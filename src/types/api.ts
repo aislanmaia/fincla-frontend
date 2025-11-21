@@ -190,6 +190,24 @@ export interface CreditCard {
   description: string | null;
 }
 
+export interface InvoiceItemResponse {
+  id: number;
+  transaction_date: string;
+  description: string;
+  amount: number;
+  installment_number: number;
+  total_installments: number;
+  tags: Record<string, Tag[]>;
+}
+
+export interface InvoiceResponse {
+  month: string;
+  due_date: string;
+  total_amount: number;
+  status: 'open' | 'closed' | 'overdue' | 'paid';
+  items: InvoiceItemResponse[];
+}
+
 // ===== CHAT/AI =====
 export interface ChatRequest {
   message: string;

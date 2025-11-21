@@ -1,6 +1,6 @@
 // api/creditCards.ts
 import apiClient from './client';
-import { CreateCreditCardRequest, CreditCard } from '../types/api';
+import { CreateCreditCardRequest, CreditCard, InvoiceResponse } from '../types/api';
 
 /**
  * Lista todos os cartões de crédito de uma organização
@@ -40,6 +40,24 @@ export const deleteCreditCard = async (
   await apiClient.delete(`/credit-cards/${cardId}`, {
     params: { organization_id: organizationId },
   });
+};
+
+/**
+ * Obtém a fatura de um cartão de crédito para um mês específico
+ */
+export const getCreditCardInvoice = async (
+  cardId: number,
+  year: number,
+  month: number,
+  organizationId: string
+): Promise<InvoiceResponse> => {
+  const response = await apiClient.get<InvoiceResponse>(
+    `/credit-cards/${cardId}/invoices/${year}/${month}`,
+    {
+      params: { organization_id: organizationId },
+    }
+  );
+  return response.data;
 };
 
 
