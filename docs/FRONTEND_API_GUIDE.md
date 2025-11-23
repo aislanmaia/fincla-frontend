@@ -344,6 +344,24 @@ export interface CreditCard {
   description: string | null;
 }
 
+export interface InvoiceItemResponse {
+  id: number;
+  transaction_date: string;
+  description: string;
+  amount: number;
+  installment_number: number;
+  total_installments: number;
+  tags: Record<string, Tag[]>;
+}
+
+export interface InvoiceResponse {
+  month: string;
+  due_date: string;
+  total_amount: number;
+  status: string;
+  items: InvoiceItemResponse[];
+}
+
 // ===== CHAT/AI =====
 export interface ChatRequest {
   message: string;
@@ -1327,6 +1345,63 @@ const deleteCreditCard = async (
 
 ---
 
+### GET `/credit-cards/{card_id}/invoices/{year}/{month}`
+
+Obtém a fatura de um cartão de crédito para um mês específico.
+
+**Request:**
+```typescript
+const getCreditCardInvoice = async (
+  cardId: number,
+  year: number,
+  month: number,
+  organizationId: string
+): Promise<InvoiceResponse> => {
+  const response = await apiClient.get<InvoiceResponse>(
+    `/credit-cards/${cardId}/invoices/${year}/${month}`,
+    {
+      params: { organization_id: organizationId },
+    }
+  );
+  return response.data;
+};
+```
+
+**Response (200):**
+```typescript
+{
+  month: "Janeiro",
+  due_date: "2025-01-10",
+  total_amount: 1500.00,
+  status: "open",
+  items: [
+    {
+      id: 123,
+      transaction_date: "2025-01-05",
+      description: "Compra Parcelada",
+      amount: 100.00,
+      installment_number: 1,
+      total_installments: 10,
+      tags: {
+        "categoria": [
+          {
+            id: "...",
+            name: "Eletrônicos",
+            // ...
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+**Erros:**
+- `403`: Usuário não tem acesso à organização
+- `404`: Cartão não encontrado
+
+---
+
 ## 🤖 Endpoints de Chat/AI
 
 ### POST `/api/v1/ai/chat`
@@ -1506,6 +1581,48 @@ export const updateTag = async (
 
 export const deleteTag = async (tagId: string): Promise<void> => {
   await apiClient.delete(`/api/v1/tags/${tagId}`);
+};
+```
+
+### Funções de API para Cartões de Crédito
+
+```typescript
+// api/creditCards.ts
+import apiClient from './client';
+import { CreditCard, CreateCreditCardRequest, InvoiceResponse } from '../types/api';
+
+export const listCreditCards = async (
+  organizationId: string
+): Promise<CreditCard[]> => {
+  const response = await apiClient.get<CreditCard[]>('/credit-cards', {
+    params: { organization_id: organizationId },
+  });
+  return response.data;
+};
+
+export const createCreditCard = async (
+  card: CreateCreditCardRequest
+): Promise<CreditCard> => {
+  const response = await apiClient.post<CreditCard>(
+    '/credit-cards',
+    card
+  );
+  return response.data;
+};
+
+export const getCreditCardInvoice = async (
+  cardId: number,
+  year: number,
+  month: number,
+  organizationId: string
+): Promise<InvoiceResponse> => {
+  const response = await apiClient.get<InvoiceResponse>(
+    `/credit-cards/${cardId}/invoices/${year}/${month}`,
+    {
+      params: { organization_id: organizationId },
+    }
+  );
+  return response.data;
 };
 ```
 

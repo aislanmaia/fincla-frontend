@@ -1,6 +1,6 @@
 // api/creditCards.ts
 import apiClient from './client';
-import { CreateCreditCardRequest, CreditCard, InvoiceResponse } from '../types/api';
+import { CreateCreditCardRequest, UpdateCreditCardRequest, CreditCard, InvoiceResponse } from '../types/api';
 
 /**
  * Lista todos os cartões de crédito de uma organização
@@ -26,6 +26,20 @@ export const createCreditCard = async (
   const response = await apiClient.post<CreditCard>(
     '/credit-cards',
     card
+  );
+  return response.data;
+};
+
+/**
+ * Atualiza um cartão de crédito existente
+ */
+export const updateCreditCard = async (
+  cardId: number,
+  data: UpdateCreditCardRequest
+): Promise<CreditCard> => {
+  const response = await apiClient.put<CreditCard>(
+    `/credit-cards/${cardId}`,
+    data
   );
   return response.data;
 };

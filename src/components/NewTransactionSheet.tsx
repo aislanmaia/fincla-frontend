@@ -1650,7 +1650,7 @@ export function NewTransactionSheet({
       // 2. Processar outras tags
       for (const tag of tags) {
         // Ignorar se for a mesma tag da categoria principal para evitar duplicidade
-        if ((tag.type === 'category' || tag.type === 'categoria') &&
+        if ((String(tag.type) === 'category' || String(tag.type) === 'categoria') &&
           tag.value.toLowerCase() === values.category.toLowerCase()) {
           continue;
         }

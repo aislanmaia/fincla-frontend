@@ -181,6 +181,14 @@ export interface CreateCreditCardRequest {
   description?: string | null;
 }
 
+export interface UpdateCreditCardRequest {
+  organization_id: string;
+  last4?: string;
+  brand?: string;
+  due_day?: number;
+  description?: string | null;
+}
+
 export interface CreditCard {
   id: number;
   organization_id: string;
