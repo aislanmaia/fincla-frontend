@@ -339,3 +339,42 @@ export interface UpdateGoalRequest {
   category?: string;
 }
 
+// ===== SIMULADOR FINANCEIRO =====
+export interface FinancialSimulationRequest {
+  purchase_amount: number;
+  installments: number;
+  start_date?: string; // ISO date string (YYYY-MM-DD)
+}
+
+export type SimulationVerdict = 'viable' | 'caution' | 'high-risk';
+export type SimulationStatus = 'success' | 'warning' | 'danger';
+
+export interface SimulationTimelineItem {
+  month: string; // Nome do mês (ex: "Janeiro")
+  year: number;
+  month_iso: string; // "YYYY-MM"
+  financial_data: {
+    projected_income: number;
+    base_expenses: number;
+    existing_commitments: number;
+    new_installment: number;
+    total_obligations: number;
+    savings_goal: number;
+  };
+  result: {
+    projected_balance: number;
+    status: SimulationStatus;
+    meets_goal: boolean;
+  };
+}
+
+export interface FinancialSimulationResponse {
+  simulation_id: string;
+  summary: {
+    verdict: SimulationVerdict;
+    verdict_message: string;
+    total_impact: number;
+    duration_months: number;
+  };
+  timeline: SimulationTimelineItem[];
+}

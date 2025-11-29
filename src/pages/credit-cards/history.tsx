@@ -1,17 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { PageTransition } from '@/components/PageTransition';
-import { InvoiceStatusCard } from '@/components/credit-cards/InvoiceStatusCard';
-import { InvoiceTransactionList } from '@/components/credit-cards/InvoiceTransactionList';
+import { Breadcrumb } from '@/components/Breadcrumb';
 import { listCreditCards, getCreditCardInvoice } from '@/api/creditCards';
 import { CreditCard, InvoiceResponse } from '@/types/api';
 import { useOrganization } from '@/hooks/useOrganization';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Calendar } from 'lucide-react';
-import { format, subMonths } from 'date-fns';
+import { Input } from '@/components/ui/input';
+import { Card } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { CreditCard as CreditCardIcon, Download, Eye, Search, Filter } from 'lucide-react';
+import { format, subMonths, startOfYear, endOfYear } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
+
+interface InvoiceHistoryItem {
+  year: number;
+  month: number;
+  total: number;
+  status: 'paid' | 'overdue' | 'pending';
+  dueDate: string;
+}
 
 export default function InvoiceHistoryPage() {
     const [, setLocation] = useLocation();
@@ -20,18 +31,24 @@ export default function InvoiceHistoryPage() {
 
     const [cards, setCards] = useState<CreditCard[]>([]);
     const [selectedCardId, setSelectedCardId] = useState<string>('');
-    const [selectedMonth, setSelectedMonth] = useState<string>(''); // Format: "YYYY-MM"
-    const [invoice, setInvoice] = useState<InvoiceResponse | null>(null);
+    const [selectedYear, setSelectedYear] = useState<string>(String(new Date().getFullYear()));
+    const [selectedSemester, setSelectedSemester] = useState<string>('all');
+    const [searchQuery, setSearchQuery] = useState<string>('');
+    const [invoiceHistory, setInvoiceHistory] = useState<InvoiceHistoryItem[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [selectedInvoice, setSelectedInvoice] = useState<{ year: number; month: number } | null>(null);
 
-    // Generate last 12 months options
-    const monthOptions = Array.from({ length: 12 }, (_, i) => {
-        const date = subMonths(new Date(), i);
-        return {
-            value: format(date, 'yyyy-MM'),
-            label: format(date, 'MMMM yyyy', { locale: ptBR }),
-        };
+    // Generate year options (last 5 years)
+    const yearOptions = Array.from({ length: 5 }, (_, i) => {
+        const year = new Date().getFullYear() - i;
+        return { value: String(year), label: String(year) };
     });
+
+    const semesterOptions = [
+        { value: 'all', label: 'Ano Completo' },
+        { value: '1', label: '1º Semestre (Jan-Jun)' },
+        { value: '2', label: '2º Semestre (Jul-Dez)' },
+    ];
 
     // Load Cards
     useEffect(() => {
@@ -51,102 +68,315 @@ export default function InvoiceHistoryPage() {
         loadCards();
     }, [currentOrg?.id]);
 
-    // Set default month
+    // Load Invoice History
     useEffect(() => {
-        if (!selectedMonth && monthOptions.length > 0) {
-            setSelectedMonth(monthOptions[0].value);
-        }
-    }, [monthOptions]);
-
-    // Load Invoice
-    useEffect(() => {
-        const loadInvoice = async () => {
-            if (!selectedCardId || !selectedMonth || !currentOrg?.id) return;
+        const loadInvoiceHistory = async () => {
+            if (!selectedCardId || !currentOrg?.id) return;
 
             try {
                 setIsLoading(true);
-                const [year, month] = selectedMonth.split('-');
-                const data = await getCreditCardInvoice(
-                    Number(selectedCardId),
-                    Number(year),
-                    Number(month),
-                    currentOrg.id
-                );
-                setInvoice(data);
+                const year = Number(selectedYear);
+                
+                // Determine month range based on semester
+                let startMonth = 1;
+                let endMonth = 12;
+                
+                if (selectedSemester === '1') {
+                    startMonth = 1;
+                    endMonth = 6;
+                } else if (selectedSemester === '2') {
+                    startMonth = 7;
+                    endMonth = 12;
+                }
+
+                // Load all invoices for the period
+                const invoices: InvoiceHistoryItem[] = [];
+                
+                for (let month = startMonth; month <= endMonth; month++) {
+                    try {
+                        const invoice = await getCreditCardInvoice(
+                            Number(selectedCardId),
+                            year,
+                            month,
+                            currentOrg.id
+                        );
+                        
+                        if (invoice && invoice.total_amount > 0) {
+                            // Determine status based on due date
+                            const dueDate = new Date(invoice.due_date);
+                            const now = new Date();
+                            let status: 'paid' | 'overdue' | 'pending' = 'pending';
+                            
+                            if (dueDate < now) {
+                                status = 'overdue'; // Could be refined with payment info
+                            }
+                            
+                            invoices.push({
+                                year,
+                                month,
+                                total: invoice.total_amount,
+                                status,
+                                dueDate: invoice.due_date,
+                            });
+                        }
+                    } catch (err) {
+                        // Invoice doesn't exist or is empty, skip
+                        continue;
+                    }
+                }
+                
+                // Sort by date (most recent first)
+                invoices.sort((a, b) => {
+                    if (a.year !== b.year) return b.year - a.year;
+                    return b.month - a.month;
+                });
+                
+                setInvoiceHistory(invoices);
             } catch (error) {
-                console.error('Failed to load invoice:', error);
-                setInvoice(null);
+                console.error('Failed to load invoice history:', error);
+                toast.error('Erro ao carregar histórico de faturas');
             } finally {
                 setIsLoading(false);
             }
         };
 
-        loadInvoice();
-    }, [selectedCardId, selectedMonth, currentOrg?.id]);
+        loadInvoiceHistory();
+    }, [selectedCardId, selectedYear, selectedSemester, currentOrg?.id]);
+
+    // Filter invoices based on search
+    const filteredInvoices = invoiceHistory.filter((invoice) => {
+        if (!searchQuery) return true;
+        
+        const monthName = format(new Date(invoice.year, invoice.month - 1), 'MMMM yyyy', { locale: ptBR });
+        const total = `R$ ${invoice.total.toFixed(2)}`;
+        const status = getStatusLabel(invoice.status);
+        
+        return (
+            monthName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            total.includes(searchQuery) ||
+            status.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+    });
+
+    const getStatusLabel = (status: string) => {
+        switch (status) {
+            case 'paid': return 'Paga';
+            case 'overdue': return 'Vencida';
+            case 'pending': return 'Pendente';
+            default: return status;
+        }
+    };
+
+    const getStatusVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
+        switch (status) {
+            case 'paid': return 'default';
+            case 'overdue': return 'destructive';
+            case 'pending': return 'secondary';
+            default: return 'outline';
+        }
+    };
+
+    const handleViewDetails = (year: number, month: number) => {
+        // Navigate to detail view or show modal
+        setSelectedInvoice({ year, month });
+        // For now, just navigate to the main page (could be improved)
+        toast.info(`Visualização detalhada: ${format(new Date(year, month - 1), 'MMMM yyyy', { locale: ptBR })}`);
+    };
+
+    const handleDownloadPDF = (year: number, month: number) => {
+        // TODO: Implement PDF download
+        toast.info(`Download PDF: ${format(new Date(year, month - 1), 'MMMM yyyy', { locale: ptBR })}`);
+    };
 
     return (
         <PageTransition>
-            <div className="container mx-auto p-6 max-w-7xl space-y-8">
+            <div className="container mx-auto p-4 sm:p-6 max-w-7xl space-y-4 sm:space-y-6">
+                {/* Breadcrumb */}
+                <Breadcrumb
+                    items={[
+                        { label: 'Cartões', href: '/credit-cards', icon: <CreditCardIcon className="w-4 h-4" /> },
+                        { label: 'Histórico de Faturas' },
+                    ]}
+                />
+
                 {/* Header */}
-                <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" onClick={() => setLocation('/credit-cards')}>
-                        <ArrowLeft className="w-5 h-5" />
-                    </Button>
-                    <div>
-                        <h1 className="text-3xl font-bold tracking-tight">Histórico de Faturas</h1>
-                        <p className="text-muted-foreground">Consulte faturas anteriores</p>
-                    </div>
+                <div>
+                    <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Histórico de Faturas</h1>
+                    <p className="text-sm sm:text-base text-muted-foreground">Consulte e analise todas as suas faturas anteriores</p>
                 </div>
 
-                {/* Filters */}
-                <div className="flex flex-col sm:flex-row gap-4 bg-card p-4 rounded-lg border shadow-sm">
-                    <div className="flex-1">
-                        <label className="text-sm font-medium mb-2 block">Cartão</label>
-                        <Select value={selectedCardId} onValueChange={setSelectedCardId}>
-                            <SelectTrigger>
-                                <SelectValue placeholder="Selecione um cartão" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {cards.map((card) => (
-                                    <SelectItem key={card.id} value={String(card.id)}>
-                                        {card.description || `Cartão final ${card.last4}`}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                {/* Filters Toolbar */}
+                <Card className="p-3 sm:p-4">
+                    <div className="flex flex-col gap-3 sm:gap-4">
+                        <div className="flex items-center gap-2 text-xs sm:text-sm font-medium">
+                            <Filter className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                            <span>Ferramentas de Análise</span>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                            {/* Card Selector */}
+                            <div>
+                                <label className="text-xs sm:text-sm font-medium mb-1.5 sm:mb-2 block">Cartão</label>
+                                <Select value={selectedCardId} onValueChange={setSelectedCardId}>
+                                    <SelectTrigger className="text-sm">
+                                        <SelectValue placeholder="Selecione um cartão" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {cards.map((card) => (
+                                            <SelectItem key={card.id} value={String(card.id)} className="text-sm">
+                                                {card.description || `Cartão final ${card.last4}`}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
 
-                    <div className="flex-1">
-                        <label className="text-sm font-medium mb-2 block">Mês de Referência</label>
-                        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                            <SelectTrigger>
-                                <Calendar className="w-4 h-4 mr-2" />
-                                <SelectValue placeholder="Selecione o mês" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {monthOptions.map((option) => (
-                                    <SelectItem key={option.value} value={option.value}>
-                                        <span className="capitalize">{option.label}</span>
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
+                            {/* Year Filter */}
+                            <div>
+                                <label className="text-xs sm:text-sm font-medium mb-1.5 sm:mb-2 block">Ano</label>
+                                <Select value={selectedYear} onValueChange={setSelectedYear}>
+                                    <SelectTrigger className="text-sm">
+                                        <SelectValue placeholder="Selecione o ano" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {yearOptions.map((option) => (
+                                            <SelectItem key={option.value} value={option.value} className="text-sm">
+                                                {option.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
 
-                {/* Content */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div className="lg:col-span-1 h-[300px]">
-                        <InvoiceStatusCard invoice={invoice} isLoading={isLoading} />
-                    </div>
+                            {/* Semester Filter */}
+                            <div>
+                                <label className="text-xs sm:text-sm font-medium mb-1.5 sm:mb-2 block">Semestre</label>
+                                <Select value={selectedSemester} onValueChange={setSelectedSemester}>
+                                    <SelectTrigger className="text-sm">
+                                        <SelectValue placeholder="Selecione o semestre" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {semesterOptions.map((option) => (
+                                            <SelectItem key={option.value} value={option.value} className="text-sm">
+                                                {option.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
 
-                    <div className="lg:col-span-2">
-                        <InvoiceTransactionList
-                            transactions={invoice?.items || []}
-                            isLoading={isLoading}
-                        />
+                            {/* Global Search */}
+                            <div>
+                                <label className="text-xs sm:text-sm font-medium mb-1.5 sm:mb-2 block">Busca Global</label>
+                                <div className="relative">
+                                    <Search className="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground" />
+                                    <Input
+                                        placeholder="Pesquisar faturas..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="pl-8 sm:pl-9 text-sm"
+                                    />
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                </div>
+                </Card>
+
+                {/* Invoices Table */}
+                <Card className="overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="text-xs sm:text-sm">Mês/Ano</TableHead>
+                                    <TableHead className="text-xs sm:text-sm">Status</TableHead>
+                                    <TableHead className="hidden sm:table-cell text-xs sm:text-sm">Vencimento</TableHead>
+                                    <TableHead className="text-right text-xs sm:text-sm">Valor Total</TableHead>
+                                    <TableHead className="text-right text-xs sm:text-sm">Ações</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {isLoading ? (
+                                    <TableRow>
+                                        <TableCell colSpan={5} className="text-center py-6 sm:py-8 text-xs sm:text-sm text-muted-foreground">
+                                            Carregando faturas...
+                                        </TableCell>
+                                    </TableRow>
+                                ) : filteredInvoices.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={5} className="text-center py-6 sm:py-8 text-xs sm:text-sm text-muted-foreground">
+                                            {searchQuery ? 'Nenhuma fatura encontrada para esta busca.' : 'Nenhuma fatura encontrada para o período selecionado.'}
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    filteredInvoices.map((invoice) => {
+                                        const monthLabel = format(new Date(invoice.year, invoice.month - 1), 'MMMM yyyy', { locale: ptBR });
+                                        const dueDateLabel = format(new Date(invoice.dueDate), 'dd/MM/yyyy', { locale: ptBR });
+                                        
+                                        return (
+                                            <TableRow key={`${invoice.year}-${invoice.month}`}>
+                                                <TableCell className="font-medium capitalize text-xs sm:text-sm">{monthLabel}</TableCell>
+                                                <TableCell>
+                                                    <Badge variant={getStatusVariant(invoice.status)} className="text-[10px] sm:text-xs">
+                                                        {getStatusLabel(invoice.status)}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="hidden sm:table-cell text-xs sm:text-sm">{dueDateLabel}</TableCell>
+                                                <TableCell className="text-right font-medium text-xs sm:text-sm whitespace-nowrap">
+                                                    R$ {invoice.total.toFixed(2)}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex items-center justify-end gap-1 sm:gap-2">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => handleDownloadPDF(invoice.year, invoice.month)}
+                                                            className="text-xs p-1.5 sm:p-2"
+                                                        >
+                                                            <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 sm:mr-1" />
+                                                            <span className="hidden md:inline">Baixar PDF</span>
+                                                        </Button>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => handleViewDetails(invoice.year, invoice.month)}
+                                                            className="text-xs p-1.5 sm:p-2"
+                                                        >
+                                                            <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4 sm:mr-1" />
+                                                            <span className="hidden md:inline">Ver Detalhes</span>
+                                                        </Button>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </Card>
+
+                {/* Summary Stats */}
+                {!isLoading && filteredInvoices.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                        <Card className="p-3 sm:p-4">
+                            <div className="text-xs sm:text-sm text-muted-foreground mb-1">Total de Faturas</div>
+                            <div className="text-xl sm:text-2xl font-bold">{filteredInvoices.length}</div>
+                        </Card>
+                        <Card className="p-3 sm:p-4">
+                            <div className="text-xs sm:text-sm text-muted-foreground mb-1">Valor Total do Período</div>
+                            <div className="text-xl sm:text-2xl font-bold">
+                                R$ {filteredInvoices.reduce((sum, inv) => sum + inv.total, 0).toFixed(2)}
+                            </div>
+                        </Card>
+                        <Card className="p-3 sm:p-4">
+                            <div className="text-xs sm:text-sm text-muted-foreground mb-1">Média Mensal</div>
+                            <div className="text-xl sm:text-2xl font-bold">
+                                R$ {(filteredInvoices.reduce((sum, inv) => sum + inv.total, 0) / filteredInvoices.length).toFixed(2)}
+                            </div>
+                        </Card>
+                    </div>
+                )}
             </div>
         </PageTransition>
     );

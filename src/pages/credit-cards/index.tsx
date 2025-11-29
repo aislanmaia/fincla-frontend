@@ -12,7 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useOrganization } from '@/hooks/useOrganization';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { CalendarRange, History, ArrowRight, Plus } from 'lucide-react';
+import { CalendarRange, History, ArrowRight, Plus, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function CreditCardsPage() {
@@ -133,10 +133,20 @@ export default function CreditCardsPage() {
                         <h1 className="text-3xl font-bold tracking-tight">Cartões de Crédito</h1>
                         <p className="text-muted-foreground">Gerencie suas faturas e limites</p>
                     </div>
-                    <Button onClick={handleAddCard}>
-                        <Plus className="w-4 h-4 mr-2" />
-                        Adicionar Cartão
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        {selectedCardId && (
+                            <Button variant="outline" size="icon" onClick={() => {
+                                const card = cards.find(c => c.id === selectedCardId);
+                                if (card) handleEditCard(card);
+                            }}>
+                                <Settings className="w-4 h-4" />
+                            </Button>
+                        )}
+                        <Button onClick={handleAddCard}>
+                            <Plus className="w-4 h-4 mr-2" />
+                            Adicionar Cartão
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Card Selector */}
@@ -146,73 +156,75 @@ export default function CreditCardsPage() {
                         selectedCardId={selectedCardId}
                         onSelectCard={setSelectedCardId}
                         onAddCard={handleAddCard}
-                        onEditCard={handleEditCard}
-                        onDeleteCard={handleDeleteCard}
                     />
                 </section>
 
                 {selectedCardId ? (
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                        {/* Left Column: Status & Portals */}
-                        <div className="space-y-8 lg:col-span-1">
-                            <div className="h-[300px]">
+                    <div className="space-y-8">
+                        {/* Dashboard Row: Status + Insights */}
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            {/* Status Card (1/3) */}
+                            <div className="lg:col-span-1">
                                 <InvoiceStatusCard
                                     invoice={currentInvoice}
                                     isLoading={isLoadingInvoice}
                                 />
                             </div>
 
-                            {/* Portal Cards */}
-                            <div className="grid grid-cols-1 gap-4">
-                                <Card
-                                    className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group"
-                                    onClick={() => setLocation('/credit-cards/history')}
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 rounded-lg">
-                                                <History className="w-5 h-5" />
-                                            </div>
-                                            <div>
-                                                <h3 className="font-semibold">Histórico de Faturas</h3>
-                                                <p className="text-xs text-muted-foreground">Ver faturas anteriores</p>
-                                            </div>
-                                        </div>
-                                        <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-primary transition-colors" />
-                                    </div>
-                                </Card>
-
-                                <Card
-                                    className="p-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group"
-                                    onClick={() => setLocation('/credit-cards/planning')}
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-lg">
-                                                <CalendarRange className="w-5 h-5" />
-                                            </div>
-                                            <div>
-                                                <h3 className="font-semibold">Planejamento Futuro</h3>
-                                                <p className="text-xs text-muted-foreground">Projeção de parcelas</p>
-                                            </div>
-                                        </div>
-                                        <ArrowRight className="w-4 h-4 text-gray-400 group-hover:text-primary transition-colors" />
-                                    </div>
-                                </Card>
+                            {/* Insights Area (2/3) */}
+                            <div className="lg:col-span-2">
+                                <InvoiceCharts
+                                    currentInvoice={currentInvoice}
+                                    isLoading={isLoadingInvoice}
+                                />
                             </div>
                         </div>
 
-                        {/* Right Column: Transactions & Charts */}
-                        <div className="lg:col-span-2 space-y-8">
-                            <InvoiceCharts
-                                currentInvoice={currentInvoice}
-                                isLoading={isLoadingInvoice}
-                            />
-
+                        {/* Transactions List (Full Width) */}
+                        <div>
                             <InvoiceTransactionList
                                 transactions={currentInvoice?.items || []}
                                 isLoading={isLoadingInvoice}
                             />
+                        </div>
+
+                        {/* Navigation Portals */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <Card
+                                className="p-6 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group border-l-4 border-l-purple-500"
+                                onClick={() => setLocation('/credit-cards/history')}
+                            >
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <div className="p-3 bg-purple-100 dark:bg-purple-900/30 text-purple-600 rounded-xl">
+                                            <History className="w-6 h-6" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-semibold text-lg">Histórico de Faturas</h3>
+                                            <p className="text-sm text-muted-foreground">Visualize e baixe faturas anteriores</p>
+                                        </div>
+                                    </div>
+                                    <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-purple-600 transition-colors" />
+                                </div>
+                            </Card>
+
+                            <Card
+                                className="p-6 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group border-l-4 border-l-indigo-500"
+                                onClick={() => setLocation('/credit-cards/planning')}
+                            >
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-xl">
+                                            <CalendarRange className="w-6 h-6" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-semibold text-lg">Planejamento Futuro</h3>
+                                            <p className="text-sm text-muted-foreground">Projeção de gastos e parcelas futuras</p>
+                                        </div>
+                                    </div>
+                                    <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-indigo-600 transition-colors" />
+                                </div>
+                            </Card>
                         </div>
                     </div>
                 ) : (
