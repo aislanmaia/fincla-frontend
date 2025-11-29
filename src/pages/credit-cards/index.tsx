@@ -126,12 +126,12 @@ export default function CreditCardsPage() {
 
     return (
         <PageTransition>
-            <div className="container mx-auto p-6 max-w-7xl space-y-8">
+            <div className="container mx-auto p-4 sm:p-6 max-w-7xl space-y-6 sm:space-y-8">
                 {/* Header */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                     <div>
-                        <h1 className="text-3xl font-bold tracking-tight">Cartões de Crédito</h1>
-                        <p className="text-muted-foreground">Gerencie suas faturas e limites</p>
+                        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Cartões de Crédito</h1>
+                        <p className="text-sm sm:text-base text-muted-foreground">Gerencie suas faturas e limites</p>
                     </div>
                     <div className="flex items-center gap-2">
                         {selectedCardId && (
@@ -142,9 +142,10 @@ export default function CreditCardsPage() {
                                 <Settings className="w-4 h-4" />
                             </Button>
                         )}
-                        <Button onClick={handleAddCard}>
-                            <Plus className="w-4 h-4 mr-2" />
-                            Adicionar Cartão
+                        <Button onClick={handleAddCard} className="text-sm sm:text-base">
+                            <Plus className="w-4 h-4 mr-1 sm:mr-2" />
+                            <span className="hidden sm:inline">Adicionar Cartão</span>
+                            <span className="sm:hidden">Adicionar</span>
                         </Button>
                     </div>
                 </div>
@@ -160,9 +161,9 @@ export default function CreditCardsPage() {
                 </section>
 
                 {selectedCardId ? (
-                    <div className="space-y-8">
+                    <div className="space-y-6 sm:space-y-8">
                         {/* Dashboard Row: Status + Insights */}
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
                             {/* Status Card (1/3) */}
                             <div className="lg:col-span-1">
                                 <InvoiceStatusCard
@@ -189,40 +190,40 @@ export default function CreditCardsPage() {
                         </div>
 
                         {/* Navigation Portals */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                             <Card
-                                className="p-6 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group border-l-4 border-l-purple-500"
+                                className="p-4 sm:p-6 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group border-l-4 border-l-purple-500"
                                 onClick={() => setLocation('/credit-cards/history')}
                             >
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-4">
-                                        <div className="p-3 bg-purple-100 dark:bg-purple-900/30 text-purple-600 rounded-xl">
-                                            <History className="w-6 h-6" />
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                                        <div className="p-2 sm:p-3 bg-purple-100 dark:bg-purple-900/30 text-purple-600 rounded-xl flex-shrink-0">
+                                            <History className="w-5 h-5 sm:w-6 sm:h-6" />
                                         </div>
-                                        <div>
-                                            <h3 className="font-semibold text-lg">Histórico de Faturas</h3>
-                                            <p className="text-sm text-muted-foreground">Visualize e baixe faturas anteriores</p>
+                                        <div className="min-w-0">
+                                            <h3 className="font-semibold text-base sm:text-lg">Histórico de Faturas</h3>
+                                            <p className="text-xs sm:text-sm text-muted-foreground">Visualize e baixe faturas anteriores</p>
                                         </div>
                                     </div>
-                                    <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-purple-600 transition-colors" />
+                                    <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 group-hover:text-purple-600 transition-colors flex-shrink-0" />
                                 </div>
                             </Card>
 
                             <Card
-                                className="p-6 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group border-l-4 border-l-indigo-500"
+                                className="p-4 sm:p-6 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group border-l-4 border-l-indigo-500"
                                 onClick={() => setLocation('/credit-cards/planning')}
                             >
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-4">
-                                        <div className="p-3 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-xl">
-                                            <CalendarRange className="w-6 h-6" />
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                                        <div className="p-2 sm:p-3 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-xl flex-shrink-0">
+                                            <CalendarRange className="w-5 h-5 sm:w-6 sm:h-6" />
                                         </div>
-                                        <div>
-                                            <h3 className="font-semibold text-lg">Planejamento Futuro</h3>
-                                            <p className="text-sm text-muted-foreground">Projeção de gastos e parcelas futuras</p>
+                                        <div className="min-w-0">
+                                            <h3 className="font-semibold text-base sm:text-lg">Planejamento Futuro</h3>
+                                            <p className="text-xs sm:text-sm text-muted-foreground">Projeção de gastos e parcelas futuras</p>
                                         </div>
                                     </div>
-                                    <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-indigo-600 transition-colors" />
+                                    <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 group-hover:text-indigo-600 transition-colors flex-shrink-0" />
                                 </div>
                             </Card>
                         </div>
