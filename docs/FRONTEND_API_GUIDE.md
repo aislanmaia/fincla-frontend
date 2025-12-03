@@ -14,10 +14,11 @@ Este documento fornece uma referência completa da API REST para desenvolvedores
 8. [Endpoints de Tag Types](#endpoints-de-tag-types)
 9. [Endpoints de Tags](#endpoints-de-tags)
 10. [Endpoints de Transações](#endpoints-de-transações)
-11. [Endpoints de Cartões de Crédito](#endpoints-de-cartões-de-crédito)
-12. [Endpoints de Chat/AI](#endpoints-de-chatai)
-13. [Tratamento de Erros](#tratamento-de-erros)
-14. [Exemplos de Uso](#exemplos-de-uso)
+    11. [Endpoints de Cartões de Crédito](#endpoints-de-cartões-de-crédito)
+    12. [Endpoints de Metas (Goals)](#endpoints-de-metas-goals)
+    13. [Endpoints de Chat/AI](#endpoints-de-chatai)
+    14. [Tratamento de Erros](#tratamento-de-erros)
+    15. [Exemplos de Uso](#exemplos-de-uso)
 
 ---
 
@@ -26,8 +27,14 @@ Este documento fornece uma referência completa da API REST para desenvolvedores
 ### Base URL
 
 ```typescript
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL ||
+  'https://api.fincla.com';
 ```
+
+> Para desenvolvimento local, defina `REACT_APP_API_URL=http://localhost:8000`
+> (ou a URL do backend que estiver rodando via `uvicorn`) para manter o fluxo
+> offline. Em produção, o frontend deve consumir `https://api.fincla.com`.
 
 ### Headers Padrão
 
@@ -344,6 +351,56 @@ export interface CreditCard {
   description: string | null;
 }
 
+export interface InvoiceItemResponse {
+  id: number;
+  transaction_date: string;
+  description: string;
+  amount: number;
+  installment_number: number;
+  total_installments: number;
+  tags: Record<string, Tag[]>;
+}
+
+export interface InvoiceResponse {
+  month: string;
+  due_date: string;
+  total_amount: number;
+  status: string;
+  items: InvoiceItemResponse[];
+}
+
+// ===== METAS =====
+export interface CreateGoalRequest {
+  organization_id: string;
+  name: string;
+  target_amount: number;
+  deadline: string; // ISO date string (YYYY-MM-DD)
+  description?: string | null;
+}
+
+export interface UpdateGoalRequest {
+  name?: string;
+  target_amount?: number;
+  current_amount?: number;
+  deadline?: string;
+  status?: 'active' | 'completed' | 'cancelled';
+  description?: string | null;
+}
+
+export interface Goal {
+  id: string;
+  organization_id: string;
+  name: string;
+  target_amount: number;
+  current_amount: number;
+  deadline: string;
+  status: 'active' | 'completed' | 'cancelled';
+  description: string | null;
+  created_at: string;
+  updated_at: string | null;
+  progress: number; // Porcentagem 0-100
+}
+
 // ===== CHAT/AI =====
 export interface ChatRequest {
   message: string;
@@ -392,14 +449,14 @@ export interface ApiError {
 
 ## 🔑 Endpoints de Autenticação
 
-### POST `/api/auth/login`
+### POST `/auth/login`
 
 Autentica um usuário e retorna o token JWT.
 
 **Request:**
 ```typescript
 const login = async (email: string, password: string): Promise<LoginResponse> => {
-  const response = await apiClient.post<LoginResponse>('/api/auth/login', {
+  const response = await apiClient.post<LoginResponse>('/auth/login', {
     email,
     password,
   });
@@ -432,14 +489,14 @@ const login = async (email: string, password: string): Promise<LoginResponse> =>
 
 ---
 
-### GET `/api/auth/me`
+### GET `/auth/me`
 
 Retorna informações do usuário autenticado.
 
 **Request:**
 ```typescript
 const getCurrentUser = async (): Promise<User> => {
-  const response = await apiClient.get<User>('/api/auth/me');
+  const response = await apiClient.get<User>('/auth/me');
   return response.data;
 };
 ```
@@ -468,7 +525,7 @@ const getCurrentUser = async (): Promise<User> => {
 
 ## 👥 Endpoints de Usuários
 
-### POST `/api/users/register/owner`
+### POST `/users/register/owner`
 
 Registra um novo usuário owner (público, não requer autenticação).
 
@@ -480,7 +537,7 @@ const registerOwner = async (
   plan: 'free' | 'beta' | 'premium' = 'free'
 ): Promise<RegisterOwnerResponse> => {
   const response = await apiClient.post<RegisterOwnerResponse>(
-    '/api/users/register/owner',
+    '/users/register/owner',
     { email, password, plan }
   );
   return response.data;
@@ -508,7 +565,7 @@ const registerOwner = async (
 
 ---
 
-### POST `/api/users/register/member`
+### POST `/users/register/member`
 
 Registra um novo membro em uma organização (apenas owners).
 
@@ -520,7 +577,7 @@ const registerMember = async (
   organizationId: string
 ): Promise<RegisterMemberResponse> => {
   const response = await apiClient.post<RegisterMemberResponse>(
-    '/api/users/register/member',
+    '/users/register/member',
     {
       email,
       password,
@@ -555,14 +612,14 @@ const registerMember = async (
 
 ---
 
-### GET `/api/users/me`
+### GET `/users/me`
 
-Retorna o perfil do usuário autenticado (mesmo que `/api/auth/me`).
+Retorna o perfil do usuário autenticado (mesmo que `/auth/me`).
 
 **Request:**
 ```typescript
 const getMyProfile = async (): Promise<User> => {
-  const response = await apiClient.get<User>('/api/users/me');
+  const response = await apiClient.get<User>('/users/me');
   return response.data;
 };
 ```
@@ -571,7 +628,7 @@ const getMyProfile = async (): Promise<User> => {
 
 ## 🏢 Endpoints de Organizações
 
-### POST `/api/organizations`
+### POST `/organizations`
 
 Cria uma nova organização (apenas owners).
 
@@ -582,7 +639,7 @@ const createOrganization = async (
   description?: string
 ): Promise<CreateOrganizationResponse> => {
   const response = await apiClient.post<CreateOrganizationResponse>(
-    '/api/organizations',
+    '/organizations',
     { name, description }
   );
   return response.data;
@@ -616,7 +673,7 @@ const createOrganization = async (
 
 ## 👥 Endpoints de Memberships
 
-### GET `/api/memberships/my-organizations`
+### GET `/memberships/my-organizations`
 
 Lista todas as organizações onde o usuário tem membership.
 
@@ -624,7 +681,7 @@ Lista todas as organizações onde o usuário tem membership.
 ```typescript
 const getMyOrganizations = async (): Promise<MyOrganizationsResponse> => {
   const response = await apiClient.get<MyOrganizationsResponse>(
-    '/api/memberships/my-organizations'
+    '/memberships/my-organizations'
   );
   return response.data;
 };
@@ -653,7 +710,7 @@ const getMyOrganizations = async (): Promise<MyOrganizationsResponse> => {
 
 ---
 
-### GET `/api/memberships/organizations/{org_id}/members`
+### GET `/memberships/organizations/{org_id}/members`
 
 Lista todos os membros de uma organização.
 
@@ -663,7 +720,7 @@ const getOrganizationMembers = async (
   organizationId: string
 ): Promise<OrganizationMembersResponse> => {
   const response = await apiClient.get<OrganizationMembersResponse>(
-    `/api/memberships/organizations/${organizationId}/members`
+    `/memberships/organizations/${organizationId}/members`
   );
   return response.data;
 };
@@ -694,7 +751,7 @@ const getOrganizationMembers = async (
 
 ---
 
-### DELETE `/api/memberships/organizations/{org_id}/members/{user_id}`
+### DELETE `/memberships/organizations/{org_id}/members/{user_id}`
 
 Remove um membro de uma organização (apenas owners).
 
@@ -705,7 +762,7 @@ const removeMember = async (
   userId: string
 ): Promise<void> => {
   await apiClient.delete(
-    `/api/memberships/organizations/${organizationId}/members/${userId}`
+    `/memberships/organizations/${organizationId}/members/${userId}`
   );
 };
 ```
@@ -721,14 +778,14 @@ const removeMember = async (
 
 ## 🏷️ Endpoints de Tag Types
 
-### GET `/api/v1/tag-types`
+### GET `/v1/tag-types`
 
 Lista todos os tipos de tags disponíveis no sistema com seus metadados.
 
 **Request:**
 ```typescript
 const listTagTypes = async (): Promise<TagTypesResponse> => {
-  const response = await apiClient.get<TagTypesResponse>('/api/v1/tag-types');
+  const response = await apiClient.get<TagTypesResponse>('/v1/tag-types');
   return response.data;
 };
 ```
@@ -767,7 +824,7 @@ const listTagTypes = async (): Promise<TagTypesResponse> => {
 
 ## 🏷️ Endpoints de Tags
 
-### GET `/api/v1/tags`
+### GET `/v1/tags`
 
 Lista todas as tags de uma organização, opcionalmente filtradas por tipo de tag.
 
@@ -777,7 +834,7 @@ const listTags = async (
   organizationId: string,
   tagType?: string
 ): Promise<TagsResponse> => {
-  const response = await apiClient.get<TagsResponse>('/api/v1/tags', {
+  const response = await apiClient.get<TagsResponse>('/v1/tags', {
     params: {
       organization_id: organizationId,
       tag_type: tagType, // Opcional: nome do tipo de tag (ex: "categoria")
@@ -826,7 +883,7 @@ await listTags("123e4567-e89b-12d3-a456-426614174000", "categoria");
 
 ---
 
-### POST `/api/v1/tags`
+### POST `/v1/tags`
 
 Cria uma nova tag personalizada para uma organização.
 
@@ -837,7 +894,7 @@ const createTag = async (
   tag: CreateTagRequest
 ): Promise<Tag> => {
   const response = await apiClient.post<Tag>(
-    '/api/v1/tags',
+    '/v1/tags',
     tag,
     {
       params: {
@@ -883,7 +940,7 @@ await createTag("123e4567-e89b-12d3-a456-426614174000", {
 
 ---
 
-### PATCH `/api/v1/tags/{tag_id}`
+### PATCH `/v1/tags/{tag_id}`
 
 Atualiza uma tag existente.
 
@@ -894,7 +951,7 @@ const updateTag = async (
   tag: UpdateTagRequest
 ): Promise<Tag> => {
   const response = await apiClient.patch<Tag>(
-    `/api/v1/tags/${tagId}`,
+    `/v1/tags/${tagId}`,
     tag
   );
   return response.data;
@@ -935,14 +992,14 @@ await updateTag("789e0123-e89b-12d3-a456-426614174000", {
 
 ---
 
-### DELETE `/api/v1/tags/{tag_id}`
+### DELETE `/v1/tags/{tag_id}`
 
 Remove uma tag (soft delete - define `is_active=false`).
 
 **Request:**
 ```typescript
 const deleteTag = async (tagId: string): Promise<void> => {
-  await apiClient.delete(`/api/v1/tags/${tagId}`);
+  await apiClient.delete(`/v1/tags/${tagId}`);
 };
 ```
 
@@ -960,7 +1017,7 @@ const deleteTag = async (tagId: string): Promise<void> => {
 
 ## 💰 Endpoints de Transações
 
-### POST `/api/v1/transactions`
+### POST `/v1/transactions`
 
 Cria uma nova transação.
 
@@ -970,7 +1027,7 @@ const createTransaction = async (
   transaction: CreateTransactionRequest
 ): Promise<Transaction> => {
   const response = await apiClient.post<Transaction>(
-    '/api/v1/transactions',
+    '/v1/transactions',
     transaction
   );
   return response.data;
@@ -1092,7 +1149,7 @@ await createTransaction({
 
 ---
 
-### GET `/api/v1/transactions`
+### GET `/v1/transactions`
 
 Lista transações com filtros opcionais. Retorna todas as transações das organizações onde o usuário tem membership.
 
@@ -1113,7 +1170,7 @@ const listTransactions = async (
   }
 ): Promise<Transaction[]> => {
   const response = await apiClient.get<Transaction[]>(
-    '/api/v1/transactions',
+    '/v1/transactions',
     { params: filters }
   );
   return response.data;
@@ -1327,9 +1384,202 @@ const deleteCreditCard = async (
 
 ---
 
+### GET `/credit-cards/{card_id}/invoices/{year}/{month}`
+
+Obtém a fatura de um cartão de crédito para um mês específico.
+
+**Request:**
+```typescript
+const getCreditCardInvoice = async (
+  cardId: number,
+  year: number,
+  month: number,
+  organizationId: string
+): Promise<InvoiceResponse> => {
+  const response = await apiClient.get<InvoiceResponse>(
+    `/credit-cards/${cardId}/invoices/${year}/${month}`,
+    {
+      params: { organization_id: organizationId },
+    }
+  );
+  return response.data;
+};
+```
+
+**Response (200):**
+```typescript
+{
+  month: "Janeiro",
+  due_date: "2025-01-10",
+  total_amount: 1500.00,
+  status: "open",
+  items: [
+    {
+      id: 123,
+      transaction_date: "2025-01-05",
+      description: "Compra Parcelada",
+      amount: 100.00,
+      installment_number: 1,
+      total_installments: 10,
+      tags: {
+        "categoria": [
+          {
+            id: "...",
+            name: "Eletrônicos",
+            // ...
+          }
+        ]
+      }
+    }
+  ]
+}
+```
+
+**Erros:**
+- `403`: Usuário não tem acesso à organização
+- `404`: Cartão não encontrado
+
+---
+
+## 🎯 Endpoints de Metas (Goals)
+
+### POST `/v1/goals`
+
+Cria uma nova meta financeira.
+
+**Request:**
+```typescript
+const createGoal = async (
+  goal: CreateGoalRequest
+): Promise<Goal> => {
+  const response = await apiClient.post<Goal>(
+    '/v1/goals',
+    goal
+  );
+  return response.data;
+};
+```
+
+**Exemplo:**
+```typescript
+await createGoal({
+  organization_id: "123e4567-e89b-12d3-a456-426614174000",
+  name: "Reserva de Emergência",
+  target_amount: 15000.00,
+  deadline: "2025-12-31",
+  description: "Fundo para imprevistos"
+});
+```
+
+**Response (201):**
+```typescript
+{
+  id: "goal-uuid",
+  organization_id: "org-uuid",
+  name: "Reserva de Emergência",
+  target_amount: 15000.00,
+  current_amount: 0.00,
+  deadline: "2025-12-31",
+  status: "active",
+  description: "Fundo para imprevistos",
+  created_at: "2025-01-15T10:00:00",
+  progress: 0.0
+}
+```
+
+---
+
+### GET `/v1/goals`
+
+Lista todas as metas de uma organização.
+
+**Request:**
+```typescript
+const listGoals = async (
+  organizationId: string
+): Promise<Goal[]> => {
+  const response = await apiClient.get<Goal[]>('/v1/goals', {
+    params: { organization_id: organizationId }
+  });
+  return response.data;
+};
+```
+
+**Response (200):**
+```typescript
+[
+  {
+    id: "goal-uuid",
+    name: "Reserva de Emergência",
+    target_amount: 15000.00,
+    current_amount: 2250.00,
+    deadline: "2025-12-31",
+    status: "active",
+    progress: 15.0,
+    // ...
+  }
+]
+```
+
+---
+
+### GET `/v1/goals/{goal_id}`
+
+Obtém detalhes de uma meta específica.
+
+**Request:**
+```typescript
+const getGoal = async (
+  goalId: string,
+  organizationId: string
+): Promise<Goal> => {
+  const response = await apiClient.get<Goal>(
+    `/v1/goals/${goalId}`,
+    {
+      params: { organization_id: organizationId }
+    }
+  );
+  return response.data;
+};
+```
+
+---
+
+### PUT `/v1/goals/{goal_id}`
+
+Atualiza uma meta existente.
+
+**Request:**
+```typescript
+const updateGoal = async (
+  goalId: string,
+  organizationId: string,
+  data: UpdateGoalRequest
+): Promise<Goal> => {
+  const response = await apiClient.put<Goal>(
+    `/v1/goals/${goalId}`,
+    data,
+    {
+      params: { organization_id: organizationId }
+    }
+  );
+  return response.data;
+};
+```
+
+**Exemplo:**
+```typescript
+await updateGoal("goal-uuid", "org-uuid", {
+  current_amount: 3000.00,
+  status: "active"
+});
+```
+
+---
+
 ## 🤖 Endpoints de Chat/AI
 
-### POST `/api/v1/ai/chat`
+### POST `/v1/ai/chat`
 
 Envia uma mensagem para o assistente financeiro de IA.
 
@@ -1340,7 +1590,7 @@ const sendChatMessage = async (
   sessionId?: string
 ): Promise<ChatResponse> => {
   const response = await apiClient.post<ChatResponse>(
-    '/api/v1/ai/chat',
+    '/v1/ai/chat',
     {
       message,
       session_id: sessionId,
@@ -1460,7 +1710,7 @@ import apiClient from './client';
 import { TagTypesResponse, TagsResponse, Tag, CreateTagRequest, UpdateTagRequest } from '../types/api';
 
 export const listTagTypes = async (): Promise<TagTypesResponse> => {
-  const response = await apiClient.get<TagTypesResponse>('/api/v1/tag-types');
+  const response = await apiClient.get<TagTypesResponse>('/v1/tag-types');
   return response.data;
 };
 
@@ -1468,7 +1718,7 @@ export const listTags = async (
   organizationId: string,
   tagType?: string
 ): Promise<TagsResponse> => {
-  const response = await apiClient.get<TagsResponse>('/api/v1/tags', {
+  const response = await apiClient.get<TagsResponse>('/v1/tags', {
     params: {
       organization_id: organizationId,
       tag_type: tagType,
@@ -1482,7 +1732,7 @@ export const createTag = async (
   tag: CreateTagRequest
 ): Promise<Tag> => {
   const response = await apiClient.post<Tag>(
-    '/api/v1/tags',
+    '/v1/tags',
     tag,
     {
       params: {
@@ -1498,14 +1748,56 @@ export const updateTag = async (
   tag: UpdateTagRequest
 ): Promise<Tag> => {
   const response = await apiClient.patch<Tag>(
-    `/api/v1/tags/${tagId}`,
+    `/v1/tags/${tagId}`,
     tag
   );
   return response.data;
 };
 
 export const deleteTag = async (tagId: string): Promise<void> => {
-  await apiClient.delete(`/api/v1/tags/${tagId}`);
+  await apiClient.delete(`/v1/tags/${tagId}`);
+};
+```
+
+### Funções de API para Cartões de Crédito
+
+```typescript
+// api/creditCards.ts
+import apiClient from './client';
+import { CreditCard, CreateCreditCardRequest, InvoiceResponse } from '../types/api';
+
+export const listCreditCards = async (
+  organizationId: string
+): Promise<CreditCard[]> => {
+  const response = await apiClient.get<CreditCard[]>('/credit-cards', {
+    params: { organization_id: organizationId },
+  });
+  return response.data;
+};
+
+export const createCreditCard = async (
+  card: CreateCreditCardRequest
+): Promise<CreditCard> => {
+  const response = await apiClient.post<CreditCard>(
+    '/credit-cards',
+    card
+  );
+  return response.data;
+};
+
+export const getCreditCardInvoice = async (
+  cardId: number,
+  year: number,
+  month: number,
+  organizationId: string
+): Promise<InvoiceResponse> => {
+  const response = await apiClient.get<InvoiceResponse>(
+    `/credit-cards/${cardId}/invoices/${year}/${month}`,
+    {
+      params: { organization_id: organizationId },
+    }
+  );
+  return response.data;
 };
 ```
 
@@ -1514,7 +1806,7 @@ export const deleteTag = async (tagId: string): Promise<void> => {
 ```typescript
 // hooks/useAuth.ts
 import { useState, useEffect } from 'react';
-import { login, getCurrentUser, LoginResponse, User } from '../api/auth';
+import { login, getCurrentUser, LoginResponse, User } from '../auth';
 
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -1563,7 +1855,7 @@ export const useAuth = () => {
 ```typescript
 // hooks/useOrganizations.ts
 import { useState, useEffect } from 'react';
-import { getMyOrganizations, MyOrganizationsResponse } from '../api/organizations';
+import { getMyOrganizations, MyOrganizationsResponse } from '../organizations';
 
 export const useOrganizations = () => {
   const [organizations, setOrganizations] = useState<MyOrganizationsResponse | null>(null);
@@ -1588,6 +1880,62 @@ export const useOrganizations = () => {
   }, []);
 
   return { organizations, loading, error };
+};
+```
+
+### Hook para Metas (Goals)
+
+```typescript
+// hooks/useGoals.ts
+import { useState, useEffect } from 'react';
+import { listGoals, createGoal, updateGoal, Goal, CreateGoalRequest, UpdateGoalRequest } from '../api/goals';
+import { handleApiError } from '../utils/errorHandler';
+
+export const useGoals = (organizationId: string) => {
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchGoals = async () => {
+    try {
+      setLoading(true);
+      const data = await listGoals(organizationId);
+      setGoals(data);
+      setError(null);
+    } catch (err) {
+      setError(handleApiError(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (organizationId) {
+      fetchGoals();
+    }
+  }, [organizationId]);
+
+  const addGoal = async (data: CreateGoalRequest) => {
+    try {
+      const newGoal = await createGoal(data);
+      setGoals((prev) => [...prev, newGoal]);
+      return newGoal;
+    } catch (err) {
+      throw new Error(handleApiError(err));
+    }
+  };
+
+  const editGoal = async (goalId: string, data: UpdateGoalRequest) => {
+    try {
+      const updatedGoal = await updateGoal(goalId, organizationId, data);
+      setGoals((prev) => prev.map((g) => (g.id === goalId ? updatedGoal : g)));
+      return updatedGoal;
+    } catch (err) {
+      throw new Error(handleApiError(err));
+    }
+  };
+
+  return { goals, loading, error, fetchGoals, addGoal, editGoal };
 };
 ```
 

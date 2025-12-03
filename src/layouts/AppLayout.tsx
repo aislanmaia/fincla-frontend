@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { TrendingUp, LayoutGrid, ListOrdered, PieChart, Target, User, LogOut, Plus } from "lucide-react";
+import { TrendingUp, LayoutGrid, ListOrdered, PieChart, Target, User, LogOut, Plus, CreditCard } from "lucide-react";
 import { PropsWithChildren, useState } from "react";
 import { useAIChat } from "@/hooks/useAIChat";
 import { ChatBar } from "@/components/ChatBar";
@@ -46,6 +46,7 @@ export function AppLayout({ children }: PropsWithChildren) {
   const [, setLocation] = useLocation();
   const [isDashboard] = useRoute("/");
   const [isTransactions] = useRoute("/transactions");
+  const [isCreditCards] = useRoute("/credit-cards");
   const [isReports] = useRoute("/reports");
   const [isGoals] = useRoute("/goals");
   const [isProfile] = useRoute("/profile");
@@ -133,6 +134,16 @@ export function AppLayout({ children }: PropsWithChildren) {
                         <a className="text-white data-[active=true]:!text-[#111827]" aria-current={isTransactions ? 'page' : undefined}>
                           <ListOrdered />
                           <span>Transações</span>
+                        </a>
+                      </SidebarMenuButton>
+                    </Link>
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <Link href="/credit-cards">
+                      <SidebarMenuButton asChild isActive={!!isCreditCards} className="hover:bg-white/10 data-[active=true]:bg-white">
+                        <a className="text-white data-[active=true]:!text-[#111827]" aria-current={isCreditCards ? 'page' : undefined}>
+                          <CreditCard />
+                          <span>Cartões</span>
                         </a>
                       </SidebarMenuButton>
                     </Link>

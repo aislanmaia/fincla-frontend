@@ -1,8 +1,8 @@
-# 🚀 WalletAI - Roadmap de Melhorias
+# 🚀 Fincla - Roadmap de Melhorias
 
 ## 📊 Visão Geral
 
-Este documento contém uma análise abrangente do dashboard atual e sugestões de melhorias organizadas por prioridade e complexidade. O objetivo é transformar o WalletAI em uma ferramenta financeira completa e moderna.
+Este documento contém uma análise abrangente do dashboard atual e sugestões de melhorias organizadas por prioridade e complexidade. O objetivo é transformar o Fincla em uma ferramenta financeira completa e moderna.
 
 ---
 

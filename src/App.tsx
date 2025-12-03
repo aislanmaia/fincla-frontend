@@ -7,6 +7,9 @@ import { lazy, Suspense } from "react";
 import { motion } from "framer-motion";
 import Dashboard from "@/pages/dashboard";
 import TransactionsPage from "@/pages/transactions";
+import CreditCardsPage from '@/pages/credit-cards';
+import InvoiceHistoryPage from '@/pages/credit-cards/history';
+import FuturePlanningPage from '@/pages/credit-cards/planning';
 import Login from "@/pages/login";
 import NotFound from "@/pages/not-found";
 import AppLayout from "@/layouts/AppLayout";
@@ -41,6 +44,9 @@ function ProtectedRoutes() {
           <Switch>
             <Route path="/" component={Dashboard} />
             <Route path="/transactions" component={TransactionsPage} />
+            <Route path="/credit-cards" component={CreditCardsPage} />
+            <Route path="/credit-cards/history" component={InvoiceHistoryPage} />
+            <Route path="/credit-cards/planning" component={FuturePlanningPage} />
             <Route path="/reports" component={ReportsPage} />
             <Route path="/goals" component={GoalsPage} />
             <Route path="/profile" component={ProfilePage} />
