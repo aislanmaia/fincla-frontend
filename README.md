@@ -1,4 +1,4 @@
-# WalletAI - Frontend
+# Fincla - Frontend
 
 Uma aplicação frontend moderna para gestão financeira pessoal com assistente de IA.
 
@@ -58,7 +58,7 @@ Crie um arquivo `.env` na raiz do projeto:
 VITE_API_BASE_URL=http://localhost:5000
 
 # Outras configurações
-VITE_APP_NAME=WalletAI
+VITE_APP_NAME=Fincla
 VITE_APP_VERSION=1.0.0
 ```
 
@@ -223,4 +223,4 @@ Se você encontrar algum problema ou tiver dúvidas:
 
 ---
 
-**WalletAI** - Transformando a gestão financeira com IA 🚀 
+**Fincla** - Transformando a gestão financeira com IA 🚀 

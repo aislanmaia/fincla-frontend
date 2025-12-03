@@ -1,4 +1,4 @@
-import { api } from '@/lib/axios';
+import apiClient from './client';
 import { FinancialSimulationRequest, FinancialSimulationResponse } from '@/types/api';
 
 /**

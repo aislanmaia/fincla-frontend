@@ -66,7 +66,7 @@ export default function Login() {
             </div>
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight">
-            Bem-vindo ao WalletAI
+            Bem-vindo ao Fincla
           </CardTitle>
           <CardDescription>
             Entre com suas credenciais para acessar sua conta
