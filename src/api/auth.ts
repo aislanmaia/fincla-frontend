@@ -6,7 +6,7 @@ import { LoginRequest, LoginResponse, User } from '../types/api';
  * Autentica um usuário e retorna o token JWT
  */
 export const login = async (email: string, password: string): Promise<LoginResponse> => {
-  const response = await apiClient.post<LoginResponse>('/api/auth/login', {
+  const response = await apiClient.post<LoginResponse>('/auth/login', {
     email,
     password,
   });
@@ -23,7 +23,7 @@ export const login = async (email: string, password: string): Promise<LoginRespo
  * Retorna informações do usuário autenticado
  */
 export const getCurrentUser = async (): Promise<User> => {
-  const response = await apiClient.get<User>('/api/auth/me');
+  const response = await apiClient.get<User>('/auth/me');
   return response.data;
 };
 

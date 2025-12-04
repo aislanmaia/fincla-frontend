@@ -8,7 +8,7 @@ import { CreateOrganizationRequest, CreateOrganizationResponse, MyOrganizationsR
 export const createOrganization = async (
   data: CreateOrganizationRequest
 ): Promise<CreateOrganizationResponse> => {
-  const response = await apiClient.post<CreateOrganizationResponse>('/api/organizations', data);
+  const response = await apiClient.post<CreateOrganizationResponse>('/organizations', data);
   return response.data;
 };
 
@@ -16,6 +16,6 @@ export const createOrganization = async (
  * Lista todas as organizações do usuário atual
  */
 export const getMyOrganizations = async (): Promise<MyOrganizationsResponse> => {
-  const response = await apiClient.get<MyOrganizationsResponse>('/api/memberships/my-organizations');
+  const response = await apiClient.get<MyOrganizationsResponse>('/memberships/my-organizations');
   return response.data;
 };
