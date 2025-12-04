@@ -1,63 +1,63 @@
 // Configuração das APIs externas
 export const API_CONFIG = {
   // URL base da API backend
-  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000',
+  BASE_URL: `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/v1`,
   
   // Endpoints da API
   ENDPOINTS: {
     // Autenticação
     AUTH: {
-      LOGIN: '/api/auth/login',
-      REGISTER: '/api/auth/register',
-      LOGOUT: '/api/auth/logout',
-      REFRESH: '/api/auth/refresh',
+      LOGIN: '/auth/login',
+      REGISTER: '/auth/register',
+      LOGOUT: '/auth/logout',
+      REFRESH: '/auth/refresh',
     },
     
     // Usuários
     USERS: {
-      PROFILE: '/api/users/profile',
-      UPDATE: '/api/users/update',
+      PROFILE: '/users/profile',
+      UPDATE: '/users/update',
     },
     
     // Transações
     TRANSACTIONS: {
-      LIST: '/api/transactions',
-      CREATE: '/api/transactions',
-      UPDATE: '/api/transactions/:id',
-      DELETE: '/api/transactions/:id',
-      SUMMARY: '/api/transactions/summary',
+      LIST: '/transactions',
+      CREATE: '/transactions',
+      UPDATE: '/transactions/:id',
+      DELETE: '/transactions/:id',
+      SUMMARY: '/transactions/summary',
     },
     
     // Categorias
     CATEGORIES: {
-      LIST: '/api/categories',
-      CREATE: '/api/categories',
-      UPDATE: '/api/categories/:id',
-      DELETE: '/api/categories/:id',
+      LIST: '/categories',
+      CREATE: '/categories',
+      UPDATE: '/categories/:id',
+      DELETE: '/categories/:id',
     },
     
     // Metas financeiras
     GOALS: {
-      LIST: '/api/goals',
-      CREATE: '/api/goals',
-      UPDATE: '/api/goals/:id',
-      DELETE: '/api/goals/:id',
+      LIST: '/goals',
+      CREATE: '/goals',
+      UPDATE: '/goals/:id',
+      DELETE: '/goals/:id',
     },
     
     // Relatórios
     REPORTS: {
-      MONTHLY: '/api/reports/monthly',
-      CATEGORIES: '/api/reports/categories',
-      TRENDS: '/api/reports/trends',
-      MONEY_FLOW: '/api/reports/money-flow',
-      WEEKLY_HEATMAP: '/api/reports/weekly-heatmap',
-      DAILY_TRANSACTIONS: '/api/reports/daily-transactions',
+      MONTHLY: '/reports/monthly',
+      CATEGORIES: '/reports/categories',
+      TRENDS: '/reports/trends',
+      MONEY_FLOW: '/reports/money-flow',
+      WEEKLY_HEATMAP: '/reports/weekly-heatmap',
+      DAILY_TRANSACTIONS: '/reports/daily-transactions',
     },
     
     // Chat IA
     AI: {
-      CHAT: '/api/ai/chat',
-      PROCESS_TRANSACTION: '/api/ai/process-transaction',
+      CHAT: '/ai/chat',
+      PROCESS_TRANSACTION: '/ai/process-transaction',
     },
   },
   
