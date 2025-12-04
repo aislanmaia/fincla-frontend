@@ -52,8 +52,12 @@ export function useOrganization() {
                 setActiveOrgId(firstOrg.id);
                 localStorage.setItem(STORAGE_KEY, firstOrg.id);
             }
+        } else if (activeOrgId && organizations.length === 0 && !isLoading) {
+            // Usuário não tem mais organizações, limpar activeOrgId
+            setActiveOrgId(null);
+            localStorage.removeItem(STORAGE_KEY);
         }
-    }, [activeOrgId, organizations]);
+    }, [activeOrgId, organizations, isLoading]);
 
     /**
      * Troca a organização ativa

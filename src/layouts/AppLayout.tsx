@@ -41,7 +41,7 @@ import { useToast } from "@/hooks/use-toast";
 export function AppLayout({ children }: PropsWithChildren) {
   const queryClient = useQueryClient();
   const { messages, isProcessing, processUserMessage } = useAIChat();
-  const { user, signOut, isDemoMode } = useAuth();
+  const { user, signOut } = useAuth();
   const { organizations, activeOrgId, selectOrganization } = useOrganization();
   const [, setLocation] = useLocation();
   const [isDashboard] = useRoute("/");
@@ -225,23 +225,6 @@ export function AppLayout({ children }: PropsWithChildren) {
                   </Select>
                 )}
 
-                {/* Chip Modo Demo - apenas se estiver em demo mode */}
-                {isDemoMode && (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs bg-[#E6F0F6] text-[#00A89C] ring-1 ring-[#00C6B8]/30 cursor-help">
-                          <span className="inline-block h-2 w-2 rounded-full bg-[#00C6B8]" />
-                          Modo Demo
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Você está usando dados simulados.</p>
-                        <p className="text-xs text-muted-foreground">Faça login com outro email para acessar dados reais.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
                 {/* Menu de contexto do usuário */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

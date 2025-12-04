@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { listTransactions } from '@/api/transactions';
-import { getDemoData } from '../config/demo';
-import { useAuth } from './useAuth';
 import { useOrganization } from './useOrganization';
 import { processTransactionAnalytics } from '@/lib/analytics';
 import type { Transaction as ApiTransaction } from '@/types/api';
@@ -79,41 +77,41 @@ export interface DailyTransactions {
 
 /**
  * Hook principal para dados financeiros
- * - Em modo demo: retorna dados mockados
- * - Em modo real: carrega transações do backend e processa analytics no frontend
+ * Carrega transações do backend e processa analytics no frontend
  */
 export function useFinancialData() {
-  const { isDemoMode: isDemo } = useAuth();
   const { activeOrgId } = useOrganization();
-  const demoData = getDemoData();
 
-  // Estados para dados processados
-  const [summary, setSummary] = useState<FinancialSummary>(demoData.summary);
-  const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>(demoData.expenseCategories);
-  const [monthlyData, setMonthlyData] = useState<MonthlyData[]>(demoData.monthlyData);
-  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>(demoData.recentTransactions);
-  const [moneyFlow, setMoneyFlow] = useState<MoneyFlow>(demoData.moneyFlow as MoneyFlow);
-  const [weeklyExpenseHeatmap, setWeeklyExpenseHeatmap] = useState<WeeklyExpenseHeatmap>(demoData.weeklyExpenseHeatmap as WeeklyExpenseHeatmap);
-  const [dailyTransactions, setDailyTransactions] = useState<DailyTransactions>(demoData.dailyTransactions as DailyTransactions);
+  // Estados para dados processados (inicializados vazios)
+  const [summary, setSummary] = useState<FinancialSummary>({ balance: 0, income: 0, expenses: 0 });
+  const [expenseCategories, setExpenseCategories] = useState<ExpenseCategory[]>([]);
+  const [monthlyData, setMonthlyData] = useState<MonthlyData[]>([]);
+  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
+  const [moneyFlow, setMoneyFlow] = useState<MoneyFlow>({ nodes: [], links: [] });
+  const [weeklyExpenseHeatmap, setWeeklyExpenseHeatmap] = useState<WeeklyExpenseHeatmap>({ categories: [], days: [], data: [] });
+  const [dailyTransactions, setDailyTransactions] = useState<DailyTransactions>({
+    monday: [],
+    tuesday: [],
+    wednesday: [],
+    thursday: [],
+    friday: [],
+    saturday: [],
+    sunday: []
+  });
 
-  // Carregar transações do backend (apenas se não for demo E tiver organização ativa)
+  // Carregar transações do backend (sempre que tiver organização ativa)
   const { data: backendTransactions, isLoading, error: queryError } = useQuery({
     queryKey: ['financial-data', activeOrgId],
     queryFn: async () => {
       if (!activeOrgId) return [];
       return await listTransactions({ organization_id: activeOrgId });
     },
-    enabled: !isDemo && !!activeOrgId,
+    enabled: !!activeOrgId,
     staleTime: 2 * 60 * 1000, // 2 minutos
   });
 
   // Processar dados quando transações do backend mudarem
   useEffect(() => {
-    if (isDemo) {
-      // Modo demo: manter dados mockados
-      return;
-    }
-
     if (backendTransactions && backendTransactions.length > 0) {
       // Filtrar por organização ativa
       const orgTransactions = backendTransactions.filter(
@@ -152,7 +150,7 @@ export function useFinancialData() {
       setMoneyFlow({ nodes: [], links: [] });
       setWeeklyExpenseHeatmap({ categories: [], days: [], data: [] });
     }
-  }, [backendTransactions, activeOrgId, isDemo]);
+  }, [backendTransactions, activeOrgId]);
 
   const error = queryError ? String(queryError) : null;
 
@@ -166,6 +164,5 @@ export function useFinancialData() {
     dailyTransactions,
     loading: isLoading,
     error,
-    isDemoMode: isDemo,
   };
 }

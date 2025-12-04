@@ -4,16 +4,6 @@ import { login, getCurrentUser, logout as apiLogout, isAuthenticated } from '../
 import { LoginResponse, User } from '../types/api';
 import { handleApiError } from '../api/client';
 
-// Email especial que ativa modo demo
-export const DEMO_USER_EMAIL = 'demo@walletai.app';
-
-/**
- * Verifica se o email é do usuário demo
- */
-export function isDemoUser(email?: string | null): boolean {
-  return email === DEMO_USER_EMAIL;
-}
-
 export const useAuth = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -63,9 +53,6 @@ export const useAuth = () => {
     setError(null);
   };
 
-  // Verificar se está em modo demo
-  const isDemoMode = isDemoUser(user?.email);
-
   return {
     user,
     loading,
@@ -73,7 +60,6 @@ export const useAuth = () => {
     signIn,
     signOut,
     isAuthenticated: !!user,
-    isDemoMode, // Nova flag para verificar modo demo
   };
 };
 

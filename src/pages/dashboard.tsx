@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { TrendingUp, User, AlertCircle, Sparkles } from 'lucide-react';
+import { TrendingUp, User, AlertCircle } from 'lucide-react';
 import { SummaryCards } from '@/components/SummaryCards';
 import { Suspense, lazy } from 'react';
 const ExpensePieChart = lazy(() => import('@/components/charts/ExpensePieChart').then(m => ({ default: m.ExpensePieChart })));
@@ -9,7 +9,6 @@ import { RecentTransactions } from '@/components/RecentTransactions';
 import { useFinancialData } from '@/hooks/useFinancialData';
 import { useAIChat } from '@/hooks/useAIChat';
 import { Button } from '@/components/ui/button';
-import { isDemoMode } from '@/config/demo';
 import { PageTransition } from '@/components/PageTransition';
 
 export default function Dashboard() {
@@ -23,7 +22,6 @@ export default function Dashboard() {
     weeklyExpenseHeatmap,
     loading,
     error,
-    isDemoMode: isDemo
   } = useFinancialData();
 
   const { processUserMessage } = useAIChat();
@@ -50,7 +48,7 @@ export default function Dashboard() {
     <PageTransition>
       <div className="mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 max-w-7xl xl:max-w-[95%] 2xl:max-w-[1800px]">
         {/* Loading State */}
-        {loading && !isDemo && (
+        {loading && (
           <div className="mb-8 p-4 bg-[#E6F0F6] supports-[backdrop-filter]:bg-[#E6F0F6]/80 backdrop-blur border border-[#00C6B8]/30 rounded-xl">
             <div className="flex items-center space-x-2">
               <div className="w-5 h-5 border-2 border-[#00C6B8]/30 border-t-[#00A89C] rounded-full animate-spin"></div>
@@ -59,20 +57,8 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Demo Mode Info */}
-        {isDemo && (
-          <div className="mb-8 p-4 bg-[#E6F0F6] supports-[backdrop-filter]:bg-[#E6F0F6]/80 backdrop-blur border border-[#00C6B8]/30 rounded-xl">
-            <div className="flex items-center space-x-2">
-              <Sparkles className="w-4 h-4 text-[#00A89C]" />
-              <span className="text-sm text-cyan-600">
-                Modo demonstração ativo - Dados simulados sendo exibidos
-              </span>
-            </div>
-          </div>
-        )}
-
         {/* Summary Cards em grid Bento inicial */}
-        <SummaryCards summary={summary} isLoading={loading && !isDemo} />
+        <SummaryCards summary={summary} isLoading={loading} />
 
         {/* Bento Grid: 12 colunas em XL, alturas balanceadas e cards com sombras/gradientes */}
         <div className="grid grid-cols-1 lg:grid-cols-6 xl:grid-cols-12 gap-6 xl:gap-8">

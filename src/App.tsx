@@ -14,11 +14,14 @@ import Login from "@/pages/login";
 import NotFound from "@/pages/not-found";
 import AppLayout from "@/layouts/AppLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { RequireOrganization } from "@/components/RequireOrganization";
 
 // Lazy load heavy pages
 const ReportsPage = lazy(() => import("@/pages/reports"));
 const GoalsPage = lazy(() => import("@/pages/goals"));
 const ProfilePage = lazy(() => import("@/pages/profile"));
+const CreateOrganizationPage = lazy(() => import("@/pages/onboarding/create-organization"));
+const NoOrganizationPage = lazy(() => import("@/pages/no-organization"));
 
 // Loading fallback component with animation
 function PageLoader() {
@@ -39,21 +42,23 @@ function PageLoader() {
 function ProtectedRoutes() {
   return (
     <ProtectedRoute>
-      <AppLayout>
-        <Suspense fallback={<PageLoader />}>
-          <Switch>
-            <Route path="/" component={Dashboard} />
-            <Route path="/transactions" component={TransactionsPage} />
-            <Route path="/credit-cards" component={CreditCardsPage} />
-            <Route path="/credit-cards/history" component={InvoiceHistoryPage} />
-            <Route path="/credit-cards/planning" component={FuturePlanningPage} />
-            <Route path="/reports" component={ReportsPage} />
-            <Route path="/goals" component={GoalsPage} />
-            <Route path="/profile" component={ProfilePage} />
-            <Route component={NotFound} />
-          </Switch>
-        </Suspense>
-      </AppLayout>
+      <RequireOrganization>
+        <AppLayout>
+          <Suspense fallback={<PageLoader />}>
+            <Switch>
+              <Route path="/" component={Dashboard} />
+              <Route path="/transactions" component={TransactionsPage} />
+              <Route path="/credit-cards" component={CreditCardsPage} />
+              <Route path="/credit-cards/history" component={InvoiceHistoryPage} />
+              <Route path="/credit-cards/planning" component={FuturePlanningPage} />
+              <Route path="/reports" component={ReportsPage} />
+              <Route path="/goals" component={GoalsPage} />
+              <Route path="/profile" component={ProfilePage} />
+              <Route component={NotFound} />
+            </Switch>
+          </Suspense>
+        </AppLayout>
+      </RequireOrganization>
     </ProtectedRoute>
   );
 }
@@ -62,6 +67,24 @@ function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
+      
+      {/* Rotas de onboarding - protegidas mas sem AppLayout */}
+      <Route path="/onboarding/create-organization">
+        <ProtectedRoute>
+          <Suspense fallback={<PageLoader />}>
+            <CreateOrganizationPage />
+          </Suspense>
+        </ProtectedRoute>
+      </Route>
+      
+      <Route path="/no-organization">
+        <ProtectedRoute>
+          <Suspense fallback={<PageLoader />}>
+            <NoOrganizationPage />
+          </Suspense>
+        </ProtectedRoute>
+      </Route>
+      
       <Route component={ProtectedRoutes} />
     </Switch>
   );

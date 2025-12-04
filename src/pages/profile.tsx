@@ -9,7 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { PageTransition } from '@/components/PageTransition';
 
 export default function ProfilePage() {
-    const { user, signOut, isDemoMode } = useAuth();
+    const { user, signOut } = useAuth();
     const { organizations, activeOrgId, selectOrganization } = useOrganization();
 
     const getUserInitials = () => {
@@ -53,11 +53,6 @@ export default function ProfilePage() {
                                         {user?.first_name} {user?.last_name}
                                     </h2>
                                     <p className="text-sm text-gray-500 dark:text-gray-400">{user?.email}</p>
-                                    {isDemoMode && (
-                                        <Badge variant="secondary" className="mt-2 bg-cyan-100 text-cyan-700 hover:bg-cyan-200">
-                                            Modo Demo
-                                        </Badge>
-                                    )}
                                 </div>
                                 <div className="mt-6">
                                     <Button variant="outline" className="w-full" onClick={signOut}>
