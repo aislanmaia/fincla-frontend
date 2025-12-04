@@ -29,12 +29,19 @@ Este documento fornece uma referência completa da API REST para desenvolvedores
 ```typescript
 const API_BASE_URL =
   process.env.REACT_APP_API_URL ||
-  'https://api.fincla.com';
+  'https://api.fincla.com/v1';
 ```
 
-> Para desenvolvimento local, defina `REACT_APP_API_URL=http://localhost:8000`
-> (ou a URL do backend que estiver rodando via `uvicorn`) para manter o fluxo
-> offline. Em produção, o frontend deve consumir `https://api.fincla.com`.
+> **⚠️ Importante:** Todos os endpoints da API utilizam o prefixo `/v1` para versionamento.
+> 
+> - **Produção:** `https://api.fincla.com/v1`
+> - **Desenvolvimento local:** `http://localhost:8000/v1`
+> 
+> Se você definir a variável de ambiente `REACT_APP_API_URL`, certifique-se de incluir o `/v1` ao final:
+> ```bash
+> # .env.local (para desenvolvimento)
+> REACT_APP_API_URL=http://localhost:8000/v1
+> ```
 
 ### Headers Padrão
 
@@ -83,6 +90,28 @@ apiClient.interceptors.response.use(
 );
 
 export default apiClient;
+```
+
+### 📌 Versionamento da API
+
+Todos os endpoints da API utilizam o prefixo `/v1` para versionamento. Isso permite:
+
+- **Estabilidade:** Futuras mudanças na API (v2, v3) não quebrarão clientes existentes
+- **Clareza:** Sempre sabemos qual versão da API estamos consumindo
+- **Migração gradual:** Novas versões podem coexistir com versões antigas
+
+**Exemplos de URLs completas:**
+```
+https://api.fincla.com/v1/auth/login
+https://api.fincla.com/v1/users/me
+https://api.fincla.com/v1/transactions
+https://api.fincla.com/v1/organizations
+```
+
+**Exceções:** Endpoints de monitoramento não são versionados:
+```
+https://api.fincla.com/health
+https://api.fincla.com/ping
 ```
 
 ---
@@ -449,14 +478,14 @@ export interface ApiError {
 
 ## 🔑 Endpoints de Autenticação
 
-### POST `/auth/login`
+### POST `/v1/auth/login`
 
 Autentica um usuário e retorna o token JWT.
 
 **Request:**
 ```typescript
 const login = async (email: string, password: string): Promise<LoginResponse> => {
-  const response = await apiClient.post<LoginResponse>('/auth/login', {
+  const response = await apiClient.post<LoginResponse>('/v1/auth/login', {
     email,
     password,
   });
@@ -489,14 +518,14 @@ const login = async (email: string, password: string): Promise<LoginResponse> =>
 
 ---
 
-### GET `/auth/me`
+### GET `/v1/auth/me`
 
 Retorna informações do usuário autenticado.
 
 **Request:**
 ```typescript
 const getCurrentUser = async (): Promise<User> => {
-  const response = await apiClient.get<User>('/auth/me');
+  const response = await apiClient.get<User>('/v1/auth/me');
   return response.data;
 };
 ```
@@ -525,7 +554,7 @@ const getCurrentUser = async (): Promise<User> => {
 
 ## 👥 Endpoints de Usuários
 
-### POST `/users/register/owner`
+### POST `/v1/users/register/owner`
 
 Registra um novo usuário owner (público, não requer autenticação).
 
@@ -537,7 +566,7 @@ const registerOwner = async (
   plan: 'free' | 'beta' | 'premium' = 'free'
 ): Promise<RegisterOwnerResponse> => {
   const response = await apiClient.post<RegisterOwnerResponse>(
-    '/users/register/owner',
+    '/v1/users/register/owner',
     { email, password, plan }
   );
   return response.data;
@@ -565,7 +594,7 @@ const registerOwner = async (
 
 ---
 
-### POST `/users/register/member`
+### POST `/v1/users/register/member`
 
 Registra um novo membro em uma organização (apenas owners).
 
@@ -577,7 +606,7 @@ const registerMember = async (
   organizationId: string
 ): Promise<RegisterMemberResponse> => {
   const response = await apiClient.post<RegisterMemberResponse>(
-    '/users/register/member',
+    '/v1/users/register/member',
     {
       email,
       password,
@@ -612,14 +641,14 @@ const registerMember = async (
 
 ---
 
-### GET `/users/me`
+### GET `/v1/users/me`
 
-Retorna o perfil do usuário autenticado (mesmo que `/auth/me`).
+Retorna o perfil do usuário autenticado (mesmo que `/v1/auth/me`).
 
 **Request:**
 ```typescript
 const getMyProfile = async (): Promise<User> => {
-  const response = await apiClient.get<User>('/users/me');
+  const response = await apiClient.get<User>('/v1/users/me');
   return response.data;
 };
 ```
@@ -628,7 +657,7 @@ const getMyProfile = async (): Promise<User> => {
 
 ## 🏢 Endpoints de Organizações
 
-### POST `/organizations`
+### POST `/v1/organizations`
 
 Cria uma nova organização (apenas owners).
 
@@ -639,7 +668,7 @@ const createOrganization = async (
   description?: string
 ): Promise<CreateOrganizationResponse> => {
   const response = await apiClient.post<CreateOrganizationResponse>(
-    '/organizations',
+    '/v1/organizations',
     { name, description }
   );
   return response.data;
@@ -673,7 +702,7 @@ const createOrganization = async (
 
 ## 👥 Endpoints de Memberships
 
-### GET `/memberships/my-organizations`
+### GET `/v1/memberships/my-organizations`
 
 Lista todas as organizações onde o usuário tem membership.
 
@@ -681,7 +710,7 @@ Lista todas as organizações onde o usuário tem membership.
 ```typescript
 const getMyOrganizations = async (): Promise<MyOrganizationsResponse> => {
   const response = await apiClient.get<MyOrganizationsResponse>(
-    '/memberships/my-organizations'
+    '/v1/memberships/my-organizations'
   );
   return response.data;
 };
@@ -710,7 +739,7 @@ const getMyOrganizations = async (): Promise<MyOrganizationsResponse> => {
 
 ---
 
-### GET `/memberships/organizations/{org_id}/members`
+### GET `/v1/memberships/organizations/{org_id}/members`
 
 Lista todos os membros de uma organização.
 
@@ -720,7 +749,7 @@ const getOrganizationMembers = async (
   organizationId: string
 ): Promise<OrganizationMembersResponse> => {
   const response = await apiClient.get<OrganizationMembersResponse>(
-    `/memberships/organizations/${organizationId}/members`
+    `/v1/memberships/organizations/${organizationId}/members`
   );
   return response.data;
 };
@@ -751,7 +780,7 @@ const getOrganizationMembers = async (
 
 ---
 
-### DELETE `/memberships/organizations/{org_id}/members/{user_id}`
+### DELETE `/v1/memberships/organizations/{org_id}/members/{user_id}`
 
 Remove um membro de uma organização (apenas owners).
 
@@ -762,7 +791,7 @@ const removeMember = async (
   userId: string
 ): Promise<void> => {
   await apiClient.delete(
-    `/memberships/organizations/${organizationId}/members/${userId}`
+    `/v1/memberships/organizations/${organizationId}/members/${userId}`
   );
 };
 ```
@@ -1255,7 +1284,7 @@ const orgTransactions = allTransactions.filter(
 
 ## 💳 Endpoints de Cartões de Crédito
 
-### POST `/credit-cards`
+### POST `/v1/credit-cards`
 
 Cria um novo cartão de crédito.
 
@@ -1265,7 +1294,7 @@ const createCreditCard = async (
   card: CreateCreditCardRequest
 ): Promise<CreditCard> => {
   const response = await apiClient.post<CreditCard>(
-    '/credit-cards',
+    '/v1/credit-cards',
     card
   );
   return response.data;
@@ -1302,7 +1331,7 @@ await createCreditCard({
 
 ---
 
-### GET `/credit-cards`
+### GET `/v1/credit-cards`
 
 Lista todos os cartões de uma organização.
 
@@ -1311,7 +1340,7 @@ Lista todos os cartões de uma organização.
 const listCreditCards = async (
   organizationId: string
 ): Promise<CreditCard[]> => {
-  const response = await apiClient.get<CreditCard[]>('/credit-cards', {
+  const response = await apiClient.get<CreditCard[]>('/v1/credit-cards', {
     params: { organization_id: organizationId },
   });
   return response.data;
@@ -1334,7 +1363,7 @@ const listCreditCards = async (
 
 ---
 
-### GET `/credit-cards/{card_id}`
+### GET `/v1/credit-cards/{card_id}`
 
 Obtém um cartão específico.
 
@@ -1345,7 +1374,7 @@ const getCreditCard = async (
   organizationId: string
 ): Promise<CreditCard> => {
   const response = await apiClient.get<CreditCard>(
-    `/credit-cards/${cardId}`,
+    `/v1/credit-cards/${cardId}`,
     {
       params: { organization_id: organizationId },
     }
@@ -1360,7 +1389,7 @@ const getCreditCard = async (
 
 ---
 
-### DELETE `/credit-cards/{card_id}`
+### DELETE `/v1/credit-cards/{card_id}`
 
 Deleta um cartão de crédito.
 
@@ -1370,7 +1399,7 @@ const deleteCreditCard = async (
   cardId: number,
   organizationId: string
 ): Promise<void> => {
-  await apiClient.delete(`/credit-cards/${cardId}`, {
+  await apiClient.delete(`/v1/credit-cards/${cardId}`, {
     params: { organization_id: organizationId },
   });
 };
@@ -1384,7 +1413,7 @@ const deleteCreditCard = async (
 
 ---
 
-### GET `/credit-cards/{card_id}/invoices/{year}/{month}`
+### GET `/v1/credit-cards/{card_id}/invoices/{year}/{month}`
 
 Obtém a fatura de um cartão de crédito para um mês específico.
 
@@ -1397,7 +1426,7 @@ const getCreditCardInvoice = async (
   organizationId: string
 ): Promise<InvoiceResponse> => {
   const response = await apiClient.get<InvoiceResponse>(
-    `/credit-cards/${cardId}/invoices/${year}/${month}`,
+    `/v1/credit-cards/${cardId}/invoices/${year}/${month}`,
     {
       params: { organization_id: organizationId },
     }
@@ -1769,7 +1798,7 @@ import { CreditCard, CreateCreditCardRequest, InvoiceResponse } from '../types/a
 export const listCreditCards = async (
   organizationId: string
 ): Promise<CreditCard[]> => {
-  const response = await apiClient.get<CreditCard[]>('/credit-cards', {
+  const response = await apiClient.get<CreditCard[]>('/v1/credit-cards', {
     params: { organization_id: organizationId },
   });
   return response.data;
@@ -1779,7 +1808,7 @@ export const createCreditCard = async (
   card: CreateCreditCardRequest
 ): Promise<CreditCard> => {
   const response = await apiClient.post<CreditCard>(
-    '/credit-cards',
+    '/v1/credit-cards',
     card
   );
   return response.data;
@@ -1792,7 +1821,7 @@ export const getCreditCardInvoice = async (
   organizationId: string
 ): Promise<InvoiceResponse> => {
   const response = await apiClient.get<InvoiceResponse>(
-    `/credit-cards/${cardId}/invoices/${year}/${month}`,
+    `/v1/credit-cards/${cardId}/invoices/${year}/${month}`,
     {
       params: { organization_id: organizationId },
     }
@@ -2264,21 +2293,22 @@ export const useTags = (organizationId: string) => {
 
 ## 🔗 Links Úteis
 
-- **Swagger/OpenAPI**: Acesse `http://localhost:8000/docs` para documentação interativa
-- **Health Check**: `GET /health` - Verifica se a API está online
-- **Ping**: `GET /ping` - Endpoint simples de teste
+- **Swagger/OpenAPI**: Acesse `http://localhost:8000/docs` ou `https://api.fincla.com/docs` para documentação interativa
+- **Health Check**: `GET /health` - Verifica se a API está online (não versionado)
+- **Ping**: `GET /ping` - Endpoint simples de teste (não versionado)
 
 ---
 
 ## 📝 Notas Importantes
 
-1. **Multi-tenancy**: Todos os endpoints (exceto auth e registro público) requerem `organization_id` explícito
-2. **Autenticação**: Token JWT deve ser incluído em todos os headers (exceto login/registro)
-3. **Validação**: A API valida automaticamente os dados e retorna erros descritivos
-4. **Datas**: Use formato ISO (YYYY-MM-DD) para campos de data
-5. **Valores**: Use números (não strings) para valores monetários
-6. **UUIDs**: Todos os IDs de organização e usuário são UUIDs (strings)
-7. **Sistema de Tags**:
+1. **Versionamento**: Todos os endpoints da API utilizam o prefixo `/v1`. A base URL completa é `https://api.fincla.com/v1`
+2. **Multi-tenancy**: Todos os endpoints (exceto auth e registro público) requerem `organization_id` explícito
+3. **Autenticação**: Token JWT deve ser incluído em todos os headers (exceto login/registro)
+4. **Validação**: A API valida automaticamente os dados e retorna erros descritivos
+5. **Datas**: Use formato ISO (YYYY-MM-DD) para campos de data
+6. **Valores**: Use números (não strings) para valores monetários
+7. **UUIDs**: Todos os IDs de organização e usuário são UUIDs (strings)
+8. **Sistema de Tags**:
    - Todas as transações **devem** ter pelo menos uma tag do tipo obrigatório (geralmente "categoria")
    - Cada tipo de tag pode ter um limite máximo por transação (`max_per_transaction`)
    - Tags são agrupadas por tipo na resposta de transações (`tags: { "categoria": [...], "projeto": [...] }`)
@@ -2287,5 +2317,5 @@ export const useTags = (organizationId: string) => {
 
 ---
 
-**Última atualização**: Janeiro 2025
+**Última atualização**: Dezembro 2025 (v1 API)
 
