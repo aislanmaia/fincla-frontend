@@ -6,7 +6,7 @@ import { TagsResponse, Tag, TagTypesResponse } from '../types/api';
  * Lista todos os tipos de tags disponíveis no sistema
  */
 export const listTagTypes = async (): Promise<TagTypesResponse> => {
-  const response = await apiClient.get<TagTypesResponse>('/api/v1/tag-types');
+  const response = await apiClient.get<TagTypesResponse>('/tag-types');
   return response.data;
 };
 
@@ -17,7 +17,7 @@ export const listTags = async (
   organizationId: string,
   tagType?: string
 ): Promise<TagsResponse> => {
-  const response = await apiClient.get<TagsResponse>('/api/v1/tags', {
+  const response = await apiClient.get<TagsResponse>('/tags', {
     params: {
       organization_id: organizationId,
       tag_type: tagType, // Opcional: nome do tipo de tag (ex: "categoria")
@@ -32,7 +32,7 @@ export const createTag = async (
   tagTypeId: string,
   color?: string
 ): Promise<Tag> => {
-  const response = await apiClient.post<Tag>('/api/v1/tags', {
+  const response = await apiClient.post<Tag>('/tags', {
     name,
     tag_type_id: tagTypeId,
     color,

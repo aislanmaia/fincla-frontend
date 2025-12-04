@@ -9,7 +9,7 @@ export const createTransaction = async (
   transaction: CreateTransactionRequest
 ): Promise<Transaction> => {
   const response = await apiClient.post<Transaction>(
-    '/api/v1/transactions',
+    '/transactions',
     transaction
   );
   return response.data;
@@ -22,7 +22,7 @@ export const listTransactions = async (
   filters?: ListTransactionsQuery
 ): Promise<Transaction[]> => {
   const response = await apiClient.get<Transaction[]>(
-    '/api/v1/transactions',
+    '/transactions',
     { params: filters }
   );
   return response.data;
