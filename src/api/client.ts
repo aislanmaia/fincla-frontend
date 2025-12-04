@@ -1,11 +1,11 @@
 // api/client.ts
 import axios, { AxiosError } from 'axios';
 import { ApiError } from '../types/api';
-
-const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/v1`;
+import { API_CONFIG } from '../config/api';
 
 const apiClient = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: API_CONFIG.BASE_URL,
+  timeout: API_CONFIG.REQUEST_CONFIG.TIMEOUT,
   headers: {
     'Content-Type': 'application/json',
   },
