@@ -72,7 +72,7 @@ export function ChatModal({ isOpen, onClose, messages, isProcessing }: ChatModal
                 <Bot className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">Assistente FinanceAI</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Assistente Fincla</h3>
                 <p className="text-sm text-gray-500">Online - Pronto para ajudar</p>
               </div>
             </div>

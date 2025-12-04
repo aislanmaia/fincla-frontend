@@ -109,7 +109,7 @@ export function AppLayout({ children }: PropsWithChildren) {
               <div className="bg-white/20 p-2 rounded-xl ring-1 ring-white/25">
                 <TrendingUp className="w-4 h-4 text-white" />
               </div>
-              <div className="font-semibold tracking-tight">FinanceAI</div>
+              <div className="font-semibold tracking-tight">Fincla</div>
             </div>
           </SidebarHeader>
           <SidebarSeparator className="bg-white/20" />

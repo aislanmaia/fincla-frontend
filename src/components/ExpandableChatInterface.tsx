@@ -199,7 +199,7 @@ export function ExpandableChatInterface({ messages, onSendMessage, isProcessing,
                       <Bot className="w-5 h-5 text-white" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Assistente FinanceAI</h3>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Assistente Fincla</h3>
                       <p className="text-sm text-gray-500 dark:text-gray-400">Online - Pronto para ajudar</p>
                     </div>
                   </div>

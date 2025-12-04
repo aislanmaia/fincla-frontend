@@ -194,7 +194,7 @@ export function ChatBar({ placeholder, isProcessing, onSend, suggestions = [], m
                 <div className="h-full flex flex-col chat-fade-in">
                   {/* Top bar única para ambas as colunas */}
                   <div className="shrink-0 h-14 px-5 flex items-center justify-between border-b border-gray-200 dark:border-white/10 supports-[backdrop-filter]:bg-white/90 backdrop-blur dark:supports-[backdrop-filter]:bg-neutral-900/70">
-                    <div className="text-sm font-medium text-[#111827] dark:text-gray-100">Assistente FinanceAI</div>
+                    <div className="text-sm font-medium text-[#111827] dark:text-gray-100">Assistente Fincla</div>
                     <button
                       className="ml-auto h-7 w-7 inline-flex items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10"
                       aria-label="Minimizar"
@@ -226,7 +226,7 @@ export function ChatBar({ placeholder, isProcessing, onSend, suggestions = [], m
                               )}
 
                               <div className={`mb-1 text-[11px] text-gray-500 dark:text-gray-400 ${isUser ? 'text-right' : 'text-left'}`}>
-                                <span className="font-medium">{isUser ? 'Você' : 'FinanceAI'}</span>
+                                <span className="font-medium">{isUser ? 'Você' : 'Fincla'}</span>
                                 <span className="mx-1">•</span>
                                 <span>{format(m.timestamp, 'HH:mm', { locale: ptBR })}</span>
                               </div>

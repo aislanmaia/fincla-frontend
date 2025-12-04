@@ -59,7 +59,7 @@ Implementação completa do ecossistema de análise financeira para Cartões de 
 ### Implementado:
 
 #### Header e Navegação
-- ✅ **Breadcrumb funcional**: `FinanceAI > Cartões > Histórico`
+- ✅ **Breadcrumb funcional**: `Fincla > Cartões > Histórico`
 - ✅ Título: "Histórico de Faturas"
 - ✅ Descrição: "Consulte e analise todas as suas faturas anteriores"
 
@@ -98,7 +98,7 @@ Implementação completa do ecossistema de análise financeira para Cartões de 
 ### Implementado:
 
 #### Header e Navegação
-- ✅ **Breadcrumb funcional**: `FinanceAI > Cartões > Planejamento Futuro`
+- ✅ **Breadcrumb funcional**: `Fincla > Cartões > Planejamento Futuro`
 - ✅ Título: "Planejamento Futuro"
 - ✅ Descrição contextual
 
