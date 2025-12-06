@@ -44,6 +44,8 @@ import {
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { Loader2, TrendingUp, TrendingDown, Check, CreditCard, Wallet, Banknote, Building2, Receipt, Plus, Calendar, Tag, DollarSign, FileText, ShoppingBag, Clock, Search, MapPin, User, FolderOpen, StickyNote, X, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -1388,6 +1390,8 @@ const transactionSchema = z.object({
   card_last4: z.string().optional().nullable(),
   modality: z.enum(['cash', 'installment']).optional().nullable(),
   installments_count: z.number().positive().optional().nullable(),
+  // Marcador de recorrência para previsões futuras
+  recurring: z.boolean().default(false),
 }).refine((data) => {
   if (data.payment_method === 'Cartão de Crédito' && !data.card_last4) {
     return false;
@@ -1696,6 +1700,7 @@ export function NewTransactionSheet({
         payment_method: values.payment_method,
         date: values.date.split('T')[0], // Enviar apenas a data YYYY-MM-DD
         tag_ids: tagIds,
+        recurring: values.recurring || false, // Marcador de recorrência para previsões
         ...(values.payment_method === 'Cartão de Crédito' && {
           card_last4: values.card_last4 || null,
           modality: values.modality || null,
@@ -2367,6 +2372,34 @@ export function NewTransactionSheet({
                           </FormItem>
                         )}
                       />
+
+                      {/* Marcador de Recorrência */}
+                      <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
+                        <FormField
+                          control={form.control}
+                          name="recurring"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                  disabled={loading}
+                                  id="recurring-checkbox"
+                                />
+                              </FormControl>
+                              <div className="space-y-0 leading-none">
+                                <Label
+                                  htmlFor="recurring-checkbox"
+                                  className="text-sm text-slate-600 dark:text-slate-400 cursor-pointer"
+                                >
+                                  Incluir esta transação nas previsões futuras (ex: fluxo de caixa, planejamento)
+                                </Label>
+                              </div>
+                            </FormItem>
+                          )}
+                        />
+                      </div>
 
                       {/* Área de Tags Adicionadas removida para evitar redundância */}
                       {/* As tags selecionadas agora são visualizadas diretamente no ClassificationPrompt */}

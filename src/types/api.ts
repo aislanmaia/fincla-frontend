@@ -145,6 +145,8 @@ export interface CreateTransactionRequest {
   modality?: 'cash' | 'installment' | null;
   installments_count?: number | null;
   tag_ids?: string[];
+  // Marcador de recorrência para previsões futuras
+  recurring?: boolean;
 }
 
 export interface Transaction {
