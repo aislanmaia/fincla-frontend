@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { createTransaction } from '@/api/transactions';
 import { getMyOrganizations } from '@/api/organizations';
 import { listTags, listTagTypes, createTag } from '@/api/tags';
@@ -47,7 +48,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Loader2, TrendingUp, TrendingDown, Check, CreditCard, Wallet, Banknote, Building2, Receipt, Plus, Calendar, Tag, DollarSign, FileText, ShoppingBag, Clock, Search, MapPin, User, FolderOpen, StickyNote, X, Sparkles, Info } from 'lucide-react';
+import { Loader2, TrendingUp, TrendingDown, Check, CreditCard, Wallet, Banknote, Building2, Receipt, Plus, Calendar, Tag, DollarSign, FileText, ShoppingBag, Clock, Search, MapPin, User, FolderOpen, StickyNote, X, Sparkles, Info, ArrowLeft } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { SearchableSelect } from '@/components/SearchableSelect';
@@ -985,7 +986,7 @@ function ClassificationPrompt({
 
       {/* Dialog de Criação de Tag */}
       <Dialog open={!!creationState} onOpenChange={(open) => !open && setCreationState(null)}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[425px]" style={{ zIndex: 70 }}>
           <DialogHeader>
             <DialogTitle>Criar nova {creationState?.label}</DialogTitle>
             <DialogDescription>
@@ -1093,7 +1094,7 @@ function CardManagementArea({
                     >
                       <ToggleGroupItem
                         value="cash"
-                        aria-label="À Vista"
+                        aria-label="À vista"
                         className={cn(
                           'flex-1 h-10 rounded-lg font-medium text-sm transition-all duration-200',
                           'data-[state=on]:bg-gradient-to-r data-[state=on]:from-purple-500 data-[state=on]:to-blue-500 data-[state=on]:text-white data-[state=on]:shadow-md',
@@ -1101,7 +1102,7 @@ function CardManagementArea({
                           'data-[state=off]:hover:bg-gray-200 dark:data-[state=off]:hover:bg-gray-600'
                         )}
                       >
-                        À Vista
+                        À vista
                       </ToggleGroupItem>
                       <ToggleGroupItem
                         value="installment"
@@ -1456,6 +1457,7 @@ export function NewTransactionSheet({
   onSuccess,
 }: NewTransactionSheetProps) {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1464,6 +1466,10 @@ export function NewTransactionSheet({
   const [showConfirmationDialog, setShowConfirmationDialog] = useState(false);
   const [valueDisplay, setValueDisplay] = useState<string>('');
   const valueInputRef = useRef<HTMLInputElement>(null);
+  
+  // Estados para wizard mobile
+  const [mobileStep, setMobileStep] = useState<1 | 2>(1);
+  const [showTagSelector, setShowTagSelector] = useState(false);
 
   // Estados para tags e cartão
   const [tags, setTags] = useState<Array<{ type: TagType; value: string }>>([]);
@@ -1515,6 +1521,17 @@ export function NewTransactionSheet({
 
     loadTagTypes();
   }, []);
+
+  // Focar automaticamente no campo de valor quando a etapa 1 mobile for exibida
+  useEffect(() => {
+    if (isMobile && mobileStep === 1 && open && valueInputRef.current) {
+      // Pequeno delay para garantir que o modal esteja totalmente renderizado
+      const timer = setTimeout(() => {
+        valueInputRef.current?.focus();
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [isMobile, mobileStep, open]);
 
   // Buscar todas as tags quando a organização for selecionada
   useEffect(() => {
@@ -1591,6 +1608,11 @@ export function NewTransactionSheet({
       setValueDisplay('');
       setTags([]);
       setSelectedCardId(null);
+      // Resetar wizard mobile
+      if (isMobile) {
+        setMobileStep(1);
+        setShowTagSelector(false);
+      }
       setShowCardCreateForm(false);
       setShowConfirmationDialog(false);
     }
@@ -1764,6 +1786,86 @@ export function NewTransactionSheet({
     form.trigger().then((isValid) => {
       if (isValid) {
         setShowConfirmationDialog(true);
+      } else {
+        // Se houver erros, fazer scroll para o primeiro erro
+        if (isMobile) {
+          // Aguardar um pouco para o DOM atualizar com as mensagens de erro
+          setTimeout(() => {
+            // Procurar pela primeira mensagem de erro visível (tentar múltiplos seletores)
+            let errorMessage: Element | null = null;
+            
+            // Tentar diferentes seletores
+            errorMessage = document.querySelector('[role="alert"]') ||
+                          document.querySelector('.text-destructive') ||
+                          document.querySelector('.text-red-600') ||
+                          document.querySelector('.text-red-400') ||
+                          document.querySelector('p.text-sm.text-red-600') ||
+                          document.querySelector('p.text-sm.text-red-400');
+            
+            if (!errorMessage) {
+              // Procurar por qualquer elemento com texto de erro
+              const allElements = document.querySelectorAll('p, span, div');
+              Array.from(allElements).some((el) => {
+                const text = el.textContent || '';
+                if (text.includes('deve ter') || text.includes('Selecione') || text.includes('obrigatório')) {
+                  errorMessage = el;
+                  return true;
+                }
+                return false;
+              });
+            }
+            
+            if (errorMessage) {
+              // Fazer scroll no container scrollável da etapa 2 (procurar pelo container correto)
+              const step2Container = document.querySelector('[data-step="2"]') || 
+                                    document.querySelector('.absolute.inset-0.flex.flex-col.overflow-y-auto') ||
+                                    errorMessage.closest('.overflow-y-auto') ||
+                                    errorMessage.closest('.flex.flex-col');
+              
+              if (step2Container && step2Container instanceof HTMLElement) {
+                // Calcular posição relativa ao container
+                const containerRect = step2Container.getBoundingClientRect();
+                const errorRect = errorMessage.getBoundingClientRect();
+                const scrollTop = step2Container.scrollTop;
+                const relativeTop = errorRect.top - containerRect.top + scrollTop;
+                
+                step2Container.scrollTo({
+                  top: Math.max(0, relativeTop - 100), // 100px de margem superior
+                  behavior: 'smooth'
+                });
+              } else {
+                // Fallback: scroll direto no elemento usando scrollIntoView
+                errorMessage.scrollIntoView({ 
+                  behavior: 'smooth', 
+                  block: 'center',
+                  inline: 'nearest'
+                });
+              }
+              
+              // Destacar visualmente o campo com erro
+              const formItem = errorMessage.closest('.space-y-2, .space-y-6, [class*="FormItem"]');
+              if (formItem) {
+                const input = formItem.querySelector('input, textarea, select') as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
+                if (input) {
+                  input.focus();
+                  input.classList.add('ring-2', 'ring-red-500');
+                  setTimeout(() => {
+                    input.classList.remove('ring-2', 'ring-red-500');
+                  }, 2000);
+                } else {
+                  // Se não houver input, destacar o botão ou área relacionada
+                  const button = formItem.querySelector('button');
+                  if (button) {
+                    button.classList.add('ring-2', 'ring-red-500', 'border-red-500');
+                    setTimeout(() => {
+                      button.classList.remove('ring-2', 'ring-red-500', 'border-red-500');
+                    }, 2000);
+                  }
+                }
+              }
+            }
+          }, 200);
+        }
       }
     });
   };
@@ -1853,7 +1955,7 @@ export function NewTransactionSheet({
       category: values.category || 'Não informado',
       paymentMethod: values.payment_method || 'Não informado',
       date: dateFormatted,
-      modality: values.modality === 'cash' ? 'À Vista' : values.modality === 'installment' ? 'Parcelado' : null,
+      modality: values.modality === 'cash' ? 'À vista' : values.modality === 'installment' ? 'Parcelado' : null,
       installments: values.installments_count || null,
       tags: tags.filter(t => t.value).map(t => `${t.type}: ${t.value}`),
     };
@@ -1862,10 +1964,19 @@ export function NewTransactionSheet({
   const handleSheetOpenChange = (newOpen: boolean) => {
     // Só permitir fechar se não estiver processando e não estiver em estado de sucesso
     if (!newOpen && !loading && !showSuccess) {
+      // Resetar wizard mobile quando fechar
+      if (isMobile) {
+        setMobileStep(1);
+        setShowTagSelector(false);
+      }
       onOpenChange(false);
     } else if (!newOpen && !loading && showSuccess) {
       // Se estiver em sucesso, permitir fechar clicando fora
       setShowSuccess(false);
+      if (isMobile) {
+        setMobileStep(1);
+        setShowTagSelector(false);
+      }
       onOpenChange(false);
       onSuccess?.();
     }
@@ -1874,16 +1985,553 @@ export function NewTransactionSheet({
   return (
     <Sheet open={open} onOpenChange={handleSheetOpenChange}>
       <SheetContent
-        side="right"
-        className="!w-[1000px] !max-w-[1000px] overflow-hidden p-8 [&>button]:hidden z-50 [&_div[data-radix-dialog-overlay]]:bg-black/40 bg-white dark:bg-gray-950"
+        side={isMobile ? "bottom" : "right"}
+        className={cn(
+          isMobile 
+            ? "!h-[100vh] !max-h-[100vh] !w-full !max-w-full rounded-t-2xl overflow-hidden p-0 [&>button]:hidden z-50 [&_div[data-radix-dialog-overlay]]:bg-black/40"
+            : "!w-[1000px] !max-w-[1000px] overflow-hidden p-8 [&>button]:hidden z-50 [&_div[data-radix-dialog-overlay]]:bg-black/40 bg-white dark:bg-gray-950"
+        )}
       >
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.2 }}
-          className="h-full relative"
+          className={cn("h-full relative", isMobile && "bg-white dark:bg-gray-950")}
         >
-          <div className="flex flex-col h-full">
+          {isMobile ? (
+            // Versão Mobile: Wizard em etapas
+            <div className="flex flex-col h-full">
+              {/* Header Fixo */}
+              <div className="shrink-0 flex items-center justify-between px-4 pt-4 pb-2 border-b border-slate-200 dark:border-slate-700">
+                {mobileStep === 2 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setMobileStep(1)}
+                    className="h-8 w-8 p-0"
+                  >
+                    <ArrowLeft className="h-5 w-5" />
+                  </Button>
+                )}
+                <SheetTitle className={cn("text-lg font-semibold", mobileStep === 2 && "flex-1 text-center")}>
+                  {mobileStep === 1 
+                    ? type === 'expense' ? 'Nova Despesa' : 'Nova Receita'
+                    : 'Detalhes'
+                  }
+                </SheetTitle>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onOpenChange(false)}
+                  className="h-8 w-8 p-0"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {/* Conteúdo do Wizard */}
+              <div className="flex-1 min-h-0 overflow-hidden relative">
+                <AnimatePresence mode="wait">
+                  {mobileStep === 1 ? (
+                    <motion.div
+                      key="step1"
+                      initial={{ x: 0, opacity: 1 }}
+                      exit={{ x: -100, opacity: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="absolute inset-0 flex flex-col p-6"
+                    >
+                      {/* Etapa 1: Valor e Tipo */}
+                      <Form {...form}>
+                        <div className="flex-1 flex flex-col">
+                          {/* Seletores de Tipo */}
+                          <FormField
+                            control={form.control}
+                            name="type"
+                            render={({ field }) => (
+                              <FormItem className="mb-8">
+                                <FormControl>
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <Button
+                                      type="button"
+                                      variant={field.value === 'expense' ? 'default' : 'outline'}
+                                      onClick={() => {
+                                        field.onChange('expense');
+                                        form.setValue('payment_method', '');
+                                      }}
+                                      className={cn(
+                                        "h-14 text-base font-semibold",
+                                        field.value === 'expense' && "bg-rose-500 hover:bg-rose-600 text-white"
+                                      )}
+                                    >
+                                      <TrendingDown className="h-5 w-5 mr-2" />
+                                      Despesa
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant={field.value === 'income' ? 'default' : 'outline'}
+                                      onClick={() => {
+                                        field.onChange('income');
+                                        form.setValue('payment_method', '');
+                                      }}
+                                      className={cn(
+                                        "h-14 text-base font-semibold",
+                                        field.value === 'income' && "bg-emerald-500 hover:bg-emerald-600 text-white"
+                                      )}
+                                    >
+                                      <TrendingUp className="h-5 w-5 mr-2" />
+                                      Receita
+                                    </Button>
+                                  </div>
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+
+                          {/* Campo Valor Herói */}
+                          <div className="flex-1 flex items-center justify-center">
+                            <FormField
+                              control={form.control}
+                              name="value"
+                              render={({ field }) => (
+                                <FormItem className="w-full">
+                                  <FormControl>
+                                    <div className="relative w-full">
+                                      <input
+                                        ref={valueInputRef}
+                                        type="tel"
+                                        inputMode="decimal"
+                                        placeholder="0,00"
+                                        value={valueDisplay}
+                                        onChange={(e) => {
+                                          const rawValue = e.target.value.replace(/[^\d]/g, '');
+                                          if (rawValue === '') {
+                                            setValueDisplay('');
+                                            field.onChange(0);
+                                            return;
+                                          }
+                                          const numericValue = parseInt(rawValue, 10) / 100;
+                                          field.onChange(numericValue);
+                                          setValueDisplay(numericValue.toLocaleString('pt-BR', {
+                                            minimumFractionDigits: 2,
+                                            maximumFractionDigits: 2,
+                                          }));
+                                        }}
+                                        onFocus={() => {
+                                          if (valueInputRef.current) {
+                                            valueInputRef.current.select();
+                                          }
+                                        }}
+                                        className="w-full text-center text-6xl font-bold bg-transparent border-0 focus:outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600"
+                                        autoFocus
+                                      />
+                                      <span className="absolute left-0 top-1/2 -translate-y-1/2 text-6xl font-bold text-gray-400 pointer-events-none">
+                                        R$
+                                      </span>
+                                    </div>
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+
+                          {/* Botão Continuar */}
+                          <div className="shrink-0 pb-6">
+                            <Button
+                              type="button"
+                              onClick={() => {
+                                form.trigger(['type', 'value']).then((isValid) => {
+                                  if (isValid) {
+                                    setMobileStep(2);
+                                  }
+                                });
+                              }}
+                              disabled={loading || !form.watch('value') || form.watch('value') <= 0}
+                              className="w-full h-14 text-base font-semibold"
+                              variant="primary"
+                            >
+                              Continuar →
+                            </Button>
+                          </div>
+                        </div>
+                      </Form>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="step2"
+                      data-step="2"
+                      initial={{ x: 100, opacity: 0 }}
+                      animate={{ x: 0, opacity: 1 }}
+                      exit={{ x: 100, opacity: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="absolute inset-0 flex flex-col overflow-y-auto"
+                    >
+                      {/* Etapa 2: Detalhes e Classificação */}
+                      <Form {...form}>
+                        <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 flex flex-col p-6 space-y-6">
+                          {/* Descrição */}
+                          <FormField
+                            control={form.control}
+                            name="description"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-sm font-semibold">O que foi?</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    {...field}
+                                    placeholder="Ex: Almoço no restaurante"
+                                    disabled={loading}
+                                    className="h-12 text-base"
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          {/* Bandeja de Sugestões Rápidas */}
+                          {(() => {
+                            const selectedCategory = form.watch('category');
+                            // Filtrar a categoria selecionada das sugestões rápidas para evitar redundância
+                            const quickSuggestions = availableCategories
+                              .filter(cat => cat !== selectedCategory)
+                              .slice(0, 4);
+                            
+                            return quickSuggestions.length > 0 && (
+                              <div className="space-y-2">
+                                <FormLabel className="text-sm font-semibold">Sugestões Rápidas</FormLabel>
+                                <div className="flex flex-wrap gap-2">
+                                  {quickSuggestions.map((category) => (
+                                    <button
+                                      key={category}
+                                      type="button"
+                                      onClick={() => {
+                                        form.setValue('category', category);
+                                      }}
+                                      className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800/50 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-purple-300 dark:hover:border-purple-600 transition-all"
+                                    >
+                                      {category}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })()}
+
+                          {/* Campo de Categoria (oculto mas necessário para validação) */}
+                          <FormField
+                            control={form.control}
+                            name="category"
+                            render={({ field }) => (
+                              <FormItem className="hidden">
+                                <FormControl>
+                                  <input type="hidden" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          {/* Botão Adicionar Categoria ou Tag */}
+                          <div className="space-y-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => setShowTagSelector(true)}
+                              className="w-full h-12 text-base border-purple-200 dark:border-purple-700 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:border-purple-300 dark:hover:border-purple-600"
+                            >
+                              <Plus className="h-4 w-4 mr-2" />
+                              Adicionar Categoria ou Tag
+                            </Button>
+                            {/* Mensagem de erro da categoria */}
+                            {form.formState.errors.category && (
+                              <p className="text-sm text-red-600 dark:text-red-400 px-1">
+                                {form.formState.errors.category.message}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Classificação Selecionada (Categoria + Tags) */}
+                          {(form.watch('category') || tags.filter(t => t.value).length > 0) && (
+                            <div className="space-y-2">
+                              <FormLabel className="text-sm font-semibold">Classificação Selecionada</FormLabel>
+                              <div className="flex flex-wrap gap-2">
+                                {/* Chip da Categoria */}
+                                {form.watch('category') && (
+                                  <span className="px-3 py-1.5 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-lg text-sm font-medium flex items-center gap-2">
+                                    <Tag className="h-3.5 w-3.5" />
+                                    {form.watch('category')}
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        form.setValue('category', '');
+                                      }}
+                                      className="hover:text-purple-900 dark:hover:text-purple-100 ml-1"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                  </span>
+                                )}
+                                {/* Chips das Tags */}
+                                {tags.filter(t => t.value).map((tag, idx) => {
+                                  const config = getTagTypeConfig(tag.type);
+                                  return (
+                                    <span
+                                      key={`tag-${tag.type}-${idx}`}
+                                      className="px-3 py-1.5 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-lg text-sm font-medium flex items-center gap-2"
+                                    >
+                                      <span className="text-xs">{config.emoji}</span>
+                                      {tag.value}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveTag(tag.type)}
+                                        className="hover:text-purple-900 dark:hover:text-purple-100 ml-1"
+                                      >
+                                        <X className="h-3.5 w-3.5" />
+                                      </button>
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Método de Pagamento */}
+                          <div className="space-y-2">
+                            <FormLabel className="text-sm font-semibold">Pagamento</FormLabel>
+                            <FormField
+                              control={form.control}
+                              name="payment_method"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <div className="grid grid-cols-2 gap-2">
+                                      {commonPaymentMethods
+                                        .filter(method => {
+                                          if (type === 'income') {
+                                            return ['PIX', 'Dinheiro', 'Transferência Bancária'].includes(method.value);
+                                          }
+                                          return method.value !== 'Transferência Bancária';
+                                        })
+                                        .map((method) => {
+                                          const Icon = method.icon;
+                                          return (
+                                            <Button
+                                              key={method.value}
+                                              type="button"
+                                              variant={field.value === method.value ? 'default' : 'outline'}
+                                              onClick={() => {
+                                                field.onChange(method.value);
+                                                if (method.value !== 'Cartão de Crédito') {
+                                                  form.setValue('card_last4', null);
+                                                  form.setValue('modality', null);
+                                                  form.setValue('installments_count', null);
+                                                  setSelectedCardId(null);
+                                                }
+                                              }}
+                                              className={cn(
+                                                "h-12 text-sm font-medium transition-all",
+                                                field.value === method.value 
+                                                  ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg" 
+                                                  : "bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                                              )}
+                                            >
+                                              <Icon className="h-4 w-4 mr-2" />
+                                              {method.label}
+                                            </Button>
+                                          );
+                                        })}
+                                    </div>
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+
+                          {/* Campos de Cartão de Crédito (Mobile) */}
+                          {paymentMethod === 'Cartão de Crédito' && type === 'expense' && organizationId && (
+                            <div className="space-y-4 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border">
+                              <h4 className="font-medium text-sm">Informações do Cartão</h4>
+                              
+                              {/* Seletor de Cartão */}
+                              <CardSelector
+                                organizationId={organizationId}
+                                selectedCardId={selectedCardId}
+                                onCardSelect={(cardId, card) => {
+                                  setSelectedCardId(cardId);
+                                  if (card) {
+                                    form.setValue('card_last4', card.last4);
+                                  }
+                                }}
+                                disabled={loading}
+                              />
+
+                              {/* Modalidade */}
+                              <FormField
+                                control={form.control}
+                                name="modality"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel className="text-sm font-semibold">Modalidade</FormLabel>
+                                    <FormControl>
+                                      <div className="grid grid-cols-2 gap-2">
+                                        <Button
+                                          type="button"
+                                          variant={field.value === 'cash' ? 'default' : 'outline'}
+                                          onClick={() => {
+                                            field.onChange('cash');
+                                            form.setValue('installments_count', null);
+                                          }}
+                                          className={cn(
+                                            "h-12 transition-all",
+                                            field.value === 'cash'
+                                              ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg"
+                                              : "bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                                          )}
+                                        >
+                                          À vista
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          variant={field.value === 'installment' ? 'default' : 'outline'}
+                                          onClick={() => field.onChange('installment')}
+                                          className={cn(
+                                            "h-12 transition-all",
+                                            field.value === 'installment'
+                                              ? "bg-gradient-to-r from-blue-500 to-cyan-500 text-white shadow-lg"
+                                              : "bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-blue-300 dark:hover:border-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                                          )}
+                                        >
+                                          Parcelado
+                                        </Button>
+                                      </div>
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+
+                              {/* Número de Parcelas (se parcelado) */}
+                              {form.watch('modality') === 'installment' && (
+                                <FormField
+                                  control={form.control}
+                                  name="installments_count"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel className="text-sm font-semibold">Número de Parcelas</FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          type="number"
+                                          min="1"
+                                          max="24"
+                                          placeholder="Ex: 3"
+                                          {...field}
+                                          value={field.value || ''}
+                                          onChange={(e) => {
+                                            const value = e.target.value ? parseInt(e.target.value, 10) : null;
+                                            field.onChange(value);
+                                          }}
+                                          disabled={loading}
+                                          className="h-12"
+                                        />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              )}
+                            </div>
+                          )}
+
+                          {/* Recorrência */}
+                          <FormField
+                            control={form.control}
+                            name="recurring"
+                            render={({ field }) => (
+                              <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                                <FormControl>
+                                  <Checkbox
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                    disabled={loading}
+                                    id="recurring-checkbox-mobile"
+                                  />
+                                </FormControl>
+                                <div className="space-y-0 leading-none flex items-center gap-2">
+                                  <Label
+                                    htmlFor="recurring-checkbox-mobile"
+                                    className="text-sm font-medium cursor-pointer"
+                                  >
+                                    Esta transação é recorrente?
+                                  </Label>
+                                  <TooltipProvider delayDuration={200}>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Info className="w-4 h-4 text-slate-500 dark:text-slate-400 cursor-help" />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p className="max-w-xs">
+                                          Marque esta opção para que a transação seja considerada em <strong>análises e previsões futuras</strong>, como seu <strong>fluxo de caixa</strong>.
+                                        </p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </div>
+                              </FormItem>
+                            )}
+                          />
+
+                          {/* Data e Hora */}
+                          <FormField
+                            control={form.control}
+                            name="date"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-sm font-semibold">Data e Hora</FormLabel>
+                                <FormControl>
+                                  <DateTimeInput
+                                    value={field.value}
+                                    onChange={field.onChange}
+                                    disabled={loading}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+
+                          {/* Botão Salvar */}
+                          <div className="shrink-0 pb-6 pt-4">
+                            <Button
+                              type="button"
+                              onClick={handleSaveClick}
+                              disabled={loading}
+                              className="w-full h-14 text-base font-semibold"
+                              variant="primary"
+                            >
+                              {loading ? (
+                                <>
+                                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                                  Salvando...
+                                </>
+                              ) : (
+                                'Salvar Transação'
+                              )}
+                            </Button>
+                          </div>
+                        </form>
+                      </Form>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+          ) : (
+            // Versão Desktop: Layout original
+            <div className="flex flex-col h-full">
             {/* Estado de Sucesso */}
             <AnimatePresence>
               {showSuccess && (
@@ -2507,8 +3155,9 @@ export function NewTransactionSheet({
               </form>
             </Form>
           </div>
+          )}
 
-          {/* Modal de Confirmação com Overlay sobre o painel */}
+          {/* Modal de Confirmação com Overlay sobre o painel (compartilhado entre mobile e desktop) */}
           <AnimatePresence>
             {showConfirmationDialog && (
               <>
@@ -2713,6 +3362,84 @@ export function NewTransactionSheet({
           </AnimatePresence>
         </motion.div>
       </SheetContent>
+
+      {/* Tela de Seleção de Tags (Mobile) */}
+      {isMobile && (
+        <Sheet open={showTagSelector} onOpenChange={setShowTagSelector}>
+          <SheetContent
+            side="bottom"
+            className="!h-[90vh] !max-h-[90vh] !w-full !max-w-full rounded-t-2xl overflow-hidden p-0 [&>button]:hidden z-[60]"
+          >
+            <div className="flex flex-col h-full">
+              {/* Header */}
+              <div className="shrink-0 flex items-center justify-between px-4 pt-4 pb-2 border-b border-slate-200 dark:border-slate-700">
+                <SheetTitle className="text-lg font-semibold">Adicionar Categoria ou Tag</SheetTitle>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowTagSelector(false)}
+                  className="h-8 w-8 p-0"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {/* Conteúdo - Reutiliza ClassificationPrompt */}
+              <div className="flex-1 min-h-0 overflow-y-auto p-4">
+                <Form {...form}>
+                  <FormField
+                    control={form.control}
+                    name="category"
+                    render={({ field }) => (
+                      <FormItem className="flex-1 flex flex-col min-h-0">
+                        <FormControl>
+                          <div className="flex-1 flex flex-col min-h-0">
+                            <ClassificationPrompt
+                              category={field.value || null}
+                              onCategoryChange={(value) => {
+                                // Toggle: se clicar na mesma categoria, remove
+                                if (field.value === value) {
+                                  field.onChange('');
+                                } else {
+                                  field.onChange(value);
+                                }
+                              }}
+                              categories={availableCategories}
+                              tags={tags}
+                              onTagToggle={handleToggleTag}
+                              onTagValueChange={handleTagValueChange}
+                              disabled={loading}
+                              allTagsFromBackend={allTagsFromBackend}
+                              tagTypesFromBackend={tagTypesFromBackend}
+                              onPanelStateChange={() => {
+                                // Não fazer nada - o painel interno sempre fica aberto nesta tela
+                              }}
+                              isOpen={true}
+                            />
+                          </div>
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </Form>
+              </div>
+
+              {/* Footer com botão Concluir */}
+              <div className="shrink-0 border-t border-slate-200 dark:border-slate-700 p-4">
+                <Button
+                  type="button"
+                  onClick={() => setShowTagSelector(false)}
+                  className="w-full h-12 text-base font-semibold"
+                  variant="primary"
+                >
+                  Concluir
+                </Button>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
+      )}
     </Sheet>
   );
 }
