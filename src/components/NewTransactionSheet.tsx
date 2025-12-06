@@ -46,7 +46,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { Loader2, TrendingUp, TrendingDown, Check, CreditCard, Wallet, Banknote, Building2, Receipt, Plus, Calendar, Tag, DollarSign, FileText, ShoppingBag, Clock, Search, MapPin, User, FolderOpen, StickyNote, X, Sparkles } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Loader2, TrendingUp, TrendingDown, Check, CreditCard, Wallet, Banknote, Building2, Receipt, Plus, Calendar, Tag, DollarSign, FileText, ShoppingBag, Clock, Search, MapPin, User, FolderOpen, StickyNote, X, Sparkles, Info } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { SearchableSelect } from '@/components/SearchableSelect';
@@ -2269,6 +2270,46 @@ export function NewTransactionSheet({
                           </FormItem>
                         )}
                       />
+
+                      {/* Marcador de Recorrência */}
+                      <div className="mt-8">
+                        <FormField
+                          control={form.control}
+                          name="recurring"
+                          render={({ field }) => (
+                            <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                              <FormControl>
+                                <Checkbox
+                                  checked={field.value}
+                                  onCheckedChange={field.onChange}
+                                  disabled={loading}
+                                  id="recurring-checkbox"
+                                />
+                              </FormControl>
+                              <div className="space-y-0 leading-none flex items-center gap-2">
+                                <Label
+                                  htmlFor="recurring-checkbox"
+                                  className="text-sm font-medium text-slate-700 dark:text-slate-300 cursor-pointer"
+                                >
+                                  Esta transação é recorrente?
+                                </Label>
+                                <TooltipProvider delayDuration={200}>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Info className="w-4 h-4 text-slate-500 dark:text-slate-400 cursor-help" />
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p className="max-w-xs">
+                                        Marque esta opção para que a transação seja considerada em <strong>análises e previsões futuras</strong>, como seu <strong>fluxo de caixa</strong>.
+                                      </p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </div>
+                            </FormItem>
+                          )}
+                        />
+                      </div>
                     </div>
 
                     {/* Rodapé Fixo da Coluna Esquerda */}
@@ -2372,34 +2413,6 @@ export function NewTransactionSheet({
                           </FormItem>
                         )}
                       />
-
-                      {/* Marcador de Recorrência */}
-                      <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
-                        <FormField
-                          control={form.control}
-                          name="recurring"
-                          render={({ field }) => (
-                            <FormItem className="flex flex-row items-center space-x-3 space-y-0">
-                              <FormControl>
-                                <Checkbox
-                                  checked={field.value}
-                                  onCheckedChange={field.onChange}
-                                  disabled={loading}
-                                  id="recurring-checkbox"
-                                />
-                              </FormControl>
-                              <div className="space-y-0 leading-none">
-                                <Label
-                                  htmlFor="recurring-checkbox"
-                                  className="text-sm text-slate-600 dark:text-slate-400 cursor-pointer"
-                                >
-                                  Incluir esta transação nas previsões futuras (ex: fluxo de caixa, planejamento)
-                                </Label>
-                              </div>
-                            </FormItem>
-                          )}
-                        />
-                      </div>
 
                       {/* Área de Tags Adicionadas removida para evitar redundância */}
                       {/* As tags selecionadas agora são visualizadas diretamente no ClassificationPrompt */}
