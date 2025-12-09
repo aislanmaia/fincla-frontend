@@ -1525,10 +1525,20 @@ export function NewTransactionSheet({
   // Focar automaticamente no campo de valor quando a etapa 1 mobile for exibida
   useEffect(() => {
     if (isMobile && mobileStep === 1 && open && valueInputRef.current) {
-      // Pequeno delay para garantir que o modal esteja totalmente renderizado
+      // Delay para garantir que o modal esteja totalmente renderizado
       const timer = setTimeout(() => {
-        valueInputRef.current?.focus();
-      }, 200);
+        // Primeiro, garantir que o scroll esteja no topo
+        const container = valueInputRef.current?.closest('.flex.flex-col.h-full');
+        if (container) {
+          container.scrollTop = 0;
+        }
+        // Pequeno delay adicional antes de focar para evitar scroll indesejado
+        setTimeout(() => {
+          valueInputRef.current?.focus({
+            preventScroll: true
+          });
+        }, 100);
+      }, 300);
       return () => clearTimeout(timer);
     }
   }, [isMobile, mobileStep, open]);
@@ -2002,7 +2012,7 @@ export function NewTransactionSheet({
             // Versão Mobile: Wizard em etapas
             <div className="flex flex-col h-full">
               {/* Header Fixo */}
-              <div className="shrink-0 flex items-center justify-between px-4 pt-4 pb-2 border-b border-slate-200 dark:border-slate-700">
+              <div className="sticky top-0 z-50 shrink-0 flex items-center justify-between px-4 pt-4 pb-2 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-950" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
                 {mobileStep === 2 && (
                   <Button
                     type="button"
@@ -2031,8 +2041,67 @@ export function NewTransactionSheet({
                 </Button>
               </div>
 
+              {/* Feedback de Erro */}
+              {error && (
+                <div className="px-4 py-2">
+                  <Alert variant="destructive">
+                    <AlertDescription>{typeof error === 'string' ? error : String(error)}</AlertDescription>
+                  </Alert>
+                </div>
+              )}
+
               {/* Conteúdo do Wizard */}
               <div className="flex-1 min-h-0 overflow-hidden relative">
+                {/* Estado de Sucesso (Mobile) */}
+                <AnimatePresence>
+                  {showSuccess && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      className="absolute inset-0 z-50 bg-white/95 dark:bg-gray-950/95 backdrop-blur-sm flex items-center justify-center"
+                    >
+                      <motion.div
+                        initial={{ scale: 0.9, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0.9, opacity: 0 }}
+                        className="text-center space-y-6 px-6 w-full max-w-sm"
+                      >
+                        <motion.div
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                          transition={{ delay: 0.1, type: 'spring' }}
+                          className="mx-auto w-20 h-20 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center"
+                        >
+                          <Check className="h-10 w-10 text-emerald-600 dark:text-emerald-400" strokeWidth={3} />
+                        </motion.div>
+                        <div>
+                          <h3 className="text-2xl font-bold mb-2">Transação salva com sucesso!</h3>
+                          <p className="text-muted-foreground">Sua transação foi registrada.</p>
+                        </div>
+                        <div className="flex flex-col gap-3 pt-4">
+                          <Button
+                            type="button"
+                            onClick={handleCreateAnother}
+                            variant="primary"
+                            className="w-full"
+                          >
+                            Criar Nova Transação
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleClose}
+                            className="w-full"
+                          >
+                            Fechar
+                          </Button>
+                        </div>
+                      </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <AnimatePresence mode="wait">
                   {mobileStep === 1 ? (
                     <motion.div
@@ -2124,7 +2193,6 @@ export function NewTransactionSheet({
                                           }
                                         }}
                                         className="w-full text-center text-6xl font-bold bg-transparent border-0 focus:outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600"
-                                        autoFocus
                                       />
                                       <span className="absolute left-0 top-1/2 -translate-y-1/2 text-6xl font-bold text-gray-400 pointer-events-none">
                                         R$
@@ -2171,6 +2239,13 @@ export function NewTransactionSheet({
                       {/* Etapa 2: Detalhes e Classificação */}
                       <Form {...form}>
                         <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 flex flex-col p-6 space-y-6">
+                          {/* Feedback de Erro (Step 2) */}
+                          {error && (
+                            <Alert variant="destructive">
+                              <AlertDescription>{typeof error === 'string' ? error : String(error)}</AlertDescription>
+                            </Alert>
+                          )}
+
                           {/* Descrição */}
                           <FormField
                             control={form.control}
