@@ -5,10 +5,11 @@ import * as z from 'zod';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { createTransaction } from '@/api/transactions';
+import { createTransaction, updateTransaction } from '@/api/transactions';
+import { listCreditCards } from '@/api/creditCards';
 import { getMyOrganizations } from '@/api/organizations';
 import { listTags, listTagTypes, createTag } from '@/api/tags';
-import { CreateTransactionRequest } from '@/types/api';
+import { CreateTransactionRequest, Transaction } from '@/types/api';
 import { handleApiError } from '@/api/client';
 import {
   Sheet,
@@ -102,9 +103,9 @@ function ClassificationPrompt({
   category: string | null;
   onCategoryChange: (value: string) => void;
   categories: string[];
-  tags: Array<{ type: TagType; value: string }>;
-  onTagToggle: (type: TagType, value: string) => void;
-  onTagValueChange: (type: TagType, value: string | null) => void;
+  tags: Array<{ type: string; value: string }>; // Usar string para suportar tanto TagType quanto tipos do backend
+  onTagToggle: (type: TagType | string, value: string) => void; // Aceitar string também
+  onTagValueChange: (type: TagType | string, value: string | null) => void; // Aceitar string também
   disabled: boolean;
   allTagsFromBackend?: Array<{ type: string; name: string }>;
   tagTypesFromBackend?: Array<{ id: string; name: string; description: string | null; is_required: boolean; max_per_transaction: number | null }>;
@@ -285,21 +286,21 @@ function ClassificationPrompt({
 
     // Busca normal
     if (searchQuery.trim()) {
-      const results: Array<{ type: TagType | 'category'; value: string; category: string }> = [];
+      const results: Array<{ type: string; value: string; category: string }> = [];
       const queryLower = searchQuery.toLowerCase();
 
       // Buscar em categorias do backend
       backendTags
         .filter(tag => tag.type === 'categoria' && tag.name.toLowerCase().includes(queryLower))
         .forEach(tag => {
-          results.push({ type: 'category' as const, value: tag.name, category: 'Categoria' });
+          results.push({ type: 'category', value: tag.name, category: 'Categoria' });
         });
 
       // Buscar em tags do backend
       const foundTags = searchTags(searchQuery);
       foundTags.forEach(tag => {
         const config = getTagTypeConfig(tag.type);
-        results.push({ type: tag.type as any, value: tag.value, category: config.label });
+        results.push({ type: tag.type, value: tag.value, category: config.label });
       });
 
       // Se não encontrou resultados na lista completa do backend, oferecer criar nova tag
@@ -316,7 +317,7 @@ function ClassificationPrompt({
           if (!acc[item.category]) acc[item.category] = [];
           acc[item.category].push(item);
           return acc;
-        }, {} as Record<string, Array<{ type: TagType | 'category'; value: string; category: string }>>),
+        }, {} as Record<string, Array<{ type: string; value: string; category: string }>>),
       };
     }
 
@@ -600,10 +601,7 @@ function ClassificationPrompt({
       {(() => {
         const selectedItems: Array<{ type: string; value: string }> = [];
 
-        if (category) {
-          selectedItems.push({ type: 'category', value: category });
-        }
-
+        // Usar apenas tags como fonte da verdade - ignorar campo 'category' legado completamente
         tags.forEach(tag => {
           selectedItems.push({ type: tag.type, value: tag.value });
         });
@@ -1282,7 +1280,9 @@ function CardCreateForm({
 
 // Componente separado para o campo de parcelas com legenda dinâmica
 function InstallmentsField({ form, loading }: { form: ReturnType<typeof useForm<TransactionFormValues>>; loading: boolean }) {
-  const transactionValue = useWatch({ control: form.control, name: 'value' }) || 0;
+  const transactionValueRaw = useWatch({ control: form.control, name: 'value' });
+  // Garantir que transactionValue seja um número
+  const transactionValue = typeof transactionValueRaw === 'number' ? transactionValueRaw : (transactionValueRaw ? Number(transactionValueRaw) : 0);
   const installmentsCount = useWatch({ control: form.control, name: 'installments_count' });
   const modality = useWatch({ control: form.control, name: 'modality' });
   const installmentsInputRef = useRef<HTMLInputElement>(null);
@@ -1384,8 +1384,8 @@ const transactionSchema = z.object({
     required_error: 'Selecione o tipo de transação',
   }),
   description: z.string().min(3, 'A descrição deve ter pelo menos 3 caracteres'),
-  category: z.string().min(1, 'Selecione uma categoria'),
-  value: z.number().positive('O valor deve ser maior que zero'),
+  category: z.string().optional(), // Campo legado - não usado, tags são a fonte da verdade
+  value: z.coerce.number().positive('O valor deve ser maior que zero'),
   payment_method: z.string().min(1, 'Selecione o método de pagamento'),
   date: z.string().min(1, 'Selecione uma data'),
   // Campos opcionais para cartão de crédito
@@ -1418,6 +1418,8 @@ interface NewTransactionSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  onInvalidateCache?: () => void; // Chamado imediatamente após sucesso para invalidar cache
+  transactionToEdit?: Transaction | null;
 }
 
 const categories = [
@@ -1455,6 +1457,8 @@ export function NewTransactionSheet({
   open,
   onOpenChange,
   onSuccess,
+  onInvalidateCache,
+  transactionToEdit,
 }: NewTransactionSheetProps) {
   const { user } = useAuth();
   const isMobile = useIsMobile();
@@ -1472,7 +1476,8 @@ export function NewTransactionSheet({
   const [showTagSelector, setShowTagSelector] = useState(false);
 
   // Estados para tags e cartão
-  const [tags, setTags] = useState<Array<{ type: TagType; value: string }>>([]);
+  // Usar string para type para suportar tanto TagType quanto tipos do backend (categoria, category, etc.)
+  const [tags, setTags] = useState<Array<{ type: string; value: string }>>([]);
   const [selectedCardId, setSelectedCardId] = useState<number | null>(null);
   const [showCardCreateForm, setShowCardCreateForm] = useState(false);
 
@@ -1628,6 +1633,132 @@ export function NewTransactionSheet({
     }
   }, [open]);
 
+  // Carregar dados da transação quando estiver editando
+  useEffect(() => {
+    if (transactionToEdit && open) {
+      const loadTransactionData = async () => {
+        // Converter data da API para o formato do input (YYYY-MM-DDTHH:mm)
+        const transactionDate = new Date(transactionToEdit.date);
+        const formattedDate = format(transactionDate, "yyyy-MM-dd'T'HH:mm");
+
+        // Carregar tags da transação
+        // Formato da API: tags é um Record<string, Tag[]> (objeto com chaves sendo nomes de tipos)
+        const transactionTags: Array<{ type: string; value: string }> = [];
+        if (transactionToEdit.tags) {
+          // Se tags é um objeto (Record<string, Tag[]>)
+          if (!Array.isArray(transactionToEdit.tags) && typeof transactionToEdit.tags === 'object') {
+            Object.entries(transactionToEdit.tags).forEach(([typeName, tagsArray]) => {
+              tagsArray.forEach((tag: any) => {
+                transactionTags.push({
+                  type: typeName,
+                  value: tag.name,
+                });
+              });
+            });
+          } 
+          // Se tags é um array (formato legado)
+          else if (Array.isArray(transactionToEdit.tags)) {
+            transactionToEdit.tags.forEach((tag: any) => {
+              transactionTags.push({
+                type: tag.type || tag.tag_type?.name || '',
+                value: tag.name,
+              });
+            });
+          }
+        }
+
+        // Ignorar o campo 'category' legado - usar apenas tags como fonte da verdade
+        // Não precisamos remover tags de categoria, pois elas serão exibidas normalmente
+
+        // Carregar dados do cartão de crédito se houver
+        // O backend agora retorna credit_card_charge quando payment_method é "Cartão de Crédito" ou "credit_card"
+        let cardId: number | null = null;
+        let cardLast4: string | null = null;
+        let modality: 'cash' | 'installment' | null = null;
+        let installmentsCount: number | null = null;
+
+        const isCreditCardPayment = transactionToEdit.payment_method === 'Cartão de Crédito' || 
+                                    transactionToEdit.payment_method === 'credit_card';
+
+        // Priorizar credit_card_charge (novo formato do backend)
+        if (transactionToEdit.credit_card_charge) {
+          cardId = transactionToEdit.credit_card_charge.card.id;
+          cardLast4 = transactionToEdit.credit_card_charge.card.last4;
+          modality = transactionToEdit.credit_card_charge.charge.modality;
+          installmentsCount = transactionToEdit.credit_card_charge.charge.installments_count;
+        } 
+        // Fallback para campos legados (compatibilidade)
+        else if (isCreditCardPayment) {
+          cardLast4 = transactionToEdit.card_last4 || null;
+          modality = transactionToEdit.modality || null;
+          installmentsCount = transactionToEdit.installments_count || null;
+          
+          // Se temos card_last4 mas não temos cardId, tentar encontrar o cartão
+          if (cardLast4 && !cardId) {
+            try {
+              const cards = await listCreditCards(transactionToEdit.organization_id);
+              const cardLast4Normalized = String(cardLast4).trim();
+              const matchingCard = cards.find(card => {
+                const cardLast4Normalized2 = String(card.last4).trim();
+                return cardLast4Normalized2 === cardLast4Normalized;
+              });
+              if (matchingCard) {
+                cardId = matchingCard.id;
+              }
+            } catch (error) {
+              console.error('Erro ao buscar cartões:', error);
+            }
+          }
+        }
+
+        // Resetar formulário com todos os dados
+        // Não preencher o campo 'category' - usar apenas tags como fonte da verdade
+        form.reset({
+          organization_id: transactionToEdit.organization_id,
+          type: transactionToEdit.type,
+          description: transactionToEdit.description,
+          category: '', // Campo legado - não usar, tags são a fonte da verdade
+          value: transactionToEdit.value,
+          payment_method: transactionToEdit.payment_method,
+          date: formattedDate,
+          card_last4: cardLast4,
+          modality: modality,
+          installments_count: installmentsCount,
+          recurring: transactionToEdit.recurring || false,
+        });
+
+        // Definir tags (incluindo categoria) e cartão selecionado
+        setTags(transactionTags);
+        setSelectedCardId(cardId);
+        
+        setValueDisplay(transactionToEdit.value.toLocaleString('pt-BR', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }));
+      };
+
+      loadTransactionData();
+    } else if (!transactionToEdit && open) {
+      // Resetar quando não estiver editando
+      form.reset({
+        organization_id: '',
+        type: 'expense',
+        description: '',
+        category: '',
+        value: 0,
+        payment_method: '',
+        date: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+        card_last4: null,
+        modality: null,
+        installments_count: null,
+        recurring: false,
+      });
+      setTags([]);
+      setSelectedCardId(null);
+      setValueDisplay('');
+    }
+  }, [transactionToEdit, open, form]);
+
   const loadOrganizations = async () => {
     try {
       const data = await getMyOrganizations();
@@ -1652,44 +1783,13 @@ export function NewTransactionSheet({
       setShowConfirmationDialog(false);
 
       // Processar tags: buscar IDs existentes ou criar novas tags
+      // Tags são a fonte da verdade - processar todas as tags do estado, incluindo categoria
       const tagIds: string[] = [];
 
-      // 1. Processar a Categoria Principal (Obrigatória no backend)
-      if (values.category) {
-        const categoryTag = allTagsFromBackend.find(
-          t => (t.type.toLowerCase() === 'category' || t.type.toLowerCase() === 'categoria') &&
-            t.name.toLowerCase() === values.category.toLowerCase()
-        );
-
-        if (categoryTag) {
-          tagIds.push(categoryTag.id);
-        } else {
-          // Criar nova tag de categoria
-          const categoryType = tagTypesFromBackend.find(
-            tt => tt.name.toLowerCase() === 'categoria' || tt.name.toLowerCase() === 'category'
-          );
-
-          if (categoryType) {
-            try {
-              const newCategoryTag = await createTag(
-                values.organization_id,
-                values.category,
-                categoryType.id
-              );
-              tagIds.push(newCategoryTag.id);
-            } catch (err) {
-              console.error(`Erro ao criar categoria ${values.category}:`, err);
-            }
-          }
-        }
-      }
-
-      // 2. Processar outras tags
+      // Processar todas as tags (incluindo categoria que agora é apenas mais uma tag)
       for (const tag of tags) {
-        // Ignorar se for a mesma tag da categoria principal para evitar duplicidade
-        if ((String(tag.type) === 'category' || String(tag.type) === 'categoria') &&
-          tag.value.toLowerCase() === values.category.toLowerCase()) {
-          continue;
+        if (!tag.value || tag.value.trim() === '') {
+          continue; // Ignorar tags vazias
         }
 
         const existingTag = allTagsFromBackend.find(
@@ -1724,14 +1824,20 @@ export function NewTransactionSheet({
         }
       }
 
-      const transactionData: CreateTransactionRequest = {
+      // Garantir que value seja um número
+      const numericValue = typeof values.value === 'number' 
+        ? values.value 
+        : (values.value ? Number(String(values.value).replace(',', '.')) : 0);
+
+      // Preparar dados base da transação
+      const baseTransactionData = {
         organization_id: values.organization_id,
         type: values.type,
         description: values.description,
-        category: values.category,
-        value: values.value,
+        // Não enviar category - tags são a fonte da verdade
+        category: '', // Campo legado - sempre vazio
+        value: numericValue,
         payment_method: values.payment_method,
-        date: values.date.split('T')[0], // Enviar apenas a data YYYY-MM-DD
         tag_ids: tagIds,
         recurring: values.recurring || false, // Marcador de recorrência para previsões
         ...(values.payment_method === 'Cartão de Crédito' && {
@@ -1741,17 +1847,46 @@ export function NewTransactionSheet({
         }),
       };
 
-      await createTransaction(transactionData);
+      // Garantir que date está no formato datetime correto (YYYY-MM-DDTHH:MM)
+      // O DateTimeInput já retorna no formato correto, mas garantimos que está completo
+      let dateValue = values.date;
+      if (!dateValue.includes('T')) {
+        // Se não tiver hora, adicionar 00:00
+        dateValue = `${dateValue}T00:00`;
+      } else if (dateValue.split('T')[1].split(':').length === 2) {
+        // Se já tiver HH:MM, está correto
+        dateValue = dateValue;
+      } else {
+        // Se tiver HH:MM:SS, remover os segundos para manter apenas HH:MM
+        dateValue = dateValue.substring(0, 16);
+      }
+
+      if (transactionToEdit) {
+        // Para atualização, incluir date no formato datetime (REQUIRED conforme documentação)
+        const updateTransactionData = {
+          ...baseTransactionData,
+          date: dateValue, // datetime completo: YYYY-MM-DDTHH:MM
+        };
+        await updateTransaction(transactionToEdit.id, transactionToEdit.organization_id, updateTransactionData);
+      } else {
+        // Para criação, incluir date no formato datetime
+        const createTransactionData: CreateTransactionRequest = {
+          ...baseTransactionData,
+          date: dateValue, // datetime completo: YYYY-MM-DDTHH:MM
+        };
+        await createTransaction(createTransactionData);
+      }
       setShowSuccess(true);
       setLoading(false);
-      onSuccess?.(); // Notificar sucesso para invalidação de cache
-      // Não fechar automaticamente - aguardar ação do usuário
+      // Invalidar cache imediatamente para atualizar a lista, mas não fechar o painel
+      onInvalidateCache?.();
+      // onSuccess será chamado quando o usuário fechar o painel após ver a mensagem de sucesso
     } catch (err) {
       const errorMessage = handleApiError(err);
       setError(typeof errorMessage === 'string' ? errorMessage : String(errorMessage));
       setLoading(false);
     }
-  }, [tags, allTagsFromBackend, tagTypesFromBackend]);
+  }, [tags, allTagsFromBackend, tagTypesFromBackend, transactionToEdit]);
 
   // Função para confirmar transação (usada no botão e no Enter)
   const handleConfirm = useCallback(() => {
@@ -1786,7 +1921,9 @@ export function NewTransactionSheet({
     const type = form.watch('type');
     const value = form.watch('value');
     const typeLabel = type === 'expense' ? 'Despesa' : 'Receita';
-    const valueFormatted = value > 0 ? value.toFixed(2).replace('.', ',') : '0,00';
+    // Garantir que value seja um número
+    const numericValue = typeof value === 'number' ? value : (value ? Number(value) : 0);
+    const valueFormatted = numericValue > 0 ? numericValue.toFixed(2).replace('.', ',') : '0,00';
     return `Salvar ${typeLabel} de R$ ${valueFormatted}`;
   };
 
@@ -1904,7 +2041,8 @@ export function NewTransactionSheet({
   };
 
   // Funções para gerenciar tags
-  const handleToggleTag = (tagType: TagType, value: string) => {
+  // Aceitar string para suportar tanto TagType quanto tipos do backend
+  const handleToggleTag = (tagType: TagType | string, value: string) => {
     // Verificar se já existe uma tag deste tipo com este valor
     const existingTagIndex = tags.findIndex(t => t.type === tagType && t.value === value);
 
@@ -1923,11 +2061,11 @@ export function NewTransactionSheet({
     }
   };
 
-  const handleTagValueChange = (tagType: TagType, value: string | null) => {
+  const handleTagValueChange = (tagType: TagType | string, value: string | null) => {
     setTags(tags.map(t => t.type === tagType ? { ...t, value: value || '' } : t));
   };
 
-  const handleRemoveTag = (tagType: TagType) => {
+  const handleRemoveTag = (tagType: TagType | string) => {
     setTags(tags.filter(t => t.type !== tagType));
   };
 
@@ -1955,7 +2093,9 @@ export function NewTransactionSheet({
   const getTransactionSummary = () => {
     const values = form.getValues();
     const typeLabel = values.type === 'expense' ? 'Despesa' : 'Receita';
-    const valueFormatted = values.value > 0 ? values.value.toFixed(2).replace('.', ',') : '0,00';
+    // Garantir que value seja um número
+    const numericValue = typeof values.value === 'number' ? values.value : (values.value ? Number(values.value) : 0);
+    const valueFormatted = numericValue > 0 ? numericValue.toFixed(2).replace('.', ',') : '0,00';
     const dateFormatted = values.date ? format(new Date(values.date), "dd/MM/yyyy 'às' HH:mm") : 'Não informado';
 
     return {
@@ -1971,6 +2111,17 @@ export function NewTransactionSheet({
     };
   };
 
+  // Limpar erro quando o usuário começar a editar
+  useEffect(() => {
+    const subscription = form.watch((value, { name }) => {
+      // Limpar erro quando qualquer campo for alterado
+      if (error && name) {
+        setError(null);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form, error]);
+
   const handleSheetOpenChange = (newOpen: boolean) => {
     // Só permitir fechar se não estiver processando e não estiver em estado de sucesso
     if (!newOpen && !loading && !showSuccess) {
@@ -1979,6 +2130,8 @@ export function NewTransactionSheet({
         setMobileStep(1);
         setShowTagSelector(false);
       }
+      // Limpar erro ao fechar
+      setError(null);
       onOpenChange(false);
     } else if (!newOpen && !loading && showSuccess) {
       // Se estiver em sucesso, permitir fechar clicando fora
@@ -1987,6 +2140,8 @@ export function NewTransactionSheet({
         setMobileStep(1);
         setShowTagSelector(false);
       }
+      // Limpar erro ao fechar
+      setError(null);
       onOpenChange(false);
       onSuccess?.();
     }
@@ -2026,7 +2181,9 @@ export function NewTransactionSheet({
                 )}
                 <SheetTitle className={cn("text-lg font-semibold", mobileStep === 2 && "flex-1 text-center")}>
                   {mobileStep === 1 
-                    ? type === 'expense' ? 'Nova Despesa' : 'Nova Receita'
+                    ? transactionToEdit 
+                      ? 'Atualizar Transação'
+                      : (type === 'expense' ? 'Nova Despesa' : 'Nova Receita')
                     : 'Detalhes'
                   }
                 </SheetTitle>
@@ -2076,18 +2233,24 @@ export function NewTransactionSheet({
                           <Check className="h-10 w-10 text-emerald-600 dark:text-emerald-400" strokeWidth={3} />
                         </motion.div>
                         <div>
-                          <h3 className="text-2xl font-bold mb-2">Transação salva com sucesso!</h3>
-                          <p className="text-muted-foreground">Sua transação foi registrada.</p>
+                          <h3 className="text-2xl font-bold mb-2">
+                            {transactionToEdit ? 'Transação atualizada com sucesso!' : 'Transação salva com sucesso!'}
+                          </h3>
+                          <p className="text-muted-foreground">
+                            {transactionToEdit ? 'As alterações foram salvas com sucesso.' : 'Sua transação foi registrada.'}
+                          </p>
                         </div>
                         <div className="flex flex-col gap-3 pt-4">
-                          <Button
-                            type="button"
-                            onClick={handleCreateAnother}
-                            variant="primary"
-                            className="w-full"
-                          >
-                            Criar Nova Transação
-                          </Button>
+                          {!transactionToEdit && (
+                            <Button
+                              type="button"
+                              onClick={handleCreateAnother}
+                              variant="primary"
+                              className="w-full"
+                            >
+                              Criar Nova Transação
+                            </Button>
+                          )}
                           <Button
                             type="button"
                             variant="outline"
@@ -2328,28 +2491,12 @@ export function NewTransactionSheet({
                             )}
                           </div>
 
-                          {/* Classificação Selecionada (Categoria + Tags) */}
-                          {(form.watch('category') || tags.filter(t => t.value).length > 0) && (
+                          {/* Classificação Selecionada (Tags - fonte da verdade) */}
+                          {tags.filter(t => t.value).length > 0 && (
                             <div className="space-y-2">
                               <FormLabel className="text-sm font-semibold">Classificação Selecionada</FormLabel>
                               <div className="flex flex-wrap gap-2">
-                                {/* Chip da Categoria */}
-                                {form.watch('category') && (
-                                  <span className="px-3 py-1.5 bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 rounded-lg text-sm font-medium flex items-center gap-2">
-                                    <Tag className="h-3.5 w-3.5" />
-                                    {form.watch('category')}
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        form.setValue('category', '');
-                                      }}
-                                      className="hover:text-purple-900 dark:hover:text-purple-100 ml-1"
-                                    >
-                                      <X className="h-3.5 w-3.5" />
-                                    </button>
-                                  </span>
-                                )}
-                                {/* Chips das Tags */}
+                                {/* Chips das Tags (tags são a fonte da verdade, ignorar campo category legado) */}
                                 {tags.filter(t => t.value).map((tag, idx) => {
                                   const config = getTagTypeConfig(tag.type);
                                   return (
@@ -2631,18 +2778,24 @@ export function NewTransactionSheet({
                       <Check className="h-10 w-10 text-emerald-600 dark:text-emerald-400" strokeWidth={3} />
                     </motion.div>
                     <div>
-                      <h3 className="text-2xl font-bold mb-2">Transação salva com sucesso!</h3>
-                      <p className="text-muted-foreground">Sua transação foi registrada.</p>
+                      <h3 className="text-2xl font-bold mb-2">
+                        {transactionToEdit ? 'Transação atualizada com sucesso!' : 'Transação salva com sucesso!'}
+                      </h3>
+                      <p className="text-muted-foreground">
+                        {transactionToEdit ? 'As alterações foram salvas com sucesso.' : 'Sua transação foi registrada.'}
+                      </p>
                     </div>
                     <div className="flex flex-col gap-3 pt-4">
-                      <Button
-                        type="button"
-                        onClick={handleCreateAnother}
-                        variant="primary"
-                        className="w-full"
-                      >
-                        Criar Nova Transação
-                      </Button>
+                      {!transactionToEdit && (
+                        <Button
+                          type="button"
+                          onClick={handleCreateAnother}
+                          variant="primary"
+                          className="w-full"
+                        >
+                          Criar Nova Transação
+                        </Button>
+                      )}
                       <Button
                         type="button"
                         variant="outline"
@@ -2663,7 +2816,7 @@ export function NewTransactionSheet({
                 <div className="shrink-0 mb-6">
                   <SheetHeader>
                     <SheetTitle className="text-2xl font-bold">
-                      Nova Transação
+                      {transactionToEdit ? 'Atualizar Transação' : 'Nova Transação'}
                     </SheetTitle>
                   </SheetHeader>
 
@@ -2749,7 +2902,8 @@ export function NewTransactionSheet({
                           const paymentMethod = useWatch({ control: form.control, name: 'payment_method' });
                           const modality = useWatch({ control: form.control, name: 'modality' });
                           const installmentsCount = useWatch({ control: form.control, name: 'installments_count' });
-                          const transactionValue = field.value || 0;
+                          // Garantir que transactionValue seja um número
+                          const transactionValue = typeof field.value === 'number' ? field.value : (field.value ? Number(field.value) : 0);
 
                           // Calcular se deve mostrar a legenda
                           const showInstallmentLegend =
@@ -2759,8 +2913,11 @@ export function NewTransactionSheet({
                             installmentsCount > 0 &&
                             transactionValue > 0;
 
-                          const installmentValue = showInstallmentLegend
-                            ? transactionValue / installmentsCount
+                          // Garantir que transactionValue e installmentsCount sejam números
+                          const numericTransactionValue = typeof transactionValue === 'number' ? transactionValue : (transactionValue ? Number(transactionValue) : 0);
+                          const numericInstallmentsCount = typeof installmentsCount === 'number' ? installmentsCount : (installmentsCount ? Number(installmentsCount) : 0);
+                          const installmentValue = showInstallmentLegend && numericInstallmentsCount > 0
+                            ? numericTransactionValue / numericInstallmentsCount
                             : 0;
 
                           return (
@@ -2818,8 +2975,9 @@ export function NewTransactionSheet({
                                     }}
                                     onBlur={(e) => {
                                       // Ao perder foco, formata com 2 casas decimais
-                                      if (field.value > 0) {
-                                        setValueDisplay(field.value.toFixed(2).replace('.', ','));
+                                      const numericValue = typeof field.value === 'number' ? field.value : (field.value ? Number(field.value) : 0);
+                                      if (numericValue > 0) {
+                                        setValueDisplay(numericValue.toFixed(2).replace('.', ','));
                                       } else {
                                         setValueDisplay('');
                                       }
@@ -3117,8 +3275,29 @@ export function NewTransactionSheet({
                                     // Toggle category: se clicar na mesma, remove
                                     if (field.value === value) {
                                       field.onChange('');
+                                      // Remover categoria do estado tags também
+                                      setTags(tags.filter(t => {
+                                        const typeLower = t.type.toLowerCase();
+                                        return !(typeLower === 'categoria' || typeLower === 'category');
+                                      }));
                                     } else {
                                       field.onChange(value);
+                                      // Atualizar tags: remover categoria antiga e adicionar nova
+                                      const categoryTagType = tagTypesFromBackend.find(
+                                        tt => tt.name.toLowerCase() === 'categoria' || tt.name.toLowerCase() === 'category'
+                                      )?.name.toLowerCase() || 'categoria';
+                                      
+                                      // Remover categoria antiga (se houver)
+                                      const tagsWithoutCategory = tags.filter(t => {
+                                        const typeLower = t.type.toLowerCase();
+                                        return !(typeLower === 'categoria' || typeLower === 'category');
+                                      });
+                                      
+                                      // Adicionar nova categoria
+                                      setTags([...tagsWithoutCategory, { 
+                                        type: categoryTagType, 
+                                        value 
+                                      }]);
                                     }
                                   }}
                                   categories={categories}

@@ -271,11 +271,13 @@ export function AppLayout({ children }: PropsWithChildren) {
           <NewTransactionSheet
             open={isNewTransactionOpen}
             onOpenChange={setIsNewTransactionOpen}
-            onSuccess={() => {
-              // Invalidar queries para atualizar dados
-              // Usar exact: false para garantir que pegue ['transactions', activeOrgId]
+            onInvalidateCache={() => {
+              // Invalidar queries imediatamente após sucesso para atualizar dados
               queryClient.invalidateQueries({ queryKey: ['transactions'] });
               queryClient.invalidateQueries({ queryKey: ['financial-data'] });
+            }}
+            onSuccess={() => {
+              // Chamado quando o usuário fechar o painel após ver a mensagem de sucesso
             }}
           />
 

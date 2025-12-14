@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { listTransactions } from '@/api/transactions';
+import { listTransactions, deleteTransaction, getTransaction } from '@/api/transactions';
 import { Transaction } from '@/types/api';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Download } from 'lucide-react';
+import { ArrowLeft, Download, Edit, Trash2 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -14,6 +14,10 @@ import { Button } from '@/components/ui/button';
 import { useEffect } from 'react';
 import { useOrganization } from '@/hooks/useOrganization';
 import { PageTransition } from '@/components/PageTransition';
+import { NewTransactionSheet } from '@/components/NewTransactionSheet';
+import { DeleteTransactionDialog } from '@/components/DeleteTransactionDialog';
+import { handleApiError } from '@/api/client';
+import { useToast } from '@/hooks/use-toast';
 
 function formatCurrency(value: number) {
   return value.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
@@ -21,7 +25,13 @@ function formatCurrency(value: number) {
 
 function formatDate(value: string | Date) {
   const date = value instanceof Date ? value : new Date(value);
-  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return date.toLocaleString('pt-BR', { 
+    day: '2-digit', 
+    month: '2-digit', 
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 }
 
 export default function TransactionsPage() {
@@ -29,10 +39,15 @@ export default function TransactionsPage() {
   const [type, setType] = useState<'todas' | 'receitas' | 'despesas'>('todas');
   const [period, setPeriod] = useState<'tudo' | '7d' | '30d' | '90d'>('tudo');
   const [category, setCategory] = useState<string>('todas');
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [isEditSheetOpen, setIsEditSheetOpen] = useState(false);
+  const [deletingTransaction, setDeletingTransaction] = useState<Transaction | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
   const queryClient = useQueryClient();
   const [location] = useLocation();
   const { activeOrgId } = useOrganization();
+  const { toast } = useToast();
 
   const { data, isLoading } = useQuery({
     queryKey: ['transactions', activeOrgId],
@@ -46,16 +61,19 @@ export default function TransactionsPage() {
 
 
   // Converter Transaction da API para o formato esperado (amount positivo/negativo)
+  // Preservar todos os campos originais, incluindo card_last4, modality, installments_count, recurring
   const transactionsWithAmount = useMemo(() => {
     const list = Array.isArray(data) ? [...data] : [];
     return list
       .map((t) => ({
-        ...t,
-        id: t.id.toString(),
+        ...t, // Preservar todos os campos originais
+        id: t.id.toString(), // Para compatibilidade com a tabela
+        originalId: t.id, // Manter id original como number
         amount: t.type === 'income' ? t.value : -t.value,
         date: new Date(t.date),
+        createdAt: t.created_at ? new Date(t.created_at) : new Date(t.date), // Fallback para date se created_at não existir
       }))
-      .sort((a, b) => b.date.getTime() - a.date.getTime());
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // Ordenar por data de criação (mais recente primeiro)
   }, [data]);
 
   const categories = useMemo(() => {
@@ -105,6 +123,79 @@ export default function TransactionsPage() {
     a.download = 'transacoes.csv';
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleEdit = async (transaction: Transaction) => {
+    try {
+      // Buscar dados completos da transação do backend
+      // O GET agora retorna credit_card_charge com todos os dados do cartão
+      const fullTransaction = await getTransaction(transaction.id, transaction.organization_id);
+      
+      // Se o GET não retornar credit_card_charge mas a lista tiver campos legados, preservar
+      // (compatibilidade com versões antigas ou casos edge)
+      const transactionWithCardData: Transaction = {
+        ...fullTransaction,
+        // Preservar campos legados apenas se credit_card_charge não estiver presente
+        // e os campos legados estiverem disponíveis na lista original
+        ...(fullTransaction.credit_card_charge ? {} : {
+          card_last4: transaction.card_last4 !== undefined ? transaction.card_last4 : (fullTransaction.card_last4 || null),
+          modality: transaction.modality !== undefined ? transaction.modality : (fullTransaction.modality !== undefined ? fullTransaction.modality : null),
+          installments_count: transaction.installments_count !== undefined ? transaction.installments_count : (fullTransaction.installments_count !== undefined ? fullTransaction.installments_count : null),
+        }),
+        recurring: transaction.recurring !== undefined ? transaction.recurring : (fullTransaction.recurring !== undefined ? fullTransaction.recurring : false),
+      };
+      
+      setEditingTransaction(transactionWithCardData);
+      setIsEditSheetOpen(true);
+    } catch (error) {
+      const errorMessage = handleApiError(error);
+      alert(typeof errorMessage === 'string' ? errorMessage : String(errorMessage));
+    }
+  };
+
+  const handleDeleteClick = (transaction: Transaction) => {
+    setDeletingTransaction(transaction);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingTransaction) return;
+
+    try {
+      await deleteTransaction(deletingTransaction.id, deletingTransaction.organization_id);
+      queryClient.invalidateQueries({ queryKey: ['transactions', activeOrgId] });
+      setIsDeleteDialogOpen(false);
+      setDeletingTransaction(null);
+      
+      // Feedback de sucesso
+      toast({
+        title: "Transação excluída",
+        description: "A transação foi excluída com sucesso.",
+        variant: "success",
+        duration: 5000,
+      });
+    } catch (error) {
+      const errorMessage = handleApiError(error);
+      
+      // Feedback de erro
+      toast({
+        title: "Erro ao excluir transação",
+        description: typeof errorMessage === 'string' ? errorMessage : String(errorMessage),
+        variant: "destructive",
+        duration: 5000,
+      });
+    }
+  };
+
+  const handleInvalidateCache = () => {
+    // Invalidar cache imediatamente após sucesso para atualizar a lista
+    queryClient.invalidateQueries({ queryKey: ['transactions', activeOrgId] });
+  };
+
+  const handleEditSuccess = () => {
+    // Fechar painel e limpar estado quando o usuário fechar após ver a mensagem de sucesso
+    setIsEditSheetOpen(false);
+    setEditingTransaction(null);
   };
 
   return (
@@ -192,6 +283,7 @@ export default function TransactionsPage() {
                   <TableHead>Categoria</TableHead>
                   <TableHead>Data</TableHead>
                   <TableHead className="text-right">Valor</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -208,7 +300,7 @@ export default function TransactionsPage() {
 
                 {!isLoading && filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={4} className="py-10 text-center text-sm text-gray-500 dark:text-gray-400">
+                    <TableCell colSpan={5} className="py-10 text-center text-sm text-gray-500 dark:text-gray-400">
                       Nenhuma transação encontrada.
                     </TableCell>
                   </TableRow>
@@ -216,6 +308,26 @@ export default function TransactionsPage() {
 
                 {!isLoading && filtered.map((t, idx) => {
                   const isExpense = t.amount < 0;
+                  // Converter para formato Transaction da API usando dados originais
+                  // Preservar todos os campos, incluindo card_last4, modality, installments_count, recurring
+                  // IMPORTANTE: A lista de transações pode não retornar esses campos, mas tentamos preservá-los
+                  const transaction: Transaction = {
+                    id: (t as any).originalId || parseInt(t.id),
+                    organization_id: t.organization_id,
+                    type: isExpense ? 'expense' : 'income',
+                    description: t.description,
+                    category: t.category,
+                    value: Math.abs(t.amount),
+                    payment_method: t.payment_method || '',
+                    date: t.date instanceof Date ? t.date.toISOString() : t.date,
+                    tags: t.tags || [],
+                    // Preservar campos do cartão de crédito se existirem na lista
+                    // Se não existirem, serão undefined e tentaremos buscar do GET
+                    card_last4: (t as any).card_last4 !== undefined ? (t as any).card_last4 : undefined,
+                    modality: (t as any).modality !== undefined ? (t as any).modality : undefined,
+                    installments_count: (t as any).installments_count !== undefined ? (t as any).installments_count : undefined,
+                    recurring: (t as any).recurring !== undefined ? (t as any).recurring : undefined,
+                  };
                   return (
                     <TableRow key={t.id} className={idx % 2 === 0 ? 'bg-gray-50' : undefined}>
                       <TableCell className="font-medium text-gray-900 dark:text-gray-100">{t.description}</TableCell>
@@ -228,6 +340,28 @@ export default function TransactionsPage() {
                       <TableCell className={isExpense ? 'text-[#F87171] text-right tabular-nums font-semibold' : 'text-[#10B981] text-right tabular-nums font-semibold'}>
                         {isExpense ? '-' : '+'}R$ {formatCurrency(Math.abs(t.amount))}
                       </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(transaction)}
+                            className="h-8 w-8 p-0 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                          >
+                            <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteClick(transaction)}
+                            className="h-8 w-8 p-0 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          >
+                            <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   );
                 })}
@@ -235,6 +369,23 @@ export default function TransactionsPage() {
             </Table>
           </div>
         </Card>
+
+        {/* Sheet de Edição */}
+        <NewTransactionSheet
+          open={isEditSheetOpen}
+          onOpenChange={setIsEditSheetOpen}
+          onSuccess={handleEditSuccess}
+          onInvalidateCache={handleInvalidateCache}
+          transactionToEdit={editingTransaction}
+        />
+
+        {/* Diálogo de Confirmação de Exclusão */}
+        <DeleteTransactionDialog
+          open={isDeleteDialogOpen}
+          onOpenChange={setIsDeleteDialogOpen}
+          transaction={deletingTransaction}
+          onConfirm={handleDeleteConfirm}
+        />
       </div>
     </PageTransition>
   );

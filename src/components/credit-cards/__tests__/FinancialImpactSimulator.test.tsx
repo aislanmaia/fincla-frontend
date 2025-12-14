@@ -83,10 +83,11 @@ describe('FinancialImpactSimulator Integration', () => {
     // Por isso não acha "Compra segura"!
     
     // Vou verificar se achou ALGUM resultado (Viável, Atenção ou Risco)
-    const verdict = screen.queryByText(/Compra Viável/i) || 
-                    screen.queryByText(/Atenção Necessária/i) || 
-                    screen.queryByText(/Alto Risco/i);
-                    
-    expect(verdict).toBeInTheDocument();
+    const viableText = screen.queryAllByText(/Compra Viável/i);
+    const attentionText = screen.queryAllByText(/Atenção Necessária/i);
+    const riskText = screen.queryAllByText(/Alto Risco/i);
+    
+    // Pelo menos um dos resultados deve estar presente
+    expect(viableText.length > 0 || attentionText.length > 0 || riskText.length > 0).toBe(true);
   });
 });

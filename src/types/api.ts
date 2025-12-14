@@ -139,7 +139,7 @@ export interface CreateTransactionRequest {
   category: string;
   value: number; // Decimal como number
   payment_method: string;
-  date: string; // ISO date string (YYYY-MM-DD)
+  date: string; // ISO datetime string (YYYY-MM-DDTHH:MM or YYYY-MM-DDTHH:MM:SS) - REQUIRED, supports minute granularity
   // Campos opcionais para cartão de crédito
   card_last4?: string | null;
   modality?: 'cash' | 'installment' | null;
@@ -147,6 +147,27 @@ export interface CreateTransactionRequest {
   tag_ids?: string[];
   // Marcador de recorrência para previsões futuras
   recurring?: boolean;
+}
+
+export interface CreditCardCharge {
+  charge: {
+    id: number;
+    organization_id: string;
+    card_id: number;
+    transaction_id: number;
+    total_amount: number;
+    installments_count: number;
+    modality: 'cash' | 'installment';
+    purchase_date: string;
+  };
+  card: {
+    id: number;
+    organization_id: string;
+    last4: string;
+    brand: string;
+    due_day: number;
+    description: string | null;
+  };
 }
 
 export interface Transaction {
@@ -158,8 +179,18 @@ export interface Transaction {
   value: number;
   payment_method: string;
   date: string; // ISO date string
-  // Tags retornadas como array (formato real da API)
-  tags?: Tag[];
+  // Tags agrupadas por nome do tipo (ex: { "categoria": [Tag], "projeto": [Tag] })
+  tags?: Record<string, Tag[]> | Tag[]; // Suporta ambos os formatos para compatibilidade
+  // Campos opcionais para cartão de crédito (legado - mantido para compatibilidade)
+  card_last4?: string | null;
+  modality?: 'cash' | 'installment' | null;
+  installments_count?: number | null;
+  recurring?: boolean;
+  // Novo campo retornado pelo GET quando payment_method é "Cartão de Crédito" ou "credit_card"
+  credit_card_charge?: CreditCardCharge | null;
+  // Timestamps de criação e atualização
+  created_at?: string; // ISO datetime string - timestamp quando a transação foi criada
+  updated_at?: string; // ISO datetime string - timestamp quando a transação foi atualizada
 }
 
 export interface ListTransactionsQuery {

@@ -329,7 +329,7 @@ export interface CreateTransactionRequest {
   tag_ids: string[]; // Lista de UUIDs das tags (pelo menos uma tag do tipo 'categoria' é obrigatória)
   value: number; // Decimal como number
   payment_method: string;
-  date: string; // ISO date string (YYYY-MM-DD)
+  date: string; // ISO datetime string (YYYY-MM-DDTHH:MM or YYYY-MM-DDTHH:MM:SS) - REQUIRED, supports minute granularity
   // Campos opcionais para cartão de crédito
   card_last4?: string | null;
   modality?: 'cash' | 'installment' | null;
@@ -346,7 +346,11 @@ export interface Transaction {
   tags: Record<string, Tag[]>; // Tags agrupadas por nome do tipo (ex: { "categoria": [Tag], "projeto": [Tag] })
   value: number;
   payment_method: string;
-  date: string; // ISO date string
+  date: string; // ISO datetime string (YYYY-MM-DDTHH:MM:SS) - supports minute granularity
+  recurring: boolean; // Whether this is a recurring transaction
+  created_at: string; // ISO datetime string - timestamp when transaction was created
+  updated_at: string; // ISO datetime string - timestamp when transaction was last updated
+  credit_card_charge?: CreditCardChargeInfo | null; // Only present if payment_method is "credit_card"
   // Campo legado - mantido para compatibilidade durante migração
   category?: string | null;
 }
@@ -1075,7 +1079,7 @@ await createTransaction({
   ],
   value: 150.50,
   payment_method: "PIX",
-  date: "2025-01-15",
+  date: "2025-01-15T14:30", // datetime com hora (granularidade de minutos)
   // category: "Alimentação", // Campo legado - opcional durante migração
 });
 ```
@@ -1091,7 +1095,7 @@ await createTransaction({
   ],
   value: 500.00,
   payment_method: "Cartão de Crédito",
-  date: "2025-01-15",
+  date: "2025-01-15T15:45", // datetime com hora
   card_last4: "1234",
   modality: "cash",
 });
@@ -1108,12 +1112,20 @@ await createTransaction({
   ],
   value: 2000.00,
   payment_method: "Cartão de Crédito",
-  date: "2025-01-15",
+  date: "2025-01-15T10:00", // datetime com hora
   card_last4: "1234",
   modality: "installment",
   installments_count: 10,
 });
 ```
+
+**Nota sobre o campo `date`:**
+- O campo `date` agora aceita **datetime com granularidade de minutos**
+- Formatos aceitos:
+  - `YYYY-MM-DDTHH:MM` (ex: `"2025-01-15T14:30"`)
+  - `YYYY-MM-DDTHH:MM:SS` (ex: `"2025-01-15T14:30:00"`)
+  - `YYYY-MM-DD` (ex: `"2025-01-15"`) - será convertido para `2025-01-15T00:00:00`
+- Recomenda-se sempre enviar com hora para maior precisão
 
 **Notas Importantes:**
 - `tag_ids` é **obrigatório** e deve conter pelo menos uma tag do tipo "categoria" (ou outro tipo marcado como `is_required: true`)
@@ -1165,7 +1177,8 @@ await createTransaction({
   },
   value: 150.50,
   payment_method: "PIX",
-  date: "2025-01-15",
+  date: "2025-01-15T14:30:00", // datetime com hora
+  recurring: false,
   category: "Alimentação" // Campo legado - mantido para compatibilidade
 }
 ```
@@ -1279,6 +1292,274 @@ const orgTransactions = allTransactions.filter(
   }
 ]
 ```
+
+---
+
+### GET `/v1/transactions/{transaction_id}`
+
+Obtém uma transação específica por ID.
+
+**Request:**
+```typescript
+const getTransaction = async (
+  transactionId: number,
+  organizationId: string
+): Promise<Transaction> => {
+  const response = await apiClient.get<Transaction>(
+    `/v1/transactions/${transactionId}?organization_id=${organizationId}`
+  );
+  return response.data;
+};
+```
+
+**Exemplo de Uso:**
+```typescript
+const transaction = await getTransaction(123, "123e4567-e89b-12d3-a456-426614174000");
+console.log(transaction.description); // "Compra no supermercado"
+```
+
+**Response (200):**
+```typescript
+{
+  id: 123,
+  organization_id: "123e4567-e89b-12d3-a456-426614174000",
+  type: "expense",
+  description: "Compra no supermercado",
+  tags: {
+    "categoria": [
+      {
+        id: "789e0123-e89b-12d3-a456-426614174000",
+        name: "Alimentação",
+        tag_type: {
+          id: "123e4567-e89b-12d3-a456-426614174000",
+          name: "categoria",
+          description: "Categoria da transação",
+          is_required: true,
+          max_per_transaction: 1
+        },
+        color: "#FF5733",
+        is_default: true,
+        is_active: true,
+        organization_id: "123e4567-e89b-12d3-a456-426614174000"
+      }
+    ]
+  },
+  value: 150.50,
+  payment_method: "PIX",
+  date: "2025-01-15T14:30:00", // datetime com hora
+  recurring: false,
+  created_at: "2025-01-15T14:30:00", // timestamp de criação
+  updated_at: "2025-01-15T14:30:00", // timestamp de última atualização
+  category: "Alimentação", // Campo legado
+  credit_card_charge: null // null se payment_method não for "credit_card"
+}
+```
+
+**Exemplo - Transação com Cartão de Crédito:**
+```typescript
+// Se a transação foi criada com payment_method="credit_card",
+// o campo credit_card_charge será preenchido:
+{
+  id: 456,
+  organization_id: "123e4567-e89b-12d3-a456-426614174000",
+  type: "expense",
+  description: "Compra na loja",
+  tags: {
+    "categoria": [
+      {
+        id: "789e0123-e89b-12d3-a456-426614174000",
+        name: "Compras",
+        tag_type: { /* ... */ },
+        color: "#FF5733",
+        is_default: true,
+        is_active: true,
+        organization_id: "123e4567-e89b-12d3-a456-426614174000"
+      }
+    ]
+  },
+  value: 500.00,
+  payment_method: "credit_card",
+  date: "2025-01-15T15:45:00", // datetime com hora
+  recurring: false,
+  created_at: "2025-01-15T15:45:00", // timestamp de criação
+  updated_at: "2025-01-15T15:45:00", // timestamp de última atualização
+  category: "Compras",
+  credit_card_charge: {
+    charge: {
+      id: 789,
+      organization_id: "123e4567-e89b-12d3-a456-426614174000",
+      card_id: 1,
+      transaction_id: 456,
+      total_amount: 500.00,
+      installments_count: 1,
+      modality: "cash", // ou "installment"
+      purchase_date: "2025-01-15"
+    },
+    card: {
+      id: 1,
+      organization_id: "123e4567-e89b-12d3-a456-426614174000",
+      last4: "1234",
+      brand: "Visa",
+      due_day: 10,
+      description: "Cartão Principal"
+    }
+  }
+}
+```
+
+**Notas:**
+- O campo `credit_card_charge` só é preenchido quando `payment_method` é `"credit_card"`
+- Quando a transação não é de cartão de crédito, `credit_card_charge` será `null`
+- O objeto `charge` contém informações sobre a compra (modalidade, parcelas, valor total)
+- Os campos `created_at` e `updated_at` estão disponíveis em todas as respostas de transações e podem ser usados para ordenação de listas no frontend
+- O objeto `card` contém informações sobre o cartão usado (últimos 4 dígitos, bandeira, dia de vencimento)
+
+**Erros:**
+- `404`: Transação não encontrada
+- `403`: Acesso negado à organização
+- `500`: Erro interno do servidor
+
+---
+
+### PUT `/v1/transactions/{transaction_id}`
+
+Atualiza uma transação existente. Todos os campos são opcionais - apenas os campos fornecidos serão atualizados.
+
+**Request:**
+```typescript
+interface UpdateTransactionRequest {
+  type?: 'income' | 'expense';
+  description?: string;
+  tag_ids?: string[]; // Lista de tag UUIDs para substituir as tags existentes
+  value?: number;
+  payment_method?: string;
+  date: string; // ISO datetime string (YYYY-MM-DDTHH:MM or YYYY-MM-DDTHH:MM:SS) - REQUIRED, supports minute granularity
+  recurring?: boolean;
+  category?: string; // Campo legado - opcional
+}
+
+const updateTransaction = async (
+  transactionId: number,
+  organizationId: string,
+  updates: UpdateTransactionRequest
+): Promise<Transaction> => {
+  const response = await apiClient.put<Transaction>(
+    `/v1/transactions/${transactionId}?organization_id=${organizationId}`,
+    updates
+  );
+  return response.data;
+};
+```
+
+**Exemplos de Uso:**
+```typescript
+// Atualizar apenas a descrição (date é obrigatório)
+await updateTransaction(123, orgId, {
+  description: "Nova descrição",
+  date: "2025-01-20T14:30" // datetime com hora (obrigatório)
+});
+
+// Atualizar valor e data
+await updateTransaction(123, orgId, {
+  value: 200.00,
+  date: "2025-01-20T15:45" // datetime com hora
+});
+
+// Atualizar tags (substitui todas as tags existentes)
+await updateTransaction(123, orgId, {
+  tag_ids: [
+    "new-tag-id-1",
+    "new-tag-id-2"
+  ]
+});
+
+// Atualizar múltiplos campos
+await updateTransaction(123, orgId, {
+  description: "Descrição atualizada",
+  value: 250.00,
+  payment_method: "Cartão de Crédito",
+  recurring: true
+});
+```
+
+**Response (200):**
+```typescript
+{
+  id: 123,
+  organization_id: "123e4567-e89b-12d3-a456-426614174000",
+  type: "expense",
+  description: "Nova descrição",
+  tags: {
+    "categoria": [
+      {
+        id: "789e0123-e89b-12d3-a456-426614174000",
+        name: "Alimentação",
+        // ... tag details
+      }
+    ]
+  },
+  value: 200.00,
+  payment_method: "PIX",
+  date: "2025-01-20T14:30:00", // datetime com hora
+  recurring: false,
+  category: "Alimentação"
+}
+```
+
+**Notas Importantes:**
+- Se `tag_ids` for fornecido, **todas as tags existentes serão substituídas** pelas novas tags
+- Se `tag_ids` não for fornecido, as tags existentes serão mantidas
+- Pelo menos uma tag do tipo "categoria" (ou outro tipo obrigatório) deve estar presente se `tag_ids` for fornecido
+- Campos não fornecidos mantêm seus valores originais
+
+**Erros:**
+- `404`: Transação não encontrada
+- `403`: Acesso negado à organização
+- `422`: Erro de validação ou regra de negócio (ex: tag obrigatória ausente)
+- `500`: Erro interno do servidor
+
+---
+
+### DELETE `/v1/transactions/{transaction_id}`
+
+Exclui uma transação específica.
+
+**Request:**
+```typescript
+const deleteTransaction = async (
+  transactionId: number,
+  organizationId: string
+): Promise<void> => {
+  await apiClient.delete(
+    `/v1/transactions/${transactionId}?organization_id=${organizationId}`
+  );
+};
+```
+
+**Exemplo de Uso:**
+```typescript
+// Excluir uma transação
+await deleteTransaction(123, "123e4567-e89b-12d3-a456-426614174000");
+
+// Com tratamento de erro
+try {
+  await deleteTransaction(123, orgId);
+  console.log("Transação excluída com sucesso");
+} catch (error) {
+  if (error.response?.status === 404) {
+    console.error("Transação não encontrada");
+  } else {
+    console.error("Erro ao excluir transação:", error);
+  }
+}
+```
+
+**Response (204):** Sem conteúdo (No Content)
+
+**Erros:**
+- `404`: Transação não encontrada
+- `403`: Acesso negado à organização
+- `500`: Erro interno do servidor
 
 ---
 
@@ -1657,7 +1938,7 @@ if (response.result.action === 'transaction_created') {
       value: 50.00,
       category: "Alimentação",
       payment_method: "PIX",
-      date: "2025-01-15",
+      date: "2025-01-15T14:30:00", // datetime com hora
       transaction_id: 123
     },
     transaction_id: 123
@@ -2189,8 +2470,9 @@ export const CreateTransactionForm: React.FC<CreateTransactionFormProps> = ({
       </div>
 
       <div>
-        <label>Data:</label>
-        <input type="date" name="date" required />
+        <label>Data e Hora:</label>
+        <input type="datetime-local" name="date" required step="60" />
+        <small>Formato: YYYY-MM-DDTHH:MM (granularidade de minutos)</small>
       </div>
 
       {/* Seleção de Tags por Tipo */}
@@ -2305,7 +2587,10 @@ export const useTags = (organizationId: string) => {
 2. **Multi-tenancy**: Todos os endpoints (exceto auth e registro público) requerem `organization_id` explícito
 3. **Autenticação**: Token JWT deve ser incluído em todos os headers (exceto login/registro)
 4. **Validação**: A API valida automaticamente os dados e retorna erros descritivos
-5. **Datas**: Use formato ISO (YYYY-MM-DD) para campos de data
+5. **Datas**: Use formato ISO datetime (YYYY-MM-DDTHH:MM ou YYYY-MM-DDTHH:MM:SS) para campos de data/hora. 
+   - O campo `date` das transações suporta granularidade de minutos
+   - Exemplos: `"2025-12-09T14:30"` ou `"2025-12-09T14:30:00"`
+   - Para apenas data (sem hora), use `"2025-12-09"` (será convertido para `2025-12-09T00:00:00`)
 6. **Valores**: Use números (não strings) para valores monetários
 7. **UUIDs**: Todos os IDs de organização e usuário são UUIDs (strings)
 8. **Sistema de Tags**:

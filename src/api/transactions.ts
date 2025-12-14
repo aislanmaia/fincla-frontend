@@ -28,3 +28,49 @@ export const listTransactions = async (
   return response.data;
 };
 
+/**
+ * Busca uma transação específica por ID
+ */
+export const getTransaction = async (
+  transactionId: number,
+  organizationId: string
+): Promise<Transaction> => {
+  const response = await apiClient.get<Transaction>(
+    `/transactions/${transactionId}`,
+    {
+      params: { organization_id: organizationId },
+    }
+  );
+  return response.data;
+};
+
+/**
+ * Atualiza uma transação existente
+ */
+export const updateTransaction = async (
+  transactionId: number,
+  organizationId: string,
+  transaction: CreateTransactionRequest
+): Promise<Transaction> => {
+  const response = await apiClient.put<Transaction>(
+    `/transactions/${transactionId}`,
+    transaction,
+    {
+      params: { organization_id: organizationId },
+    }
+  );
+  return response.data;
+};
+
+/**
+ * Deleta uma transação
+ */
+export const deleteTransaction = async (
+  transactionId: number,
+  organizationId: string
+): Promise<void> => {
+  await apiClient.delete(`/transactions/${transactionId}`, {
+    params: { organization_id: organizationId },
+  });
+};
+
