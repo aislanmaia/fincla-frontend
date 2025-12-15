@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -28,9 +28,16 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const { signIn, error: authError } = useAuth();
+  const { signIn, error: authError, isAuthenticated, loading: authLoading } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Redirecionar se já estiver autenticado
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      setLocation('/');
+    }
+  }, [authLoading, isAuthenticated, setLocation]);
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -55,6 +62,18 @@ export default function Login() {
   };
 
   const displayError = error || authError;
+
+  // Mostrar loading enquanto verifica autenticação ou se já estiver autenticado
+  if (authLoading || isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#F3F4F6] via-white to-[#E6F0F6]">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-[#4A56E2]" />
+          <p className="text-muted-foreground">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#F3F4F6] via-white to-[#E6F0F6] p-4">
