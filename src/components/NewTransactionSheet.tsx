@@ -2847,25 +2847,29 @@ export function NewTransactionSheet({
                           />
                           </div>
 
-                          {/* Bottom Sheet - FIXO no rodapé, NUNCA se move com scroll */}
-                          <div className="shrink-0 relative z-50 bg-white dark:bg-gray-950 border-t border-slate-200 dark:border-slate-700 px-6 pt-4 pb-6">
-                            <Button
-                              type="button"
-                              onClick={handleSaveClick}
-                              disabled={loading}
-                              className="w-full h-14 text-base font-semibold"
-                              variant="primary"
-                            >
-                              {loading ? (
-                                <>
-                                  <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                                  Salvando...
-                                </>
-                              ) : (
-                                getSaveButtonText()
-                              )}
-                            </Button>
-                          </div>
+                          {/* Bottom Sheet - FIXO no rodapé, NUNCA se move com scroll
+                             Só deve aparecer enquanto o usuário está editando os detalhes,
+                             não durante o estado de sucesso. */}
+                          {!showSuccess && (
+                            <div className="shrink-0 relative z-50 bg-white dark:bg-gray-950 border-t border-slate-200 dark:border-slate-700 px-6 pt-4 pb-6">
+                              <Button
+                                type="button"
+                                onClick={handleSaveClick}
+                                disabled={loading}
+                                className="w-full h-14 text-base font-semibold"
+                                variant="primary"
+                              >
+                                {loading ? (
+                                  <>
+                                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                                    Salvando...
+                                  </>
+                                ) : (
+                                  getSaveButtonText()
+                                )}
+                              </Button>
+                            </div>
+                          )}
                         </form>
                       </Form>
                     </motion.div>
