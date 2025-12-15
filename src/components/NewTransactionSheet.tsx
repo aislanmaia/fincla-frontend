@@ -2463,11 +2463,13 @@ export function NewTransactionSheet({
                       animate={{ x: 0, opacity: 1 }}
                       exit={{ x: 100, opacity: 0 }}
                       transition={{ duration: 0.3 }}
-                      className="absolute inset-0 flex flex-col overflow-y-auto"
+                      className="absolute inset-0 flex flex-col"
                     >
                       {/* Etapa 2: Detalhes e Classificação */}
                       <Form {...form}>
-                        <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 flex flex-col p-6 space-y-6">
+                        <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 flex flex-col min-h-0">
+                          {/* Conteúdo rolável - separado do bottom sheet */}
+                          <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6 pb-24">
                           {/* Feedback de Erro (Step 2) */}
                           {error && (
                             <Alert variant="destructive">
@@ -2790,9 +2792,10 @@ export function NewTransactionSheet({
                               </FormItem>
                             )}
                           />
+                          </div>
 
-                          {/* Botão Salvar - fixo no rodapé da etapa 2 (mobile) */}
-                          <div className="sticky bottom-0 left-0 right-0 bg-white dark:bg-gray-950 border-t border-slate-200 dark:border-slate-700 pt-4 pb-6 mt-4">
+                          {/* Bottom Sheet - FIXO no rodapé, NUNCA se move com scroll */}
+                          <div className="shrink-0 relative z-50 bg-white dark:bg-gray-950 border-t border-slate-200 dark:border-slate-700 px-6 pt-4 pb-6">
                             <Button
                               type="button"
                               onClick={handleSaveClick}
