@@ -1525,6 +1525,38 @@ export function NewTransactionSheet({
   const type = form.watch('type');
   const currentOrganizationId = form.watch('organization_id');
 
+  // Helper: sincronizar categoria (campo category) com estado de tags (tipo "categoria")
+  const syncCategoryToTags = useCallback((categoryValue: string) => {
+    // Normalizar tipo de tag de categoria baseado nos tipos vindos do backend
+    const categoryTagType =
+      tagTypesFromBackend.find(
+        (tt) =>
+          tt.name.toLowerCase() === 'categoria' ||
+          tt.name.toLowerCase() === 'category',
+      )?.name.toLowerCase() || 'categoria';
+
+    // Remover qualquer tag de categoria anterior
+    const tagsWithoutCategory = tags.filter((t) => {
+      const typeLower = t.type.toLowerCase();
+      return !(typeLower === 'categoria' || typeLower === 'category');
+    });
+
+    if (!categoryValue) {
+      // Sem categoria: apenas remove do estado
+      setTags(tagsWithoutCategory);
+      return;
+    }
+
+    // Adiciona a nova categoria como tag
+    setTags([
+      ...tagsWithoutCategory,
+      {
+        type: categoryTagType,
+        value: categoryValue,
+      },
+    ]);
+  }, [tagTypesFromBackend, tags]);
+
   // Filtrar métodos de pagamento baseado no tipo de transação
   const paymentMethods = type === 'income'
     ? ['PIX', 'Dinheiro', 'Transferência Bancária']
@@ -2515,6 +2547,8 @@ export function NewTransactionSheet({
                                       type="button"
                                       onClick={() => {
                                         form.setValue('category', category);
+                                        // Sincronizar categoria selecionada com tags (tipo categoria)
+                                        syncCategoryToTags(category);
                                       }}
                                       className="px-3 py-1.5 bg-gray-50 dark:bg-gray-800/50 text-gray-700 dark:text-gray-300 rounded-lg text-sm font-medium hover:bg-gray-100 dark:hover:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-purple-300 dark:hover:border-purple-600 transition-all"
                                     >
@@ -2757,18 +2791,37 @@ export function NewTransactionSheet({
                                   >
                                     Esta transação é recorrente?
                                   </Label>
-                                  <TooltipProvider delayDuration={200}>
-                                    <Tooltip>
-                                      <TooltipTrigger asChild>
-                                        <Info className="w-4 h-4 text-slate-500 dark:text-slate-400 cursor-help" />
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        <p className="max-w-xs">
+                                  {/* Desktop/tablet: Tooltip padrão; Mobile: popover por toque */}
+                                  {isMobile ? (
+                                    <Popover>
+                                      <PopoverTrigger asChild>
+                                        <button
+                                          type="button"
+                                          className="inline-flex items-center justify-center rounded-full p-1 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                        >
+                                          <Info className="w-4 h-4" />
+                                        </button>
+                                      </PopoverTrigger>
+                                      <PopoverContent className="max-w-xs text-sm leading-relaxed">
+                                        <p>
                                           Marque esta opção para que a transação seja considerada em <strong>análises e previsões futuras</strong>, como seu <strong>fluxo de caixa</strong>.
                                         </p>
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  </TooltipProvider>
+                                      </PopoverContent>
+                                    </Popover>
+                                  ) : (
+                                    <TooltipProvider delayDuration={200}>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <Info className="w-4 h-4 text-slate-500 dark:text-slate-400 cursor-help" />
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          <p className="max-w-xs">
+                                            Marque esta opção para que a transação seja considerada em <strong>análises e previsões futuras</strong>, como seu <strong>fluxo de caixa</strong>.
+                                          </p>
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  )}
                                 </div>
                               </FormItem>
                             )}
@@ -3344,29 +3397,10 @@ export function NewTransactionSheet({
                                     // Toggle category: se clicar na mesma, remove
                                     if (field.value === value) {
                                       field.onChange('');
-                                      // Remover categoria do estado tags também
-                                      setTags(tags.filter(t => {
-                                        const typeLower = t.type.toLowerCase();
-                                        return !(typeLower === 'categoria' || typeLower === 'category');
-                                      }));
+                                      syncCategoryToTags('');
                                     } else {
                                       field.onChange(value);
-                                      // Atualizar tags: remover categoria antiga e adicionar nova
-                                      const categoryTagType = tagTypesFromBackend.find(
-                                        tt => tt.name.toLowerCase() === 'categoria' || tt.name.toLowerCase() === 'category'
-                                      )?.name.toLowerCase() || 'categoria';
-                                      
-                                      // Remover categoria antiga (se houver)
-                                      const tagsWithoutCategory = tags.filter(t => {
-                                        const typeLower = t.type.toLowerCase();
-                                        return !(typeLower === 'categoria' || typeLower === 'category');
-                                      });
-                                      
-                                      // Adicionar nova categoria
-                                      setTags([...tagsWithoutCategory, { 
-                                        type: categoryTagType, 
-                                        value 
-                                      }]);
+                                      syncCategoryToTags(value);
                                     }
                                   }}
                                   categories={categories}
@@ -3724,8 +3758,10 @@ export function NewTransactionSheet({
                                 // Toggle: se clicar na mesma categoria, remove
                                 if (field.value === value) {
                                   field.onChange('');
+                                  syncCategoryToTags('');
                                 } else {
                                   field.onChange(value);
+                                  syncCategoryToTags(value);
                                 }
                               }}
                               categories={availableCategories}
