@@ -3536,20 +3536,22 @@ export function NewTransactionSheet({
                   className="absolute inset-0 z-[60] flex items-center justify-center p-6 pointer-events-none"
                 >
                   <div
-                    className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl border-2 border-dashed border-gray-300 dark:border-gray-700 p-6 max-w-[500px] w-full pointer-events-auto"
+                    className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl border-2 border-dashed border-gray-300 dark:border-gray-700 max-w-[500px] w-full max-h-[85vh] flex flex-col pointer-events-auto"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <div className="space-y-5">
-                      <div>
-                        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-1">
-                          Por favor, confirme sua transação
-                        </h2>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          Revise os dados abaixo antes de confirmar
-                        </p>
-                      </div>
+                    {/* Header fixo */}
+                    <div className="shrink-0 p-6 pb-4">
+                      <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-1">
+                        Por favor, confirme sua transação
+                      </h2>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Revise os dados abaixo antes de confirmar
+                      </p>
+                    </div>
 
-                      <div className="space-y-3">
+                    {/* Conteúdo rolável */}
+                    <div className="flex-1 min-h-0 overflow-y-auto px-6">
+                      <div className="space-y-3 pb-4">
                         {(() => {
                           const summary = getTransactionSummary();
                           const isIncome = form.getValues('type') === 'income';
@@ -3683,34 +3685,35 @@ export function NewTransactionSheet({
                           );
                         })()}
                       </div>
+                    </div>
 
-                      <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => setShowConfirmationDialog(false)}
-                          disabled={loading}
-                          className="w-full sm:w-auto"
-                        >
-                          Editar Dados
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="primary"
-                          onClick={handleConfirm}
-                          disabled={loading}
-                          className="w-full sm:w-auto"
-                        >
-                          {loading ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                              Salvando...
-                            </>
-                          ) : (
-                            'Confirmar'
-                          )}
-                        </Button>
-                      </div>
+                    {/* Footer fixo */}
+                    <div className="shrink-0 flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 gap-2 p-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setShowConfirmationDialog(false)}
+                        disabled={loading}
+                        className="w-full sm:w-auto"
+                      >
+                        Editar Dados
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="primary"
+                        onClick={handleConfirm}
+                        disabled={loading}
+                        className="w-full sm:w-auto"
+                      >
+                        {loading ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Salvando...
+                          </>
+                        ) : (
+                          'Confirmar'
+                        )}
+                      </Button>
                     </div>
                   </div>
                 </motion.div>
