@@ -1462,6 +1462,22 @@ export function NewTransactionSheet({
 }: NewTransactionSheetProps) {
   const { user } = useAuth();
   const isMobile = useIsMobile();
+  // Debug: identificar no console quando o painel está usando o layout mobile
+  useEffect(() => {
+    if (isMobile) {
+      // eslint-disable-next-line no-console
+      console.log(
+        '[Fincla][NewTransactionSheet] Layout mobile ativo (useIsMobile === true)',
+        {
+          innerWidth: typeof window !== 'undefined' ? window.innerWidth : null,
+          innerHeight: typeof window !== 'undefined' ? window.innerHeight : null,
+        }
+      );
+    } else {
+      // eslint-disable-next-line no-console
+      console.log('[Fincla][NewTransactionSheet] Layout desktop/tablet (useIsMobile === false)');
+    }
+  }, [isMobile]);
   const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1530,19 +1546,8 @@ export function NewTransactionSheet({
   // Focar automaticamente no campo de valor quando a etapa 1 mobile for exibida
   useEffect(() => {
     if (isMobile && mobileStep === 1 && open && valueInputRef.current) {
-      // Delay para garantir que o modal esteja totalmente renderizado
       const timer = setTimeout(() => {
-        // Primeiro, garantir que o scroll esteja no topo
-        const container = valueInputRef.current?.closest('.flex.flex-col.h-full');
-        if (container) {
-          container.scrollTop = 0;
-        }
-        // Pequeno delay adicional antes de focar para evitar scroll indesejado
-        setTimeout(() => {
-          valueInputRef.current?.focus({
-            preventScroll: true
-          });
-        }, 100);
+        valueInputRef.current?.focus();
       }, 300);
       return () => clearTimeout(timer);
     }
@@ -2165,37 +2170,49 @@ export function NewTransactionSheet({
         >
           {isMobile ? (
             // Versão Mobile: Wizard em etapas
-            <div className="flex flex-col h-full">
-              {/* Header Fixo */}
-              <div className="sticky top-0 z-50 shrink-0 flex items-center justify-between px-4 pt-4 pb-2 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-950" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
-                {mobileStep === 2 && (
+            <div className="flex flex-col h-full bg-white dark:bg-gray-950">
+              {/* Header Mobile fixo no topo */}
+              <div
+                className="sticky top-0 z-50 shrink-0 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-950"
+                // Altura visual do header em mobile (~56px) + safe-area quando existir.
+                // Este offset garante que o header apareça corretamente em devices como o seu Poco.
+                style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 3.5rem)' }}
+              >
+                <div className="flex items-center justify-between gap-2 px-4 py-2">
+                  {mobileStep === 2 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setMobileStep(1)}
+                      className="h-8 w-8 p-0 text-slate-600"
+                    >
+                      <ArrowLeft className="h-5 w-5" />
+                    </Button>
+                  )}
+                  <SheetTitle
+                    className={cn(
+                      "text-base font-semibold text-slate-900",
+                      mobileStep === 2 && "flex-1 text-center"
+                    )}
+                  >
+                    {mobileStep === 1 
+                      ? transactionToEdit 
+                        ? 'Atualizar Transação'
+                        : (type === 'expense' ? 'Nova Despesa' : 'Nova Receita')
+                      : 'Detalhes'
+                    }
+                  </SheetTitle>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    onClick={() => setMobileStep(1)}
-                    className="h-8 w-8 p-0"
+                    onClick={() => onOpenChange(false)}
+                    className="h-8 w-8 p-0 text-slate-600"
                   >
-                    <ArrowLeft className="h-5 w-5" />
+                    <X className="h-4 w-4" />
                   </Button>
-                )}
-                <SheetTitle className={cn("text-lg font-semibold", mobileStep === 2 && "flex-1 text-center")}>
-                  {mobileStep === 1 
-                    ? transactionToEdit 
-                      ? 'Atualizar Transação'
-                      : (type === 'expense' ? 'Nova Despesa' : 'Nova Receita')
-                    : 'Detalhes'
-                  }
-                </SheetTitle>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onOpenChange(false)}
-                  className="h-8 w-8 p-0"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
+                </div>
               </div>
 
               {/* Feedback de Erro */}
@@ -2272,68 +2289,71 @@ export function NewTransactionSheet({
                       initial={{ x: 0, opacity: 1 }}
                       exit={{ x: -100, opacity: 0 }}
                       transition={{ duration: 0.3 }}
-                      className="absolute inset-0 flex flex-col p-6"
+                      className="absolute inset-0 flex flex-col overflow-y-auto"
                     >
                       {/* Etapa 1: Valor e Tipo */}
                       <Form {...form}>
-                        <div className="flex-1 flex flex-col">
-                          {/* Seletores de Tipo */}
-                          <FormField
-                            control={form.control}
-                            name="type"
-                            render={({ field }) => (
-                              <FormItem className="mb-8">
-                                <FormControl>
-                                  <div className="grid grid-cols-2 gap-3">
-                                    <Button
-                                      type="button"
-                                      variant={field.value === 'expense' ? 'default' : 'outline'}
-                                      onClick={() => {
-                                        field.onChange('expense');
-                                        form.setValue('payment_method', '');
-                                      }}
-                                      className={cn(
-                                        "h-14 text-base font-semibold",
-                                        field.value === 'expense' && "bg-rose-500 hover:bg-rose-600 text-white"
-                                      )}
-                                    >
-                                      <TrendingDown className="h-5 w-5 mr-2" />
-                                      Despesa
-                                    </Button>
-                                    <Button
-                                      type="button"
-                                      variant={field.value === 'income' ? 'default' : 'outline'}
-                                      onClick={() => {
-                                        field.onChange('income');
-                                        form.setValue('payment_method', '');
-                                      }}
-                                      className={cn(
-                                        "h-14 text-base font-semibold",
-                                        field.value === 'income' && "bg-emerald-500 hover:bg-emerald-600 text-white"
-                                      )}
-                                    >
-                                      <TrendingUp className="h-5 w-5 mr-2" />
-                                      Receita
-                                    </Button>
-                                  </div>
-                                </FormControl>
-                              </FormItem>
-                            )}
-                          />
-
-                          {/* Campo Valor Herói */}
-                          <div className="flex-1 flex items-center justify-center">
+                        <div className="flex flex-col min-h-full">
+                          {/* Seletores de Tipo - sempre visíveis, mesmo com scroll/teclado */}
+                          <div className="shrink-0 px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-gray-950">
                             <FormField
                               control={form.control}
-                              name="value"
+                              name="type"
                               render={({ field }) => (
-                                <FormItem className="w-full">
+                                <FormItem className="mb-0">
                                   <FormControl>
-                                    <div className="relative w-full">
-                                      <input
-                                        ref={valueInputRef}
-                                        type="tel"
-                                        inputMode="decimal"
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <Button
+                                        type="button"
+                                        variant={field.value === 'expense' ? 'default' : 'outline'}
+                                        onClick={() => {
+                                          field.onChange('expense');
+                                          form.setValue('payment_method', '');
+                                        }}
+                                        className={cn(
+                                          "h-14 text-base font-semibold",
+                                          field.value === 'expense' && "bg-rose-500 hover:bg-rose-600 text-white"
+                                        )}
+                                      >
+                                        <TrendingDown className="h-5 w-5 mr-2" />
+                                        Despesa
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant={field.value === 'income' ? 'default' : 'outline'}
+                                        onClick={() => {
+                                          field.onChange('income');
+                                          form.setValue('payment_method', '');
+                                        }}
+                                        className={cn(
+                                          "h-14 text-base font-semibold",
+                                          field.value === 'income' && "bg-emerald-500 hover:bg-emerald-600 text-white"
+                                        )}
+                                      >
+                                        <TrendingUp className="h-5 w-5 mr-2" />
+                                        Receita
+                                      </Button>
+                                    </div>
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+
+                          {/* Campo Valor Herói - área rolável, centralizada verticalmente quando possível */}
+                          <div className="flex-1 flex flex-col px-6 pb-6">
+                            <div className="flex-1 flex items-center justify-center">
+                              <FormField
+                                control={form.control}
+                                name="value"
+                                render={({ field }) => (
+                                  <FormItem className="w-full">
+                                    <FormControl>
+                                      <div className="relative w-full">
+                                        <input
+                                          ref={valueInputRef}
+                                          type="tel"
+                                          inputMode="decimal"
                                         placeholder="0,00"
                                         value={valueDisplay}
                                         onChange={(e) => {
@@ -2345,46 +2365,59 @@ export function NewTransactionSheet({
                                           }
                                           const numericValue = parseInt(rawValue, 10) / 100;
                                           field.onChange(numericValue);
-                                          setValueDisplay(numericValue.toLocaleString('pt-BR', {
-                                            minimumFractionDigits: 2,
-                                            maximumFractionDigits: 2,
-                                          }));
+                                          setValueDisplay(
+                                            numericValue.toLocaleString('pt-BR', {
+                                              minimumFractionDigits: 2,
+                                              maximumFractionDigits: 2,
+                                            })
+                                          );
                                         }}
                                         onFocus={() => {
                                           if (valueInputRef.current) {
                                             valueInputRef.current.select();
                                           }
                                         }}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') {
+                                            // Apenas "confirma" o valor atual e minimiza o teclado,
+                                            // sem avançar automaticamente para a próxima etapa.
+                                            e.preventDefault();
+                                            if (valueInputRef.current) {
+                                              valueInputRef.current.blur();
+                                            }
+                                          }
+                                        }}
                                         className="w-full text-center text-6xl font-bold bg-transparent border-0 focus:outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600"
                                       />
-                                      <span className="absolute left-0 top-1/2 -translate-y-1/2 text-6xl font-bold text-gray-400 pointer-events-none">
-                                        R$
-                                      </span>
-                                    </div>
-                                  </FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
-                          </div>
+                                        <span className="absolute left-0 top-1/2 -translate-y-1/2 text-6xl font-bold text-gray-400 pointer-events-none">
+                                          R$
+                                        </span>
+                                      </div>
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
 
-                          {/* Botão Continuar */}
-                          <div className="shrink-0 pb-6">
-                            <Button
-                              type="button"
-                              onClick={() => {
-                                form.trigger(['type', 'value']).then((isValid) => {
-                                  if (isValid) {
-                                    setMobileStep(2);
-                                  }
-                                });
-                              }}
-                              disabled={loading || !form.watch('value') || form.watch('value') <= 0}
-                              className="w-full h-14 text-base font-semibold"
-                              variant="primary"
-                            >
-                              Continuar →
-                            </Button>
+                            {/* Botão Continuar */}
+                            <div className="shrink-0 pt-4">
+                              <Button
+                                type="button"
+                                onClick={() => {
+                                  form.trigger(['type', 'value']).then((isValid) => {
+                                    if (isValid) {
+                                      setMobileStep(2);
+                                    }
+                                  });
+                                }}
+                                disabled={loading || !form.watch('value') || form.watch('value') <= 0}
+                                className="w-full h-14 text-base font-semibold"
+                                variant="primary"
+                              >
+                                Continuar →
+                              </Button>
+                            </div>
                           </div>
                         </div>
                       </Form>
