@@ -3,11 +3,10 @@
 
 import { http, HttpResponse } from 'msw';
 
-const API_BASE_URL = 'http://localhost:8000/v1';
-
 export const handlers = [
     // Auth endpoints
-    http.post(`${API_BASE_URL}/auth/login`, () => {
+    // Usar wildcard (*) para ignorar host/porta e focar apenas no path
+    http.post('*/v1/auth/login', () => {
         return HttpResponse.json({
             token: 'mock-token-123',
             user_id: 'user-123',
@@ -22,7 +21,7 @@ export const handlers = [
         });
     }),
 
-    http.get(`${API_BASE_URL}/auth/me`, () => {
+    http.get('*/v1/auth/me', () => {
         return HttpResponse.json({
             id: 'user-123',
             email: 'test@example.com',
@@ -41,7 +40,7 @@ export const handlers = [
     }),
 
     // Organizations endpoints
-    http.get(`${API_BASE_URL}/memberships/my-organizations`, () => {
+    http.get('*/v1/memberships/my-organizations', () => {
         return HttpResponse.json({
             total: 1,
             organizations: [
@@ -63,7 +62,7 @@ export const handlers = [
     }),
 
     // Transactions endpoints
-    http.get(`${API_BASE_URL}/transactions`, ({ request }) => {
+    http.get('*/v1/transactions', ({ request }) => {
         const url = new URL(request.url);
         const organizationId = url.searchParams.get('organization_id');
         
@@ -96,7 +95,7 @@ export const handlers = [
         ]);
     }),
 
-    http.post(`${API_BASE_URL}/transactions`, () => {
+    http.post('*/v1/transactions', () => {
         return HttpResponse.json({
             id: 2,
             organization_id: 'org-123',
@@ -113,7 +112,7 @@ export const handlers = [
     }),
 
     // Tags endpoints
-    http.get(`${API_BASE_URL}/tag-types`, () => {
+    http.get('*/v1/tag-types', () => {
         return HttpResponse.json([
             {
                 id: 'tagtype-123',
@@ -125,7 +124,7 @@ export const handlers = [
         ]);
     }),
 
-    http.get(`${API_BASE_URL}/tags`, () => {
+    http.get('*/v1/tags', () => {
         return HttpResponse.json([
             {
                 id: 'tag-123',
@@ -140,7 +139,7 @@ export const handlers = [
     }),
 
     // Financial Impact endpoint
-    http.post(`${API_BASE_URL}/financial-impact/simulate`, () => {
+    http.post('*/v1/financial-impact/simulate', () => {
         return HttpResponse.json({
             simulation_id: 'sim-123',
             summary: {

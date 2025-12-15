@@ -1490,6 +1490,7 @@ export function NewTransactionSheet({
   // Estados para wizard mobile
   const [mobileStep, setMobileStep] = useState<1 | 2>(1);
   const [showTagSelector, setShowTagSelector] = useState(false);
+  const step1ContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Estados para tags e cartão
   // Usar string para type para suportar tanto TagType quanto tipos do backend (categoria, category, etc.)
@@ -1546,12 +1547,46 @@ export function NewTransactionSheet({
   // Focar automaticamente no campo de valor quando a etapa 1 mobile for exibida
   useEffect(() => {
     if (isMobile && mobileStep === 1 && open && valueInputRef.current) {
+      // Delay para garantir que o modal esteja totalmente renderizado
       const timer = setTimeout(() => {
-        valueInputRef.current?.focus();
+        // Primeiro, garantir que o scroll esteja no topo
+        const container = valueInputRef.current?.closest('.flex.flex-col.h-full');
+        if (container) {
+          container.scrollTop = 0;
+        }
+        // Pequeno delay adicional antes de focar para evitar scroll indesejado
+        setTimeout(() => {
+          valueInputRef.current?.focus({
+            preventScroll: true
+          });
+        }, 100);
       }, 300);
       return () => clearTimeout(timer);
     }
   }, [isMobile, mobileStep, open]);
+
+  // Quando o campo de valor ganha foco no mobile, garantir que o topo da etapa 1 esteja visível.
+  // Isso aumenta as chances de header + botões Despesa/Receita continuarem à vista mesmo com o teclado aberto.
+  useEffect(() => {
+    if (!isMobile || !open || mobileStep !== 1) return;
+    const input = valueInputRef.current;
+    const container = step1ContainerRef.current;
+    if (!input || !container) return;
+
+    const handleFocus = () => {
+      try {
+        container.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch {
+        // fallback silencioso
+        container.scrollTop = 0;
+      }
+    };
+
+    input.addEventListener('focus', handleFocus);
+    return () => {
+      input.removeEventListener('focus', handleFocus);
+    };
+  }, [isMobile, open, mobileStep]);
 
   // Buscar todas as tags quando a organização for selecionada
   useEffect(() => {
@@ -2175,10 +2210,9 @@ export function NewTransactionSheet({
               <div
                 className="sticky top-0 z-50 shrink-0 border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-950"
                 // Altura visual do header em mobile (~56px) + safe-area quando existir.
-                // Este offset garante que o header apareça corretamente em devices como o seu Poco.
                 style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 3.5rem)' }}
               >
-                <div className="flex items-center justify-between gap-2 px-4 py-2">
+                <div className="flex items-center justify-between gap-2 px-4 py-3">
                   {mobileStep === 2 && (
                     <Button
                       type="button"
@@ -2290,6 +2324,7 @@ export function NewTransactionSheet({
                       exit={{ x: -100, opacity: 0 }}
                       transition={{ duration: 0.3 }}
                       className="absolute inset-0 flex flex-col overflow-y-auto"
+                      ref={step1ContainerRef}
                     >
                       {/* Etapa 1: Valor e Tipo */}
                       <Form {...form}>
@@ -2355,40 +2390,38 @@ export function NewTransactionSheet({
                                           type="tel"
                                           inputMode="decimal"
                                         placeholder="0,00"
-                                        value={valueDisplay}
-                                        onChange={(e) => {
-                                          const rawValue = e.target.value.replace(/[^\d]/g, '');
-                                          if (rawValue === '') {
-                                            setValueDisplay('');
-                                            field.onChange(0);
-                                            return;
-                                          }
-                                          const numericValue = parseInt(rawValue, 10) / 100;
-                                          field.onChange(numericValue);
-                                          setValueDisplay(
-                                            numericValue.toLocaleString('pt-BR', {
+                                          value={valueDisplay}
+                                          onChange={(e) => {
+                                            const rawValue = e.target.value.replace(/[^\d]/g, '');
+                                            if (rawValue === '') {
+                                              setValueDisplay('');
+                                              field.onChange(0);
+                                              return;
+                                            }
+                                            const numericValue = parseInt(rawValue, 10) / 100;
+                                            field.onChange(numericValue);
+                                            setValueDisplay(numericValue.toLocaleString('pt-BR', {
                                               minimumFractionDigits: 2,
                                               maximumFractionDigits: 2,
-                                            })
-                                          );
-                                        }}
-                                        onFocus={() => {
-                                          if (valueInputRef.current) {
-                                            valueInputRef.current.select();
-                                          }
+                                            }));
+                                          }}
+                                          onFocus={() => {
+                                            if (valueInputRef.current) {
+                                              valueInputRef.current.select();
+                                            }
                                         }}
                                         onKeyDown={(e) => {
                                           if (e.key === 'Enter') {
-                                            // Apenas "confirma" o valor atual e minimiza o teclado,
-                                            // sem avançar automaticamente para a próxima etapa.
+                                            // Apenas minimizar o teclado, sem avançar de etapa automaticamente.
+                                            // Isso permite o usuário revisar se é Despesa ou Receita antes de continuar.
                                             e.preventDefault();
                                             if (valueInputRef.current) {
                                               valueInputRef.current.blur();
                                             }
                                           }
                                         }}
-                                        className="w-full text-center text-6xl font-bold bg-transparent border-0 focus:outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600"
-                                      />
+                                          className="w-full text-center text-6xl font-bold bg-transparent border-0 focus:outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600"
+                                        />
                                         <span className="absolute left-0 top-1/2 -translate-y-1/2 text-6xl font-bold text-gray-400 pointer-events-none">
                                           R$
                                         </span>
@@ -2758,8 +2791,8 @@ export function NewTransactionSheet({
                             )}
                           />
 
-                          {/* Botão Salvar */}
-                          <div className="shrink-0 pb-6 pt-4">
+                          {/* Botão Salvar - fixo no rodapé da etapa 2 (mobile) */}
+                          <div className="sticky bottom-0 left-0 right-0 bg-white dark:bg-gray-950 border-t border-slate-200 dark:border-slate-700 pt-4 pb-6 mt-4">
                             <Button
                               type="button"
                               onClick={handleSaveClick}
@@ -2773,7 +2806,7 @@ export function NewTransactionSheet({
                                   Salvando...
                                 </>
                               ) : (
-                                'Salvar Transação'
+                                getSaveButtonText()
                               )}
                             </Button>
                           </div>
@@ -3730,4 +3763,3 @@ export function NewTransactionSheet({
     </Sheet>
   );
 }
-
