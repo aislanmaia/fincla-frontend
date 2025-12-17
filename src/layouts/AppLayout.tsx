@@ -195,24 +195,24 @@ export function AppLayout({ children }: PropsWithChildren) {
         {/* Top Bar fora do fluxo do conteúdo (sempre no topo) */}
         <div className="sticky top-0 z-30">
           <header className="supports-[backdrop-filter]:bg-white/40 backdrop-blur border-b border-gray-200/60 dark:supports-[backdrop-filter]:bg-white/[0.03] dark:border-white/10 bg-transparent">
-            <div className="h-16 px-4 sm:px-6 lg:px-8 xl:px-10 flex items-center gap-3 justify-between mx-auto max-w-7xl xl:max-w-[90rem] 2xl:max-w-[96rem]">
-              <div className="flex items-center gap-3">
-                <SidebarTrigger />
-                <div className="text-2xl font-semibold tracking-tight">Dashboard</div>
+            <div className="h-16 px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 flex items-center gap-2 sm:gap-3 justify-between mx-auto max-w-7xl xl:max-w-[90rem] 2xl:max-w-[96rem] min-w-0">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 sm:flex-none">
+                <SidebarTrigger className="shrink-0" />
+                <div className="text-lg sm:text-xl md:text-2xl font-semibold tracking-tight truncate min-w-0">Dashboard</div>
                 <Button
                   onClick={() => setIsNewTransactionOpen(true)}
-                  className="h-9 px-4 rounded-full shadow-sm bg-gradient-to-r from-[#4A56E2] to-[#00C6B8] hover:from-[#343D9B] hover:to-[#00A89C] text-white font-medium flex items-center gap-2 transition-all duration-200 hover:scale-105 active:scale-95"
+                  className="h-8 sm:h-9 px-2 sm:px-4 rounded-full shadow-sm bg-gradient-to-r from-[#4A56E2] to-[#00C6B8] hover:from-[#343D9B] hover:to-[#00A89C] text-white font-medium flex items-center gap-1 sm:gap-2 transition-all duration-200 hover:scale-105 active:scale-95 shrink-0"
                 >
-                  <Plus className="h-4 w-4" />
-                  <span className="text-sm">Nova transação</span>
+                  <Plus className="h-4 w-4 shrink-0" />
+                  <span className="text-xs sm:text-sm hidden sm:inline">Nova transação</span>
                 </Button>
               </div>
-              <div className="flex-1 max-w-xl md:max-w-2xl xl:max-w-3xl" />
-              <div className="flex items-center gap-3">
+              <div className="hidden md:flex flex-1 max-w-xl lg:max-w-2xl xl:max-w-3xl" />
+              <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                 {/* Organization Selector */}
                 {organizations.length > 0 && (
                   <Select value={activeOrgId || undefined} onValueChange={handleOrgChange}>
-                    <SelectTrigger className="w-[180px] h-9 rounded-full bg-white/70 ring-1 ring-gray-200 text-sm">
+                    <SelectTrigger className="hidden sm:flex w-[140px] md:w-[180px] h-8 sm:h-9 rounded-full bg-white/70 ring-1 ring-gray-200 text-xs sm:text-sm">
                       <SelectValue placeholder="Selecionar organização" />
                     </SelectTrigger>
                     <SelectContent>
@@ -228,13 +228,13 @@ export function AppLayout({ children }: PropsWithChildren) {
                 {/* Menu de contexto do usuário */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 bg-gray-100/70 ring-1 ring-gray-200 hover:bg-gray-100 transition-colors">
-                      <Avatar className="h-7 w-7">
+                    <button className="inline-flex items-center gap-1.5 sm:gap-2 rounded-full px-2 sm:px-3 py-1.5 bg-gray-100/70 ring-1 ring-gray-200 hover:bg-gray-100 transition-colors shrink-0 min-w-0">
+                      <Avatar className="h-6 w-6 sm:h-7 sm:w-7 shrink-0">
                         <AvatarFallback className="bg-gradient-to-br from-[#4A56E2] to-[#00C6B8] text-white text-xs font-semibold">
                           {getUserInitials()}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="text-sm font-medium">{getUserDisplayName()}</span>
+                      <span className="text-xs sm:text-sm font-medium hidden sm:inline truncate max-w-[120px] md:max-w-none">{getUserDisplayName()}</span>
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">

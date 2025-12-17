@@ -142,6 +142,7 @@ export interface CreateTransactionRequest {
   date: string; // ISO datetime string (YYYY-MM-DDTHH:MM or YYYY-MM-DDTHH:MM:SS) - REQUIRED, supports minute granularity
   // Campos opcionais para cartão de crédito
   card_last4?: string | null;
+  card_id?: number | null; // ID do cartão (usado para atualizar credit_card_charge)
   modality?: 'cash' | 'installment' | null;
   installments_count?: number | null;
   tag_ids?: string[];

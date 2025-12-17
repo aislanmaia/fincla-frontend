@@ -1761,6 +1761,7 @@ export function NewTransactionSheet({
         } 
         // Fallback para campos legados (compatibilidade)
         else if (isCreditCardPayment) {
+          // Usar campos legados diretamente da transação
           cardLast4 = transactionToEdit.card_last4 || null;
           modality = transactionToEdit.modality || null;
           installmentsCount = transactionToEdit.installments_count || null;
@@ -1783,6 +1784,13 @@ export function NewTransactionSheet({
           }
         }
 
+        // Normalizar payment_method para garantir compatibilidade
+        // O backend pode retornar "credit_card" mas o formulário espera "Cartão de Crédito"
+        let normalizedPaymentMethod = transactionToEdit.payment_method;
+        if (normalizedPaymentMethod === 'credit_card') {
+          normalizedPaymentMethod = 'Cartão de Crédito';
+        }
+
         // Resetar formulário com todos os dados
         // Não preencher o campo 'category' - usar apenas tags como fonte da verdade
         form.reset({
@@ -1791,7 +1799,7 @@ export function NewTransactionSheet({
           description: transactionToEdit.description,
           category: '', // Campo legado - não usar, tags são a fonte da verdade
           value: transactionToEdit.value,
-          payment_method: transactionToEdit.payment_method,
+          payment_method: normalizedPaymentMethod,
           date: formattedDate,
           card_last4: cardLast4,
           modality: modality,
@@ -1854,6 +1862,41 @@ export function NewTransactionSheet({
       setError(null);
       setShowConfirmationDialog(false);
 
+      // Garantir que card_last4 está atualizado se um cartão foi selecionado
+      // Isso é necessário porque o card_last4 pode ter sido atualizado via setValue
+      // mas o values pode não ter sido atualizado ainda
+      const currentFormValues = form.getValues();
+      
+      // Se temos um cartão selecionado, garantir que card_last4 está atualizado
+      if (currentFormValues.payment_method === 'Cartão de Crédito' && selectedCardId) {
+        // Se não temos card_last4 ou se o card_last4 não corresponde ao cartão selecionado, buscar do cartão
+        try {
+          const cards = await listCreditCards(currentFormValues.organization_id);
+          const selectedCard = cards.find(card => card.id === selectedCardId);
+          if (selectedCard) {
+            // Sempre atualizar card_last4 com o cartão selecionado
+            currentFormValues.card_last4 = selectedCard.last4;
+            form.setValue('card_last4', selectedCard.last4);
+          }
+        } catch (error) {
+          console.error('Erro ao buscar cartão:', error);
+        }
+      }
+
+      // Usar valores atualizados do formulário (priorizar currentFormValues que tem os valores mais recentes)
+      const finalValues: TransactionFormValues = {
+        ...values,
+        ...currentFormValues,
+        // Garantir que modality e installments_count estão corretos
+        modality: currentFormValues.modality !== undefined ? currentFormValues.modality : values.modality,
+        // Se não for parcelado, garantir que installments_count é null
+        installments_count: currentFormValues.modality === 'installment' 
+          ? (currentFormValues.installments_count !== undefined ? currentFormValues.installments_count : values.installments_count)
+          : null,
+        // Priorizar card_last4 do currentFormValues (que foi atualizado acima se necessário)
+        card_last4: currentFormValues.card_last4 !== undefined ? currentFormValues.card_last4 : values.card_last4,
+      };
+
       // Processar tags: buscar IDs existentes ou criar novas tags
       // Tags são a fonte da verdade - processar todas as tags do estado, incluindo categoria
       const tagIds: string[] = [];
@@ -1897,31 +1940,45 @@ export function NewTransactionSheet({
       }
 
       // Garantir que value seja um número
-      const numericValue = typeof values.value === 'number' 
-        ? values.value 
-        : (values.value ? Number(String(values.value).replace(',', '.')) : 0);
+      const numericValue = typeof finalValues.value === 'number' 
+        ? finalValues.value 
+        : (finalValues.value ? Number(String(finalValues.value).replace(',', '.')) : 0);
+
+      // Extrair categoria das tags para preencher campo legado 'category'
+      // Isso evita que o backend retorne "Uncategorized" quando há uma categoria nas tags
+      let categoryValue = '';
+      const categoryTag = tags.find(t => 
+        t.type.toLowerCase() === 'categoria' || 
+        t.type.toLowerCase() === 'category' ||
+        t.type.toLowerCase() === 'Categoria'
+      );
+      if (categoryTag && categoryTag.value) {
+        categoryValue = categoryTag.value;
+      }
 
       // Preparar dados base da transação
-      const baseTransactionData = {
-        organization_id: values.organization_id,
-        type: values.type,
-        description: values.description,
-        // Não enviar category - tags são a fonte da verdade
-        category: '', // Campo legado - sempre vazio
+      const baseTransactionData: any = {
+        organization_id: finalValues.organization_id,
+        type: finalValues.type,
+        description: finalValues.description,
+        // Preencher category com o valor da tag de categoria (se houver) para compatibilidade
+        category: categoryValue,
         value: numericValue,
-        payment_method: values.payment_method,
+        payment_method: finalValues.payment_method,
         tag_ids: tagIds,
-        recurring: values.recurring || false, // Marcador de recorrência para previsões
-        ...(values.payment_method === 'Cartão de Crédito' && {
-          card_last4: values.card_last4 || null,
-          modality: values.modality || null,
-          installments_count: values.modality === 'installment' ? values.installments_count || null : null,
+        recurring: finalValues.recurring || false, // Marcador de recorrência para previsões
+        ...(finalValues.payment_method === 'Cartão de Crédito' && {
+          card_last4: finalValues.card_last4 || null,
+          // Enviar card_id se disponível (para atualizar credit_card_charge corretamente)
+          ...(selectedCardId && { card_id: selectedCardId }),
+          modality: finalValues.modality || null,
+          installments_count: finalValues.modality === 'installment' ? finalValues.installments_count || null : null,
         }),
       };
 
       // Garantir que date está no formato datetime correto (YYYY-MM-DDTHH:MM)
       // O DateTimeInput já retorna no formato correto, mas garantimos que está completo
-      let dateValue = values.date;
+      let dateValue = finalValues.date;
       if (!dateValue.includes('T')) {
         // Se não tiver hora, adicionar 00:00
         dateValue = `${dateValue}T00:00`;
@@ -1958,7 +2015,7 @@ export function NewTransactionSheet({
       setError(typeof errorMessage === 'string' ? errorMessage : String(errorMessage));
       setLoading(false);
     }
-  }, [tags, allTagsFromBackend, tagTypesFromBackend, transactionToEdit]);
+  }, [tags, allTagsFromBackend, tagTypesFromBackend, transactionToEdit, form, selectedCardId]);
 
   // Função para confirmar transação (usada no botão e no Enter)
   const handleConfirm = useCallback(() => {
@@ -2170,16 +2227,41 @@ export function NewTransactionSheet({
     const valueFormatted = numericValue > 0 ? numericValue.toFixed(2).replace('.', ',') : '0,00';
     const dateFormatted = values.date ? format(new Date(values.date), "dd/MM/yyyy 'às' HH:mm") : 'Não informado';
 
+    // Extrair categoria das tags
+    const categoryTag = tags.find(t => 
+      (t.type.toLowerCase() === 'categoria' || t.type.toLowerCase() === 'category') && t.value
+    );
+    const categoryValue = categoryTag?.value || 'Não informado';
+
+    // Separar tags de categoria das outras tags
+    const categoryTags = tags.filter(t => 
+      (t.type.toLowerCase() === 'categoria' || t.type.toLowerCase() === 'category') && t.value
+    );
+    const otherTags = tags.filter(t => 
+      !(t.type.toLowerCase() === 'categoria' || t.type.toLowerCase() === 'category') && t.value
+    );
+
+    // Se apenas a tag categoria está selecionada, não mostrar campo TAGS
+    // Se há mais de uma tag (incluindo categoria), mostrar CATEGORIA e TAGS (com todas as tags, incluindo categoria)
+    const hasOnlyCategory = categoryTags.length > 0 && otherTags.length === 0;
+    const allTagsForDisplay = tags.filter(t => t.value).map(t => `${t.type}: ${t.value}`);
+
+    // Formatar método de pagamento com últimos 4 dígitos do cartão se for cartão de crédito
+    let paymentMethodDisplay = values.payment_method || 'Não informado';
+    if (values.payment_method === 'Cartão de Crédito' && values.card_last4) {
+      paymentMethodDisplay = `Cartão de Crédito •••• ${values.card_last4}`;
+    }
+
     return {
       type: typeLabel,
       value: valueFormatted,
       description: values.description || 'Não informado',
-      category: values.category || 'Não informado',
-      paymentMethod: values.payment_method || 'Não informado',
+      category: categoryValue,
+      paymentMethod: paymentMethodDisplay,
       date: dateFormatted,
       modality: values.modality === 'cash' ? 'À vista' : values.modality === 'installment' ? 'Parcelado' : null,
       installments: values.installments_count || null,
-      tags: tags.filter(t => t.value).map(t => `${t.type}: ${t.value}`),
+      tags: hasOnlyCategory ? [] : allTagsForDisplay, // Só mostrar tags se houver mais de uma tag além da categoria
     };
   };
 
@@ -2416,7 +2498,7 @@ export function NewTransactionSheet({
                                 render={({ field }) => (
                                   <FormItem className="w-full">
                                     <FormControl>
-                                      <div className="relative w-full">
+                                      <div className="relative w-full min-w-0">
                                         <input
                                           ref={valueInputRef}
                                           type="tel"
@@ -2452,9 +2534,18 @@ export function NewTransactionSheet({
                                             }
                                           }
                                         }}
-                                          className="w-full text-center text-6xl font-bold bg-transparent border-0 focus:outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600"
+                                          className="w-full text-center text-4xl sm:text-5xl md:text-6xl font-bold bg-transparent border-0 focus:outline-none placeholder:text-gray-300 dark:placeholder:text-gray-600 pr-2 pl-12 sm:pl-16 md:pl-20 min-w-0 overflow-hidden text-ellipsis"
+                                          style={{ 
+                                            fontSize: 'clamp(2rem, 8vw, 3.75rem)',
+                                            lineHeight: '1.2'
+                                          }}
                                         />
-                                        <span className="absolute left-0 top-1/2 -translate-y-1/2 text-6xl font-bold text-gray-400 pointer-events-none">
+                                        <span className="absolute left-0 top-1/2 -translate-y-1/2 text-4xl sm:text-5xl md:text-6xl font-bold text-gray-400 pointer-events-none whitespace-nowrap"
+                                          style={{ 
+                                            fontSize: 'clamp(2rem, 8vw, 3.75rem)',
+                                            lineHeight: '1.2'
+                                          }}
+                                        >
                                           R$
                                         </span>
                                       </div>
