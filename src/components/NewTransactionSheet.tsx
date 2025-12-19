@@ -2058,6 +2058,64 @@ export function NewTransactionSheet({
 
   // Função para lidar com o clique no botão de salvar (abre modal de confirmação)
   const handleSaveClick = () => {
+    // Validar tags obrigatórias (especialmente categoria)
+    const requiredTagTypes = tagTypesFromBackend.filter(tt => tt.is_required);
+    const missingRequiredTags: string[] = [];
+    
+    for (const requiredType of requiredTagTypes) {
+      const hasTagOfType = tags.some(tag => {
+        const typeLower = tag.type.toLowerCase();
+        const requiredTypeLower = requiredType.name.toLowerCase();
+        return (typeLower === requiredTypeLower || typeLower === 'categoria' || typeLower === 'category') && 
+               tag.value && tag.value.trim() !== '';
+      });
+      
+      if (!hasTagOfType) {
+        missingRequiredTags.push(requiredType.name);
+      }
+    }
+    
+    // Se houver tags obrigatórias faltando, mostrar erro
+    if (missingRequiredTags.length > 0) {
+      const errorMessage = `É obrigatório selecionar pelo menos uma tag do tipo "${missingRequiredTags.join('", "')}"`;
+      setError(errorMessage);
+      
+      // Fazer scroll para o campo de classificação se estiver em mobile
+      if (isMobile) {
+        setTimeout(() => {
+          const classificationField = document.querySelector('[placeholder*="Adicionar Categoria"]') as HTMLElement;
+          if (classificationField) {
+            const step2Container = classificationField.closest('.overflow-y-auto') as HTMLElement;
+            if (step2Container) {
+              const fieldRect = classificationField.getBoundingClientRect();
+              const containerRect = step2Container.getBoundingClientRect();
+              const scrollTop = step2Container.scrollTop;
+              const relativeTop = fieldRect.top - containerRect.top + scrollTop;
+              
+              step2Container.scrollTo({
+                top: Math.max(0, relativeTop - 100),
+                behavior: 'smooth'
+              });
+            } else {
+              classificationField.scrollIntoView({ 
+                behavior: 'smooth', 
+                block: 'center',
+                inline: 'nearest'
+              });
+            }
+            
+            // Destacar o campo
+            classificationField.focus();
+            classificationField.classList.add('ring-2', 'ring-red-500', 'border-red-500');
+            setTimeout(() => {
+              classificationField.classList.remove('ring-2', 'ring-red-500', 'border-red-500');
+            }, 3000);
+          }
+        }, 200);
+      }
+      return;
+    }
+    
     // Validar formulário antes de abrir o modal
     form.trigger().then((isValid) => {
       if (isValid) {
@@ -2172,6 +2230,18 @@ export function NewTransactionSheet({
   // Funções para gerenciar tags
   // Aceitar string para suportar tanto TagType quanto tipos do backend
   const handleToggleTag = (tagType: TagType | string, value: string) => {
+    // Limpar erro se uma tag de categoria obrigatória for adicionada
+    const typeLower = String(tagType).toLowerCase();
+    const isCategoryType = typeLower === 'categoria' || typeLower === 'category';
+    if (isCategoryType && value && value.trim() !== '') {
+      const requiredTagTypes = tagTypesFromBackend.filter(tt => tt.is_required);
+      const categoryRequiredType = requiredTagTypes.find(tt => 
+        tt.name.toLowerCase() === 'categoria' || tt.name.toLowerCase() === 'category'
+      );
+      if (categoryRequiredType) {
+        setError(null);
+      }
+    }
     // Verificar se já existe uma tag deste tipo com este valor
     const existingTagIndex = tags.findIndex(t => t.type === tagType && t.value === value);
 

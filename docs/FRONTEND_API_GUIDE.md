@@ -1436,6 +1436,11 @@ interface UpdateTransactionRequest {
   date: string; // ISO datetime string (YYYY-MM-DDTHH:MM or YYYY-MM-DDTHH:MM:SS) - REQUIRED, supports minute granularity
   recurring?: boolean;
   category?: string; // Campo legado - opcional
+  // Campos de cartão de crédito (opcional - apenas se payment_method for "Cartão de Crédito")
+  card_id?: number; // ID do cartão (prioridade sobre card_last4)
+  card_last4?: string; // Últimos 4 dígitos do cartão (fallback se card_id não for fornecido)
+  modality?: 'cash' | 'installment'; // Modalidade de pagamento
+  installments_count?: number; // Número de parcelas (obrigatório se modality for 'installment')
 }
 
 const updateTransaction = async (
@@ -1480,6 +1485,33 @@ await updateTransaction(123, orgId, {
   payment_method: "Cartão de Crédito",
   recurring: true
 });
+
+// Atualizar transação com cartão de crédito - alterar cartão
+await updateTransaction(123, orgId, {
+  card_id: 456, // ID do novo cartão
+  date: "2025-01-20T15:45"
+});
+
+// Atualizar modalidade para à vista (remove parcelas)
+await updateTransaction(123, orgId, {
+  modality: "cash",
+  date: "2025-01-20T15:45"
+});
+
+// Atualizar para parcelado (cria novas parcelas)
+await updateTransaction(123, orgId, {
+  modality: "installment",
+  installments_count: 3, // 3 parcelas
+  date: "2025-01-20T15:45"
+});
+
+// Atualizar valor + parcelas (recalcula parcelas com novo valor)
+await updateTransaction(123, orgId, {
+  value: 300.00, // Novo valor total
+  modality: "installment",
+  installments_count: 5, // 5 parcelas de 60.00 cada
+  date: "2025-01-20T15:45"
+});
 ```
 
 **Response (200):**
@@ -1512,11 +1544,26 @@ await updateTransaction(123, orgId, {
 - Pelo menos uma tag do tipo "categoria" (ou outro tipo obrigatório) deve estar presente se `tag_ids` for fornecido
 - Campos não fornecidos mantêm seus valores originais
 
+**Campos de Cartão de Crédito:**
+- Os campos `card_id`, `card_last4`, `modality` e `installments_count` só devem ser enviados quando `payment_method` for "Cartão de Crédito"
+- Se `card_id` for fornecido, ele terá prioridade sobre `card_last4`
+- Se `card_last4` for fornecido mas `card_id` não, o sistema buscará o cartão correspondente na organização
+- Ao alterar `modality` de "installment" para "cash", as parcelas existentes serão removidas
+- Ao alterar `modality` de "cash" para "installment", novas parcelas serão criadas baseado no `value` atual
+- Ao alterar `installments_count` mantendo "installment", as parcelas antigas são removidas e novas são criadas
+- Se `value` for alterado junto com campos de cartão, o `total_amount` do charge será atualizado e as parcelas recalculadas
+
 **Erros:**
 - `404`: Transação não encontrada
 - `403`: Acesso negado à organização
-- `422`: Erro de validação ou regra de negócio (ex: tag obrigatória ausente)
+- `422`: Erro de validação ou regra de negócio (ex: tag obrigatória ausente, cartão não encontrado, modalidade inválida)
 - `500`: Erro interno do servidor
+
+**Erros de Cartão de Crédito:**
+- `422`: Cartão não encontrado (se `card_id` ou `card_last4` inválido)
+- `422`: `installments_count` obrigatório quando `modality` é "installment"
+- `422`: `modality` deve ser "cash" ou "installment"
+- `422`: Campos de cartão só podem ser usados com `payment_method: "Cartão de Crédito"`
 
 ---
 

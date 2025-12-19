@@ -39,6 +39,15 @@ apiClient.interceptors.response.use(
 // Função auxiliar para tratar erros da API
 export const handleApiError = (error: unknown): string => {
   if (axios.isAxiosError(error)) {
+    // Tratar erros de CORS especificamente
+    if (!error.response && error.code === 'ERR_NETWORK') {
+      // Verificar se é um erro de CORS
+      if (error.message?.includes('CORS') || error.message?.includes('Network Error')) {
+        return 'Erro de CORS: O servidor não está permitindo requisições deste domínio. Verifique a configuração do backend.';
+      }
+      return 'Erro de conexão: Não foi possível conectar ao servidor. Verifique sua conexão e se o servidor está rodando.';
+    }
+    
     const responseData = error.response?.data;
     
     // Se for um objeto ApiError com detail
@@ -72,6 +81,17 @@ export const handleApiError = (error: unknown): string => {
       if (errorObj.message && typeof errorObj.message === 'string') {
         return errorObj.message;
       }
+    }
+    
+    // Tratar erros HTTP específicos
+    if (error.response?.status === 403) {
+      return 'Acesso negado. Verifique suas permissões.';
+    }
+    if (error.response?.status === 404) {
+      return 'Recurso não encontrado.';
+    }
+    if (error.response?.status === 500) {
+      return 'Erro interno do servidor. Tente novamente mais tarde.';
     }
     
     return error.message || 'Erro desconhecido';
