@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { TrendingUp, LayoutGrid, ListOrdered, PieChart, Target, User, LogOut, Plus, CreditCard } from "lucide-react";
+import { TrendingUp, LayoutGrid, ListOrdered, PieChart, Target, User, LogOut, Plus, CreditCard, Settings } from "lucide-react";
 import { PropsWithChildren, useState } from "react";
 import { useAIChat } from "@/hooks/useAIChat";
 import { ChatBar } from "@/components/ChatBar";
@@ -183,10 +183,18 @@ export function AppLayout({ children }: PropsWithChildren) {
             </SidebarGroup>
           </SidebarContent>
           <SidebarFooter>
-            <Button variant="outline" className="justify-start bg-white/10 hover:bg-white/15 text-white border-white/20">
-              Configurações
-            </Button>
-            <Button className="justify-start bg-white text-[#00A38D] hover:bg-gray-50">Upgrade</Button>
+            <Link href="/profile">
+              <Button 
+                variant="outline" 
+                className="w-full justify-start bg-white/10 hover:bg-white/15 hover:text-white text-white border-white/20"
+                asChild
+              >
+                <a>
+                  <Settings className="w-4 h-4 mr-2" />
+                  Configurações
+                </a>
+              </Button>
+            </Link>
           </SidebarFooter>
         </div>
       </Sidebar>
