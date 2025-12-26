@@ -90,20 +90,14 @@ export const SummaryCards = memo(function SummaryCards({ summary, monthlyData, i
                 {formatCurrency(summary.balance)}
               </p>
             )}
-            {!isLoading && (
+            {!isLoading && balanceChange && (
               <p className="text-sm text-white/90 flex items-center mt-2">
-                {balanceChange ? (
-                  <>
-                    {balanceChange.isPositive ? (
-                      <ArrowUp className="w-3 h-3 mr-1" />
-                    ) : (
-                      <ArrowDown className="w-3 h-3 mr-1" />
-                    )}
-                    {balanceChange.isPositive ? '+' : '-'}{balanceChange.percentage.toFixed(1).replace('.', ',')}% este mês
-                  </>
+                {balanceChange.isPositive ? (
+                  <ArrowUp className="w-3 h-3 mr-1" />
                 ) : (
-                  <span className="text-white/70">Sem dados para comparar</span>
+                  <ArrowDown className="w-3 h-3 mr-1" />
                 )}
+                {balanceChange.isPositive ? '+' : '-'}{balanceChange.percentage.toFixed(1).replace('.', ',')}% este mês
               </p>
             )}
           </div>
@@ -125,20 +119,14 @@ export const SummaryCards = memo(function SummaryCards({ summary, monthlyData, i
                 {formatCurrency(summary.income)}
               </p>
             )}
-            {!isLoading && (
+            {!isLoading && incomeChange && (
               <p className="text-sm text-white/90 flex items-center mt-2">
-                {incomeChange ? (
-                  <>
-                    {incomeChange.isPositive ? (
-                      <ArrowUp className="w-3 h-3 mr-1" />
-                    ) : (
-                      <ArrowDown className="w-3 h-3 mr-1" />
-                    )}
-                    {incomeChange.isPositive ? '+' : '-'}{incomeChange.percentage.toFixed(1).replace('.', ',')}% este mês
-                  </>
+                {incomeChange.isPositive ? (
+                  <ArrowUp className="w-3 h-3 mr-1" />
                 ) : (
-                  <span className="text-white/70">Sem dados para comparar</span>
+                  <ArrowDown className="w-3 h-3 mr-1" />
                 )}
+                {incomeChange.isPositive ? '+' : '-'}{incomeChange.percentage.toFixed(1).replace('.', ',')}% este mês
               </p>
             )}
           </div>
@@ -160,20 +148,14 @@ export const SummaryCards = memo(function SummaryCards({ summary, monthlyData, i
                 {formatCurrency(summary.expenses)}
               </p>
             )}
-            {!isLoading && (
+            {!isLoading && expenseChange && (
               <p className="text-sm text-white/90 flex items-center mt-2">
-                {expenseChange ? (
-                  <>
-                    {expenseChange.isPositive ? (
-                      <ArrowUp className="w-3 h-3 mr-1" />
-                    ) : (
-                      <ArrowDown className="w-3 h-3 mr-1" />
-                    )}
-                    {expenseChange.isPositive ? '+' : '-'}{expenseChange.percentage.toFixed(1).replace('.', ',')}% este mês
-                  </>
+                {expenseChange.isPositive ? (
+                  <ArrowUp className="w-3 h-3 mr-1" />
                 ) : (
-                  <span className="text-white/70">Sem dados para comparar</span>
+                  <ArrowDown className="w-3 h-3 mr-1" />
                 )}
+                {expenseChange.isPositive ? '+' : '-'}{expenseChange.percentage.toFixed(1).replace('.', ',')}% este mês
               </p>
             )}
           </div>
