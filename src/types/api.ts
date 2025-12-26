@@ -131,6 +131,16 @@ export interface RegisterMemberResponse {
   };
 }
 
+export interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
+}
+
+export interface ChangePasswordResponse {
+  message: string;
+  user_id: string;
+}
+
 // ===== TRANSAÇÕES =====
 export interface CreateTransactionRequest {
   organization_id: string;

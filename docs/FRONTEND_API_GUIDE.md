@@ -659,6 +659,73 @@ const getMyProfile = async (): Promise<User> => {
 
 ---
 
+### PUT `/v1/users/me/password`
+
+Atualiza a senha do usuário autenticado. Requer a senha atual e uma nova senha que atenda aos critérios de segurança.
+
+**Request:**
+```typescript
+interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
+}
+
+const changePassword = async (
+  currentPassword: string,
+  newPassword: string
+): Promise<ChangePasswordResponse> => {
+  const response = await apiClient.put<ChangePasswordResponse>(
+    '/v1/users/me/password',
+    {
+      current_password: currentPassword,
+      new_password: newPassword,
+    }
+  );
+  return response.data;
+};
+```
+
+**Response (200):**
+```typescript
+{
+  message: "Senha atualizada com sucesso",
+  user_id: "123e4567-e89b-12d3-a456-426614174000"
+}
+```
+
+**Validações da Nova Senha:**
+- Mínimo de 8 caracteres
+- Pelo menos uma letra maiúscula (A-Z)
+- Pelo menos uma letra minúscula (a-z)
+- Pelo menos um número (0-9)
+- Pelo menos um caractere especial (!@#$%^&*(),.?":{}|<>)
+- Deve ser diferente da senha atual
+
+**Exemplos de Uso:**
+```typescript
+// Mudança de senha bem-sucedida
+await changePassword("MinhaSenhaAtual123!", "NovaSenhaSegura456!");
+
+// Após mudança, fazer login com nova senha
+const loginResponse = await login("user@example.com", "NovaSenhaSegura456!");
+```
+
+**Erros:**
+- `400 Bad Request`: 
+  - Senha atual incorreta
+  - Nova senha não atende aos critérios de segurança
+  - Nova senha é igual à senha atual
+- `401 Unauthorized`: Não autenticado ou token inválido
+- `422 Unprocessable Entity`: Dados de entrada inválidos (campos faltando)
+
+**Notas Importantes:**
+- A senha atual deve ser fornecida e estar correta
+- A nova senha deve atender a todos os critérios de segurança
+- Após a mudança, o usuário precisará fazer login novamente com a nova senha
+- Tokens JWT existentes continuam válidos até expirarem
+
+---
+
 ## 🏢 Endpoints de Organizações
 
 ### POST `/v1/organizations`

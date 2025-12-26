@@ -2075,19 +2075,35 @@ export function NewTransactionSheet({
       }
     }
     
-    // Se houver tags obrigatórias faltando, mostrar erro
+    // Se houver tags obrigatórias faltando, setar erro no campo category do formulário
     if (missingRequiredTags.length > 0) {
       const errorMessage = `É obrigatório selecionar pelo menos uma tag do tipo "${missingRequiredTags.join('", "')}"`;
-      setError(errorMessage);
+      // Setar erro no campo category para que apareça próximo ao componente de classificação
+      form.setError('category', {
+        type: 'manual',
+        message: errorMessage
+      });
+      
+      // Limpar erro geral se houver
+      setError(null);
       
       // Fazer scroll para o campo de classificação se estiver em mobile
       if (isMobile) {
         setTimeout(() => {
-          const classificationField = document.querySelector('[placeholder*="Adicionar Categoria"]') as HTMLElement;
-          if (classificationField) {
-            const step2Container = classificationField.closest('.overflow-y-auto') as HTMLElement;
+          // Procurar pelo botão de adicionar categoria (procura por texto no botão)
+          const allButtons = Array.from(document.querySelectorAll('button'));
+          const classificationButton = allButtons.find(btn => 
+            btn.textContent?.includes('Adicionar Categoria') || btn.textContent?.includes('Adicionar Categoria ou Tag')
+          ) as HTMLElement | undefined;
+          
+          // Procurar pela mensagem de erro do FormMessage
+          const errorMessageElement = document.querySelector('p.text-sm.text-destructive, p.text-sm.text-red-600, p.text-sm.text-red-400') as HTMLElement;
+          const targetElement = errorMessageElement || classificationButton;
+          
+          if (targetElement) {
+            const step2Container = targetElement.closest('.overflow-y-auto') as HTMLElement;
             if (step2Container) {
-              const fieldRect = classificationField.getBoundingClientRect();
+              const fieldRect = targetElement.getBoundingClientRect();
               const containerRect = step2Container.getBoundingClientRect();
               const scrollTop = step2Container.scrollTop;
               const relativeTop = fieldRect.top - containerRect.top + scrollTop;
@@ -2097,24 +2113,29 @@ export function NewTransactionSheet({
                 behavior: 'smooth'
               });
             } else {
-              classificationField.scrollIntoView({ 
+              targetElement.scrollIntoView({ 
                 behavior: 'smooth', 
                 block: 'center',
                 inline: 'nearest'
               });
             }
             
-            // Destacar o campo
-            classificationField.focus();
-            classificationField.classList.add('ring-2', 'ring-red-500', 'border-red-500');
-            setTimeout(() => {
-              classificationField.classList.remove('ring-2', 'ring-red-500', 'border-red-500');
-            }, 3000);
+            // Destacar o botão se for o botão de classificação
+            if (classificationButton) {
+              classificationButton.focus();
+              classificationButton.classList.add('ring-2', 'ring-red-500', 'border-red-500');
+              setTimeout(() => {
+                classificationButton.classList.remove('ring-2', 'ring-red-500', 'border-red-500');
+              }, 3000);
+            }
           }
         }, 200);
       }
       return;
     }
+    
+    // Limpar erro de category se a validação passou
+    form.clearErrors('category');
     
     // Validar formulário antes de abrir o modal
     form.trigger().then((isValid) => {
@@ -2239,6 +2260,8 @@ export function NewTransactionSheet({
         tt.name.toLowerCase() === 'categoria' || tt.name.toLowerCase() === 'category'
       );
       if (categoryRequiredType) {
+        // Limpar erro do campo category e erro geral
+        form.clearErrors('category');
         setError(null);
       }
     }
@@ -2433,8 +2456,8 @@ export function NewTransactionSheet({
                 </div>
               </div>
 
-              {/* Feedback de Erro */}
-              {error && (
+              {/* Não exibir Alert de erro se for erro de categoria (já exibido via FormMessage) */}
+              {error && !form.formState.errors.category && (
                 <div className="px-4 py-2">
                   <Alert variant="destructive">
                     <AlertDescription>{typeof error === 'string' ? error : String(error)}</AlertDescription>
@@ -2663,8 +2686,8 @@ export function NewTransactionSheet({
                         <form onSubmit={form.handleSubmit(onSubmit)} className="flex-1 flex flex-col min-h-0">
                           {/* Conteúdo rolável - separado do bottom sheet */}
                           <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6 pb-24">
-                          {/* Feedback de Erro (Step 2) */}
-                          {error && (
+                          {/* Não exibir Alert de erro se for erro de categoria (já exibido via FormMessage) */}
+                          {error && !form.formState.errors.category && (
                             <Alert variant="destructive">
                               <AlertDescription>{typeof error === 'string' ? error : String(error)}</AlertDescription>
                             </Alert>
@@ -2736,23 +2759,29 @@ export function NewTransactionSheet({
                           />
 
                           {/* Botão Adicionar Categoria ou Tag */}
-                          <div className="space-y-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              onClick={() => setShowTagSelector(true)}
-                              className="w-full h-12 text-base border-purple-200 dark:border-purple-700 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:border-purple-300 dark:hover:border-purple-600"
-                            >
-                              <Plus className="h-4 w-4 mr-2" />
-                              Adicionar Categoria ou Tag
-                            </Button>
-                            {/* Mensagem de erro da categoria */}
-                            {form.formState.errors.category && (
-                              <p className="text-sm text-red-600 dark:text-red-400 px-1">
-                                {form.formState.errors.category.message}
-                              </p>
+                          <FormField
+                            control={form.control}
+                            name="category"
+                            render={() => (
+                              <FormItem>
+                                <FormControl>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setShowTagSelector(true)}
+                                    className={cn(
+                                      "w-full h-12 text-base border-purple-200 dark:border-purple-700 text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/20 hover:border-purple-300 dark:hover:border-purple-600",
+                                      form.formState.errors.category && "border-red-500 dark:border-red-500"
+                                    )}
+                                  >
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Adicionar Categoria ou Tag
+                                  </Button>
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
                             )}
-                          </div>
+                          />
 
                           {/* Classificação Selecionada (Tags - fonte da verdade) */}
                           {tags.filter(t => t.value).length > 0 && (
@@ -3107,7 +3136,8 @@ export function NewTransactionSheet({
                     </SheetTitle>
                   </SheetHeader>
 
-                  {error && (
+                  {/* Não exibir Alert de erro se for erro de categoria (já exibido via FormMessage) */}
+                  {error && !form.formState.errors.category && (
                     <Alert variant="destructive" className="mt-4">
                       <AlertDescription>{typeof error === 'string' ? error : String(error)}</AlertDescription>
                     </Alert>

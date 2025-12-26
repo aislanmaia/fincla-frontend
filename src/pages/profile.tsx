@@ -4,7 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { User, Building, LogOut, Mail, Shield, CreditCard, Settings } from 'lucide-react';
+import { User, Building, LogOut, Mail, Shield, CreditCard, Settings, Key } from 'lucide-react';
+import { Link } from 'wouter';
 import { Separator } from '@/components/ui/separator';
 import { PageTransition } from '@/components/PageTransition';
 
@@ -127,6 +128,24 @@ export default function ProfilePage() {
                                         </div>
                                     ))}
                                 </div>
+                            </CardContent>
+                        </Card>
+
+                        <Card className="shadow-flat border-0 rounded-2xl">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Key className="w-5 h-5 text-indigo-500" />
+                                    Segurança
+                                </CardTitle>
+                                <CardDescription>Gerencie a segurança da sua conta</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <Link href="/profile/change-password">
+                                    <Button variant="outline" className="w-full justify-start">
+                                        <Key className="w-4 h-4 mr-2" />
+                                        Alterar Senha
+                                    </Button>
+                                </Link>
                             </CardContent>
                         </Card>
 

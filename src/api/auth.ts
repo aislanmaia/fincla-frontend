@@ -1,6 +1,6 @@
 // api/auth.ts
 import apiClient from './client';
-import { LoginRequest, LoginResponse, User } from '../types/api';
+import { LoginRequest, LoginResponse, User, ChangePasswordRequest, ChangePasswordResponse } from '../types/api';
 
 /**
  * Autentica um usuário e retorna o token JWT
@@ -39,5 +39,22 @@ export const isAuthenticated = (): boolean => {
  */
 export const logout = (): void => {
   localStorage.removeItem('auth_token');
+};
+
+/**
+ * Atualiza a senha do usuário autenticado
+ */
+export const changePassword = async (
+  currentPassword: string,
+  newPassword: string
+): Promise<ChangePasswordResponse> => {
+  const response = await apiClient.put<ChangePasswordResponse>(
+    '/users/me/password',
+    {
+      current_password: currentPassword,
+      new_password: newPassword,
+    }
+  );
+  return response.data;
 };
 

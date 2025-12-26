@@ -20,6 +20,7 @@ import { RequireOrganization } from "@/components/RequireOrganization";
 const ReportsPage = lazy(() => import("@/pages/reports"));
 const GoalsPage = lazy(() => import("@/pages/goals"));
 const ProfilePage = lazy(() => import("@/pages/profile"));
+const ChangePasswordPage = lazy(() => import("@/pages/profile/change-password"));
 const CreateOrganizationPage = lazy(() => import("@/pages/onboarding/create-organization"));
 const NoOrganizationPage = lazy(() => import("@/pages/no-organization"));
 
@@ -54,6 +55,7 @@ function ProtectedRoutes() {
               <Route path="/reports" component={ReportsPage} />
               <Route path="/goals" component={GoalsPage} />
               <Route path="/profile" component={ProfilePage} />
+              <Route path="/profile/change-password" component={ChangePasswordPage} />
               <Route component={NotFound} />
             </Switch>
           </Suspense>
