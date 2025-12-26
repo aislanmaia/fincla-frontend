@@ -38,12 +38,39 @@ import { NewTransactionSheet } from "@/components/NewTransactionSheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
+// Mapeamento de rotas para títulos das páginas
+const ROUTE_TITLES: Record<string, string> = {
+  '/': 'Dashboard',
+  '/transactions': 'Transações',
+  '/credit-cards': 'Cartões',
+  '/credit-cards/history': 'Histórico de Faturas',
+  '/credit-cards/planning': 'Planejamento',
+  '/reports': 'Relatórios',
+  '/goals': 'Metas',
+  '/profile': 'Perfil',
+  '/profile/change-password': 'Alterar Senha',
+};
+
+/**
+ * Obtém o título da página baseado na rota atual
+ * Verifica rotas específicas primeiro, depois rotas principais
+ */
+function getPageTitle(location: string): string {
+  // Verificar rota exata primeiro (para rotas aninhadas)
+  if (ROUTE_TITLES[location]) {
+    return ROUTE_TITLES[location];
+  }
+  
+  // Fallback: retornar 'Dashboard' se rota não encontrada
+  return 'Dashboard';
+}
+
 export function AppLayout({ children }: PropsWithChildren) {
   const queryClient = useQueryClient();
   const { messages, isProcessing, processUserMessage } = useAIChat();
   const { user, signOut } = useAuth();
   const { organizations, activeOrgId, selectOrganization } = useOrganization();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const [isDashboard] = useRoute("/");
   const [isTransactions] = useRoute("/transactions");
   const [isCreditCards] = useRoute("/credit-cards");
@@ -52,6 +79,9 @@ export function AppLayout({ children }: PropsWithChildren) {
   const [isProfile] = useRoute("/profile");
   const [isNewTransactionOpen, setIsNewTransactionOpen] = useState(false);
   const { toast } = useToast();
+  
+  // Obter título dinâmico baseado na rota atual
+  const pageTitle = getPageTitle(location);
 
   const handleLogout = () => {
     signOut();
@@ -206,7 +236,7 @@ export function AppLayout({ children }: PropsWithChildren) {
             <div className="h-16 px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 flex items-center gap-2 sm:gap-3 justify-between mx-auto max-w-7xl xl:max-w-[90rem] 2xl:max-w-[96rem] min-w-0">
               <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 sm:flex-none">
                 <SidebarTrigger className="shrink-0" />
-                <div className="text-lg sm:text-xl md:text-2xl font-semibold tracking-tight truncate min-w-0">Dashboard</div>
+                <div className="text-lg sm:text-xl md:text-2xl font-semibold tracking-tight truncate min-w-0">{pageTitle}</div>
                 <Button
                   onClick={() => setIsNewTransactionOpen(true)}
                   className="h-8 sm:h-9 px-2 sm:px-4 rounded-full shadow-sm bg-gradient-to-r from-[#4A56E2] to-[#00C6B8] hover:from-[#343D9B] hover:to-[#00A89C] text-white font-medium flex items-center gap-1 sm:gap-2 transition-all duration-200 hover:scale-105 active:scale-95 shrink-0"
