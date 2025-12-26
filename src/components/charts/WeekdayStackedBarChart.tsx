@@ -13,6 +13,7 @@ import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { WeeklyExpenseHeatmap } from '@/hooks/useFinancialData';
+import { generateDistinctCategoryColors } from '@/lib/colorGenerator';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
@@ -21,19 +22,6 @@ type Props = {
   isLoading?: boolean;
 };
 
-const colors = [
-  '#4F46E5', // indigo
-  '#EF4444', // red
-  '#F59E0B', // amber
-  '#10B981', // emerald
-  '#3B82F6', // blue
-  '#8B5CF6', // violet
-  '#F97316', // orange
-  '#06B6D4', // cyan
-  '#84CC16', // lime
-  '#F43F5E', // rose
-];
-
 export function WeekdayStackedBarChart({ data, isLoading = false }: Props) {
   const [period, setPeriod] = React.useState('semana');
 
@@ -41,10 +29,14 @@ export function WeekdayStackedBarChart({ data, isLoading = false }: Props) {
     if (!data || !data.data) {
       return { labels: [], datasets: [] };
     }
+    
+    // Gerar cores distintas para todas as categorias
+    const colorMap = generateDistinctCategoryColors(data.categories);
+    
     // Construir datasets por categoria (colunas da matriz)
     const datasets = data.categories.map((category, categoryIdx) => ({
       label: category,
-      backgroundColor: colors[categoryIdx % colors.length],
+      backgroundColor: colorMap.get(category) || '#6B7280',
       data: data.data.map((dayRow) => dayRow[categoryIdx] || 0),
       stack: 'stack-0',
       borderRadius: 6,

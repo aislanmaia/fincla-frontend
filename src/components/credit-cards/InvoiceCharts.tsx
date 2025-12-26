@@ -4,14 +4,13 @@ import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, 
 import { InvoiceResponse } from '@/types/api';
 import { TrendingUp, Store, History } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { generateDistinctCategoryColors } from '@/lib/colorGenerator';
 
 interface InvoiceChartsProps {
     currentInvoice: InvoiceResponse | null;
     monthlyData?: { month: string; total: number }[];
     isLoading?: boolean;
 }
-
-const COLORS = ['#4A56E2', '#00C6B8', '#FF6B6B', '#FFA500', '#9B59B6', '#3498DB', '#E74C3C', '#1ABC9C'];
 
 export const InvoiceCharts: React.FC<InvoiceChartsProps> = ({
     currentInvoice,
@@ -32,9 +31,19 @@ export const InvoiceCharts: React.FC<InvoiceChartsProps> = ({
             categoryMap.set(categoryName, (categoryMap.get(categoryName) || 0) + item.amount);
         });
 
-        return Array.from(categoryMap.entries())
+        const categories = Array.from(categoryMap.entries())
             .map(([name, value]) => ({ name, value }))
             .sort((a, b) => b.value - a.value);
+
+        // Gerar cores distintas para as categorias
+        const categoryNames = categories.map(c => c.name);
+        const colorMap = generateDistinctCategoryColors(categoryNames);
+
+        // Adicionar cores aos dados
+        return categories.map(cat => ({
+            ...cat,
+            color: colorMap.get(cat.name) || '#6B7280'
+        }));
     }, [currentInvoice]);
 
     // Process top merchants/descriptions
@@ -99,7 +108,7 @@ export const InvoiceCharts: React.FC<InvoiceChartsProps> = ({
                                         label={(entry) => entry.name}
                                     >
                                         {categoryData.map((entry, index) => (
-                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                            <Cell key={`cell-${index}`} fill={entry.color} />
                                         ))}
                                     </Pie>
                                     <Tooltip formatter={(value: number) => formatCurrency(value)} />

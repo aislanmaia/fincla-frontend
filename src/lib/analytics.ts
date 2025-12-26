@@ -2,6 +2,7 @@
 // Processa transações do backend para gerar analytics no frontend
 
 import { Transaction } from '@/types/api';
+import { generateDistinctCategoryColors } from './colorGenerator';
 
 export interface FinancialSummary {
     balance: number;
@@ -126,7 +127,15 @@ function getMainCategory(transaction: Transaction): string {
         return transaction.category;
     }
 
-    // Se usar tags (array), procurar tag do tipo "categoria"
+    // Verificar se tags é um Record (formato atual do backend)
+    if (transaction.tags && !Array.isArray(transaction.tags)) {
+        const categoryTags = transaction.tags['categoria'];
+        if (categoryTags && categoryTags.length > 0) {
+            return categoryTags[0].name;
+        }
+    }
+
+    // Se usar tags (array), procurar tag do tipo "categoria" (formato legado)
     if (Array.isArray(transaction.tags)) {
         const categoryTag = transaction.tags.find(
             (tag) => tag.tag_type?.name === 'categoria'
@@ -155,24 +164,15 @@ export function groupByCategory(transactions: Transaction[]): ExpenseCategory[] 
         categoryMap.set(category, current + value);
     });
 
-    // Cores padrão para categorias (pode ser melhorado)
-    const defaultColors: Record<string, string> = {
-        'Alimentação': '#1E40AF',
-        'Transporte': '#059669',
-        'Moradia': '#DC2626',
-        'Lazer': '#D97706',
-        'Saúde': '#0284C7',
-        'Outros': '#7C3AED',
-        'Educação': '#9333EA',
-        'Vestuário': '#DB2777',
-        'Tecnologia': '#0891B2',
-    };
+    // Gerar cores distintas dinamicamente para todas as categorias
+    const categoryNames = Array.from(categoryMap.keys());
+    const colorMap = generateDistinctCategoryColors(categoryNames);
 
     return Array.from(categoryMap.entries())
         .map(([name, amount]) => ({
             name,
             amount,
-            color: defaultColors[name] || '#6B7280',
+            color: colorMap.get(name) || '#6B7280', // Fallback caso algo dê errado
         }))
         .sort((a, b) => b.amount - a.amount); // Ordenar por valor decrescente
 }
