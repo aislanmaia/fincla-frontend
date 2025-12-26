@@ -90,16 +90,22 @@ export const SummaryCards = memo(function SummaryCards({ summary, monthlyData, i
                 {formatCurrency(summary.balance)}
               </p>
             )}
-            {balanceChange ? (
+            {!isLoading && (
               <p className="text-sm text-white/90 flex items-center mt-2">
-                {balanceChange.isPositive ? (
-                  <ArrowUp className="w-3 h-3 mr-1" />
+                {balanceChange ? (
+                  <>
+                    {balanceChange.isPositive ? (
+                      <ArrowUp className="w-3 h-3 mr-1" />
+                    ) : (
+                      <ArrowDown className="w-3 h-3 mr-1" />
+                    )}
+                    {balanceChange.isPositive ? '+' : '-'}{balanceChange.percentage.toFixed(1).replace('.', ',')}% este mês
+                  </>
                 ) : (
-                  <ArrowDown className="w-3 h-3 mr-1" />
+                  <span className="text-white/70">Sem dados para comparar</span>
                 )}
-                {balanceChange.isPositive ? '+' : '-'}{balanceChange.percentage.toFixed(1).replace('.', ',')}% este mês
               </p>
-            ) : null}
+            )}
           </div>
           <div className="bg-white/20 p-3 rounded-xl ring-1 ring-white/40">
             <Wallet className="text-white w-6 h-6" />
@@ -119,16 +125,22 @@ export const SummaryCards = memo(function SummaryCards({ summary, monthlyData, i
                 {formatCurrency(summary.income)}
               </p>
             )}
-            {incomeChange ? (
+            {!isLoading && (
               <p className="text-sm text-white/90 flex items-center mt-2">
-                {incomeChange.isPositive ? (
-                  <ArrowUp className="w-3 h-3 mr-1" />
+                {incomeChange ? (
+                  <>
+                    {incomeChange.isPositive ? (
+                      <ArrowUp className="w-3 h-3 mr-1" />
+                    ) : (
+                      <ArrowDown className="w-3 h-3 mr-1" />
+                    )}
+                    {incomeChange.isPositive ? '+' : '-'}{incomeChange.percentage.toFixed(1).replace('.', ',')}% este mês
+                  </>
                 ) : (
-                  <ArrowDown className="w-3 h-3 mr-1" />
+                  <span className="text-white/70">Sem dados para comparar</span>
                 )}
-                {incomeChange.isPositive ? '+' : '-'}{incomeChange.percentage.toFixed(1).replace('.', ',')}% este mês
               </p>
-            ) : null}
+            )}
           </div>
           <div className="bg-white/20 p-3 rounded-xl ring-1 ring-white/40">
             <TrendingUp className="text-white w-6 h-6" />
@@ -148,16 +160,22 @@ export const SummaryCards = memo(function SummaryCards({ summary, monthlyData, i
                 {formatCurrency(summary.expenses)}
               </p>
             )}
-            {expenseChange ? (
+            {!isLoading && (
               <p className="text-sm text-white/90 flex items-center mt-2">
-                {expenseChange.isPositive ? (
-                  <ArrowUp className="w-3 h-3 mr-1" />
+                {expenseChange ? (
+                  <>
+                    {expenseChange.isPositive ? (
+                      <ArrowUp className="w-3 h-3 mr-1" />
+                    ) : (
+                      <ArrowDown className="w-3 h-3 mr-1" />
+                    )}
+                    {expenseChange.isPositive ? '+' : '-'}{expenseChange.percentage.toFixed(1).replace('.', ',')}% este mês
+                  </>
                 ) : (
-                  <ArrowDown className="w-3 h-3 mr-1" />
+                  <span className="text-white/70">Sem dados para comparar</span>
                 )}
-                {expenseChange.isPositive ? '+' : '-'}{expenseChange.percentage.toFixed(1).replace('.', ',')}% este mês
               </p>
-            ) : null}
+            )}
           </div>
           <div className="bg-white/20 p-3 rounded-xl ring-1 ring-white/40">
             <ArrowDown className="text-white w-6 h-6" />
