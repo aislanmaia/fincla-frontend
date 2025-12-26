@@ -12,13 +12,13 @@ describe('SummaryCards', () => {
     };
 
     it('should render loading state', () => {
-        render(<SummaryCards isLoading={true} summary={mockSummary} />);
+        render(<SummaryCards isLoading={true} summary={mockSummary} monthlyData={[]} />);
         // Check that values are NOT displayed when loading
         expect(screen.queryByText(/1\.234,56/)).not.toBeInTheDocument();
     });
 
     it('should render data correctly', () => {
-        render(<SummaryCards isLoading={false} summary={mockSummary} />);
+        render(<SummaryCards isLoading={false} summary={mockSummary} monthlyData={[]} />);
 
         // Check for values formatted as currency
         // Using regex to match formatted currency strings
@@ -33,7 +33,7 @@ describe('SummaryCards', () => {
             income: 0,
             expenses: 0,
         };
-        render(<SummaryCards isLoading={false} summary={emptySummary} />);
+        render(<SummaryCards isLoading={false} summary={emptySummary} monthlyData={[]} />);
 
         // Should show 0,00 for empty values
         expect(screen.getAllByText(/0,00/)).toHaveLength(3); // Balance, Income, Expenses

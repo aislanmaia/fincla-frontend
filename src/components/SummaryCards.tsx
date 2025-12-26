@@ -1,18 +1,66 @@
 import { ArrowUp, ArrowDown, Wallet, Target, TrendingUp, Info } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { FinancialSummary } from '@/hooks/useFinancialData';
+import { FinancialSummary, MonthlyData } from '@/hooks/useFinancialData';
 import { Skeleton } from '@/components/ui/skeleton';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { formatCurrency } from '@/lib/utils';
 
 interface SummaryCardsProps {
   summary: FinancialSummary;
+  monthlyData?: MonthlyData[];
   isLoading?: boolean;
   isEmpty?: boolean;
 }
 
-export const SummaryCards = memo(function SummaryCards({ summary, isLoading, isEmpty }: SummaryCardsProps) {
+/**
+ * Calcula a porcentagem de mudança entre o mês atual e o mês anterior
+ * Retorna null se não houver dados suficientes para comparar
+ */
+function calculateMonthChange(
+  monthlyData: MonthlyData[] | undefined,
+  getValue: (data: MonthlyData) => number
+): { percentage: number; isPositive: boolean } | null {
+  if (!monthlyData || monthlyData.length < 2) {
+    return null;
+  }
+
+  // Os dados já vêm ordenados por data do analytics.ts (groupByMonth)
+  // Pegar os dois últimos meses (mais recentes)
+  const currentMonth = monthlyData[monthlyData.length - 1];
+  const previousMonth = monthlyData[monthlyData.length - 2];
+
+  const currentValue = getValue(currentMonth);
+  const previousValue = getValue(previousMonth);
+
+  // Se o mês anterior for zero, não podemos calcular porcentagem
+  if (previousValue === 0) {
+    return null;
+  }
+
+  const percentage = ((currentValue - previousValue) / previousValue) * 100;
+  return {
+    percentage: Math.abs(percentage),
+    isPositive: percentage >= 0,
+  };
+}
+
+export const SummaryCards = memo(function SummaryCards({ summary, monthlyData, isLoading, isEmpty }: SummaryCardsProps) {
+  // Calcular mudanças percentuais
+  const balanceChange = useMemo(() => {
+    if (!monthlyData || monthlyData.length < 2) return null;
+    // Os dados já vêm ordenados por data do analytics.ts
+    const current = monthlyData[monthlyData.length - 1];
+    const previous = monthlyData[monthlyData.length - 2];
+    const currentBalance = current.income - current.expenses;
+    const previousBalance = previous.income - previous.expenses;
+    if (previousBalance === 0) return null;
+    const percentage = ((currentBalance - previousBalance) / Math.abs(previousBalance)) * 100;
+    return { percentage: Math.abs(percentage), isPositive: percentage >= 0 };
+  }, [monthlyData]);
+
+  const incomeChange = useMemo(() => calculateMonthChange(monthlyData, (data) => data.income), [monthlyData]);
+  const expenseChange = useMemo(() => calculateMonthChange(monthlyData, (data) => data.expenses), [monthlyData]);
 
   // Se não há dados, mostrar estado vazio simplificado
   if (isEmpty && !isLoading) {
@@ -42,10 +90,16 @@ export const SummaryCards = memo(function SummaryCards({ summary, isLoading, isE
                 {formatCurrency(summary.balance)}
               </p>
             )}
-            <p className="text-sm text-white/90 flex items-center mt-2">
-              <ArrowUp className="w-3 h-3 mr-1" />
-              +5,2% este mês
-            </p>
+            {balanceChange ? (
+              <p className="text-sm text-white/90 flex items-center mt-2">
+                {balanceChange.isPositive ? (
+                  <ArrowUp className="w-3 h-3 mr-1" />
+                ) : (
+                  <ArrowDown className="w-3 h-3 mr-1" />
+                )}
+                {balanceChange.isPositive ? '+' : '-'}{balanceChange.percentage.toFixed(1).replace('.', ',')}% este mês
+              </p>
+            ) : null}
           </div>
           <div className="bg-white/20 p-3 rounded-xl ring-1 ring-white/40">
             <Wallet className="text-white w-6 h-6" />
@@ -65,10 +119,16 @@ export const SummaryCards = memo(function SummaryCards({ summary, isLoading, isE
                 {formatCurrency(summary.income)}
               </p>
             )}
-            <p className="text-sm text-white/90 flex items-center mt-2">
-              <ArrowUp className="w-3 h-3 mr-1" />
-              +2,1% este mês
-            </p>
+            {incomeChange ? (
+              <p className="text-sm text-white/90 flex items-center mt-2">
+                {incomeChange.isPositive ? (
+                  <ArrowUp className="w-3 h-3 mr-1" />
+                ) : (
+                  <ArrowDown className="w-3 h-3 mr-1" />
+                )}
+                {incomeChange.isPositive ? '+' : '-'}{incomeChange.percentage.toFixed(1).replace('.', ',')}% este mês
+              </p>
+            ) : null}
           </div>
           <div className="bg-white/20 p-3 rounded-xl ring-1 ring-white/40">
             <TrendingUp className="text-white w-6 h-6" />
@@ -88,10 +148,16 @@ export const SummaryCards = memo(function SummaryCards({ summary, isLoading, isE
                 {formatCurrency(summary.expenses)}
               </p>
             )}
-            <p className="text-sm text-white/90 flex items-center mt-2">
-              <ArrowUp className="w-3 h-3 mr-1" />
-              +1,3% este mês
-            </p>
+            {expenseChange ? (
+              <p className="text-sm text-white/90 flex items-center mt-2">
+                {expenseChange.isPositive ? (
+                  <ArrowUp className="w-3 h-3 mr-1" />
+                ) : (
+                  <ArrowDown className="w-3 h-3 mr-1" />
+                )}
+                {expenseChange.isPositive ? '+' : '-'}{expenseChange.percentage.toFixed(1).replace('.', ',')}% este mês
+              </p>
+            ) : null}
           </div>
           <div className="bg-white/20 p-3 rounded-xl ring-1 ring-white/40">
             <ArrowDown className="text-white w-6 h-6" />

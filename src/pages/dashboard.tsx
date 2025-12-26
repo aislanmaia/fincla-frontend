@@ -58,7 +58,7 @@ export default function Dashboard() {
         )}
 
         {/* Summary Cards em grid Bento inicial */}
-        <SummaryCards summary={summary} isLoading={loading} />
+        <SummaryCards summary={summary} monthlyData={monthlyData} isLoading={loading} />
 
         {/* Bento Grid: 12 colunas em XL, alturas balanceadas e cards com sombras/gradientes */}
         <div className="grid grid-cols-1 lg:grid-cols-6 xl:grid-cols-12 gap-6 xl:gap-8">
