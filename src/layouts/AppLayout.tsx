@@ -247,10 +247,10 @@ export function AppLayout({ children }: PropsWithChildren) {
               </div>
               <div className="hidden md:flex flex-1 max-w-xl lg:max-w-2xl xl:max-w-3xl" />
               <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                {/* Organization Selector */}
-                {organizations.length > 0 && (
+                {/* Organization Selector - Só mostrar quando há múltiplas organizações */}
+                {organizations.length > 1 && (
                   <Select value={activeOrgId || undefined} onValueChange={handleOrgChange}>
-                    <SelectTrigger className="hidden sm:flex w-[140px] md:w-[180px] h-8 sm:h-9 rounded-full bg-white/70 ring-1 ring-gray-200 text-xs sm:text-sm">
+                    <SelectTrigger className="w-[140px] md:w-[180px] h-8 sm:h-9 rounded-full bg-white/70 ring-1 ring-gray-200 text-xs sm:text-sm">
                       <SelectValue placeholder="Selecionar organização" />
                     </SelectTrigger>
                     <SelectContent>
