@@ -7,6 +7,7 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
+    DialogDescription,
     DialogFooter,
 } from '@/components/ui/dialog';
 import {
@@ -106,6 +107,9 @@ export function CardFormDialog({
             <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader>
                     <DialogTitle>{cardToEdit ? 'Editar Cartão' : 'Novo Cartão'}</DialogTitle>
+                    <DialogDescription>
+                        {cardToEdit ? 'Atualize as informações do cartão.' : 'Preencha os dados para adicionar um novo cartão.'}
+                    </DialogDescription>
                 </DialogHeader>
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

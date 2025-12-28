@@ -16,6 +16,7 @@ import {
   SheetContent,
   SheetHeader,
   SheetTitle,
+  SheetDescription,
 } from '@/components/ui/sheet';
 import {
   Dialog,
@@ -49,7 +50,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Loader2, TrendingUp, TrendingDown, Check, CreditCard, Wallet, Banknote, Building2, Receipt, Plus, Calendar, Tag, DollarSign, FileText, ShoppingBag, Clock, Search, MapPin, User, FolderOpen, StickyNote, X, Sparkles, Info, ArrowLeft } from 'lucide-react';
+import { Loader2, TrendingUp, TrendingDown, Check, CreditCard, Wallet, Banknote, Building2, Receipt, Plus, Calendar, Tag, DollarSign, FileText, ShoppingBag, Clock, Search, MapPin, User, FolderOpen, StickyNote, X, Sparkles, Info, ArrowLeft, Lock, Unlock } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { SearchableSelect } from '@/components/SearchableSelect';
@@ -1053,14 +1054,15 @@ function ClassificationPrompt({
       </AnimatePresence>
 
       {/* Dialog de Criação de Tag */}
-      <Dialog open={!!creationState} onOpenChange={(open) => !open && setCreationState(null)}>
-        <DialogContent className="sm:max-w-[425px]" style={{ zIndex: 70 }}>
-          <DialogHeader>
-            <DialogTitle>Criar nova {creationState?.label}</DialogTitle>
-            <DialogDescription>
-              Adicione uma nova opção para {creationState?.label}.
-            </DialogDescription>
-          </DialogHeader>
+      {creationState && (
+        <Dialog open={true} onOpenChange={(open) => !open && setCreationState(null)}>
+          <DialogContent className="sm:max-w-[425px]" style={{ zIndex: 70 }}>
+            <DialogHeader>
+              <DialogTitle>Criar nova {creationState.label}</DialogTitle>
+              <DialogDescription>
+                Adicione uma nova opção para {creationState.label}.
+              </DialogDescription>
+            </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-4 items-center gap-4">
               <Input
@@ -1089,6 +1091,7 @@ function ClassificationPrompt({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
     </div>
   );
 }
@@ -1523,6 +1526,51 @@ const commonPaymentMethods = [
   { value: 'Transferência Bancária', label: 'Transferência Bancária', icon: Building2 },
 ];
 
+// Componente de botão de cadeado para seções traváveis
+function LockButton({
+  isLocked,
+  onToggle,
+  disabled,
+}: {
+  isLocked: boolean;
+  onToggle: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={onToggle}
+            disabled={disabled}
+            className={cn(
+              "ml-2 p-1 rounded-md transition-colors",
+              "hover:bg-gray-100 dark:hover:bg-gray-800",
+              "disabled:opacity-50 disabled:cursor-not-allowed",
+              isLocked ? "text-blue-600 dark:text-blue-400" : "text-gray-400 dark:text-gray-500"
+            )}
+            aria-label={isLocked ? "Destravar seção" : "Travar seção"}
+          >
+            {isLocked ? (
+              <Lock className="h-4 w-4" />
+            ) : (
+              <Unlock className="h-4 w-4" />
+            )}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>
+            {isLocked
+              ? "Esta seção está travada. Suas informações serão mantidas para a próxima transação. Clique para destravar."
+              : "Clique para travar. As informações desta seção serão mantidas para a próxima transação ao usar 'Salvar e criar outra'."}
+          </p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 export function NewTransactionSheet({
   open,
   onOpenChange,
@@ -1532,22 +1580,6 @@ export function NewTransactionSheet({
 }: NewTransactionSheetProps) {
   const { user } = useAuth();
   const isMobile = useIsMobile();
-  // Debug: identificar no console quando o painel está usando o layout mobile
-  useEffect(() => {
-    if (isMobile) {
-      // eslint-disable-next-line no-console
-      console.log(
-        '[Fincla][NewTransactionSheet] Layout mobile ativo (useIsMobile === true)',
-        {
-          innerWidth: typeof window !== 'undefined' ? window.innerWidth : null,
-          innerHeight: typeof window !== 'undefined' ? window.innerHeight : null,
-        }
-      );
-    } else {
-      // eslint-disable-next-line no-console
-      console.log('[Fincla][NewTransactionSheet] Layout desktop/tablet (useIsMobile === false)');
-    }
-  }, [isMobile]);
   const [organizations, setOrganizations] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1574,6 +1606,13 @@ export function NewTransactionSheet({
   const [tagTypesFromBackend, setTagTypesFromBackend] = useState<Array<{ id: string; name: string; description: string | null; is_required: boolean; max_per_transaction: number | null }>>([]);
   const [loadingCategories, setLoadingCategories] = useState(false);
   const [isClassificationPanelOpen, setIsClassificationPanelOpen] = useState(false);
+
+  // Estados para controle de seções travadas (Entrada Rápida)
+  const [isPaymentLocked, setIsPaymentLocked] = useState(false);
+  const [isDateLocked, setIsDateLocked] = useState(false);
+  const [isTypeLocked, setIsTypeLocked] = useState(false);
+  const [isCategoryLocked, setIsCategoryLocked] = useState(false);
+  const [isDescriptionLocked, setIsDescriptionLocked] = useState(false);
 
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(transactionSchema),
@@ -2101,21 +2140,25 @@ export function NewTransactionSheet({
         };
         await createTransaction(createTransactionData);
       }
-      setShowSuccess(true);
+      
       setLoading(false);
-      // Invalidar cache imediatamente para atualizar a lista, mas não fechar o painel
+      // Invalidar cache imediatamente para atualizar a lista
       onInvalidateCache?.();
+      
+      // Sempre mostrar tela de sucesso
+      setShowSuccess(true);
+      
       // onSuccess será chamado quando o usuário fechar o painel após ver a mensagem de sucesso
     } catch (err) {
       const errorMessage = handleApiError(err);
       setError(typeof errorMessage === 'string' ? errorMessage : String(errorMessage));
       setLoading(false);
     }
-  }, [tags, allTagsFromBackend, tagTypesFromBackend, transactionToEdit, form, selectedCardId]);
+  }, [tags, allTagsFromBackend, tagTypesFromBackend, transactionToEdit, form, selectedCardId, saveAndCreateAnother, isTypeLocked, isDescriptionLocked, isCategoryLocked, isPaymentLocked, isDateLocked]);
 
   // Função para confirmar transação (usada no botão e no Enter)
   const handleConfirm = useCallback(() => {
-    setSaveAndCreateAnother(false);
+    // Não resetar saveAndCreateAnother aqui - será resetado após o redirecionamento automático
     form.handleSubmit(onSubmit)();
   }, [form, onSubmit]);
 
@@ -2140,6 +2183,74 @@ export function NewTransactionSheet({
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [showConfirmationDialog, loading, handleConfirm]);
+
+  // Auto-redirecionar após sucesso quando "Salvar e criar outra" foi usado
+  useEffect(() => {
+    if (showSuccess && saveAndCreateAnother) {
+      const timer = setTimeout(() => {
+        // Resetar estado de sucesso
+        setShowSuccess(false);
+        setValueDisplay('');
+        
+        // Obter valores atuais do formulário e tags
+        const currentValues = form.getValues();
+        const currentTags = [...tags];
+        
+        // Separar tags de categoria das outras tags
+        const categoryTags = currentTags.filter(t => 
+          t.type.toLowerCase() === 'categoria' || t.type.toLowerCase() === 'category'
+        );
+        
+        // Se categoria está travada, manter tags de categoria, caso contrário limpar todas as tags
+        if (isCategoryLocked) {
+          setTags(categoryTags);
+        } else {
+          setTags([]);
+        }
+        
+        // Se payment está travado, manter selectedCardId também
+        // Caso contrário, resetar selectedCardId apenas se não for cartão de crédito
+        if (!isPaymentLocked && currentValues.payment_method !== 'Cartão de Crédito') {
+          setSelectedCardId(null);
+        } else if (isPaymentLocked && currentValues.payment_method === 'Cartão de Crédito') {
+          // Manter selectedCardId se payment está travado e é cartão de crédito
+          // Não fazer nada, já está correto
+        } else {
+          setSelectedCardId(null);
+        }
+        
+        setShowCardCreateForm(false);
+        
+        // Preparar valores para reset
+        const resetValues: Partial<TransactionFormValues> = {
+          organization_id: currentValues.organization_id,
+          // Manter tipo se travado, caso contrário manter o padrão (expense)
+          type: isTypeLocked ? currentValues.type : 'expense',
+          // Manter descrição se travada, caso contrário limpar
+          description: isDescriptionLocked ? currentValues.description : '',
+          // Manter categoria se travada, caso contrário limpar
+          category: isCategoryLocked ? currentValues.category : '',
+          value: 0,
+          // Manter valores de seções travadas, caso contrário resetar
+          payment_method: isPaymentLocked ? currentValues.payment_method : '',
+          date: isDateLocked ? currentValues.date : format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+          card_last4: isPaymentLocked ? currentValues.card_last4 : null,
+          modality: isPaymentLocked ? currentValues.modality : null,
+          installments_count: isPaymentLocked ? currentValues.installments_count : null,
+        };
+        
+        form.reset(resetValues);
+        setSaveAndCreateAnother(false);
+        
+        // Focar no campo valor após um pequeno delay para garantir que o formulário foi resetado
+        setTimeout(() => {
+          valueInputRef.current?.focus();
+        }, 100);
+      }, 2500); // 2.5 segundos
+
+      return () => clearTimeout(timer);
+    }
+  }, [showSuccess, saveAndCreateAnother, form, tags, isCategoryLocked, isTypeLocked, isDescriptionLocked, isPaymentLocked, isDateLocked]);
 
   // Função para gerar texto dinâmico do botão de salvar
   const getSaveButtonText = () => {
@@ -2324,21 +2435,54 @@ export function NewTransactionSheet({
   const handleCreateAnother = () => {
     setShowSuccess(false);
     setValueDisplay('');
-    setTags([]);
+    
+    // Obter valores atuais do formulário e tags
+    const currentValues = form.getValues();
+    const currentTags = [...tags];
+    
+    // Separar tags de categoria das outras tags
+    const categoryTags = currentTags.filter(t => 
+      t.type.toLowerCase() === 'categoria' || t.type.toLowerCase() === 'category'
+    );
+    const otherTags = currentTags.filter(t => 
+      t.type.toLowerCase() !== 'categoria' && t.type.toLowerCase() !== 'category'
+    );
+    
+    // Se categoria está travada, manter tags de categoria, caso contrário limpar todas as tags
+    if (isCategoryLocked) {
+      setTags(categoryTags);
+    } else {
+      setTags([]);
+    }
+    
     setSelectedCardId(null);
     setShowCardCreateForm(false);
-    form.reset({
-      organization_id: form.getValues('organization_id'),
-      type: form.getValues('type'),
-      description: '',
-      category: '',
+    
+    // Preparar valores para reset
+    const resetValues: Partial<TransactionFormValues> = {
+      organization_id: currentValues.organization_id,
+      // Manter tipo se travado, caso contrário manter o padrão (expense)
+      type: isTypeLocked ? currentValues.type : 'expense',
+      // Manter descrição se travada, caso contrário limpar
+      description: isDescriptionLocked ? currentValues.description : '',
+      // Manter categoria se travada, caso contrário limpar
+      category: isCategoryLocked ? currentValues.category : '',
       value: 0,
-      payment_method: '',
-      date: format(new Date(), "yyyy-MM-dd'T'HH:mm"),
-      card_last4: null,
-      modality: null,
-      installments_count: null,
-    });
+      // Manter valores de seções travadas, caso contrário resetar
+      payment_method: isPaymentLocked ? currentValues.payment_method : '',
+      date: isDateLocked ? currentValues.date : format(new Date(), "yyyy-MM-dd'T'HH:mm"),
+      card_last4: isPaymentLocked ? currentValues.card_last4 : null,
+      modality: isPaymentLocked ? currentValues.modality : null,
+      installments_count: isPaymentLocked ? currentValues.installments_count : null,
+    };
+    
+    // Se payment está travado, manter selectedCardId também
+    // Caso contrário, resetar selectedCardId apenas se não for cartão de crédito
+    if (!isPaymentLocked && currentValues.payment_method !== 'Cartão de Crédito') {
+      setSelectedCardId(null);
+    }
+    
+    form.reset(resetValues);
     setTimeout(() => {
       valueInputRef.current?.focus();
     }, 100);
@@ -2499,7 +2643,11 @@ export function NewTransactionSheet({
             ? "!h-[100vh] !max-h-[100vh] !w-full !max-w-full rounded-t-2xl overflow-hidden p-0 [&>button]:hidden z-50 [&_div[data-radix-dialog-overlay]]:bg-black/40"
             : "!w-[1000px] !max-w-[1000px] overflow-hidden p-8 [&>button]:hidden z-50 [&_div[data-radix-dialog-overlay]]:bg-black/40 bg-white dark:bg-gray-950"
         )}
+        aria-describedby="new-transaction-sheet-description"
       >
+        <span id="new-transaction-sheet-description" className="sr-only">
+          {transactionToEdit ? 'Atualize os dados da transação' : 'Preencha os dados para criar uma nova transação'}
+        </span>
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -2595,24 +2743,28 @@ export function NewTransactionSheet({
                           </p>
                         </div>
                         <div className="flex flex-col gap-3 pt-4">
-                          {!transactionToEdit && (
-                            <Button
-                              type="button"
-                              onClick={handleCreateAnother}
-                              variant="primary"
-                              className="w-full"
-                            >
-                              Criar Nova Transação
-                            </Button>
+                          {!saveAndCreateAnother && (
+                            <>
+                              {!transactionToEdit && (
+                                <Button
+                                  type="button"
+                                  onClick={handleCreateAnother}
+                                  variant="primary"
+                                  className="w-full"
+                                >
+                                  Criar Nova Transação
+                                </Button>
+                              )}
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={handleClose}
+                                className="w-full"
+                              >
+                                Fechar
+                              </Button>
+                            </>
                           )}
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={handleClose}
-                            className="w-full"
-                          >
-                            Fechar
-                          </Button>
                         </div>
                       </motion.div>
                     </motion.div>
@@ -2634,6 +2786,14 @@ export function NewTransactionSheet({
                         <div className="flex flex-col min-h-full">
                           {/* Seletores de Tipo - sempre visíveis, mesmo com scroll/teclado */}
                           <div className="shrink-0 px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-gray-950">
+                            <div className="flex items-center mb-3">
+                              <FormLabel className="text-sm font-semibold">Tipo</FormLabel>
+                              <LockButton
+                                isLocked={isTypeLocked}
+                                onToggle={() => setIsTypeLocked(!isTypeLocked)}
+                                disabled={loading}
+                              />
+                            </div>
                             <FormField
                               control={form.control}
                               name="type"
@@ -2795,7 +2955,14 @@ export function NewTransactionSheet({
                             name="description"
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel className="text-sm font-semibold">O que foi?</FormLabel>
+                                <div className="flex items-center">
+                                  <FormLabel className="text-sm font-semibold">O que foi?</FormLabel>
+                                  <LockButton
+                                    isLocked={isDescriptionLocked}
+                                    onToggle={() => setIsDescriptionLocked(!isDescriptionLocked)}
+                                    disabled={loading}
+                                  />
+                                </div>
                                 <FormControl>
                                   <Input
                                     {...field}
@@ -2855,6 +3022,14 @@ export function NewTransactionSheet({
                           />
 
                           {/* Botão Adicionar Categoria ou Tag */}
+                          <div className="flex items-center mb-2">
+                            <FormLabel className="text-sm font-semibold">Categoria</FormLabel>
+                            <LockButton
+                              isLocked={isCategoryLocked}
+                              onToggle={() => setIsCategoryLocked(!isCategoryLocked)}
+                              disabled={loading}
+                            />
+                          </div>
                           <FormField
                             control={form.control}
                             name="category"
@@ -2910,7 +3085,14 @@ export function NewTransactionSheet({
 
                           {/* Método de Pagamento */}
                           <div className="space-y-2">
-                            <FormLabel className="text-sm font-semibold">Pagamento</FormLabel>
+                            <div className="flex items-center">
+                              <FormLabel className="text-sm font-semibold">Pagamento</FormLabel>
+                              <LockButton
+                                isLocked={isPaymentLocked}
+                                onToggle={() => setIsPaymentLocked(!isPaymentLocked)}
+                                disabled={loading}
+                              />
+                            </div>
                             <FormField
                               control={form.control}
                               name="payment_method"
@@ -3119,7 +3301,14 @@ export function NewTransactionSheet({
                             name="date"
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel className="text-sm font-semibold">Data e Hora</FormLabel>
+                                <div className="flex items-center">
+                                  <FormLabel className="text-sm font-semibold">Data e Hora</FormLabel>
+                                  <LockButton
+                                    isLocked={isDateLocked}
+                                    onToggle={() => setIsDateLocked(!isDateLocked)}
+                                    disabled={loading}
+                                  />
+                                </div>
                                 <FormControl>
                                   <DateTimeInput
                                     value={field.value}
@@ -3198,24 +3387,28 @@ export function NewTransactionSheet({
                       </p>
                     </div>
                     <div className="flex flex-col gap-3 pt-4">
-                      {!transactionToEdit && (
-                        <Button
-                          type="button"
-                          onClick={handleCreateAnother}
-                          variant="primary"
-                          className="w-full"
-                        >
-                          Criar Nova Transação
-                        </Button>
+                      {!saveAndCreateAnother && (
+                        <>
+                          {!transactionToEdit && (
+                            <Button
+                              type="button"
+                              onClick={handleCreateAnother}
+                              variant="primary"
+                              className="w-full"
+                            >
+                              Criar Nova Transação
+                            </Button>
+                          )}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={handleClose}
+                            className="w-full"
+                          >
+                            Fechar
+                          </Button>
+                        </>
                       )}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleClose}
-                        className="w-full"
-                      >
-                        Fechar
-                      </Button>
                     </div>
                   </motion.div>
                 </motion.div>
@@ -3230,6 +3423,9 @@ export function NewTransactionSheet({
                     <SheetTitle className="text-2xl font-bold">
                       {transactionToEdit ? 'Atualizar Transação' : 'Nova Transação'}
                     </SheetTitle>
+                    <SheetDescription className="sr-only">
+                      {transactionToEdit ? 'Atualize os dados da transação' : 'Preencha os dados para criar uma nova transação'}
+                    </SheetDescription>
                   </SheetHeader>
 
                   {/* Não exibir Alert de erro se for erro de categoria (já exibido via FormMessage) */}
@@ -3252,9 +3448,16 @@ export function NewTransactionSheet({
                         name="type"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-sm font-semibold text-slate-600 dark:text-slate-400 tracking-wide uppercase">
-                              Tipo
-                            </FormLabel>
+                            <div className="flex items-center">
+                              <FormLabel className="text-sm font-semibold text-slate-600 dark:text-slate-400 tracking-wide uppercase">
+                                Tipo
+                              </FormLabel>
+                              <LockButton
+                                isLocked={isTypeLocked}
+                                onToggle={() => setIsTypeLocked(!isTypeLocked)}
+                                disabled={loading}
+                              />
+                            </div>
                             <FormControl>
                               <ToggleGroup
                                 type="single"
@@ -3450,9 +3653,16 @@ export function NewTransactionSheet({
                         name="description"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-sm font-semibold text-slate-600 dark:text-slate-400 tracking-wide uppercase">
-                              O que foi?
-                            </FormLabel>
+                            <div className="flex items-center">
+                              <FormLabel className="text-sm font-semibold text-slate-600 dark:text-slate-400 tracking-wide uppercase">
+                                O que foi?
+                              </FormLabel>
+                              <LockButton
+                                isLocked={isDescriptionLocked}
+                                onToggle={() => setIsDescriptionLocked(!isDescriptionLocked)}
+                                disabled={loading}
+                              />
+                            </div>
                             <FormControl>
                               <input
                                 type="text"
@@ -3470,9 +3680,16 @@ export function NewTransactionSheet({
 
                       {/* Seção de Pagamento */}
                       <div className="space-y-2">
-                        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 tracking-wide uppercase">
-                          Pagamento
-                        </h3>
+                        <div className="flex items-center">
+                          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 tracking-wide uppercase">
+                            Pagamento
+                          </h3>
+                          <LockButton
+                            isLocked={isPaymentLocked}
+                            onToggle={() => setIsPaymentLocked(!isPaymentLocked)}
+                            disabled={loading}
+                          />
+                        </div>
 
                         <FormField
                           control={form.control}
@@ -3550,9 +3767,16 @@ export function NewTransactionSheet({
                         name="date"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-sm font-semibold text-slate-600 dark:text-slate-400 tracking-wide uppercase">
-                              Data e Hora
-                            </FormLabel>
+                            <div className="flex items-center">
+                              <FormLabel className="text-sm font-semibold text-slate-600 dark:text-slate-400 tracking-wide uppercase">
+                                Data e Hora
+                              </FormLabel>
+                              <LockButton
+                                isLocked={isDateLocked}
+                                onToggle={() => setIsDateLocked(!isDateLocked)}
+                                disabled={loading}
+                              />
+                            </div>
                             <FormControl>
                               <DateTimeInput
                                 value={field.value}
@@ -3657,9 +3881,16 @@ export function NewTransactionSheet({
                         : "shrink-0 pb-4 border-b border-slate-200 dark:border-slate-700 max-h-[280px] overflow-y-auto"
                     )}>
                       <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 tracking-wide uppercase">
-                          Classificação
-                        </h3>
+                        <div className="flex items-center">
+                          <h3 className="text-sm font-semibold text-slate-600 dark:text-slate-400 tracking-wide uppercase">
+                            Classificação
+                          </h3>
+                          <LockButton
+                            isLocked={isCategoryLocked}
+                            onToggle={() => setIsCategoryLocked(!isCategoryLocked)}
+                            disabled={loading}
+                          />
+                        </div>
                         {isClassificationPanelOpen && (
                           <Button
                             type="button"
@@ -4022,11 +4253,20 @@ export function NewTransactionSheet({
           <SheetContent
             side="bottom"
             className="!h-[90vh] !max-h-[90vh] !w-full !max-w-full rounded-t-2xl overflow-hidden p-0 [&>button]:hidden z-[60]"
+            aria-describedby="tag-selector-sheet-description"
           >
+            <span id="tag-selector-sheet-description" className="sr-only">
+              Selecione ou crie categorias e tags para classificar a transação
+            </span>
             <div className="flex flex-col h-full">
               {/* Header */}
               <div className="shrink-0 flex items-center justify-between px-4 pt-4 pb-2 border-b border-slate-200 dark:border-slate-700">
-                <SheetTitle className="text-lg font-semibold">Adicionar Categoria ou Tag</SheetTitle>
+                <div>
+                  <SheetTitle className="text-lg font-semibold">Adicionar Categoria ou Tag</SheetTitle>
+                  <SheetDescription className="sr-only">
+                    Selecione ou crie categorias e tags para classificar a transação
+                  </SheetDescription>
+                </div>
                 <Button
                   type="button"
                   variant="ghost"
