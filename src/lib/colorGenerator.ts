@@ -126,3 +126,4 @@ export function generateDistinctCategoryColors(categoryNames: string[]): Map<str
   return colorMap;
 }
 
+

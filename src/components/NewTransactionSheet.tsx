@@ -99,6 +99,8 @@ function ClassificationPrompt({
   tagTypesFromBackend = [],
   onPanelStateChange,
   isOpen: isOpenControlled,
+  organizationId,
+  onTagCreated,
 }: {
   category: string | null;
   onCategoryChange: (value: string) => void;
@@ -111,6 +113,8 @@ function ClassificationPrompt({
   tagTypesFromBackend?: Array<{ id: string; name: string; description: string | null; is_required: boolean; max_per_transaction: number | null }>;
   onPanelStateChange?: (isOpen: boolean) => void;
   isOpen?: boolean; // Prop controlada para permitir fechamento externo
+  organizationId?: string; // ID da organização para criar tags
+  onTagCreated?: (tag: { id: string; type: string; name: string }) => void; // Callback quando uma tag é criada
 }) {
   // Garantir que allTagsFromBackend sempre tenha um valor padrão
   const backendTags = allTagsFromBackend || [];
@@ -169,15 +173,26 @@ function ClassificationPrompt({
   // Agrupar tags por tipo para o painel
   const getTagsByType = (): Record<string, Array<{ type: string; value: string }>> => {
     const tagsByType: Record<string, Array<{ type: string; value: string }>> = {};
+    // Usar Set para rastrear combinações únicas de tipo + nome (case-insensitive)
+    const seenTags = new Set<string>();
+    
     backendTags.forEach(tag => {
       const tagType = tag.type.toLowerCase();
-      if (!tagsByType[tagType]) {
-        tagsByType[tagType] = [];
+      const tagName = tag.name.trim();
+      // Criar chave única baseada em tipo e nome (case-insensitive)
+      const uniqueKey = `${tagType}:${tagName.toLowerCase()}`;
+      
+      // Só adicionar se ainda não foi visto
+      if (!seenTags.has(uniqueKey)) {
+        seenTags.add(uniqueKey);
+        if (!tagsByType[tagType]) {
+          tagsByType[tagType] = [];
+        }
+        tagsByType[tagType].push({
+          type: tag.type,
+          value: tagName,
+        });
       }
-      tagsByType[tagType].push({
-        type: tag.type,
-        value: tag.name,
-      });
     });
     return tagsByType;
   };
@@ -323,17 +338,27 @@ function ClassificationPrompt({
 
     // Quando não há busca, mostrar todas as tags agrupadas por tipo
     const tagsByType: Record<string, Array<{ type: string; value: string }>> = {};
+    // Usar Set para rastrear combinações únicas de tipo + nome (case-insensitive)
+    const seenTags = new Set<string>();
 
-    // Agrupar todas as tags do backend por tipo
+    // Agrupar todas as tags do backend por tipo, removendo duplicatas
     backendTags.forEach(tag => {
       const tagType = tag.type.toLowerCase();
-      if (!tagsByType[tagType]) {
-        tagsByType[tagType] = [];
+      const tagName = tag.name.trim();
+      // Criar chave única baseada em tipo e nome (case-insensitive)
+      const uniqueKey = `${tagType}:${tagName.toLowerCase()}`;
+      
+      // Só adicionar se ainda não foi visto
+      if (!seenTags.has(uniqueKey)) {
+        seenTags.add(uniqueKey);
+        if (!tagsByType[tagType]) {
+          tagsByType[tagType] = [];
+        }
+        tagsByType[tagType].push({
+          type: tag.type,
+          value: tagName,
+        });
       }
-      tagsByType[tagType].push({
-        type: tag.type,
-        value: tag.name,
-      });
     });
 
     return {
@@ -548,20 +573,65 @@ function ClassificationPrompt({
   // Estado para criação de nova tag
   const [creationState, setCreationState] = useState<{ type: string; label: string } | null>(null);
   const [newTagValue, setNewTagValue] = useState('');
+  const [isCreatingTag, setIsCreatingTag] = useState(false);
 
-  const handleCreateTag = () => {
+  const handleCreateTag = async () => {
     if (!newTagValue.trim() || !creationState) return;
 
+    const tagName = newTagValue.trim();
     const isCategory = creationState.type.toLowerCase() === 'categoria';
 
-    if (isCategory) {
-      onCategoryChange(newTagValue.trim());
-    } else {
-      onTagToggle(creationState.type as TagType, newTagValue.trim());
-    }
+    // Encontrar o tipo de tag correspondente
+    const tagType = tagTypesFromBackend.find(
+      tt => tt.name.toLowerCase() === creationState.type.toLowerCase()
+    );
 
-    setCreationState(null);
-    setNewTagValue('');
+    // Se temos organizationId e tagType, criar a tag no backend
+    if (organizationId && tagType) {
+      try {
+        setIsCreatingTag(true);
+        const newTag = await createTag(organizationId, tagName, tagType.id);
+        
+        // Adicionar a nova tag ao estado local através do callback
+        if (onTagCreated) {
+          onTagCreated({
+            id: newTag.id,
+            type: tagType.name,
+            name: tagName,
+          });
+        }
+
+        // Selecionar a tag criada
+        if (isCategory) {
+          onCategoryChange(tagName);
+        } else {
+          onTagToggle(creationState.type as TagType, tagName);
+        }
+      } catch (error) {
+        console.error('Erro ao criar tag:', error);
+        // Mesmo com erro, permitir selecionar a tag localmente
+        // (a tag será criada no submit da transação)
+        if (isCategory) {
+          onCategoryChange(tagName);
+        } else {
+          onTagToggle(creationState.type as TagType, tagName);
+        }
+      } finally {
+        setIsCreatingTag(false);
+        setCreationState(null);
+        setNewTagValue('');
+      }
+    } else {
+      // Fallback: se não temos organizationId ou tagType, apenas selecionar localmente
+      // (a tag será criada no submit da transação)
+      if (isCategory) {
+        onCategoryChange(tagName);
+      } else {
+        onTagToggle(creationState.type as TagType, tagName);
+      }
+      setCreationState(null);
+      setNewTagValue('');
+    }
   };
 
   const toggleSection = (type: string) => {
@@ -1010,11 +1080,11 @@ function ClassificationPrompt({
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCreationState(null)}>
+            <Button variant="outline" onClick={() => setCreationState(null)} disabled={isCreatingTag}>
               Cancelar
             </Button>
-            <Button onClick={handleCreateTag} disabled={!newTagValue.trim()}>
-              Criar
+            <Button onClick={handleCreateTag} disabled={!newTagValue.trim() || isCreatingTag}>
+              {isCreatingTag ? 'Criando...' : 'Criar'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1525,6 +1595,22 @@ export function NewTransactionSheet({
   const type = form.watch('type');
   const currentOrganizationId = form.watch('organization_id');
 
+  // Callback para quando uma nova tag é criada - atualiza o estado local
+  const handleTagCreated = useCallback((newTag: { id: string; type: string; name: string }) => {
+    setAllTagsFromBackend(prev => {
+      // Verificar se a tag já existe (evitar duplicatas)
+      const exists = prev.some(
+        t => t.type.toLowerCase() === newTag.type.toLowerCase() &&
+             t.name.toLowerCase() === newTag.name.toLowerCase()
+      );
+      if (exists) {
+        return prev; // Já existe, não adicionar
+      }
+      // Adicionar a nova tag ao início da lista
+      return [newTag, ...prev];
+    });
+  }, []);
+
   // Helper: sincronizar categoria (campo category) com estado de tags (tipo "categoria")
   const syncCategoryToTags = useCallback((categoryValue: string) => {
     // Normalizar tipo de tag de categoria baseado nos tipos vindos do backend
@@ -1634,14 +1720,24 @@ export function NewTransactionSheet({
         // Buscar todas as tags (sem filtro de tipo)
         const response = await listTags(currentOrganizationId);
 
-        // Separar categorias e outras tags
+        // Separar categorias e outras tags, removendo duplicatas
+        const seenTagKeys = new Set<string>();
         const allTags = response.tags
           .filter((tag: { is_active: boolean }) => tag.is_active)
           .map((tag: { id: string; name: string; tag_type: { name: string } }) => ({
             id: tag.id,
             type: tag.tag_type.name,
-            name: tag.name,
-          }));
+            name: tag.name.trim(),
+          }))
+          .filter((tag) => {
+            // Criar chave única baseada em tipo e nome (case-insensitive)
+            const uniqueKey = `${tag.type.toLowerCase()}:${tag.name.toLowerCase()}`;
+            if (seenTagKeys.has(uniqueKey)) {
+              return false; // Duplicata, remover
+            }
+            seenTagKeys.add(uniqueKey);
+            return true; // Primeira ocorrência, manter
+          });
 
         setAllTagsFromBackend(allTags);
 
@@ -3607,6 +3703,8 @@ export function NewTransactionSheet({
                                   tagTypesFromBackend={tagTypesFromBackend}
                                   onPanelStateChange={setIsClassificationPanelOpen}
                                   isOpen={isClassificationPanelOpen}
+                                  organizationId={currentOrganizationId}
+                                  onTagCreated={handleTagCreated}
                                 />
                               </div>
                             </FormControl>
@@ -3973,6 +4071,8 @@ export function NewTransactionSheet({
                                 // Não fazer nada - o painel interno sempre fica aberto nesta tela
                               }}
                               isOpen={true}
+                              organizationId={currentOrganizationId}
+                              onTagCreated={handleTagCreated}
                             />
                           </div>
                         </FormControl>
