@@ -92,13 +92,50 @@ export default function TransactionsPage() {
     return Array.from(set).sort();
   }, [transactionsWithAmount]);
 
-  const paymentMethods = useMemo(() => {
+  // Lista completa de métodos de pagamento disponíveis no sistema
+  const allAvailablePaymentMethods = [
+    'PIX',
+    'Dinheiro',
+    'Cartão de Débito',
+    'Cartão de Crédito',
+    'Transferência Bancária',
+    'Boleto',
+  ];
+
+  // Função para normalizar valores internos para nomes amigáveis
+  const normalizePaymentMethod = (method: string): string => {
+    if (!method) return '';
+    // Mapear valores internos para nomes amigáveis
+    if (method === 'credit_card' || method.toLowerCase() === 'credit_card') {
+      return 'Cartão de Crédito';
+    }
+    if (method === 'debit_card' || method.toLowerCase() === 'debit_card') {
+      return 'Cartão de Débito';
+    }
+    if (method === 'bank_transfer' || method.toLowerCase() === 'bank_transfer') {
+      return 'Transferência Bancária';
+    }
+    // Retornar o método original se já estiver no formato correto
+    return method;
+  };
+
+  // Obter métodos de pagamento únicos das transações (normalizados)
+  const paymentMethodsFromTransactions = useMemo(() => {
     const set = new Set<string>();
     (transactionsWithAmount || []).forEach((t) => {
-      if (t.payment_method) set.add(t.payment_method);
+      if (t.payment_method) {
+        const normalized = normalizePaymentMethod(t.payment_method);
+        if (normalized) set.add(normalized);
+      }
     });
-    return Array.from(set).sort();
+    return Array.from(set);
   }, [transactionsWithAmount]);
+
+  // Combinar métodos disponíveis com métodos usados nas transações
+  const paymentMethods = useMemo(() => {
+    const combined = new Set([...allAvailablePaymentMethods, ...paymentMethodsFromTransactions]);
+    return Array.from(combined).sort();
+  }, [paymentMethodsFromTransactions]);
 
   const filtered = useMemo(() => {
     let list = [...transactionsWithAmount];
@@ -142,8 +179,13 @@ export default function TransactionsPage() {
     // Categoria
     if (category !== 'todas') list = list.filter((t) => t.category === category);
     
-    // Forma de pagamento
-    if (paymentMethod !== 'todas') list = list.filter((t) => t.payment_method === paymentMethod);
+    // Forma de pagamento (normalizar antes de comparar)
+    if (paymentMethod !== 'todas') {
+      list = list.filter((t) => {
+        const normalized = normalizePaymentMethod(t.payment_method || '');
+        return normalized === paymentMethod;
+      });
+    }
     
     // Busca
     if (query.trim()) {
