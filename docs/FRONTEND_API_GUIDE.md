@@ -16,9 +16,10 @@ Este documento fornece uma referência completa da API REST para desenvolvedores
 10. [Endpoints de Transações](#endpoints-de-transações)
     11. [Endpoints de Cartões de Crédito](#endpoints-de-cartões-de-crédito)
     12. [Endpoints de Metas (Goals)](#endpoints-de-metas-goals)
-    13. [Endpoints de Chat/AI](#endpoints-de-chatai)
-    14. [Tratamento de Erros](#tratamento-de-erros)
-    15. [Exemplos de Uso](#exemplos-de-uso)
+    13. [Endpoints de Simulação Financeira](#endpoints-de-simulação-financeira)
+    14. [Endpoints de Chat/AI](#endpoints-de-chatai)
+    15. [Tratamento de Erros](#tratamento-de-erros)
+    16. [Exemplos de Uso](#exemplos-de-uso)
 
 ---
 
@@ -469,6 +470,49 @@ export interface ChatResponse {
   result: ChatResult;
   confidence: number; // 0.0 - 1.0
   processing_time: number; // segundos
+}
+
+// ===== SIMULAÇÃO FINANCEIRA =====
+export interface NewCardCommitment {
+  card_last4: string;
+  value: number;
+  installments_count: number;
+  description: string;
+}
+
+export interface SavingsGoal {
+  target_amount: number;
+  current_amount: number;
+  target_date: string; // ISO date string (YYYY-MM-DD)
+}
+
+export interface SimulateFinancialImpactRequest {
+  organization_id: string;
+  new_card_commitments?: NewCardCommitment[];
+  savings_goals?: SavingsGoal[];
+  simulation_months?: number; // 1-12, default: 6
+}
+
+export interface MonthlyProjection {
+  month: string; // Format: "YYYY-MM"
+  projected_income: number;
+  base_expenses: number;
+  card_commitments: number;
+  savings_goal: number;
+  total_expenses: number;
+  balance: number;
+  status: "success" | "warning" | "danger";
+}
+
+export interface SimulateFinancialImpactResponse {
+  months: MonthlyProjection[];
+  global_verdict: "viable" | "caution" | "high-risk";
+  summary: {
+    income: number;
+    base_expenses: number;
+    card_commitments: number;
+    savings_goal: number;
+  };
 }
 
 // ===== ERROS =====
@@ -1997,6 +2041,249 @@ await updateGoal("goal-uuid", "org-uuid", {
   current_amount: 3000.00,
   status: "active"
 });
+```
+
+---
+
+## 📊 Endpoints de Simulação Financeira
+
+### POST `/v1/financial-impact/simulate`
+
+Simula o impacto financeiro de novos compromissos de cartão de crédito e metas de economia.
+
+Calcula projeções mês a mês baseado em:
+- **Fonte A:** Receita projetada (transações de receita recorrentes)
+- **Fonte B:** Despesas base (média de despesas recorrentes, excluindo faturas de cartão)
+- **Fonte C:** Compromissos de cartão existentes (parcelas futuras)
+- **Fonte D:** Novos compromissos de cartão (cenário de simulação)
+- **Metas de economia:** Contribuições mensais para metas
+
+Retorna análise mês a mês com status (success/warning/danger) e veredito global (viable/caution/high-risk).
+
+**Request:**
+```typescript
+interface NewCardCommitment {
+  card_last4: string; // Últimos 4 dígitos do cartão
+  value: number; // Valor total da compra (decimal)
+  installments_count: number; // Número de parcelas (1-120)
+  description: string; // Descrição da compra (1-255 caracteres)
+}
+
+interface SavingsGoal {
+  target_amount: number; // Valor alvo da meta (decimal)
+  current_amount: number; // Valor já economizado (decimal, >= 0)
+  target_date: string; // Data alvo no formato YYYY-MM-DD
+}
+
+interface SimulateFinancialImpactRequest {
+  organization_id: string; // UUID da organização
+  new_card_commitments?: NewCardCommitment[]; // Novos compromissos de cartão (opcional)
+  savings_goals?: SavingsGoal[]; // Metas de economia (opcional)
+  simulation_months?: number; // Número de meses para simular (1-12, padrão: 6)
+}
+
+const simulateFinancialImpact = async (
+  request: SimulateFinancialImpactRequest
+): Promise<SimulateFinancialImpactResponse> => {
+  const response = await apiClient.post<SimulateFinancialImpactResponse>(
+    '/v1/financial-impact/simulate',
+    request
+  );
+  return response.data;
+};
+```
+
+**Exemplos de Uso:**
+
+```typescript
+// Simulação simples - apenas verificar situação atual
+await simulateFinancialImpact({
+  organization_id: "123e4567-e89b-12d3-a456-426614174000",
+  simulation_months: 6
+});
+
+// Simular nova compra parcelada
+await simulateFinancialImpact({
+  organization_id: "123e4567-e89b-12d3-a456-426614174000",
+  new_card_commitments: [
+    {
+      card_last4: "1234",
+      value: 2000.00,
+      installments_count: 10,
+      description: "Notebook novo"
+    }
+  ],
+  simulation_months: 10
+});
+
+// Simular múltiplas compras
+await simulateFinancialImpact({
+  organization_id: "123e4567-e89b-12d3-a456-426614174000",
+  new_card_commitments: [
+    {
+      card_last4: "1234",
+      value: 1500.00,
+      installments_count: 6,
+      description: "Móveis"
+    },
+    {
+      card_last4: "5678",
+      value: 800.00,
+      installments_count: 3,
+      description: "Eletrodomésticos"
+    }
+  ],
+  simulation_months: 6
+});
+
+// Simular com metas de economia
+await simulateFinancialImpact({
+  organization_id: "123e4567-e89b-12d3-a456-426614174000",
+  new_card_commitments: [
+    {
+      card_last4: "1234",
+      value: 3000.00,
+      installments_count: 12,
+      description: "Viagem"
+    }
+  ],
+  savings_goals: [
+    {
+      target_amount: 10000.00,
+      current_amount: 2000.00,
+      target_date: "2025-12-31"
+    }
+  ],
+  simulation_months: 12
+});
+```
+
+**Response (200):**
+```typescript
+interface MonthlyProjection {
+  month: string; // Formato: "YYYY-MM" (ex: "2025-01")
+  projected_income: number; // Receita projetada do mês
+  base_expenses: number; // Despesas base (excluindo cartões)
+  card_commitments: number; // Compromissos de cartão do mês
+  savings_goal: number; // Contribuição para metas de economia
+  total_expenses: number; // Total de despesas (base + cartões + metas)
+  balance: number; // Saldo (receita - despesas)
+  status: "success" | "warning" | "danger"; // Status do mês
+}
+
+interface SimulateFinancialImpactResponse {
+  months: MonthlyProjection[]; // Projeções mês a mês
+  global_verdict: "viable" | "caution" | "high-risk"; // Veredito global
+  summary: {
+    income: number; // Total de receita no período
+    base_expenses: number; // Total de despesas base
+    card_commitments: number; // Total de compromissos de cartão
+    savings_goal: number; // Total de contribuições para metas
+  };
+}
+```
+
+**Exemplo de Response:**
+```typescript
+{
+  months: [
+    {
+      month: "2025-01",
+      projected_income: 5000.00,
+      base_expenses: 3000.00,
+      card_commitments: 200.00, // Parcela do novo compromisso
+      savings_goal: 500.00,
+      total_expenses: 3700.00,
+      balance: 1300.00,
+      status: "success"
+    },
+    {
+      month: "2025-02",
+      projected_income: 5000.00,
+      base_expenses: 3000.00,
+      card_commitments: 200.00,
+      savings_goal: 500.00,
+      total_expenses: 3700.00,
+      balance: 1300.00,
+      status: "success"
+    },
+    // ... mais meses
+  ],
+  global_verdict: "viable",
+  summary: {
+    income: 30000.00,
+    base_expenses: 18000.00,
+    card_commitments: 2000.00,
+    savings_goal: 3000.00
+  }
+}
+```
+
+**Status dos Meses:**
+- `"success"`: Saldo positivo, situação confortável
+- `"warning"`: Saldo baixo ou próximo de zero, atenção necessária
+- `"danger"`: Saldo negativo, situação crítica
+
+**Veredito Global:**
+- `"viable"`: Simulação viável, situação financeira estável
+- `"caution"`: Cuidado necessário, alguns meses podem ser apertados
+- `"high-risk"`: Alto risco, situação financeira comprometida
+
+**Validações:**
+- `card_last4`: Deve corresponder a um cartão existente na organização
+- `value`: Deve ser maior que 0
+- `installments_count`: Deve estar entre 1 e 120
+- `description`: Deve ter entre 1 e 255 caracteres
+- `target_amount`: Deve ser maior que 0
+- `current_amount`: Deve ser >= 0
+- `target_date`: Deve ser uma data válida no futuro
+- `simulation_months`: Deve estar entre 1 e 12
+
+**Notas Importantes:**
+- O endpoint calcula automaticamente as parcelas dos novos compromissos baseado no valor total e número de parcelas
+- As parcelas são distribuídas mensalmente a partir do próximo mês
+- Compromissos existentes de cartão são automaticamente incluídos na simulação
+- Metas de economia são calculadas automaticamente baseado no valor alvo, valor atual e data alvo
+- A receita projetada é calculada a partir de transações de receita marcadas como recorrentes
+- As despesas base são calculadas como média dos últimos 3 meses, excluindo pagamentos de faturas de cartão
+
+**Erros:**
+- `400`: Dados inválidos (valores negativos, datas inválidas, etc.)
+- `401`: Não autenticado (token inválido ou ausente)
+- `403`: Acesso negado à organização
+- `422`: Erro de validação ou regra de negócio (cartão não encontrado, etc.)
+- `500`: Erro interno do servidor
+
+**Exemplo de Hook React:**
+```typescript
+// hooks/useFinancialSimulation.ts
+import { useState } from 'react';
+import { simulateFinancialImpact, SimulateFinancialImpactRequest, SimulateFinancialImpactResponse } from '../api/financialSimulation';
+import { handleApiError } from '../utils/errorHandler';
+
+export const useFinancialSimulation = () => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<SimulateFinancialImpactResponse | null>(null);
+
+  const simulate = async (request: SimulateFinancialImpactRequest) => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await simulateFinancialImpact(request);
+      setResult(response);
+      return response;
+    } catch (err) {
+      const errorMessage = handleApiError(err);
+      setError(errorMessage);
+      throw new Error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { simulate, loading, error, result };
+};
 ```
 
 ---

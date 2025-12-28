@@ -3,6 +3,7 @@
 
 import { Transaction } from '@/types/api';
 import { generateDistinctCategoryColors } from './colorGenerator';
+import { startOfMonth, endOfMonth, addMonths, isWithinInterval } from 'date-fns';
 
 export interface FinancialSummary {
     balance: number;
@@ -49,36 +50,112 @@ export interface WeeklyExpenseHeatmap {
 }
 
 /**
+ * Calcula o valor de uma transação considerando parcelas de cartão de crédito
+ * Para transações parceladas, retorna o valor da parcela que vence no período
+ * @param transaction - Transação a ser processada
+ * @param dateRange - Opcional: range de datas para calcular qual parcela vence
+ * @returns Valor a ser contabilizado (parcela ou valor total)
+ */
+function getTransactionValue(
+    transaction: Transaction,
+    dateRange?: { from: Date; to: Date }
+): number {
+    const numericValue = typeof transaction.value === 'string' 
+        ? parseFloat(transaction.value) 
+        : transaction.value;
+
+    // Se não é transação de cartão parcelada, retornar valor total
+    const isCreditCard = transaction.payment_method === 'Cartão de Crédito' || 
+                        transaction.payment_method === 'credit_card';
+    const isInstallment = transaction.modality === 'installment' || 
+                        transaction.credit_card_charge?.charge.modality === 'installment';
+    const installmentsCount = transaction.installments_count || 
+                             transaction.credit_card_charge?.charge.installments_count || 
+                             1;
+
+    if (!isCreditCard || !isInstallment || installmentsCount <= 1) {
+        return numericValue;
+    }
+
+    // Para transações parceladas, calcular valor da parcela
+    const totalAmount = transaction.credit_card_charge?.charge.total_amount || numericValue;
+    const installmentValue = totalAmount / installmentsCount;
+
+    // Se não há dateRange, retornar valor total (comportamento antigo)
+    if (!dateRange) {
+        return numericValue;
+    }
+
+    // Calcular qual parcela vence no período
+    const purchaseDate = transaction.credit_card_charge?.charge.purchase_date 
+        ? new Date(transaction.credit_card_charge.charge.purchase_date)
+        : new Date(transaction.date);
+    
+    // A primeira parcela geralmente vence no mês seguinte à compra
+    // Vamos calcular em qual mês cada parcela vence
+    let totalInstallmentValue = 0;
+    
+    for (let i = 1; i <= installmentsCount; i++) {
+        // Parcela i vence aproximadamente i meses após a compra
+        // Usar o início do mês seguinte à compra como base
+        const installmentMonth = addMonths(startOfMonth(purchaseDate), i);
+        const installmentMonthStart = startOfMonth(installmentMonth);
+        const installmentMonthEnd = endOfMonth(installmentMonth);
+        
+        // Verificar se a parcela vence dentro do período selecionado
+        if (isWithinInterval(installmentMonthStart, { start: dateRange.from, end: dateRange.to }) ||
+            isWithinInterval(installmentMonthEnd, { start: dateRange.from, end: dateRange.to }) ||
+            (installmentMonthStart <= dateRange.to && installmentMonthEnd >= dateRange.from)) {
+            totalInstallmentValue += installmentValue;
+        }
+    }
+
+    // Se nenhuma parcela vence no período, retornar 0
+    // Caso contrário, retornar a soma das parcelas que vencem no período
+    return totalInstallmentValue > 0 ? totalInstallmentValue : 0;
+}
+
+/**
  * Processa transações para gerar resumo financeiro
  * @param transactions - Lista de transações
  * @param dateRange - Opcional: range de datas para filtrar transações
+ * @param creditCardInvoicesTotal - Opcional: valor total das faturas de cartão que fecham no período
  */
 export function calculateSummary(
     transactions: Transaction[],
-    dateRange?: { from: Date; to: Date }
+    dateRange?: { from: Date; to: Date },
+    creditCardInvoicesTotal?: number
 ): FinancialSummary {
-    // Filtrar por data se fornecido
-    let filteredTransactions = transactions;
+    // Para receitas, filtrar por data da transação
+    // Para despesas, usar getTransactionValue que já considera parcelas
+    let filteredIncomeTransactions = transactions.filter((t) => t.type === 'income');
     if (dateRange) {
-        filteredTransactions = transactions.filter((t) => {
+        filteredIncomeTransactions = filteredIncomeTransactions.filter((t) => {
             const transactionDate = new Date(t.date);
             return transactionDate >= dateRange.from && transactionDate <= dateRange.to;
         });
     }
 
-    const income = filteredTransactions
-        .filter((t) => t.type === 'income')
+    const income = filteredIncomeTransactions.reduce((acc, t) => {
+        const value = typeof t.value === 'string' ? parseFloat(t.value) : t.value;
+        return acc + value;
+    }, 0);
+
+    // Para despesas, usar todas as transações e deixar getTransactionValue calcular
+    // o valor correto baseado em parcelas que vencem no período
+    let expenses = transactions
+        .filter((t) => t.type === 'expense')
         .reduce((acc, t) => {
-            const value = typeof t.value === 'string' ? parseFloat(t.value) : t.value;
+            // getTransactionValue já considera se a parcela vence no período
+            const value = dateRange ? getTransactionValue(t, dateRange) : getTransactionValue(t);
             return acc + value;
         }, 0);
 
-    const expenses = filteredTransactions
-        .filter((t) => t.type === 'expense')
-        .reduce((acc, t) => {
-            const value = typeof t.value === 'string' ? parseFloat(t.value) : t.value;
-            return acc + value;
-        }, 0);
+    // Adicionar valor total das faturas de cartão de crédito que fecham no período
+    // Isso representa o valor que o usuário precisa pagar naquele mês
+    if (creditCardInvoicesTotal !== undefined && creditCardInvoicesTotal > 0) {
+        expenses += creditCardInvoicesTotal;
+    }
 
     const balance = income - expenses;
 
@@ -91,27 +168,89 @@ export function calculateSummary(
 
 /**
  * Agrupa transações por mês para gráfico temporal
+ * Considera parcelas de cartão de crédito corretamente
  */
-export function groupByMonth(transactions: Transaction[]): MonthlyData[] {
+export function groupByMonth(
+    transactions: Transaction[],
+    dateRange?: { from: Date; to: Date }
+): MonthlyData[] {
     const monthMap = new Map<string, { income: number; expenses: number }>();
 
     transactions.forEach((t) => {
-        const date = new Date(t.date);
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-        const monthName = date.toLocaleDateString('pt-BR', { month: 'short' });
-
-        if (!monthMap.has(monthKey)) {
-            monthMap.set(monthKey, { income: 0, expenses: 0 });
-        }
-
-        const data = monthMap.get(monthKey)!;
-        // IMPORTANTE: Converter para número pois o backend pode retornar como string
-        const numericValue = typeof t.value === 'string' ? parseFloat(t.value) : t.value;
-
+        // Para receitas, usar valor total
         if (t.type === 'income') {
+            const date = new Date(t.date);
+            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            
+            if (!monthMap.has(monthKey)) {
+                monthMap.set(monthKey, { income: 0, expenses: 0 });
+            }
+            
+            const data = monthMap.get(monthKey)!;
+            const numericValue = typeof t.value === 'string' ? parseFloat(t.value) : t.value;
             data.income += numericValue;
         } else {
-            data.expenses += numericValue;
+            // Para despesas, considerar parcelas de cartão
+            const isCreditCard = t.payment_method === 'Cartão de Crédito' || 
+                                t.payment_method === 'credit_card';
+            const isInstallment = t.modality === 'installment' || 
+                                 t.credit_card_charge?.charge.modality === 'installment';
+            const installmentsCount = t.installments_count || 
+                                     t.credit_card_charge?.charge.installments_count || 
+                                     1;
+
+            if (isCreditCard && isInstallment && installmentsCount > 1) {
+                // Transação parcelada: distribuir parcelas pelos meses
+                const purchaseDate = t.credit_card_charge?.charge.purchase_date 
+                    ? new Date(t.credit_card_charge.charge.purchase_date)
+                    : new Date(t.date);
+                const totalAmount = t.credit_card_charge?.charge.total_amount || 
+                                   (typeof t.value === 'string' ? parseFloat(t.value) : t.value);
+                const installmentValue = totalAmount / installmentsCount;
+
+                // Distribuir cada parcela no mês correspondente
+                for (let i = 1; i <= installmentsCount; i++) {
+                    const installmentMonth = addMonths(startOfMonth(purchaseDate), i);
+                    const monthKey = `${installmentMonth.getFullYear()}-${String(installmentMonth.getMonth() + 1).padStart(2, '0')}`;
+                    
+                    // Se há dateRange, verificar se o mês está dentro do range
+                    if (dateRange) {
+                        const monthStart = startOfMonth(installmentMonth);
+                        const monthEnd = endOfMonth(installmentMonth);
+                        if (!(monthStart <= dateRange.to && monthEnd >= dateRange.from)) {
+                            continue; // Pular se o mês não está no range
+                        }
+                    }
+
+                    if (!monthMap.has(monthKey)) {
+                        monthMap.set(monthKey, { income: 0, expenses: 0 });
+                    }
+
+                    const data = monthMap.get(monthKey)!;
+                    data.expenses += installmentValue;
+                }
+            } else {
+                // Transação não parcelada: usar valor total no mês da transação
+                const date = new Date(t.date);
+                const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                
+                // Se há dateRange, verificar se o mês está dentro do range
+                if (dateRange) {
+                    const monthStart = startOfMonth(date);
+                    const monthEnd = endOfMonth(date);
+                    if (!(monthStart <= dateRange.to && monthEnd >= dateRange.from)) {
+                        return; // Pular se o mês não está no range
+                    }
+                }
+
+                if (!monthMap.has(monthKey)) {
+                    monthMap.set(monthKey, { income: 0, expenses: 0 });
+                }
+
+                const data = monthMap.get(monthKey)!;
+                const numericValue = typeof t.value === 'string' ? parseFloat(t.value) : t.value;
+                data.expenses += numericValue;
+            }
         }
     });
 
@@ -164,8 +303,12 @@ function getMainCategory(transaction: Transaction): string {
 
 /**
  * Agrupa despesas por categoria
+ * Considera parcelas de cartão de crédito corretamente
  */
-export function groupByCategory(transactions: Transaction[]): ExpenseCategory[] {
+export function groupByCategory(
+    transactions: Transaction[],
+    dateRange?: { from: Date; to: Date }
+): ExpenseCategory[] {
     const categoryMap = new Map<string, number>();
 
     // Filtrar apenas despesas
@@ -174,7 +317,8 @@ export function groupByCategory(transactions: Transaction[]): ExpenseCategory[] 
     expenses.forEach((t) => {
         const category = getMainCategory(t);
         const current = categoryMap.get(category) || 0;
-        const value = typeof t.value === 'string' ? parseFloat(t.value) : t.value;
+        // Usar função que considera parcelas
+        const value = dateRange ? getTransactionValue(t, dateRange) : getTransactionValue(t);
         categoryMap.set(category, current + value);
     });
 
@@ -312,21 +456,59 @@ export function generateWeeklyHeatmap(transactions: Transaction[]): WeeklyExpens
  */
 export function processTransactionAnalytics(
     transactions: Transaction[],
-    dateRange?: { from: Date; to: Date }
+    dateRange?: { from: Date; to: Date },
+    creditCardInvoicesTotal?: number
 ) {
-    // Filtrar por data se fornecido
+    // Para transações parceladas, não filtrar pela data da transação original
+    // mas sim considerar todas as transações que podem ter parcelas vencendo no período
+    // As funções de cálculo já fazem essa verificação internamente
     let filteredTransactions = transactions;
     if (dateRange) {
+        // Incluir todas as transações que:
+        // 1. Foram criadas no período (transações não parceladas)
+        // 2. OU são parceladas e podem ter parcelas vencendo no período
         filteredTransactions = transactions.filter((t) => {
             const transactionDate = new Date(t.date);
-            return transactionDate >= dateRange.from && transactionDate <= dateRange.to;
+            
+            // Se a transação está dentro do período, incluir
+            if (transactionDate >= dateRange.from && transactionDate <= dateRange.to) {
+                return true;
+            }
+            
+            // Se é transação parcelada, verificar se alguma parcela vence no período
+            const isCreditCard = t.payment_method === 'Cartão de Crédito' || 
+                                t.payment_method === 'credit_card';
+            const isInstallment = t.modality === 'installment' || 
+                                 t.credit_card_charge?.charge.modality === 'installment';
+            const installmentsCount = t.installments_count || 
+                                     t.credit_card_charge?.charge.installments_count || 
+                                     1;
+            
+            if (isCreditCard && isInstallment && installmentsCount > 1) {
+                const purchaseDate = t.credit_card_charge?.charge.purchase_date 
+                    ? new Date(t.credit_card_charge.charge.purchase_date)
+                    : transactionDate;
+                
+                // Verificar se alguma parcela vence no período
+                for (let i = 1; i <= installmentsCount; i++) {
+                    const installmentMonth = addMonths(startOfMonth(purchaseDate), i);
+                    const monthStart = startOfMonth(installmentMonth);
+                    const monthEnd = endOfMonth(installmentMonth);
+                    
+                    if (monthStart <= dateRange.to && monthEnd >= dateRange.from) {
+                        return true; // Esta parcela vence no período
+                    }
+                }
+            }
+            
+            return false;
         });
     }
 
     return {
-        summary: calculateSummary(filteredTransactions),
-        monthly: groupByMonth(filteredTransactions),
-        categories: groupByCategory(filteredTransactions),
+        summary: calculateSummary(filteredTransactions, dateRange, creditCardInvoicesTotal),
+        monthly: groupByMonth(filteredTransactions, dateRange),
+        categories: groupByCategory(filteredTransactions, dateRange),
         moneyFlow: generateMoneyFlow(filteredTransactions),
         heatmap: generateWeeklyHeatmap(filteredTransactions),
     };

@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { listTransactions } from '@/api/transactions';
+import { listCreditCards, getCreditCardInvoice } from '@/api/creditCards';
 import { useOrganization } from './useOrganization';
 import { processTransactionAnalytics } from '@/lib/analytics';
 import type { Transaction as ApiTransaction } from '@/types/api';
+import { startOfMonth, endOfMonth, eachMonthOfInterval, format } from 'date-fns';
 
 export interface FinancialSummary {
   balance: number;
@@ -111,6 +113,57 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
     staleTime: 2 * 60 * 1000, // 2 minutos
   });
 
+  // Carregar faturas de cartão de crédito que fecham no período
+  const { data: creditCardInvoicesTotal } = useQuery({
+    queryKey: ['credit-card-invoices', activeOrgId, dateRange?.from, dateRange?.to],
+    queryFn: async () => {
+      if (!activeOrgId || !dateRange) return 0;
+
+      try {
+        // Buscar todos os cartões da organização
+        const cards = await listCreditCards(activeOrgId);
+        if (cards.length === 0) return 0;
+
+        let totalInvoices = 0;
+
+        // Para cada mês no período, buscar faturas de todos os cartões
+        const months = eachMonthOfInterval({ start: dateRange.from, end: dateRange.to });
+        
+        for (const month of months) {
+          const year = month.getFullYear();
+          const monthNumber = month.getMonth() + 1;
+
+          // Buscar fatura de cada cartão para este mês
+          for (const card of cards) {
+            try {
+              const invoice = await getCreditCardInvoice(
+                card.id,
+                year,
+                monthNumber,
+                activeOrgId
+              );
+              
+              // Somar o valor total da fatura (representa o que o usuário precisa pagar)
+              if (invoice && invoice.total_amount > 0) {
+                totalInvoices += invoice.total_amount;
+              }
+            } catch (err) {
+              // Fatura não existe ou erro ao buscar, continuar
+              continue;
+            }
+          }
+        }
+
+        return totalInvoices;
+      } catch (error) {
+        console.error('Erro ao buscar faturas de cartão:', error);
+        return 0;
+      }
+    },
+    enabled: !!activeOrgId && !!dateRange,
+    staleTime: 2 * 60 * 1000, // 2 minutos
+  });
+
   // Processar dados quando transações do backend mudarem
   useEffect(() => {
     if (backendTransactions && backendTransactions.length > 0) {
@@ -120,7 +173,12 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
       );
 
       // Processar analytics com filtro de data se fornecido
-      const analytics = processTransactionAnalytics(orgTransactions, dateRange);
+      // Incluir valor total das faturas de cartão de crédito que fecham no período
+      const analytics = processTransactionAnalytics(
+        orgTransactions, 
+        dateRange,
+        creditCardInvoicesTotal || 0
+      );
 
       setSummary(analytics.summary);
       setMonthlyData(analytics.monthly);
@@ -151,7 +209,7 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
       setMoneyFlow({ nodes: [], links: [] });
       setWeeklyExpenseHeatmap({ categories: [], days: [], data: [] });
     }
-  }, [backendTransactions, activeOrgId, dateRange]);
+  }, [backendTransactions, activeOrgId, dateRange, creditCardInvoicesTotal]);
 
   const error = queryError ? String(queryError) : null;
 

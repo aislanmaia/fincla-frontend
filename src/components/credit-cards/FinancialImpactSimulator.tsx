@@ -8,8 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { Sparkles, AlertTriangle, CheckCircle2, TrendingDown, Wallet, Target, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { simulateFinancialImpact } from '@/api/financialImpact';
-import { FinancialSimulationResponse, SimulationTimelineItem } from '@/types/api';
+import { SimulateFinancialImpactResponse, MonthlyProjection } from '@/types/api';
 import { toast } from 'sonner';
+import { handleApiError } from '@/api/client';
+import { useOrganization } from '@/hooks/useOrganization';
+import { listCreditCards } from '@/api/creditCards';
+import { CreditCard } from '@/types/api';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface FinancialImpactSimulatorProps {
   open: boolean;
@@ -22,15 +27,44 @@ export function FinancialImpactSimulator({
   onOpenChange,
   currentCardInvoices = []
 }: FinancialImpactSimulatorProps) {
+  const { activeOrgId } = useOrganization();
   const [step, setStep] = useState<'form' | 'loading' | 'results'>('form');
   
   // Form state
   const [description, setDescription] = useState('');
   const [totalAmount, setTotalAmount] = useState('');
   const [installments, setInstallments] = useState('');
+  const [selectedCardId, setSelectedCardId] = useState<string>('');
+  
+  // Cards state
+  const [cards, setCards] = useState<CreditCard[]>([]);
+  const [loadingCards, setLoadingCards] = useState(false);
   
   // Results state
-  const [simulationData, setSimulationData] = useState<FinancialSimulationResponse | null>(null);
+  const [simulationData, setSimulationData] = useState<SimulateFinancialImpactResponse | null>(null);
+  
+  // Load cards when component opens
+  useEffect(() => {
+    const loadCards = async () => {
+      if (!open || !activeOrgId) return;
+      
+      try {
+        setLoadingCards(true);
+        const data = await listCreditCards(activeOrgId);
+        setCards(data);
+        if (data.length > 0 && !selectedCardId) {
+          setSelectedCardId(String(data[0].id));
+        }
+      } catch (error) {
+        console.error('Failed to load cards:', error);
+        toast.error('Erro ao carregar cartões');
+      } finally {
+        setLoadingCards(false);
+      }
+    };
+    
+    loadCards();
+  }, [open, activeOrgId]);
 
   // Reset form when dialog closes
   useEffect(() => {
@@ -40,6 +74,7 @@ export function FinancialImpactSimulator({
         setDescription('');
         setTotalAmount('');
         setInstallments('');
+        setSelectedCardId('');
         setSimulationData(null);
       }, 200);
     }
@@ -53,19 +88,66 @@ export function FinancialImpactSimulator({
       return;
     }
 
+    if (!description || description.trim().length === 0) {
+      toast.error("Por favor, informe uma descrição para a compra.");
+      return;
+    }
+
+    if (!selectedCardId) {
+      toast.error("Por favor, selecione um cartão de crédito.");
+      return;
+    }
+
     try {
       setStep('loading');
+      
+      if (!activeOrgId) {
+        toast.error("Organização não selecionada. Por favor, selecione uma organização.");
+        setStep('form');
+        return;
+      }
+
+      // Encontrar o cartão selecionado
+      const selectedCard = cards.find(c => String(c.id) === selectedCardId);
+      if (!selectedCard) {
+        toast.error("Cartão selecionado não encontrado.");
+        setStep('form');
+        return;
+      }
+
+      // Validar número de parcelas
+      if (numInstallments < 1 || numInstallments > 120) {
+        toast.error("O número de parcelas deve estar entre 1 e 120.");
+        setStep('form');
+        return;
+      }
+
+      // Validar descrição
+      if (description.length > 255) {
+        toast.error("A descrição deve ter no máximo 255 caracteres.");
+        setStep('form');
+        return;
+      }
+
       const result = await simulateFinancialImpact({
-        purchase_amount: amount,
-        installments: numInstallments,
-        start_date: new Date().toISOString() // Início no próximo mês (default do backend)
+        organization_id: activeOrgId,
+        new_card_commitments: [
+          {
+            card_last4: selectedCard.last4,
+            value: amount,
+            installments_count: numInstallments,
+            description: description.trim()
+          }
+        ],
+        simulation_months: Math.max(numInstallments, 6) // Simular pelo menos o número de parcelas ou 6 meses
       });
       
       setSimulationData(result);
       setStep('results');
     } catch (error) {
       console.error("Simulation failed:", error);
-      toast.error("Erro ao realizar simulação. Tente novamente.");
+      const errorMessage = handleApiError(error);
+      toast.error(errorMessage || "Erro ao realizar simulação. Tente novamente.");
       setStep('form');
     }
   };
@@ -120,7 +202,24 @@ export function FinancialImpactSimulator({
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   className="text-sm"
+                  maxLength={255}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="card" className="text-sm">Cartão de Crédito</Label>
+                <Select value={selectedCardId} onValueChange={setSelectedCardId} disabled={loadingCards || cards.length === 0}>
+                  <SelectTrigger className="w-full text-sm">
+                    <SelectValue placeholder={loadingCards ? "Carregando cartões..." : cards.length === 0 ? "Nenhum cartão disponível" : "Selecione um cartão"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {cards.map((card) => (
+                      <SelectItem key={card.id} value={String(card.id)}>
+                        {card.description || `Cartão final ${card.last4}`} ({card.last4})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -151,7 +250,7 @@ export function FinancialImpactSimulator({
                     onChange={(e) => setInstallments(e.target.value)}
                     className="text-sm"
                     min="1"
-                    max="48"
+                    max="120"
                   />
                 </div>
               </div>
@@ -172,7 +271,7 @@ export function FinancialImpactSimulator({
               </Button>
               <Button 
                 onClick={handleSimulate}
-                disabled={!description || !totalAmount || !installments}
+                disabled={!description || !totalAmount || !installments || !selectedCardId || cards.length === 0}
                 className="w-full sm:w-auto bg-indigo-500 hover:bg-indigo-600 text-sm"
               >
                 <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-2" />
@@ -216,7 +315,7 @@ export function FinancialImpactSimulator({
                     <div>
                       <div className="text-[10px] sm:text-xs md:text-sm text-muted-foreground mb-0.5 sm:mb-1">Impacto Mensal</div>
                       <div className="text-sm sm:text-lg md:text-xl font-bold text-indigo-600">
-                        R$ {simulationData.summary.total_impact.toFixed(2)}
+                        R$ {(parseFloat(totalAmount) / parseInt(installments)).toFixed(2)}
                       </div>
                     </div>
                   </div>
@@ -230,96 +329,108 @@ export function FinancialImpactSimulator({
                   </h3>
                   
                   <div className="space-y-1.5 sm:space-y-2 max-h-[250px] sm:max-h-[300px] overflow-y-auto pr-1 sm:pr-2">
-                    {simulationData.timeline.map((item: SimulationTimelineItem, index: number) => (
-                      <Card
-                        key={index}
-                        className={cn(
-                          'p-3 sm:p-4 transition-all',
-                          item.result.status === 'danger' && 'border-red-300 bg-red-50 dark:bg-red-950/20',
-                          item.result.status === 'warning' && 'border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20',
-                          item.result.status === 'success' && 'border-green-300 bg-green-50 dark:bg-green-950/20'
-                        )}
-                      >
-                        <div className="flex items-start justify-between gap-2 mb-2 sm:mb-3">
-                          <div className="font-semibold text-sm sm:text-base capitalize">{item.month} {item.year}</div>
-                          {item.result.status === 'danger' ? (
-                            <Badge variant="destructive" className="gap-0.5 sm:gap-1 text-[10px] sm:text-xs px-1.5 sm:px-2">
-                              <TrendingDown className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                              Déficit
-                            </Badge>
-                          ) : item.result.status === 'success' ? (
-                            <Badge className="gap-0.5 sm:gap-1 bg-green-500 text-[10px] sm:text-xs px-1.5 sm:px-2">
-                              <CheckCircle2 className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                              Meta OK
-                            </Badge>
-                          ) : (
-                            <Badge className="gap-0.5 sm:gap-1 bg-yellow-500 text-black text-[10px] sm:text-xs px-1.5 sm:px-2">
-                              <AlertTriangle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
-                              Atenção
-                            </Badge>
+                    {simulationData.months.map((item: MonthlyProjection, index: number) => {
+                      // Converter "YYYY-MM" para nome do mês
+                      const [year, month] = item.month.split('-');
+                      const monthDate = new Date(parseInt(year), parseInt(month) - 1);
+                      const monthName = monthDate.toLocaleString('pt-BR', { month: 'long' });
+                      
+                      return (
+                        <Card
+                          key={index}
+                          className={cn(
+                            'p-3 sm:p-4 transition-all',
+                            item.status === 'danger' && 'border-red-300 bg-red-50 dark:bg-red-950/20',
+                            item.status === 'warning' && 'border-yellow-300 bg-yellow-50 dark:bg-yellow-950/20',
+                            item.status === 'success' && 'border-green-300 bg-green-50 dark:bg-green-950/20'
                           )}
-                        </div>
+                        >
+                          <div className="flex items-start justify-between gap-2 mb-2 sm:mb-3">
+                            <div className="font-semibold text-sm sm:text-base capitalize">{monthName} {year}</div>
+                            {item.status === 'danger' ? (
+                              <Badge variant="destructive" className="gap-0.5 sm:gap-1 text-[10px] sm:text-xs px-1.5 sm:px-2">
+                                <TrendingDown className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                                Déficit
+                              </Badge>
+                            ) : item.status === 'success' ? (
+                              <Badge className="gap-0.5 sm:gap-1 bg-green-500 text-[10px] sm:text-xs px-1.5 sm:px-2">
+                                <CheckCircle2 className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                                Meta OK
+                              </Badge>
+                            ) : (
+                              <Badge className="gap-0.5 sm:gap-1 bg-yellow-500 text-black text-[10px] sm:text-xs px-1.5 sm:px-2">
+                                <AlertTriangle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                                Atenção
+                              </Badge>
+                            )}
+                          </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 sm:gap-x-4 gap-y-1.5 sm:gap-y-2 text-xs sm:text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">+ Receitas:</span>
-                            <span className="font-medium text-green-600">R$ {item.financial_data.projected_income.toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">- Despesas Base:</span>
-                            <span className="font-medium text-red-600">R$ {item.financial_data.base_expenses.toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">- Parcelas Atuais:</span>
-                            <span className="font-medium text-orange-600">R$ {item.financial_data.existing_commitments.toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">- Nova Parcela:</span>
-                            <span className="font-medium text-purple-600">R$ {item.financial_data.new_installment.toFixed(2)}</span>
-                          </div>
-                          <div className="flex justify-between col-span-1 sm:col-span-2 pt-1.5 sm:pt-2 border-t mt-1">
-                            <span className="font-semibold text-xs sm:text-sm">= Saldo Previsto:</span>
-                            <span className={cn(
-                              'font-bold text-xs sm:text-sm',
-                              item.result.projected_balance < 0 && 'text-red-600',
-                              item.result.projected_balance >= 0 && 'text-green-600'
-                            )}>
-                              R$ {item.result.projected_balance.toFixed(2)}
-                            </span>
-                          </div>
-                          {item.financial_data.savings_goal > 0 && (
-                            <div className="flex justify-between col-span-1 sm:col-span-2 text-[10px] sm:text-xs text-muted-foreground">
-                              <span className="flex items-center gap-0.5 sm:gap-1">
-                                <Target className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
-                                Meta de Economia:
-                              </span>
-                              <span>R$ {item.financial_data.savings_goal.toFixed(2)}</span>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 sm:gap-x-4 gap-y-1.5 sm:gap-y-2 text-xs sm:text-sm">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">+ Receitas:</span>
+                              <span className="font-medium text-green-600">R$ {Number(item.projected_income).toFixed(2)}</span>
                             </div>
-                          )}
-                        </div>
-                      </Card>
-                    ))}
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">- Despesas Base:</span>
+                              <span className="font-medium text-red-600">R$ {Number(item.base_expenses).toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">- Compromissos Cartão:</span>
+                              <span className="font-medium text-orange-600">R$ {Number(item.card_commitments).toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">- Total Despesas:</span>
+                              <span className="font-medium text-red-600">R$ {Number(item.total_expenses).toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between col-span-1 sm:col-span-2 pt-1.5 sm:pt-2 border-t mt-1">
+                              <span className="font-semibold text-xs sm:text-sm">= Saldo Previsto:</span>
+                              <span className={cn(
+                                'font-bold text-xs sm:text-sm',
+                                Number(item.balance) < 0 && 'text-red-600',
+                                Number(item.balance) >= 0 && 'text-green-600'
+                              )}>
+                                R$ {Number(item.balance).toFixed(2)}
+                              </span>
+                            </div>
+                            {Number(item.savings_goal) > 0 && (
+                              <div className="flex justify-between col-span-1 sm:col-span-2 text-[10px] sm:text-xs text-muted-foreground">
+                                <span className="flex items-center gap-0.5 sm:gap-1">
+                                  <Target className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
+                                  Meta de Economia:
+                                </span>
+                                <span>R$ {Number(item.savings_goal).toFixed(2)}</span>
+                              </div>
+                            )}
+                          </div>
+                        </Card>
+                      );
+                    })}
                   </div>
                 </div>
 
                 {/* Final Verdict */}
                 <Card className={cn(
                   'p-4 sm:p-5 md:p-6',
-                  simulationData.summary.verdict === 'viable' && 'border-green-300 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20',
-                  simulationData.summary.verdict === 'high-risk' && 'border-red-300 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/20 dark:to-rose-950/20',
-                  simulationData.summary.verdict === 'caution' && 'border-yellow-300 bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-950/20 dark:to-amber-950/20'
+                  simulationData.global_verdict === 'viable' && 'border-green-300 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20',
+                  simulationData.global_verdict === 'high-risk' && 'border-red-300 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/20 dark:to-rose-950/20',
+                  simulationData.global_verdict === 'caution' && 'border-yellow-300 bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-950/20 dark:to-amber-950/20'
                 )}>
                   <div className="flex items-start gap-3 sm:gap-4">
                     <div className="flex-shrink-0">
-                      {getVerdictIcon(simulationData.summary.verdict)}
+                      {getVerdictIcon(simulationData.global_verdict)}
                     </div>
                     <div className="flex-1 space-y-2 sm:space-y-3 min-w-0">
                       <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                         <h3 className="font-bold text-base sm:text-lg md:text-xl">Conclusão da Análise</h3>
-                        {getVerdictBadge(simulationData.summary.verdict)}
+                        {getVerdictBadge(simulationData.global_verdict)}
                       </div>
                       <p className="text-xs sm:text-sm leading-relaxed">
-                        {simulationData.summary.verdict_message}
+                        {simulationData.global_verdict === 'viable' && 
+                          'Compra segura! Seu orçamento comporta esta despesa sem afetar suas metas.'}
+                        {simulationData.global_verdict === 'caution' && 
+                          'Atenção necessária. Alguns meses podem ser apertados, mas a compra é viável com cuidado.'}
+                        {simulationData.global_verdict === 'high-risk' && 
+                          'Alto risco! Esta compra pode comprometer seriamente sua saúde financeira. Recomenda-se reconsiderar.'}
                       </p>
                     </div>
                   </div>

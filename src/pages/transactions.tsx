@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Download, Edit, Trash2 } from 'lucide-react';
+import { ArrowLeft, Download, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, TrendingDown, Receipt } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -18,6 +18,10 @@ import { NewTransactionSheet } from '@/components/NewTransactionSheet';
 import { DeleteTransactionDialog } from '@/components/DeleteTransactionDialog';
 import { handleApiError } from '@/api/client';
 import { useToast } from '@/hooks/use-toast';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, PaginationEllipsis } from '@/components/ui/pagination';
+import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 function formatCurrency(value: number) {
   return value.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
@@ -34,15 +38,24 @@ function formatDate(value: string | Date) {
   });
 }
 
+type SortField = 'description' | 'category' | 'date' | 'value' | 'payment_method';
+type SortDirection = 'asc' | 'desc' | null;
+
 export default function TransactionsPage() {
   const [query, setQuery] = useState('');
   const [type, setType] = useState<'todas' | 'receitas' | 'despesas'>('todas');
-  const [period, setPeriod] = useState<'tudo' | '7d' | '30d' | '90d'>('tudo');
+  const [period, setPeriod] = useState<'tudo' | '7d' | '30d' | '90d' | 'este-mes' | 'mes-anterior'>('tudo');
   const [category, setCategory] = useState<string>('todas');
+  const [paymentMethod, setPaymentMethod] = useState<string>('todas');
+  const [sortField, setSortField] = useState<SortField>('date');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+  const [currentPage, setCurrentPage] = useState(1);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isEditSheetOpen, setIsEditSheetOpen] = useState(false);
   const [deletingTransaction, setDeletingTransaction] = useState<Transaction | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+  const ITEMS_PER_PAGE = 20;
 
   const queryClient = useQueryClient();
   const [location] = useLocation();
@@ -58,8 +71,6 @@ export default function TransactionsPage() {
     enabled: !!activeOrgId,
   });
 
-
-
   // Converter Transaction da API para o formato esperado (amount positivo/negativo)
   // Preservar todos os campos originais, incluindo card_last4, modality, installments_count, recurring
   const transactionsWithAmount = useMemo(() => {
@@ -72,8 +83,7 @@ export default function TransactionsPage() {
         amount: t.type === 'income' ? t.value : -t.value,
         date: new Date(t.date),
         createdAt: t.created_at ? new Date(t.created_at) : new Date(t.date), // Fallback para date se created_at não existir
-      }))
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // Ordenar por data de criação (mais recente primeiro)
+      }));
   }, [data]);
 
   const categories = useMemo(() => {
@@ -82,20 +92,59 @@ export default function TransactionsPage() {
     return Array.from(set).sort();
   }, [transactionsWithAmount]);
 
+  const paymentMethods = useMemo(() => {
+    const set = new Set<string>();
+    (transactionsWithAmount || []).forEach((t) => {
+      if (t.payment_method) set.add(t.payment_method);
+    });
+    return Array.from(set).sort();
+  }, [transactionsWithAmount]);
+
   const filtered = useMemo(() => {
     let list = [...transactionsWithAmount];
+    
     // Tipo
     if (type === 'receitas') list = list.filter((t) => t.amount > 0);
     if (type === 'despesas') list = list.filter((t) => t.amount < 0);
+    
     // Período
     if (period !== 'tudo') {
-      const now = new Date().getTime();
-      const days = period === '7d' ? 7 : period === '30d' ? 30 : 90;
-      const cutoff = now - days * 24 * 60 * 60 * 1000;
-      list = list.filter((t) => new Date(t.date).getTime() >= cutoff);
+      const now = new Date();
+      let cutoff: Date;
+      
+      if (period === '7d') {
+        cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        list = list.filter((t) => new Date(t.date).getTime() >= cutoff.getTime());
+      } else if (period === '30d') {
+        cutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        list = list.filter((t) => new Date(t.date).getTime() >= cutoff.getTime());
+      } else if (period === '90d') {
+        cutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        list = list.filter((t) => new Date(t.date).getTime() >= cutoff.getTime());
+      } else if (period === 'este-mes') {
+        cutoff = startOfMonth(now);
+        const end = endOfMonth(now);
+        list = list.filter((t) => {
+          const tDate = new Date(t.date);
+          return tDate >= cutoff && tDate <= end;
+        });
+      } else if (period === 'mes-anterior') {
+        const lastMonth = subMonths(now, 1);
+        cutoff = startOfMonth(lastMonth);
+        const end = endOfMonth(lastMonth);
+        list = list.filter((t) => {
+          const tDate = new Date(t.date);
+          return tDate >= cutoff && tDate <= end;
+        });
+      }
     }
+    
     // Categoria
     if (category !== 'todas') list = list.filter((t) => t.category === category);
+    
+    // Forma de pagamento
+    if (paymentMethod !== 'todas') list = list.filter((t) => t.payment_method === paymentMethod);
+    
     // Busca
     if (query.trim()) {
       const q = query.trim().toLowerCase();
@@ -104,16 +153,155 @@ export default function TransactionsPage() {
         t.category.toLowerCase().includes(q)
       );
     }
+    
+    // Ordenamento
+    if (sortField && sortDirection) {
+      list.sort((a, b) => {
+        let aVal: any;
+        let bVal: any;
+        
+        switch (sortField) {
+          case 'description':
+            aVal = a.description.toLowerCase();
+            bVal = b.description.toLowerCase();
+            break;
+          case 'category':
+            aVal = a.category.toLowerCase();
+            bVal = b.category.toLowerCase();
+            break;
+          case 'date':
+            aVal = a.date.getTime();
+            bVal = b.date.getTime();
+            break;
+          case 'value':
+            aVal = Math.abs(a.amount);
+            bVal = Math.abs(b.amount);
+            break;
+          case 'payment_method':
+            aVal = (a.payment_method || '').toLowerCase();
+            bVal = (b.payment_method || '').toLowerCase();
+            break;
+          default:
+            return 0;
+        }
+        
+        if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    
     return list;
-  }, [transactionsWithAmount, type, period, category, query]);
+  }, [transactionsWithAmount, type, period, category, paymentMethod, query, sortField, sortDirection]);
+
+  // Estatísticas do período filtrado
+  const stats = useMemo(() => {
+    const total = filtered.length;
+    
+    let totalValue = 0;
+    let income = 0;
+    let expenses = 0;
+    
+    filtered.forEach((t) => {
+      const amount = typeof t.amount === 'number' ? t.amount : parseFloat(String(t.amount)) || 0;
+      const absAmount = Math.abs(amount);
+      
+      totalValue += absAmount;
+      
+      if (amount > 0) {
+        income += amount;
+      } else if (amount < 0) {
+        expenses += absAmount;
+      }
+    });
+    
+    const balance = income - expenses;
+    
+    return { total, totalValue, income, expenses, balance };
+  }, [filtered]);
+
+  // Paginação
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  const paginatedTransactions = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    const end = start + ITEMS_PER_PAGE;
+    return filtered.slice(start, end);
+  }, [filtered, currentPage]);
+
+  // Resetar página quando filtros mudarem
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [type, period, category, paymentMethod, query, sortField, sortDirection]);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else if (sortDirection === 'desc') {
+        setSortDirection(null);
+        setSortField('date');
+      } else {
+        setSortDirection('asc');
+      }
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const getSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="h-4 w-4 ml-1 opacity-50" />;
+    }
+    if (sortDirection === 'asc') {
+      return <ArrowUp className="h-4 w-4 ml-1" />;
+    }
+    if (sortDirection === 'desc') {
+      return <ArrowDown className="h-4 w-4 ml-1" />;
+    }
+    return <ArrowUpDown className="h-4 w-4 ml-1 opacity-50" />;
+  };
+
+  const formatPaymentMethod = (transaction: any) => {
+    const method = transaction.payment_method || '';
+    const isCreditCard = method === 'Cartão de Crédito' || method === 'credit_card';
+    
+    if (!isCreditCard) {
+      return method;
+    }
+    
+    const cardLast4 = transaction.card_last4 || transaction.credit_card_charge?.card?.last4 || '';
+    const modality = transaction.modality || transaction.credit_card_charge?.charge?.modality;
+    const installmentsCount = transaction.installments_count || transaction.credit_card_charge?.charge?.installments_count;
+    
+    if (modality === 'installment' && installmentsCount && installmentsCount > 1) {
+      return `Cartão ${cardLast4} em ${installmentsCount}x`;
+    }
+    
+    return `Cartão ${cardLast4} à vista`;
+  };
+
+  const getInstallmentInfo = (transaction: any) => {
+    const modality = transaction.modality || transaction.credit_card_charge?.charge?.modality;
+    const installmentsCount = transaction.installments_count || transaction.credit_card_charge?.charge?.installments_count;
+    const totalAmount = transaction.credit_card_charge?.charge?.total_amount || transaction.value || Math.abs(transaction.amount);
+    
+    if (modality === 'installment' && installmentsCount && installmentsCount > 1) {
+      const installmentValue = totalAmount / installmentsCount;
+      return `${installmentsCount}x de ${formatCurrency(installmentValue)}`;
+    }
+    
+    return null;
+  };
 
   const downloadCsv = () => {
-    const header = ['Descrição', 'Categoria', 'Data', 'Valor'];
+    const header = ['Descrição', 'Categoria', 'Data', 'Valor', 'Forma de Pagamento'];
     const rows = filtered.map((t) => [
       t.description,
       t.category,
       formatDate(t.date as any),
       `${t.amount < 0 ? '-' : ''}R$ ${formatCurrency(Math.abs(t.amount))}`,
+      formatPaymentMethod(t),
     ]);
     const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace('"', '""')}"`).join(';')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -127,16 +315,10 @@ export default function TransactionsPage() {
 
   const handleEdit = async (transaction: Transaction) => {
     try {
-      // Buscar dados completos da transação do backend
-      // O GET agora retorna credit_card_charge com todos os dados do cartão
       const fullTransaction = await getTransaction(transaction.id, transaction.organization_id);
       
-      // Se o GET não retornar credit_card_charge mas a lista tiver campos legados, preservar
-      // (compatibilidade com versões antigas ou casos edge)
       const transactionWithCardData: Transaction = {
         ...fullTransaction,
-        // Preservar campos legados apenas se credit_card_charge não estiver presente
-        // e os campos legados estiverem disponíveis na lista original
         ...(fullTransaction.credit_card_charge ? {} : {
           card_last4: transaction.card_last4 !== undefined ? transaction.card_last4 : (fullTransaction.card_last4 || null),
           modality: transaction.modality !== undefined ? transaction.modality : (fullTransaction.modality !== undefined ? fullTransaction.modality : null),
@@ -167,7 +349,6 @@ export default function TransactionsPage() {
       setIsDeleteDialogOpen(false);
       setDeletingTransaction(null);
       
-      // Feedback de sucesso
       toast({
         title: "Transação excluída",
         description: "A transação foi excluída com sucesso.",
@@ -177,7 +358,6 @@ export default function TransactionsPage() {
     } catch (error) {
       const errorMessage = handleApiError(error);
       
-      // Feedback de erro
       toast({
         title: "Erro ao excluir transação",
         description: typeof errorMessage === 'string' ? errorMessage : String(errorMessage),
@@ -188,20 +368,18 @@ export default function TransactionsPage() {
   };
 
   const handleInvalidateCache = () => {
-    // Invalidar cache imediatamente após sucesso para atualizar a lista
     queryClient.invalidateQueries({ queryKey: ['transactions', activeOrgId] });
   };
 
   const handleEditSuccess = () => {
-    // Fechar painel e limpar estado quando o usuário fechar após ver a mensagem de sucesso
     setIsEditSheetOpen(false);
     setEditingTransaction(null);
   };
 
   return (
     <PageTransition>
-      <div className="mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 max-w-7xl xl:max-w-[95%] 2xl:max-w-[1800px]">
-        <div className="mt-4 mb-4 flex items-center justify-between">
+      <div className="mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 max-w-7xl xl:max-w-[95%] 2xl:max-w-[1800px] flex flex-col flex-1 min-h-0" style={{ overflow: 'hidden', maxHeight: '100%' }}>
+        <div className="mt-4 mb-4 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-3">
             <Link href="/">
               <a className="inline-flex items-center text-sm text-[#4A56E2] hover:text-[#343D9B]">
@@ -213,8 +391,8 @@ export default function TransactionsPage() {
         </div>
 
         {/* Toolbar: filtros à esquerda, ações à direita */}
-        <div className="mb-4 flex flex-col md:flex-row md:items-end md:justify-between gap-3">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3 flex-1">
+        <div className="mb-4 flex flex-col md:flex-row md:items-end md:justify-between gap-3 flex-shrink-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 flex-1">
             <div className="md:col-span-2">
               <label htmlFor="tx-search" className="mb-1 block text-xs font-medium text-gray-600">Buscar</label>
               <Input
@@ -246,6 +424,8 @@ export default function TransactionsPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="tudo">Tudo</SelectItem>
+                  <SelectItem value="este-mes">Este mês</SelectItem>
+                  <SelectItem value="mes-anterior">Mês anterior</SelectItem>
                   <SelectItem value="7d">Últimos 7 dias</SelectItem>
                   <SelectItem value="30d">Últimos 30 dias</SelectItem>
                   <SelectItem value="90d">Últimos 90 dias</SelectItem>
@@ -266,6 +446,20 @@ export default function TransactionsPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <label id="tx-payment-label" className="mb-1 block text-xs font-medium text-gray-600">Forma de Pagamento</label>
+              <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v)}>
+                <SelectTrigger id="tx-payment" aria-labelledby="tx-payment-label" className="rounded-xl h-10 border-[#D1D5DB] bg-white text-[#111827] shadow-sm focus-visible:ring-2 focus-visible:ring-[#4A56E2] focus-visible:ring-offset-1">
+                  <SelectValue placeholder="Forma de Pagamento" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todas">Todas</SelectItem>
+                  {paymentMethods.map((pm) => (
+                    <SelectItem key={pm} value={pm}>{pm}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="flex md:justify-end">
             <Button onClick={downloadCsv} variant="outline" className="rounded-xl gap-2 border-[#D1D5DB] text-[#4A56E2] hover:bg-[#EEF2FF]">
@@ -274,16 +468,107 @@ export default function TransactionsPage() {
           </div>
         </div>
 
-        <Card className="p-0 rounded-2xl shadow-flat border-0 bg-white">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader className="sticky top-0 z-10 bg-white border-b border-[#E5E7EB]">
+        {/* Estatísticas */}
+        <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 flex-shrink-0">
+          <Card className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-gray-600 mb-1">Total de Transações</p>
+                <p className="text-2xl font-bold text-gray-900 truncate">{stats.total}</p>
+              </div>
+              <Receipt className="h-8 w-8 text-gray-400 flex-shrink-0 ml-2" />
+            </div>
+          </Card>
+          <Card className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-gray-600 mb-1">Valor Total</p>
+                <p className="text-2xl font-bold text-gray-900 truncate">R$ {formatCurrency(stats.totalValue)}</p>
+              </div>
+              <TrendingUp className="h-8 w-8 text-blue-500 flex-shrink-0 ml-2" />
+            </div>
+          </Card>
+          <Card className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-gray-600 mb-1">Receitas</p>
+                <p className="text-2xl font-bold text-green-600 truncate">R$ {formatCurrency(stats.income)}</p>
+              </div>
+              <TrendingUp className="h-8 w-8 text-green-500 flex-shrink-0 ml-2" />
+            </div>
+          </Card>
+          <Card className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-gray-600 mb-1">Despesas</p>
+                <p className="text-2xl font-bold text-red-600 truncate">R$ {formatCurrency(stats.expenses)}</p>
+              </div>
+              <TrendingDown className="h-8 w-8 text-red-500 flex-shrink-0 ml-2" />
+            </div>
+          </Card>
+        </div>
+
+        <Card className="p-0 rounded-2xl shadow-flat border-0 bg-white flex flex-col flex-1 min-h-0 overflow-hidden" style={{ maxHeight: 'calc(100vh - 450px)' }}>
+          <div className="flex-1 overflow-y-auto overflow-x-auto min-h-0" style={{ maxHeight: '100%' }}>
+            <Table className="[&>div]:!overflow-visible [&>div]:!h-auto [&>div]:!max-h-none">
+              <TableHeader className="sticky top-0 z-30 bg-white border-b border-[#E5E7EB]" style={{ position: 'sticky', top: 0, zIndex: 30, backgroundColor: 'white' }}>
                 <TableRow className="bg-gray-50">
-                  <TableHead>Descrição</TableHead>
-                  <TableHead>Categoria</TableHead>
-                  <TableHead>Data</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
-                  <TableHead className="text-right">Ações</TableHead>
+                  <TableHead className="w-[150px] min-w-[120px]">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 -ml-3 hover:bg-transparent font-medium"
+                      onClick={() => handleSort('description')}
+                    >
+                      Descrição
+                      {getSortIcon('description')}
+                    </Button>
+                  </TableHead>
+                  <TableHead className="min-w-[100px]">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 -ml-3 hover:bg-transparent font-medium"
+                      onClick={() => handleSort('category')}
+                    >
+                      Categoria
+                      {getSortIcon('category')}
+                    </Button>
+                  </TableHead>
+                  <TableHead className="min-w-[140px]">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 -ml-3 hover:bg-transparent font-medium"
+                      onClick={() => handleSort('date')}
+                    >
+                      Data
+                      {getSortIcon('date')}
+                    </Button>
+                  </TableHead>
+                  <TableHead className="min-w-[160px]">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 -ml-3 hover:bg-transparent font-medium"
+                      onClick={() => handleSort('payment_method')}
+                    >
+                      Forma de Pagamento
+                      {getSortIcon('payment_method')}
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-right min-w-[120px]">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 -mr-3 hover:bg-transparent font-medium"
+                      onClick={() => handleSort('value')}
+                    >
+                      Valor
+                      {getSortIcon('value')}
+                    </Button>
+                  </TableHead>
+                  <TableHead className="text-right w-[100px]">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -293,24 +578,23 @@ export default function TransactionsPage() {
                       <TableCell><Skeleton className="h-4 w-48" /></TableCell>
                       <TableCell><Skeleton className="h-5 w-24 rounded-full" /></TableCell>
                       <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                       <TableCell className="text-right"><Skeleton className="h-4 w-28 ml-auto" /></TableCell>
+                      <TableCell className="text-right"><Skeleton className="h-4 w-16 ml-auto" /></TableCell>
                     </TableRow>
                   ))
                 )}
 
                 {!isLoading && filtered.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="py-10 text-center text-sm text-gray-500 dark:text-gray-400">
+                    <TableCell colSpan={6} className="py-10 text-center text-sm text-gray-500 dark:text-gray-400">
                       Nenhuma transação encontrada.
                     </TableCell>
                   </TableRow>
                 )}
 
-                {!isLoading && filtered.map((t, idx) => {
+                {!isLoading && paginatedTransactions.map((t, idx) => {
                   const isExpense = t.amount < 0;
-                  // Converter para formato Transaction da API usando dados originais
-                  // Preservar todos os campos, incluindo card_last4, modality, installments_count, recurring
-                  // IMPORTANTE: A lista de transações pode não retornar esses campos, mas tentamos preservá-los
                   const transaction: Transaction = {
                     id: (t as any).originalId || parseInt(t.id),
                     organization_id: t.organization_id,
@@ -321,24 +605,47 @@ export default function TransactionsPage() {
                     payment_method: t.payment_method || '',
                     date: t.date instanceof Date ? t.date.toISOString() : t.date,
                     tags: t.tags || [],
-                    // Preservar campos do cartão de crédito se existirem na lista
-                    // Se não existirem, serão undefined e tentaremos buscar do GET
                     card_last4: (t as any).card_last4 !== undefined ? (t as any).card_last4 : undefined,
                     modality: (t as any).modality !== undefined ? (t as any).modality : undefined,
                     installments_count: (t as any).installments_count !== undefined ? (t as any).installments_count : undefined,
                     recurring: (t as any).recurring !== undefined ? (t as any).recurring : undefined,
+                    credit_card_charge: (t as any).credit_card_charge,
                   };
+                  
+                  const installmentInfo = getInstallmentInfo(t);
+                  
                   return (
                     <TableRow key={t.id} className={idx % 2 === 0 ? 'bg-gray-50' : undefined}>
-                      <TableCell className="font-medium text-gray-900 dark:text-gray-100">{t.description}</TableCell>
+                      <TableCell className="font-medium text-gray-900 dark:text-gray-100 max-w-[150px]">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="truncate cursor-help" title={t.description}>
+                                {t.description}
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-xs">
+                              <p className="break-words">{t.description}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="rounded-full text-[10px] font-medium px-2 py-0.5 border-gray-200 text-gray-600 dark:border-white/15 dark:text-gray-300">
                           {t.category}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-gray-700">{formatDate(t.date as any)}</TableCell>
+                      <TableCell className="text-gray-700 text-sm">
+                        {formatPaymentMethod(t)}
+                      </TableCell>
                       <TableCell className={isExpense ? 'text-[#F87171] text-right tabular-nums font-semibold' : 'text-[#10B981] text-right tabular-nums font-semibold'}>
-                        {isExpense ? '-' : '+'}R$ {formatCurrency(Math.abs(t.amount))}
+                        <div className="flex flex-col items-end">
+                          <span>{isExpense ? '-' : '+'}R$ {formatCurrency(Math.abs(t.amount))}</span>
+                          {installmentInfo && (
+                            <span className="text-xs text-gray-500 font-normal mt-0.5">{installmentInfo}</span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -368,6 +675,71 @@ export default function TransactionsPage() {
               </TableBody>
             </Table>
           </div>
+          
+          {/* Paginação */}
+          {!isLoading && totalPages > 1 && (
+            <div className="p-4 border-t border-gray-200 flex-shrink-0 bg-white">
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious 
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (currentPage > 1) setCurrentPage(currentPage - 1);
+                      }}
+                      className={currentPage === 1 ? 'pointer-events-none opacity-50' : ''}
+                    >
+                      Anterior
+                    </PaginationPrevious>
+                  </PaginationItem>
+                  
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                    if (
+                      page === 1 ||
+                      page === totalPages ||
+                      (page >= currentPage - 1 && page <= currentPage + 1)
+                    ) {
+                      return (
+                        <PaginationItem key={page}>
+                          <PaginationLink
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setCurrentPage(page);
+                            }}
+                            isActive={currentPage === page}
+                          >
+                            {page}
+                          </PaginationLink>
+                        </PaginationItem>
+                      );
+                    } else if (page === currentPage - 2 || page === currentPage + 2) {
+                      return (
+                        <PaginationItem key={page}>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      );
+                    }
+                    return null;
+                  })}
+                  
+                  <PaginationItem>
+                    <PaginationNext 
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+                      }}
+                      className={currentPage === totalPages ? 'pointer-events-none opacity-50' : ''}
+                    >
+                      Próxima
+                    </PaginationNext>
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          )}
         </Card>
 
         {/* Sheet de Edição */}
@@ -390,5 +762,3 @@ export default function TransactionsPage() {
     </PageTransition>
   );
 }
-
-

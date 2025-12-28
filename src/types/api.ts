@@ -384,19 +384,76 @@ export interface UpdateGoalRequest {
 }
 
 // ===== SIMULADOR FINANCEIRO =====
-export interface FinancialSimulationRequest {
-  purchase_amount: number;
-  installments: number;
-  start_date?: string; // ISO date string (YYYY-MM-DD)
+export interface NewCardCommitment {
+  card_last4: string; // Últimos 4 dígitos do cartão
+  value: number; // Valor total da compra (decimal)
+  installments_count: number; // Número de parcelas (1-120)
+  description: string; // Descrição da compra (1-255 caracteres)
+}
+
+export interface SavingsGoal {
+  target_amount: number; // Valor alvo da meta (decimal)
+  current_amount: number; // Valor já economizado (decimal, >= 0)
+  target_date: string; // Data alvo no formato YYYY-MM-DD
+}
+
+export interface SimulateFinancialImpactRequest {
+  organization_id: string; // UUID da organização
+  new_card_commitments?: NewCardCommitment[]; // Novos compromissos de cartão (opcional)
+  savings_goals?: SavingsGoal[]; // Metas de economia (opcional)
+  simulation_months?: number; // Número de meses para simular (1-12, padrão: 6)
 }
 
 export type SimulationVerdict = 'viable' | 'caution' | 'high-risk';
 export type SimulationStatus = 'success' | 'warning' | 'danger';
 
+export interface MonthlyProjection {
+  month: string; // Formato: "YYYY-MM" (ex: "2025-01")
+  projected_income: number; // Receita projetada do mês
+  base_expenses: number; // Despesas base (excluindo cartões)
+  card_commitments: number; // Compromissos de cartão do mês
+  savings_goal: number; // Contribuição para metas de economia
+  total_expenses: number; // Total de despesas (base + cartões + metas)
+  balance: number; // Saldo (receita - despesas)
+  status: SimulationStatus; // Status do mês
+}
+
+export interface SimulateFinancialImpactResponse {
+  months: MonthlyProjection[]; // Projeções mês a mês
+  global_verdict: SimulationVerdict; // Veredito global
+  summary: {
+    income: number; // Total de receita no período
+    base_expenses: number; // Total de despesas base
+    card_commitments: number; // Total de compromissos de cartão
+    savings_goal: number; // Total de contribuições para metas
+  };
+}
+
+// Tipos legados mantidos para compatibilidade (deprecated)
+/** @deprecated Use SimulateFinancialImpactRequest instead */
+export interface FinancialSimulationRequest {
+  purchase_amount: number;
+  installments: number;
+  start_date?: string;
+}
+
+/** @deprecated Use SimulateFinancialImpactResponse instead */
+export interface FinancialSimulationResponse {
+  simulation_id: string;
+  summary: {
+    verdict: SimulationVerdict;
+    verdict_message: string;
+    total_impact: number;
+    duration_months: number;
+  };
+  timeline: SimulationTimelineItem[];
+}
+
+/** @deprecated Use MonthlyProjection instead */
 export interface SimulationTimelineItem {
-  month: string; // Nome do mês (ex: "Janeiro")
+  month: string;
   year: number;
-  month_iso: string; // "YYYY-MM"
+  month_iso: string;
   financial_data: {
     projected_income: number;
     base_expenses: number;
@@ -410,15 +467,4 @@ export interface SimulationTimelineItem {
     status: SimulationStatus;
     meets_goal: boolean;
   };
-}
-
-export interface FinancialSimulationResponse {
-  simulation_id: string;
-  summary: {
-    verdict: SimulationVerdict;
-    verdict_message: string;
-    total_impact: number;
-    duration_months: number;
-  };
-  timeline: SimulationTimelineItem[];
 }
