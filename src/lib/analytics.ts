@@ -50,16 +50,30 @@ export interface WeeklyExpenseHeatmap {
 
 /**
  * Processa transações para gerar resumo financeiro
+ * @param transactions - Lista de transações
+ * @param dateRange - Opcional: range de datas para filtrar transações
  */
-export function calculateSummary(transactions: Transaction[]): FinancialSummary {
-    const income = transactions
+export function calculateSummary(
+    transactions: Transaction[],
+    dateRange?: { from: Date; to: Date }
+): FinancialSummary {
+    // Filtrar por data se fornecido
+    let filteredTransactions = transactions;
+    if (dateRange) {
+        filteredTransactions = transactions.filter((t) => {
+            const transactionDate = new Date(t.date);
+            return transactionDate >= dateRange.from && transactionDate <= dateRange.to;
+        });
+    }
+
+    const income = filteredTransactions
         .filter((t) => t.type === 'income')
         .reduce((acc, t) => {
             const value = typeof t.value === 'string' ? parseFloat(t.value) : t.value;
             return acc + value;
         }, 0);
 
-    const expenses = transactions
+    const expenses = filteredTransactions
         .filter((t) => t.type === 'expense')
         .reduce((acc, t) => {
             const value = typeof t.value === 'string' ? parseFloat(t.value) : t.value;
@@ -293,13 +307,27 @@ export function generateWeeklyHeatmap(transactions: Transaction[]): WeeklyExpens
 
 /**
  * Função principal que processa todas as analytics
+ * @param transactions - Lista de transações
+ * @param dateRange - Opcional: range de datas para filtrar transações
  */
-export function processTransactionAnalytics(transactions: Transaction[]) {
+export function processTransactionAnalytics(
+    transactions: Transaction[],
+    dateRange?: { from: Date; to: Date }
+) {
+    // Filtrar por data se fornecido
+    let filteredTransactions = transactions;
+    if (dateRange) {
+        filteredTransactions = transactions.filter((t) => {
+            const transactionDate = new Date(t.date);
+            return transactionDate >= dateRange.from && transactionDate <= dateRange.to;
+        });
+    }
+
     return {
-        summary: calculateSummary(transactions),
-        monthly: groupByMonth(transactions),
-        categories: groupByCategory(transactions),
-        moneyFlow: generateMoneyFlow(transactions),
-        heatmap: generateWeeklyHeatmap(transactions),
+        summary: calculateSummary(filteredTransactions),
+        monthly: groupByMonth(filteredTransactions),
+        categories: groupByCategory(filteredTransactions),
+        moneyFlow: generateMoneyFlow(filteredTransactions),
+        heatmap: generateWeeklyHeatmap(filteredTransactions),
     };
 }

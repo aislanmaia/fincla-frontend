@@ -78,8 +78,9 @@ export interface DailyTransactions {
 /**
  * Hook principal para dados financeiros
  * Carrega transações do backend e processa analytics no frontend
+ * @param dateRange - Opcional: range de datas para filtrar transações
  */
-export function useFinancialData() {
+export function useFinancialData(dateRange?: { from: Date; to: Date }) {
   const { activeOrgId } = useOrganization();
 
   // Estados para dados processados (inicializados vazios)
@@ -118,8 +119,8 @@ export function useFinancialData() {
         (t) => t.organization_id === activeOrgId
       );
 
-      // Processar analytics
-      const analytics = processTransactionAnalytics(orgTransactions);
+      // Processar analytics com filtro de data se fornecido
+      const analytics = processTransactionAnalytics(orgTransactions, dateRange);
 
       setSummary(analytics.summary);
       setMonthlyData(analytics.monthly);
@@ -150,7 +151,7 @@ export function useFinancialData() {
       setMoneyFlow({ nodes: [], links: [] });
       setWeeklyExpenseHeatmap({ categories: [], days: [], data: [] });
     }
-  }, [backendTransactions, activeOrgId]);
+  }, [backendTransactions, activeOrgId, dateRange]);
 
   const error = queryError ? String(queryError) : null;
 

@@ -8,11 +8,21 @@ const WeekdayStackedBarChart = lazy(() => import('@/components/charts/WeekdaySta
 import { RecentTransactions } from '@/components/RecentTransactions';
 import { useFinancialData } from '@/hooks/useFinancialData';
 import { useAIChat } from '@/hooks/useAIChat';
+import { useDateRange } from '@/hooks/useDateRange';
 import { Button } from '@/components/ui/button';
 import { PageTransition } from '@/components/PageTransition';
+import { DateRangePicker } from '@/components/DateRangePicker';
 
 export default function Dashboard() {
   const [chartsLoading, setChartsLoading] = useState(true);
+  
+  // Gerenciar período selecionado (padrão: este mês)
+  const { dateRange, setDateRange: setDateRangeFromHook } = useDateRange('thisMonth');
+  
+  // Wrapper para compatibilidade com DateRangePicker
+  const handleDateRangeChange = (range: { from: Date; to: Date } | undefined) => {
+    setDateRangeFromHook(range);
+  };
 
   const {
     summary,
@@ -22,7 +32,7 @@ export default function Dashboard() {
     weeklyExpenseHeatmap,
     loading,
     error,
-  } = useFinancialData();
+  } = useFinancialData(dateRange);
 
   const { processUserMessage } = useAIChat();
 
@@ -56,6 +66,14 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+
+        {/* Seletor de Período - acima dos cards, à direita */}
+        <div className="mb-6 flex justify-end">
+          <DateRangePicker 
+            value={dateRange}
+            onChange={handleDateRangeChange}
+          />
+        </div>
 
         {/* Summary Cards em grid Bento inicial */}
         <SummaryCards summary={summary} monthlyData={monthlyData} isLoading={loading} />
