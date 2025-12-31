@@ -50,7 +50,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Loader2, TrendingUp, TrendingDown, Check, CreditCard, Wallet, Banknote, Building2, Receipt, Plus, Calendar, Tag, DollarSign, FileText, ShoppingBag, Clock, Search, MapPin, User, FolderOpen, StickyNote, X, Sparkles, Info, ArrowLeft, Lock, Unlock } from 'lucide-react';
+import { Loader2, TrendingUp, TrendingDown, Check, CreditCard, Wallet, Banknote, Building2, Receipt, Plus, Calendar, Tag, DollarSign, FileText, ShoppingBag, Clock, Search, MapPin, User, FolderOpen, StickyNote, X, Sparkles, Info, ArrowLeft, Lock, Unlock, Calculator } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { SearchableSelect } from '@/components/SearchableSelect';
@@ -1614,6 +1614,21 @@ export function NewTransactionSheet({
   const [isCategoryLocked, setIsCategoryLocked] = useState(false);
   const [isDescriptionLocked, setIsDescriptionLocked] = useState(false);
 
+  // Estado para calculador inline de parcelas
+  const [isCalculatorMode, setIsCalculatorMode] = useState(false);
+  const [installmentCountInput, setInstallmentCountInput] = useState<string>('');
+  const installmentCountInputRef = useRef<HTMLInputElement>(null);
+
+  // Focar no input de parcelas quando o modo calculadora for ativado
+  useEffect(() => {
+    if (isCalculatorMode && installmentCountInputRef.current) {
+      const timer = setTimeout(() => {
+        installmentCountInputRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isCalculatorMode]);
+
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(transactionSchema),
     defaultValues: {
@@ -3114,13 +3129,28 @@ export function NewTransactionSheet({
                                               key={method.value}
                                               type="button"
                                               variant={field.value === method.value ? 'default' : 'outline'}
-                                              onClick={() => {
+                                              onClick={async () => {
                                                 field.onChange(method.value);
                                                 if (method.value !== 'Cartão de Crédito') {
                                                   form.setValue('card_last4', null);
                                                   form.setValue('modality', null);
                                                   form.setValue('installments_count', null);
                                                   setSelectedCardId(null);
+                                                } else {
+                                                  // Quando seleciona Cartão de Crédito, verificar se há apenas um cartão e pré-selecionar
+                                                  const currentOrgId = form.getValues('organization_id');
+                                                  if (currentOrgId) {
+                                                    try {
+                                                      const cards = await listCreditCards(currentOrgId);
+                                                      if (cards.length === 1) {
+                                                        // Pré-selecionar o único cartão
+                                                        setSelectedCardId(cards[0].id);
+                                                        form.setValue('card_last4', cards[0].last4);
+                                                      }
+                                                    } catch (error) {
+                                                      console.error('Erro ao carregar cartões:', error);
+                                                    }
+                                                  }
                                                 }
                                               }}
                                               className={cn(
@@ -3536,10 +3566,29 @@ export function NewTransactionSheet({
                             ? numericTransactionValue / numericInstallmentsCount
                             : 0;
 
+                          // Calcular valor total quando estiver no modo calculadora
+                          // Quando o modo calculadora está ativo, o transactionValue é o valor da parcela
+                          const installmentValueForCalc = isCalculatorMode ? transactionValue : 0;
+                          const installmentCountForCalc = parseInt(installmentCountInput) || 0;
+                          
+                          // Calcular o total apenas se tiver parcelas válidas
+                          const calculatedTotal = useMemo(() => {
+                            if (isCalculatorMode && installmentCountForCalc >= 2 && installmentValueForCalc > 0) {
+                              return installmentValueForCalc * installmentCountForCalc;
+                            }
+                            return transactionValue;
+                          }, [isCalculatorMode, installmentCountForCalc, installmentValueForCalc, transactionValue]);
+
+                          // Valor a ser exibido: se estiver no modo calculadora, mostrar o total calculado
+                          // Mas não atualizar o field.value automaticamente para evitar loops
+                          const displayValue = isCalculatorMode && installmentCountForCalc >= 2
+                            ? calculatedTotal
+                            : transactionValue;
+
                           return (
                             <FormItem>
                               <FormLabel className="text-sm font-semibold text-slate-600 dark:text-slate-400 tracking-wide uppercase">
-                                Valor (R$)
+                                {isCalculatorMode ? 'Valor da Parcela (R$)' : 'Valor (R$)'}
                               </FormLabel>
                               <FormControl>
                                 <div className="relative">
@@ -3549,11 +3598,13 @@ export function NewTransactionSheet({
                                     inputMode="decimal"
                                     placeholder="0,00"
                                     className={cn(
-                                      "flex w-full rounded-lg bg-gray-50 dark:bg-gray-900 text-3xl font-bold text-right border-0 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:bg-white dark:focus:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 placeholder:text-gray-400 dark:placeholder:text-gray-500 pr-4 pl-14",
-                                      showInstallmentLegend ? "pb-8 pt-3" : "py-3"
+                                      "flex w-full rounded-lg bg-gray-50 dark:bg-gray-900 text-3xl font-bold text-right border-0 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:bg-white dark:focus:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 placeholder:text-gray-400 dark:placeholder:text-gray-500 pl-14",
+                                      isCalculatorMode && installmentCountForCalc >= 2 ? "pb-8 pr-16 pt-3" : showInstallmentLegend ? "pb-8 pr-16 pt-3" : "py-3 pr-16"
                                     )}
                                     style={{ fontSize: '2rem', lineHeight: '1.2' }}
-                                    value={valueDisplay}
+                                    value={isCalculatorMode && installmentCountForCalc >= 2 
+                                      ? displayValue.toFixed(2).replace('.', ',')
+                                      : valueDisplay}
                                     onChange={(e) => {
                                       // Remove tudo exceto números e vírgula
                                       let inputValue = e.target.value.replace(/[^\d,]/g, '');
@@ -3599,7 +3650,8 @@ export function NewTransactionSheet({
                                       }
                                       field.onBlur();
                                     }}
-                                    disabled={loading}
+                                    disabled={loading || (isCalculatorMode && installmentCountForCalc >= 2)}
+                                    readOnly={isCalculatorMode && installmentCountForCalc >= 2}
                                   />
                                   <span
                                     className="absolute left-4 top-1/2 -translate-y-1/2 text-foreground pointer-events-none font-bold"
@@ -3608,8 +3660,49 @@ export function NewTransactionSheet({
                                     R$
                                   </span>
 
+                                  {/* Ícone de calculadora */}
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            if (!isCalculatorMode && field.value > 0) {
+                                              // Ativar modo calculadora usando o valor atual como parcela
+                                              setIsCalculatorMode(true);
+                                              setInstallmentCountInput('');
+                                            } else if (isCalculatorMode) {
+                                              // Desativar modo calculadora
+                                              setIsCalculatorMode(false);
+                                              setInstallmentCountInput('');
+                                            }
+                                          }}
+                                          disabled={loading || field.value <= 0}
+                                          className={cn(
+                                            "absolute right-3 top-3 p-1.5 rounded-md transition-colors z-10",
+                                            "hover:bg-gray-100 dark:hover:bg-gray-800",
+                                            "disabled:opacity-50 disabled:cursor-not-allowed",
+                                            isCalculatorMode && "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
+                                          )}
+                                        >
+                                          <Calculator className="h-4 w-4" />
+                                        </button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        <p>Calcular valor total a partir da parcela</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+
                                   {/* Legenda de parcelas dentro do input, abaixo do valor */}
-                                  {showInstallmentLegend && (
+                                  {isCalculatorMode && installmentCountForCalc >= 2 && (
+                                    <span
+                                      className="absolute right-4 bottom-2 text-xs font-medium text-gray-500 dark:text-gray-500 pointer-events-none"
+                                    >
+                                      em {installmentCountForCalc}x de R$ {installmentValueForCalc.toFixed(2).replace('.', ',')}
+                                    </span>
+                                  )}
+                                  {!isCalculatorMode && showInstallmentLegend && (
                                     <span
                                       className="absolute right-4 bottom-2 text-xs font-medium text-gray-500 dark:text-gray-500 pointer-events-none"
                                     >
@@ -3619,6 +3712,127 @@ export function NewTransactionSheet({
                                 </div>
                               </FormControl>
                               <FormMessage />
+
+                              {/* Campo inline de Nº de Parcelas */}
+                              <AnimatePresence>
+                                {isCalculatorMode && (
+                                  <motion.div
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: 'auto' }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="overflow-hidden mt-3"
+                                  >
+                                    <FormItem>
+                                      <FormLabel className="text-sm font-semibold text-slate-600 dark:text-slate-400 tracking-wide uppercase">
+                                        Nº de Parcelas
+                                      </FormLabel>
+                                      <FormControl>
+                                        <input
+                                          ref={installmentCountInputRef}
+                                          type="text"
+                                          inputMode="numeric"
+                                          placeholder="Ex: 12"
+                                          value={installmentCountInput}
+                                          onChange={(e) => {
+                                            // Permite apenas números
+                                            const value = e.target.value.replace(/\D/g, '');
+                                            setInstallmentCountInput(value);
+                                          }}
+                                          onKeyDown={async (e) => {
+                                            if (e.key === 'Enter') {
+                                              e.preventDefault();
+                                              // Concluir cálculo
+                                              const count = parseInt(installmentCountInput) || 0;
+                                              if (count >= 2 && transactionValue > 0) {
+                                                const total = transactionValue * count;
+
+                                                // Desativar modo calculadora
+                                                setIsCalculatorMode(false);
+                                                setInstallmentCountInput('');
+
+                                                // Atualizar valor total
+                                                field.onChange(total);
+                                                setValueDisplay(total.toFixed(2).replace('.', ','));
+
+                                                // Selecionar Cartão de Crédito
+                                                form.setValue('payment_method', 'Cartão de Crédito');
+
+                                                // Carregar cartões e pré-selecionar se houver apenas um
+                                                const currentOrgId = form.getValues('organization_id');
+                                                if (currentOrgId) {
+                                                  try {
+                                                    const cards = await listCreditCards(currentOrgId);
+                                                    if (cards.length === 1) {
+                                                      // Pré-selecionar o único cartão
+                                                      setSelectedCardId(cards[0].id);
+                                                      form.setValue('card_last4', cards[0].last4);
+                                                    }
+                                                  } catch (error) {
+                                                    console.error('Erro ao carregar cartões:', error);
+                                                  }
+                                                }
+
+                                                // Selecionar modalidade Parcelado
+                                                form.setValue('modality', 'installment');
+
+                                                // Preencher número de parcelas
+                                                form.setValue('installments_count', count);
+                                              }
+                                            }
+                                          }}
+                                          onBlur={async () => {
+                                            // Concluir cálculo ao perder foco
+                                            const count = parseInt(installmentCountInput) || 0;
+                                            if (count >= 2 && transactionValue > 0) {
+                                              const total = transactionValue * count;
+
+                                              // Desativar modo calculadora
+                                              setIsCalculatorMode(false);
+                                              setInstallmentCountInput('');
+
+                                              // Atualizar valor total
+                                              field.onChange(total);
+                                              setValueDisplay(total.toFixed(2).replace('.', ','));
+
+                                              // Selecionar Cartão de Crédito
+                                              form.setValue('payment_method', 'Cartão de Crédito');
+
+                                              // Carregar cartões e pré-selecionar se houver apenas um
+                                              const currentOrgId = form.getValues('organization_id');
+                                              if (currentOrgId) {
+                                                try {
+                                                  const cards = await listCreditCards(currentOrgId);
+                                                  if (cards.length === 1) {
+                                                    // Pré-selecionar o único cartão
+                                                    setSelectedCardId(cards[0].id);
+                                                    form.setValue('card_last4', cards[0].last4);
+                                                  }
+                                                } catch (error) {
+                                                  console.error('Erro ao carregar cartões:', error);
+                                                }
+                                              }
+
+                                              // Selecionar modalidade Parcelado
+                                              form.setValue('modality', 'installment');
+
+                                              // Preencher número de parcelas
+                                              form.setValue('installments_count', count);
+                                            } else if (count < 2) {
+                                              // Se não tiver parcelas válidas, desativar modo calculadora
+                                              setIsCalculatorMode(false);
+                                              setInstallmentCountInput('');
+                                            }
+                                          }}
+                                          disabled={loading}
+                                          className="flex w-full rounded-lg bg-gray-50 dark:bg-gray-900 px-4 py-3 text-base border-0 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:bg-white dark:focus:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 placeholder:text-gray-400 dark:placeholder:text-gray-500"
+                                        />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
                             </FormItem>
                           );
                         }}
@@ -3700,7 +3914,7 @@ export function NewTransactionSheet({
                                 <ToggleGroup
                                   type="single"
                                   value={field.value}
-                                  onValueChange={(value) => {
+                                  onValueChange={async (value) => {
                                     if (value) {
                                       field.onChange(value);
                                       if (value !== 'Cartão de Crédito') {
@@ -3708,6 +3922,21 @@ export function NewTransactionSheet({
                                         form.setValue('modality', null);
                                         form.setValue('installments_count', null);
                                         setSelectedCardId(null);
+                                      } else {
+                                        // Quando seleciona Cartão de Crédito, verificar se há apenas um cartão e pré-selecionar
+                                        const currentOrgId = form.getValues('organization_id');
+                                        if (currentOrgId) {
+                                          try {
+                                            const cards = await listCreditCards(currentOrgId);
+                                            if (cards.length === 1) {
+                                              // Pré-selecionar o único cartão
+                                              setSelectedCardId(cards[0].id);
+                                              form.setValue('card_last4', cards[0].last4);
+                                            }
+                                          } catch (error) {
+                                            console.error('Erro ao carregar cartões:', error);
+                                          }
+                                        }
                                       }
                                     }
                                   }}

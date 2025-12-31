@@ -302,7 +302,7 @@ export function AppLayout({ children }: PropsWithChildren) {
         </div>
 
         {/* Conteúdo com padding-top para não ficar sob o top bar (sem fundo) */}
-        <div className="relative pt-4 bg-transparent" style={{ overflow: 'hidden', height: 'calc(100vh - 74px)', maxHeight: 'calc(100vh - 74px)', display: 'flex', flexDirection: 'column' }}>
+        <div className="relative pt-4 bg-transparent">
           {children}
 
           {/* Sheet de Nova Transação */}
