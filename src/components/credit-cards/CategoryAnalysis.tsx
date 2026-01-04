@@ -24,14 +24,30 @@ export const CategoryAnalysis: React.FC<CategoryAnalysisProps> = ({
     const categoryData = useMemo(() => {
         let categories: Array<{ name: string; value: number; percentage: number; count?: number }> = [];
         
-        // Se o backend já retorna category_breakdown, usa direto
+        // Se o backend já retorna category_breakdown, agrupa por nome para evitar duplicatas
         if (currentInvoice?.category_breakdown && currentInvoice.category_breakdown.length > 0) {
-            categories = currentInvoice.category_breakdown.map(cat => ({
-                name: cat.category_name,
-                value: cat.total,
-                percentage: cat.percentage,
-                count: cat.transaction_count
-            }));
+            // Agrupar categorias por nome (caso o backend retorne duplicatas)
+            const categoryMap = new Map<string, { total: number; count: number }>();
+            
+            currentInvoice.category_breakdown.forEach(cat => {
+                const categoryName = cat.category_name;
+                const existing = categoryMap.get(categoryName) || { total: 0, count: 0 };
+                categoryMap.set(categoryName, {
+                    total: existing.total + cat.total,
+                    count: existing.count + cat.transaction_count
+                });
+            });
+            
+            // Converter para array e recalcular porcentagens
+            const totalAmount = currentInvoice.total_amount || 0;
+            categories = Array.from(categoryMap.entries())
+                .map(([name, data]) => ({
+                    name,
+                    value: data.total,
+                    percentage: totalAmount > 0 ? (data.total / totalAmount * 100) : 0,
+                    count: data.count
+                }))
+                .sort((a, b) => b.value - a.value);
         } else if (currentInvoice?.items) {
             // Fallback: calcula a partir dos items (compatibilidade com backend antigo)
             const categoryMap = new Map<string, number>();
