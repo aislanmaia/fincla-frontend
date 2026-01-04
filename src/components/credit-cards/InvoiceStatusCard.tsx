@@ -22,6 +22,7 @@ interface InvoiceStatusCardProps {
     currentYear?: number;
     currentMonth?: number;
     onMarkAsPaid?: () => void;
+    onUnmarkAsPaid?: () => void;
     isPaid?: boolean;
 }
 
@@ -110,6 +111,7 @@ export const InvoiceStatusCard: React.FC<InvoiceStatusCardProps> = ({
     currentYear,
     currentMonth,
     onMarkAsPaid,
+    onUnmarkAsPaid,
     isPaid = false,
 }) => {
     // Generate month options (current month ± 12 months = 25 months total)
@@ -457,10 +459,23 @@ export const InvoiceStatusCard: React.FC<InvoiceStatusCardProps> = ({
                 
                 {invoice.status === 'paid' && (
                     <div className="flex flex-col items-end gap-1">
-                        <div className="flex items-center gap-1.5 text-sm text-green-600 bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg">
-                            <CheckCircle className="w-4 h-4" />
-                            <span className="font-medium">Paga</span>
-                        </div>
+                        {onUnmarkAsPaid ? (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={onUnmarkAsPaid}
+                                className="gap-1.5 text-green-600 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/30"
+                                title="Clique para desmarcar como paga"
+                            >
+                                <CheckCircle className="w-4 h-4" />
+                                <span className="font-medium">Paga</span>
+                            </Button>
+                        ) : (
+                            <div className="flex items-center gap-1.5 text-sm text-green-600 bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg">
+                                <CheckCircle className="w-4 h-4" />
+                                <span className="font-medium">Paga</span>
+                            </div>
+                        )}
                         {invoice.paid_date && (
                             <span className="text-xs text-muted-foreground">
                                 em {new Date(invoice.paid_date).toLocaleDateString()}

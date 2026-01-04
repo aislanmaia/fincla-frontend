@@ -197,15 +197,8 @@ export default function CreditCardsPage() {
         if (!selectedCardId || !currentOrg?.id || !currentYear || !currentMonth) return;
         
         try {
-            if (currentInvoice?.status === 'paid') {
-                // Desmarcar como paga
-                await unmarkInvoicePaid(selectedCardId, currentYear, currentMonth, currentOrg.id);
-                toast.success('Fatura desmarcada como paga');
-            } else {
-                // Marcar como paga
-                await markInvoicePaid(selectedCardId, currentYear, currentMonth, currentOrg.id);
-                toast.success('Fatura marcada como paga!');
-            }
+            await markInvoicePaid(selectedCardId, currentYear, currentMonth, currentOrg.id);
+            toast.success('Fatura marcada como paga!');
             // Recarregar a fatura para atualizar o status
             setIsLoadingInvoice(true);
             const invoice = await getCreditCardInvoice(selectedCardId, currentYear, currentMonth, currentOrg.id);
@@ -214,7 +207,25 @@ export default function CreditCardsPage() {
         } catch (error: any) {
             console.error('Error marking invoice as paid:', error);
             setIsLoadingInvoice(false);
-            toast.error(error.response?.data?.detail || 'Erro ao atualizar status da fatura');
+            toast.error(error.response?.data?.detail || 'Erro ao marcar fatura como paga');
+        }
+    };
+
+    const handleUnmarkAsPaid = async () => {
+        if (!selectedCardId || !currentOrg?.id || !currentYear || !currentMonth) return;
+        
+        try {
+            await unmarkInvoicePaid(selectedCardId, currentYear, currentMonth, currentOrg.id);
+            toast.success('Fatura desmarcada como paga');
+            // Recarregar a fatura para atualizar o status
+            setIsLoadingInvoice(true);
+            const invoice = await getCreditCardInvoice(selectedCardId, currentYear, currentMonth, currentOrg.id);
+            setCurrentInvoice(invoice);
+            setIsLoadingInvoice(false);
+        } catch (error: any) {
+            console.error('Error unmarking invoice as paid:', error);
+            setIsLoadingInvoice(false);
+            toast.error(error.response?.data?.detail || 'Erro ao desmarcar fatura');
         }
     };
 
@@ -399,6 +410,7 @@ export default function CreditCardsPage() {
                                     currentYear={currentYear}
                                     currentMonth={currentMonth}
                                     onMarkAsPaid={handleMarkAsPaid}
+                                    onUnmarkAsPaid={handleUnmarkAsPaid}
                                     isPaid={isPaid}
                                 />
                                 <CategoryAnalysis
@@ -430,6 +442,7 @@ export default function CreditCardsPage() {
                                 currentYear={currentYear}
                                 currentMonth={currentMonth}
                                 onMarkAsPaid={handleMarkAsPaid}
+                                onUnmarkAsPaid={handleUnmarkAsPaid}
                                 isPaid={isPaid}
                             />
                             <CategoryAnalysis
