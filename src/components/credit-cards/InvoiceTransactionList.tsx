@@ -171,10 +171,11 @@ export const InvoiceTransactionList: React.FC<InvoiceTransactionListProps> = ({
                         {/* Category Tag */}
                         {transaction.tags?.['categoria']?.[0] ? (
                             <span
-                                className="flex items-center gap-1 px-2 py-0.5 rounded text-xs whitespace-nowrap"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap border"
                                 style={{
                                     backgroundColor: `${transaction.tags['categoria'][0].color}20`,
-                                    color: transaction.tags['categoria'][0].color || 'currentColor'
+                                    color: transaction.tags['categoria'][0].color || '#6B7280',
+                                    borderColor: `${transaction.tags['categoria'][0].color}50`
                                 }}
                             >
                                 {transaction.tags['categoria'][0].name}
