@@ -85,15 +85,30 @@ export const InvoiceTransactionList: React.FC<InvoiceTransactionListProps> = ({
                     dateLabel = format(parsedDate, "dd 'de' MMMM", { locale: ptBR });
                 }
 
+                // Ordenar transações dentro do grupo
+                const sortedItems = [...items].sort((a, b) => {
+                    if (sortBy === 'date') {
+                        return new Date(b.transaction_date).getTime() - new Date(a.transaction_date).getTime();
+                    } else {
+                        return b.amount - a.amount;
+                    }
+                });
+
                 return {
                     date,
                     dateLabel,
-                    transactions: items,
+                    transactions: sortedItems,
                     total: items.reduce((sum, t) => sum + t.amount, 0),
                 };
             })
-            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    }, [filteredTransactions, grouped]);
+            .sort((a, b) => {
+                if (sortBy === 'date') {
+                    return new Date(b.date).getTime() - new Date(a.date).getTime();
+                } else {
+                    return b.total - a.total;
+                }
+            });
+    }, [filteredTransactions, grouped, sortBy]);
 
     // Inicializar grupos expandidos (2 primeiros abertos)
     React.useEffect(() => {
@@ -303,7 +318,9 @@ export const InvoiceTransactionList: React.FC<InvoiceTransactionListProps> = ({
                     <Select value={sortBy} onValueChange={(v) => setSortBy(v as 'date' | 'amount')}>
                         <SelectTrigger className="w-[110px] h-9">
                             <Filter className="w-4 h-4 mr-1" />
-                            <SelectValue placeholder="Ordenar" />
+                            <SelectValue>
+                                {sortBy === 'date' ? 'Data' : 'Valor'}
+                            </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="date">Data</SelectItem>
