@@ -1925,7 +1925,7 @@ const listCreditCards = async (
 
 ### GET `/v1/credit-cards/{card_id}`
 
-Obtém um cartão específico.
+Obtém um cartão específico com limites calculados.
 
 **Request:**
 ```typescript
@@ -1943,9 +1943,103 @@ const getCreditCard = async (
 };
 ```
 
+**Response (200):**
+```typescript
+{
+  id: 1,
+  organization_id: "123e4567-e89b-12d3-a456-426614174000",
+  last4: "1234",
+  brand: "mastercard",
+  due_day: 10,
+  description: "Nubank",
+  credit_limit: 5000.00,
+  closing_day: 3,
+  color: "#8B5CF6",
+  available_limit: 3200.00,
+  used_limit: 1800.00,
+  limit_usage_percent: 36.0
+}
+```
+
 **Erros:**
-- `403`: Usuário não tem acesso à organização
-- `404`: Cartão não encontrado
+- `403`: User does not have access to the organization
+- `404`: Credit card not found
+
+---
+
+### PATCH `/v1/credit-cards/{card_id}`
+
+Atualiza um cartão de crédito (atualização parcial).
+
+Apenas os campos enviados no request serão atualizados. Os demais campos permanecem inalterados.
+
+**Request:**
+```typescript
+const updateCreditCard = async (
+  cardId: number,
+  organizationId: string,
+  updates: Partial<UpdateCreditCardRequest>
+): Promise<CreditCard> => {
+  const response = await apiClient.patch<CreditCard>(
+    `/v1/credit-cards/${cardId}`,
+    updates,
+    {
+      params: { organization_id: organizationId },
+    }
+  );
+  return response.data;
+};
+```
+
+**Request Body (todos os campos são opcionais):**
+```typescript
+interface UpdateCreditCardRequest {
+  last4?: string; // 4 dígitos
+  brand?: string; // "visa" | "mastercard" | "elo" | "amex" | "hipercard" | "other"
+  due_day?: number; // 1-31
+  description?: string;
+  credit_limit?: number; // >= 0
+  closing_day?: number; // 1-31
+  color?: string; // Hex color pattern: ^#[0-9A-Fa-f]{6}$
+}
+```
+
+**Exemplo:**
+```typescript
+// Atualizar apenas o limite e a cor
+await updateCreditCard(cardId, organizationId, {
+  credit_limit: 6000.0,
+  color: "#FF5733",
+});
+
+// Atualizar apenas a descrição
+await updateCreditCard(cardId, organizationId, {
+  description: "Cartão principal atualizado",
+});
+```
+
+**Response (200):**
+```typescript
+{
+  id: 1,
+  organization_id: "123e4567-e89b-12d3-a456-426614174000",
+  last4: "1234",
+  brand: "mastercard",
+  due_day: 10,
+  description: "Cartão principal atualizado",
+  credit_limit: 6000.00,
+  closing_day: 3,
+  color: "#FF5733",
+  available_limit: 4200.00, // Recalculado
+  used_limit: 1800.00,
+  limit_usage_percent: 30.0 // Recalculado
+}
+```
+
+**Erros:**
+- `400`: Invalid data (e.g., invalid color format, closing_day out of range)
+- `403`: User does not have access to the organization
+- `404`: Credit card not found
 
 ---
 

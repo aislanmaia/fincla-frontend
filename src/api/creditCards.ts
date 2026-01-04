@@ -61,10 +61,13 @@ export const updateCreditCard = async (
   cardId: number,
   data: UpdateCreditCardRequest
 ): Promise<CreditCard> => {
-  // Tentar com PUT primeiro, mantendo organization_id no body
-  const response = await apiClient.put<CreditCard>(
+  const { organization_id, ...updates } = data;
+  const response = await apiClient.patch<CreditCard>(
     `/credit-cards/${cardId}`,
-    data
+    updates,
+    {
+      params: { organization_id },
+    }
   );
   return response.data;
 };
