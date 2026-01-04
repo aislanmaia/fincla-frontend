@@ -15,6 +15,7 @@ import { CreditCard as CreditCardIcon, Download, Eye, Search, Filter } from 'luc
 import { format, subMonths, startOfYear, endOfYear } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 
 interface InvoiceHistoryItem {
   year: number;
@@ -176,6 +177,19 @@ export default function InvoiceHistoryPage() {
             case 'overdue': return 'destructive';
             case 'pending': return 'secondary';
             default: return 'outline';
+        }
+    };
+
+    const getStatusBadgeClasses = (status: string) => {
+        switch (status) {
+            case 'paid': 
+                return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-green-200 dark:border-green-800';
+            case 'overdue': 
+                return 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-red-200 dark:border-red-800';
+            case 'pending': 
+                return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 border-amber-200 dark:border-amber-800';
+            default: 
+                return 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700';
         }
     };
 
@@ -363,7 +377,13 @@ export default function InvoiceHistoryPage() {
                                             <TableRow key={`${invoice.year}-${invoice.month}`}>
                                                 <TableCell className="font-medium capitalize text-xs sm:text-sm">{monthLabel}</TableCell>
                                                 <TableCell>
-                                                    <Badge variant={getStatusVariant(invoice.status)} className="text-[10px] sm:text-xs">
+                                                    <Badge 
+                                                        variant="outline" 
+                                                        className={cn(
+                                                            "text-[10px] sm:text-xs font-semibold",
+                                                            getStatusBadgeClasses(invoice.status)
+                                                        )}
+                                                    >
                                                         {getStatusLabel(invoice.status)}
                                                     </Badge>
                                                 </TableCell>
