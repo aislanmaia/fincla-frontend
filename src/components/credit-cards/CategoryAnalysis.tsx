@@ -22,39 +22,41 @@ export const CategoryAnalysis: React.FC<CategoryAnalysisProps> = ({
 }) => {
     // Processar dados de categoria - usa category_breakdown do backend se disponível
     const categoryData = useMemo(() => {
+        let categories: Array<{ name: string; value: number; percentage: number; count?: number }> = [];
+        
         // Se o backend já retorna category_breakdown, usa direto
         if (currentInvoice?.category_breakdown && currentInvoice.category_breakdown.length > 0) {
-            return currentInvoice.category_breakdown.map(cat => ({
+            categories = currentInvoice.category_breakdown.map(cat => ({
                 name: cat.category_name,
                 value: cat.total,
                 percentage: cat.percentage,
-                color: cat.category_color,
                 count: cat.transaction_count
             }));
+        } else if (currentInvoice?.items) {
+            // Fallback: calcula a partir dos items (compatibilidade com backend antigo)
+            const categoryMap = new Map<string, number>();
+
+            currentInvoice.items.forEach((item) => {
+                const categoryTag = item.tags?.['categoria']?.[0] || item.tags?.['category']?.[0];
+                const categoryName = categoryTag?.name || 'Sem Categoria';
+                categoryMap.set(categoryName, (categoryMap.get(categoryName) || 0) + item.amount);
+            });
+
+            categories = Array.from(categoryMap.entries())
+                .map(([name, value]) => ({ 
+                    name, 
+                    value,
+                    percentage: currentInvoice.total_amount > 0 
+                        ? (value / currentInvoice.total_amount * 100) 
+                        : 0
+                }))
+                .sort((a, b) => b.value - a.value);
+        } else {
+            return [];
         }
-        
-        // Fallback: calcula a partir dos items (compatibilidade com backend antigo)
-        if (!currentInvoice?.items) return [];
 
-        const categoryMap = new Map<string, number>();
-
-        currentInvoice.items.forEach((item) => {
-            const categoryTag = item.tags?.['categoria']?.[0] || item.tags?.['category']?.[0];
-            const categoryName = categoryTag?.name || 'Sem Categoria';
-            categoryMap.set(categoryName, (categoryMap.get(categoryName) || 0) + item.amount);
-        });
-
-        const categories = Array.from(categoryMap.entries())
-            .map(([name, value]) => ({ 
-                name, 
-                value,
-                percentage: currentInvoice.total_amount > 0 
-                    ? (value / currentInvoice.total_amount * 100) 
-                    : 0
-            }))
-            .sort((a, b) => b.value - a.value);
-
-        // Gerar cores distintas
+        // SEMPRE gerar cores distintas no frontend para garantir que cada categoria tenha cor única
+        // Isso garante diferenciação visual mesmo se o backend retornar cores iguais
         const categoryNames = categories.map(c => c.name);
         const colorMap = generateDistinctCategoryColors(categoryNames);
 
