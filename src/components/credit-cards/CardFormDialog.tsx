@@ -31,6 +31,13 @@ const formSchema = z.object({
     brand: z.string().min(1, 'Bandeira é obrigatória'),
     last4: z.string().length(4, 'Deve ter exatamente 4 dígitos').regex(/^\d+$/, 'Apenas números'),
     due_day: z.coerce.number().min(1).max(31),
+    credit_limit: z.coerce.number().min(0, 'Limite deve ser maior ou igual a zero').optional().nullable(),
+    closing_day: z.coerce.number().min(1).max(31).optional().nullable(),
+    color: z.union([
+        z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Cor deve estar no formato hexadecimal (#RRGGBB)'),
+        z.literal(''),
+        z.null()
+    ]).optional().transform((val) => (val === '' || !val ? null : val)),
 });
 
 interface CardFormDialogProps {
@@ -56,6 +63,9 @@ export function CardFormDialog({
             brand: '',
             last4: '',
             due_day: 1,
+            credit_limit: null,
+            closing_day: null,
+            color: null,
         },
     });
 
@@ -66,6 +76,9 @@ export function CardFormDialog({
                 brand: cardToEdit.brand,
                 last4: cardToEdit.last4,
                 due_day: cardToEdit.due_day,
+                credit_limit: cardToEdit.credit_limit,
+                closing_day: cardToEdit.closing_day,
+                color: cardToEdit.color,
             });
         } else {
             form.reset({
@@ -73,6 +86,9 @@ export function CardFormDialog({
                 brand: '',
                 last4: '',
                 due_day: 1,
+                credit_limit: null,
+                closing_day: null,
+                color: null,
             });
         }
     }, [cardToEdit, form, open]);
@@ -81,17 +97,23 @@ export function CardFormDialog({
         if (!currentOrg?.id) return;
 
         try {
+            // Converter null para undefined para compatibilidade com a API
+            const apiData = {
+                organization_id: currentOrg.id,
+                description: values.description,
+                brand: values.brand,
+                last4: values.last4,
+                due_day: values.due_day,
+                credit_limit: values.credit_limit ?? undefined,
+                closing_day: values.closing_day ?? undefined,
+                color: values.color ?? undefined,
+            };
+
             if (cardToEdit) {
-                await updateCreditCard(cardToEdit.id, {
-                    organization_id: currentOrg.id,
-                    ...values,
-                });
+                await updateCreditCard(cardToEdit.id, apiData);
                 toast.success('Cartão atualizado com sucesso!');
             } else {
-                await createCreditCard({
-                    organization_id: currentOrg.id,
-                    ...values,
-                });
+                await createCreditCard(apiData);
                 toast.success('Cartão criado com sucesso!');
             }
             onSuccess();
@@ -166,14 +188,89 @@ export function CardFormDialog({
                                 )}
                             />
                         </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <FormField
+                                control={form.control}
+                                name="due_day"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Dia de Vencimento</FormLabel>
+                                        <FormControl>
+                                            <Input type="number" min={1} max={31} {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="closing_day"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Dia de Fechamento</FormLabel>
+                                        <FormControl>
+                                            <Input 
+                                                type="number" 
+                                                min={1} 
+                                                max={31} 
+                                                {...field}
+                                                value={field.value ?? ''}
+                                                onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : null)}
+                                            />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        </div>
                         <FormField
                             control={form.control}
-                            name="due_day"
+                            name="credit_limit"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Dia de Vencimento</FormLabel>
+                                    <FormLabel>Limite de Crédito (R$)</FormLabel>
                                     <FormControl>
-                                        <Input type="number" min={1} max={31} {...field} />
+                                        <Input 
+                                            type="number" 
+                                            min={0} 
+                                            step="0.01"
+                                            placeholder="Ex: 5000.00"
+                                            {...field}
+                                            value={field.value ?? ''}
+                                            onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : null)}
+                                        />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="color"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Cor do Cartão (Opcional)</FormLabel>
+                                    <FormControl>
+                                        <div className="flex items-center gap-2">
+                                            <Input 
+                                                type="color"
+                                                className="w-16 h-10 cursor-pointer"
+                                                value={field.value || '#8B5CF6'}
+                                                onChange={(e) => field.onChange(e.target.value || null)}
+                                            />
+                                            <Input 
+                                                type="text"
+                                                placeholder="#8B5CF6"
+                                                maxLength={7}
+                                                value={field.value || ''}
+                                                onChange={(e) => {
+                                                    const val = e.target.value.trim();
+                                                    if (val === '' || /^#[0-9A-Fa-f]{6}$/i.test(val)) {
+                                                        field.onChange(val || null);
+                                                    }
+                                                }}
+                                            />
+                                        </div>
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>

@@ -393,7 +393,7 @@ export const InvoiceStatusCard: React.FC<InvoiceStatusCardProps> = ({
                 </div>
                 
                 {/* Progress bar de uso do limite */}
-                {(invoice.limit_usage_percent !== null && invoice.limit_usage_percent !== undefined) || (card?.limit_usage_percent !== null && card?.limit_usage_percent !== undefined) && (
+                {card?.credit_limit && card.credit_limit > 0 && (
                     <div className="mb-4 space-y-2">
                         <div className="flex justify-between text-xs text-muted-foreground">
                             <span>Uso do limite</span>
@@ -410,12 +410,10 @@ export const InvoiceStatusCard: React.FC<InvoiceStatusCardProps> = ({
                                 "[&>div]:bg-green-500"
                             )}
                         />
-                        {card?.credit_limit && (
-                            <div className="flex justify-between text-xs text-muted-foreground">
-                                <span>Disponível: {formatCurrency(card.available_limit ?? 0)}</span>
-                                <span>Limite: {formatCurrency(card.credit_limit)}</span>
-                            </div>
-                        )}
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>Disponível: {formatCurrency(card.available_limit ?? 0)}</span>
+                            <span>Limite: {formatCurrency(card.credit_limit)}</span>
+                        </div>
                     </div>
                 )}
             </div>
