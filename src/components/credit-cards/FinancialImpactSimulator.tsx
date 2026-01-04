@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles, AlertTriangle, CheckCircle2, TrendingDown, Wallet, Target, Loader2 } from 'lucide-react';
+import { Sparkles, AlertTriangle, CheckCircle2, TrendingDown, Wallet, Loader2, Plus, Minus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { simulateFinancialImpact } from '@/api/financialImpact';
 import { SimulateFinancialImpactResponse, MonthlyProjection } from '@/types/api';
@@ -42,6 +42,7 @@ export function FinancialImpactSimulator({
   
   // Results state
   const [simulationData, setSimulationData] = useState<SimulateFinancialImpactResponse | null>(null);
+  const [simulatedCard, setSimulatedCard] = useState<CreditCard | null>(null);
   
   // Load cards when component opens
   useEffect(() => {
@@ -76,6 +77,7 @@ export function FinancialImpactSimulator({
         setInstallments('');
         setSelectedCardId('');
         setSimulationData(null);
+        setSimulatedCard(null);
       }, 200);
     }
   }, [open]);
@@ -142,7 +144,28 @@ export function FinancialImpactSimulator({
         simulation_months: Math.max(numInstallments, 6) // Simular pelo menos o número de parcelas ou 6 meses
       });
       
+      // Log para diagnóstico: verificar se receitas estão sendo retornadas
+      console.log('[FinancialImpactSimulator] Resultado da simulação:', {
+        months: result.months?.map(m => ({
+          month: m.month,
+          projected_income: m.projected_income,
+          base_expenses: m.base_expenses,
+          card_commitments: m.card_commitments
+        })),
+        summary: result.summary
+      });
+      
+      // Verificar se todas as receitas estão zeradas e alertar
+      const allIncomesZero = result.months?.every(m => Number(m.projected_income) === 0);
+      if (allIncomesZero && result.months && result.months.length > 0) {
+        console.warn('[FinancialImpactSimulator] AVISO: Todas as receitas projetadas estão zeradas. O backend pode não estar identificando receitas recorrentes corretamente.');
+        toast.warning('Receitas projetadas estão zeradas. Verifique se você possui transações de receita marcadas como recorrentes nos últimos 6 meses.', {
+          duration: 5000
+        });
+      }
+      
       setSimulationData(result);
+      setSimulatedCard(selectedCard);
       setStep('results');
     } catch (error) {
       console.error("Simulation failed:", error);
@@ -335,6 +358,12 @@ export function FinancialImpactSimulator({
                       const monthDate = new Date(parseInt(year), parseInt(month) - 1);
                       const monthName = monthDate.toLocaleString('pt-BR', { month: 'long' });
                       
+                      // Calcular parcela mensal da nova compra
+                      const monthlyInstallment = totalAmount && installments 
+                        ? parseFloat(totalAmount) / parseInt(installments) 
+                        : 0;
+                      const hasNewInstallment = index < parseInt(installments || '0');
+                      
                       return (
                         <Card
                           key={index}
@@ -367,19 +396,53 @@ export function FinancialImpactSimulator({
 
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 sm:gap-x-4 gap-y-1.5 sm:gap-y-2 text-xs sm:text-sm">
                             <div className="flex justify-between">
-                              <span className="text-muted-foreground">+ Receitas:</span>
+                              <span className="text-muted-foreground flex items-center gap-1">
+                                <Plus className="w-3 h-3 flex-shrink-0 text-green-600" />
+                                Receitas:
+                              </span>
                               <span className="font-medium text-green-600">R$ {Number(item.projected_income).toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between">
-                              <span className="text-muted-foreground">- Despesas Base:</span>
+                              <span className="text-muted-foreground flex items-center gap-1">
+                                <Minus className="w-3 h-3 flex-shrink-0 text-red-600" />
+                                Despesas Base:
+                              </span>
                               <span className="font-medium text-red-600">R$ {Number(item.base_expenses).toFixed(2)}</span>
                             </div>
+                            {hasNewInstallment && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground flex items-center gap-1">
+                                  <Minus className="w-3 h-3 flex-shrink-0 text-indigo-600" />
+                                  Nova Parcela ({description}):
+                                </span>
+                                <span className="font-medium text-indigo-600">R$ {monthlyInstallment.toFixed(2)}</span>
+                              </div>
+                            )}
                             <div className="flex justify-between">
-                              <span className="text-muted-foreground">- Compromissos Cartão:</span>
-                              <span className="font-medium text-orange-600">R$ {Number(item.card_commitments).toFixed(2)}</span>
+                              <span className="text-muted-foreground flex items-center gap-1">
+                                <Minus className="w-3 h-3 flex-shrink-0 text-orange-600" />
+                                {simulatedCard 
+                                  ? `Compromisso mensal do Cartão ${simulatedCard.last4}:`
+                                  : 'Compromissos Cartão:'}
+                              </span>
+                              <span className="font-medium text-orange-600">
+                                R$ {(Number(item.card_commitments) - (hasNewInstallment ? monthlyInstallment : 0)).toFixed(2)}
+                              </span>
                             </div>
+                            {Number(item.savings_goal) > 0 && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground flex items-center gap-1">
+                                  <Minus className="w-3 h-3 flex-shrink-0 text-blue-600" />
+                                  Meta de Economia:
+                                </span>
+                                <span className="font-medium text-blue-600">R$ {Number(item.savings_goal).toFixed(2)}</span>
+                              </div>
+                            )}
                             <div className="flex justify-between">
-                              <span className="text-muted-foreground">- Total Despesas:</span>
+                              <span className="text-muted-foreground flex items-center gap-1">
+                                <Minus className="w-3 h-3 flex-shrink-0 text-red-600" />
+                                Total Despesas:
+                              </span>
                               <span className="font-medium text-red-600">R$ {Number(item.total_expenses).toFixed(2)}</span>
                             </div>
                             <div className="flex justify-between col-span-1 sm:col-span-2 pt-1.5 sm:pt-2 border-t mt-1">
@@ -392,15 +455,6 @@ export function FinancialImpactSimulator({
                                 R$ {Number(item.balance).toFixed(2)}
                               </span>
                             </div>
-                            {Number(item.savings_goal) > 0 && (
-                              <div className="flex justify-between col-span-1 sm:col-span-2 text-[10px] sm:text-xs text-muted-foreground">
-                                <span className="flex items-center gap-0.5 sm:gap-1">
-                                  <Target className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
-                                  Meta de Economia:
-                                </span>
-                                <span>R$ {Number(item.savings_goal).toFixed(2)}</span>
-                              </div>
-                            )}
                           </div>
                         </Card>
                       );

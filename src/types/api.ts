@@ -220,9 +220,12 @@ export interface ListTransactionsQuery {
 export interface CreateCreditCardRequest {
   organization_id: string;
   last4: string; // 4 dígitos
-  brand: string; // Ex: "Visa", "Mastercard"
+  brand: string; // "visa" | "mastercard" | "elo" | "amex" | "hipercard" | "other"
   due_day: number; // 1-31
   description?: string | null;
+  credit_limit?: number;
+  closing_day?: number; // 1-31
+  color?: string; // Hex color pattern: ^#[0-9A-Fa-f]{6}$
 }
 
 export interface UpdateCreditCardRequest {
@@ -231,6 +234,9 @@ export interface UpdateCreditCardRequest {
   brand?: string;
   due_day?: number;
   description?: string | null;
+  credit_limit?: number;
+  closing_day?: number;
+  color?: string;
 }
 
 export interface CreditCard {
@@ -240,6 +246,23 @@ export interface CreditCard {
   brand: string;
   due_day: number;
   description: string | null;
+  // Novos campos
+  credit_limit: number | null;
+  closing_day: number | null;
+  color: string | null; // Hex color like #FF5733
+  // Campos calculados (read-only)
+  available_limit: number | null;
+  used_limit: number;
+  limit_usage_percent: number | null;
+}
+
+export interface CategoryBreakdown {
+  category_id: string | null;
+  category_name: string;
+  category_color: string;
+  total: number;
+  percentage: number;
+  transaction_count: number;
 }
 
 export interface InvoiceItemResponse {
@@ -256,8 +279,58 @@ export interface InvoiceResponse {
   month: string;
   due_date: string;
   total_amount: number;
-  status: 'open' | 'closed' | 'overdue' | 'paid';
+  status: 'open' | 'closed' | 'paid';
   items: InvoiceItemResponse[];
+  // Novos campos calculados
+  closing_date: string | null;
+  days_until_due: number;
+  is_overdue: boolean;
+  paid_date: string | null;
+  previous_month_total: number | null;
+  month_over_month_change: number | null; // Pode ser negativo (gastou menos)
+  limit_usage_percent: number | null;
+  items_count: number;
+  category_breakdown: CategoryBreakdown[];
+}
+
+// ===== HISTÓRICO DE FATURAS =====
+export interface InvoiceHistoryItem {
+  year: number;
+  month: number;
+  month_name: string;
+  total_amount: number;
+  status: string;
+  items_count: number;
+  top_category: string | null;
+}
+
+export interface InvoiceHistorySummary {
+  total_spent: number;
+  average_monthly: number;
+  highest_month: { month: string; amount: number } | null;
+  lowest_month: { month: string; amount: number } | null;
+}
+
+export interface InvoiceHistoryResponse {
+  card_id: number;
+  card_name: string;
+  period_start: string;
+  period_end: string;
+  summary: InvoiceHistorySummary;
+  monthly_data: InvoiceHistoryItem[];
+}
+
+// ===== MARCAR FATURA COMO PAGA =====
+export interface MarkInvoicePaidRequest {
+  paid_date?: string; // ISO date, defaults to today
+}
+
+export interface InvoiceMarkPaidResponse {
+  card_id: number;
+  year: number;
+  month: number;
+  status: string;
+  paid_date: string | null;
 }
 
 // ===== CHAT/AI =====

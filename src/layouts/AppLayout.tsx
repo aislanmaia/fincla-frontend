@@ -20,8 +20,8 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { TrendingUp, LayoutGrid, ListOrdered, PieChart, Target, User, LogOut, Plus, CreditCard, Settings } from "lucide-react";
 import { PropsWithChildren, useState } from "react";
-import { useAIChat } from "@/hooks/useAIChat";
-import { ChatBar } from "@/components/ChatBar";
+// import { useAIChat } from "@/hooks/useAIChat"; // TODO: Reativar no futuro quando a feature estiver pronta
+// import { ChatBar } from "@/components/ChatBar"; // TODO: Reativar no futuro quando a feature estiver pronta
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -67,7 +67,7 @@ function getPageTitle(location: string): string {
 
 export function AppLayout({ children }: PropsWithChildren) {
   const queryClient = useQueryClient();
-  const { messages, isProcessing, processUserMessage } = useAIChat();
+  // const { messages, isProcessing, processUserMessage } = useAIChat(); // TODO: Reativar no futuro quando a feature estiver pronta
   const { user, signOut } = useAuth();
   const { organizations, activeOrgId, selectOrganization } = useOrganization();
   const [location, setLocation] = useLocation();
@@ -320,12 +320,13 @@ export function AppLayout({ children }: PropsWithChildren) {
           />
 
           {/* Chat estilo AI Studio fixo ao rodapé do conteúdo */}
-          <ChatBar
+          {/* TODO: Reativar no futuro quando a feature estiver pronta */}
+          {/* <ChatBar
             onSend={(m) => processUserMessage(m)}
             isProcessing={isProcessing}
             suggestions={["Registrar despesa", "Relatório mensal", "Comparar meses"]}
             messages={messages}
-          />
+          /> */}
         </div>
       </SidebarInset>
     </SidebarProvider>

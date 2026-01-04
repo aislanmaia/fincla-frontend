@@ -83,35 +83,36 @@ export default function FuturePlanningPage() {
                             currentOrg.id
                         );
 
-                        if (invoice) {
-                            // Extract installment transactions
-                            const installments = invoice.items
-                                .filter(item => item.installment_number && item.installment_number > 0)
-                                .map(item => ({
-                                    description: item.description || 'Parcela',
-                                    amount: item.amount,
-                                }))
-                                .slice(0, 3); // Top 3 installments
+                        // If we get here, invoice exists (200 response means invoice exists with items)
+                        // Extract installment transactions
+                        const installments = invoice.items
+                            .filter(item => item.installment_number && item.installment_number > 0)
+                            .map(item => ({
+                                description: item.description || 'Parcela',
+                                amount: item.amount,
+                            }))
+                            .slice(0, 3); // Top 3 installments
 
-                            commitments.push({
-                                month: format(date, 'MMMM', { locale: ptBR }),
-                                year,
-                                monthNumber: month,
-                                totalAmount: invoice.total_amount,
-                                installmentsCount: invoice.items.filter(item => item.installment_number).length,
-                                mainInstallments: installments,
-                            });
-                        }
-                    } catch (err) {
-                        // Invoice doesn't exist yet, add empty commitment
                         commitments.push({
                             month: format(date, 'MMMM', { locale: ptBR }),
                             year,
                             monthNumber: month,
-                            totalAmount: 0,
-                            installmentsCount: 0,
-                            mainInstallments: [],
+                            totalAmount: invoice.total_amount,
+                            installmentsCount: invoice.items.filter(item => item.installment_number).length,
+                            mainInstallments: installments,
                         });
+                    } catch (err: any) {
+                        // 404 means invoice doesn't exist for this month/card - add empty commitment
+                        if (err?.response?.status === 404) {
+                            commitments.push({
+                                month: format(date, 'MMMM', { locale: ptBR }),
+                                year,
+                                monthNumber: month,
+                                totalAmount: 0,
+                                installmentsCount: 0,
+                                mainInstallments: [],
+                            });
+                        }
                     }
                 }
 

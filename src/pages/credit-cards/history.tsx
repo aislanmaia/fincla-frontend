@@ -36,7 +36,6 @@ export default function InvoiceHistoryPage() {
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [invoiceHistory, setInvoiceHistory] = useState<InvoiceHistoryItem[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [selectedInvoice, setSelectedInvoice] = useState<{ year: number; month: number } | null>(null);
 
     // Generate year options (last 5 years)
     const yearOptions = Array.from({ length: 5 }, (_, i) => {
@@ -101,26 +100,30 @@ export default function InvoiceHistoryPage() {
                             currentOrg.id
                         );
                         
-                        if (invoice && invoice.total_amount > 0) {
-                            // Determine status based on due date
-                            const dueDate = new Date(invoice.due_date);
-                            const now = new Date();
-                            let status: 'paid' | 'overdue' | 'pending' = 'pending';
-                            
-                            if (dueDate < now) {
-                                status = 'overdue'; // Could be refined with payment info
-                            }
-                            
-                            invoices.push({
-                                year,
-                                month,
-                                total: invoice.total_amount,
-                                status,
-                                dueDate: invoice.due_date,
-                            });
+                        // If we get here, invoice exists (200 response means invoice exists with items)
+                        // Determine status based on due date
+                        const dueDate = new Date(invoice.due_date);
+                        const now = new Date();
+                        let status: 'paid' | 'overdue' | 'pending' = 'pending';
+                        
+                        if (dueDate < now) {
+                            status = 'overdue'; // Could be refined with payment info
                         }
-                    } catch (err) {
-                        // Invoice doesn't exist or is empty, skip
+                        
+                        invoices.push({
+                            year,
+                            month,
+                            total: invoice.total_amount,
+                            status,
+                            dueDate: invoice.due_date,
+                        });
+                    } catch (err: any) {
+                        // 404 means invoice doesn't exist for this month/card - skip
+                        if (err?.response?.status === 404) {
+                            continue;
+                        }
+                        // Other errors - log but continue
+                        console.error(`Erro ao carregar fatura ${year}/${month}:`, err);
                         continue;
                     }
                 }
@@ -177,15 +180,36 @@ export default function InvoiceHistoryPage() {
     };
 
     const handleViewDetails = (year: number, month: number) => {
-        // Navigate to detail view or show modal
-        setSelectedInvoice({ year, month });
-        // For now, just navigate to the main page (could be improved)
-        toast.info(`Visualização detalhada: ${format(new Date(year, month - 1), 'MMMM yyyy', { locale: ptBR })}`);
+        if (!selectedCardId) {
+            toast.error('Selecione um cartão primeiro');
+            return;
+        }
+        
+        // Navigate to credit cards page with query parameters
+        setLocation(`/credit-cards?cardId=${selectedCardId}&year=${year}&month=${month}`);
     };
 
-    const handleDownloadPDF = (year: number, month: number) => {
-        // TODO: Implement PDF download
-        toast.info(`Download PDF: ${format(new Date(year, month - 1), 'MMMM yyyy', { locale: ptBR })}`);
+    const handleDownloadPDF = async (year: number, month: number) => {
+        // TODO: Implementar quando o endpoint de PDF estiver disponível
+        const monthName = format(new Date(year, month - 1), 'MMMM yyyy', { locale: ptBR });
+        toast.info(`Download de PDF para ${monthName} será implementado em breve.`);
+        
+        // Exemplo de implementação futura:
+        // try {
+        //     const response = await apiClient.get(`/credit-cards/${selectedCardId}/invoices/${year}/${month}/pdf`, {
+        //         params: { organization_id: currentOrg?.id },
+        //         responseType: 'blob'
+        //     });
+        //     const url = window.URL.createObjectURL(new Blob([response.data]));
+        //     const link = document.createElement('a');
+        //     link.href = url;
+        //     link.setAttribute('download', `fatura-${monthName}.pdf`);
+        //     document.body.appendChild(link);
+        //     link.click();
+        //     link.remove();
+        // } catch (error) {
+        //     toast.error('Erro ao baixar PDF');
+        // }
     };
 
     return (
@@ -282,6 +306,28 @@ export default function InvoiceHistoryPage() {
                     </div>
                 </Card>
 
+                {/* Summary Stats */}
+                {!isLoading && filteredInvoices.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                        <Card className="p-3 sm:p-4">
+                            <div className="text-xs sm:text-sm text-muted-foreground mb-1">Total de Faturas</div>
+                            <div className="text-xl sm:text-2xl font-bold">{filteredInvoices.length}</div>
+                        </Card>
+                        <Card className="p-3 sm:p-4">
+                            <div className="text-xs sm:text-sm text-muted-foreground mb-1">Valor Total do Período</div>
+                            <div className="text-xl sm:text-2xl font-bold">
+                                R$ {filteredInvoices.reduce((sum, inv) => sum + inv.total, 0).toFixed(2)}
+                            </div>
+                        </Card>
+                        <Card className="p-3 sm:p-4">
+                            <div className="text-xs sm:text-sm text-muted-foreground mb-1">Média Mensal</div>
+                            <div className="text-xl sm:text-2xl font-bold">
+                                R$ {(filteredInvoices.reduce((sum, inv) => sum + inv.total, 0) / filteredInvoices.length).toFixed(2)}
+                            </div>
+                        </Card>
+                    </div>
+                )}
+
                 {/* Invoices Table */}
                 <Card className="overflow-hidden">
                     <div className="overflow-x-auto">
@@ -355,28 +401,6 @@ export default function InvoiceHistoryPage() {
                         </Table>
                     </div>
                 </Card>
-
-                {/* Summary Stats */}
-                {!isLoading && filteredInvoices.length > 0 && (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                        <Card className="p-3 sm:p-4">
-                            <div className="text-xs sm:text-sm text-muted-foreground mb-1">Total de Faturas</div>
-                            <div className="text-xl sm:text-2xl font-bold">{filteredInvoices.length}</div>
-                        </Card>
-                        <Card className="p-3 sm:p-4">
-                            <div className="text-xs sm:text-sm text-muted-foreground mb-1">Valor Total do Período</div>
-                            <div className="text-xl sm:text-2xl font-bold">
-                                R$ {filteredInvoices.reduce((sum, inv) => sum + inv.total, 0).toFixed(2)}
-                            </div>
-                        </Card>
-                        <Card className="p-3 sm:p-4">
-                            <div className="text-xs sm:text-sm text-muted-foreground mb-1">Média Mensal</div>
-                            <div className="text-xl sm:text-2xl font-bold">
-                                R$ {(filteredInvoices.reduce((sum, inv) => sum + inv.total, 0) / filteredInvoices.length).toFixed(2)}
-                            </div>
-                        </Card>
-                    </div>
-                )}
             </div>
         </PageTransition>
     );

@@ -127,6 +127,32 @@
   .scrollbar-track-gray-100::-webkit-scrollbar-track {
     background: #f3f4f6;
   }
+
+  /* Scrollbar para o dropdown de seleção de mês */
+  [data-radix-select-viewport]::-webkit-scrollbar {
+    width: 8px !important;
+    display: block !important;
+  }
+  [data-radix-select-viewport]::-webkit-scrollbar-track {
+    background: transparent !important;
+  }
+  [data-radix-select-viewport]::-webkit-scrollbar-thumb {
+    background-color: #d1d5db !important;
+    border-radius: 4px !important;
+    min-height: 40px !important;
+  }
+  [data-radix-select-viewport]::-webkit-scrollbar-thumb:hover {
+    background-color: #9ca3af !important;
+  }
+
+  /* Esconder scrollbar mas manter funcionalidade */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @layer components {

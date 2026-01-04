@@ -490,7 +490,7 @@ export interface SimulateFinancialImpactRequest {
   organization_id: string;
   new_card_commitments?: NewCardCommitment[];
   savings_goals?: SavingsGoal[];
-  simulation_months?: number; // 1-12, default: 6
+  simulation_months?: number; // 1-60 (até 5 anos), default: 6
 }
 
 export interface MonthlyProjection {
@@ -1723,6 +1723,106 @@ try {
 
 ## 💳 Endpoints de Cartões de Crédito
 
+### Tipos TypeScript para Cartões de Crédito
+
+```typescript
+// Types for Credit Cards
+interface CreditCard {
+  id: number;
+  organization_id: string;
+  last4: string;
+  brand: string;
+  due_day: number;
+  description: string | null;
+  // New fields
+  credit_limit: number | null;
+  closing_day: number | null;
+  color: string | null; // Hex color like #FF5733
+  // Calculated fields (read-only)
+  available_limit: number | null;
+  used_limit: number;
+  limit_usage_percent: number | null;
+}
+
+interface CreateCreditCardRequest {
+  organization_id: string;
+  last4: string;
+  brand: string; // "visa" | "mastercard" | "elo" | "amex" | "hipercard" | "other"
+  due_day: number; // 1-31
+  description?: string;
+  credit_limit?: number;
+  closing_day?: number; // 1-31
+  color?: string; // Hex color pattern: ^#[0-9A-Fa-f]{6}$
+}
+
+interface CategoryBreakdown {
+  category_id: string | null;
+  category_name: string;
+  category_color: string;
+  total: number;
+  percentage: number;
+  transaction_count: number;
+}
+
+interface InvoiceResponse {
+  month: string;
+  due_date: string;
+  total_amount: number;
+  status: "open" | "closed" | "paid";
+  items: InvoiceItem[];
+  // New fields
+  closing_date: string | null;
+  days_until_due: number;
+  is_overdue: boolean;
+  paid_date: string | null;
+  previous_month_total: number | null;
+  month_over_month_change: number | null; // Can be negative (spent less)
+  limit_usage_percent: number | null;
+  items_count: number;
+  category_breakdown: CategoryBreakdown[];
+}
+
+interface InvoiceHistoryItem {
+  year: number;
+  month: number;
+  month_name: string;
+  total_amount: number;
+  status: string;
+  items_count: number;
+  top_category: string | null;
+}
+
+interface InvoiceHistorySummary {
+  total_spent: number;
+  average_monthly: number;
+  highest_month: { month: string; amount: number } | null;
+  lowest_month: { month: string; amount: number } | null;
+}
+
+interface InvoiceHistoryResponse {
+  card_id: number;
+  card_name: string;
+  period_start: string;
+  period_end: string;
+  summary: InvoiceHistorySummary;
+  monthly_data: InvoiceHistoryItem[];
+}
+
+interface MarkInvoicePaidRequest {
+  paid_date?: string; // ISO date, defaults to today
+}
+
+interface InvoiceMarkPaidResponse {
+  card_id: number;
+  year: number;
+  month: number;
+  status: string;
+  paid_date: string | null;
+}
+```
+
+---
+
 ### POST `/v1/credit-cards`
 
 Cria um novo cartão de crédito.
@@ -1745,9 +1845,12 @@ const createCreditCard = async (
 await createCreditCard({
   organization_id: "123e4567-e89b-12d3-a456-426614174000",
   last4: "1234",
-  brand: "Visa",
+  brand: "mastercard",
   due_day: 10,
-  description: "Cartão principal",
+  description: "Nubank",
+  credit_limit: 5000.00,
+  closing_day: 3,
+  color: "#8B5CF6",
 });
 ```
 
@@ -1757,22 +1860,28 @@ await createCreditCard({
   id: 1,
   organization_id: "123e4567-e89b-12d3-a456-426614174000",
   last4: "1234",
-  brand: "Visa",
+  brand: "mastercard",
   due_day: 10,
-  description: "Cartão principal"
+  description: "Nubank",
+  credit_limit: 5000.00,
+  closing_day: 3,
+  color: "#8B5CF6",
+  available_limit: null, // Not calculated on create
+  used_limit: 0,
+  limit_usage_percent: null
 }
 ```
 
 **Erros:**
-- `400`: Dados inválidos
-- `403`: Usuário não tem acesso à organização
-- `422`: Cartão duplicado (mesmo last4 e brand na mesma organização)
+- `400`: Invalid data (e.g., invalid color format, closing_day out of range)
+- `403`: User does not have access to the organization
+- `422`: Duplicate card (same last4 and brand in the same organization)
 
 ---
 
 ### GET `/v1/credit-cards`
 
-Lista todos os cartões de uma organização.
+Lista todos os cartões de uma organização com limites calculados.
 
 **Request:**
 ```typescript
@@ -1793,12 +1902,24 @@ const listCreditCards = async (
     id: 1,
     organization_id: "123e4567-e89b-12d3-a456-426614174000",
     last4: "1234",
-    brand: "Visa",
+    brand: "mastercard",
     due_day: 10,
-    description: "Cartão principal"
+    description: "Nubank",
+    credit_limit: 5000.00,
+    closing_day: 3,
+    color: "#8B5CF6",
+    // Calculated fields
+    available_limit: 3200.00,
+    used_limit: 1800.00,
+    limit_usage_percent: 36.0
   }
 ]
 ```
+
+**Notes:**
+- `available_limit`: `null` if `credit_limit` is 0 or not set
+- `used_limit`: Sum of future installments (status = scheduled/pending)
+- `limit_usage_percent`: `null` if `credit_limit` is 0 or not set
 
 ---
 
@@ -1854,7 +1975,7 @@ const deleteCreditCard = async (
 
 ### GET `/v1/credit-cards/{card_id}/invoices/{year}/{month}`
 
-Obtém a fatura de um cartão de crédito para um mês específico.
+Obtém a fatura de um cartão de crédito para um mês específico com campos calculados.
 
 **Request:**
 ```typescript
@@ -1877,10 +1998,36 @@ const getCreditCardInvoice = async (
 **Response (200):**
 ```typescript
 {
-  month: "Janeiro",
+  month: "2025-01",
   due_date: "2025-01-10",
-  total_amount: 1500.00,
-  status: "open",
+  total_amount: 2450.00,
+  status: "open", // "open" | "closed" | "paid"
+  closing_date: "2025-01-03",
+  paid_date: null,
+  days_until_due: 7, // Negative if overdue
+  is_overdue: false,
+  previous_month_total: 2180.00,
+  month_over_month_change: 12.4, // % change vs previous month (can be negative)
+  limit_usage_percent: 49.0,
+  items_count: 32,
+  category_breakdown: [
+    {
+      category_id: "uuid-here",
+      category_name: "Alimentação",
+      category_color: "#22C55E",
+      total: 1102.50,
+      percentage: 45.0,
+      transaction_count: 15
+    },
+    {
+      category_id: null,
+      category_name: "Sem Categoria",
+      category_color: "#6B7280",
+      total: 368.40,
+      percentage: 15.0,
+      transaction_count: 4
+    }
+  ],
   items: [
     {
       id: 123,
@@ -1892,9 +2039,11 @@ const getCreditCardInvoice = async (
       tags: {
         "categoria": [
           {
-            id: "...",
+            id: "uuid-here",
             name: "Eletrônicos",
-            // ...
+            color: "#3B82F6",
+            is_default: false,
+            is_active: true
           }
         ]
       }
@@ -1904,8 +2053,195 @@ const getCreditCardInvoice = async (
 ```
 
 **Erros:**
-- `403`: Usuário não tem acesso à organização
-- `404`: Cartão não encontrado
+- `403`: User does not have access to the organization
+- `404`: Credit card not found or invoice not found for the specified card/month
+
+**Notas Importantes:**
+- O endpoint retorna `404` quando a fatura não existe para o mês/cartão solicitado (sem itens/parcelas)
+- O endpoint retorna `200` apenas quando a fatura existe e possui itens
+- Diferencie os casos de `404`:
+  - **Cartão não encontrado**: `{"detail": "Credit card {id} not found"}`
+  - **Fatura não encontrada**: `{"detail": "Invoice not found for the specified card/month"}`
+- `month_over_month_change` pode ser **negativo** (gastou menos que o mês anterior)
+- `category_breakdown` é ordenado por `total` decrescente
+
+---
+
+### GET `/v1/credit-cards/{card_id}/invoices/history`
+
+Obtém o histórico de faturas de um cartão para gráficos de evolução.
+
+**Request:**
+```typescript
+const getInvoiceHistory = async (
+  cardId: number,
+  organizationId: string,
+  months: number = 6
+): Promise<InvoiceHistoryResponse> => {
+  const response = await apiClient.get<InvoiceHistoryResponse>(
+    `/v1/credit-cards/${cardId}/invoices/history`,
+    {
+      params: { organization_id: organizationId, months },
+    }
+  );
+  return response.data;
+};
+```
+
+**Query Parameters:**
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `months` | number | 6 | Number of months to retrieve (1-24) |
+
+**Response (200):**
+```typescript
+{
+  card_id: 1,
+  card_name: "Nubank",
+  period_start: "2024-08-01",
+  period_end: "2025-01-31",
+  summary: {
+    total_spent: 28540.00,
+    average_monthly: 2378.33,
+    highest_month: {
+      month: "dezembro 2024",
+      amount: 4520.00
+    },
+    lowest_month: {
+      month: "agosto 2024",
+      amount: 1250.00
+    }
+  },
+  monthly_data: [
+    {
+      year: 2024,
+      month: 8,
+      month_name: "agosto 2024",
+      total_amount: 1250.00,
+      status: "paid",
+      items_count: 18,
+      top_category: "Alimentação"
+    },
+    // ... more months
+  ]
+}
+```
+
+**Erros:**
+- `403`: User does not have access to the organization
+- `404`: Credit card not found
+
+---
+
+### PATCH `/v1/credit-cards/{card_id}/invoices/{year}/{month}/mark-paid`
+
+Marca uma fatura como paga (controle manual do usuário).
+
+> **Nota:** Este endpoint NÃO realiza pagamento real. Apenas atualiza o status da fatura 
+> para que o usuário possa acompanhar quais faturas já foram pagas no app do banco.
+
+**Request:**
+```typescript
+const markInvoicePaid = async (
+  cardId: number,
+  year: number,
+  month: number,
+  organizationId: string,
+  paidDate?: string // ISO date, defaults to today
+): Promise<InvoiceMarkPaidResponse> => {
+  const response = await apiClient.patch<InvoiceMarkPaidResponse>(
+    `/v1/credit-cards/${cardId}/invoices/${year}/${month}/mark-paid`,
+    { paid_date: paidDate },
+    { params: { organization_id: organizationId } }
+  );
+  return response.data;
+};
+```
+
+**Request Body (optional):**
+```typescript
+{
+  paid_date?: "2025-01-08" // ISO date, defaults to today if not provided
+}
+```
+
+**Response (200):**
+```typescript
+{
+  card_id: 1,
+  year: 2025,
+  month: 1,
+  status: "paid",
+  paid_date: "2025-01-08"
+}
+```
+
+**Erros:**
+- `400`: Invoice is already paid or paid_date is in the future
+- `403`: User does not have access to the organization
+- `404`: Credit card not found
+
+---
+
+### PATCH `/v1/credit-cards/{card_id}/invoices/{year}/{month}/unmark-paid`
+
+Desfaz a marcação de pagamento de uma fatura (caso tenha marcado por engano).
+
+**Request:**
+```typescript
+const unmarkInvoicePaid = async (
+  cardId: number,
+  year: number,
+  month: number,
+  organizationId: string
+): Promise<InvoiceMarkPaidResponse> => {
+  const response = await apiClient.patch<InvoiceMarkPaidResponse>(
+    `/v1/credit-cards/${cardId}/invoices/${year}/${month}/unmark-paid`,
+    {},
+    { params: { organization_id: organizationId } }
+  );
+  return response.data;
+};
+```
+
+**Response (200):**
+```typescript
+{
+  card_id: 1,
+  year: 2025,
+  month: 1,
+  status: "open", // or "closed" based on closing_date
+  paid_date: null
+}
+```
+
+**Erros:**
+- `400`: Invoice is not marked as paid
+- `403`: User does not have access to the organization
+- `404`: Credit card or invoice not found
+
+**Exemplo de Tratamento de Erros:**
+```typescript
+try {
+  const invoice = await getCreditCardInvoice(cardId, year, month, organizationId);
+  // Fatura existe e possui itens
+  console.log(`Fatura com ${invoice.items.length} itens`);
+} catch (error) {
+    if (error.response?.status === 404) {
+      const detail = error.response.data.detail;
+      if (detail.includes("Invoice not found")) {
+        // Fatura não existe para este mês/cartão
+        console.log("Fatura não encontrada - desabilitar navegação");
+      } else if (detail.includes("Credit card") && detail.includes("not found")) {
+        // Cartão não existe
+        console.log("Cartão não encontrado");
+      }
+    } else if (error.response?.status === 403) {
+    // Acesso negado
+    console.log("Acesso negado à organização");
+  }
+}
+```
 
 ---
 
@@ -2079,7 +2415,7 @@ interface SimulateFinancialImpactRequest {
   organization_id: string; // UUID da organização
   new_card_commitments?: NewCardCommitment[]; // Novos compromissos de cartão (opcional)
   savings_goals?: SavingsGoal[]; // Metas de economia (opcional)
-  simulation_months?: number; // Número de meses para simular (1-12, padrão: 6)
+  simulation_months?: number; // Número de meses para simular (1-60, até 5 anos, padrão: 6)
 }
 
 const simulateFinancialImpact = async (
@@ -2237,7 +2573,7 @@ interface SimulateFinancialImpactResponse {
 - `target_amount`: Deve ser maior que 0
 - `current_amount`: Deve ser >= 0
 - `target_date`: Deve ser uma data válida no futuro
-- `simulation_months`: Deve estar entre 1 e 12
+- `simulation_months`: Deve estar entre 1 e 60 (até 5 anos)
 
 **Notas Importantes:**
 - O endpoint calcula automaticamente as parcelas dos novos compromissos baseado no valor total e número de parcelas

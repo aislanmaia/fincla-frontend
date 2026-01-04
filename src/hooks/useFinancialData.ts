@@ -143,12 +143,16 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
                 activeOrgId
               );
               
+              // If we get here, invoice exists (200 response means invoice exists with items)
               // Somar o valor total da fatura (representa o que o usuário precisa pagar)
-              if (invoice && invoice.total_amount > 0) {
-                totalInvoices += invoice.total_amount;
+              totalInvoices += invoice.total_amount;
+            } catch (err: any) {
+              // 404 means invoice doesn't exist for this month/card - skip
+              if (err?.response?.status === 404) {
+                continue;
               }
-            } catch (err) {
-              // Fatura não existe ou erro ao buscar, continuar
+              // Other errors - log but continue
+              console.error(`Erro ao buscar fatura do cartão ${card.id} para ${year}/${monthNumber}:`, err);
               continue;
             }
           }

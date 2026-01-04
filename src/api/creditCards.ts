@@ -1,6 +1,14 @@
 // api/creditCards.ts
 import apiClient from './client';
-import { CreateCreditCardRequest, UpdateCreditCardRequest, CreditCard, InvoiceResponse } from '../types/api';
+import { 
+  CreateCreditCardRequest, 
+  UpdateCreditCardRequest, 
+  CreditCard, 
+  InvoiceResponse,
+  InvoiceHistoryResponse,
+  InvoiceMarkPaidResponse,
+  MarkInvoicePaidRequest
+} from '../types/api';
 
 /**
  * Lista todos os cartões de crédito de uma organização
@@ -10,6 +18,22 @@ export const listCreditCards = async (
 ): Promise<CreditCard[]> => {
   const response = await apiClient.get<CreditCard[]>(
     '/credit-cards',
+    {
+      params: { organization_id: organizationId },
+    }
+  );
+  return response.data;
+};
+
+/**
+ * Obtém um cartão de crédito específico
+ */
+export const getCreditCard = async (
+  cardId: number,
+  organizationId: string
+): Promise<CreditCard> => {
+  const response = await apiClient.get<CreditCard>(
+    `/credit-cards/${cardId}`,
     {
       params: { organization_id: organizationId },
     }
@@ -74,4 +98,56 @@ export const getCreditCardInvoice = async (
   return response.data;
 };
 
+/**
+ * Obtém o histórico de faturas de um cartão
+ */
+export const getInvoiceHistory = async (
+  cardId: number,
+  organizationId: string,
+  months: number = 6
+): Promise<InvoiceHistoryResponse> => {
+  const response = await apiClient.get<InvoiceHistoryResponse>(
+    `/credit-cards/${cardId}/invoices/history`,
+    {
+      params: { organization_id: organizationId, months },
+    }
+  );
+  return response.data;
+};
+
+/**
+ * Marca uma fatura como paga
+ */
+export const markInvoicePaid = async (
+  cardId: number,
+  year: number,
+  month: number,
+  organizationId: string,
+  paidDate?: string
+): Promise<InvoiceMarkPaidResponse> => {
+  const body: MarkInvoicePaidRequest = paidDate ? { paid_date: paidDate } : {};
+  const response = await apiClient.patch<InvoiceMarkPaidResponse>(
+    `/credit-cards/${cardId}/invoices/${year}/${month}/mark-paid`,
+    body,
+    { params: { organization_id: organizationId } }
+  );
+  return response.data;
+};
+
+/**
+ * Desfaz a marcação de pagamento de uma fatura
+ */
+export const unmarkInvoicePaid = async (
+  cardId: number,
+  year: number,
+  month: number,
+  organizationId: string
+): Promise<InvoiceMarkPaidResponse> => {
+  const response = await apiClient.patch<InvoiceMarkPaidResponse>(
+    `/credit-cards/${cardId}/invoices/${year}/${month}/unmark-paid`,
+    {},
+    { params: { organization_id: organizationId } }
+  );
+  return response.data;
+};
 
