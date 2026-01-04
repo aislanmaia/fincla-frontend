@@ -2,7 +2,7 @@ import React, { useMemo, useRef, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { InvoiceResponse, CreditCard } from '@/types/api';
 import { formatCurrency } from '@/lib/utils';
-import { Calendar, CheckCircle, AlertCircle, Clock, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Calendar, CheckCircle, AlertCircle, Clock, ChevronLeft, ChevronRight, TrendingUp, TrendingDown, Minus, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Select, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -15,6 +15,7 @@ interface InvoiceStatusCardProps {
     invoice: InvoiceResponse | null;
     card?: CreditCard | null;
     isLoading: boolean;
+    isMarkingPaid?: boolean;
     onNavigateMonth?: (direction: 'prev' | 'next') => void;
     onSelectMonth?: (year: number, month: number) => void;
     canNavigatePrev?: boolean;
@@ -104,6 +105,7 @@ export const InvoiceStatusCard: React.FC<InvoiceStatusCardProps> = ({
     invoice,
     card,
     isLoading,
+    isMarkingPaid = false,
     onNavigateMonth,
     onSelectMonth,
     canNavigatePrev = true,
@@ -450,10 +452,15 @@ export const InvoiceStatusCard: React.FC<InvoiceStatusCardProps> = ({
                         variant="outline"
                         size="sm"
                         onClick={onMarkAsPaid}
+                        disabled={isMarkingPaid}
                         className="gap-1.5 text-green-600 border-green-200 hover:bg-green-50 hover:border-green-300 dark:border-green-800 dark:hover:bg-green-900/20"
                     >
-                        <CheckCircle className="w-4 h-4" />
-                        Marcar como Paga
+                        {isMarkingPaid ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <CheckCircle className="w-4 h-4" />
+                        )}
+                        {isMarkingPaid ? 'Salvando...' : 'Marcar como Paga'}
                     </Button>
                 )}
                 
@@ -464,11 +471,16 @@ export const InvoiceStatusCard: React.FC<InvoiceStatusCardProps> = ({
                                 variant="ghost"
                                 size="sm"
                                 onClick={onUnmarkAsPaid}
+                                disabled={isMarkingPaid}
                                 className="gap-1.5 text-green-600 bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/30"
                                 title="Clique para desmarcar como paga"
                             >
-                                <CheckCircle className="w-4 h-4" />
-                                <span className="font-medium">Paga</span>
+                                {isMarkingPaid ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                    <CheckCircle className="w-4 h-4" />
+                                )}
+                                <span className="font-medium">{isMarkingPaid ? 'Salvando...' : 'Paga'}</span>
                             </Button>
                         ) : (
                             <div className="flex items-center gap-1.5 text-sm text-green-600 bg-green-50 dark:bg-green-900/20 px-3 py-2 rounded-lg">
