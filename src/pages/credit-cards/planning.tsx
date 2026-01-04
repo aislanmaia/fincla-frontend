@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'wouter';
 import { PageTransition } from '@/components/PageTransition';
 import { Breadcrumb } from '@/components/Breadcrumb';
@@ -13,10 +13,11 @@ import {
   CarouselContent, 
   CarouselItem, 
   CarouselNext, 
-  CarouselPrevious 
+  CarouselPrevious,
+  type CarouselApi
 } from '@/components/ui/carousel';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CreditCard as CreditCardIcon, Sparkles, Calendar, TrendingUp, Receipt, Package } from 'lucide-react';
+import { CreditCard as CreditCardIcon, Sparkles, Calendar, TrendingUp, Receipt, Package, ChevronLeft, ChevronRight, GripHorizontal } from 'lucide-react';
 import { format, addMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -41,6 +42,33 @@ export default function FuturePlanningPage() {
     const [monthlyCommitments, setMonthlyCommitments] = useState<MonthlyCommitment[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [isSimulatorOpen, setIsSimulatorOpen] = useState(false);
+    
+    // Carousel state
+    const [carouselApi, setCarouselApi] = useState<CarouselApi>();
+    const [currentSlide, setCurrentSlide] = useState(0);
+    const [canScrollPrev, setCanScrollPrev] = useState(false);
+    const [canScrollNext, setCanScrollNext] = useState(false);
+
+    // Update carousel state when it changes
+    const onCarouselSelect = useCallback(() => {
+        if (!carouselApi) return;
+        setCurrentSlide(carouselApi.selectedScrollSnap());
+        setCanScrollPrev(carouselApi.canScrollPrev());
+        setCanScrollNext(carouselApi.canScrollNext());
+    }, [carouselApi]);
+
+    useEffect(() => {
+        if (!carouselApi) return;
+        
+        onCarouselSelect();
+        carouselApi.on('select', onCarouselSelect);
+        carouselApi.on('reInit', onCarouselSelect);
+        
+        return () => {
+            carouselApi.off('select', onCarouselSelect);
+            carouselApi.off('reInit', onCarouselSelect);
+        };
+    }, [carouselApi, onCarouselSelect]);
 
     // Load Cards
     useEffect(() => {
@@ -205,95 +233,180 @@ export default function FuturePlanningPage() {
                             </div>
                         </Card>
                     ) : (
-                        <Carousel
-                            opts={{
-                                align: 'start',
-                                loop: false,
-                            }}
-                            className="w-full"
-                        >
-                            <CarouselContent className="-ml-1 sm:-ml-2 md:-ml-4">
-                                {monthlyCommitments.map((commitment, index) => {
-                                    const isCurrentMonth = index === 0;
-                                    
-                                    return (
-                                        <CarouselItem key={`${commitment.year}-${commitment.monthNumber}`} className="pl-1 sm:pl-2 md:pl-4 basis-[90%] sm:basis-[70%] md:basis-1/2 lg:basis-1/3">
-                                            <Card className={cn(
-                                                'p-4 sm:p-5 md:p-6 h-full transition-all hover:shadow-md',
-                                                isCurrentMonth && 'border-indigo-300 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30'
-                                            )}>
-                                                <div className="space-y-3 sm:space-y-4">
-                                                    {/* Header */}
-                                                    <div className="flex items-start justify-between gap-2">
-                                                        <div className="min-w-0">
-                                                            <h3 className="font-bold text-base sm:text-lg capitalize truncate">
-                                                                {commitment.month}
-                                                            </h3>
-                                                            <p className="text-xs sm:text-sm text-muted-foreground">
-                                                                {commitment.year}
-                                                            </p>
-                                                        </div>
-                                                        {isCurrentMonth && (
-                                                            <span className="text-[10px] sm:text-xs bg-indigo-500 text-white px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full whitespace-nowrap flex-shrink-0">
-                                                                Próximo
-                                                            </span>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Total Amount */}
-                                                    <div className="space-y-1">
-                                                        <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-muted-foreground">
-                                                            <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                                                            <span>Total Previsto</span>
-                                                        </div>
-                                                        <div className="text-xl sm:text-2xl font-bold">
-                                                            R$ {commitment.totalAmount.toFixed(2)}
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Installments Summary */}
-                                                    {commitment.installmentsCount > 0 ? (
-                                                        <div className="space-y-1.5 sm:space-y-2 pt-2 border-t">
-                                                            <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-muted-foreground">
-                                                                <Package className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                                                                <span>{commitment.installmentsCount} parcela(s)</span>
-                                                            </div>
-                                                            
-                                                            <div className="space-y-0.5 sm:space-y-1">
-                                                                {commitment.mainInstallments.map((inst, idx) => (
-                                                                    <div key={idx} className="flex justify-between gap-2 text-xs sm:text-sm">
-                                                                        <span className="text-muted-foreground truncate">
-                                                                            {inst.description}
-                                                                        </span>
-                                                                        <span className="font-medium whitespace-nowrap flex-shrink-0">
-                                                                            R$ {inst.amount.toFixed(2)}
-                                                                        </span>
-                                                                    </div>
-                                                                ))}
-                                                                {commitment.installmentsCount > 3 && (
-                                                                    <div className="text-[10px] sm:text-xs text-muted-foreground">
-                                                                        + {commitment.installmentsCount - 3} outras
-                                                                    </div>
+                        <div className="space-y-4">
+                            {/* Carousel Container with visual indicators */}
+                            <div className="relative group">
+                                {/* Left gradient indicator */}
+                                <div 
+                                    className={cn(
+                                        "absolute left-0 top-0 bottom-0 w-12 sm:w-16 bg-gradient-to-r from-background via-background/80 to-transparent z-10 pointer-events-none transition-opacity duration-300",
+                                        canScrollPrev ? "opacity-100" : "opacity-0"
+                                    )}
+                                />
+                                
+                                {/* Right gradient indicator */}
+                                <div 
+                                    className={cn(
+                                        "absolute right-0 top-0 bottom-0 w-12 sm:w-16 bg-gradient-to-l from-background via-background/80 to-transparent z-10 pointer-events-none transition-opacity duration-300",
+                                        canScrollNext ? "opacity-100" : "opacity-0"
+                                    )}
+                                />
+                                
+                                {/* Navigation buttons - more visible */}
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className={cn(
+                                        "absolute left-2 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full bg-background/95 backdrop-blur shadow-lg border-2 transition-all duration-200",
+                                        "hover:bg-primary hover:text-primary-foreground hover:scale-110",
+                                        canScrollPrev 
+                                            ? "opacity-100" 
+                                            : "opacity-0 pointer-events-none"
+                                    )}
+                                    onClick={() => carouselApi?.scrollPrev()}
+                                >
+                                    <ChevronLeft className="h-5 w-5" />
+                                </Button>
+                                
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    className={cn(
+                                        "absolute right-2 top-1/2 -translate-y-1/2 z-20 h-10 w-10 rounded-full bg-background/95 backdrop-blur shadow-lg border-2 transition-all duration-200",
+                                        "hover:bg-primary hover:text-primary-foreground hover:scale-110",
+                                        canScrollNext 
+                                            ? "opacity-100" 
+                                            : "opacity-0 pointer-events-none"
+                                    )}
+                                    onClick={() => carouselApi?.scrollNext()}
+                                >
+                                    <ChevronRight className="h-5 w-5" />
+                                </Button>
+                                
+                                <Carousel
+                                    setApi={setCarouselApi}
+                                    opts={{
+                                        align: 'start',
+                                        loop: false,
+                                    }}
+                                    className="w-full"
+                                >
+                                    <CarouselContent className="-ml-2 sm:-ml-3 md:-ml-4">
+                                        {monthlyCommitments.map((commitment, index) => {
+                                            const isCurrentMonth = index === 0;
+                                            
+                                            return (
+                                                <CarouselItem 
+                                                    key={`${commitment.year}-${commitment.monthNumber}`} 
+                                                    className="pl-2 sm:pl-3 md:pl-4 basis-[85%] sm:basis-[60%] md:basis-1/2 lg:basis-1/3 cursor-grab active:cursor-grabbing"
+                                                >
+                                                    <Card className={cn(
+                                                        'p-4 sm:p-5 md:p-6 h-full transition-all hover:shadow-lg hover:-translate-y-1',
+                                                        isCurrentMonth && 'border-indigo-300 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 ring-2 ring-indigo-200 dark:ring-indigo-800'
+                                                    )}>
+                                                        <div className="space-y-3 sm:space-y-4">
+                                                            {/* Header */}
+                                                            <div className="flex items-start justify-between gap-2">
+                                                                <div className="min-w-0">
+                                                                    <h3 className="font-bold text-base sm:text-lg capitalize truncate">
+                                                                        {commitment.month}
+                                                                    </h3>
+                                                                    <p className="text-xs sm:text-sm text-muted-foreground">
+                                                                        {commitment.year}
+                                                                    </p>
+                                                                </div>
+                                                                {isCurrentMonth && (
+                                                                    <span className="text-[10px] sm:text-xs bg-indigo-500 text-white px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-full whitespace-nowrap flex-shrink-0 animate-pulse">
+                                                                        Próximo
+                                                                    </span>
                                                                 )}
                                                             </div>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="pt-2 border-t">
-                                                            <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-muted-foreground">
-                                                                <Receipt className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                                                                <span>Sem parcelas previstas</span>
+
+                                                            {/* Total Amount */}
+                                                            <div className="space-y-1">
+                                                                <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-muted-foreground">
+                                                                    <TrendingUp className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                                                    <span>Total Previsto</span>
+                                                                </div>
+                                                                <div className="text-xl sm:text-2xl font-bold">
+                                                                    R$ {commitment.totalAmount.toFixed(2)}
+                                                                </div>
                                                             </div>
+
+                                                            {/* Installments Summary */}
+                                                            {commitment.installmentsCount > 0 ? (
+                                                                <div className="space-y-1.5 sm:space-y-2 pt-2 border-t">
+                                                                    <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-muted-foreground">
+                                                                        <Package className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                                                        <span>{commitment.installmentsCount} parcela(s)</span>
+                                                                    </div>
+                                                                    
+                                                                    <div className="space-y-0.5 sm:space-y-1">
+                                                                        {commitment.mainInstallments.map((inst, idx) => (
+                                                                            <div key={idx} className="flex justify-between gap-2 text-xs sm:text-sm">
+                                                                                <span className="text-muted-foreground truncate">
+                                                                                    {inst.description}
+                                                                                </span>
+                                                                                <span className="font-medium whitespace-nowrap flex-shrink-0">
+                                                                                    R$ {inst.amount.toFixed(2)}
+                                                                                </span>
+                                                                            </div>
+                                                                        ))}
+                                                                        {commitment.installmentsCount > 3 && (
+                                                                            <div className="text-[10px] sm:text-xs text-muted-foreground">
+                                                                                + {commitment.installmentsCount - 3} outras
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="pt-2 border-t">
+                                                                    <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-muted-foreground">
+                                                                        <Receipt className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+                                                                        <span>Sem parcelas previstas</span>
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                    )}
-                                                </div>
-                                            </Card>
-                                        </CarouselItem>
-                                    );
-                                })}
-                            </CarouselContent>
-                            <CarouselPrevious />
-                            <CarouselNext />
-                        </Carousel>
+                                                    </Card>
+                                                </CarouselItem>
+                                            );
+                                        })}
+                                    </CarouselContent>
+                                </Carousel>
+                            </div>
+                            
+                            {/* Pagination indicators and drag hint */}
+                            <div className="flex flex-col items-center gap-2">
+                                {/* Dots pagination */}
+                                <div className="flex items-center gap-1.5">
+                                    {monthlyCommitments.map((_, index) => (
+                                        <button
+                                            key={index}
+                                            onClick={() => carouselApi?.scrollTo(index)}
+                                            className={cn(
+                                                "h-2 rounded-full transition-all duration-300",
+                                                currentSlide === index 
+                                                    ? "w-6 bg-primary" 
+                                                    : "w-2 bg-muted-foreground/30 hover:bg-muted-foreground/50"
+                                            )}
+                                            aria-label={`Ir para ${monthlyCommitments[index].month}`}
+                                        />
+                                    ))}
+                                </div>
+                                
+                                {/* Counter and drag hint */}
+                                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                    <span className="font-medium">
+                                        {currentSlide + 1} de {monthlyCommitments.length}
+                                    </span>
+                                    <span className="hidden sm:flex items-center gap-1 opacity-60">
+                                        <GripHorizontal className="w-3.5 h-3.5" />
+                                        Arraste para navegar
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
                     )}
                 </div>
 
