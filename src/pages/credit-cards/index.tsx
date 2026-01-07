@@ -428,6 +428,40 @@ export default function CreditCardsPage() {
                                 transactions={currentInvoice?.items || []}
                                 isLoading={isLoadingInvoice}
                                 grouped
+                                cardId={selectedCardId || undefined}
+                                organizationId={currentOrg?.id}
+                                currentInvoice={currentInvoice}
+                                currentYear={invoiceYear || new Date().getFullYear()}
+                                currentMonth={invoiceMonth || new Date().getMonth() + 1}
+                                onInvoiceUpdated={() => {
+                                    // Recarregar fatura após mover parcela
+                                    const loadInvoice = async () => {
+                                        if (!selectedCardId || !currentOrg?.id) return;
+                                        try {
+                                            setIsLoadingInvoice(true);
+                                            const now = new Date();
+                                            const year = invoiceYear || now.getFullYear();
+                                            const month = invoiceMonth || (now.getMonth() + 1);
+                                            const invoice = await getCreditCardInvoice(
+                                                selectedCardId,
+                                                year,
+                                                month,
+                                                currentOrg.id
+                                            );
+                                            setCurrentInvoice(invoice);
+                                        } catch (error: any) {
+                                            if (error?.response?.status === 404) {
+                                                setCurrentInvoice(null);
+                                            } else {
+                                                console.error('Erro ao carregar fatura:', error);
+                                                setCurrentInvoice(null);
+                                            }
+                                        } finally {
+                                            setIsLoadingInvoice(false);
+                                        }
+                                    };
+                                    loadInvoice();
+                                }}
                             />
                         </div>
 
@@ -459,6 +493,40 @@ export default function CreditCardsPage() {
                                 isLoading={isLoadingInvoice}
                                 grouped
                                 compactCards
+                                cardId={selectedCardId || undefined}
+                                organizationId={currentOrg?.id}
+                                currentInvoice={currentInvoice}
+                                currentYear={invoiceYear || new Date().getFullYear()}
+                                currentMonth={invoiceMonth || new Date().getMonth() + 1}
+                                onInvoiceUpdated={() => {
+                                    // Recarregar fatura após mover parcela
+                                    const loadInvoice = async () => {
+                                        if (!selectedCardId || !currentOrg?.id) return;
+                                        try {
+                                            setIsLoadingInvoice(true);
+                                            const now = new Date();
+                                            const year = invoiceYear || now.getFullYear();
+                                            const month = invoiceMonth || (now.getMonth() + 1);
+                                            const invoice = await getCreditCardInvoice(
+                                                selectedCardId,
+                                                year,
+                                                month,
+                                                currentOrg.id
+                                            );
+                                            setCurrentInvoice(invoice);
+                                        } catch (error: any) {
+                                            if (error?.response?.status === 404) {
+                                                setCurrentInvoice(null);
+                                            } else {
+                                                console.error('Erro ao carregar fatura:', error);
+                                                setCurrentInvoice(null);
+                                            }
+                                        } finally {
+                                            setIsLoadingInvoice(false);
+                                        }
+                                    };
+                                    loadInvoice();
+                                }}
                             />
                         </div>
 
@@ -483,6 +551,40 @@ export default function CreditCardsPage() {
                                 grouped
                                 mobileOptimized
                                 compactCards
+                                cardId={selectedCardId || undefined}
+                                organizationId={currentOrg?.id}
+                                currentInvoice={currentInvoice}
+                                currentYear={invoiceYear || new Date().getFullYear()}
+                                currentMonth={invoiceMonth || new Date().getMonth() + 1}
+                                onInvoiceUpdated={() => {
+                                    // Recarregar fatura após mover parcela
+                                    const loadInvoice = async () => {
+                                        if (!selectedCardId || !currentOrg?.id) return;
+                                        try {
+                                            setIsLoadingInvoice(true);
+                                            const now = new Date();
+                                            const year = invoiceYear || now.getFullYear();
+                                            const month = invoiceMonth || (now.getMonth() + 1);
+                                            const invoice = await getCreditCardInvoice(
+                                                selectedCardId,
+                                                year,
+                                                month,
+                                                currentOrg.id
+                                            );
+                                            setCurrentInvoice(invoice);
+                                        } catch (error: any) {
+                                            if (error?.response?.status === 404) {
+                                                setCurrentInvoice(null);
+                                            } else {
+                                                console.error('Erro ao carregar fatura:', error);
+                                                setCurrentInvoice(null);
+                                            }
+                                        } finally {
+                                            setIsLoadingInvoice(false);
+                                        }
+                                    };
+                                    loadInvoice();
+                                }}
                             />
                         </div>
 

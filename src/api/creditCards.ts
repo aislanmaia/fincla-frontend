@@ -7,7 +7,9 @@ import {
   InvoiceResponse,
   InvoiceHistoryResponse,
   InvoiceMarkPaidResponse,
-  MarkInvoicePaidRequest
+  MarkInvoicePaidRequest,
+  MoveInstallmentRequest,
+  MoveInstallmentResponse
 } from '../types/api';
 
 /**
@@ -151,6 +153,27 @@ export const unmarkInvoicePaid = async (
     `/credit-cards/${cardId}/invoices/${year}/${month}/unmark-paid`,
     {},
     { params: { organization_id: organizationId } }
+  );
+  return response.data;
+};
+
+/**
+ * Move uma parcela específica para uma fatura diferente (mês/ano)
+ * Todas as outras parcelas da mesma compra serão recalculadas automaticamente
+ */
+export const moveInstallmentToInvoice = async (
+  cardId: number,
+  chargeId: number,
+  installmentId: number,
+  organizationId: string,
+  target: MoveInstallmentRequest
+): Promise<MoveInstallmentResponse> => {
+  const response = await apiClient.patch<MoveInstallmentResponse>(
+    `/credit-cards/${cardId}/charges/${chargeId}/installments/${installmentId}/invoice`,
+    target,
+    {
+      params: { organization_id: organizationId },
+    }
   );
   return response.data;
 };

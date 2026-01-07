@@ -387,6 +387,7 @@ export interface CreditCard {
 
 export interface InvoiceItemResponse {
   id: number;
+  charge_id: number;
   transaction_date: string;
   description: string;
   amount: number;
@@ -2125,6 +2126,7 @@ const getCreditCardInvoice = async (
   items: [
     {
       id: 123,
+      charge_id: 456,
       transaction_date: "2025-01-05",
       description: "Compra Parcelada",
       amount: 100.00,
@@ -2336,6 +2338,162 @@ try {
   }
 }
 ```
+
+---
+
+### Como Obter `charge_id` e `installment_id`
+
+Para usar o endpoint `move_installment_to_invoice`, você precisa dos seguintes IDs:
+- `card_id`: ID do cartão de crédito (já disponível ao listar cartões)
+- `charge_id`: ID da compra (charge) associada à parcela
+- `installment_id`: ID da parcela específica que você quer mover
+
+#### Opção 1: Através da Transação (Recomendado)
+
+Quando você obtém uma transação de cartão de crédito, o `charge_id` está disponível no campo `credit_card_charge.charge.id`:
+
+```typescript
+// Obter transação
+const transaction = await getTransaction(transactionId, organizationId);
+
+if (transaction.credit_card_charge) {
+  const chargeId = transaction.credit_card_charge.charge.id;
+  const cardId = transaction.credit_card_charge.card.id;
+  
+  // Para obter o installment_id, você precisa buscar as parcelas da fatura
+  // ou usar o id do item da fatura (veja Opção 2)
+}
+```
+
+#### Opção 2: Através da Fatura (Recomendado para visualização de faturas)
+
+Quando você obtém uma fatura de cartão de crédito, cada item (`InvoiceItemResponse`) possui **todos os IDs necessários**:
+- `id`: Este é o `installment_id` da parcela
+- `charge_id`: ID da compra (charge) associada à parcela ✅ **Agora disponível diretamente!**
+- `installment_number`: Número da parcela (1, 2, 3, etc.)
+- `total_installments`: Total de parcelas da compra
+
+**Exemplo Prático:**
+
+```typescript
+// 1. Obter fatura do cartão
+const invoice = await getCreditCardInvoice(cardId, year, month, organizationId);
+
+// 2. Para cada item da fatura, você já tem tudo que precisa:
+invoice.items.forEach((item) => {
+  const installmentId = item.id;        // installment_id
+  const chargeId = item.charge_id;       // charge_id - agora disponível diretamente!
+  const cardId = /* já conhecido */;
+  
+  // 3. Pronto para usar no endpoint de mover parcela
+  await moveInstallmentToInvoice(
+    cardId,
+    chargeId,
+    installmentId,
+    organizationId,
+    {
+      target_year: 2025,
+      target_month: 12,
+    }
+  );
+});
+```
+
+---
+
+### PATCH `/v1/credit-cards/{card_id}/charges/{charge_id}/installments/{installment_id}/invoice`
+
+Move uma parcela específica para uma fatura diferente (mês/ano) e recalcula todas as outras parcelas da mesma compra mantendo intervalo de 1 mês entre elas.
+
+> **Nota:** Este endpoint permite ajuste manual de parcelas para sincronizar com o app do banco. Ao mover uma parcela para um mês/ano específico, todas as outras parcelas da mesma compra são recalculadas automaticamente para manter o intervalo de 1 mês entre elas.
+
+**Request:**
+```typescript
+interface MoveInstallmentRequest {
+  target_year: number;  // Ano da fatura de destino (1900-2100)
+  target_month: number; // Mês da fatura de destino (1-12)
+}
+
+const moveInstallmentToInvoice = async (
+  cardId: number,
+  chargeId: number,
+  installmentId: number,
+  organizationId: string,
+  target: MoveInstallmentRequest
+): Promise<void> => {
+  await apiClient.patch(
+    `/v1/credit-cards/${cardId}/charges/${chargeId}/installments/${installmentId}/invoice`,
+    target,
+    {
+      params: { organization_id: organizationId },
+    }
+  );
+};
+```
+
+**Exemplo:**
+```typescript
+// Mover a parcela 3 de uma compra de 5 parcelas para dezembro de 2025
+// Todas as outras parcelas serão recalculadas:
+// - Parcela 1: outubro 2025 (dezembro - 2 meses)
+// - Parcela 2: novembro 2025 (dezembro - 1 mês)
+// - Parcela 3: dezembro 2025 (destino)
+// - Parcela 4: janeiro 2026 (dezembro + 1 mês)
+// - Parcela 5: fevereiro 2026 (dezembro + 2 meses)
+await moveInstallmentToInvoice(
+  cardId,
+  chargeId,
+  installmentId,
+  organizationId,
+  {
+    target_year: 2025,
+    target_month: 12,
+  }
+);
+```
+
+**Response (200):**
+```typescript
+{
+  success: true,
+  message: "Installment moved to invoice 2025-12 and all related installments recalculated"
+}
+```
+
+**Erros:**
+- `400`: Invalid year/month (out of range) or invalid installment position
+- `403`: User does not have access to the organization
+- `404`: Installment, charge, or card not found
+- `422`: Installment does not belong to the specified organization
+
+**Exemplo de Tratamento de Erros:**
+```typescript
+try {
+  await moveInstallmentToInvoice(
+    cardId,
+    chargeId,
+    installmentId,
+    organizationId,
+    { target_year: 2025, target_month: 12 }
+  );
+  // Sucesso - todas as parcelas foram recalculadas
+  console.log("Parcela movida com sucesso");
+} catch (error) {
+  if (error.response?.status === 404) {
+    console.log("Parcela, compra ou cartão não encontrado");
+  } else if (error.response?.status === 403) {
+    console.log("Acesso negado à organização");
+  } else if (error.response?.status === 400) {
+    console.log("Ano/mês inválido ou posição de parcela inválida");
+  }
+}
+```
+
+**Notas Importantes:**
+- A data de vencimento (`due_date`) é calculada automaticamente com base no `due_day` do cartão e no mês/ano da fatura de destino
+- Todas as parcelas da mesma compra são recalculadas para manter intervalo de 1 mês
+- O sistema usa uma fórmula de "mês absoluto" para garantir cálculos corretos mesmo com mudanças de ano
+- A parcela movida serve como "âncora" e as outras são posicionadas relativamente a ela
 
 ---
 
@@ -3404,6 +3562,225 @@ export const useTags = (organizationId: string) => {
 
 ---
 
+## 🔮 Planejamento Futuro (Credit Cards)
+
+### GET `/v1/credit-cards/{card_id}/future-commitments`
+
+Retorna uma visão consolidada dos compromissos futuros de um cartão específico.
+
+**Query Parameters:**
+
+| Parâmetro | Tipo | Obrigatório | Default | Descrição |
+|-----------|------|-------------|---------|-----------|
+| `organization_id` | UUID | Sim | - | ID da organização |
+| `months` | integer | Não | 6 | Número de meses futuros (1-12) |
+
+**Request:**
+
+```typescript
+const getFutureCommitments = async (
+  cardId: number,
+  organizationId: string,
+  months: number = 6
+): Promise<FutureCommitmentsResponse> => {
+  const response = await apiClient.get<FutureCommitmentsResponse>(
+    `/v1/credit-cards/${cardId}/future-commitments`,
+    {
+      params: { organization_id: organizationId, months }
+    }
+  );
+  return response.data;
+};
+```
+
+**Response (200):**
+
+```typescript
+interface FutureCommitmentsResponse {
+  card_id: number;
+  card_name: string;
+  card_last4: string;
+  credit_limit: number | null;
+  current_available_limit: number | null;
+  
+  summary: {
+    total_committed: number;
+    average_monthly: number;
+    lowest_month: MonthSummary | null;
+    highest_month: MonthSummary | null;
+  };
+  
+  monthly_breakdown: MonthlyBreakdown[];
+  ending_soon: EndingInstallment[];
+  insights: Insight[];
+}
+
+interface MonthSummary {
+  year: number;
+  month: number;
+  month_name: string;  // "janeiro", "fevereiro", etc.
+  amount: number;
+}
+
+interface MonthlyBreakdown {
+  year: number;
+  month: number;
+  month_name: string;
+  total_amount: number;
+  limit_usage_percent: number | null;
+  installments_count: number;
+  top_installments: InstallmentItem[];
+}
+
+interface InstallmentItem {
+  description: string;
+  amount: number;
+  installment_number: number;
+  total_installments: number;
+  category_name: string | null;
+  category_color: string | null;
+}
+
+interface EndingInstallment {
+  description: string;
+  purchase_date: string;  // YYYY-MM-DD
+  total_value: number;
+  monthly_amount: number;
+  total_installments: number;
+  remaining_installments: number;
+  last_installment_date: string;  // YYYY-MM-DD
+  last_installment_month: string;  // "abril 2026"
+  category_name: string | null;
+}
+
+interface Insight {
+  type: "ending_commitment" | "best_month" | "limit_warning" | "decreasing_trend" | "no_commitments";
+  icon: string;  // Material icon name
+  message: string;
+}
+```
+
+**Campos Calculados:**
+
+| Campo | Descrição |
+|-------|-----------|
+| `summary.total_committed` | Soma de `total_amount` de todos os meses |
+| `summary.average_monthly` | `total_committed / months` |
+| `limit_usage_percent` | `(total_amount / credit_limit) * 100` |
+| `remaining_installments` | Parcelas restantes a partir do mês atual |
+| `ending_soon` | Compras que terminam nos próximos 6 meses (máx. 5 itens) |
+
+**Erros:**
+
+- `403`: Usuário não tem acesso à organização
+- `404`: Cartão não encontrado
+
+---
+
+### GET `/v1/credit-cards/consolidated-commitments`
+
+Retorna uma visão consolidada de TODOS os cartões da organização.
+
+**Query Parameters:**
+
+| Parâmetro | Tipo | Obrigatório | Default | Descrição |
+|-----------|------|-------------|---------|-----------|
+| `organization_id` | UUID | Sim | - | ID da organização |
+| `months` | integer | Não | 6 | Número de meses futuros (1-12) |
+
+**Request:**
+
+```typescript
+const getConsolidatedCommitments = async (
+  organizationId: string,
+  months: number = 6
+): Promise<ConsolidatedCommitmentsResponse> => {
+  const response = await apiClient.get<ConsolidatedCommitmentsResponse>(
+    `/v1/credit-cards/consolidated-commitments`,
+    {
+      params: { organization_id: organizationId, months }
+    }
+  );
+  return response.data;
+};
+```
+
+**Response (200):**
+
+```typescript
+interface ConsolidatedCommitmentsResponse {
+  organization_id: string;
+  total_cards: number;
+  total_credit_limit: number;
+  total_available_limit: number;
+  
+  summary: {
+    total_committed_all_cards: number;
+    average_monthly_all_cards: number;
+    lowest_month: MonthSummary | null;
+    highest_month: MonthSummary | null;
+  };
+  
+  by_card: CardCommitmentSummary[];
+  monthly_total: MonthlyTotal[];
+  ending_soon_all_cards: EndingInstallmentAllCards[];
+  global_insights: Insight[];
+}
+
+interface CardCommitmentSummary {
+  card_id: number;
+  card_name: string;
+  card_last4: string;
+  credit_limit: number | null;
+  total_committed: number;
+  percentage_of_total: number;  // % do total de todos os cartões
+}
+
+interface MonthlyTotal {
+  year: number;
+  month: number;
+  month_name: string;
+  total_amount: number;
+  by_card: { card_id: number; card_name: string; amount: number }[];
+}
+
+interface EndingInstallmentAllCards {
+  card_id: number;
+  card_name: string;
+  description: string;
+  monthly_amount: number;
+  remaining_installments: number;
+  last_installment_month: string;
+}
+```
+
+**Campos Calculados:**
+
+| Campo | Descrição |
+|-------|-----------|
+| `total_credit_limit` | Soma de `credit_limit` de todos os cartões |
+| `total_available_limit` | Soma de `available_limit` de todos os cartões |
+| `percentage_of_total` | `(card_total / total_committed_all_cards) * 100` |
+
+**Erros:**
+
+- `403`: Usuário não tem acesso à organização
+
+**Tipos de Insights Gerados:**
+
+| Tipo | Ícone | Quando aparece |
+|------|-------|----------------|
+| `ending_commitment` | `trending_down` | Parcela termina nos próximos 3 meses |
+| `best_month` | `lightbulb` | Sempre (mês com menor compromisso) |
+| `no_commitments` | `check_circle` | Algum mês sem compromissos |
+| `limit_warning` | `warning` | Uso do limite > 50% em algum mês |
+| `decreasing_trend` | `trending_down` | Compromissos diminuem ao longo dos meses |
+| `card_distribution` | `pie_chart` | Mostra distribuição de compromissos por cartão |
+| `total_reduction` | `trending_down` | Redução nos compromissos totais |
+| `best_card_for_purchase` | `credit_card` | Cartão com mais limite disponível |
+
+---
+
 ## 🔗 Links Úteis
 
 - **Swagger/OpenAPI**: Acesse `http://localhost:8000/docs` ou `https://api.fincla.com/docs` para documentação interativa
@@ -3433,5 +3810,5 @@ export const useTags = (organizationId: string) => {
 
 ---
 
-**Última atualização**: Dezembro 2025 (v1 API)
+**Última atualização**: Janeiro 2026 (v1 API)
 

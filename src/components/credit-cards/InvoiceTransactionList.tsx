@@ -1,10 +1,10 @@
 import React, { useState, useMemo } from 'react';
-import { InvoiceItemResponse } from '@/types/api';
+import { InvoiceItemResponse, InvoiceResponse } from '@/types/api';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Filter, Download, Tag as TagIcon, ChevronDown, ChevronRight, ChevronsUpDown } from 'lucide-react';
+import { Search, Filter, Download, Tag as TagIcon, ChevronDown, ChevronRight, ChevronsUpDown, ArrowRightLeft } from 'lucide-react';
 import { formatCurrency, cn } from '@/lib/utils';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -13,6 +13,8 @@ import {
     CollapsibleContent,
     CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import { MoveInstallmentDialog } from './MoveInstallmentDialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface InvoiceTransactionListProps {
     transactions: InvoiceItemResponse[];
@@ -22,6 +24,13 @@ interface InvoiceTransactionListProps {
     mobileOptimized?: boolean;
     stickyHeader?: boolean;
     maxHeight?: string;
+    // Props para mover parcela
+    cardId?: number;
+    organizationId?: string;
+    currentInvoice?: InvoiceResponse | null;
+    currentYear?: number;
+    currentMonth?: number;
+    onInvoiceUpdated?: () => void;
 }
 
 interface TransactionGroup {
@@ -39,10 +48,18 @@ export const InvoiceTransactionList: React.FC<InvoiceTransactionListProps> = ({
     mobileOptimized = false,
     stickyHeader = false,
     maxHeight,
+    cardId,
+    organizationId,
+    currentInvoice,
+    currentYear,
+    currentMonth,
+    onInvoiceUpdated,
 }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [sortBy, setSortBy] = useState<'date' | 'amount'>('date');
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+    const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+    const [selectedItemForMove, setSelectedItemForMove] = useState<InvoiceItemResponse | null>(null);
 
     const filteredTransactions = useMemo(() => {
         return transactions
@@ -145,74 +162,117 @@ export const InvoiceTransactionList: React.FC<InvoiceTransactionListProps> = ({
         }
     };
 
-    const renderTransaction = (transaction: InvoiceItemResponse) => (
-        <Card 
-            key={transaction.id} 
-            className={cn(
-                "flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors",
-                compactCards || mobileOptimized ? "p-3" : "p-4"
-            )}
-        >
-            <div className="flex items-center gap-3 min-w-0">
-                {/* Date badge - hidden when grouped */}
-                {!grouped && (
-                    <div className={cn(
-                        "flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-800 rounded-lg flex-shrink-0",
-                        compactCards ? "w-10 h-10" : "w-12 h-12"
-                    )}>
-                        <span className="text-[10px] font-bold text-gray-500 uppercase">
-                            {format(new Date(transaction.transaction_date), 'MMM', { locale: ptBR })}
-                        </span>
-                        <span className={cn("font-bold", compactCards ? "text-base" : "text-lg")}>
-                            {format(new Date(transaction.transaction_date), 'dd')}
-                        </span>
-                    </div>
+    const handleMoveInstallment = (item: InvoiceItemResponse) => {
+        if (!cardId || !organizationId || !currentInvoice || !currentYear || !currentMonth) {
+            return;
+        }
+        setSelectedItemForMove(item);
+        setMoveDialogOpen(true);
+    };
+
+    const renderTransaction = (transaction: InvoiceItemResponse) => {
+        const canMove = 
+            transaction.total_installments > 1 &&
+            cardId &&
+            organizationId &&
+            currentInvoice &&
+            currentYear &&
+            currentMonth &&
+            transaction.charge_id;
+
+        return (
+            <Card 
+                key={transaction.id} 
+                className={cn(
+                    "flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors",
+                    compactCards || mobileOptimized ? "p-3" : "p-4"
                 )}
-
-                <div className="min-w-0">
-                    <div className={cn(
-                        "font-medium truncate",
-                        compactCards && "text-sm"
-                    )}>
-                        {transaction.description}
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
-                        {transaction.total_installments > 1 && (
-                            <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded text-xs font-medium">
-                                {transaction.installment_number}/{transaction.total_installments}
+            >
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                    {/* Date badge - hidden when grouped */}
+                    {!grouped && (
+                        <div className={cn(
+                            "flex flex-col items-center justify-center bg-gray-100 dark:bg-gray-800 rounded-lg flex-shrink-0",
+                            compactCards ? "w-10 h-10" : "w-12 h-12"
+                        )}>
+                            <span className="text-[10px] font-bold text-gray-500 uppercase">
+                                {format(new Date(transaction.transaction_date), 'MMM', { locale: ptBR })}
                             </span>
-                        )}
-
-                        {/* Category Tag */}
-                        {transaction.tags?.['categoria']?.[0] ? (
-                            <span
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap border"
-                                style={{
-                                    backgroundColor: `${transaction.tags['categoria'][0].color}20`,
-                                    color: transaction.tags['categoria'][0].color || '#6B7280',
-                                    borderColor: `${transaction.tags['categoria'][0].color}50`
-                                }}
-                            >
-                                {transaction.tags['categoria'][0].name}
+                            <span className={cn("font-bold", compactCards ? "text-base" : "text-lg")}>
+                                {format(new Date(transaction.transaction_date), 'dd')}
                             </span>
-                        ) : !mobileOptimized && (
-                            <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-orange-500 hover:text-orange-600 hover:bg-orange-50">
-                                <TagIcon className="w-3 h-3 mr-1" />
-                                Classificar
-                            </Button>
-                        )}
+                        </div>
+                    )}
+
+                    <div className="min-w-0 flex-1">
+                        <div className={cn(
+                            "font-medium truncate",
+                            compactCards && "text-sm"
+                        )}>
+                            {transaction.description}
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
+                            {transaction.total_installments > 1 && (
+                                <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded text-xs font-medium">
+                                    {transaction.installment_number}/{transaction.total_installments}
+                                </span>
+                            )}
+
+                            {/* Category Tag */}
+                            {transaction.tags?.['categoria']?.[0] ? (
+                                <span
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap border"
+                                    style={{
+                                        backgroundColor: `${transaction.tags['categoria'][0].color}20`,
+                                        color: transaction.tags['categoria'][0].color || '#6B7280',
+                                        borderColor: `${transaction.tags['categoria'][0].color}50`
+                                    }}
+                                >
+                                    {transaction.tags['categoria'][0].name}
+                                </span>
+                            ) : !mobileOptimized && (
+                                <Button variant="ghost" size="sm" className="h-6 px-2 text-xs text-orange-500 hover:text-orange-600 hover:bg-orange-50">
+                                    <TagIcon className="w-3 h-3 mr-1" />
+                                    Classificar
+                                </Button>
+                            )}
+
+                            {/* Botão de mover parcela */}
+                            {canMove && (
+                                <TooltipProvider>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground hover:bg-muted"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleMoveInstallment(transaction);
+                                                }}
+                                            >
+                                                <ArrowRightLeft className="w-3 h-3" />
+                                            </Button>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p>Mover parcela para outra fatura</p>
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            )}
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div className={cn(
-                "font-bold text-right flex-shrink-0",
-                compactCards && "text-sm"
-            )}>
-                {formatCurrency(transaction.amount)}
-            </div>
-        </Card>
-    );
+                <div className={cn(
+                    "font-bold text-right flex-shrink-0",
+                    compactCards && "text-sm"
+                )}>
+                    {formatCurrency(transaction.amount)}
+                </div>
+            </Card>
+        );
+    };
 
     const renderGroupedList = () => (
         <div className="space-y-3">
@@ -350,6 +410,24 @@ export const InvoiceTransactionList: React.FC<InvoiceTransactionListProps> = ({
                     renderFlatList()
                 )}
             </div>
+
+            {/* Dialog de mover parcela */}
+            {selectedItemForMove && cardId && organizationId && currentInvoice && currentYear && currentMonth && (
+                <MoveInstallmentDialog
+                    open={moveDialogOpen}
+                    onOpenChange={setMoveDialogOpen}
+                    item={selectedItemForMove}
+                    currentInvoice={currentInvoice}
+                    cardId={cardId}
+                    organizationId={organizationId}
+                    currentYear={currentYear}
+                    currentMonth={currentMonth}
+                    onSuccess={() => {
+                        onInvoiceUpdated?.();
+                        setSelectedItemForMove(null);
+                    }}
+                />
+            )}
         </div>
     );
 };

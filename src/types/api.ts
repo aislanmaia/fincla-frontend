@@ -265,14 +265,23 @@ export interface CategoryBreakdown {
   transaction_count: number;
 }
 
+export interface PurchaseInfo {
+  purchase_date: string;
+  total_value: number;
+  last_installment_date: string;
+  remaining_after_this: number;
+}
+
 export interface InvoiceItemResponse {
-  id: number;
+  id: number; // Este é o installment_id
+  charge_id: number; // ID da compra (charge)
   transaction_date: string;
   description: string;
   amount: number;
   installment_number: number;
   total_installments: number;
   tags: Record<string, Tag[]>;
+  purchase_info?: PurchaseInfo; // Opcional, apenas se total_installments > 1
 }
 
 export interface InvoiceResponse {
@@ -331,6 +340,17 @@ export interface InvoiceMarkPaidResponse {
   month: number;
   status: string;
   paid_date: string | null;
+}
+
+// ===== MOVER PARCELA ENTRE FATURAS =====
+export interface MoveInstallmentRequest {
+  target_year: number; // Ano da fatura de destino (1900-2100)
+  target_month: number; // Mês da fatura de destino (1-12)
+}
+
+export interface MoveInstallmentResponse {
+  success: boolean;
+  message: string;
 }
 
 // ===== CHAT/AI =====
