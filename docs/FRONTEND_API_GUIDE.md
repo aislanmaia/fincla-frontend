@@ -357,14 +357,68 @@ export interface Transaction {
 }
 
 export interface ListTransactionsQuery {
+  organization_id: string; // Required
   type?: 'income' | 'expense';
   category?: string;
   payment_method?: string;
   description?: string;
-  date_start?: string; // ISO date string
-  date_end?: string; // ISO date string
+  date_start?: string; // ISO date string (YYYY-MM-DD)
+  date_end?: string; // ISO date string (YYYY-MM-DD)
   value_min?: number;
   value_max?: number;
+  page?: number; // Page number (1-indexed, default: 1)
+  limit?: number; // Items per page (default: 20, max: 100)
+}
+
+export interface PaginationMetadata {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+  has_next: boolean;
+  has_prev: boolean;
+}
+
+export interface PaginatedTransactionsResponse {
+  data: Transaction[];
+  pagination: PaginationMetadata;
+}
+
+export interface TransactionsSummaryQuery {
+  organization_id: string; // Required
+  type?: 'income' | 'expense';
+  category?: string;
+  payment_method?: string;
+  description?: string;
+  date_start?: string; // ISO date string (YYYY-MM-DD)
+  date_end?: string; // ISO date string (YYYY-MM-DD)
+  value_min?: number;
+  value_max?: number;
+}
+
+export interface PeriodInfo {
+  start_date: string | null; // ISO date string (YYYY-MM-DD)
+  end_date: string | null; // ISO date string (YYYY-MM-DD)
+}
+
+export interface FiltersInfo {
+  organization_id: string;
+  type: string | null;
+  category: string | null;
+  payment_method: string | null;
+  date_start: string | null; // ISO date string (YYYY-MM-DD)
+  date_end: string | null; // ISO date string (YYYY-MM-DD)
+}
+
+export interface TransactionsSummaryResponse {
+  total_transactions: number;
+  total_value: number;
+  total_income: number;
+  total_expenses: number;
+  balance: number;
+  average_transaction: number;
+  period: PeriodInfo;
+  filters_applied: FiltersInfo;
 }
 
 // ===== CARTÕES DE CRÉDITO =====
@@ -1305,25 +1359,16 @@ await createTransaction({
 
 ### GET `/v1/transactions`
 
-Lista transações com filtros opcionais. Retorna todas as transações das organizações onde o usuário tem membership.
+Lista transações com filtros opcionais e paginação. Retorna transações paginadas da organização especificada.
 
-**Nota**: Atualmente, o endpoint retorna transações de todas as organizações do usuário. Para filtrar por organização específica, use os filtros de categoria, tipo, etc. ou filtre no frontend.
+**⚠️ Breaking Change:** A estrutura de resposta mudou de `Transaction[]` para `{ data: Transaction[], pagination: {...} }`. O frontend precisa atualizar para acessar `response.data` em vez de `response` diretamente.
 
 **Request:**
 ```typescript
 const listTransactions = async (
-  filters?: {
-    type?: 'income' | 'expense';
-    category?: string;
-    payment_method?: string;
-    description?: string;
-    date_start?: string; // ISO date string (YYYY-MM-DD)
-    date_end?: string; // ISO date string (YYYY-MM-DD)
-    value_min?: number;
-    value_max?: number;
-  }
-): Promise<Transaction[]> => {
-  const response = await apiClient.get<Transaction[]>(
+  filters: ListTransactionsQuery
+): Promise<PaginatedTransactionsResponse> => {
+  const response = await apiClient.get<PaginatedTransactionsResponse>(
     '/v1/transactions',
     { params: filters }
   );
@@ -1331,79 +1376,247 @@ const listTransactions = async (
 };
 ```
 
+**Parâmetros:**
+- `organization_id` (obrigatório): UUID da organização
+- `type` (opcional): 'income' | 'expense'
+- `category` (opcional): Nome da categoria
+- `payment_method` (opcional): Método de pagamento
+- `description` (opcional): Busca parcial na descrição
+- `date_start` (opcional): Data inicial (YYYY-MM-DD)
+- `date_end` (opcional): Data final (YYYY-MM-DD)
+- `value_min` (opcional): Valor mínimo
+- `value_max` (opcional): Valor máximo
+- `page` (opcional): Número da página (padrão: 1, mínimo: 1)
+- `limit` (opcional): Itens por página (padrão: 20, mínimo: 1, máximo: 100)
+
 **Exemplos de Uso:**
 ```typescript
-// Listar todas as transações do usuário (todas as organizações)
-await listTransactions();
+// Listar primeira página de transações
+const result = await listTransactions({
+  organization_id: "123e4567-e89b-12d3-a456-426614174000",
+  page: 1,
+  limit: 20
+});
+console.log(result.data); // Array de transações
+console.log(result.pagination.total); // Total de transações
 
-// Filtrar por tipo
-await listTransactions({ type: 'expense' });
-
-// Filtrar por categoria
-await listTransactions({ category: 'Alimentação' });
+// Filtrar por tipo com paginação
+const expenses = await listTransactions({
+  organization_id: orgId,
+  type: 'expense',
+  page: 1,
+  limit: 10
+});
 
 // Filtrar por período
-await listTransactions({
+const january = await listTransactions({
+  organization_id: orgId,
   date_start: '2025-01-01',
   date_end: '2025-01-31',
+  page: 1,
+  limit: 20
 });
 
-// Filtrar por valor
-await listTransactions({
-  value_min: 100,
-  value_max: 1000,
-});
-
-// Múltiplos filtros
-await listTransactions({
+// Múltiplos filtros com paginação
+const filtered = await listTransactions({
+  organization_id: orgId,
   type: 'expense',
   category: 'Alimentação',
   date_start: '2025-01-01',
   date_end: '2025-01-31',
   value_min: 50,
+  page: 2,
+  limit: 10
 });
 
-// Filtrar no frontend por organização específica
-const allTransactions = await listTransactions();
-const orgTransactions = allTransactions.filter(
-  (tx) => tx.organization_id === organizationId
-);
+// Navegar para próxima página
+if (result.pagination.has_next) {
+  const nextPage = await listTransactions({
+    organization_id: orgId,
+    page: result.pagination.page + 1,
+    limit: result.pagination.limit
+  });
+}
+```
+
+**Response (200) - Estrutura Completa:**
+```typescript
+{
+  data: [
+    {
+      id: 1,
+      organization_id: "123e4567-e89b-12d3-a456-426614174000",
+      type: "expense",
+      description: "Compra no supermercado",
+      tags: {
+        "categoria": [
+          {
+            id: "789e0123-e89b-12d3-a456-426614174000",
+            name: "Alimentação",
+            tag_type: {
+              id: "123e4567-e89b-12d3-a456-426614174000",
+              name: "categoria",
+              description: "Categoria da transação",
+              is_required: true,
+              max_per_transaction: 1
+            },
+            color: "#FF5733",
+            is_default: true,
+            is_active: true,
+            organization_id: "123e4567-e89b-12d3-a456-426614174000"
+          }
+        ]
+      },
+      value: 150.50,
+      payment_method: "PIX",
+      date: "2025-01-15T14:30:00",
+      category: "Alimentação", // Campo legado - mantido para compatibilidade
+      recurring: false,
+      created_at: "2025-01-15T14:30:00",
+      updated_at: "2025-01-15T14:30:00"
+    }
+  ],
+  pagination: {
+    page: 1,
+    limit: 20,
+    total: 150,
+    pages: 8,
+    has_next: true,
+    has_prev: false
+  }
+}
+```
+
+---
+
+**Response (200) - Estrutura Completa:**
+```typescript
+{
+  data: Transaction[],
+  pagination: {
+    page: 1,
+    limit: 20,
+    total: 150,
+    pages: 8,
+    has_next: true,
+    has_prev: false
+  }
+}
+```
+
+**Campos de Paginação:**
+- `page`: Página atual (1-indexed)
+- `limit`: Itens por página
+- `total`: Total de transações que atendem aos filtros
+- `pages`: Total de páginas (calculado como `ceil(total / limit)`)
+- `has_next`: `true` se existe próxima página
+- `has_prev`: `true` se existe página anterior
+
+**Erros:**
+- `422`: Parâmetros inválidos (page < 1, limit < 1 ou limit > 100)
+- `403`: Acesso negado à organização
+- `401`: Não autenticado
+
+---
+
+### GET `/v1/transactions/summary`
+
+Obtém estatísticas agregadas das transações que atendem aos filtros especificados. Útil para calcular KPIs sem precisar buscar todas as transações.
+
+**Request:**
+```typescript
+const getTransactionsSummary = async (
+  filters: TransactionsSummaryQuery
+): Promise<TransactionsSummaryResponse> => {
+  const response = await apiClient.get<TransactionsSummaryResponse>(
+    '/v1/transactions/summary',
+    { params: filters }
+  );
+  return response.data;
+};
+```
+
+**Parâmetros:**
+- `organization_id` (obrigatório): UUID da organização
+- `type` (opcional): 'income' | 'expense'
+- `category` (opcional): Nome da categoria
+- `payment_method` (opcional): Método de pagamento
+- `description` (opcional): Busca parcial na descrição
+- `date_start` (opcional): Data inicial (YYYY-MM-DD)
+- `date_end` (opcional): Data final (YYYY-MM-DD)
+- `value_min` (opcional): Valor mínimo
+- `value_max` (opcional): Valor máximo
+
+**Exemplos de Uso:**
+```typescript
+// Obter resumo de todas as transações
+const summary = await getTransactionsSummary({
+  organization_id: "123e4567-e89b-12d3-a456-426614174000"
+});
+console.log(`Total: ${summary.total_transactions}`);
+console.log(`Balanço: ${summary.balance}`);
+
+// Resumo de despesas em janeiro
+const januaryExpenses = await getTransactionsSummary({
+  organization_id: orgId,
+  type: 'expense',
+  date_start: '2025-01-01',
+  date_end: '2025-01-31'
+});
+console.log(`Total de despesas: ${januaryExpenses.total_expenses}`);
+
+// Resumo por categoria
+const foodSummary = await getTransactionsSummary({
+  organization_id: orgId,
+  category: 'Alimentação',
+  date_start: '2025-01-01',
+  date_end: '2025-01-31'
+});
 ```
 
 **Response (200):**
 ```typescript
-[
-  {
-    id: 1,
+{
+  total_transactions: 45,
+  total_value: 12500.50,        // Soma dos valores absolutos
+  total_income: 10000.00,       // Soma de receitas
+  total_expenses: 2500.50,      // Soma de despesas (valor absoluto)
+  balance: 7499.50,             // total_income - total_expenses
+  average_transaction: 277.79,  // total_value / total_transactions
+  period: {
+    start_date: "2025-01-01",   // ISO date string ou null
+    end_date: "2025-01-31"      // ISO date string ou null
+  },
+  filters_applied: {
     organization_id: "123e4567-e89b-12d3-a456-426614174000",
     type: "expense",
-    description: "Compra no supermercado",
-    tags: {
-      "categoria": [
-        {
-          id: "789e0123-e89b-12d3-a456-426614174000",
-          name: "Alimentação",
-          tag_type: {
-            id: "123e4567-e89b-12d3-a456-426614174000",
-            name: "categoria",
-            description: "Categoria da transação",
-            is_required: true,
-            max_per_transaction: 1
-          },
-          color: "#FF5733",
-          is_default: true,
-          is_active: true,
-          organization_id: "123e4567-e89b-12d3-a456-426614174000"
-        }
-      ]
-    },
-    value: 150.50,
-    payment_method: "PIX",
-    date: "2025-01-15",
-    category: "Alimentação" // Campo legado - mantido para compatibilidade
+    category: "Alimentação",
+    payment_method: null,
+    date_start: "2025-01-01",
+    date_end: "2025-01-31"
   }
-]
+}
 ```
+
+**Campos de Resposta:**
+- `total_transactions`: Número total de transações que atendem aos filtros
+- `total_value`: Soma dos valores absolutos de todas as transações
+- `total_income`: Soma dos valores das transações de receita
+- `total_expenses`: Soma dos valores absolutos das transações de despesa
+- `balance`: Diferença entre receitas e despesas (total_income - total_expenses)
+- `average_transaction`: Valor médio por transação (total_value / total_transactions)
+- `period`: Informações sobre o período filtrado
+- `filters_applied`: Filtros que foram aplicados na consulta
+
+**Notas:**
+- Se não houver transações que atendem aos filtros, todos os valores numéricos serão `0`
+- `total_value` é a soma dos valores absolutos (sem considerar sinal)
+- `balance` pode ser negativo se as despesas forem maiores que as receitas
+- `average_transaction` será `0` se não houver transações
+
+**Erros:**
+- `403`: Acesso negado à organização
+- `401`: Não autenticado
 
 ---
 
@@ -3263,12 +3476,14 @@ export const TransactionList: React.FC<TransactionListProps> = ({ organizationId
     const loadTransactions = async () => {
       try {
         setLoading(true);
-        // Buscar todas as transações e filtrar por organização no frontend
-        const allTransactions = await listTransactions(filters);
-        const orgTransactions = allTransactions.filter(
-          (tx) => tx.organization_id === organizationId
-        );
-        setTransactions(orgTransactions);
+        // Buscar transações paginadas da organização
+        const result = await listTransactions({
+          organization_id: organizationId,
+          ...filters,
+          page: 1,
+          limit: 20
+        });
+        setTransactions(result.data);
         setError(null);
       } catch (err) {
         setError(handleApiError(err));

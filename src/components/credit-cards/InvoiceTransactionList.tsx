@@ -172,13 +172,12 @@ export const InvoiceTransactionList: React.FC<InvoiceTransactionListProps> = ({
 
     const renderTransaction = (transaction: InvoiceItemResponse) => {
         const canMove = 
-            transaction.total_installments > 1 &&
+            transaction.charge_id &&
             cardId &&
             organizationId &&
             currentInvoice &&
             currentYear &&
-            currentMonth &&
-            transaction.charge_id;
+            currentMonth;
 
         return (
             <Card 

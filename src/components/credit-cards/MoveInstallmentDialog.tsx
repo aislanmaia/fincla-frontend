@@ -190,8 +190,12 @@ export const MoveInstallmentDialog: React.FC<MoveInstallmentDialogProps> = ({
         <DialogHeader>
           <DialogTitle>Mover Parcela para Outra Fatura</DialogTitle>
           <DialogDescription>
-            Ao mover esta parcela, todas as outras parcelas da mesma compra serão recalculadas
-            automaticamente mantendo o intervalo de 1 mês entre elas.
+            {item.total_installments > 1 ? (
+              <>Ao mover esta parcela, todas as outras parcelas da mesma compra serão recalculadas
+              automaticamente mantendo o intervalo de 1 mês entre elas.</>
+            ) : (
+              <>Ao mover esta despesa para outra fatura, ela será realocada mantendo todas as suas informações.</>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -251,14 +255,16 @@ export const MoveInstallmentDialog: React.FC<MoveInstallmentDialogProps> = ({
           </div>
 
           {/* Alert de Aviso */}
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              <strong>Atenção:</strong> Todas as {item.total_installments} parcelas desta compra
-              serão recalculadas. A parcela selecionada será movida para a fatura de destino e as
-              outras serão reposicionadas mantendo intervalo de 1 mês.
-            </AlertDescription>
-          </Alert>
+          {item.total_installments > 1 && (
+            <Alert>
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Atenção:</strong> Todas as {item.total_installments} parcelas desta compra
+                serão recalculadas. A parcela selecionada será movida para a fatura de destino e as
+                outras serão reposicionadas mantendo intervalo de 1 mês.
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Preview de Impacto */}
           {impactPreview.length > 0 && (

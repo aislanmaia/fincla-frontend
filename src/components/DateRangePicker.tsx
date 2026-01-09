@@ -315,7 +315,6 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
               onSelect={setSelectedRange}
               numberOfMonths={2}
               locale={ptBR}
-              disabled={(date) => isAfter(date, new Date())}
               className="rounded-md"
               classNames={{
                 months: "flex flex-col sm:flex-row space-y-1.5 sm:space-x-2 sm:space-y-0",

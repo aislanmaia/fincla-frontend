@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { listTransactions, deleteTransaction, getTransaction } from '@/api/transactions';
+import { listTransactions, deleteTransaction, getTransaction, getTransactionsSummary } from '@/api/transactions';
 import { Transaction } from '@/types/api';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -22,6 +22,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, PaginationEllipsis } from '@/components/ui/pagination';
 import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { DateRangePicker } from '@/components/DateRangePicker';
 
 function formatCurrency(value: number) {
   return value.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
@@ -44,7 +45,7 @@ type SortDirection = 'asc' | 'desc' | null;
 export default function TransactionsPage() {
   const [query, setQuery] = useState('');
   const [type, setType] = useState<'todas' | 'receitas' | 'despesas'>('todas');
-  const [period, setPeriod] = useState<'tudo' | '7d' | '30d' | '90d' | 'este-mes' | 'mes-anterior'>('tudo');
+  const [dateRange, setDateRange] = useState<{ from: Date; to: Date } | undefined>(undefined);
   const [category, setCategory] = useState<string>('todas');
   const [paymentMethod, setPaymentMethod] = useState<string>('todas');
   const [sortField, setSortField] = useState<SortField>('date');
@@ -62,41 +63,17 @@ export default function TransactionsPage() {
   const { activeOrgId } = useOrganization();
   const { toast } = useToast();
 
-  // Calcular filtros de data para a API baseado no período selecionado
+  // Calcular filtros de data para a API baseado no dateRange selecionado
   const apiDateFilters = useMemo(() => {
-    if (period === 'tudo') {
-      return {};
-    }
-
-    const now = new Date();
-    let dateStart: Date;
-    let dateEnd: Date;
-
-    if (period === '7d') {
-      dateStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      dateEnd = now;
-    } else if (period === '30d') {
-      dateStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      dateEnd = now;
-    } else if (period === '90d') {
-      dateStart = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-      dateEnd = now;
-    } else if (period === 'este-mes') {
-      dateStart = startOfMonth(now);
-      dateEnd = endOfMonth(now);
-    } else if (period === 'mes-anterior') {
-      const lastMonth = subMonths(now, 1);
-      dateStart = startOfMonth(lastMonth);
-      dateEnd = endOfMonth(lastMonth);
-    } else {
+    if (!dateRange?.from || !dateRange?.to) {
       return {};
     }
 
     return {
-      date_start: format(dateStart, 'yyyy-MM-dd'),
-      date_end: format(dateEnd, 'yyyy-MM-dd'),
+      date_start: format(dateRange.from, 'yyyy-MM-dd'),
+      date_end: format(dateRange.to, 'yyyy-MM-dd'),
     };
-  }, [period]);
+  }, [dateRange]);
 
   // Preparar filtros de tipo para a API
   const apiTypeFilter = useMemo(() => {
@@ -105,14 +82,70 @@ export default function TransactionsPage() {
     return {};
   }, [type]);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['transactions', activeOrgId, period, type],
+  // Função para converter payment method do formato amigável para o formato da API
+  const denormalizePaymentMethod = (method: string): string => {
+    // Converter valores amigáveis de volta para o formato que a API pode aceitar
+    if (method === 'Cartão de Crédito') return 'credit_card';
+    if (method === 'Cartão de Débito') return 'debit_card';
+    if (method === 'Transferência Bancária') return 'bank_transfer';
+    // Para outros métodos (PIX, Dinheiro, Boleto), manter como está
+    return method;
+  };
+
+  // Preparar filtros de categoria e forma de pagamento para a API
+  const apiCategoryFilter = useMemo(() => {
+    if (category !== 'todas') return { category };
+    return {};
+  }, [category]);
+
+  const apiPaymentMethodFilter = useMemo(() => {
+    if (paymentMethod !== 'todas') {
+      // Converter para o formato que a API aceita
+      const apiFormat = denormalizePaymentMethod(paymentMethod);
+      return { payment_method: apiFormat };
+    }
+    return {};
+  }, [paymentMethod]);
+
+  // Preparar filtro de busca (description) para a API
+  const apiDescriptionFilter = useMemo(() => {
+    if (query.trim()) return { description: query.trim() };
+    return {};
+  }, [query]);
+
+  // Query para buscar transações paginadas
+  const { data: transactionsData, isLoading: isLoadingTransactions } = useQuery({
+    queryKey: ['transactions', activeOrgId, dateRange?.from, dateRange?.to, type, category, paymentMethod, query, currentPage],
     queryFn: async () => {
-      if (!activeOrgId) return [];
+      if (!activeOrgId) return null;
+      
       return await listTransactions({
         organization_id: activeOrgId,
         ...apiDateFilters,
         ...apiTypeFilter,
+        ...apiCategoryFilter,
+        ...apiPaymentMethodFilter,
+        ...apiDescriptionFilter,
+        page: currentPage,
+        limit: ITEMS_PER_PAGE,
+      });
+    },
+    enabled: !!activeOrgId,
+  });
+
+  // Query para buscar estatísticas (KPIs)
+  const { data: summaryData, isLoading: isLoadingSummary } = useQuery({
+    queryKey: ['transactions-summary', activeOrgId, dateRange?.from, dateRange?.to, type, category, paymentMethod, query],
+    queryFn: async () => {
+      if (!activeOrgId) return null;
+      
+      return await getTransactionsSummary({
+        organization_id: activeOrgId,
+        ...apiDateFilters,
+        ...apiTypeFilter,
+        ...apiCategoryFilter,
+        ...apiPaymentMethodFilter,
+        ...apiDescriptionFilter,
       });
     },
     enabled: !!activeOrgId,
@@ -121,7 +154,7 @@ export default function TransactionsPage() {
   // Converter Transaction da API para o formato esperado (amount positivo/negativo)
   // Preservar todos os campos originais, incluindo card_last4, modality, installments_count, recurring
   const transactionsWithAmount = useMemo(() => {
-    const list = Array.isArray(data) ? [...data] : [];
+    const list = transactionsData?.data || [];
     return list
       .map((t) => ({
         ...t, // Preservar todos os campos originais
@@ -131,7 +164,7 @@ export default function TransactionsPage() {
         date: new Date(t.date),
         createdAt: t.created_at ? new Date(t.created_at) : new Date(t.date), // Fallback para date se created_at não existir
       }));
-  }, [data]);
+  }, [transactionsData]);
 
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -185,30 +218,8 @@ export default function TransactionsPage() {
   }, [paymentMethodsFromTransactions]);
 
   const filtered = useMemo(() => {
+    // A API já aplica todos os filtros, então apenas aplicamos ordenamento no frontend
     let list = [...transactionsWithAmount];
-    
-    // Nota: Filtros de tipo e período já são aplicados na API via queryKey
-    // Apenas aplicamos filtros que não são suportados pela API ou que são mais eficientes no frontend
-    
-    // Categoria
-    if (category !== 'todas') list = list.filter((t) => t.category === category);
-    
-    // Forma de pagamento (normalizar antes de comparar)
-    if (paymentMethod !== 'todas') {
-      list = list.filter((t) => {
-        const normalized = normalizePaymentMethod(t.payment_method || '');
-        return normalized === paymentMethod;
-      });
-    }
-    
-    // Busca
-    if (query.trim()) {
-      const q = query.trim().toLowerCase();
-      list = list.filter((t) =>
-        t.description.toLowerCase().includes(q) ||
-        t.category.toLowerCase().includes(q)
-      );
-    }
     
     // Ordenamento
     if (sortField && sortDirection) {
@@ -248,12 +259,22 @@ export default function TransactionsPage() {
     }
     
     return list;
-  }, [transactionsWithAmount, type, period, category, paymentMethod, query, sortField, sortDirection]);
+  }, [transactionsWithAmount, sortField, sortDirection]);
 
-  // Estatísticas do período filtrado
+  // Estatísticas do período filtrado - usar dados do summary da API
   const stats = useMemo(() => {
-    const total = filtered.length;
+    if (summaryData) {
+      return {
+        total: summaryData.total_transactions,
+        totalValue: summaryData.total_value,
+        income: summaryData.total_income,
+        expenses: summaryData.total_expenses,
+        balance: summaryData.balance,
+      };
+    }
     
+    // Fallback: calcular do filtered se summary não estiver disponível
+    const total = filtered.length;
     let totalValue = 0;
     let income = 0;
     let expenses = 0;
@@ -274,20 +295,20 @@ export default function TransactionsPage() {
     const balance = income - expenses;
     
     return { total, totalValue, income, expenses, balance };
-  }, [filtered]);
+  }, [summaryData, filtered]);
 
-  // Paginação
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
+  // Paginação - usar dados da API
+  const pagination = transactionsData?.pagination;
+  const totalPages = pagination?.pages || 1;
   const paginatedTransactions = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    const end = start + ITEMS_PER_PAGE;
-    return filtered.slice(start, end);
-  }, [filtered, currentPage]);
+    // A API já retorna os dados paginados, então usamos diretamente
+    return filtered;
+  }, [filtered]);
 
   // Resetar página quando filtros mudarem
   useEffect(() => {
     setCurrentPage(1);
-  }, [type, period, category, paymentMethod, query, sortField, sortDirection]);
+  }, [type, dateRange, category, paymentMethod, query]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -446,10 +467,11 @@ export default function TransactionsPage() {
           </div>
         </div>
 
-        {/* Toolbar: filtros à esquerda, ações à direita */}
-        <div className="mb-4 flex flex-col md:flex-row md:items-end md:justify-between gap-3 flex-shrink-0">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 flex-1">
-            <div className="md:col-span-2">
+        {/* Toolbar: filtros organizados em linhas */}
+        <div className="mb-4 space-y-3 flex-shrink-0">
+          {/* Primeira linha: Busca, Tipo e Exportar */}
+          <div className="flex flex-col sm:flex-row gap-3 items-end">
+            <div className="flex-1 w-full sm:max-w-md">
               <label htmlFor="tx-search" className="mb-1 block text-xs font-medium text-gray-600">Buscar</label>
               <Input
                 id="tx-search"
@@ -459,7 +481,7 @@ export default function TransactionsPage() {
                 className="rounded-xl h-10 border-[#D1D5DB] bg-white placeholder-[#9CA3AF] shadow-sm focus-visible:ring-2 focus-visible:ring-[#4A56E2] focus-visible:ring-offset-1"
               />
             </div>
-            <div>
+            <div className="w-full sm:w-[140px]">
               <label id="tx-type-label" className="mb-1 block text-xs font-medium text-gray-600">Tipo</label>
               <Select value={type} onValueChange={(v) => setType(v as any)}>
                 <SelectTrigger id="tx-type" aria-labelledby="tx-type-label" className="rounded-xl h-10 border-[#D1D5DB] bg-white text-[#111827] shadow-sm focus-visible:ring-2 focus-visible:ring-[#4A56E2] focus-visible:ring-offset-1">
@@ -472,21 +494,22 @@ export default function TransactionsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div>
+            <div className="w-full sm:w-auto">
+              <Button onClick={downloadCsv} variant="outline" className="rounded-xl gap-2 border-[#D1D5DB] text-[#4A56E2] hover:bg-[#EEF2FF] h-10 w-full sm:w-auto">
+                <Download className="w-4 h-4" /> <span className="hidden sm:inline">Exportar CSV</span><span className="sm:hidden">Exportar</span>
+              </Button>
+            </div>
+          </div>
+          
+          {/* Segunda linha: Período, Categoria e Forma de Pagamento */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="sm:col-span-2 lg:col-span-1">
               <label id="tx-period-label" className="mb-1 block text-xs font-medium text-gray-600">Período</label>
-              <Select value={period} onValueChange={(v) => setPeriod(v as any)}>
-                <SelectTrigger id="tx-period" aria-labelledby="tx-period-label" className="rounded-xl h-10 border-[#D1D5DB] bg-white text-[#111827] shadow-sm focus-visible:ring-2 focus-visible:ring-[#4A56E2] focus-visible:ring-offset-1">
-                  <SelectValue placeholder="Período" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="tudo">Tudo</SelectItem>
-                  <SelectItem value="este-mes">Este mês</SelectItem>
-                  <SelectItem value="mes-anterior">Mês anterior</SelectItem>
-                  <SelectItem value="7d">Últimos 7 dias</SelectItem>
-                  <SelectItem value="30d">Últimos 30 dias</SelectItem>
-                  <SelectItem value="90d">Últimos 90 dias</SelectItem>
-                </SelectContent>
-              </Select>
+              <DateRangePicker
+                value={dateRange}
+                onChange={setDateRange}
+                className="rounded-xl h-10 border-[#D1D5DB] bg-white text-[#111827] shadow-sm focus-visible:ring-2 focus-visible:ring-[#4A56E2] focus-visible:ring-offset-1 w-full"
+              />
             </div>
             <div>
               <label id="tx-category-label" className="mb-1 block text-xs font-medium text-gray-600">Categoria</label>
@@ -517,11 +540,6 @@ export default function TransactionsPage() {
               </Select>
             </div>
           </div>
-          <div className="flex md:justify-end">
-            <Button onClick={downloadCsv} variant="outline" className="rounded-xl gap-2 border-[#D1D5DB] text-[#4A56E2] hover:bg-[#EEF2FF]">
-              <Download className="w-4 h-4" /> Exportar CSV
-            </Button>
-          </div>
         </div>
 
         {/* Estatísticas */}
@@ -530,7 +548,11 @@ export default function TransactionsPage() {
             <div className="flex items-center justify-between">
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium text-gray-600 mb-1">Total de Transações</p>
-                <p className="text-2xl font-bold text-gray-900 truncate">{stats.total}</p>
+                {isLoadingSummary ? (
+                  <Skeleton className="h-8 w-20" />
+                ) : (
+                  <p className="text-2xl font-bold text-gray-900 truncate">{stats.total}</p>
+                )}
               </div>
               <Receipt className="h-8 w-8 text-gray-400 flex-shrink-0 ml-2" />
             </div>
@@ -539,7 +561,11 @@ export default function TransactionsPage() {
             <div className="flex items-center justify-between">
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium text-gray-600 mb-1">Valor Total</p>
-                <p className="text-2xl font-bold text-gray-900 truncate">R$ {formatCurrency(stats.totalValue)}</p>
+                {isLoadingSummary ? (
+                  <Skeleton className="h-8 w-24" />
+                ) : (
+                  <p className="text-2xl font-bold text-gray-900 truncate">R$ {formatCurrency(stats.totalValue)}</p>
+                )}
               </div>
               <TrendingUp className="h-8 w-8 text-blue-500 flex-shrink-0 ml-2" />
             </div>
@@ -548,7 +574,11 @@ export default function TransactionsPage() {
             <div className="flex items-center justify-between">
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium text-gray-600 mb-1">Receitas</p>
-                <p className="text-2xl font-bold text-green-600 truncate">R$ {formatCurrency(stats.income)}</p>
+                {isLoadingSummary ? (
+                  <Skeleton className="h-8 w-24" />
+                ) : (
+                  <p className="text-2xl font-bold text-green-600 truncate">R$ {formatCurrency(stats.income)}</p>
+                )}
               </div>
               <TrendingUp className="h-8 w-8 text-green-500 flex-shrink-0 ml-2" />
             </div>
@@ -557,7 +587,11 @@ export default function TransactionsPage() {
             <div className="flex items-center justify-between">
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-medium text-gray-600 mb-1">Despesas</p>
-                <p className="text-2xl font-bold text-red-600 truncate">R$ {formatCurrency(stats.expenses)}</p>
+                {isLoadingSummary ? (
+                  <Skeleton className="h-8 w-24" />
+                ) : (
+                  <p className="text-2xl font-bold text-red-600 truncate">R$ {formatCurrency(stats.expenses)}</p>
+                )}
               </div>
               <TrendingDown className="h-8 w-8 text-red-500 flex-shrink-0 ml-2" />
             </div>
@@ -628,7 +662,7 @@ export default function TransactionsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading && (
+                {(isLoadingTransactions || isLoadingSummary) && (
                   Array.from({ length: 6 }).map((_, idx) => (
                     <TableRow key={`sk-${idx}`} className={idx % 2 === 0 ? 'bg-gray-50' : undefined}>
                       <TableCell><Skeleton className="h-4 w-48" /></TableCell>
@@ -641,7 +675,7 @@ export default function TransactionsPage() {
                   ))
                 )}
 
-                {!isLoading && filtered.length === 0 && (
+                {!isLoadingTransactions && !isLoadingSummary && filtered.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={6} className="py-10 text-center text-sm text-gray-500 dark:text-gray-400">
                       Nenhuma transação encontrada.
@@ -649,7 +683,7 @@ export default function TransactionsPage() {
                   </TableRow>
                 )}
 
-                {!isLoading && paginatedTransactions.map((t, idx) => {
+                {!isLoadingTransactions && !isLoadingSummary && paginatedTransactions.map((t, idx) => {
                   const isExpense = t.amount < 0;
                   const transaction: Transaction = {
                     id: (t as any).originalId || parseInt(t.id),
@@ -733,7 +767,7 @@ export default function TransactionsPage() {
           </div>
           
           {/* Paginação */}
-          {!isLoading && totalPages > 1 && (
+          {!isLoadingTransactions && pagination && totalPages > 1 && (
             <div className="p-4 border-t border-gray-200 flex-shrink-0 bg-white">
               <Pagination>
                 <PaginationContent>
@@ -742,9 +776,9 @@ export default function TransactionsPage() {
                       href="#"
                       onClick={(e) => {
                         e.preventDefault();
-                        if (currentPage > 1) setCurrentPage(currentPage - 1);
+                        if (pagination.has_prev) setCurrentPage(currentPage - 1);
                       }}
-                      className={currentPage === 1 ? 'pointer-events-none opacity-50' : ''}
+                      className={!pagination.has_prev ? 'pointer-events-none opacity-50' : ''}
                     >
                       Anterior
                     </PaginationPrevious>
@@ -785,9 +819,9 @@ export default function TransactionsPage() {
                       href="#"
                       onClick={(e) => {
                         e.preventDefault();
-                        if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+                        if (pagination.has_next) setCurrentPage(currentPage + 1);
                       }}
-                      className={currentPage === totalPages ? 'pointer-events-none opacity-50' : ''}
+                      className={!pagination.has_next ? 'pointer-events-none opacity-50' : ''}
                     >
                       Próxima
                     </PaginationNext>

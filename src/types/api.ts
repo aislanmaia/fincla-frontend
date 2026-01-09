@@ -214,6 +214,59 @@ export interface ListTransactionsQuery {
   date_end?: string; // ISO date string
   value_min?: number;
   value_max?: number;
+  page?: number; // Page number (1-indexed, default: 1)
+  limit?: number; // Items per page (default: 20, max: 100)
+}
+
+export interface PaginationMetadata {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+  has_next: boolean;
+  has_prev: boolean;
+}
+
+export interface PaginatedTransactionsResponse {
+  data: Transaction[];
+  pagination: PaginationMetadata;
+}
+
+export interface TransactionsSummaryQuery {
+  organization_id: string; // Required
+  type?: 'income' | 'expense';
+  category?: string;
+  payment_method?: string;
+  description?: string;
+  date_start?: string; // ISO date string (YYYY-MM-DD)
+  date_end?: string; // ISO date string (YYYY-MM-DD)
+  value_min?: number;
+  value_max?: number;
+}
+
+export interface PeriodInfo {
+  start_date: string | null; // ISO date string (YYYY-MM-DD)
+  end_date: string | null; // ISO date string (YYYY-MM-DD)
+}
+
+export interface FiltersInfo {
+  organization_id: string;
+  type: string | null;
+  category: string | null;
+  payment_method: string | null;
+  date_start: string | null; // ISO date string (YYYY-MM-DD)
+  date_end: string | null; // ISO date string (YYYY-MM-DD)
+}
+
+export interface TransactionsSummaryResponse {
+  total_transactions: number;
+  total_value: number;
+  total_income: number;
+  total_expenses: number;
+  balance: number;
+  average_transaction: number;
+  period: PeriodInfo;
+  filters_applied: FiltersInfo;
 }
 
 // ===== CARTÕES DE CRÉDITO =====

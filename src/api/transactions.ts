@@ -1,6 +1,13 @@
 // api/transactions.ts
 import apiClient from './client';
-import { CreateTransactionRequest, Transaction, ListTransactionsQuery } from '../types/api';
+import {
+  CreateTransactionRequest,
+  Transaction,
+  ListTransactionsQuery,
+  PaginatedTransactionsResponse,
+  TransactionsSummaryQuery,
+  TransactionsSummaryResponse,
+} from '../types/api';
 
 /**
  * Cria uma nova transação
@@ -16,13 +23,28 @@ export const createTransaction = async (
 };
 
 /**
- * Lista transações com filtros opcionais
+ * Lista transações com filtros opcionais e paginação
+ * Retorna resposta paginada com metadata
  */
 export const listTransactions = async (
-  filters?: ListTransactionsQuery
-): Promise<Transaction[]> => {
-  const response = await apiClient.get<Transaction[]>(
+  filters: ListTransactionsQuery
+): Promise<PaginatedTransactionsResponse> => {
+  const response = await apiClient.get<PaginatedTransactionsResponse>(
     '/transactions',
+    { params: filters }
+  );
+  return response.data;
+};
+
+/**
+ * Obtém estatísticas agregadas das transações (KPIs)
+ * Útil para calcular métricas sem precisar buscar todas as transações
+ */
+export const getTransactionsSummary = async (
+  filters: TransactionsSummaryQuery
+): Promise<TransactionsSummaryResponse> => {
+  const response = await apiClient.get<TransactionsSummaryResponse>(
+    '/transactions/summary',
     { params: filters }
   );
   return response.data;

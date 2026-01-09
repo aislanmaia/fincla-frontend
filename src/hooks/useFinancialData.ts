@@ -103,11 +103,35 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
   });
 
   // Carregar transações do backend (sempre que tiver organização ativa)
+  // Buscar todas as transações fazendo múltiplas requisições se necessário
   const { data: backendTransactions, isLoading, error: queryError } = useQuery({
     queryKey: ['financial-data', activeOrgId],
     queryFn: async () => {
       if (!activeOrgId) return [];
-      return await listTransactions({ organization_id: activeOrgId });
+      
+      // Buscar todas as transações paginadas
+      let allTransactions: ApiTransaction[] = [];
+      let page = 1;
+      const limit = 100; // Máximo permitido
+      let hasMore = true;
+
+      while (hasMore) {
+        const response = await listTransactions({
+          organization_id: activeOrgId,
+          page,
+          limit,
+        });
+
+        if (response.data && response.data.length > 0) {
+          allTransactions = [...allTransactions, ...response.data];
+          hasMore = response.pagination.has_next;
+          page++;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      return allTransactions;
     },
     enabled: !!activeOrgId,
     staleTime: 2 * 60 * 1000, // 2 minutos
