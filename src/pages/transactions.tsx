@@ -62,11 +62,58 @@ export default function TransactionsPage() {
   const { activeOrgId } = useOrganization();
   const { toast } = useToast();
 
+  // Calcular filtros de data para a API baseado no período selecionado
+  const apiDateFilters = useMemo(() => {
+    if (period === 'tudo') {
+      return {};
+    }
+
+    const now = new Date();
+    let dateStart: Date;
+    let dateEnd: Date;
+
+    if (period === '7d') {
+      dateStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      dateEnd = now;
+    } else if (period === '30d') {
+      dateStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      dateEnd = now;
+    } else if (period === '90d') {
+      dateStart = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+      dateEnd = now;
+    } else if (period === 'este-mes') {
+      dateStart = startOfMonth(now);
+      dateEnd = endOfMonth(now);
+    } else if (period === 'mes-anterior') {
+      const lastMonth = subMonths(now, 1);
+      dateStart = startOfMonth(lastMonth);
+      dateEnd = endOfMonth(lastMonth);
+    } else {
+      return {};
+    }
+
+    return {
+      date_start: format(dateStart, 'yyyy-MM-dd'),
+      date_end: format(dateEnd, 'yyyy-MM-dd'),
+    };
+  }, [period]);
+
+  // Preparar filtros de tipo para a API
+  const apiTypeFilter = useMemo(() => {
+    if (type === 'receitas') return { type: 'income' as const };
+    if (type === 'despesas') return { type: 'expense' as const };
+    return {};
+  }, [type]);
+
   const { data, isLoading } = useQuery({
-    queryKey: ['transactions', activeOrgId],
+    queryKey: ['transactions', activeOrgId, period, type],
     queryFn: async () => {
       if (!activeOrgId) return [];
-      return await listTransactions({ organization_id: activeOrgId });
+      return await listTransactions({
+        organization_id: activeOrgId,
+        ...apiDateFilters,
+        ...apiTypeFilter,
+      });
     },
     enabled: !!activeOrgId,
   });
@@ -140,41 +187,8 @@ export default function TransactionsPage() {
   const filtered = useMemo(() => {
     let list = [...transactionsWithAmount];
     
-    // Tipo
-    if (type === 'receitas') list = list.filter((t) => t.amount > 0);
-    if (type === 'despesas') list = list.filter((t) => t.amount < 0);
-    
-    // Período
-    if (period !== 'tudo') {
-      const now = new Date();
-      let cutoff: Date;
-      
-      if (period === '7d') {
-        cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        list = list.filter((t) => new Date(t.date).getTime() >= cutoff.getTime());
-      } else if (period === '30d') {
-        cutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-        list = list.filter((t) => new Date(t.date).getTime() >= cutoff.getTime());
-      } else if (period === '90d') {
-        cutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
-        list = list.filter((t) => new Date(t.date).getTime() >= cutoff.getTime());
-      } else if (period === 'este-mes') {
-        cutoff = startOfMonth(now);
-        const end = endOfMonth(now);
-        list = list.filter((t) => {
-          const tDate = new Date(t.date);
-          return tDate >= cutoff && tDate <= end;
-        });
-      } else if (period === 'mes-anterior') {
-        const lastMonth = subMonths(now, 1);
-        cutoff = startOfMonth(lastMonth);
-        const end = endOfMonth(lastMonth);
-        list = list.filter((t) => {
-          const tDate = new Date(t.date);
-          return tDate >= cutoff && tDate <= end;
-        });
-      }
-    }
+    // Nota: Filtros de tipo e período já são aplicados na API via queryKey
+    // Apenas aplicamos filtros que não são suportados pela API ou que são mais eficientes no frontend
     
     // Categoria
     if (category !== 'todas') list = list.filter((t) => t.category === category);
