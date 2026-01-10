@@ -30,7 +30,7 @@ interface InvoiceTransactionListProps {
     currentInvoice?: InvoiceResponse | null;
     currentYear?: number;
     currentMonth?: number;
-    onInvoiceUpdated?: () => void;
+    onInvoiceUpdated?: (targetYear?: number, targetMonth?: number, installmentId?: number) => void;
 }
 
 interface TransactionGroup {
@@ -181,9 +181,9 @@ export const InvoiceTransactionList: React.FC<InvoiceTransactionListProps> = ({
 
         return (
             <Card 
-                key={transaction.id} 
+                key={transaction.id}
                 className={cn(
-                    "flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors",
+                    "flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800/50",
                     compactCards || mobileOptimized ? "p-3" : "p-4"
                 )}
             >
@@ -274,7 +274,7 @@ export const InvoiceTransactionList: React.FC<InvoiceTransactionListProps> = ({
     };
 
     const renderGroupedList = () => (
-        <div className="space-y-3">
+        <div className="space-y-3 transition-all duration-500 ease-in-out">
             {groupedTransactions.map((group) => {
                 const isExpanded = expandedGroups.has(group.date);
                 
@@ -303,7 +303,7 @@ export const InvoiceTransactionList: React.FC<InvoiceTransactionListProps> = ({
                             </button>
                         </CollapsibleTrigger>
                         <CollapsibleContent>
-                            <div className="mt-2 space-y-2 pl-6 border-l-2 border-gray-200 dark:border-gray-700 ml-2">
+                            <div className="mt-2 space-y-2 pl-6 border-l-2 border-gray-200 dark:border-gray-700 ml-2 transition-all duration-500 ease-in-out">
                                 {group.transactions.map(renderTransaction)}
                             </div>
                         </CollapsibleContent>
@@ -314,7 +314,7 @@ export const InvoiceTransactionList: React.FC<InvoiceTransactionListProps> = ({
     );
 
     const renderFlatList = () => (
-        <div className="space-y-2">
+        <div className="space-y-2 transition-all duration-500 ease-in-out">
             {filteredTransactions.map(renderTransaction)}
         </div>
     );
@@ -421,8 +421,8 @@ export const InvoiceTransactionList: React.FC<InvoiceTransactionListProps> = ({
                     organizationId={organizationId}
                     currentYear={currentYear}
                     currentMonth={currentMonth}
-                    onSuccess={() => {
-                        onInvoiceUpdated?.();
+                    onSuccess={(targetYear, targetMonth, installmentId) => {
+                        onInvoiceUpdated?.(targetYear, targetMonth, installmentId);
                         setSelectedItemForMove(null);
                     }}
                 />

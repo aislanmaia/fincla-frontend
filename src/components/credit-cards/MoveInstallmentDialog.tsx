@@ -35,7 +35,7 @@ interface MoveInstallmentDialogProps {
   organizationId: string;
   currentYear: number;
   currentMonth: number;
-  onSuccess?: () => void;
+  onSuccess?: (targetYear?: number, targetMonth?: number, installmentId?: number) => void;
 }
 
 interface InstallmentPreview {
@@ -156,6 +156,8 @@ export const MoveInstallmentDialog: React.FC<MoveInstallmentDialogProps> = ({
         target_month: selectedMonth,
       };
 
+      const isSingleInstallment = item.total_installments === 1;
+
       await moveInstallmentToInvoice(
         cardId,
         item.charge_id,
@@ -164,11 +166,14 @@ export const MoveInstallmentDialog: React.FC<MoveInstallmentDialogProps> = ({
         request
       );
 
-      toast.success('Parcela movida com sucesso! Todas as parcelas foram recalculadas.');
-      onSuccess?.();
+      toast.success(
+        isSingleInstallment 
+          ? 'Despesa movida com sucesso!' 
+          : 'Parcela movida com sucesso! Todas as parcelas foram recalculadas.'
+      );
+      onSuccess?.(selectedYear, selectedMonth, item.id);
       onOpenChange(false);
     } catch (err: any) {
-      console.error('Erro ao mover parcela:', err);
       const errorMessage =
         err.response?.data?.detail ||
         err.message ||

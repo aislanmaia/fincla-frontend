@@ -170,12 +170,68 @@ export default function CreditCardsPage() {
         setInvoiceMonth(newMonth);
     };
 
+    const loadInvoiceForMonth = async (year: number, month: number, showLoading: boolean = true): Promise<InvoiceResponse | null> => {
+        if (!selectedCardId || !currentOrg?.id) return null;
+        try {
+            if (showLoading) {
+                setIsLoadingInvoice(true);
+            }
+            const invoice = await getCreditCardInvoice(
+                selectedCardId,
+                year,
+                month,
+                currentOrg.id
+            );
+            setCurrentInvoice(invoice);
+            return invoice;
+        } catch (error: any) {
+            console.error('❌ Erro ao carregar fatura:', error);
+            if (error?.response?.status === 404) {
+                setCurrentInvoice(null);
+            } else {
+                setCurrentInvoice(null);
+            }
+            return null;
+        } finally {
+            if (showLoading) {
+                setIsLoadingInvoice(false);
+            }
+        }
+    };
+
     const handleSelectMonth = (year: number, month: number) => {
         if (!selectedCardId) return;
         setLocation(`/credit-cards?cardId=${selectedCardId}&year=${year}&month=${month}`);
         setInvoiceYear(year);
         setInvoiceMonth(month);
         setIsMonthSelectorOpen(false);
+    };
+
+    // Função auxiliar para verificar duplicação de parcelas após movimentação
+    const handleInvoiceUpdated = (targetYear: number | undefined, targetMonth: number | undefined, installmentId: number | undefined) => {
+        const now = new Date();
+        const year = invoiceYear || now.getFullYear();
+        const month = invoiceMonth || (now.getMonth() + 1);
+        
+        // Mostrar toast de sucesso
+        if (targetYear && targetMonth && installmentId) {
+            const targetDate = new Date(targetYear, targetMonth - 1);
+            const monthName = targetDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+            toast.success(
+                `Parcela movida para ${monthName}!`,
+                {
+                    duration: 5000,
+                }
+            );
+        }
+        
+        // Recarregar fatura silenciosamente após delay para garantir que backend processou
+        // O componente InvoiceTransactionList controla quando a animação termina
+        // e só então chama esta função, então podemos recarregar imediatamente
+        // Mas adicionamos um pequeno delay para garantir que a animação já começou
+        setTimeout(() => {
+            loadInvoiceForMonth(year, month, false);
+        }, 100);
     };
 
     const handleSelectCard = (cardId: number) => {
@@ -433,35 +489,7 @@ export default function CreditCardsPage() {
                                 currentInvoice={currentInvoice}
                                 currentYear={invoiceYear || new Date().getFullYear()}
                                 currentMonth={invoiceMonth || new Date().getMonth() + 1}
-                                onInvoiceUpdated={() => {
-                                    // Recarregar fatura após mover parcela
-                                    const loadInvoice = async () => {
-                                        if (!selectedCardId || !currentOrg?.id) return;
-                                        try {
-                                            setIsLoadingInvoice(true);
-                                            const now = new Date();
-                                            const year = invoiceYear || now.getFullYear();
-                                            const month = invoiceMonth || (now.getMonth() + 1);
-                                            const invoice = await getCreditCardInvoice(
-                                                selectedCardId,
-                                                year,
-                                                month,
-                                                currentOrg.id
-                                            );
-                                            setCurrentInvoice(invoice);
-                                        } catch (error: any) {
-                                            if (error?.response?.status === 404) {
-                                                setCurrentInvoice(null);
-                                            } else {
-                                                console.error('Erro ao carregar fatura:', error);
-                                                setCurrentInvoice(null);
-                                            }
-                                        } finally {
-                                            setIsLoadingInvoice(false);
-                                        }
-                                    };
-                                    loadInvoice();
-                                }}
+                                onInvoiceUpdated={handleInvoiceUpdated}
                             />
                         </div>
 
@@ -498,35 +526,7 @@ export default function CreditCardsPage() {
                                 currentInvoice={currentInvoice}
                                 currentYear={invoiceYear || new Date().getFullYear()}
                                 currentMonth={invoiceMonth || new Date().getMonth() + 1}
-                                onInvoiceUpdated={() => {
-                                    // Recarregar fatura após mover parcela
-                                    const loadInvoice = async () => {
-                                        if (!selectedCardId || !currentOrg?.id) return;
-                                        try {
-                                            setIsLoadingInvoice(true);
-                                            const now = new Date();
-                                            const year = invoiceYear || now.getFullYear();
-                                            const month = invoiceMonth || (now.getMonth() + 1);
-                                            const invoice = await getCreditCardInvoice(
-                                                selectedCardId,
-                                                year,
-                                                month,
-                                                currentOrg.id
-                                            );
-                                            setCurrentInvoice(invoice);
-                                        } catch (error: any) {
-                                            if (error?.response?.status === 404) {
-                                                setCurrentInvoice(null);
-                                            } else {
-                                                console.error('Erro ao carregar fatura:', error);
-                                                setCurrentInvoice(null);
-                                            }
-                                        } finally {
-                                            setIsLoadingInvoice(false);
-                                        }
-                                    };
-                                    loadInvoice();
-                                }}
+                                onInvoiceUpdated={handleInvoiceUpdated}
                             />
                         </div>
 
@@ -556,35 +556,7 @@ export default function CreditCardsPage() {
                                 currentInvoice={currentInvoice}
                                 currentYear={invoiceYear || new Date().getFullYear()}
                                 currentMonth={invoiceMonth || new Date().getMonth() + 1}
-                                onInvoiceUpdated={() => {
-                                    // Recarregar fatura após mover parcela
-                                    const loadInvoice = async () => {
-                                        if (!selectedCardId || !currentOrg?.id) return;
-                                        try {
-                                            setIsLoadingInvoice(true);
-                                            const now = new Date();
-                                            const year = invoiceYear || now.getFullYear();
-                                            const month = invoiceMonth || (now.getMonth() + 1);
-                                            const invoice = await getCreditCardInvoice(
-                                                selectedCardId,
-                                                year,
-                                                month,
-                                                currentOrg.id
-                                            );
-                                            setCurrentInvoice(invoice);
-                                        } catch (error: any) {
-                                            if (error?.response?.status === 404) {
-                                                setCurrentInvoice(null);
-                                            } else {
-                                                console.error('Erro ao carregar fatura:', error);
-                                                setCurrentInvoice(null);
-                                            }
-                                        } finally {
-                                            setIsLoadingInvoice(false);
-                                        }
-                                    };
-                                    loadInvoice();
-                                }}
+                                onInvoiceUpdated={handleInvoiceUpdated}
                             />
                         </div>
 
