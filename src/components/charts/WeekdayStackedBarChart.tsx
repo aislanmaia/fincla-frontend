@@ -24,7 +24,6 @@ type Props = {
 
 export function WeekdayStackedBarChart({ data, isLoading = false }: Props) {
   const [period, setPeriod] = React.useState('semana');
-
   const chartData = React.useMemo(() => {
     if (!data || !data.data) {
       return { labels: [], datasets: [] };

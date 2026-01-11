@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { listTransactions } from '@/api/transactions';
+import { listTransactions, getTransactionsSummary } from '@/api/transactions';
 import { listCreditCards, getCreditCardInvoice } from '@/api/creditCards';
 import { useOrganization } from './useOrganization';
 import { processTransactionAnalytics } from '@/lib/analytics';
@@ -137,6 +137,29 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
     staleTime: 2 * 60 * 1000, // 2 minutos
   });
 
+  // Buscar resumo do backend quando há dateRange (mais preciso que cálculo local)
+  const { data: backendSummary } = useQuery({
+    queryKey: ['transactions-summary', activeOrgId, dateRange?.from, dateRange?.to],
+    queryFn: async () => {
+      if (!activeOrgId || !dateRange) return null;
+      
+      // Formatar datas para o formato esperado pelo backend (YYYY-MM-DD)
+      // dateRange.to pode ser 2026-01-12T02:59:59.999Z, precisamos usar apenas a data
+      const dateStart = format(dateRange.from, 'yyyy-MM-dd');
+      const dateEnd = format(dateRange.to, 'yyyy-MM-dd');
+      
+      const summary = await getTransactionsSummary({
+        organization_id: activeOrgId,
+        date_start: dateStart,
+        date_end: dateEnd,
+      });
+      
+      return summary;
+    },
+    enabled: !!activeOrgId && !!dateRange,
+    staleTime: 2 * 60 * 1000, // 2 minutos
+  });
+
   // Carregar faturas de cartão de crédito que fecham no período
   const { data: creditCardInvoicesTotal } = useQuery({
     queryKey: ['credit-card-invoices', activeOrgId, dateRange?.from, dateRange?.to],
@@ -208,7 +231,18 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
         creditCardInvoicesTotal || 0
       );
 
-      setSummary(analytics.summary);
+      // Usar resumo do backend se disponível (mais preciso que cálculo local)
+      // O backend já deve incluir as faturas de cartão de crédito no total_expenses
+      if (backendSummary) {
+        setSummary({
+          balance: backendSummary.balance,
+          income: backendSummary.total_income,
+          expenses: backendSummary.total_expenses, // Backend já inclui faturas de cartão
+        });
+      } else {
+        setSummary(analytics.summary);
+      }
+      
       setMonthlyData(analytics.monthly);
       setExpenseCategories(analytics.categories);
       setMoneyFlow(analytics.moneyFlow);
@@ -229,15 +263,23 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
 
       setRecentTransactions(formattedTransactions);
     } else if (backendTransactions && backendTransactions.length === 0) {
-      // Sem transações: definir valores zerados
-      setSummary({ balance: 0, income: 0, expenses: 0 });
+      // Sem transações: usar resumo do backend se disponível, senão zerar
+      if (backendSummary) {
+        setSummary({
+          balance: backendSummary.balance,
+          income: backendSummary.total_income,
+          expenses: backendSummary.total_expenses, // Backend já inclui faturas de cartão
+        });
+      } else {
+        setSummary({ balance: 0, income: 0, expenses: 0 });
+      }
       setExpenseCategories([]);
       setMonthlyData([]);
       setRecentTransactions([]);
       setMoneyFlow({ nodes: [], links: [] });
       setWeeklyExpenseHeatmap({ categories: [], days: [], data: [] });
     }
-  }, [backendTransactions, activeOrgId, dateRange, creditCardInvoicesTotal]);
+  }, [backendTransactions, activeOrgId, dateRange, creditCardInvoicesTotal, backendSummary]);
 
   const error = queryError ? String(queryError) : null;
 

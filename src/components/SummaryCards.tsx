@@ -11,18 +11,47 @@ interface SummaryCardsProps {
   monthlyData?: MonthlyData[];
   isLoading?: boolean;
   isEmpty?: boolean;
+  dateRange?: { from: Date; to: Date };
 }
 
 /**
  * Calcula a porcentagem de mudança entre o mês atual e o mês anterior
- * Retorna null se não houver dados suficientes para comparar
+ * Retorna null se não houver dados suficientes para comparar ou se o período for parcial
  */
 function calculateMonthChange(
   monthlyData: MonthlyData[] | undefined,
-  getValue: (data: MonthlyData) => number
+  getValue: (data: MonthlyData) => number,
+  dateRange?: { from: Date; to: Date }
 ): { percentage: number; isPositive: boolean } | null {
   if (!monthlyData || monthlyData.length < 2) {
     return null;
+  }
+
+  // Se o período selecionado é parcial (não é um mês completo), não calcular porcentagem
+  // pois a comparação de meses completos não faz sentido para períodos parciais
+  if (dateRange) {
+    const from = new Date(dateRange.from);
+    const to = new Date(dateRange.to);
+    
+    // Usar UTC para evitar problemas de timezone
+    const fromYear = from.getUTCFullYear();
+    const fromMonth = from.getUTCMonth();
+    const fromDay = from.getUTCDate();
+    const toYear = to.getUTCFullYear();
+    const toMonth = to.getUTCMonth();
+    const toDay = to.getUTCDate();
+    
+    // Verificar se começa no dia 1 do mês
+    const isStartOfMonth = fromDay === 1 && fromMonth === toMonth && fromYear === toYear;
+    
+    // Verificar se termina no último dia do mês
+    const lastDayOfMonth = new Date(Date.UTC(toYear, toMonth + 1, 0)).getUTCDate();
+    const isEndOfMonth = toDay === lastDayOfMonth && toMonth === fromMonth && toYear === fromYear;
+    
+    // Se não é um mês completo, não exibir porcentagem
+    if (!(isStartOfMonth && isEndOfMonth)) {
+      return null;
+    }
   }
 
   // Os dados já vêm ordenados por data do analytics.ts (groupByMonth)
@@ -45,10 +74,37 @@ function calculateMonthChange(
   };
 }
 
-export const SummaryCards = memo(function SummaryCards({ summary, monthlyData, isLoading, isEmpty }: SummaryCardsProps) {
+export const SummaryCards = memo(function SummaryCards({ summary, monthlyData, isLoading, isEmpty, dateRange }: SummaryCardsProps) {
   // Calcular mudanças percentuais
   const balanceChange = useMemo(() => {
     if (!monthlyData || monthlyData.length < 2) return null;
+    
+    // Se o período selecionado é parcial (não é um mês completo), não calcular porcentagem
+    if (dateRange) {
+      const from = new Date(dateRange.from);
+      const to = new Date(dateRange.to);
+      
+      // Usar UTC para evitar problemas de timezone
+      const fromYear = from.getUTCFullYear();
+      const fromMonth = from.getUTCMonth();
+      const fromDay = from.getUTCDate();
+      const toYear = to.getUTCFullYear();
+      const toMonth = to.getUTCMonth();
+      const toDay = to.getUTCDate();
+      
+      // Verificar se começa no dia 1 do mês
+      const isStartOfMonth = fromDay === 1 && fromMonth === toMonth && fromYear === toYear;
+      
+      // Verificar se termina no último dia do mês
+      const lastDayOfMonth = new Date(Date.UTC(toYear, toMonth + 1, 0)).getUTCDate();
+      const isEndOfMonth = toDay === lastDayOfMonth && toMonth === fromMonth && toYear === fromYear;
+      
+      // Se não é um mês completo, não exibir porcentagem
+      if (!(isStartOfMonth && isEndOfMonth)) {
+        return null;
+      }
+    }
+    
     // Os dados já vêm ordenados por data do analytics.ts
     const current = monthlyData[monthlyData.length - 1];
     const previous = monthlyData[monthlyData.length - 2];
@@ -57,10 +113,12 @@ export const SummaryCards = memo(function SummaryCards({ summary, monthlyData, i
     if (previousBalance === 0) return null;
     const percentage = ((currentBalance - previousBalance) / Math.abs(previousBalance)) * 100;
     return { percentage: Math.abs(percentage), isPositive: percentage >= 0 };
-  }, [monthlyData]);
+  }, [monthlyData, dateRange]);
 
-  const incomeChange = useMemo(() => calculateMonthChange(monthlyData, (data) => data.income), [monthlyData]);
-  const expenseChange = useMemo(() => calculateMonthChange(monthlyData, (data) => data.expenses), [monthlyData]);
+  const incomeChange = useMemo(() => calculateMonthChange(monthlyData, (data) => data.income, dateRange), [monthlyData, dateRange]);
+  const expenseChange = useMemo(() => {
+    return calculateMonthChange(monthlyData, (data) => data.expenses, dateRange);
+  }, [monthlyData, summary.expenses, dateRange]);
 
   // Se não há dados, mostrar estado vazio simplificado
   if (isEmpty && !isLoading) {

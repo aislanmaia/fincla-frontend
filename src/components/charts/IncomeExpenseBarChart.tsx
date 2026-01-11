@@ -24,6 +24,20 @@ interface IncomeExpenseBarChartProps {
 }
 
 export const IncomeExpenseBarChart = React.memo(({ data, isLoading }: IncomeExpenseBarChartProps) => {
+  // Detectar tamanho da tela para ajustar barras responsivamente
+  const [windowWidth, setWindowWidth] = React.useState(typeof window !== 'undefined' ? window.innerWidth : 1920);
+  
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const handleResize = () => {
+      setWindowWidth(window.innerWidth);
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  
   const chartData = React.useMemo(() => {
     // Lógica para centralizar barras quando há poucos dados
     let labels = data.map(item => item.month);
@@ -44,43 +58,50 @@ export const IncomeExpenseBarChart = React.memo(({ data, isLoading }: IncomeExpe
       labels = ['', ...labels, ''];
     }
 
-    // Calcular largura dinâmica baseada na quantidade de dados
-    // Menos dados = barras mais largas, mais dados = barras mais finas
-    const isDenseData = data.length > 6;
-    const barWidth = isDenseData ? Math.max(20, 60 - data.length * 2) : 50;
+    // Ajustar configurações baseado no tamanho da tela
+    const isSmallScreen = windowWidth < 768; // mobile
+    const isMediumScreen = windowWidth >= 768 && windowWidth < 1024; // tablet
+    const isLargeScreen = windowWidth >= 1024; // desktop
+    
+    // Configurações responsivas para evitar sobreposição em telas menores
+    // mas manter barras proporcionais em telas maiores
+    const barPercentage = isSmallScreen ? 0.6 : isMediumScreen ? 0.75 : 0.85;
+    const categoryPercentage = isSmallScreen ? 0.5 : isMediumScreen ? 0.65 : 0.75;
+    const maxBarThickness = isSmallScreen ? 60 : isMediumScreen ? 100 : 120;
+    
+    const expensesData = getPaddedData(item => item.expenses);
+    const incomeData = getPaddedData(item => item.income);
 
     return {
       labels,
       datasets: [
         {
           label: 'Receitas',
-          data: getPaddedData(item => item.income),
+          data: incomeData,
           backgroundColor: '#10B981',
-          barPercentage: 0.9,
-          categoryPercentage: 1.0,
-          maxBarThickness: 150,
-          // SEMPRE desagrupado (grouped: false) para evitar que barras sumam quando há valor zero
-          // Ajusta largura dinamicamente para evitar overlap em dados densos
-          barThickness: barWidth,
+          barPercentage,
+          categoryPercentage,
+          maxBarThickness,
+          // Não usar barThickness fixo - deixar Chart.js calcular automaticamente
           borderRadius: 4,
           skipNull: true,
-          grouped: false,
+          // Barras agrupadas (lado a lado) para garantir que ambas sejam sempre visíveis
         },
         {
           label: 'Despesas',
-          data: getPaddedData(item => item.expenses),
+          data: expensesData,
           backgroundColor: '#F87171',
-          barPercentage: 0.9,
-          categoryPercentage: 1.0,
-          maxBarThickness: 150,
-          barThickness: barWidth,
+          barPercentage,
+          categoryPercentage,
+          maxBarThickness,
+          // Não usar barThickness fixo - deixar Chart.js calcular automaticamente
           borderRadius: 4,
           skipNull: true,
-          grouped: false,
+          // Barras agrupadas (lado a lado) para garantir que ambas sejam sempre visíveis
         }
       ]
     };
-  }, [data]);
+  }, [data, windowWidth]);
 
   if (isLoading) {
     return (
@@ -123,18 +144,37 @@ export const IncomeExpenseBarChart = React.memo(({ data, isLoading }: IncomeExpe
               ...barChartOptions.scales,
               x: {
                 ...barChartOptions.scales?.x,
+                // Não usar stacked para barras agrupadas
                 grid: {
                   display: false,
                 }
               },
               y: {
                 ...barChartOptions.scales?.y,
+                // Não usar stacked para barras agrupadas
+                beginAtZero: true,
                 border: {
                   display: false
                 },
                 grid: {
                   color: 'rgba(0, 0, 0, 0.05)',
+                },
+                // Garantir que valores pequenos sejam visíveis
+                min: 0,
+                ticks: {
+                  ...barChartOptions.scales?.y?.ticks,
+                  // Não limitar o número de ticks para garantir que valores pequenos sejam visíveis
+                  stepSize: undefined,
                 }
+              }
+            },
+            // Garantir que todas as barras sejam renderizadas, mesmo valores pequenos
+            plugins: {
+              ...barChartOptions.plugins,
+              tooltip: {
+                ...barChartOptions.plugins?.tooltip,
+                // Sempre mostrar tooltip, mesmo para valores pequenos
+                filter: () => true,
               }
             }
           }}
