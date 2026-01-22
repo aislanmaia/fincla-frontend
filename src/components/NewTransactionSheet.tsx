@@ -3,6 +3,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { createTransaction, updateTransaction } from '@/api/transactions';
@@ -1702,19 +1703,22 @@ export function NewTransactionSheet({
     ? ['PIX', 'Dinheiro', 'Transferência Bancária']
     : allPaymentMethods;
 
-  // Buscar tipos de tags do backend (uma vez, não depende da organização)
-  useEffect(() => {
-    const loadTagTypes = async () => {
-      try {
-        const response = await listTagTypes();
-        setTagTypesFromBackend(response.tag_types);
-      } catch (err) {
-        console.error('Erro ao buscar tipos de tags:', err);
-      }
-    };
+  // Buscar tipos de tags do backend usando React Query (cache compartilhado)
+  const { data: tagTypesData } = useQuery({
+    queryKey: ['tag-types'],
+    queryFn: async () => {
+      const response = await listTagTypes();
+      return response.tag_types;
+    },
+    staleTime: 10 * 60 * 1000, // 10 minutos - tag types raramente mudam
+  });
 
-    loadTagTypes();
-  }, []);
+  // Atualizar estado quando dados chegarem
+  useEffect(() => {
+    if (tagTypesData) {
+      setTagTypesFromBackend(tagTypesData);
+    }
+  }, [tagTypesData]);
 
   // Focar automaticamente no campo de valor quando a etapa 1 mobile for exibida
   useEffect(() => {

@@ -113,9 +113,14 @@ export default function TransactionsPage() {
     return {};
   }, [query]);
 
+  // Converter dateRange para string nas queryKeys para evitar recriação de objetos Date
+  const dateRangeKey = dateRange?.from && dateRange?.to
+    ? `${format(dateRange.from, 'yyyy-MM-dd')}_${format(dateRange.to, 'yyyy-MM-dd')}`
+    : null;
+
   // Query para buscar transações paginadas
   const { data: transactionsData, isLoading: isLoadingTransactions } = useQuery({
-    queryKey: ['transactions', activeOrgId, dateRange?.from, dateRange?.to, type, category, paymentMethod, query, currentPage],
+    queryKey: ['transactions', activeOrgId, dateRangeKey, type, category, paymentMethod, query, currentPage],
     queryFn: async () => {
       if (!activeOrgId) return null;
       
@@ -135,7 +140,7 @@ export default function TransactionsPage() {
 
   // Query para buscar estatísticas (KPIs)
   const { data: summaryData, isLoading: isLoadingSummary } = useQuery({
-    queryKey: ['transactions-summary', activeOrgId, dateRange?.from, dateRange?.to, type, category, paymentMethod, query],
+    queryKey: ['transactions-summary', activeOrgId, dateRangeKey, type, category, paymentMethod, query],
     queryFn: async () => {
       if (!activeOrgId) return null;
       

@@ -1,62 +1,54 @@
 // hooks/useAuth.ts
-import { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { login, getCurrentUser, logout as apiLogout, isAuthenticated } from '../api/auth';
 import { LoginResponse, User } from '../types/api';
 import { handleApiError } from '../api/client';
 
 export const useAuth = () => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    const loadUser = async () => {
+  // Usar React Query para cache compartilhado do usuário
+  const { data: user, isLoading: loading, error: queryError } = useQuery({
+    queryKey: ['current-user'],
+    queryFn: async () => {
       if (!isAuthenticated()) {
-        setLoading(false);
-        return;
+        return null;
       }
-
       try {
-        const currentUser = await getCurrentUser();
-        setUser(currentUser);
-        setError(null);
+        return await getCurrentUser();
       } catch (err) {
         // Token inválido ou expirado
-        setUser(null);
         apiLogout();
-        setError(null);
-      } finally {
-        setLoading(false);
+        return null;
       }
-    };
-
-    loadUser();
-  }, []);
+    },
+    enabled: isAuthenticated(),
+    staleTime: 5 * 60 * 1000, // 5 minutos - dados do usuário raramente mudam
+    retry: false,
+  });
 
   const signIn = async (email: string, password: string): Promise<LoginResponse> => {
     try {
-      setError(null);
       const response = await login(email, password);
-      const currentUser = await getCurrentUser();
-      setUser(currentUser);
+      // Invalidar cache e buscar usuário atualizado
+      await queryClient.invalidateQueries({ queryKey: ['current-user'] });
       return response;
     } catch (err) {
       const errorMessage = handleApiError(err);
-      setError(errorMessage);
       throw new Error(errorMessage);
     }
   };
 
   const signOut = () => {
     apiLogout();
-    setUser(null);
-    setError(null);
+    // Limpar cache do usuário
+    queryClient.setQueryData(['current-user'], null);
   };
 
   return {
-    user,
+    user: user || null,
     loading,
-    error,
+    error: queryError ? handleApiError(queryError) : null,
     signIn,
     signOut,
     isAuthenticated: !!user,

@@ -152,8 +152,13 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
   });
 
   // Buscar resumo do backend quando há dateRange (mais preciso que cálculo local)
+  // Usar strings formatadas nas queryKeys para evitar recriação de objetos Date
+  const dateRangeKey = dateRange 
+    ? `${format(dateRange.from, 'yyyy-MM-dd')}_${format(dateRange.to, 'yyyy-MM-dd')}`
+    : null;
+  
   const { data: backendSummary } = useQuery({
-    queryKey: ['transactions-summary', activeOrgId, dateRange?.from, dateRange?.to],
+    queryKey: ['transactions-summary', activeOrgId, dateRangeKey],
     queryFn: async () => {
       if (!activeOrgId || !dateRange) return null;
       
@@ -175,8 +180,9 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
   });
 
   // Carregar faturas de cartão de crédito que fecham no período
+  // Usar string formatada na queryKey para evitar recriação de objetos Date
   const { data: creditCardInvoicesTotal } = useQuery({
-    queryKey: ['credit-card-invoices', activeOrgId, dateRange?.from, dateRange?.to],
+    queryKey: ['credit-card-invoices', activeOrgId, dateRangeKey],
     queryFn: async () => {
       if (!activeOrgId || !dateRange) return 0;
 
