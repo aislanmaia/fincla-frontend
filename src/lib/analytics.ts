@@ -3,7 +3,7 @@
 
 import { Transaction } from '@/types/api';
 import { generateDistinctCategoryColors } from './colorGenerator';
-import { startOfMonth, endOfMonth, addMonths, subMonths, isWithinInterval } from 'date-fns';
+import { startOfMonth, endOfMonth, addMonths, subMonths, isWithinInterval, startOfDay, isSameDay, isAfter, isBefore } from 'date-fns';
 
 export interface FinancialSummary {
     balance: number;
@@ -74,6 +74,19 @@ function getTransactionValue(
                              1;
 
     if (!isCreditCard || !isInstallment || installmentsCount <= 1) {
+        // Para transações não parceladas, verificar se a data está no período
+        if (dateRange) {
+            const transactionDate = new Date(transaction.date);
+            const transactionDateStart = startOfDay(transactionDate);
+            const rangeFromStart = startOfDay(dateRange.from);
+            const rangeToStart = startOfDay(dateRange.to);
+            
+            // Verificar se a data da transação está dentro do período (inclusive)
+            // Usar comparação direta com >= e <= para incluir as datas de início e fim
+            if (transactionDateStart < rangeFromStart || transactionDateStart > rangeToStart) {
+                return 0; // Transação fora do período
+            }
+        }
         return numericValue;
     }
 
@@ -374,6 +387,7 @@ export function groupByCategory(
     const colorMap = generateDistinctCategoryColors(categoryNames);
 
     const result = Array.from(categoryMap.entries())
+        .filter(([name, amount]) => amount > 0) // Filtrar categorias com valor 0 (fora do período)
         .map(([name, amount]) => ({
             name,
             amount,

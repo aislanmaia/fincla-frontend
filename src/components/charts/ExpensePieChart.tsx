@@ -3,7 +3,6 @@ import { Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PieChart } from 'lucide-react';
 import { chartColors, pieChartOptions } from '@/lib/chartConfig';
 import { ExpenseCategory } from '@/hooks/useFinancialData';
@@ -39,23 +38,26 @@ export const ExpensePieChart = React.memo(({ data, isLoading }: ExpensePieChartP
     );
   }
 
+  // Se não há dados, mostrar mensagem
+  if (!data || data.length === 0) {
+    return (
+      <Card className="p-6 rounded-2xl shadow-flat border-0 gradient-card-blue">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Despesas por Categoria</h3>
+          <PieChart className="w-4 h-4 text-gray-400" />
+        </div>
+        <div className="chart-container flex items-center justify-center min-h-[240px]">
+          <p className="text-sm text-gray-500">Nenhuma despesa no período selecionado</p>
+        </div>
+      </Card>
+    );
+  }
+
   return (
     <Card className="p-6 rounded-2xl shadow-flat border-0 gradient-card-blue">
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Despesas por Categoria</h3>
-        <div className="flex items-center space-x-2">
-          <PieChart className="w-4 h-4 text-gray-400" />
-          <Select defaultValue="current-month">
-            <SelectTrigger className="w-auto h-9 text-sm border-gray-300 rounded-full px-3 dark:border-white/10">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="current-month">Este mês</SelectItem>
-              <SelectItem value="last-month">Último mês</SelectItem>
-              <SelectItem value="quarter">Último trimestre</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        <PieChart className="w-4 h-4 text-gray-400" />
       </div>
       <div className="chart-container">
         <Doughnut data={chartData} options={pieChartOptions} />
