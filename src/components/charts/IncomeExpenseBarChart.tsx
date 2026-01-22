@@ -11,7 +11,6 @@ import {
 } from 'chart.js';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BarChart3 } from 'lucide-react';
 import { chartColors, barChartOptions } from '@/lib/chartConfig';
 import { MonthlyData } from '@/hooks/useFinancialData';
@@ -39,6 +38,11 @@ export const IncomeExpenseBarChart = React.memo(({ data, isLoading }: IncomeExpe
   }, []);
   
   const chartData = React.useMemo(() => {
+    // #region agent log
+    const totalExpenses = data.reduce((acc, item) => acc + item.expenses, 0);
+    const totalIncome = data.reduce((acc, item) => acc + item.income, 0);
+    fetch('http://127.0.0.1:7243/ingest/64fc74d5-2f72-478d-b268-2554f07bb069',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'IncomeExpenseBarChart.tsx:41',message:'chartData memo entry',data:{dataLength:data.length,data,totalExpenses,totalIncome},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+    // #endregion
     // Lógica para centralizar barras quando há poucos dados
     let labels = data.map(item => item.month);
 
@@ -82,10 +86,9 @@ export const IncomeExpenseBarChart = React.memo(({ data, isLoading }: IncomeExpe
           barPercentage,
           categoryPercentage,
           maxBarThickness,
-          // Não usar barThickness fixo - deixar Chart.js calcular automaticamente
           borderRadius: 4,
           skipNull: true,
-          // Barras agrupadas (lado a lado) para garantir que ambas sejam sempre visíveis
+          order: 2, // Despesas aparecem primeiro (mais à esquerda)
         },
         {
           label: 'Despesas',
@@ -94,10 +97,9 @@ export const IncomeExpenseBarChart = React.memo(({ data, isLoading }: IncomeExpe
           barPercentage,
           categoryPercentage,
           maxBarThickness,
-          // Não usar barThickness fixo - deixar Chart.js calcular automaticamente
           borderRadius: 4,
           skipNull: true,
-          // Barras agrupadas (lado a lado) para garantir que ambas sejam sempre visíveis
+          order: 1, // Despesas aparecem primeiro (mais à esquerda)
         }
       ]
     };
@@ -121,18 +123,7 @@ export const IncomeExpenseBarChart = React.memo(({ data, isLoading }: IncomeExpe
     <Card className="p-6 rounded-2xl shadow-flat border-0 gradient-card-indigo">
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Receitas vs Despesas</h3>
-        <div className="flex items-center space-x-2">
-          <BarChart3 className="w-4 h-4 text-gray-400" />
-          <Select defaultValue="this-year">
-            <SelectTrigger className="w-auto h-9 text-sm border-gray-300 rounded-full px-3 dark:border-white/10">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="this-year">Este ano</SelectItem>
-              <SelectItem value="last-year">Último ano</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        <BarChart3 className="w-4 h-4 text-gray-400" />
       </div>
       <div className="chart-container">
         <Bar
@@ -140,18 +131,25 @@ export const IncomeExpenseBarChart = React.memo(({ data, isLoading }: IncomeExpe
           options={{
             ...barChartOptions,
             maintainAspectRatio: false,
+            interaction: {
+              mode: 'index' as const,
+              intersect: false,
+            },
             scales: {
               ...barChartOptions.scales,
               x: {
                 ...barChartOptions.scales?.x,
-                // Não usar stacked para barras agrupadas
+                stacked: false, // Barras lado a lado, não empilhadas
                 grid: {
                   display: false,
+                },
+                ticks: {
+                  autoSkip: false,
                 }
               },
               y: {
                 ...barChartOptions.scales?.y,
-                // Não usar stacked para barras agrupadas
+                stacked: false, // Barras lado a lado, não empilhadas
                 beginAtZero: true,
                 border: {
                   display: false
@@ -159,22 +157,31 @@ export const IncomeExpenseBarChart = React.memo(({ data, isLoading }: IncomeExpe
                 grid: {
                   color: 'rgba(0, 0, 0, 0.05)',
                 },
-                // Garantir que valores pequenos sejam visíveis
                 min: 0,
                 ticks: {
                   ...barChartOptions.scales?.y?.ticks,
-                  // Não limitar o número de ticks para garantir que valores pequenos sejam visíveis
                   stepSize: undefined,
                 }
               }
             },
-            // Garantir que todas as barras sejam renderizadas, mesmo valores pequenos
             plugins: {
               ...barChartOptions.plugins,
               tooltip: {
                 ...barChartOptions.plugins?.tooltip,
-                // Sempre mostrar tooltip, mesmo para valores pequenos
                 filter: () => true,
+                mode: 'index' as const,
+                intersect: false,
+              },
+              legend: {
+                ...barChartOptions.plugins?.legend,
+                onClick: (e, legendItem, legend) => {
+                  // Permitir clicar na legenda para mostrar/ocultar datasets
+                  const index = legendItem.datasetIndex ?? 0;
+                  const chart = legend.chart;
+                  const meta = chart.getDatasetMeta(index);
+                  meta.hidden = meta.hidden === null ? !chart.data.datasets[index].hidden : null;
+                  chart.update();
+                }
               }
             }
           }}
