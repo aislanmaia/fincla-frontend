@@ -38,11 +38,6 @@ export const IncomeExpenseBarChart = React.memo(({ data, isLoading }: IncomeExpe
   }, []);
   
   const chartData = React.useMemo(() => {
-    // #region agent log
-    const totalExpenses = data.reduce((acc, item) => acc + item.expenses, 0);
-    const totalIncome = data.reduce((acc, item) => acc + item.income, 0);
-    fetch('http://127.0.0.1:7243/ingest/64fc74d5-2f72-478d-b268-2554f07bb069',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'IncomeExpenseBarChart.tsx:41',message:'chartData memo entry',data:{dataLength:data.length,data,totalExpenses,totalIncome},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     // Lógica para centralizar barras quando há poucos dados
     let labels = data.map(item => item.month);
 

@@ -131,10 +131,6 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
             hasMore = false;
           }
         } catch (error: any) {
-          // #region agent log
-          fetch('http://127.0.0.1:7243/ingest/64fc74d5-2f72-478d-b268-2554f07bb069',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useFinancialData.ts:119',message:'listTransactions error',data:{page,limit,organizationId:activeOrgId,errorStatus:error?.response?.status,errorMessage:error?.message,errorData:error?.response?.data,transactionsCollected:allTransactions.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-          // #endregion
-          
           // Se for erro 422 (Unprocessable Entity) ou 404 (Not Found), 
           // provavelmente não há mais páginas - parar o loop
           // Se for outro erro, também parar para não ficar em loop infinito
@@ -148,10 +144,6 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
           }
         }
       }
-
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/64fc74d5-2f72-478d-b268-2554f07bb069',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useFinancialData.ts:140',message:'all transactions collected',data:{totalTransactions:allTransactions.length,pagesProcessed:page-1},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-      // #endregion
 
       return allTransactions;
     },
@@ -239,10 +231,6 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
 
   // Processar dados quando transações do backend mudarem
   useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/64fc74d5-2f72-478d-b268-2554f07bb069',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useFinancialData.ts:241',message:'useEffect entry',data:{backendTransactionsLength:backendTransactions?.length||0,backendTransactionsIsUndefined:backendTransactions===undefined,isLoading,queryError:queryError?.message||null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-    // #endregion
-    
     if (backendTransactions && backendTransactions.length > 0) {
       // Filtrar por organização ativa
       const orgTransactions = backendTransactions.filter(
@@ -251,17 +239,11 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
 
       // Processar analytics com filtro de data se fornecido
       // Incluir valor total das faturas de cartão de crédito que fecham no período
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/64fc74d5-2f72-478d-b268-2554f07bb069',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useFinancialData.ts:228',message:'before processTransactionAnalytics',data:{orgTransactionsCount:orgTransactions.length,dateRange:dateRange?{from:dateRange.from.toISOString(),to:dateRange.to.toISOString()}:null,creditCardInvoicesTotal:creditCardInvoicesTotal||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       const analytics = processTransactionAnalytics(
         orgTransactions, 
         dateRange,
         creditCardInvoicesTotal || 0
       );
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/64fc74d5-2f72-478d-b268-2554f07bb069',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useFinancialData.ts:235',message:'after processTransactionAnalytics',data:{monthlyDataLength:analytics.monthly.length,monthlyData:analytics.monthly,summaryExpenses:analytics.summary.expenses,summaryIncome:analytics.summary.income},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
 
       // Usar resumo do backend se disponível (mais preciso que cálculo local)
       // O backend já deve incluir as faturas de cartão de crédito no total_expenses
@@ -295,9 +277,6 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
 
       setRecentTransactions(formattedTransactions);
     } else if (backendTransactions && backendTransactions.length === 0) {
-      // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/64fc74d5-2f72-478d-b268-2554f07bb069',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useFinancialData.ts:265',message:'backendTransactions empty array',data:{backendSummaryAvailable:!!backendSummary},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-      // #endregion
       // Sem transações: usar resumo do backend se disponível, senão zerar
       if (backendSummary) {
         setSummary({
@@ -313,11 +292,6 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
       setRecentTransactions([]);
       setMoneyFlow({ nodes: [], links: [] });
       setWeeklyExpenseHeatmap({ categories: [], days: [], data: [] });
-    } else if (!backendTransactions && !isLoading) {
-      // #region agent log
-      const errorStatus = (queryError as any)?.response?.status || null;
-      fetch('http://127.0.0.1:7243/ingest/64fc74d5-2f72-478d-b268-2554f07bb069',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useFinancialData.ts:278',message:'backendTransactions undefined and not loading',data:{queryError:queryError?.message||null,queryErrorStatus:errorStatus},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
-      // #endregion
     }
   }, [backendTransactions, activeOrgId, dateRange, creditCardInvoicesTotal, backendSummary]);
 

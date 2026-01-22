@@ -201,10 +201,6 @@ export function groupByMonth(
     dateRange?: { from: Date; to: Date },
     creditCardInvoicesTotal?: number
 ): MonthlyData[] {
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/64fc74d5-2f72-478d-b268-2554f07bb069',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.ts:199',message:'groupByMonth entry',data:{transactionsCount:transactions.length,dateRange:dateRange?{from:dateRange.from.toISOString(),to:dateRange.to.toISOString()}:null,creditCardInvoicesTotal},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
-    
     // Para o gráfico "Receitas vs Despesas", sempre mostrar os últimos 6 meses
     // independente do dateRange selecionado
     const now = new Date();
@@ -218,11 +214,6 @@ export function groupByMonth(
         const monthKey = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`;
         monthMap.set(monthKey, { income: 0, expenses: 0 });
     }
-    
-    // #region agent log
-    const monthKeys = Array.from(monthMap.keys());
-    fetch('http://127.0.0.1:7243/ingest/64fc74d5-2f72-478d-b268-2554f07bb069',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.ts:216',message:'monthMap initialized',data:{monthKeys,now:now.toISOString(),chartStartDate:chartStartDate.toISOString(),chartEndDate:chartEndDate.toISOString()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     
     let expenseProcessedCount = 0;
     let expenseSkippedCount = 0;
@@ -283,11 +274,6 @@ export function groupByMonth(
                         expenseSkippedCount++;
                     }
                 }
-                // #region agent log
-                if (expenseProcessedCount <= 10) {
-                    fetch('http://127.0.0.1:7243/ingest/64fc74d5-2f72-478d-b268-2554f07bb069',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.ts:244',message:'installment expense processed',data:{transactionId:t.id,description:t.description,purchaseDate:purchaseDate.toISOString(),installmentsCount,totalAmount,installmentValue,installmentAdded,monthKeys:Array.from(monthMap.keys())},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
-                }
-                // #endregion
             } else {
                 // Transação não parcelada: processar se estiver nos últimos 6 meses
                 const date = new Date(t.date);
@@ -302,29 +288,15 @@ export function groupByMonth(
                 } else {
                     expenseSkippedCount++;
                 }
-                // #region agent log
-                if (expenseProcessedCount <= 10) {
-                    fetch('http://127.0.0.1:7243/ingest/64fc74d5-2f72-478d-b268-2554f07bb069',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.ts:267',message:'non-installment expense processed',data:{transactionId:t.id,description:t.description,date:date.toISOString(),monthKey,value,isInMonthMap:monthMap.has(monthKey),monthKeys:Array.from(monthMap.keys())},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-                }
-                // #endregion
             }
         }
     });
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/64fc74d5-2f72-478d-b268-2554f07bb069',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.ts:281',message:'transactions processing summary',data:{incomeCount,incomeAdded,expenseCount,expenseAdded,expenseProcessedCount,expenseSkippedCount},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-    // #endregion
 
     // NÃO adicionar creditCardInvoicesTotal ao gráfico mensal
     // O gráfico mensal mostra meses completos, enquanto creditCardInvoicesTotal
     // representa faturas que fecham apenas no período selecionado (que pode ser parcial)
     // creditCardInvoicesTotal deve aparecer apenas no resumo (summary), não no gráfico
 
-    // #region agent log
-    const monthMapBeforeConversion = Array.from(monthMap.entries()).map(([key, data]) => ({key,income:data.income,expenses:data.expenses}));
-    fetch('http://127.0.0.1:7243/ingest/64fc74d5-2f72-478d-b268-2554f07bb069',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.ts:288',message:'monthMap before conversion',data:{monthMapData:monthMapBeforeConversion},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
-    
     // Converter para array e ordenar por data
     const result = Array.from(monthMap.entries())
         .sort(([a], [b]) => a.localeCompare(b))
@@ -339,10 +311,6 @@ export function groupByMonth(
                 expenses: data.expenses,
             };
         });
-    
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/64fc74d5-2f72-478d-b268-2554f07bb069',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'analytics.ts:303',message:'groupByMonth result',data:{result,resultLength:result.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
-    // #endregion
     
     return result;
 }
