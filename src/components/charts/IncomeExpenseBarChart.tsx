@@ -148,8 +148,7 @@ export const IncomeExpenseBarChart = React.memo(({ data, isLoading }: IncomeExpe
                 }
               },
               y: {
-                ...barChartOptions.scales?.y,
-                stacked: false, // Barras lado a lado, não empilhadas
+                type: 'linear' as const,
                 beginAtZero: true,
                 border: {
                   display: false
@@ -159,7 +158,7 @@ export const IncomeExpenseBarChart = React.memo(({ data, isLoading }: IncomeExpe
                 },
                 min: 0,
                 ticks: {
-                  ...barChartOptions.scales?.y?.ticks,
+                  callback: barChartOptions.scales?.y?.ticks?.callback,
                   stepSize: undefined,
                 }
               }
@@ -179,7 +178,8 @@ export const IncomeExpenseBarChart = React.memo(({ data, isLoading }: IncomeExpe
                   const index = legendItem.datasetIndex ?? 0;
                   const chart = legend.chart;
                   const meta = chart.getDatasetMeta(index);
-                  meta.hidden = meta.hidden === null ? !chart.data.datasets[index].hidden : null;
+                  const currentHidden = meta.hidden ?? false;
+                  meta.hidden = !currentHidden;
                   chart.update();
                 }
               }

@@ -315,7 +315,8 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
       setWeeklyExpenseHeatmap({ categories: [], days: [], data: [] });
     } else if (!backendTransactions && !isLoading) {
       // #region agent log
-      fetch('http://127.0.0.1:7243/ingest/64fc74d5-2f72-478d-b268-2554f07bb069',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useFinancialData.ts:278',message:'backendTransactions undefined and not loading',data:{queryError:queryError?.message||null,queryErrorStatus:queryError?.response?.status||null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+      const errorStatus = (queryError as any)?.response?.status || null;
+      fetch('http://127.0.0.1:7243/ingest/64fc74d5-2f72-478d-b268-2554f07bb069',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'useFinancialData.ts:278',message:'backendTransactions undefined and not loading',data:{queryError:queryError?.message||null,queryErrorStatus:errorStatus},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
       // #endregion
     }
   }, [backendTransactions, activeOrgId, dateRange, creditCardInvoicesTotal, backendSummary]);
