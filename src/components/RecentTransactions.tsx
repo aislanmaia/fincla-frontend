@@ -1,7 +1,15 @@
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Link } from 'wouter';
-import { ShoppingCart, Building, Car, Heart, Coffee, ShoppingBag, Plus, FileText } from 'lucide-react';
+import { 
+  ShoppingCart, 
+  Building, 
+  ArrowRightLeft, 
+  PiggyBank,
+  ArrowUpRight,
+  Plus, 
+  FileText 
+} from 'lucide-react';
 import { Transaction } from '@/hooks/useFinancialData';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -14,20 +22,63 @@ interface RecentTransactionsProps {
 }
 
 export const RecentTransactions = memo(function RecentTransactions({ transactions, isLoading }: RecentTransactionsProps) {
-  const getTransactionIcon = (iconName: string) => {
-    const iconMap = {
+  const getTransactionIcon = (iconName: string, isExpense: boolean, category: string) => {
+    // Mapear baseado no tipo e categoria para cores específicas
+    const iconMap: Record<string, any> = {
       'shopping-cart': ShoppingCart,
       'building': Building,
-      'car': Car,
-      'gas-pump': Car,
-      'heart': Heart,
-      'coffee': Coffee,
-      'shopping-bag': ShoppingBag,
-      'dollar-sign': Building
+      'car': ShoppingCart,
+      'gas-pump': ShoppingCart,
+      'heart': ShoppingCart,
+      'coffee': ShoppingCart,
+      'shopping-bag': ShoppingCart,
+      'dollar-sign': Building,
     };
 
-    const Icon = iconMap[iconName as keyof typeof iconMap] || ShoppingBag;
+    // Para transferências, usar ícone específico
+    if (category?.toLowerCase().includes('transferência') || category?.toLowerCase().includes('pagamento')) {
+      return ArrowRightLeft;
+    }
+
+    // Para investimentos/poupança
+    if (category?.toLowerCase().includes('investimento') || category?.toLowerCase().includes('poupança')) {
+      return PiggyBank;
+    }
+
+    const Icon = iconMap[iconName] || (isExpense ? ShoppingCart : Building);
     return Icon;
+  };
+
+  const getIconColor = (isExpense: boolean, category: string) => {
+    // Verde para entradas/bônus
+    if (!isExpense) {
+      return {
+        bg: '#10B981', // Verde
+        icon: '#FFFFFF', // Ícone branco
+      };
+    }
+
+    // Azul para transferências/pagamentos
+    if (category?.toLowerCase().includes('transferência') || category?.toLowerCase().includes('pagamento')) {
+      return {
+        bg: '#3B82F6', // Azul
+        icon: '#FFFFFF',
+      };
+    }
+
+    // Amarelo para investimentos/poupança
+    if (category?.toLowerCase().includes('investimento') || category?.toLowerCase().includes('poupança')) {
+      return {
+        bg: '#F59E0B', // Amarelo/Dourado
+        icon: '#FFFFFF',
+      };
+    }
+
+    // Vermelho para despesas
+    return {
+      bg: '#EF4444', // Vermelho
+      icon: '#FFFFFF',
+    };
   };
 
   const formatDate = (date: Date): string => {
@@ -36,9 +87,9 @@ export const RecentTransactions = memo(function RecentTransactions({ transaction
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
     if (diffDays === 0) {
-      return `Hoje, ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+      return 'Hoje';
     } else if (diffDays === 1) {
-      return `Ontem, ${date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+      return 'Ontem';
     } else {
       return `${diffDays} dias atrás`;
     }
@@ -48,22 +99,21 @@ export const RecentTransactions = memo(function RecentTransactions({ transaction
 
   if (isLoading) {
     return (
-      <Card className="p-6 rounded-2xl shadow-flat border-0 gradient-card-indigo/50">
-        <div className="flex items-center justify-between mb-6">
-          <div className="h-6 w-40 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
-          <div className="h-9 w-24 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+      <Card className="bg-white rounded-2xl shadow-flat border-0 p-4 md:p-6">
+        <div className="flex justify-between items-center mb-6">
+          <div className="h-6 w-40 bg-gray-200 rounded animate-pulse" />
+          <div className="h-10 w-28 bg-gray-200 rounded-full animate-pulse" />
         </div>
-        <div className="space-y-3">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-gray-50/60">
-              <div className="flex items-center space-x-3">
-                <div className="w-8 h-8 rounded-full bg-gray-200 dark:bg-gray-700 animate-pulse" />
-                <div className="space-y-2">
-                  <div className="h-4 w-32 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
-                  <div className="h-3 w-20 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
-                </div>
+        <div className="flex flex-col gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="flex items-center gap-4 py-4 border-b border-gray-100 last:border-b-0">
+              <div className="w-12 h-12 shrink-0 rounded-full bg-gray-200 animate-pulse" />
+              <div className="flex flex-col grow shrink items-start text-left min-w-0">
+                <div className="h-5 w-32 bg-gray-200 rounded animate-pulse mb-1" />
+                <div className="h-4 w-24 bg-gray-200 rounded animate-pulse mt-1" />
+                <div className="h-3 w-20 bg-gray-200 rounded animate-pulse mt-1" />
               </div>
-              <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+              <div className="h-6 w-24 bg-gray-200 rounded animate-pulse shrink-0" />
             </div>
           ))}
         </div>
@@ -74,26 +124,28 @@ export const RecentTransactions = memo(function RecentTransactions({ transaction
   if (!transactions || transactions.length === 0) {
     return (
       <>
-        <Card className="p-6 rounded-2xl shadow-flat border-0 gradient-card-indigo/50">
-          <div className="flex items-center justify-between mb-6">
+        <Card className="bg-white rounded-2xl shadow-flat border-0 p-4 md:p-6">
+          <div className="flex justify-between items-center mb-6">
             <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Transações Recentes</h3>
             <Link href="/transactions">
-              <Button variant="ghost" className="text-indigo-600 hover:text-indigo-700 text-sm font-medium">
+              <Button 
+                className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-4 py-2 h-auto text-sm font-medium flex items-center gap-1.5"
+              >
                 Ver todas
+                <ArrowUpRight className="w-4 h-4" />
               </Button>
             </Link>
           </div>
           <div className="flex flex-col items-center justify-center py-12 space-y-4">
-            <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-full">
+            <div className="bg-gray-100 p-4 rounded-full">
               <FileText className="w-8 h-8 text-gray-400" />
             </div>
             <div className="text-center">
-              <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Nenhuma transação encontrada</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Comece adicionando sua primeira transação</p>
+              <p className="text-sm font-medium text-gray-900 mb-1">Nenhuma transação encontrada</p>
+              <p className="text-xs text-gray-500 mb-4">Comece adicionando sua primeira transação</p>
               <Button
                 onClick={() => setIsNewTransactionOpen(true)}
-                size="sm"
-                className="bg-indigo-600 hover:bg-indigo-700"
+                className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-4 py-2"
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Nova Transação
@@ -110,61 +162,86 @@ export const RecentTransactions = memo(function RecentTransactions({ transaction
   }
 
   return (
-    <Card className="p-6 rounded-2xl shadow-flat border-0 gradient-card-indigo/50">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Transações Recentes</h3>
-        <Link href="/transactions">
-          <Button variant="ghost" className="text-indigo-600 hover:text-indigo-700 text-sm font-medium">
-            Ver todas
-          </Button>
-        </Link>
-      </div>
-      <div className="space-y-3">
-        {transactions.slice(0, 6).map((transaction, idx) => {
-          const Icon = getTransactionIcon(transaction.icon);
-          const isExpense = transaction.amount < 0;
-
-          return (
-            <div
-              key={transaction.id}
-              className={cn(
-                'flex items-center justify-between p-3 rounded-xl transition-colors',
-                idx % 2 === 0
-                  ? 'bg-gray-50/60 hover:bg-gray-100/50'
-                  : 'bg-gray-100/60 hover:bg-gray-200/50'
-              )}
+    <>
+      <Card className="bg-white rounded-2xl shadow-flat border-0 p-4 md:p-6 h-full flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Transações Recentes</h3>
+          <Link href="/transactions">
+            <Button 
+              className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-4 py-2 h-auto text-sm font-medium flex items-center gap-1.5"
             >
-              <div className="flex items-center space-x-3">
-                <div
-                  className={cn(
-                    'p-2 rounded-full ring-1',
-                    isExpense ? 'bg-rose-100/80 ring-rose-200' : 'bg-emerald-100/80 ring-emerald-200'
-                  )}
+              Ver todas
+              <ArrowUpRight className="w-4 h-4" />
+            </Button>
+          </Link>
+        </div>
+
+        {/* Transactions List */}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide">
+          <div className="flex flex-col gap-4">
+            {transactions.slice(0, 6).map((transaction, idx) => {
+              const isExpense = transaction.amount < 0;
+              const amount = Math.abs(transaction.amount);
+              const formattedAmount = amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+              const Icon = getTransactionIcon(transaction.icon, isExpense, transaction.category);
+              const iconColors = getIconColor(isExpense, transaction.category);
+
+              return (
+                <div 
+                  key={transaction.id}
+                  className="flex items-center gap-4 py-4 border-b border-gray-100 last:border-b-0"
                 >
-                  <Icon className={cn('w-4 h-4', isExpense ? 'text-rose-600' : 'text-emerald-600')} />
-                </div>
-                <div>
-                  <div className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                    {transaction.description}
-                    <Badge variant="outline" className="rounded-full text-[10px] font-medium px-2 py-0.5 border-gray-200 text-gray-600 dark:border-white/15 dark:text-gray-300">
-                      {transaction.category}
-                    </Badge>
+                  {/* Filho 1: Ícone - Fixo, Inflexível */}
+                  <div 
+                    className="w-12 h-12 shrink-0 flex items-center justify-center rounded-full"
+                    style={{ backgroundColor: iconColors.bg }}
+                  >
+                    <Icon 
+                      className="w-6 h-6"
+                      style={{ color: iconColors.icon }}
+                      strokeWidth={2}
+                    />
                   </div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">{formatDate(transaction.date)}</p>
+
+                  {/* Filho 2: Bloco Central de Texto - Flexível, Alinhado à Esquerda */}
+                  <div className="flex flex-col grow shrink items-start text-left min-w-0">
+                    {/* Título */}
+                    <p className="font-bold text-gray-900 truncate w-full">
+                      {transaction.description}
+                    </p>
+                    
+                    {/* Categoria - Badge inline-block, permite quebra de texto */}
+                    <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 text-wrap">
+                      {transaction.category}
+                    </span>
+                    
+                    {/* Data */}
+                    <p className="text-sm text-gray-500 mt-1">
+                      {formatDate(transaction.date)}
+                    </p>
+                  </div>
+
+                  {/* Filho 3: Valor - Fixo, Inflexível */}
+                  <div className="text-right font-bold text-lg shrink-0 whitespace-nowrap">
+                    <span
+                      className={cn(
+                        isExpense ? 'text-red-500' : 'text-green-500'
+                      )}
+                    >
+                      {isExpense ? '-' : '+'}R$ {formattedAmount}
+                    </span>
+                  </div>
                 </div>
-              </div>
-              <span
-                className={cn(
-                  'font-semibold tabular-nums',
-                  isExpense ? 'text-rose-600' : 'text-emerald-600'
-                )}
-              >
-                {isExpense ? '-' : '+'}R$ {Math.abs(transaction.amount).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    </Card>
+              );
+            })}
+          </div>
+        </div>
+      </Card>
+      <NewTransactionSheet
+        open={isNewTransactionOpen}
+        onOpenChange={setIsNewTransactionOpen}
+      />
+    </>
   );
 });
