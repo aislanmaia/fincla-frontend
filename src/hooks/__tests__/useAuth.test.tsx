@@ -29,9 +29,11 @@ describe('useAuth', () => {
             await result.current.signIn('test@example.com', 'password');
         });
 
+        // Após login, o query precisa ser refetchado
+        // Esperar um pouco mais para o React Query processar
         await waitFor(() => {
             expect(result.current.isAuthenticated).toBe(true);
-        });
+        }, { timeout: 3000 });
 
         expect(result.current.user?.email).toBe('test@example.com');
     });
@@ -46,15 +48,19 @@ describe('useAuth', () => {
 
         await waitFor(() => {
             expect(result.current.isAuthenticated).toBe(true);
-        });
+        }, { timeout: 3000 });
 
         // Then logout
         act(() => {
             result.current.signOut();
         });
 
-        expect(result.current.user).toBeNull();
-        expect(result.current.isAuthenticated).toBe(false);
+        // Após logout, o query deve retornar null
+        await waitFor(() => {
+            expect(result.current.user).toBeNull();
+            expect(result.current.isAuthenticated).toBe(false);
+        });
+
         expect(localStorage.getItem('auth_token')).toBeNull();
     });
 });

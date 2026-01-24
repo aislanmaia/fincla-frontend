@@ -30,8 +30,15 @@ export const useAuth = () => {
   const signIn = async (email: string, password: string): Promise<LoginResponse> => {
     try {
       const response = await login(email, password);
-      // Invalidar cache e buscar usuário atualizado
-      await queryClient.invalidateQueries({ queryKey: ['current-user'] });
+      // Após login, buscar usuário e atualizar cache diretamente
+      // Isso garante que o usuário seja carregado imediatamente
+      try {
+        const user = await getCurrentUser();
+        queryClient.setQueryData(['current-user'], user);
+      } catch (err) {
+        // Se falhar ao buscar usuário, limpar cache
+        queryClient.setQueryData(['current-user'], null);
+      }
       return response;
     } catch (err) {
       const errorMessage = handleApiError(err);

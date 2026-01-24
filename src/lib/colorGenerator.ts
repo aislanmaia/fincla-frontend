@@ -83,11 +83,13 @@ export function generateCategoryColors(categoryNames: string[]): Map<string, str
 /**
  * Gera cores para categorias garantindo distância mínima entre cores similares
  * Versão otimizada que tenta maximizar a diferença visual entre cores adjacentes
+ * GARANTE que cada categoria receba uma cor única e não repetida
  */
 export function generateDistinctCategoryColors(categoryNames: string[]): Map<string, string> {
   const colorMap = new Map<string, string>();
   const uniqueCategories = Array.from(new Set(categoryNames));
   const total = uniqueCategories.length;
+  const usedColors = new Set<string>(); // Rastrear cores já usadas para evitar duplicatas
   
   if (total === 0) return colorMap;
   
@@ -95,10 +97,34 @@ export function generateDistinctCategoryColors(categoryNames: string[]): Map<str
   if (total <= 12) {
     // Distribuir uniformemente no círculo de cores
     uniqueCategories.forEach((categoryName, index) => {
-      const hue = (index * (360 / total)) % 360;
-      const saturation = 70; // Saturação fixa para cores vibrantes
-      const lightness = 50; // Luminosidade média
-      colorMap.set(categoryName, hslToHex(hue, saturation, lightness));
+      // Usar hash do nome para garantir unicidade mesmo se o índice mudar
+      const nameHash = hashString(categoryName.toLowerCase().trim());
+      
+      // Distribuir hue uniformemente baseado no índice
+      const baseHue = (index * (360 / total)) % 360;
+      // Adicionar pequena variação baseada no hash para garantir unicidade
+      const hueVariation = (nameHash % 30) - 15; // Variação de -15 a +15 graus
+      const hue = (baseHue + hueVariation + 360) % 360;
+      
+      // Usar hash para gerar saturação e luminosidade únicas
+      // Saturação: 70-85% (cores vibrantes)
+      const saturation = 70 + (nameHash % 16); // 70-85%
+      // Luminosidade: 55-70% (cores claras)
+      const lightness = 55 + ((nameHash * 7) % 16); // 55-70%
+      
+      let color = hslToHex(hue, saturation, lightness);
+      
+      // Garantir que a cor seja única (se já foi usada, ajustar ligeiramente)
+      let attempts = 0;
+      while (usedColors.has(color) && attempts < 10) {
+        // Ajustar ligeiramente o hue para gerar uma cor diferente
+        const adjustedHue = (hue + (attempts * 25)) % 360;
+        color = hslToHex(adjustedHue, saturation, lightness);
+        attempts++;
+      }
+      
+      usedColors.add(color);
+      colorMap.set(categoryName, color);
     });
   } else {
     // Para muitas categorias, usar algoritmo mais sofisticado
@@ -107,19 +133,41 @@ export function generateDistinctCategoryColors(categoryNames: string[]): Map<str
     const colorsPerGroup = Math.ceil(total / groups);
     
     uniqueCategories.forEach((categoryName, index) => {
+      // Usar hash do nome para garantir unicidade
+      const nameHash = hashString(categoryName.toLowerCase().trim());
+      
       const groupIndex = Math.floor(index / colorsPerGroup);
       const indexInGroup = index % colorsPerGroup;
       
       // Distribuir matiz uniformemente
-      const hue = (index * (360 / total)) % 360;
+      const baseHue = (index * (360 / total)) % 360;
+      // Adicionar variação baseada no hash
+      const hueVariation = (nameHash % 20) - 10; // Variação de -10 a +10 graus
+      const hue = (baseHue + hueVariation + 360) % 360;
       
-      // Variação de saturação por grupo
-      const saturation = 55 + (groupIndex % 3) * 10; // 55, 65, 75%
+      // Variação de saturação por grupo e hash - cores vibrantes
+      const baseSaturation = 70 + (groupIndex % 3) * 5; // 70, 75, 80%
+      const saturationVariation = (nameHash % 6); // 0-5
+      const saturation = Math.min(85, baseSaturation + saturationVariation);
       
-      // Variação de luminosidade por posição no grupo
-      const lightness = 35 + (indexInGroup % 4) * 5; // 35, 40, 45, 50%
+      // Variação de luminosidade por posição no grupo e hash - cores claras
+      const baseLightness = 55 + (indexInGroup % 4) * 5; // 55, 60, 65, 70%
+      const lightnessVariation = ((nameHash * 3) % 6); // 0-5
+      const lightness = Math.min(70, baseLightness + lightnessVariation);
       
-      colorMap.set(categoryName, hslToHex(hue, saturation, lightness));
+      let color = hslToHex(hue, saturation, lightness);
+      
+      // Garantir que a cor seja única
+      let attempts = 0;
+      while (usedColors.has(color) && attempts < 10) {
+        // Ajustar ligeiramente o hue para gerar uma cor diferente
+        const adjustedHue = (hue + (attempts * 30)) % 360;
+        color = hslToHex(adjustedHue, saturation, lightness);
+        attempts++;
+      }
+      
+      usedColors.add(color);
+      colorMap.set(categoryName, color);
     });
   }
   

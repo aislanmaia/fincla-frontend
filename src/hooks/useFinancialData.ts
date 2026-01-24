@@ -104,8 +104,12 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
 
   // Carregar transações do backend (sempre que tiver organização ativa)
   // Buscar todas as transações fazendo múltiplas requisições se necessário
+  const dateRangeKey = dateRange 
+    ? `${format(dateRange.from, 'yyyy-MM-dd')}_${format(dateRange.to, 'yyyy-MM-dd')}`
+    : 'no-range';
+  
   const { data: backendTransactions, isLoading, error: queryError } = useQuery({
-    queryKey: ['financial-data', activeOrgId],
+    queryKey: ['financial-data', activeOrgId, dateRangeKey],
     queryFn: async () => {
       if (!activeOrgId) return [];
       
@@ -121,6 +125,11 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
             organization_id: activeOrgId,
             page,
             limit,
+            // Passar parâmetros de data se houver dateRange
+            ...(dateRange ? {
+              date_start: format(dateRange.from, 'yyyy-MM-dd'),
+              date_end: format(dateRange.to, 'yyyy-MM-dd'),
+            } : {}),
           });
 
           if (response.data && response.data.length > 0) {
@@ -153,9 +162,7 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
 
   // Buscar resumo do backend quando há dateRange (mais preciso que cálculo local)
   // Usar strings formatadas nas queryKeys para evitar recriação de objetos Date
-  const dateRangeKey = dateRange 
-    ? `${format(dateRange.from, 'yyyy-MM-dd')}_${format(dateRange.to, 'yyyy-MM-dd')}`
-    : null;
+  // dateRangeKey já foi definido acima
   
   const { data: backendSummary } = useQuery({
     queryKey: ['transactions-summary', activeOrgId, dateRangeKey],
@@ -181,17 +188,19 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
 
   // Carregar faturas de cartão de crédito que fecham no período
   // Usar string formatada na queryKey para evitar recriação de objetos Date
-  const { data: creditCardInvoicesTotal } = useQuery({
+  const { data: creditCardInvoicesData } = useQuery({
     queryKey: ['credit-card-invoices', activeOrgId, dateRangeKey],
     queryFn: async () => {
-      if (!activeOrgId || !dateRange) return 0;
+      if (!activeOrgId || !dateRange) return { total: 0, categoryBreakdown: [] };
 
       try {
         // Buscar todos os cartões da organização
         const cards = await listCreditCards(activeOrgId);
-        if (cards.length === 0) return 0;
+        if (cards.length === 0) return { total: 0, categoryBreakdown: [] };
 
         let totalInvoices = 0;
+        const categoryMap = new Map<string, number>();
+        const invoicesByMonth = new Map<string, number>(); // Para o gráfico mensal
 
         // Para cada mês no período, buscar faturas de todos os cartões
         const months = eachMonthOfInterval({ start: dateRange.from, end: dateRange.to });
@@ -199,6 +208,7 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
         for (const month of months) {
           const year = month.getFullYear();
           const monthNumber = month.getMonth() + 1;
+          let monthTotal = 0;
 
           // Buscar fatura de cada cartão para este mês
           for (const card of cards) {
@@ -213,6 +223,16 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
               // If we get here, invoice exists (200 response means invoice exists with items)
               // Somar o valor total da fatura (representa o que o usuário precisa pagar)
               totalInvoices += invoice.total_amount;
+              monthTotal += invoice.total_amount;
+              
+              // Agregar category_breakdown das faturas
+              if (invoice.category_breakdown) {
+                invoice.category_breakdown.forEach((breakdown) => {
+                  const categoryName = breakdown.category_name || 'Sem Categoria';
+                  const current = categoryMap.get(categoryName) || 0;
+                  categoryMap.set(categoryName, current + breakdown.total);
+                });
+              }
             } catch (err: any) {
               // 404 means invoice doesn't exist for this month/card - skip
               if (err?.response?.status === 404) {
@@ -223,17 +243,37 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
               continue;
             }
           }
+          
+          // Armazenar total por mês para o gráfico mensal
+          if (monthTotal > 0) {
+            const monthKey = `${year}-${String(monthNumber).padStart(2, '0')}`;
+            invoicesByMonth.set(monthKey, monthTotal);
+          }
         }
 
-        return totalInvoices;
+        const categoryBreakdown = Array.from(categoryMap.entries()).map(([name, total]) => ({
+          category_name: name,
+          total,
+        }));
+        
+        const invoicesByMonthArray = Array.from(invoicesByMonth.entries()).map(([key, total]) => {
+          const [year, month] = key.split('-');
+          return { year: parseInt(year), month: parseInt(month), total };
+        });
+
+        return { total: totalInvoices, categoryBreakdown, invoicesByMonth: invoicesByMonthArray };
       } catch (error) {
         console.error('Erro ao buscar faturas de cartão:', error);
-        return 0;
+        return { total: 0, categoryBreakdown: [] };
       }
     },
     enabled: !!activeOrgId && !!dateRange,
     staleTime: 2 * 60 * 1000, // 2 minutos
   });
+
+  const creditCardInvoicesTotal = creditCardInvoicesData?.total || 0;
+  const creditCardCategoryBreakdown = creditCardInvoicesData?.categoryBreakdown || [];
+  const creditCardInvoicesByMonth = creditCardInvoicesData?.invoicesByMonth || [];
 
   // Processar dados quando transações do backend mudarem
   useEffect(() => {
@@ -248,7 +288,9 @@ export function useFinancialData(dateRange?: { from: Date; to: Date }) {
       const analytics = processTransactionAnalytics(
         orgTransactions, 
         dateRange,
-        creditCardInvoicesTotal || 0
+        creditCardInvoicesTotal || 0,
+        creditCardCategoryBreakdown,
+        creditCardInvoicesByMonth
       );
 
       // Usar resumo do backend se disponível (mais preciso que cálculo local)

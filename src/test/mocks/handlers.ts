@@ -66,33 +66,43 @@ export const handlers = [
         const url = new URL(request.url);
         const organizationId = url.searchParams.get('organization_id');
         
-        return HttpResponse.json([
-            {
-                id: 1,
-                organization_id: organizationId || 'org-123',
-                type: 'expense',
-                description: 'Test expense',
-                category: 'Alimentação',
-                value: 50.0,
-                payment_method: 'PIX',
-                date: '2024-01-15T10:00:00',
-                created_at: '2024-01-15T10:00:00',
-                updated_at: '2024-01-15T10:00:00',
-                tags: {
-                    categoria: [
-                        {
-                            id: 'tag-123',
-                            name: 'Alimentação',
-                            type: 'categoria',
-                            color: '#FF5733',
-                            is_default: true,
-                            is_active: true,
-                            organization_id: organizationId || 'org-123',
-                        },
-                    ],
+        return HttpResponse.json({
+            data: [
+                {
+                    id: 1,
+                    organization_id: organizationId || 'org-123',
+                    type: 'expense',
+                    description: 'Test expense',
+                    category: 'Alimentação',
+                    value: 50.0,
+                    payment_method: 'PIX',
+                    date: '2024-01-15T10:00:00',
+                    created_at: '2024-01-15T10:00:00',
+                    updated_at: '2024-01-15T10:00:00',
+                    tags: {
+                        categoria: [
+                            {
+                                id: 'tag-123',
+                                name: 'Alimentação',
+                                type: 'categoria',
+                                color: '#FF5733',
+                                is_default: true,
+                                is_active: true,
+                                organization_id: organizationId || 'org-123',
+                            },
+                        ],
+                    },
                 },
+            ],
+            pagination: {
+                page: 1,
+                limit: 100,
+                total: 1,
+                pages: 1,
+                has_next: false,
+                has_prev: false,
             },
-        ]);
+        });
     }),
 
     http.post('*/v1/transactions', () => {

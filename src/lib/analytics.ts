@@ -5,6 +5,31 @@ import { Transaction } from '@/types/api';
 import { generateDistinctCategoryColors } from './colorGenerator';
 import { startOfMonth, endOfMonth, addMonths, subMonths, isWithinInterval, startOfDay, isSameDay, isAfter, isBefore } from 'date-fns';
 
+// Função auxiliar para gerar hash de string (usada para garantir unicidade de cores)
+function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash);
+}
+
+// Função auxiliar para converter HSL para hexadecimal (usada no fallback de cores)
+function hslToHex(h: number, s: number, l: number): string {
+  l /= 100;
+  const a = (s * Math.min(l, 1 - l)) / 100;
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * color)
+      .toString(16)
+      .padStart(2, '0');
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+
 export interface FinancialSummary {
     balance: number;
     income: number;
@@ -58,7 +83,8 @@ export interface WeeklyExpenseHeatmap {
  */
 function getTransactionValue(
     transaction: Transaction,
-    dateRange?: { from: Date; to: Date }
+    dateRange?: { from: Date; to: Date },
+    includeCreditCardInvoices?: boolean
 ): number {
     const numericValue = typeof transaction.value === 'string' 
         ? parseFloat(transaction.value) 
@@ -81,9 +107,32 @@ function getTransactionValue(
             const rangeFromStart = startOfDay(dateRange.from);
             const rangeToStart = startOfDay(dateRange.to);
             
-            // Verificar se a data da transação está dentro do período (inclusive)
-            // Usar comparação direta com >= e <= para incluir as datas de início e fim
-            if (transactionDateStart < rangeFromStart || transactionDateStart > rangeToStart) {
+            // Para transações de cartão de crédito não parceladas, considerar que podem estar
+            // em faturas que fecham no período. Faturas podem fechar no mês seguinte ou no mês seguinte ao seguinte,
+            // dependendo da data de fechamento do cartão.
+            let isInRange = transactionDateStart >= rangeFromStart && transactionDateStart <= rangeToStart;
+            
+            // Se é cartão de crédito e não está no período, verificar se pode estar em fatura
+            // Mas apenas se includeCreditCardInvoices for true (usado apenas para categorias)
+            if (isCreditCard && !isInRange && includeCreditCardInvoices) {
+                // Calcular o mês da transação e o mês do período
+                const transactionMonth = startOfMonth(transactionDate);
+                const rangeStartMonth = startOfMonth(dateRange.from);
+                const rangeEndMonth = startOfMonth(dateRange.to);
+                
+                // Faturas podem fechar no mês seguinte (mais comum) ou no mês seguinte ao seguinte
+                // Incluir transações cuja fatura pode fechar no período
+                const invoiceMonth1 = addMonths(transactionMonth, 1); // Mês seguinte (mais comum)
+                const invoiceMonth2 = addMonths(transactionMonth, 2); // Mês seguinte ao seguinte (se fecha no início do mês)
+                
+                // Verificar se algum dos meses possíveis de fechamento está dentro do período
+                if ((invoiceMonth1 >= rangeStartMonth && invoiceMonth1 <= rangeEndMonth) ||
+                    (invoiceMonth2 >= rangeStartMonth && invoiceMonth2 <= rangeEndMonth)) {
+                    isInRange = true;
+                }
+            }
+            
+            if (!isInRange) {
                 return 0; // Transação fora do período
             }
         }
@@ -147,7 +196,10 @@ export function calculateSummary(
     if (dateRange) {
         filteredIncomeTransactions = filteredIncomeTransactions.filter((t) => {
             const transactionDate = new Date(t.date);
-            return transactionDate >= dateRange.from && transactionDate <= dateRange.to;
+            const transactionDateStart = startOfDay(transactionDate);
+            const rangeFromStart = startOfDay(dateRange.from);
+            const rangeToStart = startOfDay(dateRange.to);
+            return transactionDateStart >= rangeFromStart && transactionDateStart <= rangeToStart;
         });
     }
 
@@ -172,15 +224,8 @@ export function calculateSummary(
                                          t.credit_card_charge?.charge.installments_count || 
                                          1;
                 
-                // Se não é parcelada, verificar se a data está no período
-                if (!(isCreditCard && isInstallment && installmentsCount > 1)) {
-                    const transactionDate = new Date(t.date);
-                    if (transactionDate < dateRange.from || transactionDate > dateRange.to) {
-                        return acc; // Pular se a data não está no período
-                    }
-                }
-                
-                // Para parceladas ou não parceladas no período, usar getTransactionValue
+                // Usar getTransactionValue que já faz a verificação de data corretamente
+                // para transações parceladas e não parceladas
                 const value = getTransactionValue(t, dateRange);
                 return acc + value;
             } else {
@@ -212,7 +257,8 @@ export function calculateSummary(
 export function groupByMonth(
     transactions: Transaction[],
     dateRange?: { from: Date; to: Date },
-    creditCardInvoicesTotal?: number
+    creditCardInvoicesTotal?: number,
+    creditCardInvoicesByMonth?: Array<{ year: number; month: number; total: number }>
 ): MonthlyData[] {
     // Para o gráfico "Receitas vs Despesas", sempre mostrar os últimos 6 meses
     // independente do dateRange selecionado
@@ -305,10 +351,16 @@ export function groupByMonth(
         }
     });
 
-    // NÃO adicionar creditCardInvoicesTotal ao gráfico mensal
-    // O gráfico mensal mostra meses completos, enquanto creditCardInvoicesTotal
-    // representa faturas que fecham apenas no período selecionado (que pode ser parcial)
-    // creditCardInvoicesTotal deve aparecer apenas no resumo (summary), não no gráfico
+    // Adicionar faturas de cartão de crédito que fecham em cada mês
+    if (creditCardInvoicesByMonth && creditCardInvoicesByMonth.length > 0) {
+        creditCardInvoicesByMonth.forEach((invoice) => {
+            const monthKey = `${invoice.year}-${String(invoice.month).padStart(2, '0')}`;
+            if (monthMap.has(monthKey)) {
+                const data = monthMap.get(monthKey)!;
+                data.expenses += invoice.total;
+            }
+        });
+    }
 
     // Converter para array e ordenar por data
     const result = Array.from(monthMap.entries())
@@ -365,34 +417,107 @@ function getMainCategory(transaction: Transaction): string {
  */
 export function groupByCategory(
     transactions: Transaction[],
-    dateRange?: { from: Date; to: Date }
+    dateRange?: { from: Date; to: Date },
+    creditCardInvoicesTotal?: number,
+    creditCardCategoryBreakdown?: Array<{ category_name: string; total: number }>
 ): ExpenseCategory[] {
     const categoryMap = new Map<string, number>();
 
     // Filtrar apenas despesas
     const expenses = transactions.filter((t) => t.type === 'expense');
 
+    // Se há category_breakdown das faturas, NÃO processar transações de cartão de crédito
+    // para evitar duplicação (as faturas já contêm essas transações)
+    const shouldSkipCreditCard = creditCardCategoryBreakdown && creditCardCategoryBreakdown.length > 0;
+    
     let zeroValueCount = 0;
     expenses.forEach((t) => {
+        // Pular transações de cartão de crédito se há category_breakdown (para evitar duplicação)
+        const isCreditCard = t.payment_method === 'Cartão de Crédito' || 
+                            t.payment_method === 'credit_card';
+        if (shouldSkipCreditCard && isCreditCard) {
+            return; // Pular transações de cartão quando há breakdown das faturas
+        }
+        
         const category = getMainCategory(t);
         const current = categoryMap.get(category) || 0;
-        // Usar função que considera parcelas
-        const value = dateRange ? getTransactionValue(t, dateRange) : getTransactionValue(t);
-        if (value === 0) zeroValueCount++;
+        // Usar função que considera parcelas (mas não incluir cartão quando há breakdown)
+        const value = dateRange ? getTransactionValue(t, dateRange, false) : getTransactionValue(t);
+        if (value === 0) {
+            zeroValueCount++;
+        }
         categoryMap.set(category, current + value);
     });
 
-    // Gerar cores distintas dinamicamente para todas as categorias
+    // Adicionar categorias das faturas de cartão de crédito ANTES de gerar cores
+    // IMPORTANTE: Usar APENAS o category_breakdown das faturas, não tentar adivinhar transações
+    // porque as transações individuais já estão sendo processadas acima e podem causar duplicação
+    if (creditCardCategoryBreakdown && creditCardCategoryBreakdown.length > 0) {
+        creditCardCategoryBreakdown.forEach((breakdown) => {
+            const categoryName = breakdown.category_name || 'Sem Categoria';
+            const current = categoryMap.get(categoryName) || 0;
+            categoryMap.set(categoryName, current + breakdown.total);
+        });
+    }
+
+    // Gerar cores distintas dinamicamente para TODAS as categorias (incluindo as das faturas)
     const categoryNames = Array.from(categoryMap.keys());
     const colorMap = generateDistinctCategoryColors(categoryNames);
 
+    // Garantir que todas as categorias tenham cores claras e vibrantes
+    // Verificar se há cores duplicadas e corrigir
+    const usedColors = new Set<string>();
     const result = Array.from(categoryMap.entries())
         .filter(([name, amount]) => amount > 0) // Filtrar categorias com valor 0 (fora do período)
-        .map(([name, amount]) => ({
-            name,
-            amount,
-            color: colorMap.get(name) || '#6B7280', // Fallback caso algo dê errado
-        }))
+        .map(([name, amount], index) => {
+            // Se não há cor no map, gerar uma cor clara e vibrante como fallback
+            let color = colorMap.get(name);
+            if (!color) {
+                // Gerar cor clara e vibrante baseada no índice e hash do nome para garantir unicidade
+                const nameHash = hashString(name.toLowerCase().trim());
+                const baseHue = (index * 137.508) % 360; // Golden angle para distribuição uniforme
+                const hueVariation = (nameHash % 30) - 15; // Variação de -15 a +15 graus
+                let hue = (baseHue + hueVariation + 360) % 360;
+                let saturation = 70 + (nameHash % 16); // 70-85% - cores vibrantes
+                let lightness = 55 + ((nameHash * 7) % 16); // 55-70% - cores claras
+                
+                // Garantir que a cor seja única (se já foi usada, ajustar)
+                let attempts = 0;
+                do {
+                    color = hslToHex(hue, saturation, lightness);
+                    if (!usedColors.has(color)) break;
+                    // Ajustar ligeiramente o hue para gerar uma cor diferente
+                    hue = (hue + 25) % 360;
+                    saturation = 70 + ((saturation + attempts) % 16);
+                    lightness = 55 + ((lightness + attempts * 3) % 16);
+                    attempts++;
+                } while (attempts < 20);
+            } else {
+                // Se a cor já foi usada, ajustar ligeiramente
+                if (usedColors.has(color)) {
+                    const nameHash = hashString(name.toLowerCase().trim());
+                    let hue = (nameHash * 137.508) % 360;
+                    let saturation = 70 + (nameHash % 16);
+                    let lightness = 55 + ((nameHash * 7) % 16);
+                    let attempts = 0;
+                    do {
+                        color = hslToHex(hue, saturation, lightness);
+                        if (!usedColors.has(color)) break;
+                        hue = (hue + 25) % 360;
+                        saturation = 70 + ((saturation + attempts) % 16);
+                        lightness = 55 + ((lightness + attempts * 3) % 16);
+                        attempts++;
+                    } while (attempts < 20);
+                }
+            }
+            
+            usedColors.add(color);
+            return {
+                name,
+                amount,
+                color,
+            };
+        })
         .sort((a, b) => b.amount - a.amount); // Ordenar por valor decrescente
     
     return result;
@@ -487,7 +612,7 @@ export function generateWeeklyHeatmap(
     const days = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
     const expenses = transactions.filter((t) => t.type === 'expense');
 
-    // Pegar categorias únicas
+    // Pegar categorias únicas das transações
     const categorySet = new Set<string>();
     expenses.forEach((t) => {
         categorySet.add(getMainCategory(t));
@@ -500,23 +625,48 @@ export function generateWeeklyHeatmap(
         .map(() => Array(categories.length).fill(0));
 
     // Preencher matriz
+    // IMPORTANTE: Para o heatmap semanal, mostramos apenas transações que REALMENTE ocorreram no período selecionado
+    // (baseado na data da transação), não baseado na data de fechamento da fatura
+    // O heatmap semanal é sobre quando os gastos foram feitos, não quando as faturas fecham
     let totalValue = 0;
+    
     expenses.forEach((t) => {
         const date = new Date(t.date);
-        const isCreditCard = t.payment_method === 'Cartão de Crédito' || 
-                            t.payment_method === 'credit_card';
-        const isInstallment = t.modality === 'installment' || 
-                             t.credit_card_charge?.charge.modality === 'installment';
-        const installmentsCount = t.installments_count || 
-                                 t.credit_card_charge?.charge.installments_count || 
-                                 1;
         
-        // Calcular valor da transação considerando dateRange
+        // Verificar se a data da transação está dentro do período selecionado
+        if (dateRange) {
+            const transactionDateStart = startOfDay(date);
+            const rangeFromStart = startOfDay(dateRange.from);
+            const rangeToStart = startOfDay(dateRange.to);
+            
+            // A transação só deve aparecer se sua data estiver dentro do período
+            const isInRange = transactionDateStart >= rangeFromStart && transactionDateStart <= rangeToStart;
+            
+            if (!isInRange) {
+                return; // Pular se a data da transação está fora do período
+            }
+        }
+        
+        // Calcular valor da transação
         let value = 0;
         if (dateRange) {
-            // Usar getTransactionValue para todas as transações quando há dateRange
-            // Isso garante que parcelas sejam calculadas corretamente
-            value = getTransactionValue(t, dateRange);
+            // Para transações parceladas, calcular apenas a parcela que vence no período
+            const isCreditCard = t.payment_method === 'Cartão de Crédito' || 
+                                t.payment_method === 'credit_card';
+            const isInstallment = t.modality === 'installment' || 
+                                 t.credit_card_charge?.charge.modality === 'installment';
+            const installmentsCount = t.installments_count || 
+                                     t.credit_card_charge?.charge.installments_count || 
+                                     1;
+            
+            if (isCreditCard && isInstallment && installmentsCount > 1) {
+                // Para transações parceladas, calcular apenas a parcela que vence no período
+                value = getTransactionValue(t, dateRange, false);
+            } else {
+                // Para transações não parceladas, usar o valor total
+                value = typeof t.value === 'string' ? parseFloat(t.value) : t.value;
+            }
+            
             if (value === 0) {
                 return; // Pular se não há valor no período
             }
@@ -524,8 +674,7 @@ export function generateWeeklyHeatmap(
             value = typeof t.value === 'string' ? parseFloat(t.value) : t.value;
         }
         
-        // Para determinar o dia da semana, usar a data da transação
-        // (ou a data da primeira parcela que vence no período, se aplicável)
+        // Para determinar o dia da semana, usar a data real da transação
         const dayIndex = date.getDay(); // 0 = Domingo, 6 = Sábado
         const category = getMainCategory(t);
         const categoryIndex = categories.indexOf(category);
@@ -549,7 +698,9 @@ export function generateWeeklyHeatmap(
 export function processTransactionAnalytics(
     transactions: Transaction[],
     dateRange?: { from: Date; to: Date },
-    creditCardInvoicesTotal?: number
+    creditCardInvoicesTotal?: number,
+    creditCardCategoryBreakdown?: Array<{ category_name: string; total: number }>,
+    creditCardInvoicesByMonth?: Array<{ year: number; month: number; total: number }>
 ) {
     // Para transações parceladas, não filtrar pela data da transação original
     // mas sim considerar todas as transações que podem ter parcelas vencendo no período
@@ -561,8 +712,8 @@ export function processTransactionAnalytics(
     let filteredTransactions = transactions;
 
     const summary = calculateSummary(filteredTransactions, dateRange, creditCardInvoicesTotal);
-    const monthly = groupByMonth(filteredTransactions, dateRange, creditCardInvoicesTotal);
-    const categories = groupByCategory(filteredTransactions, dateRange);
+    const monthly = groupByMonth(filteredTransactions, dateRange, creditCardInvoicesTotal, creditCardInvoicesByMonth);
+    const categories = groupByCategory(filteredTransactions, dateRange, creditCardInvoicesTotal, creditCardCategoryBreakdown);
     const heatmap = generateWeeklyHeatmap(filteredTransactions, dateRange);
     
     return {
