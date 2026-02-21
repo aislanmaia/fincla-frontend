@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { MessageCircle, Plus, Trash2, Loader2, CheckCircle2 } from 'lucide-react';
+import { MessageCircle, MessagesSquare, Smartphone, Plus, Trash2, Loader2, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -135,6 +135,25 @@ export function WhatsAppConnectionsSection({ organizationId }: WhatsAppConnectio
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          <a
+            href="https://wa.me/5589981248808"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 p-4 rounded-xl border bg-muted/30 hover:bg-muted/50 transition-colors group"
+          >
+            <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-600">
+              <MessagesSquare className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="font-medium text-gray-900 dark:text-gray-100 group-hover:text-green-600 transition-colors">
+                Falar com assistente IA no WhatsApp
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Inicie uma conversa com a IA assistente no WhatsApp
+              </p>
+            </div>
+          </a>
+
           {feedbackMessage && (
             <div
               role="status"
@@ -203,7 +222,7 @@ export function WhatsAppConnectionsSection({ organizationId }: WhatsAppConnectio
                   >
                     <div className="flex items-center gap-3">
                       <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-600">
-                        <MessageCircle className="w-4 h-4" />
+                        <Smartphone className="w-4 h-4" />
                       </div>
                       <div>
                         <p className="font-medium font-mono">{conn.phone_number}</p>
