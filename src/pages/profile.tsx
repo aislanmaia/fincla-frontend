@@ -8,10 +8,11 @@ import { User, Building, LogOut, Mail, Shield, CreditCard, Settings, Key } from 
 import { Link } from 'wouter';
 import { Separator } from '@/components/ui/separator';
 import { PageTransition } from '@/components/PageTransition';
+import { WhatsAppConnectionsSection } from '@/components/profile/WhatsAppConnectionsSection';
 
 export default function ProfilePage() {
     const { user, signOut } = useAuth();
-    const { organizations, activeOrgId, selectOrganization } = useOrganization();
+    const { organizations, activeOrgId, selectOrganization, isOwner } = useOrganization();
 
     const getUserInitials = () => {
         if (user?.first_name || user?.last_name) {
@@ -148,6 +149,10 @@ export default function ProfilePage() {
                                 </Link>
                             </CardContent>
                         </Card>
+
+                        {isOwner && activeOrgId && (
+                            <WhatsAppConnectionsSection organizationId={activeOrgId} />
+                        )}
 
                         <Card className="shadow-flat border-0 rounded-2xl">
                             <CardHeader>

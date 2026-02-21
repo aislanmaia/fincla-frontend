@@ -90,6 +90,26 @@ export interface OrganizationMembersResponse {
   members: Membership[];
 }
 
+// ===== WHATSAPP CONNECTIONS =====
+export interface WhatsAppConnection {
+  id: string;
+  user_id: string;
+  organization_id: string;
+  phone_number: string;
+  is_active: boolean;
+  connected_at: string;
+}
+
+export interface CreateWhatsAppConnectionRequest {
+  organization_id: string;
+  phone_number: string;
+}
+
+export interface ListWhatsAppConnectionsResponse {
+  total: number;
+  connections: WhatsAppConnection[];
+}
+
 // ===== USUÁRIOS =====
 export interface RegisterOwnerRequest {
   email: string;

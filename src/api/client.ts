@@ -1,6 +1,5 @@
 // api/client.ts
 import axios, { AxiosError } from 'axios';
-import { ApiError } from '../types/api';
 import { API_CONFIG } from '../config/api';
 
 const apiClient = axios.create({
@@ -36,6 +35,22 @@ apiClient.interceptors.response.use(
   }
 );
 
+// Mapeamento de mensagens da API para português (idioma da aplicação)
+const API_MESSAGE_TRANSLATIONS: Record<string, string> = {
+  'Phone already linked': 'Este número já está vinculado para esta ou outra conta.',
+  'phone already linked': 'Este número já está vinculado para esta ou outra conta.',
+  'PHONE_ALREADY_LINKED': 'Este número já está vinculado para esta ou outra conta.',
+};
+
+function translateApiMessage(message: string, errorCode?: string): string {
+  const trimmed = message.trim();
+  return (
+    API_MESSAGE_TRANSLATIONS[trimmed] ??
+    (errorCode ? API_MESSAGE_TRANSLATIONS[errorCode] : null) ??
+    trimmed
+  );
+}
+
 // Função auxiliar para tratar erros da API
 export const handleApiError = (error: unknown): string => {
   if (axios.isAxiosError(error)) {
@@ -50,11 +65,24 @@ export const handleApiError = (error: unknown): string => {
     
     const responseData = error.response?.data;
     
-    // Se for um objeto ApiError com detail
+    // Se for um objeto ApiError com detail (string, array ou objeto aninhado)
     if (responseData && typeof responseData === 'object' && 'detail' in responseData) {
-      const apiError = responseData as ApiError;
-      if (typeof apiError.detail === 'string') {
-        return apiError.detail;
+      const detail = (responseData as { detail: unknown }).detail;
+      if (typeof detail === 'string') {
+        return detail;
+      }
+      if (Array.isArray(detail)) {
+        const msgs = detail
+          .map((d) => (typeof d === 'object' && d && 'msg' in d ? (d as { msg?: string }).msg : typeof d === 'object' && d && 'message' in d ? (d as { message?: string }).message : String(d)))
+          .filter(Boolean);
+        return msgs.length > 0 ? msgs.join('. ') : 'Erro de validação. Verifique os dados.';
+      }
+      // detail como objeto: { error, message, type } (ex: PHONE_ALREADY_LINKED)
+      if (detail && typeof detail === 'object' && 'message' in detail) {
+        const msg = (detail as { message?: string }).message;
+        if (typeof msg === 'string' && msg.trim()) {
+          return translateApiMessage(msg, (detail as { error?: string }).error);
+        }
       }
     }
     
@@ -83,18 +111,24 @@ export const handleApiError = (error: unknown): string => {
       }
     }
     
-    // Tratar erros HTTP específicos
-    if (error.response?.status === 403) {
-      return 'Acesso negado. Verifique suas permissões.';
+    // Tratar erros HTTP específicos com mensagens amigáveis (sempre em português)
+    const status = error.response?.status;
+    const statusMessages: Record<number, string> = {
+      400: 'Dados inválidos. Verifique as informações e tente novamente.',
+      403: 'Acesso negado. Verifique suas permissões.',
+      404: 'Recurso não encontrado.',
+      409: 'Este número já está vinculado para esta ou outra conta.',
+      422: 'Dados inválidos. Verifique as informações e tente novamente.',
+      500: 'Erro interno do servidor. Tente novamente mais tarde.',
+      502: 'Serviço temporariamente indisponível. Tente novamente em instantes.',
+    };
+    if (status && statusMessages[status]) {
+      return statusMessages[status];
     }
-    if (error.response?.status === 404) {
-      return 'Recurso não encontrado.';
+    if (status && status >= 400) {
+      return 'Algo deu errado. Tente novamente mais tarde.';
     }
-    if (error.response?.status === 500) {
-      return 'Erro interno do servidor. Tente novamente mais tarde.';
-    }
-    
-    return error.message || 'Erro desconhecido';
+    return 'Erro desconhecido. Tente novamente.';
   }
   
   if (error instanceof Error) {

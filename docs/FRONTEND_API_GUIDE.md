@@ -18,8 +18,9 @@ Este documento fornece uma referência completa da API REST para desenvolvedores
     12. [Endpoints de Metas (Goals)](#endpoints-de-metas-goals)
     13. [Endpoints de Simulação Financeira](#endpoints-de-simulação-financeira)
     14. [Endpoints de Chat/AI](#endpoints-de-chatai)
-    15. [Tratamento de Erros](#tratamento-de-erros)
-    16. [Exemplos de Uso](#exemplos-de-uso)
+    15. [Endpoints de WhatsApp Connections](#endpoints-de-whatsapp-connections)
+    16. [Tratamento de Erros](#tratamento-de-erros)
+    17. [Exemplos de Uso](#exemplos-de-uso)
 
 ---
 
@@ -231,6 +232,26 @@ export interface OrganizationMembersResponse {
   };
   total_members: number;
   members: Membership[];
+}
+
+// ===== WHATSAPP CONNECTIONS =====
+export interface WhatsAppConnection {
+  id: string;
+  user_id: string;
+  organization_id: string;
+  phone_number: string;
+  is_active: boolean;
+  connected_at: string;
+}
+
+export interface CreateWhatsAppConnectionRequest {
+  organization_id: string;
+  phone_number: string;
+}
+
+export interface ListWhatsAppConnectionsResponse {
+  total: number;
+  connections: WhatsAppConnection[];
 }
 
 // ===== USUÁRIOS =====
@@ -3156,6 +3177,115 @@ if (response.result.action === 'transaction_created') {
 
 ---
 
+## 📱 Endpoints de WhatsApp Connections
+
+Permite vincular números de WhatsApp a organizações para receber mensagens do assistente financeiro via WhatsApp. Apenas o **owner** da organização pode vincular ou desvincular números.
+
+### POST `/v1/whatsapp-connections`
+
+Vincula um número de WhatsApp à organização. O número deve estar no formato E.164 (ex: `+5511999999999`).
+
+**Request:**
+```typescript
+const linkWhatsAppPhone = async (
+  organizationId: string,
+  phoneNumber: string
+): Promise<WhatsAppConnection> => {
+  const response = await apiClient.post<WhatsAppConnection>(
+    '/v1/whatsapp-connections',
+    {
+      organization_id: organizationId,
+      phone_number: phoneNumber,
+    }
+  );
+  return response.data;
+};
+```
+
+**Response (201):**
+```typescript
+{
+  id: string;
+  user_id: string;
+  organization_id: string;
+  phone_number: string;
+  is_active: boolean;
+  connected_at: string;  // ISO 8601
+}
+```
+
+**Erros:**
+- `400`: Formato de telefone inválido (use E.164: +5511999999999)
+- `403`: Acesso negado (apenas owner pode vincular)
+- `409`: Número já vinculado a outra organização
+
+---
+
+### GET `/v1/whatsapp-connections`
+
+Lista as conexões WhatsApp de uma organização. Owner ou member podem listar.
+
+**Request:**
+```typescript
+const listWhatsAppConnections = async (
+  organizationId: string
+): Promise<ListWhatsAppConnectionsResponse> => {
+  const response = await apiClient.get<ListWhatsAppConnectionsResponse>(
+    `/v1/whatsapp-connections?organization_id=${organizationId}`
+  );
+  return response.data;
+};
+```
+
+**Response (200):**
+```typescript
+{
+  total: number;
+  connections: WhatsAppConnection[];
+}
+```
+
+**Erros:**
+- `400`: organization_id obrigatório
+- `403`: Acesso negado à organização
+
+---
+
+### DELETE `/v1/whatsapp-connections/{connection_id}`
+
+Desvincula (desativa) uma conexão WhatsApp. Apenas owner pode desvincular.
+
+**Request:**
+```typescript
+const unlinkWhatsAppPhone = async (
+  connectionId: string
+): Promise<void> => {
+  await apiClient.delete(`/v1/whatsapp-connections/${connectionId}`);
+};
+```
+
+**Response (204):** Sem conteúdo
+
+**Erros:**
+- `403`: Acesso negado (apenas owner pode desvincular)
+- `404`: Conexão não encontrada
+
+---
+
+### Webhook WhatsApp (referência para configuração)
+
+O backend recebe mensagens via webhook da Evolution API. Configure a URL no painel da Evolution API:
+
+```
+https://seu-backend.com/v1/webhooks/whatsapp?token=SEU_WEBHOOK_TOKEN
+```
+
+- **Token:** Configure `WEBHOOK_TOKEN` no `.env` e use o mesmo valor na URL
+- **Método:** POST (Evolution API envia eventos)
+- **Resposta:** O backend retorna 200 imediatamente e processa em background
+
+---
+
 ## ⚠️ Tratamento de Erros
 
 ### Estrutura de Erro Padrão
@@ -3310,6 +3440,44 @@ export const getCreditCardInvoice = async (
     }
   );
   return response.data;
+};
+```
+
+### Funções de API para WhatsApp Connections
+
+```typescript
+// api/whatsappConnections.ts
+import apiClient from './client';
+import {
+  WhatsAppConnection,
+  CreateWhatsAppConnectionRequest,
+  ListWhatsAppConnectionsResponse,
+} from '../types/api';
+
+export const linkWhatsAppPhone = async (
+  data: CreateWhatsAppConnectionRequest
+): Promise<WhatsAppConnection> => {
+  const response = await apiClient.post<WhatsAppConnection>(
+    '/v1/whatsapp-connections',
+    data
+  );
+  return response.data;
+};
+
+export const listWhatsAppConnections = async (
+  organizationId: string
+): Promise<ListWhatsAppConnectionsResponse> => {
+  const response = await apiClient.get<ListWhatsAppConnectionsResponse>(
+    '/v1/whatsapp-connections',
+    { params: { organization_id: organizationId } }
+  );
+  return response.data;
+};
+
+export const unlinkWhatsAppPhone = async (
+  connectionId: string
+): Promise<void> => {
+  await apiClient.delete(`/v1/whatsapp-connections/${connectionId}`);
 };
 ```
 
