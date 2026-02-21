@@ -101,7 +101,7 @@ export default function ChangePasswordPage() {
 
       // Redirecionar para perfil após 2 segundos
       setTimeout(() => {
-        setLocation('/profile');
+        setLocation('/profile/seguranca');
       }, 2000);
     } catch (err) {
       const errorMessage = handleApiError(err);
@@ -119,7 +119,7 @@ export default function ChangePasswordPage() {
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setLocation('/profile')}
+            onClick={() => setLocation('/profile/seguranca')}
             className="shrink-0"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -266,7 +266,7 @@ export default function ChangePasswordPage() {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => setLocation('/profile')}
+                    onClick={() => setLocation('/profile/seguranca')}
                     className="flex-1"
                     disabled={loading}
                   >

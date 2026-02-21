@@ -55,8 +55,14 @@ function ProtectedRoutes() {
               <Route path="/credit-cards/planning" component={FuturePlanningPage} />
               <Route path="/reports" component={ReportsPage} />
               <Route path="/goals" component={GoalsPage} />
-              <Route path="/profile" component={ProfilePage} />
               <Route path="/profile/change-password" component={ChangePasswordPage} />
+              <Route path="/profile/me" component={ProfilePage} />
+              <Route path="/profile/organizacoes" component={ProfilePage} />
+              <Route path="/profile/seguranca" component={ProfilePage} />
+              <Route path="/profile/whatsapp" component={ProfilePage} />
+              <Route path="/profile/categorias" component={ProfilePage} />
+              <Route path="/profile/assinatura" component={ProfilePage} />
+              <Route path="/profile" component={ProfilePage} />
               <Route component={NotFound} />
             </Switch>
           </Suspense>

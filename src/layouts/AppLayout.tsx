@@ -47,7 +47,13 @@ const ROUTE_TITLES: Record<string, string> = {
   '/credit-cards/planning': 'Planejamento',
   '/reports': 'Relatórios',
   '/goals': 'Metas',
-  '/profile': 'Perfil',
+  '/profile': 'Configurações',
+  '/profile/me': 'Configurações',
+  '/profile/organizacoes': 'Configurações',
+  '/profile/seguranca': 'Configurações',
+  '/profile/whatsapp': 'Configurações',
+  '/profile/categorias': 'Configurações',
+  '/profile/assinatura': 'Configurações',
   '/profile/change-password': 'Alterar Senha',
 };
 
@@ -76,7 +82,7 @@ export function AppLayout({ children }: PropsWithChildren) {
   const [isCreditCards] = useRoute("/credit-cards");
   const [isReports] = useRoute("/reports");
   const [isGoals] = useRoute("/goals");
-  const [isProfile] = useRoute("/profile");
+  const isProfile = location.startsWith("/profile");
   const [isNewTransactionOpen, setIsNewTransactionOpen] = useState(false);
   const { toast } = useToast();
   
@@ -199,7 +205,7 @@ export function AppLayout({ children }: PropsWithChildren) {
                     </Link>
                   </SidebarMenuItem>
                   <SidebarMenuItem>
-                    <Link href="/profile">
+                    <Link href="/profile/me">
                       <SidebarMenuButton asChild isActive={!!isProfile} className="hover:bg-white/10 data-[active=true]:bg-white">
                         <a className="text-white data-[active=true]:!text-[#111827]" aria-current={isProfile ? 'page' : undefined}>
                           <User />
@@ -213,7 +219,7 @@ export function AppLayout({ children }: PropsWithChildren) {
             </SidebarGroup>
           </SidebarContent>
           <SidebarFooter>
-            <Link href="/profile">
+            <Link href="/profile/me">
               <Button 
                 variant="outline" 
                 className="w-full justify-start bg-white/10 hover:bg-white/15 hover:text-white text-white border-white/20"
@@ -285,7 +291,7 @@ export function AppLayout({ children }: PropsWithChildren) {
                       </div>
                     </DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => setLocation("/profile")} className="cursor-pointer">
+                    <DropdownMenuItem onClick={() => setLocation("/profile/me")} className="cursor-pointer">
                       <User className="mr-2 h-4 w-4" />
                       <span>Perfil</span>
                     </DropdownMenuItem>
