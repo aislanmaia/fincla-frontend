@@ -1040,6 +1040,50 @@ const listTagTypes = async (): Promise<TagTypesResponse> => {
 **Erros:**
 - `500`: Erro interno do servidor
 
+### POST `/v1/tag-types`
+
+Cria um novo tipo de tag no sistema.
+
+**Request:**
+```typescript
+const createTagType = async (data: CreateTagTypeRequest): Promise<TagType> => {
+  const response = await apiClient.post<TagType>('/v1/tag-types', data);
+  return response.data;
+};
+
+// CreateTagTypeRequest
+{
+  name: string;           // Ex: "categoria", "projeto"
+  description?: string;   // Opcional
+  is_required?: boolean;  // Default: false
+  max_per_transaction?: number | null;  // null = ilimitado
+}
+```
+
+**Response (201):** Retorna o `TagType` criado.
+
+**Erros:**
+- `400`: Dados inválidos ou nome duplicado
+- `403`: Sem permissão
+
+### PATCH `/v1/tag-types/{tag_type_id}`
+
+Atualiza um tipo de tag existente.
+
+**Request:** Mesmo body do POST (campos opcionais).
+
+**Erros:**
+- `404`: Tipo não encontrado
+- `400`: Dados inválidos
+
+### DELETE `/v1/tag-types/{tag_type_id}`
+
+Remove um tipo de tag. Pode falhar se houver tags vinculadas.
+
+**Erros:**
+- `404`: Tipo não encontrado
+- `409`: Existem tags vinculadas a este tipo
+
 ---
 
 ## 🏷️ Endpoints de Tags

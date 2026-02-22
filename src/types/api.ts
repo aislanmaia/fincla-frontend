@@ -476,6 +476,20 @@ export interface TagTypesResponse {
   tag_types: TagType[];
 }
 
+export interface CreateTagTypeRequest {
+  name: string;
+  description?: string | null;
+  is_required?: boolean;
+  max_per_transaction?: number | null;
+}
+
+export interface UpdateTagTypeRequest {
+  name?: string;
+  description?: string | null;
+  is_required?: boolean;
+  max_per_transaction?: number | null;
+}
+
 // ===== TAGS =====
 export interface TagTypeInfo {
   id: string;

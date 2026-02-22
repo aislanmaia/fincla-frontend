@@ -592,7 +592,10 @@ function ClassificationPrompt({
     if (organizationId && tagType) {
       try {
         setIsCreatingTag(true);
-        const newTag = await createTag(organizationId, tagName, tagType.id);
+        const newTag = await createTag(organizationId, {
+          name: tagName,
+          tag_type_id: tagType.id,
+        });
         
         // Adicionar a nova tag ao estado local através do callback
         if (onTagCreated) {
@@ -2079,11 +2082,10 @@ export function NewTransactionSheet({
 
           if (tagType) {
             try {
-              const newTag = await createTag(
-                values.organization_id,
-                tag.value,
-                tagType.id
-              );
+              const newTag = await createTag(values.organization_id, {
+                name: tag.value,
+                tag_type_id: tagType.id,
+              });
               tagIds.push(newTag.id);
             } catch (createTagError) {
               console.error(`Erro ao criar tag ${tag.value}:`, createTagError);

@@ -123,15 +123,43 @@ export const handlers = [
 
     // Tags endpoints
     http.get('*/v1/tag-types', () => {
-        return HttpResponse.json([
+        return HttpResponse.json({
+            tag_types: [
+                {
+                    id: 'tagtype-123',
+                    name: 'categoria',
+                    description: 'Categoria da transação',
+                    is_required: true,
+                    max_per_transaction: 1,
+                },
+            ],
+        });
+    }),
+    http.post('*/v1/tag-types', async ({ request }) => {
+        const body = (await request.json()) as { name: string; description?: string };
+        return HttpResponse.json(
             {
-                id: 'tagtype-123',
-                name: 'categoria',
-                description: 'Categoria da transação',
-                is_required: true,
-                max_per_transaction: 1,
+                id: `tagtype-${Date.now()}`,
+                name: body.name,
+                description: body.description ?? null,
+                is_required: false,
+                max_per_transaction: null,
             },
-        ]);
+            { status: 201 }
+        );
+    }),
+    http.patch('*/v1/tag-types/*', async ({ request }) => {
+        const body = (await request.json()) as { name?: string; description?: string };
+        return HttpResponse.json({
+            id: 'tagtype-123',
+            name: body.name ?? 'categoria',
+            description: body.description ?? null,
+            is_required: false,
+            max_per_transaction: null,
+        });
+    }),
+    http.delete('*/v1/tag-types/*', () => {
+        return new HttpResponse(null, { status: 204 });
     }),
 
     http.get('*/v1/tags', () => {
