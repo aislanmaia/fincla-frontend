@@ -206,7 +206,7 @@ export function AppLayout({ children }: PropsWithChildren) {
                   <SidebarMenuItem>
                     <Link href={linkBase ? `${linkBase}/credit-cards` : "/credit-cards"}>
                       <SidebarMenuButton asChild isActive={!!isCreditCards || !!isCreditCardsClient} className="hover:bg-white/10 data-[active=true]:bg-white">
-                        <a className="text-white data-[active=true]:!text-[#111827]" aria-current={isCreditCards ? 'page' : undefined}>
+                        <a className="text-white data-[active=true]:!text-[#111827]" aria-current={isCreditCards || isCreditCardsClient ? 'page' : undefined}>
                           <CreditCard />
                           <span>Cartões</span>
                         </a>
@@ -216,7 +216,7 @@ export function AppLayout({ children }: PropsWithChildren) {
                   <SidebarMenuItem>
                     <Link href={linkBase ? `${linkBase}/reports` : "/reports"}>
                       <SidebarMenuButton asChild isActive={!!isReports || !!isReportsClient} className="hover:bg-white/10 data-[active=true]:bg-white">
-                        <a className="text-white data-[active=true]:!text-[#111827]" aria-current={isReports ? 'page' : undefined}>
+                        <a className="text-white data-[active=true]:!text-[#111827]" aria-current={isReports || isReportsClient ? 'page' : undefined}>
                           <PieChart />
                           <span>Relatórios</span>
                         </a>
@@ -226,7 +226,7 @@ export function AppLayout({ children }: PropsWithChildren) {
                   <SidebarMenuItem>
                     <Link href={linkBase ? `${linkBase}/goals` : "/goals"}>
                       <SidebarMenuButton asChild isActive={!!isGoals || !!isGoalsClient} className="hover:bg-white/10 data-[active=true]:bg-white">
-                        <a className="text-white data-[active=true]:!text-[#111827]" aria-current={isGoals ? 'page' : undefined}>
+                        <a className="text-white data-[active=true]:!text-[#111827]" aria-current={isGoals || isGoalsClient ? 'page' : undefined}>
                           <Target />
                           <span>Metas</span>
                         </a>
@@ -288,8 +288,11 @@ export function AppLayout({ children }: PropsWithChildren) {
               </div>
               <div className="hidden md:flex flex-1 max-w-xl lg:max-w-2xl xl:max-w-3xl" />
               <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                {/* Organization Selector - Só mostrar quando há múltiplas organizações */}
-                {organizations.length > 1 && (
+                {consultantUser && location === '/consultant' ? (
+                  <span className="text-sm text-muted-foreground font-medium px-3 py-1.5 rounded-full bg-muted/60">
+                    Visão consolidada
+                  </span>
+                ) : organizations.length > 1 ? (
                   <Select value={activeOrgId || undefined} onValueChange={handleOrgChange}>
                     <SelectTrigger className="w-[140px] md:w-[180px] h-8 sm:h-9 rounded-full bg-white/70 ring-1 ring-gray-200 text-xs sm:text-sm">
                       <SelectValue placeholder="Selecionar organização" />
@@ -302,7 +305,7 @@ export function AppLayout({ children }: PropsWithChildren) {
                       ))}
                     </SelectContent>
                   </Select>
-                )}
+                ) : null}
 
                 {/* Menu de contexto do usuário */}
                 <DropdownMenu>

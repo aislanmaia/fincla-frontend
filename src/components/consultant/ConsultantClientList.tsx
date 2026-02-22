@@ -43,7 +43,10 @@ export function ConsultantClientList({ clients, isLoading }: ConsultantClientLis
             key={client.organization_id}
             href={`/consultant/clients/${client.organization_id}`}
           >
-            <a className="flex items-center justify-between p-4 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group">
+            <a
+              className="flex items-center justify-between p-4 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors group"
+              aria-label={`Ver detalhes de ${client.organization_name}`}
+            >
               <div className="min-w-0 flex-1">
                 <p className="font-medium truncate">{client.organization_name}</p>
                 <p className="text-sm text-muted-foreground">
@@ -53,7 +56,7 @@ export function ConsultantClientList({ clients, isLoading }: ConsultantClientLis
                   })}
                 </p>
               </div>
-              <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-foreground shrink-0 ml-2" />
+              <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-foreground shrink-0 ml-2" aria-hidden />
             </a>
           </Link>
         ))}

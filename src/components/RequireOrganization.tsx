@@ -2,11 +2,13 @@ import { PropsWithChildren, useEffect } from 'react';
 import { useLocation } from 'wouter';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrganization } from '@/hooks/useOrganization';
+import { isConsultant } from '@/lib/consultant';
 
 /**
  * Guard que verifica se o usuário possui pelo menos uma organização.
- * 
+ *
  * Comportamento:
+ * - Consultor sem organização → Redireciona para /consultant (acessa área consolidada)
  * - Owner sem organização → Redireciona para /onboarding/create-organization
  * - Member sem organização → Redireciona para /no-organization
  * - Usuário com organização → Permite acesso ao conteúdo
@@ -17,14 +19,12 @@ export function RequireOrganization({ children }: PropsWithChildren) {
   const { organizations, isLoading } = useOrganization();
 
   useEffect(() => {
-    // Aguardar carregamento das organizações
-    if (isLoading || !user) {
-      return;
-    }
+    if (isLoading || !user) return;
 
-    // Se não há organizações, redirecionar conforme o papel do usuário
     if (organizations.length === 0) {
-      if (user.role === 'owner') {
+      if (isConsultant(user)) {
+        setLocation('/consultant');
+      } else if (user.role === 'owner') {
         setLocation('/onboarding/create-organization');
       } else {
         setLocation('/no-organization');
@@ -44,12 +44,10 @@ export function RequireOrganization({ children }: PropsWithChildren) {
     );
   }
 
-  // Se tudo ok, renderizar conteúdo
-  if (organizations.length > 0) {
+  if (organizations.length > 0 || isConsultant(user)) {
     return <>{children}</>;
   }
 
-  // Caso contrário, não renderizar nada (redirecionamento será feito pelo useEffect)
   return null;
 }
 

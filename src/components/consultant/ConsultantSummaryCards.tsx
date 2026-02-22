@@ -66,7 +66,7 @@ export function ConsultantSummaryCards({ summary, isLoading }: ConsultantSummary
         </div>
       </Card>
 
-      <Card className="p-6 rounded-2xl shadow-flat shadow-flat-hover border-0 kpi-card kpi-savings">
+      <Card className="p-6 rounded-2xl shadow-flat shadow-flat-hover border-0 kpi-card kpi-savings" role="group" aria-label="Total de transações">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-wide text-white/90 mb-1">Transações</p>
@@ -84,7 +84,7 @@ export function ConsultantSummaryCards({ summary, isLoading }: ConsultantSummary
         </div>
       </Card>
 
-      <Card className="p-6 rounded-2xl shadow-flat shadow-flat-hover border-0 kpi-card kpi-savings">
+      <Card className="p-6 rounded-2xl shadow-flat shadow-flat-hover border-0 kpi-card kpi-balance" role="group" aria-label="Total de clientes">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-wide text-white/90 mb-1">Clientes</p>

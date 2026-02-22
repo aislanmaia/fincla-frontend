@@ -34,7 +34,7 @@ export function ConsultantBreadcrumb() {
       {isClientView && (
         <>
           <ChevronRight className="w-4 h-4 shrink-0" />
-          <Link href={`/consultant/clients/${clientMatch![1]}`}>
+          <Link href={`/consultant/clients/${clientMatch?.[1] ?? ''}`}>
             <a className="hover:text-foreground transition-colors truncate max-w-[180px]">
               {activeOrganization?.name ?? 'Cliente'}
             </a>

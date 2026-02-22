@@ -6,6 +6,7 @@ export function useConsultantSummary(params?: ConsultantSummaryQuery) {
   return useQuery({
     queryKey: ['consultant-summary', params?.date_start, params?.date_end],
     queryFn: () => getConsultantSummary(params),
+    retry: false,
   });
 }
 
@@ -13,5 +14,6 @@ export function useConsultantClients() {
   return useQuery({
     queryKey: ['consultant-clients'],
     queryFn: getConsultantClients,
+    retry: false,
   });
 }

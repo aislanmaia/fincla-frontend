@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { useLocation } from 'wouter';
+import { useEffect, useRef } from 'react';
+import { Redirect, useLocation } from 'wouter';
 import { useDateRange } from '@/hooks/useDateRange';
 import { useConsultantSummary, useConsultantClients } from '@/hooks/useConsultantData';
 import { DateRangePicker } from '@/components/DateRangePicker';
@@ -7,13 +7,17 @@ import { ConsultantSummaryCards } from '@/components/consultant/ConsultantSummar
 import { ConsultantClientList } from '@/components/consultant/ConsultantClientList';
 import { PageTransition } from '@/components/PageTransition';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
+import { isConsultant } from '@/lib/consultant';
 import { handleApiError } from '@/api/client';
 import { format } from 'date-fns';
 import { isAxiosError } from 'axios';
 
 export default function ConsultantDashboard() {
   const [, setLocation] = useLocation();
+  const { user } = useAuth();
   const { toast } = useToast();
+  const errorHandledRef = useRef(false);
   const { dateRange, setDateRange: setDateRangeFromHook } = useDateRange('thisMonth');
 
   const handleDateRangeChange = (range: { from: Date; to: Date } | undefined) => {
@@ -32,9 +36,18 @@ export default function ConsultantDashboard() {
 
   const clients = clientsData?.clients ?? [];
 
+  if (!isConsultant(user)) {
+    return <Redirect to="/" />;
+  }
+
   useEffect(() => {
+    if (!summaryError && !clientsError) {
+      errorHandledRef.current = false;
+      return;
+    }
+    if (errorHandledRef.current) return;
+    errorHandledRef.current = true;
     const err = summaryError || clientsError;
-    if (!err) return;
     const status = isAxiosError(err) ? err.response?.status : null;
     if (status === 403) {
       toast({
