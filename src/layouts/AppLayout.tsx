@@ -35,6 +35,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/hooks/useOrganization";
 import { isConsultant } from "@/lib/consultant";
+import { ConsultantBreadcrumb } from "@/components/consultant/ConsultantBreadcrumb";
 import { NewTransactionSheet } from "@/components/NewTransactionSheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -268,9 +269,15 @@ export function AppLayout({ children }: PropsWithChildren) {
         <div className="sticky top-0 z-30">
           <header className="supports-[backdrop-filter]:bg-white/40 backdrop-blur border-b border-gray-200/60 dark:supports-[backdrop-filter]:bg-white/[0.03] dark:border-white/10 bg-transparent">
             <div className="h-16 px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 flex items-center gap-2 sm:gap-3 justify-between mx-auto max-w-7xl xl:max-w-[90rem] 2xl:max-w-[96rem] min-w-0">
-              <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 sm:flex-none">
-                <SidebarTrigger className="shrink-0" />
-                <div className="text-lg sm:text-xl md:text-2xl font-semibold tracking-tight truncate min-w-0">{pageTitle}</div>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 min-w-0 flex-1 sm:flex-none">
+                <SidebarTrigger className="shrink-0 self-start sm:self-center" />
+                <div className="min-w-0 flex-1">
+                  {consultantUser && location.startsWith("/consultant") ? (
+                    <ConsultantBreadcrumb />
+                  ) : (
+                    <div className="text-lg sm:text-xl md:text-2xl font-semibold tracking-tight truncate">{pageTitle}</div>
+                  )}
+                </div>
                 <Button
                   onClick={() => setIsNewTransactionOpen(true)}
                   className="h-8 sm:h-9 px-2 sm:px-4 rounded-full shadow-sm bg-gradient-to-r from-[#4A56E2] to-[#00C6B8] hover:from-[#343D9B] hover:to-[#00A89C] text-white font-medium flex items-center gap-1 sm:gap-2 transition-all duration-200 hover:scale-105 active:scale-95 shrink-0"
