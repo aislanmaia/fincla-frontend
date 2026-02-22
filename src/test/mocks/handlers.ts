@@ -176,6 +176,38 @@ export const handlers = [
         ]);
     }),
 
+    // Consultant endpoints
+    http.get('*/v1/consultant/summary', () => {
+        return HttpResponse.json({
+            total_income: 50000,
+            total_expenses: 32000,
+            balance: 18000,
+            total_transactions: 245,
+            organizations_count: 8,
+            period_start: '2025-01-01',
+            period_end: '2025-01-31',
+        });
+    }),
+    http.get('*/v1/consultant/clients', () => {
+        return HttpResponse.json({
+            total: 2,
+            clients: [
+                {
+                    organization_id: 'org-123',
+                    organization_name: 'Empresa ABC',
+                    role: 'owner',
+                    membership_created_at: '2024-06-15T10:00:00Z',
+                },
+                {
+                    organization_id: 'org-456',
+                    organization_name: 'Empresa XYZ',
+                    role: 'member',
+                    membership_created_at: '2024-08-20T14:30:00Z',
+                },
+            ],
+        });
+    }),
+
     // Financial Impact endpoint
     http.post('*/v1/financial-impact/simulate', () => {
         return HttpResponse.json({
