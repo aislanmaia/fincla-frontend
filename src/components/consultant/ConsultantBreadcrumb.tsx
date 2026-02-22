@@ -2,9 +2,6 @@ import { Link, useLocation } from 'wouter';
 import { ChevronRight } from 'lucide-react';
 import { useOrganization } from '@/hooks/useOrganization';
 
-/**
- * Breadcrumb para rotas do consultor: Consultor > [Cliente] > [Página]
- */
 export function ConsultantBreadcrumb() {
   const [location] = useLocation();
   const { activeOrganization } = useOrganization();
@@ -13,7 +10,7 @@ export function ConsultantBreadcrumb() {
 
   const clientMatch = /^\/consultant\/clients\/([^/]+)(?:\/(.+))?/.exec(location);
   const isClientView = !!clientMatch;
-  const subPath = clientMatch?.[2]; // ex: "transactions", "credit-cards/history"
+  const subPath = clientMatch?.[2];
 
   const pageLabels: Record<string, string> = {
     transactions: 'Transações',

@@ -43,7 +43,7 @@ export default function ConsultantDashboard() {
         variant: 'destructive',
       });
       setLocation('/');
-    } else if (err) {
+    } else {
       toast({
         title: 'Erro ao carregar dados',
         description: handleApiError(err),
@@ -55,15 +55,12 @@ export default function ConsultantDashboard() {
   return (
     <PageTransition>
       <div className="mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 max-w-7xl xl:max-w-[95%] 2xl:max-w-[1800px]">
-        {/* Seletor de Período */}
         <div className="mb-6 flex justify-end">
           <DateRangePicker value={dateRange} onChange={handleDateRangeChange} />
         </div>
 
-        {/* Cards de Resumo Consolidado */}
         <ConsultantSummaryCards summary={summary} isLoading={summaryLoading} />
 
-        {/* Lista de Clientes */}
         <div className="mt-8">
           <ConsultantClientList clients={clients} isLoading={clientsLoading} />
         </div>

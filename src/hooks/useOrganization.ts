@@ -8,11 +8,9 @@ import { OrganizationWithMembership } from '@/types/api';
 const STORAGE_KEY = 'active_organization_id';
 
 /**
- * Hook para gerenciar a organização ativa do usuário
- * - Carrega organizações do backend
- * - Persiste seleção no localStorage
- * - Em rotas /consultant/clients/:organizationId, o ID da URL tem prioridade
- * - Fornece funções para trocar de organização
+ * Hook para gerenciar a organização ativa do usuário.
+ * Carrega organizações do backend, persiste seleção no localStorage.
+ * Em rotas /consultant/clients/:id, o ID da URL tem prioridade.
  */
 export function useOrganization() {
     const [location, setLocation] = useLocation();
@@ -68,8 +66,7 @@ export function useOrganization() {
     }, [activeOrgId, organizations, isLoading]);
 
     /**
-     * Troca a organização ativa
-     * Em rota de cliente do consultor, navega para a nova URL
+     * Troca a organização ativa. Em rota de cliente do consultor, atualiza a URL.
      */
     const selectOrganization = (organizationId: string) => {
         const exists = organizations.some((o) => o.organization.id === organizationId);
@@ -104,7 +101,7 @@ export function useOrganization() {
     const isOwner = activeOrganization?.membership.role === 'owner';
 
     return {
-        // Estado (effectiveOrgId: URL tem prioridade em rotas de cliente do consultor)
+        // Estado
         activeOrgId: effectiveOrgId,
         activeOrganization: activeOrganization?.organization || null,
         activeMembership: activeOrganization?.membership || null,
