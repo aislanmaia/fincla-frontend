@@ -563,6 +563,34 @@ export interface UpdateGoalRequest {
   category?: string;
 }
 
+// ===== CONSULTANT =====
+export interface ConsultantSummaryQuery {
+  date_start?: string;
+  date_end?: string;
+}
+
+export interface ConsultantSummaryResponse {
+  total_income: number;
+  total_expenses: number;
+  balance: number;
+  total_transactions: number;
+  organizations_count: number;
+  period_start: string | null;
+  period_end: string | null;
+}
+
+export interface ConsultantClient {
+  organization_id: string;
+  organization_name: string;
+  role: 'owner' | 'member';
+  membership_created_at: string;
+}
+
+export interface ConsultantClientsResponse {
+  total: number;
+  clients: ConsultantClient[];
+}
+
 // ===== SIMULADOR FINANCEIRO =====
 export interface NewCardCommitment {
   card_last4: string; // Últimos 4 dígitos do cartão
