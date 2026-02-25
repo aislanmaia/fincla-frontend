@@ -1,7 +1,8 @@
 import { Link } from 'wouter';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Users } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ConsultantEmptyState } from '@/components/consultant/ConsultantEmptyState';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { ConsultantClient } from '@/types/api';
@@ -29,7 +30,11 @@ export function ConsultantClientList({ clients, isLoading }: ConsultantClientLis
     return (
       <Card className="p-6 rounded-2xl shadow-flat border-0">
         <h3 className="text-lg font-semibold mb-4">Clientes</h3>
-        <p className="text-sm text-muted-foreground">Nenhum cliente vinculado.</p>
+        <ConsultantEmptyState
+          icon={Users}
+          title="Nenhum cliente vinculado"
+          description="Os clientes que você atender aparecerão aqui. Compartilhe o link de convite para começar."
+        />
       </Card>
     );
   }

@@ -48,6 +48,7 @@ export default function TransactionsPage() {
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date } | undefined>(undefined);
   const [category, setCategory] = useState<string>('todas');
   const [paymentMethod, setPaymentMethod] = useState<string>('todas');
+  const [recurring, setRecurring] = useState<'all' | 'recurring' | 'non_recurring'>('all');
   const [sortField, setSortField] = useState<SortField>('date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [currentPage, setCurrentPage] = useState(1);
@@ -113,6 +114,12 @@ export default function TransactionsPage() {
     return {};
   }, [query]);
 
+  // Preparar filtro de recorrência para a API
+  const apiRecurringFilter = useMemo(() => {
+    if (recurring === 'all') return {};
+    return { recurring: recurring === 'recurring' };
+  }, [recurring]);
+
   // Converter dateRange para string nas queryKeys para evitar recriação de objetos Date
   const dateRangeKey = dateRange?.from && dateRange?.to
     ? `${format(dateRange.from, 'yyyy-MM-dd')}_${format(dateRange.to, 'yyyy-MM-dd')}`
@@ -120,7 +127,7 @@ export default function TransactionsPage() {
 
   // Query para buscar transações paginadas
   const { data: transactionsData, isLoading: isLoadingTransactions } = useQuery({
-    queryKey: ['transactions', activeOrgId, dateRangeKey, type, category, paymentMethod, query, currentPage],
+    queryKey: ['transactions', activeOrgId, dateRangeKey, type, category, paymentMethod, query, recurring, currentPage],
     queryFn: async () => {
       if (!activeOrgId) return null;
       
@@ -131,6 +138,7 @@ export default function TransactionsPage() {
         ...apiCategoryFilter,
         ...apiPaymentMethodFilter,
         ...apiDescriptionFilter,
+        ...(recurring !== 'all' ? apiRecurringFilter : {}),
         page: currentPage,
         limit: ITEMS_PER_PAGE,
       });
@@ -140,7 +148,7 @@ export default function TransactionsPage() {
 
   // Query para buscar estatísticas (KPIs)
   const { data: summaryData, isLoading: isLoadingSummary } = useQuery({
-    queryKey: ['transactions-summary', activeOrgId, dateRangeKey, type, category, paymentMethod, query],
+    queryKey: ['transactions-summary', activeOrgId, dateRangeKey, type, category, paymentMethod, query, recurring],
     queryFn: async () => {
       if (!activeOrgId) return null;
       
@@ -151,6 +159,7 @@ export default function TransactionsPage() {
         ...apiCategoryFilter,
         ...apiPaymentMethodFilter,
         ...apiDescriptionFilter,
+        ...(recurring !== 'all' ? apiRecurringFilter : {}),
       });
     },
     enabled: !!activeOrgId,
@@ -223,9 +232,15 @@ export default function TransactionsPage() {
   }, [paymentMethodsFromTransactions]);
 
   const filtered = useMemo(() => {
-    // A API já aplica todos os filtros, então apenas aplicamos ordenamento no frontend
+    // A API já aplica todos os filtros; aplicar filtro de recorrência no cliente como fallback
+    // (caso a API não suporte o parâmetro recurring)
     let list = [...transactionsWithAmount];
-    
+    if (recurring === 'recurring') {
+      list = list.filter((t) => (t as { recurring?: boolean }).recurring === true);
+    } else if (recurring === 'non_recurring') {
+      list = list.filter((t) => (t as { recurring?: boolean }).recurring !== true);
+    }
+
     // Ordenamento
     if (sortField && sortDirection) {
       list.sort((a, b) => {
@@ -264,7 +279,7 @@ export default function TransactionsPage() {
     }
     
     return list;
-  }, [transactionsWithAmount, sortField, sortDirection]);
+  }, [transactionsWithAmount, recurring, sortField, sortDirection]);
 
   // Estatísticas do período filtrado - usar dados do summary da API
   const stats = useMemo(() => {
@@ -313,7 +328,7 @@ export default function TransactionsPage() {
   // Resetar página quando filtros mudarem
   useEffect(() => {
     setCurrentPage(1);
-  }, [type, dateRange, category, paymentMethod, query]);
+  }, [type, dateRange, category, paymentMethod, query, recurring]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -541,6 +556,19 @@ export default function TransactionsPage() {
                   {paymentMethods.map((pm) => (
                     <SelectItem key={pm} value={pm}>{pm}</SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label id="tx-recurring-label" className="mb-1 block text-xs font-medium text-gray-600">Recorrência</label>
+              <Select value={recurring} onValueChange={(v) => setRecurring(v as 'all' | 'recurring' | 'non_recurring')}>
+                <SelectTrigger id="tx-recurring" aria-labelledby="tx-recurring-label" className="rounded-xl h-10 border-[#D1D5DB] bg-white text-[#111827] shadow-sm focus-visible:ring-2 focus-visible:ring-[#4A56E2] focus-visible:ring-offset-1">
+                  <SelectValue placeholder="Recorrência" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  <SelectItem value="recurring">Apenas recorrentes</SelectItem>
+                  <SelectItem value="non_recurring">Apenas não recorrentes</SelectItem>
                 </SelectContent>
               </Select>
             </div>

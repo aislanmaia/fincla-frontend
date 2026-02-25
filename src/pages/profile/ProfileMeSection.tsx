@@ -1,4 +1,5 @@
 import { useAuth } from '@/hooks/useAuth';
+import { isConsultant } from '@/lib/consultant';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -49,7 +50,7 @@ export default function ProfileMeSection() {
             <div className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm">
               <span className="flex items-center gap-2 text-gray-800 dark:text-gray-200">
                 <Shield className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                {user?.role === 'owner' ? 'Administrador' : 'Membro'}
+                {isConsultant(user) ? 'Consultor' : user?.role === 'owner' ? 'Administrador' : 'Membro'}
               </span>
               <span className="flex items-center gap-2 text-gray-800 dark:text-gray-200">
                 <CalendarIcon className="w-4 h-4 text-gray-600 dark:text-gray-400" />
