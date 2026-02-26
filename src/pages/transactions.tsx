@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { useEffect } from 'react';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useDateRange } from '@/hooks/useDateRange';
 import { PageTransition } from '@/components/PageTransition';
 import { NewTransactionSheet } from '@/components/NewTransactionSheet';
 import { DeleteTransactionDialog } from '@/components/DeleteTransactionDialog';
@@ -159,7 +160,7 @@ export default function TransactionsPage() {
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebounce(query, 400);
   const [type, setType] = useState<'todas' | 'receitas' | 'despesas'>('todas');
-  const [dateRange, setDateRange] = useState<{ from: Date; to: Date } | undefined>(undefined);
+  const { dateRange, setDateRange } = useDateRange('thisMonth', { storageKey: 'transactions-date-range' });
   const [category, setCategory] = useState<string>('todas');
   const [paymentMethod, setPaymentMethod] = useState<string>('todas');
   const [recurring, setRecurring] = useState<'all' | 'recurring' | 'non_recurring'>('all');

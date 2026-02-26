@@ -102,12 +102,30 @@ export function filterTransactionsByDateRange(
   });
 }
 
+export interface UseDateRangeOptions {
+  /** Chave do localStorage para persistir o período. Padrão: 'dashboard-date-range' */
+  storageKey?: string;
+}
+
 /**
  * Hook para gerenciar seleção de período
  */
-export function useDateRange(defaultPreset: PeriodPreset = 'thisMonth') {
+export function useDateRange(defaultPreset: PeriodPreset = 'thisMonth', options?: UseDateRangeOptions) {
+  const storageKey = options?.storageKey ?? 'dashboard-date-range';
+
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
-    // Inicializar com preset padrão
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          from: new Date(parsed.from),
+          to: new Date(parsed.to),
+        };
+      }
+    } catch {
+      // Ignorar erros de parse
+    }
     return getPresetRange(defaultPreset);
   });
 
@@ -119,35 +137,21 @@ export function useDateRange(defaultPreset: PeriodPreset = 'thisMonth') {
     setDateRange(range);
   }, []);
 
-  // Persistir no localStorage
+  // Persistir no localStorage quando o período mudar
   useEffect(() => {
-    if (dateRange) {
-      try {
-        localStorage.setItem('dashboard-date-range', JSON.stringify({
+    try {
+      if (dateRange) {
+        localStorage.setItem(storageKey, JSON.stringify({
           from: dateRange.from.toISOString(),
           to: dateRange.to.toISOString(),
         }));
-      } catch (error) {
-        console.error('Erro ao salvar date range no localStorage:', error);
-      }
-    }
-  }, [dateRange]);
-
-  // Carregar do localStorage na inicialização
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('dashboard-date-range');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setDateRange({
-          from: new Date(parsed.from),
-          to: new Date(parsed.to),
-        });
+      } else {
+        localStorage.removeItem(storageKey);
       }
     } catch (error) {
-      console.error('Erro ao carregar date range do localStorage:', error);
+      console.error('Erro ao salvar date range no localStorage:', error);
     }
-  }, []);
+  }, [dateRange, storageKey]);
 
   return {
     dateRange,
