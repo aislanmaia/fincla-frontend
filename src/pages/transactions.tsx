@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { listTransactions, deleteTransaction, getTransaction, getTransactionsSummary } from '@/api/transactions';
-import { Transaction } from '@/types/api';
+import { Transaction, InstallmentInfo } from '@/types/api';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Download, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, TrendingDown, Receipt } from 'lucide-react';
+import { ArrowLeft, Download, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, TrendingDown, Receipt, CreditCard, Calendar } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -37,6 +37,118 @@ function formatDate(value: string | Date) {
     hour: '2-digit',
     minute: '2-digit'
   });
+}
+
+function formatDateShort(value: string | Date) {
+  const date = value instanceof Date ? value : new Date(value);
+  return format(date, 'dd/MM/yyyy', { locale: ptBR });
+}
+
+interface TransactionTableRow {
+  transactionId: number;
+  organizationId: string;
+  description: string;
+  category: string;
+  displayDate: string;
+  sortDate: string; // ISO ou YYYY-MM-DD para ordenação
+  displayPaymentMethod: string;
+  displayValue: number;
+  type: 'income' | 'expense';
+  transaction: Transaction;
+  installment?: InstallmentInfo;
+}
+
+function getCategory(tx: Transaction): string {
+  if (tx.category) return tx.category;
+  const tags = tx.tags as Record<string, { name: string }[]> | undefined;
+  return tags?.categoria?.[0]?.name ?? '-';
+}
+
+function mapPaymentMethodForDisplay(method: string): string {
+  const map: Record<string, string> = {
+    pix: 'PIX',
+    debit_card: 'Cartão de Débito',
+    credit_card: 'Cartão à vista',
+    bank_transfer: 'Transferência Bancária',
+    money: 'Dinheiro',
+    boleto: 'Boleto',
+  };
+  return map[method?.toLowerCase()] ?? method ?? '';
+}
+
+type TransactionWithAmount = Omit<Transaction, 'id' | 'date'> & {
+  id?: number | string;
+  originalId?: number;
+  date?: Date | string;
+  amount?: number;
+  installment_info?: InstallmentInfo[] | null;
+};
+function expandTransactionsToRows(transactions: TransactionWithAmount[]): TransactionTableRow[] {
+  const rows: TransactionTableRow[] = [];
+
+  for (const tx of transactions) {
+    const txId = (tx as { originalId?: number }).originalId ?? (typeof tx.id === 'number' ? tx.id : parseInt(String(tx.id), 10));
+    const category = getCategory(tx as Transaction);
+    const rawTx = { ...tx, id: txId } as Transaction;
+
+    // À vista: modality === 'cash' ou total_installments === 1 (fallback)
+    const modality = tx.credit_card_charge?.charge?.modality ?? (tx as { modality?: string }).modality;
+    const instList = tx.installment_info;
+    const firstInst = Array.isArray(instList) && instList.length > 0 ? instList[0] : null;
+    const isCash = modality === 'cash' || (firstInst?.total_installments === 1);
+    const shouldExpand = tx.installment_info?.length && !isCash;
+
+    if (shouldExpand) {
+      const instInfo = tx.installment_info ?? [];
+      const sorted = [...instInfo].sort((a, b) => a.due_date.localeCompare(b.due_date));
+      for (const inst of sorted) {
+        const displayValue = tx.type === 'income' ? inst.amount : -inst.amount;
+        rows.push({
+          transactionId: txId,
+          organizationId: tx.organization_id,
+          description: tx.description,
+          category,
+          displayDate: formatDateShort(inst.due_date),
+          sortDate: inst.due_date,
+          displayPaymentMethod: `Cartão parcelado (${inst.installment_number}/${inst.total_installments})`,
+          displayValue,
+          type: tx.type,
+          transaction: rawTx,
+          installment: inst,
+        });
+      }
+    } else {
+      const amount = tx.amount ?? (tx.type === 'income' ? tx.value : -tx.value);
+      const displayDate = formatDate(tx.date ?? new Date().toISOString());
+      const displayPaymentMethod = mapPaymentMethodForDisplay(tx.payment_method || '');
+      const cardLast4 = (tx as { card_last4?: string }).card_last4 ?? tx.credit_card_charge?.card?.last4;
+      const modality = (tx as { modality?: string }).modality ?? tx.credit_card_charge?.charge?.modality;
+      const installmentsCount = (tx as { installments_count?: number }).installments_count ?? tx.credit_card_charge?.charge?.installments_count;
+      const isCreditCard = tx.payment_method === 'credit_card' || tx.payment_method === 'Cartão de Crédito';
+      const finalPaymentMethod = isCreditCard && cardLast4
+        ? (modality === 'installment' && installmentsCount && installmentsCount > 1
+          ? `Cartão ${cardLast4} em ${installmentsCount}x`
+          : `Cartão ${cardLast4} à vista`)
+        : displayPaymentMethod || tx.payment_method || '';
+
+      const dateVal = tx.date as unknown;
+      const dateForSort = dateVal instanceof Date ? dateVal.toISOString() : String(tx.date);
+      rows.push({
+        transactionId: txId,
+        organizationId: tx.organization_id,
+        description: tx.description,
+        category,
+        displayDate,
+        sortDate: dateForSort,
+        displayPaymentMethod: finalPaymentMethod,
+        displayValue: amount,
+        type: tx.type,
+        transaction: rawTx,
+      });
+    }
+  }
+
+  return rows;
 }
 
 type SortField = 'description' | 'category' | 'date' | 'value' | 'payment_method';
@@ -233,53 +345,53 @@ export default function TransactionsPage() {
 
   const filtered = useMemo(() => {
     // A API já aplica todos os filtros; aplicar filtro de recorrência no cliente como fallback
-    // (caso a API não suporte o parâmetro recurring)
     let list = [...transactionsWithAmount];
     if (recurring === 'recurring') {
       list = list.filter((t) => (t as { recurring?: boolean }).recurring === true);
     } else if (recurring === 'non_recurring') {
       list = list.filter((t) => (t as { recurring?: boolean }).recurring !== true);
     }
-
-    // Ordenamento
-    if (sortField && sortDirection) {
-      list.sort((a, b) => {
-        let aVal: any;
-        let bVal: any;
-        
-        switch (sortField) {
-          case 'description':
-            aVal = a.description.toLowerCase();
-            bVal = b.description.toLowerCase();
-            break;
-          case 'category':
-            aVal = a.category.toLowerCase();
-            bVal = b.category.toLowerCase();
-            break;
-          case 'date':
-            aVal = a.date.getTime();
-            bVal = b.date.getTime();
-            break;
-          case 'value':
-            aVal = Math.abs(a.amount);
-            bVal = Math.abs(b.amount);
-            break;
-          case 'payment_method':
-            aVal = (a.payment_method || '').toLowerCase();
-            bVal = (b.payment_method || '').toLowerCase();
-            break;
-          default:
-            return 0;
-        }
-        
-        if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
-        if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
-        return 0;
-      });
-    }
-    
     return list;
-  }, [transactionsWithAmount, recurring, sortField, sortDirection]);
+  }, [transactionsWithAmount, recurring]);
+
+  // Expandir transações com installment_info em linhas (uma por parcela)
+  const expandedRows = useMemo(() => expandTransactionsToRows(filtered), [filtered]);
+
+  // Ordenar linhas expandidas (a API já ordena transações; parcelas já vêm ordenadas por due_date)
+  const sortedRows = useMemo(() => {
+    if (!sortField || !sortDirection) return expandedRows;
+    return [...expandedRows].sort((a, b) => {
+      let aVal: string | number;
+      let bVal: string | number;
+      switch (sortField) {
+        case 'description':
+          aVal = a.description.toLowerCase();
+          bVal = b.description.toLowerCase();
+          break;
+        case 'category':
+          aVal = a.category.toLowerCase();
+          bVal = b.category.toLowerCase();
+          break;
+        case 'date':
+          aVal = new Date(a.sortDate).getTime();
+          bVal = new Date(b.sortDate).getTime();
+          break;
+        case 'value':
+          aVal = Math.abs(a.displayValue);
+          bVal = Math.abs(b.displayValue);
+          break;
+        case 'payment_method':
+          aVal = a.displayPaymentMethod.toLowerCase();
+          bVal = b.displayPaymentMethod.toLowerCase();
+          break;
+        default:
+          return 0;
+      }
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }, [expandedRows, sortField, sortDirection]);
 
   // Estatísticas do período filtrado - usar dados do summary da API
   const stats = useMemo(() => {
@@ -293,37 +405,30 @@ export default function TransactionsPage() {
       };
     }
     
-    // Fallback: calcular do filtered se summary não estiver disponível
-    const total = filtered.length;
+    // Fallback: calcular das linhas expandidas
     let totalValue = 0;
     let income = 0;
     let expenses = 0;
-    
-    filtered.forEach((t) => {
-      const amount = typeof t.amount === 'number' ? t.amount : parseFloat(String(t.amount)) || 0;
+    sortedRows.forEach((row) => {
+      const amount = row.displayValue;
       const absAmount = Math.abs(amount);
-      
       totalValue += absAmount;
-      
-      if (amount > 0) {
-        income += amount;
-      } else if (amount < 0) {
-        expenses += absAmount;
-      }
+      if (amount > 0) income += amount;
+      else if (amount < 0) expenses += absAmount;
     });
-    
-    const balance = income - expenses;
-    
-    return { total, totalValue, income, expenses, balance };
-  }, [summaryData, filtered]);
+    return {
+      total: sortedRows.length,
+      totalValue,
+      income,
+      expenses,
+      balance: income - expenses,
+    };
+  }, [summaryData, sortedRows]);
 
   // Paginação - usar dados da API
   const pagination = transactionsData?.pagination;
   const totalPages = pagination?.pages || 1;
-  const paginatedTransactions = useMemo(() => {
-    // A API já retorna os dados paginados, então usamos diretamente
-    return filtered;
-  }, [filtered]);
+  const paginatedTransactions = useMemo(() => sortedRows, [sortedRows]);
 
   // Resetar página quando filtros mudarem
   useEffect(() => {
@@ -359,46 +464,14 @@ export default function TransactionsPage() {
     return <ArrowUpDown className="h-4 w-4 ml-1 opacity-50" />;
   };
 
-  const formatPaymentMethod = (transaction: any) => {
-    const method = transaction.payment_method || '';
-    const isCreditCard = method === 'Cartão de Crédito' || method === 'credit_card';
-    
-    if (!isCreditCard) {
-      return method;
-    }
-    
-    const cardLast4 = transaction.card_last4 || transaction.credit_card_charge?.card?.last4 || '';
-    const modality = transaction.modality || transaction.credit_card_charge?.charge?.modality;
-    const installmentsCount = transaction.installments_count || transaction.credit_card_charge?.charge?.installments_count;
-    
-    if (modality === 'installment' && installmentsCount && installmentsCount > 1) {
-      return `Cartão ${cardLast4} em ${installmentsCount}x`;
-    }
-    
-    return `Cartão ${cardLast4} à vista`;
-  };
-
-  const getInstallmentInfo = (transaction: any) => {
-    const modality = transaction.modality || transaction.credit_card_charge?.charge?.modality;
-    const installmentsCount = transaction.installments_count || transaction.credit_card_charge?.charge?.installments_count;
-    const totalAmount = transaction.credit_card_charge?.charge?.total_amount || transaction.value || Math.abs(transaction.amount);
-    
-    if (modality === 'installment' && installmentsCount && installmentsCount > 1) {
-      const installmentValue = totalAmount / installmentsCount;
-      return `${installmentsCount}x de ${formatCurrency(installmentValue)}`;
-    }
-    
-    return null;
-  };
-
   const downloadCsv = () => {
     const header = ['Descrição', 'Categoria', 'Data', 'Valor', 'Forma de Pagamento'];
-    const rows = filtered.map((t) => [
-      t.description,
-      t.category,
-      formatDate(t.date as any),
-      `${t.amount < 0 ? '-' : ''}R$ ${formatCurrency(Math.abs(t.amount))}`,
-      formatPaymentMethod(t),
+    const rows = paginatedTransactions.map((row) => [
+      row.description,
+      row.category,
+      row.displayDate,
+      `${row.displayValue < 0 ? '-' : ''}R$ ${formatCurrency(Math.abs(row.displayValue))}`,
+      row.displayPaymentMethod,
     ]);
     const csv = [header, ...rows].map((r) => r.map((c) => `"${String(c).replace('"', '""')}"`).join(';')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -708,7 +781,7 @@ export default function TransactionsPage() {
                   ))
                 )}
 
-                {!isLoadingTransactions && !isLoadingSummary && filtered.length === 0 && (
+                {!isLoadingTransactions && !isLoadingSummary && paginatedTransactions.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={6} className="py-10 text-center text-sm text-gray-500 dark:text-gray-400">
                       Nenhuma transação encontrada.
@@ -716,59 +789,96 @@ export default function TransactionsPage() {
                   </TableRow>
                 )}
 
-                {!isLoadingTransactions && !isLoadingSummary && paginatedTransactions.map((t, idx) => {
-                  const isExpense = t.amount < 0;
-                  const transaction: Transaction = {
-                    id: (t as any).originalId || parseInt(t.id),
-                    organization_id: t.organization_id,
-                    type: isExpense ? 'expense' : 'income',
-                    description: t.description,
-                    category: t.category,
-                    value: Math.abs(t.amount),
-                    payment_method: t.payment_method || '',
-                    date: t.date instanceof Date ? t.date.toISOString() : t.date,
-                    tags: t.tags || [],
-                    card_last4: (t as any).card_last4 !== undefined ? (t as any).card_last4 : undefined,
-                    modality: (t as any).modality !== undefined ? (t as any).modality : undefined,
-                    installments_count: (t as any).installments_count !== undefined ? (t as any).installments_count : undefined,
-                    recurring: (t as any).recurring !== undefined ? (t as any).recurring : undefined,
-                    credit_card_charge: (t as any).credit_card_charge,
-                  };
-                  
-                  const installmentInfo = getInstallmentInfo(t);
-                  
+                {!isLoadingTransactions && !isLoadingSummary && paginatedTransactions.map((row, idx) => {
+                  const isExpense = row.displayValue < 0;
+                  const rowKey = row.installment
+                    ? `${row.transactionId}-${row.installment.installment_number}`
+                    : row.transactionId.toString();
+
+                  const card = row.transaction.credit_card_charge?.card;
+                  const paymentMethodCell = row.installment ? (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="cursor-help underline decoration-dotted decoration-gray-400">
+                            {row.displayPaymentMethod}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="max-w-[280px] p-0 border-0 shadow-xl rounded-xl overflow-hidden bg-white dark:bg-gray-900">
+                          <div className="space-y-0">
+                            {card && (
+                              <div className="bg-gradient-to-br from-[#4A56E2]/10 to-[#4A56E2]/5 dark:from-[#4A56E2]/20 dark:to-[#4A56E2]/10 px-4 py-3">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <div className="p-1.5 rounded-lg bg-[#4A56E2]/20 dark:bg-[#4A56E2]/30">
+                                    <CreditCard className="h-4 w-4 text-[#4A56E2] dark:text-[#6B7BFF]" />
+                                  </div>
+                                  <span className="text-xs font-semibold uppercase tracking-wider text-[#4A56E2] dark:text-[#6B7BFF]">Cartão</span>
+                                </div>
+                                <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm">
+                                  {card.brand ? `${card.brand.charAt(0).toUpperCase() + card.brand.slice(1)} ` : ''}****{card.last4}
+                                  {card.description && <span className="text-gray-600 dark:text-gray-400 font-normal"> — {card.description}</span>}
+                                </p>
+                                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1 flex items-center gap-1.5">
+                                  <Calendar className="h-3.5 w-3.5" />
+                                  Vencimento da fatura: dia {card.due_day}
+                                </p>
+                              </div>
+                            )}
+                            <div className="px-4 py-3 space-y-2">
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className="p-1.5 rounded-lg bg-gray-100 dark:bg-gray-800">
+                                  <Receipt className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+                                </div>
+                                <span className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Parcela</span>
+                              </div>
+                              <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
+                                <span className="text-gray-500 dark:text-gray-400">Compra</span>
+                                <span className="font-medium text-right">{formatDateShort(row.transaction.date)}</span>
+                                <span className="text-gray-500 dark:text-gray-400">Parcela</span>
+                                <span className="font-medium text-right">{row.installment.installment_number} de {row.installment.total_installments}</span>
+                                <span className="text-gray-500 dark:text-gray-400">Vencimento</span>
+                                <span className="font-medium text-right">{formatDateShort(row.installment.due_date)}</span>
+                                <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">Valor parcela</span>
+                                <span className="font-semibold text-right text-gray-900 dark:text-gray-100">R$ {formatCurrency(row.installment.amount)}</span>
+                                <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">Valor total</span>
+                                <span className="font-semibold text-right text-[#4A56E2] dark:text-[#6B7BFF]">R$ {formatCurrency(row.transaction.value)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ) : (
+                    row.displayPaymentMethod
+                  );
+
                   return (
-                    <TableRow key={t.id} className={idx % 2 === 0 ? 'bg-gray-50' : undefined}>
+                    <TableRow key={rowKey} className={idx % 2 === 0 ? 'bg-gray-50' : undefined}>
                       <TableCell className="font-medium text-gray-900 dark:text-gray-100 max-w-[150px]">
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <div className="truncate cursor-help" title={t.description}>
-                                {t.description}
+                              <div className="truncate cursor-help" title={row.description}>
+                                {row.description}
                               </div>
                             </TooltipTrigger>
                             <TooltipContent side="top" className="max-w-xs">
-                              <p className="break-words">{t.description}</p>
+                              <p className="break-words">{row.description}</p>
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="rounded-full text-[10px] font-medium px-2 py-0.5 border-gray-200 text-gray-600 dark:border-white/15 dark:text-gray-300">
-                          {t.category}
+                          {row.category}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-gray-700">{formatDate(t.date as any)}</TableCell>
+                      <TableCell className="text-gray-700">{row.displayDate}</TableCell>
                       <TableCell className="text-gray-700 text-sm">
-                        {formatPaymentMethod(t)}
+                        {paymentMethodCell}
                       </TableCell>
                       <TableCell className={isExpense ? 'text-[#F87171] text-right tabular-nums font-semibold' : 'text-[#10B981] text-right tabular-nums font-semibold'}>
-                        <div className="flex flex-col items-end">
-                          <span>{isExpense ? '-' : '+'}R$ {formatCurrency(Math.abs(t.amount))}</span>
-                          {installmentInfo && (
-                            <span className="text-xs text-gray-500 font-normal mt-0.5">{installmentInfo}</span>
-                          )}
-                        </div>
+                        {isExpense ? '-' : '+'}R$ {formatCurrency(Math.abs(row.displayValue))}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
@@ -776,7 +886,7 @@ export default function TransactionsPage() {
                             type="button"
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleEdit(transaction)}
+                            onClick={() => handleEdit(row.transaction)}
                             className="h-8 w-8 p-0 hover:bg-blue-50 dark:hover:bg-blue-900/20"
                           >
                             <Edit className="h-4 w-4 text-blue-600 dark:text-blue-400" />
@@ -785,7 +895,7 @@ export default function TransactionsPage() {
                             type="button"
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDeleteClick(transaction)}
+                            onClick={() => handleDeleteClick(row.transaction)}
                             className="h-8 w-8 p-0 hover:bg-red-50 dark:hover:bg-red-900/20"
                           >
                             <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />

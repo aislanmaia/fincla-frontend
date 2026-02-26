@@ -221,9 +221,19 @@ export interface Transaction {
   recurring?: boolean;
   // Novo campo retornado pelo GET quando payment_method é "Cartão de Crédito" ou "credit_card"
   credit_card_charge?: CreditCardCharge | null;
+  /** Parcelas no range de data (quando a transação aparece por causa do vencimento da parcela) */
+  installment_info?: InstallmentInfo[] | null;
   // Timestamps de criação e atualização
   created_at?: string; // ISO datetime string - timestamp quando a transação foi criada
   updated_at?: string; // ISO datetime string - timestamp quando a transação foi atualizada
+}
+
+/** Info de parcela quando a transação aparece na lista por causa do vencimento no range */
+export interface InstallmentInfo {
+  installment_number: number;
+  total_installments: number;
+  due_date: string; // YYYY-MM-DD
+  amount: number;
 }
 
 export interface ListTransactionsQuery {
@@ -717,6 +727,7 @@ export interface GoalsProgressByTypeResponse {
 export interface ClientAtRiskItem {
   organization_id: string;
   organization_name: string;
+  client_name?: string;
   main_situation: string;
   current_balance: number;
   last_invoice_status: string;
