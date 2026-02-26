@@ -23,9 +23,12 @@ describe('useOrganization', () => {
             expect(result.current.organizations.length).toBeGreaterThan(0);
         });
 
+        await waitFor(() => {
+            expect(result.current.activeOrgId).toBe('org-123');
+        });
+
         expect(result.current.organizations).toHaveLength(1);
         expect(result.current.organizations[0].name).toBe('Test Organization');
-        expect(result.current.activeOrgId).toBe('org-123');
     });
 
     it('should switch organization', async () => {
