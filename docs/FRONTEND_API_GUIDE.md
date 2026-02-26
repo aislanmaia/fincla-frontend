@@ -16,11 +16,12 @@ Este documento fornece uma referência completa da API REST para desenvolvedores
 10. [Endpoints de Transações](#endpoints-de-transações)
     11. [Endpoints de Cartões de Crédito](#endpoints-de-cartões-de-crédito)
     12. [Endpoints de Metas (Goals)](#endpoints-de-metas-goals)
-    13. [Endpoints de Simulação Financeira](#endpoints-de-simulação-financeira)
-    14. [Endpoints de Chat/AI](#endpoints-de-chatai)
-    15. [Endpoints de WhatsApp Connections](#endpoints-de-whatsapp-connections)
-    16. [Tratamento de Erros](#tratamento-de-erros)
-    17. [Exemplos de Uso](#exemplos-de-uso)
+    13. [Endpoints da Área do Consultor](#endpoints-da-área-do-consultor)
+    14. [Endpoints de Simulação Financeira](#endpoints-de-simulação-financeira)
+    15. [Endpoints de Chat/AI](#endpoints-de-chatai)
+    16. [Endpoints de WhatsApp Connections](#endpoints-de-whatsapp-connections)
+    17. [Tratamento de Erros](#tratamento-de-erros)
+    18. [Exemplos de Uso](#exemplos-de-uso)
 
 ---
 
@@ -168,7 +169,7 @@ export interface LoginResponse {
 export interface User {
   id: string;
   email: string;
-  role: 'owner' | 'member';
+  role: 'owner' | 'member' | 'consultant';  // consultant = plan consultant_basic/pro/premium
   created_at: string;
   subscription?: {
     plan: 'free' | 'beta' | 'premium';
@@ -252,6 +253,126 @@ export interface CreateWhatsAppConnectionRequest {
 export interface ListWhatsAppConnectionsResponse {
   total: number;
   connections: WhatsAppConnection[];
+}
+
+// ===== CONSULTANT DASHBOARD =====
+export interface ConsultantConsolidatedSummaryResponse {
+  total_income: number;
+  total_expenses: number;
+  balance: number;
+  total_transactions: number;
+  organizations_count: number;
+  period_start: string | null;
+  period_end: string | null;
+}
+
+export interface ConsultantClient {
+  organization_id: string;
+  organization_name: string;
+  role: 'owner' | 'member';
+  membership_created_at: string;
+}
+
+export interface ListConsultantClientsResponse {
+  total: number;
+  clients: ConsultantClient[];
+}
+
+export interface FinancialHealthIndexResponse {
+  index: number;
+  balance_score: number;
+  debt_score: number;
+  reserve_score: number;
+  total_income: number;
+  total_expenses: number;
+  balance: number;
+  total_debt: number;
+  organizations_count: number;
+  period_start: string;
+  period_end: string;
+  formula_info: string;
+}
+
+export interface ActiveGoalsCountResponse {
+  active_goals_count: number;
+  organizations_count: number;
+  as_of_date: string;
+}
+
+export interface TotalCreditCardDebtResponse {
+  total_debt: number;
+  organizations_count: number;
+  as_of_date: string;
+}
+
+export interface MonthlyCashFlowItem {
+  month: string;
+  year: number;
+  month_number: number;
+  total_income: number;
+  total_expenses: number;
+  balance: number;
+}
+
+export interface CashFlowResponse {
+  monthly_data: MonthlyCashFlowItem[];
+  period_start: string;
+  period_end: string;
+}
+
+export interface CategoryExpenseItem {
+  name: string;
+  total: number;
+  percentage: number;
+}
+
+export interface ExpensesByCategoryResponse {
+  categories: CategoryExpenseItem[];
+  total_expenses: number;
+  period_start: string;
+  period_end: string;
+}
+
+export interface MonthlyIncomeCommitmentItem {
+  month: string;
+  year: number;
+  month_number: number;
+  income_commitment_percent: number;
+  total_income: number;
+  total_card_bills: number;
+}
+
+export interface IncomeCommitmentResponse {
+  monthly_data: MonthlyIncomeCommitmentItem[];
+  period_start: string;
+  period_end: string;
+}
+
+export interface GoalProgressByTypeItem {
+  goal_name: string;
+  avg_progress: number;
+  count: number;
+}
+
+export interface GoalsProgressByTypeResponse {
+  by_type: GoalProgressByTypeItem[];
+  organizations_count: number;
+  as_of_date: string;
+}
+
+export interface ClientAtRiskItem {
+  organization_id: string;
+  organization_name: string;
+  main_situation: string;
+  current_balance: number;
+  last_invoice_status: string;
+  risk_score: number;
+}
+
+export interface ClientsAtRiskResponse {
+  clients: ClientAtRiskItem[];
+  total: number;
+  as_of_date: string;
 }
 
 // ===== USUÁRIOS =====
@@ -646,6 +767,8 @@ const login = async (email: string, password: string): Promise<LoginResponse> =>
 
 Retorna informações do usuário autenticado.
 
+**Campo `role`:** `"owner"` | `"member"` | `"consultant"`. Usuários com plano de consultoria (consultant_basic, consultant_pro, etc.) retornam `"consultant"` em vez de owner/member.
+
 **Request:**
 ```typescript
 const getCurrentUser = async (): Promise<User> => {
@@ -767,7 +890,7 @@ const registerMember = async (
 
 ### GET `/v1/users/me`
 
-Retorna o perfil do usuário autenticado (mesmo que `/v1/auth/me`).
+Retorna o perfil do usuário autenticado (mesmo que `/v1/auth/me`). O campo `role` retorna `"consultant"` para usuários com plano de consultoria.
 
 **Request:**
 ```typescript
@@ -1039,50 +1162,6 @@ const listTagTypes = async (): Promise<TagTypesResponse> => {
 
 **Erros:**
 - `500`: Erro interno do servidor
-
-### POST `/v1/tag-types`
-
-Cria um novo tipo de tag no sistema.
-
-**Request:**
-```typescript
-const createTagType = async (data: CreateTagTypeRequest): Promise<TagType> => {
-  const response = await apiClient.post<TagType>('/v1/tag-types', data);
-  return response.data;
-};
-
-// CreateTagTypeRequest
-{
-  name: string;           // Ex: "categoria", "projeto"
-  description?: string;   // Opcional
-  is_required?: boolean;  // Default: false
-  max_per_transaction?: number | null;  // null = ilimitado
-}
-```
-
-**Response (201):** Retorna o `TagType` criado.
-
-**Erros:**
-- `400`: Dados inválidos ou nome duplicado
-- `403`: Sem permissão
-
-### PATCH `/v1/tag-types/{tag_type_id}`
-
-Atualiza um tipo de tag existente.
-
-**Request:** Mesmo body do POST (campos opcionais).
-
-**Erros:**
-- `404`: Tipo não encontrado
-- `400`: Dados inválidos
-
-### DELETE `/v1/tag-types/{tag_type_id}`
-
-Remove um tipo de tag. Pode falhar se houver tags vinculadas.
-
-**Erros:**
-- `404`: Tipo não encontrado
-- `409`: Existem tags vinculadas a este tipo
 
 ---
 
@@ -2911,6 +2990,719 @@ await updateGoal("goal-uuid", "org-uuid", {
 
 ---
 
+## 👔 Endpoints da Área do Consultor
+
+Endpoints exclusivos para usuários com perfil de **consultor**, que gerenciam múltiplas organizações (clientes). Requer autenticação e feature flags habilitadas (`multi_org_dashboard`, `client_list`, `consolidated_reports`).
+
+### GET `/v1/consultant/summary`
+
+Resumo consolidado de todas as organizações do consultor (multi_org_dashboard).
+
+**Request:**
+```typescript
+interface ConsultantSummaryQuery {
+  date_start?: string;  // YYYY-MM-DD (opcional)
+  date_end?: string;    // YYYY-MM-DD (opcional)
+}
+
+interface ConsultantSummaryResponse {
+  total_income: number;
+  total_expenses: number;
+  balance: number;
+  total_transactions: number;
+  organizations_count: number;
+  period_start: string | null;  // YYYY-MM-DD
+  period_end: string | null;    // YYYY-MM-DD
+}
+
+const getConsultantSummary = async (
+  params?: ConsultantSummaryQuery
+): Promise<ConsultantSummaryResponse> => {
+  const response = await apiClient.get<ConsultantSummaryResponse>(
+    '/v1/consultant/summary',
+    { params }
+  );
+  return response.data;
+};
+```
+
+**Exemplo:**
+```typescript
+// Resumo do período atual (padrão)
+const summary = await getConsultantSummary();
+
+// Resumo de um período específico
+const janSummary = await getConsultantSummary({
+  date_start: '2025-01-01',
+  date_end: '2025-01-31'
+});
+console.log(`Balanço: ${janSummary.balance}, Clientes: ${janSummary.organizations_count}`);
+```
+
+**Response (200):**
+```typescript
+{
+  total_income: 50000.00,
+  total_expenses: 32000.00,
+  balance: 18000.00,
+  total_transactions: 245,
+  organizations_count: 8,
+  period_start: "2025-01-01",
+  period_end: "2025-01-31"
+}
+```
+
+**Erros:**
+- `401`: Não autenticado
+- `403`: Usuário não é consultor ou feature `multi_org_dashboard` ausente
+- `500`: `CONSULTANT_SERVICE_ERROR` - Erro interno do serviço (ex.: falha ao buscar memberships)
+
+---
+
+### GET `/v1/consultant/clients`
+
+Lista de clientes (organizações) vinculados ao consultor (client_list).
+
+**Request:**
+```typescript
+interface ConsultantClient {
+  organization_id: string;
+  organization_name: string;
+  role: 'owner' | 'member';  // Role in that organization (membership), not consultant
+  membership_created_at: string;  // ISO 8601
+}
+
+interface ConsultantClientsResponse {
+  total: number;
+  clients: ConsultantClient[];
+}
+
+const getConsultantClients = async (): Promise<ConsultantClientsResponse> => {
+  const response = await apiClient.get<ConsultantClientsResponse>(
+    '/v1/consultant/clients'
+  );
+  return response.data;
+};
+```
+
+**Exemplo:**
+```typescript
+const { total, clients } = await getConsultantClients();
+clients.forEach((c) => {
+  console.log(`${c.organization_name} (${c.role}) - desde ${c.membership_created_at}`);
+});
+```
+
+**Response (200):**
+```typescript
+{
+  total: 8,
+  clients: [
+    {
+      organization_id: "123e4567-e89b-12d3-a456-426614174000",
+      organization_name: "Empresa ABC",
+      role: "owner",
+      membership_created_at: "2024-06-15T10:00:00Z"
+    },
+    {
+      organization_id: "223e4567-e89b-12d3-a456-426614174001",
+      organization_name: "Empresa XYZ",
+      role: "member",
+      membership_created_at: "2024-08-20T14:30:00Z"
+    }
+  ]
+}
+```
+
+**Erros:**
+- `401`: Não autenticado
+- `403`: Usuário não é consultor ou feature `client_list` ausente
+- `500`: `CONSULTANT_SERVICE_ERROR` - Erro interno do serviço (ex.: falha ao buscar memberships)
+
+---
+
+### GET `/v1/consultant/reports/consolidated`
+
+Relatório consolidado de todas as organizações do consultor (consolidated_reports). Mesmo formato de resposta do summary.
+
+**Request:**
+```typescript
+interface ConsultantReportQuery {
+  date_start?: string;  // YYYY-MM-DD (opcional)
+  date_end?: string;    // YYYY-MM-DD (opcional)
+}
+
+const getConsultantConsolidatedReport = async (
+  params?: ConsultantReportQuery
+): Promise<ConsultantSummaryResponse> => {
+  const response = await apiClient.get<ConsultantSummaryResponse>(
+    '/v1/consultant/reports/consolidated',
+    { params }
+  );
+  return response.data;
+};
+```
+
+**Exemplo:**
+```typescript
+const report = await getConsultantConsolidatedReport({
+  date_start: '2025-01-01',
+  date_end: '2025-01-31'
+});
+console.log(`Receitas: ${report.total_income}, Despesas: ${report.total_expenses}`);
+```
+
+**Response (200):**
+```typescript
+{
+  total_income: 50000.00,
+  total_expenses: 32000.00,
+  balance: 18000.00,
+  total_transactions: 245,
+  organizations_count: 8,
+  period_start: "2025-01-01",
+  period_end: "2025-01-31"
+}
+```
+
+**Erros:**
+- `401`: Não autenticado
+- `403`: Usuário não é consultor ou feature `consolidated_reports` ausente
+- `500`: `CONSULTANT_SERVICE_ERROR` - Erro interno do serviço (ex.: falha ao buscar memberships)
+
+---
+
+### GET `/v1/consultant/financial-health-index`
+
+Índice de saúde financeira ponderado (saldo, dívida, reserva) de todas as organizações do consultor.
+
+**Request:**
+```typescript
+interface FinancialHealthIndexQuery {
+  date_start?: string;  // YYYY-MM-DD (opcional)
+  date_end?: string;    // YYYY-MM-DD (opcional)
+}
+
+interface FinancialHealthIndexResponse {
+  index: number;           // 0-100 (índice geral)
+  balance_score: number;   // 0-100 (score de saldo)
+  debt_score: number;      // 0-100 (score de endividamento)
+  reserve_score: number;   // 0-100 (score de reserva)
+  total_income: number;
+  total_expenses: number;
+  balance: number;
+  total_debt: number;
+  organizations_count: number;
+  period_start: string;    // YYYY-MM-DD
+  period_end: string;      // YYYY-MM-DD
+  formula_info: string;    // Descrição da fórmula usada
+}
+
+const getFinancialHealthIndex = async (
+  params?: FinancialHealthIndexQuery
+): Promise<FinancialHealthIndexResponse> => {
+  const response = await apiClient.get<FinancialHealthIndexResponse>(
+    '/v1/consultant/financial-health-index',
+    { params }
+  );
+  return response.data;
+};
+```
+
+**Exemplo:**
+```typescript
+const health = await getFinancialHealthIndex({
+  date_start: '2025-01-01',
+  date_end: '2025-01-31'
+});
+console.log(`Índice de Saúde: ${health.index}/100`);
+console.log(`Score Saldo: ${health.balance_score}, Score Dívida: ${health.debt_score}`);
+```
+
+**Response (200):**
+```typescript
+{
+  index: 72.5,
+  balance_score: 80.0,
+  debt_score: 65.0,
+  reserve_score: 72.5,
+  total_income: 50000.00,
+  total_expenses: 32000.00,
+  balance: 18000.00,
+  total_debt: 8500.00,
+  organizations_count: 8,
+  period_start: "2025-01-01",
+  period_end: "2025-01-31",
+  formula_info: "Média ponderada: 40% saldo, 40% dívida, 20% reserva"
+}
+```
+
+**Erros:**
+- `401`: Não autenticado
+- `403`: Usuário não é consultor ou feature `multi_org_dashboard` ausente
+
+---
+
+### GET `/v1/consultant/active-goals-count`
+
+Contagem de metas ativas em todas as organizações do consultor.
+
+**Request:**
+```typescript
+interface ActiveGoalsCountQuery {
+  as_of_date?: string;  // YYYY-MM-DD (opcional, padrão: hoje)
+}
+
+interface ActiveGoalsCountResponse {
+  active_goals_count: number;
+  organizations_count: number;
+  as_of_date: string;  // YYYY-MM-DD
+}
+
+const getActiveGoalsCount = async (
+  params?: ActiveGoalsCountQuery
+): Promise<ActiveGoalsCountResponse> => {
+  const response = await apiClient.get<ActiveGoalsCountResponse>(
+    '/v1/consultant/active-goals-count',
+    { params }
+  );
+  return response.data;
+};
+```
+
+**Exemplo:**
+```typescript
+const goals = await getActiveGoalsCount();
+console.log(`${goals.active_goals_count} metas ativas em ${goals.organizations_count} clientes`);
+```
+
+**Response (200):**
+```typescript
+{
+  active_goals_count: 15,
+  organizations_count: 8,
+  as_of_date: "2025-01-31"
+}
+```
+
+**Erros:**
+- `401`: Não autenticado
+- `403`: Usuário não é consultor ou feature `multi_org_dashboard` ausente
+
+---
+
+### GET `/v1/consultant/total-credit-card-debt`
+
+Total de dívida de cartão de crédito não paga em todas as organizações do consultor.
+
+**Request:**
+```typescript
+interface TotalCreditCardDebtQuery {
+  as_of_date?: string;  // YYYY-MM-DD (opcional, padrão: hoje)
+}
+
+interface TotalCreditCardDebtResponse {
+  total_debt: number;
+  organizations_count: number;
+  as_of_date: string;  // YYYY-MM-DD
+}
+
+const getTotalCreditCardDebt = async (
+  params?: TotalCreditCardDebtQuery
+): Promise<TotalCreditCardDebtResponse> => {
+  const response = await apiClient.get<TotalCreditCardDebtResponse>(
+    '/v1/consultant/total-credit-card-debt',
+    { params }
+  );
+  return response.data;
+};
+```
+
+**Exemplo:**
+```typescript
+const debt = await getTotalCreditCardDebt();
+console.log(`Dívida total de cartões: R$ ${debt.total_debt}`);
+```
+
+**Response (200):**
+```typescript
+{
+  total_debt: 12500.00,
+  organizations_count: 8,
+  as_of_date: "2025-01-31"
+}
+```
+
+**Erros:**
+- `401`: Não autenticado
+- `403`: Usuário não é consultor ou feature `multi_org_dashboard` ausente
+
+---
+
+### GET `/v1/consultant/cash-flow`
+
+Fluxo de caixa mensal (receitas, despesas, saldo) de todas as organizações do consultor.
+
+**Request:**
+```typescript
+interface CashFlowQuery {
+  date_start?: string;  // YYYY-MM-DD (opcional)
+  date_end?: string;    // YYYY-MM-DD (opcional)
+}
+
+interface MonthlyCashFlowItem {
+  month: string;        // YYYY-MM
+  year: number;
+  month_number: number; // 1-12
+  total_income: number;
+  total_expenses: number;
+  balance: number;
+}
+
+interface CashFlowResponse {
+  monthly_data: MonthlyCashFlowItem[];
+  period_start: string;  // YYYY-MM-DD
+  period_end: string;    // YYYY-MM-DD
+}
+
+const getCashFlow = async (
+  params?: CashFlowQuery
+): Promise<CashFlowResponse> => {
+  const response = await apiClient.get<CashFlowResponse>(
+    '/v1/consultant/cash-flow',
+    { params }
+  );
+  return response.data;
+};
+```
+
+**Exemplo:**
+```typescript
+const cashFlow = await getCashFlow({
+  date_start: '2025-01-01',
+  date_end: '2025-03-31'
+});
+cashFlow.monthly_data.forEach((month) => {
+  console.log(`${month.month}: Receita ${month.total_income}, Despesa ${month.total_expenses}, Saldo ${month.balance}`);
+});
+```
+
+**Response (200):**
+```typescript
+{
+  monthly_data: [
+    {
+      month: "2025-01",
+      year: 2025,
+      month_number: 1,
+      total_income: 50000.00,
+      total_expenses: 32000.00,
+      balance: 18000.00
+    },
+    {
+      month: "2025-02",
+      year: 2025,
+      month_number: 2,
+      total_income: 52000.00,
+      total_expenses: 35000.00,
+      balance: 17000.00
+    }
+  ],
+  period_start: "2025-01-01",
+  period_end: "2025-03-31"
+}
+```
+
+**Erros:**
+- `401`: Não autenticado
+- `403`: Usuário não é consultor ou feature `multi_org_dashboard` ausente
+
+---
+
+### GET `/v1/consultant/expenses-by-category`
+
+Despesas agrupadas por categoria de todas as organizações do consultor.
+
+**Request:**
+```typescript
+interface ExpensesByCategoryQuery {
+  date_start?: string;  // YYYY-MM-DD (opcional)
+  date_end?: string;    // YYYY-MM-DD (opcional)
+}
+
+interface CategoryExpenseItem {
+  name: string;       // Nome da categoria
+  total: number;      // Total gasto
+  percentage: number; // % do total
+}
+
+interface ExpensesByCategoryResponse {
+  categories: CategoryExpenseItem[];
+  total_expenses: number;
+  period_start: string;  // YYYY-MM-DD
+  period_end: string;    // YYYY-MM-DD
+}
+
+const getExpensesByCategory = async (
+  params?: ExpensesByCategoryQuery
+): Promise<ExpensesByCategoryResponse> => {
+  const response = await apiClient.get<ExpensesByCategoryResponse>(
+    '/v1/consultant/expenses-by-category',
+    { params }
+  );
+  return response.data;
+};
+```
+
+**Exemplo:**
+```typescript
+const expenses = await getExpensesByCategory({
+  date_start: '2025-01-01',
+  date_end: '2025-01-31'
+});
+expenses.categories.forEach((cat) => {
+  console.log(`${cat.name}: R$ ${cat.total} (${cat.percentage}%)`);
+});
+```
+
+**Response (200):**
+```typescript
+{
+  categories: [
+    { name: "alimentação", total: 8500.00, percentage: 26.56 },
+    { name: "transporte", total: 6200.00, percentage: 19.38 },
+    { name: "moradia", total: 12000.00, percentage: 37.50 },
+    { name: "lazer", total: 5300.00, percentage: 16.56 }
+  ],
+  total_expenses: 32000.00,
+  period_start: "2025-01-01",
+  period_end: "2025-01-31"
+}
+```
+
+**Erros:**
+- `401`: Não autenticado
+- `403`: Usuário não é consultor ou feature `multi_org_dashboard` ausente
+
+---
+
+### GET `/v1/consultant/income-commitment`
+
+Comprometimento de renda (faturas de cartão vs receita) de todas as organizações do consultor.
+
+**Request:**
+```typescript
+interface IncomeCommitmentQuery {
+  date_start?: string;  // YYYY-MM-DD (opcional)
+  date_end?: string;    // YYYY-MM-DD (opcional)
+}
+
+interface MonthlyIncomeCommitmentItem {
+  month: string;
+  year: number;
+  month_number: number;
+  income_commitment_percent: number;  // % da renda comprometida com cartões
+  total_income: number;
+  total_card_bills: number;
+}
+
+interface IncomeCommitmentResponse {
+  monthly_data: MonthlyIncomeCommitmentItem[];
+  period_start: string;  // YYYY-MM-DD
+  period_end: string;    // YYYY-MM-DD
+}
+
+const getIncomeCommitment = async (
+  params?: IncomeCommitmentQuery
+): Promise<IncomeCommitmentResponse> => {
+  const response = await apiClient.get<IncomeCommitmentResponse>(
+    '/v1/consultant/income-commitment',
+    { params }
+  );
+  return response.data;
+};
+```
+
+**Exemplo:**
+```typescript
+const commitment = await getIncomeCommitment({
+  date_start: '2025-01-01',
+  date_end: '2025-03-31'
+});
+commitment.monthly_data.forEach((month) => {
+  console.log(`${month.month}: ${month.income_commitment_percent}% comprometido`);
+});
+```
+
+**Response (200):**
+```typescript
+{
+  monthly_data: [
+    {
+      month: "2025-01",
+      year: 2025,
+      month_number: 1,
+      income_commitment_percent: 35.5,
+      total_income: 50000.00,
+      total_card_bills: 17750.00
+    }
+  ],
+  period_start: "2025-01-01",
+  period_end: "2025-03-31"
+}
+```
+
+**Erros:**
+- `401`: Não autenticado
+- `403`: Usuário não é consultor ou feature `multi_org_dashboard` ausente
+
+---
+
+### GET `/v1/consultant/goals-progress-by-type`
+
+Progresso das metas agrupadas por tipo de todas as organizações do consultor.
+
+**Request:**
+```typescript
+interface GoalsProgressByTypeQuery {
+  as_of_date?: string;  // YYYY-MM-DD (opcional, padrão: hoje)
+}
+
+interface GoalProgressByTypeItem {
+  goal_name: string;     // Nome/tipo da meta
+  avg_progress: number;  // Progresso médio (0-100%)
+  count: number;         // Quantidade de metas deste tipo
+}
+
+interface GoalsProgressByTypeResponse {
+  by_type: GoalProgressByTypeItem[];
+  organizations_count: number;
+  as_of_date: string;  // YYYY-MM-DD
+}
+
+const getGoalsProgressByType = async (
+  params?: GoalsProgressByTypeQuery
+): Promise<GoalsProgressByTypeResponse> => {
+  const response = await apiClient.get<GoalsProgressByTypeResponse>(
+    '/v1/consultant/goals-progress-by-type',
+    { params }
+  );
+  return response.data;
+};
+```
+
+**Exemplo:**
+```typescript
+const progress = await getGoalsProgressByType();
+progress.by_type.forEach((type) => {
+  console.log(`${type.goal_name}: ${type.avg_progress}% médio (${type.count} metas)`);
+});
+```
+
+**Response (200):**
+```typescript
+{
+  by_type: [
+    { goal_name: "reserva_emergencia", avg_progress: 65.5, count: 5 },
+    { goal_name: "viagem", avg_progress: 42.0, count: 3 },
+    { goal_name: "carro", avg_progress: 28.5, count: 2 }
+  ],
+  organizations_count: 8,
+  as_of_date: "2025-01-31"
+}
+```
+
+**Erros:**
+- `401`: Não autenticado
+- `403`: Usuário não é consultor ou feature `multi_org_dashboard` ausente
+
+---
+
+### GET `/v1/consultant/clients-at-risk`
+
+Lista de clientes em risco (gastos > receita ou alto endividamento) do consultor.
+
+**Request:**
+```typescript
+interface ClientsAtRiskQuery {
+  as_of_date?: string;              // YYYY-MM-DD (opcional, padrão: hoje)
+  limit?: number;                   // Máximo de clientes (1-100, padrão: 10)
+  gasto_maior_renda_meses?: number; // Meses com gasto > receita para flag (1-12, padrão: 3)
+  endividamento_max_percent?: number; // % máximo dívida/renda para flag (0-100, padrão: 70)
+  exigir_reserva_emergencia?: boolean; // Exigir reserva de emergência (padrão: false)
+}
+
+interface ClientAtRiskItem {
+  organization_id: string;
+  organization_name: string;
+  main_situation: string;     // Motivo principal do risco
+  current_balance: number;
+  last_invoice_status: string;
+  risk_score: number;         // 1-100 (maior = mais risco)
+}
+
+interface ClientsAtRiskResponse {
+  clients: ClientAtRiskItem[];
+  total: number;
+  as_of_date: string;  // YYYY-MM-DD
+}
+
+const getClientsAtRisk = async (
+  params?: ClientsAtRiskQuery
+): Promise<ClientsAtRiskResponse> => {
+  const response = await apiClient.get<ClientsAtRiskResponse>(
+    '/v1/consultant/clients-at-risk',
+    { params }
+  );
+  return response.data;
+};
+```
+
+**Exemplo:**
+```typescript
+const atRisk = await getClientsAtRisk({
+  limit: 5,
+  gasto_maior_renda_meses: 3,
+  endividamento_max_percent: 70
+});
+console.log(`${atRisk.total} clientes em risco:`);
+atRisk.clients.forEach((client) => {
+  console.log(`${client.organization_name}: ${client.main_situation} (score: ${client.risk_score})`);
+});
+```
+
+**Response (200):**
+```typescript
+{
+  clients: [
+    {
+      organization_id: "123e4567-e89b-12d3-a456-426614174000",
+      organization_name: "Empresa ABC",
+      main_situation: "Gastos maiores que receita por 3 meses",
+      current_balance: -2500.00,
+      last_invoice_status: "unpaid",
+      risk_score: 85
+    },
+    {
+      organization_id: "223e4567-e89b-12d3-a456-426614174001",
+      organization_name: "Empresa XYZ",
+      main_situation: "Endividamento acima de 70% da receita",
+      current_balance: 500.00,
+      last_invoice_status: "paid",
+      risk_score: 72
+    }
+  ],
+  total: 2,
+  as_of_date: "2025-01-31"
+}
+```
+
+**Erros:**
+- `401`: Não autenticado
+- `403`: Usuário não é consultor ou feature `multi_org_dashboard` ausente
+
+---
+
 ## 📊 Endpoints de Simulação Financeira
 
 ### POST `/v1/financial-impact/simulate`
@@ -4237,5 +5029,5 @@ interface EndingInstallmentAllCards {
 
 ---
 
-**Última atualização**: Janeiro 2026 (v1 API)
+**Última atualização**: Fevereiro 2026 (v1 API)
 

@@ -1,22 +1,28 @@
 // hooks/useOrganization.ts
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useLocation } from 'wouter';
 import { getMyOrganizations } from '@/api/organizations';
 import { OrganizationWithMembership } from '@/types/api';
 
 const STORAGE_KEY = 'active_organization_id';
 
 /**
- * Hook para gerenciar a organização ativa do usuário
- * - Carrega organizações do backend
- * - Persiste seleção no localStorage
- * - Fornece funções para trocar de organização
+ * Hook para gerenciar a organização ativa do usuário.
+ * Carrega organizações do backend, persiste seleção no localStorage.
+ * Em rotas /consultant/clients/:id, o ID da URL tem prioridade.
  */
 export function useOrganization() {
+    const [location, setLocation] = useLocation();
+    const urlOrgIdMatch = /^\/consultant\/clients\/([^/]+)/.exec(location);
+    const urlOrgId = urlOrgIdMatch?.[1] ?? null;
+
     const [activeOrgId, setActiveOrgId] = useState<string | null>(() => {
         // Carregar do localStorage na inicialização
         return localStorage.getItem(STORAGE_KEY);
     });
+
+    const effectiveOrgId = urlOrgId ?? activeOrgId;
 
     // Carregar organizações do usuário
     const {
@@ -60,7 +66,7 @@ export function useOrganization() {
     }, [activeOrgId, organizations, isLoading]);
 
     /**
-     * Troca a organização ativa
+     * Troca a organização ativa. Em rota de cliente do consultor, atualiza a URL.
      */
     const selectOrganization = (organizationId: string) => {
         const exists = organizations.some((o) => o.organization.id === organizationId);
@@ -71,6 +77,14 @@ export function useOrganization() {
 
         setActiveOrgId(organizationId);
         localStorage.setItem(STORAGE_KEY, organizationId);
+
+        if (urlOrgId) {
+            const newPath = location.replace(
+                /^\/consultant\/clients\/[^/]+/,
+                `/consultant/clients/${organizationId}`
+            );
+            setLocation(newPath);
+        }
         return true;
     };
 
@@ -78,7 +92,7 @@ export function useOrganization() {
      * Obtém dados completos da organização ativa
      */
     const activeOrganization = organizations.find(
-        (o) => o.organization.id === activeOrgId
+        (o) => o.organization.id === effectiveOrgId
     );
 
     /**
@@ -88,7 +102,7 @@ export function useOrganization() {
 
     return {
         // Estado
-        activeOrgId,
+        activeOrgId: effectiveOrgId,
         activeOrganization: activeOrganization?.organization || null,
         activeMembership: activeOrganization?.membership || null,
         isOwner,

@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { TrendingUp, LayoutGrid, ListOrdered, PieChart, Target, User, LogOut, Plus, CreditCard, Settings } from "lucide-react";
+import { TrendingUp, LayoutGrid, ListOrdered, PieChart, Target, User, LogOut, Plus, CreditCard, Settings, Users } from "lucide-react";
 import { PropsWithChildren, useState } from "react";
 // import { useAIChat } from "@/hooks/useAIChat"; // TODO: Reativar no futuro quando a feature estiver pronta
 // import { ChatBar } from "@/components/ChatBar"; // TODO: Reativar no futuro quando a feature estiver pronta
@@ -34,6 +34,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrganization } from "@/hooks/useOrganization";
+import { useCanAccess } from "@/hooks/useCanAccess";
+import { PermissionGate } from "@/components/PermissionGate";
+import { ConsultantBreadcrumb } from "@/components/consultant/ConsultantBreadcrumb";
 import { NewTransactionSheet } from "@/components/NewTransactionSheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
@@ -55,19 +58,19 @@ const ROUTE_TITLES: Record<string, string> = {
   '/profile/categorias': 'Configurações',
   '/profile/assinatura': 'Configurações',
   '/profile/change-password': 'Alterar Senha',
+  '/consultant': 'Dashboard',
+  '/consultant/clients': 'Meus Clientes',
+  '/consultant/reports': 'Relatórios',
+  '/consultant/clients-goals': 'Metas dos Clientes',
 };
 
-/**
- * Obtém o título da página baseado na rota atual
- * Verifica rotas específicas primeiro, depois rotas principais
- */
 function getPageTitle(location: string): string {
-  // Verificar rota exata primeiro (para rotas aninhadas)
-  if (ROUTE_TITLES[location]) {
-    return ROUTE_TITLES[location];
-  }
-  
-  // Fallback: retornar 'Dashboard' se rota não encontrada
+  if (ROUTE_TITLES[location]) return ROUTE_TITLES[location];
+  if (/^\/consultant\/clients\/[^/]+$/.test(location)) return 'Dashboard';
+  if (/^\/consultant\/clients\/[^/]+\/transactions/.test(location)) return 'Transações';
+  if (/^\/consultant\/clients\/[^/]+\/credit-cards/.test(location)) return 'Cartões';
+  if (/^\/consultant\/clients\/[^/]+\/reports/.test(location)) return 'Relatórios';
+  if (/^\/consultant\/clients\/[^/]+\/goals/.test(location)) return 'Metas';
   return 'Dashboard';
 }
 
@@ -78,15 +81,25 @@ export function AppLayout({ children }: PropsWithChildren) {
   const { organizations, activeOrgId, selectOrganization } = useOrganization();
   const [location, setLocation] = useLocation();
   const [isDashboard] = useRoute("/");
+  const [isConsultantDashboard] = useRoute("/consultant");
+  const [isConsultantClients] = useRoute("/consultant/clients");
+  const [isConsultantReports] = useRoute("/consultant/reports");
+  const [isConsultantGoals] = useRoute("/consultant/clients-goals");
+  const clientRouteMatch = /^\/consultant\/clients\/([^/]+)/.exec(location);
+  const linkBase = clientRouteMatch ? clientRouteMatch[0] : "";
+  const isInConsultantClientView = !!linkBase;
   const [isTransactions] = useRoute("/transactions");
+  const [isTransactionsClient] = useRoute("/consultant/clients/:organizationId/transactions");
   const [isCreditCards] = useRoute("/credit-cards");
+  const [isCreditCardsClient] = useRoute("/consultant/clients/:organizationId/credit-cards");
   const [isReports] = useRoute("/reports");
+  const [isReportsClient] = useRoute("/consultant/clients/:organizationId/reports");
   const [isGoals] = useRoute("/goals");
+  const [isGoalsClient] = useRoute("/consultant/clients/:organizationId/goals");
   const isProfile = location.startsWith("/profile");
+  const consultantUser = useCanAccess('consultant');
   const [isNewTransactionOpen, setIsNewTransactionOpen] = useState(false);
   const { toast } = useToast();
-  
-  // Obter título dinâmico baseado na rota atual
   const pageTitle = getPageTitle(location);
 
   const handleLogout = () => {
@@ -154,66 +167,171 @@ export function AppLayout({ children }: PropsWithChildren) {
               <SidebarGroupLabel className="text-white/80">Navegação</SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  <SidebarMenuItem>
-                    <Link href="/">
-                      <SidebarMenuButton asChild isActive={!!isDashboard} className="hover:bg-white/10 data-[active=true]:bg-white">
-                        <a className="text-white data-[active=true]:!text-[#111827]">
-                          <LayoutGrid />
-                          <span>Dashboard</span>
-                        </a>
-                      </SidebarMenuButton>
-                    </Link>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <Link href="/transactions">
-                      <SidebarMenuButton asChild isActive={!!isTransactions} className="hover:bg-white/10 data-[active=true]:bg-white">
-                        <a className="text-white data-[active=true]:!text-[#111827]" aria-current={isTransactions ? 'page' : undefined}>
-                          <ListOrdered />
-                          <span>Transações</span>
-                        </a>
-                      </SidebarMenuButton>
-                    </Link>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <Link href="/credit-cards">
-                      <SidebarMenuButton asChild isActive={!!isCreditCards} className="hover:bg-white/10 data-[active=true]:bg-white">
-                        <a className="text-white data-[active=true]:!text-[#111827]" aria-current={isCreditCards ? 'page' : undefined}>
-                          <CreditCard />
-                          <span>Cartões</span>
-                        </a>
-                      </SidebarMenuButton>
-                    </Link>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <Link href="/reports">
-                      <SidebarMenuButton asChild isActive={!!isReports} className="hover:bg-white/10 data-[active=true]:bg-white">
-                        <a className="text-white data-[active=true]:!text-[#111827]" aria-current={isReports ? 'page' : undefined}>
-                          <PieChart />
-                          <span>Relatórios</span>
-                        </a>
-                      </SidebarMenuButton>
-                    </Link>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <Link href="/goals">
-                      <SidebarMenuButton asChild isActive={!!isGoals} className="hover:bg-white/10 data-[active=true]:bg-white">
-                        <a className="text-white data-[active=true]:!text-[#111827]" aria-current={isGoals ? 'page' : undefined}>
-                          <Target />
-                          <span>Metas</span>
-                        </a>
-                      </SidebarMenuButton>
-                    </Link>
-                  </SidebarMenuItem>
-                  <SidebarMenuItem>
-                    <Link href="/profile/me">
-                      <SidebarMenuButton asChild isActive={!!isProfile} className="hover:bg-white/10 data-[active=true]:bg-white">
-                        <a className="text-white data-[active=true]:!text-[#111827]" aria-current={isProfile ? 'page' : undefined}>
-                          <User />
-                          <span>Perfil</span>
-                        </a>
-                      </SidebarMenuButton>
-                    </Link>
-                  </SidebarMenuItem>
+                  {/* Área do Consultor - apenas para consultores */}
+                  {consultantUser ? (
+                    <>
+                      <SidebarMenuItem>
+                        <Link href="/consultant">
+                          <SidebarMenuButton asChild isActive={!!isConsultantDashboard} className="hover:bg-white/10 data-[active=true]:bg-white">
+                            <a className="text-white data-[active=true]:!text-[#111827]">
+                              <LayoutGrid />
+                              <span>Dashboard</span>
+                            </a>
+                          </SidebarMenuButton>
+                        </Link>
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                        <Link href="/consultant/clients">
+                          <SidebarMenuButton asChild isActive={!!isConsultantClients && !clientRouteMatch} className="hover:bg-white/10 data-[active=true]:bg-white">
+                            <a className="text-white data-[active=true]:!text-[#111827]">
+                              <Users />
+                              <span>Meus Clientes</span>
+                            </a>
+                          </SidebarMenuButton>
+                        </Link>
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                        <Link href="/consultant/reports">
+                          <SidebarMenuButton asChild isActive={!!isConsultantReports} className="hover:bg-white/10 data-[active=true]:bg-white">
+                            <a className="text-white data-[active=true]:!text-[#111827]">
+                              <PieChart />
+                              <span>Relatórios</span>
+                            </a>
+                          </SidebarMenuButton>
+                        </Link>
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                        <Link href="/consultant/clients-goals">
+                          <SidebarMenuButton asChild isActive={!!isConsultantGoals} className="hover:bg-white/10 data-[active=true]:bg-white">
+                            <a className="text-white data-[active=true]:!text-[#111827]">
+                              <Target />
+                              <span>Metas</span>
+                            </a>
+                          </SidebarMenuButton>
+                        </Link>
+                      </SidebarMenuItem>
+                      {isInConsultantClientView && (
+                        <>
+                          <SidebarSeparator className="bg-white/20 my-2" />
+                          <SidebarGroupLabel className="text-white/60 text-xs px-2">Cliente</SidebarGroupLabel>
+                          <SidebarMenuItem>
+                            <Link href={linkBase}>
+                              <SidebarMenuButton asChild isActive={!location.split("/").slice(4).filter(Boolean).length} className="hover:bg-white/10 data-[active=true]:bg-white">
+                                <a className="text-white data-[active=true]:!text-[#111827]">
+                                  <LayoutGrid />
+                                  <span>Dashboard</span>
+                                </a>
+                              </SidebarMenuButton>
+                            </Link>
+                          </SidebarMenuItem>
+                          <SidebarMenuItem>
+                            <Link href={`${linkBase}/transactions`}>
+                              <SidebarMenuButton asChild isActive={!!isTransactionsClient} className="hover:bg-white/10 data-[active=true]:bg-white">
+                                <a className="text-white data-[active=true]:!text-[#111827]">
+                                  <ListOrdered />
+                                  <span>Transações</span>
+                                </a>
+                              </SidebarMenuButton>
+                            </Link>
+                          </SidebarMenuItem>
+                          <SidebarMenuItem>
+                            <Link href={`${linkBase}/credit-cards`}>
+                              <SidebarMenuButton asChild isActive={!!isCreditCardsClient} className="hover:bg-white/10 data-[active=true]:bg-white">
+                                <a className="text-white data-[active=true]:!text-[#111827]">
+                                  <CreditCard />
+                                  <span>Cartões</span>
+                                </a>
+                              </SidebarMenuButton>
+                            </Link>
+                          </SidebarMenuItem>
+                          <SidebarMenuItem>
+                            <Link href={`${linkBase}/reports`}>
+                              <SidebarMenuButton asChild isActive={!!isReportsClient} className="hover:bg-white/10 data-[active=true]:bg-white">
+                                <a className="text-white data-[active=true]:!text-[#111827]">
+                                  <PieChart />
+                                  <span>Relatórios</span>
+                                </a>
+                              </SidebarMenuButton>
+                            </Link>
+                          </SidebarMenuItem>
+                          <SidebarMenuItem>
+                            <Link href={`${linkBase}/goals`}>
+                              <SidebarMenuButton asChild isActive={!!isGoalsClient} className="hover:bg-white/10 data-[active=true]:bg-white">
+                                <a className="text-white data-[active=true]:!text-[#111827]">
+                                  <Target />
+                                  <span>Metas</span>
+                                </a>
+                              </SidebarMenuButton>
+                            </Link>
+                          </SidebarMenuItem>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {/* Dashboard padrão - para usuários não-consultores */}
+                      <SidebarMenuItem>
+                        <Link href="/">
+                          <SidebarMenuButton asChild isActive={!!isDashboard} className="hover:bg-white/10 data-[active=true]:bg-white">
+                            <a className="text-white data-[active=true]:!text-[#111827]">
+                              <LayoutGrid />
+                              <span>Dashboard</span>
+                            </a>
+                          </SidebarMenuButton>
+                        </Link>
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                        <Link href="/transactions">
+                          <SidebarMenuButton asChild isActive={!!isTransactions} className="hover:bg-white/10 data-[active=true]:bg-white">
+                            <a className="text-white data-[active=true]:!text-[#111827]">
+                              <ListOrdered />
+                              <span>Transações</span>
+                            </a>
+                          </SidebarMenuButton>
+                        </Link>
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                        <Link href="/credit-cards">
+                          <SidebarMenuButton asChild isActive={!!isCreditCards} className="hover:bg-white/10 data-[active=true]:bg-white">
+                            <a className="text-white data-[active=true]:!text-[#111827]">
+                              <CreditCard />
+                              <span>Cartões</span>
+                            </a>
+                          </SidebarMenuButton>
+                        </Link>
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                        <Link href="/reports">
+                          <SidebarMenuButton asChild isActive={!!isReports} className="hover:bg-white/10 data-[active=true]:bg-white">
+                            <a className="text-white data-[active=true]:!text-[#111827]">
+                              <PieChart />
+                              <span>Relatórios</span>
+                            </a>
+                          </SidebarMenuButton>
+                        </Link>
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                        <Link href="/goals">
+                          <SidebarMenuButton asChild isActive={!!isGoals} className="hover:bg-white/10 data-[active=true]:bg-white">
+                            <a className="text-white data-[active=true]:!text-[#111827]">
+                              <Target />
+                              <span>Metas</span>
+                            </a>
+                          </SidebarMenuButton>
+                        </Link>
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                        <Link href="/profile/me">
+                          <SidebarMenuButton asChild isActive={!!isProfile} className="hover:bg-white/10 data-[active=true]:bg-white">
+                            <a className="text-white data-[active=true]:!text-[#111827]">
+                              <User />
+                              <span>Perfil</span>
+                            </a>
+                          </SidebarMenuButton>
+                        </Link>
+                      </SidebarMenuItem>
+                    </>
+                  )}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
@@ -240,9 +358,15 @@ export function AppLayout({ children }: PropsWithChildren) {
         <div className="sticky top-0 z-30">
           <header className="supports-[backdrop-filter]:bg-white/40 backdrop-blur border-b border-gray-200/60 dark:supports-[backdrop-filter]:bg-white/[0.03] dark:border-white/10 bg-transparent">
             <div className="h-16 px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 flex items-center gap-2 sm:gap-3 justify-between mx-auto max-w-7xl xl:max-w-[90rem] 2xl:max-w-[96rem] min-w-0">
-              <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1 sm:flex-none">
-                <SidebarTrigger className="shrink-0" />
-                <div className="text-lg sm:text-xl md:text-2xl font-semibold tracking-tight truncate min-w-0">{pageTitle}</div>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 min-w-0 flex-1 sm:flex-none">
+                <SidebarTrigger className="shrink-0 self-start sm:self-center" />
+                <div className="min-w-0 flex-1">
+                  {consultantUser && location.startsWith("/consultant") ? (
+                    <ConsultantBreadcrumb />
+                  ) : (
+                    <div className="text-lg sm:text-xl md:text-2xl font-semibold tracking-tight truncate">{pageTitle}</div>
+                  )}
+                </div>
                 <Button
                   onClick={() => setIsNewTransactionOpen(true)}
                   className="h-8 sm:h-9 px-2 sm:px-4 rounded-full shadow-sm bg-gradient-to-r from-[#4A56E2] to-[#00C6B8] hover:from-[#343D9B] hover:to-[#00A89C] text-white font-medium flex items-center gap-1 sm:gap-2 transition-all duration-200 hover:scale-105 active:scale-95 shrink-0"
@@ -253,8 +377,11 @@ export function AppLayout({ children }: PropsWithChildren) {
               </div>
               <div className="hidden md:flex flex-1 max-w-xl lg:max-w-2xl xl:max-w-3xl" />
               <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                {/* Organization Selector - Só mostrar quando há múltiplas organizações */}
-                {organizations.length > 1 && (
+                {consultantUser && location === '/consultant' ? (
+                  <span className="text-sm text-muted-foreground font-medium px-3 py-1.5 rounded-full bg-muted/60">
+                    Visão consolidada
+                  </span>
+                ) : organizations.length > 1 ? (
                   <Select value={activeOrgId || undefined} onValueChange={handleOrgChange}>
                     <SelectTrigger className="w-[140px] md:w-[180px] h-8 sm:h-9 rounded-full bg-white/70 ring-1 ring-gray-200 text-xs sm:text-sm">
                       <SelectValue placeholder="Selecionar organização" />
@@ -267,7 +394,7 @@ export function AppLayout({ children }: PropsWithChildren) {
                       ))}
                     </SelectContent>
                   </Select>
-                )}
+                ) : null}
 
                 {/* Menu de contexto do usuário */}
                 <DropdownMenu>

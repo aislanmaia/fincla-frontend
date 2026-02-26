@@ -6,7 +6,7 @@ import { Toaster as SonnerToaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { lazy, Suspense } from "react";
 import { motion } from "framer-motion";
-import Dashboard from "@/pages/dashboard";
+import { DashboardOrRedirect } from "@/components/DashboardOrRedirect";
 import TransactionsPage from "@/pages/transactions";
 import CreditCardsPage from '@/pages/credit-cards';
 import InvoiceHistoryPage from '@/pages/credit-cards/history';
@@ -16,6 +16,7 @@ import NotFound from "@/pages/not-found";
 import AppLayout from "@/layouts/AppLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { RequireOrganization } from "@/components/RequireOrganization";
+import { RequireConsultant } from "@/components/RequireConsultant";
 
 // Lazy load heavy pages
 const ReportsPage = lazy(() => import("@/pages/reports"));
@@ -24,6 +25,9 @@ const ProfilePage = lazy(() => import("@/pages/profile"));
 const ChangePasswordPage = lazy(() => import("@/pages/profile/change-password"));
 const CreateOrganizationPage = lazy(() => import("@/pages/onboarding/create-organization"));
 const NoOrganizationPage = lazy(() => import("@/pages/no-organization"));
+const ConsultantDashboard = lazy(() => import("@/pages/consultant"));
+const ConsultantClientsPage = lazy(() => import("@/pages/consultant/clients"));
+const ConsultantClientLayout = lazy(() => import("@/layouts/ConsultantClientLayout").then((m) => ({ default: m.ConsultantClientLayout })));
 
 // Loading fallback component with animation
 function PageLoader() {
@@ -45,28 +49,39 @@ function ProtectedRoutes() {
   return (
     <ProtectedRoute>
       <RequireOrganization>
-        <AppLayout>
-          <Suspense fallback={<PageLoader />}>
-            <Switch>
-              <Route path="/" component={Dashboard} />
-              <Route path="/transactions" component={TransactionsPage} />
-              <Route path="/credit-cards" component={CreditCardsPage} />
-              <Route path="/credit-cards/history" component={InvoiceHistoryPage} />
-              <Route path="/credit-cards/planning" component={FuturePlanningPage} />
-              <Route path="/reports" component={ReportsPage} />
-              <Route path="/goals" component={GoalsPage} />
-              <Route path="/profile/change-password" component={ChangePasswordPage} />
-              <Route path="/profile/me" component={ProfilePage} />
-              <Route path="/profile/organizacoes" component={ProfilePage} />
-              <Route path="/profile/seguranca" component={ProfilePage} />
-              <Route path="/profile/whatsapp" component={ProfilePage} />
-              <Route path="/profile/categorias" component={ProfilePage} />
-              <Route path="/profile/assinatura" component={ProfilePage} />
-              <Route path="/profile" component={ProfilePage} />
-              <Route component={NotFound} />
-            </Switch>
-          </Suspense>
-        </AppLayout>
+        <RequireConsultant>
+          <AppLayout>
+            <Suspense fallback={<PageLoader />}>
+              <Switch>
+                <Route path="/" component={DashboardOrRedirect} />
+                <Route path="/consultant" component={ConsultantDashboard} />
+                <Route path="/consultant/clients" component={ConsultantClientsPage} />
+                <Route path="/consultant/clients/:organizationId" component={ConsultantClientLayout} />
+                <Route path="/consultant/clients/:organizationId/transactions" component={TransactionsPage} />
+                <Route path="/consultant/clients/:organizationId/credit-cards" component={CreditCardsPage} />
+                <Route path="/consultant/clients/:organizationId/credit-cards/history" component={InvoiceHistoryPage} />
+                <Route path="/consultant/clients/:organizationId/credit-cards/planning" component={FuturePlanningPage} />
+                <Route path="/consultant/clients/:organizationId/reports" component={ReportsPage} />
+                <Route path="/consultant/clients/:organizationId/goals" component={GoalsPage} />
+                <Route path="/transactions" component={TransactionsPage} />
+                <Route path="/credit-cards" component={CreditCardsPage} />
+                <Route path="/credit-cards/history" component={InvoiceHistoryPage} />
+                <Route path="/credit-cards/planning" component={FuturePlanningPage} />
+                <Route path="/reports" component={ReportsPage} />
+                <Route path="/goals" component={GoalsPage} />
+                <Route path="/profile/change-password" component={ChangePasswordPage} />
+                <Route path="/profile/me" component={ProfilePage} />
+                <Route path="/profile/organizacoes" component={ProfilePage} />
+                <Route path="/profile/seguranca" component={ProfilePage} />
+                <Route path="/profile/whatsapp" component={ProfilePage} />
+                <Route path="/profile/categorias" component={ProfilePage} />
+                <Route path="/profile/assinatura" component={ProfilePage} />
+                <Route path="/profile" component={ProfilePage} />
+                <Route component={NotFound} />
+              </Switch>
+            </Suspense>
+          </AppLayout>
+        </RequireConsultant>
       </RequireOrganization>
     </ProtectedRoute>
   );

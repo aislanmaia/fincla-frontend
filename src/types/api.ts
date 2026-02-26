@@ -1,6 +1,8 @@
 // types/api.ts
 
 // ===== AUTENTICAÇÃO =====
+export type UserRole = 'owner' | 'member' | 'consultant';
+
 export interface LoginRequest {
   email: string;
   password: string;
@@ -10,7 +12,7 @@ export interface LoginResponse {
   token: string;
   user_id: string;
   email: string;
-  role: 'owner' | 'member';
+  role: UserRole;
   subscription: {
     plan: 'free' | 'beta' | 'premium';
     max_organizations: number;
@@ -24,7 +26,7 @@ export interface User {
   email: string;
   first_name?: string | null;
   last_name?: string | null;
-  role: 'owner' | 'member';
+  role: UserRole;
   created_at: string;
   subscription?: {
     plan: 'free' | 'beta' | 'premium';
@@ -219,9 +221,19 @@ export interface Transaction {
   recurring?: boolean;
   // Novo campo retornado pelo GET quando payment_method é "Cartão de Crédito" ou "credit_card"
   credit_card_charge?: CreditCardCharge | null;
+  /** Parcelas no range de data (quando a transação aparece por causa do vencimento da parcela) */
+  installment_info?: InstallmentInfo[] | null;
   // Timestamps de criação e atualização
   created_at?: string; // ISO datetime string - timestamp quando a transação foi criada
   updated_at?: string; // ISO datetime string - timestamp quando a transação foi atualizada
+}
+
+/** Info de parcela quando a transação aparece na lista por causa do vencimento no range */
+export interface InstallmentInfo {
+  installment_number: number;
+  total_installments: number;
+  due_date: string; // YYYY-MM-DD
+  amount: number;
 }
 
 export interface ListTransactionsQuery {
@@ -234,6 +246,7 @@ export interface ListTransactionsQuery {
   date_end?: string; // ISO date string
   value_min?: number;
   value_max?: number;
+  recurring?: boolean; // Filter for recurring transactions
   page?: number; // Page number (1-indexed, default: 1)
   limit?: number; // Items per page (default: 20, max: 100)
 }
@@ -262,6 +275,7 @@ export interface TransactionsSummaryQuery {
   date_end?: string; // ISO date string (YYYY-MM-DD)
   value_min?: number;
   value_max?: number;
+  recurring?: boolean; // Filter for recurring transactions
 }
 
 export interface PeriodInfo {
@@ -561,6 +575,169 @@ export interface UpdateGoalRequest {
   current_amount?: number;
   target_date?: string;
   category?: string;
+}
+
+// ===== CONSULTANT =====
+export interface ConsultantSummaryQuery {
+  date_start?: string;
+  date_end?: string;
+}
+
+export interface ConsultantSummaryResponse {
+  total_income: number;
+  total_expenses: number;
+  balance: number;
+  total_transactions: number;
+  organizations_count: number;
+  period_start: string | null;
+  period_end: string | null;
+}
+
+export interface ConsultantClient {
+  organization_id: string;
+  organization_name: string;
+  role: 'owner' | 'member';
+  membership_created_at: string;
+}
+
+export interface ConsultantClientsResponse {
+  total: number;
+  clients: ConsultantClient[];
+}
+
+// Query types for additional consultant endpoints
+export interface ActiveGoalsCountQuery {
+  as_of_date?: string;
+}
+
+export interface TotalCreditCardDebtQuery {
+  as_of_date?: string;
+}
+
+export interface CashFlowQuery {
+  date_start?: string;
+  date_end?: string;
+}
+
+export interface ExpensesByCategoryQuery {
+  date_start?: string;
+  date_end?: string;
+}
+
+export interface IncomeCommitmentQuery {
+  date_start?: string;
+  date_end?: string;
+}
+
+export interface GoalsProgressByTypeQuery {
+  as_of_date?: string;
+}
+
+export interface ClientsAtRiskQuery {
+  as_of_date?: string;
+  limit?: number;
+  gasto_maior_renda_meses?: number;
+  endividamento_max_percent?: number;
+  exigir_reserva_emergencia?: boolean;
+}
+
+// Response types for consultant endpoints
+export interface FinancialHealthIndexResponse {
+  index: number;
+  balance_score: number;
+  debt_score: number;
+  reserve_score: number;
+  total_income: number;
+  total_expenses: number;
+  balance: number;
+  total_debt: number;
+  organizations_count: number;
+  period_start: string;
+  period_end: string;
+  formula_info: string;
+}
+
+export interface ActiveGoalsCountResponse {
+  active_goals_count: number;
+  organizations_count: number;
+  as_of_date: string;
+}
+
+export interface TotalCreditCardDebtResponse {
+  total_debt: number;
+  organizations_count: number;
+  as_of_date: string;
+}
+
+export interface MonthlyCashFlowItem {
+  month: string;
+  year: number;
+  month_number: number;
+  total_income: number;
+  total_expenses: number;
+  balance: number;
+}
+
+export interface CashFlowResponse {
+  monthly_data: MonthlyCashFlowItem[];
+  period_start: string;
+  period_end: string;
+}
+
+export interface CategoryExpenseItem {
+  name: string;
+  total: number;
+  percentage: number;
+}
+
+export interface ExpensesByCategoryResponse {
+  categories: CategoryExpenseItem[];
+  total_expenses: number;
+  period_start: string;
+  period_end: string;
+}
+
+export interface MonthlyIncomeCommitmentItem {
+  month: string;
+  year: number;
+  month_number: number;
+  income_commitment_percent: number;
+  total_income: number;
+  total_card_bills: number;
+}
+
+export interface IncomeCommitmentResponse {
+  monthly_data: MonthlyIncomeCommitmentItem[];
+  period_start: string;
+  period_end: string;
+}
+
+export interface GoalProgressByTypeItem {
+  goal_name: string;
+  avg_progress: number;
+  count: number;
+}
+
+export interface GoalsProgressByTypeResponse {
+  by_type: GoalProgressByTypeItem[];
+  organizations_count: number;
+  as_of_date: string;
+}
+
+export interface ClientAtRiskItem {
+  organization_id: string;
+  organization_name: string;
+  client_name?: string;
+  main_situation: string;
+  current_balance: number;
+  last_invoice_status: string;
+  risk_score: number;
+}
+
+export interface ClientsAtRiskResponse {
+  clients: ClientAtRiskItem[];
+  total: number;
+  as_of_date: string;
 }
 
 // ===== SIMULADOR FINANCEIRO =====
