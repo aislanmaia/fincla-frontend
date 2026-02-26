@@ -6,8 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Download, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, TrendingDown, Receipt, CreditCard, Calendar } from 'lucide-react';
-import { Link, useLocation } from 'wouter';
+import { Download, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, TrendingDown, Receipt, CreditCard, Calendar, Filter, Wallet, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -25,6 +24,7 @@ import { Pagination, PaginationContent, PaginationItem, PaginationLink, Paginati
 import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { DateRangePicker } from '@/components/DateRangePicker';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 function formatCurrency(value: number) {
   return value.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
@@ -175,7 +175,6 @@ export default function TransactionsPage() {
   const ITEMS_PER_PAGE = 20;
 
   const queryClient = useQueryClient();
-  const [location] = useLocation();
   const { activeOrgId } = useOrganization();
   const { toast } = useToast();
 
@@ -549,38 +548,79 @@ export default function TransactionsPage() {
     setEditingTransaction(null);
   };
 
+  const inputClassName = 'rounded-xl h-10 border-[#D1D5DB] dark:border-gray-600 bg-white dark:bg-gray-900 text-[#111827] dark:text-gray-100 shadow-sm focus-visible:ring-2 focus-visible:ring-[#4A56E2] focus-visible:ring-offset-1';
+  const labelClassName = 'mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400';
+
+  const moreFiltersContent = (
+    <div className="space-y-3 p-1">
+      <div>
+        <label id="tx-category-label" className={labelClassName}>Categoria</label>
+        <Select value={category} onValueChange={(v) => setCategory(v)}>
+          <SelectTrigger id="tx-category" aria-labelledby="tx-category-label" className={inputClassName}>
+            <SelectValue placeholder="Categoria" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todas">Todas</SelectItem>
+            {categories.map((c) => (
+              <SelectItem key={c} value={c}>{c}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <label id="tx-payment-label" className={labelClassName}>Forma de Pagamento</label>
+        <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v)}>
+          <SelectTrigger id="tx-payment" aria-labelledby="tx-payment-label" className={inputClassName}>
+            <SelectValue placeholder="Forma de Pagamento" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todas">Todas</SelectItem>
+            {paymentMethods.map((pm) => (
+              <SelectItem key={pm} value={pm}>{pm}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <label id="tx-recurring-label" className={labelClassName}>Recorrência</label>
+        <Select value={recurring} onValueChange={(v) => setRecurring(v as 'all' | 'recurring' | 'non_recurring')}>
+          <SelectTrigger id="tx-recurring" aria-labelledby="tx-recurring-label" className={inputClassName}>
+            <SelectValue placeholder="Recorrência" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todas</SelectItem>
+            <SelectItem value="recurring">Apenas recorrentes</SelectItem>
+            <SelectItem value="non_recurring">Apenas não recorrentes</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </div>
+  );
+
+  const hasActiveCategory = category !== 'todas';
+  const hasActivePayment = paymentMethod !== 'todas';
+  const hasActiveRecurring = recurring !== 'all';
+
   return (
     <PageTransition>
       <div className="mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 max-w-7xl xl:max-w-[95%] 2xl:max-w-[1800px] flex flex-col flex-1 min-h-0" style={{ overflow: 'hidden', maxHeight: '100%' }}>
-        <div className="mt-4 mb-4 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <Link href="/">
-              <a className="inline-flex items-center text-sm text-[#4A56E2] hover:text-[#343D9B]">
-                <ArrowLeft className="w-4 h-4 mr-1" /> Voltar
-              </a>
-            </Link>
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Todas as Transações</h1>
-          </div>
-        </div>
-
-        {/* Toolbar: filtros organizados em linhas */}
-        <div className="mb-4 space-y-3 flex-shrink-0">
-          {/* Primeira linha: Busca, Tipo e Exportar */}
-          <div className="flex flex-col sm:flex-row gap-3 items-end">
-            <div className="flex-1 w-full sm:max-w-md">
-              <label htmlFor="tx-search" className="mb-1 block text-xs font-medium text-gray-600">Buscar</label>
+        {/* Toolbar: barra principal + filtros ativos */}
+        <div className="mt-4 mb-4 flex flex-col gap-3 flex-shrink-0">
+          <div className="flex flex-wrap gap-3 items-end">
+            <div className="flex-1 min-w-[200px]">
+              <label htmlFor="tx-search" className={labelClassName}>Buscar</label>
               <Input
                 id="tx-search"
                 placeholder="por descrição ou categoria"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="rounded-xl h-10 border-[#D1D5DB] bg-white placeholder-[#9CA3AF] shadow-sm focus-visible:ring-2 focus-visible:ring-[#4A56E2] focus-visible:ring-offset-1"
+                className={inputClassName}
               />
             </div>
             <div className="w-full sm:w-[140px]">
-              <label id="tx-type-label" className="mb-1 block text-xs font-medium text-gray-600">Tipo</label>
-              <Select value={type} onValueChange={(v) => setType(v as any)}>
-                <SelectTrigger id="tx-type" aria-labelledby="tx-type-label" className="rounded-xl h-10 border-[#D1D5DB] bg-white text-[#111827] shadow-sm focus-visible:ring-2 focus-visible:ring-[#4A56E2] focus-visible:ring-offset-1">
+              <label id="tx-type-label" className={labelClassName}>Tipo</label>
+              <Select value={type} onValueChange={(v) => setType(v as typeof type)}>
+                <SelectTrigger id="tx-type" aria-labelledby="tx-type-label" className={inputClassName}>
                   <SelectValue placeholder="Tipo" />
                 </SelectTrigger>
                 <SelectContent>
@@ -590,119 +630,154 @@ export default function TransactionsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="w-full sm:w-auto">
-              <Button onClick={downloadCsv} variant="outline" className="rounded-xl gap-2 border-[#D1D5DB] text-[#4A56E2] hover:bg-[#EEF2FF] h-10 w-full sm:w-auto">
-                <Download className="w-4 h-4" /> <span className="hidden sm:inline">Exportar CSV</span><span className="sm:hidden">Exportar</span>
-              </Button>
-            </div>
-          </div>
-          
-          {/* Segunda linha: Período, Categoria e Forma de Pagamento */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            <div className="sm:col-span-2 lg:col-span-1">
-              <label id="tx-period-label" className="mb-1 block text-xs font-medium text-gray-600">Período</label>
+            <div className="w-full sm:w-[180px]">
+              <label id="tx-period-label" className={labelClassName}>Período</label>
               <DateRangePicker
                 value={dateRange}
                 onChange={setDateRange}
-                className="rounded-xl h-10 border-[#D1D5DB] bg-white text-[#111827] shadow-sm focus-visible:ring-2 focus-visible:ring-[#4A56E2] focus-visible:ring-offset-1 w-full"
+                className={inputClassName + ' w-full'}
               />
             </div>
-            <div>
-              <label id="tx-category-label" className="mb-1 block text-xs font-medium text-gray-600">Categoria</label>
-              <Select value={category} onValueChange={(v) => setCategory(v)}>
-                <SelectTrigger id="tx-category" aria-labelledby="tx-category-label" className="rounded-xl h-10 border-[#D1D5DB] bg-white text-[#111827] shadow-sm focus-visible:ring-2 focus-visible:ring-[#4A56E2] focus-visible:ring-offset-1">
-                  <SelectValue placeholder="Categoria" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todas">Todas</SelectItem>
-                  {categories.map((c) => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label id="tx-payment-label" className="mb-1 block text-xs font-medium text-gray-600">Forma de Pagamento</label>
-              <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v)}>
-                <SelectTrigger id="tx-payment" aria-labelledby="tx-payment-label" className="rounded-xl h-10 border-[#D1D5DB] bg-white text-[#111827] shadow-sm focus-visible:ring-2 focus-visible:ring-[#4A56E2] focus-visible:ring-offset-1">
-                  <SelectValue placeholder="Forma de Pagamento" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todas">Todas</SelectItem>
-                  {paymentMethods.map((pm) => (
-                    <SelectItem key={pm} value={pm}>{pm}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label id="tx-recurring-label" className="mb-1 block text-xs font-medium text-gray-600">Recorrência</label>
-              <Select value={recurring} onValueChange={(v) => setRecurring(v as 'all' | 'recurring' | 'non_recurring')}>
-                <SelectTrigger id="tx-recurring" aria-labelledby="tx-recurring-label" className="rounded-xl h-10 border-[#D1D5DB] bg-white text-[#111827] shadow-sm focus-visible:ring-2 focus-visible:ring-[#4A56E2] focus-visible:ring-offset-1">
-                  <SelectValue placeholder="Recorrência" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  <SelectItem value="recurring">Apenas recorrentes</SelectItem>
-                  <SelectItem value="non_recurring">Apenas não recorrentes</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {hasActiveCategory && (
+              <div className="flex items-end gap-1">
+                <div className="w-[160px]">
+                  <label className={labelClassName}>Categoria</label>
+                  <Select value={category} onValueChange={(v) => setCategory(v)}>
+                    <SelectTrigger className={inputClassName}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todas">Todas</SelectItem>
+                      {categories.map((c) => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0 text-gray-500 hover:text-gray-700" onClick={() => setCategory('todas')} aria-label="Remover filtro Categoria">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+            {hasActivePayment && (
+              <div className="flex items-end gap-1">
+                <div className="w-[180px]">
+                  <label className={labelClassName}>Forma de Pagamento</label>
+                  <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v)}>
+                    <SelectTrigger className={inputClassName}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todas">Todas</SelectItem>
+                      {paymentMethods.map((pm) => (
+                        <SelectItem key={pm} value={pm}>{pm}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0 text-gray-500 hover:text-gray-700" onClick={() => setPaymentMethod('todas')} aria-label="Remover filtro Forma de Pagamento">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+            {hasActiveRecurring && (
+              <div className="flex items-end gap-1">
+                <div className="w-[160px]">
+                  <label className={labelClassName}>Recorrência</label>
+                  <Select value={recurring} onValueChange={(v) => setRecurring(v as typeof recurring)}>
+                    <SelectTrigger className={inputClassName}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      <SelectItem value="recurring">Apenas recorrentes</SelectItem>
+                      <SelectItem value="non_recurring">Apenas não recorrentes</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0 text-gray-500 hover:text-gray-700" onClick={() => setRecurring('all')} aria-label="Remover filtro Recorrência">
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="rounded-xl gap-2 border-[#D1D5DB] dark:border-gray-600 text-[#4A56E2] hover:bg-[#EEF2FF] dark:hover:bg-[#4A56E2]/10 h-10">
+                  <Filter className="w-4 h-4" /> Mais filtros
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 z-[100]" align="end">
+                {moreFiltersContent}
+              </PopoverContent>
+            </Popover>
+            <Button onClick={downloadCsv} variant="outline" className="rounded-xl gap-2 border-[#D1D5DB] dark:border-gray-600 text-[#4A56E2] hover:bg-[#EEF2FF] dark:hover:bg-[#4A56E2]/10 h-10 shrink-0">
+              <Download className="w-4 h-4" /> <span className="hidden sm:inline">Exportar CSV</span><span className="sm:hidden">Exportar</span>
+            </Button>
           </div>
         </div>
 
-        {/* Estatísticas */}
+        {/* KPIs */}
         <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 flex-shrink-0">
-          <Card className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
+          <Card className="p-4 rounded-2xl shadow-flat shadow-flat-hover border-0 kpi-card kpi-savings">
             <div className="flex items-center justify-between">
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-gray-600 mb-1">Total de Transações</p>
+                <p className="text-xs font-medium text-white/90 mb-1">Total de Transações</p>
                 {isLoadingSummary ? (
-                  <Skeleton className="h-8 w-20" />
+                  <Skeleton className="h-8 w-20 bg-white/30" />
                 ) : (
-                  <p className="text-2xl font-bold text-gray-900 truncate">{stats.total}</p>
+                  <p className="text-2xl font-bold text-white truncate">{stats.total}</p>
                 )}
               </div>
-              <Receipt className="h-8 w-8 text-gray-400 flex-shrink-0 ml-2" />
+              <div className="bg-white/20 p-2 rounded-xl ring-1 ring-white/40 flex-shrink-0 ml-2">
+                <Receipt className="h-6 w-6 text-white" />
+              </div>
             </div>
           </Card>
-          <Card className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
+          <Card className="p-4 rounded-2xl shadow-flat shadow-flat-hover border-0 kpi-card kpi-income">
             <div className="flex items-center justify-between">
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-gray-600 mb-1">Valor Total</p>
+                <p className="text-xs font-medium text-white/90 mb-1">Receitas</p>
                 {isLoadingSummary ? (
-                  <Skeleton className="h-8 w-24" />
+                  <Skeleton className="h-8 w-24 bg-white/30" />
                 ) : (
-                  <p className="text-2xl font-bold text-gray-900 truncate">R$ {formatCurrency(stats.totalValue)}</p>
+                  <p className="text-2xl font-bold text-white truncate">R$ {formatCurrency(stats.income)}</p>
                 )}
               </div>
-              <TrendingUp className="h-8 w-8 text-blue-500 flex-shrink-0 ml-2" />
+              <div className="bg-white/20 p-2 rounded-xl ring-1 ring-white/40 flex-shrink-0 ml-2">
+                <TrendingUp className="h-6 w-6 text-white" />
+              </div>
             </div>
           </Card>
-          <Card className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
+          <Card className="p-4 rounded-2xl shadow-flat shadow-flat-hover border-0 kpi-card kpi-expense">
             <div className="flex items-center justify-between">
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-gray-600 mb-1">Receitas</p>
+                <p className="text-xs font-medium text-white/90 mb-1">Despesas</p>
                 {isLoadingSummary ? (
-                  <Skeleton className="h-8 w-24" />
+                  <Skeleton className="h-8 w-24 bg-white/30" />
                 ) : (
-                  <p className="text-2xl font-bold text-green-600 truncate">R$ {formatCurrency(stats.income)}</p>
+                  <p className="text-2xl font-bold text-white truncate">R$ {formatCurrency(stats.expenses)}</p>
                 )}
               </div>
-              <TrendingUp className="h-8 w-8 text-green-500 flex-shrink-0 ml-2" />
+              <div className="bg-white/20 p-2 rounded-xl ring-1 ring-white/40 flex-shrink-0 ml-2">
+                <TrendingDown className="h-6 w-6 text-white" />
+              </div>
             </div>
           </Card>
-          <Card className="p-4 rounded-xl border border-gray-200 bg-white shadow-sm">
+          <Card className="p-4 rounded-2xl shadow-flat shadow-flat-hover border-0 kpi-card kpi-balance">
             <div className="flex items-center justify-between">
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-gray-600 mb-1">Despesas</p>
+                <p className="text-xs font-medium text-white/90 mb-1">Saldo</p>
                 {isLoadingSummary ? (
-                  <Skeleton className="h-8 w-24" />
+                  <Skeleton className="h-8 w-24 bg-white/30" />
                 ) : (
-                  <p className="text-2xl font-bold text-red-600 truncate">R$ {formatCurrency(stats.expenses)}</p>
+                  <p className={`text-2xl font-bold truncate ${stats.balance >= 0 ? 'text-white' : 'text-white'}`}>
+                    R$ {formatCurrency(stats.balance)}
+                  </p>
                 )}
               </div>
-              <TrendingDown className="h-8 w-8 text-red-500 flex-shrink-0 ml-2" />
+              <div className="bg-white/20 p-2 rounded-xl ring-1 ring-white/40 flex-shrink-0 ml-2">
+                <Wallet className="h-6 w-6 text-white" />
+              </div>
             </div>
           </Card>
         </div>
