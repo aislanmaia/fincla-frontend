@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { useEffect } from 'react';
 import { useOrganization } from '@/hooks/useOrganization';
+import { useDebounce } from '@/hooks/useDebounce';
 import { PageTransition } from '@/components/PageTransition';
 import { NewTransactionSheet } from '@/components/NewTransactionSheet';
 import { DeleteTransactionDialog } from '@/components/DeleteTransactionDialog';
@@ -156,6 +157,7 @@ type SortDirection = 'asc' | 'desc' | null;
 
 export default function TransactionsPage() {
   const [query, setQuery] = useState('');
+  const debouncedQuery = useDebounce(query, 400);
   const [type, setType] = useState<'todas' | 'receitas' | 'despesas'>('todas');
   const [dateRange, setDateRange] = useState<{ from: Date; to: Date } | undefined>(undefined);
   const [category, setCategory] = useState<string>('todas');
@@ -220,11 +222,11 @@ export default function TransactionsPage() {
     return {};
   }, [paymentMethod]);
 
-  // Preparar filtro de busca (description) para a API
+  // Preparar filtro de busca (description) para a API - usa valor debounced
   const apiDescriptionFilter = useMemo(() => {
-    if (query.trim()) return { description: query.trim() };
+    if (debouncedQuery.trim()) return { description: debouncedQuery.trim() };
     return {};
-  }, [query]);
+  }, [debouncedQuery]);
 
   // Preparar filtro de recorrência para a API
   const apiRecurringFilter = useMemo(() => {
@@ -239,7 +241,7 @@ export default function TransactionsPage() {
 
   // Query para buscar transações paginadas
   const { data: transactionsData, isLoading: isLoadingTransactions } = useQuery({
-    queryKey: ['transactions', activeOrgId, dateRangeKey, type, category, paymentMethod, query, recurring, currentPage],
+    queryKey: ['transactions', activeOrgId, dateRangeKey, type, category, paymentMethod, debouncedQuery, recurring, currentPage],
     queryFn: async () => {
       if (!activeOrgId) return null;
       
@@ -260,7 +262,7 @@ export default function TransactionsPage() {
 
   // Query para buscar estatísticas (KPIs)
   const { data: summaryData, isLoading: isLoadingSummary } = useQuery({
-    queryKey: ['transactions-summary', activeOrgId, dateRangeKey, type, category, paymentMethod, query, recurring],
+    queryKey: ['transactions-summary', activeOrgId, dateRangeKey, type, category, paymentMethod, debouncedQuery, recurring],
     queryFn: async () => {
       if (!activeOrgId) return null;
       
@@ -433,7 +435,7 @@ export default function TransactionsPage() {
   // Resetar página quando filtros mudarem
   useEffect(() => {
     setCurrentPage(1);
-  }, [type, dateRange, category, paymentMethod, query, recurring]);
+  }, [type, dateRange, category, paymentMethod, debouncedQuery, recurring]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
