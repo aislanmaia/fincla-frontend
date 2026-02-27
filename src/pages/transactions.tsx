@@ -21,7 +21,8 @@ import { handleApiError } from '@/api/client';
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, PaginationEllipsis } from '@/components/ui/pagination';
-import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
+import { startOfMonth, endOfMonth, subMonths, format, isSameDay } from 'date-fns';
+import { getPresetRange } from '@/hooks/useDateRange';
 import { ptBR } from 'date-fns/locale';
 import { DateRangePicker } from '@/components/DateRangePicker';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -551,6 +552,27 @@ export default function TransactionsPage() {
   const inputClassName = 'rounded-xl h-10 border-[#D1D5DB] dark:border-gray-600 bg-white dark:bg-gray-900 text-[#111827] dark:text-gray-100 shadow-sm focus-visible:ring-2 focus-visible:ring-[#4A56E2] focus-visible:ring-offset-1';
   const labelClassName = 'mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400';
 
+  const defaultPeriod = getPresetRange('thisMonth');
+  const hasActivePeriod = dateRange && (
+    !isSameDay(dateRange.from, defaultPeriod.from) || !isSameDay(dateRange.to, defaultPeriod.to)
+  );
+  const hasActiveSearch = query.trim().length > 0;
+  const hasActiveType = type !== 'todas';
+  const hasActiveCategory = category !== 'todas';
+  const hasActivePayment = paymentMethod !== 'todas';
+  const hasActiveRecurring = recurring !== 'all';
+  const activeMoreFiltersCount = [hasActiveCategory, hasActivePayment, hasActiveRecurring].filter(Boolean).length;
+
+  const formatPeriodLabel = () => {
+    if (!dateRange?.from || !dateRange?.to) return '';
+    if (isSameDay(dateRange.from, dateRange.to)) {
+      return format(dateRange.from, "d 'de' MMMM 'de' yyyy", { locale: ptBR });
+    }
+    return `${format(dateRange.from, 'dd/MM/yy', { locale: ptBR })} - ${format(dateRange.to, 'dd/MM/yy', { locale: ptBR })}`;
+  };
+
+  const selectContentInPopoverProps = { side: 'top' as const, className: 'z-[200]' };
+
   const moreFiltersContent = (
     <div className="space-y-3 p-1">
       <div>
@@ -559,7 +581,7 @@ export default function TransactionsPage() {
           <SelectTrigger id="tx-category" aria-labelledby="tx-category-label" className={inputClassName}>
             <SelectValue placeholder="Categoria" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent {...selectContentInPopoverProps}>
             <SelectItem value="todas">Todas</SelectItem>
             {categories.map((c) => (
               <SelectItem key={c} value={c}>{c}</SelectItem>
@@ -573,7 +595,7 @@ export default function TransactionsPage() {
           <SelectTrigger id="tx-payment" aria-labelledby="tx-payment-label" className={inputClassName}>
             <SelectValue placeholder="Forma de Pagamento" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent {...selectContentInPopoverProps}>
             <SelectItem value="todas">Todas</SelectItem>
             {paymentMethods.map((pm) => (
               <SelectItem key={pm} value={pm}>{pm}</SelectItem>
@@ -587,7 +609,7 @@ export default function TransactionsPage() {
           <SelectTrigger id="tx-recurring" aria-labelledby="tx-recurring-label" className={inputClassName}>
             <SelectValue placeholder="Recorrência" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent {...selectContentInPopoverProps}>
             <SelectItem value="all">Todas</SelectItem>
             <SelectItem value="recurring">Apenas recorrentes</SelectItem>
             <SelectItem value="non_recurring">Apenas não recorrentes</SelectItem>
@@ -597,14 +619,12 @@ export default function TransactionsPage() {
     </div>
   );
 
-  const hasActiveCategory = category !== 'todas';
-  const hasActivePayment = paymentMethod !== 'todas';
-  const hasActiveRecurring = recurring !== 'all';
+  const hasAnyActiveFilter = hasActiveType || hasActivePeriod || hasActiveSearch || hasActiveCategory || hasActivePayment || hasActiveRecurring;
 
   return (
     <PageTransition>
       <div className="mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 max-w-7xl xl:max-w-[95%] 2xl:max-w-[1800px] flex flex-col flex-1 min-h-0" style={{ overflow: 'hidden', maxHeight: '100%' }}>
-        {/* Toolbar: barra principal + filtros ativos */}
+        {/* Toolbar: barra principal */}
         <div className="mt-4 mb-4 flex flex-col gap-3 flex-shrink-0">
           <div className="flex flex-wrap gap-3 items-end">
             <div className="flex-1 min-w-[200px]">
@@ -638,75 +658,19 @@ export default function TransactionsPage() {
                 className={inputClassName + ' w-full'}
               />
             </div>
-            {hasActiveCategory && (
-              <div className="flex items-end gap-1">
-                <div className="w-[160px]">
-                  <label className={labelClassName}>Categoria</label>
-                  <Select value={category} onValueChange={(v) => setCategory(v)}>
-                    <SelectTrigger className={inputClassName}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todas">Todas</SelectItem>
-                      {categories.map((c) => (
-                        <SelectItem key={c} value={c}>{c}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0 text-gray-500 hover:text-gray-700" onClick={() => setCategory('todas')} aria-label="Remover filtro Categoria">
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-            {hasActivePayment && (
-              <div className="flex items-end gap-1">
-                <div className="w-[180px]">
-                  <label className={labelClassName}>Forma de Pagamento</label>
-                  <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v)}>
-                    <SelectTrigger className={inputClassName}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todas">Todas</SelectItem>
-                      {paymentMethods.map((pm) => (
-                        <SelectItem key={pm} value={pm}>{pm}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0 text-gray-500 hover:text-gray-700" onClick={() => setPaymentMethod('todas')} aria-label="Remover filtro Forma de Pagamento">
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
-            {hasActiveRecurring && (
-              <div className="flex items-end gap-1">
-                <div className="w-[160px]">
-                  <label className={labelClassName}>Recorrência</label>
-                  <Select value={recurring} onValueChange={(v) => setRecurring(v as typeof recurring)}>
-                    <SelectTrigger className={inputClassName}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todas</SelectItem>
-                      <SelectItem value="recurring">Apenas recorrentes</SelectItem>
-                      <SelectItem value="non_recurring">Apenas não recorrentes</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0 text-gray-500 hover:text-gray-700" onClick={() => setRecurring('all')} aria-label="Remover filtro Recorrência">
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            )}
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" className="rounded-xl gap-2 border-[#D1D5DB] dark:border-gray-600 text-[#4A56E2] hover:bg-[#EEF2FF] dark:hover:bg-[#4A56E2]/10 h-10">
-                  <Filter className="w-4 h-4" /> Mais filtros
+                  <Filter className="w-4 h-4" />
+                  Mais filtros
+                  {activeMoreFiltersCount > 0 && (
+                    <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 rounded-full text-xs">
+                      {activeMoreFiltersCount}
+                    </Badge>
+                  )}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-80 z-[100]" align="end">
+              <PopoverContent className="w-80 z-[100]" align="end" side="top">
                 {moreFiltersContent}
               </PopoverContent>
             </Popover>
@@ -714,6 +678,60 @@ export default function TransactionsPage() {
               <Download className="w-4 h-4" /> <span className="hidden sm:inline">Exportar CSV</span><span className="sm:hidden">Exportar</span>
             </Button>
           </div>
+
+          {/* Chips de filtros ativos */}
+          {hasAnyActiveFilter && (
+            <div className="flex flex-wrap gap-2 items-center">
+              {hasActiveType && (
+                <Badge variant="secondary" className="gap-1 py-1.5 pl-2.5 pr-1 text-sm font-normal">
+                  Tipo: {type === 'receitas' ? 'Receitas' : 'Despesas'}
+                  <button type="button" onClick={() => setType('todas')} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Tipo">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </Badge>
+              )}
+              {hasActivePeriod && dateRange && (
+                <Badge variant="secondary" className="gap-1 py-1.5 pl-2.5 pr-1 text-sm font-normal">
+                  Período: {formatPeriodLabel()}
+                  <button type="button" onClick={() => setDateRange(getPresetRange('thisMonth'))} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Período">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </Badge>
+              )}
+              {hasActiveSearch && (
+                <Badge variant="secondary" className="gap-1 py-1.5 pl-2.5 pr-1 text-sm font-normal">
+                  Busca: &quot;{query}&quot;
+                  <button type="button" onClick={() => setQuery('')} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Busca">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </Badge>
+              )}
+              {hasActiveCategory && (
+                <Badge variant="secondary" className="gap-1 py-1.5 pl-2.5 pr-1 text-sm font-normal">
+                  Categoria: {category}
+                  <button type="button" onClick={() => setCategory('todas')} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Categoria">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </Badge>
+              )}
+              {hasActivePayment && (
+                <Badge variant="secondary" className="gap-1 py-1.5 pl-2.5 pr-1 text-sm font-normal">
+                  Forma de Pagamento: {paymentMethod}
+                  <button type="button" onClick={() => setPaymentMethod('todas')} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Forma de Pagamento">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </Badge>
+              )}
+              {hasActiveRecurring && (
+                <Badge variant="secondary" className="gap-1 py-1.5 pl-2.5 pr-1 text-sm font-normal">
+                  Recorrência: {recurring === 'recurring' ? 'Apenas recorrentes' : 'Apenas não recorrentes'}
+                  <button type="button" onClick={() => setRecurring('all')} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Recorrência">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </Badge>
+              )}
+            </div>
+          )}
         </div>
 
         {/* KPIs */}
