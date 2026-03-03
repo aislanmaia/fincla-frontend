@@ -108,6 +108,7 @@ export default function Login() {
                     <FormLabel>Email</FormLabel>
                     <FormControl>
                       <Input
+                        id="login-email"
                         type="email"
                         placeholder="seu@email.com"
                         disabled={isLoading}
@@ -127,6 +128,7 @@ export default function Login() {
                     <FormLabel>Senha</FormLabel>
                     <FormControl>
                       <Input
+                        id="login-password"
                         type="password"
                         placeholder="••••••••"
                         disabled={isLoading}
