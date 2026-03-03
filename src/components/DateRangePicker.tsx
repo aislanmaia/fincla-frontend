@@ -16,6 +16,8 @@ export interface DateRangePickerProps {
   value?: { from: Date; to: Date };
   onChange?: (range: { from: Date; to: Date } | undefined) => void;
   className?: string;
+  /** Classe adicional para o PopoverContent (ex.: z-index para evitar sobreposição) */
+  popoverContentClassName?: string;
 }
 
 type PeriodPreset = 
@@ -37,7 +39,7 @@ interface PresetOption {
   getRange: () => { from: Date; to: Date };
 }
 
-export function DateRangePicker({ value, onChange, className }: DateRangePickerProps) {
+export function DateRangePicker({ value, onChange, className, popoverContentClassName }: DateRangePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedRange, setSelectedRange] = useState<DateRange | undefined>(
     value ? { from: value.from, to: value.to } : undefined
@@ -215,29 +217,23 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
     onChange?.(undefined);
   };
 
+  /** Formato compacto para caber no trigger sem overflow */
   const formatDateRange = (range: DateRange | undefined): string => {
     if (!range?.from) return 'Selecione um período';
-    
-    // Se não há range completo, mostrar apenas a data inicial
+
     if (!range.to) {
-      return format(range.from, "d 'de' MMMM 'de' yyyy", { locale: ptBR });
+      return format(range.from, 'dd/MM/yyyy', { locale: ptBR });
     }
-    
-    // Presets que devem exibir o intervalo detalhado ao invés do nome
+
     const presetsWithDetailedRange: PeriodPreset[] = ['last7Days', 'last30Days', 'last90Days'];
-    
-    // Se um preset está ativo e não é um dos que devem mostrar detalhes, retornar o label do preset
+
     if (activePreset && activePreset !== 'custom' && !presetsWithDetailedRange.includes(activePreset)) {
       const preset = presets.find(p => p.value === activePreset);
-      if (preset) {
-        return preset.label;
-      }
+      if (preset) return preset.label;
     }
-    
-    // Para presets com intervalo detalhado ou customizado, mostrar o range completo
-    const fromStr = format(range.from, "d 'de' MMMM 'de' yyyy", { locale: ptBR });
-    const toStr = format(range.to, "d 'de' MMMM 'de' yyyy", { locale: ptBR });
-    return `${fromStr} - ${toStr}`;
+
+    const compact = (d: Date) => format(d, 'dd/MM/yy', { locale: ptBR });
+    return `${compact(range.from)} - ${compact(range.to)}`;
   };
 
   const isRangeValid = selectedRange?.from && selectedRange?.to && 
@@ -249,13 +245,13 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
         <Button
           variant="outline"
           className={cn(
-            "min-w-[240px] sm:min-w-[280px] max-w-[400px] h-9 justify-start text-left font-normal bg-white hover:bg-gray-50 border-gray-300 text-sm",
+            "w-full min-w-0 h-9 justify-start text-left font-normal bg-white hover:bg-gray-50 border-gray-300 text-sm overflow-hidden",
             !selectedRange && "text-muted-foreground",
             className
           )}
         >
           <CalendarIcon className="mr-2 h-3.5 w-3.5 flex-shrink-0" />
-          <span className="flex-1 text-xs sm:text-sm whitespace-nowrap">
+          <span className="flex-1 min-w-0 truncate text-xs sm:text-sm" title={formatDateRange(selectedRange)}>
             {formatDateRange(selectedRange)}
           </span>
           {selectedRange && (
@@ -272,7 +268,7 @@ export function DateRangePicker({ value, onChange, className }: DateRangePickerP
       </PopoverTrigger>
       <PopoverContent
         ref={popoverRef}
-        className="w-auto p-0 max-w-[580px]"
+        className={cn("w-auto p-0 max-w-[580px] z-[110]", popoverContentClassName)}
         align="end"
         sideOffset={8}
       >
