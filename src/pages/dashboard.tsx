@@ -69,10 +69,12 @@ export default function Dashboard() {
 
         {/* Seletor de Período - acima dos cards, à direita */}
         <div className="mb-6 flex justify-end">
-          <DateRangePicker 
-            value={dateRange}
-            onChange={handleDateRangeChange}
-          />
+          <div className="w-fit max-w-full min-w-0">
+            <DateRangePicker 
+              value={dateRange}
+              onChange={handleDateRangeChange}
+            />
+          </div>
         </div>
 
         {/* Summary Cards em grid Bento inicial */}
