@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { listTransactions, deleteTransaction, getTransaction, getTransactionsSummary } from '@/api/transactions';
 import { Transaction, InstallmentInfo } from '@/types/api';
@@ -6,11 +6,10 @@ import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Download, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, TrendingDown, Receipt, CreditCard, Calendar, Filter, Wallet, X } from 'lucide-react';
+import { Download, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, TrendingDown, Receipt, CreditCard, Calendar, Wallet, X, ChevronDown, ChevronRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { useEffect } from 'react';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useDateRange } from '@/hooks/useDateRange';
@@ -25,7 +24,7 @@ import { startOfMonth, endOfMonth, subMonths, format, isSameDay } from 'date-fns
 import { getPresetRange } from '@/hooks/useDateRange';
 import { ptBR } from 'date-fns/locale';
 import { DateRangePicker } from '@/components/DateRangePicker';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { CategorySearchPopover } from '@/components/CategorySearchPopover';
 
 function formatCurrency(value: number) {
   return value.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
@@ -172,6 +171,7 @@ export default function TransactionsPage() {
   const [isEditSheetOpen, setIsEditSheetOpen] = useState(false);
   const [deletingTransaction, setDeletingTransaction] = useState<Transaction | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isMoreFiltersExpanded, setIsMoreFiltersExpanded] = useState(false);
 
   const ITEMS_PER_PAGE = 20;
 
@@ -551,6 +551,7 @@ export default function TransactionsPage() {
 
   const inputClassName = 'rounded-xl h-10 border-[#D1D5DB] dark:border-gray-600 bg-white dark:bg-gray-900 text-[#111827] dark:text-gray-100 shadow-sm focus-visible:ring-2 focus-visible:ring-[#4A56E2] focus-visible:ring-offset-1';
   const labelClassName = 'mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400';
+  const filterChipClassName = 'gap-1 py-1.5 pl-2.5 pr-1 text-sm font-normal bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200/80 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600 dark:hover:bg-slate-700/80';
 
   const defaultPeriod = getPresetRange('thisMonth');
   const hasActivePeriod = dateRange && (
@@ -563,6 +564,15 @@ export default function TransactionsPage() {
   const hasActiveRecurring = recurring !== 'all';
   const activeMoreFiltersCount = [hasActiveCategory, hasActivePayment, hasActiveRecurring].filter(Boolean).length;
 
+  // Auto-expand quando o usuário aplica o primeiro filtro secundário
+  const prevMoreFiltersCountRef = useRef(0);
+  useEffect(() => {
+    if (activeMoreFiltersCount > 0 && prevMoreFiltersCountRef.current === 0) {
+      setIsMoreFiltersExpanded(true);
+    }
+    prevMoreFiltersCountRef.current = activeMoreFiltersCount;
+  }, [activeMoreFiltersCount]);
+
   const formatPeriodLabel = () => {
     if (!dateRange?.from || !dateRange?.to) return '';
     if (isSameDay(dateRange.from, dateRange.to)) {
@@ -573,52 +583,6 @@ export default function TransactionsPage() {
 
   const selectContentInPopoverProps = { side: 'top' as const, className: 'z-[200]' };
 
-  const moreFiltersContent = (
-    <div className="space-y-3 p-1">
-      <div>
-        <label id="tx-category-label" className={labelClassName}>Categoria</label>
-        <Select value={category} onValueChange={(v) => setCategory(v)}>
-          <SelectTrigger id="tx-category" aria-labelledby="tx-category-label" className={inputClassName}>
-            <SelectValue placeholder="Categoria" />
-          </SelectTrigger>
-          <SelectContent {...selectContentInPopoverProps}>
-            <SelectItem value="todas">Todas</SelectItem>
-            {categories.map((c) => (
-              <SelectItem key={c} value={c}>{c}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <label id="tx-payment-label" className={labelClassName}>Forma de Pagamento</label>
-        <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v)}>
-          <SelectTrigger id="tx-payment" aria-labelledby="tx-payment-label" className={inputClassName}>
-            <SelectValue placeholder="Forma de Pagamento" />
-          </SelectTrigger>
-          <SelectContent {...selectContentInPopoverProps}>
-            <SelectItem value="todas">Todas</SelectItem>
-            {paymentMethods.map((pm) => (
-              <SelectItem key={pm} value={pm}>{pm}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-      <div>
-        <label id="tx-recurring-label" className={labelClassName}>Recorrência</label>
-        <Select value={recurring} onValueChange={(v) => setRecurring(v as 'all' | 'recurring' | 'non_recurring')}>
-          <SelectTrigger id="tx-recurring" aria-labelledby="tx-recurring-label" className={inputClassName}>
-            <SelectValue placeholder="Recorrência" />
-          </SelectTrigger>
-          <SelectContent {...selectContentInPopoverProps}>
-            <SelectItem value="all">Todas</SelectItem>
-            <SelectItem value="recurring">Apenas recorrentes</SelectItem>
-            <SelectItem value="non_recurring">Apenas não recorrentes</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-    </div>
-  );
-
   const hasAnyActiveFilter = hasActiveType || hasActivePeriod || hasActiveSearch || hasActiveCategory || hasActivePayment || hasActiveRecurring;
 
   return (
@@ -627,20 +591,20 @@ export default function TransactionsPage() {
         {/* Toolbar: barra principal */}
         <div className="mt-4 mb-4 flex flex-col gap-3 flex-shrink-0">
           <div className="flex flex-wrap gap-3 items-end">
-            <div className="flex-1 min-w-[200px]">
+            <div className="flex-1 min-w-0">
               <label htmlFor="tx-search" className={labelClassName}>Buscar</label>
               <Input
                 id="tx-search"
-                placeholder="por descrição ou categoria"
+                placeholder="por descrição"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 className={inputClassName}
               />
             </div>
-            <div className="w-full sm:w-[140px]">
+            <div className="flex-1 min-w-0">
               <label id="tx-type-label" className={labelClassName}>Tipo</label>
               <Select value={type} onValueChange={(v) => setType(v as typeof type)}>
-                <SelectTrigger id="tx-type" aria-labelledby="tx-type-label" className={inputClassName}>
+                <SelectTrigger id="tx-type" aria-labelledby="tx-type-label" className={inputClassName + ' w-full'}>
                   <SelectValue placeholder="Tipo" />
                 </SelectTrigger>
                 <SelectContent>
@@ -650,104 +614,103 @@ export default function TransactionsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="w-full sm:w-[180px]">
+            <div className="flex-1 min-w-0">
               <label id="tx-period-label" className={labelClassName}>Período</label>
               <DateRangePicker
                 value={dateRange}
                 onChange={setDateRange}
-                className={inputClassName + ' w-full'}
+                className={inputClassName}
               />
             </div>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" className="rounded-xl gap-2 border-[#D1D5DB] dark:border-gray-600 text-[#4A56E2] hover:bg-[#EEF2FF] dark:hover:bg-[#4A56E2]/10 h-10">
-                  <Filter className="w-4 h-4" />
-                  Mais filtros
-                  {activeMoreFiltersCount > 0 && (
-                    <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 rounded-full text-xs">
-                      {activeMoreFiltersCount}
-                    </Badge>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80 z-[100]" align="end" side="top">
-                {moreFiltersContent}
-              </PopoverContent>
-            </Popover>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsMoreFiltersExpanded((v) => !v)}
+              className="rounded-xl gap-2 border-[#D1D5DB] dark:border-gray-600 text-[#4A56E2] hover:bg-[#EEF2FF] dark:hover:bg-[#4A56E2]/10 h-10 shrink-0"
+            >
+              {isMoreFiltersExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              Mais filtros
+              {activeMoreFiltersCount > 0 && (
+                <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 rounded-full text-xs bg-slate-200/80 text-slate-700 hover:bg-slate-300/80 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600">
+                  {activeMoreFiltersCount}
+                </Badge>
+              )}
+            </Button>
             <Button onClick={downloadCsv} variant="outline" className="rounded-xl gap-2 border-[#D1D5DB] dark:border-gray-600 text-[#4A56E2] hover:bg-[#EEF2FF] dark:hover:bg-[#4A56E2]/10 h-10 shrink-0">
               <Download className="w-4 h-4" /> <span className="hidden sm:inline">Exportar CSV</span><span className="sm:hidden">Exportar</span>
             </Button>
           </div>
 
-          {/* Chips de filtros ativos */}
-          {hasAnyActiveFilter && (
-            <div className="flex flex-wrap gap-2 items-center">
-              {hasActiveType && (
-                <Badge variant="secondary" className="gap-1 py-1.5 pl-2.5 pr-1 text-sm font-normal">
-                  Tipo: {type === 'receitas' ? 'Receitas' : 'Despesas'}
-                  <button type="button" onClick={() => setType('todas')} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Tipo">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </Badge>
-              )}
-              {hasActivePeriod && dateRange && (
-                <Badge variant="secondary" className="gap-1 py-1.5 pl-2.5 pr-1 text-sm font-normal">
-                  Período: {formatPeriodLabel()}
-                  <button type="button" onClick={() => setDateRange(getPresetRange('thisMonth'))} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Período">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </Badge>
-              )}
-              {hasActiveSearch && (
-                <Badge variant="secondary" className="gap-1 py-1.5 pl-2.5 pr-1 text-sm font-normal">
-                  Busca: &quot;{query}&quot;
-                  <button type="button" onClick={() => setQuery('')} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Busca">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </Badge>
-              )}
-              {hasActiveCategory && (
-                <Badge variant="secondary" className="gap-1 py-1.5 pl-2.5 pr-1 text-sm font-normal">
-                  Categoria: {category}
-                  <button type="button" onClick={() => setCategory('todas')} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Categoria">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </Badge>
-              )}
-              {hasActivePayment && (
-                <Badge variant="secondary" className="gap-1 py-1.5 pl-2.5 pr-1 text-sm font-normal">
-                  Forma de Pagamento: {paymentMethod}
-                  <button type="button" onClick={() => setPaymentMethod('todas')} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Forma de Pagamento">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </Badge>
-              )}
-              {hasActiveRecurring && (
-                <Badge variant="secondary" className="gap-1 py-1.5 pl-2.5 pr-1 text-sm font-normal">
-                  Recorrência: {recurring === 'recurring' ? 'Apenas recorrentes' : 'Apenas não recorrentes'}
-                  <button type="button" onClick={() => setRecurring('all')} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Recorrência">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </Badge>
-              )}
+          {isMoreFiltersExpanded && (
+            <div className="flex flex-wrap gap-3 items-end">
+              <div className="flex-1 min-w-0">
+                <label id="tx-category-label" className={labelClassName}>Categoria</label>
+                <CategorySearchPopover
+                  id="tx-category"
+                  ariaLabelledBy="tx-category-label"
+                  value={category}
+                  onValueChange={setCategory}
+                  transactionCategories={categories}
+                  triggerClassName={inputClassName}
+                  placeholder="Categoria"
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <label id="tx-payment-label" className={labelClassName}>Forma de Pagamento</label>
+                <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v)}>
+                  <SelectTrigger id="tx-payment" aria-labelledby="tx-payment-label" className={inputClassName + ' w-full'}>
+                    <SelectValue placeholder="Forma de Pagamento" />
+                  </SelectTrigger>
+                  <SelectContent {...selectContentInPopoverProps}>
+                    <SelectItem value="todas">Todas</SelectItem>
+                    {paymentMethods.map((pm) => (
+                      <SelectItem key={pm} value={pm}>{pm}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex-1 min-w-0">
+                <label id="tx-recurring-label" className={labelClassName}>Recorrência</label>
+                <Select value={recurring} onValueChange={(v) => setRecurring(v as 'all' | 'recurring' | 'non_recurring')}>
+                  <SelectTrigger id="tx-recurring" aria-labelledby="tx-recurring-label" className={inputClassName + ' w-full'}>
+                    <SelectValue placeholder="Recorrência" />
+                  </SelectTrigger>
+                  <SelectContent {...selectContentInPopoverProps} side="bottom">
+                    <SelectItem value="all">Sem filtro</SelectItem>
+                    <SelectItem value="recurring">Somente recorrentes</SelectItem>
+                    <SelectItem value="non_recurring">Somente não recorrentes</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           )}
         </div>
 
         {/* KPIs */}
         <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 flex-shrink-0">
-          <Card className="p-4 rounded-2xl shadow-flat shadow-flat-hover border-0 kpi-card kpi-savings">
+          <Card className="p-4 rounded-2xl shadow-flat shadow-flat-hover border-0 kpi-card kpi-balance">
             <div className="flex items-center justify-between">
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-white/90 mb-1">Total de Transações</p>
+                <p className="text-xs font-medium text-white/90 mb-1">Saldo</p>
                 {isLoadingSummary ? (
-                  <Skeleton className="h-8 w-20 bg-white/30" />
+                  <Skeleton className="h-8 w-24 bg-white/30" />
                 ) : (
-                  <p className="text-2xl font-bold text-white truncate">{stats.total}</p>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <p className={`text-2xl font-bold truncate cursor-help ${stats.balance >= 0 ? 'text-white' : 'text-white'}`}>
+                          R$ {formatCurrency(stats.balance)}
+                        </p>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        <p>Saldo: R$ {formatCurrency(stats.balance)}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
               </div>
               <div className="bg-white/20 p-2 rounded-xl ring-1 ring-white/40 flex-shrink-0 ml-2">
-                <Receipt className="h-6 w-6 text-white" />
+                <Wallet className="h-6 w-6 text-white" />
               </div>
             </div>
           </Card>
@@ -758,7 +721,16 @@ export default function TransactionsPage() {
                 {isLoadingSummary ? (
                   <Skeleton className="h-8 w-24 bg-white/30" />
                 ) : (
-                  <p className="text-2xl font-bold text-white truncate">R$ {formatCurrency(stats.income)}</p>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <p className="text-2xl font-bold text-white truncate cursor-help">R$ {formatCurrency(stats.income)}</p>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        <p>Receitas: R$ {formatCurrency(stats.income)}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
               </div>
               <div className="bg-white/20 p-2 rounded-xl ring-1 ring-white/40 flex-shrink-0 ml-2">
@@ -773,7 +745,16 @@ export default function TransactionsPage() {
                 {isLoadingSummary ? (
                   <Skeleton className="h-8 w-24 bg-white/30" />
                 ) : (
-                  <p className="text-2xl font-bold text-white truncate">R$ {formatCurrency(stats.expenses)}</p>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <p className="text-2xl font-bold text-white truncate cursor-help">R$ {formatCurrency(stats.expenses)}</p>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        <p>Despesas: R$ {formatCurrency(stats.expenses)}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
               </div>
               <div className="bg-white/20 p-2 rounded-xl ring-1 ring-white/40 flex-shrink-0 ml-2">
@@ -781,24 +762,88 @@ export default function TransactionsPage() {
               </div>
             </div>
           </Card>
-          <Card className="p-4 rounded-2xl shadow-flat shadow-flat-hover border-0 kpi-card kpi-balance">
+          <Card className="p-4 rounded-2xl shadow-flat shadow-flat-hover border-0 kpi-card kpi-savings">
             <div className="flex items-center justify-between">
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-white/90 mb-1">Saldo</p>
+                <p className="text-xs font-medium text-white/90 mb-1">Total de Transações</p>
                 {isLoadingSummary ? (
-                  <Skeleton className="h-8 w-24 bg-white/30" />
+                  <Skeleton className="h-8 w-20 bg-white/30" />
                 ) : (
-                  <p className={`text-2xl font-bold truncate ${stats.balance >= 0 ? 'text-white' : 'text-white'}`}>
-                    R$ {formatCurrency(stats.balance)}
-                  </p>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <p className="text-2xl font-bold text-white truncate cursor-help">{stats.total}</p>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        <p>Total de Transações: {stats.total}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 )}
               </div>
               <div className="bg-white/20 p-2 rounded-xl ring-1 ring-white/40 flex-shrink-0 ml-2">
-                <Wallet className="h-6 w-6 text-white" />
+                <Receipt className="h-6 w-6 text-white" />
               </div>
             </div>
           </Card>
         </div>
+
+        {/* Filtros selecionados - chips abaixo dos KPIs, próximo à tabela */}
+        {hasAnyActiveFilter && (
+          <div className="mb-4 flex flex-col gap-2 flex-shrink-0">
+            <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Filtros selecionados</p>
+            <div className="flex flex-wrap gap-2 items-center">
+              {hasActiveType && (
+                <Badge variant="secondary" className={filterChipClassName}>
+                  Tipo: {type === 'receitas' ? 'Receitas' : 'Despesas'}
+                  <button type="button" onClick={() => setType('todas')} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Tipo">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </Badge>
+              )}
+              {hasActivePeriod && dateRange && (
+                <Badge variant="secondary" className={filterChipClassName}>
+                  Período: {formatPeriodLabel()}
+                  <button type="button" onClick={() => setDateRange(getPresetRange('thisMonth'))} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Período">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </Badge>
+              )}
+              {hasActiveSearch && (
+                <Badge variant="secondary" className={filterChipClassName}>
+                  Busca: &quot;{query}&quot;
+                  <button type="button" onClick={() => setQuery('')} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Busca">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </Badge>
+              )}
+              {hasActiveCategory && (
+                <Badge variant="secondary" className={filterChipClassName}>
+                  Categoria: {category}
+                  <button type="button" onClick={() => setCategory('todas')} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Categoria">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </Badge>
+              )}
+              {hasActivePayment && (
+                <Badge variant="secondary" className={filterChipClassName}>
+                  Forma de Pagamento: {paymentMethod}
+                  <button type="button" onClick={() => setPaymentMethod('todas')} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Forma de Pagamento">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </Badge>
+              )}
+              {hasActiveRecurring && (
+                <Badge variant="secondary" className={filterChipClassName}>
+                  Recorrência: {recurring === 'recurring' ? 'Somente recorrentes' : 'Somente não recorrentes'}
+                  <button type="button" onClick={() => setRecurring('all')} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Recorrência">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </Badge>
+              )}
+            </div>
+          </div>
+        )}
 
         <Card className="p-0 rounded-2xl shadow-flat border-0 bg-white flex flex-col flex-1 min-h-0 overflow-hidden" style={{ maxHeight: 'calc(100vh - 450px)' }}>
           <div className="flex-1 overflow-y-auto overflow-x-auto min-h-0" style={{ maxHeight: '100%' }}>
