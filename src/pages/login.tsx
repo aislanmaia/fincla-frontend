@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/form';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { TrendingUp, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 
 const loginSchema = z.object({
   email: z.string().email('Email inválido'),
@@ -80,8 +80,8 @@ export default function Login() {
       <Card className="w-full max-w-md shadow-xl border-0 bg-white/80 backdrop-blur-sm">
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center mb-4">
-            <div className="bg-gradient-to-br from-[#4A56E2] to-[#00C6B8] p-3 rounded-xl">
-              <TrendingUp className="w-8 h-8 text-white" />
+            <div className="bg-[#1a1e27] p-3 rounded-xl">
+              <img src="/logo.png" alt="Fincla" className="w-10 h-10 object-contain" />
             </div>
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight">

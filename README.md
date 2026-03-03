@@ -54,8 +54,11 @@ Crie um arquivo `.env` na raiz do projeto:
 
 ```env
 # URL da API Backend
-# URL da API Backend
 VITE_API_BASE_URL=http://localhost:5000
+
+# URL base do frontend (para Open Graph / compartilhamento WhatsApp)
+# Em produção, use a URL do seu domínio (ex: https://app.fincla.com)
+VITE_APP_URL=http://localhost:3000
 
 # Outras configurações
 VITE_APP_NAME=Fincla

@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { TrendingUp, LayoutGrid, ListOrdered, PieChart, Target, User, LogOut, Plus, CreditCard, Settings, Users } from "lucide-react";
+import { LayoutGrid, ListOrdered, PieChart, Target, User, LogOut, Plus, CreditCard, Settings, Users } from "lucide-react";
 import { PropsWithChildren, useState } from "react";
 // import { useAIChat } from "@/hooks/useAIChat"; // TODO: Reativar no futuro quando a feature estiver pronta
 // import { ChatBar } from "@/components/ChatBar"; // TODO: Reativar no futuro quando a feature estiver pronta
@@ -155,8 +155,8 @@ export function AppLayout({ children }: PropsWithChildren) {
         <div className="flex h-full flex-col">
           <SidebarHeader>
             <div className="flex items-center gap-2 px-2 py-2">
-              <div className="bg-white/20 p-2 rounded-xl ring-1 ring-white/25">
-                <TrendingUp className="w-4 h-4 text-white" />
+              <div className="bg-white/20 p-1.5 rounded-xl ring-1 ring-white/25 shrink-0">
+                <img src="/logo.png" alt="Fincla" className="w-6 h-6 object-contain" />
               </div>
               <div className="font-semibold tracking-tight">Fincla</div>
             </div>
