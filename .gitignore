@@ -79,3 +79,6 @@ jspm_packages/
 
 # TernJS port file
 .tern-port
+
+# Demo/docs (não versionar)
+docs/DEMO_USERS.md
