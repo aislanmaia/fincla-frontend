@@ -80,7 +80,7 @@ export default function Login() {
       <Card className="w-full max-w-md shadow-xl border-0 bg-white/80 backdrop-blur-sm">
         <CardHeader className="space-y-1 text-center">
           <div className="flex justify-center mb-4">
-            <div className="bg-[#1a1e27] p-3 rounded-xl">
+            <div className="p-3 rounded-xl">
               <img src="/logo.png" alt="Fincla" className="w-10 h-10 object-contain" />
             </div>
           </div>

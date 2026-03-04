@@ -155,7 +155,7 @@ export function AppLayout({ children }: PropsWithChildren) {
         <div className="flex h-full flex-col">
           <SidebarHeader>
             <div className="flex items-center gap-2 px-2 py-2">
-              <div className="bg-white/20 p-1.5 rounded-xl ring-1 ring-white/25 shrink-0">
+              <div className="p-1.5 rounded-xl shrink-0">
                 <img src="/logo.png" alt="Fincla" className="w-6 h-6 object-contain" />
               </div>
               <div className="font-semibold tracking-tight">Fincla</div>
