@@ -42,6 +42,20 @@ global.ResizeObserver = class ResizeObserver {
     unobserve() { }
 } as any;
 
+// Mock Element.prototype.hasPointerCapture for Radix UI (jsdom lacks this)
+if (!Element.prototype.hasPointerCapture) {
+    Element.prototype.hasPointerCapture = vi.fn(() => false);
+}
+if (!Element.prototype.setPointerCapture) {
+    Element.prototype.setPointerCapture = vi.fn();
+}
+if (!Element.prototype.releasePointerCapture) {
+    Element.prototype.releasePointerCapture = vi.fn();
+}
+
+// Mock scrollIntoView for Radix UI (jsdom lacks full implementation)
+Element.prototype.scrollIntoView = vi.fn();
+
 // MSW Setup
 import { server } from './mocks/server';
 import { beforeAll, afterAll } from 'vitest';

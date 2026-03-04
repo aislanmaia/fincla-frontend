@@ -433,10 +433,10 @@ export default function TransactionsPage() {
   const totalPages = pagination?.pages || 1;
   const paginatedTransactions = useMemo(() => sortedRows, [sortedRows]);
 
-  // Resetar página quando filtros mudarem
+  // Resetar página quando busca (debounced) mudar — Input não chama setCurrentPage no onChange
   useEffect(() => {
     setCurrentPage(1);
-  }, [type, dateRange, category, paymentMethod, debouncedQuery, recurring]);
+  }, [debouncedQuery]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -603,7 +603,7 @@ export default function TransactionsPage() {
             </div>
             <div className="flex-1 min-w-0">
               <label id="tx-type-label" className={labelClassName}>Tipo</label>
-              <Select value={type} onValueChange={(v) => setType(v as typeof type)}>
+              <Select value={type} onValueChange={(v) => { setType(v as typeof type); setCurrentPage(1); }}>
                 <SelectTrigger id="tx-type" aria-labelledby="tx-type-label" className={inputClassName + ' w-full'}>
                   <SelectValue placeholder="Tipo" />
                 </SelectTrigger>
@@ -618,7 +618,7 @@ export default function TransactionsPage() {
               <label id="tx-period-label" className={labelClassName}>Período</label>
               <DateRangePicker
                 value={dateRange}
-                onChange={setDateRange}
+                onChange={(range) => { setDateRange(range); setCurrentPage(1); }}
                 className={inputClassName}
               />
             </div>
@@ -649,7 +649,7 @@ export default function TransactionsPage() {
                   id="tx-category"
                   ariaLabelledBy="tx-category-label"
                   value={category}
-                  onValueChange={setCategory}
+                  onValueChange={(v) => { setCategory(v); setCurrentPage(1); }}
                   transactionCategories={categories}
                   triggerClassName={inputClassName}
                   placeholder="Categoria"
@@ -657,7 +657,7 @@ export default function TransactionsPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <label id="tx-payment-label" className={labelClassName}>Forma de Pagamento</label>
-                <Select value={paymentMethod} onValueChange={(v) => setPaymentMethod(v)}>
+                <Select value={paymentMethod} onValueChange={(v) => { setPaymentMethod(v); setCurrentPage(1); }}>
                   <SelectTrigger id="tx-payment" aria-labelledby="tx-payment-label" className={inputClassName + ' w-full'}>
                     <SelectValue placeholder="Forma de Pagamento" />
                   </SelectTrigger>
@@ -671,7 +671,7 @@ export default function TransactionsPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <label id="tx-recurring-label" className={labelClassName}>Recorrência</label>
-                <Select value={recurring} onValueChange={(v) => setRecurring(v as 'all' | 'recurring' | 'non_recurring')}>
+                <Select value={recurring} onValueChange={(v) => { setRecurring(v as 'all' | 'recurring' | 'non_recurring'); setCurrentPage(1); }}>
                   <SelectTrigger id="tx-recurring" aria-labelledby="tx-recurring-label" className={inputClassName + ' w-full'}>
                     <SelectValue placeholder="Recorrência" />
                   </SelectTrigger>
@@ -796,7 +796,7 @@ export default function TransactionsPage() {
               {hasActiveType && (
                 <Badge variant="secondary" className={filterChipClassName}>
                   Tipo: {type === 'receitas' ? 'Receitas' : 'Despesas'}
-                  <button type="button" onClick={() => setType('todas')} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Tipo">
+                  <button type="button" onClick={() => { setType('todas'); setCurrentPage(1); }} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Tipo">
                     <X className="h-3.5 w-3.5" />
                   </button>
                 </Badge>
@@ -804,7 +804,7 @@ export default function TransactionsPage() {
               {hasActivePeriod && dateRange && (
                 <Badge variant="secondary" className={filterChipClassName}>
                   Período: {formatPeriodLabel()}
-                  <button type="button" onClick={() => setDateRange(getPresetRange('thisMonth'))} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Período">
+                  <button type="button" onClick={() => { setDateRange(getPresetRange('thisMonth')); setCurrentPage(1); }} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Período">
                     <X className="h-3.5 w-3.5" />
                   </button>
                 </Badge>
@@ -812,7 +812,7 @@ export default function TransactionsPage() {
               {hasActiveSearch && (
                 <Badge variant="secondary" className={filterChipClassName}>
                   Busca: &quot;{query}&quot;
-                  <button type="button" onClick={() => setQuery('')} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Busca">
+                  <button type="button" onClick={() => { setQuery(''); setCurrentPage(1); }} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Busca">
                     <X className="h-3.5 w-3.5" />
                   </button>
                 </Badge>
@@ -820,7 +820,7 @@ export default function TransactionsPage() {
               {hasActiveCategory && (
                 <Badge variant="secondary" className={filterChipClassName}>
                   Categoria: {category}
-                  <button type="button" onClick={() => setCategory('todas')} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Categoria">
+                  <button type="button" onClick={() => { setCategory('todas'); setCurrentPage(1); }} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Categoria">
                     <X className="h-3.5 w-3.5" />
                   </button>
                 </Badge>
@@ -828,7 +828,7 @@ export default function TransactionsPage() {
               {hasActivePayment && (
                 <Badge variant="secondary" className={filterChipClassName}>
                   Forma de Pagamento: {paymentMethod}
-                  <button type="button" onClick={() => setPaymentMethod('todas')} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Forma de Pagamento">
+                  <button type="button" onClick={() => { setPaymentMethod('todas'); setCurrentPage(1); }} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Forma de Pagamento">
                     <X className="h-3.5 w-3.5" />
                   </button>
                 </Badge>
@@ -836,7 +836,7 @@ export default function TransactionsPage() {
               {hasActiveRecurring && (
                 <Badge variant="secondary" className={filterChipClassName}>
                   Recorrência: {recurring === 'recurring' ? 'Somente recorrentes' : 'Somente não recorrentes'}
-                  <button type="button" onClick={() => setRecurring('all')} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Recorrência">
+                  <button type="button" onClick={() => { setRecurring('all'); setCurrentPage(1); }} className="ml-1 rounded-full p-0.5 hover:bg-muted" aria-label="Remover filtro Recorrência">
                     <X className="h-3.5 w-3.5" />
                   </button>
                 </Badge>

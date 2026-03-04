@@ -105,6 +105,31 @@ export const handlers = [
         });
     }),
 
+    http.get('*/v1/transactions/summary', ({ request }) => {
+        const url = new URL(request.url);
+        const organizationId = url.searchParams.get('organization_id');
+        return HttpResponse.json({
+            total_transactions: 1,
+            total_value: 50.0,
+            total_income: 0,
+            total_expenses: 50.0,
+            balance: -50.0,
+            average_transaction: 50.0,
+            period: {
+                start_date: '2024-01-01',
+                end_date: '2024-01-31',
+            },
+            filters_applied: {
+                organization_id: organizationId || 'org-123',
+                type: null,
+                category: null,
+                payment_method: null,
+                date_start: '2024-01-01',
+                date_end: '2024-01-31',
+            },
+        });
+    }),
+
     http.post('*/v1/transactions', () => {
         return HttpResponse.json({
             id: 2,
