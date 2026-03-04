@@ -519,6 +519,7 @@ export default function TransactionsPage() {
     try {
       await deleteTransaction(deletingTransaction.id, deletingTransaction.organization_id);
       queryClient.invalidateQueries({ queryKey: ['transactions', activeOrgId] });
+      queryClient.invalidateQueries({ queryKey: ['transactions-summary', activeOrgId] });
       setIsDeleteDialogOpen(false);
       setDeletingTransaction(null);
       
@@ -542,6 +543,7 @@ export default function TransactionsPage() {
 
   const handleInvalidateCache = () => {
     queryClient.invalidateQueries({ queryKey: ['transactions', activeOrgId] });
+    queryClient.invalidateQueries({ queryKey: ['transactions-summary', activeOrgId] });
   };
 
   const handleEditSuccess = () => {

@@ -445,6 +445,7 @@ export function AppLayout({ children }: PropsWithChildren) {
             onInvalidateCache={() => {
               // Invalidar queries imediatamente após sucesso para atualizar dados
               queryClient.invalidateQueries({ queryKey: ['transactions'] });
+              queryClient.invalidateQueries({ queryKey: ['transactions-summary'] });
               queryClient.invalidateQueries({ queryKey: ['financial-data'] });
             }}
             onSuccess={() => {
