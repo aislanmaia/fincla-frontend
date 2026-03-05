@@ -236,6 +236,9 @@ export interface InstallmentInfo {
   amount: number;
 }
 
+export type SortByField = 'date' | 'value' | 'type' | 'payment_method' | 'description' | 'category';
+export type SortOrder = 'asc' | 'desc';
+
 export interface ListTransactionsQuery {
   organization_id?: string;
   type?: 'income' | 'expense';
@@ -249,6 +252,8 @@ export interface ListTransactionsQuery {
   recurring?: boolean; // Filter for recurring transactions
   page?: number; // Page number (1-indexed, default: 1)
   limit?: number; // Items per page (default: 20, max: 100)
+  sort_by?: SortByField; // Sort field (default: 'date')
+  sort_order?: SortOrder; // Sort direction (default: 'desc')
 }
 
 export interface PaginationMetadata {

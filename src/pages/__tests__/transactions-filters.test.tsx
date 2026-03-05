@@ -150,6 +150,28 @@ describe('TransactionsPage - filtros', () => {
     });
   });
 
+  it('chama GET /transactions com sort_by e sort_order na requisição inicial', async () => {
+    const capturedParams: Record<string, string>[] = [];
+    server.use(
+      http.get('*/v1/transactions', ({ request }) => {
+        const url = new URL(request.url);
+        capturedParams.push({
+          sort_by: url.searchParams.get('sort_by') ?? '',
+          sort_order: url.searchParams.get('sort_order') ?? '',
+        });
+        return HttpResponse.json(mockTransactionsResponse);
+      })
+    );
+
+    render(<TransactionsPage />, { wrapper: createWrapper() });
+
+    await waitFor(() => {
+      expect(capturedParams.length).toBeGreaterThan(0);
+      expect(capturedParams[0].sort_by).toBe('date');
+      expect(capturedParams[0].sort_order).toBe('desc');
+    });
+  });
+
   it('chama GET /transactions com page=2 ao navegar para próxima página', async () => {
     const capturedParams: Record<string, string>[] = [];
     server.use(

@@ -243,9 +243,13 @@ export default function TransactionsPage() {
     ? `${format(dateRange.from, 'yyyy-MM-dd')}_${format(dateRange.to, 'yyyy-MM-dd')}`
     : null;
 
-  // Query para buscar transações paginadas
+  const apiSortParams = useMemo(() => {
+    if (!sortField || !sortDirection) return { sort_by: 'date' as const, sort_order: 'desc' as const };
+    return { sort_by: sortField, sort_order: sortDirection };
+  }, [sortField, sortDirection]);
+
   const { data: transactionsData, isLoading: isLoadingTransactions } = useQuery({
-    queryKey: ['transactions', activeOrgId, dateRangeKey, type, category, paymentMethod, debouncedQuery, recurring, currentPage],
+    queryKey: ['transactions', activeOrgId, dateRangeKey, type, category, paymentMethod, debouncedQuery, recurring, currentPage, sortField, sortDirection],
     queryFn: async () => {
       if (!activeOrgId) return null;
 
@@ -259,6 +263,7 @@ export default function TransactionsPage() {
         ...(recurring !== 'all' ? apiRecurringFilter : {}),
         page: currentPage,
         limit: ITEMS_PER_PAGE,
+        ...apiSortParams,
       });
     },
     enabled: !!activeOrgId,
@@ -364,42 +369,6 @@ export default function TransactionsPage() {
   // Expandir transações com installment_info em linhas (uma por parcela)
   const expandedRows = useMemo(() => expandTransactionsToRows(filtered), [filtered]);
 
-  // Ordenar linhas expandidas (a API já ordena transações; parcelas já vêm ordenadas por due_date)
-  const sortedRows = useMemo(() => {
-    if (!sortField || !sortDirection) return expandedRows;
-    return [...expandedRows].sort((a, b) => {
-      let aVal: string | number;
-      let bVal: string | number;
-      switch (sortField) {
-        case 'description':
-          aVal = a.description.toLowerCase();
-          bVal = b.description.toLowerCase();
-          break;
-        case 'category':
-          aVal = a.category.toLowerCase();
-          bVal = b.category.toLowerCase();
-          break;
-        case 'date':
-          aVal = new Date(a.sortDate).getTime();
-          bVal = new Date(b.sortDate).getTime();
-          break;
-        case 'value':
-          aVal = Math.abs(a.displayValue);
-          bVal = Math.abs(b.displayValue);
-          break;
-        case 'payment_method':
-          aVal = a.displayPaymentMethod.toLowerCase();
-          bVal = b.displayPaymentMethod.toLowerCase();
-          break;
-        default:
-          return 0;
-      }
-      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
-      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
-      return 0;
-    });
-  }, [expandedRows, sortField, sortDirection]);
-
   // Estatísticas do período filtrado - usar dados do summary da API
   const stats = useMemo(() => {
     if (summaryData) {
@@ -416,7 +385,7 @@ export default function TransactionsPage() {
     let totalValue = 0;
     let income = 0;
     let expenses = 0;
-    sortedRows.forEach((row) => {
+    expandedRows.forEach((row) => {
       const amount = row.displayValue;
       const absAmount = Math.abs(amount);
       totalValue += absAmount;
@@ -424,23 +393,22 @@ export default function TransactionsPage() {
       else if (amount < 0) expenses += absAmount;
     });
     return {
-      total: sortedRows.length,
+      total: expandedRows.length,
       totalValue,
       income,
       expenses,
       balance: income - expenses,
     };
-  }, [summaryData, sortedRows]);
+  }, [summaryData, expandedRows]);
 
   // Paginação - usar dados da API
   const pagination = transactionsData?.pagination;
   const totalPages = pagination?.pages || 1;
-  const paginatedTransactions = useMemo(() => sortedRows, [sortedRows]);
+  const paginatedTransactions = useMemo(() => expandedRows, [expandedRows]);
 
-  // Resetar página para 1 quando qualquer filtro mudar
   useEffect(() => {
     setCurrentPage(1);
-  }, [dateRangeKey, type, category, paymentMethod, debouncedQuery, recurring]);
+  }, [dateRangeKey, type, category, paymentMethod, debouncedQuery, recurring, sortField, sortDirection]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
