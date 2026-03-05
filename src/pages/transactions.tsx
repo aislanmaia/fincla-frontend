@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Download, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, TrendingDown, Receipt, CreditCard, Calendar, Wallet, X, ChevronDown, ChevronRight } from 'lucide-react';
+import { Download, Edit, Trash2, ArrowUpDown, ArrowUp, ArrowDown, TrendingUp, TrendingDown, Receipt, CreditCard, Calendar, Wallet, X, ChevronDown, ChevronRight, ChevronLeft } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ import { DeleteTransactionDialog } from '@/components/DeleteTransactionDialog';
 import { handleApiError } from '@/api/client';
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious, PaginationEllipsis } from '@/components/ui/pagination';
+import { Pagination, PaginationContent, PaginationItem, PaginationEllipsis } from '@/components/ui/pagination';
 import { startOfMonth, endOfMonth, subMonths, format, isSameDay } from 'date-fns';
 import { getPresetRange } from '@/hooks/useDateRange';
 import { ptBR } from 'date-fns/locale';
@@ -245,7 +245,7 @@ export default function TransactionsPage() {
     queryKey: ['transactions', activeOrgId, dateRangeKey, type, category, paymentMethod, debouncedQuery, recurring, currentPage],
     queryFn: async () => {
       if (!activeOrgId) return null;
-      
+
       return await listTransactions({
         organization_id: activeOrgId,
         ...apiDateFilters,
@@ -259,6 +259,7 @@ export default function TransactionsPage() {
       });
     },
     enabled: !!activeOrgId,
+    staleTime: 0,
   });
 
   // Query para buscar estatísticas (KPIs)
@@ -433,10 +434,10 @@ export default function TransactionsPage() {
   const totalPages = pagination?.pages || 1;
   const paginatedTransactions = useMemo(() => sortedRows, [sortedRows]);
 
-  // Resetar página quando busca (debounced) mudar — Input não chama setCurrentPage no onChange
+  // Resetar página para 1 quando qualquer filtro mudar
   useEffect(() => {
     setCurrentPage(1);
-  }, [debouncedQuery]);
+  }, [dateRangeKey, type, category, paymentMethod, debouncedQuery, recurring]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -1058,16 +1059,16 @@ export default function TransactionsPage() {
               <Pagination>
                 <PaginationContent>
                   <PaginationItem>
-                    <PaginationPrevious 
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        if (pagination.has_prev) setCurrentPage(currentPage - 1);
-                      }}
-                      className={!pagination.has_prev ? 'pointer-events-none opacity-50' : ''}
+                    <Button
+                      variant="ghost"
+                      size="default"
+                      className="gap-1 pl-2.5"
+                      onClick={() => pagination.has_prev && setCurrentPage(currentPage - 1)}
+                      disabled={!pagination.has_prev}
                     >
+                      <ChevronLeft className="h-4 w-4" />
                       Anterior
-                    </PaginationPrevious>
+                    </Button>
                   </PaginationItem>
                   
                   {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
@@ -1078,16 +1079,14 @@ export default function TransactionsPage() {
                     ) {
                       return (
                         <PaginationItem key={page}>
-                          <PaginationLink
-                            href="#"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              setCurrentPage(page);
-                            }}
-                            isActive={currentPage === page}
+                          <Button
+                            variant={currentPage === page ? 'outline' : 'ghost'}
+                            size="icon"
+                            onClick={() => setCurrentPage(page)}
+                            aria-current={currentPage === page ? 'page' : undefined}
                           >
                             {page}
-                          </PaginationLink>
+                          </Button>
                         </PaginationItem>
                       );
                     } else if (page === currentPage - 2 || page === currentPage + 2) {
@@ -1101,16 +1100,16 @@ export default function TransactionsPage() {
                   })}
                   
                   <PaginationItem>
-                    <PaginationNext 
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        if (pagination.has_next) setCurrentPage(currentPage + 1);
-                      }}
-                      className={!pagination.has_next ? 'pointer-events-none opacity-50' : ''}
+                    <Button
+                      variant="ghost"
+                      size="default"
+                      className="gap-1 pr-2.5"
+                      onClick={() => pagination.has_next && setCurrentPage(currentPage + 1)}
+                      disabled={!pagination.has_next}
                     >
                       Próxima
-                    </PaginationNext>
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
                   </PaginationItem>
                 </PaginationContent>
               </Pagination>

@@ -174,7 +174,7 @@ describe('TransactionsPage - filtros', () => {
     render(<TransactionsPage />, { wrapper: createWrapper() });
     await waitFor(() => expect(screen.getByRole('combobox', { name: /tipo/i })).toBeInTheDocument());
 
-    const nextBtn = await screen.findByRole('link', { name: /próxima|Go to next page/i });
+    const nextBtn = await screen.findByRole('button', { name: /próxima/i });
     await userEvent.click(nextBtn);
 
     await waitFor(() => {
