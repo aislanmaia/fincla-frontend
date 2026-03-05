@@ -121,7 +121,13 @@ function expandTransactionsToRows(transactions: TransactionWithAmount[]): Transa
       }
     } else {
       const amount = tx.amount ?? (tx.type === 'income' ? tx.value : -tx.value);
-      const displayDate = formatDate(tx.date ?? new Date().toISOString());
+      const useParcelDueDate = isCash && firstInst;
+      const displayDate = useParcelDueDate
+        ? formatDateShort(firstInst.due_date)
+        : formatDate(tx.date ?? new Date().toISOString());
+      const dateForSort = useParcelDueDate
+        ? firstInst.due_date
+        : (tx.date instanceof Date ? tx.date.toISOString() : String(tx.date ?? new Date().toISOString()));
       const displayPaymentMethod = mapPaymentMethodForDisplay(tx.payment_method || '');
       const cardLast4 = (tx as { card_last4?: string }).card_last4 ?? tx.credit_card_charge?.card?.last4;
       const modality = (tx as { modality?: string }).modality ?? tx.credit_card_charge?.charge?.modality;
@@ -132,9 +138,6 @@ function expandTransactionsToRows(transactions: TransactionWithAmount[]): Transa
           ? `Cartão ${cardLast4} em ${installmentsCount}x`
           : `Cartão ${cardLast4} à vista`)
         : displayPaymentMethod || tx.payment_method || '';
-
-      const dateVal = tx.date as unknown;
-      const dateForSort = dateVal instanceof Date ? dateVal.toISOString() : String(tx.date);
       rows.push({
         transactionId: txId,
         organizationId: tx.organization_id,
