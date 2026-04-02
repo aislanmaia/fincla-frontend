@@ -1,6 +1,6 @@
 // api/client.ts
 import axios, { AxiosError } from 'axios';
-import { API_CONFIG } from '../config/api';
+import { API_CONFIG } from './config';
 
 const apiClient = axios.create({
   baseURL: API_CONFIG.BASE_URL,
@@ -24,12 +24,8 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     if (error.response?.status === 401) {
-      // Token expirado ou inválido
       localStorage.removeItem('auth_token');
-      // Redirecionar para login apenas se não estiver já na página de login
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
-      }
+      window.dispatchEvent(new CustomEvent('fincla:auth-expired'));
     }
     return Promise.reject(error);
   }

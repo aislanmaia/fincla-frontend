@@ -18,7 +18,7 @@ import type {
   ClientsAtRiskQuery,
   ClientsAtRiskResponse,
   FinancialHealthIndexResponse,
-} from '../types/api';
+} from './types';
 
 export const getConsultantSummary = async (
   params?: ConsultantSummaryQuery

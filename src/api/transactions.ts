@@ -1,13 +1,14 @@
 // api/transactions.ts
 import apiClient from './client';
-import {
+import type {
   CreateTransactionRequest,
+  UpdateTransactionRequest,
   Transaction,
   ListTransactionsQuery,
   PaginatedTransactionsResponse,
   TransactionsSummaryQuery,
   TransactionsSummaryResponse,
-} from '../types/api';
+} from './types';
 
 /**
  * Cria uma nova transação
@@ -72,7 +73,7 @@ export const getTransaction = async (
 export const updateTransaction = async (
   transactionId: number,
   organizationId: string,
-  transaction: CreateTransactionRequest
+  transaction: UpdateTransactionRequest
 ): Promise<Transaction> => {
   const response = await apiClient.put<Transaction>(
     `/transactions/${transactionId}`,
@@ -95,4 +96,3 @@ export const deleteTransaction = async (
     params: { organization_id: organizationId },
   });
 };
-

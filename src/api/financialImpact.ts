@@ -1,5 +1,5 @@
 import apiClient from './client';
-import { SimulateFinancialImpactRequest, SimulateFinancialImpactResponse } from '@/types/api';
+import type { SimulateFinancialImpactRequest, SimulateFinancialImpactResponse } from './types';
 
 /**
  * Simula o impacto financeiro de novos compromissos de cartão de crédito e metas de economia.

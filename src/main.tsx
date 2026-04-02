@@ -1,6 +1,0 @@
-import { createRoot } from "react-dom/client";
-import App from "./App";
-import "./reset.css"; // reset deve vir antes do Tailwind
-import "./index.css";
-
-createRoot(document.getElementById("root")!).render(<App />);
