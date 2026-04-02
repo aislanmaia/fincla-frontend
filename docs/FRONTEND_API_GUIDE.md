@@ -14,14 +14,18 @@ Este documento fornece uma referência completa da API REST para desenvolvedores
 8. [Endpoints de Tag Types](#endpoints-de-tag-types)
 9. [Endpoints de Tags](#endpoints-de-tags)
 10. [Endpoints de Transações](#endpoints-de-transações)
-    11. [Endpoints de Cartões de Crédito](#endpoints-de-cartões-de-crédito)
-    12. [Endpoints de Metas (Goals)](#endpoints-de-metas-goals)
-    13. [Endpoints da Área do Consultor](#endpoints-da-área-do-consultor)
-    14. [Endpoints de Simulação Financeira](#endpoints-de-simulação-financeira)
-    15. [Endpoints de Chat/AI](#endpoints-de-chatai)
-    16. [Endpoints de WhatsApp Connections](#endpoints-de-whatsapp-connections)
-    17. [Tratamento de Erros](#tratamento-de-erros)
-    18. [Exemplos de Uso](#exemplos-de-uso)
+11. [Endpoints de Cartões de Crédito](#endpoints-de-cartões-de-crédito)
+12. [Endpoints de Metas (Goals)](#endpoints-de-metas-goals)
+13. [Endpoints de Orçamentos (Budgets)](#endpoints-de-orçamentos-budgets)
+14. [Endpoints de Transações Recorrentes](#endpoints-de-transações-recorrentes)
+15. [Endpoints de Analytics](#endpoints-de-analytics)
+16. [Endpoints de Notificações](#endpoints-de-notificações)
+17. [Endpoints da Área do Consultor](#endpoints-da-área-do-consultor)
+18. [Endpoints de Simulação Financeira](#endpoints-de-simulação-financeira)
+19. [Endpoints de Chat/AI](#endpoints-de-chatai)
+20. [Endpoints de WhatsApp Connections](#endpoints-de-whatsapp-connections)
+21. [Tratamento de Erros](#tratamento-de-erros)
+22. [Exemplos de Uso](#exemplos-de-uso)
 
 ---
 
@@ -170,6 +174,11 @@ export interface User {
   id: string;
   email: string;
   role: 'owner' | 'member' | 'consultant';  // consultant = plan consultant_basic/pro/premium
+  first_name: string | null;
+  last_name: string | null;
+  avatar_url: string | null;         // URL da foto de perfil
+  phone: string | null;              // Telefone do usuário
+  onboarding_completed: boolean;     // Se o onboarding foi concluído
   created_at: string;
   subscription?: {
     plan: 'free' | 'beta' | 'premium';
@@ -178,6 +187,14 @@ export interface User {
     max_users_per_org: number;
     features: string[];
   };
+}
+
+export interface UpdateProfileRequest {
+  first_name?: string | null;
+  last_name?: string | null;
+  avatar_url?: string | null;
+  phone?: string | null;
+  onboarding_completed?: boolean | null;
 }
 
 // ===== ORGANIZAÇÕES =====
@@ -190,7 +207,19 @@ export interface Organization {
   id: string;
   name: string;
   description: string | null;
+  org_type: string | null;           // Tipo da organização (ex: "personal", "business")
+  monthly_income: number | null;     // Renda mensal declarada
+  avatar_url: string | null;         // URL da foto/logo da organização
   created_at: string;
+  updated_at: string | null;
+}
+
+export interface UpdateOrganizationRequest {
+  name?: string | null;
+  description?: string | null;
+  org_type?: string | null;
+  monthly_income?: number | null;
+  avatar_url?: string | null;
 }
 
 export interface CreateOrganizationResponse {
@@ -363,6 +392,7 @@ export interface GoalsProgressByTypeResponse {
 export interface ClientAtRiskItem {
   organization_id: string;
   organization_name: string;
+  client_name: string;  // Owner name for display - use in Cliente column
   main_situation: string;
   current_balance: number;
   last_invoice_status: string;
@@ -446,18 +476,30 @@ export interface Tag {
   is_default: boolean;
   is_active: boolean;
   organization_id: string;
+  sort_order: number;
+  is_onboarding_highlight: boolean;
+  icon_key: string | null;
+  parent_category_tag_id: string | null;
 }
 
 export interface CreateTagRequest {
   name: string;
   tag_type_id: string;
   color?: string | null;
+  sort_order?: number;
+  is_onboarding_highlight?: boolean;
+  icon_key?: string | null;
+  parent_category_tag_id?: string | null;
 }
 
 export interface UpdateTagRequest {
   name: string;
   tag_type_id: string;
   color?: string | null;
+  sort_order?: number;
+  is_onboarding_highlight?: boolean;
+  icon_key?: string | null;
+  parent_category_tag_id?: string | null;
 }
 
 export interface TagsResponse {
@@ -490,13 +532,27 @@ export interface Transaction {
   value: number;
   payment_method: string;
   date: string; // ISO datetime string (YYYY-MM-DDTHH:MM:SS) - supports minute granularity
+  status: 'pending' | 'completed' | 'cancelled'; // Status da transação
   recurring: boolean; // Whether this is a recurring transaction
   created_at: string; // ISO datetime string - timestamp when transaction was created
   updated_at: string; // ISO datetime string - timestamp when transaction was last updated
   credit_card_charge?: CreditCardChargeInfo | null; // Only present if payment_method is "credit_card"
+  /** Parcelas no range de data (quando a transação aparece por causa do vencimento da parcela) */
+  installment_info?: InstallmentInfo[] | null;
   // Campo legado - mantido para compatibilidade durante migração
   category?: string | null;
 }
+
+/** Info de parcela quando a transação aparece na lista por causa do vencimento no range */
+export interface InstallmentInfo {
+  installment_number: number;
+  total_installments: number;
+  due_date: string; // YYYY-MM-DD
+  amount: number;
+}
+
+export type SortByField = 'date' | 'value' | 'type' | 'payment_method' | 'description' | 'category';
+export type SortOrder = 'asc' | 'desc';
 
 export interface ListTransactionsQuery {
   organization_id: string; // Required
@@ -504,12 +560,16 @@ export interface ListTransactionsQuery {
   category?: string;
   payment_method?: string;
   description?: string;
+  status?: 'pending' | 'completed' | 'cancelled'; // Filtrar por status
+  tag_id?: string; // Filtrar por tag UUID específica
   date_start?: string; // ISO date string (YYYY-MM-DD)
   date_end?: string; // ISO date string (YYYY-MM-DD)
   value_min?: number;
   value_max?: number;
   page?: number; // Page number (1-indexed, default: 1)
   limit?: number; // Items per page (default: 20, max: 100)
+  sort_by?: SortByField; // Sort field (default: 'date'). For date with period filter, uses due_date when installment_info exists
+  sort_order?: SortOrder; // Sort direction (default: 'desc')
 }
 
 export interface PaginationMetadata {
@@ -630,6 +690,253 @@ export interface Goal {
   created_at: string;
   updated_at: string | null;
   progress: number; // Porcentagem 0-100
+}
+
+// ===== ORÇAMENTOS (BUDGETS) =====
+export interface CreateBudgetRequest {
+  tag_id: string;           // UUID da tag (categoria) associada ao orçamento
+  amount: number;           // Valor limite do orçamento
+  period_type?: string;     // "monthly" (padrão), "weekly", "yearly" ou "custom"
+  start_date?: string | null; // YYYY-MM-DD (obrigatório se period_type="custom")
+  end_date?: string | null;   // YYYY-MM-DD (obrigatório se period_type="custom")
+}
+
+export interface UpdateBudgetRequest {
+  amount?: number | null;
+  period_type?: string | null;
+  is_active?: boolean | null;
+  start_date?: string | null;
+  end_date?: string | null;
+}
+
+export interface Budget {
+  id: string;
+  organization_id: string;
+  tag_id: string;
+  tag_name: string;
+  tag_color: string | null;
+  amount: number;
+  period_type: string;
+  is_active: boolean;
+  spent_amount: number;        // Calculado: total gasto no período
+  remaining_amount: number;    // Calculado: amount - spent_amount
+  usage_percent: number;       // Porcentagem usada (0-100+)
+  status: 'ok' | 'warning' | 'exceeded'; // ok < 80%, warning 80-100%, exceeded > 100%
+  created_at: string;
+  updated_at: string;
+  start_date: string | null;
+  end_date: string | null;
+}
+
+export interface BudgetsSummary {
+  total_budgeted: number;
+  total_spent: number;
+  total_remaining: number;
+  budgets_exceeded: number;
+  budgets_warning: number;
+  budgets_ok: number;
+}
+
+export interface BudgetListResponse {
+  budgets: Budget[];
+  summary: BudgetsSummary;
+}
+
+// ===== TRANSAÇÕES RECORRENTES =====
+export interface CreateRecurringTransactionRequest {
+  type: 'income' | 'expense';
+  description: string;
+  value: number;
+  payment_method: string;
+  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  start_date: string;          // YYYY-MM-DD
+  tag_ids?: string[];
+  day_of_month?: number | null; // 1-31 (para frequency="monthly")
+  day_of_week?: number | null;  // 0=segunda, 6=domingo (para frequency="weekly")
+  end_date?: string | null;     // YYYY-MM-DD
+  credit_card_id?: number | null;
+  notes?: string | null;
+}
+
+export interface UpdateRecurringTransactionRequest {
+  description?: string | null;
+  value?: number | null;
+  payment_method?: string | null;
+  frequency?: 'daily' | 'weekly' | 'monthly' | 'yearly' | null;
+  day_of_month?: number | null;
+  day_of_week?: number | null;
+  end_date?: string | null;
+  credit_card_id?: number | null;
+  notes?: string | null;
+  tag_ids?: string[] | null;
+}
+
+export interface RecurringTransaction {
+  id: string;
+  organization_id: string;
+  type: 'income' | 'expense';
+  description: string;
+  value: number;
+  payment_method: string;
+  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  start_date: string;       // YYYY-MM-DD
+  next_occurrence: string;  // YYYY-MM-DD - próxima data de geração
+  is_active: boolean;
+  tags: Array<{
+    id: string;
+    name: string;
+    color: string | null;
+    is_default: boolean;
+    is_active: boolean;
+    organization_id: string;
+    tag_type: { id: string; name: string } | null;
+  }>;
+  day_of_month: number | null;
+  day_of_week: number | null;
+  end_date: string | null;
+  credit_card_id: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RecurringTransactionsSummary {
+  total_monthly_income: number;
+  total_monthly_expense: number;
+  active_count: number;
+  paused_count: number;
+}
+
+export interface RecurringTransactionListResponse {
+  recurring_transactions: RecurringTransaction[];
+  summary: RecurringTransactionsSummary;
+}
+
+export interface GenerateFromRecurringRequest {
+  occurrence_date: string;     // YYYY-MM-DD - data em que a transação será gerada
+  value_override?: number | null; // Substituir valor padrão nesta geração
+}
+
+export interface GenerateFromRecurringResponse {
+  next_occurrence: string; // YYYY-MM-DD - nova próxima ocorrência após geração
+}
+
+// ===== ANALYTICS =====
+export interface MonthDataPoint {
+  year: number;
+  month: number;
+  month_name: string; // "janeiro", "fevereiro", etc.
+  total_income: number;
+  total_expenses: number;
+  balance: number;
+}
+
+export interface MonthlyEvolutionResponse {
+  months: MonthDataPoint[];
+  period_start: string; // YYYY-MM-DD
+  period_end: string;   // YYYY-MM-DD
+}
+
+export interface CategoryDataPoint {
+  tag_id: string;
+  tag_name: string;
+  total: number;
+  percentage: number;
+  transaction_count: number;
+  tag_color: string | null;
+}
+
+export interface ByCategoryResponse {
+  categories: CategoryDataPoint[];
+  total_amount: number;
+  period_start: string;
+  period_end: string;
+}
+
+export interface SpendingRhythmCategory {
+  tag_id: string;
+  tag_name: string;
+  monthly_totals: number[];  // Um valor por mês, na mesma ordem de `months`
+  average: number;
+  trend: 'up' | 'down' | 'stable';
+  tag_color: string | null;
+}
+
+export interface SpendingRhythmResponse {
+  months: string[];                    // Nomes dos meses (ex: ["jan/2026", "fev/2026"])
+  categories: SpendingRhythmCategory[];
+  monthly_totals: number[];            // Total de gastos por mês
+}
+
+export interface PeriodSummary {
+  start: string;
+  end: string;
+  total_income: number;
+  total_expenses: number;
+  balance: number;
+}
+
+export interface PeriodChanges {
+  income_change_pct: number | null;   // null se período A não tem receita
+  expenses_change_pct: number | null;
+  balance_change_pct: number | null;
+}
+
+export interface PeriodComparisonResponse {
+  period_a: PeriodSummary;
+  period_b: PeriodSummary;
+  changes: PeriodChanges;
+}
+
+// ===== NOTIFICAÇÕES =====
+export interface Notification {
+  id: string;
+  type: string;           // ex: "goal_progress", "budget_exceeded", "recurring_generated"
+  title: string;
+  body: string;
+  is_read: boolean;
+  created_at: string;
+  organization_id: string | null;
+  data: Record<string, unknown> | null; // Dados extras específicos por tipo
+  read_at: string | null;
+}
+
+export interface NotificationListResponse {
+  notifications: Notification[];
+  unread_count: number;
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+  has_next: boolean;
+  has_prev: boolean;
+}
+
+// ===== CONTRIBUIÇÕES DE METAS =====
+export interface CreateGoalContributionRequest {
+  amount: number;              // Valor da contribuição (> 0)
+  contributed_at?: string | null; // YYYY-MM-DD (default: hoje)
+  note?: string | null;
+}
+
+export interface GoalContribution {
+  id: string;
+  goal_id: string;
+  amount: number;
+  contributed_at: string; // YYYY-MM-DD
+  created_at: string;
+  note: string | null;
+}
+
+export interface GoalContributionListResponse {
+  contributions: GoalContribution[];
+  total_contributed: number;
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+  has_next: boolean;
+  has_prev: boolean;
 }
 
 // ===== CHAT/AI =====
@@ -763,6 +1070,63 @@ const login = async (email: string, password: string): Promise<LoginResponse> =>
 
 ---
 
+### POST `/v1/auth/forgot-password`
+
+Solicita envio do link de recuperação. A resposta é sempre a mesma para não vazar se o e-mail existe ou não.
+
+**Request:**
+```typescript
+const forgotPassword = async (email: string): Promise<{ message: string }> => {
+  const response = await apiClient.post<{ message: string }>('/v1/auth/forgot-password', {
+    email,
+  });
+  return response.data;
+};
+```
+
+**Response (200):**
+```typescript
+{
+  message: "Se o e-mail existir, enviaremos um link de recuperação."
+}
+```
+
+**Link no e-mail:** O backend monta o `href` apontando para a origem do app (`FRONTEND_BASE_URL` no servidor), com query na raiz: `?reset_token=<token>` (ex.: `https://app.exemplo.com/?reset_token=...`). O app lê esse parâmetro e chama `POST /v1/auth/reset-password` com o mesmo valor no campo `token`. Formatos alternativos aceitos pelo app ao interpretar a URL estão em [`docs/FRONTEND_AUTH_INVITE_LINKS.md`](FRONTEND_AUTH_INVITE_LINKS.md).
+
+---
+
+### POST `/v1/auth/reset-password`
+
+Redefine a senha usando o token recebido por e-mail.
+
+**Request:**
+```typescript
+const resetPassword = async (
+  token: string,
+  newPassword: string
+): Promise<{ message: string }> => {
+  const response = await apiClient.post<{ message: string }>('/v1/auth/reset-password', {
+    token,
+    new_password: newPassword,
+  });
+  return response.data;
+};
+```
+
+**Response (200):**
+```typescript
+{
+  message: "Senha redefinida com sucesso."
+}
+```
+
+**Erros:**
+- `400`: Nova senha não atende aos critérios de segurança
+- `404`: Token inválido ou já utilizado
+- `410`: Token expirado
+
+---
+
 ### GET `/v1/auth/me`
 
 Retorna informações do usuário autenticado.
@@ -783,6 +1147,11 @@ const getCurrentUser = async (): Promise<User> => {
   id: "123e4567-e89b-12d3-a456-426614174000",
   email: "owner@example.com",
   role: "owner",
+  first_name: "João" | null,
+  last_name: "Silva" | null,
+  avatar_url: string | null,
+  phone: string | null,
+  onboarding_completed: boolean,
   created_at: "2025-01-09T10:00:00",
   subscription: {
     plan: "beta",
@@ -890,7 +1259,7 @@ const registerMember = async (
 
 ### GET `/v1/users/me`
 
-Retorna o perfil do usuário autenticado (mesmo que `/v1/auth/me`). O campo `role` retorna `"consultant"` para usuários com plano de consultoria.
+Retorna o perfil do usuário autenticado (mesmo payload que `GET /v1/auth/me`). O campo `role` retorna `"consultant"` para usuários com plano de consultoria.
 
 **Request:**
 ```typescript
@@ -898,6 +1267,28 @@ const getMyProfile = async (): Promise<User> => {
   const response = await apiClient.get<User>('/v1/users/me');
   return response.data;
 };
+```
+
+**Response (200):**
+```typescript
+{
+  id: "123e4567-e89b-12d3-a456-426614174000",
+  email: "joao@example.com",
+  role: "owner" | "member" | "consultant",
+  first_name: "João" | null,
+  last_name: "Silva" | null,
+  avatar_url: string | null,
+  phone: string | null,
+  onboarding_completed: boolean,
+  created_at: "2025-01-09T10:00:00",
+  subscription?: {
+    plan: string;
+    status: "active" | "inactive";
+    max_organizations: number;
+    max_users_per_org: number;
+    features: string[];
+  };
+}
 ```
 
 ---
@@ -969,21 +1360,77 @@ const loginResponse = await login("user@example.com", "NovaSenhaSegura456!");
 
 ---
 
-## 🏢 Endpoints de Organizações
+### PATCH `/v1/users/me`
 
-### POST `/v1/organizations`
-
-Cria uma nova organização (apenas owners).
+Atualiza campos do perfil do usuário autenticado (partial update — envie apenas os campos a alterar).
 
 **Request:**
 ```typescript
+const updateMyProfile = async (
+  data: UpdateProfileRequest
+): Promise<User> => {
+  const response = await apiClient.patch<User>('/v1/users/me', data);
+  return response.data;
+};
+```
+
+**Exemplo:**
+```typescript
+await updateMyProfile({
+  first_name: "João",
+  last_name: "Silva",
+  avatar_url: "https://storage.example.com/avatars/user123.jpg",
+  phone: "+5511999999999",
+  onboarding_completed: true,
+});
+```
+
+**Response (200):**
+```typescript
+{
+  id: "123e4567-e89b-12d3-a456-426614174000",
+  email: "joao@example.com",
+  role: "owner",
+  first_name: "João",
+  last_name: "Silva",
+  avatar_url: "https://storage.example.com/avatars/user123.jpg",
+  phone: "+5511999999999",
+  onboarding_completed: true
+}
+```
+
+**Erros:**
+- `400`: Dados inválidos
+- `401`: Não autenticado
+
+---
+
+## 🏢 Endpoints de Organizações
+
+**Contrato `org_type` (estável):** o backend **persiste e devolve sempre** um destes valores em inglês: `personal` | `couple` | `family` | `business`. No **POST** e **PATCH** também são aceitos **aliases em português** (ex.: `casal` → `couple`, `negocio` / `negócio` → `business`, `familia` / `família` → `family`, `pessoal` → `personal`). Valores legados `outro` / `other` são normalizados para `personal` (documentado para compatibilidade com onboarding antigo). Respostas de API trazem sempre o valor canônico.
+
+### POST `/v1/organizations`
+
+Cria uma nova organização (apenas owners). Opcionalmente define perfil (`org_type`, `monthly_income`, `avatar_url`) já na criação.
+
+**Request:**
+```typescript
+type OrgTypeCanonical = "personal" | "couple" | "family" | "business";
+
+interface CreateOrganizationBody {
+  name: string;
+  description?: string | null;
+  org_type?: OrgTypeCanonical | string; // pode enviar alias PT; resposta vem canônica
+  monthly_income?: number | string | null;
+  avatar_url?: string | null;
+}
+
 const createOrganization = async (
-  name: string,
-  description?: string
+  body: CreateOrganizationBody
 ): Promise<CreateOrganizationResponse> => {
   const response = await apiClient.post<CreateOrganizationResponse>(
     '/v1/organizations',
-    { name, description }
+    body
   );
   return response.data;
 };
@@ -996,7 +1443,11 @@ const createOrganization = async (
     id: "123e4567-e89b-12d3-a456-426614174000",
     name: "Minha Empresa",
     description: "Descrição da empresa",
-    created_at: "2025-01-09T10:00:00"
+    created_at: "2025-01-09T10:00:00",
+    org_type: "couple",
+    monthly_income: 5000.0,
+    avatar_url: null,
+    updated_at: "2025-01-09T10:00:00"
   },
   membership: {
     id: "456e7890-e89b-12d3-a456-426614174000",
@@ -1011,6 +1462,238 @@ const createOrganization = async (
 **Erros:**
 - `400`: Dados inválidos ou limite de organizações excedido
 - `403`: Usuário não é owner
+
+---
+
+### GET `/v1/organizations/{org_id}`
+
+Obtém os detalhes de uma organização.
+
+**Request:**
+```typescript
+const getOrganization = async (orgId: string): Promise<Organization> => {
+  const response = await apiClient.get<Organization>(`/v1/organizations/${orgId}`);
+  return response.data;
+};
+```
+
+**Response (200):**
+```typescript
+{
+  id: "123e4567-e89b-12d3-a456-426614174000",
+  name: "Minha Empresa",
+  description: "Descrição da empresa",
+  org_type: "business",
+  monthly_income: 15000.00,
+  avatar_url: "https://storage.example.com/logos/org123.jpg",
+  created_at: "2025-01-09T10:00:00",
+  updated_at: "2026-03-01T08:30:00"
+}
+```
+
+**Erros:**
+- `404`: Organização não encontrada
+
+---
+
+### PATCH `/v1/organizations/{org_id}`
+
+Atualiza campos de uma organização (partial update — envie apenas os campos a alterar).
+
+**Request:**
+```typescript
+const updateOrganization = async (
+  orgId: string,
+  data: UpdateOrganizationRequest
+): Promise<Organization> => {
+  const response = await apiClient.patch<Organization>(
+    `/v1/organizations/${orgId}`,
+    data
+  );
+  return response.data;
+};
+```
+
+**Exemplo:**
+```typescript
+await updateOrganization("org-uuid", {
+  name: "Nova Razão Social",
+  org_type: "personal",
+  monthly_income: 8000.00,
+  avatar_url: "https://storage.example.com/logos/org_new.jpg",
+});
+```
+
+**Response (200):**
+```typescript
+{
+  id: "123e4567-e89b-12d3-a456-426614174000",
+  name: "Nova Razão Social",
+  description: "Descrição da empresa",
+  org_type: "personal",
+  monthly_income: 8000.00,
+  avatar_url: "https://storage.example.com/logos/org_new.jpg",
+  created_at: "2025-01-09T10:00:00",
+  updated_at: "2026-03-22T14:00:00"
+}
+```
+
+**Erros:**
+- `400`: Dados inválidos
+- `404`: Organização não encontrada
+
+---
+
+### POST `/v1/organizations/{org_id}/invitations`
+
+Cria convites por e-mail para entrada na organização. Apenas owners da organização podem usar.
+
+**Request:**
+```typescript
+const createOrganizationInvitations = async (
+  organizationId: string,
+  emails: string[]
+): Promise<{ invitations: OrganizationInvitation[] }> => {
+  const response = await apiClient.post<{ invitations: OrganizationInvitation[] }>(
+    `/v1/organizations/${organizationId}/invitations`,
+    { emails }
+  );
+  return response.data;
+};
+```
+
+**Response (201):**
+```typescript
+interface OrganizationInvitation {
+  id: string;
+  email: string;
+  organization_id: string;
+  status: "pending" | "accepted" | "cancelled" | "expired";
+  expires_at: string;
+  created_at: string;
+  accepted_at: string | null;
+  cancelled_at: string | null;
+  last_sent_at: string | null;
+}
+```
+
+**Erros:**
+- `403`: Usuário não é owner da organização
+- `404`: Organização não encontrada
+- `409`: Já existe convite pendente para o e-mail
+
+**Link no e-mail:** O `href` do convite (criação e reenvio) usa a origem do app (`FRONTEND_BASE_URL`) com `?invite_token=<token>` na raiz. O app extrai o token e chama `POST /v1/invitations/accept`. Outros formatos de URL aceitos pelo app estão em [`docs/FRONTEND_AUTH_INVITE_LINKS.md`](FRONTEND_AUTH_INVITE_LINKS.md).
+
+---
+
+### GET `/v1/organizations/{org_id}/invitations`
+
+Lista os convites da organização para exibir pendentes, aceitos, cancelados ou expirados.
+
+**Request:**
+```typescript
+const listOrganizationInvitations = async (
+  organizationId: string
+): Promise<{ total: number; invitations: OrganizationInvitation[] }> => {
+  const response = await apiClient.get<{ total: number; invitations: OrganizationInvitation[] }>(
+    `/v1/organizations/${organizationId}/invitations`
+  );
+  return response.data;
+};
+```
+
+**Erros:**
+- `403`: Usuário não é owner da organização
+- `404`: Organização não encontrada
+
+---
+
+### POST `/v1/organizations/{org_id}/invitations/{invitation_id}/resend`
+
+Reenvia um convite existente gerando novo token e nova expiração.
+
+**Request:**
+```typescript
+const resendOrganizationInvitation = async (
+  organizationId: string,
+  invitationId: string
+): Promise<{ invitation: OrganizationInvitation }> => {
+  const response = await apiClient.post<{ invitation: OrganizationInvitation }>(
+    `/v1/organizations/${organizationId}/invitations/${invitationId}/resend`
+  );
+  return response.data;
+};
+```
+
+**Erros:**
+- `403`: Usuário não é owner da organização
+- `404`: Convite não encontrado
+- `409`: Convite já aceito
+
+---
+
+### DELETE `/v1/organizations/{org_id}/invitations/{invitation_id}`
+
+Cancela um convite pendente.
+
+**Request:**
+```typescript
+const cancelOrganizationInvitation = async (
+  organizationId: string,
+  invitationId: string
+): Promise<void> => {
+  await apiClient.delete(
+    `/v1/organizations/${organizationId}/invitations/${invitationId}`
+  );
+};
+```
+
+**Response (204):** Sem conteúdo
+
+**Erros:**
+- `403`: Usuário não é owner da organização
+- `404`: Convite não encontrado
+- `409`: Convite já aceito
+
+---
+
+### POST `/v1/invitations/accept`
+
+Aceita um convite via token. Se o e-mail ainda não existe, o backend cria o usuário com plano `free`. Se já existir, apenas adiciona a membership na organização.
+
+**Request:**
+```typescript
+const acceptInvitation = async (payload: {
+  token: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  password: string;
+}): Promise<{
+  user: {
+    id: string;
+    email: string;
+    role: string;
+    first_name: string | null;
+    last_name: string | null;
+  };
+  membership: {
+    id: string;
+    user_id: string;
+    organization_id: string;
+    role: "member";
+    created_at: string;
+  };
+  invitation: OrganizationInvitation;
+}> => {
+  const response = await apiClient.post('/v1/invitations/accept', payload);
+  return response.data;
+};
+```
+
+**Erros:**
+- `404`: Convite não encontrado
+- `409`: Convite cancelado, já aceito ou usuário já pertence à organização
+- `410`: Convite expirado
 
 ---
 
@@ -1030,7 +1713,8 @@ const getMyOrganizations = async (): Promise<MyOrganizationsResponse> => {
 };
 ```
 
-**Response (200):**
+**Response (200):** O objeto `organization` usa o **mesmo formato** que `GET /v1/organizations/{org_id}` (inclui `description`, `org_type`, `monthly_income`, `avatar_url`, `updated_at`).
+
 ```typescript
 {
   total: 2,
@@ -1039,7 +1723,12 @@ const getMyOrganizations = async (): Promise<MyOrganizationsResponse> => {
       organization: {
         id: "123e4567-e89b-12d3-a456-426614174000",
         name: "Minha Empresa",
-        created_at: "2025-01-09T10:00:00"
+        description: "Descrição da empresa",
+        org_type: "business",
+        monthly_income: 15000.0,
+        avatar_url: "https://storage.example.com/logos/org123.jpg",
+        created_at: "2025-01-09T10:00:00",
+        updated_at: "2026-03-01T08:30:00"
       },
       membership: {
         id: "456e7890-e89b-12d3-a456-426614174000",
@@ -1202,7 +1891,7 @@ await listTags("123e4567-e89b-12d3-a456-426614174000", "categoria");
   tags: [
     {
       id: "789e0123-e89b-12d3-a456-426614174000",
-      name: "Alimentação",
+      name: "Food & Groceries",
       tag_type: {
         id: "123e4567-e89b-12d3-a456-426614174000",
         name: "categoria",
@@ -1210,14 +1899,27 @@ await listTags("123e4567-e89b-12d3-a456-426614174000", "categoria");
         is_required: true,
         max_per_transaction: 1
       },
-      color: "#FF5733",
+      color: "#059669",
       is_default: true,
       is_active: true,
-      organization_id: "123e4567-e89b-12d3-a456-426614174000"
+      organization_id: "123e4567-e89b-12d3-a456-426614174000",
+      sort_order: 0,
+      is_onboarding_highlight: true,
+      icon_key: "shopping-cart",
+      parent_category_tag_id: null
     }
   ]
 }
 ```
+
+**Notas:**
+- `sort_order`: inteiro não negativo; menor valor aparece primeiro na lista (empate: ordem alfabética por `name`).
+- `is_onboarding_highlight`: indica destaque sugerido no onboarding (ex.: categorias iniciais).
+- `icon_key`: identificador Lucide em kebab-case (ex.: `shopping-cart`); `null` para tags sem ícone ou para tipo `detalhe` sem ícone.
+- `parent_category_tag_id`: para tags do tipo `detalhe`, UUID da categoria pai (tipo `categoria`); `null` para categorias e demais tipos.
+- Ao criar uma organização, a API semeia **11 categorias canônicas em inglês** (ex.: `Food & Groceries`, `Transport`, `Income`) e filhos `detalhe` (ex.: `restaurant`, `fuel`). Esses nomes são **estáveis** no banco para o app combinar com ícones (`icon_key`) e com chaves de tradução.
+- **i18n:** o backend **não** traduz `name` por `Accept-Language`. O valor de `name` é o que está persistido (inglês nas canônicas semeadas; tags criadas pelo usuário ou certos `detalhe` podem estar em PT ou outro idioma). Para UI localizada, mapeie no frontend — por exemplo usando `icon_key`, o `id` da tag, ou um dicionário indexado pelo nome canônico em inglês — e exiba o rótulo no idioma do app.
+- **Dados legados / migração no servidor:** orgs antigas podem ter sido normalizadas fora da API (categorias legadas → canônicas EN; receitas antigas como `detalhe` sob `Income`). **Não** dependa de listas fixas de nomes em português no bundle do frontend; use **`GET /v1/tags`** e os UUIDs retornados nas transações/orçamentos como fonte da verdade.
 
 **Erros:**
 - `400`: Tipo de tag não encontrado (quando usando filtro tag_type)
@@ -1255,6 +1957,10 @@ await createTag("123e4567-e89b-12d3-a456-426614174000", {
   name: "Marketing Digital",
   tag_type_id: "123e4567-e89b-12d3-a456-426614174000", // ID do tipo "categoria"
   color: "#9B59B6", // Opcional: cor em hexadecimal
+  sort_order: 10, // Opcional; padrão 0
+  is_onboarding_highlight: false, // Opcional; padrão false
+  icon_key: "megaphone", // Opcional; kebab-case Lucide; omitir ou null para sem ícone
+  parent_category_tag_id: null, // Obrigatório para tipo "detalhe": UUID da categoria pai
 });
 ```
 
@@ -1273,12 +1979,16 @@ await createTag("123e4567-e89b-12d3-a456-426614174000", {
   color: "#9B59B6",
   is_default: false,
   is_active: true,
-  organization_id: "123e4567-e89b-12d3-a456-426614174000"
+  organization_id: "123e4567-e89b-12d3-a456-426614174000",
+  sort_order: 10,
+  is_onboarding_highlight: false,
+  icon_key: "megaphone",
+  parent_category_tag_id: null
 }
 ```
 
 **Erros:**
-- `400`: Dados inválidos, tag duplicada ou regra de negócio violada
+- `400`: Dados inválidos, tag duplicada, `icon_key` inválido (não kebab-case), `parent_category_tag_id` inválido (pai inexistente, tipo errado, ou categoria com pai), ou regra de negócio violada
 - `403`: Usuário não tem acesso à organização
 
 ---
@@ -1307,6 +2017,10 @@ await updateTag("789e0123-e89b-12d3-a456-426614174000", {
   name: "Marketing e Publicidade",
   tag_type_id: "123e4567-e89b-12d3-a456-426614174000",
   color: "#8E44AD",
+  sort_order: 3, // Opcional: omitir para manter o valor atual
+  is_onboarding_highlight: true, // Opcional: omitir para manter o valor atual
+  icon_key: "megaphone", // Opcional
+  parent_category_tag_id: null, // Opcional; para detalhe, UUID do pai
 });
 ```
 
@@ -1325,7 +2039,11 @@ await updateTag("789e0123-e89b-12d3-a456-426614174000", {
   color: "#8E44AD",
   is_default: false,
   is_active: true,
-  organization_id: "123e4567-e89b-12d3-a456-426614174000"
+  organization_id: "123e4567-e89b-12d3-a456-426614174000",
+  sort_order: 3,
+  is_onboarding_highlight: true,
+  icon_key: "megaphone",
+  parent_category_tag_id: null
 }
 ```
 
@@ -1505,6 +2223,10 @@ await createTransaction({
 
 Lista transações com filtros opcionais e paginação. Retorna transações paginadas da organização especificada.
 
+**Comportamento com filtro de data (`date_start`/`date_end`):**
+- **Transações normais** (pix, débito, etc.): filtradas por `transaction.date` (data da compra)
+- **Transações de cartão de crédito**: incluídas quando **ao menos uma parcela** tem `due_date` no range. A transação original é retornada com `installment_info` contendo as parcelas cujo vencimento está no período. Use `installment_info[].amount` para exibir o valor da parcela e `installment_info[].due_date` para ordenação/exibição.
+
 **⚠️ Breaking Change:** A estrutura de resposta mudou de `Transaction[]` para `{ data: Transaction[], pagination: {...} }`. O frontend precisa atualizar para acessar `response.data` em vez de `response` diretamente.
 
 **Request:**
@@ -1524,7 +2246,7 @@ const listTransactions = async (
 - `organization_id` (obrigatório): UUID da organização
 - `type` (opcional): 'income' | 'expense'
 - `category` (opcional): Nome da categoria
-- `payment_method` (opcional): Método de pagamento
+- `payment_method` (opcional): Método de pagamento (valores canônicos: `credit_card`, `debit_card`, `pix`, `cash`, `bank_transfer`, `boleto`). A API aceita variações e normaliza.
 - `description` (opcional): Busca parcial na descrição
 - `date_start` (opcional): Data inicial (YYYY-MM-DD)
 - `date_end` (opcional): Data final (YYYY-MM-DD)
@@ -1532,6 +2254,8 @@ const listTransactions = async (
 - `value_max` (opcional): Valor máximo
 - `page` (opcional): Número da página (padrão: 1, mínimo: 1)
 - `limit` (opcional): Itens por página (padrão: 20, mínimo: 1, máximo: 100)
+- `sort_by` (opcional): Campo de ordenação. Valores: `date`, `value`, `type`, `payment_method`, `description`, `category`. Padrão: `date`. Quando `date` e há filtro de período com transações de cartão, usa `due_date` das parcelas automaticamente.
+- `sort_order` (opcional): Direção da ordenação. Valores: `asc` | `desc`. Padrão: `desc`
 
 **Exemplos de Uso:**
 ```typescript
@@ -1581,6 +2305,30 @@ if (result.pagination.has_next) {
     limit: result.pagination.limit
   });
 }
+
+// Ordenar por valor (maiores primeiro)
+const byValue = await listTransactions({
+  organization_id: orgId,
+  sort_by: 'value',
+  sort_order: 'desc',
+  limit: 20
+});
+
+// Ordenar por data (mais antigas primeiro)
+const byDateAsc = await listTransactions({
+  organization_id: orgId,
+  sort_by: 'date',
+  sort_order: 'asc',
+  limit: 20
+});
+
+// Ordenar por descrição (alfabético)
+const byDescription = await listTransactions({
+  organization_id: orgId,
+  sort_by: 'description',
+  sort_order: 'asc',
+  limit: 20
+});
 ```
 
 **Response (200) - Estrutura Completa:**
@@ -1614,6 +2362,8 @@ if (result.pagination.has_next) {
       value: 150.50,
       payment_method: "PIX",
       date: "2025-01-15T14:30:00",
+      credit_card_charge: null,
+      installment_info: null,
       category: "Alimentação", // Campo legado - mantido para compatibilidade
       recurring: false,
       created_at: "2025-01-15T14:30:00",
@@ -1646,6 +2396,35 @@ if (result.pagination.has_next) {
     has_prev: false
   }
 }
+```
+
+**Exemplo de transação com `installment_info` (cartão parcelado no range):**
+```typescript
+{
+  id: 351,
+  description: "Supermercado Assaí - compra do mês",
+  value: 300.00,
+  payment_method: "credit_card",
+  date: "2026-01-10T13:05:00",
+  credit_card_charge: { charge: {...}, card: {...} },
+  installment_info: [
+    { installment_number: 1, total_installments: 3, due_date: "2026-02-10", amount: 100.00 }
+  ]
+}
+```
+
+**Uso no frontend:**
+```typescript
+function displayTransaction(tx: Transaction) {
+  const amount = tx.installment_info?.length
+    ? tx.installment_info.reduce((s, i) => s + i.amount, 0)
+    : tx.value;
+  const label = tx.installment_info?.length
+    ? `Parcela(s) ${tx.installment_info.map(i => `${i.installment_number}/${i.total_installments}`).join(", ")} • vence(m) ${tx.installment_info.map(i => i.due_date).join(", ")}`
+    : formatDate(tx.date);
+  return { amount, label };
+}
+// Editar: sempre usar tx.id (transação original)
 ```
 
 **Campos de Paginação:**
@@ -1684,7 +2463,7 @@ const getTransactionsSummary = async (
 - `organization_id` (obrigatório): UUID da organização
 - `type` (opcional): 'income' | 'expense'
 - `category` (opcional): Nome da categoria
-- `payment_method` (opcional): Método de pagamento
+- `payment_method` (opcional): Método de pagamento (valores canônicos: `credit_card`, `debit_card`, `pix`, `cash`, `bank_transfer`, `boleto`). A API aceita variações e normaliza.
 - `description` (opcional): Busca parcial na descrição
 - `date_start` (opcional): Data inicial (YYYY-MM-DD)
 - `date_end` (opcional): Data final (YYYY-MM-DD)
@@ -1757,6 +2536,7 @@ const foodSummary = await getTransactionsSummary({
 - `total_value` é a soma dos valores absolutos (sem considerar sinal)
 - `balance` pode ser negativo se as despesas forem maiores que as receitas
 - `average_transaction` será `0` se não houver transações
+- **Com filtros de data (`date_start` e/ou `date_end`):** transações de cartão de crédito são incluídas com base no **vencimento das parcelas** (`due_date`), não na data da compra. Cada parcela que vence no período conta como uma entrada separada no resumo.
 
 **Erros:**
 - `403`: Acesso negado à organização
@@ -2013,8 +2793,18 @@ await updateTransaction(123, orgId, {
 - Pelo menos uma tag do tipo "categoria" (ou outro tipo obrigatório) deve estar presente se `tag_ids` for fornecido
 - Campos não fornecidos mantêm seus valores originais
 
+**Valores canônicos de `payment_method` (banco de dados):**
+- `credit_card` - Cartão de crédito
+- `debit_card` - Cartão de débito
+- `pix` - PIX
+- `cash` - Dinheiro
+- `bank_transfer` - Transferência bancária (TED, DOC, etc.)
+- `boleto` - Boleto bancário
+
+A API aceita variações (ex: "PIX", "Cartão de Crédito", "Dinheiro") e normaliza para os valores canônicos.
+
 **Campos de Cartão de Crédito:**
-- Os campos `card_id`, `card_last4`, `modality` e `installments_count` só devem ser enviados quando `payment_method` for "Cartão de Crédito"
+- Os campos `card_id`, `card_last4`, `modality` e `installments_count` só devem ser enviados quando `payment_method` for `credit_card` (ou "Cartão de Crédito")
 - Se `card_id` for fornecido, ele terá prioridade sobre `card_last4`
 - Se `card_last4` for fornecido mas `card_id` não, o sistema buscará o cartão correspondente na organização
 - Ao alterar `modality` de "installment" para "cash", as parcelas existentes serão removidas
@@ -2032,7 +2822,7 @@ await updateTransaction(123, orgId, {
 - `422`: Cartão não encontrado (se `card_id` ou `card_last4` inválido)
 - `422`: `installments_count` obrigatório quando `modality` é "installment"
 - `422`: `modality` deve ser "cash" ou "installment"
-- `422`: Campos de cartão só podem ser usados com `payment_method: "Cartão de Crédito"`
+- `422`: Campos de cartão só podem ser usados com `payment_method: "credit_card"` (ou "Cartão de Crédito")
 
 ---
 
@@ -2990,6 +3780,1110 @@ await updateGoal("goal-uuid", "org-uuid", {
 
 ---
 
+### DELETE `/v1/goals/{goal_id}`
+
+Remove uma meta financeira.
+
+**Request:**
+```typescript
+const deleteGoal = async (
+  goalId: string,
+  organizationId: string
+): Promise<void> => {
+  await apiClient.delete(`/v1/goals/${goalId}`, {
+    params: { organization_id: organizationId }
+  });
+};
+```
+
+**Response (204):** Sem conteúdo
+
+**Erros:**
+- `403`: Sem acesso à organização
+- `404`: Meta não encontrada
+
+---
+
+### POST `/v1/goals/{goal_id}/contributions`
+
+Registra uma contribuição para uma meta. O campo `current_amount` da meta é incrementado automaticamente.
+
+**Request:**
+```typescript
+const contributeToGoal = async (
+  goalId: string,
+  organizationId: string,
+  data: CreateGoalContributionRequest
+): Promise<GoalContribution> => {
+  const response = await apiClient.post<GoalContribution>(
+    `/v1/goals/${goalId}/contributions`,
+    data,
+    { params: { organization_id: organizationId } }
+  );
+  return response.data;
+};
+```
+
+**Exemplo:**
+```typescript
+await contributeToGoal("goal-uuid", "org-uuid", {
+  amount: 500.00,
+  contributed_at: "2026-03-22",
+  note: "Salário de março"
+});
+```
+
+**Response (201):**
+```typescript
+{
+  id: "contrib-uuid",
+  goal_id: "goal-uuid",
+  amount: 500.00,
+  contributed_at: "2026-03-22",
+  created_at: "2026-03-22T10:00:00",
+  note: "Salário de março"
+}
+```
+
+**Erros:**
+- `400`: Valor inválido, meta não ativa ou acesso negado
+- `404`: Meta não encontrada
+
+---
+
+### GET `/v1/goals/{goal_id}/contributions`
+
+Lista o histórico de contribuições de uma meta com paginação.
+
+**Query Parameters:**
+
+| Parâmetro | Tipo | Obrigatório | Default | Descrição |
+|-----------|------|-------------|---------|-----------|
+| `organization_id` | UUID | Sim | - | ID da organização |
+| `page` | integer | Não | 1 | Página |
+| `limit` | integer | Não | 20 | Itens por página |
+
+**Request:**
+```typescript
+const listGoalContributions = async (
+  goalId: string,
+  organizationId: string,
+  page = 1,
+  limit = 20
+): Promise<GoalContributionListResponse> => {
+  const response = await apiClient.get<GoalContributionListResponse>(
+    `/v1/goals/${goalId}/contributions`,
+    { params: { organization_id: organizationId, page, limit } }
+  );
+  return response.data;
+};
+```
+
+**Response (200):**
+```typescript
+{
+  contributions: [
+    {
+      id: "contrib-uuid",
+      goal_id: "goal-uuid",
+      amount: 500.00,
+      contributed_at: "2026-03-22",
+      created_at: "2026-03-22T10:00:00",
+      note: "Salário de março"
+    }
+  ],
+  total_contributed: 3000.00,
+  page: 1,
+  limit: 20,
+  total: 6,
+  pages: 1,
+  has_next: false,
+  has_prev: false
+}
+```
+
+---
+
+## 💰 Endpoints de Orçamentos (Budgets)
+
+Gerencie limites de gastos por categoria/tag e período. O sistema calcula automaticamente quanto foi gasto em relação ao orçamento definido.
+
+### POST `/v1/budgets`
+
+Cria um novo orçamento para uma tag/categoria.
+
+**Query Parameters:**
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `organization_id` | UUID | Sim | ID da organização |
+
+**Request:**
+```typescript
+const createBudget = async (
+  organizationId: string,
+  data: CreateBudgetRequest
+): Promise<Budget> => {
+  const response = await apiClient.post<Budget>('/v1/budgets', data, {
+    params: { organization_id: organizationId }
+  });
+  return response.data;
+};
+```
+
+**Exemplo:**
+```typescript
+await createBudget("org-uuid", {
+  tag_id: "tag-uuid-alimentacao",
+  amount: 1500.00,
+  period_type: "monthly",
+});
+```
+
+**Response (201):**
+```typescript
+{
+  id: "budget-uuid",
+  organization_id: "org-uuid",
+  tag_id: "tag-uuid-alimentacao",
+  tag_name: "Alimentação",
+  tag_color: "#FF5722",
+  amount: 1500.00,
+  period_type: "monthly",
+  is_active: true,
+  spent_amount: 350.00,
+  remaining_amount: 1150.00,
+  usage_percent: 23.33,
+  status: "ok",
+  created_at: "2026-03-01T00:00:00",
+  updated_at: "2026-03-01T00:00:00",
+  start_date: null,
+  end_date: null
+}
+```
+
+**Erros:**
+- `400`: Dados inválidos ou já existe orçamento ativo para essa tag
+
+---
+
+### POST `/v1/budgets/preview-transaction`
+
+Preview do **impacto em orçamentos** para um rascunho de transação (sem persistir). Usar com **debounce** (ex.: 300–400 ms) ao mudar valor, categoria ou data no modal Nova transação.
+
+**Request body:**
+```typescript
+interface PreviewTransactionRequest {
+  organization_id: string;
+  type: 'expense' | 'income';
+  value: number; // > 0
+  tag_id: string | null;
+  date: string; // YYYY-MM-DD — define o mês/ano do orçamento mensal de referência
+  payment_method?: string | null;
+  installments_count?: number | null;
+  card_id?: number | null; // reservado; v1 não altera cálculo
+}
+
+interface PreviewTransactionResponse {
+  category: {
+    tag_id: string | null;
+    tag_name: string | null;
+    budget_amount: string | null;
+    spent_before: string;
+    spent_after: string;
+    usage_percent_before: number | null;
+    usage_percent_after: number | null;
+    remaining_before: string | null;
+    remaining_after: string | null;
+  };
+  budgets_summary: {
+    total_budgeted: string;
+    total_spent_before: string;
+    total_spent_after: string;
+    total_remaining_after: string;
+    percent_of_total_budget_after: number | null;
+  };
+  month_projection: {
+    projected_total_expenses_end_of_month: string;
+    projected_percent_of_budget: number | null;
+    label_context: string; // ex.: "monthly_budget"
+  } | null;
+}
+
+const previewTransactionImpact = async (
+  body: PreviewTransactionRequest
+): Promise<PreviewTransactionResponse> => {
+  const response = await apiClient.post<PreviewTransactionResponse>(
+    '/v1/budgets/preview-transaction',
+    body
+  );
+  return response.data;
+};
+```
+
+**Comportamento resumido:**
+- `category`: gasto na tag no período do orçamento (`monthly`/`yearly`) que contém `date`; `spent_after` inclui o valor hipotético se `type === 'expense'`.
+- `budgets_summary`: mesma ideia do `GET /v1/budgets` → `total_spent_after` só aumenta se houver orçamento ativo para `tag_id` e a transação for despesa.
+- `month_projection`: apenas para `expense`; projeção linear do mês de `date` + despesa hipotética se `date` cai no intervalo já decorrido até hoje; `null` se o mês de referência ainda não começou (`month_start > today`) ou se `type === 'income'`.
+
+**Erros:**
+- `400`: corpo inválido (`value` ≤ 0, tipo inválido)
+- `403`: Sem acesso à organização
+
+---
+
+### GET `/v1/budgets`
+
+Lista todos os orçamentos da organização com resumo consolidado.
+
+**Query Parameters:**
+
+| Parâmetro | Tipo | Obrigatório | Default | Descrição |
+|-----------|------|-------------|---------|-----------|
+| `organization_id` | UUID | Sim | - | ID da organização |
+| `period_type` | string | Não | - | Filtrar por tipo ("monthly", "custom", etc.) |
+| `is_active` | boolean | Não | - | Filtrar por status ativo/inativo |
+
+**Request:**
+```typescript
+const listBudgets = async (
+  organizationId: string,
+  periodType?: string,
+  isActive?: boolean
+): Promise<BudgetListResponse> => {
+  const response = await apiClient.get<BudgetListResponse>('/v1/budgets', {
+    params: {
+      organization_id: organizationId,
+      period_type: periodType,
+      is_active: isActive,
+    }
+  });
+  return response.data;
+};
+```
+
+**Response (200):**
+```typescript
+{
+  budgets: [
+    {
+      id: "budget-uuid",
+      tag_name: "Alimentação",
+      tag_color: "#FF5722",
+      amount: 1500.00,
+      spent_amount: 1245.80,
+      remaining_amount: 254.20,
+      usage_percent: 83.05,
+      status: "warning",
+      // ...
+    }
+  ],
+  summary: {
+    total_budgeted: 5000.00,
+    total_spent: 3200.00,
+    total_remaining: 1800.00,
+    budgets_exceeded: 0,
+    budgets_warning: 2,
+    budgets_ok: 3
+  }
+}
+```
+
+---
+
+### GET `/v1/budgets/{budget_id}`
+
+Obtém detalhes de um orçamento específico.
+
+**Request:**
+```typescript
+const getBudget = async (
+  budgetId: string,
+  organizationId: string
+): Promise<Budget> => {
+  const response = await apiClient.get<Budget>(`/v1/budgets/${budgetId}`, {
+    params: { organization_id: organizationId }
+  });
+  return response.data;
+};
+```
+
+**Erros:**
+- `403`: Sem acesso à organização
+- `404`: Orçamento não encontrado
+
+---
+
+### PATCH `/v1/budgets/{budget_id}`
+
+Atualiza campos de um orçamento (partial update).
+
+**Request:**
+```typescript
+const updateBudget = async (
+  budgetId: string,
+  organizationId: string,
+  data: UpdateBudgetRequest
+): Promise<Budget> => {
+  const response = await apiClient.patch<Budget>(
+    `/v1/budgets/${budgetId}`,
+    data,
+    { params: { organization_id: organizationId } }
+  );
+  return response.data;
+};
+```
+
+**Exemplo:**
+```typescript
+// Aumentar limite
+await updateBudget("budget-uuid", "org-uuid", { amount: 2000.00 });
+
+// Desativar orçamento
+await updateBudget("budget-uuid", "org-uuid", { is_active: false });
+```
+
+**Erros:**
+- `400`: Dados inválidos
+- `404`: Orçamento não encontrado
+
+---
+
+### DELETE `/v1/budgets/{budget_id}`
+
+Remove um orçamento.
+
+**Request:**
+```typescript
+const deleteBudget = async (
+  budgetId: string,
+  organizationId: string
+): Promise<void> => {
+  await apiClient.delete(`/v1/budgets/${budgetId}`, {
+    params: { organization_id: organizationId }
+  });
+};
+```
+
+**Response (204):** Sem conteúdo
+
+**Erros:**
+- `403`: Sem acesso à organização
+- `404`: Orçamento não encontrado
+
+---
+
+## 🔄 Endpoints de Transações Recorrentes
+
+Gerencie receitas e despesas recorrentes. O sistema rastreia a próxima data de ocorrência e permite gerar transações reais a partir de um template recorrente.
+
+### POST `/v1/recurring-transactions`
+
+Cria uma nova transação recorrente.
+
+**Query Parameters:**
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `organization_id` | UUID | Sim | ID da organização |
+
+**Request:**
+```typescript
+const createRecurringTransaction = async (
+  organizationId: string,
+  data: CreateRecurringTransactionRequest
+): Promise<RecurringTransaction> => {
+  const response = await apiClient.post<RecurringTransaction>(
+    '/v1/recurring-transactions',
+    data,
+    { params: { organization_id: organizationId } }
+  );
+  return response.data;
+};
+```
+
+**Exemplo:**
+```typescript
+await createRecurringTransaction("org-uuid", {
+  type: "expense",
+  description: "Aluguel",
+  value: 2500.00,
+  payment_method: "bank_transfer",
+  frequency: "monthly",
+  start_date: "2026-01-01",
+  day_of_month: 5,
+  tag_ids: ["tag-uuid-moradia"],
+  notes: "Pagamento até dia 5"
+});
+```
+
+**Response (201):**
+```typescript
+{
+  id: "rt-uuid",
+  organization_id: "org-uuid",
+  type: "expense",
+  description: "Aluguel",
+  value: 2500.00,
+  payment_method: "bank_transfer",
+  frequency: "monthly",
+  start_date: "2026-01-01",
+  next_occurrence: "2026-04-05",
+  is_active: true,
+  day_of_month: 5,
+  day_of_week: null,
+  end_date: null,
+  credit_card_id: null,
+  notes: "Pagamento até dia 5",
+  tags: [{ id: "tag-uuid", name: "Moradia", color: "#795548", ... }],
+  created_at: "2026-03-22T10:00:00",
+  updated_at: "2026-03-22T10:00:00"
+}
+```
+
+**Erros:**
+- `400`: Dados inválidos (frequência, valor, método de pagamento)
+
+---
+
+### GET `/v1/recurring-transactions`
+
+Lista todas as transações recorrentes da organização com resumo.
+
+**Query Parameters:**
+
+| Parâmetro | Tipo | Obrigatório | Default | Descrição |
+|-----------|------|-------------|---------|-----------|
+| `organization_id` | UUID | Sim | - | ID da organização |
+| `is_active` | boolean | Não | - | Filtrar por status ativo/pausado |
+
+**Request:**
+```typescript
+const listRecurringTransactions = async (
+  organizationId: string,
+  isActive?: boolean
+): Promise<RecurringTransactionListResponse> => {
+  const response = await apiClient.get<RecurringTransactionListResponse>(
+    '/v1/recurring-transactions',
+    { params: { organization_id: organizationId, is_active: isActive } }
+  );
+  return response.data;
+};
+```
+
+**Response (200):**
+```typescript
+{
+  recurring_transactions: [ /* lista de RecurringTransaction */ ],
+  summary: {
+    total_monthly_income: 5000.00,
+    total_monthly_expense: 3800.00,
+    active_count: 8,
+    paused_count: 2
+  }
+}
+```
+
+---
+
+### GET `/v1/recurring-transactions/{rt_id}`
+
+Obtém detalhes de uma transação recorrente específica.
+
+**Request:**
+```typescript
+const getRecurringTransaction = async (
+  rtId: string,
+  organizationId: string
+): Promise<RecurringTransaction> => {
+  const response = await apiClient.get<RecurringTransaction>(
+    `/v1/recurring-transactions/${rtId}`,
+    { params: { organization_id: organizationId } }
+  );
+  return response.data;
+};
+```
+
+**Erros:**
+- `403`: Sem acesso
+- `404`: Não encontrada
+
+---
+
+### PATCH `/v1/recurring-transactions/{rt_id}`
+
+Atualiza campos de uma transação recorrente (partial update). A `next_occurrence` é recalculada automaticamente se a frequência ou o dia for alterado.
+
+**Request:**
+```typescript
+const updateRecurringTransaction = async (
+  rtId: string,
+  organizationId: string,
+  data: UpdateRecurringTransactionRequest
+): Promise<RecurringTransaction> => {
+  const response = await apiClient.patch<RecurringTransaction>(
+    `/v1/recurring-transactions/${rtId}`,
+    data,
+    { params: { organization_id: organizationId } }
+  );
+  return response.data;
+};
+```
+
+**Erros:**
+- `400`: Dados inválidos
+- `404`: Não encontrada
+
+---
+
+### DELETE `/v1/recurring-transactions/{rt_id}`
+
+Remove uma transação recorrente.
+
+**Request:**
+```typescript
+const deleteRecurringTransaction = async (
+  rtId: string,
+  organizationId: string
+): Promise<void> => {
+  await apiClient.delete(`/v1/recurring-transactions/${rtId}`, {
+    params: { organization_id: organizationId }
+  });
+};
+```
+
+**Response (204):** Sem conteúdo
+
+---
+
+### POST `/v1/recurring-transactions/{rt_id}/toggle`
+
+Ativa ou pausa uma transação recorrente (alterna `is_active`).
+
+**Request:**
+```typescript
+const toggleRecurringTransaction = async (
+  rtId: string,
+  organizationId: string
+): Promise<RecurringTransaction> => {
+  const response = await apiClient.post<RecurringTransaction>(
+    `/v1/recurring-transactions/${rtId}/toggle`,
+    null,
+    { params: { organization_id: organizationId } }
+  );
+  return response.data;
+};
+```
+
+**Response (200):** Retorna o objeto `RecurringTransaction` atualizado com o novo `is_active`.
+
+---
+
+### POST `/v1/recurring-transactions/{rt_id}/generate`
+
+Gera uma transação real a partir do template recorrente para uma data específica. Avança `next_occurrence` para a próxima data após a geração.
+
+**Request:**
+```typescript
+const generateFromRecurring = async (
+  rtId: string,
+  organizationId: string,
+  data: GenerateFromRecurringRequest
+): Promise<GenerateFromRecurringResponse> => {
+  const response = await apiClient.post<GenerateFromRecurringResponse>(
+    `/v1/recurring-transactions/${rtId}/generate`,
+    data,
+    { params: { organization_id: organizationId } }
+  );
+  return response.data;
+};
+```
+
+**Exemplo:**
+```typescript
+await generateFromRecurring("rt-uuid", "org-uuid", {
+  occurrence_date: "2026-04-05",
+  value_override: 2600.00, // Opcional: substituir valor nesta geração
+});
+```
+
+**Response (200):**
+```typescript
+{
+  next_occurrence: "2026-05-05" // Nova próxima ocorrência após geração
+}
+```
+
+**Erros:**
+- `400`: Transação recorrente inativa ou data inválida
+- `404`: Não encontrada
+
+---
+
+## 📊 Endpoints de Analytics
+
+Análises e relatórios financeiros avançados. Todos os endpoints retornam dados calculados em tempo real com base nas transações da organização.
+
+### GET `/v1/analytics/monthly-evolution`
+
+Evolução mensal de receitas, despesas e saldo ao longo dos últimos N meses.
+
+**Query Parameters:**
+
+| Parâmetro | Tipo | Obrigatório | Default | Descrição |
+|-----------|------|-------------|---------|-----------|
+| `organization_id` | UUID | Sim | - | ID da organização |
+| `months` | integer | Não | 6 | Número de meses (1-24) |
+
+**Request:**
+```typescript
+const getMonthlyEvolution = async (
+  organizationId: string,
+  months = 6
+): Promise<MonthlyEvolutionResponse> => {
+  const response = await apiClient.get<MonthlyEvolutionResponse>(
+    '/v1/analytics/monthly-evolution',
+    { params: { organization_id: organizationId, months } }
+  );
+  return response.data;
+};
+```
+
+**Response (200):**
+```typescript
+{
+  months: [
+    {
+      year: 2025,
+      month: 10,
+      month_name: "outubro",
+      total_income: 8000.00,
+      total_expenses: 5200.00,
+      balance: 2800.00
+    },
+    // ... meses seguintes
+  ],
+  period_start: "2025-10-01",
+  period_end: "2026-03-31"
+}
+```
+
+---
+
+### GET `/v1/analytics/by-category`
+
+Distribuição de gastos (ou receitas) por categoria/tag para um período.
+
+**Query Parameters:**
+
+| Parâmetro | Tipo | Obrigatório | Default | Descrição |
+|-----------|------|-------------|---------|-----------|
+| `organization_id` | UUID | Sim | - | ID da organização |
+| `date_start` | date | Não | - | YYYY-MM-DD |
+| `date_end` | date | Não | - | YYYY-MM-DD |
+| `transaction_type` | string | Não | `"expense"` | `"expense"` ou `"income"` |
+
+**Request:**
+```typescript
+const getByCategory = async (
+  organizationId: string,
+  options?: {
+    dateStart?: string;
+    dateEnd?: string;
+    transactionType?: 'expense' | 'income';
+  }
+): Promise<ByCategoryResponse> => {
+  const response = await apiClient.get<ByCategoryResponse>(
+    '/v1/analytics/by-category',
+    {
+      params: {
+        organization_id: organizationId,
+        date_start: options?.dateStart,
+        date_end: options?.dateEnd,
+        transaction_type: options?.transactionType ?? 'expense',
+      }
+    }
+  );
+  return response.data;
+};
+```
+
+**Response (200):**
+```typescript
+{
+  categories: [
+    {
+      tag_id: "tag-uuid",
+      tag_name: "Alimentação",
+      tag_color: "#FF5722",
+      total: 1245.80,
+      percentage: 38.5,
+      transaction_count: 23
+    },
+    // ...
+  ],
+  total_amount: 3236.40,
+  period_start: "2026-03-01",
+  period_end: "2026-03-31"
+}
+```
+
+---
+
+### GET `/v1/analytics/spending-by-day`
+
+Série **diária** de totais por dia civil (agregação no servidor), para o gráfico de “ritmo” no modal Nova transação / impacto financeiro. Um ponto por dia no intervalo; dias sem movimento retornam `total_expenses: 0`.
+
+**Query Parameters:**
+
+| Parâmetro | Tipo | Obrigatório | Default | Descrição |
+|-----------|------|-------------|---------|-----------|
+| `organization_id` | UUID | Sim | - | ID da organização |
+| `date_start` | date (YYYY-MM-DD) | Sim | - | Início inclusivo |
+| `date_end` | date (YYYY-MM-DD) | Sim | - | Fim inclusivo |
+| `tag_id` | UUID | Não | - | Filtra despesas/receitas que tenham essa tag |
+| `transaction_type` | string | Não | `expense` | `expense` ou `income` |
+
+**Semântica (alinhada aos outros analytics):** agregação por `transactions.date` (datetime da transação, bucket por dia civil). Não inclui lógica de parcelas por `due_date` do cartão (igual a `monthly-evolution` / `by-category`).
+
+**Request:**
+```typescript
+interface SpendingByDayPoint {
+  date: string;
+  total_expenses: string; // decimal as string
+}
+
+interface SpendingByDayResponse {
+  points: SpendingByDayPoint[];
+  currency: string; // ex.: "BRL"
+  period: { start: string; end: string };
+}
+
+const getSpendingByDay = async (
+  organizationId: string,
+  dateStart: string,
+  dateEnd: string,
+  options?: { tagId?: string; transactionType?: 'expense' | 'income' }
+): Promise<SpendingByDayResponse> => {
+  const response = await apiClient.get<SpendingByDayResponse>('/v1/analytics/spending-by-day', {
+    params: {
+      organization_id: organizationId,
+      date_start: dateStart,
+      date_end: dateEnd,
+      ...(options?.tagId && { tag_id: options.tagId }),
+      ...(options?.transactionType && { transaction_type: options.transactionType }),
+    },
+  });
+  return response.data;
+};
+```
+
+**Response (200):** ver tipos acima.
+
+**Erros:**
+- `400`: `date_end` antes de `date_start` ou `transaction_type` inválido
+- `403`: Sem acesso à organização
+
+**Performance:** chame **uma vez** ao abrir o drawer (ou ao mudar mês/categoria); não precisa debounce por digitação de valor.
+
+---
+
+### GET `/v1/analytics/spending-rhythm`
+
+Ritmo de gastos por categoria ao longo de vários meses — útil para gráficos de linha por categoria.
+
+**Query Parameters:**
+
+| Parâmetro | Tipo | Obrigatório | Default | Descrição |
+|-----------|------|-------------|---------|-----------|
+| `organization_id` | UUID | Sim | - | ID da organização |
+| `months` | integer | Não | 6 | Número de meses |
+
+**Request:**
+```typescript
+const getSpendingRhythm = async (
+  organizationId: string,
+  months = 6
+): Promise<SpendingRhythmResponse> => {
+  const response = await apiClient.get<SpendingRhythmResponse>(
+    '/v1/analytics/spending-rhythm',
+    { params: { organization_id: organizationId, months } }
+  );
+  return response.data;
+};
+```
+
+**Response (200):**
+```typescript
+{
+  months: ["out/2025", "nov/2025", "dez/2025", "jan/2026", "fev/2026", "mar/2026"],
+  categories: [
+    {
+      tag_id: "tag-uuid",
+      tag_name: "Alimentação",
+      tag_color: "#FF5722",
+      monthly_totals: [980, 1100, 1380, 950, 1050, 1245],
+      average: 1117.50,
+      trend: "up"
+    }
+  ],
+  monthly_totals: [3200, 3800, 4500, 3100, 3400, 3600]
+}
+```
+
+**Notas:**
+- `monthly_totals` em cada categoria corresponde posição a posição com o array `months`
+- `trend`: `"up"` (crescente), `"down"` (decrescente), `"stable"` (estável)
+
+---
+
+### GET `/v1/analytics/period-comparison`
+
+Compara dois períodos (A vs B) mostrando variação percentual de receitas, despesas e saldo.
+
+**Query Parameters:**
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `organization_id` | UUID | Sim | ID da organização |
+| `period_a_start` | date | Sim | Início do período A (YYYY-MM-DD) |
+| `period_a_end` | date | Sim | Fim do período A |
+| `period_b_start` | date | Sim | Início do período B |
+| `period_b_end` | date | Sim | Fim do período B |
+
+**Request:**
+```typescript
+const getPeriodComparison = async (
+  organizationId: string,
+  periodAStart: string,
+  periodAEnd: string,
+  periodBStart: string,
+  periodBEnd: string
+): Promise<PeriodComparisonResponse> => {
+  const response = await apiClient.get<PeriodComparisonResponse>(
+    '/v1/analytics/period-comparison',
+    {
+      params: {
+        organization_id: organizationId,
+        period_a_start: periodAStart,
+        period_a_end: periodAEnd,
+        period_b_start: periodBStart,
+        period_b_end: periodBEnd,
+      }
+    }
+  );
+  return response.data;
+};
+```
+
+**Exemplo — comparar fevereiro vs março:**
+```typescript
+await getPeriodComparison(
+  "org-uuid",
+  "2026-02-01", "2026-02-28",
+  "2026-03-01", "2026-03-31"
+);
+```
+
+**Response (200):**
+```typescript
+{
+  period_a: {
+    start: "2026-02-01",
+    end: "2026-02-28",
+    total_income: 8000.00,
+    total_expenses: 5200.00,
+    balance: 2800.00
+  },
+  period_b: {
+    start: "2026-03-01",
+    end: "2026-03-31",
+    total_income: 8500.00,
+    total_expenses: 5800.00,
+    balance: 2700.00
+  },
+  changes: {
+    income_change_pct: 6.25,       // +6.25%
+    expenses_change_pct: 11.54,    // +11.54%
+    balance_change_pct: -3.57      // -3.57%
+  }
+}
+```
+
+**Notas:**
+- `change_pct` é `null` quando o valor do período A é zero (divisão impossível)
+- Valor positivo = aumento; negativo = redução
+
+---
+
+### GET `/v1/analytics/export-csv`
+
+Exporta transações filtradas em formato CSV. Retorna o arquivo diretamente com header `Content-Disposition: attachment`.
+
+**Query Parameters:**
+
+| Parâmetro | Tipo | Obrigatório | Descrição |
+|-----------|------|-------------|-----------|
+| `organization_id` | UUID | Sim | ID da organização |
+| `date_start` | date | Não | YYYY-MM-DD |
+| `date_end` | date | Não | YYYY-MM-DD |
+| `type` | string | Não | `"income"` ou `"expense"` |
+| `payment_method` | string | Não | Método de pagamento |
+| `status_filter` | string | Não | `"pending"`, `"completed"`, `"cancelled"` |
+| `tag_id` | UUID | Não | Filtrar por tag |
+
+**Request:**
+```typescript
+const exportTransactionsCsv = async (
+  organizationId: string,
+  options?: {
+    dateStart?: string;
+    dateEnd?: string;
+    type?: string;
+    paymentMethod?: string;
+    statusFilter?: string;
+    tagId?: string;
+  }
+): Promise<Blob> => {
+  const response = await apiClient.get('/v1/analytics/export-csv', {
+    params: {
+      organization_id: organizationId,
+      date_start: options?.dateStart,
+      date_end: options?.dateEnd,
+      type: options?.type,
+      payment_method: options?.paymentMethod,
+      status_filter: options?.statusFilter,
+      tag_id: options?.tagId,
+    },
+    responseType: 'blob',
+  });
+  return response.data;
+};
+
+// Uso: baixar o arquivo
+const downloadCsv = async (organizationId: string) => {
+  const blob = await exportTransactionsCsv(organizationId, {
+    dateStart: "2026-01-01",
+    dateEnd: "2026-03-31",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'transactions.csv';
+  link.click();
+  URL.revokeObjectURL(url);
+};
+```
+
+**Response (200):** Arquivo CSV com as colunas:
+```
+id,date,type,description,value,payment_method,status,tags
+```
+
+---
+
+## 🔔 Endpoints de Notificações
+
+### GET `/v1/notifications`
+
+Lista as notificações do usuário autenticado com paginação.
+
+**Query Parameters:**
+
+| Parâmetro | Tipo | Obrigatório | Default | Descrição |
+|-----------|------|-------------|---------|-----------|
+| `organization_id` | UUID | Não | - | Filtrar por organização |
+| `page` | integer | Não | 1 | Página |
+| `limit` | integer | Não | 20 | Itens por página |
+
+**Request:**
+```typescript
+const listNotifications = async (
+  organizationId?: string,
+  page = 1,
+  limit = 20
+): Promise<NotificationListResponse> => {
+  const response = await apiClient.get<NotificationListResponse>(
+    '/v1/notifications',
+    { params: { organization_id: organizationId, page, limit } }
+  );
+  return response.data;
+};
+```
+
+**Response (200):**
+```typescript
+{
+  notifications: [
+    {
+      id: "notif-uuid",
+      type: "budget_exceeded",
+      title: "Orçamento excedido",
+      body: "Você ultrapassou o limite de Alimentação em R$ 245,80",
+      is_read: false,
+      created_at: "2026-03-22T08:30:00",
+      organization_id: "org-uuid",
+      data: { budget_id: "budget-uuid", tag_name: "Alimentação", excess_amount: 245.80 },
+      read_at: null
+    }
+  ],
+  unread_count: 3,
+  page: 1,
+  limit: 20,
+  total: 15,
+  pages: 1,
+  has_next: false,
+  has_prev: false
+}
+```
+
+---
+
+### POST `/v1/notifications/{notification_id}/read`
+
+Marca uma notificação específica como lida.
+
+**Request:**
+```typescript
+const markNotificationRead = async (notificationId: string): Promise<void> => {
+  await apiClient.post(`/v1/notifications/${notificationId}/read`);
+};
+```
+
+**Response (204):** Sem conteúdo
+
+**Erros:**
+- `404`: Notificação não encontrada ou não pertence ao usuário
+
+---
+
+### POST `/v1/notifications/read-all`
+
+Marca todas as notificações do usuário como lidas (opcionalmente filtrado por organização).
+
+**Request:**
+```typescript
+const markAllNotificationsRead = async (
+  organizationId?: string
+): Promise<{ updated: number }> => {
+  const response = await apiClient.post<{ updated: number }>(
+    '/v1/notifications/read-all',
+    null,
+    { params: { organization_id: organizationId } }
+  );
+  return response.data;
+};
+```
+
+**Response (200):**
+```typescript
+{
+  updated: 5 // Número de notificações marcadas como lidas
+}
+```
+
+---
+
 ## 👔 Endpoints da Área do Consultor
 
 Endpoints exclusivos para usuários com perfil de **consultor**, que gerenciam múltiplas organizações (clientes). Requer autenticação e feature flags habilitadas (`multi_org_dashboard`, `client_list`, `consolidated_reports`).
@@ -3622,6 +5516,8 @@ progress.by_type.forEach((type) => {
 
 Lista de clientes em risco (gastos > receita ou alto endividamento) do consultor.
 
+**Título sugerido para a tabela:** "Clientes que Precisam de Atenção (Top Riscos)"
+
 **Request:**
 ```typescript
 interface ClientsAtRiskQuery {
@@ -3635,9 +5531,10 @@ interface ClientsAtRiskQuery {
 interface ClientAtRiskItem {
   organization_id: string;
   organization_name: string;
-  main_situation: string;     // Motivo principal do risco
-  current_balance: number;
-  last_invoice_status: string;
+  client_name: string;        // Nome do cliente (owner) para exibição - usar na coluna Cliente
+  main_situation: string;     // Motivo principal do risco (Situação Principal)
+  current_balance: number;    // Saldo atual
+  last_invoice_status: string; // Status da última fatura
   risk_score: number;         // 1-100 (maior = mais risco)
 }
 
@@ -3667,7 +5564,8 @@ const atRisk = await getClientsAtRisk({
 });
 console.log(`${atRisk.total} clientes em risco:`);
 atRisk.clients.forEach((client) => {
-  console.log(`${client.organization_name}: ${client.main_situation} (score: ${client.risk_score})`);
+  // Usar client_name para exibir na coluna Cliente (avatar + nome)
+  console.log(`${client.client_name}: ${client.main_situation} (score: ${client.risk_score})`);
 });
 ```
 
@@ -3678,7 +5576,8 @@ atRisk.clients.forEach((client) => {
     {
       organization_id: "123e4567-e89b-12d3-a456-426614174000",
       organization_name: "Empresa ABC",
-      main_situation: "Gastos maiores que receita por 3 meses",
+      client_name: "Ana Souza",
+      main_situation: "gasto > renda em 3 meses consecutivos",
       current_balance: -2500.00,
       last_invoice_status: "unpaid",
       risk_score: 85
@@ -3686,7 +5585,8 @@ atRisk.clients.forEach((client) => {
     {
       organization_id: "223e4567-e89b-12d3-a456-426614174001",
       organization_name: "Empresa XYZ",
-      main_situation: "Endividamento acima de 70% da receita",
+      client_name: "Carlos Lima",
+      main_situation: "endividamento 75% (limite 70%)",
       current_balance: 500.00,
       last_invoice_status: "paid",
       risk_score: 72
@@ -5014,7 +6914,7 @@ interface EndingInstallmentAllCards {
 2. **Multi-tenancy**: Todos os endpoints (exceto auth e registro público) requerem `organization_id` explícito
 3. **Autenticação**: Token JWT deve ser incluído em todos os headers (exceto login/registro)
 4. **Validação**: A API valida automaticamente os dados e retorna erros descritivos
-5. **Datas**: Use formato ISO datetime (YYYY-MM-DDTHH:MM ou YYYY-MM-DDTHH:MM:SS) para campos de data/hora. 
+5. **Datas**: Use formato ISO datetime (YYYY-MM-DDTHH:MM ou YYYY-MM-DDTHH:MM:SS) para campos de data/hora.
    - O campo `date` das transações suporta granularidade de minutos
    - Exemplos: `"2025-12-09T14:30"` ou `"2025-12-09T14:30:00"`
    - Para apenas data (sem hora), use `"2025-12-09"` (será convertido para `2025-12-09T00:00:00`)
@@ -5026,8 +6926,13 @@ interface EndingInstallmentAllCards {
    - Tags são agrupadas por tipo na resposta de transações (`tags: { "categoria": [...], "projeto": [...] }`)
    - Tags podem ser criadas, atualizadas e removidas (soft delete) por organização
    - O campo `category` nas transações é legado e será removido no futuro - use `tag_ids` em vez disso
+9. **Status de Transações**: O campo `status` em `Transaction` pode ser `"pending"`, `"completed"` ou `"cancelled"`. Use o filtro `status` em `GET /v1/transactions` para filtrar por status.
+10. **Orçamentos**: O campo `status` em `Budget` é calculado automaticamente: `"ok"` (< 80% usado), `"warning"` (80-100%), `"exceeded"` (> 100%).
+11. **Transações Recorrentes**: Após `POST /{rt_id}/generate`, a `next_occurrence` é avançada automaticamente. O frontend deve atualizar o objeto local após essa chamada.
+12. **Contribuições de Metas**: Ao registrar uma contribuição via `POST /v1/goals/{goal_id}/contributions`, o campo `current_amount` da meta é incrementado atomicamente no servidor — não é necessário fazer PATCH na meta separadamente.
+13. **Notificações**: O campo `data` em `Notification` é um objeto JSON livre — seu conteúdo varia conforme o `type` da notificação (ex: `budget_exceeded`, `goal_progress`, `recurring_generated`).
 
 ---
 
-**Última atualização**: Fevereiro 2026 (v1 API)
+**Última atualização**: Março 2026 (v1 API — Fincla v2)
 
