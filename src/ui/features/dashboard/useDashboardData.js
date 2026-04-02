@@ -6,6 +6,22 @@ import {
   getTransactionsSummary,
   listRecurringTransactions,
 } from "../../data/dashboardAdapter";
+import { categoryLabelPtForTag } from "../../data/categoryLabels.js";
+import { pickCategoryTagFromApiTransaction } from "../../data/transactionsAdapter.js";
+import {
+  addLocalDays,
+  daysInclusive,
+  parseLocalYmd,
+  previousPeriodRange,
+  startOfLocalDay,
+  toIsoLocalDate,
+} from "./dashboardDateRange.js";
+
+/** Máximo de linhas no card Gastos por Categoria (dashboard). */
+const DASHBOARD_CATEGORY_CARD_LIMIT = 8;
+
+/** Acima disso, o gráfico de ritmo agrega por semana (legibilidade). */
+const RHYTHM_MAX_DAILY_POINTS = 62;
 
 const EMPTY_STATE = {
   isLoading: false,
@@ -14,33 +30,16 @@ const EMPTY_STATE = {
   transactions: [],
   categories: [],
   rhythmChart: [],
-  rhythmMeta: { dim: 31, today: 1 },
+  rhythmMeta: {
+    dim: 31,
+    today: 1,
+    showTodayMarker: true,
+    refLabel: "Hoje",
+    progressSuffix: "",
+    rhythmMode: "daily",
+  },
   upcomingDebits: [],
 };
-
-function toIsoLocalDate(date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function monthBounds(referenceDate = new Date()) {
-  const start = new Date(
-    referenceDate.getFullYear(),
-    referenceDate.getMonth(),
-    1,
-  );
-  const end = new Date(
-    referenceDate.getFullYear(),
-    referenceDate.getMonth() + 1,
-    0,
-  );
-
-  return {
-    start: toIsoLocalDate(start),
-    end: toIsoLocalDate(end),
-    daysInMonth: end.getDate(),
-    today: referenceDate.getDate(),
-  };
-}
 
 function formatShortDate(value) {
   const date = new Date(value);
@@ -59,12 +58,33 @@ function transactionDayKey(isoDate) {
   return { y, m, d };
 }
 
+function transactionDateInRange(isoDate, rangeStartYmd, rangeEndYmd) {
+  const key = transactionDayKey(isoDate);
+  if (!key) return false;
+  const t = new Date(key.y, key.m - 1, key.d);
+  const ts = toIsoLocalDate(t);
+  return ts >= rangeStartYmd && ts <= rangeEndYmd;
+}
+
+function dayIndexInRange(isoDate, rangeStart, dayCount) {
+  const key = transactionDayKey(isoDate);
+  if (!key) return -1;
+  const t = new Date(key.y, key.m - 1, key.d);
+  const diff = Math.round(
+    (startOfLocalDay(t) - startOfLocalDay(rangeStart)) / 86400000,
+  );
+  if (diff < 0 || diff >= dayCount) return -1;
+  return diff;
+}
+
 function pickCategoryName(transaction) {
-  if (transaction.category) return transaction.category;
+  if (transaction.category) {
+    return categoryLabelPtForTag({ name: transaction.category });
+  }
 
   const tagGroups = Object.values(transaction.tags ?? {});
   const firstTag = tagGroups.flat()[0];
-  return firstTag?.name ?? "Sem categoria";
+  return categoryLabelPtForTag(firstTag ?? { name: "Sem categoria" });
 }
 
 function pickCategoryColor(category) {
@@ -92,61 +112,350 @@ function mapTransaction(transaction) {
   };
 }
 
-function mapCategory(category) {
+function normalizeTagNameKey(name) {
+  return String(name || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+/**
+ * Agrega despesas no intervalo [rangeStartYmd, rangeEndYmd] por categoria.
+ */
+function aggregateExpenseCategoriesFromTransactions(
+  rawTx,
+  rangeStartYmd,
+  rangeEndYmd,
+) {
+  const map = new Map();
+
+  for (const tx of rawTx) {
+    if (tx.type !== "expense") continue;
+    if (!transactionDateInRange(tx.date, rangeStartYmd, rangeEndYmd)) continue;
+
+    const tag = pickCategoryTagFromApiTransaction(tx);
+    const rawName = tag?.name ?? tx.category ?? "Sem categoria";
+    const mapKey =
+      tag?.id != null && tag.id !== ""
+        ? `id:${tag.id}`
+        : `name:${normalizeTagNameKey(rawName)}`;
+
+    const add = Number(tx.value) || 0;
+    const cur = map.get(mapKey);
+    if (cur) {
+      cur.total += add;
+      if (!cur.color && tag?.color) cur.color = tag.color;
+      if (!cur.tagId && tag?.id) cur.tagId = tag.id;
+      if (!cur.icon_key && tag?.icon_key) cur.icon_key = tag.icon_key;
+    } else {
+      map.set(mapKey, {
+        tagId: tag?.id ?? null,
+        tagName: rawName,
+        icon_key: tag?.icon_key ?? null,
+        color: tag?.color ?? null,
+        total: add,
+      });
+    }
+  }
+
+  return Array.from(map.values());
+}
+
+function buildDashboardCategoryRows(
+  rawTx,
+  rangeStartYmd,
+  rangeEndYmd,
+  apiCategories,
+  prevTotalByTagId,
+) {
+  const fromTx = aggregateExpenseCategoriesFromTransactions(
+    rawTx,
+    rangeStartYmd,
+    rangeEndYmd,
+  );
+  const apiList = apiCategories ?? [];
+
+  const apiColorByTagId = new Map(
+    apiList.map((c) => [c.tag_id, c.tag_color]),
+  );
+  const apiColorByName = new Map(
+    apiList.map((c) => [normalizeTagNameKey(c.tag_name), c.tag_color]),
+  );
+
+  const sourceRows =
+    fromTx.length > 0
+      ? fromTx
+      : apiList.map((c) => ({
+          tagId: c.tag_id,
+          tagName: c.tag_name,
+          icon_key: c.tag_icon_key ?? null,
+          color: c.tag_color,
+          total: c.total,
+        }));
+
+  return sourceRows
+    .filter((r) => r.total > 0)
+    .sort((a, b) => b.total - a.total)
+    .slice(0, DASHBOARD_CATEGORY_CARD_LIMIT)
+    .map((row) => {
+      const color =
+        row.color ||
+        (row.tagId ? apiColorByTagId.get(row.tagId) : null) ||
+        apiColorByName.get(normalizeTagNameKey(row.tagName)) ||
+        "#9CA3AF";
+
+      return mapCategory(
+        {
+          tag_id: row.tagId || undefined,
+          tag_name: row.tagName,
+          tag_icon_key: row.icon_key,
+          total: row.total,
+          tag_color: color,
+        },
+        prevTotalByTagId,
+      );
+    });
+}
+
+function mapCategory(category, prevTotalByTagId) {
+  const prev =
+    category.tag_id
+      ? prevTotalByTagId.get(category.tag_id)
+      : undefined;
+  const fallbackAvg = Math.max(Math.round(category.total * 0.82), 1);
+  const avg =
+    typeof prev === "number" && prev > 0 ? prev : fallbackAvg;
+
   return {
-    name: category.tag_name,
+    tagId: category.tag_id,
+    name: categoryLabelPtForTag({
+      name: category.tag_name,
+      icon_key: category.tag_icon_key ?? null,
+    }),
     value: category.total,
-    avg: Math.max(Math.round(category.total * 0.82), 1),
+    avg,
     color: pickCategoryColor(category),
   };
 }
 
-function buildRhythmChart(transactions, summary, bounds) {
-  const { daysInMonth: dim, today, start } = bounds;
-  const startParts = start.split("-").map(Number);
-  const y0 = startParts[0];
-  const m0 = startParts[1];
+function buildRhythmChart(transactions, summary, rangeStartYmd, rangeEndYmd) {
+  const startD = parseLocalYmd(rangeStartYmd);
+  const endD = parseLocalYmd(rangeEndYmd);
+  if (!startD || !endD) {
+    return {
+      series: [],
+      dim: 1,
+      today: 1,
+      showTodayMarker: false,
+      refLabel: "Hoje",
+      progressSuffix: "",
+      rhythmMode: "daily",
+    };
+  }
 
-  const daily = Array(dim + 1).fill(0);
+  const D = daysInclusive(startD, endD);
+  const now = new Date();
+  const todayStartMs = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  ).getTime();
+
+  if (D <= RHYTHM_MAX_DAILY_POINTS) {
+    return buildRhythmDaily(transactions, summary, startD, D, todayStartMs);
+  }
+  return buildRhythmWeekly(
+    transactions,
+    summary,
+    startD,
+    endD,
+    D,
+    todayStartMs,
+  );
+}
+
+function buildRhythmDaily(transactions, summary, startD, D, todayStartMs) {
+  const daily = Array(D).fill(0);
   for (const tx of transactions) {
     if (tx.type !== "expense") continue;
-    const key = transactionDayKey(tx.date);
-    if (!key || key.y !== y0 || key.m !== m0) continue;
-    if (key.d >= 1 && key.d <= dim) daily[key.d] += tx.value;
+    const idx = dayIndexInRange(tx.date, startD, D);
+    if (idx >= 0) daily[idx] += Number(tx.value) || 0;
   }
 
   const rawCum = [];
   let acc = 0;
-  for (let d = 1; d <= dim; d++) {
-    acc += daily[d];
+  for (let i = 0; i < D; i++) {
+    acc += daily[i];
     rawCum.push(acc);
   }
 
-  const targetExpenses = summary?.total_expenses ?? 0;
-  const atToday = today >= 1 && today <= dim ? rawCum[today - 1] : 0;
+  let todayIdx = -1;
+  for (let i = 0; i < D; i++) {
+    const dayDate = addLocalDays(startD, i);
+    if (startOfLocalDay(dayDate) <= todayStartMs) todayIdx = i;
+    else break;
+  }
 
+  const targetExpenses = summary?.total_expenses ?? 0;
+  const atToday = todayIdx >= 0 ? rawCum[todayIdx] : 0;
   const envelope = Math.max(
     summary?.total_income ?? 0,
     summary?.total_expenses ?? 0,
     1,
   );
 
-  const scaledReal = (d) => {
-    if (d < 1 || d > dim || d > today) return null;
-    const raw = rawCum[d - 1] ?? 0;
+  const scaledReal = (i) => {
+    if (todayIdx < 0 || i > todayIdx) return null;
+    const raw = rawCum[i] ?? 0;
     if (atToday > 0) return Math.round(raw * (targetExpenses / atToday));
-    if (today > 0 && targetExpenses > 0)
-      return Math.round(targetExpenses * (d / today));
+    if (todayIdx >= 0 && targetExpenses > 0) {
+      return Math.round(targetExpenses * ((i + 1) / (todayIdx + 1)));
+    }
     return Math.round(raw);
   };
 
   const series = [];
-  for (let d = 1; d <= dim; d++) {
-    const proj = Math.round((envelope / dim) * d);
-    series.push({ dia: d, proj, real: scaledReal(d) });
+  for (let i = 0; i < D; i++) {
+    const dayDate = addLocalDays(startD, i);
+    const proj = Math.round((envelope / D) * (i + 1));
+    const dayLabel = dayDate
+      .toLocaleDateString("pt-BR", { day: "numeric", month: "short" })
+      .replace(/\./g, "");
+    series.push({
+      dia: i + 1,
+      proj,
+      real: scaledReal(i),
+      dayLabel,
+    });
   }
 
-  return { series, dim, today };
+  const startMs = startOfLocalDay(startD);
+  const endMs = startOfLocalDay(addLocalDays(startD, D - 1));
+  let todayDisplay = 1;
+  let showTodayMarker = true;
+  let refLabel = "Hoje";
+
+  if (todayStartMs < startMs) {
+    todayDisplay = 1;
+    showTodayMarker = false;
+  } else if (todayStartMs > endMs) {
+    todayDisplay = D;
+    refLabel = "Fim";
+  } else {
+    todayDisplay = todayIdx + 1;
+  }
+
+  const pct = D > 0 ? Math.round((todayDisplay / D) * 100) : 0;
+  const progressSuffix = `${todayDisplay}/${D} · ${pct}% do período`;
+
+  return {
+    series,
+    dim: D,
+    today: todayDisplay,
+    showTodayMarker,
+    refLabel,
+    progressSuffix,
+    rhythmMode: "daily",
+  };
+}
+
+function buildRhythmWeekly(
+  transactions,
+  summary,
+  startD,
+  endD,
+  D,
+  todayStartMs,
+) {
+  const nB = Math.ceil(D / 7);
+  const bucketSum = Array(nB).fill(0);
+
+  for (const tx of transactions) {
+    if (tx.type !== "expense") continue;
+    const idx = dayIndexInRange(tx.date, startD, D);
+    if (idx < 0) continue;
+    const b = Math.floor(idx / 7);
+    bucketSum[b] += Number(tx.value) || 0;
+  }
+
+  const rawCum = [];
+  let acc = 0;
+  for (let b = 0; b < nB; b++) {
+    acc += bucketSum[b];
+    rawCum.push(acc);
+  }
+
+  let todayIdx = -1;
+  for (let i = 0; i < D; i++) {
+    const dayMs = startOfLocalDay(addLocalDays(startD, i));
+    if (dayMs <= todayStartMs) todayIdx = i;
+    else break;
+  }
+  const todayBucket = todayIdx >= 0 ? Math.floor(todayIdx / 7) : -1;
+
+  const targetExpenses = summary?.total_expenses ?? 0;
+  const atToday = todayBucket >= 0 ? rawCum[todayBucket] : 0;
+  const envelope = Math.max(
+    summary?.total_income ?? 0,
+    summary?.total_expenses ?? 0,
+    1,
+  );
+
+  const scaledRealBucket = (b) => {
+    if (todayBucket < 0 || b > todayBucket) return null;
+    const raw = rawCum[b] ?? 0;
+    if (atToday > 0) return Math.round(raw * (targetExpenses / atToday));
+    if (todayBucket >= 0 && targetExpenses > 0) {
+      return Math.round(targetExpenses * ((b + 1) / (todayBucket + 1)));
+    }
+    return Math.round(raw);
+  };
+
+  const series = [];
+  for (let b = 0; b < nB; b++) {
+    const fromDay = b * 7;
+    const toDay = Math.min(fromDay + 6, D - 1);
+    const d0 = addLocalDays(startD, fromDay);
+    const d1 = addLocalDays(startD, toDay);
+    const dayLabel = `${d0.getDate()}/${d0.getMonth() + 1}–${d1.getDate()}/${d1.getMonth() + 1}`;
+    const proj = Math.round((envelope / nB) * (b + 1));
+    series.push({
+      dia: b + 1,
+      proj,
+      real: scaledRealBucket(b),
+      dayLabel,
+    });
+  }
+
+  const startMs = startOfLocalDay(startD);
+  const endMs = startOfLocalDay(addLocalDays(startD, D - 1));
+  let todayDisplay = 1;
+  let showTodayMarker = true;
+  let refLabel = "Hoje";
+
+  if (todayStartMs < startMs) {
+    todayDisplay = 1;
+    showTodayMarker = false;
+  } else if (todayStartMs > endMs) {
+    todayDisplay = nB;
+    refLabel = "Fim";
+  } else {
+    todayDisplay = todayBucket + 1;
+  }
+
+  const pct = nB > 0 ? Math.round((todayDisplay / nB) * 100) : 0;
+  const progressSuffix = `sem. ${todayDisplay}/${nB} · ${pct}% do período`;
+
+  return {
+    series,
+    dim: nB,
+    today: todayDisplay,
+    showTodayMarker,
+    refLabel,
+    progressSuffix,
+    rhythmMode: "weekly",
+  };
 }
 
 function startOfToday() {
@@ -196,7 +505,12 @@ function mapUpcomingDebits(recurringResponse, horizonDays = 14) {
     });
 }
 
-export function useDashboardData({ organizationId, enabled = true }) {
+export function useDashboardData({
+  organizationId,
+  enabled = true,
+  dateStart,
+  dateEnd,
+}) {
   const [state, setState] = useState(EMPTY_STATE);
   const [fetchTick, setFetchTick] = useState(0);
 
@@ -205,14 +519,15 @@ export function useDashboardData({ organizationId, enabled = true }) {
   }, []);
 
   useEffect(() => {
-    if (!enabled || !organizationId) {
+    if (!enabled || !organizationId || !dateStart || !dateEnd) {
       setState(EMPTY_STATE);
       return;
     }
 
     let cancelled = false;
-    const bounds = monthBounds();
-    const { start, end, daysInMonth, today } = bounds;
+    const start = dateStart;
+    const end = dateEnd;
+    const prevPeriod = previousPeriodRange(start, end);
 
     setState((current) => ({
       ...current,
@@ -238,17 +553,39 @@ export function useDashboardData({ organizationId, enabled = true }) {
         dateEnd: end,
         transactionType: "expense",
       }),
+      getByCategory(organizationId, {
+        dateStart: prevPeriod.start,
+        dateEnd: prevPeriod.end,
+        transactionType: "expense",
+      }),
       listRecurringTransactions(organizationId, true),
     ])
-      .then(([summary, transactionsResponse, categoriesResponse, recurring]) => {
+      .then(
+        ([
+          summary,
+          transactionsResponse,
+          categoriesResponse,
+          prevCategoriesResponse,
+          recurring,
+        ]) => {
         if (cancelled) return;
 
         const rawTx = transactionsResponse.data ?? [];
         const recent = rawTx.slice(0, 5).map(mapTransaction);
-        const { series, dim, today: tDay } = buildRhythmChart(
+        const rhythm = buildRhythmChart(rawTx, summary, start, end);
+
+        const prevTotalByTagId = new Map(
+          (prevCategoriesResponse.categories ?? []).map((c) => [
+            c.tag_id,
+            Number(c.total) || 0,
+          ]),
+        );
+        const categories = buildDashboardCategoryRows(
           rawTx,
-          summary,
-          { daysInMonth, today, start },
+          start,
+          end,
+          categoriesResponse.categories,
+          prevTotalByTagId,
         );
 
         setState({
@@ -256,11 +593,16 @@ export function useDashboardData({ organizationId, enabled = true }) {
           error: "",
           summary,
           transactions: recent,
-          categories: (categoriesResponse.categories ?? [])
-            .slice(0, 5)
-            .map(mapCategory),
-          rhythmChart: series,
-          rhythmMeta: { dim, today: tDay },
+          categories,
+          rhythmChart: rhythm.series,
+          rhythmMeta: {
+            dim: rhythm.dim,
+            today: rhythm.today,
+            showTodayMarker: rhythm.showTodayMarker,
+            refLabel: rhythm.refLabel,
+            progressSuffix: rhythm.progressSuffix,
+            rhythmMode: rhythm.rhythmMode,
+          },
           upcomingDebits: mapUpcomingDebits(recurring),
         });
       })
@@ -274,7 +616,14 @@ export function useDashboardData({ organizationId, enabled = true }) {
           transactions: [],
           categories: [],
           rhythmChart: [],
-          rhythmMeta: { dim: 31, today: 1 },
+          rhythmMeta: {
+            dim: 31,
+            today: 1,
+            showTodayMarker: true,
+            refLabel: "Hoje",
+            progressSuffix: "",
+            rhythmMode: "daily",
+          },
           upcomingDebits: [],
         });
       });
@@ -282,7 +631,7 @@ export function useDashboardData({ organizationId, enabled = true }) {
     return () => {
       cancelled = true;
     };
-  }, [enabled, organizationId, fetchTick]);
+  }, [enabled, organizationId, fetchTick, dateStart, dateEnd]);
 
   const hasRealData = useMemo(() => {
     return Boolean(state.summary);
@@ -292,5 +641,7 @@ export function useDashboardData({ organizationId, enabled = true }) {
     ...state,
     hasRealData,
     refetch,
+    rangeStart: dateStart ?? null,
+    rangeEnd: dateEnd ?? null,
   };
 }

@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { createPortal } from "react-dom";
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { T } from "../tokens";
-import { G } from "../typography";
+import { G, NUM } from "../typography";
 import { formatYmdToLocaleDisplay, todayLocalYmd } from "../data/transactionsAdapter.js";
 
 const UI_FALLBACK_EN = {
@@ -174,10 +174,11 @@ export function LocaleDatePicker({
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
-  const fontSize = variant === "mobile" ? 14 : 12;
-  const iconSize = variant === "mobile" ? 14 : 12;
-  const pad = variant === "mobile" ? "12px 14px" : "9px 12px";
-  const radius = variant === "mobile" ? 12 : 9;
+  /** Mesma escala do painel de período (preset rows): leitura confortável e Geist explícito. */
+  const displayFontSize = variant === "mobile" ? 15 : 14;
+  const iconSize = variant === "mobile" ? 18 : 16;
+  const pad = variant === "mobile" ? "12px 14px" : "10px 12px";
+  const radius = variant === "mobile" ? 12 : 10;
 
   const year = cursor.getFullYear();
   const monthIndex = cursor.getMonth();
@@ -235,6 +236,7 @@ export function LocaleDatePicker({
   const popover = open && (
     <div
       ref={popoverRef}
+      data-fincla-locale-calendar-popover=""
       role="dialog"
       aria-label={messages.calendarAria}
       style={{
@@ -424,21 +426,33 @@ export function LocaleDatePicker({
           boxSizing: "border-box",
           display: "flex",
           alignItems: "center",
-          gap: variant === "mobile" ? 8 : 7,
+          gap: variant === "mobile" ? 10 : 8,
           padding: pad,
           border: `1px solid ${T.border}`,
           borderRadius: radius,
           background: T.surface,
           cursor: disabled ? "not-allowed" : "pointer",
           textAlign: "left",
-          fontSize,
           color: T.ink,
-          fontFamily: "inherit",
           opacity: disabled ? 0.6 : 1,
+          lineHeight: 1.35,
+          WebkitFontSmoothing: "antialiased",
         }}
       >
-        <Calendar size={iconSize} color={T.inkLight} style={{ flexShrink: 0 }} />
-        <span style={{ flex: 1, minWidth: 0 }}>
+        <Calendar size={iconSize} color={T.inkMid} strokeWidth={2} style={{ flexShrink: 0 }} />
+        <span
+          style={{
+            ...G,
+            ...NUM,
+            flex: 1,
+            minWidth: 0,
+            fontSize: displayFontSize,
+            fontWeight: 600,
+            color: T.ink,
+            letterSpacing: "-0.01em",
+            lineHeight: 1.35,
+          }}
+        >
           {formatYmdToLocaleDisplay(value, locale)}
         </span>
       </button>

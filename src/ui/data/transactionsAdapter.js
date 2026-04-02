@@ -90,6 +90,23 @@ function pickCategoryTag(transaction) {
   return firstTag ?? null;
 }
 
+/**
+ * Tag de categoria da transação (API), para agregações na UI.
+ * @param {import("../../api/types").Transaction} transaction
+ * @returns {{ id: string | null; name: string | null; icon_key: string | null; color: string | null } | null}
+ */
+export function pickCategoryTagFromApiTransaction(transaction) {
+  const t = pickCategoryTag(transaction);
+  if (!t) return null;
+  return {
+    id: t.id != null && t.id !== "" ? t.id : null,
+    name: t.name ?? null,
+    icon_key: t.icon_key ?? null,
+    color:
+      typeof t.color === "string" && t.color.trim() ? t.color : null,
+  };
+}
+
 function pickCategoryName(transaction) {
   const tag = pickCategoryTag(transaction);
   if (!tag) return "Sem categoria";

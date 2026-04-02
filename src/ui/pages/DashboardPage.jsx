@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   TrendingUp,
   TrendingDown,
@@ -32,11 +32,17 @@ import {
   getMoodActions,
   M_MONO,
   MOODS,
-  PERIODS_V4,
   RhythmTooltipV4,
   calcMood,
 } from "../features/moodV4";
 import { useDashboardData } from "../features/dashboard/useDashboardData.js";
+import { DashboardPeriodSelector } from "../features/dashboard/DashboardPeriodSelector.jsx";
+import {
+  formatDashboardKpiPeriodPhrase,
+  formatDashboardRangeBadge,
+  parseLocalYmd,
+  rangeForDashboardPreset,
+} from "../features/dashboard/dashboardDateRange.js";
 import { CardEmptyWithCta } from "../features/shellExtras.jsx";
 
 export function DashboardPage({
@@ -50,15 +56,51 @@ export function DashboardPage({
 }) {
   const { mounted, isMobile } = stateCtrl;
   const apiDataEnabled = Boolean(organizationId);
+
+  const [periodPreset, setPeriodPreset] = useState("este_mes");
+  const defaultEste = useMemo(
+    () => rangeForDashboardPreset("este_mes", new Date()),
+    [],
+  );
+  const [customStart, setCustomStart] = useState(defaultEste.start);
+  const [customEnd, setCustomEnd] = useState(defaultEste.end);
+
+  const appliedRange = useMemo(() => {
+    if (periodPreset === "personalizado") {
+      let s = customStart;
+      let e = customEnd;
+      if (s > e) {
+        const t = s;
+        s = e;
+        e = t;
+      }
+      return { start: s, end: e };
+    }
+    return rangeForDashboardPreset(periodPreset, new Date());
+  }, [periodPreset, customStart, customEnd]);
+
+  const onCustomDatesChange = useCallback(({ start, end }) => {
+    setCustomStart(start);
+    setCustomEnd(end);
+  }, []);
+
   const dashboardData = useDashboardData({
     organizationId,
     enabled: apiDataEnabled,
+    dateStart: appliedRange.start,
+    dateEnd: appliedRange.end,
   });
   const recentTransactions = dashboardData.transactions;
   const categoryData = dashboardData.categories;
   const rhythmData = dashboardData.rhythmChart;
   const upcomingDebits = dashboardData.upcomingDebits;
-  const { dim, today: calendarDay } = dashboardData.rhythmMeta;
+  const {
+    dim,
+    today: calendarDay,
+    showTodayMarker,
+    refLabel,
+    progressSuffix,
+  } = dashboardData.rhythmMeta;
 
   const summary = dashboardData.summary;
   const inc = summary?.total_income ?? 0;
@@ -85,6 +127,7 @@ export function DashboardPage({
       dia: i + 1,
       proj: Math.round((env / d) * (i + 1)),
       real: null,
+      dayLabel: `${i + 1}`,
     }));
   }, [rhythmData, dim, envelope]);
   const day = calendarDay;
@@ -104,24 +147,19 @@ export function DashboardPage({
   );
   const mood = MOODS[moodKey];
   const moodActions = getMoodActions(moodKey);
-  const [period, setPeriod] = useState("mes");
-  const monthPeriodBadge = useMemo(() => {
-    const d = new Date();
-    return d
-      .toLocaleDateString("pt-BR", { month: "short", year: "2-digit" })
-      .replace(".", "");
-  }, []);
-  const monthNameLong = useMemo(
+  const kpiPeriodPhrase = useMemo(
     () =>
-      new Date().toLocaleDateString("pt-BR", {
-        month: "long",
-      }),
-    [],
+      formatDashboardKpiPeriodPhrase(
+        appliedRange.start,
+        appliedRange.end,
+        "pt-BR",
+      ),
+    [appliedRange.start, appliedRange.end],
   );
-  const periodBadge =
-    period === "mes"
-      ? monthPeriodBadge
-      : PERIODS_V4.find((p) => p.key === period)?.badge ?? monthPeriodBadge;
+  const periodBadge = useMemo(
+    () => formatDashboardRangeBadge(appliedRange.start, appliedRange.end),
+    [appliedRange.start, appliedRange.end],
+  );
 
   const pool = Math.max(inc, exp, Math.abs(bal), 1);
   const usedAmt = exp;
@@ -129,8 +167,24 @@ export function DashboardPage({
   const freeAmt = Math.max(0, bal);
   const balance = bal;
   const barTotal = Math.max(usedAmt + committed + freeAmt, 1);
-  const daysLeft = Math.max(dim - day, 1);
-  const dailyBudget = Math.round(Math.max(0, bal) / daysLeft);
+  const daysLeftInRange = useMemo(() => {
+    const e = parseLocalYmd(appliedRange.end);
+    if (!e) return 1;
+    const now = new Date();
+    const tMs = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    ).getTime();
+    const eMs = new Date(
+      e.getFullYear(),
+      e.getMonth(),
+      e.getDate(),
+    ).getTime();
+    if (eMs < tMs) return 1;
+    return Math.max(1, Math.floor((eMs - tMs) / 86400000) + 1);
+  }, [appliedRange.end]);
+  const dailyBudget = Math.round(Math.max(0, bal) / daysLeftInRange);
 
   const { Icon: MoodIcon, InsightIcon } = mood;
   const insightStat =
@@ -141,41 +195,41 @@ export function DashboardPage({
   const rhythmVsProj = Math.round((envelope * (timePct - spendPct)) / 100);
 
   const insightBody = {
-    serene: `Com ${daysLeft} dias restantes, você pode gastar até ${fmtAbs(dailyBudget)}/dia com folga.`,
-    healthy: `Ritmo equilibrado — tente manter ${fmtAbs(dailyBudget)}/dia pelos próximos ${daysLeft} dias.`,
+    serene: `Com ${daysLeftInRange} dias restantes no período, você pode gastar até ${fmtAbs(dailyBudget)}/dia com folga.`,
+    healthy: `Ritmo equilibrado — tente manter ${fmtAbs(dailyBudget)}/dia pelos próximos ${daysLeftInRange} dias.`,
     watchful: "Reduza cerca de R$ 80/dia para fechar o mês no zero. Revise categorias variáveis.",
-    tense: `Limite gastos a ${fmtAbs(dailyBudget)}/dia para não estourar o orçamento em ${monthNameLong}.`,
+    tense: `Limite gastos a ${fmtAbs(dailyBudget)}/dia para não estourar o orçamento no período (${kpiPeriodPhrase}).`,
     alert: "Evite novas despesas e avalie pausar recorrências não essenciais esta semana.",
   }[moodKey];
 
   const kpiItems = useMemo(() => {
     if (apiFailedNoSummary) {
       return [
-        { key: "inc", label: `Receitas em ${monthNameLong}`, value: "—", delta: "Dados indisponíveis", up: null, emptyCta: false },
-        { key: "exp", label: `Despesas em ${monthNameLong}`, value: "—", delta: "Dados indisponíveis", up: null, emptyCta: false },
+        { key: "inc", label: `Receitas · ${kpiPeriodPhrase}`, value: "—", delta: "Dados indisponíveis", up: null, emptyCta: false },
+        { key: "exp", label: `Despesas · ${kpiPeriodPhrase}`, value: "—", delta: "Dados indisponíveis", up: null, emptyCta: false },
         { key: "bal", label: "Saldo do período", value: "—", delta: "Dados indisponíveis", up: null, emptyCta: false },
       ];
     }
     if (isPeriodWithoutActivity) {
       const n = txCount ?? 0;
       return [
-        { key: "inc", label: `Receitas em ${monthNameLong}`, value: fmtAbs(0), delta: `${n} lançamentos no período`, up: null, emptyCta: true },
-        { key: "exp", label: `Despesas em ${monthNameLong}`, value: fmtAbs(0), delta: "registre para acompanhar o ritmo", up: null, emptyCta: true },
+        { key: "inc", label: `Receitas · ${kpiPeriodPhrase}`, value: fmtAbs(0), delta: `${n} lançamentos no período`, up: null, emptyCta: true },
+        { key: "exp", label: `Despesas · ${kpiPeriodPhrase}`, value: fmtAbs(0), delta: "registre para acompanhar o ritmo", up: null, emptyCta: true },
         { key: "bal", label: "Saldo do período", value: fmtAbs(0), delta: "sem movimento ainda", up: null, emptyCta: true },
       ];
     }
     const s = dashboardData.summary;
     if (!s) {
       return [
-        { key: "inc", label: `Receitas em ${monthNameLong}`, value: fmtAbs(0), delta: "Carregando resumo…", up: null, emptyCta: false },
-        { key: "exp", label: `Despesas em ${monthNameLong}`, value: fmtAbs(0), delta: "Carregando resumo…", up: null, emptyCta: false },
+        { key: "inc", label: `Receitas · ${kpiPeriodPhrase}`, value: fmtAbs(0), delta: "Carregando resumo…", up: null, emptyCta: false },
+        { key: "exp", label: `Despesas · ${kpiPeriodPhrase}`, value: fmtAbs(0), delta: "Carregando resumo…", up: null, emptyCta: false },
         { key: "bal", label: "Saldo do período", value: fmtAbs(0), delta: "Carregando resumo…", up: null, emptyCta: false },
       ];
     }
     return [
       {
         key: "inc",
-        label: `Receitas em ${monthNameLong}`,
+        label: `Receitas · ${kpiPeriodPhrase}`,
         value: fmtAbs(s?.total_income ?? 0),
         delta: `${s?.total_transactions ?? 0} lançamentos no período`,
         up: s ? s.total_income > 0 : null,
@@ -183,7 +237,7 @@ export function DashboardPage({
       },
       {
         key: "exp",
-        label: `Despesas em ${monthNameLong}`,
+        label: `Despesas · ${kpiPeriodPhrase}`,
         value: fmtAbs(s?.total_expenses ?? 0),
         delta: s ? (s.balance >= 0 ? "saldo positivo" : "saldo pressionado") : "aguardando resumo do período",
         up: s ? spendPct <= timePct : null,
@@ -201,7 +255,7 @@ export function DashboardPage({
   }, [
     apiFailedNoSummary,
     isPeriodWithoutActivity,
-    monthNameLong,
+    kpiPeriodPhrase,
     dashboardData.summary,
     spendPct,
     timePct,
@@ -432,7 +486,7 @@ export function DashboardPage({
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                   <div style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink }}>Ritmo de gastos</div>
                   <div style={{ ...G, fontSize: 10, fontWeight: 600, color: T.inkLight, background: T.grayLight, borderRadius: 99, padding: "3px 9px" }}>
-                    {monthPeriodBadge}
+                    {periodBadge}
                   </div>
                 </div>
                 <div style={{ background: T.bg, borderRadius: 10, padding: "10px 10px 0", marginBottom: 12, position: "relative", overflow: "hidden", height: 80 }}>
@@ -626,21 +680,27 @@ export function DashboardPage({
         </div>
       )}
 
-      <div style={{ ...anim(0.03), display: "flex", alignItems: "center", justifyContent: "space-between", position: "relative", zIndex: 1 }}>
-        <div style={{ display: "flex", gap: 2, background: T.grayLight, borderRadius: 9, padding: 3 }}>
-          {PERIODS_V4.map((p) => (
-            <button key={p.key} onClick={() => setPeriod(p.key)} style={{ ...G, padding: "5px 13px", borderRadius: 7, border: "none", fontSize: 12, fontWeight: period === p.key ? 600 : 400, cursor: "pointer", background: period === p.key ? T.surface : "transparent", color: period === p.key ? T.ink : T.inkLight, boxShadow: period === p.key ? T.sm : "none", transition: "all 0.18s" }}>
-              {isMobile ? p.badge : p.label}
-            </button>
-          ))}
+      <div style={{ ...anim(0.03), position: "relative", zIndex: 1 }}>
+        <DashboardPeriodSelector
+          isMobile={isMobile}
+          presetId={periodPreset}
+          onPresetChange={setPeriodPreset}
+          customStart={customStart}
+          customEnd={customEnd}
+          onCustomDatesChange={onCustomDatesChange}
+        />
+        <div
+          style={{
+            ...G,
+            marginTop: 8,
+            fontSize: 11,
+            color: T.inkLight,
+            lineHeight: 1.45,
+            maxWidth: isMobile ? "100%" : 480,
+          }}
+        >
+          Os cards abaixo usam o período escolhido. Próximos débitos: sempre os próximos 14 dias.
         </div>
-        {!isMobile && (
-          <div style={{ ...G, display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: T.inkLight }}>
-            <span>Cards históricos:</span>
-            <Badge color={T.inkMid} bg={T.grayLight}>{periodBadge}</Badge>
-            <span>· Saldo e ritmo sempre em tempo real</span>
-          </div>
-        )}
       </div>
 
       <div style={{ ...anim(0.06), display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 300px", gap: 14, position: "relative", zIndex: 1 }}>
@@ -693,7 +753,7 @@ export function DashboardPage({
                 </>
               ) : (
                 <>
-                  <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Mês atual</div>
+                  <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>{kpiPeriodPhrase}</div>
                   <div style={{ ...S, ...NUM, fontSize: isMobile ? "2rem" : "2.35rem", lineHeight: 1.05, color: T.ink, letterSpacing: "-1px", marginBottom: 8 }}>{fmtAbs(balance)}</div>
                   <div style={{ ...G, fontSize: 13, color: T.inkMid, marginBottom: 18, lineHeight: 1.55 }}>
                     Nenhum lançamento neste mês. Sem receitas nem despesas no período — registre uma transação ou configure recorrências para ver saldo e ritmo aqui.
@@ -928,8 +988,18 @@ export function DashboardPage({
         ))}
       </div>
 
-      <div style={{ ...anim(0.14), display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 300px", gap: 14, position: "relative", zIndex: 1 }}>
-        <Card style={{ padding: "20px 20px 14px" }}>
+      <div
+        style={{
+          ...anim(0.14),
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "1fr 300px",
+          gap: 14,
+          position: "relative",
+          zIndex: 1,
+          alignItems: "stretch",
+        }}
+      >
+        <Card style={{ padding: "20px 20px 14px", display: "flex", flexDirection: "column", minHeight: 0 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
             <div>
               <div style={{ ...G, fontSize: 14, fontWeight: 700, color: T.ink }}>Ritmo de Gastos</div>
@@ -996,7 +1066,7 @@ export function DashboardPage({
                     : `R$ ${Math.abs(Math.round((envelope * (spendPct - timePct)) / 100))} acima do ritmo`}
                 </span>
                 <span style={{ ...G, fontSize: 11, color: T.inkMid, marginLeft: "auto" }}>
-                  dia {day}/{dim} · {timePct}% do mês
+                  {progressSuffix || `dia ${day}/${dim} · ${timePct}%`}
                 </span>
               </div>
 
@@ -1006,7 +1076,21 @@ export function DashboardPage({
                   <XAxis dataKey="dia" tick={{ ...G, fontSize: 10, fill: T.inkLight }} tickLine={false} axisLine={false} tickFormatter={(v) => (v % 5 === 0 || v === 1 ? `${v}` : "")} />
                   <YAxis tick={{ ...G, ...NUM, fontSize: 10, fill: T.inkLight }} tickLine={false} axisLine={false} tickFormatter={fmtK} />
                   <Tooltip content={<RhythmTooltipV4 />} />
-                  <ReferenceLine x={day} stroke={mood.bar} strokeDasharray="4 2" strokeWidth={1.5} label={{ value: "Hoje", position: "top", fill: mood.bar, fontSize: 10, fontFamily: "Geist,sans-serif" }} />
+                  {showTodayMarker ? (
+                    <ReferenceLine
+                      x={day}
+                      stroke={mood.bar}
+                      strokeDasharray="4 2"
+                      strokeWidth={1.5}
+                      label={{
+                        value: refLabel,
+                        position: "top",
+                        fill: mood.bar,
+                        fontSize: 10,
+                        fontFamily: "Geist,sans-serif",
+                      }}
+                    />
+                  ) : null}
                   <Line type="monotone" dataKey="proj" stroke="#D1D5DB" strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
                   <Line type="monotone" dataKey="real" stroke={mood.bar} strokeWidth={2.5} dot={false} connectNulls={false} style={{ transition: "stroke 0.8s" }} />
                 </ComposedChart>
@@ -1015,39 +1099,58 @@ export function DashboardPage({
           )}
         </Card>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <Card style={{ padding: 18 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: 14,
+            minHeight: isMobile ? undefined : "100%",
+          }}
+        >
+          <Card
+            style={{
+              padding: 18,
+              flex: isMobile ? undefined : 1,
+              display: "flex",
+              flexDirection: "column",
+              minHeight: isMobile ? undefined : 0,
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4, flexShrink: 0 }}>
               <div style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink }}>Gastos por Categoria</div>
               <Badge color={T.inkMid} bg={T.grayLight}>{periodBadge}</Badge>
             </div>
-            <div style={{ display: "flex", gap: 12, marginBottom: 12, marginTop: 4 }}>
-              {[["#D1D5DB", "atual"], ["#9CA3AF", "média"], ["#FCA5A5", "acima"]].map(([c, l]) => (
+            <div style={{ display: "flex", gap: 12, marginBottom: 12, marginTop: 4, flexShrink: 0 }}>
+              {[["#D1D5DB", "atual"], ["#9CA3AF", "referência"], ["#FCA5A5", "acima"]].map(([c, l]) => (
                 <div key={l} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  <div style={{ width: 10, height: l === "média" ? 2 : 5, background: c, borderRadius: l === "média" ? 1 : 2 }} />
+                  <div style={{ width: 10, height: l === "referência" ? 2 : 5, background: c, borderRadius: l === "referência" ? 1 : 2 }} />
                   <span style={{ ...G, fontSize: 10, color: T.inkLight }}>{l}</span>
                 </div>
               ))}
             </div>
             {categoryData.length === 0 ? (
-              <CardEmptyWithCta
-                icon="📭"
-                title="Nenhuma despesa categorizada"
-                sub="Assim que você registrar gastos com categoria, elas aparecem aqui."
-                primaryLabel="+ Registrar primeiro gasto"
-                onPrimary={onNewTx}
-                primaryVariant="redLight"
-              />
+              <div style={{ flex: isMobile ? undefined : 1, display: "flex", flexDirection: "column", justifyContent: "center", minHeight: isMobile ? undefined : 0 }}>
+                <CardEmptyWithCta
+                  icon="📭"
+                  title="Nenhuma despesa categorizada"
+                  sub="Assim que você registrar gastos com categoria, elas aparecem aqui."
+                  primaryLabel="+ Registrar primeiro gasto"
+                  onPrimary={onNewTx}
+                  primaryVariant="redLight"
+                />
+              </div>
             ) : (() => {
               const maxVal = Math.max(...categoryData.map((c) => Math.max(c.value, c.avg)));
-              return categoryData.map((c) => {
+              return (
+                <div style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingRight: 2 }}>
+                  {categoryData.map((c) => {
                 const barPct = (c.value / maxVal) * 100;
                 const avgPct = (c.avg / maxVal) * 100;
                 const isOver = c.value > c.avg;
                 const safePct = Math.min(barPct, avgPct);
                 const overPct = isOver ? barPct - avgPct : 0;
                 return (
-                  <div key={c.name} style={{ marginBottom: 9 }}>
+                  <div key={c.tagId || c.name} style={{ marginBottom: 9 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                         <div style={{ width: 7, height: 7, borderRadius: 2, background: c.color, flexShrink: 0 }} />
@@ -1065,7 +1168,9 @@ export function DashboardPage({
                     </div>
                   </div>
                 );
-              });
+                  })}
+                </div>
+              );
             })()}
           </Card>
         </div>
@@ -1111,7 +1216,7 @@ export function DashboardPage({
         <Card style={{ padding: 16 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
             <div style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink }}>Próximos Débitos</div>
-            <Badge color={T.inkMid} bg={T.grayLight}>{monthPeriodBadge}</Badge>
+            <Badge color={T.inkMid} bg={T.grayLight}>próx. 14 dias</Badge>
           </div>
 
           {upcomingDebits.length === 0 ? (

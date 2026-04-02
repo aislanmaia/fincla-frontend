@@ -42,6 +42,7 @@ import {
 } from "./features/moodV4";
 
 import { OnboardingFlow } from "./features/onboarding/OnboardingFlow.jsx";
+import { useFirstStepsLiveStatus } from "./features/onboarding/useFirstStepsLiveStatus.js";
 import { submitOnboarding } from "./features/onboarding/onboardingApi.js";
 import {
   buildImmediateCreditCardPreview,
@@ -4359,8 +4360,7 @@ export default function App() {
     valorTipo: r.valorTipo,
   }));
   const [checklistDismissed, setChecklistDismissed]  = useState(false);
-  const [completedTx,        setCompletedTx]         = useState(false);
-  const [completedBudget,    setCompletedBudget]      = useState(false);
+  const [checklistProbeVersion, setChecklistProbeVersion] = useState(0);
   const [mounted, setMounted]     = useState(false);
   const [day, setDay]             = useState(11);
   const [budgetPct, setBudgetPct] = useState(38);
@@ -4370,6 +4370,16 @@ export default function App() {
   const [transactionsListVersion, setTransactionsListVersion] = useState(0);
   const bumpTransactionsList = useCallback(() => {
     setTransactionsListVersion((n) => n + 1);
+  }, []);
+
+  useEffect(() => {
+    setChecklistProbeVersion((v) => v + 1);
+  }, [transactionsListVersion]);
+
+  useEffect(() => {
+    const onFocus = () => setChecklistProbeVersion((v) => v + 1);
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, []);
 
   useEffect(() => {
@@ -4390,6 +4400,14 @@ export default function App() {
     [session.activeOrgId, session.organizations],
   );
   const dataMode = resolveDataMode(requestedDataMode, mockDataEnabled);
+
+  const firstStepsLive = useFirstStepsLiveStatus({
+    organizationId: session.activeOrgId,
+    enabled: session.isAuthenticated && dataMode === "live",
+    refreshToken: checklistProbeVersion,
+  });
+  const completedTx = firstStepsLive.completedTx;
+  const completedBudget = firstStepsLive.completedBudget;
 
   useEffect(() => {
     if (!session.isAuthenticated) {
@@ -4642,8 +4660,6 @@ export default function App() {
           session.completeOnboarding(onboardingResult);
           setShowOnboarding(false);
           setChecklistDismissed(false);
-          setCompletedTx(false);
-          setCompletedBudget(false);
           setRequestedDataMode("live");
           setCenarios([]);
           setCenarioId(null);

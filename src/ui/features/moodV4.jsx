@@ -198,7 +198,11 @@ export function RhythmTooltipV4({ active, payload, label }) {
         boxShadow: T.md,
       }}
     >
-      <div style={{ color: T.inkLight, marginBottom: 5 }}>Dia {label}</div>
+      <div style={{ color: T.inkLight, marginBottom: 5 }}>
+        {payload?.[0]?.payload?.dayLabel
+          ? payload[0].payload.dayLabel
+          : `Dia ${label}`}
+      </div>
       {payload.map(
         (p, i) =>
           p.value != null && (
