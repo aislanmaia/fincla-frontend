@@ -25,7 +25,7 @@ function resolvePresetTitle(presetId, isMobile) {
 }
 
 /**
- * Gatilho único + menu com abas Atalhos | Datas (sem esconder personalizado).
+ * Gatilho único + menu com abas Predefinido | Personalizado.
  */
 export function DashboardPeriodSelector({
   isMobile,
@@ -36,7 +36,7 @@ export function DashboardPeriodSelector({
   onCustomDatesChange,
 }) {
   const [panelOpen, setPanelOpen] = useState(false);
-  const [menuTab, setMenuTab] = useState("atalhos");
+  const [menuTab, setMenuTab] = useState("predefinido");
   const wrapRef = useRef(null);
   const panelRootRef = useRef(null);
   const [popoverPos, setPopoverPos] = useState({ top: 0, left: 0, width: 300 });
@@ -53,7 +53,7 @@ export function DashboardPeriodSelector({
 
   useEffect(() => {
     if (!panelOpen) return;
-    setMenuTab(presetId === "personalizado" ? "datas" : "atalhos");
+    setMenuTab(presetId === "personalizado" ? "personalizado" : "predefinido");
   }, [panelOpen, presetId]);
 
   const updatePopoverPos = useCallback(() => {
@@ -63,7 +63,7 @@ export function DashboardPeriodSelector({
     const w = Math.min(340, Math.max(292, r.width));
     let left = Math.max(12, Math.min(r.left, window.innerWidth - w - 12));
     let top = r.bottom + 10;
-    const estH = menuTab === "datas" ? 340 : 420;
+    const estH = menuTab === "personalizado" ? 520 : 420;
     if (top + estH > window.innerHeight - 12) {
       top = Math.max(12, r.top - estH - 10);
     }
@@ -173,8 +173,14 @@ export function DashboardPeriodSelector({
     );
   });
 
-  const tabIds = { atalhos: "dash-period-tab-atalhos", datas: "dash-period-tab-datas" };
-  const panelIds = { atalhos: "dash-period-panel-atalhos", datas: "dash-period-panel-datas" };
+  const tabIds = {
+    predefinido: "dash-period-tab-predefinido",
+    personalizado: "dash-period-tab-personalizado",
+  };
+  const panelIds = {
+    predefinido: "dash-period-panel-predefinido",
+    personalizado: "dash-period-panel-personalizado",
+  };
 
   const segmentedControl = (
     <div
@@ -190,8 +196,8 @@ export function DashboardPeriodSelector({
       }}
     >
       {[
-        { id: "atalhos", label: "Atalhos" },
-        { id: "datas", label: "Datas" },
+        { id: "predefinido", label: "Predefinido" },
+        { id: "personalizado", label: "Personalizado" },
       ].map(({ id, label }) => {
         const active = menuTab === id;
         return (
@@ -227,14 +233,14 @@ export function DashboardPeriodSelector({
     </div>
   );
 
-  const atalhosPanel = (
+  const predefinidoPanel = (
     <div
-      id={panelIds.atalhos}
+      id={panelIds.predefinido}
       role="tabpanel"
-      aria-labelledby={tabIds.atalhos}
-      hidden={menuTab !== "atalhos"}
+      aria-labelledby={tabIds.predefinido}
+      hidden={menuTab !== "predefinido"}
       style={{
-        display: menuTab === "atalhos" ? "flex" : "none",
+        display: menuTab === "predefinido" ? "flex" : "none",
         flexDirection: "column",
         padding: isMobile ? "0 10px 8px" : "0 8px 10px",
         overflowY: "auto",
@@ -262,18 +268,20 @@ export function DashboardPeriodSelector({
     </div>
   );
 
-  const datasPanel = (
+  const personalizadoPanel = (
     <div
-      id={panelIds.datas}
+      id={panelIds.personalizado}
       role="tabpanel"
-      aria-labelledby={tabIds.datas}
-      hidden={menuTab !== "datas"}
+      aria-labelledby={tabIds.personalizado}
+      hidden={menuTab !== "personalizado"}
       style={{
-        display: menuTab === "datas" ? "flex" : "none",
+        display: menuTab === "personalizado" ? "flex" : "none",
         flexDirection: "column",
         gap: isMobile ? 12 : 10,
         padding: isMobile ? "0 14px 12px" : "0 12px 12px",
-        overflow: "visible",
+        overflowY: "auto",
+        overflowX: "hidden",
+        WebkitOverflowScrolling: "touch",
       }}
     >
       <p
@@ -310,6 +318,7 @@ export function DashboardPeriodSelector({
           max={customEnd <= maxYmd ? customEnd : maxYmd}
           locale={APP_UI_LOCALE}
           variant={isMobile ? "mobile" : "desktop"}
+          popoverMode="expand"
         />
       </div>
       <div>
@@ -334,6 +343,7 @@ export function DashboardPeriodSelector({
           max={maxYmd}
           locale={APP_UI_LOCALE}
           variant={isMobile ? "mobile" : "desktop"}
+          popoverMode="expand"
         />
       </div>
     </div>
@@ -373,7 +383,8 @@ export function DashboardPeriodSelector({
               display: "flex",
               flexDirection: "column",
               overflow: "hidden",
-              maxHeight: menuTab === "datas" ? "min(85vh, 400px)" : "min(85vh, 480px)",
+              maxHeight:
+                menuTab === "personalizado" ? "min(92vh, 720px)" : "min(85vh, 480px)",
             }
       }
     >
@@ -453,10 +464,11 @@ export function DashboardPeriodSelector({
           minHeight: 0,
           display: "flex",
           flexDirection: "column",
+          overflow: "hidden",
         }}
       >
-        {atalhosPanel}
-        {datasPanel}
+        {predefinidoPanel}
+        {personalizadoPanel}
       </div>
 
       {isMobile ? (

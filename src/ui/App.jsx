@@ -31,8 +31,8 @@ import {
   ProgBar,
   Btn,
 } from "./components/primitives";
-import { Sidebar } from "./layouts/Sidebar";
-import { Topbar } from "./layouts/Topbar";
+import { Sidebar } from "./layouts/Sidebar.jsx";
+import { Topbar } from "./layouts/Topbar.jsx";
 import { DragScrollTabs } from "./layouts/DragScrollTabs.jsx";
 
 import {
@@ -4632,9 +4632,7 @@ export default function App() {
       <AnimStyles/>
       <div style={{ ...G, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:T.bg, padding:24 }}>
         <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:16, padding:"28px 24px", minWidth:320, textAlign:"center", boxShadow:T.sm }}>
-          <div style={{ ...G, fontSize:12, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10 }}>
-            Fincla
-          </div>
+          <img src="/logo.png" alt="Fincla" width={32} height={32} style={{ objectFit:"contain", display:"block", margin:"0 auto 14px" }} />
           <div style={{ ...S, fontSize:28, color:T.ink, marginBottom:10 }}>
             Carregando sua sessao
           </div>

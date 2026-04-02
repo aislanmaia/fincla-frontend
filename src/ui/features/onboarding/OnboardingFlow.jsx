@@ -135,13 +135,15 @@ export const OnboardingFlow = ({
             borderRadius:"50%",background:`${cfg.leftAcc}0E`,pointerEvents:"none",transition:"background 0.5s"}}/>
           <div style={{position:"absolute",bottom:-50,left:-30,width:170,height:170,
             borderRadius:"50%",background:`${cfg.leftAcc}07`,pointerEvents:"none",transition:"background 0.5s"}}/>
-          {/* logo */}
+          {/* logo — /public/logo.png */}
           <div style={{position:"relative",display:"flex",alignItems:"center",gap:8}}>
-            <div style={{width:25,height:25,borderRadius:7,
-              background:`${cfg.leftAcc}18`,border:`1.5px solid ${cfg.leftAcc}33`,
-              display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <span style={{...G,fontSize:12,fontWeight:800,color:cfg.leftAcc}}>f</span>
-            </div>
+            <img
+              src="/logo.png"
+              alt=""
+              width={26}
+              height={26}
+              style={{ objectFit:"contain", display:"block", flexShrink:0 }}
+            />
             <span style={{...G,fontSize:13,fontWeight:700,color:cfg.leftAcc,letterSpacing:"0.04em",opacity:0.9}}>Fincla</span>
           </div>
           {/* ← Instrument Serif italic: left panel headline only */}

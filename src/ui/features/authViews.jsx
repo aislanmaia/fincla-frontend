@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import {
-  Activity,
   Mail,
   Lock,
   Eye,
@@ -118,12 +117,16 @@ export const LoginPage = ({
       <div style={{ position:"absolute", bottom:-60, left:-60, width:220, height:220, borderRadius:"50%", background:"rgba(124,58,237,0.1)" }}/>
       <div style={{ position:"absolute", top:"40%", right:-20, width:140, height:140, borderRadius:"50%", background:"rgba(37,99,235,0.05)" }}/>
 
-      {/* Logo */}
+      {/* Logo — asset em /public/logo.png (mesmo padrão do layout legado) */}
       <div style={{ display:"flex", alignItems:"center", gap:10, position:"relative", zIndex:1 }}>
-        <div style={{ width:34, height:34, borderRadius:9, background:`linear-gradient(135deg, ${T.blue}, ${T.purple})`, display:"flex", alignItems:"center", justifyContent:"center" }}>
-          <Activity size={17} color="#fff" strokeWidth={2.5}/>
-        </div>
-        <span style={{ fontFamily:"'Geist',sans-serif", fontSize:17, fontWeight:800, color:"#fff", letterSpacing:"0.02em" }}>FINCLA</span>
+        <img
+          src="/logo.png"
+          alt="Fincla"
+          width={40}
+          height={40}
+          style={{ objectFit:"contain", display:"block", flexShrink:0 }}
+        />
+        <span style={{ fontFamily:"'Geist',sans-serif", fontSize:17, fontWeight:800, color:"#fff", letterSpacing:"0.02em" }}>Fincla</span>
       </div>
 
       {/* Central copy */}
@@ -316,10 +319,14 @@ export const LoginPage = ({
         <div style={{ flex:1, display:"flex", flexDirection:"column", overflowY:"auto", background:T.surface }}>
           {/* Logo — visible on mobile, hidden on desktop when brand panel shows */}
           <div style={{ padding:"28px 28px 0", display:"flex", alignItems:"center", gap:10 }} id="fincla-mobile-logo">
-            <div style={{ width:30, height:30, borderRadius:8, background:`linear-gradient(135deg,${T.blue},${T.purple})`, display:"flex", alignItems:"center", justifyContent:"center" }}>
-              <Activity size={15} color="#fff" strokeWidth={2.5}/>
-            </div>
-            <span style={{ fontFamily:"'Geist',sans-serif", fontSize:15, fontWeight:800, color:T.ink, letterSpacing:"0.02em" }}>FINCLA</span>
+            <img
+              src="/logo.png"
+              alt="Fincla"
+              width={36}
+              height={36}
+              style={{ objectFit:"contain", display:"block", flexShrink:0 }}
+            />
+            <span style={{ fontFamily:"'Geist',sans-serif", fontSize:15, fontWeight:800, color:T.ink, letterSpacing:"0.02em" }}>Fincla</span>
           </div>
           {FormPanel()}
         </div>

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   TrendingUp,
   TrendingDown,
@@ -43,6 +43,10 @@ import {
   parseLocalYmd,
   rangeForDashboardPreset,
 } from "../features/dashboard/dashboardDateRange.js";
+import {
+  getDashboardPeriodBootstrap,
+  writeDashboardPeriodToStorage,
+} from "../features/dashboard/dashboardPeriodStorage.js";
 import { CardEmptyWithCta } from "../features/shellExtras.jsx";
 
 export function DashboardPage({
@@ -57,13 +61,52 @@ export function DashboardPage({
   const { mounted, isMobile } = stateCtrl;
   const apiDataEnabled = Boolean(organizationId);
 
-  const [periodPreset, setPeriodPreset] = useState("este_mes");
-  const defaultEste = useMemo(
-    () => rangeForDashboardPreset("este_mes", new Date()),
-    [],
-  );
-  const [customStart, setCustomStart] = useState(defaultEste.start);
-  const [customEnd, setCustomEnd] = useState(defaultEste.end);
+  /** Primeira pintura já alinhada ao localStorage (evita useEffect gravar "este mês" antes da hidratação). */
+  const periodBootstrapRef = useRef(null);
+  if (periodBootstrapRef.current === null) {
+    periodBootstrapRef.current = getDashboardPeriodBootstrap(organizationId);
+  }
+  const b0 = periodBootstrapRef.current;
+  const [periodPreset, setPeriodPreset] = useState(b0.periodPreset);
+  const [customStart, setCustomStart] = useState(b0.customStart);
+  const [customEnd, setCustomEnd] = useState(b0.customEnd);
+
+  /** Evita gravar no mesmo ciclo em que hidratamos do localStorage (e evita write redundante). */
+  const periodPersistFingerprintRef = useRef("");
+
+  useLayoutEffect(() => {
+    if (!organizationId) {
+      periodPersistFingerprintRef.current = "";
+      return;
+    }
+    const row = getDashboardPeriodBootstrap(organizationId);
+    periodPersistFingerprintRef.current = JSON.stringify({
+      org: organizationId,
+      p: row.periodPreset,
+      s: row.customStart,
+      e: row.customEnd,
+    });
+    setPeriodPreset(row.periodPreset);
+    setCustomStart(row.customStart);
+    setCustomEnd(row.customEnd);
+  }, [organizationId]);
+
+  useEffect(() => {
+    if (!organizationId) return;
+    const fp = JSON.stringify({
+      org: organizationId,
+      p: periodPreset,
+      s: customStart,
+      e: customEnd,
+    });
+    if (fp === periodPersistFingerprintRef.current) return;
+    periodPersistFingerprintRef.current = fp;
+    writeDashboardPeriodToStorage(organizationId, {
+      presetId: periodPreset,
+      customStart,
+      customEnd,
+    });
+  }, [organizationId, periodPreset, customStart, customEnd]);
 
   const appliedRange = useMemo(() => {
     if (periodPreset === "personalizado") {

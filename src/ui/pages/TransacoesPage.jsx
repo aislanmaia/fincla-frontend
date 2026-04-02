@@ -22,6 +22,7 @@ import { PeriodCalendar } from "../features/transactions/PeriodCalendar.jsx";
 import { useTransactionsData } from "../features/transactions/useTransactionsData.js";
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { CardEmptyWithCta } from "../features/shellExtras.jsx";
+import { FINCLA_CALENDAR_SHADOW } from "../components/finclaCalendarStyles.js";
 
 export function TransacoesPage({
   onNav,
@@ -876,7 +877,7 @@ export function TransacoesPage({
                 <div onClick={()=>setPeriodOpen(false)} style={{ position:"fixed", inset:0, zIndex:199 }}/>
                 <div style={{ position:"absolute", top:"calc(100% + 8px)", right:0, zIndex:200,
                   background:T.surface, border:`1px solid ${T.border}`, borderRadius:16,
-                  boxShadow:`0 8px 40px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.06)`,
+                  boxShadow: FINCLA_CALENDAR_SHADOW,
                   minWidth:300, overflow:"hidden", animation:"fadeIn 0.14s ease" }}>
                   <div style={{ padding:"14px 14px 10px", borderBottom:`1px solid ${T.border}` }}>
                     <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid,

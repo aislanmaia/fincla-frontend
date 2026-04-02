@@ -1,9 +1,27 @@
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
 import { T } from "../tokens";
 import { G, NUM } from "../typography";
 import { formatYmdToLocaleDisplay, todayLocalYmd } from "../data/transactionsAdapter.js";
+import { weekdayLabelsShort, formatCalendarNavMonth } from "./finclaCalendarI18n.js";
+import {
+  FINCLA_CALENDAR_SHADOW,
+  FINCLA_CALENDAR_SURFACE_RADIUS,
+  FINCLA_CAL_DAY_PX,
+  finclaCalendarWeekdayCellStyle,
+  finclaCalNavButtonBase,
+  finclaCalMonthTitleStyle,
+} from "./finclaCalendarStyles.js";
+import { parseBrDateLooseResult } from "./localeDateInputParse.js";
 
 const UI_FALLBACK_EN = {
   today: "Today",
@@ -11,9 +29,11 @@ const UI_FALLBACK_EN = {
   prevMonthAria: "Previous month",
   nextMonthAria: "Next month",
   calendarAria: "Calendar",
+  dateInvalid: "Invalid date.",
+  dateOutOfRange: "Date is outside the allowed range.",
+  dateInvalidFormat: "Use dd/mm/yyyy or 6/8 digits.",
 };
 
-/** Textos de ação/A11y por idioma (prefixo BCP 47). Intl não cobre estes rótulos. */
 const UI_BY_LANG_PREFIX = {
   pt: {
     today: "Hoje",
@@ -21,6 +41,9 @@ const UI_BY_LANG_PREFIX = {
     prevMonthAria: "Mês anterior",
     nextMonthAria: "Próximo mês",
     calendarAria: "Calendário",
+    dateInvalid: "Data inválida.",
+    dateOutOfRange: "Data fora do intervalo permitido.",
+    dateInvalidFormat: "Use dd/mm/aaaa ou só números (6 ou 8 dígitos).",
   },
   es: {
     today: "Hoy",
@@ -28,14 +51,13 @@ const UI_BY_LANG_PREFIX = {
     prevMonthAria: "Mes anterior",
     nextMonthAria: "Mes siguiente",
     calendarAria: "Calendario",
+    dateInvalid: "Fecha no válida.",
+    dateOutOfRange: "Fecha fuera del rango permitido.",
+    dateInvalidFormat: "Use dd/mm/aaaa o solo números (6 u 8 dígitos).",
   },
   en: { ...UI_FALLBACK_EN },
 };
 
-/**
- * @param {string} locale BCP 47 (ex.: pt-BR, en-US)
- * @param {Partial<typeof UI_FALLBACK_EN>} [override]
- */
 export function resolveLocaleDatePickerMessages(locale, override = {}) {
   const loc = (locale || "en-US").toString();
   const prefix = loc.split(/[-_]/)[0].toLowerCase();
@@ -43,31 +65,7 @@ export function resolveLocaleDatePickerMessages(locale, override = {}) {
   return { ...UI_FALLBACK_EN, ...fromLang, ...override };
 }
 
-/** Cabeçalhos de coluna: domingo → sábado (alinhado a `Date.getDay()`). */
-export function weekdayLabelsShort(locale) {
-  try {
-    const fmt = new Intl.DateTimeFormat(locale, { weekday: "short" });
-    const anchor = new Date(2024, 0, 7);
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(anchor);
-      d.setDate(anchor.getDate() + i);
-      return fmt.format(d);
-    });
-  } catch {
-    return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  }
-}
-
-export function formatMonthYearTitle(year, monthIndex, locale) {
-  try {
-    return new Intl.DateTimeFormat(locale, {
-      month: "long",
-      year: "numeric",
-    }).format(new Date(year, monthIndex, 1));
-  } catch {
-    return `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
-  }
-}
+export { weekdayLabelsShort, formatCalendarNavMonth, formatMonthYearTitle } from "./finclaCalendarI18n.js";
 
 function parseYmd(s) {
   if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
@@ -86,12 +84,9 @@ function startOfLocalDay(dt) {
 }
 
 /**
- * Seletor de data com calendário popover; nomes de mês/dia da semana via `Intl` (`locale`).
- * Textos de botões (Hoje, Fechar, aria) vêm de `resolveLocaleDatePickerMessages` + `messages`.
- *
  * @param {object} props
- * @param {string} [props.locale='pt-BR'] BCP 47
- * @param {Partial<{today:string,close:string,prevMonthAria:string,nextMonthAria:string,calendarAria:string}>} [props.messages]
+ * @param {'portal'|'expand'} [props.popoverMode='portal'] — `expand`: input + calendário no mesmo bloco (ex.: seletor de período).
+ * @param {string} [props.locale='pt-BR']
  */
 export function LocaleDatePicker({
   id,
@@ -103,6 +98,7 @@ export function LocaleDatePicker({
   variant = "desktop",
   locale = "pt-BR",
   messages: messagesOverride,
+  popoverMode = "portal",
 }) {
   const messages = useMemo(
     () => resolveLocaleDatePickerMessages(locale, messagesOverride),
@@ -112,10 +108,15 @@ export function LocaleDatePicker({
   const weekdays = useMemo(() => weekdayLabelsShort(locale), [locale]);
 
   const [open, setOpen] = useState(false);
+  const [hoverDay, setHoverDay] = useState(null);
   const wrapRef = useRef(null);
   const popoverRef = useRef(null);
   const buttonRef = useRef(null);
+  const inputRef = useRef(null);
   const [popoverPos, setPopoverPos] = useState({ top: 0, left: 0, width: 280 });
+  const [draft, setDraft] = useState(() => formatYmdToLocaleDisplay(value, locale));
+  const [draftError, setDraftError] = useState(null);
+  const dateErrId = useId();
 
   const minD = useMemo(() => parseYmd(min), [min]);
   const maxD = useMemo(() => parseYmd(max), [max]);
@@ -128,6 +129,18 @@ export function LocaleDatePicker({
   );
 
   useEffect(() => {
+    setDraft(formatYmdToLocaleDisplay(value, locale));
+    setDraftError(null);
+  }, [value, locale]);
+
+  const formatParseError = useCallback((status) => {
+    if (status === "invalid_date") return messages.dateInvalid;
+    if (status === "out_of_range") return messages.dateOutOfRange;
+    if (status === "invalid_format") return messages.dateInvalidFormat;
+    return null;
+  }, [messages]);
+
+  useEffect(() => {
     if (!open) return;
     const d = parseYmd(value);
     if (d) setCursor(new Date(d.getFullYear(), d.getMonth(), 1));
@@ -137,10 +150,10 @@ export function LocaleDatePicker({
     const el = buttonRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    const w = variant === "mobile" ? Math.min(r.width, 320) : 280;
+    const w = variant === "mobile" ? Math.min(r.width, 320) : 300;
     const left = Math.max(12, Math.min(r.left, window.innerWidth - w - 12));
     let top = r.bottom + 6;
-    const estHeight = 340;
+    const estHeight = 360;
     if (top + estHeight > window.innerHeight - 8) {
       top = Math.max(8, r.top - estHeight - 6);
     }
@@ -148,12 +161,12 @@ export function LocaleDatePicker({
   }, [variant]);
 
   useLayoutEffect(() => {
-    if (!open) return;
+    if (!open || popoverMode !== "portal") return;
     updatePopoverPosition();
-  }, [open, updatePopoverPosition]);
+  }, [open, popoverMode, updatePopoverPosition]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || popoverMode !== "portal") return;
     const onScroll = () => updatePopoverPosition();
     window.addEventListener("resize", onScroll);
     window.addEventListener("scroll", onScroll, true);
@@ -161,7 +174,7 @@ export function LocaleDatePicker({
       window.removeEventListener("resize", onScroll);
       window.removeEventListener("scroll", onScroll, true);
     };
-  }, [open, updatePopoverPosition]);
+  }, [open, popoverMode, updatePopoverPosition]);
 
   useEffect(() => {
     if (!open) return;
@@ -174,7 +187,18 @@ export function LocaleDatePicker({
     return () => document.removeEventListener("mousedown", onDoc);
   }, [open]);
 
-  /** Mesma escala do painel de período (preset rows): leitura confortável e Geist explícito. */
+  useEffect(() => {
+    if (!open || popoverMode !== "expand") return;
+    const onEsc = (e) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      setOpen(false);
+      inputRef.current?.blur();
+    };
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [open, popoverMode]);
+
   const displayFontSize = variant === "mobile" ? 15 : 14;
   const iconSize = variant === "mobile" ? 18 : 16;
   const pad = variant === "mobile" ? "12px 14px" : "10px 12px";
@@ -183,7 +207,7 @@ export function LocaleDatePicker({
   const year = cursor.getFullYear();
   const monthIndex = cursor.getMonth();
   const monthTitle = useMemo(
-    () => formatMonthYearTitle(year, monthIndex, locale),
+    () => formatCalendarNavMonth(year, monthIndex, locale),
     [year, monthIndex, locale],
   );
 
@@ -233,25 +257,97 @@ export function LocaleDatePicker({
     }
   };
 
-  const popover = open && (
-    <div
-      ref={popoverRef}
-      data-fincla-locale-calendar-popover=""
-      role="dialog"
-      aria-label={messages.calendarAria}
-      style={{
-        position: "fixed",
-        top: popoverPos.top,
-        left: popoverPos.left,
-        width: popoverPos.width,
-        zIndex: 10000,
-        background: T.surface,
-        border: `1px solid ${T.border}`,
-        borderRadius: 12,
-        boxShadow: T.lg,
-        padding: 12,
-      }}
-    >
+  const navBase = finclaCalNavButtonBase();
+
+  const handleDraftChange = (e) => {
+    const v = e.target.value;
+    setDraft(v);
+    const res = parseBrDateLooseResult(v, min, max);
+    if (res.status === "ok") {
+      onChange(res.ymd);
+      setDraftError(null);
+      return;
+    }
+    if (res.status === "empty" || res.status === "incomplete") {
+      setDraftError(null);
+      return;
+    }
+    const msg = formatParseError(res.status);
+    if (msg) setDraftError(msg);
+  };
+
+  const handleDraftBlur = (e) => {
+    const res = parseBrDateLooseResult(draft, min, max);
+    if (res.status === "ok") {
+      setDraft(formatYmdToLocaleDisplay(res.ymd, locale));
+      setDraftError(null);
+    } else {
+      setDraft(formatYmdToLocaleDisplay(value, locale));
+      if (res.status === "invalid_date" || res.status === "out_of_range" || res.status === "invalid_format") {
+        setDraftError(formatParseError(res.status));
+      } else {
+        setDraftError(null);
+      }
+    }
+    const next = e.relatedTarget;
+    if (
+      popoverMode === "expand" &&
+      wrapRef.current &&
+      (!next || !wrapRef.current.contains(next))
+    ) {
+      setOpen(false);
+    }
+  };
+
+  /** Seleciona o texto inteiro após pintar (foco + calendário aberto). */
+  const selectAllInInput = useCallback(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.select();
+      });
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!open || popoverMode !== "expand") return;
+    const el = inputRef.current;
+    if (!el || document.activeElement !== el) return;
+    selectAllInInput();
+  }, [open, popoverMode, selectAllInInput]);
+
+  const handleExpandInputFocus = () => {
+    if (disabled) return;
+    setOpen(true);
+    selectAllInInput();
+  };
+
+  /** Enter confirma data válida e fecha o painel. */
+  const handleExpandInputKeyDown = (e) => {
+    if (popoverMode !== "expand") return;
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const raw = inputRef.current?.value ?? draft;
+    const res = parseBrDateLooseResult(raw, min, max);
+    if (res.status === "ok") {
+      onChange(res.ymd);
+      setDraft(formatYmdToLocaleDisplay(res.ymd, locale));
+      setDraftError(null);
+      setOpen(false);
+      inputRef.current?.blur();
+      return;
+    }
+    if (res.status === "empty" || res.status === "incomplete") {
+      setDraftError(null);
+      return;
+    }
+    const msg = formatParseError(res.status);
+    if (msg) setDraftError(msg);
+  };
+
+  const calendarInner = (
+    <>
       <div
         style={{
           display: "flex",
@@ -266,36 +362,38 @@ export function LocaleDatePicker({
           disabled={!canPrev}
           onClick={() => canPrev && shiftMonth(-1)}
           style={{
-            border: "none",
-            background: T.bg,
-            borderRadius: 8,
-            padding: 6,
+            ...navBase,
             cursor: canPrev ? "pointer" : "not-allowed",
             opacity: canPrev ? 1 : 0.35,
-            display: "flex",
+          }}
+          onMouseEnter={(e) => {
+            if (canPrev) e.currentTarget.style.background = T.bg;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "none";
           }}
         >
-          <ChevronLeft size={18} color={T.ink} />
+          <ChevronLeft size={15} color={T.inkMid} />
         </button>
-        <span style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink, textAlign: "center", flex: 1, padding: "0 4px" }}>
-          {monthTitle}
-        </span>
+        <span style={{ ...G, ...finclaCalMonthTitleStyle }}>{monthTitle}</span>
         <button
           type="button"
           aria-label={messages.nextMonthAria}
           disabled={!canNext}
           onClick={() => canNext && shiftMonth(1)}
           style={{
-            border: "none",
-            background: T.bg,
-            borderRadius: 8,
-            padding: 6,
+            ...navBase,
             cursor: canNext ? "pointer" : "not-allowed",
             opacity: canNext ? 1 : 0.35,
-            display: "flex",
+          }}
+          onMouseEnter={(e) => {
+            if (canNext) e.currentTarget.style.background = T.bg;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "none";
           }}
         >
-          <ChevronRight size={18} color={T.ink} />
+          <ChevronRight size={15} color={T.inkMid} />
         </button>
       </div>
 
@@ -303,22 +401,11 @@ export function LocaleDatePicker({
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(7, 1fr)",
-          gap: 2,
-          marginBottom: 6,
+          marginBottom: 4,
         }}
       >
         {weekdays.map((wd, wi) => (
-          <div
-            key={`w-${wi}`}
-            style={{
-              ...G,
-              fontSize: 10,
-              fontWeight: 700,
-              color: T.inkLight,
-              textAlign: "center",
-              padding: "4px 0",
-            }}
-          >
+          <div key={`w-${wi}`} style={{ ...G, ...finclaCalendarWeekdayCellStyle }}>
             {wd}
           </div>
         ))}
@@ -328,8 +415,9 @@ export function LocaleDatePicker({
         style={{
           display: "grid",
           gridTemplateColumns: "repeat(7, 1fr)",
-          gap: 4,
+          gap: "2px 0",
         }}
+        onMouseLeave={() => setHoverDay(null)}
       >
         {cells.map((day, idx) => {
           if (day == null) return <div key={`e-${idx}`} />;
@@ -337,27 +425,55 @@ export function LocaleDatePicker({
           const dis = isDisabledYmd(cellYmd);
           const sel = value === cellYmd;
           const isTodayCell = todayY === cellYmd;
+          const hov = hoverDay === day && !dis;
           return (
-            <button
+            <div
               key={day}
-              type="button"
-              disabled={dis}
-              onClick={() => pick(day)}
+              role="button"
+              tabIndex={dis ? -1 : 0}
+              onClick={() => !dis && pick(day)}
+              onKeyDown={(e) => {
+                if (dis) return;
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  pick(day);
+                }
+              }}
+              onMouseEnter={() => !dis && setHoverDay(day)}
               style={{
-                ...G,
-                border: "none",
-                borderRadius: 8,
-                padding: "8px 0",
-                fontSize: 12,
-                fontWeight: 600,
+                textAlign: "center",
                 cursor: dis ? "not-allowed" : "pointer",
-                background: sel ? T.ink : isTodayCell ? T.bg : "transparent",
-                color: sel ? "#fff" : dis ? T.inkGhost : T.ink,
-                opacity: dis ? 0.35 : 1,
+                padding: "1px 0",
               }}
             >
-              {day}
-            </button>
+              <div
+                style={{
+                  width: FINCLA_CAL_DAY_PX,
+                  height: FINCLA_CAL_DAY_PX,
+                  borderRadius: "50%",
+                  margin: "0 auto",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: sel ? T.ink : hov ? T.bg : "transparent",
+                  border: isTodayCell && !sel ? `1.5px solid ${T.ink}` : "none",
+                  boxSizing: "border-box",
+                  transition: "background 0.1s",
+                  opacity: dis ? 0.35 : 1,
+                }}
+              >
+                <span
+                  style={{
+                    ...G,
+                    fontSize: 12,
+                    fontWeight: sel || isTodayCell ? 700 : 500,
+                    color: sel ? "#fff" : isTodayCell ? T.ink : T.inkMid,
+                  }}
+                >
+                  {day}
+                </span>
+              </div>
+            </div>
           );
         })}
       </div>
@@ -378,8 +494,8 @@ export function LocaleDatePicker({
             ...G,
             flex: 1,
             border: "none",
-            borderRadius: 8,
-            padding: "8px 10px",
+            borderRadius: 9,
+            padding: "9px 10px",
             fontSize: 12,
             fontWeight: 600,
             background: T.blueLight,
@@ -397,8 +513,8 @@ export function LocaleDatePicker({
             ...G,
             flex: 1,
             border: `1px solid ${T.border}`,
-            borderRadius: 8,
-            padding: "8px 10px",
+            borderRadius: 9,
+            padding: "9px 10px",
             fontSize: 12,
             fontWeight: 600,
             background: T.surface,
@@ -409,8 +525,131 @@ export function LocaleDatePicker({
           {messages.close}
         </button>
       </div>
-    </div>
+    </>
   );
+
+  const portalPopover =
+    open &&
+    popoverMode === "portal" && (
+      <div
+        ref={popoverRef}
+        data-fincla-locale-calendar-popover=""
+        role="dialog"
+        aria-label={messages.calendarAria}
+        style={{
+          position: "fixed",
+          top: popoverPos.top,
+          left: popoverPos.left,
+          width: popoverPos.width,
+          zIndex: 10000,
+          background: T.surface,
+          border: `1px solid ${T.border}`,
+          borderRadius: FINCLA_CALENDAR_SURFACE_RADIUS,
+          boxShadow: FINCLA_CALENDAR_SHADOW,
+          padding: "12px 14px 14px",
+        }}
+      >
+        {calendarInner}
+      </div>
+    );
+
+  if (popoverMode === "expand") {
+    return (
+      <div
+        ref={wrapRef}
+        style={{
+          position: "relative",
+          width: "100%",
+          border: `1px solid ${draftError ? T.red : open ? T.inkMid : T.border}`,
+          borderRadius: radius,
+          background: T.surface,
+          boxShadow: open ? T.sm : "none",
+          transition: "border-color 0.2s ease, box-shadow 0.2s ease",
+          overflow: "hidden",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: variant === "mobile" ? 10 : 8,
+            padding: pad,
+          }}
+        >
+          <Calendar size={iconSize} color={T.inkMid} strokeWidth={2} style={{ flexShrink: 0 }} aria-hidden />
+          <input
+            ref={inputRef}
+            id={id}
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder="dd/mm/aaaa"
+            disabled={disabled}
+            value={draft}
+            onChange={handleDraftChange}
+            onBlur={handleDraftBlur}
+            onFocus={handleExpandInputFocus}
+            onKeyDown={handleExpandInputKeyDown}
+            aria-expanded={open}
+            aria-haspopup="dialog"
+            aria-invalid={draftError ? "true" : "false"}
+            aria-describedby={draftError ? dateErrId : undefined}
+            style={{
+              ...G,
+              ...NUM,
+              flex: 1,
+              minWidth: 0,
+              border: "none",
+              outline: "none",
+              background: "transparent",
+              fontSize: displayFontSize,
+              fontWeight: 600,
+              color: T.ink,
+              letterSpacing: "-0.01em",
+              lineHeight: 1.35,
+            }}
+          />
+        </div>
+        {draftError ? (
+          <div
+            id={dateErrId}
+            role="alert"
+            style={{
+              ...G,
+              padding: variant === "mobile" ? "0 14px 10px" : "0 12px 8px",
+              fontSize: variant === "mobile" ? 12 : 11,
+              fontWeight: 600,
+              color: T.red,
+              lineHeight: 1.4,
+            }}
+          >
+            {draftError}
+          </div>
+        ) : null}
+        <div
+          ref={popoverRef}
+          data-fincla-locale-calendar-popover=""
+          role="region"
+          aria-label={messages.calendarAria}
+          onMouseDown={(e) => e.preventDefault()}
+          style={{
+            maxHeight: open ? 380 : 0,
+            opacity: open ? 1 : 0,
+            overflow: "hidden",
+            transition: "max-height 0.22s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.18s ease",
+            borderTop: open ? `1px solid ${T.border}` : "1px solid transparent",
+            paddingLeft: 12,
+            paddingRight: 12,
+            paddingBottom: open ? 12 : 0,
+            paddingTop: open ? 10 : 0,
+            pointerEvents: open ? "auto" : "none",
+          }}
+        >
+          {calendarInner}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div ref={wrapRef} style={{ position: "relative", width: "100%" }}>
@@ -456,9 +695,7 @@ export function LocaleDatePicker({
           {formatYmdToLocaleDisplay(value, locale)}
         </span>
       </button>
-      {typeof document !== "undefined" && popover
-        ? createPortal(popover, document.body)
-        : null}
+      {typeof document !== "undefined" && portalPopover ? createPortal(portalPopover, document.body) : null}
     </div>
   );
 }

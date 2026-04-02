@@ -56,20 +56,14 @@ function SidebarInner({ page, onNav, onClose }) {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: 7,
-              background: `linear-gradient(135deg, ${T.blue}, ${T.purple})`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Activity size={14} color="#fff" strokeWidth={2.5} />
-          </div>
-          <span style={{ ...G, fontSize: 14, fontWeight: 800, color: T.ink, letterSpacing: "0.02em" }}>FINCLA</span>
+          <img
+            src="/logo.png"
+            alt="Fincla"
+            width={24}
+            height={24}
+            style={{ objectFit: "contain", display: "block", flexShrink: 0 }}
+          />
+          <span style={{ ...G, fontSize: 14, fontWeight: 700, color: T.ink, letterSpacing: "-0.02em" }}>Fincla</span>
         </div>
         {onClose && (
           <button

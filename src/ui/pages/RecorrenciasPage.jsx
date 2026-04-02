@@ -28,7 +28,12 @@ import { CategoryLucideIcon } from "../components/CategoryLucideIcon.jsx";
 import { buildUpcomingRecurringSummary } from "../data/recurringTransactionsAdapter.js";
 import { useRecurringTransactionsData } from "../features/recurringTransactions/useRecurringTransactionsData.js";
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
-const MONTH_NAMES_PT = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+import { weekdayLabelsShort, formatCalendarNavMonth } from "../components/finclaCalendarI18n.js";
+import {
+  FINCLA_CAL_DAY_PX,
+  finclaCalendarWeekdayCellStyle,
+} from "../components/finclaCalendarStyles.js";
+import { APP_UI_LOCALE } from "../appLocale.js";
 
 function MiniCalendar({ recorrencias = [], selectedDay, onSelectDay }) {
   const hoje = new Date();
@@ -37,53 +42,77 @@ function MiniCalendar({ recorrencias = [], selectedDay, onSelectDay }) {
   const daysInMonth = new Date(ano, mes + 1, 0).getDate();
   const firstDow = new Date(ano, mes, 1).getDay();
   const diasVenc = new Set(recorrencias.filter((r) => r.ativa).map((r) => r.dia));
-  const DAY_LABELS = ["D", "S", "T", "Q", "Q", "S", "S"];
+  const wkLabels = weekdayLabelsShort(APP_UI_LOCALE);
 
   const handleDayClick = (day) => {
     if (onSelectDay) onSelectDay(selectedDay === day ? null : day);
   };
 
+  const monthTitle = formatCalendarNavMonth(ano, mes, APP_UI_LOCALE);
+
   return (
     <div style={{ background: T.surface, borderRadius: 12, border: `1px solid ${T.border}`, padding: "12px 14px" }}>
-      <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.ink, marginBottom: 10 }}>
-        {MONTH_NAMES_PT[mes]} {ano}
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2, marginBottom: 4 }}>
-        {DAY_LABELS.map((d, i) => (
-          <div key={i} style={{ ...G, fontSize: 9, fontWeight: 600, color: T.inkGhost, textAlign: "center", padding: "2px 0" }}>
+      <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.ink, marginBottom: 10 }}>{monthTitle}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", marginBottom: 4 }}>
+        {wkLabels.map((d, i) => (
+          <div key={i} style={{ ...G, ...finclaCalendarWeekdayCellStyle, fontSize: 9 }}>
             {d}
           </div>
         ))}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 2 }}>
-        {Array.from({ length: firstDow }).map((_, i) => <div key={`e${i}`} />)}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: "2px 0" }}>
+        {Array.from({ length: firstDow }).map((_, i) => (
+          <div key={`e${i}`} />
+        ))}
         {Array.from({ length: daysInMonth }, (_, i) => {
           const day = i + 1;
-          const isHoje = day === hoje.getDate();
+          const isHoje = day === hoje.getDate() && mes === hoje.getMonth() && ano === hoje.getFullYear();
           const isVenc = diasVenc.has(day);
           const isSel = selectedDay === day;
           return (
-            <div key={day}
+            <div
+              key={day}
+              role="presentation"
               onClick={() => handleDayClick(day)}
-              style={{
-                ...G,
-                fontSize: 10,
-                fontWeight: isVenc || isHoje || isSel ? 700 : 400,
-                textAlign: "center",
-                padding: "4px 2px",
-                borderRadius: 6,
-                background: isSel ? T.purple : isHoje ? T.ink : isVenc ? T.blueLight : "transparent",
-                color: isSel || isHoje ? "#fff" : isVenc ? T.blue : T.inkMid,
-                position: "relative",
-                cursor: "pointer",
-                transition: "background 0.12s, color 0.12s",
-                outline: isSel ? `2px solid ${T.purple}44` : "none",
-                outlineOffset: 1,
-              }}>
-              {day}
-              {isVenc && !isHoje && !isSel && (
-                <div style={{ width: 3, height: 3, borderRadius: "50%", background: T.blue, margin: "1px auto 0" }} />
-              )}
+              style={{ textAlign: "center", cursor: "pointer", padding: "1px 0" }}
+            >
+              <div
+                style={{
+                  width: FINCLA_CAL_DAY_PX,
+                  height: FINCLA_CAL_DAY_PX,
+                  borderRadius: "50%",
+                  margin: "0 auto",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  background: isSel ? T.purple : isHoje && !isSel ? "transparent" : isVenc ? T.blueLight : "transparent",
+                  border: isSel
+                    ? "none"
+                    : isHoje && !isSel
+                      ? `1.5px solid ${T.ink}`
+                      : isVenc && !isHoje && !isSel
+                        ? `1px solid ${T.blue}33`
+                        : "none",
+                  boxSizing: "border-box",
+                  transition: "background 0.12s, color 0.12s",
+                }}
+              >
+                <span
+                  style={{
+                    ...G,
+                    fontSize: 11,
+                    fontWeight: isVenc || isHoje || isSel ? 700 : 500,
+                    color: isSel || isHoje ? (isSel ? "#fff" : T.ink) : isVenc ? T.blue : T.inkMid,
+                    lineHeight: 1,
+                  }}
+                >
+                  {day}
+                </span>
+                {isVenc && !isHoje && !isSel && (
+                  <div style={{ width: 3, height: 3, borderRadius: "50%", background: T.blue, marginTop: 1 }} />
+                )}
+              </div>
             </div>
           );
         })}
