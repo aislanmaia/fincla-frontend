@@ -4,7 +4,7 @@ import {
   WhatsAppConnection,
   CreateWhatsAppConnectionRequest,
   ListWhatsAppConnectionsResponse,
-} from '../types/api';
+} from './types';
 
 /**
  * Vincula um número de WhatsApp à organização.

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import apiClient from '../client';
-import { API_CONFIG } from '../../config/api';
+import { API_CONFIG } from '../config';
 
 describe('API Config Integration', () => {
   it('apiClient deve usar API_CONFIG.BASE_URL como fonte única de verdade', () => {
@@ -58,7 +58,7 @@ describe('API Config Integration', () => {
   });
 
   it('buildApiUrl deve construir URLs completas corretamente', async () => {
-    const { buildApiUrl } = await import('../../config/api');
+    const { buildApiUrl } = await import('../config');
     
     const loginUrl = buildApiUrl(API_CONFIG.ENDPOINTS.AUTH.LOGIN);
     expect(loginUrl).toMatch(/\/v1\/auth\/login$/);
@@ -68,7 +68,7 @@ describe('API Config Integration', () => {
   });
 
   it('buildApiUrl deve substituir parâmetros corretamente', async () => {
-    const { buildApiUrl } = await import('../../config/api');
+    const { buildApiUrl } = await import('../config');
     
     const url = buildApiUrl('/transactions/:id', { id: '123' });
     expect(url).toContain('/transactions/123');

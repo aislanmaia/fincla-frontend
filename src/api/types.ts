@@ -1,0 +1,1365 @@
+// types/api.ts
+
+// ===== AUTENTICAÇÃO =====
+export type UserRole = 'owner' | 'member' | 'consultant';
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  token: string;
+  user_id: string;
+  email: string;
+  role: UserRole;
+  subscription: {
+    plan: 'free' | 'beta' | 'premium';
+    max_organizations: number;
+    max_users_per_org: number;
+    status: 'active' | 'inactive';
+  };
+}
+
+export interface User {
+  id: string;
+  email: string;
+  role: UserRole;
+  first_name: string | null;
+  last_name: string | null;
+  avatar_url: string | null;
+  phone: string | null;
+  onboarding_completed: boolean;
+  created_at: string;
+  subscription?: {
+    plan: 'free' | 'beta' | 'premium';
+    status: 'active' | 'inactive';
+    max_organizations: number;
+    max_users_per_org: number;
+    features: string[];
+  };
+}
+
+export interface UpdateProfileRequest {
+  first_name?: string | null;
+  last_name?: string | null;
+  avatar_url?: string | null;
+  phone?: string | null;
+  onboarding_completed?: boolean | null;
+}
+
+// ===== ORGANIZAÇÕES =====
+/** Valores canônicos em respostas; no POST/PATCH o backend aceita aliases em PT. */
+export type OrgTypeCanonical = 'personal' | 'couple' | 'family' | 'business';
+
+export interface CreateOrganizationRequest {
+  name: string;
+  description?: string | null;
+  org_type?: OrgTypeCanonical | string;
+  monthly_income?: number | string | null;
+  avatar_url?: string | null;
+}
+
+export interface Organization {
+  id: string;
+  name: string;
+  description: string | null;
+  org_type: string | null;
+  monthly_income: number | null;
+  avatar_url: string | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface UpdateOrganizationRequest {
+  name?: string | null;
+  description?: string | null;
+  org_type?: string | null;
+  monthly_income?: number | null;
+  avatar_url?: string | null;
+}
+
+export interface CreateOrganizationResponse {
+  organization: Organization;
+  membership: {
+    id: string;
+    user_id: string;
+    organization_id: string;
+    role: 'owner' | 'member';
+    created_at: string;
+  };
+}
+
+export type OrganizationInvitationStatus =
+  | 'pending'
+  | 'accepted'
+  | 'cancelled'
+  | 'expired';
+
+export interface OrganizationInvitation {
+  id: string;
+  email: string;
+  organization_id: string;
+  status: OrganizationInvitationStatus;
+  expires_at: string;
+  created_at: string;
+  accepted_at: string | null;
+  cancelled_at: string | null;
+  last_sent_at: string | null;
+}
+
+export interface CreateOrganizationInvitationsResponse {
+  invitations: OrganizationInvitation[];
+}
+
+export interface ListOrganizationInvitationsResponse {
+  total: number;
+  invitations: OrganizationInvitation[];
+}
+
+export interface ResendOrganizationInvitationResponse {
+  invitation: OrganizationInvitation;
+}
+
+export interface AcceptInvitationRequest {
+  token: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  password: string;
+}
+
+export interface AcceptInvitationResponse {
+  user: {
+    id: string;
+    email: string;
+    role: string;
+    first_name: string | null;
+    last_name: string | null;
+  };
+  membership: {
+    id: string;
+    user_id: string;
+    organization_id: string;
+    role: 'member';
+    created_at: string;
+  };
+  invitation: OrganizationInvitation;
+}
+
+export interface OrganizationWithMembership {
+  organization: Organization;
+  membership: {
+    id: string;
+    role: 'owner' | 'member';
+    created_at: string;
+  };
+}
+
+export interface MyOrganizationsResponse {
+  total: number;
+  organizations: OrganizationWithMembership[];
+}
+
+// ===== MEMBERSHIPS =====
+export interface Membership {
+  membership_id: string;
+  user_id: string;
+  role: 'owner' | 'member';
+  created_at: string;
+}
+
+export interface OrganizationMembersResponse {
+  organization: {
+    id: string;
+    name: string;
+  };
+  total_members: number;
+  members: Membership[];
+}
+
+// ===== WHATSAPP CONNECTIONS =====
+export interface WhatsAppConnection {
+  id: string;
+  user_id: string;
+  organization_id: string;
+  phone_number: string;
+  is_active: boolean;
+  connected_at: string;
+}
+
+export interface CreateWhatsAppConnectionRequest {
+  organization_id: string;
+  phone_number: string;
+}
+
+export interface ListWhatsAppConnectionsResponse {
+  total: number;
+  connections: WhatsAppConnection[];
+}
+
+// ===== USUÁRIOS =====
+export interface RegisterOwnerRequest {
+  email: string;
+  password: string;
+  plan?: 'free' | 'beta' | 'premium';
+}
+
+export interface RegisterOwnerResponse {
+  id: string;
+  email: string;
+  role: 'owner';
+  created_at: string;
+  subscription: {
+    plan: 'free' | 'beta' | 'premium';
+    status: 'active';
+    max_organizations: number;
+    max_users_per_org: number;
+  };
+}
+
+export interface RegisterMemberRequest {
+  email: string;
+  password: string;
+  organization_id: string;
+}
+
+export interface RegisterMemberResponse {
+  user: {
+    id: string;
+    email: string;
+    role: 'member';
+    created_at: string;
+  };
+  membership: {
+    id: string;
+    organization_id: string;
+    role: 'member';
+    created_at: string;
+  };
+}
+
+export interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
+}
+
+export interface ChangePasswordResponse {
+  message: string;
+  user_id: string;
+}
+
+// ===== TAG TYPES =====
+export interface TagType {
+  id: string;
+  name: string;
+  description: string | null;
+  is_required: boolean;
+  max_per_transaction: number | null;
+}
+
+export interface TagTypesResponse {
+  tag_types: TagType[];
+}
+
+export interface CreateTagTypeRequest {
+  name: string;
+  description?: string | null;
+  is_required?: boolean;
+  max_per_transaction?: number | null;
+}
+
+export interface UpdateTagTypeRequest {
+  name?: string;
+  description?: string | null;
+  is_required?: boolean;
+  max_per_transaction?: number | null;
+}
+
+// ===== TAGS =====
+export interface TagTypeInfo {
+  id: string;
+  name: string;
+  description: string | null;
+  is_required: boolean;
+  max_per_transaction: number | null;
+}
+
+export interface Tag {
+  id: string;
+  name: string;
+  tag_type: TagTypeInfo;
+  color: string | null;
+  is_default: boolean;
+  is_active: boolean;
+  organization_id: string;
+  sort_order: number;
+  is_onboarding_highlight: boolean;
+  /** Lucide em kebab-case; ver docs/FRONTEND_API_GUIDE.md — Tags */
+  icon_key: string | null;
+  /** Tipo `detalhe`: UUID da categoria pai; `null` para categorias */
+  parent_category_tag_id: string | null;
+}
+
+export interface CreateTagRequest {
+  name: string;
+  tag_type_id: string;
+  color?: string | null;
+  sort_order?: number;
+  is_onboarding_highlight?: boolean;
+  icon_key?: string | null;
+  parent_category_tag_id?: string | null;
+}
+
+export interface UpdateTagRequest {
+  name: string;
+  tag_type_id: string;
+  color?: string | null;
+  sort_order?: number;
+  is_onboarding_highlight?: boolean;
+  icon_key?: string | null;
+  parent_category_tag_id?: string | null;
+}
+
+export interface TagsResponse {
+  tags: Tag[];
+}
+
+// ===== TRANSAÇÕES =====
+export interface CreateTransactionRequest {
+  organization_id: string;
+  type: 'income' | 'expense';
+  description: string;
+  /** Obrigatório: pelo menos uma tag do tipo categoria (ver guia da API) */
+  tag_ids: string[];
+  value: number;
+  payment_method: string;
+  date: string; // ISO datetime string (YYYY-MM-DDTHH:MM or YYYY-MM-DDTHH:MM:SS)
+  card_last4?: string | null;
+  card_id?: number | null;
+  modality?: 'cash' | 'installment' | null;
+  installments_count?: number | null;
+  recurring?: boolean;
+  category?: string | null; // Campo legado
+}
+
+export interface UpdateTransactionRequest {
+  type?: 'income' | 'expense';
+  description?: string;
+  tag_ids?: string[];
+  value?: number;
+  payment_method?: string;
+  date: string; // REQUIRED - ISO datetime string
+  recurring?: boolean;
+  category?: string; // Campo legado
+  card_id?: number;
+  card_last4?: string;
+  modality?: 'cash' | 'installment';
+  installments_count?: number;
+}
+
+export interface CreditCardChargeInfo {
+  charge: {
+    id: number;
+    organization_id: string;
+    card_id: number;
+    transaction_id: number;
+    total_amount: number;
+    installments_count: number;
+    modality: 'cash' | 'installment';
+    purchase_date: string;
+  };
+  card: {
+    id: number;
+    organization_id: string;
+    last4: string;
+    brand: string;
+    due_day: number;
+    description: string | null;
+  };
+}
+
+// Legacy alias for backwards compatibility
+export type CreditCardCharge = CreditCardChargeInfo;
+
+export interface Transaction {
+  id: number;
+  organization_id: string;
+  type: 'income' | 'expense';
+  description: string;
+  tags: Record<string, Tag[]>;
+  value: number;
+  payment_method: string;
+  date: string;
+  status: 'pending' | 'completed' | 'cancelled';
+  recurring: boolean;
+  created_at: string;
+  updated_at: string;
+  credit_card_charge?: CreditCardChargeInfo | null;
+  installment_info?: InstallmentInfo[] | null;
+  category?: string | null; // Campo legado
+  // Campos derivados do credit_card_charge para acesso direto
+  card_last4?: string | null;
+  modality?: 'cash' | 'installment' | null;
+  installments_count?: number | null;
+}
+
+/** Info de parcela quando a transação aparece na lista por causa do vencimento no range */
+export interface InstallmentInfo {
+  installment_number: number;
+  total_installments: number;
+  due_date: string; // YYYY-MM-DD
+  amount: number;
+}
+
+export type SortByField = 'date' | 'value' | 'type' | 'payment_method' | 'description' | 'category';
+export type SortOrder = 'asc' | 'desc';
+
+export interface ListTransactionsQuery {
+  organization_id: string;
+  type?: 'income' | 'expense';
+  category?: string;
+  payment_method?: string;
+  description?: string;
+  status?: 'pending' | 'completed' | 'cancelled';
+  tag_id?: string;
+  date_start?: string;
+  date_end?: string;
+  value_min?: number;
+  value_max?: number;
+  recurring?: boolean;
+  page?: number;
+  limit?: number;
+  sort_by?: SortByField;
+  sort_order?: SortOrder;
+}
+
+export interface PaginationMetadata {
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+  has_next: boolean;
+  has_prev: boolean;
+}
+
+export interface PaginatedTransactionsResponse {
+  data: Transaction[];
+  pagination: PaginationMetadata;
+}
+
+export interface TransactionsSummaryQuery {
+  organization_id: string;
+  type?: 'income' | 'expense';
+  category?: string;
+  /** Quando o filtro da UI usa UUID da tag categoria (alinhado a GET /transactions) */
+  tag_id?: string;
+  payment_method?: string;
+  description?: string;
+  date_start?: string;
+  date_end?: string;
+  value_min?: number;
+  value_max?: number;
+}
+
+export interface PeriodInfo {
+  start_date: string | null;
+  end_date: string | null;
+}
+
+export interface FiltersInfo {
+  organization_id: string;
+  type: string | null;
+  category: string | null;
+  payment_method: string | null;
+  date_start: string | null;
+  date_end: string | null;
+}
+
+export interface TransactionsSummaryResponse {
+  total_transactions: number;
+  total_value: number;
+  total_income: number;
+  total_expenses: number;
+  balance: number;
+  average_transaction: number;
+  period: PeriodInfo;
+  filters_applied: FiltersInfo;
+}
+
+// ===== CARTÕES DE CRÉDITO =====
+export interface CreateCreditCardRequest {
+  organization_id: string;
+  last4: string;
+  brand: string;
+  due_day: number;
+  description?: string | null;
+  credit_limit?: number;
+  closing_day?: number;
+  color?: string;
+}
+
+export interface UpdateCreditCardRequest {
+  organization_id: string;
+  last4?: string;
+  brand?: string;
+  due_day?: number;
+  description?: string | null;
+  credit_limit?: number;
+  closing_day?: number;
+  color?: string;
+}
+
+export interface CreditCard {
+  id: number;
+  organization_id: string;
+  last4: string;
+  brand: string;
+  due_day: number;
+  description: string | null;
+  credit_limit: number | null;
+  closing_day: number | null;
+  color: string | null;
+  available_limit: number | null;
+  used_limit: number;
+  limit_usage_percent: number | null;
+}
+
+export interface CategoryBreakdown {
+  category_id: string | null;
+  category_name: string;
+  category_color: string;
+  total: number;
+  percentage: number;
+  transaction_count: number;
+}
+
+export interface PurchaseInfo {
+  purchase_date: string;
+  total_value: number;
+  last_installment_date: string;
+  remaining_after_this: number;
+}
+
+export interface InvoiceItemResponse {
+  id: number;
+  charge_id: number;
+  transaction_date: string;
+  description: string;
+  amount: number;
+  installment_number: number;
+  total_installments: number;
+  tags: Record<string, Tag[]>;
+  purchase_info?: PurchaseInfo;
+}
+
+export interface InvoiceResponse {
+  month: string;
+  due_date: string;
+  total_amount: number;
+  status: 'open' | 'closed' | 'paid';
+  items: InvoiceItemResponse[];
+  closing_date: string | null;
+  days_until_due: number;
+  is_overdue: boolean;
+  paid_date: string | null;
+  previous_month_total: number | null;
+  month_over_month_change: number | null;
+  limit_usage_percent: number | null;
+  items_count: number;
+  category_breakdown: CategoryBreakdown[];
+}
+
+// ===== HISTÓRICO DE FATURAS =====
+export interface InvoiceHistoryItem {
+  year: number;
+  month: number;
+  month_name: string;
+  total_amount: number;
+  status: string;
+  items_count: number;
+  top_category: string | null;
+}
+
+export interface InvoiceHistorySummary {
+  total_spent: number;
+  average_monthly: number;
+  highest_month: { month: string; amount: number } | null;
+  lowest_month: { month: string; amount: number } | null;
+}
+
+export interface InvoiceHistoryResponse {
+  card_id: number;
+  card_name: string;
+  period_start: string;
+  period_end: string;
+  summary: InvoiceHistorySummary;
+  monthly_data: InvoiceHistoryItem[];
+}
+
+// ===== MARCAR FATURA COMO PAGA =====
+export interface MarkInvoicePaidRequest {
+  paid_date?: string;
+}
+
+export interface InvoiceMarkPaidResponse {
+  card_id: number;
+  year: number;
+  month: number;
+  status: string;
+  paid_date: string | null;
+}
+
+// ===== MOVER PARCELA ENTRE FATURAS =====
+export interface MoveInstallmentRequest {
+  target_year: number;
+  target_month: number;
+}
+
+export interface MoveInstallmentResponse {
+  success: boolean;
+  message: string;
+}
+
+// ===== COMPROMISSOS FUTUROS (CARTÕES) =====
+export interface MonthSummary {
+  year: number;
+  month: number;
+  month_name: string;
+  amount: number;
+}
+
+export interface FutureInstallmentItem {
+  description: string;
+  amount: number;
+  installment_number: number;
+  total_installments: number;
+  category_name: string | null;
+  category_color: string | null;
+}
+
+export interface MonthlyBreakdown {
+  year: number;
+  month: number;
+  month_name: string;
+  total_amount: number;
+  limit_usage_percent: number | null;
+  installments_count: number;
+  top_installments: FutureInstallmentItem[];
+}
+
+export interface EndingInstallment {
+  description: string;
+  purchase_date: string;
+  total_value: number;
+  monthly_amount: number;
+  total_installments: number;
+  remaining_installments: number;
+  last_installment_date: string;
+  last_installment_month: string;
+  category_name: string | null;
+}
+
+export interface FutureCommitmentsInsight {
+  type: 'ending_commitment' | 'best_month' | 'limit_warning' | 'decreasing_trend' | 'no_commitments' | 'card_distribution' | 'total_reduction' | 'best_card_for_purchase';
+  icon: string;
+  message: string;
+}
+
+export interface FutureCommitmentsResponse {
+  card_id: number;
+  card_name: string;
+  card_last4: string;
+  credit_limit: number | null;
+  current_available_limit: number | null;
+  summary: {
+    total_committed: number;
+    average_monthly: number;
+    lowest_month: MonthSummary | null;
+    highest_month: MonthSummary | null;
+  };
+  monthly_breakdown: MonthlyBreakdown[];
+  ending_soon: EndingInstallment[];
+  insights: FutureCommitmentsInsight[];
+}
+
+export interface CardCommitmentSummary {
+  card_id: number;
+  card_name: string;
+  card_last4: string;
+  credit_limit: number | null;
+  total_committed: number;
+  percentage_of_total: number;
+}
+
+export interface MonthlyTotal {
+  year: number;
+  month: number;
+  month_name: string;
+  total_amount: number;
+  by_card: { card_id: number; card_name: string; amount: number }[];
+}
+
+export interface EndingInstallmentAllCards {
+  card_id: number;
+  card_name: string;
+  description: string;
+  monthly_amount: number;
+  remaining_installments: number;
+  last_installment_month: string;
+}
+
+export interface ConsolidatedCommitmentsResponse {
+  organization_id: string;
+  total_cards: number;
+  total_credit_limit: number;
+  total_available_limit: number;
+  summary: {
+    total_committed_all_cards: number;
+    average_monthly_all_cards: number;
+    lowest_month: MonthSummary | null;
+    highest_month: MonthSummary | null;
+  };
+  by_card: CardCommitmentSummary[];
+  monthly_total: MonthlyTotal[];
+  ending_soon_all_cards: EndingInstallmentAllCards[];
+  global_insights: FutureCommitmentsInsight[];
+}
+
+// ===== METAS (GOALS) =====
+export interface CreateGoalRequest {
+  organization_id: string;
+  name: string;
+  target_amount: number;
+  deadline: string; // ISO date string (YYYY-MM-DD)
+  description?: string | null;
+}
+
+export interface UpdateGoalRequest {
+  name?: string;
+  target_amount?: number;
+  current_amount?: number;
+  deadline?: string;
+  status?: 'active' | 'completed' | 'cancelled';
+  description?: string | null;
+}
+
+export interface Goal {
+  id: string;
+  organization_id: string;
+  name: string;
+  target_amount: number;
+  current_amount: number;
+  deadline: string;
+  status: 'active' | 'completed' | 'cancelled';
+  description: string | null;
+  created_at: string;
+  updated_at: string | null;
+  progress: number; // Porcentagem 0-100
+}
+
+// ===== CONTRIBUIÇÕES DE METAS =====
+export interface CreateGoalContributionRequest {
+  amount: number;
+  contributed_at?: string | null; // YYYY-MM-DD (default: hoje)
+  note?: string | null;
+}
+
+export interface GoalContribution {
+  id: string;
+  goal_id: string;
+  amount: number;
+  contributed_at: string;
+  created_at: string;
+  note: string | null;
+}
+
+export interface GoalContributionListResponse {
+  contributions: GoalContribution[];
+  total_contributed: number;
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+  has_next: boolean;
+  has_prev: boolean;
+}
+
+// ===== ORÇAMENTOS (BUDGETS) =====
+export interface CreateBudgetRequest {
+  tag_id: string;
+  amount: number;
+  period_type?: string; // "monthly" (padrão), "weekly", "yearly" ou "custom"
+  start_date?: string | null;
+  end_date?: string | null;
+}
+
+export interface UpdateBudgetRequest {
+  amount?: number | null;
+  period_type?: string | null;
+  is_active?: boolean | null;
+  start_date?: string | null;
+  end_date?: string | null;
+}
+
+export interface Budget {
+  id: string;
+  organization_id: string;
+  tag_id: string;
+  tag_name: string;
+  /** Quando o backend enviar, alinha ícone à UI (Lucide `icon_key`) */
+  tag_icon_key?: string | null;
+  tag_color: string | null;
+  amount: number;
+  period_type: string;
+  is_active: boolean;
+  spent_amount: number;
+  remaining_amount: number;
+  usage_percent: number;
+  status: 'ok' | 'warning' | 'exceeded';
+  created_at: string;
+  updated_at: string;
+  start_date: string | null;
+  end_date: string | null;
+}
+
+export interface BudgetsSummary {
+  total_budgeted: number;
+  total_spent: number;
+  total_remaining: number;
+  budgets_exceeded: number;
+  budgets_warning: number;
+  budgets_ok: number;
+}
+
+export interface BudgetListResponse {
+  budgets: Budget[];
+  summary: BudgetsSummary;
+}
+
+/** POST /v1/budgets/preview-transaction */
+export interface PreviewTransactionRequest {
+  organization_id: string;
+  type: 'expense' | 'income';
+  value: number;
+  tag_id: string | null;
+  date: string;
+  payment_method?: string | null;
+  installments_count?: number | null;
+  card_id?: number | null;
+}
+
+export interface PreviewTransactionCategoryBlock {
+  tag_id: string | null;
+  tag_name: string | null;
+  budget_amount: string | null;
+  spent_before: string;
+  spent_after: string;
+  usage_percent_before: number | null;
+  usage_percent_after: number | null;
+  remaining_before: string | null;
+  remaining_after: string | null;
+}
+
+export interface PreviewTransactionBudgetsSummary {
+  total_budgeted: string;
+  total_spent_before: string;
+  total_spent_after: string;
+  total_remaining_after: string;
+  percent_of_total_budget_after: number | null;
+}
+
+export interface PreviewTransactionMonthProjection {
+  projected_total_expenses_end_of_month: string;
+  projected_percent_of_budget: number | null;
+  label_context: string;
+}
+
+export interface PreviewTransactionResponse {
+  category: PreviewTransactionCategoryBlock;
+  budgets_summary: PreviewTransactionBudgetsSummary;
+  month_projection: PreviewTransactionMonthProjection | null;
+}
+
+/** GET /v1/analytics/spending-by-day */
+export interface SpendingByDayPoint {
+  date: string;
+  total_expenses: string;
+}
+
+export interface SpendingByDayResponse {
+  points: SpendingByDayPoint[];
+  currency: string;
+  period: { start: string; end: string };
+}
+
+// ===== TRANSAÇÕES RECORRENTES =====
+export interface CreateRecurringTransactionRequest {
+  type: 'income' | 'expense';
+  description: string;
+  value: number;
+  payment_method: string;
+  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  start_date: string;
+  tag_ids?: string[];
+  day_of_month?: number | null;
+  day_of_week?: number | null;
+  end_date?: string | null;
+  credit_card_id?: number | null;
+  notes?: string | null;
+}
+
+export interface UpdateRecurringTransactionRequest {
+  description?: string | null;
+  value?: number | null;
+  payment_method?: string | null;
+  frequency?: 'daily' | 'weekly' | 'monthly' | 'yearly' | null;
+  day_of_month?: number | null;
+  day_of_week?: number | null;
+  end_date?: string | null;
+  credit_card_id?: number | null;
+  notes?: string | null;
+  tag_ids?: string[] | null;
+}
+
+export interface RecurringTransaction {
+  id: string;
+  organization_id: string;
+  type: 'income' | 'expense';
+  description: string;
+  value: number;
+  payment_method: string;
+  frequency: 'daily' | 'weekly' | 'monthly' | 'yearly';
+  start_date: string;
+  next_occurrence: string;
+  is_active: boolean;
+  tags: Array<{
+    id: string;
+    name: string;
+    color: string | null;
+    icon_key?: string | null;
+    is_default: boolean;
+    is_active: boolean;
+    organization_id: string;
+    tag_type: { id: string; name: string } | null;
+  }>;
+  day_of_month: number | null;
+  day_of_week: number | null;
+  end_date: string | null;
+  credit_card_id: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RecurringTransactionsSummary {
+  total_monthly_income: number;
+  total_monthly_expense: number;
+  active_count: number;
+  paused_count: number;
+}
+
+export interface RecurringTransactionListResponse {
+  recurring_transactions: RecurringTransaction[];
+  summary: RecurringTransactionsSummary;
+}
+
+export interface GenerateFromRecurringRequest {
+  occurrence_date: string;
+  value_override?: number | null;
+}
+
+export interface GenerateFromRecurringResponse {
+  next_occurrence: string;
+  /** Presente quando o backend retorna o ID da transação gerada */
+  transaction_id?: number;
+}
+
+// ===== ANALYTICS =====
+export interface MonthDataPoint {
+  year: number;
+  month: number;
+  month_name: string;
+  total_income: number;
+  total_expenses: number;
+  balance: number;
+}
+
+export interface MonthlyEvolutionResponse {
+  months: MonthDataPoint[];
+  period_start: string;
+  period_end: string;
+}
+
+export interface CategoryDataPoint {
+  tag_id: string;
+  tag_name: string;
+  /** Quando o backend enviar, melhora o mapa PT + Lucide */
+  tag_icon_key?: string | null;
+  total: number;
+  percentage: number;
+  transaction_count: number;
+  tag_color: string | null;
+}
+
+export interface ByCategoryResponse {
+  categories: CategoryDataPoint[];
+  total_amount: number;
+  period_start: string;
+  period_end: string;
+}
+
+export interface SpendingRhythmCategory {
+  tag_id: string;
+  tag_name: string;
+  tag_icon_key?: string | null;
+  monthly_totals: number[];
+  average: number;
+  trend: 'up' | 'down' | 'stable';
+  tag_color: string | null;
+}
+
+export interface SpendingRhythmResponse {
+  months: string[];
+  categories: SpendingRhythmCategory[];
+  monthly_totals: number[];
+}
+
+export interface PeriodSummary {
+  start: string;
+  end: string;
+  total_income: number;
+  total_expenses: number;
+  balance: number;
+}
+
+export interface PeriodChanges {
+  income_change_pct: number | null;
+  expenses_change_pct: number | null;
+  balance_change_pct: number | null;
+}
+
+export interface PeriodComparisonResponse {
+  period_a: PeriodSummary;
+  period_b: PeriodSummary;
+  changes: PeriodChanges;
+}
+
+// ===== NOTIFICAÇÕES =====
+export interface Notification {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  is_read: boolean;
+  created_at: string;
+  organization_id: string | null;
+  data: Record<string, unknown> | null;
+  read_at: string | null;
+}
+
+export interface NotificationListResponse {
+  notifications: Notification[];
+  unread_count: number;
+  page: number;
+  limit: number;
+  total: number;
+  pages: number;
+  has_next: boolean;
+  has_prev: boolean;
+}
+
+// ===== CHAT/AI =====
+export interface ChatRequest {
+  message: string;
+  session_id?: string | null;
+}
+
+export interface TransactionDetails {
+  type: string;
+  description: string;
+  value: number;
+  category: string;
+  payment_method: string;
+  date: string;
+  transaction_id?: number | null;
+}
+
+export interface TransactionCreatedResult {
+  action: 'transaction_created';
+  message: string;
+  details: TransactionDetails;
+  transaction_id: number;
+}
+
+export interface GeneralChatResult {
+  action: 'general_response';
+  message: string;
+  content: string;
+}
+
+export type ChatResult = TransactionCreatedResult | GeneralChatResult;
+
+export interface ChatResponse {
+  result: ChatResult;
+  confidence: number;
+  processing_time: number;
+}
+
+// ===== SIMULAÇÃO FINANCEIRA =====
+export interface NewCardCommitment {
+  card_last4: string;
+  value: number;
+  installments_count: number;
+  description: string;
+}
+
+export interface SavingsGoal {
+  target_amount: number;
+  current_amount: number;
+  target_date: string;
+}
+
+export interface SimulateFinancialImpactRequest {
+  organization_id: string;
+  new_card_commitments?: NewCardCommitment[];
+  savings_goals?: SavingsGoal[];
+  simulation_months?: number; // 1-60, default: 6
+}
+
+export type SimulationVerdict = 'viable' | 'caution' | 'high-risk';
+export type SimulationStatus = 'success' | 'warning' | 'danger';
+
+export interface MonthlyProjection {
+  month: string;
+  projected_income: number;
+  base_expenses: number;
+  card_commitments: number;
+  savings_goal: number;
+  total_expenses: number;
+  balance: number;
+  status: SimulationStatus;
+}
+
+export interface SimulateFinancialImpactResponse {
+  months: MonthlyProjection[];
+  global_verdict: SimulationVerdict;
+  summary: {
+    income: number;
+    base_expenses: number;
+    card_commitments: number;
+    savings_goal: number;
+  };
+}
+
+// ===== CONSULTANT DASHBOARD =====
+export interface ConsultantSummaryQuery {
+  date_start?: string;
+  date_end?: string;
+}
+
+export interface ConsultantSummaryResponse {
+  total_income: number;
+  total_expenses: number;
+  balance: number;
+  total_transactions: number;
+  organizations_count: number;
+  period_start: string | null;
+  period_end: string | null;
+}
+
+// Alias for naming consistency
+export type ConsultantConsolidatedSummaryResponse = ConsultantSummaryResponse;
+
+export interface ConsultantClient {
+  organization_id: string;
+  organization_name: string;
+  role: 'owner' | 'member';
+  membership_created_at: string;
+}
+
+export interface ConsultantClientsResponse {
+  total: number;
+  clients: ConsultantClient[];
+}
+
+// Alias for naming consistency
+export type ListConsultantClientsResponse = ConsultantClientsResponse;
+
+export interface ActiveGoalsCountQuery {
+  as_of_date?: string;
+}
+
+export interface TotalCreditCardDebtQuery {
+  as_of_date?: string;
+}
+
+export interface CashFlowQuery {
+  date_start?: string;
+  date_end?: string;
+}
+
+export interface ExpensesByCategoryQuery {
+  date_start?: string;
+  date_end?: string;
+}
+
+export interface IncomeCommitmentQuery {
+  date_start?: string;
+  date_end?: string;
+}
+
+export interface GoalsProgressByTypeQuery {
+  as_of_date?: string;
+}
+
+export interface ClientsAtRiskQuery {
+  as_of_date?: string;
+  limit?: number;
+  gasto_maior_renda_meses?: number;
+  endividamento_max_percent?: number;
+  exigir_reserva_emergencia?: boolean;
+}
+
+export interface FinancialHealthIndexResponse {
+  index: number;
+  balance_score: number;
+  debt_score: number;
+  reserve_score: number;
+  total_income: number;
+  total_expenses: number;
+  balance: number;
+  total_debt: number;
+  organizations_count: number;
+  period_start: string;
+  period_end: string;
+  formula_info: string;
+}
+
+export interface ActiveGoalsCountResponse {
+  active_goals_count: number;
+  organizations_count: number;
+  as_of_date: string;
+}
+
+export interface TotalCreditCardDebtResponse {
+  total_debt: number;
+  organizations_count: number;
+  as_of_date: string;
+}
+
+export interface MonthlyCashFlowItem {
+  month: string;
+  year: number;
+  month_number: number;
+  total_income: number;
+  total_expenses: number;
+  balance: number;
+}
+
+export interface CashFlowResponse {
+  monthly_data: MonthlyCashFlowItem[];
+  period_start: string;
+  period_end: string;
+}
+
+export interface CategoryExpenseItem {
+  name: string;
+  total: number;
+  percentage: number;
+}
+
+export interface ExpensesByCategoryResponse {
+  categories: CategoryExpenseItem[];
+  total_expenses: number;
+  period_start: string;
+  period_end: string;
+}
+
+export interface MonthlyIncomeCommitmentItem {
+  month: string;
+  year: number;
+  month_number: number;
+  income_commitment_percent: number;
+  total_income: number;
+  total_card_bills: number;
+}
+
+export interface IncomeCommitmentResponse {
+  monthly_data: MonthlyIncomeCommitmentItem[];
+  period_start: string;
+  period_end: string;
+}
+
+export interface GoalProgressByTypeItem {
+  goal_name: string;
+  avg_progress: number;
+  count: number;
+}
+
+export interface GoalsProgressByTypeResponse {
+  by_type: GoalProgressByTypeItem[];
+  organizations_count: number;
+  as_of_date: string;
+}
+
+export interface ClientAtRiskItem {
+  organization_id: string;
+  organization_name: string;
+  client_name: string;
+  main_situation: string;
+  current_balance: number;
+  last_invoice_status: string;
+  risk_score: number;
+}
+
+export interface ClientsAtRiskResponse {
+  clients: ClientAtRiskItem[];
+  total: number;
+  as_of_date: string;
+}
+
+// ===== ERROS =====
+export interface ApiError {
+  detail: string;
+  status?: number;
+}
+
+// ===== Tipos legados mantidos para compatibilidade (deprecated) =====
+/** @deprecated Use SimulateFinancialImpactRequest instead */
+export interface FinancialSimulationRequest {
+  purchase_amount: number;
+  installments: number;
+  start_date?: string;
+}
+
+/** @deprecated Use SimulateFinancialImpactResponse instead */
+export interface FinancialSimulationResponse {
+  simulation_id: string;
+  summary: {
+    verdict: SimulationVerdict;
+    verdict_message: string;
+    total_impact: number;
+    duration_months: number;
+  };
+  timeline: SimulationTimelineItem[];
+}
+
+/** @deprecated Use MonthlyProjection instead */
+export interface SimulationTimelineItem {
+  month: string;
+  year: number;
+  month_iso: string;
+  financial_data: {
+    projected_income: number;
+    base_expenses: number;
+    existing_commitments: number;
+    new_installment: number;
+    total_obligations: number;
+    savings_goal: number;
+  };
+  result: {
+    projected_balance: number;
+    status: SimulationStatus;
+    meets_goal: boolean;
+  };
+}

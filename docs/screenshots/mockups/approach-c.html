@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Abordagem C — Relatórios (Editorial)</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#F8F7F5;font-family:-apple-system,'Segoe UI',sans-serif;color:#0F0F0D;-webkit-font-smoothing:antialiased}
+.badge{position:fixed;top:14px;right:14px;z-index:999;background:#7C3AED;color:#fff;padding:7px 18px;border-radius:20px;font-size:14px;font-weight:800;box-shadow:0 4px 16px rgba(124,58,237,.5);letter-spacing:.01em}
+.badge-desc{position:fixed;top:56px;right:14px;z-index:999;background:#fff;border:1px solid #E2E5EA;border-radius:10px;padding:10px 14px;font-size:11px;color:#374151;max-width:260px;text-align:right;box-shadow:0 4px 12px rgba(0,0,0,.07);line-height:1.5}
+.badge-desc strong{color:#0F0F0D}
+.app{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:195px;background:#fff;border-right:1px solid #E2E5EA;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+.sb-logo{padding:16px 16px 14px;border-bottom:1px solid #E2E5EA;margin-bottom:10px}
+.sb-logo-name{font-size:17px;font-weight:900;letter-spacing:-.03em;color:#0F0F0D}
+.sb-logo-org{font-size:10px;color:#9CA3AF;margin-top:1px}
+.nav-group{padding:0 8px;margin-bottom:6px}
+.nav-label{font-size:10px;font-weight:700;color:#9CA3AF;letter-spacing:.09em;text-transform:uppercase;padding:0 8px;margin-bottom:3px;margin-top:10px}
+.nav-item{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;font-size:13px;color:#374151;cursor:pointer}
+.nav-item.active{background:#0F0F0D;color:#fff}
+.sb-footer{margin-top:auto;padding:12px 8px;border-top:1px solid #E2E5EA}
+.sb-user{display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px}
+.sb-avatar{width:30px;height:30px;border-radius:50%;background:#059669;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+.sb-uname{font-size:12px;font-weight:700;color:#0F0F0D}
+.sb-upln{font-size:10px;color:#7C3AED;font-weight:700}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.topbar{height:48px;background:#fff;border-bottom:1px solid #E2E5EA;display:flex;align-items:center;padding:0 20px;gap:10px;flex-shrink:0}
+.search{flex:0 0 280px;height:32px;background:#F3F4F6;border:1px solid #E2E5EA;border-radius:8px;display:flex;align-items:center;padding:0 10px;gap:6px;font-size:12px;color:#9CA3AF}
+.search-kbd{margin-left:auto;background:#fff;border:1px solid #E2E5EA;border-radius:4px;padding:1px 5px;font-size:10px;color:#9CA3AF}
+.btn-new{background:#0F0F0D;color:#fff;border:none;border-radius:8px;padding:7px 14px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;margin-left:auto}
+.topbar-avatar{width:32px;height:32px;border-radius:50%;background:#059669;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0;margin-left:8px}
+.content{flex:1;overflow-y:auto;padding:24px 28px;display:flex;flex-direction:column;gap:20px}
+.page-header{display:flex;justify-content:space-between;align-items:center}
+.page-title{font-size:22px;font-weight:800;color:#0F0F0D;letter-spacing:-.02em}
+.page-actions{display:flex;gap:10px;align-items:center}
+.period-sel{display:flex;background:#F3F4F6;border-radius:10px;padding:3px;gap:2px}
+.period-btn{padding:5px 14px;border-radius:7px;font-size:12px;font-weight:600;color:#374151}
+.period-btn.active{background:#fff;color:#0F0F0D;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.btn-export{background:#fff;border:1px solid #E2E5EA;border-radius:8px;padding:7px 12px;font-size:12px;font-weight:600;color:#374151}
+.kpi-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi-card{background:#fff;border:1px solid #E2E5EA;border-radius:12px;padding:14px 16px}
+.kpi-label{font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.09em;margin-bottom:6px}
+.kpi-value{font-size:20px;font-weight:800;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.kpi-sub{font-size:10px;color:#9CA3AF;margin-top:3px}
+.section-card{background:#fff;border:1px solid #E2E5EA;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;height:100%}
+/* Hero card: slightly elevated */
+.section-card.hero{box-shadow:0 4px 16px rgba(0,0,0,.06);border-color:#D1D5DB}
+.section-header{padding:14px 20px 12px;border-bottom:1px solid #E2E5EA;background:#F8F7F5;flex-shrink:0}
+.section-title{font-size:14px;font-weight:700;color:#0F0F0D;display:flex;gap:4px;align-items:baseline}
+.section-title em{font-style:italic;font-weight:400;color:#374151}
+.insight{display:flex;align-items:flex-start;gap:7px;border-radius:8px;padding:8px 10px;margin-top:8px;font-size:10.5px;line-height:1.4;color:#374151}
+.section-body{padding:14px 20px;flex:1;display:flex;flex-direction:column;gap:0}
+
+/* ── APPROACH C: Editorial / Asymmetric ── */
+/* Full-width — app uses all available space */
+.grid-cap{width:100%}
+
+/* Row 1: Hero (2fr) + Cascade sidebar (1fr) */
+.hero-row{
+  display:grid;
+  grid-template-columns:2fr 1fr;
+  gap:16px;
+  align-items:stretch;
+}
+
+/* Row 2: 3-col support */
+.support-row{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr;
+  gap:16px;
+  align-items:stretch;
+}
+
+/* Row 3: Full-width composition */
+.full-row{width:100%}
+
+/* Hero badge */
+.hero-label{
+  display:inline-flex;align-items:center;gap:5px;
+  background:#0F0F0D;color:#fff;border-radius:6px;
+  padding:3px 8px;font-size:9px;font-weight:700;
+  letter-spacing:.06em;text-transform:uppercase;
+  margin-bottom:8px;
+}
+</style>
+</head>
+<body>
+<div class="badge">C — Editorial</div>
+<div class="badge-desc">
+  <strong>Hero 2:1</strong> (Receita wide+raso)<br>
+  + <strong>Cascata tall</strong> sidebar<br>
+  <strong>3-col suporte</strong> abaixo<br>
+  max-width <strong>1405px</strong> em todas as rows<br>
+  <span style="color:#7C3AED">● Proporção específica por tipo de gráfico</span>
+</div>
+
+<div class="app">
+  <nav class="sidebar">
+    <div class="sb-logo">
+      <div class="sb-logo-name">FINCLA</div>
+      <div class="sb-logo-org">Org Principal</div>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label">Principal</div>
+      <div class="nav-item">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg>
+        Visão Geral
+      </div>
+      <div class="nav-item">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8h12M8 3l-4 5 4 5"/></svg>
+        Transações
+      </div>
+      <div class="nav-item">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12 Q5 4 8 8 Q11 12 14 4"/></svg>
+        Ritmo de Gastos
+      </div>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label">Planejar</div>
+      <div class="nav-item">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="5"/><path d="M8 5v3l2 2"/></svg>
+        Orçamentos
+      </div>
+      <div class="nav-item">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8a6 6 0 0012 0"/><path d="M8 2v3M12 4l-2 2"/></svg>
+        Recorrências
+      </div>
+      <div class="nav-item">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 13L7 7l3 4 3-8"/></svg>
+        Simulação
+        <span style="margin-left:auto;background:#7C3AED;color:#fff;border-radius:10px;padding:1px 6px;font-size:9px;font-weight:700">1</span>
+      </div>
+      <div class="nav-item">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="2"/></svg>
+        Metas
+      </div>
+    </div>
+    <div class="nav-group">
+      <div class="nav-label">Gestão</div>
+      <div class="nav-item">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="4" width="14" height="10" rx="2"/><path d="M1 8h14"/></svg>
+        Cartões
+      </div>
+      <div class="nav-item active">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h8M2 12h5"/></svg>
+        Relatórios
+      </div>
+    </div>
+    <div class="sb-footer">
+      <div class="nav-label" style="margin-top:0">Conta</div>
+      <div class="nav-item">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="6" r="3"/><path d="M2 14c0-3 2.7-5 6-5s6 2 6 5"/></svg>
+        Perfil
+      </div>
+      <div class="sb-user" style="margin-top:8px">
+        <div class="sb-avatar">AS</div>
+        <div><div class="sb-uname">Aislan</div><div class="sb-upln">PREMIUM</div></div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="search">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#9CA3AF" stroke-width="1.8"><circle cx="7" cy="7" r="4"/><path d="M11 11l2.5 2.5"/></svg>
+        Buscar ou navegar...
+        <span class="search-kbd">⌘K</span>
+      </div>
+      <div class="btn-new">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3v10M3 8h10"/></svg>
+        Nova transação
+      </div>
+      <div class="topbar-avatar">AS</div>
+    </div>
+
+    <div class="content">
+      <div class="page-header">
+        <div class="page-title">Meus Relatórios</div>
+        <div class="page-actions">
+          <div class="period-sel">
+            <div class="period-btn">3m</div>
+            <div class="period-btn active">6m</div>
+            <div class="period-btn">12m</div>
+          </div>
+          <div class="btn-export">↓ Exportar</div>
+        </div>
+      </div>
+
+      <div class="kpi-strip">
+        <div class="kpi-card"><div class="kpi-label">Receita</div><div class="kpi-value" style="color:#059669">R$ 7,5k</div><div class="kpi-sub">Acum. 6m · R$ 42k</div></div>
+        <div class="kpi-card"><div class="kpi-label">Gasto</div><div class="kpi-value" style="color:#DC2626">R$ 1,4k</div><div class="kpi-sub">Acum. 6m · R$ 34k</div></div>
+        <div class="kpi-card"><div class="kpi-label">Saldo</div><div class="kpi-value" style="color:#059669">R$ 5,5k</div><div class="kpi-sub">73% da receita</div></div>
+        <div class="kpi-card"><div class="kpi-label">Taxa de Poupança</div><div class="kpi-value" style="color:#059669">73%</div><div class="kpi-sub">Média 6m · Meta: 30%</div></div>
+      </div>
+
+      <!-- ROW 1: Hero (2fr) + Cascata (1fr) -->
+      <div class="hero-row grid-cap">
+
+        <!-- 1. Receita vs Gasto — HERO: wide + shallow, 200px tall -->
+        <div class="section-card hero">
+          <div class="section-header">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+              <div class="hero-label">★ Destaque principal</div>
+            </div>
+            <div class="section-title">Receita vs <em>Gasto</em></div>
+            <div class="insight" style="background:#ECFDF518;border:1px solid #05966928">
+              💡 <span>Saldo <strong>R$5.474</strong> (73%). Receita <strong>+36%</strong> vs mês anterior.</span>
+            </div>
+          </div>
+          <div class="section-body">
+            <!-- Bar chart: wide + shallow = cinematic feel -->
+            <svg viewBox="0 0 920 160" width="100%" height="160" style="overflow:visible">
+              <line x1="36" y1="15" x2="900" y2="15" stroke="#E2E5EA" stroke-width="1"/>
+              <line x1="36" y1="50" x2="900" y2="50" stroke="#E2E5EA" stroke-width="1"/>
+              <line x1="36" y1="85" x2="900" y2="85" stroke="#E2E5EA" stroke-width="1"/>
+              <line x1="36" y1="120" x2="900" y2="120" stroke="#E2E5EA" stroke-width="1"/>
+              <text x="32" y="18" text-anchor="end" font-size="9" fill="#9CA3AF">10k</text>
+              <text x="32" y="53" text-anchor="end" font-size="9" fill="#9CA3AF">7.5k</text>
+              <text x="32" y="88" text-anchor="end" font-size="9" fill="#9CA3AF">5k</text>
+              <text x="32" y="123" text-anchor="end" font-size="9" fill="#9CA3AF">2.5k</text>
+              <!-- Bars per month: wide/shallow, bars are chunkier -->
+              <rect x="48" y="62" width="20" height="76" fill="#34D399" rx="3" opacity=".85"/>
+              <rect x="72" y="97" width="20" height="41" fill="#F87171" rx="3" opacity=".85"/>
+              <text x="82" y="148" text-anchor="middle" font-size="9" fill="#9CA3AF">Out'25</text>
+
+              <rect x="180" y="45" width="20" height="93" fill="#34D399" rx="3" opacity=".85"/>
+              <rect x="204" y="92" width="20" height="46" fill="#F87171" rx="3" opacity=".85"/>
+              <text x="202" y="148" text-anchor="middle" font-size="9" fill="#9CA3AF">Nov'25</text>
+
+              <rect x="312" y="56" width="20" height="82" fill="#34D399" rx="3" opacity=".85"/>
+              <rect x="336" y="105" width="20" height="33" fill="#F87171" rx="3" opacity=".85"/>
+              <text x="334" y="148" text-anchor="middle" font-size="9" fill="#9CA3AF">Dez'25</text>
+
+              <rect x="444" y="34" width="20" height="104" fill="#34D399" rx="3" opacity=".85"/>
+              <rect x="468" y="100" width="20" height="38" fill="#F87171" rx="3" opacity=".85"/>
+              <text x="466" y="148" text-anchor="middle" font-size="9" fill="#9CA3AF">Jan'26</text>
+
+              <rect x="576" y="48" width="20" height="90" fill="#34D399" rx="3" opacity=".85"/>
+              <rect x="600" y="15" width="20" height="123" fill="#F87171" rx="3" opacity=".85"/>
+              <text x="598" y="148" text-anchor="middle" font-size="9" fill="#9CA3AF">Fev'26</text>
+
+              <rect x="708" y="20" width="20" height="118" fill="#34D399" rx="3" opacity=".85"/>
+              <rect x="732" y="130" width="20" height="8" fill="#F87171" rx="3" opacity=".85"/>
+              <text x="730" y="148" text-anchor="middle" font-size="9" fill="#9CA3AF">Mar'26</text>
+            </svg>
+            <div style="display:flex;gap:12px;justify-content:center;margin-top:6px;flex-shrink:0">
+              <div style="display:flex;align-items:center;gap:5px"><div style="width:8px;height:8px;border-radius:2px;background:#34D399"></div><span style="font-size:10px;color:#9CA3AF">Receita</span></div>
+              <div style="display:flex;align-items:center;gap:5px"><div style="width:8px;height:8px;border-radius:2px;background:#F87171"></div><span style="font-size:10px;color:#9CA3AF">Gasto</span></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Cascata de caixa — SIDEBAR: narrow + tall = shows full waterfall -->
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">Cascata de <em>caixa</em></div>
+            <div class="insight" style="background:#ECFDF518;border:1px solid #05966928">
+              🔍 <span>Alimentação + Transporte = <strong>26%</strong> da receita.</span>
+            </div>
+          </div>
+          <div class="section-body">
+            <!-- Tall/narrow waterfall: lots of vertical space to show all bars properly -->
+            <svg viewBox="0 0 320 280" width="100%" height="280">
+              <!-- +7.5k tall green bar at full height -->
+              <text x="52" y="24" text-anchor="middle" font-size="11" font-weight="700" fill="#059669">+7.5k</text>
+              <rect x="16" y="30" width="72" height="176" fill="#059669" rx="3" opacity=".85"/>
+              <line x1="88" y1="206" x2="108" y2="206" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="3,2"/>
+              <!-- -1.4k red bar, nicely sized -->
+              <text x="148" y="145" text-anchor="middle" font-size="11" font-weight="700" fill="#DC2626">−1.4k</text>
+              <rect x="108" y="156" width="72" height="50" fill="#DC2626" rx="3" opacity=".85"/>
+              <line x1="180" y1="156" x2="200" y2="156" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="3,2"/>
+              <!-- -589 small red bar -->
+              <text x="240" y="140" text-anchor="middle" font-size="11" font-weight="700" fill="#DC2626">−589</text>
+              <rect x="200" y="148" width="72" height="21" fill="#DC2626" rx="3" opacity=".85"/>
+              <line x1="272" y1="148" x2="292" y2="148" stroke="#9CA3AF" stroke-width="1" stroke-dasharray="3,2"/>
+              <!-- Others tiny -->
+              <text x="330" y="138" text-anchor="middle" font-size="11" font-weight="700" fill="#DC2626">−68</text>
+              <rect x="292" y="146" width="72" height="3" fill="#DC2626" rx="3" opacity=".85"/>
+              <!-- Saldo final bar -->
+              <text x="52" y="250" text-anchor="middle" font-size="11" font-weight="700" fill="#2563EB">+5.5k</text>
+              <!-- X labels at bottom -->
+              <text x="52" y="240" text-anchor="middle" font-size="9" fill="#9CA3AF">Receita</text>
+              <text x="144" y="240" text-anchor="middle" font-size="9" fill="#9CA3AF">Alimentação</text>
+              <text x="236" y="240" text-anchor="middle" font-size="9" fill="#9CA3AF">Transporte</text>
+              <text x="328" y="240" text-anchor="middle" font-size="9" fill="#9CA3AF">Outros</text>
+            </svg>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ROW 2: 3-col support — Evolução / Score / Velocidade -->
+      <div class="support-row grid-cap">
+
+        <!-- 3. Evolução por categoria -->
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">Evolução por <em>categoria</em></div>
+            <div class="insight" style="background:#F5F3FF18;border:1px solid #7C3AED28">
+              📊 <span>Lazer variou <strong>+134%</strong> em Nov–Dez.</span>
+            </div>
+          </div>
+          <div class="section-body">
+            <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;flex-shrink:0">
+              <div style="display:flex;align-items:center;gap:4px"><div style="width:7px;height:7px;border-radius:2px;background:#0F0F0D"></div><span style="font-size:9px;color:#9CA3AF">Moradia</span></div>
+              <div style="display:flex;align-items:center;gap:4px"><div style="width:7px;height:7px;border-radius:2px;background:#2563EB"></div><span style="font-size:9px;color:#9CA3AF">Alimentação</span></div>
+              <div style="display:flex;align-items:center;gap:4px"><div style="width:7px;height:7px;border-radius:2px;background:#D97706"></div><span style="font-size:9px;color:#9CA3AF">Transporte</span></div>
+              <div style="display:flex;align-items:center;gap:4px"><div style="width:7px;height:7px;border-radius:2px;background:#7C3AED"></div><span style="font-size:9px;color:#9CA3AF">Lazer</span></div>
+            </div>
+            <svg viewBox="0 0 420 195" width="100%" height="195">
+              <polygon points="20,190 100,188 180,192 260,185 340,190 420,182 420,195 20,195" fill="#9CA3AF" opacity=".5"/>
+              <polygon points="20,178 100,173 180,162 260,167 340,176 420,169 420,182 20,190" fill="#7C3AED" opacity=".6"/>
+              <polygon points="20,165 100,162 180,155 260,160 340,167 420,161 420,169 20,178" fill="#059669" opacity=".6"/>
+              <polygon points="20,140 100,136 180,132 260,139 340,144 420,137 420,161 20,165" fill="#D97706" opacity=".65"/>
+              <polygon points="20,95 100,90 180,84 260,93 340,101 420,88 420,137 20,140" fill="#2563EB" opacity=".65"/>
+              <polygon points="20,25 100,28 180,22 260,30 340,25 420,21 420,88 20,95" fill="#0F0F0D" opacity=".55"/>
+              <text x="20" y="195" text-anchor="middle" font-size="8" fill="#9CA3AF" dy="-2">Out</text>
+              <text x="100" y="195" text-anchor="middle" font-size="8" fill="#9CA3AF" dy="-2">Nov</text>
+              <text x="180" y="195" text-anchor="middle" font-size="8" fill="#9CA3AF" dy="-2">Dez</text>
+              <text x="260" y="195" text-anchor="middle" font-size="8" fill="#9CA3AF" dy="-2">Jan</text>
+              <text x="340" y="195" text-anchor="middle" font-size="8" fill="#9CA3AF" dy="-2">Fev</text>
+              <text x="420" y="195" text-anchor="middle" font-size="8" fill="#9CA3AF" dy="-2">Mar</text>
+            </svg>
+          </div>
+        </div>
+
+        <!-- 4. Score de aderência -->
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">Score de <em>aderência</em></div>
+            <div class="insight" style="background:#ECFDF518;border:1px solid #05966928">
+              🏆 <span>Score médio: <strong>82/100</strong>.</span>
+            </div>
+          </div>
+          <div class="section-body">
+            <svg viewBox="0 0 380 160" width="100%" height="160">
+              <line x1="36" y1="15" x2="370" y2="15" stroke="#E2E5EA" stroke-width="1"/>
+              <line x1="36" y1="55" x2="370" y2="55" stroke="#E2E5EA" stroke-width="1"/>
+              <line x1="36" y1="95" x2="370" y2="95" stroke="#E2E5EA" stroke-width="1"/>
+              <text x="32" y="18" text-anchor="end" font-size="9" fill="#9CA3AF">100</text>
+              <text x="32" y="58" text-anchor="end" font-size="9" fill="#9CA3AF">75</text>
+              <text x="32" y="98" text-anchor="end" font-size="9" fill="#9CA3AF">50</text>
+              <rect x="44" y="28" width="34" height="102" fill="#34D399" rx="2" opacity=".8"/>
+              <rect x="96" y="22" width="34" height="108" fill="#34D399" rx="2" opacity=".8"/>
+              <rect x="148" y="44" width="34" height="86" fill="#FBBF24" rx="2" opacity=".8"/>
+              <rect x="200" y="18" width="34" height="112" fill="#34D399" rx="2" opacity=".8"/>
+              <rect x="252" y="62" width="34" height="68" fill="#F87171" rx="2" opacity=".8"/>
+              <rect x="304" y="15" width="34" height="115" fill="#34D399" rx="2" opacity=".8"/>
+              <polyline points="61,65 113,55 165,77 217,48 269,88 321,45" fill="none" stroke="#0F0F0D" stroke-width="1.5" stroke-dasharray="4,2"/>
+              <text x="61" y="140" text-anchor="middle" font-size="9" fill="#9CA3AF">Out</text>
+              <text x="113" y="140" text-anchor="middle" font-size="9" fill="#9CA3AF">Nov</text>
+              <text x="165" y="140" text-anchor="middle" font-size="9" fill="#9CA3AF">Dez</text>
+              <text x="217" y="140" text-anchor="middle" font-size="9" fill="#9CA3AF">Jan</text>
+              <text x="269" y="140" text-anchor="middle" font-size="9" fill="#9CA3AF">Fev</text>
+              <text x="321" y="140" text-anchor="middle" font-size="9" fill="#9CA3AF">Mar</text>
+            </svg>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:10px;flex-shrink:0">
+              <div style="background:#ECFDF5;border-radius:7px;padding:4px 6px"><div style="font-size:9px;font-weight:700;color:#9CA3AF">Out</div><div style="font-size:12px;font-weight:800;color:#059669">85</div></div>
+              <div style="background:#ECFDF5;border-radius:7px;padding:4px 6px"><div style="font-size:9px;font-weight:700;color:#9CA3AF">Nov</div><div style="font-size:12px;font-weight:800;color:#059669">91</div></div>
+              <div style="background:#FFFBEB;border-radius:7px;padding:4px 6px"><div style="font-size:9px;font-weight:700;color:#9CA3AF">Dez</div><div style="font-size:12px;font-weight:800;color:#D97706">74</div></div>
+              <div style="background:#ECFDF5;border-radius:7px;padding:4px 6px"><div style="font-size:9px;font-weight:700;color:#9CA3AF">Jan</div><div style="font-size:12px;font-weight:800;color:#059669">88</div></div>
+              <div style="background:#FEF2F2;border-radius:7px;padding:4px 6px"><div style="font-size:9px;font-weight:700;color:#9CA3AF">Fev</div><div style="font-size:12px;font-weight:800;color:#DC2626">67</div></div>
+              <div style="background:#ECFDF5;border-radius:7px;padding:4px 6px;border:1.5px solid #059669"><div style="font-size:9px;font-weight:700;color:#9CA3AF">Mar</div><div style="font-size:12px;font-weight:800;color:#059669">82</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. Velocidade de gasto — in support row -->
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">Velocidade de <em>gasto</em></div>
+            <div class="insight" style="background:#FEF2F218;border:1px solid #DC262628">
+              ⚡ <span>Acumulou <strong>82%</strong> até dia 20.</span>
+            </div>
+          </div>
+          <div class="section-body" style="padding-top:12px">
+            <svg viewBox="0 0 380 170" width="100%" height="170">
+              <defs><linearGradient id="gVel3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#F87171" stop-opacity=".5"/><stop offset="100%" stop-color="#F87171" stop-opacity=".05"/></linearGradient></defs>
+              <line x1="32" y1="15" x2="370" y2="15" stroke="#E2E5EA" stroke-width="1"/>
+              <line x1="32" y1="58" x2="370" y2="58" stroke="#E2E5EA" stroke-width="1"/>
+              <line x1="32" y1="100" x2="370" y2="100" stroke="#E2E5EA" stroke-width="1"/>
+              <line x1="32" y1="143" x2="370" y2="143" stroke="#E2E5EA" stroke-width="1"/>
+              <line x1="32" y1="143" x2="370" y2="15" stroke="#059669" stroke-width="1.5" stroke-dasharray="5,3" opacity=".7"/>
+              <polygon points="32,143 80,133 130,120 180,108 230,95 280,84 330,78 340,77 340,143 32,143" fill="url(#gVel3)" opacity=".9"/>
+              <polyline points="32,143 80,133 130,120 180,108 230,95 280,84 330,78 340,77" fill="none" stroke="#DC2626" stroke-width="2"/>
+              <line x1="340" y1="15" x2="340" y2="143" stroke="#0F0F0D" stroke-width="1" stroke-dasharray="3,2" opacity=".5"/>
+              <text x="346" y="30" font-size="9" fill="#374151" font-weight="600">Hoje</text>
+              <text x="28" y="18" text-anchor="end" font-size="9" fill="#9CA3AF">100%</text>
+              <text x="28" y="61" text-anchor="end" font-size="9" fill="#9CA3AF">75%</text>
+              <text x="28" y="103" text-anchor="end" font-size="9" fill="#9CA3AF">50%</text>
+              <text x="28" y="146" text-anchor="end" font-size="9" fill="#9CA3AF">0%</text>
+              <text x="32" y="158" text-anchor="middle" font-size="9" fill="#9CA3AF">1</text>
+              <text x="180" y="158" text-anchor="middle" font-size="9" fill="#9CA3AF">15</text>
+              <text x="340" y="158" text-anchor="middle" font-size="9" fill="#9CA3AF">Hoje</text>
+              <text x="370" y="158" text-anchor="middle" font-size="9" fill="#9CA3AF">31</text>
+            </svg>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ROW 3: Composição — full-width -->
+      <div class="full-row grid-cap">
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">Composição dos <em>gastos</em></div>
+            <div class="insight" style="background:#FFFBEB18;border:1px solid #D9770628">
+              🔒 <span><strong>R$3.300 (38%)</strong> comprometidos antes do 1º gasto. Margem discricionária: <strong>R$1.081</strong></span>
+            </div>
+          </div>
+          <div class="section-body" style="flex-direction:row;align-items:center;gap:20px;padding:20px">
+            <svg viewBox="0 0 200 200" width="200" height="200" style="flex-shrink:0">
+              <circle cx="100" cy="100" r="70" fill="none" stroke="#0F0F0D" stroke-width="28" stroke-dasharray="175 263" stroke-dashoffset="0" opacity=".85"/>
+              <circle cx="100" cy="100" r="70" fill="none" stroke="#2563EB" stroke-width="28" stroke-dasharray="100 263" stroke-dashoffset="-175" opacity=".85"/>
+              <circle cx="100" cy="100" r="70" fill="none" stroke="#D97706" stroke-width="28" stroke-dasharray="58 263" stroke-dashoffset="-275" opacity=".85"/>
+              <circle cx="100" cy="100" r="70" fill="none" stroke="#059669" stroke-width="28" stroke-dasharray="35 263" stroke-dashoffset="-333" opacity=".85"/>
+              <circle cx="100" cy="100" r="70" fill="none" stroke="#7C3AED" stroke-width="28" stroke-dasharray="23 263" stroke-dashoffset="-368" opacity=".85"/>
+              <text x="100" y="100" text-anchor="middle" font-size="13" font-weight="800" fill="#0F0F0D" dy="4">Mar'26</text>
+            </svg>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;flex:1">
+              <div style="display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:8px;background:#F8F7F5"><div style="width:8px;height:8px;border-radius:2px;background:#0F0F0D;flex-shrink:0"></div><span style="font-size:12px;color:#374151;flex:1">Moradia</span><span style="font-size:12px;font-weight:700;color:#0F0F0D">R$1.250</span><span style="font-size:11px;color:#9CA3AF;min-width:30px;text-align:right">38%</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:8px;background:#F8F7F5"><div style="width:8px;height:8px;border-radius:2px;background:#2563EB;flex-shrink:0"></div><span style="font-size:12px;color:#374151;flex:1">Alimentação</span><span style="font-size:12px;font-weight:700;color:#0F0F0D">R$750</span><span style="font-size:11px;color:#9CA3AF;min-width:30px;text-align:right">23%</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:8px;background:#F8F7F5"><div style="width:8px;height:8px;border-radius:2px;background:#D97706;flex-shrink:0"></div><span style="font-size:12px;color:#374151;flex:1">Transporte</span><span style="font-size:12px;font-weight:700;color:#0F0F0D">R$420</span><span style="font-size:11px;color:#9CA3AF;min-width:30px;text-align:right">13%</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:8px;background:#F8F7F5"><div style="width:8px;height:8px;border-radius:2px;background:#059669;flex-shrink:0"></div><span style="font-size:12px;color:#374151;flex:1">Saúde</span><span style="font-size:12px;font-weight:700;color:#0F0F0D">R$280</span><span style="font-size:11px;color:#9CA3AF;min-width:30px;text-align:right">9%</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:8px;background:#F8F7F5"><div style="width:8px;height:8px;border-radius:2px;background:#7C3AED;flex-shrink:0"></div><span style="font-size:12px;color:#374151;flex:1">Lazer</span><span style="font-size:12px;font-weight:700;color:#0F0F0D">R$180</span><span style="font-size:11px;color:#9CA3AF;min-width:30px;text-align:right">6%</span></div>
+              <div style="display:flex;align-items:center;gap:7px;padding:8px 10px;border-radius:8px;background:#F8F7F5"><div style="width:8px;height:8px;border-radius:2px;background:#9CA3AF;flex-shrink:0"></div><span style="font-size:12px;color:#374151;flex:1">Outros</span><span style="font-size:12px;font-weight:700;color:#0F0F0D">R$120</span><span style="font-size:11px;color:#9CA3AF;min-width:30px;text-align:right">4%</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="height:16px"></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

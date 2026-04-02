@@ -82,3 +82,7 @@ jspm_packages/
 
 # Demo/docs (não versionar)
 docs/DEMO_USERS.md
+
+# Cache / ferramentas locais
+.vite/
+.superpowers/

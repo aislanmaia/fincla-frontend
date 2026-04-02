@@ -1,16 +1,18 @@
 // api/creditCards.ts
 import apiClient from './client';
-import { 
-  CreateCreditCardRequest, 
-  UpdateCreditCardRequest, 
-  CreditCard, 
+import type {
+  CreateCreditCardRequest,
+  UpdateCreditCardRequest,
+  CreditCard,
   InvoiceResponse,
   InvoiceHistoryResponse,
   InvoiceMarkPaidResponse,
   MarkInvoicePaidRequest,
   MoveInstallmentRequest,
-  MoveInstallmentResponse
-} from '../types/api';
+  MoveInstallmentResponse,
+  FutureCommitmentsResponse,
+  ConsolidatedCommitmentsResponse,
+} from './types';
 
 /**
  * Lista todos os cartões de crédito de uma organização
@@ -175,7 +177,39 @@ export const moveInstallmentToInvoice = async (
       params: { organization_id: organizationId },
     }
   );
-  
+
   return response.data;
 };
 
+/**
+ * Retorna uma visão consolidada dos compromissos futuros de um cartão específico
+ */
+export const getFutureCommitments = async (
+  cardId: number,
+  organizationId: string,
+  months: number = 6
+): Promise<FutureCommitmentsResponse> => {
+  const response = await apiClient.get<FutureCommitmentsResponse>(
+    `/credit-cards/${cardId}/future-commitments`,
+    {
+      params: { organization_id: organizationId, months },
+    }
+  );
+  return response.data;
+};
+
+/**
+ * Retorna uma visão consolidada de TODOS os cartões da organização
+ */
+export const getConsolidatedCommitments = async (
+  organizationId: string,
+  months: number = 6
+): Promise<ConsolidatedCommitmentsResponse> => {
+  const response = await apiClient.get<ConsolidatedCommitmentsResponse>(
+    '/credit-cards/consolidated-commitments',
+    {
+      params: { organization_id: organizationId, months },
+    }
+  );
+  return response.data;
+};

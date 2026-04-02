@@ -9,7 +9,7 @@ import {
   UpdateTagRequest,
   CreateTagTypeRequest,
   UpdateTagTypeRequest,
-} from '../types/api';
+} from './types';
 
 /**
  * Cria um novo tipo de tag no sistema.

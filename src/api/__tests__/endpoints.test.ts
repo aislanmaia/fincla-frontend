@@ -11,6 +11,16 @@ describe('API Endpoints URL Construction', () => {
       expect(fullURL).toMatch(/\/v1\/auth\/login$/);
     });
 
+    it('Forgot password deve resultar em /v1/auth/forgot-password', () => {
+      const endpoint = '/auth/forgot-password';
+      expect(`${baseURL}${endpoint}`).toMatch(/\/v1\/auth\/forgot-password$/);
+    });
+
+    it('Reset password deve resultar em /v1/auth/reset-password', () => {
+      const endpoint = '/auth/reset-password';
+      expect(`${baseURL}${endpoint}`).toMatch(/\/v1\/auth\/reset-password$/);
+    });
+
     it('Register endpoint deve resultar em /v1/auth/register', () => {
       const endpoint = '/auth/register';
       const fullURL = `${baseURL}${endpoint}`;
@@ -31,10 +41,31 @@ describe('API Endpoints URL Construction', () => {
       expect(fullURL).toMatch(/\/v1\/organizations$/);
     });
 
+    it('Create invitations deve resultar em /v1/organizations/{id}/invitations', () => {
+      const endpoint = '/organizations/org-1/invitations';
+      expect(`${baseURL}${endpoint}`).toMatch(
+        /\/v1\/organizations\/org-1\/invitations$/,
+      );
+    });
+
+    it('List invitations deve resultar em /v1/organizations/{id}/invitations', () => {
+      const endpoint = '/organizations/org-1/invitations';
+      expect(`${baseURL}${endpoint}`).toMatch(
+        /\/v1\/organizations\/org-1\/invitations$/,
+      );
+    });
+
     it('My organizations endpoint deve resultar em /v1/memberships/my-organizations', () => {
       const endpoint = '/memberships/my-organizations';
       const fullURL = `${baseURL}${endpoint}`;
       expect(fullURL).toMatch(/\/v1\/memberships\/my-organizations$/);
+    });
+  });
+
+  describe('Invitations (aceite público)', () => {
+    it('Accept invitation deve resultar em /v1/invitations/accept', () => {
+      const endpoint = '/invitations/accept';
+      expect(`${baseURL}${endpoint}`).toMatch(/\/v1\/invitations\/accept$/);
     });
   });
 
@@ -77,6 +108,20 @@ describe('API Endpoints URL Construction', () => {
       const endpoint = '/credit-cards/1/invoices/2025/1';
       const fullURL = `${baseURL}${endpoint}`;
       expect(fullURL).toMatch(/\/v1\/credit-cards\/1\/invoices\/2025\/1$/);
+    });
+  });
+
+  describe('Goals, budgets, analytics, notifications, chat', () => {
+    it.each([
+      ['/goals', /\/v1\/goals$/],
+      ['/budgets', /\/v1\/budgets$/],
+      ['/recurring-transactions', /\/v1\/recurring-transactions$/],
+      ['/analytics/monthly-evolution', /\/v1\/analytics\/monthly-evolution$/],
+      ['/notifications', /\/v1\/notifications$/],
+      ['/ai/chat', /\/v1\/ai\/chat$/],
+      ['/financial-impact/simulate', /\/v1\/financial-impact\/simulate$/],
+    ])('%s → %s', (path, pattern) => {
+      expect(`${baseURL}${path}`).toMatch(pattern);
     });
   });
 
