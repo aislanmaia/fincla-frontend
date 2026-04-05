@@ -246,10 +246,13 @@ function resolveDateRange(period, customFrom, customTo) {
   }
 
   if (period === "mes") {
-    const start = new Date(today.getFullYear(), today.getMonth(), 1);
+    const y = today.getFullYear();
+    const m = today.getMonth();
+    const start = new Date(y, m, 1);
+    const end = new Date(y, m + 1, 0);
     return {
       date_start: formatLocalIsoDate(start),
-      date_end: formatLocalIsoDate(today),
+      date_end: formatLocalIsoDate(end),
     };
   }
 

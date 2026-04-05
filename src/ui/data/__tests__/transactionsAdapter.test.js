@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   buildTransactionsSummaryQuery,
   buildTransactionsQuery,
@@ -130,6 +130,42 @@ describe("transactionsAdapter", () => {
       organization_id: "org-1",
       tag_id: tagId,
     });
+  });
+
+  it("período Este mês: do dia 1 ao último dia do mês civil (não só até hoje)", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-05T12:00:00"));
+    expect(
+      buildTransactionsQuery({
+        organizationId: "org-1",
+        period: "mes",
+        limit: 10,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        date_start: "2026-04-01",
+        date_end: "2026-04-30",
+      }),
+    );
+    vi.useRealTimers();
+  });
+
+  it("período Este mês em fevereiro bissexto termina em 29", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2024-02-15T12:00:00"));
+    expect(
+      buildTransactionsQuery({
+        organizationId: "org-1",
+        period: "mes",
+        limit: 10,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        date_start: "2024-02-01",
+        date_end: "2024-02-29",
+      }),
+    );
+    vi.useRealTimers();
   });
 
   it("gera query de summary sem paginação nem ordenação", () => {
