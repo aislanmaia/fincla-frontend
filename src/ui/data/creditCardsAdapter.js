@@ -460,6 +460,19 @@ export async function moveInstallmentForUi({ cardId, chargeId, installmentId, or
   });
 }
 
+/**
+ * Busca os itens de uma fatura de um mês específico (incluindo faturas fechadas).
+ * Retorna array vazio se a fatura não existir (404) ou ocorrer erro.
+ */
+export async function fetchPastInvoiceItemsForUi(cardId, year, month, organizationId) {
+  try {
+    const invoice = await getCreditCardInvoice(cardId, year, month, organizationId);
+    return (invoice?.items || []).map(mapInvoiceItemToUi);
+  } catch {
+    return [];
+  }
+}
+
 export function formatCreditCardsApiError(error) {
   return handleApiError(error);
 }

@@ -60,6 +60,7 @@ import { SimulacaoPage as SimulacaoPageView } from "./pages/SimulacaoPage.jsx";
 import { listCreditCards } from "../api/creditCards";
 import {
   buildCreateCreditCardPayload,
+  fetchPastInvoiceItemsForUi,
   formatCreditCardsApiError,
   mapCreditCardToModalPickerRow,
 } from "./data/creditCardsAdapter.js";
@@ -2753,12 +2754,29 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, a
 
   useEffect(() => { setVisibleGroups(8); }, [cardId, filterCat, search, faturaIdx]);
 
+  // Itens de faturas anteriores (busca sob demanda ao navegar entre meses)
+  const [pastItens,        setPastItens]        = useState([]);
+  const [pastItensLoading, setPastItensLoading] = useState(false);
+
+  useEffect(() => {
+    if (isAtual || !shouldUseRealData || !card || !fatura?.year || !fatura?.month || !organizationId) {
+      setPastItens([]);
+      return;
+    }
+    let cancelled = false;
+    setPastItensLoading(true);
+    fetchPastInvoiceItemsForUi(card.cardId, fatura.year, fatura.month, organizationId)
+      .then((items) => { if (!cancelled) { setPastItens(items); setPastItensLoading(false); } })
+      .catch(() => { if (!cancelled) { setPastItens([]); setPastItensLoading(false); } });
+    return () => { cancelled = true; };
+  }, [isAtual, shouldUseRealData, card?.cardId, fatura?.year, fatura?.month, organizationId]);
+
   // Safe aliases — guard against empty onboarding card
   const cardFaturas    = faturas;
   const cardItens      = card?.itens           || [];
   const cardParcelas   = card?.parcelas_ativas || [];
   const cardTendencia  = card?.tendencia       || [];
-  const displayItens   = isAtual ? cardItens : [];
+  const displayItens   = isAtual ? cardItens : pastItens;
   const recItems     = displayItens.filter(i => i.rec);
   const recTotal     = recItems.reduce((s,i) => s+i.val, 0);
   const totalParcelas= cardParcelas.reduce((s,p) => s+p.vParcela*(p.total-p.pago), 0);
@@ -4211,13 +4229,15 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
               </div>
               <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:16,overflow:"hidden"}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 20px",borderBottom:`1px solid ${T.border}`}}>
-                  <span style={{...G,fontSize:12,fontWeight:700,color:T.ink}}>{isAtual?`${filtered.length} de ${displayItens.length} lançamentos`:`Fatura ${fatura?.mes} · ${fatura?.pago?"Paga":"Pendente"}`}</span>
+                  <span style={{...G,fontSize:12,fontWeight:700,color:T.ink}}>{displayItens.length>0?`${filtered.length} de ${displayItens.length} lançamentos`:`Fatura ${fatura?.mes} · ${fatura?.pago?"Paga":"Pendente"}`}</span>
                   {filtered.length>0&&<button onClick={()=>setExpandedDate(expandedDate===null?grouped[0]?.[0]:null)} style={{...G,fontSize:11,color:T.blue,background:"none",border:"none",cursor:"pointer"}}>{expandedDate===null?"Recolher tudo":"Expandir tudo"}</button>}
                 </div>
-                {isAtual&&grouped.length>0?pagedGroups.map(([date,items])=><DateGroup key={date} date={date} items={items}/>)
-                  :isAtual?<div style={{textAlign:"center",padding:"36px 20px"}}><div style={{fontSize:26,marginBottom:8}}>🔍</div><div style={{...G,fontSize:13,color:T.inkMid}}>Nenhum resultado</div></div>
-                  :<div style={{textAlign:"center",padding:"36px 20px"}}><div style={{fontSize:26,marginBottom:8}}>📁</div><div style={{...G,fontSize:13,color:T.inkMid}}>Fatura {fatura?.mes} · {fmtBRL((fatura?.val||0))}</div><div style={{...G,fontSize:11,color:T.inkLight,marginTop:4}}>Detalhes disponíveis apenas na fatura atual</div></div>}
-                {isAtual&&filtered.length>0&&hasMoreGroups&&(
+                {pastItensLoading
+                  ?<div style={{textAlign:"center",padding:"36px 20px"}}><div style={{...G,fontSize:13,color:T.inkLight}}>Carregando lançamentos…</div></div>
+                  :grouped.length>0?pagedGroups.map(([date,items])=><DateGroup key={date} date={date} items={items}/>)
+                  :!isAtual&&shouldUseRealData?<div style={{textAlign:"center",padding:"36px 20px"}}><div style={{fontSize:26,marginBottom:8}}>📭</div><div style={{...G,fontSize:13,color:T.inkMid}}>Nenhum lançamento encontrado</div><div style={{...G,fontSize:11,color:T.inkLight,marginTop:4}}>Fatura {fatura?.mes} · {fmtBRL((fatura?.val||0))}</div></div>
+                  :<div style={{textAlign:"center",padding:"36px 20px"}}><div style={{fontSize:26,marginBottom:8}}>🔍</div><div style={{...G,fontSize:13,color:T.inkMid}}>Nenhum resultado</div></div>}
+                {filtered.length>0&&hasMoreGroups&&(
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 20px",borderTop:`1px solid ${T.border}`}}>
                     <span style={{...G,fontSize:12,color:T.inkMid}}>
                       {visibleItems} de {totalItems} lançamentos
@@ -4225,7 +4245,7 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
                     <span style={{...M_MONO,...NUM,fontSize:16,fontWeight:800,color:T.ink}}>{fmtBRL(filtered.reduce((s,i)=>s+i.val,0))}</span>
                   </div>
                 )}
-                {isAtual&&filtered.length>0&&(
+                {filtered.length>0&&(
                   hasMoreGroups?(
                     <button type="button" onClick={()=>setVisibleGroups((v)=>v+PAGE_GROUPS)}
                       style={{...G,width:"100%",padding:"13px 20px",background:T.bg,
@@ -4371,13 +4391,15 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
               </div>
               <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:16,overflow:"hidden"}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"14px 20px",borderBottom:`1px solid ${T.border}`}}>
-                  <span style={{...G,fontSize:12,fontWeight:700,color:T.ink}}>{isAtual?`${filtered.length} de ${displayItens.length} lançamentos`:`Fatura ${fatura?.mes} · ${fatura?.pago?"Paga":"Pendente"}`}</span>
+                  <span style={{...G,fontSize:12,fontWeight:700,color:T.ink}}>{displayItens.length>0?`${filtered.length} de ${displayItens.length} lançamentos`:`Fatura ${fatura?.mes} · ${fatura?.pago?"Paga":"Pendente"}`}</span>
                   {filtered.length>0&&<button onClick={()=>setExpandedDate(expandedDate===null?grouped[0]?.[0]:null)} style={{...G,fontSize:11,color:T.blue,background:"none",border:"none",cursor:"pointer"}}>{expandedDate===null?"Recolher tudo":"Expandir tudo"}</button>}
                 </div>
-                {isAtual&&grouped.length>0?pagedGroups.map(([date,items])=><DateGroup key={date} date={date} items={items}/>)
-                  :isAtual?<div style={{textAlign:"center",padding:"36px 20px"}}><div style={{fontSize:26,marginBottom:8}}>🔍</div><div style={{...G,fontSize:13,color:T.inkMid}}>Nenhum resultado</div></div>
-                  :<div style={{textAlign:"center",padding:"36px 20px"}}><div style={{fontSize:26,marginBottom:8}}>📁</div><div style={{...G,fontSize:13,color:T.inkMid}}>Fatura {fatura?.mes} · {fmtBRL((fatura?.val||0))}</div><div style={{...G,fontSize:11,color:T.inkLight,marginTop:4}}>Detalhes disponíveis apenas na fatura atual</div></div>}
-                {isAtual&&filtered.length>0&&hasMoreGroups&&(
+                {pastItensLoading
+                  ?<div style={{textAlign:"center",padding:"36px 20px"}}><div style={{...G,fontSize:13,color:T.inkLight}}>Carregando lançamentos…</div></div>
+                  :grouped.length>0?pagedGroups.map(([date,items])=><DateGroup key={date} date={date} items={items}/>)
+                  :!isAtual&&shouldUseRealData?<div style={{textAlign:"center",padding:"36px 20px"}}><div style={{fontSize:26,marginBottom:8}}>📭</div><div style={{...G,fontSize:13,color:T.inkMid}}>Nenhum lançamento encontrado</div><div style={{...G,fontSize:11,color:T.inkLight,marginTop:4}}>Fatura {fatura?.mes} · {fmtBRL((fatura?.val||0))}</div></div>
+                  :<div style={{textAlign:"center",padding:"36px 20px"}}><div style={{fontSize:26,marginBottom:8}}>🔍</div><div style={{...G,fontSize:13,color:T.inkMid}}>Nenhum resultado</div></div>}
+                {filtered.length>0&&hasMoreGroups&&(
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 20px",borderTop:`1px solid ${T.border}`}}>
                     <span style={{...G,fontSize:12,color:T.inkMid}}>
                       {visibleItems} de {totalItems} lançamentos
@@ -4385,7 +4407,7 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
                     <span style={{...M_MONO,...NUM,fontSize:16,fontWeight:800,color:T.ink}}>{fmtBRL(filtered.reduce((s,i)=>s+i.val,0))}</span>
                   </div>
                 )}
-                {isAtual&&filtered.length>0&&(
+                {filtered.length>0&&(
                   hasMoreGroups?(
                     <button type="button" onClick={()=>setVisibleGroups((v)=>v+PAGE_GROUPS)}
                       style={{...G,width:"100%",padding:"13px 20px",background:T.bg,
