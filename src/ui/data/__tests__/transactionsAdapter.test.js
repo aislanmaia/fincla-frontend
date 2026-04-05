@@ -78,6 +78,53 @@ describe("transactionsAdapter", () => {
     });
   });
 
+  it("crédito à vista 1/1x usa due_date na lista (não só a data da compra)", () => {
+    const mapped = mapApiTransactionToUi({
+      id: 493,
+      organization_id: "org-1",
+      type: "expense",
+      description: "assinatura chatgpt",
+      category: "Subscriptions & Software",
+      tags: {},
+      value: "95.99",
+      payment_method: "credit_card",
+      date: "2026-03-16T00:00:00",
+      recurring: false,
+      created_at: "2026-03-03T02:53:43.647040",
+      updated_at: "2026-03-03T02:53:43.647040",
+      credit_card_charge: {
+        charge: {
+          id: 330,
+          organization_id: "org-1",
+          card_id: 3,
+          transaction_id: 493,
+          total_amount: "95.99",
+          installments_count: 1,
+          modality: "cash",
+          purchase_date: "2026-03-16",
+        },
+        card: {
+          id: 3,
+          organization_id: "org-1",
+          last4: "2919",
+          brand: "Visa",
+          due_day: 10,
+          description: "Visa - Azul",
+        },
+      },
+      installment_info: [
+        {
+          installment_number: 1,
+          total_installments: 1,
+          due_date: "2026-04-10",
+          amount: "95.99",
+        },
+      ],
+    });
+
+    expect(mapped.date).toBe("10/04/2026");
+  });
+
   it("converte filtros da UI para query da API", () => {
     expect(
       buildTransactionsQuery({

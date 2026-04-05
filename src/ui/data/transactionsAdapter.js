@@ -196,11 +196,12 @@ export function mapApiTransactionToUi(transaction) {
   if (transaction.status === "pending") statusLabel = "pendente";
   else if (transaction.status === "cancelled") statusLabel = "cancelada";
 
-  // Usa due_date só para compras parceladas (> 1 parcela); à vista usa a data da transação.
-  const dateLabel = transaction.installment_info?.[0]?.due_date &&
-    (transaction.installment_info[0].total_installments ?? 1) > 1
-      ? formatDate(transaction.installment_info[0].due_date)
-      : formatDate(transaction.date);
+  // Com `installment_info`, a data relevante para fatura/período é o vencimento da parcela
+  // (inclui 1/1x à vista no crédito); senão mantém a data da transação.
+  const firstInst = transaction.installment_info?.[0];
+  const dateLabel = firstInst?.due_date
+    ? formatDate(firstInst.due_date)
+    : formatDate(transaction.date);
 
   const cardIdFromCharge =
     transaction.credit_card_charge?.charge?.card_id ??
