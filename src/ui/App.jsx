@@ -699,7 +699,7 @@ const NovaTransacaoModal = ({
     setMethod("credito"); setPanelCartaoOpen(true); setPanelCartaoExiting(false); setMod("parcelado"); setParcelas(pCalcN);
     setParcelaMode(false); setPCalcCents(0);
   };
-  const valorNum   = parseFloat(valor.replace(",",".")) || 0;
+  const valorNum   = centavos / 100;
 
   const financialImpact = useNovaTransacaoFinancialImpact({
     open,
