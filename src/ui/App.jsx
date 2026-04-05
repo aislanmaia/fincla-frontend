@@ -460,6 +460,9 @@ const NovaTransacaoModal = ({
       setEncRec(pc.encRec || "sem-fim");
       setValorTipoRec(pc.valorTipoRec || "fixo");
       setCat(pc.cat || "");
+      setCategoryTagId(pc.categoryTagId ?? null);
+      if (pc.modalidade) setMod(pc.modalidade);
+      if (pc.parcelas) setParcelas(pc.parcelas);
       if (m === "credito") {
         setPanelCartaoOpen(true);
         setPanelCartaoExiting(false);
@@ -4667,12 +4670,14 @@ export default function App() {
       onTransactionsInvalidate={bumpTransactionsList}
       onNewTx={() => setModal(true)}
       onEditTx={(tx) => {
+        const txMethod = modalPaymentKeyFromTransactionUi(tx);
+        const isParcelado = tx.parcela && tx.parcela.total > 1;
         setModalPreConfig({
           tipo: tx.val > 0 ? "receita" : "despesa",
           desc: tx.desc,
           cat: tx.cat,
-          categoryTagId: tx.categoryTagId ?? undefined,
-          method: modalPaymentKeyFromTransactionUi(tx),
+          categoryTagId: tx.categoryTagId ?? null,
+          method: txMethod,
           valorInicial: Math.abs(tx.val),
           recorre: tx.rec,
           editingTransactionId: tx.id,
@@ -4681,6 +4686,10 @@ export default function App() {
             transactionDateIsoFromBrDisplay(tx.date) ??
             undefined,
           cartaoId: tx.cartaoId != null ? tx.cartaoId : undefined,
+          modalidade: txMethod === "credito"
+            ? (isParcelado ? "parcelado" : "avista")
+            : undefined,
+          parcelas: isParcelado ? tx.parcela.total : undefined,
         });
         setModalMode("transacao");
         setModal(true);

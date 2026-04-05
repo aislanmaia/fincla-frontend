@@ -196,9 +196,11 @@ export function mapApiTransactionToUi(transaction) {
   if (transaction.status === "pending") statusLabel = "pendente";
   else if (transaction.status === "cancelled") statusLabel = "cancelada";
 
-  const dateLabel = transaction.installment_info?.[0]?.due_date
-    ? formatDate(transaction.installment_info[0].due_date)
-    : formatDate(transaction.date);
+  // Usa due_date só para compras parceladas (> 1 parcela); à vista usa a data da transação.
+  const dateLabel = transaction.installment_info?.[0]?.due_date &&
+    (transaction.installment_info[0].total_installments ?? 1) > 1
+      ? formatDate(transaction.installment_info[0].due_date)
+      : formatDate(transaction.date);
 
   const cardIdFromCharge =
     transaction.credit_card_charge?.charge?.card_id ??
@@ -674,12 +676,13 @@ export function buildUpdateTransactionPayload({
   const payload = {
     type,
     description: String(description || "").trim() || "—",
-    tag_ids: [categoryTagId],
     value: Number(value),
     payment_method: mapUiPaymentMethodToApi(paymentMethodKey),
     date: dateIso,
     recurring: !!recurring,
   };
+  // Só sobrescreve tags se houver um ID válido; caso contrário, a API mantém as existentes.
+  if (categoryTagId != null) payload.tag_ids = [categoryTagId];
   if (cardId != null && Number.isFinite(Number(cardId))) {
     payload.card_id = Number(cardId);
   }
