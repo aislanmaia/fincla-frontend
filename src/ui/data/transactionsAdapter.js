@@ -181,9 +181,9 @@ function mapInstallmentInfo(transaction) {
 function pickDisplayAmount(transaction) {
   const parts = transaction.installment_info;
   if (parts?.length) {
-    return parts.reduce((sum, p) => sum + (p.amount ?? 0), 0);
+    return parts.reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
   }
-  return transaction.value;
+  return Number(transaction.value ?? 0);
 }
 
 export function mapApiTransactionToUi(transaction) {
