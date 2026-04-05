@@ -1191,7 +1191,7 @@ const NovaTransacaoModal = ({
               { label:"ENCERRAMENTO", val: ENC_LABELS[encRec] || encRec },
               { label:"TIPO DE VALOR", val: valorTipoRec === "estimado" ? "≈ Estimado" : "Fixo" },
             ] : [
-              { label:"PARCELAS",  val: method === "credito" ? `${parcelas}× de R$ ${(valorNum/parcelas).toFixed(2)}` : "—" },
+              { label:"MODALIDADE", val: method === "credito" ? (modalidade === "avista" ? "À vista (1×)" : `${parcelas}× de R$ ${(valorNum/parcelas).toFixed(2)}`) : "—" },
               { label:"CARTÃO",    val: method === "credito" ? cartoes.find(c=>c.id===cartao)?.nome || "—" : "—" },
             ]),
           ].map((f,i) => (
