@@ -6,28 +6,33 @@ import {
 } from "../recurringTransactionsAdapter.js";
 
 describe("recurringTransactionsAdapter", () => {
-  it("mapeia recorrência da API para o formato usado na UI", () => {
+  it("mapeia série recorrente da API para o formato usado na UI", () => {
     expect(mapRecurringTransactionToUi({
       id: "rt-1",
       organization_id: "org-1",
+      logical_series_id: "log-1",
       type: "expense",
       description: "Conta de luz",
       value: 180,
+      value_kind: "exact",
+      category: "Utilidades",
       payment_method: "boleto",
       frequency: "monthly",
       start_date: "2020-01-15",
       next_occurrence: "2026-03-13",
       is_active: true,
-      tags: [{ id: "t1", name: "Utilidades", color: "#2563EB", is_default: false, is_active: true, organization_id: "org-1", tag_type: { id: "tt1", name: "categoria" } }],
+      created_at: "",
+      updated_at: "",
+      tags: [{ id: "t1", name: "Utilidades", color: "#2563EB", icon_key: null, is_default: false, is_active: true, organization_id: "org-1", tag_type: { id: "tt1", name: "categoria" } }],
       day_of_month: 13,
       day_of_week: null,
       end_date: null,
       credit_card_id: null,
       notes: null,
-      created_at: "",
-      updated_at: "",
+      replaces_series_id: null,
     })).toEqual({
       id: "rt-1",
+      logicalSeriesId: "log-1",
       desc: "Conta de luz",
       cat: "Utilidades",
       val: 180,
@@ -52,6 +57,8 @@ describe("recurringTransactionsAdapter", () => {
       methodId: "boleto",
       encId: "sem-fim",
       endDateRaw: null,
+      creditCardId: null,
+      categoryTagId: "t1",
     });
   });
 

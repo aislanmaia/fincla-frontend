@@ -122,9 +122,10 @@ export function InfoTip({ text, width = 220 }) {
   );
 }
 
-export function Card({ children, style = {}, onClick }) {
+export function Card({ children, style = {}, onClick, ...rest }) {
   return (
     <div
+      {...rest}
       onClick={onClick}
       style={{
         background: T.surface,

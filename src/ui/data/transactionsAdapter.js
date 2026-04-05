@@ -220,6 +220,7 @@ export function mapApiTransactionToUi(transaction) {
     val: signedVal,
     icon: pickTransactionIcon(transaction),
     rec: transaction.recurring,
+    recurringSeriesId: transaction.recurring_series_id ?? null,
     status: statusLabel,
     method: formatMethodLabel(transaction.payment_method),
     tags: pickTagNames(transaction, categoryName),

@@ -96,6 +96,13 @@ import {
   updateTransactionForUi,
   writeStoredNovaTransacaoDate,
 } from "./data/transactionsAdapter.js";
+import {
+  buildCreateRecurringSeriesPayload,
+  buildUpdateRecurringSeriesPayload,
+  createRecurringSeriesForUi,
+  formatRecurringTransactionsApiError,
+  updateRecurringSeriesForUi,
+} from "./data/recurringTransactionsAdapter.js";
 import { CategoryLucideIcon } from "./components/CategoryLucideIcon.jsx";
 import { LocaleDatePicker } from "./components/LocaleDatePicker.jsx";
 import { APP_UI_LOCALE } from "./appLocale.js";
@@ -455,7 +462,7 @@ const NovaTransacaoModal = ({
       if (m === "credito") {
         setPanelCartaoOpen(true);
         setPanelCartaoExiting(false);
-        setPanelRecorrenciaOpen(false);
+        setPanelRecorrenciaOpen(!!pc.recorre);
         setPanelRecorrenciaExiting(false);
         setCartao(pc.cartaoId != null ? String(pc.cartaoId) : "");
       } else {
@@ -919,6 +926,95 @@ const NovaTransacaoModal = ({
       Number.isFinite(Number(preConfig.editingTransactionId))
         ? Number(preConfig.editingTransactionId)
         : null;
+
+    const isEditSeries =
+      Boolean(preConfig?.isEditRecorrencia) &&
+      preConfig?.recId &&
+      isUuidString(String(preConfig.recId));
+
+    const shouldSaveLiveSeries =
+      organizationId &&
+      dataMode === "live" &&
+      editingTransactionId == null &&
+      (novaRecorrencia || recorre || isEditSeries);
+
+    if (shouldSaveLiveSeries) {
+      if (!categoryTagId) {
+        setTxSubmitError("Escolha uma categoria da lista.");
+        return;
+      }
+      if (!(valorNum > 0)) {
+        setTxSubmitError("Informe um valor válido.");
+        return;
+      }
+      if (method === "credito") {
+        const idNum = Number(cartao);
+        if (!cartao || cartao === "novo" || !Number.isFinite(idNum)) {
+          setTxSubmitError("Selecione um cartão de crédito.");
+          return;
+        }
+      }
+      setTxSubmitting(true);
+      setTxSubmitError("");
+      try {
+        const cardId =
+          method === "credito" && cartao && cartao !== "novo"
+            ? Number(cartao)
+            : null;
+        const endYmd =
+          encRec === "data" &&
+          preConfig?.dataFimRec &&
+          /^\d{4}-\d{2}-\d{2}$/.test(String(preConfig.dataFimRec))
+            ? String(preConfig.dataFimRec)
+            : undefined;
+        if (isEditSeries) {
+          await updateRecurringSeriesForUi(
+            String(preConfig.recId),
+            organizationId,
+            buildUpdateRecurringSeriesPayload({
+              description: desc,
+              value: valorNum,
+              paymentMethodKey: method,
+              categoryTagId,
+              startDateYmd: txDateYmd,
+              freqRec,
+              encRec,
+              endDateYmd: endYmd,
+              valorTipoRec,
+              categoryLabel: cat,
+              cardId: Number.isFinite(cardId) ? cardId : null,
+            }),
+          );
+        } else {
+          await createRecurringSeriesForUi(
+            organizationId,
+            buildCreateRecurringSeriesPayload({
+              tipo,
+              description: desc,
+              value: valorNum,
+              paymentMethodKey: method,
+              categoryTagId,
+              startDateYmd: txDateYmd,
+              freqRec,
+              encRec,
+              endDateYmd: endYmd,
+              valorTipoRec,
+              categoryLabel: cat,
+              cardId: Number.isFinite(cardId) ? cardId : null,
+            }),
+          );
+        }
+        onTransactionSaved?.();
+      } catch (err) {
+        setTxSubmitError(formatRecurringTransactionsApiError(err));
+        setTxSubmitting(false);
+        return;
+      }
+      setTxSubmitting(false);
+      setSuccess(true);
+      setTimeout(() => { setSuccess(false); beginClose(); }, 1200);
+      return;
+    }
 
     const liveOneShot =
       organizationId &&
@@ -4598,14 +4694,15 @@ export default function App() {
           </div>
         </div>
       </div>
-    ) : <RecorrenciasPageView onNav={navTo} cenarios={cenarios} isMobile={isMobile} dataMode={dataMode} extraRecs={extraRecs} organizationId={session.activeOrgId} onNovaRec={() => { setModalMode("recorrencia"); setModal(true); }} onEditar={(rec) => {
+    ) : <RecorrenciasPageView onNav={navTo} cenarios={cenarios} isMobile={isMobile} dataMode={dataMode} extraRecs={extraRecs} organizationId={session.activeOrgId} recurringRefreshToken={transactionsListVersion} onNovaRec={() => { setModalMode("recorrencia"); setModal(true); }} onEditar={(rec) => {
               const freqId = rec.freqId || rec.freq?.split(" ")[0]?.toLowerCase() || "mensal";
               const encId  = rec.encId || (rec.enc === "Sem data fim" ? "sem-fim" : rec.enc === "Após N repetições" ? "repeticoes" : rec.enc === "Data específica" ? "data" : "sem-fim");
-              const methodId = rec.methodId || (rec.metodo === "Pix" ? "pix" : rec.metodo === "Boleto" ? "boleto" : rec.metodo === "Débito auto." ? "debito" : rec.metodo === "Transferência" ? "transferencia" : rec.metodo === "Cartão crédito" ? "credito" : "pix");
+              const methodId = rec.methodId || (rec.metodo === "Pix" ? "pix" : rec.metodo === "Boleto" ? "boleto" : rec.metodo === "Débito" || rec.metodo === "Débito auto." ? "debito" : rec.metodo === "Transferência" ? "transferencia" : rec.metodo === "Cartão crédito" ? "credito" : "pix");
               setModalPreConfig({
                 tipo: rec.tipo,
                 desc: rec.desc,
                 cat: rec.cat,
+                categoryTagId: rec.categoryTagId ?? undefined,
                 method: methodId,
                 valorInicial: rec.val,
                 recorre: true,
@@ -4615,6 +4712,8 @@ export default function App() {
                 valorTipoRec: rec.valorTipo || "fixo",
                 isEditRecorrencia: true,
                 recId: rec.id,
+                cartaoId: rec.creditCardId != null ? String(rec.creditCardId) : undefined,
+                transactionDate: rec.nextOccurrenceIso || undefined,
               });
               setModalMode("transacao");
               setModal(true);

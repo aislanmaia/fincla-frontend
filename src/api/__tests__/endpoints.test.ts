@@ -115,7 +115,10 @@ describe('API Endpoints URL Construction', () => {
     it.each([
       ['/goals', /\/v1\/goals$/],
       ['/budgets', /\/v1\/budgets$/],
+      ['/recurring-series', /\/v1\/recurring-series$/],
       ['/recurring-transactions', /\/v1\/recurring-transactions$/],
+      ['/test/reset-organization', /\/v1\/test\/reset-organization$/],
+      ['/test/seed', /\/v1\/test\/seed$/],
       ['/analytics/monthly-evolution', /\/v1\/analytics\/monthly-evolution$/],
       ['/notifications', /\/v1\/notifications$/],
       ['/ai/chat', /\/v1\/ai\/chat$/],

@@ -4,12 +4,14 @@ import {
   listRecurringTransactionsForUi,
   mapRecurringSummaryToUi,
   mapRecurringTransactionToUi,
-  toggleRecurringTransactionForUi,
+  toggleRecurringSeriesForUi,
+  deleteRecurringSeriesForUi,
 } from "../../data/recurringTransactionsAdapter.js";
 
 const EMPTY_STATE = {
   isLoading: false,
   isTogglingId: null,
+  isDeletingId: null,
   error: "",
   list: [],
   summary: {
@@ -24,6 +26,7 @@ const EMPTY_STATE = {
 export function useRecurringTransactionsData({
   organizationId,
   enabled = true,
+  refreshKey = 0,
 }) {
   const [state, setState] = useState(EMPTY_STATE);
 
@@ -42,11 +45,13 @@ export function useRecurringTransactionsData({
     listRecurringTransactionsForUi(organizationId)
       .then((response) => {
         if (cancelled) return;
+        const rows = response.series ?? [];
         setState({
           isLoading: false,
           isTogglingId: null,
+          isDeletingId: null,
           error: "",
-          list: (response.recurring_transactions || []).map(mapRecurringTransactionToUi),
+          list: rows.map(mapRecurringTransactionToUi),
           summary: mapRecurringSummaryToUi(response.summary),
         });
       })
@@ -61,23 +66,23 @@ export function useRecurringTransactionsData({
     return () => {
       cancelled = true;
     };
-  }, [enabled, organizationId]);
+  }, [enabled, organizationId, refreshKey]);
 
-  const toggleRecurring = useCallback(async (transactionId) => {
+  const toggleRecurring = useCallback(async (seriesId, nextIsActive) => {
     if (!organizationId) return null;
     setState((current) => ({
       ...current,
-      isTogglingId: transactionId,
+      isTogglingId: seriesId,
       error: "",
     }));
 
     try {
-      const updated = await toggleRecurringTransactionForUi(transactionId, organizationId);
+      const updated = await toggleRecurringSeriesForUi(seriesId, organizationId, nextIsActive);
       const mapped = mapRecurringTransactionToUi(updated);
       setState((current) => {
-        const nextList = current.list.map((item) => item.id === transactionId ? mapped : item);
-        const totalRec = nextList.filter((item) => item.ativa && item.tipo === "receita").reduce((sum, item) => sum + item.val, 0);
-        const totalDesp = nextList.filter((item) => item.ativa && item.tipo === "despesa").reduce((sum, item) => sum + item.val, 0);
+        const nextList = current.list.map((row) => (row.id === seriesId ? mapped : row));
+        const totalRec = nextList.filter((row) => row.ativa && row.tipo === "receita").reduce((sum, row) => sum + row.val, 0);
+        const totalDesp = nextList.filter((row) => row.ativa && row.tipo === "despesa").reduce((sum, row) => sum + row.val, 0);
         return {
           ...current,
           isTogglingId: null,
@@ -86,8 +91,8 @@ export function useRecurringTransactionsData({
             totalRec,
             totalDesp,
             saldoFixo: totalRec - totalDesp,
-            activeCount: nextList.filter((item) => item.ativa).length,
-            pausedCount: nextList.filter((item) => !item.ativa).length,
+            activeCount: nextList.filter((row) => row.ativa).length,
+            pausedCount: nextList.filter((row) => !row.ativa).length,
           },
         };
       });
@@ -102,9 +107,46 @@ export function useRecurringTransactionsData({
     }
   }, [organizationId]);
 
+  const deleteRecurring = useCallback(async (seriesId) => {
+    if (!organizationId) return;
+    setState((current) => ({
+      ...current,
+      isDeletingId: seriesId,
+      error: "",
+    }));
+    try {
+      await deleteRecurringSeriesForUi(seriesId, organizationId);
+      setState((current) => {
+        const nextList = current.list.filter((row) => row.id !== seriesId);
+        const totalRec = nextList.filter((row) => row.ativa && row.tipo === "receita").reduce((sum, row) => sum + row.val, 0);
+        const totalDesp = nextList.filter((row) => row.ativa && row.tipo === "despesa").reduce((sum, row) => sum + row.val, 0);
+        return {
+          ...current,
+          isDeletingId: null,
+          list: nextList,
+          summary: {
+            totalRec,
+            totalDesp,
+            saldoFixo: totalRec - totalDesp,
+            activeCount: nextList.filter((row) => row.ativa).length,
+            pausedCount: nextList.filter((row) => !row.ativa).length,
+          },
+        };
+      });
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        isDeletingId: null,
+        error: formatRecurringTransactionsApiError(error),
+      }));
+      throw error;
+    }
+  }, [organizationId]);
+
   return useMemo(() => ({
     ...state,
     toggleRecurring,
+    deleteRecurring,
     hasRealData: state.list.length > 0,
-  }), [state, toggleRecurring]);
+  }), [state, toggleRecurring, deleteRecurring]);
 }

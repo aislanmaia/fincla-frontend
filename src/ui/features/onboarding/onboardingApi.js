@@ -2,7 +2,7 @@ import {
   createCreditCard,
   createOrganization,
   createOrganizationInvitations,
-  createRecurringTransaction,
+  createRecurringSeries,
   formatOnboardingApiError,
   getMyOrganizations,
   listTags,
@@ -108,6 +108,8 @@ function buildOnboardingRecurringPayload(data) {
     frequency: "monthly",
     start_date: buildRecurringStartDate(),
     day_of_month: Number.parseInt(data?.recDia, 10) || 5,
+    value_kind: "exact",
+    category: "Receita",
   };
 }
 
@@ -154,7 +156,7 @@ export async function submitOnboarding(data) {
     const recurringPayload = buildOnboardingRecurringPayload(data);
     if (recurringPayload) {
       operations.push(
-        createRecurringTransaction(created.organization.id, recurringPayload),
+        createRecurringSeries(created.organization.id, recurringPayload),
       );
     }
 

@@ -1,6 +1,6 @@
 import { getByCategory } from "../../api/analytics";
 import { handleApiError } from "../../api/client";
-import { listRecurringTransactions } from "../../api/recurringTransactions";
+import { listRecurringSeries } from "../../api/recurringSeries";
 import {
   getTransactionsSummary,
   listTransactions,
@@ -11,7 +11,7 @@ export {
   fetchAllTransactionsPages,
   getByCategory,
   getTransactionsSummary,
-  listRecurringTransactions,
+  listRecurringSeries as listRecurringTransactions,
   listTransactions,
 };
 

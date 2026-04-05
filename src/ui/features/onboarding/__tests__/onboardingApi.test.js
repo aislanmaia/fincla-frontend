@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({
   createOrganization: vi.fn(),
   updateMyProfile: vi.fn(),
   getMyOrganizations: vi.fn(),
-  createRecurringTransaction: vi.fn(),
+  createRecurringSeries: vi.fn(),
   createCreditCard: vi.fn(),
   listTags: vi.fn(),
   updateTag: vi.fn(),
@@ -16,7 +16,7 @@ vi.mock("../../../data/onboardingAdapter", () => ({
   createOrganization: mocks.createOrganization,
   updateMyProfile: mocks.updateMyProfile,
   getMyOrganizations: mocks.getMyOrganizations,
-  createRecurringTransaction: mocks.createRecurringTransaction,
+  createRecurringSeries: mocks.createRecurringSeries,
   createCreditCard: mocks.createCreditCard,
   listTags: mocks.listTags,
   updateTag: mocks.updateTag,
@@ -42,7 +42,7 @@ describe("submitOnboarding", () => {
       organizations: [{ organization: { id: "org-1", name: "Casa", org_type: "couple" } }],
       total: 1,
     });
-    mocks.createRecurringTransaction.mockResolvedValue({ id: "rt-1" });
+    mocks.createRecurringSeries.mockResolvedValue({ id: "rt-1" });
     mocks.createCreditCard.mockResolvedValue({ id: 1 });
     mocks.listTags.mockResolvedValue({
       tags: [
@@ -93,7 +93,7 @@ describe("submitOnboarding", () => {
     expect(mocks.updateMyProfile).toHaveBeenCalledWith({
       onboarding_completed: true,
     });
-    expect(mocks.createRecurringTransaction).toHaveBeenCalledWith("org-1", {
+    expect(mocks.createRecurringSeries).toHaveBeenCalledWith("org-1", {
       type: "income",
       description: "Salário",
       value: 2200,
@@ -101,6 +101,8 @@ describe("submitOnboarding", () => {
       frequency: "monthly",
       start_date: "2026-03-24",
       day_of_month: 10,
+      value_kind: "exact",
+      category: "Receita",
     });
   });
 
@@ -184,7 +186,7 @@ describe("submitOnboarding", () => {
 
     const profileCallOrder = mocks.updateMyProfile.mock.invocationCallOrder[0];
     const createOrgCallOrder = mocks.createOrganization.mock.invocationCallOrder[0];
-    const recurringCallOrder = mocks.createRecurringTransaction.mock.invocationCallOrder[0];
+    const recurringCallOrder = mocks.createRecurringSeries.mock.invocationCallOrder[0];
     const creditCardCallOrder = mocks.createCreditCard.mock.invocationCallOrder[0];
     const categoryCallOrder = mocks.updateTag.mock.invocationCallOrder[0];
 

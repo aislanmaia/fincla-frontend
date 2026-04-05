@@ -36,6 +36,7 @@ import {
   calcMood,
 } from "../features/moodV4";
 import { useDashboardData } from "../features/dashboard/useDashboardData.js";
+import { pickCommittedExpenseForDashboard } from "../features/dashboard/dashboardRecurringKpi.js";
 import { DashboardPeriodSelector } from "../features/dashboard/DashboardPeriodSelector.jsx";
 import {
   formatDashboardKpiPeriodPhrase,
@@ -206,7 +207,11 @@ export function DashboardPage({
 
   const pool = Math.max(inc, exp, Math.abs(bal), 1);
   const usedAmt = exp;
-  const committed = 0;
+  /** Comprometido recorrente no período do datepicker (`recurring_in_period`) ou fallback mensal. */
+  const committed = pickCommittedExpenseForDashboard(
+    dashboardData.summary,
+    dashboardData.recurringSummary,
+  );
   const freeAmt = Math.max(0, bal);
   const balance = bal;
   const barTotal = Math.max(usedAmt + committed + freeAmt, 1);
@@ -954,7 +959,12 @@ export function DashboardPage({
                     <div key={label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
                       <div style={{ width: 7, height: 7, borderRadius: 2, background: color, opacity, transition: "background 0.18s", flexShrink: 0 }} />
                       <span style={{ fontSize: 10, color: T.inkMid }}>{label}</span>
-                      <span style={{ ...M_MONO, ...NUM, fontSize: 10, color: T.inkMid, fontWeight: 600 }}>{value}</span>
+                      <span
+                        style={{ ...M_MONO, ...NUM, fontSize: 10, color: T.inkMid, fontWeight: 600 }}
+                        data-testid={label === "Comprometido" ? "dashboard-composicao-comprometido" : undefined}
+                      >
+                        {value}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -998,7 +1008,17 @@ export function DashboardPage({
 
       <div style={{ ...anim(0.1), display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(3,1fr)", gap: 12, position: "relative", zIndex: 1 }}>
         {kpiItems.map(({ key, label, value, delta, up, emptyCta }) => (
-          <Card key={key} style={{ padding: "16px 18px" }}>
+          <Card
+            key={key}
+            data-testid={
+              key === "inc"
+                ? "dashboard-kpi-receitas"
+                : key === "exp"
+                  ? "dashboard-kpi-despesas"
+                  : "dashboard-kpi-saldo"
+            }
+            style={{ padding: "16px 18px" }}
+          >
             <div style={{ ...G, fontSize: 11, fontWeight: 500, color: T.inkMid, marginBottom: 8 }}>{label}</div>
             <div style={{ ...G, ...NUM, fontSize: 20, fontWeight: 700, color: T.ink, marginBottom: 4 }}>{value}</div>
             <div style={{ ...G, display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: up == null ? T.inkLight : up ? T.green : T.red }}>

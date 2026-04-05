@@ -9,7 +9,10 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "check": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:repeat": "sh -c 'for i in 1 2 3 4 5; do echo \"=== E2E $i/5 ===\" && npm run test:e2e || exit 1; done'",
+    "test:e2e:install": "playwright install chromium"
   },
   "dependencies": {
     "axios": "^1.13.2",
@@ -19,10 +22,15 @@
     "recharts": "^2.15.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "20.16.11",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.2",
+    "jsdom": "^28.1.0",
     "typescript": "5.6.3",
     "vite": "^5.4.19",
     "vitest": "^4.1.0"

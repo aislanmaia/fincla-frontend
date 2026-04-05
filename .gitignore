@@ -86,3 +86,8 @@ docs/DEMO_USERS.md
 # Cache / ferramentas locais
 .vite/
 .superpowers/
+
+# Playwright E2E (org id do globalSetup)
+e2e/.cache/
+test-results/
+playwright-report/

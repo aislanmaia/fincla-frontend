@@ -17,15 +17,17 @@ Este documento fornece uma referência completa da API REST para desenvolvedores
 11. [Endpoints de Cartões de Crédito](#endpoints-de-cartões-de-crédito)
 12. [Endpoints de Metas (Goals)](#endpoints-de-metas-goals)
 13. [Endpoints de Orçamentos (Budgets)](#endpoints-de-orçamentos-budgets)
-14. [Endpoints de Transações Recorrentes](#endpoints-de-transações-recorrentes)
-15. [Endpoints de Analytics](#endpoints-de-analytics)
+14. [Endpoints de Transações Recorrentes (Legado)](#endpoints-de-transações-recorrentes)
+15. [Endpoints de Séries Recorrentes (Novo)](#endpoints-de-séries-recorrentes-novo-modelo)
+16. [Endpoints de Analytics](#endpoints-de-analytics)
 16. [Endpoints de Notificações](#endpoints-de-notificações)
 17. [Endpoints da Área do Consultor](#endpoints-da-área-do-consultor)
 18. [Endpoints de Simulação Financeira](#endpoints-de-simulação-financeira)
 19. [Endpoints de Chat/AI](#endpoints-de-chatai)
 20. [Endpoints de WhatsApp Connections](#endpoints-de-whatsapp-connections)
-21. [Tratamento de Erros](#tratamento-de-erros)
-22. [Exemplos de Uso](#exemplos-de-uso)
+21. [Ferramentas de teste E2E](#ferramentas-de-teste-e2e)
+22. [Tratamento de Erros](#tratamento-de-erros)
+23. [Exemplos de Uso](#exemplos-de-uso)
 
 ---
 
@@ -596,6 +598,7 @@ export interface TransactionsSummaryQuery {
   date_end?: string; // ISO date string (YYYY-MM-DD)
   value_min?: number;
   value_max?: number;
+  recurring?: boolean; // true = only recurring txs, false = only non-recurring
 }
 
 export interface PeriodInfo {
@@ -610,6 +613,19 @@ export interface FiltersInfo {
   payment_method: string | null;
   date_start: string | null; // ISO date string (YYYY-MM-DD)
   date_end: string | null; // ISO date string (YYYY-MM-DD)
+  recurring: boolean | null;
+}
+
+/** Projected recurring totals in the same window as date_start/date_end (active series only; not realized txs). */
+export interface RecurringInPeriod {
+  total_expense: number;
+  total_income: number;
+  period: {
+    start_date: string; // YYYY-MM-DD
+    end_date: string; // YYYY-MM-DD — may be capped to 24 months after start_date
+  };
+  series_count_expense?: number;
+  series_count_income?: number;
 }
 
 export interface TransactionsSummaryResponse {
@@ -621,6 +637,8 @@ export interface TransactionsSummaryResponse {
   average_transaction: number;
   period: PeriodInfo;
   filters_applied: FiltersInfo;
+  /** Present only when both date_start and date_end are sent and date_start <= date_end. Omitted when absent. */
+  recurring_in_period?: RecurringInPeriod;
 }
 
 // ===== CARTÕES DE CRÉDITO =====
@@ -2469,6 +2487,16 @@ const getTransactionsSummary = async (
 - `date_end` (opcional): Data final (YYYY-MM-DD)
 - `value_min` (opcional): Valor mínimo
 - `value_max` (opcional): Valor máximo
+- `recurring` (opcional): `true` = só transações recorrentes; `false` = só não recorrentes
+
+**`recurring_in_period`:** quando **`date_start` e `date_end` estão presentes** e `date_start <= date_end`, a resposta inclui `recurring_in_period` com a **projeção** de receitas/despesas recorrentes (séries ativas) no mesmo intervalo — valor × número de ocorrências esperadas no calendário. Não é soma de linhas em `transactions`. Se apenas uma das datas for enviada, o campo **não** vem na resposta.
+
+| Campo na raiz | Significado |
+|---------------|-------------|
+| `total_income` | Receitas **realizadas** (transações) no período filtrado |
+| `total_expenses` | Despesas **realizadas** no período |
+| `recurring_in_period.total_income` | **Projeção** de receitas recorrentes no intervalo |
+| `recurring_in_period.total_expense` | **Projeção** de despesas recorrentes (“comprometido” no período) |
 
 **Exemplos de Uso:**
 ```typescript
@@ -2516,7 +2544,16 @@ const foodSummary = await getTransactionsSummary({
     category: "Alimentação",
     payment_method: null,
     date_start: "2025-01-01",
-    date_end: "2025-01-31"
+    date_end: "2025-01-31",
+    recurring: null
+  },
+  // Somente quando date_start e date_end válidos (inclusivos); omitido caso contrário
+  recurring_in_period: {
+    total_expense: 320.00,
+    total_income: 0,
+    period: { start_date: "2025-01-01", end_date: "2025-01-31" },
+    series_count_expense: 2,
+    series_count_income: 0
   }
 }
 ```
@@ -2530,6 +2567,7 @@ const foodSummary = await getTransactionsSummary({
 - `average_transaction`: Valor médio por transação (total_value / total_transactions)
 - `period`: Informações sobre o período filtrado
 - `filters_applied`: Filtros que foram aplicados na consulta
+- `recurring_in_period` (opcional): projeção de recorrências no intervalo; ver tabela acima
 
 **Notas:**
 - Se não houver transações que atendem aos filtros, todos os valores numéricos serão `0`
@@ -2537,8 +2575,10 @@ const foodSummary = await getTransactionsSummary({
 - `balance` pode ser negativo se as despesas forem maiores que as receitas
 - `average_transaction` será `0` se não houver transações
 - **Com filtros de data (`date_start` e/ou `date_end`):** transações de cartão de crédito são incluídas com base no **vencimento das parcelas** (`due_date`), não na data da compra. Cada parcela que vence no período conta como uma entrada separada no resumo.
+- **`date_start` > `date_end`:** `422` com mensagem `date_start must be on or before date_end`.
 
 **Erros:**
+- `422`: Intervalo de datas inválido (`date_start` depois de `date_end`)
 - `403`: Acesso negado à organização
 - `401`: Não autenticado
 
@@ -4420,6 +4460,312 @@ await generateFromRecurring("rt-uuid", "org-uuid", {
 
 ---
 
+## 🔁 Endpoints de Séries Recorrentes (Novo Modelo)
+
+Este é o novo modelo de transações recorrentes que substitui o `/v1/recurring-transactions`.
+
+### Conceitos Fundamentais
+
+- **Série Recorrente**: uma regra que define como e quando uma transação se repete (ex: Netflix todo dia 5 do mês).
+- **Materialização Lazy**: o backend gera as transações automaticamente na primeira vez que um período é consultado. O frontend **não precisa** chamar nenhum endpoint especial para "gerar" transações.
+- **Versionamento de Série**: quando um valor muda (ex: Netflix subiu de preço), a série atual é "fechada" e uma nova versão é criada com o valor atualizado. Ambas compartilham o mesmo `logical_series_id`.
+- **Projeção Futura**: Para ver o futuro, consulte simplesmente as transações com datas futuras — o backend retornará projeções automáticas.
+
+### Tipos TypeScript
+
+```typescript
+interface RecurringSeries {
+  id: string; // UUID
+  organization_id: string;
+  logical_series_id: string; // Identifica a "mesma" série mesmo após mudança de valor
+  type: 'income' | 'expense';
+  description: string;
+  value: number;
+  value_kind: 'exact' | 'approximate';
+  category: string;
+  payment_method: string;
+  frequency: 'monthly' | 'weekly' | 'biweekly' | 'yearly';
+  start_date: string; // YYYY-MM-DD
+  next_occurrence: string; // YYYY-MM-DD — próxima ocorrência a materializar
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  tags: SeriesTag[];
+  day_of_month?: number | null;
+  day_of_week?: number | null; // 0=Dom..6=Sab
+  end_date?: string | null; // null = indefinido
+  credit_card_id?: number | null;
+  notes?: string | null;
+  replaces_series_id?: string | null; // UUID da versão anterior (se mudança de valor)
+}
+
+interface RecurringSummary {
+  total_monthly_income: number;
+  total_monthly_expense: number;
+  active_count: number;
+  paused_count: number;
+}
+
+/** Same semantics as GET /v1/transactions/summary → recurring_in_period (active series only). */
+interface RecurringSeriesSummaryForPeriod {
+  total_expense: number;
+  total_income: number;
+  period: { start_date: string; end_date: string };
+  series_count_expense?: number;
+  series_count_income?: number;
+}
+
+interface RecurringSeriesListResponse {
+  series: RecurringSeries[];
+  summary: RecurringSummary;
+  /** Present when both date_start and date_end query params are set and valid. */
+  summary_for_period?: RecurringSeriesSummaryForPeriod;
+}
+
+interface ChangeSeriesValueResponse {
+  closed_series: RecurringSeries;
+  new_series: RecurringSeries;
+}
+```
+
+### POST `/v1/recurring-series`
+
+Cria uma nova série recorrente.
+
+**Query params:**
+- `organization_id` (UUID, obrigatório)
+
+**Request:**
+```typescript
+interface CreateRecurringSeriesRequest {
+  type: 'income' | 'expense';
+  description: string;
+  value: number;
+  payment_method: string;
+  frequency: 'monthly' | 'weekly' | 'biweekly' | 'yearly';
+  start_date: string; // YYYY-MM-DD
+  tag_ids?: string[];
+  value_kind?: 'exact' | 'approximate'; // default: 'exact'
+  category?: string;
+  day_of_month?: number | null;
+  day_of_week?: number | null;
+  end_date?: string | null; // null = indefinido
+  credit_card_id?: number | null;
+  notes?: string | null;
+}
+```
+
+**Response (201):** `RecurringSeries`
+
+**Erros:**
+- `400`: Dados inválidos (type, frequency, payment_method, value)
+- `403`: Acesso negado
+
+```typescript
+const createRecurringSeries = async (
+  organizationId: string,
+  data: CreateRecurringSeriesRequest
+): Promise<RecurringSeries> => {
+  const response = await apiClient.post<RecurringSeries>(
+    `/v1/recurring-series?organization_id=${organizationId}`,
+    data
+  );
+  return response.data;
+};
+```
+
+---
+
+### GET `/v1/recurring-series`
+
+Lista todas as séries de uma organização, com resumo financeiro.
+
+**Query params:**
+- `organization_id` (UUID, obrigatório)
+- `is_active` (boolean, opcional) — filtra por ativas/pausadas
+- `date_start` (opcional, YYYY-MM-DD) — junto com `date_end`, habilita `summary_for_period`
+- `date_end` (opcional, YYYY-MM-DD) — deve ser >= `date_start`; caso contrário `422`
+
+**Response (200):** `RecurringSeriesListResponse` — o campo `summary` continua sendo o **equivalente mensal** agregado (`total_monthly_*`). Com `date_start` + `date_end` válidos, `summary_for_period` traz a **projeção no intervalo** (mesma regra do bloco `recurring_in_period` do summary de transações).
+
+**Erros:**
+- `422`: `date_start` posterior a `date_end`
+
+```typescript
+const listRecurringSeries = async (
+  organizationId: string,
+  options?: { isActive?: boolean; dateStart?: string; dateEnd?: string }
+): Promise<RecurringSeriesListResponse> => {
+  const params = new URLSearchParams({ organization_id: organizationId });
+  if (options?.isActive !== undefined) params.append('is_active', String(options.isActive));
+  if (options?.dateStart) params.append('date_start', options.dateStart);
+  if (options?.dateEnd) params.append('date_end', options.dateEnd);
+  const response = await apiClient.get<RecurringSeriesListResponse>(
+    `/v1/recurring-series?${params}`
+  );
+  return response.data;
+};
+```
+
+---
+
+### GET `/v1/recurring-series/{series_id}`
+
+Retorna uma série recorrente pelo ID.
+
+**Query params:**
+- `organization_id` (UUID, obrigatório)
+
+**Response (200):** `RecurringSeries`
+
+**Erros:**
+- `404`: Série não encontrada
+
+---
+
+### PATCH `/v1/recurring-series/{series_id}`
+
+Atualiza campos simples de uma série (descrição, notas, tags, etc.).
+Para mudança de valor com histórico, use `POST /{series_id}/change-value`.
+
+**Query params:**
+- `organization_id` (UUID, obrigatório)
+
+**Request:**
+```typescript
+interface UpdateRecurringSeriesRequest {
+  description?: string;
+  value?: number;
+  value_kind?: 'exact' | 'approximate';
+  category?: string;
+  payment_method?: string;
+  frequency?: 'monthly' | 'weekly' | 'biweekly' | 'yearly';
+  day_of_month?: number | null;
+  day_of_week?: number | null;
+  end_date?: string | null;
+  credit_card_id?: number | null;
+  notes?: string | null;
+  tag_ids?: string[] | null;
+}
+```
+
+**Response (200):** `RecurringSeries`
+
+---
+
+### DELETE `/v1/recurring-series/{series_id}`
+
+Exclui uma série recorrente permanentemente.
+
+**Query params:**
+- `organization_id` (UUID, obrigatório)
+
+**Response (204):** Sem body
+
+**Erros:**
+- `404`: Série não encontrada
+
+---
+
+### PATCH `/v1/recurring-series/{series_id}/toggle`
+
+Pausa ou retoma uma série recorrente.
+
+**Query params:**
+- `organization_id` (UUID, obrigatório)
+
+**Request:**
+```typescript
+{ is_active: boolean }
+```
+
+**Response (200):** `RecurringSeries`
+
+```typescript
+const toggleRecurringSeries = async (
+  organizationId: string,
+  seriesId: string,
+  isActive: boolean
+): Promise<RecurringSeries> => {
+  const response = await apiClient.patch<RecurringSeries>(
+    `/v1/recurring-series/${seriesId}/toggle?organization_id=${organizationId}`,
+    { is_active: isActive }
+  );
+  return response.data;
+};
+```
+
+---
+
+### POST `/v1/recurring-series/{series_id}/change-value`
+
+Altera o valor de uma série com histórico (versionamento).
+
+Este endpoint **fecha** a versão atual da série (setando `end_date`) e **cria uma nova versão** a partir de `effective_start_date` com o novo valor. Ambas as versões compartilham o mesmo `logical_series_id`.
+
+**Quando usar**: quando o valor de uma assinatura/compromisso mudou e você quer manter o histórico correto.
+
+**Query params:**
+- `organization_id` (UUID, obrigatório)
+
+**Request:**
+```typescript
+interface ChangeSeriesValueRequest {
+  new_value: number;
+  effective_start_date: string; // YYYY-MM-DD — a partir de quando o novo valor vale
+  value_kind?: 'exact' | 'approximate'; // default: 'exact'
+  notes?: string | null;
+}
+```
+
+**Response (200):** `ChangeSeriesValueResponse`
+
+```typescript
+// Exemplo: Netflix subiu de R$39,90 para R$49,90 a partir de Junho/2026
+const changeSeriesValue = async (
+  organizationId: string,
+  seriesId: string
+): Promise<ChangeSeriesValueResponse> => {
+  const response = await apiClient.post<ChangeSeriesValueResponse>(
+    `/v1/recurring-series/${seriesId}/change-value?organization_id=${organizationId}`,
+    {
+      new_value: 49.90,
+      effective_start_date: '2026-06-01',
+      value_kind: 'exact',
+    }
+  );
+  return response.data;
+  // response.data.closed_series = Netflix antigo (R$39,90, end_date=2026-05-31)
+  // response.data.new_series = Netflix novo (R$49,90, start_date=2026-06-01)
+};
+```
+
+**Erros:**
+- `400`: `effective_start_date` anterior ao `start_date` da série, ou valor inválido
+- `404`: Série não encontrada
+
+---
+
+### Como o frontend deve tratar ocorrências (Materialização Automática)
+
+**Não há necessidade de chamar nenhum endpoint especial!**
+
+O backend materializa automaticamente as ocorrências quando você faz qualquer consulta de transações:
+
+```typescript
+// Simplesmente busque as transações do período — as ocorrências de séries
+// recorrentes já estarão incluídas automaticamente
+const transactions = await apiClient.get(
+  `/v1/transactions?organization_id=${orgId}&date_start=2026-04-01&date_end=2026-04-30`
+);
+
+// As transações materializadas de séries recorrentes terão:
+// - recurring: true
+// - recurring_series_id: UUID da série que as gerou
+```
+
+---
+
 ## 📊 Endpoints de Analytics
 
 Análises e relatórios financeiros avançados. Todos os endpoints retornam dados calculados em tempo real com base nas transações da organização.
@@ -6022,6 +6368,101 @@ https://seu-backend.com/v1/webhooks/whatsapp?token=SEU_WEBHOOK_TOKEN
 
 ---
 
+## Ferramentas de teste E2E
+
+Rotas disponíveis **somente** quando `APP_ENV` é `development`, `test` ou `staging`. Em **produção** esses paths não existem (`404`). Não use a partir da SPA em build de produção.
+
+Autenticação: **não** usa JWT. Envie o header obrigatório `X-Test-Reset-Token` com o mesmo valor de `TEST_RESET_SECRET` configurado no servidor e no runner (Playwright/CI).
+
+Variáveis típicas no runner:
+
+| Variável | Descrição |
+|----------|-----------|
+| `TEST_RESET_SECRET` | Deve coincidir com `TEST_RESET_SECRET` do backend |
+| `E2E_TEST_OWNER_EMAIL` / `E2E_TEST_OWNER_PASSWORD` | Credenciais do usuário técnico criado/reutilizado pelo reset quando `ensure_fixtures` é true |
+| `TEST_ORG_ID` | Opcional; após o primeiro `200`, persistir `organization_id` retornado |
+
+Organizações elegíveis para reset: nome começa com `__test_` (ver `docs/BACKEND_TEST_RESET_ORGANIZATION.md`).
+
+### `POST /v1/test/reset-organization`
+
+**Request body (JSON):**
+
+```typescript
+interface ResetTestOrganizationRequest {
+  organization_id?: string; // UUID
+  /** Default true nesta rota */
+  ensure_fixtures?: boolean;
+  owner_user_id?: string; // opcional: força membership owner deste usuário
+}
+```
+
+**Response (200):**
+
+```typescript
+interface TestResetOrganizationResponse {
+  organization_id: string;
+  provisioned: {
+    organization_created: boolean;
+    owner_user_created: boolean;
+    membership_created: boolean;
+  };
+  deleted: Record<string, number>;
+  preserved: string[];
+  owner_user_id?: string | null;
+}
+```
+
+**Erros:** `401` token ausente/incorreto; `403` org não é de teste; `404` org não encontrada (com `ensure_fixtures: false`); `422` validação; `500` falha na transação ou credenciais E2E não configuradas no servidor.
+
+**Exemplo (globalSetup Playwright):**
+
+```typescript
+const base = process.env.VITE_API_BASE_URL!.replace(/\/$/, '');
+const res = await fetch(`${base}/v1/test/reset-organization`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'X-Test-Reset-Token': process.env.TEST_RESET_SECRET!,
+  },
+  body: JSON.stringify({
+    ensure_fixtures: true,
+    ...(process.env.TEST_ORG_ID ? { organization_id: process.env.TEST_ORG_ID } : {}),
+  }),
+});
+if (!res.ok) throw new Error(await res.text());
+const data = await res.json();
+// persistir data.organization_id em TEST_ORG_ID para o job
+```
+
+### `POST /v1/test/seed`
+
+Sem JWT; mesmo header `X-Test-Reset-Token`.
+
+**Request:**
+
+```typescript
+interface SeedTestOrganizationRequest {
+  organization_id: string;
+  /** empty | recurring_e2e | dashboard_e2e */
+  profile: string;
+}
+```
+
+**Response (200):**
+
+```typescript
+interface SeedTestOrganizationResponse {
+  organization_id: string;
+  profile: string;
+  seeded: Record<string, number>;
+}
+```
+
+Ordem recomendada no CI: `reset-organization` → `seed` (se usar perfil diferente de `empty`).
+
+---
+
 ## ⚠️ Tratamento de Erros
 
 ### Estrutura de Erro Padrão
@@ -6928,11 +7369,12 @@ interface EndingInstallmentAllCards {
    - O campo `category` nas transações é legado e será removido no futuro - use `tag_ids` em vez disso
 9. **Status de Transações**: O campo `status` em `Transaction` pode ser `"pending"`, `"completed"` ou `"cancelled"`. Use o filtro `status` em `GET /v1/transactions` para filtrar por status.
 10. **Orçamentos**: O campo `status` em `Budget` é calculado automaticamente: `"ok"` (< 80% usado), `"warning"` (80-100%), `"exceeded"` (> 100%).
-11. **Transações Recorrentes**: Após `POST /{rt_id}/generate`, a `next_occurrence` é avançada automaticamente. O frontend deve atualizar o objeto local após essa chamada.
-12. **Contribuições de Metas**: Ao registrar uma contribuição via `POST /v1/goals/{goal_id}/contributions`, o campo `current_amount` da meta é incrementado atomicamente no servidor — não é necessário fazer PATCH na meta separadamente.
-13. **Notificações**: O campo `data` em `Notification` é um objeto JSON livre — seu conteúdo varia conforme o `type` da notificação (ex: `budget_exceeded`, `goal_progress`, `recurring_generated`).
+11. **Transações Recorrentes (legado)**: Após `POST /{rt_id}/generate`, a `next_occurrence` é avançada automaticamente. O frontend deve atualizar o objeto local após essa chamada. **Este modelo está sendo substituído por `/v1/recurring-series`.**
+12. **Séries Recorrentes (novo)**: Use `/v1/recurring-series` para criar e gerenciar transações recorrentes. O backend materializa as ocorrências automaticamente (lazy) — o frontend não precisa chamar nenhum endpoint separado para "gerar" transações. Simplesmente consulte `/v1/transactions` com um `date_start`/`date_end` e as ocorrências já estarão presentes.
+13. **Contribuições de Metas**: Ao registrar uma contribuição via `POST /v1/goals/{goal_id}/contributions`, o campo `current_amount` da meta é incrementado atomicamente no servidor — não é necessário fazer PATCH na meta separadamente.
+14. **Notificações**: O campo `data` em `Notification` é um objeto JSON livre — seu conteúdo varia conforme o `type` da notificação (ex: `budget_exceeded`, `goal_progress`, `recurring_generated`).
 
 ---
 
-**Última atualização**: Março 2026 (v1 API — Fincla v2)
+**Última atualização**: Abril 2026 (v1 API — Fincla v2 + Recurring Series)
 

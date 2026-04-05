@@ -39,6 +39,10 @@ const EMPTY_STATE = {
     rhythmMode: "daily",
   },
   upcomingDebits: [],
+  /** Resumo das séries recorrentes ativas (`GET /recurring-series?is_active=true`). */
+  recurringSummary: null,
+  /** Projeção no intervalo do dashboard (`GET /transactions/summary` → `recurring_in_period`). */
+  recurringInPeriod: null,
 };
 
 function formatShortDate(value) {
@@ -465,7 +469,7 @@ function startOfToday() {
 }
 
 function mapUpcomingDebits(recurringResponse, horizonDays = 14) {
-  const list = recurringResponse?.recurring_transactions ?? [];
+  const list = recurringResponse?.series ?? [];
   const start = startOfToday();
   const end = new Date(start);
   end.setDate(end.getDate() + horizonDays);
@@ -473,7 +477,7 @@ function mapUpcomingDebits(recurringResponse, horizonDays = 14) {
   return list
     .filter((r) => r.type === "expense" && r.is_active !== false)
     .map((r) => {
-      const occ = new Date(r.next_occurrence);
+      const occ = new Date(`${String(r.next_occurrence).slice(0, 10)}T12:00:00`);
       return { r, occ };
     })
     .filter(
@@ -495,7 +499,7 @@ function mapUpcomingDebits(recurringResponse, horizonDays = 14) {
         monthShort: occ
           .toLocaleDateString("pt-BR", { month: "short" })
           .replace(".", ""),
-        cat: tag?.name ?? "Recorrente",
+        cat: tag?.name ?? r.category ?? "Recorrente",
         daysLeft,
         dateLabel: occ.toLocaleDateString("pt-BR", {
           day: "2-digit",
@@ -558,7 +562,11 @@ export function useDashboardData({
         dateEnd: prevPeriod.end,
         transactionType: "expense",
       }),
-      listRecurringTransactions(organizationId, true),
+      listRecurringTransactions(organizationId, {
+        isActive: true,
+        dateStart: start,
+        dateEnd: end,
+      }),
     ])
       .then(
         ([
@@ -604,6 +612,8 @@ export function useDashboardData({
             rhythmMode: rhythm.rhythmMode,
           },
           upcomingDebits: mapUpcomingDebits(recurring),
+          recurringSummary: recurring?.summary ?? null,
+          recurringInPeriod: summary?.recurring_in_period ?? null,
         });
       })
       .catch((error) => {
@@ -625,6 +635,8 @@ export function useDashboardData({
             rhythmMode: "daily",
           },
           upcomingDebits: [],
+          recurringSummary: null,
+          recurringInPeriod: null,
         });
       });
 

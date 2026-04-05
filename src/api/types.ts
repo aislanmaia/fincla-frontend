@@ -392,6 +392,8 @@ export interface Transaction {
   date: string;
   status: 'pending' | 'completed' | 'cancelled';
   recurring: boolean;
+  /** Presente quando a transação foi materializada a partir de uma série (`/v1/recurring-series`). */
+  recurring_series_id?: string | null;
   created_at: string;
   updated_at: string;
   credit_card_charge?: CreditCardChargeInfo | null;
@@ -459,6 +461,8 @@ export interface TransactionsSummaryQuery {
   date_end?: string;
   value_min?: number;
   value_max?: number;
+  /** `true` = só transações recorrentes; `false` = só não recorrentes */
+  recurring?: boolean;
 }
 
 export interface PeriodInfo {
@@ -473,6 +477,19 @@ export interface FiltersInfo {
   payment_method: string | null;
   date_start: string | null;
   date_end: string | null;
+  recurring?: boolean | null;
+}
+
+/** Projeção de recorrências na mesma janela que date_start/date_end (séries ativas; não é soma de linhas em transactions). */
+export interface RecurringInPeriod {
+  total_expense: number;
+  total_income: number;
+  period: {
+    start_date: string;
+    end_date: string;
+  };
+  series_count_expense?: number;
+  series_count_income?: number;
 }
 
 export interface TransactionsSummaryResponse {
@@ -484,6 +501,8 @@ export interface TransactionsSummaryResponse {
   average_transaction: number;
   period: PeriodInfo;
   filters_applied: FiltersInfo;
+  /** Presente quando date_start e date_end são enviados e válidos (inclusivos). */
+  recurring_in_period?: RecurringInPeriod;
 }
 
 // ===== CARTÕES DE CRÉDITO =====
@@ -974,6 +993,124 @@ export interface GenerateFromRecurringResponse {
   transaction_id?: number;
 }
 
+// ===== SÉRIES RECORRENTES (novo modelo; substitui gradualmente recurring-transactions) =====
+
+/** Tag associada a uma série (mesmo perfil das tags em `RecurringTransaction`). */
+export interface SeriesTag {
+  id: string;
+  name: string;
+  color: string | null;
+  icon_key?: string | null;
+  is_default: boolean;
+  is_active: boolean;
+  organization_id: string;
+  tag_type: { id: string; name: string } | null;
+}
+
+export type RecurringSeriesFrequency = 'monthly' | 'weekly' | 'biweekly' | 'yearly';
+export type RecurringSeriesValueKind = 'exact' | 'approximate';
+
+export interface RecurringSeries {
+  id: string;
+  organization_id: string;
+  /** Mesma assinatura lógica após troca de valor (`change-value`). */
+  logical_series_id: string;
+  type: 'income' | 'expense';
+  description: string;
+  value: number;
+  value_kind: RecurringSeriesValueKind;
+  category: string;
+  payment_method: string;
+  frequency: RecurringSeriesFrequency;
+  start_date: string;
+  next_occurrence: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  tags: SeriesTag[];
+  day_of_month?: number | null;
+  /** 0 = domingo … 6 = sábado (contrato do guia para séries). */
+  day_of_week?: number | null;
+  end_date?: string | null;
+  credit_card_id?: number | null;
+  notes?: string | null;
+  replaces_series_id?: string | null;
+}
+
+/** Resumo da lista de séries; mesmos campos que `RecurringTransactionsSummary`. */
+export type RecurringSeriesListSummary = RecurringTransactionsSummary;
+
+/** Mesma semântica que `TransactionsSummaryResponse.recurring_in_period`. */
+export interface RecurringSeriesSummaryForPeriod {
+  total_expense: number;
+  total_income: number;
+  period: { start_date: string; end_date: string };
+  series_count_expense?: number;
+  series_count_income?: number;
+}
+
+export interface RecurringSeriesListResponse {
+  series: RecurringSeries[];
+  summary: RecurringSeriesListSummary;
+  /** Com date_start + date_end válidos na query. */
+  summary_for_period?: RecurringSeriesSummaryForPeriod;
+}
+
+/** Parâmetros opcionais de `GET /recurring-series`. */
+export interface ListRecurringSeriesParams {
+  isActive?: boolean;
+  dateStart?: string;
+  dateEnd?: string;
+}
+
+export interface CreateRecurringSeriesRequest {
+  type: 'income' | 'expense';
+  description: string;
+  value: number;
+  payment_method: string;
+  frequency: RecurringSeriesFrequency;
+  start_date: string;
+  tag_ids?: string[];
+  value_kind?: RecurringSeriesValueKind;
+  category?: string;
+  day_of_month?: number | null;
+  day_of_week?: number | null;
+  end_date?: string | null;
+  credit_card_id?: number | null;
+  notes?: string | null;
+}
+
+export interface UpdateRecurringSeriesRequest {
+  description?: string;
+  value?: number;
+  value_kind?: RecurringSeriesValueKind;
+  category?: string;
+  payment_method?: string;
+  frequency?: RecurringSeriesFrequency;
+  day_of_month?: number | null;
+  day_of_week?: number | null;
+  end_date?: string | null;
+  credit_card_id?: number | null;
+  notes?: string | null;
+  tag_ids?: string[] | null;
+}
+
+export interface RecurringSeriesToggleRequest {
+  is_active: boolean;
+}
+
+export interface ChangeSeriesValueRequest {
+  new_value: number;
+  effective_start_date: string;
+  value_kind?: RecurringSeriesValueKind;
+  notes?: string | null;
+}
+
+export interface ChangeSeriesValueResponse {
+  closed_series: RecurringSeries;
+  new_series: RecurringSeries;
+}
+
 // ===== ANALYTICS =====
 export interface MonthDataPoint {
   year: number;
@@ -1316,6 +1453,37 @@ export interface ClientsAtRiskResponse {
   clients: ClientAtRiskItem[];
   total: number;
   as_of_date: string;
+}
+
+// ===== FERRAMENTAS DE TESTE E2E (rotas só em dev/test/staging) =====
+
+export interface ResetTestOrganizationRequest {
+  organization_id?: string;
+  ensure_fixtures?: boolean;
+  owner_user_id?: string;
+}
+
+export interface TestResetOrganizationResponse {
+  organization_id: string;
+  provisioned: {
+    organization_created: boolean;
+    owner_user_created: boolean;
+    membership_created: boolean;
+  };
+  deleted: Record<string, number>;
+  preserved: string[];
+  owner_user_id?: string | null;
+}
+
+export interface SeedTestOrganizationRequest {
+  organization_id: string;
+  profile: string;
+}
+
+export interface SeedTestOrganizationResponse {
+  organization_id: string;
+  profile: string;
+  seeded: Record<string, number>;
 }
 
 // ===== ERROS =====

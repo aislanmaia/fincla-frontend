@@ -9,6 +9,7 @@ import {
   Play,
   Pencil,
   CalendarDays,
+  Trash2,
 } from "lucide-react";
 import { BarChart as ReBarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { T } from "../tokens";
@@ -34,6 +35,21 @@ import {
   finclaCalendarWeekdayCellStyle,
 } from "../components/finclaCalendarStyles.js";
 import { APP_UI_LOCALE } from "../appLocale.js";
+
+const MONTH_NAMES_PT = [
+  "janeiro",
+  "fevereiro",
+  "março",
+  "abril",
+  "maio",
+  "junho",
+  "julho",
+  "agosto",
+  "setembro",
+  "outubro",
+  "novembro",
+  "dezembro",
+];
 
 function MiniCalendar({ recorrencias = [], selectedDay, onSelectDay }) {
   const hoje = new Date();
@@ -250,7 +266,7 @@ function SimRow({ item, isExp, onToggle, isMuted, onToggleMute, onNav, isMobile 
   );
 }
 
-function RecRow({ r, isExp, onToggle, onTogglePause, onNav, onEditar, isMobile }) {
+function RecRow({ r, isExp, onToggle, onTogglePause, onExcluir, onNav, onEditar, isMobile }) {
   const isReceita = r.tipo === "receita";
   const valColor = isReceita ? T.green : T.ink;
   const sign = isReceita ? "+" : "−";
@@ -338,6 +354,12 @@ function RecRow({ r, isExp, onToggle, onTogglePause, onNav, onEditar, isMobile }
               style={{ ...G, fontSize: 11, fontWeight: 600, color: r.ativa ? T.amber : T.green, background: r.ativa ? T.amberLight : T.greenLight, border: "none", borderRadius: 7, padding: "6px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
               {r.ativa ? <><Pause size={11} /> Pausar</> : <><Play size={11} /> Reativar</>}
             </button>
+            {onExcluir && (
+              <button onClick={(e) => { e.stopPropagation(); onExcluir(r); }}
+                style={{ ...G, fontSize: 11, fontWeight: 600, color: T.red, background: T.redLight, border: "none", borderRadius: 7, padding: "6px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}>
+                <Trash2 size={11} /> Excluir
+              </button>
+            )}
           </div>
         </div>
       </CollapsibleSection>
@@ -354,7 +376,7 @@ function daysUntil(dateIso) {
   return Math.ceil((target.getTime() - base.getTime()) / 86400000);
 }
 
-export function RecorrenciasPage({ onNav, cenarios = [], onNovaRec, onEditar, isMobile = false, dataMode = "live", extraRecs = [], organizationId = null }) {
+export function RecorrenciasPage({ onNav, cenarios = [], onNovaRec, onEditar, isMobile = false, dataMode = "live", extraRecs = [], organizationId = null, recurringRefreshToken = 0 }) {
   const [list, setList] = useState(() => resolveLocalData({
     dataMode,
     mockData: RECORRENCIAS,
@@ -369,7 +391,11 @@ export function RecorrenciasPage({ onNav, cenarios = [], onNovaRec, onEditar, is
   const [mutedItems, setMuted] = useState(new Set());
   const [calendarDay, setCalendarDay] = useState(null);
   const shouldUseRealData = shouldUseRealDataForMode(organizationId, dataMode);
-  const recurringData = useRecurringTransactionsData({ organizationId, enabled: shouldUseRealData });
+  const recurringData = useRecurringTransactionsData({
+    organizationId,
+    enabled: shouldUseRealData,
+    refreshKey: recurringRefreshToken,
+  });
 
   const toggleSec = (key) => setSecOpen((s) => ({ ...s, [key]: !s[key] }));
   const showMore = (key) => setShown((s) => ({ ...s, [key]: s[key] + PAGE_SIZE }));
@@ -379,12 +405,21 @@ export function RecorrenciasPage({ onNav, cenarios = [], onNovaRec, onEditar, is
       next.has(uid) ? next.delete(uid) : next.add(uid);
       return next;
     });
-  const toggle = (id) => {
+  const toggle = (id, nextActive) => {
     if (shouldUseRealData) {
-      recurringData.toggleRecurring(id).catch(() => {});
+      recurringData.toggleRecurring(id, nextActive).catch(() => {});
       return;
     }
-    setList((l) => l.map((r) => (r.id === id ? { ...r, ativa: !r.ativa } : r)));
+    setList((l) => l.map((r) => (r.id === id ? { ...r, ativa: nextActive } : r)));
+  };
+
+  const handleExcluirRec = (r) => {
+    if (!window.confirm(`Excluir permanentemente "${r.desc}"?`)) return;
+    if (shouldUseRealData) {
+      recurringData.deleteRecurring(r.id).catch(() => {});
+      return;
+    }
+    setList((l) => l.filter((row) => row.id !== r.id));
   };
 
   const simRecorrencias = useMemo(() => {
@@ -787,7 +822,7 @@ export function RecorrenciasPage({ onNav, cenarios = [], onNovaRec, onEditar, is
           <CollapsibleSection open={secOpen.desp}>
             <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingBottom: 8 }}>
               {despesas.slice(0, shown.desp).map((r) => (
-                <RecRow key={r.id} r={r} isExp={expanded === r.id} onToggle={() => setExp(expanded === r.id ? null : r.id)} onTogglePause={() => toggle(r.id)} onNav={onNav} onEditar={onEditar} isMobile={isMobile} />
+                <RecRow key={r.id} r={r} isExp={expanded === r.id} onToggle={() => setExp(expanded === r.id ? null : r.id)} onTogglePause={() => toggle(r.id, !r.ativa)} onExcluir={handleExcluirRec} onNav={onNav} onEditar={onEditar} isMobile={isMobile} />
               ))}
               <VerMais total={despesas.length} shown={shown.desp} secKey="desp" />
             </div>
@@ -797,7 +832,7 @@ export function RecorrenciasPage({ onNav, cenarios = [], onNovaRec, onEditar, is
           <CollapsibleSection open={secOpen.rec}>
             <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingBottom: 8 }}>
               {receitas.slice(0, shown.rec).map((r) => (
-                <RecRow key={r.id} r={r} isExp={expanded === r.id} onToggle={() => setExp(expanded === r.id ? null : r.id)} onTogglePause={() => toggle(r.id)} onNav={onNav} onEditar={onEditar} isMobile={isMobile} />
+                <RecRow key={r.id} r={r} isExp={expanded === r.id} onToggle={() => setExp(expanded === r.id ? null : r.id)} onTogglePause={() => toggle(r.id, !r.ativa)} onExcluir={handleExcluirRec} onNav={onNav} onEditar={onEditar} isMobile={isMobile} />
               ))}
               <VerMais total={receitas.length} shown={shown.rec} secKey="rec" />
             </div>

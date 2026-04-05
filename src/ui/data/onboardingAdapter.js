@@ -7,14 +7,14 @@ import {
   getMyOrganizations,
   updateOrganization,
 } from "../../api/organizations";
-import { createRecurringTransaction } from "../../api/recurringTransactions";
+import { createRecurringSeries } from "../../api/recurringSeries";
 import { createTag, listTags, listTagTypes, updateTag } from "../../api/tags";
 
 export {
   createCreditCard,
   createOrganization,
   createOrganizationInvitations,
-  createRecurringTransaction,
+  createRecurringSeries,
   createTag,
   getMyOrganizations,
   listTags,
