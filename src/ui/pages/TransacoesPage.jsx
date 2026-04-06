@@ -1,8 +1,14 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   Search,
   ChevronRight,
-  ChevronDown,
   X,
   Check,
   Pencil,
@@ -23,6 +29,11 @@ import { useTransactionsData } from "../features/transactions/useTransactionsDat
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { CardEmptyWithCta } from "../features/shellExtras.jsx";
 import { FINCLA_CALENDAR_SHADOW } from "../components/finclaCalendarStyles.js";
+import {
+  getTransactionsPeriodBootstrap,
+  writeTransactionsPeriodToStorage,
+  TRANSACTIONS_DEFAULT_PERIOD,
+} from "../features/transactions/transactionsPeriodStorage.js";
 
 export function TransacoesPage({
   onNav,
@@ -83,9 +94,16 @@ export function TransacoesPage({
   const [filterCat,   setFilterCat]   = useState("todas");
   const [filterMethod,setFilterMethod]= useState("todos");
   const [sortBy,      setSortBy]      = useState("date-desc"); // date-desc|date-asc|val-desc|val-asc|name-asc|name-desc
-  const [period,      setPeriod]      = useState("tudo");      // tudo|hoje|semana|mes|mes-ant|3m|ano|custom
-  const [customFrom,  setCustomFrom]  = useState("");
-  const [customTo,    setCustomTo]    = useState("");
+  /** Período: default "mes" + persistência por org (`transactionsPeriodStorage`). */
+  const periodBootstrapRef = useRef(null);
+  if (periodBootstrapRef.current === null) {
+    periodBootstrapRef.current = getTransactionsPeriodBootstrap(organizationId);
+  }
+  const b0 = periodBootstrapRef.current;
+  const [period,      setPeriod]      = useState(b0.period);
+  const [customFrom,  setCustomFrom]  = useState(b0.customFrom);
+  const [customTo,    setCustomTo]    = useState(b0.customTo);
+  const periodPersistFingerprintRef = useRef("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [periodOpen,  setPeriodOpen]  = useState(false);
   // ── Bottom sheet drag-to-dismiss ──────────────────────────────
@@ -97,8 +115,45 @@ export function TransacoesPage({
   const [sortOpen,    setSortOpen]    = useState(false);
   const [selected,    setSelected]    = useState(null);
   const [visible,     setVisible]     = useState(PAGE_SIZE);
+  const listScrollRef = useRef(null);
+  const loadMoreSentinelRef = useRef(null);
+  const loadMoreCooldownRef = useRef(false);
   const [deletingId,  setDeletingId]  = useState(null);
   const [mockTxList,  setMockTxList]  = useState(TRANSACTIONS);
+
+  useLayoutEffect(() => {
+    if (!organizationId) {
+      periodPersistFingerprintRef.current = "";
+      return;
+    }
+    const row = getTransactionsPeriodBootstrap(organizationId);
+    periodPersistFingerprintRef.current = JSON.stringify({
+      org: organizationId,
+      period: row.period,
+      customFrom: row.customFrom,
+      customTo: row.customTo,
+    });
+    setPeriod(row.period);
+    setCustomFrom(row.customFrom);
+    setCustomTo(row.customTo);
+  }, [organizationId]);
+
+  useEffect(() => {
+    if (!organizationId) return;
+    const fp = JSON.stringify({
+      org: organizationId,
+      period,
+      customFrom,
+      customTo,
+    });
+    if (fp === periodPersistFingerprintRef.current) return;
+    periodPersistFingerprintRef.current = fp;
+    writeTransactionsPeriodToStorage(organizationId, {
+      period,
+      customFrom,
+      customTo,
+    });
+  }, [organizationId, period, customFrom, customTo]);
 
   const shouldUseRealData = shouldUseRealDataForMode(organizationId, dataMode);
   const transactionsFilters = useMemo(() => ({
@@ -212,12 +267,16 @@ export function TransacoesPage({
 
   const clearAll = () => {
     setSearch(""); setFilterType("todos"); setFilterCat("todas");
-    setFilterMethod("todos"); setPeriod("tudo"); setSortBy("date-desc");
+    setFilterMethod("todos");
+    setPeriod(TRANSACTIONS_DEFAULT_PERIOD);
+    setCustomFrom("");
+    setCustomTo("");
+    setSortBy("date-desc");
     setCustomFrom(""); setCustomTo(""); setVisible(PAGE_SIZE);
   };
 
   const activeChips = [
-    period!=="tudo" && { key:"period",  label: period==="custom" ? `${customFrom||"?"} → ${customTo||"?"}` : PERIOD_LABELS[period], onRemove:()=>{ setPeriod("tudo"); setCustomFrom(""); setCustomTo(""); } },
+    period !== TRANSACTIONS_DEFAULT_PERIOD && { key:"period",  label: period==="custom" ? `${customFrom||"?"} → ${customTo||"?"}` : PERIOD_LABELS[period], onRemove:()=>{ setPeriod(TRANSACTIONS_DEFAULT_PERIOD); setCustomFrom(""); setCustomTo(""); } },
     filterType!=="todos"  && { key:"type",    label: filterType==="receita"?"↑ Receitas":"↓ Despesas",            onRemove:()=>setFilterType("todos") },
     filterCat!=="todas"   && { key:"cat",     label: filterCatLabel,                                               onRemove:()=>setFilterCat("todas") },
     filterMethod!=="todos"&& { key:"method",  label: filterMethod,                                                 onRemove:()=>setFilterMethod("todos") },
@@ -271,12 +330,41 @@ export function TransacoesPage({
     ? transactionsData.hasMore
     : visible < filtered.length;
 
+  const tryLoadMore = useCallback(() => {
+    if (!hasMore) return;
+    if (shouldUseRealData && transactionsData.isLoading) return;
+    if (loadMoreCooldownRef.current) return;
+    loadMoreCooldownRef.current = true;
+    setVisible((v) => v + PAGE_SIZE);
+    window.setTimeout(() => {
+      loadMoreCooldownRef.current = false;
+    }, 400);
+  }, [hasMore, shouldUseRealData, transactionsData.isLoading]);
+
+  useEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel || !hasMore) return;
+    const root = isMobile ? null : listScrollRef.current;
+    if (!isMobile && !root) return;
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        const [e] = entries;
+        if (!e?.isIntersecting) return;
+        tryLoadMore();
+      },
+      { root, rootMargin: "160px", threshold: 0 },
+    );
+    io.observe(sentinel);
+    return () => io.disconnect();
+  }, [hasMore, isMobile, tryLoadMore]);
+
   const listFiltersActive =
     search.trim() !== "" ||
     filterType !== "todos" ||
     filterCat !== "todas" ||
     filterMethod !== "todos" ||
-    period !== "tudo" ||
+    period !== TRANSACTIONS_DEFAULT_PERIOD ||
     sortBy !== "date-desc" ||
     (period === "custom" && (Boolean(customFrom) || Boolean(customTo)));
 
@@ -684,7 +772,8 @@ export function TransacoesPage({
           <div key={date}>
             {/* Date group header */}
             <div style={{ display:"flex", alignItems:"center", gap:10, padding: isMobile ? "10px 16px 4px" : "10px 18px 4px",
-              position:"sticky", top:"-20px", background:T.bg, zIndex:1 }}>
+              position:"sticky", top:0, background:T.bg, zIndex:2,
+              boxShadow:"0 1px 0 rgba(15,23,42,0.06)" }}>
               <div style={{ ...G, fontSize:11, fontWeight:700, color:T.inkMid,
                 textTransform:"capitalize" }}>{fmtDateLabel(date)}</div>
               <div style={{ flex:1, height:1, background:T.border }}/>
@@ -705,14 +794,18 @@ export function TransacoesPage({
           </div>
         ))
       )}
-      {/* Load more */}
+      {/* Paginação infinita: sentinel + feedback (carregamento ao chegar ao fim da lista) */}
       {hasMore && (
-        <button onClick={()=>setVisible(v=>v+PAGE_SIZE)}
-          style={{ ...G, width:"100%", padding:"12px", background:T.surface, border:`1px solid ${T.border}`,
-            borderRadius:12, fontSize:13, fontWeight:600, color:T.inkMid, cursor:"pointer",
-            display:"flex", alignItems:"center", justifyContent:"center", gap:8, marginTop:4 }}>
-          <ChevronDown size={14}/> Carregar mais ({shouldUseRealData ? Math.max(transactionsData.total - txList.length, 0) : filtered.length - visible} restantes)
-        </button>
+        <div
+          ref={loadMoreSentinelRef}
+          style={{ height:1, marginTop:8, flexShrink:0 }}
+          aria-hidden
+        />
+      )}
+      {hasMore && shouldUseRealData && transactionsData.isLoading && (
+        <div style={{ ...G, textAlign:"center", fontSize:12, color:T.inkLight, padding:"10px 0 4px" }}>
+          Carregando mais…
+        </div>
       )}
     </div>
   );
@@ -862,9 +955,9 @@ export function TransacoesPage({
             <div style={{ position:"relative", flexShrink:0 }}>
               <button onClick={()=>{setPeriodOpen(o=>!o);setSortOpen(false);setFiltersOpen(false);}}
                 style={{ ...G, display:"flex", alignItems:"center", gap:6, padding:"9px 13px",
-                  background: period!=="tudo" ? T.ink : T.surface,
-                  color:       period!=="tudo" ? "#fff"  : T.inkMid,
-                  border:`1px solid ${period!=="tudo" ? T.ink : T.border}`,
+                  background: period !== TRANSACTIONS_DEFAULT_PERIOD ? T.ink : T.surface,
+                  color:       period !== TRANSACTIONS_DEFAULT_PERIOD ? "#fff"  : T.inkMid,
+                  border:`1px solid ${period !== TRANSACTIONS_DEFAULT_PERIOD ? T.ink : T.border}`,
                   borderRadius:10, fontSize:12, fontWeight:700, cursor:"pointer",
                   whiteSpace:"nowrap", transition:"all 0.15s" }}>
                 <Calendar size={13}/>
@@ -1295,7 +1388,10 @@ export function TransacoesPage({
         /* Desktop: master-detail — flex:1 fills remaining height, list scrolls internally */
         <div style={{ display:"flex", gap:16, flex:1, minHeight:0, overflow:"hidden" }}>
           {/* List — scrolls internally */}
-          <div style={{ flex:1, minWidth:0, overflowY:"auto", overflowX:"hidden" }}>
+          <div
+            ref={listScrollRef}
+            style={{ flex:1, minWidth:0, overflowY:"auto", overflowX:"hidden" }}
+          >
             {listContent}
           </div>
           {/* Detail panel — fixed width, fills full height of this zone */}

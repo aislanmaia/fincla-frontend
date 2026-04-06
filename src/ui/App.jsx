@@ -109,6 +109,12 @@ import { LocaleDatePicker } from "./components/LocaleDatePicker.jsx";
 import { APP_UI_LOCALE } from "./appLocale.js";
 import { useNovaTransacaoFinancialImpact } from "./features/novaTransacao/useNovaTransacaoFinancialImpact.js";
 import {
+  useNovaTransacaoPeriodSaldo,
+  projectedBalanceAfterTx,
+  fmtSaldoLine,
+  clearNovaTransacaoSummaryCache,
+} from "./features/novaTransacao/useNovaTransacaoPeriodSaldo.js";
+import {
   parseApiDecimal,
   fmtBrl,
   formatProjectionCardExplain,
@@ -308,6 +314,8 @@ const NovaTransacaoModal = ({
   const [encRec,    setEncRec]    = useState(preConfig?.encRec || "sem-fim");
   const [valorTipoRec, setValorTipoRec] = useState(preConfig?.valorTipoRec || "fixo");
   const [showImpact,setShowImpact]= useState(false);
+  /** Revisão mobile: acordeão «Impacto financeiro» (controlado no pai para não ir à API até expandir). */
+  const [mobileReviewImpactOpen, setMobileReviewImpactOpen] = useState(false);
   const [review,    setReview]    = useState(false);
   const [reviewDir, setReviewDir] = useState("forward");
   const [success,   setSuccess]   = useState(false);
@@ -397,6 +405,7 @@ const NovaTransacaoModal = ({
     setPanelCartaoExiting(false);
     setPanelRecorrenciaExiting(false);
     setShowImpact(false);
+    setMobileReviewImpactOpen(false);
     setAiSuggestion(null);
     setAiApplied(false);
     setDescFocused(false);
@@ -705,12 +714,35 @@ const NovaTransacaoModal = ({
   };
   const valorNum   = centavos / 100;
 
+  const periodSaldo = useNovaTransacaoPeriodSaldo({
+    open,
+    organizationId,
+    dataMode,
+    txDateYmd,
+  });
+  const saldoAposLancamento = projectedBalanceAfterTx(
+    periodSaldo.periodBalance,
+    tipo,
+    valorNum,
+  );
+
+  const impactPanelOpen = useMemo(() => {
+    if (!open) return false;
+    if (review) {
+      if (isMobile) return mobileReviewImpactOpen;
+      return true;
+    }
+    if (isMobile) return false;
+    return showImpact;
+  }, [open, review, isMobile, mobileReviewImpactOpen, showImpact]);
+
   const financialImpact = useNovaTransacaoFinancialImpact({
     open,
     organizationId,
     dataMode,
     novaRecorrencia,
     recorre,
+    impactPanelOpen,
     txDateYmd,
     categoryTagId,
     tipo,
@@ -824,6 +856,7 @@ const NovaTransacaoModal = ({
   const impactMobileSummary = useMemo(() => {
     if (!financialImpact.impactLive) return "Preview indisponível";
     if (!(valorNum > 0)) return "Informe um valor";
+    if (review && isMobile && !mobileReviewImpactOpen) return "Toque para ver o impacto";
     if (financialImpact.previewLoading) return "Calculando…";
     const p = financialImpact.preview;
     if (!p) return "—";
@@ -839,6 +872,9 @@ const NovaTransacaoModal = ({
     financialImpact.previewLoading,
     financialImpact.preview,
     valorNum,
+    review,
+    isMobile,
+    mobileReviewImpactOpen,
   ]);
 
   const typeColor  = tipo === "despesa" ? T.red : T.green;
@@ -1008,6 +1044,7 @@ const NovaTransacaoModal = ({
             }),
           );
         }
+        clearNovaTransacaoSummaryCache();
         onTransactionSaved?.();
       } catch (err) {
         setTxSubmitError(formatRecurringTransactionsApiError(err));
@@ -1088,6 +1125,7 @@ const NovaTransacaoModal = ({
             }),
           );
         }
+        clearNovaTransacaoSummaryCache();
         onTransactionSaved?.();
       } catch (err) {
         setTxSubmitError(formatTransactionsApiError(err));
@@ -1120,20 +1158,18 @@ const NovaTransacaoModal = ({
   );
 
   /* ── MobileImpact — collapsible in review ── */
-  const MobileImpact = () => {
-    const [open, setOpen] = useState(false);
-    return (
+  const MobileImpact = () => (
       <div style={{ border:`1px solid ${T.amber}33`, borderRadius:12, overflow:"hidden" }}>
-        <button onClick={() => setOpen(v => !v)}
+        <button onClick={() => setMobileReviewImpactOpen((v) => !v)}
           style={{ ...G, width:"100%", display:"flex", alignItems:"center", gap:8, padding:"10px 13px", background:T.amberLight, border:"none", cursor:"pointer" }}>
           <Zap size={13} color={T.amber} fill={T.amber} style={{ flexShrink:0 }} />
           <div style={{ flex:1, textAlign:"left" }}>
             <span style={{ ...G, fontSize:12, fontWeight:700, color:T.ink }}>Impacto financeiro</span>
             <span style={{ ...G, fontSize:11, color:T.amber, marginLeft:8 }}>{impactMobileSummary}</span>
           </div>
-          <ChevronDown size={14} color={T.amber} style={{ transition:"transform 0.22s", transform: open ? "rotate(180deg)" : "rotate(0deg)", flexShrink:0 }} />
+          <ChevronDown size={14} color={T.amber} style={{ transition:"transform 0.22s", transform: mobileReviewImpactOpen ? "rotate(180deg)" : "rotate(0deg)", flexShrink:0 }} />
         </button>
-        {open && (
+        {mobileReviewImpactOpen && (
           <div style={{ padding:"12px 14px", background:T.surface, borderTop:`1px solid ${T.amber}22`, display:"flex", flexDirection:"column", gap:12 }}>
             <NovaTransacaoImpactPanel
               impactLive={financialImpact.impactLive}
@@ -1151,8 +1187,7 @@ const NovaTransacaoModal = ({
           </div>
         )}
       </div>
-    );
-  };
+  );
 
   /* ── ReviewBody (shared desktop + mobile) ── */
   const ReviewBody = ({ mobile = false }) => (
@@ -1356,9 +1391,34 @@ const NovaTransacaoModal = ({
                         {parcelas}× R$ {(valorNum/parcelas).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}
                       </span>
                     )}
-                    <span style={{ ...G, fontSize:11, color:T.inkLight }}>
-                      Saldo: <span style={{ color:T.blue, fontWeight:600 }}>R$ 3.160,00</span>
-                    </span>
+                    {periodSaldo.live ? (
+                      <span style={{ ...G, fontSize:11, color:T.inkLight }}>
+                        {periodSaldo.loading ? (
+                          <>Saldo no mês: …</>
+                        ) : periodSaldo.error ? (
+                          <>Saldo no mês indisponível</>
+                        ) : (
+                          <>
+                            Saldo no mês:{" "}
+                            <span style={{ color:T.blue, fontWeight:600 }}>{fmtSaldoLine(periodSaldo.periodBalance)}</span>
+                            {valorNum > 0 && saldoAposLancamento != null ? (
+                              <>
+                                {" · "}
+                                Após:{" "}
+                                <span
+                                  style={{
+                                    color: saldoAposLancamento >= 0 ? T.green : T.red,
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {fmtSaldoLine(saldoAposLancamento)}
+                                </span>
+                              </>
+                            ) : null}
+                          </>
+                        )}
+                      </span>
+                    ) : null}
                   </div>
                 </div>
 
@@ -1970,7 +2030,9 @@ const NovaTransacaoModal = ({
                   </div>
                 </div>
               )}
-              <ParcelaHybrid parcelas={parcelas} valorNum={valorNum} T={T} G={G} NUM={NUM}/>
+              {modalidade === "parcelado" && (
+                <ParcelaHybrid parcelas={parcelas} valorNum={valorNum} T={T} G={G} NUM={NUM}/>
+              )}
             </div>
             </div>
           </div>
@@ -2126,9 +2188,34 @@ const NovaTransacaoModal = ({
                       </div>
                     </div>
                   )}
-                  <div style={{ ...G, fontSize:11, color:T.inkLight, marginTop:4 }}>
-                    Saldo: <span style={{ color:T.blue, fontWeight:600 }}>R$ 3.160,00</span>
-                  </div>
+                  {periodSaldo.live ? (
+                    <div style={{ ...G, fontSize:11, color:T.inkLight, marginTop:4 }}>
+                      {periodSaldo.loading ? (
+                        <>Saldo no mês: …</>
+                      ) : periodSaldo.error ? (
+                        <>Saldo no mês indisponível</>
+                      ) : (
+                        <>
+                          Saldo no mês:{" "}
+                          <span style={{ color:T.blue, fontWeight:600 }}>{fmtSaldoLine(periodSaldo.periodBalance)}</span>
+                          {valorNum > 0 && saldoAposLancamento != null ? (
+                            <>
+                              {" · "}
+                              Após:{" "}
+                              <span
+                                style={{
+                                  color: saldoAposLancamento >= 0 ? T.green : T.red,
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {fmtSaldoLine(saldoAposLancamento)}
+                              </span>
+                            </>
+                          ) : null}
+                        </>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
                 <div>
                   <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:8 }}>
@@ -4460,6 +4547,8 @@ export default function App() {
   const [modalMode, setModalMode] = useState("transacao"); // "transacao" | "recorrencia"
   const [modalPreConfig, setModalPreConfig] = useState(null); // pre-fill for contribuição
   const [panelOpen,          setPanelOpen]          = useState(false);
+  /** Legado: botão fixo (Sliders, canto superior direito) que alterna `StatePanelV4`. `true` para reexibir na UI. */
+  const showLegacyStatePanelFloatButton = false;
   const [requestedDataMode,  setRequestedDataMode]  = useState("live"); // "live" | "mock" | "empty"
   const [showOnboarding,     setShowOnboarding]     = useState(false);
   const [onboardingData,     setOnboardingData]      = useState(null);
@@ -4497,10 +4586,20 @@ export default function App() {
     setChecklistProbeVersion((v) => v + 1);
   }, [transactionsListVersion]);
 
+  // Revalida o checklist «primeiros passos» quando o utilizador volta ao separador.
+  // Não usar `window` `focus`: ao clicar na app após o DevTools (ou outro painel do browser)
+  // o evento dispara e refaz GETs de transactions/budgets/goals sem necessidade.
   useEffect(() => {
-    const onFocus = () => setChecklistProbeVersion((v) => v + 1);
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
+    let wasHidden = document.visibilityState === "hidden";
+    const onVisibility = () => {
+      const hidden = document.visibilityState === "hidden";
+      if (wasHidden && !hidden) {
+        setChecklistProbeVersion((v) => v + 1);
+      }
+      wasHidden = hidden;
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
   }, []);
 
   useEffect(() => {
@@ -4876,8 +4975,8 @@ export default function App() {
           <div style={{ height:2, background:mood.topBorder, transition:"background 0.18s", flexShrink:0 }} />
         )}
 
-        {/* State control button — dashboard only, hidden on mobile */}
-        {page === "dashboard" && !isMobile && (
+        {/* Legado: toggle flutuante do painel de estado — desligado na UI; ver `showLegacyStatePanelFloatButton` */}
+        {showLegacyStatePanelFloatButton && page === "dashboard" && !isMobile && (
           <button onClick={() => setPanelOpen(p => !p)} style={{ position:"fixed", top:68, right:16, zIndex:201, width:32, height:32, borderRadius:8, border:`1px solid ${T.border}`, background:panelOpen?T.ink:T.surface, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", transition:"all 0.2s", boxShadow:T.sm }}>
             <SlidersHorizontal size={13} color={panelOpen?"#fff":T.inkMid} />
           </button>

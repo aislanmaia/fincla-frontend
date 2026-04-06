@@ -14,10 +14,14 @@ import {
   referenceDayInTxMonth,
 } from "../../data/novaTransacaoImpactUtils.js";
 
-const PREVIEW_DEBOUNCE_MS = 380;
+/** Debounce só para alterações do valor monetário (digitação); abertura do painel e outras mudanças são imediatas. */
+const VALOR_PREVIEW_DEBOUNCE_MS = 3000;
 
 /**
  * Dados de impacto financeiro (preview + ritmo diário) para o modal Nova transação.
+ *
+ * @param {boolean} [props.impactPanelOpen=true] — Se false, não chama spending-by-day nem preview-transaction
+ *   (ex.: secção «Impacto financeiro» recolhida no desktop ou colapsada na revisão mobile).
  */
 export function useNovaTransacaoFinancialImpact({
   open,
@@ -25,6 +29,7 @@ export function useNovaTransacaoFinancialImpact({
   dataMode,
   novaRecorrencia,
   recorre,
+  impactPanelOpen = true,
   txDateYmd,
   categoryTagId,
   tipo,
@@ -40,6 +45,8 @@ export function useNovaTransacaoFinancialImpact({
     !novaRecorrencia &&
     !recorre;
 
+  const shouldFetchImpact = live && open && impactPanelOpen;
+
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
@@ -48,12 +55,15 @@ export function useNovaTransacaoFinancialImpact({
   const [spendingLoading, setSpendingLoading] = useState(false);
   const [spendingError, setSpendingError] = useState("");
 
-  const debounceRef = useRef(null);
+  const previewDebounceRef = useRef(null);
+  const impactPanelWasOpenRef = useRef(false);
+  const lastPreviewCommitRef = useRef(null);
 
   const transactionType = tipo === "receita" ? "income" : "expense";
 
   useEffect(() => {
-    if (!live || !open || !organizationId || !txDateYmd) {
+    let cancelled = false;
+    if (!shouldFetchImpact || !organizationId || !txDateYmd) {
       setSpending(null);
       setSpendingError("");
       setSpendingLoading(false);
@@ -62,7 +72,6 @@ export function useNovaTransacaoFinancialImpact({
     const bounds = monthBoundsFromYmd(txDateYmd);
     if (!bounds) return;
 
-    let cancelled = false;
     setSpendingLoading(true);
     setSpendingError("");
     getSpendingByDay(organizationId, bounds.start, bounds.end, {
@@ -85,10 +94,10 @@ export function useNovaTransacaoFinancialImpact({
     return () => {
       cancelled = true;
     };
-  }, [live, open, organizationId, txDateYmd, categoryTagId, transactionType]);
+  }, [shouldFetchImpact, organizationId, txDateYmd, categoryTagId, transactionType]);
 
   const runPreview = useCallback(() => {
-    if (!live || !open || !organizationId) {
+    if (!shouldFetchImpact || !organizationId) {
       setPreview(null);
       setPreviewError("");
       return;
@@ -133,8 +142,7 @@ export function useNovaTransacaoFinancialImpact({
         setPreviewLoading(false);
       });
   }, [
-    live,
-    open,
+    shouldFetchImpact,
     organizationId,
     valorNum,
     categoryTagId,
@@ -147,30 +155,118 @@ export function useNovaTransacaoFinancialImpact({
   ]);
 
   useEffect(() => {
-    if (!live || !open) {
+    if (!shouldFetchImpact || !organizationId) {
+      impactPanelWasOpenRef.current = false;
+      lastPreviewCommitRef.current = null;
       setPreview(null);
       setPreviewError("");
       setPreviewLoading(false);
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-        debounceRef.current = null;
+      if (previewDebounceRef.current) {
+        clearTimeout(previewDebounceRef.current);
+        previewDebounceRef.current = null;
       }
       return;
     }
 
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      debounceRef.current = null;
+    const snapshot = () => ({
+      valorNum,
+      categoryTagId,
+      txDateYmd,
+      transactionType,
+      method,
+      modalidade,
+      parcelas,
+      cartao,
+      organizationId,
+    });
+
+    const snap = snapshot();
+    const panelJustOpened = shouldFetchImpact && !impactPanelWasOpenRef.current;
+    impactPanelWasOpenRef.current = true;
+
+    const commitSnapshot = () => {
+      lastPreviewCommitRef.current = snap;
+    };
+
+    const runNow = () => {
+      if (previewDebounceRef.current) {
+        clearTimeout(previewDebounceRef.current);
+        previewDebounceRef.current = null;
+      }
       runPreview();
-    }, PREVIEW_DEBOUNCE_MS);
+      commitSnapshot();
+    };
+
+    if (panelJustOpened) {
+      runNow();
+      return () => {
+        if (previewDebounceRef.current) {
+          clearTimeout(previewDebounceRef.current);
+          previewDebounceRef.current = null;
+        }
+      };
+    }
+
+    const prev = lastPreviewCommitRef.current;
+    if (!prev) {
+      runNow();
+      return () => {
+        if (previewDebounceRef.current) {
+          clearTimeout(previewDebounceRef.current);
+          previewDebounceRef.current = null;
+        }
+      };
+    }
+
+    const othersEqual =
+      prev.categoryTagId === snap.categoryTagId &&
+      prev.txDateYmd === snap.txDateYmd &&
+      prev.transactionType === snap.transactionType &&
+      prev.method === snap.method &&
+      prev.modalidade === snap.modalidade &&
+      prev.parcelas === snap.parcelas &&
+      prev.cartao === snap.cartao &&
+      prev.organizationId === snap.organizationId;
+
+    const onlyValorChanged =
+      othersEqual && prev.valorNum !== snap.valorNum;
+
+    if (onlyValorChanged) {
+      if (previewDebounceRef.current) clearTimeout(previewDebounceRef.current);
+      previewDebounceRef.current = setTimeout(() => {
+        previewDebounceRef.current = null;
+        runPreview();
+        lastPreviewCommitRef.current = snapshot();
+      }, VALOR_PREVIEW_DEBOUNCE_MS);
+      return () => {
+        if (previewDebounceRef.current) {
+          clearTimeout(previewDebounceRef.current);
+          previewDebounceRef.current = null;
+        }
+      };
+    }
+
+    runNow();
 
     return () => {
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-        debounceRef.current = null;
+      if (previewDebounceRef.current) {
+        clearTimeout(previewDebounceRef.current);
+        previewDebounceRef.current = null;
       }
     };
-  }, [live, open, runPreview]);
+  }, [
+    shouldFetchImpact,
+    organizationId,
+    runPreview,
+    valorNum,
+    categoryTagId,
+    txDateYmd,
+    transactionType,
+    method,
+    modalidade,
+    parcelas,
+    cartao,
+  ]);
 
   /** Metadados + valor da projeção fim de mês (categoria), para gráfico e texto explicativo no card. */
   const categoryProjectionMeta = useMemo(() => {
