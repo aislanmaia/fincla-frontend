@@ -86,6 +86,15 @@ function firstCategoryTag(tags) {
   return cat || null;
 }
 
+function mergeSeriesTagIds(categoryTagId, detailTagIds) {
+  const cat = categoryTagId != null ? String(categoryTagId) : "";
+  const extras = Array.isArray(detailTagIds)
+    ? detailTagIds.map((id) => String(id)).filter(Boolean)
+    : [];
+  const merged = cat ? [cat, ...extras.filter((id) => id !== cat)] : [...extras];
+  return [...new Set(merged)];
+}
+
 function pickCategoryLabelPtSeries(series) {
   const tag = firstCategoryTag(series.tags);
   if (tag) return categoryLabelPtForTag(tag);
@@ -193,6 +202,7 @@ export function buildCreateRecurringSeriesPayload({
   value,
   paymentMethodKey,
   categoryTagId,
+  detailTagIds = null,
   startDateYmd,
   freqRec,
   encRec,
@@ -209,7 +219,9 @@ export function buildCreateRecurringSeriesPayload({
     payment_method: mapUiPaymentMethodToApi(paymentMethodKey),
     frequency,
     start_date: startDateYmd,
-    tag_ids: categoryTagId ? [categoryTagId] : undefined,
+    tag_ids: categoryTagId
+      ? mergeSeriesTagIds(categoryTagId, detailTagIds)
+      : undefined,
     value_kind: valorTipoRec === "estimado" ? "approximate" : "exact",
   };
   if (frequency === "monthly" || frequency === "yearly") {
@@ -238,6 +250,7 @@ export function buildUpdateRecurringSeriesPayload({
   value,
   paymentMethodKey,
   categoryTagId,
+  detailTagIds = null,
   startDateYmd,
   freqRec,
   encRec,
@@ -253,7 +266,9 @@ export function buildUpdateRecurringSeriesPayload({
     payment_method: mapUiPaymentMethodToApi(paymentMethodKey),
     frequency,
     value_kind: valorTipoRec === "estimado" ? "approximate" : "exact",
-    tag_ids: categoryTagId ? [categoryTagId] : undefined,
+    tag_ids: categoryTagId
+      ? mergeSeriesTagIds(categoryTagId, detailTagIds)
+      : undefined,
   };
   if (frequency === "monthly" || frequency === "yearly") {
     const dom = Number.parseInt(String(startDateYmd).slice(8, 10), 10);

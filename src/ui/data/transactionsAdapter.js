@@ -126,6 +126,42 @@ function pickTagNames(transaction, categoryDisplayName) {
     ));
 }
 
+/**
+ * IDs de tags associadas à transação exceto a tag de categoria principal
+ * (útil para POST/PUT com `tag_ids` e para pré-preencher o modal).
+ * @param {import("../../api/types").Transaction} transaction
+ * @returns {string[]}
+ */
+export function pickNonCategoryTagIdsFromApiTransaction(transaction) {
+  const catTag = pickCategoryTag(transaction);
+  const catId =
+    catTag && catTag.id != null && String(catTag.id) !== ""
+      ? String(catTag.id)
+      : null;
+  const out = [];
+  const seen = new Set();
+  for (const group of Object.values(transaction.tags ?? {})) {
+    for (const t of group ?? []) {
+      if (!t?.id) continue;
+      const id = String(t.id);
+      if (catId && id === catId) continue;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push(id);
+    }
+  }
+  return out;
+}
+
+function mergeTransactionTagIds(categoryTagId, detailTagIds) {
+  const cat = categoryTagId != null ? String(categoryTagId) : "";
+  const extras = Array.isArray(detailTagIds)
+    ? detailTagIds.map((id) => String(id)).filter(Boolean)
+    : [];
+  const merged = cat ? [cat, ...extras.filter((id) => id !== cat)] : [...extras];
+  return [...new Set(merged)];
+}
+
 function pickTransactionIcon(transaction) {
   if (transaction.type === "income") return "💸";
 
@@ -227,6 +263,7 @@ export function mapApiTransactionToUi(transaction) {
     status: statusLabel,
     method: formatMethodLabel(transaction.payment_method),
     tags: pickTagNames(transaction, categoryName),
+    detailTagIds: pickNonCategoryTagIdsFromApiTransaction(transaction),
     parcela: mapInstallmentInfo(transaction),
   };
 }
@@ -630,6 +667,7 @@ export function buildCreateTransactionPayload({
   value,
   paymentMethodKey,
   categoryTagId,
+  detailTagIds = null,
   dateIso,
   cardId = null,
   cardLast4 = null,
@@ -641,7 +679,7 @@ export function buildCreateTransactionPayload({
     organization_id: organizationId,
     type,
     description: String(description || "").trim() || "—",
-    tag_ids: [categoryTagId],
+    tag_ids: mergeTransactionTagIds(categoryTagId, detailTagIds),
     value: Number(value),
     payment_method: mapUiPaymentMethodToApi(paymentMethodKey),
     date: dateIso,
@@ -666,6 +704,7 @@ export function buildUpdateTransactionPayload({
   value,
   paymentMethodKey,
   categoryTagId,
+  detailTagIds = null,
   dateIso,
   cardId = null,
   cardLast4 = null,
@@ -683,7 +722,9 @@ export function buildUpdateTransactionPayload({
     recurring: !!recurring,
   };
   // Só sobrescreve tags se houver um ID válido; caso contrário, a API mantém as existentes.
-  if (categoryTagId != null) payload.tag_ids = [categoryTagId];
+  if (categoryTagId != null) {
+    payload.tag_ids = mergeTransactionTagIds(categoryTagId, detailTagIds);
+  }
   if (cardId != null && Number.isFinite(Number(cardId))) {
     payload.card_id = Number(cardId);
   }

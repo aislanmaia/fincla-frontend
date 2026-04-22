@@ -104,6 +104,7 @@ import { FC, FC_MODAL, mergeNavSearch } from "./routing/searchContract.js";
 import { FinclaPageContext } from "./routing/finclaPageContext.jsx";
 import { resolveDataMode, shouldUseRealData as shouldUseRealDataForMode } from "./dataMode.js";
 import { useCategoryTagsData } from "./features/tags/useCategoryTagsData.js";
+import { useNovaTransacaoDetailTags } from "./features/tags/useNovaTransacaoDetailTags.js";
 import {
   buildCreateTransactionPayload,
   buildUpdateTransactionPayload,
@@ -340,9 +341,12 @@ function novaTxModalInitStamp(organizationId, novaRecorrencia, preConfig) {
     pc.modalidade ?? "",
     String(pc.parcelas ?? ""),
     Array.isArray(pc.tags) ? JSON.stringify(pc.tags) : "",
+    Array.isArray(pc.detailTagIds) ? pc.detailTagIds.join(",") : "",
     pc.novaRecorrencia ? "1" : "0",
   ].join("|");
 }
+
+const NOVA_TX_QUICK_DETAIL_LABELS = ["semanal", "família"];
 
 const NovaTransacaoModal = ({
   open,
@@ -359,6 +363,8 @@ const NovaTransacaoModal = ({
   const [desc,      setDesc]      = useState("");
   const [cat,       setCat]       = useState("");
   const [tags,      setTags]      = useState([]);
+  /** Em modo live: UUIDs de tags API tipo `detalhe` (além da categoria). */
+  const [detailTagIds, setDetailTagIds] = useState([]);
   const [newTag,    setNewTag]    = useState("");
   const [addingTag, setAddingTag] = useState(false);
   const [method,    setMethod]    = useState("pix");
@@ -446,6 +452,43 @@ const NovaTransacaoModal = ({
     enabled: open && useLiveCategoryTags,
   });
 
+  const useLiveDetailTags = Boolean(
+    organizationId && dataMode === "live" && useLiveCategoryTags,
+  );
+  const {
+    findByLabel,
+    ensureDetailTag,
+    labelForDetailId,
+    error: detailTagsError,
+  } = useNovaTransacaoDetailTags({
+    organizationId,
+    categoryTagId,
+    enabled: open && useLiveDetailTags,
+  });
+
+  const addQuickDetailTag = useCallback(
+    async (label) => {
+      const trimmed = String(label || "").trim();
+      if (!trimmed) return;
+      if (!useLiveDetailTags) {
+        setTags((tg) => (tg.includes(trimmed) ? tg : [...tg, trimmed]));
+        return;
+      }
+      setTxSubmitError("");
+      try {
+        const id = await ensureDetailTag(trimmed);
+        setDetailTagIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+      } catch (err) {
+        setTxSubmitError(
+          typeof err?.message === "string"
+            ? err.message
+            : "Não foi possível adicionar a tag",
+        );
+      }
+    },
+    [useLiveDetailTags, ensureDetailTag],
+  );
+
   useEffect(() => {
     if (!open) {
       appliedModalInitStampRef.current = null;
@@ -476,6 +519,7 @@ const NovaTransacaoModal = ({
     setNcDigMod("");
     setNewTag("");
     setAddingTag(false);
+    setDetailTagIds([]);
     setParcelaMode(false);
     setPCalcCents(0);
     setPCalcN(2);
@@ -504,6 +548,7 @@ const NovaTransacaoModal = ({
       applyValor(pc?.valorInicial);
       setDesc(pc?.desc || "");
       setTags([]);
+      setDetailTagIds([]);
       setMethod("debito");
       setPanelCartaoOpen(false);
       setPanelCartaoExiting(false);
@@ -524,6 +569,11 @@ const NovaTransacaoModal = ({
       applyValor(pc.valorInicial);
       setDesc(pc.desc || "");
       setTags(Array.isArray(pc.tags) ? pc.tags : []);
+      setDetailTagIds(
+        Array.isArray(pc.detailTagIds)
+          ? pc.detailTagIds.map((id) => String(id))
+          : [],
+      );
       const m = pc.method || "pix";
       setMethod(typeof m === "string" ? m : "pix");
       setRecorre(!!pc.recorre);
@@ -555,6 +605,7 @@ const NovaTransacaoModal = ({
     applyValor(null);
     setDesc("");
     setTags([]);
+    setDetailTagIds([]);
     setMethod("pix");
     setPanelCartaoOpen(false);
     setPanelCartaoExiting(false);
@@ -981,7 +1032,7 @@ const NovaTransacaoModal = ({
     setAiApplied(false);
   }, [desc]);
 
-  const applyAi = () => {
+  const applyAi = async () => {
     if (!aiSuggestion) return;
     const rows = useLiveCategoryTags ? categoryTagsData.categories : [];
     const byKey =
@@ -992,8 +1043,24 @@ const NovaTransacaoModal = ({
     const row = byKey || byLabel;
     if (row?.labelPt) setCat(row.labelPt);
     else setCat(aiSuggestion.cat);
+    const catIdForDetailTags = row?.id ?? null;
     if (row?.id) setCategoryTagId(row.id);
-    setTags(aiSuggestion.tags);
+    if (useLiveDetailTags && catIdForDetailTags) {
+      const nextIds = [];
+      for (const t of aiSuggestion.tags || []) {
+        try {
+          const id = await ensureDetailTag(String(t), catIdForDetailTags);
+          if (!nextIds.includes(id)) nextIds.push(id);
+        } catch {
+          /* ignora tag individual */
+        }
+      }
+      setDetailTagIds(nextIds);
+      setTags([]);
+    } else {
+      setTags(aiSuggestion.tags || []);
+      setDetailTagIds([]);
+    }
     setAiApplied(true);
   };
 
@@ -1045,6 +1112,8 @@ const NovaTransacaoModal = ({
       editingTransactionIdStr == null &&
       (novaRecorrencia || recorre || isEditSeries);
 
+    const detailIdsForApi = useLiveDetailTags ? detailTagIds : [];
+
     if (shouldSaveLiveSeries) {
       if (!categoryTagId) {
         setTxSubmitError("Escolha uma categoria da lista.");
@@ -1083,6 +1152,7 @@ const NovaTransacaoModal = ({
               value: valorNum,
               paymentMethodKey: method,
               categoryTagId,
+              detailTagIds: detailIdsForApi,
               startDateYmd: txDateYmd,
               freqRec,
               encRec,
@@ -1101,6 +1171,7 @@ const NovaTransacaoModal = ({
               value: valorNum,
               paymentMethodKey: method,
               categoryTagId,
+              detailTagIds: detailIdsForApi,
               startDateYmd: txDateYmd,
               freqRec,
               encRec,
@@ -1171,6 +1242,7 @@ const NovaTransacaoModal = ({
               value: valorNum,
               paymentMethodKey: method,
               categoryTagId,
+              detailTagIds: detailIdsForApi,
               dateIso,
               installmentsCount,
               modality,
@@ -1187,6 +1259,7 @@ const NovaTransacaoModal = ({
               value: valorNum,
               paymentMethodKey: method,
               categoryTagId,
+              detailTagIds: detailIdsForApi,
               dateIso,
               installmentsCount,
               modality,
@@ -1309,13 +1382,17 @@ const NovaTransacaoModal = ({
             </div>
           ))}
         </div>
-        {tags.length > 0 && (
+        {((useLiveDetailTags && detailTagIds.length > 0) || (!useLiveDetailTags && tags.length > 0)) && (
           <div>
             <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Tags</div>
             <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-              {tags.map(tag => (
-                <span key={tag} style={{ ...G, fontSize:11, fontWeight:600, color:"#fff", background:T.purple, padding:"4px 10px", borderRadius:9999 }}>+ {tag}</span>
-              ))}
+              {useLiveDetailTags
+                ? detailTagIds.map((id) => (
+                    <span key={id} style={{ ...G, fontSize:11, fontWeight:600, color:"#fff", background:T.purple, padding:"4px 10px", borderRadius:9999 }}>+ {labelForDetailId(id)}</span>
+                  ))
+                : tags.map((tag) => (
+                    <span key={tag} style={{ ...G, fontSize:11, fontWeight:600, color:"#fff", background:T.purple, padding:"4px 10px", borderRadius:9999 }}>+ {tag}</span>
+                  ))}
             </div>
           </div>
         )}
@@ -1536,7 +1613,7 @@ const NovaTransacaoModal = ({
                   <div style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid, marginBottom:10 }}>Categoria</div>
                   <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
                     {modalCategoryChoices.map((row) => (
-                      <button key={row.id || row.labelPt} onClick={() => { setCat(row.labelPt); setCategoryTagId(row.id); }}
+                      <button key={row.id || row.labelPt} onClick={() => { setCat(row.labelPt); setCategoryTagId(row.id); setDetailTagIds([]); }}
                         style={{ ...G, display:"flex", alignItems:"center", gap:5, padding:"8px 12px", borderRadius:99, border:`1.5px solid ${cat === row.labelPt ? T.ink : T.border}`, background:cat === row.labelPt ? T.ink : T.surface, color:cat === row.labelPt ? "#fff" : T.inkMid, fontSize:12, fontWeight:600, cursor:"pointer", transition:"all 0.15s" }}>
                         <CategoryLucideIcon iconKey={row.iconKey} labelPt={row.labelPt} size={15} color={cat === row.labelPt ? "#fff" : T.inkMid} />
                         {row.labelPt}
@@ -1590,17 +1667,38 @@ const NovaTransacaoModal = ({
                 {/* Tags */}
                 <div>
                   <div style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid, marginBottom:10 }}>Tags</div>
+                  {detailTagsError ? (
+                    <div style={{ ...G, fontSize:11, color:T.red, marginBottom:8 }}>{detailTagsError}</div>
+                  ) : null}
                   <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
-                    {tags.map(tag => (
-                      <span key={tag} onClick={() => setTags(ts => ts.filter(t => t !== tag))}
-                        style={{ ...G, fontSize:12, fontWeight:600, color:"#fff", background:T.purple, padding:"5px 11px", borderRadius:9999, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}>
-                        + {tag} <span style={{ opacity:0.7, fontSize:10 }}>✕</span>
-                      </span>
+                    {useLiveDetailTags
+                      ? detailTagIds.map((id) => (
+                          <span key={id} onClick={() => setDetailTagIds((prev) => prev.filter((x) => x !== id))}
+                            style={{ ...G, fontSize:12, fontWeight:600, color:"#fff", background:T.purple, padding:"5px 11px", borderRadius:9999, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}>
+                            + {labelForDetailId(id)} <span style={{ opacity:0.7, fontSize:10 }}>✕</span>
+                          </span>
+                        ))
+                      : tags.map((tag) => (
+                          <span key={tag} onClick={() => setTags((ts) => ts.filter((t) => t !== tag))}
+                            style={{ ...G, fontSize:12, fontWeight:600, color:"#fff", background:T.purple, padding:"5px 11px", borderRadius:9999, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}>
+                            + {tag} <span style={{ opacity:0.7, fontSize:10 }}>✕</span>
+                          </span>
+                        ))}
+                    {NOVA_TX_QUICK_DETAIL_LABELS.filter((t) => {
+                      if (!useLiveDetailTags) return !tags.includes(t);
+                      const row = findByLabel(t);
+                      if (!row) return true;
+                      return !detailTagIds.includes(row.id);
+                    }).map((t) => (
+                      <span key={t} role="button" tabIndex={0}
+                        onClick={(e) => { e.preventDefault(); void addQuickDetailTag(t); }}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); void addQuickDetailTag(t); } }}
+                        style={{ ...G, fontSize:12, color:T.inkMid, background:T.grayLight, padding:"5px 11px", borderRadius:9999, cursor:"pointer" }}>{t}</span>
                     ))}
                     {addingTag ? (
                       <input autoFocus value={newTag} onChange={e => setNewTag(e.target.value)}
-                        onKeyDown={e => { if(e.key==="Enter"&&newTag.trim()){setTags(ts=>[...ts,newTag.trim()]);setNewTag("");setAddingTag(false);} if(e.key==="Escape"){setNewTag("");setAddingTag(false);} }}
-                        onBlur={() => { if(newTag.trim())setTags(ts=>[...ts,newTag.trim()]); setNewTag(""); setAddingTag(false); }}
+                        onKeyDown={e => { if(e.key==="Enter"&&newTag.trim()){ if(useLiveDetailTags) void addQuickDetailTag(newTag.trim()); else setTags(ts=>[...ts,newTag.trim()]); setNewTag("");setAddingTag(false);} if(e.key==="Escape"){setNewTag("");setAddingTag(false);} }}
+                        onBlur={() => { if(newTag.trim()){ if(useLiveDetailTags) void addQuickDetailTag(newTag.trim()); else setTags(ts=>[...ts,newTag.trim()]); } setNewTag(""); setAddingTag(false); }}
                         style={{ ...G, fontSize:12, color:T.blue, border:`1px dashed ${T.blue}`, padding:"4px 10px", borderRadius:9999, outline:"none", width:90, background:"transparent" }} />
                     ) : (
                       <span onClick={() => setAddingTag(true)} style={{ ...G, fontSize:12, color:T.blue, border:`1px dashed ${T.blue}`, padding:"4px 10px", borderRadius:9999, cursor:"pointer" }}>+ nova</span>
@@ -2339,6 +2437,7 @@ const NovaTransacaoModal = ({
                           const row = modalCategoryChoices.find((r) => r.id === id);
                           setCategoryTagId(id || null);
                           if (row?.labelPt) setCat(row.labelPt);
+                          setDetailTagIds([]);
                         }}
                         style={{ ...G, width:"100%", boxSizing:"border-box", padding:"9px 12px", border:`1.5px solid ${T.blue}`, borderRadius:9, background:"#EFF6FF", fontSize:12, fontWeight:600, color:T.ink, cursor:"pointer" }}>
                         {modalCategoryChoices.filter((r) => r.id).map((r) => (
@@ -2374,20 +2473,38 @@ const NovaTransacaoModal = ({
                 </div>
                 <div>
                   <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Tags</div>
+                  {detailTagsError ? (
+                    <div style={{ ...G, fontSize:11, color:T.red, marginBottom:8 }}>{detailTagsError}</div>
+                  ) : null}
                   <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
-                    {tags.map(tag => (
-                      <span key={tag} onClick={() => setTags(tg => tg.filter(t => t !== tag))}
-                        style={{ ...G, fontSize:11, fontWeight:600, color:"#fff", background:T.purple, padding:"4px 9px", borderRadius:9999, cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
-                        + {tag} <span style={{ opacity:0.7, fontSize:10 }}>✕</span>
-                      </span>
-                    ))}
-                    {["semanal","família"].filter(t => !tags.includes(t)).map(t => (
-                      <span key={t} onClick={() => setTags(tg => [...tg, t])} style={{ ...G, fontSize:11, color:T.inkMid, background:T.grayLight, padding:"4px 9px", borderRadius:9999, cursor:"pointer" }}>{t}</span>
+                    {useLiveDetailTags
+                      ? detailTagIds.map((id) => (
+                          <span key={id} onClick={() => setDetailTagIds((prev) => prev.filter((x) => x !== id))}
+                            style={{ ...G, fontSize:11, fontWeight:600, color:"#fff", background:T.purple, padding:"4px 9px", borderRadius:9999, cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
+                            + {labelForDetailId(id)} <span style={{ opacity:0.7, fontSize:10 }}>✕</span>
+                          </span>
+                        ))
+                      : tags.map((tag) => (
+                          <span key={tag} onClick={() => setTags((tg) => tg.filter((t) => t !== tag))}
+                            style={{ ...G, fontSize:11, fontWeight:600, color:"#fff", background:T.purple, padding:"4px 9px", borderRadius:9999, cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
+                            + {tag} <span style={{ opacity:0.7, fontSize:10 }}>✕</span>
+                          </span>
+                        ))}
+                    {NOVA_TX_QUICK_DETAIL_LABELS.filter((t) => {
+                      if (!useLiveDetailTags) return !tags.includes(t);
+                      const row = findByLabel(t);
+                      if (!row) return true;
+                      return !detailTagIds.includes(row.id);
+                    }).map((t) => (
+                      <span key={t} role="button" tabIndex={0}
+                        onClick={(e) => { e.preventDefault(); void addQuickDetailTag(t); }}
+                        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); void addQuickDetailTag(t); } }}
+                        style={{ ...G, fontSize:11, color:T.inkMid, background:T.grayLight, padding:"4px 9px", borderRadius:9999, cursor:"pointer" }}>{t}</span>
                     ))}
                     {addingTag ? (
                       <input autoFocus value={newTag} onChange={e => setNewTag(e.target.value)}
-                        onKeyDown={e => { if(e.key==="Enter"&&newTag.trim()){setTags(tg=>[...tg,newTag.trim()]);setNewTag("");setAddingTag(false);} if(e.key==="Escape"){setNewTag("");setAddingTag(false);} }}
-                        onBlur={() => { if(newTag.trim())setTags(tg=>[...tg,newTag.trim()]); setNewTag(""); setAddingTag(false); }}
+                        onKeyDown={e => { if(e.key==="Enter"&&newTag.trim()){ if(useLiveDetailTags) void addQuickDetailTag(newTag.trim()); else setTags(tg=>[...tg,newTag.trim()]); setNewTag("");setAddingTag(false);} if(e.key==="Escape"){setNewTag("");setAddingTag(false);} }}
+                        onBlur={() => { if(newTag.trim()){ if(useLiveDetailTags) void addQuickDetailTag(newTag.trim()); else setTags(tg=>[...tg,newTag.trim()]); } setNewTag(""); setAddingTag(false); }}
                         style={{ ...G, fontSize:11, color:T.blue, border:`1px dashed ${T.blue}`, padding:"3px 9px", borderRadius:9999, outline:"none", width:80, background:"transparent" }} />
                     ) : (
                       <span onClick={() => setAddingTag(true)} style={{ ...G, fontSize:11, color:T.blue, border:`1px dashed ${T.blue}`, padding:"3px 9px", borderRadius:9999, cursor:"pointer" }}>+ nova</span>
@@ -5028,6 +5145,8 @@ export default function App() {
                 : "avista"
               : undefined,
           parcelas: isParcelado ? ui.parcela.total : undefined,
+          tags: ui.tags ?? [],
+          detailTagIds: ui.detailTagIds ?? [],
         }));
       })
       .catch(() => {
@@ -5188,6 +5307,8 @@ export default function App() {
               ? (isParcelado ? "parcelado" : "avista")
               : undefined,
             parcelas: isParcelado ? tx.parcela.total : undefined,
+            tags: tx.tags ?? [],
+            detailTagIds: tx.detailTagIds ?? [],
           });
         });
         openTxModal({ [FC.TX]: String(tx.id) });
