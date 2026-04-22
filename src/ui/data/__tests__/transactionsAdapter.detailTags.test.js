@@ -63,6 +63,35 @@ describe("pickNonCategoryTagIdsFromApiTransaction", () => {
     expect(pickNonCategoryTagIdsFromApiTransaction(tx)).toEqual([DET1, DET2]);
   });
 
+  it("ignora outras tags do tipo categoria no mesmo grupo (ex.: Transport vs Transporte)", () => {
+    const transportCatId = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+    const tx = minimalTransaction({
+      tags: {
+        categoria: [
+          tagStub(CAT_ID, "Transporte", "categoria", null),
+          tagStub(transportCatId, "Transport", "categoria", null),
+        ],
+        detalhe: [tagStub(DET1, "combustível", "detalhe", CAT_ID)],
+      },
+    });
+    expect(pickNonCategoryTagIdsFromApiTransaction(tx)).toEqual([DET1]);
+  });
+
+  it("ignora detalhes cuja categoria pai não é a categoria principal da transação", () => {
+    const otherCat = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+    const detOther = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+    const tx = minimalTransaction({
+      tags: {
+        categoria: [tagStub(CAT_ID, "Transporte", "categoria", null)],
+        detalhe: [
+          tagStub(DET1, "combustível", "detalhe", CAT_ID),
+          tagStub(detOther, "outro", "detalhe", otherCat),
+        ],
+      },
+    });
+    expect(pickNonCategoryTagIdsFromApiTransaction(tx)).toEqual([DET1]);
+  });
+
   it("deduplica ids repetidos em grupos diferentes", () => {
     const tx = minimalTransaction({
       tags: {

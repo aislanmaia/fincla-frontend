@@ -68,6 +68,16 @@ export function isUuidString(value) {
   );
 }
 
+function isApiTagTypeCategory(t) {
+  const n = normalizeText(t?.tag_type?.name || "");
+  return n === "categoria" || n === "category";
+}
+
+function isCategoryTagGroupKey(groupKey) {
+  const n = normalizeText(groupKey || "");
+  return n.includes("categoria") || n.includes("category");
+}
+
 function pickCategoryTag(transaction) {
   if (transaction.category) {
     return {
@@ -116,14 +126,31 @@ function pickCategoryName(transaction) {
 function pickTagNames(transaction, categoryDisplayName) {
   const catTag = pickCategoryTag(transaction);
   const catApiName = catTag?.name ?? categoryDisplayName;
-  return Object.values(transaction.tags ?? {})
-    .flatMap((tags) => tags ?? [])
-    .map((tag) => tag.name)
-    .filter((tagName, index, all) => (
-      tagName &&
-      tagName !== catApiName &&
-      all.indexOf(tagName) === index
-    ));
+  const primaryCatId =
+    catTag && catTag.id != null && String(catTag.id) !== ""
+      ? String(catTag.id)
+      : null;
+  return Object.entries(transaction.tags ?? {})
+    .flatMap(([groupKey, tags]) =>
+      (tags ?? []).map((tag) => ({ groupKey, tag })),
+    )
+    .filter(({ groupKey, tag }) => {
+      if (isCategoryTagGroupKey(groupKey)) return false;
+      if (isApiTagTypeCategory(tag)) return false;
+      const name = tag?.name;
+      if (!name || name === catApiName) return false;
+      if (
+        primaryCatId &&
+        tag.parent_category_tag_id != null &&
+        String(tag.parent_category_tag_id).trim() !== "" &&
+        String(tag.parent_category_tag_id) !== primaryCatId
+      ) {
+        return false;
+      }
+      return true;
+    })
+    .map(({ tag }) => tag.name)
+    .filter((tagName, index, all) => tagName && all.indexOf(tagName) === index);
 }
 
 /**
@@ -140,11 +167,21 @@ export function pickNonCategoryTagIdsFromApiTransaction(transaction) {
       : null;
   const out = [];
   const seen = new Set();
-  for (const group of Object.values(transaction.tags ?? {})) {
-    for (const t of group ?? []) {
+  for (const [groupKey, tags] of Object.entries(transaction.tags ?? {})) {
+    if (isCategoryTagGroupKey(groupKey)) continue;
+    for (const t of tags ?? []) {
       if (!t?.id) continue;
+      if (isApiTagTypeCategory(t)) continue;
       const id = String(t.id);
       if (catId && id === catId) continue;
+      if (
+        catId &&
+        t.parent_category_tag_id != null &&
+        String(t.parent_category_tag_id).trim() !== "" &&
+        String(t.parent_category_tag_id) !== catId
+      ) {
+        continue;
+      }
       if (seen.has(id)) continue;
       seen.add(id);
       out.push(id);
@@ -167,11 +204,21 @@ export function pickDetailTagDisplayMapFromApiTransaction(transaction) {
       : null;
   /** @type {Record<string, string>} */
   const map = {};
-  for (const group of Object.values(transaction.tags ?? {})) {
-    for (const t of group ?? []) {
+  for (const [groupKey, tags] of Object.entries(transaction.tags ?? {})) {
+    if (isCategoryTagGroupKey(groupKey)) continue;
+    for (const t of tags ?? []) {
       if (!t?.id) continue;
+      if (isApiTagTypeCategory(t)) continue;
       const id = String(t.id);
       if (catId && id === catId) continue;
+      if (
+        catId &&
+        t.parent_category_tag_id != null &&
+        String(t.parent_category_tag_id).trim() !== "" &&
+        String(t.parent_category_tag_id) !== catId
+      ) {
+        continue;
+      }
       const raw = t.name != null && String(t.name).trim() !== "" ? String(t.name).trim() : "";
       map[id] = raw || `Tag ${id.slice(0, 8)}…`;
     }
