@@ -153,6 +153,32 @@ export function pickNonCategoryTagIdsFromApiTransaction(transaction) {
   return out;
 }
 
+/**
+ * Rótulos API por id para tags não-categoria (para chips no modal mesmo quando
+ * `GET /tags?tag_type=detalhe` não devolve todos os ids anexados à transação).
+ * @param {import("../../api/types").Transaction} transaction
+ * @returns {Record<string, string>}
+ */
+export function pickDetailTagDisplayMapFromApiTransaction(transaction) {
+  const catTag = pickCategoryTag(transaction);
+  const catId =
+    catTag && catTag.id != null && String(catTag.id) !== ""
+      ? String(catTag.id)
+      : null;
+  /** @type {Record<string, string>} */
+  const map = {};
+  for (const group of Object.values(transaction.tags ?? {})) {
+    for (const t of group ?? []) {
+      if (!t?.id) continue;
+      const id = String(t.id);
+      if (catId && id === catId) continue;
+      const raw = t.name != null && String(t.name).trim() !== "" ? String(t.name).trim() : "";
+      map[id] = raw || `Tag ${id.slice(0, 8)}…`;
+    }
+  }
+  return map;
+}
+
 function mergeTransactionTagIds(categoryTagId, detailTagIds) {
   const cat = categoryTagId != null ? String(categoryTagId) : "";
   const extras = Array.isArray(detailTagIds)
@@ -264,6 +290,7 @@ export function mapApiTransactionToUi(transaction) {
     method: formatMethodLabel(transaction.payment_method),
     tags: pickTagNames(transaction, categoryName),
     detailTagIds: pickNonCategoryTagIdsFromApiTransaction(transaction),
+    detailTagDisplayById: pickDetailTagDisplayMapFromApiTransaction(transaction),
     parcela: mapInstallmentInfo(transaction),
   };
 }

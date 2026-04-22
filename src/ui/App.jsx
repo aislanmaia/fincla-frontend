@@ -313,6 +313,14 @@ const MOCK_CARTOES_MODAL = [
  * atualiza (hidratação da URL, editar com `flushSync` + `navigate`, etc.), sem
  * reexecutar a cada render com o mesmo conteúdo.
  */
+function novaTxDetailDisplayStamp(detailTagDisplayById) {
+  if (!detailTagDisplayById || typeof detailTagDisplayById !== "object") return "";
+  return Object.keys(detailTagDisplayById)
+    .sort()
+    .map((k) => `${k}=${detailTagDisplayById[k]}`)
+    .join(";");
+}
+
 function novaTxModalInitStamp(organizationId, novaRecorrencia, preConfig) {
   const oid = organizationId ?? "";
   if (novaRecorrencia) {
@@ -342,6 +350,7 @@ function novaTxModalInitStamp(organizationId, novaRecorrencia, preConfig) {
     String(pc.parcelas ?? ""),
     Array.isArray(pc.tags) ? JSON.stringify(pc.tags) : "",
     Array.isArray(pc.detailTagIds) ? pc.detailTagIds.join(",") : "",
+    novaTxDetailDisplayStamp(pc.detailTagDisplayById),
     pc.novaRecorrencia ? "1" : "0",
   ].join("|");
 }
@@ -365,6 +374,8 @@ const NovaTransacaoModal = ({
   const [tags,      setTags]      = useState([]);
   /** Em modo live: UUIDs de tags API tipo `detalhe` (além da categoria). */
   const [detailTagIds, setDetailTagIds] = useState([]);
+  /** Rótulos vindos do GET da transação (id → nome), para chips sem depender só de GET /tags?tag_type=detalhe. */
+  const [detailTagLabelById, setDetailTagLabelById] = useState({});
   const [newTag,    setNewTag]    = useState("");
   const [addingTag, setAddingTag] = useState(false);
   const [method,    setMethod]    = useState("pix");
@@ -466,6 +477,14 @@ const NovaTransacaoModal = ({
     enabled: open && useLiveDetailTags,
   });
 
+  const detailChipLabel = useCallback(
+    (id) => {
+      const sid = String(id);
+      return detailTagLabelById[sid] || labelForDetailId(sid);
+    },
+    [detailTagLabelById, labelForDetailId],
+  );
+
   const addQuickDetailTag = useCallback(
     async (label) => {
       const trimmed = String(label || "").trim();
@@ -477,6 +496,7 @@ const NovaTransacaoModal = ({
       setTxSubmitError("");
       try {
         const id = await ensureDetailTag(trimmed);
+        setDetailTagLabelById((prev) => ({ ...prev, [String(id)]: trimmed }));
         setDetailTagIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
       } catch (err) {
         setTxSubmitError(
@@ -520,6 +540,7 @@ const NovaTransacaoModal = ({
     setNewTag("");
     setAddingTag(false);
     setDetailTagIds([]);
+    setDetailTagLabelById({});
     setParcelaMode(false);
     setPCalcCents(0);
     setPCalcN(2);
@@ -549,6 +570,7 @@ const NovaTransacaoModal = ({
       setDesc(pc?.desc || "");
       setTags([]);
       setDetailTagIds([]);
+      setDetailTagLabelById({});
       setMethod("debito");
       setPanelCartaoOpen(false);
       setPanelCartaoExiting(false);
@@ -573,6 +595,11 @@ const NovaTransacaoModal = ({
         Array.isArray(pc.detailTagIds)
           ? pc.detailTagIds.map((id) => String(id))
           : [],
+      );
+      setDetailTagLabelById(
+        pc.detailTagDisplayById && typeof pc.detailTagDisplayById === "object"
+          ? { ...pc.detailTagDisplayById }
+          : {},
       );
       const m = pc.method || "pix";
       setMethod(typeof m === "string" ? m : "pix");
@@ -606,6 +633,7 @@ const NovaTransacaoModal = ({
     setDesc("");
     setTags([]);
     setDetailTagIds([]);
+    setDetailTagLabelById({});
     setMethod("pix");
     setPanelCartaoOpen(false);
     setPanelCartaoExiting(false);
@@ -1047,19 +1075,25 @@ const NovaTransacaoModal = ({
     if (row?.id) setCategoryTagId(row.id);
     if (useLiveDetailTags && catIdForDetailTags) {
       const nextIds = [];
+      const nextLabels = {};
       for (const t of aiSuggestion.tags || []) {
         try {
           const id = await ensureDetailTag(String(t), catIdForDetailTags);
-          if (!nextIds.includes(id)) nextIds.push(id);
+          if (!nextIds.includes(id)) {
+            nextIds.push(id);
+            nextLabels[String(id)] = String(t);
+          }
         } catch {
           /* ignora tag individual */
         }
       }
       setDetailTagIds(nextIds);
+      setDetailTagLabelById(nextLabels);
       setTags([]);
     } else {
       setTags(aiSuggestion.tags || []);
       setDetailTagIds([]);
+      setDetailTagLabelById({});
     }
     setAiApplied(true);
   };
@@ -1388,7 +1422,7 @@ const NovaTransacaoModal = ({
             <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
               {useLiveDetailTags
                 ? detailTagIds.map((id) => (
-                    <span key={id} style={{ ...G, fontSize:11, fontWeight:600, color:"#fff", background:T.purple, padding:"4px 10px", borderRadius:9999 }}>+ {labelForDetailId(id)}</span>
+                    <span key={id} style={{ ...G, fontSize:11, fontWeight:600, color:"#fff", background:T.purple, padding:"4px 10px", borderRadius:9999 }}>+ {detailChipLabel(id)}</span>
                   ))
                 : tags.map((tag) => (
                     <span key={tag} style={{ ...G, fontSize:11, fontWeight:600, color:"#fff", background:T.purple, padding:"4px 10px", borderRadius:9999 }}>+ {tag}</span>
@@ -1613,7 +1647,7 @@ const NovaTransacaoModal = ({
                   <div style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid, marginBottom:10 }}>Categoria</div>
                   <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
                     {modalCategoryChoices.map((row) => (
-                      <button key={row.id || row.labelPt} onClick={() => { setCat(row.labelPt); setCategoryTagId(row.id); setDetailTagIds([]); }}
+                      <button key={row.id || row.labelPt} onClick={() => { setCat(row.labelPt); setCategoryTagId(row.id); setDetailTagIds([]); setDetailTagLabelById({}); }}
                         style={{ ...G, display:"flex", alignItems:"center", gap:5, padding:"8px 12px", borderRadius:99, border:`1.5px solid ${cat === row.labelPt ? T.ink : T.border}`, background:cat === row.labelPt ? T.ink : T.surface, color:cat === row.labelPt ? "#fff" : T.inkMid, fontSize:12, fontWeight:600, cursor:"pointer", transition:"all 0.15s" }}>
                         <CategoryLucideIcon iconKey={row.iconKey} labelPt={row.labelPt} size={15} color={cat === row.labelPt ? "#fff" : T.inkMid} />
                         {row.labelPt}
@@ -1673,9 +1707,17 @@ const NovaTransacaoModal = ({
                   <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
                     {useLiveDetailTags
                       ? detailTagIds.map((id) => (
-                          <span key={id} onClick={() => setDetailTagIds((prev) => prev.filter((x) => x !== id))}
+                          <span key={id} onClick={() => {
+                            const sid = String(id);
+                            setDetailTagIds((prev) => prev.filter((x) => String(x) !== sid));
+                            setDetailTagLabelById((prev) => {
+                              const next = { ...prev };
+                              delete next[sid];
+                              return next;
+                            });
+                          }}
                             style={{ ...G, fontSize:12, fontWeight:600, color:"#fff", background:T.purple, padding:"5px 11px", borderRadius:9999, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}>
-                            + {labelForDetailId(id)} <span style={{ opacity:0.7, fontSize:10 }}>✕</span>
+                            + {detailChipLabel(id)} <span style={{ opacity:0.7, fontSize:10 }}>✕</span>
                           </span>
                         ))
                       : tags.map((tag) => (
@@ -2438,6 +2480,7 @@ const NovaTransacaoModal = ({
                           setCategoryTagId(id || null);
                           if (row?.labelPt) setCat(row.labelPt);
                           setDetailTagIds([]);
+                          setDetailTagLabelById({});
                         }}
                         style={{ ...G, width:"100%", boxSizing:"border-box", padding:"9px 12px", border:`1.5px solid ${T.blue}`, borderRadius:9, background:"#EFF6FF", fontSize:12, fontWeight:600, color:T.ink, cursor:"pointer" }}>
                         {modalCategoryChoices.filter((r) => r.id).map((r) => (
@@ -2479,9 +2522,17 @@ const NovaTransacaoModal = ({
                   <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
                     {useLiveDetailTags
                       ? detailTagIds.map((id) => (
-                          <span key={id} onClick={() => setDetailTagIds((prev) => prev.filter((x) => x !== id))}
+                          <span key={id} onClick={() => {
+                            const sid = String(id);
+                            setDetailTagIds((prev) => prev.filter((x) => String(x) !== sid));
+                            setDetailTagLabelById((prev) => {
+                              const next = { ...prev };
+                              delete next[sid];
+                              return next;
+                            });
+                          }}
                             style={{ ...G, fontSize:11, fontWeight:600, color:"#fff", background:T.purple, padding:"4px 9px", borderRadius:9999, cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
-                            + {labelForDetailId(id)} <span style={{ opacity:0.7, fontSize:10 }}>✕</span>
+                            + {detailChipLabel(id)} <span style={{ opacity:0.7, fontSize:10 }}>✕</span>
                           </span>
                         ))
                       : tags.map((tag) => (
@@ -5147,6 +5198,7 @@ export default function App() {
           parcelas: isParcelado ? ui.parcela.total : undefined,
           tags: ui.tags ?? [],
           detailTagIds: ui.detailTagIds ?? [],
+          detailTagDisplayById: ui.detailTagDisplayById ?? {},
         }));
       })
       .catch(() => {
@@ -5309,6 +5361,7 @@ export default function App() {
             parcelas: isParcelado ? tx.parcela.total : undefined,
             tags: tx.tags ?? [],
             detailTagIds: tx.detailTagIds ?? [],
+            detailTagDisplayById: tx.detailTagDisplayById ?? {},
           });
         });
         openTxModal({ [FC.TX]: String(tx.id) });

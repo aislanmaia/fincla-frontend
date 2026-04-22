@@ -3,6 +3,7 @@ import {
   buildCreateTransactionPayload,
   buildUpdateTransactionPayload,
   mapApiTransactionToUi,
+  pickDetailTagDisplayMapFromApiTransaction,
   pickNonCategoryTagIdsFromApiTransaction,
 } from "../transactionsAdapter.js";
 
@@ -89,6 +90,33 @@ describe("mapApiTransactionToUi — detailTagIds", () => {
     const ui = mapApiTransactionToUi(minimalTransaction());
     expect(ui.detailTagIds).toEqual([DET1, DET2]);
     expect(ui.tags.map(String)).toContain("família");
+  });
+
+  it("expõe detailTagDisplayById com nome por id (chips no modal)", () => {
+    const ui = mapApiTransactionToUi(minimalTransaction());
+    expect(ui.detailTagDisplayById[DET1]).toBe("família");
+    expect(ui.detailTagDisplayById[DET2]).toBe("semanal");
+  });
+});
+
+describe("pickDetailTagDisplayMapFromApiTransaction", () => {
+  it("usa placeholder curto quando a tag não tem nome", () => {
+    const ghost = "c4eee2bc-d728-45a9-ae2e-8444af0006d5";
+    const tx = minimalTransaction({
+      tags: {
+        categoria: [tagStub(CAT_ID, "Alimentação", "categoria", null)],
+        detalhe: [
+          tagStub(DET1, "combustível", "detalhe", CAT_ID),
+          {
+            ...tagStub(ghost, "", "detalhe", CAT_ID),
+            name: "",
+          },
+        ],
+      },
+    });
+    const m = pickDetailTagDisplayMapFromApiTransaction(tx);
+    expect(m[DET1]).toBe("combustível");
+    expect(m[ghost]).toBe(`Tag ${ghost.slice(0, 8)}…`);
   });
 });
 
