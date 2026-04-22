@@ -88,7 +88,11 @@ import {
   useSearch,
 } from "@tanstack/react-router";
 import { useSession } from "./features/auth/useSession.js";
-import { firstPathSegment, isAuthRouteSegment } from "./routing/appSegments.js";
+import {
+  finclaMainOutletRemountKey,
+  firstPathSegment,
+  isAuthRouteSegment,
+} from "./routing/appSegments.js";
 import {
   capturePostLoginRedirectFromPathnameAndSearchStr,
   consumePostLoginNavigateArgs,
@@ -139,6 +143,7 @@ import {
   formatProjectionCardExplain,
 } from "./data/novaTransacaoImpactUtils.js";
 import { NovaTransacaoImpactPanel } from "./components/NovaTransacaoImpactPanel.jsx";
+import { TRANSACTIONS } from "./data/mockFinance.js";
 
 /* ─── SIMULAÇÃO — estado inicial (cenários mock) ─────────── */
 
@@ -4792,7 +4797,12 @@ export default function App() {
     const onTxDetailPath = Boolean(transactionEditIdFromPathname(pathname));
     navigate({
       replace: true,
-      ...(onTxDetailPath ? { to: "/transactions" } : {}),
+      ...(onTxDetailPath
+        ? {
+            to: "/transactions/{-$transactionId}",
+            params: { transactionId: undefined },
+          }
+        : {}),
       search: (prev) => {
         const next = { ...prev };
         delete next[FC.MODAL];
@@ -4825,7 +4835,8 @@ export default function App() {
       ) {
         navigate({
           replace: true,
-          to: "/transactions",
+          to: "/transactions/{-$transactionId}",
+          params: { transactionId: undefined },
           search: (prev) => {
             const next = { ...prev };
             if (!patch.keepExistingIds) {
@@ -4844,13 +4855,14 @@ export default function App() {
       if (useTxPath) {
         navigate({
           replace: true,
-          to: "/transactions/$transactionId",
+          to: "/transactions/{-$transactionId}",
           params: { transactionId: txPatchId },
           search: (prev) => {
             const next = { ...prev };
             delete next[FC.TX];
             delete next[FC.CARD];
-            next[FC.MODAL] = FC_MODAL.NEW_TRANSACTION;
+            // Edição: o id no path já abre o modal; `fc_modal=new-transaction` fica só para «nova» na lista.
+            delete next[FC.MODAL];
             if (patch[FC.CARD]) next[FC.CARD] = patch[FC.CARD];
             return next;
           },
@@ -4918,16 +4930,13 @@ export default function App() {
     transactionRouteEditId,
   ]);
 
-  // Dados live: se o modal abriu só com `editingTransactionId` (URL / path), busca o item na API.
+  // Modal só com id na URL: em live busca GET /transactions/:id; em mock (id numérico) usa TRANSACTIONS.
   useEffect(() => {
     if (!txModalOpen) {
       editTxHydrateKeyRef.current = null;
       return;
     }
     if (!session.isAuthenticated || session.isBootstrapping) return;
-    if (dataMode !== "live") return;
-    const orgId = session.activeOrgId;
-    if (!orgId) return;
 
     const pc = modalPreConfig;
     const editFromPc =
@@ -4938,7 +4947,6 @@ export default function App() {
     const editId = editFromPc || (routeId ? String(routeId) : "");
     if (!editId) return;
     if (routeId && editFromPc && String(routeId) !== editFromPc) return;
-    if (!isUuidString(editId)) return;
 
     const hasEditorPayload =
       (pc?.desc != null && String(pc.desc).trim() !== "") ||
@@ -4946,6 +4954,46 @@ export default function App() {
         pc.valorInicial !== "" &&
         Number.isFinite(Number(pc.valorInicial)));
     if (hasEditorPayload) return;
+
+    if (dataMode === "mock" && mockDataEnabled && /^\d+$/.test(editId)) {
+      const dedupeMock = `mock|${editId}`;
+      if (editTxHydrateKeyRef.current === dedupeMock) return;
+      const tx = TRANSACTIONS.find((t) => String(t.id) === editId);
+      if (!tx) return;
+      editTxHydrateKeyRef.current = dedupeMock;
+      const txMethod = modalPaymentKeyFromTransactionUi(tx);
+      const isParcelado = tx.parcela && tx.parcela.total > 1;
+      setModalPreConfig((p) => ({
+        ...(p || {}),
+        tipo: tx.val > 0 ? "receita" : "despesa",
+        desc: tx.desc,
+        cat: tx.cat,
+        categoryTagId: tx.categoryTagId ?? null,
+        method: txMethod,
+        valorInicial: Math.abs(tx.val),
+        recorre: tx.rec,
+        editingTransactionId: tx.id,
+        dateIso:
+          tx.dateIsoForEdit ??
+          transactionDateIsoFromBrDisplay(tx.date) ??
+          undefined,
+        cartaoId: tx.cartaoId != null ? tx.cartaoId : undefined,
+        modalidade:
+          txMethod === "credito"
+            ? isParcelado
+              ? "parcelado"
+              : "avista"
+            : undefined,
+        parcelas: isParcelado ? tx.parcela.total : undefined,
+      }));
+      return;
+    }
+
+    if (dataMode !== "live") return;
+    const orgId = session.activeOrgId;
+    if (!orgId) return;
+    // API pode usar id numérico ou UUID na URL — ambos suportados em GET /transactions/:id
+    if (!isUuidString(editId) && !/^\d+$/.test(editId)) return;
 
     const dedupeKey = `${orgId}|${editId}`;
     if (editTxHydrateKeyRef.current === dedupeKey) return;
@@ -4992,6 +5040,7 @@ export default function App() {
   }, [
     txModalOpen,
     dataMode,
+    mockDataEnabled,
     session.isAuthenticated,
     session.isBootstrapping,
     session.activeOrgId,
@@ -5344,7 +5393,7 @@ export default function App() {
               onNav={(dest) => { if (dest === "_nova_transacao") { openTxModal(); } else { navTo(dest); } }}
             />
           )}
-          <ErrorBoundary key={pathname}><PageEnter key={pathname}><Outlet /></PageEnter></ErrorBoundary>
+          <ErrorBoundary key={finclaMainOutletRemountKey(pathname)}><PageEnter key={finclaMainOutletRemountKey(pathname)}><Outlet /></PageEnter></ErrorBoundary>
         </div>
       </div>
       <NovaTransacaoModal open={txModalOpen} onClose={closeTxModal} onTransactionSaved={bumpTransactionsList} novaRecorrencia={novaRecorrenciaModal} preConfig={modalPreConfig} isMobile={isMobile} organizationId={session.activeOrgId} dataMode={dataMode} />

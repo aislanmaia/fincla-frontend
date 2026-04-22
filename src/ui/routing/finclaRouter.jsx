@@ -43,37 +43,25 @@ const segmentRoutes = AUTH_ROUTE_SEGMENTS.filter(
   }),
 );
 
+/** Um único componente para lista + detalhe evita remount ao abrir edição pela URL. */
+function transactionsOptionalBeforeLoad(ctx) {
+  requireSessionTokenBeforeLoad(ctx);
+  const raw = ctx.params?.transactionId;
+  if (raw == null || String(raw).trim() === "") return;
+  if (!isTransactionEditPathId(String(raw))) {
+    throw notFound();
+  }
+}
+
 const transactionsRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "transactions",
-  beforeLoad: requireSessionTokenBeforeLoad,
+  path: "transactions/{-$transactionId}",
+  beforeLoad: transactionsOptionalBeforeLoad,
   errorComponent: FinclaAuthenticatedRouteError,
-  component: () => <Outlet />,
-});
-
-const transactionsIndexRoute = createRoute({
-  getParentRoute: () => transactionsRoute,
-  path: "/",
-  component: function TransactionsIndexPage() {
+  component: function TransactionsPage() {
     return <AuthenticatedPageOutlet segment="transactions" />;
   },
 });
-
-const transactionsDetailRoute = createRoute({
-  getParentRoute: () => transactionsRoute,
-  path: "$transactionId",
-  beforeLoad: ({ params }) => {
-    if (!isTransactionEditPathId(params.transactionId)) {
-      throw notFound();
-    }
-  },
-  errorComponent: FinclaAuthenticatedRouteError,
-  component: function TransactionsDetailPage() {
-    return <AuthenticatedPageOutlet segment="transactions" />;
-  },
-});
-
-transactionsRoute.addChildren([transactionsIndexRoute, transactionsDetailRoute]);
 
 const profileRoute = createRoute({
   getParentRoute: () => rootRoute,

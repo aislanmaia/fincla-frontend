@@ -45,13 +45,13 @@ describe("isReturnableFinclaPathname", () => {
 });
 
 describe("capture + consume pós-login", () => {
-  it("grava destino com path de edição de transação", () => {
+  it("grava destino com path de edição de transação (sem fc_modal na query)", () => {
     capturePostLoginRedirectFromLocation({
       pathname: "/transactions/550e8400-e29b-41d4-a716-446655440000",
-      searchStr: "?fc_modal=new-transaction",
+      searchStr: "",
     });
     expect(sessionStorage.getItem(KEY)).toBe(
-      "/transactions/550e8400-e29b-41d4-a716-446655440000?fc_modal=new-transaction",
+      "/transactions/550e8400-e29b-41d4-a716-446655440000",
     );
   });
 
