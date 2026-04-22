@@ -21,7 +21,7 @@ export const MiniChecklist = ({ onboardingData, completedTx, completedBudget, on
     {
       label: "Criar orçamento ou meta",
       done: completedBudget,
-      cta: { label: "Criar →", action: () => onNav && onNav("orcamentos") },
+      cta: { label: "Criar →", action: () => onNav && onNav("budgets") },
     },
   ];
   if (items.every(i => i.done)) return null;

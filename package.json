@@ -15,11 +15,14 @@
     "test:e2e:install": "playwright install chromium"
   },
   "dependencies": {
+    "@tanstack/react-router": "^1.168.23",
+    "@tanstack/zod-adapter": "^1.166.9",
     "axios": "^1.13.2",
     "lucide-react": "^0.453.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "recharts": "^2.15.2"
+    "recharts": "^2.15.2",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",

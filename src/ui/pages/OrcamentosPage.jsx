@@ -1,4 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearch } from "@tanstack/react-router";
+import { FC } from "../routing/searchContract.js";
 import {
   ArrowRight,
   BarChart2,
@@ -51,14 +53,15 @@ const AVATAR_COLORS_ORC = { A:"#7C3AED", M:"#2563EB", F:"#059669", J:"#D97706" }
 export function OrcamentosPage({
   onNav,
   isMobile = false,
-  autoOpenAdd = false,
   dataMode = "live",
   extraRecs = [],
   orgTipo = "personal",
   organizationId = null,
 }) {
+  const urlSearch = useSearch({ strict: false });
+  const navigate = useNavigate();
   const [month,    setMonth]    = useState(2);
-  const [showAdd,  setShowAdd]  = useState(autoOpenAdd);
+  const [showAdd,  setShowAdd]  = useState(false);
   const [addSelId,   setAddSelId]   = useState(null);
   const [addLimStr,  setAddLimStr]  = useState("");
   const resetAddForm = () => { setAddSelId(null); setAddLimStr(""); };
@@ -72,6 +75,19 @@ export function OrcamentosPage({
     organizationId,
     enabled: shouldUseRealData,
   });
+
+  useEffect(() => {
+    if (urlSearch[FC.ADD] !== "1") return;
+    setShowAdd(true);
+    navigate({
+      replace: true,
+      search: (prev) => {
+        const next = { ...prev };
+        delete next[FC.ADD];
+        return next;
+      },
+    });
+  }, [urlSearch[FC.ADD], navigate]);
 
   const MONTHS_FULL = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
   const currentMonth = new Date().getMonth();
@@ -142,7 +158,7 @@ export function OrcamentosPage({
                   <div key={m} style={{ width:20, height:20, borderRadius:"50%", background:AVATAR_COLORS_ORC[m]||T.inkMid, border:`2px solid ${T.surface}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:8, fontWeight:700, color:"#fff", marginLeft:i===0?0:-5 }}>{m}</div>
                 ))}
               </div>
-              <button onClick={e => { e.stopPropagation(); onNav && onNav("transacoes", { filterCat: cat.navFilter || cat.nome }); }}
+              <button onClick={e => { e.stopPropagation(); onNav && onNav("transactions", { filterCat: cat.navFilter || cat.nome }); }}
                 style={{ ...G, fontSize:10, fontWeight:600, color:T.blue, background:"none", border:"none", cursor:"pointer", padding:0, display:"flex", alignItems:"center", gap:3 }}
                 onMouseEnter={e => e.currentTarget.style.textDecoration="underline"}
                 onMouseLeave={e => e.currentTarget.style.textDecoration="none"}>
@@ -371,7 +387,7 @@ export function OrcamentosPage({
                   </div>
                 </div>
                 {!shouldUseRealData && (
-                  <button onClick={()=>onNav("recorrencias")} style={{ ...G, fontSize:11, fontWeight:700, color:T.blue, background:"none", border:"none", cursor:"pointer", flexShrink:0 }}>Ir →</button>
+                  <button onClick={()=>onNav("recurring")} style={{ ...G, fontSize:11, fontWeight:700, color:T.blue, background:"none", border:"none", cursor:"pointer", flexShrink:0 }}>Ir →</button>
                 )}
               </div>
             )}

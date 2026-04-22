@@ -1,4 +1,10 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { formatOrganizationsApiError } from "../data/organizationsAdapter.js";
 import { useOrganizationMembersData } from "../features/organization/useOrganizationMembersData.js";
 import { changePassword as apiChangePassword } from "../../api/auth";
@@ -30,6 +36,11 @@ import { T } from "../tokens";
 import { G } from "../typography";
 import { DragScrollTabs } from "../layouts/DragScrollTabs.jsx";
 import { CardEmptyWithCta } from "../features/shellExtras.jsx";
+import {
+  PROFILE_TAB_INTERNAL_TO_SLUG,
+  PROFILE_TAB_SLUG_TO_INTERNAL,
+  profileSettingsTabSlugFromPathname,
+} from "../routing/profileSettingsTabs.js";
 
 function formatOrgTipoLabelForSettings(t) {
   if (t == null || t === "") return "Pessoal";
@@ -51,7 +62,23 @@ export function ConfiguracoesPage({
   organizationId = null,
   currentUser = null,
 }) {
-  const [subPage, setSubPage] = useState("perfil");
+  const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const settingsTabSlug = profileSettingsTabSlugFromPathname(pathname);
+  const subPage = useMemo(() => {
+    if (!settingsTabSlug) return "perfil";
+    return PROFILE_TAB_SLUG_TO_INTERNAL[settingsTabSlug] ?? "perfil";
+  }, [settingsTabSlug]);
+
+  const goToSettingsTab = useCallback(
+    (internalId) => {
+      const slug = PROFILE_TAB_INTERNAL_TO_SLUG[internalId];
+      if (!slug) return;
+      navigate({ to: `/profile/${slug}` });
+    },
+    [navigate],
+  );
+
   const liveMembersEnabled = Boolean(organizationId) && dataMode === "live";
   const liveMembers = useOrganizationMembersData({
     organizationId: organizationId || "",
@@ -970,7 +997,7 @@ export function ConfiguracoesPage({
               {items.map(({ id, label, Icon }) => {
                 const active = subPage === id;
                 return (
-                  <button key={id} onClick={() => setSubPage(id)} style={{ ...G, width:"100%", display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:9, border:"none", cursor:"pointer", marginBottom:1, transition:"all 0.12s", background: active ? T.ink : "transparent", color: active ? "#fff" : T.inkMid, fontWeight: active ? 600 : 400, fontSize:13, textAlign:"left" }}>
+                  <button key={id} onClick={() => goToSettingsTab(id)} style={{ ...G, width:"100%", display:"flex", alignItems:"center", gap:8, padding:"8px 10px", borderRadius:9, border:"none", cursor:"pointer", marginBottom:1, transition:"all 0.12s", background: active ? T.ink : "transparent", color: active ? "#fff" : T.inkMid, fontWeight: active ? 600 : 400, fontSize:13, textAlign:"left" }}>
                     <Icon size={13} strokeWidth={active ? 2.5 : 2}/>
                     {label}
                   </button>
@@ -986,7 +1013,7 @@ export function ConfiguracoesPage({
           {SUB_NAV.flatMap(g => g.items).map(({ id, label, Icon }) => {
             const active = subPage === id;
             return (
-              <button key={id} onClick={() => setSubPage(id)}
+              <button key={id} onClick={() => goToSettingsTab(id)}
                 style={{ ...G, display:"flex", alignItems:"center", gap:6,
                   padding:"7px 14px", borderRadius:99,
                   border:`1px solid ${active ? T.ink : T.border}`,

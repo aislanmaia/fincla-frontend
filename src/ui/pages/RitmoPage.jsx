@@ -177,7 +177,7 @@ function RitmoPageMock({ onNav, isMobile = false }) {
           </div>
         </div>
         {!isClosed && (
-          <Btn variant="dark" onClick={() => onNav("simulacao")}>
+          <Btn variant="dark" onClick={() => onNav("simulation")}>
             <FlaskConical size={12} /> Simular
           </Btn>
         )}
@@ -461,7 +461,7 @@ export function RitmoPage({
           title="Nenhuma organização ativa"
           sub="Selecione ou crie uma organização para ver o ritmo de gastos com dados reais."
           primaryLabel="Ir às configurações"
-          onPrimary={() => onNav("perfil")}
+          onPrimary={() => onNav("profile")}
         />
       </Card>
     </div>

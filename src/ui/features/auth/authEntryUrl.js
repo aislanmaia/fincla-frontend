@@ -1,5 +1,6 @@
 /**
- * Parâmetros de URL suportados (alinhar links dos e-mails do backend):
+ * Parâmetros de URL suportados (alinhar links dos e-mails do backend).
+ * A allowlist espelhada no router (Zod) está em `routing/finclaRootSearchSchema.js`.
  *
  * Convite:
  *   - ?invite_token=... ou ?invitation_token=...

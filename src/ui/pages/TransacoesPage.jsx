@@ -6,6 +6,8 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { useNavigate, useSearch } from "@tanstack/react-router";
+import { FC } from "../routing/searchContract.js";
 import {
   Search,
   ChevronRight,
@@ -42,10 +44,11 @@ export function TransacoesPage({
   onNewTx,
   dataMode = "live",
   organizationId = null,
-  initialFilterCat = "",
   transactionsRefreshToken = 0,
   onTransactionsInvalidate,
 }) {
+  const urlSearch = useSearch({ strict: false });
+  const navigate = useNavigate();
   const PAGE_SIZE = 10;
 
   const CAT_COLORS = {
@@ -204,25 +207,49 @@ export function TransacoesPage({
 
   const ALL_METHODS = [...new Set(txList.map(t=>t.method))].sort();
 
+  const categoryFromUrl = urlSearch[FC.CATEGORY];
   useEffect(() => {
-    if (!initialFilterCat) return;
-    if (shouldUseRealData && categoryTagsData.categories?.length) {
-      const byId = categoryTagsData.categories.find((c) => c.id === initialFilterCat);
-      if (byId) {
-        setFilterCat(byId.id);
-        setFiltersOpen(false);
-        return;
-      }
-      const byLabel = categoryTagsData.categories.find((c) => c.labelPt === initialFilterCat);
-      if (byLabel) {
-        setFilterCat(byLabel.id);
-        setFiltersOpen(false);
-        return;
+    if (!categoryFromUrl || String(categoryFromUrl).trim() === "") return;
+    const slug = String(categoryFromUrl).trim();
+    const strip = () =>
+      navigate({
+        replace: true,
+        search: (prev) => {
+          const next = { ...prev };
+          delete next[FC.CATEGORY];
+          return next;
+        },
+      });
+
+    if (shouldUseRealData) {
+      if (categoryTagsData.isLoading) return;
+      if (categoryTagsData.categories?.length) {
+        const byId = categoryTagsData.categories.find((c) => c.id === slug);
+        if (byId) {
+          setFilterCat(byId.id);
+          setFiltersOpen(false);
+          strip();
+          return;
+        }
+        const byLabel = categoryTagsData.categories.find((c) => c.labelPt === slug);
+        if (byLabel) {
+          setFilterCat(byLabel.id);
+          setFiltersOpen(false);
+          strip();
+          return;
+        }
       }
     }
-    setFilterCat(initialFilterCat);
+    setFilterCat(slug);
     setFiltersOpen(false);
-  }, [initialFilterCat, shouldUseRealData, categoryTagsData.categories]);
+    strip();
+  }, [
+    categoryFromUrl,
+    shouldUseRealData,
+    categoryTagsData.isLoading,
+    categoryTagsData.categories,
+    navigate,
+  ]);
 
   // Period presets
   const TODAY = new Date();
@@ -484,7 +511,14 @@ export function TransacoesPage({
         {/* Actions */}
         <div style={{ padding:"14px 20px", borderTop:`1px solid ${T.border}`, display:"flex", gap:10 }}>
           <button
-            onClick={() => { onEditTx && onEditTx(tx); onClose(); }}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onEditTx) onEditTx(tx);
+              // Fecha o painel no próximo tick para o pai aplicar `flushSync` + `navigate`
+              // antes do unmount do detalhe (evita corridas com o estado do modal).
+              queueMicrotask(() => onClose());
+            }}
             style={{ ...G, flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
               background:T.ink, color:"#fff", border:"none", borderRadius:10,
               padding:"10px", fontSize:13, fontWeight:700, cursor:"pointer" }}>

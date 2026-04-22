@@ -1,9 +1,10 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import App from "./ui/App.jsx";
+import { RouterProvider } from "@tanstack/react-router";
+import { finclaRouter } from "./ui/routing/finclaRouter.jsx";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <App />
+    <RouterProvider router={finclaRouter} />
   </StrictMode>
 );

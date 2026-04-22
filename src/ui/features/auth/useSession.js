@@ -13,6 +13,7 @@ import {
   buildSessionAfterOnboarding,
   isOnboardingRequired,
 } from "./sessionState.js";
+import { clearPostLoginRedirect } from "../../routing/postLoginRedirect.js";
 
 const ACTIVE_ORG_KEY = "fincla_active_org_id";
 
@@ -158,6 +159,7 @@ export function useSession() {
   const signOut = useCallback(() => {
     logoutApi();
     persistActiveOrgId(null);
+    clearPostLoginRedirect();
     resetSession();
   }, [resetSession]);
 

@@ -564,10 +564,10 @@ export function DashboardPage({
                   </div>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                  <button onClick={() => onNav("orcamentos")} style={{ ...G, width: "100%", background: T.blueLight, color: T.blue, border: "none", borderRadius: 9, padding: "8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                  <button onClick={() => onNav("budgets")} style={{ ...G, width: "100%", background: T.blueLight, color: T.blue, border: "none", borderRadius: 9, padding: "8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
                     📋 Criar orçamento
                   </button>
-                  <button onClick={() => onNav("metas")} style={{ ...G, width: "100%", background: T.purpleLight, color: T.purple, border: "none", borderRadius: 9, padding: "8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                  <button onClick={() => onNav("goals")} style={{ ...G, width: "100%", background: T.purpleLight, color: T.purple, border: "none", borderRadius: 9, padding: "8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
                     🎯 Definir meta
                   </button>
                 </div>
@@ -628,7 +628,7 @@ export function DashboardPage({
                   <div style={{ ...G, fontSize: 11, color: T.inkLight, lineHeight: 1.6, marginBottom: 8 }}>
                     Registre despesas fixas para ver boletos e assinaturas aqui.
                   </div>
-                  <button onClick={() => onNav("recorrencias")} style={{ ...G, width: "100%", background: "none", color: T.inkMid, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                  <button onClick={() => onNav("recurring")} style={{ ...G, width: "100%", background: "none", color: T.inkMid, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px", fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
                     + Adicionar recorrência
                   </button>
                 </div>
@@ -645,7 +645,7 @@ export function DashboardPage({
                   {rec.desc} aparece na tela de Recorrências. Você pode editar o valor ou adicionar outras entradas e despesas fixas.
                 </div>
               </div>
-              <button onClick={() => onNav("recorrencias")} style={{ ...G, padding: "7px 12px", borderRadius: 9, border: `1px solid ${T.border}`, background: T.surface, fontSize: 12, fontWeight: 600, color: T.inkMid, cursor: "pointer", flexShrink: 0 }}>
+              <button onClick={() => onNav("recurring")} style={{ ...G, padding: "7px 12px", borderRadius: 9, border: `1px solid ${T.border}`, background: T.surface, fontSize: 12, fontWeight: 600, color: T.inkMid, cursor: "pointer", flexShrink: 0 }}>
                 Ver →
               </button>
             </div>
@@ -664,7 +664,7 @@ export function DashboardPage({
                 <button onClick={onNewTx} style={{ ...G, background: T.ink, color: "#fff", border: "none", borderRadius: 11, padding: "11px 22px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
                   + Nova transação
                 </button>
-                <button onClick={() => onNav("recorrencias")} style={{ ...G, background: "none", color: T.inkMid, border: `1px solid ${T.border}`, borderRadius: 11, padding: "11px 22px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                <button onClick={() => onNav("recurring")} style={{ ...G, background: "none", color: T.inkMid, border: `1px solid ${T.border}`, borderRadius: 11, padding: "11px 22px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                   Recorrências
                 </button>
               </div>
@@ -679,7 +679,7 @@ export function DashboardPage({
                   Em Recorrências, adicione seu salário ou renda. O dashboard mostrará projeções reais desde o início.
                 </div>
               </div>
-              <button onClick={() => onNav("recorrencias")} style={{ ...G, fontSize: 11, fontWeight: 700, color: T.blue, background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}>
+              <button onClick={() => onNav("recurring")} style={{ ...G, fontSize: 11, fontWeight: 700, color: T.blue, background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}>
                 Ir →
               </button>
             </div>
@@ -826,7 +826,7 @@ export function DashboardPage({
                     </button>
                     <button
                       type="button"
-                      onClick={() => onNav("recorrencias")}
+                      onClick={() => onNav("recurring")}
                       style={{
                         ...G,
                         background: "none",
@@ -876,10 +876,10 @@ export function DashboardPage({
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                  <button type="button" onClick={() => onNav("orcamentos")} style={{ ...G, width: "100%", background: T.blueLight, color: T.blue, border: "none", borderRadius: 9, padding: "8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                  <button type="button" onClick={() => onNav("budgets")} style={{ ...G, width: "100%", background: T.blueLight, color: T.blue, border: "none", borderRadius: 9, padding: "8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
                     📋 Criar orçamento
                   </button>
-                  <button type="button" onClick={() => onNav("metas")} style={{ ...G, width: "100%", background: T.purpleLight, color: T.purple, border: "none", borderRadius: 9, padding: "8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                  <button type="button" onClick={() => onNav("goals")} style={{ ...G, width: "100%", background: T.purpleLight, color: T.purple, border: "none", borderRadius: 9, padding: "8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
                     🎯 Definir meta
                   </button>
                 </div>
@@ -1243,7 +1243,7 @@ export function DashboardPage({
         <Card style={{ overflow: "hidden" }}>
           <div style={{ padding: "16px 20px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `1px solid ${T.border}` }}>
             <span style={{ ...G, fontSize: 14, fontWeight: 700, color: T.ink }}>Últimas Transações</span>
-            <button onClick={() => onNav("transacoes")} style={{ ...G, display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", fontSize: 12, fontWeight: 600, color: T.blue, cursor: "pointer" }}>
+            <button onClick={() => onNav("transactions")} style={{ ...G, display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", fontSize: 12, fontWeight: 600, color: T.blue, cursor: "pointer" }}>
               Ver todas <ArrowUpRight size={12} />
             </button>
           </div>
@@ -1255,7 +1255,7 @@ export function DashboardPage({
               primaryLabel="+ Nova transação"
               onPrimary={onNewTx}
               secondaryLabel="Ver todas"
-              onSecondary={() => onNav("transacoes")}
+              onSecondary={() => onNav("transactions")}
             />
           ) : (
             recentTransactions.map((t, i) => (
@@ -1289,7 +1289,7 @@ export function DashboardPage({
               </div>
               <button
                 type="button"
-                onClick={() => onNav("recorrencias")}
+                onClick={() => onNav("recurring")}
                 style={{
                   ...G,
                   width: "100%",

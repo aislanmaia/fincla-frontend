@@ -25,13 +25,13 @@ export function Topbar({ onNew, isMobile, onMenuOpen, onNav, page: _page }) {
 
   const CMD_ITEMS = [
     { group: "Navegar", icon: "📊", label: "Visão Geral", action: () => { onNav && onNav("dashboard"); setCmdOpen(false); } },
-    { group: "Navegar", icon: "💸", label: "Transações", action: () => { onNav && onNav("transacoes"); setCmdOpen(false); } },
-    { group: "Navegar", icon: "💳", label: "Cartões", action: () => { onNav && onNav("cartoes"); setCmdOpen(false); } },
-    { group: "Navegar", icon: "📈", label: "Relatórios", action: () => { onNav && onNav("relatorios"); setCmdOpen(false); } },
-    { group: "Navegar", icon: "🎯", label: "Metas", action: () => { onNav && onNav("metas"); setCmdOpen(false); } },
-    { group: "Navegar", icon: "📋", label: "Orçamentos", action: () => { onNav && onNav("orcamentos"); setCmdOpen(false); } },
-    { group: "Navegar", icon: "🔄", label: "Recorrências", action: () => { onNav && onNav("recorrencias"); setCmdOpen(false); } },
-    { group: "Navegar", icon: "⚙️", label: "Configurações", action: () => { onNav && onNav("perfil"); setCmdOpen(false); } },
+    { group: "Navegar", icon: "💸", label: "Transações", action: () => { onNav && onNav("transactions"); setCmdOpen(false); } },
+    { group: "Navegar", icon: "💳", label: "Cartões", action: () => { onNav && onNav("cards"); setCmdOpen(false); } },
+    { group: "Navegar", icon: "📈", label: "Relatórios", action: () => { onNav && onNav("reports"); setCmdOpen(false); } },
+    { group: "Navegar", icon: "🎯", label: "Metas", action: () => { onNav && onNav("goals"); setCmdOpen(false); } },
+    { group: "Navegar", icon: "📋", label: "Orçamentos", action: () => { onNav && onNav("budgets"); setCmdOpen(false); } },
+    { group: "Navegar", icon: "🔄", label: "Recorrências", action: () => { onNav && onNav("recurring"); setCmdOpen(false); } },
+    { group: "Navegar", icon: "⚙️", label: "Configurações", action: () => { onNav && onNav("profile"); setCmdOpen(false); } },
     { group: "Ação", icon: "✚", label: "Nova transação", action: () => { onNew && onNew(); setCmdOpen(false); } },
   ];
   const filtered = cmdQ.trim()
@@ -166,7 +166,7 @@ export function Topbar({ onNew, isMobile, onMenuOpen, onNav, page: _page }) {
             />
           </button>
           <button
-            onClick={() => onNav && onNav("perfil")}
+            onClick={() => onNav && onNav("profile")}
             style={{
               width: 32,
               height: 32,

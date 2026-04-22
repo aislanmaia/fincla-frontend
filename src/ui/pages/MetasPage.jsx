@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate, useSearch } from "@tanstack/react-router";
+import { FC } from "../routing/searchContract.js";
 import { Pencil, Plus, X, Check } from "lucide-react";
 import { T } from "../tokens";
 import { G, NUM } from "../typography";
@@ -36,17 +38,18 @@ const prazoParaMeses = (prazoStr) => {
 export function MetasPage({
   isMobile = false,
   onContribuir,
-  autoOpenModal = false,
   initialMetas,
   organizationId = null,
   dataMode = "live",
 }) {
+  const urlSearch = useSearch({ strict: false });
+  const navigate = useNavigate();
   const [metas,       setMetas]       = useState(() => resolveLocalData({
     dataMode,
     mockData: initialMetas !== undefined ? initialMetas : METAS_INIT,
     emptyData: initialMetas ?? [],
   }));
-  const [drawer,      setDrawer]      = useState(autoOpenModal);
+  const [drawer,      setDrawer]      = useState(false);
   const [success,     setSuccess]     = useState(false);
   const [tooltipMeta, setTooltipMeta] = useState(null);
   const [editingMeta, setEditingMeta] = useState(null);
@@ -61,6 +64,19 @@ export function MetasPage({
       setMetas(goalsData.goals);
     }
   }, [goalsData.goals, goalsData.hasRealData, shouldUseRealData]);
+
+  useEffect(() => {
+    if (urlSearch[FC.ADD] !== "1") return;
+    setDrawer(true);
+    navigate({
+      replace: true,
+      search: (prev) => {
+        const next = { ...prev };
+        delete next[FC.ADD];
+        return next;
+      },
+    });
+  }, [urlSearch[FC.ADD], navigate]);
 
   // drawer form state
   const [fNome,   setFNome]   = useState("");

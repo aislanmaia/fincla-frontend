@@ -55,7 +55,7 @@ export const getTransactionsSummary = async (
  * Busca uma transação específica por ID
  */
 export const getTransaction = async (
-  transactionId: number,
+  transactionId: string | number,
   organizationId: string
 ): Promise<Transaction> => {
   const response = await apiClient.get<Transaction>(
@@ -71,7 +71,7 @@ export const getTransaction = async (
  * Atualiza uma transação existente
  */
 export const updateTransaction = async (
-  transactionId: number,
+  transactionId: string | number,
   organizationId: string,
   transaction: UpdateTransactionRequest
 ): Promise<Transaction> => {

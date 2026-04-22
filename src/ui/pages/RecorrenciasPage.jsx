@@ -255,7 +255,7 @@ function SimRow({ item, isExp, onToggle, isMuted, onToggleMute, onNav, isMobile 
               style={{ ...G, fontSize: 11, fontWeight: 600, color: isMuted ? T.purple : T.inkMid, background: isMuted ? T.purpleLight : T.grayLight, border: "none", borderRadius: 7, padding: "6px 12px", cursor: "pointer" }}>
               {isMuted ? "Restaurar" : "Silenciar"}
             </button>
-            <button onClick={(e) => { e.stopPropagation(); onNav && onNav("simulacao"); }}
+            <button onClick={(e) => { e.stopPropagation(); onNav && onNav("simulation"); }}
               style={{ ...G, fontSize: 11, fontWeight: 600, color: T.purple, background: T.purpleLight, border: "none", borderRadius: 7, padding: "6px 12px", cursor: "pointer" }}>
               Ver simulação →
             </button>
@@ -574,7 +574,7 @@ export function RecorrenciasPage({ onNav, cenarios = [], onNovaRec, onEditar, is
               <div style={{ width: `${Math.min(100, totalRec > 0 ? (totalDesp / totalRec) * 100 : 0)}%`, height: "100%", background: T.darkPurple, borderRadius: 99 }} />
             </div>
           </div>
-          <button onClick={() => onNav("simulacao")} style={{ ...G, marginTop: 14, width: "100%", padding: "9px", background: T.purple, color: "#fff", border: "none", borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+          <button onClick={() => onNav("simulation")} style={{ ...G, marginTop: 14, width: "100%", padding: "9px", background: T.purple, color: "#fff", border: "none", borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
             Abrir simulação completa
           </button>
         </div>
@@ -659,7 +659,7 @@ export function RecorrenciasPage({ onNav, cenarios = [], onNovaRec, onEditar, is
             </Btn>
           )}
           {!isMobile && (
-            <Btn variant="outPurp" onClick={() => onNav("simulacao", { autoOpenModal: true, autoTipo: "despesa_recorrente" })}>
+            <Btn variant="outPurp" onClick={() => onNav("simulation", { autoOpenModal: true, autoTipo: "despesa_recorrente" })}>
               <Sparkles size={12} /> Simular recorrência
             </Btn>
           )}
@@ -787,7 +787,7 @@ export function RecorrenciasPage({ onNav, cenarios = [], onNovaRec, onEditar, is
               )}
             </div>
           </div>
-          <Btn variant="purple" small onClick={() => onNav("simulacao")}>
+          <Btn variant="purple" small onClick={() => onNav("simulation")}>
             Abrir simulação completa
           </Btn>
         </div>

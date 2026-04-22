@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useNavigate, useSearch } from "@tanstack/react-router";
+import { FC, simulationTipoFromUrl } from "../routing/searchContract.js";
 import {
   FlaskConical,
   Plus,
@@ -404,16 +406,29 @@ const SimOnboarding = ({ onNovo }) => {
 };
 
 /* ── SimulacaoPage principal ───────────────────────────── */
-export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, autoOpenModal = false, autoTipo = null, isMobile = false, organizationId = null, dataMode = "live" }) {
+export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, isMobile = false, organizationId = null, dataMode = "live" }) {
+  const urlSearch = useSearch({ strict: false });
+  const navigate = useNavigate();
   const [showModal,   setShowModal]  = useState(false);
   const [modalTipo,   setModalTipo]  = useState(null);
 
   useEffect(() => {
-    if (autoOpenModal) {
-      setModalTipo(autoTipo);
-      setShowModal(true);
-    }
-  }, [autoOpenModal, autoTipo]);
+    if (urlSearch[FC.SIM_OPEN] !== "1") return;
+    const fromUrl = urlSearch[FC.SIM_ITEM]
+      ? simulationTipoFromUrl(String(urlSearch[FC.SIM_ITEM]))
+      : null;
+    setModalTipo(fromUrl);
+    setShowModal(true);
+    navigate({
+      replace: true,
+      search: (prev) => {
+        const next = { ...prev };
+        delete next[FC.SIM_OPEN];
+        delete next[FC.SIM_ITEM];
+        return next;
+      },
+    });
+  }, [urlSearch[FC.SIM_OPEN], urlSearch[FC.SIM_ITEM], navigate]);
   const [showDropCen, setShowDropCen]= useState(false);
   const [simTab, setSimTab] = useState("itens");
 

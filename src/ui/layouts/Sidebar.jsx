@@ -19,18 +19,18 @@ import { G } from "../typography";
 const NAV = [
   { sec: "PRINCIPAL" },
   { id: "dashboard", label: "Visão Geral", Icon: LayoutDashboard },
-  { id: "transacoes", label: "Transações", Icon: ArrowLeftRight },
-  { id: "ritmo", label: "Ritmo de Gastos", Icon: Activity },
+  { id: "transactions", label: "Transações", Icon: ArrowLeftRight },
+  { id: "rhythm", label: "Ritmo de Gastos", Icon: Activity },
   { sec: "PLANEJAR" },
-  { id: "orcamentos", label: "Orçamentos", Icon: Target },
-  { id: "recorrencias", label: "Recorrências", Icon: Repeat },
-  { id: "simulacao", label: "Simulação", Icon: FlaskConical, badge: "1" },
-  { id: "metas", label: "Metas", Icon: BarChart2 },
+  { id: "budgets", label: "Orçamentos", Icon: Target },
+  { id: "recurring", label: "Recorrências", Icon: Repeat },
+  { id: "simulation", label: "Simulação", Icon: FlaskConical, badge: "1" },
+  { id: "goals", label: "Metas", Icon: BarChart2 },
   { sec: "GESTÃO" },
-  { id: "cartoes", label: "Cartões", Icon: CreditCard },
-  { id: "relatorios", label: "Relatórios", Icon: FileText },
+  { id: "cards", label: "Cartões", Icon: CreditCard },
+  { id: "reports", label: "Relatórios", Icon: FileText },
   { sec: "CONTA" },
-  { id: "perfil", label: "Perfil", Icon: Settings },
+  { id: "profile", label: "Perfil", Icon: Settings },
 ];
 
 function SidebarInner({ page, onNav, onClose }) {
@@ -190,7 +190,7 @@ function SidebarInner({ page, onNav, onClose }) {
             const lb = e.currentTarget.querySelector(".sb-logout");
             if (lb) lb.style.opacity = "0";
           }}
-          onClick={() => onNav("perfil")}
+          onClick={() => onNav("profile")}
         >
           <div
             style={{

@@ -294,7 +294,7 @@ export function RitmoPageLive({
             title="Defina orçamento e registre despesas"
             sub="O ritmo compara seu gasto real com um teto mensal. Crie orçamentos por categoria e lance despesas para ver a curva."
             primaryLabel="Ir para orçamentos"
-            onPrimary={() => onNav("orcamentos")}
+            onPrimary={() => onNav("budgets")}
             secondaryLabel="+ Nova transação"
             onSecondary={onNewTx}
           />
@@ -370,7 +370,7 @@ export function RitmoPageLive({
           Sem orçamento mensal definido — mostrando só a curva de despesas.{" "}
           <button
             type="button"
-            onClick={() => onNav("orcamentos")}
+            onClick={() => onNav("budgets")}
             style={{
               ...G,
               fontWeight: 700,
@@ -451,7 +451,7 @@ export function RitmoPageLive({
           </div>
         </div>
         {!pastLight && (
-          <Btn variant="dark" onClick={() => onNav("simulacao")}>
+          <Btn variant="dark" onClick={() => onNav("simulation")}>
             <FlaskConical size={12} /> Simular
           </Btn>
         )}
@@ -1040,7 +1040,7 @@ export function RitmoPageLive({
             </div>
             <div style={{ ...G, fontSize: 11, color: T.inkMid }}>Total de despesas no período</div>
             {!pastLight && (
-              <Btn variant="dark" onClick={() => onNav("orcamentos")}>
+              <Btn variant="dark" onClick={() => onNav("budgets")}>
                 Configurar orçamentos
               </Btn>
             )}

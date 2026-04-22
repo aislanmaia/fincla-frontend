@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback, useLayoutEffect } from "react";
+import { flushSync } from "react-dom";
 import {
   LayoutDashboard, ArrowLeftRight, CreditCard, BarChart2,
   Target, Plus, Bell, ChevronDown, TrendingUp, TrendingDown,
@@ -58,6 +59,7 @@ import { OrcamentosPage } from "./pages/OrcamentosPage.jsx";
 import { RelatoriosPage } from "./pages/RelatoriosPage.jsx";
 import { SimulacaoPage as SimulacaoPageView } from "./pages/SimulacaoPage.jsx";
 import { listCreditCards } from "../api/creditCards";
+import { getTransaction } from "../api/transactions";
 import {
   buildCreateCreditCardPayload,
   fetchPastInvoiceItemsForUi,
@@ -79,7 +81,23 @@ import {
   PasswordResetPage,
   ErrorBoundary,
 } from "./features/authViews.jsx";
+import {
+  Outlet,
+  useNavigate,
+  useRouterState,
+  useSearch,
+} from "@tanstack/react-router";
 import { useSession } from "./features/auth/useSession.js";
+import { firstPathSegment, isAuthRouteSegment } from "./routing/appSegments.js";
+import {
+  capturePostLoginRedirectFromPathnameAndSearchStr,
+  consumePostLoginNavigateArgs,
+  isReturnableFinclaPathname,
+} from "./routing/postLoginRedirect.js";
+import { transactionEditIdFromPathname } from "./routing/transactionPathId.js";
+import { useFinclaDocumentTitle } from "./routing/useFinclaDocumentTitle.js";
+import { FC, FC_MODAL, mergeNavSearch } from "./routing/searchContract.js";
+import { FinclaPageContext } from "./routing/finclaPageContext.jsx";
 import { resolveDataMode, shouldUseRealData as shouldUseRealDataForMode } from "./dataMode.js";
 import { useCategoryTagsData } from "./features/tags/useCategoryTagsData.js";
 import {
@@ -90,6 +108,7 @@ import {
   formatYmdToLocaleDisplay,
   initialNovaTransacaoDateYmd,
   isUuidString,
+  mapApiTransactionToUi,
   modalPaymentKeyFromTransactionUi,
   todayLocalYmd,
   transactionDateIsoFromBrDisplay,
@@ -283,6 +302,43 @@ const MOCK_CARTOES_MODAL = [
   { id: "novo", banco: "", nome: "+ Novo cartão", dig: "", disp: 0, novo: true },
 ];
 
+/**
+ * Carimbo estável do `preConfig` para o modal reaplicar o preenchimento quando o pai
+ * atualiza (hidratação da URL, editar com `flushSync` + `navigate`, etc.), sem
+ * reexecutar a cada render com o mesmo conteúdo.
+ */
+function novaTxModalInitStamp(organizationId, novaRecorrencia, preConfig) {
+  const oid = organizationId ?? "";
+  if (novaRecorrencia) {
+    const pc = preConfig;
+    return `${oid}|nr|${pc?.recId ?? ""}|${pc?.isEditRecorrencia ? "1" : "0"}|${pc?.tipo ?? ""}|${String(pc?.valorInicial ?? "")}|${pc?.desc ?? ""}|${pc?.freqRec ?? ""}`;
+  }
+  const pc = preConfig;
+  if (pc == null) return `${oid}|empty`;
+  const eid =
+    pc.editingTransactionId != null && String(pc.editingTransactionId) !== ""
+      ? String(pc.editingTransactionId)
+      : "";
+  return [
+    oid,
+    "tx",
+    eid,
+    pc.desc ?? "",
+    String(pc.valorInicial ?? ""),
+    pc.cat ?? "",
+    String(pc.categoryTagId ?? ""),
+    pc.method ?? "",
+    String(pc.cartaoId ?? ""),
+    pc.dateIso ?? "",
+    pc.dateIsoForEdit ?? "",
+    pc.recorre ? "1" : "0",
+    pc.modalidade ?? "",
+    String(pc.parcelas ?? ""),
+    Array.isArray(pc.tags) ? JSON.stringify(pc.tags) : "",
+    pc.novaRecorrencia ? "1" : "0",
+  ].join("|");
+}
+
 const NovaTransacaoModal = ({
   open,
   onClose,
@@ -377,7 +433,7 @@ const NovaTransacaoModal = ({
   const [modalCardsRows, setModalCardsRows] = useState([]);
   const [modalCardsLoading, setModalCardsLoading] = useState(false);
   const [modalCardsError, setModalCardsError] = useState("");
-  const prevOpenRef = useRef(false);
+  const appliedModalInitStampRef = useRef(null);
 
   const useLiveCategoryTags = Boolean(organizationId && dataMode === "live");
   const categoryTagsData = useCategoryTagsData({
@@ -387,11 +443,12 @@ const NovaTransacaoModal = ({
 
   useEffect(() => {
     if (!open) {
-      prevOpenRef.current = false;
+      appliedModalInitStampRef.current = null;
       return;
     }
-    if (prevOpenRef.current) return;
-    prevOpenRef.current = true;
+    const stamp = novaTxModalInitStamp(organizationId, novaRecorrencia, preConfig);
+    if (appliedModalInitStampRef.current === stamp) return;
+    appliedModalInitStampRef.current = stamp;
 
     const pc = preConfig;
     const nr = novaRecorrencia;
@@ -961,10 +1018,14 @@ const NovaTransacaoModal = ({
   const goPrev = () => { if (mPrevStep !== null) setMStep(mPrevStep); };
 
   const handleSave = async () => {
+    const rawEditTxId = preConfig?.editingTransactionId;
     const editingTransactionId =
-      preConfig?.editingTransactionId != null &&
-      Number.isFinite(Number(preConfig.editingTransactionId))
-        ? Number(preConfig.editingTransactionId)
+      rawEditTxId != null && Number.isFinite(Number(rawEditTxId))
+        ? Number(rawEditTxId)
+        : null;
+    const editingTransactionIdStr =
+      rawEditTxId != null && isUuidString(String(rawEditTxId))
+        ? String(rawEditTxId)
         : null;
 
     const isEditSeries =
@@ -976,6 +1037,7 @@ const NovaTransacaoModal = ({
       organizationId &&
       dataMode === "live" &&
       editingTransactionId == null &&
+      editingTransactionIdStr == null &&
       (novaRecorrencia || recorre || isEditSeries);
 
     if (shouldSaveLiveSeries) {
@@ -1061,7 +1123,9 @@ const NovaTransacaoModal = ({
       organizationId &&
       dataMode === "live" &&
       !novaRecorrencia &&
-      (!recorre || editingTransactionId != null);
+      (!recorre ||
+        editingTransactionId != null ||
+        editingTransactionIdStr != null);
 
     if (liveOneShot) {
       if (!categoryTagId) {
@@ -1092,9 +1156,9 @@ const NovaTransacaoModal = ({
             ? Number(cartao)
             : null;
         const dateIso = transactionDateIsoFromYmd(txDateYmd);
-        if (editingTransactionId != null) {
+        if (editingTransactionIdStr != null || editingTransactionId != null) {
           await updateTransactionForUi(
-            editingTransactionId,
+            editingTransactionIdStr ?? editingTransactionId,
             organizationId,
             buildUpdateTransactionPayload({
               tipo,
@@ -2619,7 +2683,9 @@ const safe = (num, den, fallback=0) => (!den || isNaN(num/den)) ? fallback : Mat
 
 /* ─── CARTÕES PAGE ───────────────────────────────────────── */
 /* ─── CARTÕES PAGE ───────────────────────────────────────── */
-const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, autoOpenAdd = false, dataMode = "mock", organizationId = null }) => {
+const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, dataMode = "mock", organizationId = null }) => {
+  const urlSearch = useSearch({ strict: false });
+  const navigate = useNavigate();
   const shouldUseRealData = shouldUseRealDataForMode(organizationId, dataMode);
   const creditCardsData = useCreditCardsData({ organizationId, enabled: shouldUseRealData });
   const hasSeededCards = cardsProp !== undefined;
@@ -2630,9 +2696,6 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, a
     ? (creditCardsData.cards.length > 0 ? creditCardsData.cards : (dataMode === "empty" ? localCards : []))
     : localCards;
   const isEmptyCards = (dataMode === "empty" && hasSeededCards && CARDS.length === 0) || (shouldUseRealData && !creditCardsData.isLoading && CARDS.length === 0);
-  const [showAddCard, setShowAddCard] = useState(autoOpenAdd);
-  // When autoOpenAdd prop triggers, open the AddCardSheet
-  useEffect(() => { if (showAddCard) { setAddCardSheet(true); setShowAddCard(false); } }, [showAddCard]);
   /* ── State ───────────────────────────────────────────────── */
   const [cardId,        setCardId]        = useState(() => (cardsProp && cardsProp.length > 0 ? cardsProp[0].id : "nubank"));
   const [tab,           setTab]           = useState("fatura");
@@ -2652,6 +2715,18 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, a
   const [expNormal,     setExpNormal]     = useState(true);
   const [addCardSheet,  setAddCardSheet]  = useState(false);
   const [visibleGroups, setVisibleGroups] = useState(8); // pagination
+  useEffect(() => {
+    if (urlSearch[FC.ADD] !== "1") return;
+    setAddCardSheet(true);
+    navigate({
+      replace: true,
+      search: (prev) => {
+        const next = { ...prev };
+        delete next[FC.ADD];
+        return next;
+      },
+    });
+  }, [urlSearch[FC.ADD], navigate]);
   // New card form
   const [ncBanco,       setNcBanco]       = useState("");
   const [ncNome,        setNcNome]        = useState("");
@@ -4539,13 +4614,41 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
 export default function App() {
   const session = useSession();
   const mockDataEnabled = import.meta.env.VITE_ENABLE_UI_MOCKS === "true";
-  const [page, setPage]     = useState("dashboard");
+  const navigate = useNavigate();
+  const { pathname, searchStr } = useRouterState({
+    select: (s) => ({
+      pathname: s.location.pathname,
+      searchStr: s.location.searchStr ?? "",
+    }),
+  });
+  useFinclaDocumentTitle(pathname);
+  useLayoutEffect(() => {
+    document.querySelector("[data-fincla-main-scroll]")?.scrollTo?.(0, 0);
+  }, [pathname]);
+  const activeSegment = useMemo(() => {
+    const seg = firstPathSegment(pathname);
+    return isAuthRouteSegment(seg) ? seg : "";
+  }, [pathname]);
+
+  useEffect(() => {
+    if (session.isBootstrapping) return;
+    if (session.isAuthenticated) return;
+    if (!firstPathSegment(pathname)) return;
+    if (isReturnableFinclaPathname(pathname)) {
+      capturePostLoginRedirectFromPathnameAndSearchStr(pathname, searchStr);
+    }
+    navigate({ to: "/", replace: true });
+  }, [
+    session.isBootstrapping,
+    session.isAuthenticated,
+    pathname,
+    searchStr,
+    navigate,
+  ]);
   // shared simulation state — empty by default (API-driven); mock only when VITE_ENABLE_UI_MOCKS
   const [cenarios,   setCenarios]  = useState(mockDataEnabled ? SIM_CENARIOS_INIT : []);
   const [cenarioId,  setCenarioId] = useState(mockDataEnabled ? SIM_CENARIOS_INIT[0].id : null);
-  const [modal, setModal]       = useState(false);
-  const [modalMode, setModalMode] = useState("transacao"); // "transacao" | "recorrencia"
-  const [modalPreConfig, setModalPreConfig] = useState(null); // pre-fill for contribuição
+  const [modalPreConfig, setModalPreConfig] = useState(null); // pre-fill (não serializado na URL)
   const [panelOpen,          setPanelOpen]          = useState(false);
   /** Legado: botão fixo (Sliders, canto superior direito) que alterna `StatePanelV4`. `true` para reexibir na UI. */
   const showLegacyStatePanelFloatButton = false;
@@ -4632,16 +4735,28 @@ export default function App() {
   useEffect(() => {
     if (!session.isAuthenticated) {
       setShowOnboarding(false);
+    }
+  }, [session.isAuthenticated]);
+
+  useEffect(() => {
+    if (session.isBootstrapping) return;
+    if (!session.isAuthenticated) return;
+    if (showOnboarding || session.onboardingRequired) return;
+    if (pathname !== "/" && pathname !== "") return;
+    const next = consumePostLoginNavigateArgs();
+    if (next) {
+      navigate(next);
       return;
     }
-
-    if (session.onboardingRequired) {
-      setShowOnboarding(true);
-      return;
-    }
-
-    setShowOnboarding(false);
-  }, [session.isAuthenticated, session.onboardingRequired]);
+    navigate({ to: "/dashboard", replace: true });
+  }, [
+    session.isBootstrapping,
+    session.isAuthenticated,
+    session.onboardingRequired,
+    showOnboarding,
+    pathname,
+    navigate,
+  ]);
 
   useEffect(() => {
     if (!activeOrganization) return;
@@ -4654,27 +4769,262 @@ export default function App() {
     }));
   }, [activeOrganization]);
 
-  const [navOpts, setNavOpts] = useState({});
-  const navTo = (page, opts = {}) => {
-    if (page === "__logout__") {
-      session.signOut();
-      setShowOnboarding(false);
-      setOnboardingData(null);
-      setExtraRecs([]);
-      setExtraCards([]);
-      setRequestedDataMode("live");
-      setPage("dashboard");
+  const search = useSearch({ strict: false });
+  const urlHydratedRef = useRef(false);
+  const editTxHydrateKeyRef = useRef(null);
+
+  const transactionRouteEditId = transactionEditIdFromPathname(pathname);
+
+  const txModalOpen =
+    session.isAuthenticated &&
+    !session.isBootstrapping &&
+    !showOnboarding &&
+    !session.onboardingRequired &&
+    (search[FC.MODAL] === FC_MODAL.NEW_TRANSACTION ||
+      search[FC.MODAL] === FC_MODAL.NEW_RECURRING ||
+      Boolean(transactionRouteEditId));
+
+  const novaRecorrenciaModal =
+    search[FC.MODAL] === FC_MODAL.NEW_RECURRING || Boolean(modalPreConfig?.novaRecorrencia);
+
+  const closeTxModal = useCallback(() => {
+    urlHydratedRef.current = false;
+    const onTxDetailPath = Boolean(transactionEditIdFromPathname(pathname));
+    navigate({
+      replace: true,
+      ...(onTxDetailPath ? { to: "/transactions" } : {}),
+      search: (prev) => {
+        const next = { ...prev };
+        delete next[FC.MODAL];
+        delete next[FC.TX];
+        delete next[FC.CARD];
+        return next;
+      },
+    });
+    setModalPreConfig(null);
+  }, [navigate, pathname]);
+
+  const openTxModal = useCallback(
+    (patch = {}) => {
+      urlHydratedRef.current = false;
+      const txPatchId =
+        patch[FC.TX] != null ? String(patch[FC.TX]).trim() : "";
+      const useTxPath =
+        txPatchId &&
+        (isUuidString(txPatchId) || /^\d+$/.test(txPatchId)) &&
+        (patch[FC.MODAL] ?? FC_MODAL.NEW_TRANSACTION) ===
+          FC_MODAL.NEW_TRANSACTION;
+
+      const onTxDetailPath = Boolean(transactionEditIdFromPathname(pathname));
+
+      if (
+        onTxDetailPath &&
+        !patch.keepExistingIds &&
+        !patch[FC.CARD] &&
+        !useTxPath
+      ) {
+        navigate({
+          replace: true,
+          to: "/transactions",
+          search: (prev) => {
+            const next = { ...prev };
+            if (!patch.keepExistingIds) {
+              delete next[FC.TX];
+              delete next[FC.CARD];
+            }
+            next[FC.MODAL] = patch[FC.MODAL] ?? FC_MODAL.NEW_TRANSACTION;
+            if (patch[FC.CARD]) next[FC.CARD] = patch[FC.CARD];
+            if (patch[FC.TX]) next[FC.TX] = patch[FC.TX];
+            return next;
+          },
+        });
+        return;
+      }
+
+      if (useTxPath) {
+        navigate({
+          replace: true,
+          to: "/transactions/$transactionId",
+          params: { transactionId: txPatchId },
+          search: (prev) => {
+            const next = { ...prev };
+            delete next[FC.TX];
+            delete next[FC.CARD];
+            next[FC.MODAL] = FC_MODAL.NEW_TRANSACTION;
+            if (patch[FC.CARD]) next[FC.CARD] = patch[FC.CARD];
+            return next;
+          },
+        });
+        return;
+      }
+
+      navigate({
+        replace: true,
+        search: (prev) => {
+          const next = { ...prev };
+          if (!patch.keepExistingIds) {
+            delete next[FC.TX];
+            delete next[FC.CARD];
+          }
+          next[FC.MODAL] = patch[FC.MODAL] ?? FC_MODAL.NEW_TRANSACTION;
+          if (patch[FC.CARD]) next[FC.CARD] = patch[FC.CARD];
+          if (patch[FC.TX]) next[FC.TX] = patch[FC.TX];
+          return next;
+        },
+      });
+    },
+    [navigate, pathname],
+  );
+
+  useLayoutEffect(() => {
+    if (!txModalOpen) {
+      urlHydratedRef.current = false;
       return;
     }
-    if (opts.cenarioId) setCenarioId(opts.cenarioId);
-    setNavOpts(opts);
-    setPage(page);
-    // limpa opts no próximo tick para não re-disparar ao revisitar a página
-    setTimeout(() => setNavOpts({}), 100);
-  };
+    if (urlHydratedRef.current) return;
+    if (search[FC.CARD] && isUuidString(String(search[FC.CARD]))) {
+      setModalPreConfig((p) => ({
+        ...(p || {}),
+        tipo: "despesa",
+        method: "credito",
+        cartaoId: String(search[FC.CARD]),
+      }));
+      urlHydratedRef.current = true;
+      return;
+    }
+    const qTx = search[FC.TX];
+    if (
+      qTx &&
+      (isUuidString(String(qTx)) || /^\d+$/.test(String(qTx).trim()))
+    ) {
+      setModalPreConfig((p) => ({
+        ...(p || {}),
+        editingTransactionId: String(qTx),
+      }));
+      urlHydratedRef.current = true;
+      return;
+    }
+    if (transactionRouteEditId) {
+      setModalPreConfig((p) => ({
+        ...(p || {}),
+        editingTransactionId: String(transactionRouteEditId),
+      }));
+      urlHydratedRef.current = true;
+    }
+  }, [
+    txModalOpen,
+    search[FC.CARD],
+    search[FC.TX],
+    transactionRouteEditId,
+  ]);
+
+  // Dados live: se o modal abriu só com `editingTransactionId` (URL / path), busca o item na API.
+  useEffect(() => {
+    if (!txModalOpen) {
+      editTxHydrateKeyRef.current = null;
+      return;
+    }
+    if (!session.isAuthenticated || session.isBootstrapping) return;
+    if (dataMode !== "live") return;
+    const orgId = session.activeOrgId;
+    if (!orgId) return;
+
+    const pc = modalPreConfig;
+    const editFromPc =
+      pc?.editingTransactionId != null
+        ? String(pc.editingTransactionId).trim()
+        : "";
+    const routeId = transactionRouteEditId;
+    const editId = editFromPc || (routeId ? String(routeId) : "");
+    if (!editId) return;
+    if (routeId && editFromPc && String(routeId) !== editFromPc) return;
+    if (!isUuidString(editId)) return;
+
+    const hasEditorPayload =
+      (pc?.desc != null && String(pc.desc).trim() !== "") ||
+      (pc?.valorInicial != null &&
+        pc.valorInicial !== "" &&
+        Number.isFinite(Number(pc.valorInicial)));
+    if (hasEditorPayload) return;
+
+    const dedupeKey = `${orgId}|${editId}`;
+    if (editTxHydrateKeyRef.current === dedupeKey) return;
+    editTxHydrateKeyRef.current = dedupeKey;
+
+    let cancelled = false;
+    getTransaction(editId, orgId)
+      .then((raw) => {
+        if (cancelled) return;
+        const ui = mapApiTransactionToUi(raw);
+        const txMethod = modalPaymentKeyFromTransactionUi(ui);
+        const isParcelado = ui.parcela && ui.parcela.total > 1;
+        setModalPreConfig((p) => ({
+          ...(p || {}),
+          tipo: ui.val > 0 ? "receita" : "despesa",
+          desc: ui.desc,
+          cat: ui.cat,
+          categoryTagId: ui.categoryTagId ?? null,
+          method: txMethod,
+          valorInicial: Math.abs(ui.val),
+          recorre: ui.rec,
+          editingTransactionId: ui.id,
+          dateIso:
+            ui.dateIsoForEdit ??
+            transactionDateIsoFromBrDisplay(ui.date) ??
+            undefined,
+          cartaoId: ui.cartaoId != null ? ui.cartaoId : undefined,
+          modalidade:
+            txMethod === "credito"
+              ? isParcelado
+                ? "parcelado"
+                : "avista"
+              : undefined,
+          parcelas: isParcelado ? ui.parcela.total : undefined,
+        }));
+      })
+      .catch(() => {
+        editTxHydrateKeyRef.current = null;
+      });
+    return () => {
+      cancelled = true;
+      editTxHydrateKeyRef.current = null;
+    };
+  }, [
+    txModalOpen,
+    dataMode,
+    session.isAuthenticated,
+    session.isBootstrapping,
+    session.activeOrgId,
+    modalPreConfig,
+    transactionRouteEditId,
+  ]);
+
+  const navTo = useCallback(
+    (target, opts = {}) => {
+      if (target === "__logout__") {
+        session.signOut();
+        setShowOnboarding(false);
+        setOnboardingData(null);
+        setExtraRecs([]);
+        setExtraCards([]);
+        setRequestedDataMode("live");
+        navigate({ to: "/", replace: true });
+        return;
+      }
+      if (opts.cenarioId) setCenarioId(opts.cenarioId);
+      if (typeof target === "string" && isAuthRouteSegment(target)) {
+        const to = target === "profile" ? "/profile/account" : `/${target}`;
+        navigate({
+          to,
+          search: (prev) => mergeNavSearch(prev, target, opts),
+        });
+      }
+    },
+    [navigate, session, setCenarioId],
+  );
   const pages = {
-    dashboard:    <DashboardPageView onNav={navTo} stateCtrl={stateCtrl} dataMode={dataMode} onboardingData={onboardingData} extraRecs={extraRecs} onNewTx={()=>setModal(true)} organizationId={session.activeOrgId} />,
-    ritmo:        dataMode==="empty" ? (
+    dashboard:    <DashboardPageView onNav={navTo} stateCtrl={stateCtrl} dataMode={dataMode} onboardingData={onboardingData} extraRecs={extraRecs} onNewTx={()=>openTxModal()} organizationId={session.activeOrgId} />,
+    rhythm:        dataMode==="empty" ? (
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
         <PageTitle sans="Ritmo de" serif="Gastos"/>
         <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:14, padding:16 }}>
@@ -4702,7 +5052,7 @@ export default function App() {
               </div>
             ))}
           </div>
-          <button onClick={()=>setModal(true)} style={{ ...G, width:"100%", background:T.redLight, color:T.red, border:"none", borderRadius:9, padding:"10px", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+          <button onClick={()=>openTxModal()} style={{ ...G, width:"100%", background:T.redLight, color:T.red, border:"none", borderRadius:9, padding:"10px", fontSize:12, fontWeight:700, cursor:"pointer" }}>
             + Registrar primeira transação
           </button>
         </div>
@@ -4713,15 +5063,15 @@ export default function App() {
         isMobile={isMobile}
         dataMode={dataMode}
         organizationId={session.activeOrgId}
-        onNewTx={() => setModal(true)}
+        onNewTx={() => openTxModal()}
       />
     ),
-    transacoes:   dataMode==="empty" ? (
+    transactions:   dataMode==="empty" ? (
       extraTx.length > 0 ? (
         <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
           <div style={{ display:"flex", alignItems:"flex-end", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
             <PageTitle sans="Transações" serif=""/>
-            <button onClick={()=>setModal(true)} style={{ ...G, background:T.ink, color:"#fff", border:"none", borderRadius:11, padding:"9px 18px", fontSize:12, fontWeight:700, cursor:"pointer" }}>+ Nova transação</button>
+            <button onClick={()=>openTxModal()} style={{ ...G, background:T.ink, color:"#fff", border:"none", borderRadius:11, padding:"9px 18px", fontSize:12, fontWeight:700, cursor:"pointer" }}>+ Nova transação</button>
           </div>
           <div style={{ ...G, fontSize:12, color:T.inkLight }}>Transações registradas no onboarding</div>
           <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:14, overflow:"hidden" }}>
@@ -4755,7 +5105,7 @@ export default function App() {
             <div style={{ fontSize:28 }}>📭</div>
             <div style={{ ...G, fontSize:16, fontWeight:800, color:T.ink }}>Nenhuma transação ainda</div>
             <div style={{ ...G, fontSize:13, color:T.inkMid, lineHeight:1.7, maxWidth:360 }}>Suas transações aparecerão aqui conforme forem registradas. Registre receitas, despesas e transferências para acompanhar seu fluxo.</div>
-            <button onClick={()=>setModal(true)} style={{ ...G, background:T.ink, color:"#fff", border:"none", borderRadius:11, padding:"11px 24px", fontSize:13, fontWeight:700, cursor:"pointer", marginTop:4 }}>+ Nova transação</button>
+            <button onClick={()=>openTxModal()} style={{ ...G, background:T.ink, color:"#fff", border:"none", borderRadius:11, padding:"11px 24px", fontSize:13, fontWeight:700, cursor:"pointer", marginTop:4 }}>+ Nova transação</button>
           </div>
         </div>
       )
@@ -4764,37 +5114,37 @@ export default function App() {
       isMobile={isMobile}
       dataMode={dataMode}
       organizationId={session.activeOrgId}
-      initialFilterCat={navOpts.filterCat || ""}
       transactionsRefreshToken={transactionsListVersion}
       onTransactionsInvalidate={bumpTransactionsList}
-      onNewTx={() => setModal(true)}
+      onNewTx={() => openTxModal()}
       onEditTx={(tx) => {
         const txMethod = modalPaymentKeyFromTransactionUi(tx);
         const isParcelado = tx.parcela && tx.parcela.total > 1;
-        setModalPreConfig({
-          tipo: tx.val > 0 ? "receita" : "despesa",
-          desc: tx.desc,
-          cat: tx.cat,
-          categoryTagId: tx.categoryTagId ?? null,
-          method: txMethod,
-          valorInicial: Math.abs(tx.val),
-          recorre: tx.rec,
-          editingTransactionId: tx.id,
-          dateIso:
-            tx.dateIsoForEdit ??
-            transactionDateIsoFromBrDisplay(tx.date) ??
-            undefined,
-          cartaoId: tx.cartaoId != null ? tx.cartaoId : undefined,
-          modalidade: txMethod === "credito"
-            ? (isParcelado ? "parcelado" : "avista")
-            : undefined,
-          parcelas: isParcelado ? tx.parcela.total : undefined,
+        flushSync(() => {
+          setModalPreConfig({
+            tipo: tx.val > 0 ? "receita" : "despesa",
+            desc: tx.desc,
+            cat: tx.cat,
+            categoryTagId: tx.categoryTagId ?? null,
+            method: txMethod,
+            valorInicial: Math.abs(tx.val),
+            recorre: tx.rec,
+            editingTransactionId: tx.id,
+            dateIso:
+              tx.dateIsoForEdit ??
+              transactionDateIsoFromBrDisplay(tx.date) ??
+              undefined,
+            cartaoId: tx.cartaoId != null ? tx.cartaoId : undefined,
+            modalidade: txMethod === "credito"
+              ? (isParcelado ? "parcelado" : "avista")
+              : undefined,
+            parcelas: isParcelado ? tx.parcela.total : undefined,
+          });
         });
-        setModalMode("transacao");
-        setModal(true);
+        openTxModal({ [FC.TX]: String(tx.id) });
       }}
     />,
-    recorrencias: (dataMode==="empty" && extraRecs.length===0) ? (
+    recurring: (dataMode==="empty" && extraRecs.length===0) ? (
       <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
         <PageTitle sans="Recorrências &" serif="Compromissos"/>
         <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
@@ -4810,7 +5160,7 @@ export default function App() {
                 <div style={{ fontSize:28 }}>{c.ic}</div>
                 <div style={{ ...G, fontSize:14, fontWeight:700, color:T.ink }}>{c.title}</div>
                 <div style={{ ...G, fontSize:12, color:T.inkLight, lineHeight:1.55 }}>{c.sub}</div>
-                <button onClick={()=>{ setModalPreConfig({ novaRecorrencia:true, tipo: c.tipo }); setModalMode("recorrencia"); setModal(true); }} style={{ ...G, background:c.colorL, color:c.color, border:"none", borderRadius:9, padding:"9px", fontSize:12, fontWeight:700, cursor:"pointer" }}>{c.action}</button>
+                <button onClick={()=>{ setModalPreConfig({ novaRecorrencia:true, tipo: c.tipo }); openTxModal({ [FC.MODAL]: FC_MODAL.NEW_RECURRING }); }} style={{ ...G, background:c.colorL, color:c.color, border:"none", borderRadius:9, padding:"9px", fontSize:12, fontWeight:700, cursor:"pointer" }}>{c.action}</button>
               </div>
             ))}
           </div>
@@ -4824,7 +5174,7 @@ export default function App() {
           </div>
         </div>
       </div>
-    ) : <RecorrenciasPageView onNav={navTo} cenarios={cenarios} isMobile={isMobile} dataMode={dataMode} extraRecs={extraRecs} organizationId={session.activeOrgId} recurringRefreshToken={transactionsListVersion} onNovaRec={() => { setModalMode("recorrencia"); setModal(true); }} onEditar={(rec) => {
+    ) : <RecorrenciasPageView onNav={navTo} cenarios={cenarios} isMobile={isMobile} dataMode={dataMode} extraRecs={extraRecs} organizationId={session.activeOrgId} recurringRefreshToken={transactionsListVersion} onNovaRec={() => { openTxModal({ [FC.MODAL]: FC_MODAL.NEW_RECURRING }); }} onEditar={(rec) => {
               const freqId = rec.freqId || rec.freq?.split(" ")[0]?.toLowerCase() || "mensal";
               const encId  = rec.encId || (rec.enc === "Sem data fim" ? "sem-fim" : rec.enc === "Após N repetições" ? "repeticoes" : rec.enc === "Data específica" ? "data" : "sem-fim");
               const methodId = rec.methodId || (rec.metodo === "Pix" ? "pix" : rec.metodo === "Boleto" ? "boleto" : rec.metodo === "Débito" || rec.metodo === "Débito auto." ? "debito" : rec.metodo === "Transferência" ? "transferencia" : rec.metodo === "Cartão crédito" ? "credito" : "pix");
@@ -4845,15 +5195,14 @@ export default function App() {
                 cartaoId: rec.creditCardId != null ? String(rec.creditCardId) : undefined,
                 transactionDate: rec.nextOccurrenceIso || undefined,
               });
-              setModalMode("transacao");
-              setModal(true);
+              openTxModal();
             }} />,
-    cartoes:      <CartõesPage    onNav={navTo} isMobile={isMobile} cards={dataMode==="empty" ? extraCards : undefined} autoOpenAdd={!!navOpts.autoOpenAdd} dataMode={dataMode} organizationId={session.activeOrgId} onNovaItem={(cartaoId) => { setModalPreConfig({ tipo:"despesa", method:"credito", cartaoId }); setModalMode("transacao"); setModal(true); }} />,
-    orcamentos:   <OrcamentosPage onNav={navTo} isMobile={isMobile} dataMode={dataMode} autoOpenAdd={!!navOpts.autoOpenAdd} organizationId={session.activeOrgId} />,
-    metas:        <MetasPageView    isMobile={isMobile} autoOpenModal={!!navOpts.autoOpenModal} initialMetas={dataMode==="empty" ? [] : undefined} dataMode={dataMode} organizationId={session.activeOrgId} onContribuir={(meta) => { setModalPreConfig({ tipo:"receita", desc:`Aporte — ${meta.nome}`, cat:"Poupança" }); setModalMode("transacao"); setModal(true); }} />,
-    perfil:        <ConfiguracoesPage onNav={navTo} isMobile={isMobile} onboardingData={onboardingData} dataMode={dataMode} organizationId={session.activeOrgId} currentUser={session.user} />,
-    relatorios:   <RelatoriosPage onNav={(dest)=>{ if(dest==="_nova_transacao") setModal(true); else navTo(dest); }} isMobile={isMobile} dataMode={dataMode} extraRecs={extraRecs} organizationId={session.activeOrgId} />,
-    simulacao:    <SimulacaoPageView cenarios={cenarios} setCenarios={setCenarios} cenarioId={cenarioId} setCenarioId={setCenarioId} autoOpenModal={!!navOpts.autoOpenModal} autoTipo={navOpts.autoTipo || null} isMobile={isMobile} organizationId={session.activeOrgId} dataMode={dataMode} />,
+    cards:      <CartõesPage    onNav={navTo} isMobile={isMobile} cards={dataMode==="empty" ? extraCards : undefined} dataMode={dataMode} organizationId={session.activeOrgId} onNovaItem={(cartaoId) => { openTxModal({ [FC.CARD]: String(cartaoId) }); }} />,
+    budgets:   <OrcamentosPage onNav={navTo} isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} />,
+    goals:        <MetasPageView    isMobile={isMobile} initialMetas={dataMode==="empty" ? [] : undefined} dataMode={dataMode} organizationId={session.activeOrgId} onContribuir={(meta) => { setModalPreConfig({ tipo:"receita", desc:`Aporte — ${meta.nome}`, cat:"Poupança" }); openTxModal(); }} />,
+    profile:        <ConfiguracoesPage onNav={navTo} isMobile={isMobile} onboardingData={onboardingData} dataMode={dataMode} organizationId={session.activeOrgId} currentUser={session.user} />,
+    reports:   <RelatoriosPage onNav={(dest)=>{ if(dest==="_nova_transacao") openTxModal(); else navTo(dest); }} isMobile={isMobile} dataMode={dataMode} extraRecs={extraRecs} organizationId={session.activeOrgId} />,
+    simulation:    <SimulacaoPageView cenarios={cenarios} setCenarios={setCenarios} cenarioId={cenarioId} setCenarioId={setCenarioId} isMobile={isMobile} organizationId={session.activeOrgId} dataMode={dataMode} />,
   };
 
   if (session.isBootstrapping) return (
@@ -4873,7 +5222,7 @@ export default function App() {
     </>
   );
 
-  if (showOnboarding && session.isAuthenticated) return (
+  if (session.isAuthenticated && (session.onboardingRequired || showOnboarding)) return (
     <OnboardingFlow
       isMobile={isMobile}
       isSubmitting={onboardingSubmitting}
@@ -4896,7 +5245,7 @@ export default function App() {
           setExtraRecs(recurringPreview ? [recurringPreview] : []);
           setExtraCards(creditCardPreview ? [creditCardPreview] : []);
 
-          setPage("dashboard");
+          navigate({ to: "/dashboard", replace: true });
         } catch (error) {
           setOnboardingError(
             error instanceof Error ? error.message : "Nao foi possivel concluir o onboarding.",
@@ -4947,6 +5296,7 @@ export default function App() {
   return (
     <>
     <AnimStyles/>
+    <FinclaPageContext.Provider value={{ pages }}>
     <div style={{ ...G, display:"flex", height:"100vh", background:T.bg, overflow:"hidden" }}>
       <style>{`
         * { box-sizing: border-box; }
@@ -4956,27 +5306,27 @@ export default function App() {
         input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: ${T.ink}; border: 2px solid white; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
       `}</style>
       <Sidebar
-        page={page} onNav={navTo}
+        page={activeSegment} onNav={navTo}
         isMobile={isMobile}
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />
       <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
         <Topbar
-          onNew={() => setModal(true)}
+          onNew={() => openTxModal()}
           isMobile={isMobile}
           onMenuOpen={() => setSidebarOpen(true)}
           onNav={navTo}
-          page={page}
+          page={activeSegment}
         />
 
         {/* Mood top border on dashboard */}
-        {page === "dashboard" && mood.topBorder !== "transparent" && (
+        {activeSegment === "dashboard" && mood.topBorder !== "transparent" && (
           <div style={{ height:2, background:mood.topBorder, transition:"background 0.18s", flexShrink:0 }} />
         )}
 
         {/* Legado: toggle flutuante do painel de estado — desligado na UI; ver `showLegacyStatePanelFloatButton` */}
-        {showLegacyStatePanelFloatButton && page === "dashboard" && !isMobile && (
+        {showLegacyStatePanelFloatButton && activeSegment === "dashboard" && !isMobile && (
           <button onClick={() => setPanelOpen(p => !p)} style={{ position:"fixed", top:68, right:16, zIndex:201, width:32, height:32, borderRadius:8, border:`1px solid ${T.border}`, background:panelOpen?T.ink:T.surface, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", transition:"all 0.2s", boxShadow:T.sm }}>
             <SlidersHorizontal size={13} color={panelOpen?"#fff":T.inkMid} />
           </button>
@@ -4984,26 +5334,22 @@ export default function App() {
 
         {!isMobile && <StatePanelV4 open={panelOpen} day={day} setDay={setDay} budgetPct={budgetPct} setBudgetPct={setBudgetPct} freePct={freePct} setFreePct={setFreePct} moodKey={moodKey} onStartOnboarding={() => { setPanelOpen(false); setShowOnboarding(true); }} dataMode={dataMode} allowDataModeToggle={mockDataEnabled} onSetDataMode={(mode) => { setRequestedDataMode(mode); if (mode === 'empty') { setCenarios([]); setCenarioId(null); } else { setCenarios(SIM_CENARIOS_INIT); setCenarioId(SIM_CENARIOS_INIT[0].id); } }} />}
 
-        <div style={{ flex:1, overflowY:"auto", overflowX:"hidden", padding:isMobile?"14px 14px 40px":"20px 28px 40px" }}>
-          {page === "dashboard" && onboardingData && !checklistDismissed && (
+        <div data-fincla-main-scroll style={{ flex:1, overflowY:"auto", overflowX:"hidden", padding:isMobile?"14px 14px 40px":"20px 28px 40px" }}>
+          {activeSegment === "dashboard" && onboardingData && !checklistDismissed && (
             <MiniChecklist
               onboardingData={onboardingData}
               completedTx={completedTx}
               completedBudget={completedBudget}
               onDismiss={() => setChecklistDismissed(true)}
-              onNav={(dest) => { if (dest === "_nova_transacao") { setModal(true); } else { navTo(dest); } }}
+              onNav={(dest) => { if (dest === "_nova_transacao") { openTxModal(); } else { navTo(dest); } }}
             />
           )}
-          <ErrorBoundary key={page}><PageEnter key={page}>{pages[page] || (
-            <div style={{ paddingTop:60, textAlign:"center" }}>
-              <div style={{ ...G, fontSize:32, marginBottom:8 }}>🚧</div>
-              <div style={{ ...G, fontSize:16, color:T.inkLight }}>Em construção</div>
-            </div>
-          )}</PageEnter></ErrorBoundary>
+          <ErrorBoundary key={pathname}><PageEnter key={pathname}><Outlet /></PageEnter></ErrorBoundary>
         </div>
       </div>
-      <NovaTransacaoModal open={modal} onClose={() => { setModal(false); setModalMode("transacao"); setModalPreConfig(null); }} onTransactionSaved={bumpTransactionsList} novaRecorrencia={modalMode === "recorrencia"} preConfig={modalPreConfig} isMobile={isMobile} organizationId={session.activeOrgId} dataMode={dataMode} />
+      <NovaTransacaoModal open={txModalOpen} onClose={closeTxModal} onTransactionSaved={bumpTransactionsList} novaRecorrencia={novaRecorrenciaModal} preConfig={modalPreConfig} isMobile={isMobile} organizationId={session.activeOrgId} dataMode={dataMode} />
     </div>
+    </FinclaPageContext.Provider>
     </>
   );
 }
