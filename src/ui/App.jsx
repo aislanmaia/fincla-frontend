@@ -470,12 +470,33 @@ const NovaTransacaoModal = ({
     findByLabel,
     ensureDetailTag,
     labelForDetailId,
+    detailTagRowsForCategory,
     error: detailTagsError,
   } = useNovaTransacaoDetailTags({
     organizationId,
     categoryTagId,
     enabled: open && useLiveDetailTags,
   });
+
+  const detailTagRowsAvailable = useMemo(() => {
+    if (!useLiveDetailTags || !categoryTagId) return [];
+    const sel = new Set(detailTagIds.map((id) => String(id)));
+    return [...detailTagRowsForCategory]
+      .filter((row) => row?.id && !sel.has(String(row.id)))
+      .sort((a, b) =>
+        String(a.name || "").localeCompare(String(b.name || ""), "pt-BR", {
+          sensitivity: "base",
+        }),
+      );
+  }, [useLiveDetailTags, categoryTagId, detailTagRowsForCategory, detailTagIds]);
+
+  const addDetailTagByRow = useCallback((row) => {
+    if (!row?.id) return;
+    const id = String(row.id);
+    const name = row.name != null && String(row.name).trim() ? String(row.name).trim() : "";
+    setDetailTagIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    if (name) setDetailTagLabelById((prev) => ({ ...prev, [id]: name }));
+  }, []);
 
   const detailChipLabel = useCallback(
     (id) => {
@@ -1726,11 +1747,30 @@ const NovaTransacaoModal = ({
                             + {tag} <span style={{ opacity:0.7, fontSize:10 }}>✕</span>
                           </span>
                         ))}
+                    {detailTagRowsAvailable.map((row) => (
+                      <span
+                        key={row.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          addDetailTagByRow(row);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            addDetailTagByRow(row);
+                          }
+                        }}
+                        style={{ ...G, fontSize:12, color:T.inkMid, background:T.grayLight, padding:"5px 11px", borderRadius:9999, cursor:"pointer" }}
+                      >
+                        {row.name}
+                      </span>
+                    ))}
                     {NOVA_TX_QUICK_DETAIL_LABELS.filter((t) => {
                       if (!useLiveDetailTags) return !tags.includes(t);
-                      const row = findByLabel(t);
-                      if (!row) return true;
-                      return !detailTagIds.includes(row.id);
+                      if (findByLabel(t)) return false;
+                      return true;
                     }).map((t) => (
                       <span key={t} role="button" tabIndex={0}
                         onClick={(e) => { e.preventDefault(); void addQuickDetailTag(t); }}
@@ -2541,11 +2581,30 @@ const NovaTransacaoModal = ({
                             + {tag} <span style={{ opacity:0.7, fontSize:10 }}>✕</span>
                           </span>
                         ))}
+                    {detailTagRowsAvailable.map((row) => (
+                      <span
+                        key={row.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          addDetailTagByRow(row);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            addDetailTagByRow(row);
+                          }
+                        }}
+                        style={{ ...G, fontSize:11, color:T.inkMid, background:T.grayLight, padding:"4px 9px", borderRadius:9999, cursor:"pointer" }}
+                      >
+                        {row.name}
+                      </span>
+                    ))}
                     {NOVA_TX_QUICK_DETAIL_LABELS.filter((t) => {
                       if (!useLiveDetailTags) return !tags.includes(t);
-                      const row = findByLabel(t);
-                      if (!row) return true;
-                      return !detailTagIds.includes(row.id);
+                      if (findByLabel(t)) return false;
+                      return true;
                     }).map((t) => (
                       <span key={t} role="button" tabIndex={0}
                         onClick={(e) => { e.preventDefault(); void addQuickDetailTag(t); }}
