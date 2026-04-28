@@ -478,6 +478,7 @@ export interface FiltersInfo {
   date_start: string | null;
   date_end: string | null;
   recurring?: boolean | null;
+  tag_id?: string | null;
 }
 
 /** Projeção de recorrências na mesma janela que date_start/date_end (séries ativas; não é soma de linhas em transactions). */
