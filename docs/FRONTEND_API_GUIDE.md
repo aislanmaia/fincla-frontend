@@ -599,6 +599,8 @@ export interface TransactionsSummaryQuery {
   value_min?: number;
   value_max?: number;
   recurring?: boolean; // true = only recurring txs, false = only non-recurring
+  /** Same semantics as GET /v1/transactions: filter by tag link (transaction_tags). */
+  tag_id?: string;
 }
 
 export interface PeriodInfo {
@@ -614,6 +616,7 @@ export interface FiltersInfo {
   date_start: string | null; // ISO date string (YYYY-MM-DD)
   date_end: string | null; // ISO date string (YYYY-MM-DD)
   recurring: boolean | null;
+  tag_id: string | null;
 }
 
 /** Projected recurring totals in the same window as date_start/date_end (active series only; not realized txs). */
@@ -2264,6 +2267,7 @@ const listTransactions = async (
 - `organization_id` (obrigatório): UUID da organização
 - `type` (opcional): 'income' | 'expense'
 - `category` (opcional): Nome da categoria
+- `tag_id` (opcional): UUID da tag — retorna apenas transações vinculadas a essa tag (`transaction_tags`), em qualquer tipo (categoria, detalhe, etc.). Envie como query string (ex.: `?tag_id=uuid`).
 - `payment_method` (opcional): Método de pagamento (valores canônicos: `credit_card`, `debit_card`, `pix`, `cash`, `bank_transfer`, `boleto`). A API aceita variações e normaliza.
 - `description` (opcional): Busca parcial na descrição
 - `date_start` (opcional): Data inicial (YYYY-MM-DD)
@@ -2488,6 +2492,7 @@ const getTransactionsSummary = async (
 - `value_min` (opcional): Valor mínimo
 - `value_max` (opcional): Valor máximo
 - `recurring` (opcional): `true` = só transações recorrentes; `false` = só não recorrentes
+- `tag_id` (opcional): UUID da tag — mesma semântica de `GET /v1/transactions`: apenas transações vinculadas a essa tag em `transaction_tags`
 
 **`recurring_in_period`:** quando **`date_start` e `date_end` estão presentes** e `date_start <= date_end`, a resposta inclui `recurring_in_period` com a **projeção** de receitas/despesas recorrentes (séries ativas) no mesmo intervalo — valor × número de ocorrências esperadas no calendário. Não é soma de linhas em `transactions`. Se apenas uma das datas for enviada, o campo **não** vem na resposta.
 
@@ -2545,7 +2550,8 @@ const foodSummary = await getTransactionsSummary({
     payment_method: null,
     date_start: "2025-01-01",
     date_end: "2025-01-31",
-    recurring: null
+    recurring: null,
+    tag_id: null
   },
   // Somente quando date_start e date_end válidos (inclusivos); omitido caso contrário
   recurring_in_period: {
