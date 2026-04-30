@@ -287,12 +287,49 @@ function mapInstallmentInfo(transaction) {
   };
 }
 
-function pickDisplayAmount(transaction) {
+/** Valor exibido na linha (soma das parcelas em `installment_info` quando houver). */
+export function pickDisplayAmount(transaction) {
   const parts = transaction.installment_info;
   if (parts?.length) {
     return parts.reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
   }
   return Number(transaction.value ?? 0);
+}
+
+/**
+ * Data bruta para coluna «Data» na lista (GET /transactions com período):
+ * cartão à vista → data da compra; parcelado → vencimento da primeira parcela retornada no período.
+ * @param {import("../../api/types").Transaction} transaction
+ */
+export function pickTransactionListDateRawForDisplay(transaction) {
+  if (transaction.credit_card_charge?.charge?.modality === "cash") {
+    return transaction.date;
+  }
+  const due = transaction.installment_info?.[0]?.due_date;
+  if (due) return due;
+  return transaction.date;
+}
+
+/**
+ * Despesas atribuídas a dias (ritmo, médias por weekday, etc.), alinhado ao contrato de listagem.
+ * Parcelado: uma entrada por item em `installment_info`; demais: uma entrada na data da transação.
+ * @param {import("../../api/types").Transaction} transaction
+ * @returns {{ date: string; amount: number }[]}
+ */
+export function expandExpenseTxToAttributedParts(transaction) {
+  if (transaction.type !== "expense") return [];
+  const modality = transaction.credit_card_charge?.charge?.modality;
+  if (modality === "installment" && transaction.installment_info?.length) {
+    return transaction.installment_info.map((p) => ({
+      date: String(p.due_date ?? ""),
+      amount: Number(p.amount ?? 0),
+    }));
+  }
+  const amount = pickDisplayAmount(transaction);
+  const ymd =
+    ymdFromAnyDateInput(transaction.date) ||
+    String(transaction.date ?? "").slice(0, 10);
+  return ymd ? [{ date: ymd, amount }] : [];
 }
 
 export function mapApiTransactionToUi(transaction) {
@@ -305,12 +342,8 @@ export function mapApiTransactionToUi(transaction) {
   if (transaction.status === "pending") statusLabel = "pendente";
   else if (transaction.status === "cancelled") statusLabel = "cancelada";
 
-  // Com `installment_info`, a data relevante para fatura/período é o vencimento da parcela
-  // (inclui 1/1x à vista no crédito); senão mantém a data da transação.
-  const firstInst = transaction.installment_info?.[0];
-  const dateLabel = firstInst?.due_date
-    ? formatDate(firstInst.due_date)
-    : formatDate(transaction.date);
+  const listDateRaw = pickTransactionListDateRawForDisplay(transaction);
+  const dateLabel = formatDate(listDateRaw);
 
   const cardIdFromCharge =
     transaction.credit_card_charge?.charge?.card_id ??
@@ -672,6 +705,14 @@ export function ymdFromAnyDateInput(value) {
 }
 
 function pickDateIsoForEditTransaction(transaction) {
+  if (transaction.credit_card_charge?.charge?.modality === "cash") {
+    const raw = transaction.date;
+    if (raw != null && String(raw).trim() !== "") {
+      const ymd = ymdFromAnyDateInput(raw);
+      if (ymd) return `${ymd}T12:00:00`;
+    }
+    return `${todayLocalYmd()}T12:00:00`;
+  }
   const due = transaction.installment_info?.[0]?.due_date;
   if (due && /^\d{4}-\d{2}-\d{2}$/.test(due)) {
     return `${due}T12:00:00`;

@@ -2,6 +2,8 @@
  * Pure helpers for Spending pace (Ritmo de gastos) — current vs pastLight (Opção A).
  */
 
+import { expandExpenseTxToAttributedParts } from "../../data/transactionsAdapter.js";
+
 const DOW_META = [
   { day: "Dom", short: "D" },
   { day: "Seg", short: "S" },
@@ -83,10 +85,12 @@ export function aggregateExpenseByDay(transactions, year, month, daysInMonth) {
   const daily = Array(daysInMonth + 1).fill(0);
   for (const tx of transactions) {
     if (tx.type !== "expense") continue;
-    const key = transactionDayKey(tx.date);
-    if (!key || key.y !== year || key.m !== month) continue;
-    if (key.d >= 1 && key.d <= daysInMonth) {
-      daily[key.d] += Number(tx.value) || 0;
+    for (const { date, amount } of expandExpenseTxToAttributedParts(tx)) {
+      const key = transactionDayKey(date);
+      if (!key || key.y !== year || key.m !== month) continue;
+      if (key.d >= 1 && key.d <= daysInMonth) {
+        daily[key.d] += amount;
+      }
     }
   }
   return daily;
@@ -197,12 +201,14 @@ export function buildDowAverages(transactions, year, month, daysInMonth) {
   const sums = [0, 0, 0, 0, 0, 0, 0];
   for (const tx of transactions) {
     if (tx.type !== "expense") continue;
-    const key = transactionDayKey(tx.date);
-    if (!key || key.y !== year || key.m !== month) continue;
-    if (key.d < 1 || key.d > daysInMonth) continue;
-    const dt = new Date(year, month - 1, key.d);
-    const wd = dt.getDay();
-    sums[wd] += Number(tx.value) || 0;
+    for (const { date, amount } of expandExpenseTxToAttributedParts(tx)) {
+      const key = transactionDayKey(date);
+      if (!key || key.y !== year || key.m !== month) continue;
+      if (key.d < 1 || key.d > daysInMonth) continue;
+      const dt = new Date(year, month - 1, key.d);
+      const wd = dt.getDay();
+      sums[wd] += amount;
+    }
   }
 
   return DOW_META.map((meta, i) => ({

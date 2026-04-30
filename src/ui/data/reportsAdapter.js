@@ -7,6 +7,7 @@ import {
 import { handleApiError } from "../../api/client";
 import { listTransactions } from "../../api/transactions";
 import { categoryLabelPtForTag } from "./categoryLabels.js";
+import { expandExpenseTxToAttributedParts } from "./transactionsAdapter.js";
 
 /**
  * Rótulo PT para pontos de analytics (nome EN/PT da API + icon_key opcional).
@@ -340,22 +341,12 @@ export function buildVelocityDailyFromTransactions(
 
   for (const tx of transactions ?? []) {
     if (tx.type !== "expense") continue;
-    const inst = tx.installment_info;
-    if (Array.isArray(inst) && inst.length > 0) {
-      for (const part of inst) {
-        const due = part?.due_date;
-        if (!due || due < ds || due > de) continue;
-        const day = Number(due.slice(8, 10));
-        if (day >= 1 && day <= dim) {
-          buckets[day] += Math.abs(num(part.amount));
-        }
-      }
-    } else {
-      const d = tx.date;
-      if (!d || d < ds || d > de) continue;
-      const day = Number(d.slice(8, 10));
+    for (const { date, amount } of expandExpenseTxToAttributedParts(tx)) {
+      const due = date;
+      if (!due || due < ds || due > de) continue;
+      const day = Number(due.slice(8, 10));
       if (day >= 1 && day <= dim) {
-        buckets[day] += Math.abs(num(tx.value));
+        buckets[day] += Math.abs(num(amount));
       }
     }
   }

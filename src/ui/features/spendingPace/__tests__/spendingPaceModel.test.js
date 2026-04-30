@@ -40,6 +40,23 @@ describe("aggregateExpenseByDay", () => {
     expect(daily[5]).toBe(150);
     expect(daily[1]).toBe(0);
   });
+
+  it("cartão parcelado: atribui cada parcela ao dia de vencimento no mês", () => {
+    const tx = [
+      {
+        type: "expense",
+        date: "2026-02-20T12:00:00",
+        value: 900,
+        credit_card_charge: {
+          charge: { modality: "installment" },
+          card: {},
+        },
+        installment_info: [{ due_date: "2026-03-12", amount: 300 }],
+      },
+    ];
+    const daily = aggregateExpenseByDay(tx, 2026, 3, 31);
+    expect(daily[12]).toBe(300);
+  });
 });
 
 describe("buildSpendingPaceChartRowsCurrent", () => {

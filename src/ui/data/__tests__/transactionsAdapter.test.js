@@ -4,6 +4,7 @@ import {
   buildUpdateTransactionPayload,
   buildTransactionsSummaryQuery,
   buildTransactionsQuery,
+  expandExpenseTxToAttributedParts,
   mapApiTransactionToUi,
 } from "../transactionsAdapter.js";
 
@@ -80,7 +81,7 @@ describe("transactionsAdapter", () => {
     });
   });
 
-  it("crédito à vista 1/1x usa due_date na lista (não só a data da compra)", () => {
+  it("crédito à vista 1/1x: coluna de data usa a data da compra (não o vencimento da fatura)", () => {
     const mapped = mapApiTransactionToUi({
       id: 493,
       organization_id: "org-1",
@@ -124,7 +125,41 @@ describe("transactionsAdapter", () => {
       ],
     });
 
-    expect(mapped.date).toBe("10/04/2026");
+    expect(mapped.date).toBe("16/03/2026");
+  });
+
+  it("expandExpenseTxToAttributedParts: parcelado por due_date; à vista na data da transação", () => {
+    const installmentTx = {
+      type: "expense",
+      value: 3600,
+      date: "2026-03-18T10:00:00",
+      credit_card_charge: {
+        charge: { modality: "installment" },
+        card: {},
+      },
+      installment_info: [
+        { due_date: "2026-04-10", amount: 300 },
+        { due_date: "2026-05-10", amount: 300 },
+      ],
+    };
+    expect(expandExpenseTxToAttributedParts(installmentTx)).toEqual([
+      { date: "2026-04-10", amount: 300 },
+      { date: "2026-05-10", amount: 300 },
+    ]);
+
+    const cashTx = {
+      type: "expense",
+      value: 95.99,
+      date: "2026-03-16T00:00:00",
+      credit_card_charge: {
+        charge: { modality: "cash" },
+        card: {},
+      },
+      installment_info: [{ due_date: "2026-04-10", amount: 95.99 }],
+    };
+    expect(expandExpenseTxToAttributedParts(cashTx)).toEqual([
+      { date: "2026-03-16", amount: 95.99 },
+    ]);
   });
 
   it("converte filtros da UI para query da API", () => {

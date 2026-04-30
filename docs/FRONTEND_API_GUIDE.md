@@ -2265,9 +2265,10 @@ await createTransaction({
 Lista transações com filtros opcionais e paginação. Retorna transações paginadas da organização especificada.
 
 **Comportamento com filtro de data (`date_start`/`date_end`):**
-- **Transações normais** (pix, débito, etc.): filtradas por `transaction.date` (data da compra)
-- **Transações de cartão de crédito com cobrança persistida** (`credit_card_charges`): incluídas quando **ao menos uma parcela** tem `due_date` no range. A transação original é retornada com `installment_info` contendo as parcelas cujo vencimento está no período. Use `installment_info[].amount` para exibir o valor da parcela e `installment_info[].due_date` para ordenação/exibição.
-- **Cartão de crédito sem cobrança** (ex.: dados legados sem linha em `credit_card_charges`): tratadas como as demais — filtro por `transaction.date` no período, com `credit_card_charge` e `installment_info` tipicamente `null`.
+- **Transações normais** (pix, débito, etc.) e **cartão sem cobrança persistida** (legado): filtradas por `transaction.date`; `credit_card_charge` / `installment_info` tipicamente `null` no caso legado.
+- **Cartão com cobrança à vista (`modality: cash`):** entrada no período pela **`transaction.date`** da compra. Ordenação com `sort_by=date` usa a **data da transação**. `installment_info` lista **todas** as parcelas da cobrança (em geral uma), mesmo que `due_date` esteja fora do período — use `transaction.date` / `sort` para posicionar na UI do mês da compra, não apenas `due_date` da primeira parcela.
+- **Cartão parcelado (`modality: installment`):** a transação entra apenas se **pelo menos uma parcela** tem **`due_date`** no intervalo. `installment_info` contém **só as parcelas cujo `due_date` está no período**. A ordenação por data considera o **menor `due_date` entre as parcelas no intervalo**.
+- Transações parceladas cuja primeira fatura só cai meses depois da compra **não aparecem** em um filtro restrito ao mês da compra (até haver parcela com `due_date` naquele range).
 
 **⚠️ Breaking Change:** A estrutura de resposta mudou de `Transaction[]` para `{ data: Transaction[], pagination: {...} }`. O frontend precisa atualizar para acessar `response.data` em vez de `response` diretamente.
 
@@ -2297,7 +2298,7 @@ const listTransactions = async (
 - `value_max` (opcional): Valor máximo
 - `page` (opcional): Número da página (padrão: 1, mínimo: 1)
 - `limit` (opcional): Itens por página (padrão: 20, mínimo: 1, máximo: 100)
-- `sort_by` (opcional): Campo de ordenação. Valores: `date`, `value`, `type`, `payment_method`, `description`, `category`. Padrão: `date`. Quando `date` e há filtro de período com transações de cartão, usa `due_date` das parcelas automaticamente.
+- `sort_by` (opcional): Campo de ordenação. Valores: `date`, `value`, `type`, `payment_method`, `description`, `category`. Padrão: `date`. Com período (`date_start`/`date_end`): linhas **cartão à vista** ordenam pela data da transação; linhas **cartão parcelado** pelo menor `due_date` das parcelas **dentro do intervalo**; demais linhas pela `transaction.date`.
 - `sort_order` (opcional): Direção da ordenação. Valores: `asc` | `desc`. Padrão: `desc`
 
 **Exemplos de Uso:**

@@ -7,7 +7,12 @@ import {
   listRecurringTransactions,
 } from "../../data/dashboardAdapter";
 import { categoryLabelPtForTag } from "../../data/categoryLabels.js";
-import { pickCategoryTagFromApiTransaction } from "../../data/transactionsAdapter.js";
+import {
+  expandExpenseTxToAttributedParts,
+  pickCategoryTagFromApiTransaction,
+  pickDisplayAmount,
+  pickTransactionListDateRawForDisplay,
+} from "../../data/transactionsAdapter.js";
 import {
   addLocalDays,
   daysInclusive,
@@ -62,14 +67,6 @@ function transactionDayKey(isoDate) {
   return { y, m, d };
 }
 
-function transactionDateInRange(isoDate, rangeStartYmd, rangeEndYmd) {
-  const key = transactionDayKey(isoDate);
-  if (!key) return false;
-  const t = new Date(key.y, key.m - 1, key.d);
-  const ts = toIsoLocalDate(t);
-  return ts >= rangeStartYmd && ts <= rangeEndYmd;
-}
-
 function dayIndexInRange(isoDate, rangeStart, dayCount) {
   const key = transactionDayKey(isoDate);
   if (!key) return -1;
@@ -103,12 +100,18 @@ function pickTransactionIcon(transaction) {
 }
 
 function mapTransaction(transaction) {
+  const dateRaw = pickTransactionListDateRawForDisplay(transaction);
+  const expenseAmt =
+    transaction.type === "expense" ? pickDisplayAmount(transaction) : 0;
   return {
     id: transaction.id,
     desc: transaction.description,
     cat: pickCategoryName(transaction),
-    date: formatShortDate(transaction.date),
-    val: transaction.type === "income" ? transaction.value : -transaction.value,
+    date: formatShortDate(dateRaw),
+    val:
+      transaction.type === "income"
+        ? Number(transaction.value) || 0
+        : -expenseAmt,
     icon: pickTransactionIcon(transaction),
     rec: transaction.recurring,
     status: transaction.status === "pending" ? "pendente" : "confirmado",
@@ -125,18 +128,13 @@ function normalizeTagNameKey(name) {
 }
 
 /**
- * Agrega despesas no intervalo [rangeStartYmd, rangeEndYmd] por categoria.
+ * Agrega despesas retornadas pela API no período (já filtradas no servidor).
  */
-function aggregateExpenseCategoriesFromTransactions(
-  rawTx,
-  rangeStartYmd,
-  rangeEndYmd,
-) {
+function aggregateExpenseCategoriesFromTransactions(rawTx) {
   const map = new Map();
 
   for (const tx of rawTx) {
     if (tx.type !== "expense") continue;
-    if (!transactionDateInRange(tx.date, rangeStartYmd, rangeEndYmd)) continue;
 
     const tag = pickCategoryTagFromApiTransaction(tx);
     const rawName = tag?.name ?? tx.category ?? "Sem categoria";
@@ -145,7 +143,7 @@ function aggregateExpenseCategoriesFromTransactions(
         ? `id:${tag.id}`
         : `name:${normalizeTagNameKey(rawName)}`;
 
-    const add = Number(tx.value) || 0;
+    const add = pickDisplayAmount(tx);
     const cur = map.get(mapKey);
     if (cur) {
       cur.total += add;
@@ -173,11 +171,7 @@ function buildDashboardCategoryRows(
   apiCategories,
   prevTotalByTagId,
 ) {
-  const fromTx = aggregateExpenseCategoriesFromTransactions(
-    rawTx,
-    rangeStartYmd,
-    rangeEndYmd,
-  );
+  const fromTx = aggregateExpenseCategoriesFromTransactions(rawTx);
   const apiList = apiCategories ?? [];
 
   const apiColorByTagId = new Map(
@@ -283,8 +277,10 @@ function buildRhythmDaily(transactions, summary, startD, D, todayStartMs) {
   const daily = Array(D).fill(0);
   for (const tx of transactions) {
     if (tx.type !== "expense") continue;
-    const idx = dayIndexInRange(tx.date, startD, D);
-    if (idx >= 0) daily[idx] += Number(tx.value) || 0;
+    for (const { date, amount } of expandExpenseTxToAttributedParts(tx)) {
+      const idx = dayIndexInRange(date, startD, D);
+      if (idx >= 0) daily[idx] += amount;
+    }
   }
 
   const rawCum = [];
@@ -377,10 +373,12 @@ function buildRhythmWeekly(
 
   for (const tx of transactions) {
     if (tx.type !== "expense") continue;
-    const idx = dayIndexInRange(tx.date, startD, D);
-    if (idx < 0) continue;
-    const b = Math.floor(idx / 7);
-    bucketSum[b] += Number(tx.value) || 0;
+    for (const { date, amount } of expandExpenseTxToAttributedParts(tx)) {
+      const idx = dayIndexInRange(date, startD, D);
+      if (idx < 0) continue;
+      const b = Math.floor(idx / 7);
+      bucketSum[b] += amount;
+    }
   }
 
   const rawCum = [];
