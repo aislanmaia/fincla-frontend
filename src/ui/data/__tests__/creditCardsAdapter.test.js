@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCreateCreditCardPayload,
+  buildUpdateCreditCardPayload,
   mapCreditCardToUi,
 } from "../creditCardsAdapter.js";
 
@@ -199,12 +200,12 @@ describe("creditCardsAdapter", () => {
     expect(buildCreateCreditCardPayload({
       organizationId: "org-1",
       brand: "Visa",
-      nome: "Cartão principal",
-      digitos: "1234",
-      limite: "4.800,50",
-      vencimento: "10",
-      fechamento: "3",
-      cor: "#2563EB",
+      displayName: "Cartão principal",
+      last4Digits: "1234",
+      limitInput: "4.800,50",
+      dueDay: "10",
+      closingDay: "3",
+      color: "#2563EB",
     })).toEqual({
       organization_id: "org-1",
       last4: "1234",
@@ -214,6 +215,28 @@ describe("creditCardsAdapter", () => {
       credit_limit: 4800.5,
       closing_day: 3,
       color: "#2563EB",
+    });
+  });
+
+  it("monta payload de atualização de cartão (PATCH)", () => {
+    expect(
+      buildUpdateCreditCardPayload({
+        organizationId: "org-1",
+        brand: "Mastercard",
+        displayName: "Nubank Roxo",
+        last4Digits: "5678",
+        limitInput: "2.000,00",
+        dueDay: "15",
+        closingDay: "2",
+      }),
+    ).toEqual({
+      organization_id: "org-1",
+      brand: "Mastercard",
+      description: "Nubank Roxo",
+      last4: "5678",
+      credit_limit: 2000,
+      due_day: 15,
+      closing_day: 2,
     });
   });
 });

@@ -119,11 +119,11 @@ function buildOnboardingCreditCardPayload(data, organizationId) {
   return buildCreateCreditCardPayload({
     organizationId,
     brand: data.cardNome.trim(),
-    nome: data.cardNome.trim(),
-    digitos: "",
-    limite: data.cardLim || "",
-    vencimento: data.cardVenc || "",
-    fechamento: "",
+    displayName: data.cardNome.trim(),
+    last4Digits: "",
+    limitInput: data.cardLim || "",
+    dueDay: data.cardVenc || "",
+    closingDay: "",
   });
 }
 

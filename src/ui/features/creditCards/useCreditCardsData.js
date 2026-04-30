@@ -5,11 +5,13 @@ import {
   listCreditCardsForUi,
   markInvoicePaidForUi,
   moveInstallmentForUi,
+  updateCreditCardForUi,
 } from "../../data/creditCardsAdapter.js";
 
 const EMPTY_STATE = {
   isLoading: false,
   isSavingCard: false,
+  isUpdatingCard: false,
   isMarkingInvoice: false,
   isMovingInstallment: false,
   error: "",
@@ -92,6 +94,22 @@ export function useCreditCardsData({ organizationId, enabled = true }) {
     setState((current) => ({ ...current, isSavingCard: false }));
   }, [reload]);
 
+  const updateCard = useCallback(async (cardId, payload) => {
+    setState((current) => ({ ...current, isUpdatingCard: true, error: "" }));
+    try {
+      await updateCreditCardForUi(cardId, payload);
+      await reload();
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        isUpdatingCard: false,
+        error: formatCreditCardsApiError(error),
+      }));
+      throw error;
+    }
+    setState((current) => ({ ...current, isUpdatingCard: false }));
+  }, [reload]);
+
   const markInvoicePaid = useCallback(async (payload) => {
     setState((current) => ({ ...current, isMarkingInvoice: true, error: "" }));
     try {
@@ -129,7 +147,8 @@ export function useCreditCardsData({ organizationId, enabled = true }) {
     hasRealData: state.cards.length > 0,
     reload,
     createCard,
+    updateCard,
     markInvoicePaid,
     moveInstallment,
-  }), [createCard, markInvoicePaid, moveInstallment, reload, state]);
+  }), [createCard, updateCard, markInvoicePaid, moveInstallment, reload, state]);
 }

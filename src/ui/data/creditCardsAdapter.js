@@ -7,6 +7,7 @@ import {
   listCreditCards,
   markInvoicePaid,
   moveInstallmentToInvoice,
+  updateCreditCard,
 } from "../../api/creditCards";
 import { handleApiError } from "../../api/client";
 import { categoryLabelPtForTag } from "./categoryLabels.js";
@@ -303,6 +304,7 @@ export function mapCreditCardToUi({ card, currentInvoice, history, futureCommitm
     id: String(card.id),
     cardId: card.id,
     banco: card.brand,
+    apiColor: card.color ?? null,
     nome: card.description || `${card.brand} •• ${card.last4}`,
     dig: card.last4,
     bandeira: card.brand,
@@ -332,23 +334,57 @@ export function mapCreditCardToUi({ card, currentInvoice, history, futureCommitm
 export function buildCreateCreditCardPayload({
   organizationId,
   brand,
-  nome,
-  digitos,
-  limite,
-  vencimento,
-  fechamento,
-  cor = null,
+  displayName,
+  last4Digits,
+  limitInput,
+  dueDay,
+  closingDay,
+  color = null,
 }) {
   return {
     organization_id: organizationId,
-    last4: String(digitos || "").replace(/\D/g, "").slice(-4),
+    last4: String(last4Digits || "").replace(/\D/g, "").slice(-4),
     brand: brand || "Visa",
-    due_day: Number(vencimento) || 1,
-    description: nome || null,
-    credit_limit: parseMoneyInput(limite),
-    closing_day: fechamento ? Number(fechamento) : undefined,
-    color: cor || undefined,
+    due_day: Number(dueDay) || 1,
+    description: displayName || null,
+    credit_limit: parseMoneyInput(limitInput),
+    closing_day: closingDay ? Number(closingDay) : undefined,
+    color: color || undefined,
   };
+}
+
+export function buildUpdateCreditCardPayload({
+  organizationId,
+  brand,
+  displayName,
+  last4Digits,
+  limitInput,
+  dueDay,
+  closingDay,
+  color = undefined,
+}) {
+  const payload = {
+    organization_id: organizationId,
+  };
+  if (brand !== undefined) payload.brand = brand || "Visa";
+  if (displayName !== undefined) payload.description = displayName || null;
+  if (last4Digits !== undefined) {
+    payload.last4 = String(last4Digits || "").replace(/\D/g, "").slice(-4);
+  }
+  if (limitInput !== undefined && limitInput !== "") {
+    payload.credit_limit = parseMoneyInput(limitInput);
+  }
+  if (dueDay !== undefined && dueDay !== "") {
+    payload.due_day = Number(dueDay) || 1;
+  }
+  if (closingDay !== undefined && closingDay !== "") {
+    payload.closing_day = Number(closingDay);
+  }
+  if (color !== undefined) payload.color = color || undefined;
+
+  return Object.fromEntries(
+    Object.entries(payload).filter(([, v]) => v !== undefined),
+  );
 }
 
 /** Linha do picker de cartão no modal Nova transação (UI legada). */
@@ -447,6 +483,10 @@ export async function listCreditCardsForUi(organizationId) {
 
 export async function createCreditCardForUi(payload) {
   return createCreditCard(payload);
+}
+
+export async function updateCreditCardForUi(cardId, payload) {
+  return updateCreditCard(cardId, payload);
 }
 
 export async function markInvoicePaidForUi({ cardId, year, month, organizationId, paidDate }) {

@@ -62,6 +62,7 @@ import { listCreditCards } from "../api/creditCards";
 import { getTransaction } from "../api/transactions";
 import {
   buildCreateCreditCardPayload,
+  buildUpdateCreditCardPayload,
   fetchPastInvoiceItemsForUi,
   formatCreditCardsApiError,
   mapCreditCardToModalPickerRow,
@@ -446,8 +447,8 @@ const NovaTransacaoModal = ({
   const [parcelasInput, setParcelasInput] = useState("");    // raw input for custom parcelas
   // Quick-add card inline
   const [addingCartao,  setAddingCartao] = useState(false);
-  const [ncNomeMod,     setNcNomeMod]    = useState("");
-  const [ncDigMod,      setNcDigMod]     = useState("");
+  const [quickAddCardName, setQuickAddCardName] = useState("");
+  const [quickAddCardLast4, setQuickAddCardLast4] = useState("");
 
   const [categoryTagId, setCategoryTagId] = useState(null);
   const [txSubmitError, setTxSubmitError] = useState("");
@@ -556,8 +557,8 @@ const NovaTransacaoModal = ({
     setAiApplied(false);
     setDescFocused(false);
     setAddingCartao(false);
-    setNcNomeMod("");
-    setNcDigMod("");
+    setQuickAddCardName("");
+    setQuickAddCardLast4("");
     setNewTag("");
     setAddingTag(false);
     setDetailTagIds([]);
@@ -2159,14 +2160,14 @@ const NovaTransacaoModal = ({
                     Adicionar cartão
                   </div>
                   <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                    <input value={ncNomeMod} onChange={e=>setNcNomeMod(e.target.value)}
+                    <input value={quickAddCardName} onChange={e=>setQuickAddCardName(e.target.value)}
                       placeholder="Nome (ex: Nubank Roxinho)"
                       style={{ ...G, padding:"8px 10px", borderRadius:8, border:`1px solid ${T.border}`,
                         fontSize:12, color:T.ink, outline:"none", background:T.surface,
                         transition:"border-color 0.15s" }}
                       onFocus={e=>e.target.style.borderColor=T.blue}
                       onBlur={e=>e.target.style.borderColor=T.border}/>
-                    <input value={ncDigMod} onChange={e=>setNcDigMod(e.target.value.slice(0,4))}
+                    <input value={quickAddCardLast4} onChange={e=>setQuickAddCardLast4(e.target.value.slice(0,4))}
                       placeholder="4 últimos dígitos" maxLength={4}
                       style={{ ...G, ...NUM, padding:"8px 10px", borderRadius:8, border:`1px solid ${T.border}`,
                         fontSize:12, color:T.ink, outline:"none", background:T.surface,
@@ -2174,20 +2175,20 @@ const NovaTransacaoModal = ({
                       onFocus={e=>e.target.style.borderColor=T.blue}
                       onBlur={e=>e.target.style.borderColor=T.border}/>
                     <div style={{ display:"flex", gap:6 }}>
-                      <button onClick={()=>{setAddingCartao(false);setNcNomeMod("");setNcDigMod("");}}
+                      <button onClick={()=>{setAddingCartao(false);setQuickAddCardName("");setQuickAddCardLast4("");}}
                         style={{ ...G, flex:1, padding:"7px", borderRadius:8, border:`1px solid ${T.border}`,
                           background:T.surface, fontSize:11, fontWeight:600, color:T.inkMid, cursor:"pointer" }}>
                         Cancelar
                       </button>
                       <button
-                        disabled={!ncNomeMod||ncDigMod.length<4}
+                        disabled={!quickAddCardName||quickAddCardLast4.length<4}
                         onClick={()=>{
-                          setAddingCartao(false); setNcNomeMod(""); setNcDigMod("");
+                          setAddingCartao(false); setQuickAddCardName(""); setQuickAddCardLast4("");
                         }}
                         style={{ ...G, flex:1, padding:"7px", borderRadius:8, border:"none",
-                          background:ncNomeMod&&ncDigMod.length===4?T.blue:T.inkGhost,
+                          background:quickAddCardName&&quickAddCardLast4.length===4?T.blue:T.inkGhost,
                           fontSize:11, fontWeight:700, color:"#fff",
-                          cursor:ncNomeMod&&ncDigMod.length===4?"pointer":"not-allowed", transition:"background 0.15s" }}>
+                          cursor:quickAddCardName&&quickAddCardLast4.length===4?"pointer":"not-allowed", transition:"background 0.15s" }}>
                         Adicionar
                       </button>
                     </div>
@@ -2912,6 +2913,32 @@ const CAT_COLORS_CARD = {
 };
 const safe = (num, den, fallback=0) => (!den || isNaN(num/den)) ? fallback : Math.round(num/den*100);
 
+const CARD_BRAND_OPTIONS = [
+  "Visa", "Mastercard", "Elo", "Amex", "Hipercard", "Visa Infinite", "Mastercard Black",
+];
+
+function matchBrandToSelectOption(raw) {
+  const r = String(raw ?? "").trim();
+  const exact = CARD_BRAND_OPTIONS.find((o) => o.toLowerCase() === r.toLowerCase());
+  if (exact) return exact;
+  const lo = r.toLowerCase();
+  if (lo.includes("infinite")) return "Visa Infinite";
+  if (lo.includes("black")) return "Mastercard Black";
+  if (lo.includes("master")) return "Mastercard";
+  if (lo.includes("visa")) return "Visa";
+  if (lo.includes("elo")) return "Elo";
+  if (lo.includes("amex") || lo.includes("american")) return "Amex";
+  if (lo.includes("hiper")) return "Hipercard";
+  return CARD_BRAND_OPTIONS[0];
+}
+
+function formatLimitInputFromNumber(value) {
+  if (value == null || value === "") return "";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 
 /* ─── CARTÕES PAGE ───────────────────────────────────────── */
 /* ─── CARTÕES PAGE ───────────────────────────────────────── */
@@ -2946,10 +2973,47 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, d
   const [expRec,        setExpRec]        = useState(true);
   const [expNormal,     setExpNormal]     = useState(true);
   const [addCardSheet,  setAddCardSheet]  = useState(false);
+  const [editCardSheet, setEditCardSheet] = useState(false);
+  const [editingCardId, setEditingCardId] = useState(null);
   const [visibleGroups, setVisibleGroups] = useState(8); // pagination
+  const [draftIssuer,     setDraftIssuer]     = useState("");
+  const [draftName,       setDraftName]       = useState("");
+  const [draftLast4,      setDraftLast4]      = useState("");
+  const [draftBrand,      setDraftBrand]      = useState("Visa");
+  const [draftLimit,      setDraftLimit]      = useState("");
+  const [draftDueDay,     setDraftDueDay]     = useState("");
+  const [draftClosingDay, setDraftClosingDay] = useState("");
+  const [draftSuccess,    setDraftSuccess]    = useState(false);
+  const cardSheetOpen = addCardSheet || editCardSheet;
+  const clearCardFormState = () => {
+    setDraftSuccess(false);
+    setAddCardSheet(false);
+    setEditCardSheet(false);
+    setEditingCardId(null);
+    setDraftIssuer("");
+    setDraftName("");
+    setDraftLast4("");
+    setDraftBrand("Visa");
+    setDraftLimit("");
+    setDraftDueDay("");
+    setDraftClosingDay("");
+  };
+  const openAddCardSheet = useCallback(() => {
+    setDraftSuccess(false);
+    setEditCardSheet(false);
+    setEditingCardId(null);
+    setDraftIssuer("");
+    setDraftName("");
+    setDraftLast4("");
+    setDraftBrand("Visa");
+    setDraftLimit("");
+    setDraftDueDay("");
+    setDraftClosingDay("");
+    setAddCardSheet(true);
+  }, []);
   useEffect(() => {
     if (urlSearch[FC.ADD] !== "1") return;
-    setAddCardSheet(true);
+    openAddCardSheet();
     navigate({
       replace: true,
       search: (prev) => {
@@ -2958,52 +3022,53 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, d
         return next;
       },
     });
-  }, [urlSearch[FC.ADD], navigate]);
-  // New card form
-  const [ncBanco,       setNcBanco]       = useState("");
-  const [ncNome,        setNcNome]        = useState("");
-  const [ncDig,         setNcDig]         = useState("");
-  const [ncBandeira,    setNcBandeira]    = useState("Visa");
-  const [ncLimite,      setNcLimite]      = useState("");
-  const [ncVenc,        setNcVenc]        = useState("");
-  const [ncFecha,       setNcFecha]       = useState("");
-  const [ncSaved,       setNcSaved]       = useState(false);
-
-  const resetCardForm = () => {
-    setNcSaved(false);
-    setAddCardSheet(false);
-    setNcBanco("");
-    setNcNome("");
-    setNcDig("");
-    setNcLimite("");
-    setNcVenc("");
-    setNcFecha("");
-  };
+  }, [urlSearch[FC.ADD], navigate, openAddCardSheet]);
 
   const handleSaveCard = async () => {
     if (shouldUseRealData) {
       try {
         await creditCardsData.createCard(buildCreateCreditCardPayload({
           organizationId,
-          brand: ncBandeira || ncBanco,
-          nome: ncNome || ncBanco,
-          digitos: ncDig,
-          limite: ncLimite,
-          vencimento: ncVenc,
-          fechamento: ncFecha,
+          brand: draftBrand || draftIssuer,
+          displayName: draftName || draftIssuer,
+          last4Digits: draftLast4,
+          limitInput: draftLimit,
+          dueDay: draftDueDay,
+          closingDay: draftClosingDay,
         }));
       } catch {
         return;
       }
     }
-    setNcSaved(true);
-    setTimeout(() => { resetCardForm(); }, 1100);
+    setDraftSuccess(true);
+    setTimeout(() => { clearCardFormState(); }, 1100);
   };
 
-  /* ── AddCardSheet ────────────────────────────────────────── */
-  const AddCardSheet = () => {
-    if (!addCardSheet) return null;
-    const canSave = ncBanco&&ncNome&&ncDig&&ncLimite&&ncVenc;
+  const handleUpdateCard = async () => {
+    if (!editingCardId || !shouldUseRealData) return;
+    try {
+      await creditCardsData.updateCard(editingCardId, buildUpdateCreditCardPayload({
+        organizationId,
+        brand: draftBrand || draftIssuer,
+        displayName: draftName || draftIssuer,
+        last4Digits: draftLast4,
+        limitInput: draftLimit,
+        dueDay: draftDueDay,
+        closingDay: draftClosingDay,
+      }));
+    } catch {
+      return;
+    }
+    setDraftSuccess(true);
+    setTimeout(() => { clearCardFormState(); }, 1100);
+  };
+
+  /* ── Card form sheet (add / edit) ─────────────────────────── */
+  const CardFormSheet = () => {
+    if (!cardSheetOpen) return null;
+    const isEdit = editCardSheet;
+    const canSave = draftIssuer&&draftName&&draftLast4&&draftLimit&&draftDueDay;
+    const saving = isEdit ? creditCardsData.isUpdatingCard : creditCardsData.isSavingCard;
     const FI=({val,set,ph,type="text"})=>(
       <div style={{display:"flex",alignItems:"center",padding:"9px 12px",border:`1px solid ${T.border}`,borderRadius:9,background:T.surface,transition:"border-color 0.15s"}}
         onFocusCapture={e=>e.currentTarget.style.borderColor=T.blue}
@@ -3014,9 +3079,16 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, d
     );
     const inner=(
       <>
-        <div style={{padding:"16px 20px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
-          <div style={{...G,fontSize:14,fontWeight:800,color:T.ink}}>Adicionar cartão</div>
-          <button onClick={()=>setAddCardSheet(false)} style={{background:T.grayLight,border:"none",cursor:"pointer",padding:7,borderRadius:8,display:"flex"}}><X size={14} color={T.inkMid}/></button>
+        <div style={{padding:"16px 20px",borderBottom:`1px solid ${T.border}`,display:"flex",alignItems:"flex-start",justifyContent:"space-between",flexShrink:0,gap:12}}>
+          <div style={{minWidth:0}}>
+            <div style={{...G,fontSize:14,fontWeight:800,color:T.ink}}>{isEdit?"Editar cartão":"Adicionar cartão"}</div>
+            {isEdit && (
+              <div style={{...G,fontSize:12,fontWeight:500,color:T.inkMid,marginTop:5,lineHeight:1.45}}>
+                Atualize nome, limite e datas. Alterar os 4 dígitos afeta como o cartão é identificado nas transações.
+              </div>
+            )}
+          </div>
+          <button type="button" onClick={clearCardFormState} style={{background:T.grayLight,border:"none",cursor:"pointer",padding:7,borderRadius:8,display:"flex",flexShrink:0}}><X size={14} color={T.inkMid}/></button>
         </div>
         <div style={{flex:1,overflowY:"auto",overflowX:"hidden",padding:"20px",display:"flex",flexDirection:"column",gap:14}}>
           {/* Preview card stub */}
@@ -3025,32 +3097,32 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, d
             position:"relative",overflow:"hidden",marginBottom:4}}>
             <div style={{position:"absolute",top:-20,right:-20,width:100,height:100,borderRadius:"50%",background:"rgba(255,255,255,0.06)"}}/>
             <div style={{...G,fontSize:10,fontWeight:800,color:"rgba(255,255,255,0.7)",textTransform:"uppercase",letterSpacing:"0.14em"}}>
-              {ncBanco||"BANCO"}
+              {draftIssuer||"BANCO"}
             </div>
             <div style={{...M_MONO,...NUM,fontSize:13,color:"rgba(255,255,255,0.6)",letterSpacing:"0.18em"}}>
-              ···· ···· ···· {ncDig||"····"}
+              ···· ···· ···· {draftLast4||"····"}
             </div>
-            <div style={{...G,fontSize:12,fontWeight:700,color:"rgba(255,255,255,0.9)"}}>{ncNome||"Nome do cartão"}</div>
+            <div style={{...G,fontSize:12,fontWeight:700,color:"rgba(255,255,255,0.9)"}}>{draftName||"Nome do cartão"}</div>
           </div>
           <div>
             <div style={{...G,fontSize:10,fontWeight:700,color:T.inkMid,textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:7}}>Banco / Emissor</div>
-            <FI val={ncBanco} set={setNcBanco} ph="ex: Nubank, Itaú, Bradesco…"/>
+            <FI val={draftIssuer} set={setDraftIssuer} ph="ex: Nubank, Itaú, Bradesco…"/>
           </div>
           <div>
             <div style={{...G,fontSize:10,fontWeight:700,color:T.inkMid,textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:7}}>Nome do cartão</div>
-            <FI val={ncNome} set={setNcNome} ph="ex: Nubank Roxinho, Personnalité…"/>
+            <FI val={draftName} set={setDraftName} ph="ex: Nubank Roxinho, Personnalité…"/>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <div>
               <div style={{...G,fontSize:10,fontWeight:700,color:T.inkMid,textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:7}}>4 últimos dígitos</div>
-              <FI val={ncDig} set={setNcDig} ph="1234" type="number"/>
+              <FI val={draftLast4} set={setDraftLast4} ph="1234" type="number"/>
             </div>
             <div>
               <div style={{...G,fontSize:10,fontWeight:700,color:T.inkMid,textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:7}}>Bandeira</div>
               <div style={{display:"flex",flexDirection:"column",position:"relative"}}>
-                <select value={ncBandeira} onChange={e=>setNcBandeira(e.target.value)}
+                <select value={draftBrand} onChange={e=>setDraftBrand(e.target.value)}
                   style={{...G,padding:"9px 12px",border:`1px solid ${T.border}`,borderRadius:9,background:T.surface,fontSize:13,color:T.ink,cursor:"pointer",appearance:"none"}}>
-                  {["Visa","Mastercard","Elo","Amex","Hipercard","Visa Infinite","Mastercard Black"].map(b=><option key={b}>{b}</option>)}
+                  {CARD_BRAND_OPTIONS.map((b) => <option key={b}>{b}</option>)}
                 </select>
                 <ChevronDown size={13} color={T.inkLight} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",pointerEvents:"none"}}/>
               </div>
@@ -3062,18 +3134,18 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, d
               onFocusCapture={e=>e.currentTarget.style.borderColor=T.blue}
               onBlurCapture={e=>e.currentTarget.style.borderColor=T.border}>
               <span style={{...G,fontSize:13,fontWeight:700,color:T.inkLight,marginRight:4}}>R$</span>
-              <input value={ncLimite} onChange={e=>setNcLimite(e.target.value)} placeholder="0,00" type="text"
+              <input value={draftLimit} onChange={e=>setDraftLimit(e.target.value)} placeholder="0,00" type="text"
                 style={{...G,...NUM,flex:1,border:"none",outline:"none",background:"transparent",fontSize:13,color:T.ink}}/>
             </div>
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <div>
               <div style={{...G,fontSize:10,fontWeight:700,color:T.inkMid,textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:7}}>Dia do vencimento</div>
-              <FI val={ncVenc} set={setNcVenc} ph="ex: 10" type="number"/>
+              <FI val={draftDueDay} set={setDraftDueDay} ph="ex: 10" type="number"/>
             </div>
             <div>
               <div style={{...G,fontSize:10,fontWeight:700,color:T.inkMid,textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:7}}>Dia do fechamento</div>
-              <FI val={ncFecha} set={setNcFecha} ph="ex: 3" type="number"/>
+              <FI val={draftClosingDay} set={setDraftClosingDay} ph="ex: 3" type="number"/>
             </div>
           </div>
           <div style={{background:T.blueLight,border:`1px solid ${T.blue}22`,borderRadius:10,padding:"10px 14px"}}>
@@ -3083,19 +3155,26 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, d
           </div>
         </div>
         <div style={{padding:"14px 20px",borderTop:`1px solid ${T.border}`,flexShrink:0}}>
-          <button onClick={handleSaveCard} disabled={!canSave || creditCardsData.isSavingCard}
+          {creditCardsData.error && (
+            <div style={{...G,fontSize:12,color:T.red,background:T.redLight,border:`1px solid ${T.red}22`,borderRadius:10,padding:"10px 12px",marginBottom:12,lineHeight:1.5}}>
+              {creditCardsData.error}
+            </div>
+          )}
+          <button type="button" onClick={isEdit?handleUpdateCard:handleSaveCard} disabled={!canSave || saving}
             style={{...G,width:"100%",padding:"13px",borderRadius:10,border:"none",
-              background:ncSaved?T.green:(!canSave || creditCardsData.isSavingCard)?T.inkGhost:T.ink,
+              background:draftSuccess?T.green:(!canSave || saving)?T.inkGhost:T.ink,
               color:"#fff",fontSize:13,fontWeight:700,cursor:canSave?"pointer":"not-allowed",
               display:"flex",alignItems:"center",justifyContent:"center",gap:7,transition:"background 0.2s"}}>
-            {ncSaved?<><Check size={14}/> Cartão adicionado!</>:"Adicionar cartão"}
+            {draftSuccess
+              ? <><Check size={14}/> {isEdit?"Alterações salvas!":"Cartão adicionado!"}</>
+              : (isEdit?"Salvar alterações":"Adicionar cartão")}
           </button>
         </div>
       </>
     );
     const wrap=(ch)=>isMobile?(
       <div style={{position:"fixed",inset:0,zIndex:400,overflow:"hidden",display:"flex",flexDirection:"column",justifyContent:"flex-end"}}>
-        <div onClick={()=>setAddCardSheet(false)} style={{position:"absolute",inset:0,background:"rgba(15,23,35,0.5)"}}/>
+        <div onClick={clearCardFormState} style={{position:"absolute",inset:0,background:"rgba(15,23,35,0.5)"}}/>
         <div style={{position:"relative",background:T.surface,borderRadius:"24px 24px 0 0",maxHeight:"95vh",display:"flex",flexDirection:"column",animation:"sheetUp 0.5s cubic-bezier(0.32,0.72,0,1) both"}}>
           <div style={{display:"flex",justifyContent:"center",padding:"12px 0 4px"}}><div style={{width:36,height:4,borderRadius:99,background:T.inkGhost}}/></div>
           {ch}
@@ -3103,7 +3182,7 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, d
       </div>
     ):(
       <div style={{position:"fixed",inset:0,zIndex:400,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <div onClick={()=>setAddCardSheet(false)} style={{position:"absolute",inset:0,background:"rgba(15,23,35,0.38)"}}/>
+        <div onClick={clearCardFormState} style={{position:"absolute",inset:0,background:"rgba(15,23,35,0.38)"}}/>
         <div style={{position:"relative",width:460,maxHeight:"88vh",background:T.surface,borderRadius:18,boxShadow:T.dark,display:"flex",flexDirection:"column",overflow:"hidden"}}>{ch}</div>
       </div>
     );
@@ -3147,6 +3226,24 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, d
     const c = CARDS.find(x => x.id === id) || CARDS[0];
     setFaturaIdx(Math.max(0, (c?.faturas?.length || 1) - 1));
     setSearch(""); setFilterCat(null); setTab("fatura"); setVisibleGroups(8);
+  };
+
+  const canEditSelectedCard =
+    Boolean(shouldUseRealData && card && card.cardId != null && Number.isFinite(Number(card.cardId)));
+
+  const openEditCardSheet = () => {
+    if (!canEditSelectedCard || !card) return;
+    setAddCardSheet(false);
+    setDraftSuccess(false);
+    setEditingCardId(card.cardId);
+    setDraftIssuer(String(card.banco || ""));
+    setDraftName(String(card.nome || ""));
+    setDraftLast4(String(card.dig || "").replace(/\D/g, "").slice(-4));
+    setDraftBrand(matchBrandToSelectOption(card.bandeira || card.banco));
+    setDraftLimit(formatLimitInputFromNumber(card.limite));
+    setDraftDueDay(String(card.vencimento ?? ""));
+    setDraftClosingDay(card.fechamento != null ? String(card.fechamento) : "");
+    setEditCardSheet(true);
   };
 
   useEffect(() => { setVisibleGroups(8); }, [cardId, filterCat, search, faturaIdx]);
@@ -3314,13 +3411,13 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, d
             <div style={{ ...G, fontSize:14, color:T.inkMid, lineHeight:1.7, maxWidth:380 }}>
               Adicione seus cartões de crédito para rastrear faturas, parcelas e assinaturas automaticamente.
             </div>
-            <button type="button" onClick={() => setAddCardSheet(true)}
+            <button type="button" onClick={openAddCardSheet}
               style={{ ...G, background:T.ink, color:"#fff", border:"none", borderRadius:11, padding:"11px 26px", fontSize:13, fontWeight:700, cursor:"pointer", marginTop:4 }}>
               + Adicionar cartão
             </button>
           </div>
         </div>
-        {(addCardSheet) && <AddCardSheet/>}
+        <CardFormSheet/>
       </>
     );
   }
@@ -4516,18 +4613,25 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
       <style>{`
         @keyframes tabIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
       `}</style>
-      <ParcelaModal/><ExportModal/><AddCardSheet/>
+      <ParcelaModal/><ExportModal/><CardFormSheet/>
 
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,gap:8}}>
         <PageTitle sans="Meus" serif="Cartões"/>
-        <div style={{display:"flex",gap:6,flexShrink:0}}>
+        <div style={{display:"flex",gap:6,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end"}}>
           <button onClick={()=>onNovaItem&&onNovaItem(cardId)}
             title="Novo item"
             style={{...G,display:"flex",alignItems:"center",gap:5,background:T.green,border:"none",
               borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",flexShrink:0}}>
             <Plus size={13}/> <span>Item</span>
           </button>
-          <button onClick={()=>setAddCardSheet(true)}
+          {canEditSelectedCard && (
+            <button type="button" onClick={openEditCardSheet} title="Editar cartão selecionado"
+              style={{...G,display:"flex",alignItems:"center",gap:5,background:T.surface,border:`1px solid ${T.border}`,
+                borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:700,color:T.ink,cursor:"pointer",flexShrink:0}}>
+              <Pencil size={13}/> <span>Editar</span>
+            </button>
+          )}
+          <button onClick={openAddCardSheet} type="button"
             title="Novo cartão"
             style={{...G,display:"flex",alignItems:"center",gap:5,background:T.ink,border:"none",
               borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",flexShrink:0}}>
@@ -4544,7 +4648,7 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
               <CardVisual c={c} selected={c.id===cardId} size="sm"/>
             </div>
           ))}
-          <div onClick={()=>setAddCardSheet(true)}
+          <div onClick={openAddCardSheet}
             style={{width:130,height:Math.round(130/1.586),marginTop:8,borderRadius:12,flexShrink:0,
               border:`2px dashed ${T.border}`,display:"flex",flexDirection:"column",
               alignItems:"center",justifyContent:"center",gap:5,cursor:"pointer",background:T.surface}}>
@@ -4704,17 +4808,24 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
   return (
     <>
       <style>{`@keyframes drawerIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}`}</style>
-      <ParcelaModal/><ExportModal/><AddCardSheet/>
+      <ParcelaModal/><ExportModal/><CardFormSheet/>
 
       {/* Header */}
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 }}>
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20, flexWrap:"wrap", gap:10 }}>
         <PageTitle sans="Meus" serif="Cartões"/>
-        <div style={{ display:"flex", gap:10 }}>
-          <button onClick={()=>onNovaItem&&onNovaItem(cardId)}
+        <div style={{ display:"flex", gap:10, flexWrap:"wrap", justifyContent:"flex-end" }}>
+          <button type="button" onClick={()=>onNovaItem&&onNovaItem(cardId)}
             style={{...G,display:"flex",alignItems:"center",gap:6,background:T.green,border:"none",borderRadius:10,padding:"9px 16px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
             <Plus size={14}/> Novo item
           </button>
-          <button onClick={()=>setAddCardSheet(true)}
+          {canEditSelectedCard && (
+            <button type="button" onClick={openEditCardSheet} title="Editar cartão selecionado"
+              style={{...G,display:"flex",alignItems:"center",gap:6,background:T.surface,border:`1px solid ${T.border}`,
+                borderRadius:10,padding:"9px 16px",fontSize:13,fontWeight:700,color:T.ink,cursor:"pointer"}}>
+              <Pencil size={14}/> Editar
+            </button>
+          )}
+          <button type="button" onClick={openAddCardSheet}
             style={{...G,display:"flex",alignItems:"center",gap:6,background:T.ink,border:"none",borderRadius:10,padding:"9px 16px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
             <CreditCard size={14}/> + Cartão
           </button>
@@ -4725,7 +4836,7 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
       <div style={{ marginBottom:16 }}>
         <div style={{ display:"flex", gap:14, overflowX:"auto", paddingBottom:8, paddingTop:6, scrollbarWidth:"none" }}>
           {CARDS.map(c=><CardVisual key={c.id} c={c} selected={c.id===cardId} size="md"/>)}
-          <div onClick={()=>setAddCardSheet(true)} style={{ width:200, height:Math.round(200/1.586), borderRadius:16, flexShrink:0, border:`2px dashed ${T.border}`, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6, cursor:"pointer", background:T.surface }}>
+          <div onClick={openAddCardSheet} style={{ width:200, height:Math.round(200/1.586), borderRadius:16, flexShrink:0, border:`2px dashed ${T.border}`, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6, cursor:"pointer", background:T.surface }}>
             <Plus size={22} color={T.inkLight}/>
             <span style={{...G,fontSize:11,color:T.inkMid}}>Novo cartão</span>
           </div>
