@@ -49,6 +49,188 @@ function monthFromApiString(value) {
   return { year: Number(match[1]), month: Number(match[2]) };
 }
 
+function shiftYearMonth(year, month, delta) {
+  const d = new Date(year, month - 1 + delta, 1);
+  return { year: d.getFullYear(), month: d.getMonth() + 1 };
+}
+
+function startOfLocalDay(ref) {
+  return new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+}
+
+function closingDayForInvoiceAnchor(card) {
+  const c = card?.closing_day;
+  if (c != null && Number.isFinite(Number(c))) return Number(c);
+  const d = card?.due_day;
+  if (d != null && Number.isFinite(Number(d))) return Number(d);
+  return 1;
+}
+
+function daysInCalendarMonth(year, month) {
+  return new Date(year, month, 0).getDate();
+}
+
+/** Ano/mês da fatura aberta pelo calendário de fechamento (dia no `closingDayRaw`). */
+function yearMonthOfOpenInvoiceByClosingDay(refDate, closingDayRaw) {
+  const closingDay = Math.min(Math.max(1, Number(closingDayRaw) || 1), 31);
+  const ty = refDate.getFullYear();
+  const tm0 = refDate.getMonth();
+  const dim = daysInCalendarMonth(ty, tm0 + 1);
+  const closeThis = new Date(ty, tm0, Math.min(closingDay, dim));
+  const today0 = startOfLocalDay(refDate);
+
+  let result;
+  if (today0 > startOfLocalDay(closeThis)) {
+    let ny = ty;
+    let nm0 = tm0 + 1;
+    if (nm0 > 11) {
+      nm0 = 0;
+      ny += 1;
+    }
+    const dimNext = daysInCalendarMonth(ny, nm0 + 1);
+    const closeNext = new Date(ny, nm0, Math.min(closingDay, dimNext));
+    result = { year: closeNext.getFullYear(), month: closeNext.getMonth() + 1 };
+  } else {
+    result = { year: closeThis.getFullYear(), month: closeThis.getMonth() + 1 };
+  }
+  return result;
+}
+
+function isInvoiceClosingBeforeToday(invoice, today = new Date()) {
+  if (!invoice?.closing_date) return false;
+  const close = startOfLocalDay(new Date(`${invoice.closing_date}T12:00:00`));
+  return close < startOfLocalDay(today);
+}
+
+/**
+ * Busca a fatura corrente: inicia no mês de fechamento esperado; avança só com
+ * `paid` ou `open` com fechamento já passado. `closed` não avança (fatura em aberto para pagamento).
+ */
+async function fetchOpenCreditCardInvoiceForList(cardId, organizationId, card) {
+  const now = new Date();
+  const start = yearMonthOfOpenInvoiceByClosingDay(now, closingDayForInvoiceAnchor(card));
+  let y = start.year;
+  let m = start.month;
+  let lastOk = null;
+
+  for (let attempt = 0; attempt < 14; attempt += 1) {
+    try {
+      const inv = await getCreditCardInvoice(cardId, y, m, organizationId);
+      lastOk = inv;
+
+      if (inv.status === "paid") {
+        const n = shiftYearMonth(y, m, 1);
+        y = n.year;
+        m = n.month;
+        continue;
+      }
+
+      if (inv.status === "open" && isInvoiceClosingBeforeToday(inv, now)) {
+        const n = shiftYearMonth(y, m, 1);
+        y = n.year;
+        m = n.month;
+        continue;
+      }
+
+      return inv;
+    } catch {
+      if (lastOk && lastOk.status === "open" && isInvoiceClosingBeforeToday(lastOk, now)) {
+        return lastOk;
+      }
+      const n = shiftYearMonth(y, m, 1);
+      y = n.year;
+      m = n.month;
+    }
+  }
+
+  return lastOk;
+}
+
+function syntheticInvoiceFromBreakdownRow(row) {
+  return {
+    month: `${row.year}-${String(row.month).padStart(2, "0")}`,
+    due_date: "",
+    total_amount: row.total_amount,
+    status: "open",
+    items: [],
+    closing_date: null,
+    days_until_due: 0,
+    is_overdue: false,
+    paid_date: null,
+    previous_month_total: null,
+    month_over_month_change: null,
+    limit_usage_percent: row.limit_usage_percent ?? null,
+    items_count: 0,
+    category_breakdown: [],
+  };
+}
+
+/** Ciclo `open` com fechamento passado: tenta o mês seguinte sequencial (não o 1º mês do breakdown). */
+async function resolveStaleOpenInvoiceWithPlanning(
+  cardId,
+  organizationId,
+  invoice,
+  futureCommitments,
+) {
+  if (
+    !invoice ||
+    invoice.status !== "open" ||
+    !isInvoiceClosingBeforeToday(invoice)
+  ) {
+    return invoice;
+  }
+  const ref = monthFromApiString(invoice?.month);
+  if (!ref) return invoice;
+  const nextYm = shiftYearMonth(ref.year, ref.month, 1);
+  try {
+    const nextInv = await getCreditCardInvoice(
+      cardId,
+      nextYm.year,
+      nextYm.month,
+      organizationId,
+    );
+    return nextInv;
+  } catch {
+    const breakdown = futureCommitments?.monthly_breakdown || [];
+    const row = breakdown.find(
+      (r) => r.year === nextYm.year && r.month === nextYm.month,
+    );
+    return syntheticInvoiceFromBreakdownRow({
+      year: nextYm.year,
+      month: nextYm.month,
+      total_amount: row?.total_amount ?? 0,
+      limit_usage_percent: row?.limit_usage_percent ?? null,
+    });
+  }
+}
+
+function appendFutureCommitmentMonthsToFaturas(faturas, futureCommitments, dueDay) {
+  const byId = new Set((faturas || []).map((f) => f.id));
+  const dueLabel = Number.isFinite(Number(dueDay)) ? `dia ${dueDay}` : "—";
+  const extra = (futureCommitments?.monthly_breakdown || [])
+    .filter((item) => !byId.has(`${item.year}-${item.month}`))
+    .map((item) => ({
+      id: `${item.year}-${item.month}`,
+      mes: formatInvoiceLabel(item.year, item.month),
+      val: item.total_amount,
+      pago: false,
+      venc: dueLabel,
+      atual: false,
+      year: item.year,
+      month: item.month,
+    }));
+  return [...(faturas || []), ...extra].sort(
+    (a, b) => a.year - b.year || a.month - b.month,
+  );
+}
+
+/** Índice inicial do seletor de faturas na linha marcada `atual`. */
+export function defaultFaturaIndexForCard(faturas) {
+  if (!faturas?.length) return 0;
+  const atualIdx = faturas.findIndex((f) => f.atual);
+  return atualIdx >= 0 ? atualIdx : faturas.length - 1;
+}
+
 /** Gradientes de referência (alinhados ao mock CARTOES_DATA na UI) */
 const CARD_GRADIENT_PRESETS = [
   { cor1: "#6016A8", cor2: "#8B11D4", corChip: "#A855F7" },
@@ -231,7 +413,9 @@ function mapInvoiceHistoryToUi(card, history, currentInvoice) {
     mes: formatInvoiceLabel(currentMonth.year, currentMonth.month),
     val: currentInvoice.total_amount,
     pago: currentInvoice.status === "paid",
-    venc: formatLongDate(currentInvoice.due_date),
+    venc: currentInvoice.due_date
+      ? formatLongDate(currentInvoice.due_date)
+      : `dia ${card.due_day}`,
     atual: true,
     year: currentMonth.year,
     month: currentMonth.month,
@@ -297,7 +481,11 @@ function buildPlanningMonths(futureCommitments) {
 export function mapCreditCardToUi({ card, currentInvoice, history, futureCommitments, consolidatedCommitments = null }) {
   const colors = resolveCardColors(card);
   const itens = (currentInvoice?.items || []).map(mapInvoiceItemToUi);
-  const faturas = mapInvoiceHistoryToUi(card, history, currentInvoice);
+  const faturas = appendFutureCommitmentMonthsToFaturas(
+    mapInvoiceHistoryToUi(card, history, currentInvoice),
+    futureCommitments,
+    card.due_day,
+  );
   const parcelasAtivas = aggregateInstallments(currentInvoice);
 
   return {
@@ -416,11 +604,6 @@ export async function listCreditCardsForUi(organizationId) {
   }
 
   const detailed = await Promise.all(cards.map(async (card) => {
-    const now = new Date();
-    const currentMonth = {
-      year: now.getFullYear(),
-      month: now.getMonth() + 1,
-    };
     let history = {
       card_id: card.id,
       card_name: card.description || `${card.brand} •• ${card.last4}`,
@@ -461,9 +644,39 @@ export async function listCreditCardsForUi(organizationId) {
 
     let currentInvoice = null;
     try {
-      currentInvoice = await getCreditCardInvoice(card.id, currentMonth.year, currentMonth.month, organizationId);
+      currentInvoice = await fetchOpenCreditCardInvoiceForList(
+        card.id,
+        organizationId,
+        card,
+      );
     } catch {
       currentInvoice = null;
+    }
+
+    if (currentInvoice) {
+      currentInvoice = await resolveStaleOpenInvoiceWithPlanning(
+        card.id,
+        organizationId,
+        currentInvoice,
+        futureCommitments,
+      );
+    }
+
+    if (!currentInvoice) {
+      const anchor = yearMonthOfOpenInvoiceByClosingDay(
+        new Date(),
+        closingDayForInvoiceAnchor(card),
+      );
+      const breakdown = futureCommitments?.monthly_breakdown || [];
+      const row = breakdown.find(
+        (r) => r.year === anchor.year && r.month === anchor.month,
+      );
+      currentInvoice = syntheticInvoiceFromBreakdownRow({
+        year: anchor.year,
+        month: anchor.month,
+        total_amount: row?.total_amount ?? 0,
+        limit_usage_percent: row?.limit_usage_percent ?? null,
+      });
     }
 
     return mapCreditCardToUi({

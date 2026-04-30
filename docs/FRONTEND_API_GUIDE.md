@@ -517,8 +517,8 @@ export interface CreateTransactionRequest {
   value: number; // Decimal como number
   payment_method: string;
   date: string; // ISO datetime string (YYYY-MM-DDTHH:MM or YYYY-MM-DDTHH:MM:SS) - REQUIRED, supports minute granularity
-  // Campos opcionais para cartão de crédito
-  card_last4?: string | null;
+  // Credit card (expense + payment_method credit_card): card_id is required; modality required with card_id
+  card_id?: number;
   modality?: 'cash' | 'installment' | null;
   installments_count?: number | null;
   // Campo legado - mantido para compatibilidade durante migração
@@ -2133,8 +2133,9 @@ await createTransaction({
 });
 ```
 
-**Exemplo - Transação com Cartão à Vista:**
+**Exemplo - Transação com Cartão à Vista (`card_id` obrigatório para despesa em cartão):**
 ```typescript
+// Resolve o cartão com GET /v1/credit-cards?organization_id=...
 await createTransaction({
   organization_id: "123e4567-e89b-12d3-a456-426614174000",
   type: "expense",
@@ -2145,7 +2146,7 @@ await createTransaction({
   value: 500.00,
   payment_method: "Cartão de Crédito",
   date: "2025-01-15T15:45", // datetime com hora
-  card_last4: "1234",
+  card_id: 12,
   modality: "cash",
 });
 ```
@@ -2162,9 +2163,25 @@ await createTransaction({
   value: 2000.00,
   payment_method: "Cartão de Crédito",
   date: "2025-01-15T10:00", // datetime com hora
-  card_last4: "1234",
+  card_id: 12,
   modality: "installment",
   installments_count: 10,
+});
+```
+
+**Exemplo - Cartão por `card_id` (cria `credit_card_charges` + parcelas):**
+```typescript
+// Obtenha card_id de GET /v1/credit-cards?organization_id=...
+await createTransaction({
+  organization_id: "123e4567-e89b-12d3-a456-426614174000",
+  type: "expense",
+  description: "IOF",
+  tag_ids: ["..."],
+  value: 4.05,
+  payment_method: "credit_card",
+  date: "2026-04-08T12:00:00",
+  card_id: 3,
+  modality: "cash",
 });
 ```
 
@@ -2180,6 +2197,9 @@ await createTransaction({
 - `tag_ids` é **obrigatório** e deve conter pelo menos uma tag do tipo "categoria" (ou outro tipo marcado como `is_required: true`)
 - Cada tipo de tag tem um limite máximo por transação (`max_per_transaction`)
 - O campo `category` é legado e opcional durante a migração, mas será removido no futuro
+- **Despesa (`type: expense`) com `payment_method` normalizado `credit_card`:** é **obrigatório** enviar **`card_id`** (obtenha com `GET /v1/credit-cards?organization_id=...`) e **`modality`** (`cash` | `installment`). Com `installment`, envie **`installments_count` ≥ 1**. **Não** envie `card_last4` no POST (erro `400` se enviado). Esse fluxo grava `transactions`, `credit_card_charges` e `credit_card_installments` (resposta com `credit_card_charge` e `installment_info` preenchidos).
+- **Receita (`income`)** ou outro `payment_method`: não use `card_id` / `modality` para cobrança de cartão.
+- **Sem `card_id` em despesa no cartão:** a API responde **`400`** com mensagem indicando que `card_id` é obrigatório.
 
 **Response (201):**
 ```typescript
@@ -2246,7 +2266,8 @@ Lista transações com filtros opcionais e paginação. Retorna transações pag
 
 **Comportamento com filtro de data (`date_start`/`date_end`):**
 - **Transações normais** (pix, débito, etc.): filtradas por `transaction.date` (data da compra)
-- **Transações de cartão de crédito**: incluídas quando **ao menos uma parcela** tem `due_date` no range. A transação original é retornada com `installment_info` contendo as parcelas cujo vencimento está no período. Use `installment_info[].amount` para exibir o valor da parcela e `installment_info[].due_date` para ordenação/exibição.
+- **Transações de cartão de crédito com cobrança persistida** (`credit_card_charges`): incluídas quando **ao menos uma parcela** tem `due_date` no range. A transação original é retornada com `installment_info` contendo as parcelas cujo vencimento está no período. Use `installment_info[].amount` para exibir o valor da parcela e `installment_info[].due_date` para ordenação/exibição.
+- **Cartão de crédito sem cobrança** (ex.: dados legados sem linha em `credit_card_charges`): tratadas como as demais — filtro por `transaction.date` no período, com `credit_card_charge` e `installment_info` tipicamente `null`.
 
 **⚠️ Breaking Change:** A estrutura de resposta mudou de `Transaction[]` para `{ data: Transaction[], pagination: {...} }`. O frontend precisa atualizar para acessar `response.data` em vez de `response` diretamente.
 
@@ -2849,10 +2870,10 @@ await updateTransaction(123, orgId, {
 
 A API aceita variações (ex: "PIX", "Cartão de Crédito", "Dinheiro") e normaliza para os valores canônicos.
 
-**Campos de Cartão de Crédito:**
+**Campos de Cartão de Crédito (PATCH):**
 - Os campos `card_id`, `card_last4`, `modality` e `installments_count` só devem ser enviados quando `payment_method` for `credit_card` (ou "Cartão de Crédito")
-- Se `card_id` for fornecido, ele terá prioridade sobre `card_last4`
-- Se `card_last4` for fornecido mas `card_id` não, o sistema buscará o cartão correspondente na organização
+- Para **criação** (POST `/v1/transactions`), despesa em cartão exige **`card_id`**; `card_last4` no POST é rejeitado.
+- No **PATCH**, `card_id` ou `card_last4` podem ser usados para associar/atualizar cobrança, conforme regras do serviço
 - Ao alterar `modality` de "installment" para "cash", as parcelas existentes serão removidas
 - Ao alterar `modality` de "cash" para "installment", novas parcelas serão criadas baseado no `value` atual
 - Ao alterar `installments_count` mantendo "installment", as parcelas antigas são removidas e novas são criadas
@@ -2865,7 +2886,7 @@ A API aceita variações (ex: "PIX", "Cartão de Crédito", "Dinheiro") e normal
 - `500`: Erro interno do servidor
 
 **Erros de Cartão de Crédito:**
-- `422`: Cartão não encontrado (se `card_id` ou `card_last4` inválido)
+- `422`: Cartão não encontrado (se `card_id` ou `card_last4` inválido no PATCH / fluxos de atualização)
 - `422`: `installments_count` obrigatório quando `modality` é "installment"
 - `422`: `modality` deve ser "cash" ou "installment"
 - `422`: Campos de cartão só podem ser usados com `payment_method: "credit_card"` (ou "Cartão de Crédito")

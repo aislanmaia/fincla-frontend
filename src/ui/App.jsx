@@ -63,6 +63,7 @@ import { getTransaction } from "../api/transactions";
 import {
   buildCreateCreditCardPayload,
   buildUpdateCreditCardPayload,
+  defaultFaturaIndexForCard,
   fetchPastInvoiceItemsForUi,
   formatCreditCardsApiError,
   mapCreditCardToModalPickerRow,
@@ -3195,7 +3196,7 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, d
     if (nextCard.id !== cardId) {
       setCardId(nextCard.id);
     }
-    setFaturaIdx(Math.max(0, (nextCard?.faturas?.length || 1) - 1));
+    setFaturaIdx(defaultFaturaIndexForCard(nextCard?.faturas || []));
   }, [CARDS, cardId]);
 
   const card =
@@ -3224,7 +3225,7 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, d
   const switchCard = (id) => {
     setCardId(id);
     const c = CARDS.find(x => x.id === id) || CARDS[0];
-    setFaturaIdx(Math.max(0, (c?.faturas?.length || 1) - 1));
+    setFaturaIdx(defaultFaturaIndexForCard(c?.faturas || []));
     setSearch(""); setFilterCat(null); setTab("fatura"); setVisibleGroups(8);
   };
 
@@ -3255,13 +3256,15 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, d
   useEffect(() => {
     if (isAtual || !shouldUseRealData || !card || !fatura?.year || !fatura?.month || !organizationId) {
       setPastItens([]);
+      setPastItensLoading(false);
       return;
     }
     let cancelled = false;
     setPastItensLoading(true);
     fetchPastInvoiceItemsForUi(card.cardId, fatura.year, fatura.month, organizationId)
-      .then((items) => { if (!cancelled) { setPastItens(items); setPastItensLoading(false); } })
-      .catch(() => { if (!cancelled) { setPastItens([]); setPastItensLoading(false); } });
+      .then((items) => { if (!cancelled) setPastItens(items); })
+      .catch(() => { if (!cancelled) setPastItens([]); })
+      .finally(() => { if (!cancelled) setPastItensLoading(false); });
     return () => { cancelled = true; };
   }, [isAtual, shouldUseRealData, card?.cardId, fatura?.year, fatura?.month, organizationId]);
 
@@ -4733,10 +4736,11 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
                   <span style={{...G,fontSize:12,fontWeight:700,color:T.ink}}>{displayItens.length>0?`${filtered.length} de ${displayItens.length} lançamentos`:`Fatura ${fatura?.mes} · ${fatura?.pago?"Paga":"Pendente"}`}</span>
                   {filtered.length>0&&<button onClick={()=>setExpandedDate(expandedDate===null?grouped[0]?.[0]:null)} style={{...G,fontSize:11,color:T.blue,background:"none",border:"none",cursor:"pointer"}}>{expandedDate===null?"Recolher tudo":"Expandir tudo"}</button>}
                 </div>
-                {pastItensLoading
+                {pastItensLoading && !isAtual
                   ?<div style={{textAlign:"center",padding:"36px 20px"}}><div style={{...G,fontSize:13,color:T.inkLight}}>Carregando lançamentos…</div></div>
                   :grouped.length>0?pagedGroups.map(([date,items])=><DateGroup key={date} date={date} items={items}/>)
-                  :!isAtual&&shouldUseRealData?<div style={{textAlign:"center",padding:"36px 20px"}}><div style={{fontSize:26,marginBottom:8}}>📭</div><div style={{...G,fontSize:13,color:T.inkMid}}>Nenhum lançamento encontrado</div><div style={{...G,fontSize:11,color:T.inkLight,marginTop:4}}>Fatura {fatura?.mes} · {fmtBRL((fatura?.val||0))}</div></div>
+                  :displayItens.length>0&&filtered.length===0?<div style={{textAlign:"center",padding:"36px 20px"}}><div style={{fontSize:26,marginBottom:8}}>🔍</div><div style={{...G,fontSize:13,color:T.inkMid}}>Nenhum resultado</div></div>
+                  :shouldUseRealData?<div style={{textAlign:"center",padding:"36px 20px"}}><div style={{fontSize:26,marginBottom:8}}>📭</div><div style={{...G,fontSize:13,color:T.inkMid}}>Nenhum lançamento encontrado</div><div style={{...G,fontSize:11,color:T.inkLight,marginTop:4}}>Fatura {fatura?.mes} · {fmtBRL((fatura?.val||0))}</div></div>
                   :<div style={{textAlign:"center",padding:"36px 20px"}}><div style={{fontSize:26,marginBottom:8}}>🔍</div><div style={{...G,fontSize:13,color:T.inkMid}}>Nenhum resultado</div></div>}
                 {filtered.length>0&&hasMoreGroups&&(
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 20px",borderTop:`1px solid ${T.border}`}}>
@@ -4902,10 +4906,11 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
                   <span style={{...G,fontSize:12,fontWeight:700,color:T.ink}}>{displayItens.length>0?`${filtered.length} de ${displayItens.length} lançamentos`:`Fatura ${fatura?.mes} · ${fatura?.pago?"Paga":"Pendente"}`}</span>
                   {filtered.length>0&&<button onClick={()=>setExpandedDate(expandedDate===null?grouped[0]?.[0]:null)} style={{...G,fontSize:11,color:T.blue,background:"none",border:"none",cursor:"pointer"}}>{expandedDate===null?"Recolher tudo":"Expandir tudo"}</button>}
                 </div>
-                {pastItensLoading
+                {pastItensLoading && !isAtual
                   ?<div style={{textAlign:"center",padding:"36px 20px"}}><div style={{...G,fontSize:13,color:T.inkLight}}>Carregando lançamentos…</div></div>
                   :grouped.length>0?pagedGroups.map(([date,items])=><DateGroup key={date} date={date} items={items}/>)
-                  :!isAtual&&shouldUseRealData?<div style={{textAlign:"center",padding:"36px 20px"}}><div style={{fontSize:26,marginBottom:8}}>📭</div><div style={{...G,fontSize:13,color:T.inkMid}}>Nenhum lançamento encontrado</div><div style={{...G,fontSize:11,color:T.inkLight,marginTop:4}}>Fatura {fatura?.mes} · {fmtBRL((fatura?.val||0))}</div></div>
+                  :displayItens.length>0&&filtered.length===0?<div style={{textAlign:"center",padding:"36px 20px"}}><div style={{fontSize:26,marginBottom:8}}>🔍</div><div style={{...G,fontSize:13,color:T.inkMid}}>Nenhum resultado</div></div>
+                  :shouldUseRealData?<div style={{textAlign:"center",padding:"36px 20px"}}><div style={{fontSize:26,marginBottom:8}}>📭</div><div style={{...G,fontSize:13,color:T.inkMid}}>Nenhum lançamento encontrado</div><div style={{...G,fontSize:11,color:T.inkLight,marginTop:4}}>Fatura {fatura?.mes} · {fmtBRL((fatura?.val||0))}</div></div>
                   :<div style={{textAlign:"center",padding:"36px 20px"}}><div style={{fontSize:26,marginBottom:8}}>🔍</div><div style={{...G,fontSize:13,color:T.inkMid}}>Nenhum resultado</div></div>}
                 {filtered.length>0&&hasMoreGroups&&(
                   <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"13px 20px",borderTop:`1px solid ${T.border}`}}>
