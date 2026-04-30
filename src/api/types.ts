@@ -350,8 +350,8 @@ export interface UpdateTransactionRequest {
   date: string; // REQUIRED - ISO datetime string
   recurring?: boolean;
   category?: string; // Campo legado
+  /** Obrigatório para associar cobrança de cartão; não use last4 no lugar (ver guia da API). */
   card_id?: number;
-  card_last4?: string;
   modality?: 'cash' | 'installment';
   installments_count?: number;
 }

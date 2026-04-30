@@ -774,6 +774,7 @@ export function buildCreateTransactionPayload({
 
 /**
  * Corpo para `PUT /transactions/:id` (sem `organization_id` no body).
+ * Despesa em cartão: envie `card_id` (como no POST); não envie `card_last4` — não basta para cobrança/parcelas.
  */
 export function buildUpdateTransactionPayload({
   tipo,
@@ -784,7 +785,6 @@ export function buildUpdateTransactionPayload({
   detailTagIds = null,
   dateIso,
   cardId = null,
-  cardLast4 = null,
   installmentsCount = null,
   modality = null,
   recurring = false,
@@ -805,10 +805,13 @@ export function buildUpdateTransactionPayload({
   if (cardId != null && Number.isFinite(Number(cardId))) {
     payload.card_id = Number(cardId);
   }
-  if (cardLast4) payload.card_last4 = cardLast4;
   if (modality) payload.modality = modality;
-  if (installmentsCount != null && installmentsCount > 1) {
-    payload.installments_count = installmentsCount;
+  if (
+    modality === "installment" &&
+    installmentsCount != null &&
+    Number(installmentsCount) >= 1
+  ) {
+    payload.installments_count = Number(installmentsCount);
   }
   return payload;
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   buildCreateTransactionPayload,
+  buildUpdateTransactionPayload,
   buildTransactionsSummaryQuery,
   buildTransactionsQuery,
   mapApiTransactionToUi,
@@ -275,6 +276,28 @@ describe("transactionsAdapter", () => {
     expect(inst).toMatchObject({
       modality: "installment",
       installments_count: 3,
+    });
+  });
+
+  it("PUT update: não inclui card_last4; cartão usa card_id e parcelas como no POST", () => {
+    const body = buildUpdateTransactionPayload({
+      tipo: "despesa",
+      description: "Ajuste",
+      value: 200,
+      paymentMethodKey: "credito",
+      categoryTagId: "cat-uuid",
+      dateIso: "2026-04-10T12:00:00",
+      cardId: 5,
+      modality: "installment",
+      installmentsCount: 6,
+      recurring: false,
+    });
+    expect(body).not.toHaveProperty("card_last4");
+    expect(body).toMatchObject({
+      card_id: 5,
+      modality: "installment",
+      installments_count: 6,
+      payment_method: "credit_card",
     });
   });
 });
