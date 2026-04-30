@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  buildCreateTransactionPayload,
   buildTransactionsSummaryQuery,
   buildTransactionsQuery,
   mapApiTransactionToUi,
@@ -235,6 +236,45 @@ describe("transactionsAdapter", () => {
       payment_method: "Pix",
       date_start: "2026-03-01",
       date_end: "2026-03-31",
+    });
+  });
+
+  it("POST create: nunca inclui card_last4; parcelado envia installments_count", () => {
+    const cash = buildCreateTransactionPayload({
+      organizationId: "org-1",
+      tipo: "despesa",
+      description: "Loja",
+      value: 100,
+      paymentMethodKey: "credito",
+      categoryTagId: "cat-uuid",
+      dateIso: "2026-04-01T12:00:00",
+      cardId: 3,
+      modality: "cash",
+    });
+    expect(cash).not.toHaveProperty("card_last4");
+    expect(cash).toMatchObject({
+      card_id: 3,
+      modality: "cash",
+      payment_method: "credit_card",
+    });
+    expect(cash).not.toHaveProperty("installments_count");
+
+    const inst = buildCreateTransactionPayload({
+      organizationId: "org-1",
+      tipo: "despesa",
+      description: "Parcelado",
+      value: 600,
+      paymentMethodKey: "credito",
+      categoryTagId: "cat-uuid",
+      dateIso: "2026-04-01T12:00:00",
+      cardId: 3,
+      modality: "installment",
+      installmentsCount: 3,
+    });
+    expect(inst).not.toHaveProperty("card_last4");
+    expect(inst).toMatchObject({
+      modality: "installment",
+      installments_count: 3,
     });
   });
 });

@@ -334,7 +334,6 @@ export interface CreateTransactionRequest {
   value: number;
   payment_method: string;
   date: string; // ISO datetime string (YYYY-MM-DDTHH:MM or YYYY-MM-DDTHH:MM:SS)
-  card_last4?: string | null;
   card_id?: number | null;
   modality?: 'cash' | 'installment' | null;
   installments_count?: number | null;

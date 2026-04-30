@@ -744,7 +744,6 @@ export function buildCreateTransactionPayload({
   detailTagIds = null,
   dateIso,
   cardId = null,
-  cardLast4 = null,
   installmentsCount = null,
   modality = null,
 }) {
@@ -761,10 +760,14 @@ export function buildCreateTransactionPayload({
   if (cardId != null && Number.isFinite(Number(cardId))) {
     payload.card_id = Number(cardId);
   }
-  if (cardLast4) payload.card_last4 = cardLast4;
+  // POST /transactions: não enviar card_last4 (400 se enviado); use card_id.
   if (modality) payload.modality = modality;
-  if (installmentsCount != null && installmentsCount > 1) {
-    payload.installments_count = installmentsCount;
+  if (
+    modality === "installment" &&
+    installmentsCount != null &&
+    Number(installmentsCount) >= 1
+  ) {
+    payload.installments_count = Number(installmentsCount);
   }
   return payload;
 }
