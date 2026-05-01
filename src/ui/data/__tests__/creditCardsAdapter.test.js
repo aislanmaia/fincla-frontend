@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildCreateCreditCardPayload,
   buildUpdateCreditCardPayload,
+  faturaIdxAfterCardsRefresh,
+  faturaIdxMatchingInvoiceRef,
   mapCreditCardToUi,
 } from "../creditCardsAdapter.js";
 
@@ -238,5 +240,34 @@ describe("creditCardsAdapter", () => {
       due_day: 15,
       closing_day: 2,
     });
+  });
+});
+
+describe("faturaIdxMatchingInvoiceRef / faturaIdxAfterCardsRefresh", () => {
+  const faturas = [
+    { id: "inv-3", year: 2026, month: 3, atual: false },
+    { id: "inv-4", year: 2026, month: 4, atual: true },
+  ];
+
+  it("encontra índice por ano/mês", () => {
+    expect(faturaIdxMatchingInvoiceRef(faturas, { year: 2026, month: 3 })).toBe(
+      0,
+    );
+  });
+
+  it("encontra índice por id", () => {
+    expect(faturaIdxMatchingInvoiceRef(faturas, { id: "inv-4" })).toBe(1);
+  });
+
+  it("usa fatura atual quando não há correspondência", () => {
+    expect(
+      faturaIdxMatchingInvoiceRef(faturas, { year: 1999, month: 1 }),
+    ).toBe(1);
+  });
+
+  it("após refresh mantém competência quando o cartão é o mesmo", () => {
+    const nextCard = { id: "card-a", faturas: [...faturas] };
+    const prevCards = [{ id: "card-a", faturas: [...faturas] }];
+    expect(faturaIdxAfterCardsRefresh(nextCard, prevCards, 0)).toBe(0);
   });
 });

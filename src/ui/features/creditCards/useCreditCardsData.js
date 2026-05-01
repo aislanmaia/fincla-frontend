@@ -22,7 +22,6 @@ const EMPTY_STATE = {
 export function useCreditCardsData({
   organizationId,
   enabled = true,
-  /** Incrementado ao salvar/editar transações — refaz GET dos cartões e faturas. */
   transactionsRefreshToken = 0,
 }) {
   const [state, setState] = useState(() => ({

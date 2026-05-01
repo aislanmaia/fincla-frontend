@@ -231,6 +231,34 @@ export function defaultFaturaIndexForCard(faturas) {
   return atualIdx >= 0 ? atualIdx : faturas.length - 1;
 }
 
+export function faturaIdxMatchingInvoiceRef(faturasList, invoiceRef) {
+  const list = Array.isArray(faturasList) ? faturasList : [];
+  const fallback = defaultFaturaIndexForCard(list);
+  if (!invoiceRef || list.length === 0) return fallback;
+  if (invoiceRef.year != null && invoiceRef.month != null) {
+    const i = list.findIndex(
+      (f) =>
+        Number(f.year) === Number(invoiceRef.year) &&
+        Number(f.month) === Number(invoiceRef.month),
+    );
+    if (i >= 0) return i;
+  }
+  if (invoiceRef.id != null && invoiceRef.id !== "") {
+    const i = list.findIndex((f) => f.id === invoiceRef.id);
+    if (i >= 0) return i;
+  }
+  return fallback;
+}
+
+export function faturaIdxAfterCardsRefresh(nextCard, prevCards, prevFaturaIdx) {
+  const faturasList = nextCard?.faturas || [];
+  const prevCard = prevCards?.find((c) => c.id === nextCard?.id);
+  const prevInvoice = prevCard?.faturas?.[prevFaturaIdx];
+  return prevInvoice
+    ? faturaIdxMatchingInvoiceRef(faturasList, prevInvoice)
+    : defaultFaturaIndexForCard(faturasList);
+}
+
 /** Gradientes de referência (alinhados ao mock CARTOES_DATA na UI) */
 const CARD_GRADIENT_PRESETS = [
   { cor1: "#6016A8", cor2: "#8B11D4", corChip: "#A855F7" },

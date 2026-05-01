@@ -64,6 +64,8 @@ import {
   buildCreateCreditCardPayload,
   buildUpdateCreditCardPayload,
   defaultFaturaIndexForCard,
+  faturaIdxAfterCardsRefresh,
+  faturaIdxMatchingInvoiceRef,
   fetchPastInvoiceItemsForUi,
   formatCreditCardsApiError,
   mapCreditCardToModalPickerRow,
@@ -3055,8 +3057,6 @@ function formatLimitInputFromNumber(value) {
   return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-
-/* ─── CARTÕES PAGE ───────────────────────────────────────── */
 /* ─── CARTÕES PAGE ───────────────────────────────────────── */
 const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, dataMode = "mock", organizationId = null, transactionsRefreshToken = 0 }) => {
   const urlSearch = useSearch({ strict: false });
@@ -3079,6 +3079,9 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, d
   const [cardId,        setCardId]        = useState(() => (cardsProp && cardsProp.length > 0 ? cardsProp[0].id : "nubank"));
   const [tab,           setTab]           = useState("fatura");
   const [faturaIdx,     setFaturaIdx]     = useState(5);
+  const faturaIdxRef = useRef(faturaIdx);
+  const prevCardsSnapshotRef = useRef(null);
+  faturaIdxRef.current = faturaIdx;
   const [search,        setSearch]        = useState("");
   const [filterCat,     setFilterCat]     = useState(null);
   const [expandedDate,  setExpandedDate]  = useState(null);
@@ -3309,13 +3312,29 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, d
     return wrap(inner);
   };
   useEffect(() => {
-    if (CARDS.length === 0) return;
+    if (CARDS.length === 0) {
+      prevCardsSnapshotRef.current = CARDS;
+      return;
+    }
     const nextCard = CARDS.find((item) => item.id === cardId) || CARDS[0];
     if (!nextCard) return;
-    if (nextCard.id !== cardId) {
-      setCardId(nextCard.id);
+
+    const fixCardId = nextCard.id !== cardId;
+    if (fixCardId) setCardId(nextCard.id);
+
+    const prevCards = prevCardsSnapshotRef.current;
+    const refresh = prevCards != null && prevCards !== CARDS;
+    const firstSync = prevCards == null;
+
+    if (refresh) {
+      setFaturaIdx(
+        faturaIdxAfterCardsRefresh(nextCard, prevCards, faturaIdxRef.current),
+      );
+    } else if (fixCardId || firstSync) {
+      setFaturaIdx(defaultFaturaIndexForCard(nextCard.faturas || []));
     }
-    setFaturaIdx(defaultFaturaIndexForCard(nextCard?.faturas || []));
+
+    prevCardsSnapshotRef.current = CARDS;
   }, [CARDS, cardId]);
 
   const card =
@@ -3342,9 +3361,13 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, d
   const fmtK   = v => Math.abs(v)>=1000 ? (Math.abs(v)/1000).toFixed(1)+"k" : String(Math.abs(v));
 
   const switchCard = (id) => {
+    const fromCard = CARDS.find((x) => x.id === cardId) || CARDS[0];
+    const fromList = fromCard?.faturas || [];
+    const viewedInvoice = fromList[faturaIdx];
+
     setCardId(id);
-    const c = CARDS.find(x => x.id === id) || CARDS[0];
-    setFaturaIdx(defaultFaturaIndexForCard(c?.faturas || []));
+    const c = CARDS.find((x) => x.id === id) || CARDS[0];
+    setFaturaIdx(faturaIdxMatchingInvoiceRef(c?.faturas || [], viewedInvoice));
     setSearch(""); setFilterCat(null); setTab("fatura"); setVisibleGroups(8);
   };
 
