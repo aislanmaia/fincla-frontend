@@ -113,15 +113,21 @@ import {
   createTransactionForUi,
   formatTransactionsApiError,
   formatYmdToLocaleDisplay,
+  clampNovaTxPrefsParcelas,
   initialNovaTransacaoDateYmd,
   isUuidString,
   mapApiTransactionToUi,
   modalPaymentKeyFromTransactionUi,
+  normalizeStoredNovaTxPaymentMethod,
+  readStoredNovaTransacaoPrefs,
+  serializeNovaTxFormStateToStoredPrefs,
+  shouldApplyStoredNovaTxCategoryPrefs,
   todayLocalYmd,
   transactionDateIsoFromBrDisplay,
   transactionDateIsoFromYmd,
   updateTransactionForUi,
   writeStoredNovaTransacaoDate,
+  writeStoredNovaTransacaoPrefs,
 } from "./data/transactionsAdapter.js";
 import {
   buildCreateRecurringSeriesPayload,
@@ -624,16 +630,60 @@ const NovaTransacaoModal = ({
           ? { ...pc.detailTagDisplayById }
           : {},
       );
+      const editingTx =
+        pc.editingTransactionId != null &&
+        String(pc.editingTransactionId).trim() !== "";
+      const prefsMerge = editingTx ? null : readStoredNovaTransacaoPrefs(organizationId);
       const m = pc.method || "pix";
       setMethod(typeof m === "string" ? m : "pix");
       setRecorre(!!pc.recorre);
       setFreqRec(pc.freqRec || "mensal");
       setEncRec(pc.encRec || "sem-fim");
       setValorTipoRec(pc.valorTipoRec || "fixo");
-      setCat(pc.cat || "");
-      setCategoryTagId(pc.categoryTagId ?? null);
-      if (pc.modalidade) setMod(pc.modalidade);
-      if (pc.parcelas) setParcelas(pc.parcelas);
+      const explicitPcCat =
+        pc.cat != null && String(pc.cat).trim() !== "";
+      const explicitPcCatId =
+        pc.categoryTagId != null &&
+        isUuidString(String(pc.categoryTagId));
+
+      let mergedCat = "";
+      if (editingTx) {
+        mergedCat = pc.cat || "";
+      } else if (explicitPcCat) {
+        mergedCat = String(pc.cat).trim();
+      } else if (prefsMerge?.cat != null) {
+        const s = String(prefsMerge.cat).trim();
+        if (s) mergedCat = s;
+      }
+
+      let mergedCatId = null;
+      if (editingTx) {
+        mergedCatId = pc.categoryTagId ?? null;
+      } else if (explicitPcCatId) {
+        mergedCatId = pc.categoryTagId;
+      } else {
+        const prefId = prefsMerge?.categoryTagId;
+        if (prefId != null && isUuidString(String(prefId))) {
+          mergedCatId = prefId;
+        }
+      }
+
+      setCat(mergedCat);
+      setCategoryTagId(mergedCatId);
+
+      if (pc.modalidade) {
+        setMod(pc.modalidade);
+      } else if (m === "credito" && prefsMerge) {
+        const isAvista = prefsMerge.modalidade === "avista";
+        setMod(isAvista ? "avista" : "parcelado");
+      }
+
+      if (pc.parcelas) {
+        setParcelas(pc.parcelas);
+      } else if (m === "credito" && prefsMerge) {
+        const pp = clampNovaTxPrefsParcelas(prefsMerge.parcelas);
+        if (pp != null) setParcelas(pp);
+      }
       if (m === "credito") {
         setPanelCartaoOpen(true);
         setPanelCartaoExiting(false);
@@ -651,23 +701,40 @@ const NovaTransacaoModal = ({
       return;
     }
 
-    setTipo("despesa");
+    const prefs = readStoredNovaTransacaoPrefs(organizationId);
+    const prefTipo = prefs.tipo === "receita" ? "receita" : "despesa";
+    setTipo(prefTipo);
     applyValor(null);
     setDesc("");
     setTags([]);
     setDetailTagIds([]);
     setDetailTagLabelById({});
-    setMethod("pix");
-    setPanelCartaoOpen(false);
+    const prefMethod =
+      normalizeStoredNovaTxPaymentMethod(prefs.method, prefTipo) ?? "pix";
+    setMethod(prefMethod);
+    setPanelCartaoOpen(prefMethod === "credito");
     setPanelCartaoExiting(false);
     setPanelRecorrenciaOpen(false);
     setPanelRecorrenciaExiting(false);
     setRecorre(false);
-    setCartao("");
+    setCartao(
+      prefMethod === "credito" && prefs.cartaoId != null
+        ? String(prefs.cartaoId)
+        : "",
+    );
     setFreqRec("mensal");
     setEncRec("sem-fim");
     setValorTipoRec("fixo");
-    setCat("");
+    setCat(
+      prefs.cat != null && String(prefs.cat).trim()
+        ? String(prefs.cat).trim()
+        : "",
+    );
+    if (prefMethod === "credito") {
+      setMod(prefs.modalidade === "avista" ? "avista" : "parcelado");
+      const pp = clampNovaTxPrefsParcelas(prefs.parcelas);
+      if (pp != null) setParcelas(pp);
+    }
     setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, null));
   }, [open, novaRecorrencia, preConfig, organizationId]);
 
@@ -771,17 +838,65 @@ const NovaTransacaoModal = ({
     }
     const rows = categoryTagsData.categories;
     if (!rows.length) return;
+    const prefs = shouldApplyStoredNovaTxCategoryPrefs(preConfig)
+      ? readStoredNovaTransacaoPrefs(organizationId)
+      : null;
     const matchById =
       preConfig?.categoryTagId && isUuidString(preConfig.categoryTagId)
         ? rows.find((c) => c.id === preConfig.categoryTagId)
-        : null;
-    const match = preConfig?.cat
-      ? rows.find((c) => c.labelPt === preConfig.cat)
-      : null;
+        : prefs?.categoryTagId && isUuidString(prefs.categoryTagId)
+          ? rows.find((c) => c.id === prefs.categoryTagId)
+          : null;
+    const match =
+      preConfig?.cat
+        ? rows.find((c) => c.labelPt === preConfig.cat)
+        : prefs?.cat
+          ? rows.find((c) => c.labelPt === prefs.cat)
+          : null;
     const row = matchById ?? match ?? rows[0];
     setCategoryTagId(row.id);
     setCat(row.labelPt);
-  }, [open, useLiveCategoryTags, categoryTagsData.categories, preConfig?.cat, preConfig?.categoryTagId]);
+  }, [
+    open,
+    useLiveCategoryTags,
+    categoryTagsData.categories,
+    organizationId,
+    preConfig,
+    preConfig?.cat,
+    preConfig?.categoryTagId,
+  ]);
+
+  const skipPersistNovaTxPrefs =
+    novaRecorrencia ||
+    (preConfig?.editingTransactionId != null &&
+      String(preConfig.editingTransactionId).trim() !== "");
+
+  useEffect(() => {
+    if (!open || skipPersistNovaTxPrefs) return;
+    writeStoredNovaTransacaoPrefs(
+      organizationId,
+      serializeNovaTxFormStateToStoredPrefs({
+        tipo,
+        method,
+        cat,
+        categoryTagId,
+        modalidade,
+        parcelas,
+        cartao,
+      }),
+    );
+  }, [
+    open,
+    skipPersistNovaTxPrefs,
+    organizationId,
+    tipo,
+    method,
+    cat,
+    categoryTagId,
+    modalidade,
+    parcelas,
+    cartao,
+  ]);
 
   // Global key capture: digits typed anywhere → Valor field
   useEffect(() => {
@@ -2943,11 +3058,15 @@ function formatLimitInputFromNumber(value) {
 
 /* ─── CARTÕES PAGE ───────────────────────────────────────── */
 /* ─── CARTÕES PAGE ───────────────────────────────────────── */
-const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, dataMode = "mock", organizationId = null }) => {
+const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, dataMode = "mock", organizationId = null, transactionsRefreshToken = 0 }) => {
   const urlSearch = useSearch({ strict: false });
   const navigate = useNavigate();
   const shouldUseRealData = shouldUseRealDataForMode(organizationId, dataMode);
-  const creditCardsData = useCreditCardsData({ organizationId, enabled: shouldUseRealData });
+  const creditCardsData = useCreditCardsData({
+    organizationId,
+    enabled: shouldUseRealData,
+    transactionsRefreshToken,
+  });
   const hasSeededCards = cardsProp !== undefined;
   const localCards = (cardsProp && cardsProp.length > 0)
     ? cardsProp
@@ -3266,7 +3385,15 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, d
       .catch(() => { if (!cancelled) setPastItens([]); })
       .finally(() => { if (!cancelled) setPastItensLoading(false); });
     return () => { cancelled = true; };
-  }, [isAtual, shouldUseRealData, card?.cardId, fatura?.year, fatura?.month, organizationId]);
+  }, [
+    isAtual,
+    shouldUseRealData,
+    card?.cardId,
+    fatura?.year,
+    fatura?.month,
+    organizationId,
+    transactionsRefreshToken,
+  ]);
 
   // Safe aliases — guard against empty onboarding card
   const cardFaturas    = faturas;
@@ -5595,7 +5722,16 @@ export default function App() {
               });
               openTxModal();
             }} />,
-    cards:      <CartõesPage    onNav={navTo} isMobile={isMobile} cards={dataMode==="empty" ? extraCards : undefined} dataMode={dataMode} organizationId={session.activeOrgId} onNovaItem={(cartaoId) => { openTxModal({ [FC.CARD]: String(cartaoId) }); }} />,
+    cards:      <CartõesPage    onNav={navTo} isMobile={isMobile} cards={dataMode==="empty" ? extraCards : undefined} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onNovaItem={(cartaoId) => {
+      const id = String(cartaoId);
+      setModalPreConfig((p) => ({
+        ...(p || {}),
+        tipo: "despesa",
+        method: "credito",
+        cartaoId: id,
+      }));
+      openTxModal(isUuidString(id) ? { [FC.CARD]: id } : {});
+    }} />,
     budgets:   <OrcamentosPage onNav={navTo} isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} />,
     goals:        <MetasPageView    isMobile={isMobile} initialMetas={dataMode==="empty" ? [] : undefined} dataMode={dataMode} organizationId={session.activeOrgId} onContribuir={(meta) => { setModalPreConfig({ tipo:"receita", desc:`Aporte — ${meta.nome}`, cat:"Poupança" }); openTxModal(); }} />,
     profile:        <ConfiguracoesPage onNav={navTo} isMobile={isMobile} onboardingData={onboardingData} dataMode={dataMode} organizationId={session.activeOrgId} currentUser={session.user} />,

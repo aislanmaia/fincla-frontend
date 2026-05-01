@@ -19,7 +19,12 @@ const EMPTY_STATE = {
   consolidatedCommitments: null,
 };
 
-export function useCreditCardsData({ organizationId, enabled = true }) {
+export function useCreditCardsData({
+  organizationId,
+  enabled = true,
+  /** Incrementado ao salvar/editar transações — refaz GET dos cartões e faturas. */
+  transactionsRefreshToken = 0,
+}) {
   const [state, setState] = useState(() => ({
     ...EMPTY_STATE,
     // Evita um frame de “lista vazia” antes do efeito marcar loading (org já conhecida no 1º render)
@@ -76,7 +81,7 @@ export function useCreditCardsData({ organizationId, enabled = true }) {
     return () => {
       cancelled = true;
     };
-  }, [enabled, organizationId, reload]);
+  }, [enabled, organizationId, reload, transactionsRefreshToken]);
 
   const createCard = useCallback(async (payload) => {
     setState((current) => ({ ...current, isSavingCard: true, error: "" }));

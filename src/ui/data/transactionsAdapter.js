@@ -697,6 +697,123 @@ export function writeStoredNovaTransacaoDate(organizationId, ymd) {
   } catch (_) {}
 }
 
+function novaTxPrefsStorageKey(organizationId) {
+  return `fincla.v2.novaTxPrefs.${organizationId || "default"}`;
+}
+
+/** Últimas escolhas do modal Nova transação (forma de pagamento, categoria, cartão/modalidade). */
+export function readStoredNovaTransacaoPrefs(organizationId) {
+  try {
+    const raw = localStorage.getItem(novaTxPrefsStorageKey(organizationId));
+    if (!raw) return {};
+    const o = JSON.parse(raw);
+    return o && typeof o === "object" ? o : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+export const NOVA_TX_METHODS_DESPESA = [
+  "pix",
+  "debito",
+  "credito",
+  "dinheiro",
+  "boleto",
+];
+
+export const NOVA_TX_METHODS_RECEITA = ["pix", "dinheiro", "transferencia"];
+
+export function normalizeStoredNovaTxPaymentMethod(method, tipo) {
+  const list =
+    tipo === "receita" ? NOVA_TX_METHODS_RECEITA : NOVA_TX_METHODS_DESPESA;
+  const m = String(method ?? "").trim();
+  return list.includes(m) ? m : null;
+}
+
+export function clampNovaTxPrefsParcelas(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return null;
+  const r = Math.round(x);
+  if (r < 1 || r > 360) return null;
+  return r;
+}
+
+/**
+ * Objeto persistido em JSON — modalidade/parcelas/cartão só quando method é crédito.
+ */
+export function serializeNovaTxFormStateToStoredPrefs({
+  tipo,
+  method,
+  cat,
+  categoryTagId,
+  modalidade,
+  parcelas,
+  cartao,
+}) {
+  const t = tipo === "receita" ? "receita" : "despesa";
+  const pm = normalizeStoredNovaTxPaymentMethod(method, t);
+  const effectiveMethod = pm ?? "pix";
+  const catStr = cat != null ? String(cat).trim() : "";
+  const catId =
+    categoryTagId != null && isUuidString(String(categoryTagId))
+      ? String(categoryTagId)
+      : null;
+
+  const base = {
+    tipo: t,
+    method: effectiveMethod,
+    cat: catStr ? catStr : null,
+    categoryTagId: catId,
+    modalidade: null,
+    parcelas: null,
+    cartaoId: null,
+  };
+
+  if (effectiveMethod !== "credito") return base;
+
+  const parcelasClamped = clampNovaTxPrefsParcelas(parcelas) ?? 3;
+  const mod = modalidade === "avista" ? "avista" : "parcelado";
+  const cid =
+    cartao != null &&
+    String(cartao).trim() !== "" &&
+    String(cartao) !== "novo"
+      ? String(cartao).trim()
+      : null;
+
+  return {
+    ...base,
+    modalidade: mod,
+    parcelas: parcelasClamped,
+    cartaoId: cid,
+  };
+}
+
+export function writeStoredNovaTransacaoPrefs(organizationId, prefsObject) {
+  try {
+    localStorage.setItem(
+      novaTxPrefsStorageKey(organizationId),
+      JSON.stringify(prefsObject),
+    );
+  } catch (_) {}
+}
+
+/** Edição ou pré-config explícita de categoria: não aplicar prefs armazenadas à lista de categorias. */
+export function shouldApplyStoredNovaTxCategoryPrefs(preConfig) {
+  const editing =
+    preConfig?.editingTransactionId != null &&
+    String(preConfig.editingTransactionId).trim() !== "";
+  if (editing) return false;
+  if (!preConfig) return true;
+  if (
+    preConfig.categoryTagId != null &&
+    isUuidString(String(preConfig.categoryTagId))
+  )
+    return false;
+  if (preConfig.cat != null && String(preConfig.cat).trim() !== "")
+    return false;
+  return true;
+}
+
 /** Extrai YYYY-MM-DD de ISO ou string de data. */
 export function ymdFromAnyDateInput(value) {
   if (value == null || value === "") return null;
