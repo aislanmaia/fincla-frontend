@@ -406,7 +406,8 @@ const NovaTransacaoModal = ({
   const [mobileReviewImpactOpen, setMobileReviewImpactOpen] = useState(false);
   const [review,    setReview]    = useState(false);
   const [reviewDir, setReviewDir] = useState("forward");
-  const [success,   setSuccess]   = useState(false);
+  const [success,        setSuccess]        = useState(false);
+  const [successOverlay, setSuccessOverlay] = useState(false);
   const [drawerClosing, setDrawerClosing] = useState(false);
   const closeAnimGuardRef = useRef(false);
   const DRAWER_CLOSE_MS = 320;
@@ -439,11 +440,23 @@ const NovaTransacaoModal = ({
   }, [open]);
   // Mobile step state
   const [mStep,     setMStep]     = useState(1);
+  const [mStepAnimating, setMStepAnimating] = useState(false);
+  const mStepAnimTimerRef = useRef(null);
+  useEffect(() => {
+    if (open) return;
+    if (mStepAnimTimerRef.current) {
+      clearTimeout(mStepAnimTimerRef.current);
+      mStepAnimTimerRef.current = null;
+    }
+    setMStepAnimating(false);
+  }, [open]);
   // AI suggestion simulation
   const [aiSuggestion, setAiSuggestion] = useState(null);
   const [aiApplied,    setAiApplied]    = useState(false);
   const [descFocused,  setDescFocused]  = useState(false);
+  const [descError,    setDescError]    = useState(false);
   const valorInputRef = useRef(null);
+  const descRef       = useRef(null);
   // Banking-style valor input (integer cents)
   const [centavos,      setCentavos]     = useState(0);
   // Parcela calculator
@@ -558,6 +571,7 @@ const NovaTransacaoModal = ({
     setMStep(1);
     setReview(false);
     setSuccess(false);
+    setSuccessOverlay(false);
     setPanelCartaoExiting(false);
     setPanelRecorrenciaExiting(false);
     setShowImpact(false);
@@ -1009,13 +1023,12 @@ const NovaTransacaoModal = ({
 
   const impactPanelOpen = useMemo(() => {
     if (!open) return false;
+    if (isMobile) return mStep === "review" && mobileReviewImpactOpen;
     if (review) {
-      if (isMobile) return mobileReviewImpactOpen;
       return true;
     }
-    if (isMobile) return false;
     return showImpact;
-  }, [open, review, isMobile, mobileReviewImpactOpen, showImpact]);
+  }, [open, isMobile, mStep, mobileReviewImpactOpen, review, showImpact]);
 
   const financialImpact = useNovaTransacaoFinancialImpact({
     open,
@@ -1137,7 +1150,7 @@ const NovaTransacaoModal = ({
   const impactMobileSummary = useMemo(() => {
     if (!financialImpact.impactLive) return "Preview indisponível";
     if (!(valorNum > 0)) return "Informe um valor";
-    if (review && isMobile && !mobileReviewImpactOpen) return "Toque para ver o impacto";
+    if (isMobile && mStep === "review" && !mobileReviewImpactOpen) return "Toque para ver o impacto";
     if (financialImpact.previewLoading) return "Calculando…";
     const p = financialImpact.preview;
     if (!p) return "—";
@@ -1153,8 +1166,8 @@ const NovaTransacaoModal = ({
     financialImpact.previewLoading,
     financialImpact.preview,
     valorNum,
-    review,
     isMobile,
+    mStep,
     mobileReviewImpactOpen,
   ]);
 
@@ -1260,8 +1273,25 @@ const NovaTransacaoModal = ({
     return "Continuar →";
   };
 
-  const goNext = () => { if (mNextStep) setMStep(mNextStep); };
-  const goPrev = () => { if (mPrevStep !== null) setMStep(mPrevStep); };
+  const animateMobileStepChange = () => {
+    if (!isMobile) return;
+    setMStepAnimating(true);
+    if (mStepAnimTimerRef.current) clearTimeout(mStepAnimTimerRef.current);
+    mStepAnimTimerRef.current = window.setTimeout(() => {
+      mStepAnimTimerRef.current = null;
+      setMStepAnimating(false);
+    }, 260);
+  };
+  const goNext = () => {
+    if (!mNextStep) return;
+    animateMobileStepChange();
+    setMStep(mNextStep);
+  };
+  const goPrev = () => {
+    if (mPrevStep === null) return;
+    animateMobileStepChange();
+    setMStep(mPrevStep);
+  };
 
   const handleSave = async () => {
     const rawEditTxId = preConfig?.editingTransactionId;
@@ -1364,8 +1394,7 @@ const NovaTransacaoModal = ({
         return;
       }
       setTxSubmitting(false);
-      setSuccess(true);
-      setTimeout(() => { setSuccess(false); beginClose(); }, 1200);
+      setSuccessOverlay(true);
       return;
     }
 
@@ -1451,13 +1480,43 @@ const NovaTransacaoModal = ({
       setTxSubmitting(false);
     }
 
-    setSuccess(true);
-    setTimeout(() => { setSuccess(false); beginClose(); }, 1200);
+    setSuccessOverlay(true);
   };
 
   // Desktop-only helpers
   const goReview = () => { setReviewDir("forward"); setReview(true); };
   const goBack   = () => { setReviewDir("back");    setReview(false); };
+
+  const handleNewTransaction = () => {
+    const prefs = readStoredNovaTransacaoPrefs(organizationId);
+    const prefTipo = prefs.tipo === "receita" ? "receita" : "despesa";
+    const prefMethod = normalizeStoredNovaTxPaymentMethod(prefs.method, prefTipo) ?? "pix";
+    setTipo(prefTipo);
+    setCentavos(0); setValor("");
+    setDesc(""); setTags([]); setDetailTagIds([]); setDetailTagLabelById({});
+    setMethod(prefMethod);
+    setPanelCartaoOpen(prefMethod === "credito"); setPanelCartaoExiting(false);
+    setPanelRecorrenciaOpen(false); setPanelRecorrenciaExiting(false);
+    setRecorre(false);
+    setCartao(prefMethod === "credito" && prefs.cartaoId != null ? String(prefs.cartaoId) : "");
+    setFreqRec("mensal"); setEncRec("sem-fim"); setValorTipoRec("fixo");
+    setCat(prefs.cat != null && String(prefs.cat).trim() ? String(prefs.cat).trim() : "");
+    setCategoryTagId(null);
+    if (prefMethod === "credito") {
+      setMod(prefs.modalidade === "avista" ? "avista" : "parcelado");
+      const pp = clampNovaTxPrefsParcelas(prefs.parcelas);
+      if (pp != null) setParcelas(pp);
+    } else {
+      setMod("parcelado"); setParcelas(3);
+    }
+    setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, null));
+    setReview(false); setMStep(1); setSuccess(false); setSuccessOverlay(false);
+    setTxSubmitError(""); setTxSubmitting(false); setDescError(false);
+    setMobileReviewImpactOpen(false); setAiSuggestion(null); setAiApplied(false);
+    setDescFocused(false); setAddingCartao(false); setQuickAddCardName(""); setQuickAddCardLast4("");
+    setNewTag(""); setAddingTag(false); setParcelaMode(false); setPCalcCents(0);
+    setParcelasCustom(false); setParcelasInput(""); setShowImpact(false);
+  };
 
   const PanelHeader = ({ icon: Icon, title, onCollapse }) => (
     <div style={{ padding:"15px 18px", borderBottom:`1px solid ${T.border}`, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
@@ -1506,7 +1565,7 @@ const NovaTransacaoModal = ({
   );
 
   /* ── ReviewBody (shared desktop + mobile) ── */
-  const ReviewBody = ({ mobile = false }) => (
+  const ReviewBody = ({ mobile = false } = {}) => (
     <div style={mobile ? {} : { animation: reviewDir === "forward" ? "revSlideIn 0.26s ease-out" : "revSlideBack 0.26s ease-out" }}>
       <div style={{ background: typeLight, borderBottom:`1px solid ${typeColor}18`, padding: mobile ? "14px 18px" : "14px 20px" }}>
         <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:6 }}>
@@ -1595,12 +1654,14 @@ const NovaTransacaoModal = ({
           </div>
         )}
         {/* Mobile impact — collapsible */}
-        {mobile && <MobileImpact />}
+        {mobile && MobileImpact()}
       </div>
     </div>
   );
 
   if (!open && !drawerClosing) return null;
+
+  const isRecurrence = novaRecorrencia || recorre;
 
   /* ════════════════════════════════════════════════════════════
      MOBILE — Bottom sheet with dynamic steps
@@ -1613,6 +1674,9 @@ const NovaTransacaoModal = ({
       recorrencia: "Recorrência",
       review: "Confirmação",
     };
+    const mobileStepInStyle = mStepAnimating
+      ? { animation: "stepIn 0.22s ease-out" }
+      : {};
 
     return (
       <div style={{ position:"fixed", inset:0, zIndex:300, overflow:"hidden", display:"flex", flexDirection:"column", justifyContent:"flex-end" }}>
@@ -1621,6 +1685,8 @@ const NovaTransacaoModal = ({
           @keyframes sheetDown { from { transform:translateY(0) } to { transform:translateY(100%) } }
           @keyframes stepIn  { from { opacity:0; transform:translateX(20px) } to { opacity:1; transform:translateX(0) } }
           @keyframes stepBack{ from { opacity:0; transform:translateX(-20px) } to { opacity:1; transform:translateX(0) } }
+          @keyframes overlayContentIn { from { opacity:0; transform:translateY(14px) } to { opacity:1; transform:translateY(0) } }
+          @keyframes checkBounce { from { opacity:0; transform:scale(0.4) } to { opacity:1; transform:scale(1) } }
         `}</style>
         {/* Backdrop */}
         <div onClick={beginClose} style={{ position:"absolute", inset:0, background:"rgba(15,23,35,0.5)" }} />
@@ -1628,6 +1694,38 @@ const NovaTransacaoModal = ({
         {/* Sheet */}
         <div style={{ position:"relative", background:T.surface, borderRadius:"24px 24px 0 0", maxHeight:"94vh", display:"flex", flexDirection:"column", animation: drawerClosing ? "sheetDown 0.32s cubic-bezier(0.32,0.72,0,1) forwards" : "sheetUp 0.5s cubic-bezier(0.32,0.72,0,1) both", boxShadow:"0 -2px 0 rgba(0,0,0,0.05), 0 -8px 32px rgba(0,0,0,0.14), 0 -24px 80px rgba(0,0,0,0.08)" }}>
 
+          {successOverlay && (
+            <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"40px 28px 36px" }}>
+              <div style={{ display:"flex", flexDirection:"column", alignItems:"center", width:"100%", animation:"overlayContentIn 0.3s cubic-bezier(0.32,0.72,0,1)" }}>
+                <div style={{ width:80, height:80, borderRadius:"50%", background:T.greenLight, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:22, animation:"checkBounce 0.55s cubic-bezier(0.34,1.56,0.64,1) 0.1s both" }}>
+                  <Check size={36} color={T.green} strokeWidth={2.5} />
+                </div>
+                <div style={{ ...G, fontSize:22, fontWeight:800, color:T.ink, textAlign:"center", marginBottom:6 }}>
+                  {isRecurrence ? "Recorrência salva!" : (tipo==="despesa" ? "Despesa registrada!" : "Receita registrada!")}
+                </div>
+                <div style={{ ...G, ...NUM, fontSize:28, fontWeight:800, color:typeColor, marginBottom:8 }}>
+                  {tipo==="despesa" ? "−" : "+"}R${" "}{valorNum.toLocaleString("pt-BR",{minimumFractionDigits:2})}
+                </div>
+                {desc && <div style={{ ...G, fontSize:13, color:T.inkMid, textAlign:"center", marginBottom:36, maxWidth:280, lineHeight:1.5 }}>{desc}</div>}
+                <div style={{ display:"flex", flexDirection:"column", gap:10, width:"100%", maxWidth:320 }}>
+                  {!isRecurrence && (
+                    <button onClick={handleNewTransaction}
+                      style={{ ...G, width:"100%", padding:"14px", borderRadius:12, border:"none", background:T.ink, fontSize:14, fontWeight:700, color:"#fff", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, transition:"opacity 0.15s" }}
+                      onMouseEnter={e=>e.currentTarget.style.opacity="0.85"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
+                      <Plus size={15}/> Nova transação
+                    </button>
+                  )}
+                  <button onClick={beginClose}
+                    style={{ ...G, width:"100%", padding:"13px", borderRadius:12, border:`1px solid ${T.border}`, background:T.surface, fontSize:14, fontWeight:600, color:T.inkMid, cursor:"pointer", transition:"background 0.15s" }}
+                    onMouseEnter={e=>e.currentTarget.style.background=T.bg} onMouseLeave={e=>e.currentTarget.style.background=T.surface}>
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!successOverlay && <>
           {/* Handle */}
           <div style={{ display:"flex", justifyContent:"center", padding:"10px 0 4px" }}>
             <div style={{ width:36, height:4, borderRadius:99, background:T.inkGhost }} />
@@ -1659,7 +1757,7 @@ const NovaTransacaoModal = ({
 
             {/* ── STEP 1: Tipo + Valor + Descrição ── */}
             {mStep === 1 && (
-              <div style={{ padding:"18px 20px", display:"flex", flexDirection:"column", gap:16, animation:"stepIn 0.22s ease-out" }}>
+              <div style={{ padding:"18px 20px", display:"flex", flexDirection:"column", gap:16, ...mobileStepInStyle }}>
                 {/* Tipo tabs */}
                 <div style={{ display:"flex", background:T.grayLight, borderRadius:11, padding:3, gap:2 }}>
                   {[["despesa","↑ Despesa",T.red],["receita","↓ Receita",T.green]].map(([t, label, color]) => (
@@ -1780,7 +1878,7 @@ const NovaTransacaoModal = ({
 
             {/* ── STEP 2: Categoria + Método + Recorrência ── */}
             {mStep === 2 && (
-              <div style={{ padding:"18px 20px", display:"flex", flexDirection:"column", gap:18, animation:"stepIn 0.22s ease-out" }}>
+              <div style={{ padding:"18px 20px", display:"flex", flexDirection:"column", gap:18, ...mobileStepInStyle }}>
 
                 {/* Categoria */}
                 <div>
@@ -1911,7 +2009,7 @@ const NovaTransacaoModal = ({
 
             {/* ── STEP CARTÃO ── */}
             {mStep === "cartao" && (
-              <div style={{ padding:"18px 20px", display:"flex", flexDirection:"column", gap:16, animation:"stepIn 0.22s ease-out" }}>
+              <div style={{ padding:"18px 20px", display:"flex", flexDirection:"column", gap:16, ...mobileStepInStyle }}>
                 <div>
                   <div style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid, marginBottom:10 }}>Selecionar cartão</div>
                   <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
@@ -1990,7 +2088,7 @@ const NovaTransacaoModal = ({
 
             {/* ── STEP RECORRÊNCIA ── */}
             {mStep === "recorrencia" && (
-              <div style={{ padding:"18px 20px", display:"flex", flexDirection:"column", gap:16, animation:"stepIn 0.22s ease-out" }}>
+              <div style={{ padding:"18px 20px", display:"flex", flexDirection:"column", gap:16, ...mobileStepInStyle }}>
                 <div>
                   <div style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid, marginBottom:10 }}>Frequência</div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
@@ -2036,7 +2134,7 @@ const NovaTransacaoModal = ({
             )}
 
             {/* ── REVIEW ── */}
-            {mStep === "review" && <ReviewBody mobile={true} />}
+            {mStep === "review" && ReviewBody({ mobile: true })}
 
           </div>
 
@@ -2046,14 +2144,21 @@ const NovaTransacaoModal = ({
               <div style={{ ...G, fontSize:12, fontWeight:600, color:T.red, marginBottom:10, textAlign:"center" }}>{txSubmitError}</div>
             )}
             {mStep === "review" ? (
-              <div style={{ display:"flex", gap:10 }}>
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                {!desc.trim() && (
+                  <div style={{ ...G, fontSize:12, fontWeight:600, color:T.red, display:"flex", alignItems:"center", gap:6, padding:"8px 12px", background:`${T.red}11`, borderRadius:8 }}>
+                    <AlertTriangle size={13} color={T.red} /> Volte e adicione uma descrição para confirmar.
+                  </div>
+                )}
+                <div style={{ display:"flex", gap:10 }}>
                 <button onClick={goPrev} style={{ ...G, display:"flex", alignItems:"center", gap:5, padding:"13px 16px", borderRadius:12, border:`1px solid ${T.border}`, background:T.surface, fontSize:14, fontWeight:600, color:T.inkMid, cursor:"pointer" }}>
                   <ChevronLeft size={16} /> Editar
                 </button>
-                <button onClick={handleSave} disabled={txSubmitting}
-                  style={{ ...G, flex:1, padding:"13px", borderRadius:12, border:"none", background:success ? T.green : typeColor, fontSize:14, fontWeight:800, color:"#fff", cursor:txSubmitting ? "not-allowed" : "pointer", opacity:txSubmitting ? 0.75 : 1, display:"flex", alignItems:"center", justifyContent:"center", gap:7, transition:"background 0.25s" }}>
+                <button onClick={handleSave} disabled={txSubmitting || !desc.trim()}
+                  style={{ ...G, flex:1, padding:"13px", borderRadius:12, border:"none", background:success ? T.green : (!desc.trim() ? T.inkGhost : typeColor), fontSize:14, fontWeight:800, color:"#fff", cursor:(txSubmitting || !desc.trim()) ? "not-allowed" : "pointer", opacity:(txSubmitting || !desc.trim()) ? 0.75 : 1, display:"flex", alignItems:"center", justifyContent:"center", gap:7, transition:"background 0.25s" }}>
                   {success ? <><Check size={16} /> {recorre || novaRecorrencia ? "Recorrência salva!" : "Registrado!"}</> : (recorre || novaRecorrencia ? "Confirmar recorrência" : (txSubmitting ? "Enviando…" : `Confirmar ${tipo === "despesa" ? "despesa" : "receita"}`))}
                 </button>
+              </div>
               </div>
             ) : (
               <div style={{ display:"flex", gap:10 }}>
@@ -2069,6 +2174,7 @@ const NovaTransacaoModal = ({
               </div>
             )}
           </div>
+          </>}
         </div>
       </div>
     );
@@ -2091,6 +2197,8 @@ const NovaTransacaoModal = ({
         @keyframes revSlideIn  { from { transform:translateX(28px); opacity:0 } to { transform:translateX(0); opacity:1 } }
         @keyframes revSlideBack{ from { transform:translateX(-28px); opacity:0 } to { transform:translateX(0); opacity:1 } }
         @keyframes successPop  { 0%{transform:scale(1)} 40%{transform:scale(1.04)} 100%{transform:scale(1)} }
+        @keyframes overlayContentIn { from { opacity:0; transform:translateY(14px) } to { opacity:1; transform:translateY(0) } }
+        @keyframes checkBounce  { from { opacity:0; transform:scale(0.4) } to { opacity:1; transform:scale(1) } }
       `}</style>
       <div onClick={beginClose} style={{ position:"absolute", inset:0, background:"rgba(15,23,35,0.18)" }} />
       <div style={{ position:"relative", display:"flex", height:"100vh", boxShadow:T.dark, animation: drawerClosing ? `drawerOut ${DRAWER_CLOSE_MS}ms cubic-bezier(0.32,0.72,0,1) forwards` : "drawerIn 0.22s ease-out" }}>
@@ -2406,6 +2514,37 @@ const NovaTransacaoModal = ({
           </div>
         )}
         <div style={{ width:400, background:T.surface, borderLeft:`1px solid ${T.border}`, display:"flex", flexDirection:"column", height:"100vh", overflow:"hidden" }}>
+          {successOverlay && (
+            <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"40px 32px" }}>
+              <div style={{ display:"flex", flexDirection:"column", alignItems:"center", width:"100%", animation:"overlayContentIn 0.3s cubic-bezier(0.32,0.72,0,1)" }}>
+                <div style={{ width:80, height:80, borderRadius:"50%", background:T.greenLight, display:"flex", alignItems:"center", justifyContent:"center", marginBottom:22, animation:"checkBounce 0.55s cubic-bezier(0.34,1.56,0.64,1) 0.1s both" }}>
+                  <Check size={36} color={T.green} strokeWidth={2.5} />
+                </div>
+                <div style={{ ...G, fontSize:22, fontWeight:800, color:T.ink, textAlign:"center", marginBottom:6 }}>
+                  {isRecurrence ? "Recorrência salva!" : (tipo==="despesa" ? "Despesa registrada!" : "Receita registrada!")}
+                </div>
+                <div style={{ ...G, ...NUM, fontSize:28, fontWeight:800, color:typeColor, marginBottom:8 }}>
+                  {tipo==="despesa" ? "−" : "+"}R${" "}{valorNum.toLocaleString("pt-BR",{minimumFractionDigits:2})}
+                </div>
+                {desc && <div style={{ ...G, fontSize:13, color:T.inkMid, textAlign:"center", marginBottom:36, maxWidth:280, lineHeight:1.5 }}>{desc}</div>}
+                <div style={{ display:"flex", flexDirection:"column", gap:10, width:"100%", maxWidth:320 }}>
+                  {!isRecurrence && (
+                    <button onClick={handleNewTransaction}
+                      style={{ ...G, width:"100%", padding:"13px", borderRadius:12, border:"none", background:T.ink, fontSize:14, fontWeight:700, color:"#fff", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:8, transition:"opacity 0.15s" }}
+                      onMouseEnter={e=>e.currentTarget.style.opacity="0.85"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>
+                      <Plus size={15}/> Nova transação
+                    </button>
+                  )}
+                  <button onClick={beginClose}
+                    style={{ ...G, width:"100%", padding:"12px", borderRadius:12, border:`1px solid ${T.border}`, background:T.surface, fontSize:14, fontWeight:600, color:T.inkMid, cursor:"pointer", transition:"background 0.15s" }}
+                    onMouseEnter={e=>e.currentTarget.style.background=T.bg} onMouseLeave={e=>e.currentTarget.style.background=T.surface}>
+                    Fechar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          {!successOverlay && <>
           <div style={{ display:"flex", flexShrink:0, borderBottom:`1px solid ${T.border}` }}>
             {[["despesa","↑ Despesa"],["receita","↓ Receita"]].map(([t,label]) => (
               <button key={t} onClick={() => !review && handleSetTipo(t)} style={{ ...G, flex:1, padding:"15px 16px", border:"none", cursor:review?"default":"pointer", fontSize:13, fontWeight:600, background:tipo===t ? T.surface : T.bg, color:tipo===t ? (t==="despesa" ? T.red : T.green) : T.inkMid, borderBottom:tipo===t ? `2px solid ${t==="despesa" ? T.red : T.green}` : "2px solid transparent", transition:"all 0.12s" }}>
@@ -2417,7 +2556,7 @@ const NovaTransacaoModal = ({
             </button>
           </div>
           <div style={{ flex:1, overflowY:"auto", overflowX:"hidden" }}>
-            {review ? <ReviewBody /> : (
+            {review ? ReviewBody() : (
               <div style={{ padding:"18px 20px", display:"flex", flexDirection:"column", gap:16, animation:"revSlideBack 0.26s ease-out", minWidth:0, width:"100%" }}>
                 <div>
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
@@ -2593,14 +2732,19 @@ const NovaTransacaoModal = ({
                     </span>
                   </div>
                   <div style={{ position:"relative" }}>
-                    <textarea value={desc} onChange={e => setDesc(e.target.value)} rows={3}
+                    <textarea ref={descRef} value={desc} onChange={e => { setDesc(e.target.value); if (e.target.value.trim()) setDescError(false); }} rows={3}
                       onFocus={() => setDescFocused(true)}
                       onBlur={() => setDescFocused(false)}
-                      style={{ ...G, width:"100%", boxSizing:"border-box", padding:"10px 12px 30px", borderRadius:10, border:`1px solid ${T.border}`, fontSize:13, color:T.ink, resize:"none", outline:"none", background:T.surface, lineHeight:1.5 }} />
+                      style={{ ...G, width:"100%", boxSizing:"border-box", padding:"10px 12px 30px", borderRadius:10, border:`1px solid ${descError ? T.red : T.border}`, fontSize:13, color:T.ink, resize:"none", outline:"none", background:T.surface, lineHeight:1.5, transition:"border-color 0.15s" }} />
                     <button style={{ ...G, position:"absolute", bottom:8, right:8, display:"flex", alignItems:"center", gap:4, background:T.purpleLight, border:`1px solid ${T.purple}33`, borderRadius:7, padding:"4px 9px", fontSize:10, fontWeight:600, color:T.purple, cursor:"pointer" }}>
                       <Star size={9} fill={T.purple} /> Sugerir com IA
                     </button>
                   </div>
+                  {descError && (
+                    <div style={{ ...G, fontSize:11, fontWeight:600, color:T.red, marginTop:5, display:"flex", alignItems:"center", gap:5 }}>
+                      <AlertTriangle size={11} color={T.red} /> Descrição obrigatória para registrar a transação.
+                    </div>
+                  )}
                   {aiSuggestion && !aiApplied && (
                     <button type="button" onClick={applyAi}
                       style={{ ...G, marginTop:8, width:"100%", display:"flex", alignItems:"center", gap:8, padding:"10px 14px", background:T.purpleLight, border:`1px solid ${T.purple}33`, borderRadius:9, cursor:"pointer", textAlign:"left" }}>
@@ -2878,19 +3022,20 @@ const NovaTransacaoModal = ({
               <div style={{ display:"flex", gap:8 }}>
                 <Btn variant="outGray" onClick={beginClose}>Cancelar</Btn>
                 {novaRecorrencia || recorre ? (
-                  <button onClick={goReview}
+                  <button onClick={() => { if (!desc.trim()) { setDescError(true); descRef.current?.focus(); return; } goReview(); }}
                     style={{ ...G, flex:1, padding:"11px", borderRadius:10, border:"none", background:typeColor, fontSize:13, fontWeight:700, color:"#fff", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
                     Revisar recorrência <ChevronRight size={14} />
                   </button>
                 ) : (
-                  <button onClick={handleSave} disabled={txSubmitting}
-                    style={{ ...G, flex:1, padding:"11px", borderRadius:10, border:"none", background:success ? T.green : typeColor, fontSize:13, fontWeight:700, color:"#fff", cursor:txSubmitting ? "not-allowed" : "pointer", opacity:txSubmitting ? 0.75 : 1, display:"flex", alignItems:"center", justifyContent:"center", gap:6, transition:"background 0.2s" }}>
-                    {success ? <><Check size={14} /> Registrado!</> : (txSubmitting ? "Enviando…" : `Registrar ${tipo==="despesa" ? "Despesa" : "Receita"}`)}
+                  <button onClick={() => { if (!desc.trim()) { setDescError(true); descRef.current?.focus(); return; } goReview(); }} disabled={!valorNum}
+                    style={{ ...G, flex:1, padding:"11px", borderRadius:10, border:"none", background:!valorNum ? T.inkGhost : typeColor, fontSize:13, fontWeight:700, color:"#fff", cursor:!valorNum ? "not-allowed" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, transition:"background 0.2s" }}>
+                    Revisar {tipo==="despesa" ? "despesa" : "receita"} <ChevronRight size={14} />
                   </button>
                 )}
               </div>
             )}
           </div>
+          </>}
         </div>
       </div>
     </div>
