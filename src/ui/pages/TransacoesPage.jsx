@@ -37,7 +37,7 @@ import {
   TRANSACTIONS_DEFAULT_PERIOD,
 } from "../features/transactions/transactionsPeriodStorage.js";
 
-const TRANSACTIONS_SEARCH_DEBOUNCE_MS = 3000;
+const TRANSACTIONS_SEARCH_DEBOUNCE_MS = 1500;
 
 export function TransacoesPage({
   onNav,
