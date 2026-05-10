@@ -120,6 +120,7 @@ import {
   isUuidString,
   mapApiTransactionToUi,
   modalPaymentKeyFromTransactionUi,
+  transactionUiValAbsForEdit,
   normalizeStoredNovaTxPaymentMethod,
   readStoredNovaTransacaoPrefs,
   serializeNovaTxFormStateToStoredPrefs,
@@ -5608,7 +5609,7 @@ export default function App() {
         cat: tx.cat,
         categoryTagId: tx.categoryTagId ?? null,
         method: txMethod,
-        valorInicial: Math.abs(tx.val),
+        valorInicial: transactionUiValAbsForEdit(tx),
         recorre: tx.rec,
         editingTransactionId: tx.id,
         dateIso:
@@ -5651,7 +5652,7 @@ export default function App() {
           cat: ui.cat,
           categoryTagId: ui.categoryTagId ?? null,
           method: txMethod,
-          valorInicial: Math.abs(ui.val),
+          valorInicial: transactionUiValAbsForEdit(ui),
           recorre: ui.rec,
           editingTransactionId: ui.id,
           dateIso:
@@ -5817,7 +5818,7 @@ export default function App() {
             cat: tx.cat,
             categoryTagId: tx.categoryTagId ?? null,
             method: txMethod,
-            valorInicial: Math.abs(tx.val),
+            valorInicial: transactionUiValAbsForEdit(tx),
             recorre: tx.rec,
             editingTransactionId: tx.id,
             dateIso:

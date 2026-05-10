@@ -64,6 +64,7 @@ describe("transactionsAdapter", () => {
       categoryTagId: "tag-cat",
       date: "10/04/2026",
       val: -300,
+      valAbsForEdit: 3600,
       method: "Crédito",
       status: "pendente",
       rec: false,

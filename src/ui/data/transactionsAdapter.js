@@ -297,6 +297,48 @@ export function pickDisplayAmount(transaction) {
 }
 
 /**
+ * Magnitude do valor da operação para o formulário de edição (total na API),
+ * não o montante da parcela usado em {@link pickDisplayAmount}.
+ */
+export function pickAmountAbsForTransactionEdit(transaction) {
+  if (!transaction || typeof transaction !== "object") return 0;
+  const charge = transaction.credit_card_charge?.charge;
+  if (charge?.modality === "installment") {
+    const total = charge.total_amount;
+    if (total != null && total !== "") {
+      const n = Number(total);
+      if (Number.isFinite(n)) return Math.abs(n);
+    }
+  }
+  const v = Number(transaction.value ?? 0);
+  return Number.isFinite(v) ? Math.abs(v) : 0;
+}
+
+/**
+ * @param {ReturnType<typeof mapApiTransactionToUi> | Record<string, unknown>} ui
+ */
+export function transactionUiValAbsForEdit(ui) {
+  if (ui == null || typeof ui !== "object") return 0;
+  const fromField = ui.valAbsForEdit;
+  if (fromField != null && fromField !== "" && Number.isFinite(Number(fromField))) {
+    return Math.abs(Number(fromField));
+  }
+  const parcelaTotal = ui.parcela?.valorTotal;
+  if (
+    parcelaTotal != null &&
+    parcelaTotal !== "" &&
+    Number.isFinite(Number(parcelaTotal))
+  ) {
+    return Math.abs(Number(parcelaTotal));
+  }
+  const v = ui.val;
+  if (v != null && v !== "" && Number.isFinite(Number(v))) {
+    return Math.abs(Number(v));
+  }
+  return 0;
+}
+
+/**
  * Data bruta para coluna «Data» na lista (GET /transactions com período):
  * cartão à vista → data da compra; parcelado → vencimento da primeira parcela retornada no período.
  * @param {import("../../api/types").Transaction} transaction
@@ -363,6 +405,7 @@ export function mapApiTransactionToUi(transaction) {
       ? Number(cardIdFromCharge)
       : null,
     val: signedVal,
+    valAbsForEdit: pickAmountAbsForTransactionEdit(transaction),
     icon: pickTransactionIcon(transaction),
     rec: transaction.recurring,
     recurringSeriesId: transaction.recurring_series_id ?? null,
