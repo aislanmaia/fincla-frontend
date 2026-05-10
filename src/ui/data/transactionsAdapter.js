@@ -849,29 +849,18 @@ export function ymdFromAnyDateInput(value) {
 }
 
 function pickDateIsoForEditTransaction(transaction) {
-  if (transaction.credit_card_charge?.charge?.modality === "cash") {
-    const raw = transaction.date;
-    if (raw != null && String(raw).trim() !== "") {
-      const ymd = ymdFromAnyDateInput(raw);
-      if (ymd) return `${ymd}T12:00:00`;
-    }
-    return `${todayLocalYmd()}T12:00:00`;
-  }
-  const due = transaction.installment_info?.[0]?.due_date;
-  if (due && /^\d{4}-\d{2}-\d{2}$/.test(due)) {
-    return `${due}T12:00:00`;
-  }
-  const raw = transaction.date;
-  if (raw != null && String(raw).trim() !== "") {
-    const ymd = ymdFromAnyDateInput(raw);
+  for (const value of [
+    transaction.date,
+    transaction.credit_card_charge?.charge?.purchase_date,
+  ]) {
+    if (value == null || String(value).trim() === "") continue;
+    const ymd = ymdFromAnyDateInput(value);
     if (ymd) return `${ymd}T12:00:00`;
   }
   return `${todayLocalYmd()}T12:00:00`;
 }
 
-/**
- * Data inicial do campo Data: `preConfig` (se vier), senão última salva, senão hoje.
- */
+/** Data inicial do campo Data: preConfig, senão última salva, senão hoje. */
 export function initialNovaTransacaoDateYmd(organizationId, preConfig) {
   const fromPc = preConfig && ymdFromAnyDateInput(preConfig.dateIso ?? preConfig.transactionDate);
   if (fromPc) return fromPc;
