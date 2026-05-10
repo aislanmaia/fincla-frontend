@@ -37,6 +37,8 @@ import {
   TRANSACTIONS_DEFAULT_PERIOD,
 } from "../features/transactions/transactionsPeriodStorage.js";
 
+const TRANSACTIONS_SEARCH_DEBOUNCE_MS = 3000;
+
 export function TransacoesPage({
   onNav,
   isMobile = false,
@@ -92,7 +94,8 @@ export function TransacoesPage({
   };
 
   // ── State ─────────────────────────────────────────────────────────────────
-  const [search,      setSearch]      = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filterType,  setFilterType]  = useState("todos");
   const [filterCat,   setFilterCat]   = useState("todas");
   const [filterMethod,setFilterMethod]= useState("todos");
@@ -158,9 +161,23 @@ export function TransacoesPage({
     });
   }, [organizationId, period, customFrom, customTo]);
 
+  useEffect(() => {
+    const trimmed = searchInput.trim();
+    if (trimmed === "") {
+      setDebouncedSearch("");
+      setVisible(PAGE_SIZE);
+      return;
+    }
+    const id = window.setTimeout(() => {
+      setDebouncedSearch(trimmed);
+      setVisible(PAGE_SIZE);
+    }, TRANSACTIONS_SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(id);
+  }, [searchInput]);
+
   const shouldUseRealData = shouldUseRealDataForMode(organizationId, dataMode);
   const transactionsFilters = useMemo(() => ({
-    search,
+    search: debouncedSearch,
     filterType,
     filterCat,
     filterMethod,
@@ -169,7 +186,7 @@ export function TransacoesPage({
     customTo,
     sortBy,
     limit: visible,
-  }), [search, filterMethod, filterType, filterCat, period, customFrom, customTo, sortBy, visible]);
+  }), [debouncedSearch, filterMethod, filterType, filterCat, period, customFrom, customTo, sortBy, visible]);
   const transactionsData = useTransactionsData({
     organizationId,
     enabled: shouldUseRealData,
@@ -293,7 +310,7 @@ export function TransacoesPage({
   };
 
   const clearAll = () => {
-    setSearch(""); setFilterType("todos"); setFilterCat("todas");
+    setSearchInput(""); setFilterType("todos"); setFilterCat("todas");
     setFilterMethod("todos");
     setPeriod(TRANSACTIONS_DEFAULT_PERIOD);
     setCustomFrom("");
@@ -308,7 +325,7 @@ export function TransacoesPage({
     filterCat!=="todas"   && { key:"cat",     label: filterCatLabel,                                               onRemove:()=>setFilterCat("todas") },
     filterMethod!=="todos"&& { key:"method",  label: filterMethod,                                                 onRemove:()=>setFilterMethod("todos") },
     sortBy!=="date-desc"  && { key:"sort",    label: "↕ "+SORT_LABELS[sortBy].split("(")[0].trim(),               onRemove:()=>setSortBy("date-desc") },
-    search                && { key:"search",  label: `"${search}"`,                                                onRemove:()=>setSearch("") },
+    debouncedSearch && { key:"search", label: `"${debouncedSearch}"`, onRemove: () => setSearchInput("") },
   ].filter(Boolean);
 
   // ── Filter + sort ─────────────────────────────────────────────────────────
@@ -321,10 +338,10 @@ export function TransacoesPage({
       if (filterType === "despesa"  && t.val > 0) return false;
       if (filterCat   !== "todas"   && t.cat !== filterCat) return false;
       if (filterMethod!== "todos"   && t.method !== filterMethod) return false;
-      if (search && ![t.desc, t.cat, ...(t.tags||[])].some(s => s.toLowerCase().includes(search.toLowerCase()))) return false;
+      if (debouncedSearch && ![t.desc, t.cat, ...(t.tags||[])].some(s => s.toLowerCase().includes(debouncedSearch.toLowerCase()))) return false;
       return true;
     }).sort(sortFn);
-  }, [shouldUseRealData, txList, search, filterType, filterCat, filterMethod, period, sortBy, customFrom, customTo]);
+  }, [shouldUseRealData, txList, debouncedSearch, filterType, filterCat, filterMethod, period, sortBy, customFrom, customTo]);
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
   const canUseRemoteSummary = shouldUseRealData;
@@ -387,7 +404,7 @@ export function TransacoesPage({
   }, [hasMore, isMobile, tryLoadMore]);
 
   const listFiltersActive =
-    search.trim() !== "" ||
+    searchInput.trim() !== "" ||
     filterType !== "todos" ||
     filterCat !== "todas" ||
     filterMethod !== "todos" ||
@@ -398,7 +415,7 @@ export function TransacoesPage({
   // ── CSV export ────────────────────────────────────────────────────────────
   const exportCSV = () => {
     const header = "Data,Descrição,Categoria,Método,Valor,Status,Tags";
-    if (shouldUseRealData && organizationId && !search && filterCat === "todas") {
+    if (shouldUseRealData && organizationId && !debouncedSearch && filterCat === "todas") {
       downloadTransactionsCsvForUi(
         organizationId,
         buildTransactionsCsvOptions({
@@ -957,11 +974,11 @@ export function TransacoesPage({
         <div style={{ flex:1, display:"flex", alignItems:"center", gap:8,
           background:T.surface, border:`1px solid ${T.border}`, borderRadius:10, padding:"9px 14px" }}>
           <Search size={14} color={T.inkMid}/>
-          <input value={search} onChange={e=>{setSearch(e.target.value);setVisible(PAGE_SIZE);}}
+          <input value={searchInput} onChange={e=>{setSearchInput(e.target.value);setVisible(PAGE_SIZE);}}
             placeholder="Buscar por descrição, categoria ou tag…"
             style={{ ...G, flex:1, minWidth:0, border:"none", outline:"none",
               background:"transparent", fontSize:13, color:T.ink }}/>
-          {search && <button onClick={()=>setSearch("")} style={{ background:"none", border:"none",
+          {searchInput && <button onClick={()=>setSearchInput("")} style={{ background:"none", border:"none",
             cursor:"pointer", padding:2, display:"flex" }}><X size={12} color={T.inkLight}/></button>}
         </div>
 

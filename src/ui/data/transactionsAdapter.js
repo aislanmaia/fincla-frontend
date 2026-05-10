@@ -296,12 +296,9 @@ export function pickDisplayAmount(transaction) {
   return Number(transaction.value ?? 0);
 }
 
-/**
- * Magnitude do valor da operação para o formulário de edição (total na API),
- * não o montante da parcela usado em {@link pickDisplayAmount}.
- */
+/** Valor absoluto para o modal de edição; na lista usa-se pickDisplayAmount. */
 export function pickAmountAbsForTransactionEdit(transaction) {
-  if (!transaction || typeof transaction !== "object") return 0;
+  if (!transaction) return 0;
   const charge = transaction.credit_card_charge?.charge;
   if (charge?.modality === "installment") {
     const total = charge.total_amount;
@@ -314,26 +311,13 @@ export function pickAmountAbsForTransactionEdit(transaction) {
   return Number.isFinite(v) ? Math.abs(v) : 0;
 }
 
-/**
- * @param {ReturnType<typeof mapApiTransactionToUi> | Record<string, unknown>} ui
- */
 export function transactionUiValAbsForEdit(ui) {
-  if (ui == null || typeof ui !== "object") return 0;
-  const fromField = ui.valAbsForEdit;
-  if (fromField != null && fromField !== "" && Number.isFinite(Number(fromField))) {
-    return Math.abs(Number(fromField));
-  }
-  const parcelaTotal = ui.parcela?.valorTotal;
-  if (
-    parcelaTotal != null &&
-    parcelaTotal !== "" &&
-    Number.isFinite(Number(parcelaTotal))
-  ) {
-    return Math.abs(Number(parcelaTotal));
-  }
-  const v = ui.val;
-  if (v != null && v !== "" && Number.isFinite(Number(v))) {
-    return Math.abs(Number(v));
+  if (!ui || typeof ui !== "object") return 0;
+  for (const x of [ui.valAbsForEdit, ui.parcela?.valorTotal, ui.val]) {
+    if (x != null && x !== "") {
+      const n = Number(x);
+      if (Number.isFinite(n)) return Math.abs(n);
+    }
   }
   return 0;
 }
