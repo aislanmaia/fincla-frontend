@@ -15,6 +15,7 @@ const EMPTY_STATE = {
   summary: null,
   transactions: [],
   total: 0,
+  pagination: null,
 };
 
 export function useTransactionsData({
@@ -88,12 +89,14 @@ export function useTransactionsData({
       .then(([response, summary]) => {
         if (cancelled) return;
 
+        const transactions = (response.data ?? []).map(mapApiTransactionToUi);
         setState({
           isLoading: false,
           error: "",
           summary,
-          transactions: (response.data ?? []).map(mapApiTransactionToUi),
-          total: response.pagination?.total ?? 0,
+          transactions,
+          total: response.pagination?.total ?? transactions.length,
+          pagination: response.pagination ?? null,
         });
       })
       .catch((error) => {
@@ -105,6 +108,7 @@ export function useTransactionsData({
           summary: null,
           transactions: [],
           total: 0,
+          pagination: null,
         });
       });
 
@@ -133,9 +137,34 @@ export function useTransactionsData({
     }
   }, [organizationId]);
 
+  const hasMore = useMemo(() => {
+    if (!query || state.error) return false;
+
+    const loaded = state.transactions.length;
+    const limit = Math.max(1, Number(query.limit) || 10);
+    const next = state.pagination?.has_next;
+
+    if (!state.isLoading && loaded < limit) return false;
+    if (next === false) return false;
+    if (next === true) return true;
+
+    return state.total > loaded;
+  }, [
+    query,
+    state.error,
+    state.isLoading,
+    state.pagination,
+    state.total,
+    state.transactions.length,
+  ]);
+
   return {
-    ...state,
-    hasMore: state.total > state.transactions.length,
+    isLoading: state.isLoading,
+    error: state.error,
+    summary: state.summary,
+    transactions: state.transactions,
+    total: state.total,
+    hasMore,
     removeTransaction,
   };
 }

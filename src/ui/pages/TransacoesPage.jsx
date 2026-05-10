@@ -168,12 +168,14 @@ export function TransacoesPage({
       setVisible(PAGE_SIZE);
       return;
     }
+    setVisible(PAGE_SIZE);
     const id = window.setTimeout(() => {
       setDebouncedSearch(trimmed);
-      setVisible(PAGE_SIZE);
     }, TRANSACTIONS_SEARCH_DEBOUNCE_MS);
     return () => window.clearTimeout(id);
   }, [searchInput]);
+
+  const searchAwaitingCommit = searchInput.trim() !== debouncedSearch;
 
   const shouldUseRealData = shouldUseRealDataForMode(organizationId, dataMode);
   const transactionsFilters = useMemo(() => ({
@@ -370,11 +372,14 @@ export function TransacoesPage({
       : entries.sort((a,b) => parseDate(b[0]) - parseDate(a[0]));
   }, [shouldUseRealData, filtered, visible]);
 
-  const hasMore = shouldUseRealData
-    ? transactionsData.hasMore
-    : visible < filtered.length;
+  const hasMore =
+    !searchAwaitingCommit &&
+    (shouldUseRealData
+      ? transactionsData.hasMore
+      : visible < filtered.length);
 
   const tryLoadMore = useCallback(() => {
+    if (searchAwaitingCommit) return;
     if (!hasMore) return;
     if (shouldUseRealData && transactionsData.isLoading) return;
     if (loadMoreCooldownRef.current) return;
@@ -383,7 +388,12 @@ export function TransacoesPage({
     window.setTimeout(() => {
       loadMoreCooldownRef.current = false;
     }, 400);
-  }, [hasMore, shouldUseRealData, transactionsData.isLoading]);
+  }, [
+    searchAwaitingCommit,
+    hasMore,
+    shouldUseRealData,
+    transactionsData.isLoading,
+  ]);
 
   useEffect(() => {
     const sentinel = loadMoreSentinelRef.current;
