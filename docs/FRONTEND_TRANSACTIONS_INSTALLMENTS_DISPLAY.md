@@ -291,6 +291,6 @@ A API já retorna as transações ordenadas por data efetiva (compra ou vencimen
 
 ## 9. Referências
 
-- **API:** `docs/FRONTEND_API_GUIDE.md` — seção `GET /v1/transactions`
+- **API:** [**FRONTEND_API_GUIDE.md**](../../fincla-api/docs/FRONTEND_API_GUIDE.md) (**fincla-api**) — seção `GET /v1/transactions`
 - **Tipos TypeScript:** `Transaction`, `InstallmentInfo` já documentados no guia
 - **Exemplo de resposta:** Ver seção 2.3 deste documento

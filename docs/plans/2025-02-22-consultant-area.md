@@ -6,7 +6,7 @@
 
 **Architecture:** Rotas explícitas (`/consultant`, `/consultant/clients/:organizationId`). `useOrganization` prioriza `organizationId` da URL quando em rota de cliente. Reuso total de Dashboard, Transações, Relatórios, etc. Consultor detectado via `user.subscription.features`.
 
-**Tech Stack:** React, TypeScript, wouter, TanStack Query, axios. Ver `docs/FRONTEND_API_GUIDE.md` (seção "Endpoints da Área do Consultor").
+**Tech Stack:** React, TypeScript, wouter, TanStack Query, axios. Ver [**FRONTEND_API_GUIDE.md**](../../../fincla-api/docs/FRONTEND_API_GUIDE.md) no **fincla-api** (`docs/FRONTEND_API_GUIDE.md`; seção "Endpoints da Área do Consultor").
 
 **Design doc:** `docs/plans/2025-02-22-consultant-area-design.md`
 

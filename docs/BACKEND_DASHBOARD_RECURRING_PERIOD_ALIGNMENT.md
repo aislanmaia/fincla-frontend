@@ -3,7 +3,7 @@
 **Audiência:** backend (contrato e cálculo) e frontend (consumo e fallback).  
 **Problema:** o datepicker do **Visão Geral** usa `date_start` / `date_end` arbitrários; os KPIs de transações já respeitam o período, mas a fatia **“Comprometido”** usa `GET /v1/recurring-series` → `summary.total_monthly_expense` (**valor mensal fixo**), gerando inconsistência dimensional.
 
-**Documentos relacionados:** `docs/BACKEND_TEST_RESET_ORGANIZATION.md` (E2E), `docs/FRONTEND_API_GUIDE.md` (contrato oficial após merge).
+**Documentos relacionados:** `docs/BACKEND_TEST_RESET_ORGANIZATION.md` (E2E), [**FRONTEND_API_GUIDE.md**](../../fincla-api/docs/FRONTEND_API_GUIDE.md) (**fincla-api** — contrato oficial após merge).
 
 ---
 
@@ -170,7 +170,7 @@ Se existirem **dois** pontos de entrada (`transactions/summary` e `recurring-ser
 
 ## 7. Documentação e tipos
 
-- Atualizar `docs/FRONTEND_API_GUIDE.md` na seção `GET /v1/transactions/summary` com o bloco `recurring_in_period`, exemplos (7 dias, 90 dias, período personalizado) e a tabela §3.6.
+- Atualizar [**FRONTEND_API_GUIDE.md**](../../fincla-api/docs/FRONTEND_API_GUIDE.md) (**fincla-api**) na seção `GET /v1/transactions/summary` com o bloco `recurring_in_period`, exemplos (7 dias, 90 dias, período personalizado) e a tabela §3.6.
 - Se o backend estender `GET /v1/recurring-series` com intervalo (§5.2), documentar query params, formato de `summary` / `summary_for_period` e exemplos para telas de Relatórios e Recorrências.
 - Regenerar ou editar tipos em `src/api/types.ts`.
 

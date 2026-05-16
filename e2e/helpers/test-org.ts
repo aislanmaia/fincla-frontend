@@ -1,5 +1,5 @@
 /**
- * Reset + seed via API de teste (docs/FRONTEND_API_GUIDE.md).
+ * Reset + seed via API de teste (fincla-api/docs/FRONTEND_API_GUIDE.md).
  * Usado no globalSetup e nos testes para org sempre previsível.
  */
 import fs from "node:fs";

@@ -111,7 +111,7 @@ Resumo alinhado ao plano em `.cursor/plans/ritmopage_api_+_estados_a457a9ef.plan
 
 4. **Acessibilidade e consistência:** mesmos padrões de empty/erro da Visão Geral.
 
-**Não** é necessário, para Opção A, alterar `docs/FRONTEND_API_GUIDE.md` além de eventual nota futura quando o backend oferecer histórico completo.
+**Não** é necessário, para Opção A, alterar [**FRONTEND_API_GUIDE.md**](../../fincla-api/docs/FRONTEND_API_GUIDE.md) (**fincla-api**) além de eventual nota futura quando o backend oferecer histórico completo.
 
 ---
 
@@ -142,7 +142,7 @@ Resumo alinhado ao plano em `.cursor/plans/ritmopage_api_+_estados_a457a9ef.plan
 
 ## 8. Possibilidades de backend para histórico completo
 
-Qualquer solução deve ser **documentada no `FRONTEND_API_GUIDE.md`** com parâmetros, semântica de período e exemplos.
+Qualquer solução deve ser **documentada no [FRONTEND_API_GUIDE.md](../../fincla-api/docs/FRONTEND_API_GUIDE.md)** (**fincla-api:** `docs/FRONTEND_API_GUIDE.md`) com parâmetros, semântica de período e exemplos.
 
 ### 8.1 Versão com vigência
 
@@ -209,7 +209,7 @@ Em resumo: **cada orçamento atual vira a “primeira versão”** com vigência
 ## 9. Referências no repositório
 
 - Plano de implementação: `ritmopage_api_+_estados` (Cursor plans / cópia versionada se existir).
-- Guia de API: [`docs/FRONTEND_API_GUIDE.md`](./FRONTEND_API_GUIDE.md) — `GET /v1/transactions`, `GET /v1/budgets`.
+- Guia de API: [**FRONTEND_API_GUIDE.md**](../../fincla-api/docs/FRONTEND_API_GUIDE.md) (**fincla-api:** `docs/FRONTEND_API_GUIDE.md`) — `GET /v1/transactions`, `GET /v1/budgets`.
 - Cliente TS: `src/api/transactions.ts`, `src/api/budgets.ts`.
 - Paginação de transações: `fetchAllTransactionsPages` em `src/ui/data/transactionsAdapter.js`.
 - Orçamento consolidado no UI: `mapBudgetsResponseToUi` em `src/ui/data/budgetsAdapter.js`.

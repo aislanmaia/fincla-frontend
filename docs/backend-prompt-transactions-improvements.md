@@ -114,7 +114,7 @@ Aceitar os mesmos filtros do endpoint de listagem:
 
 ## 3. Documentação
 
-Atualizar a documentação da API (`FRONTEND_API_GUIDE.md` ou similar) para incluir:
+Atualizar [**FRONTEND_API_GUIDE.md**](../../fincla-api/docs/FRONTEND_API_GUIDE.md) no repositório **fincla-api** (ou documentação equivalente) para incluir:
 
 1. Nova estrutura de resposta do GET `/v1/transactions` com paginação
 2. Novos parâmetros `page` e `limit`

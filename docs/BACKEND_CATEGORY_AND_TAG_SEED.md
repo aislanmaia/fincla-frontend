@@ -2,7 +2,7 @@
 
 Documento para o **backend** implementar criação automática (seed) de categorias e tags associadas **para cada organização nova**, espelhando o conjunto já usado no protótipo da área **Configurações → Categorias e Tags** (`src/ui/pages/ConfiguracoesPage.jsx` → `CAT_LIST`).
 
-> **Contrato e notas de produto atualizados** pelo backend estão em **`docs/FRONTEND_API_GUIDE.md`** (seção *Endpoints de Tags*): nomes canônicos semeados em **inglês**, tipo **`detalhe`** com `parent_category_tag_id`, `icon_key` Lucide, regras de i18n e `tag_ids` obrigatório em transações. Este arquivo permanece como referência de **rótulos PT do protótipo** e mapa `icon_key`; em caso de divergência, prevalece o guia da API.
+> **Contrato e notas de produto atualizados** pelo backend estão em [**FRONTEND_API_GUIDE.md**](../../fincla-api/docs/FRONTEND_API_GUIDE.md) no repositório **fincla-api** (`docs/FRONTEND_API_GUIDE.md`) (seção *Endpoints de Tags*): nomes canônicos semeados em **inglês**, tipo **`detalhe`** com `parent_category_tag_id`, `icon_key` Lucide, regras de i18n e `tag_ids` obrigatório em transações. Este arquivo permanece como referência de **rótulos PT do protótipo** e mapa `icon_key`; em caso de divergência, prevalece o guia da API.
 
 ---
 
@@ -46,7 +46,7 @@ Ordem de exibição: usar `sort_order` crescente (0, 1, 2, …) na ordem abaixo.
 | 10 | Receita | `#059669` | `wallet` | true | true | true |
 
 - `tag_type_id`: o UUID do tipo cuja resposta de `GET /v1/tag-types` tem `name: "categoria"` (ou equivalente canônico acordado).
-- Campos alinhados ao guia: ver `Tag` em `docs/FRONTEND_API_GUIDE.md` (lista de tags).
+- Campos alinhados ao guia: ver `Tag` em [**FRONTEND_API_GUIDE.md**](../../fincla-api/docs/FRONTEND_API_GUIDE.md) (lista de tags).
 
 ### 3.2 Tags filhas (rótulos sob cada categoria)
 
@@ -132,7 +132,7 @@ O frontend deve manter um objeto **estático** `Record<string, LucideIcon>` (ou 
 
 Após o backend implementar:
 
-- Incluir `icon_key?: string | null` em `Tag` no OpenAPI / **`docs/FRONTEND_API_GUIDE.md`**.
+- Incluir `icon_key?: string | null` em `Tag` no OpenAPI / [**FRONTEND_API_GUIDE.md**](../../fincla-api/docs/FRONTEND_API_GUIDE.md) (**fincla-api**).
 - `CreateTagRequest` / `UpdateTagRequest`: permitir `icon_key` opcional.
 - Atualizar `src/api/types.ts` e adapters no frontend para ler `icon_key` e resolver o componente via §5.2.
 

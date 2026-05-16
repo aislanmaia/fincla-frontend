@@ -557,7 +557,7 @@ Features novas: Tudo disponível
   - [ ] `ending_soon_all_cards`
   - [ ] `global_insights`
 
-- [ ] Atualizar `FRONTEND_API_GUIDE.md` com novos endpoints
+- [ ] Atualizar `docs/FRONTEND_API_GUIDE.md` no repositório **fincla-api** com novos endpoints
 
 - [ ] Testes
   - [ ] Cartão sem parcelas futuras

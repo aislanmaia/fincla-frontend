@@ -1,7 +1,7 @@
 # Fincla v2 — Requisitos de Backend
 
 > **Documento:** Especificação completa para o backend suportar todas as features do Fincla v2  
-> **Base:** Análise de gaps entre `BACKEND_REFERENCE.md`, `FRONTEND_API_GUIDE.md` e o frontend Fincla v2 (ex-Finly v4)  
+> **Base:** Análise de gaps entre `BACKEND_REFERENCE.md`, [**FRONTEND_API_GUIDE.md**](../../fincla-api/docs/FRONTEND_API_GUIDE.md) (**fincla-api:** `docs/FRONTEND_API_GUIDE.md`) e o frontend Fincla v2 (ex-Finly v4)  
 > **Audiência:** Time de backend responsável pela implementação  
 > **Data:** Março 2026
 

@@ -285,7 +285,7 @@ const data = await res.json();
 - [ ] Matriz §5 coberta por testes automatizados.
 - [ ] Transação ou compensação em caso de falha parcial.
 - [ ] Resposta inclui `provisioned` e `deleted` consistentes.
-- [ ] Entrada em `docs/FRONTEND_API_GUIDE.md` (seção ferramentas de teste).
+- [ ] Entrada em [**FRONTEND_API_GUIDE.md**](../../fincla-api/docs/FRONTEND_API_GUIDE.md) (**fincla-api**, seção ferramentas de teste).
 - [ ] Produção: sem rota, sem `TEST_RESET_SECRET` no deploy.
 
 ---

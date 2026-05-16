@@ -8,7 +8,7 @@
 
 | O quê | Onde |
 |--------|------|
-| Endpoints, retornos, parâmetros, erros, payloads, evoluções da API | **`docs/FRONTEND_API_GUIDE.md`** — **sempre**. Toda mudança que o backend fizer na API deve ir para esse guia. |
+| Endpoints, retornos, parâmetros, erros, payloads, evoluções da API | [**FRONTEND_API_GUIDE.md**](../../fincla-api/docs/FRONTEND_API_GUIDE.md) (**fincla-api:** `docs/FRONTEND_API_GUIDE.md`) — **sempre**. Toda mudança que o backend fizer na API deve ir para esse guia. |
 | Formato da **URL** do botão/link no e-mail (query/hash) que o SPA lê antes de chamar a API | **Este arquivo** (`FRONTEND_AUTH_INVITE_LINKS.md`) — repasse ao backend só para esse fim. |
 
 O frontend implementa a leitura dessas URLs em `src/ui/features/auth/authEntryUrl.js`.
@@ -21,7 +21,7 @@ Os links devem apontar para a **origem do app** (onde o SPA é servido), **não*
 
 ### Recuperação de senha
 
-Após o clique, o SPA abre a tela de nova senha e o cliente chama `POST /v1/auth/reset-password` (contrato no `FRONTEND_API_GUIDE.md`).
+Após o clique, o SPA abre a tela de nova senha e o cliente chama `POST /v1/auth/reset-password` (contrato no [**FRONTEND_API_GUIDE.md**](../../fincla-api/docs/FRONTEND_API_GUIDE.md); **fincla-api:** `docs/FRONTEND_API_GUIDE.md`).
 
 **URLs aceitas pelo SPA:**
 
@@ -36,7 +36,7 @@ Após o clique, o SPA abre a tela de nova senha e o cliente chama `POST /v1/auth
 
 ### Convite para organização
 
-Após o clique, o SPA abre a tela de senha (nome opcional) e o cliente chama `POST /v1/invitations/accept` (contrato no `FRONTEND_API_GUIDE.md`).
+Após o clique, o SPA abre a tela de senha (nome opcional) e o cliente chama `POST /v1/invitations/accept` (contrato no [**FRONTEND_API_GUIDE.md**](../../fincla-api/docs/FRONTEND_API_GUIDE.md); **fincla-api:** `docs/FRONTEND_API_GUIDE.md`).
 
 **URLs aceitas:**
 
@@ -59,4 +59,4 @@ Se a URL indicar **convite** (`invite_token`, `invitation_token` ou `action=acce
 - [ ] E-mail de **esqueci minha senha** usa um dos formatos de reset acima.
 - [ ] E-mail de **convite** usa um dos formatos de convite acima (evitar só `?token=` sem `action` se isso colidir com outro fluxo).
 - [ ] Base URL do front correta por ambiente (staging/prod).
-- [ ] Qualquer mudança nos **endpoints** ou **contratos** continua documentada **apenas** no `FRONTEND_API_GUIDE.md`, não neste arquivo.
+- [ ] Qualquer mudança nos **endpoints** ou **contratos** continua documentada **apenas** no [**FRONTEND_API_GUIDE.md**](../../fincla-api/docs/FRONTEND_API_GUIDE.md) (**fincla-api** `docs/`), não neste arquivo.

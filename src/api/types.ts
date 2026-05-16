@@ -294,7 +294,7 @@ export interface Tag {
   organization_id: string;
   sort_order: number;
   is_onboarding_highlight: boolean;
-  /** Lucide em kebab-case; ver docs/FRONTEND_API_GUIDE.md — Tags */
+  /** Lucide em kebab-case; ver fincla-api/docs/FRONTEND_API_GUIDE.md — Tags */
   icon_key: string | null;
   /** Tipo `detalhe`: UUID da categoria pai; `null` para categorias */
   parent_category_tag_id: string | null;

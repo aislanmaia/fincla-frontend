@@ -4,7 +4,7 @@
 
 Documentar o que o **frontend** exibe hoje no bloco **Impacto financeiro** dentro do modal **Nova transação** (`NovaTransacaoModal` em `src/ui/App.jsx`), e o que o **backend** precisa expor para que valores, percentuais e séries temporais reflitam a realidade da organização (sem dados mockados).
 
-Após implementação, o guia canônico **`docs/FRONTEND_API_GUIDE.md`** deve ser atualizado com paths, query/body e exemplos de resposta.
+Após implementação, o guia canônico [**FRONTEND_API_GUIDE.md**](../../fincla-api/docs/FRONTEND_API_GUIDE.md) (**fincla-api:** `docs/FRONTEND_API_GUIDE.md`) deve ser atualizado com paths, query/body e exemplos de resposta.
 
 ---
 
@@ -162,7 +162,7 @@ interface PreviewTransactionResponse {
 - [ ] Novo **`GET /v1/analytics/spending-by-day`** (ou nome final alinhado ao guia).
 - [ ] Novo **`POST /v1/budgets/preview-transaction`** (ou path acordado).
 - [ ] Documentar fuso, status de transação e regras de parcela.
-- [ ] Atualizar **`FRONTEND_API_GUIDE.md`** e, se existir, OpenAPI/Swagger no repositório da API.
+- [ ] Atualizar [**FRONTEND_API_GUIDE.md**](../../fincla-api/docs/FRONTEND_API_GUIDE.md) (**fincla-api**) e, se existir, OpenAPI/Swagger no repositório da API.
 - [ ] Índices e testes de carga leves no intervalo “mês atual” (31 pontos).
 
 ---
