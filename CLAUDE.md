@@ -1,40 +1,7 @@
-# Fincla v2 — branch `v2-total-refactoring`
+# Fincla Frontend
 
-SaaS de finanças pessoais BR. Nesta branch a **UI** replica o protótipo de referência em `docs/` (objeto `T` + estilos inline), **sem Tailwind** por enquanto. Cliente REST em `src/api/` (TypeScript).
+SaaS de finanças pessoais BR. A **UI** replica o protótipo de referência em `docs/` (objeto `T` + estilos inline), **sem Tailwind** por enquanto. Cliente REST em `src/api/` (TypeScript).
 
-## Stack atual
-- **Vite 5** + **React 18**
-- **Recharts** + **lucide-react**
-- **TypeScript** apenas em `src/api/`; UI em `.jsx` com `allowJs` / `checkJs: false`
-- **Tailwind v4**: depois da componentização e integração com API, sem alterar pixel-perfect
-
-## Estrutura
-
-```
-src/
-  main.jsx                 ← entry → <App /> de ui/App.jsx
-  ui/
-    App.jsx                ← app principal (estado global + telas; modo live usa API; ir fatiando)
-    formatters.js          ← fmtAbs, fmtSgn, fmtK
-    tokens.js              ← objeto T (hex)
-    injectFonts.js         ← Google Fonts (id DOM: fincla-fonts)
-    animations.jsx         ← keyframes + classes .fincla-row / .fincla-btn / …
-    typography.js          ← G, S, NUM
-    layouts/
-      Sidebar.jsx
-      Topbar.jsx
-    components/
-      primitives.jsx       ← PageEnter, AnimNum, Card, Btn, …
-    data/
-      mockFinance.js       ← ritmo, transações mock, fluxos, etc.
-    features/
-      moodV4.jsx           ← MOODS, calcMood, CATS_V4, RhythmTooltipV4, …
-      onboarding/OnboardingFlow.jsx
-      shellExtras.jsx      ← MiniChecklist, StatePanelV4, EmptyState
-      authViews.jsx        ← LoginPage, ErrorBoundary
-    pages/                 ← (reservado) telas grandes (dashboard, cartões, …)
-  api/                     ← REST: client, config, types, domínios
-```
 
 ## API
 - Base: `VITE_API_BASE_URL` — `src/api/config.ts` acrescenta `/v1`
