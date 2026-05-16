@@ -1,5 +1,6 @@
 // api/auth.ts
 import apiClient from './client';
+import { isTransientLoginFailure, withTransientRetries } from './loginResilience';
 import type {
   LoginResponse,
   User,
@@ -16,17 +17,18 @@ import type {
  * Autentica um usuário e retorna o token JWT
  */
 export const login = async (email: string, password: string): Promise<LoginResponse> => {
-  const response = await apiClient.post<LoginResponse>('/auth/login', {
-    email,
-    password,
-  });
+  return withTransientRetries(async () => {
+    const response = await apiClient.post<LoginResponse>('/auth/login', {
+      email,
+      password,
+    });
 
-  // Armazenar token
-  if (response.data.token) {
-    localStorage.setItem('auth_token', response.data.token);
-  }
+    if (response.data.token) {
+      localStorage.setItem('auth_token', response.data.token);
+    }
 
-  return response.data;
+    return response.data;
+  }, isTransientLoginFailure);
 };
 
 /**

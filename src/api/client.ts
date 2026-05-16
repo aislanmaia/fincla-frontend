@@ -1,5 +1,12 @@
 // api/client.ts
 import axios, { AxiosError } from 'axios';
+import {
+  ApiErrorBody,
+  humanizeDetailString,
+  isLegacyError,
+  isSafeError,
+  sanitizeUnknownErrorMessage,
+} from './apiError';
 import { API_CONFIG } from './config';
 
 const apiClient = axios.create({
@@ -35,7 +42,7 @@ apiClient.interceptors.response.use(
 const API_MESSAGE_TRANSLATIONS: Record<string, string> = {
   'Phone already linked': 'Este número já está vinculado para esta ou outra conta.',
   'phone already linked': 'Este número já está vinculado para esta ou outra conta.',
-  'PHONE_ALREADY_LINKED': 'Este número já está vinculado para esta ou outra conta.',
+  PHONE_ALREADY_LINKED: 'Este número já está vinculado para esta ou outra conta.',
 };
 
 function translateApiMessage(message: string, errorCode?: string): string {
@@ -47,76 +54,107 @@ function translateApiMessage(message: string, errorCode?: string): string {
   );
 }
 
-// Função auxiliar para tratar erros da API
+function messagesFromPydanticDetailArray(
+  detail: unknown[],
+  httpStatus: number | undefined,
+): string {
+  const msgs = detail
+    .map((d) => {
+      if (typeof d === 'object' && d !== null && 'msg' in d) {
+        const raw = String((d as { msg?: unknown }).msg ?? '');
+        return humanizeDetailString(raw, httpStatus);
+      }
+      if (typeof d === 'object' && d !== null && 'message' in d) {
+        const raw = String((d as { message?: unknown }).message ?? '');
+        return humanizeDetailString(raw, httpStatus);
+      }
+      return humanizeDetailString(String(d), httpStatus);
+    })
+    .filter((s): s is string => Boolean(s && s.length > 0));
+  return msgs.length > 0
+    ? msgs.join('. ')
+    : 'Verifique os dados informados e tente novamente.';
+}
+
+/**
+ * Extrai texto seguro para exibição, cobrindo envelope sanitizado,
+ * legado e string — nunca retorna objetos serializados ou stack interno.
+ */
 export const handleApiError = (error: unknown): string => {
   if (axios.isAxiosError(error)) {
-    // Tratar erros de CORS especificamente
+    // Sem resposta HTTP (rede, timeout, CORS bloqueado no browser)
     if (!error.response && error.code === 'ERR_NETWORK') {
-      // Verificar se é um erro de CORS
-      if (error.message?.includes('CORS') || error.message?.includes('Network Error')) {
-        return 'Erro de CORS: O servidor não está permitindo requisições deste domínio. Verifique a configuração do backend.';
-      }
-      return 'Erro de conexão: Não foi possível conectar ao servidor. Verifique sua conexão e se o servidor está rodando.';
+      return 'Não foi possível conectar ao servidor. Verifique sua conexão.';
     }
-    
+
+    const status = error.response?.status;
     const responseData = error.response?.data;
-    
-    // Se for um objeto ApiError com detail (string, array ou objeto aninhado)
+
     if (responseData && typeof responseData === 'object' && 'detail' in responseData) {
-      const detail = (responseData as { detail: unknown }).detail;
+      const detail = (responseData as ApiErrorBody).detail;
+
+      if (isSafeError(detail)) {
+        return translateApiMessage(detail.message);
+      }
+      if (isLegacyError(detail)) {
+        return translateApiMessage(detail.message, detail.error);
+      }
       if (typeof detail === 'string') {
-        return detail;
+        const human = humanizeDetailString(detail, status);
+        if (human) {
+          return translateApiMessage(human);
+        }
       }
       if (Array.isArray(detail)) {
-        const msgs = detail
-          .map((d) => (typeof d === 'object' && d && 'msg' in d ? (d as { msg?: string }).msg : typeof d === 'object' && d && 'message' in d ? (d as { message?: string }).message : String(d)))
-          .filter(Boolean);
-        return msgs.length > 0 ? msgs.join('. ') : 'Erro de validação. Verifique os dados.';
+        return messagesFromPydanticDetailArray(detail, status);
       }
-      // detail como objeto: { error, message, type } (ex: PHONE_ALREADY_LINKED)
-      if (detail && typeof detail === 'object' && 'message' in detail) {
-        const msg = (detail as { message?: string }).message;
-        if (typeof msg === 'string' && msg.trim()) {
-          return translateApiMessage(msg, (detail as { error?: string }).error);
+      if (
+        detail &&
+        typeof detail === 'object' &&
+        'message' in detail &&
+        typeof (detail as { message?: unknown }).message === 'string'
+      ) {
+        const raw = (detail as { message: string }).message;
+        const human = humanizeDetailString(raw, status);
+        if (human) {
+          const code =
+            'error' in detail && typeof (detail as { error?: unknown }).error === 'string'
+              ? (detail as { error: string }).error
+              : undefined;
+          return translateApiMessage(human, code);
         }
       }
     }
-    
-    // Se for um array de erros de validação do Pydantic
+
     if (Array.isArray(responseData)) {
-      const errors = responseData
-        .map((err: any) => {
-          if (typeof err === 'object' && err.msg) {
-            return err.msg;
-          }
-          return String(err);
-        })
-        .filter(Boolean);
-      return errors.length > 0 ? errors.join(', ') : 'Erro de validação';
+      return messagesFromPydanticDetailArray(responseData, status);
     }
-    
-    // Se for um objeto de erro de validação do Pydantic
+
     if (responseData && typeof responseData === 'object') {
-      // Tentar extrair mensagens de erro
-      const errorObj = responseData as any;
-      if (errorObj.msg && typeof errorObj.msg === 'string') {
-        return errorObj.msg;
+      const errorObj = responseData as { msg?: unknown; message?: unknown };
+      if (typeof errorObj.msg === 'string') {
+        const human = humanizeDetailString(errorObj.msg, status);
+        if (human) return human;
       }
-      if (errorObj.message && typeof errorObj.message === 'string') {
-        return errorObj.message;
+      if (typeof errorObj.message === 'string') {
+        const human = humanizeDetailString(errorObj.message, status);
+        if (human) return human;
       }
     }
-    
-    // Tratar erros HTTP específicos com mensagens amigáveis (sempre em português)
-    const status = error.response?.status;
+
     const statusMessages: Record<number, string> = {
       400: 'Dados inválidos. Verifique as informações e tente novamente.',
+      401: 'Sua sessão expirou ou o acesso não foi autorizado. Faça login novamente.',
       403: 'Acesso negado. Verifique suas permissões.',
       404: 'Recurso não encontrado.',
-      409: 'Este número já está vinculado para esta ou outra conta.',
-      422: 'Dados inválidos. Verifique as informações e tente novamente.',
+      409: 'Esta ação entra em conflito com o estado atual. Verifique e tente novamente.',
+      410: 'Este link expirou ou não é mais válido.',
+      422: 'Não foi possível concluir a operação. Verifique os dados e tente novamente.',
+      429: 'Muitas tentativas. Aguarde um momento e tente novamente.',
       500: 'Erro interno do servidor. Tente novamente mais tarde.',
       502: 'Serviço temporariamente indisponível. Tente novamente em instantes.',
+      503: 'Serviço temporariamente indisponível. Tente novamente em instantes.',
+      504: 'Tempo esgotado ao contatar o servidor. Tente novamente.',
     };
     if (status && statusMessages[status]) {
       return statusMessages[status];
@@ -126,22 +164,26 @@ export const handleApiError = (error: unknown): string => {
     }
     return 'Erro desconhecido. Tente novamente.';
   }
-  
+
   if (error instanceof Error) {
-    return error.message;
-  }
-  
-  // Se for um objeto genérico, converter para string
-  if (typeof error === 'object' && error !== null) {
-    try {
-      return JSON.stringify(error);
-    } catch {
-      return 'Erro desconhecido';
+    const safe = sanitizeUnknownErrorMessage(error.message);
+    if (safe) {
+      return safe;
     }
+    return 'Algo deu errado. Tente novamente mais tarde.';
   }
-  
-  return String(error || 'Erro desconhecido');
+
+  // Nunca expor objetos genéricos via JSON (vazamento de estrutura / detalhes)
+  return 'Algo deu errado. Tente novamente mais tarde.';
 };
 
-export default apiClient;
+export { errorCode, isLegacyError, isSafeError } from './apiError';
+export type {
+  ApiErrorBody,
+  ApiErrorDetail,
+  LegacyErrorDetail,
+  SafeErrorCode,
+  SafeErrorDetail,
+} from './apiError';
 
+export default apiClient;

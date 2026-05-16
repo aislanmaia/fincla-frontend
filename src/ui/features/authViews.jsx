@@ -1,11 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Mail,
   Lock,
   Eye,
   EyeOff,
   ChevronLeft,
-  RefreshCw,
+  Loader2,
   AlertTriangle,
 } from "lucide-react";
 import { formatInvitationApiError } from "../data/invitationAdapter.js";
@@ -25,6 +25,16 @@ export const LoginPage = ({
   const [showPwd,  setShowPwd]  = useState(false);
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState(initialError);
+  const [showSlowConnectHint, setShowSlowConnectHint] = useState(false);
+
+  useEffect(() => {
+    if (!loading || view !== "login") {
+      setShowSlowConnectHint(false);
+      return;
+    }
+    const id = window.setTimeout(() => setShowSlowConnectHint(true), 2600);
+    return () => window.clearTimeout(id);
+  }, [loading, view]);
 
   const handleLogin = async () => {
     if (!email || !password) { setError("Preencha e-mail e senha."); return; }
@@ -62,15 +72,16 @@ export const LoginPage = ({
     return u.slice(0,2) + "•".repeat(Math.max(1, u.length-2)) + "@" + d;
   };
 
-  const Input = ({ type="text", value, onChange, placeholder, icon, right }) => (
+  const Input = ({ type="text", value, onChange, placeholder, icon, right, disabled=false }) => (
     <div style={{ position:"relative" }}>
       {icon && (
-        <div style={{ position:"absolute", left:14, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
+        <div style={{ position:"absolute", left:14, top:"50%", transform:"translateY(-50%)", pointerEvents:"none", opacity: disabled ? 0.45 : 1 }}>
           {icon}
         </div>
       )}
       <input
         type={type} value={value}
+        disabled={disabled}
         onChange={e => { onChange(e.target.value); setError(""); }}
         placeholder={placeholder}
         onKeyDown={e => {
@@ -85,15 +96,17 @@ export const LoginPage = ({
           ...G, width:"100%", padding: icon ? "13px 14px 13px 42px" : "13px 14px",
           border:`1.5px solid ${error ? T.red+"66" : T.border}`,
           borderRadius:11, fontSize:14, color:T.ink, background:T.surface,
-          outline:"none", transition:"border-color 0.15s, box-shadow 0.15s",
+          outline:"none", transition:"border-color 0.15s, box-shadow 0.15s, opacity 0.15s",
           boxSizing:"border-box",
+          opacity: disabled ? 0.68 : 1,
+          cursor: disabled ? "not-allowed" : "text",
         }}
         onFocus={e => { e.target.style.borderColor = T.blue; e.target.style.boxShadow = `0 0 0 3px ${T.blueLight}`; }}
         onBlur={e  => { e.target.style.borderColor = error ? T.red+"66" : T.border; e.target.style.boxShadow = "none"; }}
       />
       {right && (
-        <button onClick={right.action} tabIndex={-1}
-          style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", padding:4, color:T.inkMid }}>
+        <button type="button" onClick={right.action} tabIndex={-1} disabled={disabled}
+          style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor: disabled ? "not-allowed" : "pointer", padding:4, color:T.inkMid, opacity: disabled ? 0.45 : 1 }}>
           {right.icon}
         </button>
       )}
@@ -101,8 +114,8 @@ export const LoginPage = ({
   );
 
   const BtnPrimary = ({ onClick, children, disabled }) => (
-    <button onClick={onClick} disabled={disabled}
-      style={{ ...G, width:"100%", padding:"14px", background: disabled ? T.inkGhost : T.ink, color:"#fff", border:"none", borderRadius:11, fontSize:14, fontWeight:700, cursor: disabled ? "not-allowed" : "pointer", transition:"opacity 0.15s, transform 0.12s", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}
+    <button type="button" onClick={onClick} disabled={disabled}
+      style={{ ...G, width:"100%", minHeight:48, padding:"14px", background: disabled ? T.inkGhost : T.ink, color:"#fff", border:"none", borderRadius:11, fontSize:14, fontWeight:700, cursor: disabled ? "not-allowed" : "pointer", transition:"opacity 0.15s, transform 0.12s", display:"flex", alignItems:"center", justifyContent:"center", gap:10 }}
       onMouseEnter={e => { if (!disabled) e.currentTarget.style.opacity = "0.88"; }}
       onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}>
       {children}
@@ -204,13 +217,21 @@ export const LoginPage = ({
                 onChange: setEmail,
                 placeholder: "seu@email.com",
                 icon: <Mail size={15} color={T.inkMid} />,
+                disabled: loading,
               })}
             </div>
             {error && <div style={{ ...G, fontSize:12, color:T.red }}>{error}</div>}
             {BtnPrimary({
               onClick: handleForgot,
               disabled: loading,
-              children: loading ? "Enviando…" : "Enviar link de recuperação",
+              children: loading ? (
+                <>
+                  <Loader2 size={16} style={{ animation: "spin 0.65s linear infinite" }} aria-hidden />
+                  Enviando…
+                </>
+              ) : (
+                "Enviar link de recuperação"
+              ),
             })}
           </div>
         </div>
@@ -220,7 +241,11 @@ export const LoginPage = ({
     // Default: login
     return (
       <div style={{ display:"flex", flexDirection:"column", justifyContent:"center", padding:"clamp(24px,5vw,48px) clamp(20px,5vw,44px)", flex:1, overflowY:"auto" }}>
-        <div style={{ maxWidth:380, margin:"0 auto", width:"100%" }}>
+        <div
+          data-testid="login-form-panel"
+          style={{ maxWidth:380, margin:"0 auto", width:"100%" }}
+          aria-busy={loading ? true : undefined}
+        >
           <div style={{ marginBottom:36 }}>
             <div style={{ ...G, fontSize:26, fontWeight:800, color:T.ink, marginBottom:6 }}>
               Bom ver você de volta
@@ -239,14 +264,16 @@ export const LoginPage = ({
                 onChange: setEmail,
                 placeholder: "seu@email.com",
                 icon: <Mail size={15} color={T.inkMid} />,
+                disabled: loading,
               })}
             </div>
 
             <div>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:7 }}>
                 <label style={{ ...G, fontSize:11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.07em" }}>Senha</label>
-                <button onClick={() => { setView("forgot"); setError(""); }}
-                  style={{ ...G, background:"none", border:"none", cursor:"pointer", fontSize:12, color:T.blue, fontWeight:600, padding:0 }}>
+                <button type="button" onClick={() => { setView("forgot"); setError(""); }}
+                  disabled={loading}
+                  style={{ ...G, background:"none", border:"none", cursor: loading ? "not-allowed" : "pointer", fontSize:12, color:T.blue, fontWeight:600, padding:0, opacity: loading ? 0.45 : 1 }}>
                   Esqueci minha senha
                 </button>
               </div>
@@ -256,6 +283,7 @@ export const LoginPage = ({
                 onChange: setPassword,
                 placeholder: "••••••••",
                 icon: <Lock size={15} color={T.inkMid} />,
+                disabled: loading,
                 right: {
                   icon: showPwd ? <EyeOff size={15} /> : <Eye size={15} />,
                   action: () => setShowPwd((p) => !p),
@@ -273,11 +301,61 @@ export const LoginPage = ({
               {BtnPrimary({
                 onClick: () => { void handleLogin(); },
                 disabled: loading,
-                children: loading
-                  ? <><RefreshCw size={14} style={{ animation:"spin 0.7s linear infinite" }}/> Entrando…</>
-                  : "Entrar na conta",
+                children: loading ? (
+                  <>
+                    <Loader2 size={16} style={{ animation: "spin 0.65s linear infinite" }} aria-hidden />
+                    Entrando…
+                  </>
+                ) : (
+                  "Entrar na conta"
+                ),
               })}
             </div>
+
+            {loading && (
+              <div
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label="Carregando"
+                style={{
+                  marginTop: 2,
+                  height: 3,
+                  borderRadius: 9999,
+                  background: `${T.border}`,
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    height: "100%",
+                    width: "38%",
+                    borderRadius: 9999,
+                    background: `linear-gradient(90deg, ${T.blue}, ${T.purple})`,
+                    animation: "finclaIndeterminate 1.15s ease-in-out infinite",
+                  }}
+                />
+              </div>
+            )}
+
+            {loading && showSlowConnectHint && (
+              <div
+                style={{
+                  ...G,
+                  marginTop: 12,
+                  padding: "12px 14px",
+                  fontSize: 13,
+                  color: T.inkMid,
+                  lineHeight: 1.55,
+                  background: T.blueLight,
+                  borderRadius: 11,
+                  border: `1px solid ${T.blue}18`,
+                }}
+              >
+                <strong style={{ color: T.ink }}>Conectando ao servidor.</strong>{" "}
+                Se o ambiente ficou um tempo sem uso, a primeira tentativa pode levar alguns segundos — não é necessário enviar de novo.
+              </div>
+            )}
           </div>
 
           {showDemoAccessHint && (
@@ -302,7 +380,13 @@ export const LoginPage = ({
 
   return (
     <>
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes finclaIndeterminate {
+          0% { transform: translateX(-100%); }
+          100% { transform: translateX(280%); }
+        }
+      `}</style>
       <div style={{ display:"flex", height:"100vh", minHeight:"100dvh", background:T.surface, fontFamily:"'Geist',sans-serif", overflow:"hidden" }}>
         {/* Brand panel — hidden on mobile */}
         <div style={{ flex:"0 0 42%", display:"none", minHeight:"100vh" }} id="fincla-brand-panel">
@@ -475,7 +559,7 @@ export function AcceptInvitationPage({ token, onAccept, onComplete }) {
                 onClick: () => { void handleSubmit(); },
                 disabled: loading,
                 children: loading
-                  ? <><RefreshCw size={14} style={{ animation:"spin 0.7s linear infinite" }}/> Criando acesso…</>
+                  ? <><Loader2 size={16} style={{ animation:"spin 0.65s linear infinite" }} aria-hidden /> Criando acesso…</>
                   : "Aceitar convite e criar acesso",
               })}
             </div>
@@ -590,7 +674,7 @@ export function PasswordResetPage({ token, onResetPassword, onComplete }) {
                 onClick: () => { void handleSubmit(); },
                 disabled: loading,
                 children: loading
-                  ? <><RefreshCw size={14} style={{ animation:"spin 0.7s linear infinite" }}/> Salvando…</>
+                  ? <><Loader2 size={16} style={{ animation:"spin 0.65s linear infinite" }} aria-hidden /> Salvando…</>
                   : "Salvar nova senha",
               })}
             </div>
