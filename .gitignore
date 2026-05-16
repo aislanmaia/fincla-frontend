@@ -91,3 +91,6 @@ docs/DEMO_USERS.md
 e2e/.cache/
 test-results/
 playwright-report/
+
+# docs/mockups
+docs/mockups/
