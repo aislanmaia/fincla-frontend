@@ -10,8 +10,10 @@ import {
 import { zodValidator } from "@tanstack/zod-adapter";
 import App from "../App.jsx";
 import { AuthenticatedPageOutlet } from "./AuthenticatedPageOutlet.jsx";
+import { BillingReturnPage } from "../pages/BillingReturnPage.jsx";
 import { FinclaNotFoundPage } from "./FinclaNotFoundPage.jsx";
 import { FinclaAuthenticatedRouteError } from "./FinclaAuthenticatedRouteError.jsx";
+import { GatedAuthenticatedPageOutlet } from "./GatedAuthenticatedPageOutlet.jsx";
 import { AUTH_ROUTE_SEGMENTS } from "./appSegments.js";
 import { finclaRootSearchSchema } from "./finclaRootSearchSchema.js";
 import { requireSessionTokenBeforeLoad } from "./requireSessionTokenBeforeLoad.js";
@@ -29,19 +31,62 @@ const indexRoute = createRoute({
   component: () => null,
 });
 
+/**
+ * Segmentos cuja tela inteira só está disponível em planos com a feature
+ * key correspondente. O backend já bloqueia os endpoints via
+ * ``require_feature(...)``; aqui adicionamos UX antecipada (UpgradeWall)
+ * para evitar 403 ruidoso no navegador.
+ */
+const GATED_SEGMENTS = {
+  reports: {
+    feature: "advanced_reports",
+    title: "Relatórios avançados — disponível no Pro",
+    description:
+      "Cascata de receitas e despesas, evolução por categoria, velocidade vs ritmo ideal e score de aderência.",
+    benefits: [
+      "6 visualizações analíticas",
+      "Insights de pressão de gasto",
+      "Exportar CSV de todos os relatórios",
+    ],
+  },
+  simulation: {
+    feature: "what_if_simulations",
+    title: "Simulações de cenários — disponível no Pro",
+    description:
+      "Simule novos compromissos, ajustes em categorias e contribuições para metas antes de decidir.",
+    benefits: [
+      "Cenários what-if com múltiplos itens",
+      "Projeção lado-a-lado com o real",
+      "Análise de risco do cenário",
+    ],
+  },
+};
+
 const segmentRoutes = AUTH_ROUTE_SEGMENTS.filter(
   (s) => s !== "profile" && s !== "transactions",
-).map((segment) =>
-  createRoute({
+).map((segment) => {
+  const gate = GATED_SEGMENTS[segment];
+  return createRoute({
     getParentRoute: () => rootRoute,
     path: segment,
     beforeLoad: requireSessionTokenBeforeLoad,
     errorComponent: FinclaAuthenticatedRouteError,
     component: function SegmentPage() {
+      if (gate) {
+        return (
+          <GatedAuthenticatedPageOutlet
+            segment={segment}
+            feature={gate.feature}
+            title={gate.title}
+            description={gate.description}
+            benefits={gate.benefits}
+          />
+        );
+      }
       return <AuthenticatedPageOutlet segment={segment} />;
     },
-  }),
-);
+  });
+});
 
 /** Um único componente para lista + detalhe evita remount ao abrir edição pela URL. */
 function transactionsOptionalBeforeLoad(ctx) {
@@ -94,7 +139,14 @@ const profileTabRoute = createRoute({
   },
 });
 
-profileRoute.addChildren([profileIndexRoute, profileTabRoute]);
+const profileBillingReturnRoute = createRoute({
+  getParentRoute: () => profileRoute,
+  path: "billing/return",
+  errorComponent: FinclaAuthenticatedRouteError,
+  component: BillingReturnPage,
+});
+
+profileRoute.addChildren([profileIndexRoute, profileBillingReturnRoute, profileTabRoute]);
 
 const notFoundRoute = new NotFoundRoute({
   getParentRoute: () => rootRoute,

@@ -34,6 +34,8 @@ import {
 } from "lucide-react";
 import { T } from "../tokens";
 import { G } from "../typography";
+import { BillingPanel } from "../features/subscription/BillingPanel.jsx";
+import { FeatureGate, UpgradePrompt } from "../features/entitlements/index.js";
 import { DragScrollTabs } from "../layouts/DragScrollTabs.jsx";
 import { CardEmptyWithCta } from "../features/shellExtras.jsx";
 import {
@@ -343,7 +345,10 @@ export function ConfiguracoesPage({
       return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
     })();
     const plan = currentUser?.subscription?.plan ?? "free";
-    const planLabel = plan === "premium" ? "PREMIUM" : plan === "beta" ? "BETA" : "FREE";
+    // Catalog now ships multiple slugs (essential/pro/beta/…); render the slug
+    // uppercased so the badge reflects whatever the backend returns instead of
+    // collapsing everything not-premium-not-beta to FREE.
+    const planLabel = plan ? String(plan).toUpperCase() : "—";
     const rolePt = currentUser?.role === "owner" ? "Administrador" : currentUser?.role === "member" ? "Membro" : currentUser?.role ?? "—";
     const memberSince = currentUser?.created_at
       ? new Date(currentUser.created_at).toLocaleDateString("pt-BR")
@@ -824,7 +829,7 @@ export function ConfiguracoesPage({
     </div>
   );
 
-  const renderWhatsApp = () => (
+  const renderWhatsAppBody = () => (
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
       {/* Hero informativo */}
       <div style={{ background:"#1A1A2E", borderRadius:16, padding:"20px 24px", position:"relative", overflow:"hidden" }}>
@@ -933,55 +938,32 @@ export function ConfiguracoesPage({
   );
 
   const renderAssinatura = () => (
-    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-      <SectionCard>
-        <SectionHeader icon={<CreditCard size={16} color={T.purple}/>} title="Assinatura" sub="Detalhes do seu plano atual"/>
-        <div style={{ padding:"16px 24px", borderBottom:`1px solid ${T.border}` }}>
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14 }}>
-            <div>
-              <div style={{ ...G, fontSize:16, fontWeight:800, color:T.ink, marginBottom:3 }}>Plano Premium</div>
-              <div style={{ ...G, fontSize:13, color:T.inkMid }}>Ideal para famílias e pequenos negócios</div>
-            </div>
-            <span style={{ ...G, fontSize:12, fontWeight:700, background:T.greenLight, color:T.green, padding:"4px 12px", borderRadius:99 }}>Ativo</span>
-          </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-            {[
-              { label:"Transações/mês", used:47, limit:500, color:T.green },
-              { label:"Organizações",   used:1,  limit:3,   color:T.blue },
-              { label:"Membros",        used:2,  limit:10,  color:T.purple },
-              { label:"Metas ativas",   used:3,  limit:20,  color:T.amber },
-            ].map((k, i) => (
-              <div key={i} style={{ background:T.bg, borderRadius:10, padding:"12px 14px" }}>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:6 }}>
-                  <div style={{ ...G, fontSize:11, color:T.inkMid }}>{k.label}</div>
-                  <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:12, fontWeight:700, color:T.ink }}>{k.used}<span style={{ color:T.inkLight }}>/{k.limit}</span></div>
-                </div>
-                <div style={{ height:4, background:T.grayLight, borderRadius:99, overflow:"hidden" }}>
-                  <div style={{ height:"100%", width:`${Math.min(100, k.used/k.limit*100)}%`, background:k.color, borderRadius:99 }}/>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div style={{ padding:"14px 24px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <div>
-            <div style={{ ...G, fontSize:13, color:T.inkMid }}>Próxima cobrança</div>
-            <div style={{ ...G, fontSize:14, fontWeight:700, color:T.ink }}>R$ 29,90 em 04/04/2026</div>
-          </div>
-          <BtnGhost onClick={()=>{}}>Gerenciar assinatura</BtnGhost>
-        </div>
-      </SectionCard>
-      {/* Upgrade card */}
-      <div style={{ background:`linear-gradient(135deg, #1A1A2E, #312E81)`, borderRadius:16, padding:"20px 24px" }}>
-        <div style={{ ...G, fontSize:14, fontWeight:800, color:"#fff", marginBottom:6 }}>🚀 Em breve — Plano Business</div>
-        <div style={{ ...G, fontSize:13, color:"rgba(255,255,255,0.55)", lineHeight:1.65, marginBottom:14 }}>
-          Relatórios avançados, IA preditiva, integração bancária automática e suporte prioritário.
-        </div>
-        <button style={{ ...G, background:"rgba(255,255,255,0.1)", color:"rgba(255,255,255,0.7)", border:"1px solid rgba(255,255,255,0.15)", borderRadius:9, padding:"8px 16px", fontSize:12, fontWeight:700, cursor:"pointer" }}>
-          Entrar na lista de espera →
-        </button>
-      </div>
-    </div>
+    <BillingPanel
+      SectionCard={SectionCard}
+      SectionHeader={SectionHeader}
+      dataMode={dataMode}
+    />
+  );
+
+  // Gate the WhatsApp tab on the `whatsapp_assistant` feature. Essential and
+  // higher plans have the key, so this is a no-op for paying users; the
+  // fallback only kicks in for legacy ``free`` accounts and future plans
+  // that drop the assistant.
+  const renderWhatsApp = () => (
+    <FeatureGate
+      feature="whatsapp_assistant"
+      user={currentUser}
+      fallback={
+        <UpgradePrompt
+          feature="whatsapp_assistant"
+          message="O assistente WhatsApp está disponível a partir do plano Essential."
+          ctaLabel="Ver planos"
+          onUpgradeClick={() => onNav("assinatura")}
+        />
+      }
+    >
+      {renderWhatsAppBody()}
+    </FeatureGate>
   );
 
   const RENDERERS = { perfil:renderPerfil, seguranca:renderSeguranca, organizacao:renderOrganizacao, membros:renderMembros, categorias:renderCategorias, whatsapp:renderWhatsApp, assinatura:renderAssinatura };

@@ -8,17 +8,35 @@ export interface LoginRequest {
   password: string;
 }
 
+/**
+ * Compact subscription embedded in legacy auth payloads.
+ *
+ * Returned by ``POST /auth/login`` and ``GET /auth/me``. The richer object
+ * with the embedded ``Plan`` and full billing lifecycle lives at
+ * ``GET /v1/subscriptions/me`` (see ``Subscription`` further down).
+ */
+export interface EmbeddedSubscription {
+  /** Slug do plano (``essential``, ``pro``, ``beta``, …). */
+  plan: string;
+  status:
+    | 'active'
+    | 'pending_payment'
+    | 'past_due'
+    | 'cancelled'
+    | 'expired'
+    | 'inactive';
+  max_organizations: number;
+  max_users_per_org: number;
+  /** Feature keys; lê do plano subjacente quando o backend popula. */
+  features?: string[];
+}
+
 export interface LoginResponse {
   token: string;
   user_id: string;
   email: string;
   role: UserRole;
-  subscription: {
-    plan: 'free' | 'beta' | 'premium';
-    max_organizations: number;
-    max_users_per_org: number;
-    status: 'active' | 'inactive';
-  };
+  subscription: EmbeddedSubscription;
 }
 
 export interface User {
@@ -31,13 +49,102 @@ export interface User {
   phone: string | null;
   onboarding_completed: boolean;
   created_at: string;
-  subscription?: {
-    plan: 'free' | 'beta' | 'premium';
-    status: 'active' | 'inactive';
-    max_organizations: number;
-    max_users_per_org: number;
-    features: string[];
-  };
+  subscription?: EmbeddedSubscription;
+}
+
+// ===== PLANOS, ASSINATURA E FATURAS =====
+
+export type PlanAudience = 'standard' | 'consultant';
+
+export interface Plan {
+  id: string;
+  name: string;
+  description: string;
+  audience: PlanAudience;
+  monthly_price_cents: number;
+  yearly_price_cents: number | null;
+  max_organizations: number;
+  max_users_per_org: number;
+  features: string[];
+  display_order: number;
+}
+
+export interface ListPlansResponse {
+  items: Plan[];
+}
+
+export type SubscriptionStatus =
+  | 'active'
+  | 'pending_payment'
+  | 'past_due'
+  | 'cancelled'
+  | 'expired';
+
+export type SubscriptionGatewayProvider = 'asaas' | 'manual';
+
+export type BillingCycle = 'monthly' | 'yearly';
+
+export interface Subscription {
+  id: string;
+  plan: Plan;
+  status: SubscriptionStatus;
+  billing_cycle: BillingCycle;
+  gateway_provider: SubscriptionGatewayProvider;
+  current_period_start: string | null;
+  current_period_end: string | null;
+  cancel_at_period_end: boolean;
+  cancelled_at: string | null;
+  recent_invoices: Invoice[];
+}
+
+export type InvoiceStatus =
+  | 'pending'
+  | 'paid'
+  | 'overdue'
+  | 'refunded'
+  | 'cancelled';
+
+export type InvoicePaymentMethod = 'credit_card' | 'pix' | 'boleto';
+
+export interface Invoice {
+  id: string;
+  subscription_id?: string;
+  amount_cents: number;
+  currency: string;
+  status: InvoiceStatus;
+  due_date: string;
+  paid_at: string | null;
+  payment_method: InvoicePaymentMethod | null;
+  invoice_url: string | null;
+  pdf_url: string | null;
+  description: string;
+}
+
+export interface ListInvoicesResponse {
+  items: Invoice[];
+  limit: number;
+  offset: number;
+}
+
+export interface ChangePlanRequest {
+  target_plan_id: string;
+  billing_cycle?: BillingCycle;
+}
+
+export interface ChangePlanResponse {
+  subscription_id: string;
+  target_plan_id: string;
+  status: SubscriptionStatus;
+  /** ASAAS hosted checkout. ``null`` quando o gateway só aplicou um update. */
+  checkout_url: string | null;
+}
+
+export interface CancelSubscriptionResponse {
+  subscription_id: string;
+  status: SubscriptionStatus;
+  cancel_at_period_end: boolean;
+  /** ISO 8601 datetime. ``null`` quando ainda não há período pago. */
+  effective_until: string | null;
 }
 
 export interface UpdateProfileRequest {

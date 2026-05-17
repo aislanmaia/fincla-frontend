@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { T } from "../tokens";
 import { G } from "../typography";
+import { PlanBadge } from "../features/entitlements/index.js";
 
 const NAV = [
   { sec: "PRINCIPAL" },
@@ -24,16 +25,22 @@ const NAV = [
   { sec: "PLANEJAR" },
   { id: "budgets", label: "Orçamentos", Icon: Target },
   { id: "recurring", label: "Recorrências", Icon: Repeat },
-  { id: "simulation", label: "Simulação", Icon: FlaskConical, badge: "1" },
+  { id: "simulation", label: "Simulação", Icon: FlaskConical, proFeature: "what_if_simulations" },
   { id: "goals", label: "Metas", Icon: BarChart2 },
   { sec: "GESTÃO" },
   { id: "cards", label: "Cartões", Icon: CreditCard },
-  { id: "reports", label: "Relatórios", Icon: FileText },
+  { id: "reports", label: "Relatórios", Icon: FileText, proFeature: "advanced_reports" },
   { sec: "CONTA" },
   { id: "profile", label: "Perfil", Icon: Settings },
 ];
 
-function SidebarInner({ page, onNav, onClose }) {
+function userHasFeature(user, featureKey) {
+  if (!featureKey) return true;
+  const features = user?.subscription?.features;
+  return Array.isArray(features) && features.includes(featureKey);
+}
+
+function SidebarInner({ page, onNav, onClose, user }) {
   return (
     <div
       style={{
@@ -114,6 +121,7 @@ function SidebarInner({ page, onNav, onClose }) {
           }
           const active = page === item.id;
           const { Icon } = item;
+          const locked = item.proFeature && !userHasFeature(user, item.proFeature);
           return (
             <button
               type="button"
@@ -148,7 +156,9 @@ function SidebarInner({ page, onNav, onClose }) {
             >
               <Icon size={14} strokeWidth={active ? 2.5 : 1.8} color={active ? "#fff" : T.inkLight} />
               <span style={{ flex: 1, textAlign: "left", color: active ? "#fff" : T.inkMid }}>{item.label}</span>
-              {item.badge ? (
+              {locked ? (
+                <PlanBadge tier="pro" />
+              ) : item.badge ? (
                 <span
                   style={{
                     ...G,
@@ -263,8 +273,8 @@ function SidebarInner({ page, onNav, onClose }) {
   );
 }
 
-export function Sidebar({ page, onNav, isMobile, open, onClose }) {
-  if (!isMobile) return <SidebarInner page={page} onNav={onNav} />;
+export function Sidebar({ page, onNav, isMobile, open, onClose, user }) {
+  if (!isMobile) return <SidebarInner page={page} onNav={onNav} user={user} />;
 
   if (!open) return null;
   return (
@@ -276,7 +286,7 @@ export function Sidebar({ page, onNav, isMobile, open, onClose }) {
         style={{ position: "absolute", inset: 0, background: "rgba(15,23,35,0.42)" }}
       />
       <div style={{ position: "relative", animation: "sidebarIn 0.22s ease-out" }}>
-        <SidebarInner page={page} onNav={onNav} onClose={onClose} />
+        <SidebarInner page={page} onNav={onNav} onClose={onClose} user={user} />
       </div>
     </div>
   );

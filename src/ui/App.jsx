@@ -5999,7 +5999,7 @@ export default function App() {
   return (
     <>
     <AnimStyles/>
-    <FinclaPageContext.Provider value={{ pages }}>
+    <FinclaPageContext.Provider value={{ pages, user: session.user }}>
     <div style={{ ...G, display:"flex", height:"100vh", background:T.bg, overflow:"hidden" }}>
       <style>{`
         * { box-sizing: border-box; }
@@ -6013,6 +6013,7 @@ export default function App() {
         isMobile={isMobile}
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        user={session.user}
       />
       <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
         <Topbar

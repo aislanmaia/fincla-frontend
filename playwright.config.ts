@@ -26,6 +26,11 @@ export default defineConfig({
       testMatch: ["**/dashboard-recurring-period.spec.ts", "**/dashboard-period-custom.spec.ts"],
       dependencies: ["smoke"],
     },
+    {
+      name: "subscription",
+      testMatch: ["**/subscription.spec.ts", "**/feature-gating.spec.ts"],
+      dependencies: ["smoke"],
+    },
   ],
   use: {
     baseURL,
