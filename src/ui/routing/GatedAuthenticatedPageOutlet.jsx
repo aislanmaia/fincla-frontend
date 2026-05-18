@@ -1,13 +1,12 @@
-import { useNavigate } from "@tanstack/react-router";
-
 import { UpgradeWall, useEntitlement } from "../features/entitlements/index.js";
 import { useFinclaPages } from "./finclaPageContext.jsx";
 
 /**
  * Variante do `<AuthenticatedPageOutlet>` que esconde a rota inteira atrás
  * de uma feature key. Quando a feature está ausente do plano do usuário,
- * renderizamos `<UpgradeWall>` em vez do conteúdo; o botão "Ver planos"
- * navega para `/profile/billing`.
+ * renderizamos `<UpgradeWall>` em vez do conteúdo; o CTA "Ver planos" abre
+ * o `PlansComparisonModal` no próprio overlay (mantém o contexto que
+ * trouxe o usuário ao paywall em vez de navegar para outra tela).
  *
  * Usado em rotas inteiramente Pro como `/reports` (`advanced_reports`) e
  * `/simulation` (`what_if_simulations`).
@@ -20,7 +19,6 @@ export function GatedAuthenticatedPageOutlet({
   benefits = [],
 }) {
   const ctx = useFinclaPages();
-  const navigate = useNavigate();
   const allowed = useEntitlement(feature, ctx?.user);
 
   if (!ctx?.pages) return null;
@@ -36,9 +34,7 @@ export function GatedAuthenticatedPageOutlet({
         }
         benefits={benefits}
         ctaLabel="Ver planos"
-        onUpgradeClick={() =>
-          navigate({ to: "/profile/billing", replace: false })
-        }
+        currentPlanId={ctx.user?.subscription?.plan}
       />
     );
   }

@@ -2,8 +2,12 @@ import React, { useState, useEffect, useRef } from "react";
 import { Menu, Search, Plus, Bell, ChevronRight } from "lucide-react";
 import { T } from "../tokens";
 import { G } from "../typography";
+import {
+  getDisplayName,
+  getInitials,
+} from "../features/auth/userDisplay.js";
 
-export function Topbar({ onNew, isMobile, onMenuOpen, onNav, page: _page }) {
+export function Topbar({ onNew, isMobile, onMenuOpen, onNav, page: _page, user }) {
   const [cmdOpen, setCmdOpen] = useState(false);
   const [cmdQ, setCmdQ] = useState("");
   const cmdRef = useRef(null);
@@ -167,11 +171,15 @@ export function Topbar({ onNew, isMobile, onMenuOpen, onNav, page: _page }) {
           </button>
           <button
             onClick={() => onNav && onNav("profile")}
+            title={getDisplayName(user)}
+            aria-label={`Conta de ${getDisplayName(user)}`}
             style={{
               width: 32,
               height: 32,
               borderRadius: 9999,
-              background: `linear-gradient(135deg,${T.blue},${T.purple})`,
+              background: user?.avatar_url
+                ? "transparent"
+                : `linear-gradient(135deg,${T.blue},${T.purple})`,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -181,11 +189,23 @@ export function Topbar({ onNew, isMobile, onMenuOpen, onNav, page: _page }) {
               border: "none",
               cursor: "pointer",
               flexShrink: 0,
+              padding: 0,
+              overflow: "hidden",
             }}
             onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.85")}
             onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
           >
-            AS
+            {user?.avatar_url ? (
+              <img
+                src={user.avatar_url}
+                alt=""
+                width={32}
+                height={32}
+                style={{ objectFit: "cover", display: "block" }}
+              />
+            ) : (
+              getInitials(user)
+            )}
           </button>
         </div>
       </div>

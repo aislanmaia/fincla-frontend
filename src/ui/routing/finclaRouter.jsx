@@ -42,22 +42,22 @@ const GATED_SEGMENTS = {
     feature: "advanced_reports",
     title: "Relatórios avançados — disponível no Pro",
     description:
-      "Cascata de receitas e despesas, evolução por categoria, velocidade vs ritmo ideal e score de aderência.",
+      "Veja para onde seu dinheiro está indo com gráficos detalhados, comparações entre períodos e exportação completa.",
     benefits: [
       "6 visualizações analíticas",
-      "Insights de pressão de gasto",
-      "Exportar CSV de todos os relatórios",
+      "Comparações entre meses e categorias",
+      "Exportação em CSV de todos os relatórios",
     ],
   },
   simulation: {
     feature: "what_if_simulations",
-    title: "Simulações de cenários — disponível no Pro",
+    title: "Simulação financeira — disponível no Pro",
     description:
-      "Simule novos compromissos, ajustes em categorias e contribuições para metas antes de decidir.",
+      "Antes de assumir um novo compromisso, simule o impacto no seu orçamento e veja se cabe no plano.",
     benefits: [
-      "Cenários what-if com múltiplos itens",
-      "Projeção lado-a-lado com o real",
-      "Análise de risco do cenário",
+      "Compare cenários antes de decidir",
+      "Veja o impacto lado a lado com o real",
+      "Análise de risco automática",
     ],
   },
 };

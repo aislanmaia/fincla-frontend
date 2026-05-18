@@ -471,6 +471,52 @@ function PriceBlock({
     );
   }
 
+  // Yearly mode com preço anual conhecido: destaque o /mês equivalente
+  // ("menos por mais"). O total anual e a economia em valor absoluto
+  // ficam como subtexto para o usuário não confundir com cobrança mensal.
+  if (showYearly && yearlyCents != null) {
+    const monthlyEquivalent = Math.round(yearlyCents / 12);
+    const annualSavings = monthlyCents * 12 - yearlyCents;
+    return (
+      <div>
+        <div style={{ ...G, fontSize: 26, fontWeight: 800, color: T.ink }}>
+          {fmtBRL(monthlyEquivalent)}
+          <span
+            style={{
+              ...G,
+              fontSize: 13,
+              color: T.inkLight,
+              fontWeight: 600,
+              marginLeft: 4,
+            }}
+          >
+            /mês
+          </span>
+        </div>
+        <div
+          style={{
+            ...G,
+            fontSize: 12,
+            color: T.inkMid,
+            marginTop: 4,
+            lineHeight: 1.5,
+          }}
+        >
+          Cobrado {fmtBRL(yearlyCents)} anualmente
+          {annualSavings > 0 && (
+            <>
+              {" · "}
+              <span style={{ color: T.green, fontWeight: 600 }}>
+                economia de {fmtBRL(annualSavings)}
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Monthly mode (default) ou yearly sem plano anual definido
   return (
     <div>
       <div style={{ ...G, fontSize: 26, fontWeight: 800, color: T.ink }}>
@@ -484,7 +530,7 @@ function PriceBlock({
             marginLeft: 4,
           }}
         >
-          {showYearly ? "/ano" : "/mês"}
+          /mês
         </span>
       </div>
       {billingCycle === "monthly" && yearlyCents != null && (
@@ -498,18 +544,6 @@ function PriceBlock({
         >
           ou {fmtBRL(yearlyCents)}/ano{" "}
           {discount ? `(-${discount}%)` : null}
-        </div>
-      )}
-      {billingCycle === "yearly" && yearlyCents != null && (
-        <div
-          style={{
-            ...G,
-            fontSize: 12,
-            color: T.inkMid,
-            marginTop: 4,
-          }}
-        >
-          equivale a {fmtBRL(Math.round(yearlyCents / 12))}/mês
         </div>
       )}
       {billingCycle === "yearly" && yearlyCents == null && monthlyCents > 0 && (

@@ -6002,6 +6002,7 @@ export default function App() {
           onMenuOpen={() => setSidebarOpen(true)}
           onNav={navTo}
           page={activeSegment}
+          user={session.user}
         />
 
         {/* Mood top border on dashboard */}

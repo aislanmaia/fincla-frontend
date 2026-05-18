@@ -91,7 +91,7 @@ describe("<PlansComparisonModal>", () => {
     expect(screen.getAllByText(/-17%/).length).toBeGreaterThan(0);
   });
 
-  it("switches to yearly prices when the user toggles the cycle", async () => {
+  it("switches to yearly view highlighting the monthly equivalent and annual savings", async () => {
     vi.mocked(listPlans).mockResolvedValue([essential, pro]);
     render(<PlansComparisonModal currentPlanId="essential" onClose={vi.fn()} />);
 
@@ -99,10 +99,16 @@ describe("<PlansComparisonModal>", () => {
 
     await userEvent.click(screen.getByRole("tab", { name: /anual/i }));
 
+    // Yearly mode highlights the /mês equivalente (R$ 33,25 e R$ 45,75)
+    expect(screen.getByText(/R\$\s?33,25/)).toBeInTheDocument();
+    expect(screen.getByText(/R\$\s?45,75/)).toBeInTheDocument();
+    // The annual total is shown as subtext with "Cobrado ... anualmente".
+    expect(screen.getAllByText(/cobrado/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/R\$\s?399,00/)).toBeInTheDocument();
     expect(screen.getByText(/R\$\s?549,00/)).toBeInTheDocument();
-    // Equivalência mensal aparece no modo anual
-    expect(screen.getAllByText(/equivale a/i).length).toBeGreaterThan(0);
+    // Absolute savings shown: 39,90*12-399 = 79,80 (essential); 54,90*12-549 = 109,80 (pro)
+    expect(screen.getByText(/economia de R\$\s?79,80/)).toBeInTheDocument();
+    expect(screen.getByText(/economia de R\$\s?109,80/)).toBeInTheDocument();
   });
 
   it("sends the currently selected billing cycle to changePlan", async () => {

@@ -1,6 +1,15 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+// Stub the comparison modal so we can assert "the wall opened it"
+// without depending on listPlans / changePlan mocks here.
+vi.mock("../../subscription/PlansComparisonModal.jsx", () => ({
+  PlansComparisonModal: ({ currentPlanId }) => (
+    <div data-testid="plans-modal-stub" data-current-plan={currentPlanId} />
+  ),
+}));
 
 afterEach(() => {
   cleanup();
@@ -106,6 +115,22 @@ describe("<UpgradeWall>", () => {
     const button = screen.getByRole("button", { name: /conhecer pro/i });
     button.click();
     expect(handle).toHaveBeenCalledOnce();
+  });
+
+  it("opens the PlansComparisonModal by default when no onUpgradeClick is given", async () => {
+    render(
+      <UpgradeWall
+        feature="advanced_reports"
+        ctaLabel="Ver planos"
+        currentPlanId="essential"
+      />,
+    );
+    expect(screen.queryByTestId("plans-modal-stub")).not.toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("button", { name: /ver planos/i }),
+    );
+    const modal = await waitFor(() => screen.getByTestId("plans-modal-stub"));
+    expect(modal).toHaveAttribute("data-current-plan", "essential");
   });
 });
 

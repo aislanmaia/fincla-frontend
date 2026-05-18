@@ -1,12 +1,17 @@
+import { useState } from "react";
 import { Lock, Sparkles } from "lucide-react";
+
+import { PlansComparisonModal } from "../subscription/PlansComparisonModal.jsx";
 
 /**
  * Tela cheia exibida quando uma rota inteira não está disponível no plano
  * atual (ex.: usuário Essential abrindo `/reports`).
  *
- * Visual segue o tom dark/gradient já usado no app. O CTA delega ao caller
- * via `onUpgradeClick` — assim a abertura do `PlansComparisonModal` ou a
- * navegação para `/profile/billing` fica desacoplada deste componente.
+ * Por padrão, clicar em "Ver planos" abre o `PlansComparisonModal` no
+ * mesmo lugar — preserva o contexto da intenção que o usuário tinha ao
+ * cair na wall. O caller pode sobrescrever passando `onUpgradeClick`
+ * (ex.: para navegar para outra tela). `currentPlanId` é repassado ao
+ * modal para o card do plano atual aparecer desabilitado.
  */
 export function UpgradeWall({
   feature,
@@ -14,8 +19,19 @@ export function UpgradeWall({
   description = "Faça upgrade do seu plano para desbloquear este recurso.",
   ctaLabel = "Ver planos",
   onUpgradeClick,
+  currentPlanId,
   benefits = [],
 }) {
+  const [showPlans, setShowPlans] = useState(false);
+
+  const handleClick = () => {
+    if (onUpgradeClick) {
+      onUpgradeClick();
+      return;
+    }
+    setShowPlans(true);
+  };
+
   return (
     <div
       role="region"
@@ -88,7 +104,7 @@ export function UpgradeWall({
         )}
         <button
           type="button"
-          onClick={onUpgradeClick}
+          onClick={handleClick}
           style={{
             width: "100%",
             padding: "12px 16px",
@@ -104,6 +120,12 @@ export function UpgradeWall({
           {ctaLabel}
         </button>
       </div>
+      {showPlans && (
+        <PlansComparisonModal
+          currentPlanId={currentPlanId}
+          onClose={() => setShowPlans(false)}
+        />
+      )}
     </div>
   );
 }
