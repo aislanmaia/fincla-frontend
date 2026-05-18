@@ -5081,26 +5081,6 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
         {tab==="planejamento"&&<PlanejamentoTab/>}
       </div>
     </div>
-    {showAddCard && (
-      <div style={{ position:"fixed", inset:0, zIndex:400, overflow:"hidden", background:"rgba(0,0,0,0.4)", display:"flex", alignItems:isMobile?"flex-end":"center", justifyContent:"center", padding:isMobile?0:24 }}
-        onClick={() => setShowAddCard(false)}>
-        <div style={{ width:"100%", maxWidth:isMobile?"100%":440, background:T.surface, borderRadius:isMobile?"18px 18px 0 0":18, padding:isMobile?"20px 20px 32px":"26px 26px 22px", boxShadow:"0 -4px 40px rgba(0,0,0,0.15)" }}
-          onClick={e => e.stopPropagation()}>
-          {isMobile && <div style={{ width:36, height:4, background:T.border, borderRadius:99, margin:"0 auto 18px" }}/>}
-          <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
-            <div style={{ ...G, fontSize:16, fontWeight:800, color:T.ink }}>Adicionar cartão</div>
-            {!isMobile && <button onClick={() => setShowAddCard(false)} style={{ background:"none", border:"none", cursor:"pointer", color:T.inkLight, fontSize:22 }}>×</button>}
-          </div>
-          <div style={{ ...G, fontSize:13, color:T.inkMid, lineHeight:1.65, marginBottom:14 }}>
-            Adicione seu cartão de crédito para rastrear faturas, parcelas e assinaturas automaticamente.
-          </div>
-          <div style={{ ...G, fontSize:13, color:T.inkMid, background:T.grayLight, borderRadius:10, padding:"14px 16px", textAlign:"center", lineHeight:1.7, marginBottom:14 }}>
-            🚧 O cadastro de cartão via app estará disponível em breve. Por enquanto, adicione transações de cartão manualmente em <strong>Transações</strong>.
-          </div>
-          <button onClick={() => setShowAddCard(false)} style={{ ...G, width:"100%", padding:"11px", borderRadius:11, border:`1px solid ${T.border}`, background:"none", color:T.inkMid, fontSize:13, fontWeight:600, cursor:"pointer" }}>Entendido</button>
-        </div>
-      </div>
-    )}
     </>
   );
 
