@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -21,10 +21,15 @@ const essential = {
   description: "Plano essencial",
   audience: "standard",
   monthly_price_cents: 3990,
-  yearly_price_cents: null,
+  yearly_price_cents: 39900,
   max_organizations: 1,
   max_users_per_org: 2,
-  features: ["manual_transactions"],
+  features: [
+    "manual_transactions",
+    "recurring_transactions",
+    "whatsapp_assistant",
+    "csv_export",
+  ],
   display_order: 10,
 };
 const pro = {
@@ -33,7 +38,17 @@ const pro = {
   name: "Pro",
   description: "Plano Pro",
   monthly_price_cents: 5490,
-  features: ["manual_transactions", "advanced_reports"],
+  yearly_price_cents: 54900,
+  max_users_per_org: 10,
+  features: [
+    ...essential.features,
+    "advanced_reports",
+    "what_if_simulations",
+    "ai_categorization",
+    "ai_insights",
+    "ai_anomaly_detection",
+    "ai_predictive_reports",
+  ],
   display_order: 20,
 };
 
@@ -56,15 +71,41 @@ describe("<PlansComparisonModal>", () => {
     );
     expect(screen.getByText("Pro")).toBeInTheDocument();
 
-    // The current-plan button is rendered as a disabled "Plano atual" affordance.
-    const currentButton = screen.getByRole("button", { name: /plano atual/i });
-    expect(currentButton).toBeDisabled();
-    // The other plan has a "Selecionar" button.
-    const selectButton = screen.getByRole("button", { name: /selecionar/i });
-    expect(selectButton).not.toBeDisabled();
+    const essentialButton = screen.getByTestId("plan-select-essential");
+    expect(essentialButton).toBeDisabled();
+    expect(essentialButton).toHaveTextContent(/plano atual/i);
+
+    const proButton = screen.getByTestId("plan-select-pro");
+    expect(proButton).not.toBeDisabled();
+    expect(proButton).toHaveTextContent(/fazer upgrade/i);
   });
 
-  it("dispatches changePlan and redirects to checkout_url on select", async () => {
+  it("shows monthly price by default and the yearly hint", async () => {
+    vi.mocked(listPlans).mockResolvedValue([essential, pro]);
+    render(<PlansComparisonModal currentPlanId="essential" onClose={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText("Essential")).toBeInTheDocument());
+
+    expect(screen.getByText(/R\$\s?39,90/)).toBeInTheDocument();
+    expect(screen.getByText(/R\$\s?54,90/)).toBeInTheDocument();
+    expect(screen.getAllByText(/-17%/).length).toBeGreaterThan(0);
+  });
+
+  it("switches to yearly prices when the user toggles the cycle", async () => {
+    vi.mocked(listPlans).mockResolvedValue([essential, pro]);
+    render(<PlansComparisonModal currentPlanId="essential" onClose={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText("Essential")).toBeInTheDocument());
+
+    await userEvent.click(screen.getByRole("tab", { name: /anual/i }));
+
+    expect(screen.getByText(/R\$\s?399,00/)).toBeInTheDocument();
+    expect(screen.getByText(/R\$\s?549,00/)).toBeInTheDocument();
+    // Equivalência mensal aparece no modo anual
+    expect(screen.getAllByText(/equivale a/i).length).toBeGreaterThan(0);
+  });
+
+  it("sends the currently selected billing cycle to changePlan", async () => {
     vi.mocked(listPlans).mockResolvedValue([essential, pro]);
     vi.mocked(changePlan).mockResolvedValue({
       subscription_id: "sub_x",
@@ -73,31 +114,53 @@ describe("<PlansComparisonModal>", () => {
       checkout_url: "https://asaas/i/abc",
     });
 
-    // Stub window.location.href so we can assert the redirect without leaving jsdom.
     const originalLocation = window.location;
     delete window.location;
     window.location = { ...originalLocation, href: "" };
 
-    render(
-      <PlansComparisonModal currentPlanId="essential" onClose={vi.fn()} />,
-    );
+    render(<PlansComparisonModal currentPlanId="essential" onClose={vi.fn()} />);
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: /selecionar/i })).toBeInTheDocument(),
+      expect(screen.getByTestId("plan-select-pro")).toBeInTheDocument(),
     );
-    await userEvent.click(
-      screen.getByRole("button", { name: /selecionar/i }),
-    );
+
+    // Switch to yearly, then click Pro
+    await userEvent.click(screen.getByRole("tab", { name: /anual/i }));
+    await userEvent.click(screen.getByTestId("plan-select-pro"));
 
     await waitFor(() => {
       expect(changePlan).toHaveBeenCalledWith({
         target_plan_id: "pro",
-        billing_cycle: "monthly",
+        billing_cycle: "yearly",
       });
     });
     expect(window.location.href).toBe("https://asaas/i/abc");
 
-    // Restore
     window.location = originalLocation;
+  });
+
+  it("renders friendly labels grouped by category with ✓/✗ alignment", async () => {
+    vi.mocked(listPlans).mockResolvedValue([essential, pro]);
+    render(<PlansComparisonModal currentPlanId="essential" onClose={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByText("Essential")).toBeInTheDocument());
+
+    // Friendly labels rendered, not raw feature keys.
+    expect(screen.queryByText("manual_transactions")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Transações ilimitadas").length).toBe(2);
+    expect(screen.getAllByText("Relatórios avançados").length).toBe(2);
+
+    // Group headers visible.
+    expect(screen.getAllByText(/essenciais/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/recursos avançados/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/inteligência artificial/i).length).toBeGreaterThan(0);
+
+    // Essential card: "Relatórios avançados" should show the not-included icon.
+    const essentialCard = screen
+      .getByTestId("plan-select-essential")
+      .closest("div").parentElement;
+    expect(
+      within(essentialCard).getAllByLabelText("não incluído").length,
+    ).toBeGreaterThan(0);
   });
 
   it("renders backend error in the modal", async () => {

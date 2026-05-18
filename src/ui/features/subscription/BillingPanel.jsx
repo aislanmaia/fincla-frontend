@@ -13,6 +13,7 @@ import { G } from "../../typography.js";
 import { useSubscriptionData } from "./useSubscriptionData.js";
 import { PlansComparisonModal } from "./PlansComparisonModal.jsx";
 import { CancelSubscriptionDialog } from "./CancelSubscriptionDialog.jsx";
+import { getFeatureCopy } from "../entitlements/featureCopy.js";
 
 const STATUS_TO_STYLE = {
   active: { label: "Ativo", bg: T.greenLight, color: T.green },
@@ -123,7 +124,7 @@ function FeatureChips({ features }) {
             color={T.purple}
             style={{ marginRight: 4, verticalAlign: "middle" }}
           />
-          {feature}
+          {getFeatureCopy(feature).label}
         </span>
       ))}
     </div>

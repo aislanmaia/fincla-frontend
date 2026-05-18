@@ -1,11 +1,18 @@
-import { useEffect, useState } from "react";
-import { Check, Loader2, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Check, Loader2, Star, X } from "lucide-react";
 
 import { handleApiError } from "../../../api/client";
 import { listPlans } from "../../../api/plans";
 import { changePlan } from "../../../api/subscriptions";
+import {
+  FEATURE_GROUPS,
+  PLAN_COMPARISON_FEATURES,
+  getFeatureCopy,
+} from "../entitlements/featureCopy.js";
 import { T } from "../../tokens.js";
 import { G } from "../../typography.js";
+
+const RECOMMENDED_PLAN_ID = "pro";
 
 function fmtBRL(cents) {
   return (cents / 100).toLocaleString("pt-BR", {
@@ -14,13 +21,20 @@ function fmtBRL(cents) {
   });
 }
 
+function yearlyDiscountPercent(monthlyCents, yearlyCents) {
+  if (!monthlyCents || !yearlyCents) return null;
+  const fullYear = monthlyCents * 12;
+  if (fullYear <= 0) return null;
+  return Math.round(((fullYear - yearlyCents) / fullYear) * 100);
+}
+
 /**
  * Modal de comparação de planos. Catálogo é dinâmico — vem de
  * ``GET /v1/plans?audience=standard``, então adicionar/remover planos no
  * backend não exige deploy do frontend.
  *
  * Ao clicar em "Selecionar":
- *   * chamamos `changePlan({ target_plan_id, billing_cycle: "monthly" })`;
+ *   * chamamos `changePlan({ target_plan_id, billing_cycle })`;
  *   * se vier `checkout_url`, redirecionamos para a URL hosted do ASAAS
  *     (mais seguro que iframe);
  *   * se vier `null`, a mudança já foi aplicada (update do gateway) — o
@@ -33,6 +47,7 @@ export function PlansComparisonModal({ currentPlanId, onClose }) {
   const [error, setError] = useState("");
   const [selectingPlanId, setSelectingPlanId] = useState(null);
   const [changeError, setChangeError] = useState("");
+  const [billingCycle, setBillingCycle] = useState("monthly");
 
   useEffect(() => {
     let cancelled = false;
@@ -53,20 +68,25 @@ export function PlansComparisonModal({ currentPlanId, onClose }) {
     };
   }, []);
 
+  const maxYearlyDiscount = useMemo(() => {
+    const discounts = plans
+      .map((p) => yearlyDiscountPercent(p.monthly_price_cents, p.yearly_price_cents))
+      .filter((d) => d !== null);
+    return discounts.length ? Math.max(...discounts) : null;
+  }, [plans]);
+
   async function handleSelect(planId) {
     setSelectingPlanId(planId);
     setChangeError("");
     try {
       const result = await changePlan({
         target_plan_id: planId,
-        billing_cycle: "monthly",
+        billing_cycle: billingCycle,
       });
       if (result.checkout_url) {
-        // Hosted checkout — leave the SPA and let ASAAS handle the rest.
         window.location.href = result.checkout_url;
         return;
       }
-      // No checkout (update path) → close modal so the caller refreshes.
       onClose?.();
     } catch (err) {
       setChangeError(handleApiError(err));
@@ -98,7 +118,7 @@ export function PlansComparisonModal({ currentPlanId, onClose }) {
         style={{
           background: T.surface,
           borderRadius: 16,
-          padding: 24,
+          padding: 28,
           maxWidth: 920,
           width: "100%",
           maxHeight: "90vh",
@@ -122,6 +142,7 @@ export function PlansComparisonModal({ currentPlanId, onClose }) {
         >
           <X size={20} />
         </button>
+
         <h2
           style={{
             ...G,
@@ -131,19 +152,24 @@ export function PlansComparisonModal({ currentPlanId, onClose }) {
             color: T.ink,
           }}
         >
-          Compare os planos
+          Escolha seu plano
         </h2>
         <p
           style={{
             ...G,
             margin: "0 0 20px",
-            fontSize: 14,
+            fontSize: 13,
             color: T.inkMid,
           }}
         >
-          Escolha o plano que melhor atende ao seu momento. Você pode
-          mudar quando quiser.
+          Você pode mudar a qualquer momento.
         </p>
+
+        <BillingCycleToggle
+          value={billingCycle}
+          onChange={setBillingCycle}
+          yearlyDiscountPercent={maxYearlyDiscount}
+        />
 
         {isLoading && (
           <div
@@ -183,136 +209,395 @@ export function PlansComparisonModal({ currentPlanId, onClose }) {
           </div>
         )}
 
-        {!isLoading && !error && (
+        {!isLoading && !error && plans.length > 0 && (
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: `repeat(${Math.min(plans.length, 3)}, 1fr)`,
+              gridTemplateColumns: `repeat(${Math.min(plans.length, 2)}, 1fr)`,
               gap: 16,
+              marginTop: 20,
             }}
           >
-            {plans.map((plan) => {
-              const isCurrent = plan.id === currentPlanId;
-              const isSelecting = selectingPlanId === plan.id;
-              return (
-                <div
-                  key={plan.id}
-                  style={{
-                    border: isCurrent
-                      ? `2px solid ${T.purple}`
-                      : `1px solid ${T.border}`,
-                    borderRadius: 14,
-                    padding: 20,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 10,
-                    background: isCurrent ? T.purpleLight : T.surface,
-                  }}
-                >
-                  <div
-                    style={{
-                      ...G,
-                      fontSize: 16,
-                      fontWeight: 800,
-                      color: T.ink,
-                    }}
-                  >
-                    {plan.name}
-                  </div>
-                  <div
-                    style={{
-                      ...G,
-                      fontSize: 12,
-                      color: T.inkMid,
-                      minHeight: 36,
-                    }}
-                  >
-                    {plan.description}
-                  </div>
-                  <div
-                    style={{
-                      ...G,
-                      fontSize: 22,
-                      fontWeight: 800,
-                      color: T.ink,
-                    }}
-                  >
-                    {plan.monthly_price_cents > 0
-                      ? fmtBRL(plan.monthly_price_cents)
-                      : "Grátis"}
-                    {plan.monthly_price_cents > 0 && (
-                      <span
-                        style={{
-                          ...G,
-                          fontSize: 12,
-                          color: T.inkLight,
-                          fontWeight: 600,
-                        }}
-                      >
-                        {" "}/mês
-                      </span>
-                    )}
-                  </div>
-                  <ul
-                    style={{
-                      listStyle: "none",
-                      padding: 0,
-                      margin: "8px 0 0",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 6,
-                      flex: 1,
-                    }}
-                  >
-                    {plan.features.map((f) => (
-                      <li
-                        key={f}
-                        style={{
-                          ...G,
-                          fontSize: 12,
-                          color: T.inkMid,
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 6,
-                        }}
-                      >
-                        <Check size={14} color={T.green} />
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-                  <button
-                    type="button"
-                    onClick={() => handleSelect(plan.id)}
-                    disabled={isCurrent || isSelecting}
-                    style={{
-                      ...G,
-                      marginTop: 12,
-                      padding: "10px 14px",
-                      borderRadius: 10,
-                      border: "none",
-                      background: isCurrent
-                        ? T.grayLight
-                        : "linear-gradient(135deg, #7C3AED, #2563EB)",
-                      color: isCurrent ? T.inkLight : "white",
-                      fontSize: 13,
-                      fontWeight: 700,
-                      cursor: isCurrent ? "default" : "pointer",
-                      opacity: isSelecting ? 0.7 : 1,
-                    }}
-                  >
-                    {isCurrent
-                      ? "Plano atual"
-                      : isSelecting
-                        ? "Processando…"
-                        : "Selecionar"}
-                  </button>
-                </div>
-              );
-            })}
+            {plans.map((plan) => (
+              <PlanCard
+                key={plan.id}
+                plan={plan}
+                billingCycle={billingCycle}
+                isCurrent={plan.id === currentPlanId}
+                isRecommended={plan.id === RECOMMENDED_PLAN_ID}
+                isSelecting={selectingPlanId === plan.id}
+                onSelect={() => handleSelect(plan.id)}
+              />
+            ))}
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function BillingCycleToggle({ value, onChange, yearlyDiscountPercent }) {
+  return (
+    <div
+      role="tablist"
+      aria-label="Ciclo de cobrança"
+      style={{
+        display: "inline-flex",
+        background: T.bg,
+        borderRadius: 999,
+        padding: 4,
+        gap: 4,
+        margin: "0 auto",
+        position: "relative",
+        left: "50%",
+        transform: "translateX(-50%)",
+      }}
+    >
+      <CycleButton
+        active={value === "monthly"}
+        onClick={() => onChange("monthly")}
+        label="Mensal"
+      />
+      <CycleButton
+        active={value === "yearly"}
+        onClick={() => onChange("yearly")}
+        label={
+          yearlyDiscountPercent ? `Anual -${yearlyDiscountPercent}%` : "Anual"
+        }
+      />
+    </div>
+  );
+}
+
+function CycleButton({ active, onClick, label }) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      style={{
+        ...G,
+        padding: "8px 18px",
+        borderRadius: 999,
+        border: "none",
+        background: active ? T.surface : "transparent",
+        color: active ? T.ink : T.inkMid,
+        fontSize: 13,
+        fontWeight: active ? 700 : 500,
+        cursor: "pointer",
+        boxShadow: active ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+        transition: "all 0.15s",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
+function PlanCard({
+  plan,
+  billingCycle,
+  isCurrent,
+  isRecommended,
+  isSelecting,
+  onSelect,
+}) {
+  const showYearly =
+    billingCycle === "yearly" && plan.yearly_price_cents != null;
+  const priceCents = showYearly
+    ? plan.yearly_price_cents
+    : plan.monthly_price_cents;
+  const discount = yearlyDiscountPercent(
+    plan.monthly_price_cents,
+    plan.yearly_price_cents,
+  );
+
+  return (
+    <div
+      style={{
+        border: isRecommended
+          ? `2px solid ${T.purple}`
+          : `1px solid ${T.border}`,
+        borderRadius: 14,
+        padding: 22,
+        display: "flex",
+        flexDirection: "column",
+        gap: 14,
+        background: T.surface,
+        position: "relative",
+      }}
+    >
+      {isRecommended && (
+        <span
+          style={{
+            ...G,
+            position: "absolute",
+            top: -12,
+            right: 16,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            padding: "4px 10px",
+            borderRadius: 999,
+            background: "linear-gradient(135deg, #7C3AED, #2563EB)",
+            color: "white",
+            fontSize: 10,
+            fontWeight: 800,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
+          }}
+        >
+          <Star size={10} fill="white" />
+          Popular
+        </span>
+      )}
+
+      <div>
+        <div
+          style={{
+            ...G,
+            fontSize: 18,
+            fontWeight: 800,
+            color: T.ink,
+            marginBottom: 4,
+          }}
+        >
+          {plan.name}
+        </div>
+        <div
+          style={{
+            ...G,
+            fontSize: 12,
+            color: T.inkMid,
+            minHeight: 32,
+            lineHeight: 1.4,
+          }}
+        >
+          {plan.description}
+        </div>
+      </div>
+
+      <div style={{ borderTop: `1px solid ${T.border}` }} />
+
+      <PriceBlock
+        priceCents={priceCents}
+        billingCycle={billingCycle}
+        yearlyCents={plan.yearly_price_cents}
+        monthlyCents={plan.monthly_price_cents}
+        discount={discount}
+        showYearly={showYearly}
+      />
+
+      <button
+        type="button"
+        onClick={onSelect}
+        disabled={isCurrent || isSelecting}
+        data-testid={`plan-select-${plan.id}`}
+        style={{
+          ...G,
+          padding: "12px 14px",
+          borderRadius: 10,
+          border: "none",
+          background: isCurrent
+            ? T.bg
+            : isRecommended
+              ? "linear-gradient(135deg, #7C3AED, #2563EB)"
+              : T.ink,
+          color: isCurrent ? T.inkMid : "white",
+          fontSize: 13,
+          fontWeight: 700,
+          cursor: isCurrent ? "default" : "pointer",
+          opacity: isSelecting ? 0.7 : 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 6,
+        }}
+      >
+        {isCurrent ? (
+          <>
+            Plano atual <Check size={14} />
+          </>
+        ) : isSelecting ? (
+          <>
+            <Loader2 size={14} className="fincla-spin" />
+            Processando…
+          </>
+        ) : (
+          <>
+            {isRecommended ? "Fazer upgrade" : "Selecionar plano"}
+            <span aria-hidden>→</span>
+          </>
+        )}
+      </button>
+
+      <FeatureGroups plan={plan} />
+
+      <div style={{ borderTop: `1px solid ${T.border}` }} />
+      <div style={{ ...G, fontSize: 12, color: T.inkMid }}>
+        {plan.max_organizations === 1
+          ? "1 organização"
+          : `${plan.max_organizations} organizações`}{" "}
+        ·{" "}
+        {plan.max_users_per_org === 1
+          ? "1 membro"
+          : `até ${plan.max_users_per_org} membros`}
+      </div>
+    </div>
+  );
+}
+
+function PriceBlock({
+  priceCents,
+  billingCycle,
+  yearlyCents,
+  monthlyCents,
+  discount,
+  showYearly,
+}) {
+  if (priceCents === 0) {
+    return (
+      <div
+        style={{
+          ...G,
+          fontSize: 24,
+          fontWeight: 800,
+          color: T.ink,
+        }}
+      >
+        Grátis
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div style={{ ...G, fontSize: 26, fontWeight: 800, color: T.ink }}>
+        {fmtBRL(priceCents)}
+        <span
+          style={{
+            ...G,
+            fontSize: 13,
+            color: T.inkLight,
+            fontWeight: 600,
+            marginLeft: 4,
+          }}
+        >
+          {showYearly ? "/ano" : "/mês"}
+        </span>
+      </div>
+      {billingCycle === "monthly" && yearlyCents != null && (
+        <div
+          style={{
+            ...G,
+            fontSize: 12,
+            color: T.inkMid,
+            marginTop: 4,
+          }}
+        >
+          ou {fmtBRL(yearlyCents)}/ano{" "}
+          {discount ? `(-${discount}%)` : null}
+        </div>
+      )}
+      {billingCycle === "yearly" && yearlyCents != null && (
+        <div
+          style={{
+            ...G,
+            fontSize: 12,
+            color: T.inkMid,
+            marginTop: 4,
+          }}
+        >
+          equivale a {fmtBRL(Math.round(yearlyCents / 12))}/mês
+        </div>
+      )}
+      {billingCycle === "yearly" && yearlyCents == null && monthlyCents > 0 && (
+        <div
+          style={{
+            ...G,
+            fontSize: 12,
+            color: T.inkMid,
+            marginTop: 4,
+          }}
+        >
+          (cobrança mensal — sem plano anual)
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FeatureGroups({ plan }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {FEATURE_GROUPS.map((group) => (
+        <FeatureGroupBlock key={group.key} group={group} plan={plan} />
+      ))}
+    </div>
+  );
+}
+
+function FeatureGroupBlock({ group, plan }) {
+  const keys = PLAN_COMPARISON_FEATURES[group.key] ?? [];
+  if (keys.length === 0) return null;
+
+  return (
+    <div>
+      <div
+        style={{
+          ...G,
+          fontSize: 10,
+          fontWeight: 700,
+          color: T.inkLight,
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+          marginBottom: 6,
+        }}
+      >
+        {group.label}
+      </div>
+      <ul
+        style={{
+          listStyle: "none",
+          padding: 0,
+          margin: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+        }}
+      >
+        {keys.map((key) => {
+          const has = plan.features.includes(key);
+          return (
+            <li
+              key={key}
+              style={{
+                ...G,
+                fontSize: 13,
+                color: has ? T.inkMid : T.inkGhost,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              {has ? (
+                <Check size={14} color={T.green} aria-label="incluído" />
+              ) : (
+                <X size={14} color={T.inkGhost} aria-label="não incluído" />
+              )}
+              <span
+                style={{
+                  textDecoration: has ? "none" : "line-through",
+                  textDecorationColor: T.inkGhost,
+                }}
+              >
+                {getFeatureCopy(key).label}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

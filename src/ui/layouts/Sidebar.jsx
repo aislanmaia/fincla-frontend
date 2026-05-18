@@ -40,6 +40,38 @@ function userHasFeature(user, featureKey) {
   return Array.isArray(features) && features.includes(featureKey);
 }
 
+function getDisplayName(user) {
+  if (!user) return "—";
+  const first = (user.first_name ?? "").trim();
+  const last = (user.last_name ?? "").trim();
+  const full = [first, last].filter(Boolean).join(" ");
+  if (full) return full;
+  if (user.email) return user.email.split("@")[0];
+  return "—";
+}
+
+function getInitials(user) {
+  if (!user) return "?";
+  const first = (user.first_name ?? "").trim();
+  const last = (user.last_name ?? "").trim();
+  const initials = `${first.charAt(0)}${last.charAt(0)}`.toUpperCase();
+  if (initials) return initials;
+  if (user.email) return user.email.slice(0, 2).toUpperCase();
+  return "?";
+}
+
+const PLAN_BADGE_STYLE = {
+  essential: { label: "Essential", color: T.blue, bg: T.blueLight },
+  pro: { label: "Pro", color: T.purple, bg: T.purpleLight },
+  beta: { label: "Beta", color: T.ink, bg: T.bg },
+};
+
+function getPlanBadge(user) {
+  const slug = user?.subscription?.plan;
+  if (!slug) return null;
+  return PLAN_BADGE_STYLE[slug] ?? { label: slug, color: T.ink, bg: T.bg };
+}
+
 function SidebarInner({ page, onNav, onClose, user }) {
   return (
     <div
@@ -202,40 +234,70 @@ function SidebarInner({ page, onNav, onClose, user }) {
           }}
           onClick={() => onNav("profile")}
         >
-          <div
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: 9999,
-              background: `linear-gradient(135deg,${T.blue},${T.purple})`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 10,
-              fontWeight: 800,
-              color: "#fff",
-              flexShrink: 0,
-            }}
-          >
-            AS
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ ...G, fontSize: 12, fontWeight: 600, color: T.ink }}>Aislan</div>
-            <span
+          {user?.avatar_url ? (
+            <img
+              src={user.avatar_url}
+              alt=""
+              width={28}
+              height={28}
+              style={{ borderRadius: 9999, objectFit: "cover", flexShrink: 0 }}
+            />
+          ) : (
+            <div
               style={{
-                ...G,
+                width: 28,
+                height: 28,
+                borderRadius: 9999,
+                background: `linear-gradient(135deg,${T.blue},${T.purple})`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
                 fontSize: 10,
-                fontWeight: 700,
-                color: T.purple,
-                background: T.purpleLight,
-                padding: "1px 6px",
-                borderRadius: 99,
-                letterSpacing: "0.04em",
-                textTransform: "uppercase",
+                fontWeight: 800,
+                color: "#fff",
+                flexShrink: 0,
               }}
             >
-              PREMIUM
-            </span>
+              {getInitials(user)}
+            </div>
+          )}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                ...G,
+                fontSize: 12,
+                fontWeight: 600,
+                color: T.ink,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+              title={getDisplayName(user)}
+            >
+              {getDisplayName(user)}
+            </div>
+            {(() => {
+              const badge = getPlanBadge(user);
+              if (!badge) return null;
+              return (
+                <span
+                  data-testid="sidebar-plan-badge"
+                  style={{
+                    ...G,
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: badge.color,
+                    background: badge.bg,
+                    padding: "1px 6px",
+                    borderRadius: 99,
+                    letterSpacing: "0.04em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {badge.label}
+                </span>
+              );
+            })()}
           </div>
           <button
             type="button"
