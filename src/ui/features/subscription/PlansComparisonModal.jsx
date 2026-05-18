@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, Loader2, Star, X } from "lucide-react";
 
-import { handleApiError } from "../../../api/client";
+import { getApiErrorCode, handleApiError } from "../../../api/client";
 import { listPlans } from "../../../api/plans";
 import { changePlan } from "../../../api/subscriptions";
 import {
@@ -11,6 +11,7 @@ import {
 } from "../entitlements/featureCopy.js";
 import { T } from "../../tokens.js";
 import { G } from "../../typography.js";
+import { CpfInputDialog } from "./CpfInputDialog.jsx";
 
 const RECOMMENDED_PLAN_ID = "pro";
 
@@ -48,6 +49,11 @@ export function PlansComparisonModal({ currentPlanId, onClose }) {
   const [selectingPlanId, setSelectingPlanId] = useState(null);
   const [changeError, setChangeError] = useState("");
   const [billingCycle, setBillingCycle] = useState("monthly");
+  // CPF flow: opens when the backend returns ``code: "cpf_required"`` —
+  // the user is finishing their first upgrade and ASAAS doesn't have
+  // their document yet.
+  const [pendingCpfPlanId, setPendingCpfPlanId] = useState(null);
+  const [cpfError, setCpfError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -75,24 +81,49 @@ export function PlansComparisonModal({ currentPlanId, onClose }) {
     return discounts.length ? Math.max(...discounts) : null;
   }, [plans]);
 
-  async function handleSelect(planId) {
+  async function submitChange(planId, cpfCnpj) {
     setSelectingPlanId(planId);
     setChangeError("");
+    setCpfError("");
     try {
-      const result = await changePlan({
+      const payload = {
         target_plan_id: planId,
         billing_cycle: billingCycle,
-      });
+      };
+      if (cpfCnpj) {
+        payload.cpf_cnpj = cpfCnpj;
+      }
+      const result = await changePlan(payload);
       if (result.checkout_url) {
         window.location.href = result.checkout_url;
         return;
       }
+      // Update path (no checkout): clear pending state and close.
+      setPendingCpfPlanId(null);
       onClose?.();
     } catch (err) {
+      if (getApiErrorCode(err) === "cpf_required") {
+        setPendingCpfPlanId(planId);
+        // Only surface the API message inside the CPF dialog if we were
+        // already in the CPF flow (i.e., user typed an invalid one).
+        if (cpfCnpj) {
+          setCpfError(handleApiError(err));
+        }
+        return;
+      }
       setChangeError(handleApiError(err));
     } finally {
       setSelectingPlanId(null);
     }
+  }
+
+  function handleSelect(planId) {
+    return submitChange(planId);
+  }
+
+  function handleCpfSubmit(cpfDigits) {
+    if (!pendingCpfPlanId) return;
+    return submitChange(pendingCpfPlanId, cpfDigits);
   }
 
   return (
@@ -232,6 +263,17 @@ export function PlansComparisonModal({ currentPlanId, onClose }) {
           </div>
         )}
       </div>
+      {pendingCpfPlanId && (
+        <CpfInputDialog
+          isSubmitting={selectingPlanId === pendingCpfPlanId}
+          errorMessage={cpfError}
+          onSubmit={handleCpfSubmit}
+          onClose={() => {
+            setPendingCpfPlanId(null);
+            setCpfError("");
+          }}
+        />
+      )}
     </div>
   );
 }

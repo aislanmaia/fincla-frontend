@@ -177,6 +177,26 @@ export const handleApiError = (error: unknown): string => {
   return 'Algo deu errado. Tente novamente mais tarde.';
 };
 
+/**
+ * Returns the structured ``code`` field from a backend error response when
+ * the API replies with ``detail = { code, message }``. Returns ``null``
+ * otherwise (legacy string detail, network failure, validation array).
+ *
+ * Use this to branch UI behaviour on a known error condition (e.g., open
+ * the CPF dialog on ``cpf_required``) without coupling to message text.
+ */
+export const getApiErrorCode = (error: unknown): string | null => {
+  if (!axios.isAxiosError(error)) return null;
+  const detail = (error.response?.data as ApiErrorBody | undefined)?.detail;
+  if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
+    const code = (detail as { code?: unknown }).code;
+    if (typeof code === 'string' && code.length > 0) {
+      return code;
+    }
+  }
+  return null;
+};
+
 export { errorCode, isLegacyError, isSafeError } from './apiError';
 export type {
   ApiErrorBody,

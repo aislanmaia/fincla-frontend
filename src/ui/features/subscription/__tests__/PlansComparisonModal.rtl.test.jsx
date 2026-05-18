@@ -11,7 +11,18 @@ vi.mock("../../../../api/plans", () => ({
 vi.mock("../../../../api/subscriptions", () => ({
   changePlan: vi.fn(),
 }));
+// Stub getApiErrorCode so we don't need to fabricate an axios error
+// structure in tests — handleApiError still falls through to the real
+// implementation for the human-readable message.
+vi.mock("../../../../api/client", async () => {
+  const actual = await vi.importActual("../../../../api/client");
+  return {
+    ...actual,
+    getApiErrorCode: vi.fn(),
+  };
+});
 
+import { getApiErrorCode } from "../../../../api/client";
 import { listPlans } from "../../../../api/plans";
 import { changePlan } from "../../../../api/subscriptions";
 
@@ -55,6 +66,7 @@ const pro = {
 beforeEach(() => {
   vi.mocked(listPlans).mockReset();
   vi.mocked(changePlan).mockReset();
+  vi.mocked(getApiErrorCode).mockReset();
 });
 
 afterEach(cleanup);
@@ -179,5 +191,68 @@ describe("<PlansComparisonModal>", () => {
         screen.getByText(/algo deu errado|boom/i),
       ).toBeInTheDocument();
     });
+  });
+
+  it("opens the CPF dialog when the backend signals cpf_required", async () => {
+    vi.mocked(listPlans).mockResolvedValue([essential, pro]);
+    vi.mocked(changePlan).mockRejectedValueOnce(new Error("cpf_required"));
+    vi.mocked(getApiErrorCode).mockReturnValueOnce("cpf_required");
+
+    render(<PlansComparisonModal currentPlanId="essential" onClose={vi.fn()} />);
+    await waitFor(() =>
+      expect(screen.getByTestId("plan-select-pro")).toBeInTheDocument(),
+    );
+
+    await userEvent.click(screen.getByTestId("plan-select-pro"));
+
+    expect(
+      await screen.findByRole("dialog", { name: /informe seu cpf/i }),
+    ).toBeInTheDocument();
+    // The plans modal still shows behind the dialog; no toast/banner error
+    // pollutes the comparison view in this case.
+    expect(
+      screen.queryByText(/algo deu errado/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("resubmits change-plan with cpf_cnpj after the user types one", async () => {
+    vi.mocked(listPlans).mockResolvedValue([essential, pro]);
+    // First call: cpf_required. Second call: success with checkout_url.
+    vi.mocked(changePlan)
+      .mockRejectedValueOnce(new Error("cpf_required"))
+      .mockResolvedValueOnce({
+        subscription_id: "sub_z",
+        target_plan_id: "pro",
+        status: "pending_payment",
+        checkout_url: "https://asaas/i/cpf-flow",
+      });
+    vi.mocked(getApiErrorCode).mockReturnValueOnce("cpf_required");
+
+    const originalLocation = window.location;
+    delete window.location;
+    window.location = { ...originalLocation, href: "" };
+
+    render(<PlansComparisonModal currentPlanId="essential" onClose={vi.fn()} />);
+    await waitFor(() =>
+      expect(screen.getByTestId("plan-select-pro")).toBeInTheDocument(),
+    );
+
+    await userEvent.click(screen.getByTestId("plan-select-pro"));
+    await screen.findByRole("dialog", { name: /informe seu cpf/i });
+
+    const input = screen.getByRole("textbox");
+    await userEvent.type(input, "12345678909");
+    await userEvent.click(screen.getByTestId("cpf-dialog-submit"));
+
+    await waitFor(() => {
+      expect(changePlan).toHaveBeenLastCalledWith({
+        target_plan_id: "pro",
+        billing_cycle: "monthly",
+        cpf_cnpj: "12345678909",
+      });
+    });
+    expect(window.location.href).toBe("https://asaas/i/cpf-flow");
+
+    window.location = originalLocation;
   });
 });

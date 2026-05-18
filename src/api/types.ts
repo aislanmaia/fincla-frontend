@@ -129,6 +129,13 @@ export interface ListInvoicesResponse {
 export interface ChangePlanRequest {
   target_plan_id: string;
   billing_cycle?: BillingCycle;
+  /**
+   * Apenas dígitos (11 para CPF, 14 para CNPJ). Enviado quando o backend
+   * sinaliza ``code: "cpf_required"`` — primeira contratação de quem chegou
+   * sem ter passado o documento no signup (beta tester, conta legada).
+   * Não persistimos localmente; vai direto para o gateway de pagamento.
+   */
+  cpf_cnpj?: string;
 }
 
 export interface ChangePlanResponse {
