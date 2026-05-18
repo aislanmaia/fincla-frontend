@@ -8,6 +8,7 @@ import {
   listBudgetsForUi,
   mapBudgetHistoryToUi,
   mapBudgetsResponseToUi,
+  updateBudgetForUi,
 } from "../../data/budgetsAdapter.js";
 
 const EMPTY_STATE = {
@@ -102,9 +103,45 @@ export function useBudgetsData({
     }
   }, [organizationId]);
 
+  const updateBudget = useCallback(async (budgetId, body) => {
+    if (!organizationId) return null;
+
+    setState((current) => ({
+      ...current,
+      isSaving: true,
+      error: "",
+    }));
+
+    try {
+      await updateBudgetForUi(organizationId, budgetId, body);
+      const [budgetsResponse, tags, historyResponse] = await Promise.all([
+        listBudgetsForUi(organizationId),
+        listBudgetCategoryChoicesForUi(organizationId),
+        listBudgetHistoryForUi(organizationId),
+      ]);
+      setState({
+        isLoading: false,
+        isSaving: false,
+        error: "",
+        data: mapBudgetsResponseToUi(budgetsResponse),
+        choices: buildBudgetCreateChoices(tags, budgetsResponse.budgets),
+        history: mapBudgetHistoryToUi(historyResponse.months),
+      });
+      return true;
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        isSaving: false,
+        error: formatBudgetsApiError(error),
+      }));
+      throw error;
+    }
+  }, [organizationId]);
+
   return useMemo(() => ({
     ...state,
     hasRealData: Boolean(state.data),
     createBudget,
-  }), [createBudget, state]);
+    updateBudget,
+  }), [createBudget, updateBudget, state]);
 }

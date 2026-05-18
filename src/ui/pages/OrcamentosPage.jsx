@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { FC } from "../routing/searchContract.js";
 import {
@@ -6,6 +6,7 @@ import {
   BarChart2,
   ChevronDown,
   ChevronUp,
+  Pencil,
   Plus,
 } from "lucide-react";
 import { T } from "../tokens";
@@ -66,6 +67,11 @@ export function OrcamentosPage({
   const [addLimStr,  setAddLimStr]  = useState("");
   const resetAddForm = () => { setAddSelId(null); setAddLimStr(""); };
 
+  const [showEdit, setShowEdit] = useState(false);
+  const [editCat, setEditCat] = useState(null);
+  const [editLimStr, setEditLimStr] = useState("");
+  const resetEditForm = () => { setEditCat(null); setEditLimStr(""); };
+
   const [expanded, setExpanded] = useState({});
   const [histOpen, setHistOpen] = useState(true);
   const [mockCats, setMockCats] = useState(() => dataMode === "mock" ? CATS_ORC_INIT : []);
@@ -78,6 +84,8 @@ export function OrcamentosPage({
 
   useEffect(() => {
     if (urlSearch[FC.ADD] !== "1") return;
+    resetEditForm();
+    setShowEdit(false);
     setShowAdd(true);
     navigate({
       replace: true,
@@ -110,7 +118,19 @@ export function OrcamentosPage({
   const fmtBRL = (v) => "R$ " + Math.abs(v).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
   const toggleCat = (id) => setExpanded(e => ({ ...e, [id]: !e[id] }));
 
-  const CatCard = ({ cat, idx }) => {
+  const openEditBudget = (cat) => {
+    resetAddForm();
+    setShowAdd(false);
+    setEditCat(cat);
+    const raw =
+      typeof cat.limite === "number" && Number.isFinite(cat.limite)
+        ? cat.limite.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        : String(cat.limite ?? "");
+    setEditLimStr(raw);
+    setShowEdit(true);
+  };
+
+  const CatCard = ({ cat, onEditBudget }) => {
     const p      = pct(cat.gasto, cat.limite);
     const bColor = barColor(p);
     const bLight = barLight(p);
@@ -158,11 +178,20 @@ export function OrcamentosPage({
                   <div key={m} style={{ width:20, height:20, borderRadius:"50%", background:AVATAR_COLORS_ORC[m]||T.inkMid, border:`2px solid ${T.surface}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:8, fontWeight:700, color:"#fff", marginLeft:i===0?0:-5 }}>{m}</div>
                 ))}
               </div>
-              <button onClick={e => { e.stopPropagation(); onNav && onNav("transactions", { filterCat: cat.navFilter || cat.nome }); }}
+              <button type="button" onClick={e => { e.stopPropagation(); onEditBudget(cat); }}
+                aria-label={`Editar limite de ${cat.nome}`}
+                style={{ ...G, fontSize:10, fontWeight:600, color:T.inkMid, background:"none", border:"none", cursor:"pointer", padding:0, display:"flex", alignItems:"center", gap:3 }}
+                onMouseEnter={e => e.currentTarget.style.textDecoration="underline"}
+                onMouseLeave={e => e.currentTarget.style.textDecoration="none"}>
+                <Pencil size={11} color={T.inkMid} /> {!isMobile && "Editar"}
+              </button>
+              <button type="button" onClick={e => { e.stopPropagation(); onNav && onNav("transactions", { filterCat: cat.navFilter || cat.nome }); }}
+                aria-label={`Ver transações da categoria ${cat.nome}`}
+                title={isMobile ? undefined : "Lista de transações filtrada por esta categoria"}
                 style={{ ...G, fontSize:10, fontWeight:600, color:T.blue, background:"none", border:"none", cursor:"pointer", padding:0, display:"flex", alignItems:"center", gap:3 }}
                 onMouseEnter={e => e.currentTarget.style.textDecoration="underline"}
                 onMouseLeave={e => e.currentTarget.style.textDecoration="none"}>
-                Ver → <ArrowRight size={9} color={T.blue} />
+                Transações <ArrowRight size={9} color={T.blue} />
               </button>
             </div>
           </div>
@@ -325,7 +354,7 @@ export function OrcamentosPage({
             <div style={{ ...G, padding:"7px 14px", fontSize:isMobile?12:13, fontWeight:700, color:T.ink, borderLeft:`1px solid ${T.border}`, borderRight:`1px solid ${T.border}`, whiteSpace:"nowrap" }}>{isMobile?MONTHS_FULL[displayMonth].slice(0,3)+`/${String(currentYear).slice(-2)}`:MONTHS_FULL[displayMonth]+` ${currentYear}`}</div>
             <button disabled={shouldUseRealData} onClick={() => setMonth(m => (m+1)%12)} style={{ ...G, background:T.surface, border:"none", padding:"7px 12px", cursor:shouldUseRealData?"default":"pointer", color:T.inkMid, fontSize:14, fontWeight:600, opacity:shouldUseRealData?0.45:1 }} onMouseEnter={e => { if (!shouldUseRealData) e.currentTarget.style.background=T.grayLight; }} onMouseLeave={e => e.currentTarget.style.background=T.surface}>›</button>
           </div>
-          <button onClick={() => setShowAdd(true)} style={{ ...G, display:"flex", alignItems:"center", gap:6, background:T.ink, border:"none", borderRadius:9, padding:"8px 14px", fontSize:12, fontWeight:700, color:"#fff", cursor:"pointer" }}>
+          <button type="button" onClick={() => { resetEditForm(); setShowEdit(false); setShowAdd(true); }} style={{ ...G, display:"flex", alignItems:"center", gap:6, background:T.ink, border:"none", borderRadius:9, padding:"8px 14px", fontSize:12, fontWeight:700, color:"#fff", cursor:"pointer" }}>
             <Plus size={13} /> {isMobile?"Novo":"Novo Orçamento"}
           </button>
         </div>
@@ -413,7 +442,7 @@ export function OrcamentosPage({
         );
       })() : (
         <div style={{ display:"grid", gridTemplateColumns:isMobile?"1fr":"1fr 1fr", gap:12 }}>
-          {cats.map((cat, i) => <CatCard key={cat.id} cat={cat} idx={i} />)}
+          {cats.map((cat) => <CatCard key={cat.id} cat={cat} onEditBudget={openEditBudget} />)}
         </div>
       )}
       <Historico />
@@ -466,7 +495,7 @@ export function OrcamentosPage({
                 </div>
                 {available.length === 0 ? (
                   <div style={{ ...G, fontSize:13, color:T.inkMid, padding:"14px 0", textAlign:"center", lineHeight:1.7 }}>
-                    Todas as categorias já têm orçamento. Edite os limites diretamente nos cards abaixo.
+                    Todas as categorias já têm orçamento. Use <strong>Editar</strong> no card da categoria para ajustar o limite mensal.
                   </div>
                 ) : (
                   <div style={{ flex:1, minHeight:0, maxHeight: isMobile ? 320 : 280, overflowY:"auto", overflowX:"hidden", WebkitOverflowScrolling:"touch", paddingRight:4 }}>
@@ -525,6 +554,100 @@ export function OrcamentosPage({
                     {budgetsData.isSaving ? "Criando..." : "Criar orçamento"}
                   </button>
                 )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+      {showEdit && editCat && (() => {
+        const limVal = parseBudgetAmountInput(editLimStr);
+        const canSaveEdit = limVal > 0;
+        const closeEdit = () => {
+          if (!budgetsData.isSaving) {
+            setShowEdit(false);
+            resetEditForm();
+          }
+        };
+        const handleEditSave = async () => {
+          if (!canSaveEdit || !editCat) return;
+          try {
+            if (shouldUseRealData) {
+              const bid = editCat.budgetId ?? editCat.id;
+              await budgetsData.updateBudget(bid, { amount: limVal });
+            } else {
+              setMockCats((prev) =>
+                prev.map((c) => (c.id === editCat.id ? { ...c, limite: limVal } : c)),
+              );
+            }
+            setShowEdit(false);
+            resetEditForm();
+          } catch {
+            /* erro exibido em budgetsData.error */
+          }
+        };
+        return (
+          <div style={{ position:"fixed", inset:0, zIndex:400, overflow:"hidden",
+            background:"rgba(0,0,0,0.4)",
+            display:"flex",
+            alignItems: isMobile ? "flex-end" : "center",
+            justifyContent:"center",
+            padding: isMobile ? 0 : 24 }}
+            onClick={closeEdit}>
+            <div style={{ width:"100%", maxWidth: isMobile ? "100%" : 460,
+              maxHeight: isMobile ? "min(88vh, 720px)" : "min(90vh, 640px)",
+              display:"flex", flexDirection:"column", overflow:"hidden",
+              background:T.surface,
+              borderRadius: isMobile ? "18px 18px 0 0" : 18,
+              padding: isMobile ? "20px 20px 32px" : "26px 26px 22px",
+              boxShadow:"0 -4px 40px rgba(0,0,0,0.15)" }}
+              onClick={e => e.stopPropagation()}>
+              {isMobile && <div style={{ width:36, height:4, background:T.border, borderRadius:99, margin:"0 auto 18px" }}/>}
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:18 }}>
+                <div style={{ ...G, fontSize:16, fontWeight:800, color:T.ink }}>Editar orçamento</div>
+                {!isMobile && (
+                  <button type="button" onClick={closeEdit}
+                    style={{ background:"none", border:"none", cursor:"pointer", color:T.inkLight, fontSize:22, lineHeight:1 }}>×</button>
+                )}
+              </div>
+              <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16, padding:"12px 14px", background:T.bg, border:`1px solid ${T.border}`, borderRadius:12 }}>
+                <div style={{ width:40, height:40, borderRadius:10, background:T.greenLight, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+                  <CategoryLucideIcon iconKey={editCat.categoryIconKey} labelPt={editCat.nome} size={22} color={T.ink} />
+                </div>
+                <div style={{ minWidth:0 }}>
+                  <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:4 }}>Categoria</div>
+                  <div style={{ ...G, fontSize:14, fontWeight:700, color:T.ink, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{editCat.nome}</div>
+                  <div style={{ ...G, fontSize:11, color:T.inkMid, marginTop:4 }}>{shouldUseRealData ? `Gasto até hoje ${fmtBRL(editCat.gasto)}` : "Ajuste o limite neste cenário demo."}</div>
+                </div>
+              </div>
+              <div style={{ marginBottom:20, flexShrink:0 }}>
+                <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>
+                  Limite mensal
+                </div>
+                <div style={{ position:"relative", display:"flex", alignItems:"center" }}>
+                  <span style={{ ...G, position:"absolute", left:13, fontSize:14, fontWeight:700, color:T.inkLight, pointerEvents:"none" }}>R$</span>
+                  <input value={editLimStr} onChange={e => setEditLimStr(e.target.value)}
+                    placeholder="0,00" type="text" inputMode="decimal" autoFocus
+                    style={{ ...G, ...NUM, width:"100%", padding:"12px 14px 12px 36px", fontSize:15,
+                      color:T.ink, background:T.bg, border:`1.5px solid ${T.ink}`, borderRadius:10, outline:"none" }}
+                    onKeyDown={e => { if (e.key === "Enter") void handleEditSave(); }}/>
+                </div>
+              </div>
+              <div style={{ display:"flex", gap:10, flexShrink:0 }}>
+                <button type="button" onClick={closeEdit}
+                  disabled={budgetsData.isSaving}
+                  style={{ ...G, flex:1, padding:"11px", borderRadius:11, border:`1px solid ${T.border}`,
+                    background:"none", color:T.inkMid, fontSize:13, fontWeight:600,
+                    cursor: budgetsData.isSaving ? "not-allowed" : "pointer", opacity: budgetsData.isSaving ? 0.5 : 1 }}>
+                  Cancelar
+                </button>
+                <button type="button" onClick={() => { void handleEditSave(); }}
+                  disabled={!canSaveEdit || budgetsData.isSaving}
+                  style={{ ...G, flex:2, padding:"11px", borderRadius:11, border:"none",
+                    background: canSaveEdit ? T.ink : T.inkGhost, color:"#fff",
+                    fontSize:13, fontWeight:700, cursor: canSaveEdit ? "pointer" : "not-allowed",
+                    opacity: canSaveEdit ? 1 : 0.5, transition:"all 0.15s" }}>
+                  {budgetsData.isSaving ? "Salvando..." : "Salvar"}
+                </button>
               </div>
             </div>
           </div>

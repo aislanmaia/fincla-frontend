@@ -1,6 +1,7 @@
 import {
   createBudget,
   listBudgets,
+  updateBudget,
 } from "../../api/budgets";
 import { getMonthlyEvolution } from "../../api/analytics";
 import { handleApiError } from "../../api/client";
@@ -223,6 +224,10 @@ export async function listBudgetCategoryChoicesForUi(organizationId) {
 
 export async function createBudgetForUi(organizationId, payload) {
   return createBudget(organizationId, payload);
+}
+
+export async function updateBudgetForUi(organizationId, budgetId, data) {
+  return updateBudget(budgetId, organizationId, data);
 }
 
 export function formatBudgetsApiError(error) {

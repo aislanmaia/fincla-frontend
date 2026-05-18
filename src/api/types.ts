@@ -911,17 +911,20 @@ export interface GoalContributionListResponse {
 }
 
 // ===== ORÇAMENTOS (BUDGETS) =====
+/** Alinhado ao domínio da API (`VALID_PERIOD_TYPES`). */
+export type BudgetPeriodType = 'monthly' | 'yearly';
+
 export interface CreateBudgetRequest {
   tag_id: string;
   amount: number;
-  period_type?: string; // "monthly" (padrão), "weekly", "yearly" ou "custom"
+  period_type?: BudgetPeriodType;
   start_date?: string | null;
   end_date?: string | null;
 }
 
 export interface UpdateBudgetRequest {
   amount?: number | null;
-  period_type?: string | null;
+  period_type?: BudgetPeriodType | null;
   is_active?: boolean | null;
   start_date?: string | null;
   end_date?: string | null;
@@ -936,7 +939,7 @@ export interface Budget {
   tag_icon_key?: string | null;
   tag_color: string | null;
   amount: number;
-  period_type: string;
+  period_type: BudgetPeriodType;
   is_active: boolean;
   spent_amount: number;
   remaining_amount: number;
