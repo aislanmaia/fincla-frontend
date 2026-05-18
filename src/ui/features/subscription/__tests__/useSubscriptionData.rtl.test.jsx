@@ -4,11 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useSubscriptionData } from "../useSubscriptionData.js";
 
-vi.mock("../../../../api/subscriptions.js", () => ({
+vi.mock("../../../../api/subscriptions", () => ({
   getCurrentSubscription: vi.fn(),
 }));
 
-import { getCurrentSubscription } from "../../../../api/subscriptions.js";
+import { getCurrentSubscription } from "../../../../api/subscriptions";
 
 const sample = {
   id: "sub_uuid",

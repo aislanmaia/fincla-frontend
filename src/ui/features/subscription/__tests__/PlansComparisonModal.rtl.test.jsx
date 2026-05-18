@@ -5,15 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PlansComparisonModal } from "../PlansComparisonModal.jsx";
 
-vi.mock("../../../../api/plans.js", () => ({
+vi.mock("../../../../api/plans", () => ({
   listPlans: vi.fn(),
 }));
-vi.mock("../../../../api/subscriptions.js", () => ({
+vi.mock("../../../../api/subscriptions", () => ({
   changePlan: vi.fn(),
 }));
 
-import { listPlans } from "../../../../api/plans.js";
-import { changePlan } from "../../../../api/subscriptions.js";
+import { listPlans } from "../../../../api/plans";
+import { changePlan } from "../../../../api/subscriptions";
 
 const essential = {
   id: "essential",

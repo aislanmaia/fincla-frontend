@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { Check, Loader2, X } from "lucide-react";
 
-import { handleApiError } from "../../../api/client.ts";
-import { listPlans } from "../../../api/plans.js";
-import { changePlan } from "../../../api/subscriptions.js";
+import { handleApiError } from "../../../api/client";
+import { listPlans } from "../../../api/plans";
+import { changePlan } from "../../../api/subscriptions";
 import { T } from "../../tokens.js";
 import { G } from "../../typography.js";
 

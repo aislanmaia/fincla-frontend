@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { CheckCircle2, Loader2 } from "lucide-react";
 
-import { getCurrentSubscription } from "../../api/subscriptions.js";
-import { handleApiError } from "../../api/client.ts";
+import { getCurrentSubscription } from "../../api/subscriptions";
+import { handleApiError } from "../../api/client";
 import { T } from "../tokens.js";
 import { G } from "../typography.js";
 

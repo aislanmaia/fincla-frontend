@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { getCurrentSubscription } from "../../../api/subscriptions.js";
-import { handleApiError } from "../../../api/client.ts";
+import { getCurrentSubscription } from "../../../api/subscriptions";
+import { handleApiError } from "../../../api/client";
 
 /**
  * Hook que carrega a assinatura do usuário autenticado (plano embedado +

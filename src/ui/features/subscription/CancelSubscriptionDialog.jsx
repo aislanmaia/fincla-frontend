@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { AlertTriangle, X } from "lucide-react";
 
-import { handleApiError } from "../../../api/client.ts";
-import { cancelSubscription } from "../../../api/subscriptions.js";
+import { handleApiError } from "../../../api/client";
+import { cancelSubscription } from "../../../api/subscriptions";
 import { T } from "../../tokens.js";
 import { G } from "../../typography.js";
 

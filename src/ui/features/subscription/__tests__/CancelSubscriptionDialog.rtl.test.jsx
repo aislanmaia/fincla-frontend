@@ -5,11 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CancelSubscriptionDialog } from "../CancelSubscriptionDialog.jsx";
 
-vi.mock("../../../../api/subscriptions.js", () => ({
+vi.mock("../../../../api/subscriptions", () => ({
   cancelSubscription: vi.fn(),
 }));
 
-import { cancelSubscription } from "../../../../api/subscriptions.js";
+import { cancelSubscription } from "../../../../api/subscriptions";
 
 beforeEach(() => {
   vi.mocked(cancelSubscription).mockReset();
