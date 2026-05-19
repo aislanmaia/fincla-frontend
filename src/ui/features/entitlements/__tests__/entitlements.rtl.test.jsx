@@ -23,8 +23,8 @@ import {
   useEntitlement,
 } from "../index.js";
 
-function _userWith(features) {
-  return { subscription: { features } };
+function _userWith(features, status = "active") {
+  return { subscription: { features, status } };
 }
 
 describe("useEntitlement", () => {
@@ -56,6 +56,26 @@ describe("useEntitlement", () => {
 
   it("returns false for empty feature key", () => {
     expect(useEntitlement("", _userWith(["x"]))).toBe(false);
+  });
+
+  it("revokes entitlement when subscription status is not active", () => {
+    // Even if the plan would grant the feature, a non-active state
+    // (past_due, cancelled, expired, pending_payment, inactive) must
+    // block access. Backend does the same via ``is_entitled``.
+    for (const blockedStatus of [
+      "pending_payment",
+      "past_due",
+      "cancelled",
+      "expired",
+      "inactive",
+    ]) {
+      expect(
+        useEntitlement(
+          "advanced_reports",
+          _userWith(["advanced_reports"], blockedStatus),
+        ),
+      ).toBe(false);
+    }
   });
 });
 
