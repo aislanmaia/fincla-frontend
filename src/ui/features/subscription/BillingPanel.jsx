@@ -72,6 +72,10 @@ function StatusBadge({ status }) {
 }
 
 function CancelBanner({ effectiveUntil }) {
+  // Pode chegar `null` quando a assinatura é cancelada antes do primeiro
+  // pagamento (sem ``current_period_end`` definido ainda). Mostramos um
+  // texto genérico em vez do "—" cru que confundia o usuário.
+  const hasDate = Boolean(effectiveUntil);
   return (
     <div
       style={{
@@ -88,8 +92,17 @@ function CancelBanner({ effectiveUntil }) {
     >
       <AlertTriangle size={18} color={T.amber} />
       <div style={{ ...G, fontSize: 13, color: T.ink, flex: 1 }}>
-        Sua assinatura termina em <strong>{fmtDate(effectiveUntil)}</strong>.
-        Você manterá acesso até essa data.
+        {hasDate ? (
+          <>
+            Sua assinatura termina em <strong>{fmtDate(effectiveUntil)}</strong>.
+            Você manterá acesso até essa data.
+          </>
+        ) : (
+          <>
+            Sua assinatura está marcada para cancelamento ao fim do período
+            atual.
+          </>
+        )}
       </div>
     </div>
   );

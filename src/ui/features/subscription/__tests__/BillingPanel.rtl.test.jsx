@@ -134,6 +134,27 @@ describe("<BillingPanel>", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("falls back to a generic message when cancel_at_period_end is true but current_period_end is null", async () => {
+    vi.mocked(getCurrentSubscription).mockResolvedValue({
+      ...baseSubscription,
+      cancel_at_period_end: true,
+      current_period_end: null,
+    });
+
+    render(
+      <BillingPanel SectionCard={SectionCard} SectionHeader={SectionHeader} />,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toBeInTheDocument(),
+    );
+    // Never expose the em dash placeholder from the date formatter.
+    expect(screen.queryByText(/termina em\s*—/)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/marcada para cancelamento ao fim do período atual/i),
+    ).toBeInTheDocument();
+  });
+
   it("lists recent invoices with status and links", async () => {
     vi.mocked(getCurrentSubscription).mockResolvedValue(baseSubscription);
     render(
