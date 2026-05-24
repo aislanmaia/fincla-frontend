@@ -4280,8 +4280,9 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstorno = n
       : 0;
     const cc = catColor(item);
     const [expanded, setExpanded] = useState(false);
-    const canLancarEstorno = !item.isRefund && item.transactionId != null && !!onLancarEstorno;
-    const expandable = !!(item.method || isParcela || (item.refundsSummary && item.refundsSummary.count > 0) || canLancarEstorno);
+    const hasLinkedRefunds = !!(item.refundsSummary && item.refundsSummary.count > 0);
+    const canLancarEstorno = !item.isRefund && item.transactionId != null && !!onLancarEstorno && !hasLinkedRefunds;
+    const expandable = !!(item.method || isParcela || hasLinkedRefunds || canLancarEstorno);
 
     return (
       <div style={{ borderBottom:`1px solid ${T.border}` }}>
@@ -4430,8 +4431,11 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstorno = n
                 </div>
               </div>
             )}
-            {/* CTA: lançar estorno linkado a esta exata compra (parcela ou não). Oculto em linhas que já são estorno. */}
-            {!item.isRefund && item.transactionId != null && onLancarEstorno && (
+            {/* CTA: lançar estorno linkado a esta exata compra (parcela ou não).
+                Oculto em linhas que já são estorno OU que já têm estorno linkado
+                (evita botão "Lançar estorno" duplicado quando o banner verde
+                "Esta compra possui estorno relacionado" já está renderizado acima). */}
+            {canLancarEstorno && (
               <div style={{ marginTop:10 }}>
                 <button
                   type="button"
