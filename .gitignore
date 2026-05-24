@@ -89,6 +89,7 @@ docs/DEMO_USERS.md
 
 # Playwright E2E (org id do globalSetup)
 e2e/.cache/
+e2e/screenshots/
 test-results/
 playwright-report/
 
