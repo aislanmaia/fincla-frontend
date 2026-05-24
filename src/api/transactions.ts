@@ -52,17 +52,22 @@ export const getTransactionsSummary = async (
 };
 
 /**
- * Busca uma transação específica por ID
+ * Busca uma transação específica por ID.
+ *
+ * @param options.includeRefunds Quando true, popula `refunds: Transaction[]` com
+ *   a lista completa dos estornos linkados via refund_of_transaction_id.
+ *   `refunds_summary` é sempre populado quando há estornos, independente desta flag.
  */
 export const getTransaction = async (
   transactionId: string | number,
-  organizationId: string
+  organizationId: string,
+  options?: { includeRefunds?: boolean }
 ): Promise<Transaction> => {
+  const params: Record<string, string> = { organization_id: organizationId };
+  if (options?.includeRefunds) params.include_refunds = "true";
   const response = await apiClient.get<Transaction>(
     `/transactions/${transactionId}`,
-    {
-      params: { organization_id: organizationId },
-    }
+    { params }
   );
   return response.data;
 };

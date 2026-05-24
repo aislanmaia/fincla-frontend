@@ -441,7 +441,7 @@ export interface TagsResponse {
 // ===== TRANSAÇÕES =====
 export interface CreateTransactionRequest {
   organization_id: string;
-  type: 'income' | 'expense';
+  type: 'income' | 'expense' | 'refund';
   description: string;
   /** Obrigatório: pelo menos uma tag do tipo categoria (ver guia da API) */
   tag_ids: string[];
@@ -449,14 +449,16 @@ export interface CreateTransactionRequest {
   payment_method: string;
   date: string; // ISO datetime string (YYYY-MM-DDTHH:MM or YYYY-MM-DDTHH:MM:SS)
   card_id?: number | null;
-  modality?: 'cash' | 'installment' | null;
+  modality?: 'cash' | 'installment' | 'refund' | null;
   installments_count?: number | null;
   recurring?: boolean;
   category?: string | null; // Campo legado
+  /** FK opcional para a transação estornada. Só válida quando type='refund'. */
+  refund_of_transaction_id?: number | null;
 }
 
 export interface UpdateTransactionRequest {
-  type?: 'income' | 'expense';
+  type?: 'income' | 'expense' | 'refund';
   description?: string;
   tag_ids?: string[];
   value?: number;
@@ -466,7 +468,7 @@ export interface UpdateTransactionRequest {
   category?: string; // Campo legado
   /** Obrigatório para associar cobrança de cartão; não use last4 no lugar (ver guia da API). */
   card_id?: number;
-  modality?: 'cash' | 'installment';
+  modality?: 'cash' | 'installment' | 'refund';
   installments_count?: number;
 }
 
@@ -478,7 +480,7 @@ export interface CreditCardChargeInfo {
     transaction_id: number;
     total_amount: number;
     installments_count: number;
-    modality: 'cash' | 'installment';
+    modality: 'cash' | 'installment' | 'refund';
     purchase_date: string;
   };
   card: {
@@ -494,10 +496,16 @@ export interface CreditCardChargeInfo {
 // Legacy alias for backwards compatibility
 export type CreditCardCharge = CreditCardChargeInfo;
 
+/** Resumo agregado dos estornos linkados a uma transação. */
+export interface RefundsSummary {
+  count: number;
+  total_value: number;
+}
+
 export interface Transaction {
   id: number;
   organization_id: string;
-  type: 'income' | 'expense';
+  type: 'income' | 'expense' | 'refund';
   description: string;
   tags: Record<string, Tag[]>;
   value: number;
@@ -514,8 +522,14 @@ export interface Transaction {
   category?: string | null; // Campo legado
   // Campos derivados do credit_card_charge para acesso direto
   card_last4?: string | null;
-  modality?: 'cash' | 'installment' | null;
+  modality?: 'cash' | 'installment' | 'refund' | null;
   installments_count?: number | null;
+  /** Set apenas quando type='refund' e o estorno aponta para uma compra original. */
+  refund_of_transaction_id?: number | null;
+  /** Resumo dos estornos linkados a esta transação. Sempre vem populado quando count > 0. */
+  refunds_summary?: RefundsSummary | null;
+  /** Lista completa dos estornos linkados. Só vem quando include_refunds=true. */
+  refunds?: Transaction[] | null;
 }
 
 /** Info de parcela quando a transação aparece na lista por causa do vencimento no range */
@@ -531,7 +545,7 @@ export type SortOrder = 'asc' | 'desc';
 
 export interface ListTransactionsQuery {
   organization_id: string;
-  type?: 'income' | 'expense';
+  type?: 'income' | 'expense' | 'refund';
   category?: string;
   payment_method?: string;
   description?: string;
@@ -564,7 +578,7 @@ export interface PaginatedTransactionsResponse {
 
 export interface TransactionsSummaryQuery {
   organization_id: string;
-  type?: 'income' | 'expense';
+  type?: 'income' | 'expense' | 'refund';
   category?: string;
   /** Quando o filtro da UI usa UUID da tag categoria (alinhado a GET /transactions) */
   tag_id?: string;
@@ -610,7 +624,11 @@ export interface TransactionsSummaryResponse {
   total_transactions: number;
   total_value: number;
   total_income: number;
+  /** Bruto — soma absoluta de transações type='expense' (não desconta estornos). */
   total_expenses: number;
+  /** Bruto — soma absoluta de transações type='refund'. */
+  total_refunds: number;
+  /** Líquido — total_income − total_expenses + total_refunds. */
   balance: number;
   average_transaction: number;
   period: PeriodInfo;

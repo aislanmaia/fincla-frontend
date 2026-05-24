@@ -315,6 +315,110 @@ describe("transactionsAdapter", () => {
     });
   });
 
+  it("mapApiTransactionToUi: refund vira val positivo, ícone ↺ e preserva refund_of_transaction_id", () => {
+    const mapped = mapApiTransactionToUi({
+      id: 999,
+      organization_id: "org-1",
+      type: "refund",
+      description: "Estorno Mercado Livre",
+      tags: { categoria: [{ id: "tag-cat", name: "Compras" }] },
+      value: 1299.9,
+      payment_method: "credit_card",
+      date: "2026-05-22T10:00:00",
+      status: "confirmed",
+      recurring: false,
+      created_at: "2026-05-22T10:00:00",
+      updated_at: "2026-05-22T10:00:00",
+      refund_of_transaction_id: 42,
+    });
+
+    expect(mapped.type).toBe("refund");
+    expect(mapped.val).toBe(1299.9); // dinheiro voltando = positivo
+    expect(mapped.icon).toBe("↺");
+    expect(mapped.refundOfTransactionId).toBe(42);
+  });
+
+  it("mapApiTransactionToUi: expõe refunds_summary quando há estornos linkados", () => {
+    const mapped = mapApiTransactionToUi({
+      id: 10,
+      organization_id: "org-1",
+      type: "expense",
+      description: "Compra ML",
+      tags: { categoria: [{ id: "tag-cat", name: "Compras" }] },
+      value: 129.9,
+      payment_method: "credit_card",
+      date: "2026-05-09T10:00:00",
+      status: "confirmed",
+      recurring: false,
+      created_at: "2026-05-09T10:00:00",
+      updated_at: "2026-05-09T10:00:00",
+      refunds_summary: { count: 1, total_value: 1299.9 },
+    });
+
+    expect(mapped.refundsSummary).toEqual({ count: 1, totalValue: 1299.9 });
+  });
+
+  it("mapApiTransactionToUi: refundsSummary é null quando não vem do backend", () => {
+    const mapped = mapApiTransactionToUi({
+      id: 11,
+      organization_id: "org-1",
+      type: "expense",
+      description: "Sem estornos",
+      tags: { categoria: [{ id: "tag-cat", name: "Compras" }] },
+      value: 50,
+      payment_method: "pix",
+      date: "2026-05-09T10:00:00",
+      status: "confirmed",
+      recurring: false,
+      created_at: "2026-05-09T10:00:00",
+      updated_at: "2026-05-09T10:00:00",
+    });
+    expect(mapped.refundsSummary).toBeNull();
+  });
+
+  it("buildCreateTransactionPayload: tipo=estorno gera type=refund e propaga FK", () => {
+    const payload = buildCreateTransactionPayload({
+      organizationId: "org-1",
+      tipo: "estorno",
+      description: "Estorno ML",
+      value: 1299.9,
+      paymentMethodKey: "credito",
+      categoryTagId: "cat-uuid",
+      dateIso: "2026-05-22T12:00:00",
+      cardId: 3,
+      refundOfTransactionId: 42,
+    });
+    expect(payload.type).toBe("refund");
+    expect(payload.refund_of_transaction_id).toBe(42);
+    expect(payload.card_id).toBe(3);
+    // refund em cartão: NÃO envia modality/installments_count — backend força
+    expect(payload).not.toHaveProperty("modality");
+    expect(payload).not.toHaveProperty("installments_count");
+  });
+
+  it("buildCreateTransactionPayload: tipo=estorno sem FK omite refund_of_transaction_id", () => {
+    const payload = buildCreateTransactionPayload({
+      organizationId: "org-1",
+      tipo: "estorno",
+      description: "Estorno solto",
+      value: 50,
+      paymentMethodKey: "pix",
+      categoryTagId: "cat-uuid",
+      dateIso: "2026-05-22T12:00:00",
+    });
+    expect(payload.type).toBe("refund");
+    expect(payload).not.toHaveProperty("refund_of_transaction_id");
+  });
+
+  it("buildTransactionsQuery: filterType=estorno mapeia para type=refund", () => {
+    const query = buildTransactionsQuery({
+      organizationId: "org-1",
+      filterType: "estorno",
+      period: "tudo",
+    });
+    expect(query.type).toBe("refund");
+  });
+
   it("PUT update: não inclui card_last4; cartão usa card_id e parcelas como no POST", () => {
     const body = buildUpdateTransactionPayload({
       tipo: "despesa",

@@ -397,25 +397,44 @@ function invoiceDateKey(raw) {
 function mapInvoiceItemToUi(item) {
   const category = pickCategory(item);
   const dk = invoiceDateKey(item.transaction_date);
+  const isRefund = item.modality === "refund";
+  // Estorno: avatar/icone ↺ e descrição com prefixo limpo. O valor em si segue item.amount;
+  // a soma da fatura no backend considera modality='refund' como negativo.
+  const cleanDesc = isRefund
+    ? (item.description.toLowerCase().startsWith("estorno")
+        ? item.description
+        : `Estorno: ${item.description}`)
+    : item.description;
   return {
     id: item.id,
     chargeId: item.charge_id,
     installmentId: item.id,
-    desc: item.description,
+    transactionId: item.transaction_id ?? null,
+    desc: cleanDesc,
     cat: category,
     catColor: pickCategoryColor(item),
     val: item.amount,
     data: formatShortDate(item.transaction_date),
     dataKey: dk || undefined,
-    icon: pickIcon(category),
-    rec: isRecurringItem(item),
-    parcela: item.total_installments > 1 ? {
+    icon: isRefund ? "↺" : pickIcon(category),
+    rec: !isRefund && isRecurringItem(item),
+    modality: item.modality || "installment",
+    isRefund,
+    parcela: !isRefund && item.total_installments > 1 ? {
       n: item.installment_number,
       t: item.total_installments,
       val: item.amount,
       total: item.purchase_info?.total_value ?? item.amount * item.total_installments,
     } : null,
     purchaseInfo: item.purchase_info || null,
+    // refunds_summary da transação pai — populado pelo backend quando a compra tem estornos linkados.
+    // Usado pra exibir badge/seção "↺ Esta compra tem estorno relacionado" nas parcelas futuras.
+    refundsSummary: item.refunds_summary
+      ? {
+          count: Number(item.refunds_summary.count) || 0,
+          totalValue: Number(item.refunds_summary.total_value) || 0,
+        }
+      : null,
   };
 }
 
@@ -458,6 +477,7 @@ function aggregateInstallments(currentInvoice) {
   const isPaidInvoice = currentInvoice?.status === "paid";
 
   (currentInvoice?.items || []).forEach((item) => {
+    if (item.modality === "refund") return;
     if (item.total_installments <= 1) return;
     const key = `${item.charge_id}-${item.description}`;
     map.set(key, {
@@ -468,6 +488,13 @@ function aggregateInstallments(currentInvoice) {
       pago: Math.max(0, item.installment_number - (isPaidInvoice ? 0 : 1)),
       total: item.total_installments,
       vTotal: item.purchase_info?.total_value || item.amount * item.total_installments,
+      // Propaga refunds_summary da transação pai pra UI renderizar badge "↺ Tem estorno".
+      refundsSummary: item.refunds_summary
+        ? {
+            count: Number(item.refunds_summary.count) || 0,
+            totalValue: Number(item.refunds_summary.total_value) || 0,
+          }
+        : null,
       icon: pickIcon(pickCategory(item)),
       chargeId: item.charge_id,
       installmentId: item.id,
@@ -502,6 +529,9 @@ function buildPlanningMonths(futureCommitments) {
       id: `${item.year}-${item.month}-${index}-${installment.description}`,
       desc: installment.description,
       val: installment.amount,
+      hasRefundsLinked: Boolean(installment.has_refunds_linked),
+      refundsCount: Number(installment.refunds_count) || 0,
+      refundsTotalValue: Number(installment.refunds_total_value) || 0,
     })),
   }));
 }

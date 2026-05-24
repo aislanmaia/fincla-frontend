@@ -236,6 +236,7 @@ function mergeTransactionTagIds(categoryTagId, detailTagIds) {
 }
 
 function pickTransactionIcon(transaction) {
+  if (transaction.type === "refund") return "↺";
   if (transaction.type === "income") return "💸";
 
   const method = normalizeText(transaction.payment_method);
@@ -362,7 +363,9 @@ export function mapApiTransactionToUi(transaction) {
   const catTag = pickCategoryTag(transaction);
   const categoryName = catTag ? categoryLabelPtForTag(catTag) : "Sem categoria";
   const amount = pickDisplayAmount(transaction);
-  const signedVal = transaction.type === "income" ? amount : -amount;
+  // Refund é dinheiro voltando — sinal positivo como income.
+  const isMoneyIn = transaction.type === "income" || transaction.type === "refund";
+  const signedVal = isMoneyIn ? amount : -amount;
 
   let statusLabel = "confirmado";
   if (transaction.status === "pending") statusLabel = "pendente";
@@ -399,6 +402,17 @@ export function mapApiTransactionToUi(transaction) {
     detailTagIds: pickNonCategoryTagIdsFromApiTransaction(transaction),
     detailTagDisplayById: pickDetailTagDisplayMapFromApiTransaction(transaction),
     parcela: mapInstallmentInfo(transaction),
+    // Tipo bruto do backend — UI usa pra renderizar badge/avatar de estorno.
+    type: transaction.type,
+    // FK opcional pra compra original (só vem populado quando type === "refund").
+    refundOfTransactionId: transaction.refund_of_transaction_id ?? null,
+    // Resumo agregado dos estornos linkados a esta transação (count + total_value).
+    refundsSummary: transaction.refunds_summary
+      ? {
+          count: Number(transaction.refunds_summary.count) || 0,
+          totalValue: Number(transaction.refunds_summary.total_value) || 0,
+        }
+      : null,
   };
 }
 
@@ -499,6 +513,7 @@ export function buildTransactionsQuery({
     ...(search ? { description: search } : {}),
     ...(filterType === "receita" ? { type: "income" } : {}),
     ...(filterType === "despesa" ? { type: "expense" } : {}),
+    ...(filterType === "estorno" ? { type: "refund" } : {}),
     ...categoryFilter,
     ...(filterMethod !== "todos" ? { payment_method: filterMethod } : {}),
     ...resolveDateRange(period, customFrom, customTo),
@@ -506,6 +521,55 @@ export function buildTransactionsQuery({
     limit,
     ...resolveSort(sortBy),
   };
+}
+
+/**
+ * Busca candidatas pra linkar como "compra estornada" no drawer.
+ *
+ * Filtra expenses recentes (últimos 365 dias) pela API; pode estreitar por
+ * payment_method e — quando o usuário já escolheu cartão — por cardId
+ * client-side (a API atual não suporta filtro por card_id direto).
+ *
+ * Retorna array de objetos no formato de UI (mapApiTransactionToUi) ordenado
+ * por data desc, máximo `limit` itens.
+ */
+export async function fetchRefundCandidates({
+  organizationId,
+  query = "",
+  paymentMethodKey = null,
+  cardId = null,
+  limit = 8,
+}) {
+  if (!organizationId) return [];
+  const today = new Date();
+  const since = new Date(today.getTime() - 365 * 86400000);
+  const params = {
+    organization_id: organizationId,
+    type: "expense",
+    date_start: formatLocalIsoDate(since),
+    date_end: formatLocalIsoDate(today),
+    page: 1,
+    limit: cardId != null ? Math.max(limit * 3, 24) : limit,
+    sort_by: "date",
+    sort_order: "desc",
+  };
+  const search = String(query || "").trim();
+  if (search) params.description = search;
+  if (paymentMethodKey) {
+    const apiMethod = mapUiPaymentMethodToApi(paymentMethodKey);
+    if (apiMethod) params.payment_method = apiMethod;
+  }
+  let response;
+  try {
+    response = await listTransactions(params);
+  } catch (_err) {
+    return [];
+  }
+  const rows = (response?.data || []).map(mapApiTransactionToUi);
+  const filtered = cardId != null
+    ? rows.filter((t) => t.cartaoId != null && Number(t.cartaoId) === Number(cardId))
+    : rows;
+  return filtered.slice(0, limit);
 }
 
 export function buildTransactionsCsvOptions({
@@ -520,6 +584,7 @@ export function buildTransactionsCsvOptions({
   return {
     ...(filterType === "receita" ? { type: "income" } : {}),
     ...(filterType === "despesa" ? { type: "expense" } : {}),
+    ...(filterType === "estorno" ? { type: "refund" } : {}),
     ...(filterMethod !== "todos" ? { paymentMethod: filterMethod } : {}),
     ...(dateRange.date_start ? { dateStart: dateRange.date_start } : {}),
     ...(dateRange.date_end ? { dateEnd: dateRange.date_end } : {}),
@@ -548,6 +613,7 @@ export function buildTransactionsSummaryQuery({
     ...(search ? { description: search } : {}),
     ...(filterType === "receita" ? { type: "income" } : {}),
     ...(filterType === "despesa" ? { type: "expense" } : {}),
+    ...(filterType === "estorno" ? { type: "refund" } : {}),
     ...categoryFilter,
     ...(filterMethod !== "todos" ? { payment_method: filterMethod } : {}),
     ...resolveDateRange(period, customFrom, customTo),
@@ -920,8 +986,13 @@ export function buildCreateTransactionPayload({
   cardId = null,
   installmentsCount = null,
   modality = null,
+  refundOfTransactionId = null,
 }) {
-  const type = tipo === "receita" ? "income" : "expense";
+  let type;
+  if (tipo === "receita") type = "income";
+  else if (tipo === "estorno" || tipo === "refund") type = "refund";
+  else type = "expense";
+
   const payload = {
     organization_id: organizationId,
     type,
@@ -934,14 +1005,20 @@ export function buildCreateTransactionPayload({
   if (cardId != null && Number.isFinite(Number(cardId))) {
     payload.card_id = Number(cardId);
   }
-  // POST /transactions: não enviar card_last4 (400 se enviado); use card_id.
-  if (modality) payload.modality = modality;
-  if (
-    modality === "installment" &&
-    installmentsCount != null &&
-    Number(installmentsCount) >= 1
-  ) {
-    payload.installments_count = Number(installmentsCount);
+  // Refund em cartão: backend força modality='refund' e installments=1 — não envie nada extra.
+  if (type === "refund") {
+    if (refundOfTransactionId != null && Number.isFinite(Number(refundOfTransactionId))) {
+      payload.refund_of_transaction_id = Number(refundOfTransactionId);
+    }
+  } else {
+    if (modality) payload.modality = modality;
+    if (
+      modality === "installment" &&
+      installmentsCount != null &&
+      Number(installmentsCount) >= 1
+    ) {
+      payload.installments_count = Number(installmentsCount);
+    }
   }
   return payload;
 }
@@ -963,7 +1040,10 @@ export function buildUpdateTransactionPayload({
   modality = null,
   recurring = false,
 }) {
-  const type = tipo === "receita" ? "income" : "expense";
+  let type;
+  if (tipo === "receita") type = "income";
+  else if (tipo === "estorno" || tipo === "refund") type = "refund";
+  else type = "expense";
   const payload = {
     type,
     description: String(description || "").trim() || "—",
@@ -979,13 +1059,16 @@ export function buildUpdateTransactionPayload({
   if (cardId != null && Number.isFinite(Number(cardId))) {
     payload.card_id = Number(cardId);
   }
-  if (modality) payload.modality = modality;
-  if (
-    modality === "installment" &&
-    installmentsCount != null &&
-    Number(installmentsCount) >= 1
-  ) {
-    payload.installments_count = Number(installmentsCount);
+  // Refund em cartão: backend força modality='refund' e installments=1 — não envie.
+  if (type !== "refund") {
+    if (modality) payload.modality = modality;
+    if (
+      modality === "installment" &&
+      installmentsCount != null &&
+      Number(installmentsCount) >= 1
+    ) {
+      payload.installments_count = Number(installmentsCount);
+    }
   }
   return payload;
 }
