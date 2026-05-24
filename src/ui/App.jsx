@@ -113,6 +113,7 @@ import {
   buildCreateTransactionPayload,
   buildUpdateTransactionPayload,
   createTransactionForUi,
+  fetchRefundCandidates,
   formatTransactionsApiError,
   formatYmdToLocaleDisplay,
   clampNovaTxPrefsParcelas,
@@ -379,6 +380,16 @@ const NovaTransacaoModal = ({
   dataMode = "live",
 }) => {
   const [tipo,      setTipo]      = useState("despesa");
+  // Toggle "↺ Isto é um estorno?" — só ativável quando tipo === "despesa".
+  // Quando true, o payload enviado ao backend usa type='refund' (dinheiro voltando).
+  const [isEstorno, setIsEstorno] = useState(false);
+  // Picker de "🔗 Linkar à compra estornada" — FK opcional pra UI mostrar relação e backend agregar.
+  const [refundOfTransactionId, setRefundOfTransactionId] = useState(null);
+  const [refundLinkedTx, setRefundLinkedTx] = useState(null); // { id, desc, dateLabel, valLabel, val, categoryTagId, cat, paymentMethodKey, cardId }
+  const [refundPickerOpen, setRefundPickerOpen] = useState(false);
+  const [refundPickerQuery, setRefundPickerQuery] = useState("");
+  const [refundPickerCandidates, setRefundPickerCandidates] = useState([]);
+  const [refundPickerLoading, setRefundPickerLoading] = useState(false);
   const [valor,     setValor]     = useState("");
   const [desc,      setDesc]      = useState("");
   const [cat,       setCat]       = useState("");
@@ -634,6 +645,12 @@ const NovaTransacaoModal = ({
 
     if (pc) {
       setTipo(pc.tipo || "despesa");
+      setIsEstorno(Boolean(pc.isEstorno));
+      setRefundOfTransactionId(pc.refundOfTransactionId ?? null);
+      setRefundLinkedTx(pc.refundLinkedTx ?? null);
+      setRefundPickerOpen(false);
+      setRefundPickerQuery("");
+      setRefundPickerCandidates([]);
       applyValor(pc.valorInicial);
       setDesc(pc.desc || "");
       setTags(Array.isArray(pc.tags) ? pc.tags : []);
@@ -1172,8 +1189,10 @@ const NovaTransacaoModal = ({
     mobileReviewImpactOpen,
   ]);
 
-  const typeColor  = tipo === "despesa" ? T.red : T.green;
-  const typeLight  = tipo === "despesa" ? T.redLight : T.greenLight;
+  // Estorno (despesa + isEstorno) = dinheiro voltando → verde como receita.
+  const effectiveTypeIsMoneyIn = tipo === "receita" || (tipo === "despesa" && isEstorno);
+  const typeColor  = effectiveTypeIsMoneyIn ? T.green : T.red;
+  const typeLight  = effectiveTypeIsMoneyIn ? T.greenLight : T.redLight;
 
   const FREQ_LABELS = { diário:"Diário", semanal:"Semanal", mensal:"Mensal", quinzenal:"Quinzenal", anual:"Anual", custom:"Custom" };
   const ENC_LABELS  = { "sem-fim":"Sem data fim", repeticoes:"Após N repetições", data:"Data específica" };
@@ -1187,10 +1206,184 @@ const NovaTransacaoModal = ({
   const METHODS_RECEITA = [["pix","Pix"],["dinheiro","Dinheiro"],["transferencia","Transferência"]];
   const methodsList = tipo === "receita" ? METHODS_RECEITA : METHODS_DESPESA;
 
-  // Fix method when tipo changes to receita
+  // Fix method when tipo changes to receita; reset isEstorno when leaving despesa.
   const handleSetTipo = (t) => {
     setTipo(t);
+    if (t !== "despesa") {
+      setIsEstorno(false);
+      setRefundOfTransactionId(null);
+      setRefundLinkedTx(null);
+      setRefundPickerOpen(false);
+      setRefundPickerQuery("");
+      setRefundPickerCandidates([]);
+    }
     if (t === "receita" && (method === "credito" || method === "boleto")) setMethod("pix");
+  };
+
+  // Quando toggle "↺ Isto é um estorno?" volta para OFF, descarta vínculo já escolhido.
+  useEffect(() => {
+    if (!isEstorno) {
+      if (refundOfTransactionId != null) setRefundOfTransactionId(null);
+      if (refundLinkedTx != null) setRefundLinkedTx(null);
+      if (refundPickerOpen) setRefundPickerOpen(false);
+      if (refundPickerQuery) setRefundPickerQuery("");
+      if (refundPickerCandidates.length) setRefundPickerCandidates([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEstorno]);
+
+  // Busca candidatas (expenses recentes) com debounce quando o picker está aberto.
+  useEffect(() => {
+    if (!isEstorno || !refundPickerOpen || refundLinkedTx) return;
+    if (!organizationId) return;
+    let cancelled = false;
+    setRefundPickerLoading(true);
+    const cardIdNum =
+      method === "credito" && cartao && cartao !== "novo" ? Number(cartao) : null;
+    const handle = setTimeout(async () => {
+      // Quando o usuário já escolheu cartão de crédito, estreita pelo cartão.
+      // Caso contrário, deixa amplo (não filtra por payment_method) — o picker
+      // serve pra qualquer despesa recente, não só pix/credito.
+      const candidates = await fetchRefundCandidates({
+        organizationId,
+        query: refundPickerQuery,
+        paymentMethodKey: method === "credito" ? "credito" : null,
+        cardId: Number.isFinite(cardIdNum) ? cardIdNum : null,
+      });
+      if (cancelled) return;
+      setRefundPickerCandidates(candidates);
+      setRefundPickerLoading(false);
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [isEstorno, refundPickerOpen, refundLinkedTx, refundPickerQuery, method, cartao, organizationId]);
+
+  const handleRefundLink = (candidate) => {
+    const candCardId =
+      candidate.cartaoId != null && Number.isFinite(Number(candidate.cartaoId))
+        ? Number(candidate.cartaoId)
+        : null;
+    setRefundOfTransactionId(Number(candidate.id));
+    setRefundLinkedTx({
+      id: Number(candidate.id),
+      desc: candidate.desc,
+      dateLabel: candidate.date,
+      val: Math.abs(Number(candidate.val) || 0),
+      cat: candidate.cat,
+      categoryTagId: candidate.categoryTagId ?? null,
+      paymentMethodKey: candidate.paymentMethodKey,
+      cardId: candCardId,
+    });
+    if (!cat && candidate.cat) setCat(candidate.cat);
+    if (!categoryTagId && candidate.categoryTagId) setCategoryTagId(candidate.categoryTagId);
+    if (candidate.paymentMethodKey && candidate.paymentMethodKey !== method && method === "pix") {
+      setMethod(candidate.paymentMethodKey);
+    }
+    if (candidate.paymentMethodKey === "credito" && candCardId != null && !cartao) {
+      setCartao(String(candCardId));
+    }
+    setRefundPickerOpen(false);
+    setRefundPickerQuery("");
+    setRefundPickerCandidates([]);
+  };
+
+  const handleRefundUnlink = () => {
+    setRefundOfTransactionId(null);
+    setRefundLinkedTx(null);
+  };
+
+  /**
+   * Bloco "🔗 Linkar à compra estornada" — renderizado logo após o toggle
+   * "↺ Isto é um estorno?" tanto no drawer mobile quanto desktop.
+   * Mostra: card de linkado (se houver), ou botão de abrir picker, ou picker aberto.
+   */
+  const renderRefundLinkBlock = (variant = "desktop") => {
+    if (!isEstorno || tipo !== "despesa") return null;
+    const fsLg = variant === "mobile" ? 13 : 12;
+    const fsSm = variant === "mobile" ? 11 : 10;
+    const pad = variant === "mobile" ? "12px 14px" : "10px 12px";
+    const fmt = (v) => "R$ " + Math.abs(Number(v) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    if (refundLinkedTx) {
+      return (
+        <div style={{
+          background: T.greenLight, border: `1px solid ${T.green}44`, borderRadius: 10,
+          padding: pad, display: "flex", alignItems: "center", gap: 10,
+        }}>
+          <RotateCcw size={14} color={T.green} style={{ flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ ...G, fontSize: fsSm, fontWeight: 700, color: T.green, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>
+              Estornando a compra
+            </div>
+            <div style={{ ...G, fontSize: fsLg, fontWeight: 600, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {refundLinkedTx.desc}
+            </div>
+            <div style={{ ...G, fontSize: fsSm, color: T.inkMid, marginTop: 2 }}>
+              {refundLinkedTx.dateLabel} · <span style={{ fontFamily: "'Geist Mono',monospace", fontWeight: 700 }}>{fmt(refundLinkedTx.val)}</span>
+              {refundLinkedTx.cat ? ` · ${refundLinkedTx.cat}` : ""}
+            </div>
+          </div>
+          <button type="button" onClick={handleRefundUnlink}
+            style={{ ...G, background: "transparent", border: `1px solid ${T.green}66`, color: T.green, borderRadius: 8, padding: "5px 9px", fontSize: fsSm, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+            Desvincular
+          </button>
+        </div>
+      );
+    }
+
+    if (!refundPickerOpen) {
+      return (
+        <button type="button" onClick={() => setRefundPickerOpen(true)}
+          style={{ ...G, display: "flex", alignItems: "center", gap: 8, padding: pad, borderRadius: 10, border: `1px dashed ${T.green}66`, background: "transparent", cursor: "pointer", textAlign: "left", color: T.green, fontSize: fsLg, fontWeight: 600 }}>
+          🔗 <span>Qual a compra estornada? (opcional)</span>
+        </button>
+      );
+    }
+
+    return (
+      <div style={{ border: `1px solid ${T.green}44`, borderRadius: 10, padding: pad, display: "flex", flexDirection: "column", gap: 8, background: T.surface }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Search size={13} color={T.inkLight} />
+          <input
+            autoFocus
+            value={refundPickerQuery}
+            onChange={(e) => setRefundPickerQuery(e.target.value)}
+            placeholder="Buscar compra original (descrição)…"
+            style={{ ...G, flex: 1, border: "none", outline: "none", background: "transparent", fontSize: fsLg, color: T.ink }}
+          />
+          <button type="button" onClick={() => { setRefundPickerOpen(false); setRefundPickerQuery(""); setRefundPickerCandidates([]); }}
+            style={{ background: "transparent", border: "none", cursor: "pointer", padding: 2, color: T.inkMid }}>
+            <X size={13} />
+          </button>
+        </div>
+        {refundPickerLoading ? (
+          <div style={{ ...G, fontSize: fsSm, color: T.inkLight, padding: "8px 4px" }}>Buscando…</div>
+        ) : refundPickerCandidates.length === 0 ? (
+          <div style={{ ...G, fontSize: fsSm, color: T.inkLight, padding: "8px 4px" }}>
+            {refundPickerQuery ? "Nenhuma compra encontrada nos últimos 365 dias." : "Digite parte da descrição da compra original."}
+          </div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 220, overflowY: "auto" }}>
+            {refundPickerCandidates.map((c) => (
+              <button key={c.id} type="button" onClick={() => handleRefundLink(c)}
+                style={{ ...G, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 10px", borderRadius: 8, border: `1px solid ${T.border}`, background: T.bg, cursor: "pointer", textAlign: "left" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ ...G, fontSize: fsLg, fontWeight: 600, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.desc}</div>
+                  <div style={{ ...G, fontSize: fsSm, color: T.inkMid, marginTop: 1 }}>
+                    {c.date}{c.cat ? ` · ${c.cat}` : ""}{c.method ? ` · ${c.method}` : ""}
+                  </div>
+                </div>
+                <span style={{ ...G, fontFamily: "'Geist Mono',monospace", fontSize: fsLg, fontWeight: 700, color: T.ink, flexShrink: 0 }}>
+                  {fmt(c.val)}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   // AI simulation: trigger when desc >= 4 chars
@@ -1437,11 +1630,13 @@ const NovaTransacaoModal = ({
             : null;
         const dateIso = transactionDateIsoFromYmd(txDateYmd);
         if (editingTransactionIdStr != null || editingTransactionId != null) {
+          const effectiveTipoEdit = tipo === "despesa" && isEstorno ? "estorno" : tipo;
+          // Update endpoint não aceita refund_of_transaction_id (backend preserva o existente).
           await updateTransactionForUi(
             editingTransactionIdStr ?? editingTransactionId,
             organizationId,
             buildUpdateTransactionPayload({
-              tipo,
+              tipo: effectiveTipoEdit,
               description: desc,
               value: valorNum,
               paymentMethodKey: method,
@@ -1455,10 +1650,11 @@ const NovaTransacaoModal = ({
             }),
           );
         } else {
+          const effectiveTipo = tipo === "despesa" && isEstorno ? "estorno" : tipo;
           await createTransactionForUi(
             buildCreateTransactionPayload({
               organizationId,
-              tipo,
+              tipo: effectiveTipo,
               description: desc,
               value: valorNum,
               paymentMethodKey: method,
@@ -1468,6 +1664,7 @@ const NovaTransacaoModal = ({
               installmentsCount,
               modality,
               cardId: Number.isFinite(cardId) ? cardId : null,
+              refundOfTransactionId: isEstorno ? refundOfTransactionId : null,
             }),
           );
         }
@@ -1493,6 +1690,12 @@ const NovaTransacaoModal = ({
     const prefTipo = prefs.tipo === "receita" ? "receita" : "despesa";
     const prefMethod = normalizeStoredNovaTxPaymentMethod(prefs.method, prefTipo) ?? "pix";
     setTipo(prefTipo);
+    setIsEstorno(false);
+    setRefundOfTransactionId(null);
+    setRefundLinkedTx(null);
+    setRefundPickerOpen(false);
+    setRefundPickerQuery("");
+    setRefundPickerCandidates([]);
     setCentavos(0); setValor("");
     setDesc(""); setTags([]); setDetailTagIds([]); setDetailTagLabelById({});
     setMethod(prefMethod);
@@ -1580,7 +1783,7 @@ const NovaTransacaoModal = ({
         <div style={{ ...G, fontSize:18, fontWeight:800, color:T.ink, letterSpacing:"-0.01em" }}>{desc || "(sem descrição)"}</div>
         <div style={{ display:"flex", alignItems:"baseline", gap:5, marginTop:4 }}>
           <span style={{ ...G, ...NUM, fontSize:28, fontWeight:800, color:typeColor, letterSpacing:"-0.02em" }}>
-            {tipo === "despesa" ? "−" : "+"}R$ {valorNum.toLocaleString("pt-BR",{minimumFractionDigits:2})}
+            {effectiveTypeIsMoneyIn ? "+" : "−"}R$ {valorNum.toLocaleString("pt-BR",{minimumFractionDigits:2})}
           </span>
           {(novaRecorrencia || recorre) && (
             <span style={{ ...G, fontSize:12, color:typeColor, opacity:0.7 }}>
@@ -1597,7 +1800,7 @@ const NovaTransacaoModal = ({
       <div style={{ padding: mobile ? "14px 18px" : "16px 20px", display:"flex", flexDirection:"column", gap:14 }}>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:1, background:T.border, borderRadius:12, overflow:"hidden", border:`1px solid ${T.border}` }}>
           {[
-            { label:"TIPO",        val: tipo === "despesa" ? "Despesa" : "Receita", valColor: typeColor },
+            { label:"TIPO",        val: tipo === "despesa" ? (isEstorno ? "↺ Estorno" : "Despesa") : "Receita", valColor: typeColor },
             { label:"CATEGORIA",   val: cat    },
             { label:"FORMA PAG.",  val: MET_LABELS[method] || method },
             { label:"DATA",        val: formatYmdToLocaleDisplay(txDateYmd, APP_UI_LOCALE) },
@@ -1702,7 +1905,7 @@ const NovaTransacaoModal = ({
                   <Check size={36} color={T.green} strokeWidth={2.5} />
                 </div>
                 <div style={{ ...G, fontSize:22, fontWeight:800, color:T.ink, textAlign:"center", marginBottom:6 }}>
-                  {isRecurrence ? "Recorrência salva!" : (tipo==="despesa" ? "Despesa registrada!" : "Receita registrada!")}
+                  {isRecurrence ? "Recorrência salva!" : (tipo==="despesa" ? (isEstorno ? "Estorno registrado!" : "Despesa registrada!") : "Receita registrada!")}
                 </div>
                 <div style={{ ...G, ...NUM, fontSize:28, fontWeight:800, color:typeColor, marginBottom:8 }}>
                   {tipo==="despesa" ? "−" : "+"}R${" "}{valorNum.toLocaleString("pt-BR",{minimumFractionDigits:2})}
@@ -1841,6 +2044,56 @@ const NovaTransacaoModal = ({
                   </div>
                 </div>
 
+                {/* Toggle Estorno — só na aba Despesa, abaixo do VALOR (mobile) */}
+                {tipo === "despesa" && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEstorno((v) => !v)}
+                    style={{
+                      ...G,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: "12px 14px",
+                      borderRadius: 12,
+                      border: `1px solid ${isEstorno ? T.green : T.border}`,
+                      background: isEstorno ? T.greenLight : T.surface,
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    <RotateCcw size={16} color={isEstorno ? T.green : T.inkMid} />
+                    <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: isEstorno ? T.green : T.ink }}>
+                      {isEstorno ? "Lançando como estorno" : "Isto é um estorno?"}
+                    </span>
+                    <span
+                      aria-hidden
+                      style={{
+                        width: 32,
+                        height: 18,
+                        borderRadius: 9999,
+                        background: isEstorno ? T.green : T.border,
+                        position: "relative",
+                      }}
+                    >
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: 2,
+                          left: isEstorno ? 16 : 2,
+                          width: 14,
+                          height: 14,
+                          borderRadius: 9999,
+                          background: "#fff",
+                          transition: "left 0.15s",
+                        }}
+                      />
+                    </span>
+                  </button>
+                )}
+
+                {renderRefundLinkBlock("mobile")}
+
                 {/* Descrição */}
                 <div>
                   <div style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid, marginBottom:8, display:"flex", alignItems:"center", gap:6 }}>
@@ -1922,20 +2175,22 @@ const NovaTransacaoModal = ({
                   </div>
                 </div>
 
-                {/* Recorrência toggle */}
-                <div onClick={() => { setRecorre(r => { if (!r) setMod("avista"); return !r; }); }}
-                  style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 16px", background:recorre ? T.blueLight : T.bg, borderRadius:12, border:`1px solid ${recorre ? T.blue : T.border}`, cursor:"pointer", transition:"all 0.18s" }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                    <Repeat size={16} color={recorre ? T.blue : T.inkLight} />
-                    <div>
-                      <div style={{ ...G, fontSize:13, fontWeight:600, color:T.ink }}>Transação recorrente</div>
-                      <div style={{ ...G, fontSize:11, color:T.inkLight, marginTop:1 }}>Repetir automaticamente</div>
+                {/* Recorrência toggle — escondido em modo estorno (v1: refund não pode ser recorrente) */}
+                {!isEstorno && (
+                  <div onClick={() => { setRecorre(r => { if (!r) setMod("avista"); return !r; }); }}
+                    style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 16px", background:recorre ? T.blueLight : T.bg, borderRadius:12, border:`1px solid ${recorre ? T.blue : T.border}`, cursor:"pointer", transition:"all 0.18s" }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                      <Repeat size={16} color={recorre ? T.blue : T.inkLight} />
+                      <div>
+                        <div style={{ ...G, fontSize:13, fontWeight:600, color:T.ink }}>Transação recorrente</div>
+                        <div style={{ ...G, fontSize:11, color:T.inkLight, marginTop:1 }}>Repetir automaticamente</div>
+                      </div>
+                    </div>
+                    <div style={{ width:42, height:24, borderRadius:12, background:recorre ? T.blue : T.inkGhost, position:"relative", transition:"background 0.2s", flexShrink:0 }}>
+                      <div style={{ position:"absolute", top:3, left:recorre ? 21 : 3, width:18, height:18, borderRadius:9999, background:"#fff", transition:"left 0.2s", boxShadow:T.sm }} />
                     </div>
                   </div>
-                  <div style={{ width:42, height:24, borderRadius:12, background:recorre ? T.blue : T.inkGhost, position:"relative", transition:"background 0.2s", flexShrink:0 }}>
-                    <div style={{ position:"absolute", top:3, left:recorre ? 21 : 3, width:18, height:18, borderRadius:9999, background:"#fff", transition:"left 0.2s", boxShadow:T.sm }} />
-                  </div>
-                </div>
+                )}
 
                 {/* Tags */}
                 <div>
@@ -2042,29 +2297,36 @@ const NovaTransacaoModal = ({
                     ))}
                   </div>
                 </div>
-                <div>
-                  <div style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid, marginBottom:10 }}>Modalidade</div>
-                  <div style={{ display:"flex", gap:8 }}>
-                    {[["avista","À vista","1× sem juros"],["parcelado","Parcelado","Dividir em parcelas"]].map(([id, label, sub]) => {
-                      const disabled = id === "parcelado" && recorre;
-                      const selected = modalidade === id;
-                      return (
-                        <button key={id} onClick={() => !disabled && setMod(id)}
-                          style={{ flex:1, padding:"12px", borderRadius:12,
-                            border:`1.5px solid ${disabled ? T.border : selected ? T.ink : T.border}`,
-                            background: disabled ? T.grayLight : selected ? T.ink : T.surface,
-                            cursor: disabled ? "not-allowed" : "pointer",
-                            textAlign:"left", transition:"all 0.15s", opacity: disabled ? 0.5 : 1 }}>
-                          <div style={{ ...G, fontSize:13, fontWeight:700, color: disabled ? T.inkGhost : selected?"#fff":T.ink }}>{label}</div>
-                          <div style={{ ...G, fontSize:10, color: disabled ? T.inkGhost : selected?"rgba(255,255,255,0.5)":T.inkLight, marginTop:2 }}>
-                            {disabled ? "Indisponível com recorrência" : sub}
-                          </div>
-                        </button>
-                      );
-                    })}
+                {!isEstorno && (
+                  <div>
+                    <div style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid, marginBottom:10 }}>Modalidade</div>
+                    <div style={{ display:"flex", gap:8 }}>
+                      {[["avista","À vista","1× sem juros"],["parcelado","Parcelado","Dividir em parcelas"]].map(([id, label, sub]) => {
+                        const disabled = id === "parcelado" && recorre;
+                        const selected = modalidade === id;
+                        return (
+                          <button key={id} onClick={() => !disabled && setMod(id)}
+                            style={{ flex:1, padding:"12px", borderRadius:12,
+                              border:`1.5px solid ${disabled ? T.border : selected ? T.ink : T.border}`,
+                              background: disabled ? T.grayLight : selected ? T.ink : T.surface,
+                              cursor: disabled ? "not-allowed" : "pointer",
+                              textAlign:"left", transition:"all 0.15s", opacity: disabled ? 0.5 : 1 }}>
+                            <div style={{ ...G, fontSize:13, fontWeight:700, color: disabled ? T.inkGhost : selected?"#fff":T.ink }}>{label}</div>
+                            <div style={{ ...G, fontSize:10, color: disabled ? T.inkGhost : selected?"rgba(255,255,255,0.5)":T.inkLight, marginTop:2 }}>
+                              {disabled ? "Indisponível com recorrência" : sub}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-                {modalidade === "parcelado" && (
+                )}
+                {isEstorno && (
+                  <div style={{ ...G, fontSize:11, color:T.inkMid, padding:"10px 12px", background:T.greenLight, borderRadius:10, border:`1px solid ${T.green}33` }}>
+                    <strong style={{ color:T.green }}>↺ Estorno em cartão:</strong> sempre 1 parcela na fatura cuja janela contém a data — sem opção de parcelamento.
+                  </div>
+                )}
+                {!isEstorno && modalidade === "parcelado" && (
                   <div>
                     <div style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid, marginBottom:10 }}>Parcelas</div>
                     <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
@@ -2157,7 +2419,7 @@ const NovaTransacaoModal = ({
                 </button>
                 <button onClick={handleSave} disabled={txSubmitting || !desc.trim()}
                   style={{ ...G, flex:1, padding:"13px", borderRadius:12, border:"none", background:success ? T.green : (!desc.trim() ? T.inkGhost : typeColor), fontSize:14, fontWeight:800, color:"#fff", cursor:(txSubmitting || !desc.trim()) ? "not-allowed" : "pointer", opacity:(txSubmitting || !desc.trim()) ? 0.75 : 1, display:"flex", alignItems:"center", justifyContent:"center", gap:7, transition:"background 0.25s" }}>
-                  {success ? <><Check size={16} /> {recorre || novaRecorrencia ? "Recorrência salva!" : "Registrado!"}</> : (recorre || novaRecorrencia ? "Confirmar recorrência" : (txSubmitting ? "Enviando…" : `Confirmar ${tipo === "despesa" ? "despesa" : "receita"}`))}
+                  {success ? <><Check size={16} /> {recorre || novaRecorrencia ? "Recorrência salva!" : "Registrado!"}</> : (recorre || novaRecorrencia ? "Confirmar recorrência" : (txSubmitting ? "Enviando…" : `Confirmar ${tipo === "despesa" ? (isEstorno ? "estorno" : "despesa") : "receita"}`))}
                 </button>
               </div>
               </div>
@@ -2422,29 +2684,36 @@ const NovaTransacaoModal = ({
                   </div>
                 </div>
               )}
-              <div>
-                <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Modalidade</div>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
-                  {[["avista","À vista","1× sem juros"],["parcelado","Parcelado","Dividir em parcelas"]].map(([id,label,sub]) => {
-                    const disabled = id === "parcelado" && recorre;
-                    const selected = modalidade === id;
-                    return (
-                      <button key={id} onClick={() => !disabled && setMod(id)}
-                        style={{ padding:"10px 12px", borderRadius:9,
-                          border:`1.5px solid ${disabled ? T.border : selected ? T.ink : T.border}`,
-                          background: disabled ? T.grayLight : selected ? T.ink : T.surface,
-                          cursor: disabled ? "not-allowed" : "pointer",
-                          textAlign:"left", opacity: disabled ? 0.5 : 1, transition:"all 0.15s" }}>
-                        <div style={{ ...G, fontSize:12, fontWeight:700, color: disabled ? T.inkGhost : selected?"#fff":T.ink }}>{label}</div>
-                        <div style={{ ...G, fontSize:10, color: disabled ? T.inkGhost : selected?"rgba(255,255,255,0.6)":T.inkLight, marginTop:2 }}>
-                          {disabled ? "Indisponível com recorrência" : sub}
-                        </div>
-                      </button>
-                    );
-                  })}
+              {!isEstorno && (
+                <div>
+                  <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Modalidade</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
+                    {[["avista","À vista","1× sem juros"],["parcelado","Parcelado","Dividir em parcelas"]].map(([id,label,sub]) => {
+                      const disabled = id === "parcelado" && recorre;
+                      const selected = modalidade === id;
+                      return (
+                        <button key={id} onClick={() => !disabled && setMod(id)}
+                          style={{ padding:"10px 12px", borderRadius:9,
+                            border:`1.5px solid ${disabled ? T.border : selected ? T.ink : T.border}`,
+                            background: disabled ? T.grayLight : selected ? T.ink : T.surface,
+                            cursor: disabled ? "not-allowed" : "pointer",
+                            textAlign:"left", opacity: disabled ? 0.5 : 1, transition:"all 0.15s" }}>
+                          <div style={{ ...G, fontSize:12, fontWeight:700, color: disabled ? T.inkGhost : selected?"#fff":T.ink }}>{label}</div>
+                          <div style={{ ...G, fontSize:10, color: disabled ? T.inkGhost : selected?"rgba(255,255,255,0.6)":T.inkLight, marginTop:2 }}>
+                            {disabled ? "Indisponível com recorrência" : sub}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-              {modalidade==="parcelado" && (
+              )}
+              {isEstorno && (
+                <div style={{ ...G, fontSize:11, color:T.inkMid, padding:"10px 12px", background:T.greenLight, borderRadius:9, border:`1px solid ${T.green}33` }}>
+                  <strong style={{ color:T.green }}>↺ Estorno em cartão:</strong> sempre 1 parcela na fatura cuja janela contém a data.
+                </div>
+              )}
+              {!isEstorno && modalidade==="parcelado" && (
                 <div>
                   <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
                     <span style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em" }}>Parcelas</span>
@@ -2522,7 +2791,7 @@ const NovaTransacaoModal = ({
                   <Check size={36} color={T.green} strokeWidth={2.5} />
                 </div>
                 <div style={{ ...G, fontSize:22, fontWeight:800, color:T.ink, textAlign:"center", marginBottom:6 }}>
-                  {isRecurrence ? "Recorrência salva!" : (tipo==="despesa" ? "Despesa registrada!" : "Receita registrada!")}
+                  {isRecurrence ? "Recorrência salva!" : (tipo==="despesa" ? (isEstorno ? "Estorno registrado!" : "Despesa registrada!") : "Receita registrada!")}
                 </div>
                 <div style={{ ...G, ...NUM, fontSize:28, fontWeight:800, color:typeColor, marginBottom:8 }}>
                   {tipo==="despesa" ? "−" : "+"}R${" "}{valorNum.toLocaleString("pt-BR",{minimumFractionDigits:2})}
@@ -2725,6 +2994,56 @@ const NovaTransacaoModal = ({
                     </div>
                   ) : null}
                 </div>
+                {/* Toggle Estorno — só na aba Despesa, abaixo do VALOR */}
+                {tipo === "despesa" && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEstorno((v) => !v)}
+                    style={{
+                      ...G,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 9,
+                      padding: "10px 12px",
+                      borderRadius: 10,
+                      border: `1px solid ${isEstorno ? T.green : T.border}`,
+                      background: isEstorno ? T.greenLight : T.surface,
+                      cursor: "pointer",
+                      textAlign: "left",
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    <RotateCcw size={14} color={isEstorno ? T.green : T.inkMid} />
+                    <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: isEstorno ? T.green : T.ink }}>
+                      {isEstorno ? "Lançando como estorno" : "Isto é um estorno?"}
+                    </span>
+                    <span
+                      aria-hidden
+                      style={{
+                        width: 28,
+                        height: 16,
+                        borderRadius: 9999,
+                        background: isEstorno ? T.green : T.border,
+                        position: "relative",
+                        transition: "background 0.15s",
+                      }}
+                    >
+                      <span
+                        style={{
+                          position: "absolute",
+                          top: 2,
+                          left: isEstorno ? 14 : 2,
+                          width: 12,
+                          height: 12,
+                          borderRadius: 9999,
+                          background: "#fff",
+                          transition: "left 0.15s",
+                        }}
+                      />
+                    </span>
+                  </button>
+                )}
+                {renderRefundLinkBlock("desktop")}
                 <div>
                   <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:8 }}>
                     <span style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em" }}>Descrição</span>
@@ -2941,28 +3260,30 @@ const NovaTransacaoModal = ({
                     ))}
                   </div>
                 </div>
-                <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 14px", background:T.bg, borderRadius:10, border:`1px solid ${recorre ? T.blue : T.border}`, cursor:"pointer", transition:"border-color 0.15s" }}
-                  onClick={() => {
-                    setRecorre((r) => {
-                      if (!r) setMod("avista");
-                      return !r;
-                    });
-                    if (!recorre) {
-                      setPanelRecorrenciaOpen(true);
-                      setPanelRecorrenciaExiting(false);
-                    } else beginCloseRecorrenciaPanel();
-                  }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:9 }}>
-                    <Repeat size={14} color={recorre ? T.blue : T.inkLight} />
-                    <div>
-                      <div style={{ ...G, fontSize:12, fontWeight:600, color:T.ink }}>Transação recorrente</div>
-                      <div style={{ ...G, fontSize:10, color:T.inkLight }}>Repetir automaticamente</div>
+                {!isEstorno && (
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 14px", background:T.bg, borderRadius:10, border:`1px solid ${recorre ? T.blue : T.border}`, cursor:"pointer", transition:"border-color 0.15s" }}
+                    onClick={() => {
+                      setRecorre((r) => {
+                        if (!r) setMod("avista");
+                        return !r;
+                      });
+                      if (!recorre) {
+                        setPanelRecorrenciaOpen(true);
+                        setPanelRecorrenciaExiting(false);
+                      } else beginCloseRecorrenciaPanel();
+                    }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:9 }}>
+                      <Repeat size={14} color={recorre ? T.blue : T.inkLight} />
+                      <div>
+                        <div style={{ ...G, fontSize:12, fontWeight:600, color:T.ink }}>Transação recorrente</div>
+                        <div style={{ ...G, fontSize:10, color:T.inkLight }}>Repetir automaticamente</div>
+                      </div>
+                    </div>
+                    <div style={{ width:38, height:22, borderRadius:11, background:recorre ? T.blue : T.inkGhost, position:"relative", transition:"background 0.2s", flexShrink:0 }}>
+                      <div style={{ position:"absolute", top:3, left:recorre?18:3, width:16, height:16, borderRadius:9999, background:"#fff", transition:"left 0.2s", boxShadow:T.sm }} />
                     </div>
                   </div>
-                  <div style={{ width:38, height:22, borderRadius:11, background:recorre ? T.blue : T.inkGhost, position:"relative", transition:"background 0.2s", flexShrink:0 }}>
-                    <div style={{ position:"absolute", top:3, left:recorre?18:3, width:16, height:16, borderRadius:9999, background:"#fff", transition:"left 0.2s", boxShadow:T.sm }} />
-                  </div>
-                </div>
+                )}
                 {!novaRecorrencia && (
                   <div style={{ border:`1px solid ${T.border}`, borderRadius:12 }}>
                     <div onClick={() => setShowImpact(s => !s)}
@@ -3015,7 +3336,7 @@ const NovaTransacaoModal = ({
                   style={{ ...G, flex:1, padding:"11px", borderRadius:10, border:"none", background:success ? T.green : typeColor, fontSize:13, fontWeight:700, color:"#fff", cursor:txSubmitting ? "not-allowed" : "pointer", opacity:txSubmitting ? 0.75 : 1, display:"flex", alignItems:"center", justifyContent:"center", gap:6, transition:"background 0.25s", animation:success?"successPop 0.35s ease-out":"none" }}>
                   {success
                     ? <><Check size={14} /> {novaRecorrencia || recorre ? "Recorrência salva!" : "Registrado!"}</>
-                    : novaRecorrencia || recorre ? "Confirmar recorrência" : (txSubmitting ? "Enviando…" : `Confirmar ${tipo === "despesa" ? "despesa" : "receita"}`)
+                    : novaRecorrencia || recorre ? "Confirmar recorrência" : (txSubmitting ? "Enviando…" : `Confirmar ${tipo === "despesa" ? (isEstorno ? "estorno" : "despesa") : "receita"}`)
                   }
                 </button>
               </div>
@@ -3204,7 +3525,7 @@ function formatLimitInputFromNumber(value) {
 }
 
 /* ─── CARTÕES PAGE ───────────────────────────────────────── */
-const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, dataMode = "mock", organizationId = null, transactionsRefreshToken = 0 }) => {
+const CartõesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstorno = null, cards: cardsProp, dataMode = "mock", organizationId = null, transactionsRefreshToken = 0 }) => {
   const urlSearch = useSearch({ strict: false });
   const navigate = useNavigate();
   const shouldUseRealData = shouldUseRealDataForMode(organizationId, dataMode);
@@ -3572,7 +3893,16 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, d
   const displayItens   = isAtual ? cardItens : pastItens;
   const recItems     = displayItens.filter(i => i.rec);
   const recTotal     = recItems.reduce((s,i) => s+i.val, 0);
-  const totalParcelas= cardParcelas.reduce((s,p) => s+p.vParcela*(p.total-p.pago), 0);
+  // Total comprometido em parcelas futuras (LÍQUIDO — descontando estornos).
+  // Usa `card.limite − card.disponivel` que reflete o `used_limit` do backend,
+  // já calculado como (Σ parcelas futuras − Σ estornos futuros), clamp em 0.
+  const totalParcelasBruto = cardParcelas.reduce((s,p) => s+p.vParcela*(p.total-p.pago), 0);
+  const totalEstornos = cardParcelas.reduce(
+    (s,p) => s + (p.refundsSummary ? Number(p.refundsSummary.totalValue) : 0),
+    0,
+  );
+  const totalParcelas = Math.max(0, totalParcelasBruto - totalEstornos);
+  const hasParcelasEstornadas = totalEstornos > 0;
 
   const catColor = (it) => it.catColor || CAT_COLORS_CARD[it.cat] || T.inkMid;
 
@@ -3950,7 +4280,8 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, d
       : 0;
     const cc = catColor(item);
     const [expanded, setExpanded] = useState(false);
-    const expandable = !!(item.method || isParcela);
+    const canLancarEstorno = !item.isRefund && item.transactionId != null && !!onLancarEstorno;
+    const expandable = !!(item.method || isParcela || (item.refundsSummary && item.refundsSummary.count > 0) || canLancarEstorno);
 
     return (
       <div style={{ borderBottom:`1px solid ${T.border}` }}>
@@ -4035,6 +4366,7 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, d
 
         {/* ── Expanded detail ── */}
         {expanded && expandable && (() => {
+          const hasLinkedRefunds = item.refundsSummary && item.refundsSummary.count > 0;
           const detailChips = [
             item.method && { label:"Método", val: item.method },
             isParcela    && { label:"Parcela", val:`${item.parcela.n}ª de ${item.parcela.t}` },
@@ -4042,7 +4374,7 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, d
             isParcela    && { label:"Total compra", val: fmtBRL(parcelaTotal), mono:true },
             isParcela    && { label:"Restante", val: fmtBRL(parcelaTotal - item.parcela.n * parcelaVal), mono:true, color:T.blue },
           ].filter(Boolean);
-          if (detailChips.length === 0 && !isParcela) return null;
+          if (detailChips.length === 0 && !isParcela && !hasLinkedRefunds && !canLancarEstorno) return null;
           return (
           <div style={{ padding:"0 20px 14px 71px",
             background:`${cc}06`, animation:"fadeIn 0.15s ease" }}>
@@ -4076,6 +4408,42 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, cards: cardsProp, d
                   {Math.round((item.parcela.n / item.parcela.t) * 100)}% pago
                   · {item.parcela.t - item.parcela.n} parcelas restantes
                 </div>
+              </div>
+            )}
+            {hasLinkedRefunds && (
+              <div style={{ marginTop:10, padding:"10px 12px", background:T.greenLight,
+                border:`1px solid ${T.green}33`, borderRadius:9,
+                display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontSize:14, color:T.green }}>↺</span>
+                <div style={{ flex:1 }}>
+                  <div style={{ ...G, fontSize:11, fontWeight:700, color:T.green }}>
+                    Esta compra possui estorno relacionado
+                  </div>
+                  <div style={{ ...G, fontSize:10, color:T.inkMid, marginTop:2 }}>
+                    {item.refundsSummary.count} lançamento{item.refundsSummary.count !== 1 ? "s" : ""} de estorno
+                    {" · "}
+                    <span style={{ fontFamily:"'Geist Mono',monospace", fontWeight:700 }}>
+                      {fmtBRL(item.refundsSummary.totalValue)}
+                    </span>
+                    {" abatido"}{item.refundsSummary.count !== 1 ? "s" : ""}{" no total"}
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* CTA: lançar estorno linkado a esta exata compra (parcela ou não). Oculto em linhas que já são estorno. */}
+            {!item.isRefund && item.transactionId != null && onLancarEstorno && (
+              <div style={{ marginTop:10 }}>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onLancarEstorno(item, card); }}
+                  style={{ ...G, display:"inline-flex", alignItems:"center", gap:6,
+                    padding:"7px 12px", borderRadius:8, border:`1px dashed ${T.green}66`,
+                    background:"transparent", color:T.green, fontSize:11, fontWeight:700, cursor:"pointer" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = T.greenLight; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  <RotateCcw size={12} /> Lançar estorno desta compra
+                </button>
               </div>
             )}
           </div>
@@ -4397,17 +4765,31 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
             <div style={{...G,fontSize:13,fontWeight:700,color:T.ink}}>Exposição de parcelas</div>
             <div style={{...G,...NUM,fontSize:13,fontWeight:700,color:T.blue}}>{fmtBRL(totalParcelas)}</div>
           </div>
-          <div style={{...G,fontSize:11,color:T.inkMid,marginBottom:12,lineHeight:1.65}}>
+          <div style={{...G,fontSize:11,color:T.inkMid,marginBottom:hasParcelasEstornadas?4:12,lineHeight:1.65}}>
             Total comprometido em parcelas futuras · {Math.round(cardParcelas.reduce((s,p)=>s+p.vParcela,0)/card.limite*100)}% do limite mensal · {fmtBRL(cardParcelas.reduce((s,p)=>s+p.vParcela,0))}/mês.
           </div>
+          {hasParcelasEstornadas && (
+            <div style={{...G,fontSize:10,color:T.green,fontWeight:600,marginBottom:12}}>
+              ↓ {fmtBRL(totalEstornos)} em estornos abatidos · líquido {fmtBRL(totalParcelas)}
+            </div>
+          )}
           {cardParcelas.map((p,i)=>{
             const exposurePct = safe(p.vParcela, card.limite); // % mensal sobre o limite
+            const hasRefund = p.refundsSummary && p.refundsSummary.count > 0;
             return (
               <div key={p.id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
                 <span style={{fontSize:15}}>{p.icon}</span>
                 <div style={{flex:1}}>
-                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
-                    <span style={{...G,fontSize:12,color:T.ink}}>{p.desc}</span>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:3,alignItems:"center",gap:6}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6,minWidth:0,flex:1}}>
+                      <span style={{...G,fontSize:12,color:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.desc}</span>
+                      {hasRefund && (
+                        <span title={`${p.refundsSummary.count} estorno${p.refundsSummary.count!==1?"s":""} · ${fmtBRL(p.refundsSummary.totalValue)} abatido${p.refundsSummary.count!==1?"s":""}`}
+                          style={{...G,fontSize:9,color:T.green,background:T.greenLight,borderRadius:99,padding:"1px 6px",fontWeight:700,whiteSpace:"nowrap",cursor:"default"}}>
+                          ↺ Estornado
+                        </span>
+                      )}
+                    </div>
                     <span style={{...G,...NUM,fontSize:11,fontWeight:700,color:T.ink}}>{fmtBRL(p.vParcela*(p.total-p.pago))}</span>
                   </div>
                   <div style={{height:3,background:T.grayLight,borderRadius:99,overflow:"hidden"}}>
@@ -4495,7 +4877,7 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
         <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"repeat(3,1fr)",gap:12}}>
           {[
             { label:"Parcelas ativas",       val:cardParcelas.length, valSuffix: cardParcelas.length===1?" item":" itens", sub:"em andamento neste cartão",      color:T.blue,  icon:"🧩" },
-            { label:"Total comprometido",     val:fmtBRL(totalParcelas),       valSuffix:"",                                                sub:"soma de todas as parcelas futuras", color:T.ink,   icon:"💳" },
+            { label:"Total comprometido",     val:fmtBRL(totalParcelas),       valSuffix:"",                                                sub: hasParcelasEstornadas ? `líquido após ${fmtBRL(totalEstornos)} em estornos` : "soma de todas as parcelas futuras", color:T.ink,   icon:"💳" },
             { label:"Comprometimento mensal", val:`${mensalPct}%`,             valSuffix:"",                                                sub:`${fmtBRL(mensalTotal)}/mês do limite`, color:limitColor, icon:mensalPct>=40?"⚠️":"✅" },
           ].map((k,i) => (
             <div key={i} style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:14,padding:"16px 18px",display:"flex",flexDirection:"column",gap:8}}>
@@ -4588,7 +4970,7 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
 
                   {/* Name + progress bar */}
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5,flexWrap:"wrap"}}>
                       <span style={{...G,fontSize:13,fontWeight:600,color:T.ink,
                         overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                         {p.desc}
@@ -4597,6 +4979,12 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
                         background:`${catColor}14`,borderRadius:5,padding:"1px 6px",flexShrink:0}}>
                         {p.cat}
                       </span>
+                      {p.refundsSummary && p.refundsSummary.count > 0 && (
+                        <span title={`${p.refundsSummary.count} estorno${p.refundsSummary.count!==1?"s":""} · ${fmtBRL(p.refundsSummary.totalValue)} abatido${p.refundsSummary.count!==1?"s":""}`}
+                          style={{...G,fontSize:10,fontWeight:700,color:T.green,background:T.greenLight,borderRadius:5,padding:"1px 6px",flexShrink:0,cursor:"default"}}>
+                          ↺ Estornado
+                        </span>
+                      )}
                     </div>
                     {/* Mini progress bar with frações */}
                     <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -4716,9 +5104,17 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
                       {totalCount} parcela{totalCount!==1?"s":""}
                     </div>
                     {ativos.slice(0,3).map(p=>(
-                      <div key={p.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"5px 0",borderTop:`1px solid ${T.border}`}}>
-                        <span style={{...G,fontSize:11,color:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"70%"}}>{p.desc}</span>
-                        <span style={{...G,...NUM,fontSize:11,fontWeight:700,color:T.ink,flexShrink:0}}>{fmtBRL(monthData ? p.val : p.vParcela)}</span>
+                      <div key={p.id} style={{display:"flex",flexDirection:"column",gap:2,padding:"5px 0",borderTop:`1px solid ${T.border}`}}>
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                          <span style={{...G,fontSize:11,color:T.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:"70%"}}>{p.desc}</span>
+                          <span style={{...G,...NUM,fontSize:11,fontWeight:700,color:T.ink,flexShrink:0}}>{fmtBRL(monthData ? p.val : p.vParcela)}</span>
+                        </div>
+                        {p.hasRefundsLinked&&(
+                          <div title={`Esta compra tem ${p.refundsCount} estorno${p.refundsCount!==1?"s":""} vinculado${p.refundsCount!==1?"s":""} totalizando ${fmtBRL(p.refundsTotalValue||0)}. Considere isso ao planejar o orçamento.`}
+                            style={{...G,fontSize:9.5,color:T.green,display:"flex",alignItems:"center",gap:4,fontWeight:700}}>
+                            <RotateCcw size={9}/> Tem estorno{p.refundsTotalValue>0?` · ${fmtBRL(p.refundsTotalValue)} abatido${p.refundsCount!==1?"s":""}`:""}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -5791,9 +6187,15 @@ export default function App() {
       onEditTx={(tx) => {
         const txMethod = modalPaymentKeyFromTransactionUi(tx);
         const isParcelado = tx.parcela && tx.parcela.total > 1;
+        // Refund: tx.val é positivo mas o tipo no domínio é 'refund' → drawer abre na aba Despesa com toggle estorno ON.
+        let tipoForModal;
+        if (tx.type === "refund") tipoForModal = "despesa";
+        else if (tx.type === "income" || tx.val > 0) tipoForModal = "receita";
+        else tipoForModal = "despesa";
         flushSync(() => {
           setModalPreConfig({
-            tipo: tx.val > 0 ? "receita" : "despesa",
+            tipo: tipoForModal,
+            isEstorno: tx.type === "refund",
             desc: tx.desc,
             cat: tx.cat,
             categoryTagId: tx.categoryTagId ?? null,
@@ -5813,6 +6215,7 @@ export default function App() {
             tags: tx.tags ?? [],
             detailTagIds: tx.detailTagIds ?? [],
             detailTagDisplayById: tx.detailTagDisplayById ?? {},
+            refundOfTransactionId: tx.refundOfTransactionId ?? null,
           });
         });
         openTxModal({ [FC.TX]: String(tx.id) });
@@ -5880,6 +6283,36 @@ export default function App() {
         cartaoId: id,
       }));
       openTxModal(isUuidString(id) ? { [FC.CARD]: id } : {});
+    }} onLancarEstorno={(item, fromCard) => {
+      // Abre o drawer já configurado pra estorno linkado à compra original (transaction_id pai).
+      if (!item || item.transactionId == null) return;
+      const cardIdNum = fromCard?.cardId != null && Number.isFinite(Number(fromCard.cardId))
+        ? Number(fromCard.cardId)
+        : null;
+      const totalCompraOriginal = item.parcela?.total != null
+        ? Number(item.parcela.total)
+        : Number(item.val);
+      setModalPreConfig({
+        tipo: "despesa",
+        isEstorno: true,
+        method: "credito",
+        cartaoId: cardIdNum != null ? String(cardIdNum) : undefined,
+        cat: item.cat,
+        categoryTagId: null,
+        refundOfTransactionId: Number(item.transactionId),
+        refundLinkedTx: {
+          id: Number(item.transactionId),
+          desc: item.desc,
+          dateLabel: item.data,
+          val: Math.abs(totalCompraOriginal),
+          cat: item.cat,
+          categoryTagId: null,
+          paymentMethodKey: "credito",
+          cardId: cardIdNum,
+        },
+        valorInicial: Math.abs(totalCompraOriginal),
+      });
+      openTxModal(cardIdNum != null ? { [FC.CARD]: String(cardIdNum) } : {});
     }} />,
     budgets:   <OrcamentosPage onNav={navTo} isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} />,
     goals:        <MetasPageView    isMobile={isMobile} initialMetas={dataMode==="empty" ? [] : undefined} dataMode={dataMode} organizationId={session.activeOrgId} onContribuir={(meta) => { setModalPreConfig({ tipo:"receita", desc:`Aporte — ${meta.nome}`, cat:"Poupança" }); openTxModal(); }} />,

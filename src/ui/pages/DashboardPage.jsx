@@ -148,7 +148,10 @@ export function DashboardPage({
 
   const summary = dashboardData.summary;
   const inc = summary?.total_income ?? 0;
-  const exp = summary?.total_expenses ?? 0;
+  // total_expenses do backend é bruto; net = bruto - refunds.
+  const expGross = summary?.total_expenses ?? 0;
+  const refundsTotal = summary?.total_refunds ?? 0;
+  const exp = Math.max(0, expGross - refundsTotal); // exibimos despesa líquida no KPI principal
   const bal = summary?.balance ?? 0;
   const txCount = summary?.total_transactions;
   const apiFailedNoSummary = Boolean(
@@ -286,8 +289,11 @@ export function DashboardPage({
       {
         key: "exp",
         label: `Despesas · ${kpiPeriodPhrase}`,
-        value: fmtAbs(s?.total_expenses ?? 0),
-        delta: s ? (s.balance >= 0 ? "saldo positivo" : "saldo pressionado") : "aguardando resumo do período",
+        // Despesa líquida (bruto - estornos). Quando há estornos, sub-linha mostra o abate.
+        value: fmtAbs(Math.max(0, (s?.total_expenses ?? 0) - (s?.total_refunds ?? 0))),
+        delta: s && (s.total_refunds ?? 0) > 0
+          ? `↳ ${fmtAbs(s.total_refunds)} em estornos abatidos`
+          : (s ? (s.balance >= 0 ? "saldo positivo" : "saldo pressionado") : "aguardando resumo do período"),
         up: s ? spendPct <= timePct : null,
         emptyCta: false,
       },

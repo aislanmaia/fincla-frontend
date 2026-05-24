@@ -323,7 +323,7 @@ export function TransacoesPage({
 
   const activeChips = [
     period !== TRANSACTIONS_DEFAULT_PERIOD && { key:"period",  label: period==="custom" ? `${customFrom||"?"} → ${customTo||"?"}` : PERIOD_LABELS[period], onRemove:()=>{ setPeriod(TRANSACTIONS_DEFAULT_PERIOD); setCustomFrom(""); setCustomTo(""); } },
-    filterType!=="todos"  && { key:"type",    label: filterType==="receita"?"↑ Receitas":"↓ Despesas",            onRemove:()=>setFilterType("todos") },
+    filterType!=="todos"  && { key:"type",    label: filterType==="receita"?"↑ Receitas":filterType==="estorno"?"↺ Estornos":"↓ Despesas",            onRemove:()=>setFilterType("todos") },
     filterCat!=="todas"   && { key:"cat",     label: filterCatLabel,                                               onRemove:()=>setFilterCat("todas") },
     filterMethod!=="todos"&& { key:"method",  label: filterMethod,                                                 onRemove:()=>setFilterMethod("todos") },
     sortBy!=="date-desc"  && { key:"sort",    label: "↕ "+SORT_LABELS[sortBy].split("(")[0].trim(),               onRemove:()=>setSortBy("date-desc") },
@@ -336,8 +336,9 @@ export function TransacoesPage({
 
     return txList.filter(t => {
       if (!periodFilter(t)) return false;
-      if (filterType === "receita"  && t.val < 0) return false;
-      if (filterType === "despesa"  && t.val > 0) return false;
+      if (filterType === "receita"  && (t.type !== "income" || t.val < 0)) return false;
+      if (filterType === "despesa"  && (t.type !== "expense" || t.val > 0)) return false;
+      if (filterType === "estorno"  && t.type !== "refund") return false;
       if (filterCat   !== "todas"   && t.cat !== filterCat) return false;
       if (filterMethod!== "todos"   && t.method !== filterMethod) return false;
       if (debouncedSearch && ![t.desc, t.cat, ...(t.tags||[])].some(s => s.toLowerCase().includes(debouncedSearch.toLowerCase()))) return false;
@@ -349,14 +350,24 @@ export function TransacoesPage({
   const canUseRemoteSummary = shouldUseRealData;
   const totalReceita = canUseRemoteSummary && transactionsData.summary
     ? transactionsData.summary.total_income
-    : filtered.filter(t=>t.val>0).reduce((s,t)=>s+t.val,0);
-  const totalDespesa = canUseRemoteSummary && transactionsData.summary
+    : filtered.filter(t=>t.type==="income").reduce((s,t)=>s+t.val,0);
+  // total_expenses do backend é BRUTO (não desconta refunds).
+  const totalDespesaBruto = canUseRemoteSummary && transactionsData.summary
     ? transactionsData.summary.total_expenses
-    : filtered.filter(t=>t.val<0).reduce((s,t)=>s+Math.abs(t.val),0);
+    : filtered.filter(t=>t.type==="expense").reduce((s,t)=>s+Math.abs(t.val),0);
+  const totalEstorno = canUseRemoteSummary && transactionsData.summary
+    ? (transactionsData.summary.total_refunds ?? 0)
+    : filtered.filter(t=>t.type==="refund").reduce((s,t)=>s+Math.abs(t.val),0);
+  // Despesa líquida = bruto − estornos da mesma origem. Pode ser negativa.
+  const totalDespesaLiquido = totalDespesaBruto - totalEstorno;
   const saldo = canUseRemoteSummary && transactionsData.summary
     ? transactionsData.summary.balance
-    : totalReceita - totalDespesa;
+    : totalReceita - totalDespesaBruto + totalEstorno;
   const filteredCount = canUseRemoteSummary ? transactionsData.total : filtered.length;
+  // Contagens por tipo (apenas no modo mock — em modo live usaríamos endpoints separados).
+  const countReceita = filtered.filter(t=>t.type==="income").length;
+  const countDespesa = filtered.filter(t=>t.type==="expense").length;
+  const countEstorno = filtered.filter(t=>t.type==="refund").length;
 
   // ── Group by date ─────────────────────────────────────────────────────────
   const groups = useMemo(() => {
@@ -629,12 +640,17 @@ export function TransacoesPage({
 
   const TxRow = ({ tx }) => {
     const isSelected = selected?.id === tx.id;
-    const isReceita  = tx.val > 0;
-    const hasParcela = !!tx.parcela;
+    const isRefund   = tx.type === "refund";
+    const isReceita  = tx.type === "income" || isRefund;
+    const hasParcela = !!tx.parcela && !isRefund;
     const isCredito  = tx.method === "Crédito";
+    const hasRefundsLinked = tx.refundsSummary && tx.refundsSummary.count > 0;
     const tags       = tx.tags || [];
     const visibleTags = tags.slice(0,2);
     const hiddenTags  = tags.slice(2);
+
+    // Avatar: estorno usa fundo verde claro com ícone ↺. Demais mantêm a cor da categoria.
+    const avatarBg = isRefund ? T.greenLight : catBg(tx.cat);
 
     return (
       <div
@@ -647,18 +663,32 @@ export function TransacoesPage({
           cursor:"pointer", transition:"background 0.12s, border-color 0.12s" }}>
 
         {/* Icon */}
-        <div style={{ width:38, height:38, borderRadius:11, background:catBg(tx.cat),
-          display:"flex", alignItems:"center", justifyContent:"center", fontSize:18, flexShrink:0, marginTop:1 }}>
+        <div style={{ width:38, height:38, borderRadius:11, background:avatarBg,
+          display:"flex", alignItems:"center", justifyContent:"center",
+          fontSize:18, color: isRefund ? T.green : undefined,
+          fontWeight: isRefund ? 700 : undefined,
+          flexShrink:0, marginTop:1 }}>
           {tx.icon}
         </div>
 
         {/* Main info */}
         <div style={{ flex:1, minWidth:0 }}>
 
-          {/* Row 1: description — clean, no badge (parcela info is on row 3) */}
+          {/* Row 1: description — estorno ganha ícone ↺ inline + badge "Há estorno" quando aplicável */}
           <div style={{ ...G, fontSize:13, fontWeight:600, color:T.ink,
-            overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:3 }}>
-            {tx.desc}
+            overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:3,
+            display:"flex", alignItems:"center", gap:6 }}>
+            <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+              {tx.desc}
+            </span>
+            {hasRefundsLinked && !isRefund && (
+              <Tip label={`${tx.refundsSummary.count} estorno${tx.refundsSummary.count !== 1 ? "s" : ""} relacionado${tx.refundsSummary.count !== 1 ? "s" : ""} · ${fmtBRL(tx.refundsSummary.totalValue)} abatido${tx.refundsSummary.totalValue !== 1 ? "s" : ""}`}>
+                <span style={{ ...G, fontSize:10, color:T.green, background:T.greenLight,
+                  borderRadius:99, padding:"1px 6px", fontWeight:700, cursor:"default", whiteSpace:"nowrap" }}>
+                  ↺ Estorno
+                </span>
+              </Tip>
+            )}
           </div>
 
           {/* Row 2: categoria · método · card digits · status chips */}
@@ -699,6 +729,13 @@ export function TransacoesPage({
                 <span style={{ ...G, fontSize:11, color:T.amber, background:T.amberLight,
                   borderRadius:99, padding:"1px 6px", fontWeight:700 }}>⏳ Pendente</span>
               </Tip>
+            )}
+
+            {isRefund && (
+              <>
+                <span style={{ ...G, fontSize:11, color:T.inkGhost }}>·</span>
+                <span style={{ ...G, fontSize:11, color:T.green, fontWeight:600 }}>↺ Estorno</span>
+              </>
             )}
           </div>
 
@@ -748,9 +785,9 @@ export function TransacoesPage({
 
         {/* Amount column — total da compra + parcela/mês abaixo */}
         <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", flexShrink:0, gap:2, marginTop:1 }}>
-          <Tip label={hasParcela ? `Total da compra: ${fmtBRL(tx.val)}` : ""} pos="top">
+          <Tip label={hasParcela ? `Total da compra: ${fmtBRL(tx.val)}` : isRefund ? "Estorno · dinheiro voltando" : ""} pos="top">
             <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:14, fontWeight:700,
-              color: isReceita ? T.green : T.ink }}>
+              color: isRefund ? T.green : (isReceita ? T.green : T.ink) }}>
               {isReceita ? "+" : "−"}{fmtBRL(tx.val)}
             </div>
           </Tip>
@@ -774,7 +811,7 @@ export function TransacoesPage({
           <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase",
             letterSpacing:"0.07em", marginBottom:6 }}>Tipo</div>
           <div style={{ display:"flex", gap:5 }}>
-            {[["todos","Todos"],["receita","↑ Receita"],["despesa","↓ Despesa"]].map(([v,l])=>(
+            {[["todos","Todos"],["receita","↑ Receita"],["despesa","↓ Despesa"],["estorno","↺ Estornos"]].map(([v,l])=>(
               <button key={v} onClick={()=>{setFilterType(v);setVisible(PAGE_SIZE);}}
                 style={{ ...G, flex:1, padding:"6px 0", borderRadius:8,
                   border:`1px solid ${filterType===v?T.ink:T.border}`,
@@ -1270,7 +1307,7 @@ export function TransacoesPage({
                 <div style={{ ...G, fontSize:11, fontWeight:700, color:T.inkMid,
                   textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:12 }}>Tipo</div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
-                  {[["todos","Todos"],["receita","↑ Receita"],["despesa","↓ Despesa"]].map(([v,l])=>(
+                  {[["todos","Todos"],["receita","↑ Receita"],["despesa","↓ Despesa"],["estorno","↺ Estornos"]].map(([v,l])=>(
                     <button key={v} onClick={()=>{setFilterType(v);setVisible(PAGE_SIZE);}}
                       style={{ ...G, padding:"12px 0", borderRadius:10,
                         border:`1.5px solid ${filterType===v ? T.ink : T.border}`,
@@ -1366,25 +1403,72 @@ export function TransacoesPage({
 
       {/* ── Row 5: KPI strip ─────────────────────────────────────── */}
       <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: isMobile ? 8 : 12 }}>
-        {[
-          { label:"Receitas", val:totalReceita, color:T.green, bg:T.greenLight },
-          { label:"Despesas", val:totalDespesa, color:T.red,   bg:T.redLight   },
-          { label:"Saldo",    val:saldo,         color:saldo>=0?T.green:T.red, bg:saldo>=0?T.greenLight:T.redLight },
-        ].map(k=>(
-          <div key={k.label} style={{ background:T.surface, border:`1px solid ${T.border}`,
-            borderRadius:12, padding: isMobile ? "12px 14px" : "14px 18px",
-            gridColumn: isMobile && k.label==="Saldo" ? "1 / -1" : "auto" }}>
-            <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid,
-              textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:5 }}>{k.label}</div>
-            <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize: isMobile?14:16,
-              fontWeight:800, color:k.color, letterSpacing:"-0.01em" }}>
-              {k.label==="Saldo"&&saldo<0?"−":"+"}{fmtBRL(k.val)}
+        {(() => {
+          // Despesa líquida pode ser negativa quando estornos > despesas no período.
+          // Quando líquida < 0, cor vira verde mas o sinal `−` é preservado (matemática honesta).
+          const despesaPositiva = totalDespesaLiquido >= 0;
+          const despesaColor = despesaPositiva ? T.red : T.green;
+          const despesaBg = despesaPositiva ? T.redLight : T.greenLight;
+          return [
+            {
+              label: "Receitas",
+              val: totalReceita,
+              sign: "+",
+              color: T.green,
+              bg: T.greenLight,
+              countLine: `${countReceita} lançamento${countReceita !== 1 ? "s" : ""}`,
+            },
+            {
+              label: "Despesas",
+              val: Math.abs(totalDespesaLiquido),
+              sign: despesaPositiva ? "−" : "−", // mantém sinal mesmo quando líquido < 0
+              color: despesaColor,
+              bg: despesaBg,
+              subLine: totalEstorno > 0
+                ? `↳ ${fmtBRL(totalEstorno)} em estornos abatidos`
+                : null,
+              countLine: countEstorno > 0
+                ? `${countDespesa} desp · ${countEstorno} ↺`
+                : `${countDespesa} lançamento${countDespesa !== 1 ? "s" : ""}`,
+              tooltip: !despesaPositiva ? "Saldo positivo de estornos no período" : undefined,
+            },
+            {
+              label: "Saldo",
+              val: Math.abs(saldo),
+              sign: saldo >= 0 ? "+" : "−",
+              color: saldo >= 0 ? T.green : T.red,
+              bg: saldo >= 0 ? T.greenLight : T.redLight,
+              countLine: `${filteredCount} transaç${filteredCount !== 1 ? "ões" : "ão"}`,
+            },
+          ].map((k) => (
+            <div
+              key={k.label}
+              title={k.tooltip}
+              style={{
+                background: T.surface,
+                border: `1px solid ${T.border}`,
+                borderRadius: 12,
+                padding: isMobile ? "12px 14px" : "14px 18px",
+                gridColumn: isMobile && k.label === "Saldo" ? "1 / -1" : "auto",
+              }}
+            >
+              <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>
+                {k.label}
+              </div>
+              <div style={{ ...G, fontFamily: "'Geist Mono',monospace", fontSize: isMobile ? 14 : 16, fontWeight: 800, color: k.color, letterSpacing: "-0.01em" }}>
+                {k.sign}{fmtBRL(k.val)}
+              </div>
+              {k.subLine && (
+                <div style={{ ...G, fontSize: 10, color: T.green, marginTop: 3, fontWeight: 600 }}>
+                  {k.subLine}
+                </div>
+              )}
+              <div style={{ ...G, fontSize: 10, color: T.inkLight, marginTop: 3 }}>
+                {k.countLine}
+              </div>
             </div>
-            <div style={{ ...G, fontSize:10, color:T.inkLight, marginTop:3 }}>
-              {filteredCount} transaç{filteredCount!==1?"ões":"ão"}
-            </div>
-          </div>
-        ))}
+          ));
+        })()}
       </div>
 
             {/* List + Detail panel */}
