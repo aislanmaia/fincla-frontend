@@ -4329,6 +4329,14 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstorno = n
                   ↻
                 </span>
               )}
+              {hasLinkedRefunds && !item.isRefund && (
+                <span title={`${item.refundsSummary.count} estorno${item.refundsSummary.count !== 1 ? "s" : ""} relacionado${item.refundsSummary.count !== 1 ? "s" : ""} · ${fmtBRL(item.refundsSummary.totalValue)} abatido${item.refundsSummary.count !== 1 ? "s" : ""}`}
+                  style={{ ...G, fontSize:10, fontWeight:700, color:T.green,
+                    background:T.greenLight, borderRadius:99, padding:"1px 6px", flexShrink:0,
+                    cursor:"help", whiteSpace:"nowrap" }}>
+                  ↺ Estorno
+                </span>
+              )}
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:6 }}>
               <div style={{ width:7, height:7, borderRadius:2, background:cc, flexShrink:0 }}/>
@@ -4367,7 +4375,6 @@ const CartõesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstorno = n
 
         {/* ── Expanded detail ── */}
         {expanded && expandable && (() => {
-          const hasLinkedRefunds = item.refundsSummary && item.refundsSummary.count > 0;
           const detailChips = [
             item.method && { label:"Método", val: item.method },
             isParcela    && { label:"Parcela", val:`${item.parcela.n}ª de ${item.parcela.t}` },
