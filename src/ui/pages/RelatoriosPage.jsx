@@ -28,6 +28,7 @@ import {
 import { M_MONO } from "../features/moodV4";
 import { useReportsData } from "../features/reports/useReportsData.js";
 import { EmptyState } from "../features/shellExtras";
+import { listRecurringSeries } from "../../api/recurringSeries";
 import { shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 
 /* ─── RELATÓRIOS DATA — 12 meses ────────────────────────── */
@@ -324,6 +325,8 @@ export function RelatoriosPage({
   const [scoreDetail, setScoreDetail] = useState(null);
   const [desktopChartH, setDesktopChartH] = useState(240);
   const [desktopCols,   setDesktopCols]   = useState(2);
+  /** Séries recorrentes ativas — alimentam o card "Compromissos Fixos". */
+  const [activeRecurringSeries, setActiveRecurringSeries] = useState([]);
 
   const PERIODO_N = { "3m":3, "6m":6, "12m":12 };
   const mockScoreData = useMemo(() => REL_MONTHLY.slice(-PERIODO_N[periodo]), [periodo]);
@@ -366,6 +369,19 @@ export function RelatoriosPage({
     return () => window.removeEventListener("resize", sync);
   }, [isMobile]);
 
+  /** Carrega séries ativas para o card "Compromissos Fixos". */
+  useEffect(() => {
+    if (!shouldUseRealData || !organizationId) {
+      setActiveRecurringSeries([]);
+      return undefined;
+    }
+    let cancelled = false;
+    listRecurringSeries(organizationId, { isActive: true })
+      .then((res) => { if (!cancelled) setActiveRecurringSeries(res.series || []); })
+      .catch(() => { if (!cancelled) setActiveRecurringSeries([]); });
+    return () => { cancelled = true; };
+  }, [shouldUseRealData, organizationId]);
+
   const financialKpis = useMemo(() => buildReportKpis(activeData), [activeData]);
   const scoreKpis = useMemo(() => {
     if (scoreData.length === 0) {
@@ -384,6 +400,37 @@ export function RelatoriosPage({
   const expensePctOfIncome = kpis.totalR > 0
     ? Math.round(kpis.totalG / kpis.totalR * 100)
     : 0;
+
+  /** Agrega despesas recorrentes ativas por categoria + total + share vs gasto médio. */
+  const compromissosFixos = useMemo(() => {
+    const expenseSeries = activeRecurringSeries.filter((s) => s.type === "expense");
+    const totalMonthly = expenseSeries.reduce(
+      (sum, s) => sum + (Number.parseFloat(s.value) || 0),
+      0,
+    );
+    const byCategory = new Map();
+    for (const s of expenseSeries) {
+      const cat = s.category || "Sem categoria";
+      const val = Number.parseFloat(s.value) || 0;
+      byCategory.set(cat, (byCategory.get(cat) || 0) + val);
+    }
+    const categories = Array.from(byCategory.entries())
+      .map(([name, val]) => ({ name, val, pct: totalMonthly > 0 ? (val / totalMonthly) * 100 : 0 }))
+      .sort((a, b) => b.val - a.val);
+    const monthlyAvgExpense = kpis.totalG && scoreData.length > 0 ? kpis.totalG / scoreData.length : 0;
+    // Só mostra "X% do gasto médio" quando o gasto médio é compatível com o total comprometido
+    // (≥ 1.5x). Senão a fração explode (ex: gasto médio R$ 1, comprometido R$ 290 → 29000%).
+    const rawShare = monthlyAvgExpense > 0 ? (totalMonthly / monthlyAvgExpense) * 100 : null;
+    const shareOfAvgExpense = rawShare != null && monthlyAvgExpense >= totalMonthly / 1.5 && rawShare <= 100
+      ? rawShare
+      : null;
+    return {
+      totalMonthly,
+      activeCount: expenseSeries.length,
+      categories,
+      shareOfAvgExpense,
+    };
+  }, [activeRecurringSeries, kpis.totalG, scoreData.length]);
 
   const velocityInsightPct = useMemo(
     () => (shouldUseRealData ? velocityPressureVsIdealAtDay(velocityDaily) : null),
@@ -1032,6 +1079,46 @@ export function RelatoriosPage({
           insight={{ color:T.red, icon:"⚡", text: velocityInsightHtml }}>
           <VelocidadeChart height={desktopChartH} data={velocityDaily} />
           <div style={{ marginTop:8 }}><VelocLegend /></div>
+        </Section>
+
+        {/* Compromissos Fixos — span total */}
+        <Section title="Compromissos" serifWord="fixos"
+          style={{ gridColumn: desktopCols===3 ? "1 / span 3" : "1 / -1" }}
+          insight={{ color:T.purple, icon:"🔁",
+            text: compromissosFixos.activeCount === 0
+              ? `Nenhuma recorrência ativa. Cadastre despesas fixas para acompanhar quanto do seu orçamento já está comprometido.`
+              : `<strong>${fmtBRL(compromissosFixos.totalMonthly)}/mês</strong> em ${compromissosFixos.activeCount} ${compromissosFixos.activeCount === 1 ? "recorrência ativa" : "recorrências ativas"}${compromissosFixos.shareOfAvgExpense != null ? ` — equivalente a <strong>${compromissosFixos.shareOfAvgExpense.toFixed(0)}%</strong> do gasto médio mensal em ${periodo}.` : "."}` }}>
+          {compromissosFixos.activeCount === 0 ? (
+            <div style={{ ...G, fontSize: 12, color: T.inkLight, padding: "16px 0", textAlign: "center" }}>
+              Sem dados de recorrências para o relatório.
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, flex: 1 }}>
+              <div>
+                <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Total comprometido / mês</div>
+                <div style={{ ...G, ...NUM, fontSize: 28, fontWeight: 800, color: T.purple, letterSpacing: "-0.01em", marginBottom: 6 }}>{fmtBRL(compromissosFixos.totalMonthly)}</div>
+                <div style={{ ...G, fontSize: 11, color: T.inkLight }}>
+                  {compromissosFixos.activeCount} {compromissosFixos.activeCount === 1 ? "recorrência ativa" : "recorrências ativas"}
+                </div>
+              </div>
+              <div>
+                <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Por categoria</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {compromissosFixos.categories.slice(0, 6).map((c) => (
+                    <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ minWidth: 140, ...G, fontSize: 11, color: T.ink }}>{c.name}</div>
+                      <div style={{ flex: 1, height: 8, background: T.bg, borderRadius: 99, overflow: "hidden" }}>
+                        <div style={{ width: `${Math.max(2, Math.min(100, c.pct))}%`, height: "100%", background: T.purple, borderRadius: 99 }} />
+                      </div>
+                      <div style={{ minWidth: 84, textAlign: "right", ...G, ...NUM, fontSize: 11, fontWeight: 700, color: T.ink }}>
+                        {fmtBRL(c.val)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </Section>
 
       </div>

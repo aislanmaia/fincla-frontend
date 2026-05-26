@@ -12,6 +12,7 @@ import {
   resolveCategoryIconKey,
 } from "./categoryLabels.js";
 import { mapUiPaymentMethodToApi } from "./transactionsAdapter.js";
+import { computeEndDateFromOccurrences } from "./recurrenceDateMath.js";
 
 function formatDate(value) {
   if (!value) return "—";
@@ -35,6 +36,16 @@ function formatFrequencyLabel(series) {
     biweekly: "Quinzenal",
     yearly: "Anual",
   };
+  if (series.frequency === "custom") {
+    const n = Math.max(1, Number(series.interval) || 1);
+    const unitMap = {
+      day: n === 1 ? "dia" : "dias",
+      week: n === 1 ? "semana" : "semanas",
+      month: n === 1 ? "mês" : "meses",
+    };
+    const unit = unitMap[series.interval_unit] || "ocorrências";
+    return `Personalizado · a cada ${n} ${unit}`;
+  }
   const base = labels[series.frequency] || "Mensal";
   if (series.frequency === "monthly" && series.day_of_month) {
     return `${base} · dia ${series.day_of_month}`;
@@ -60,6 +71,7 @@ function mapFrequencyId(frequency) {
     weekly: "semanal",
     biweekly: "quinzenal",
     yearly: "anual",
+    custom: "personalizado",
   };
   return ids[frequency] || "mensal";
 }
@@ -123,7 +135,7 @@ export function mapRecurringSeriesToUi(series) {
     desc: series.description,
     cat: pickCategoryLabelPtSeries(series),
     categoryIconKey: pickCategoryIconKeySeries(series),
-    val: series.value,
+    val: Number.parseFloat(series.value) || 0,
     dia: series.day_of_month ?? (nextDate ? Number.parseInt(nextDate.slice(8, 10), 10) || null : null),
     ativa: series.is_active,
     proximo: formatDate(nextDate),
@@ -140,12 +152,17 @@ export function mapRecurringSeriesToUi(series) {
     progPct: 0,
     status: series.is_active ? "ativa" : "pausada",
     nextOccurrenceIso: nextDate || null,
+    startDateRaw: startDate || null,
     freqId: mapFrequencyId(series.frequency),
     methodId: mapMethodId(series.payment_method),
     encId: endDate ? "data" : "sem-fim",
     endDateRaw: endDate || null,
     creditCardId: series.credit_card_id ?? null,
     categoryTagId: firstCategoryTag(series.tags)?.id ?? null,
+    dayOfMonth: series.day_of_month ?? null,
+    dayOfWeek: series.day_of_week ?? null,
+    interval: Number(series.interval) > 0 ? Number(series.interval) : 1,
+    intervalUnit: series.interval_unit ?? null,
   };
 }
 
@@ -179,22 +196,76 @@ export function buildUpcomingRecurringSummary(list, todayIso = null) {
   };
 }
 
-/** `freqRec` do modal: diário|semanal|mensal|quinzenal|anual|custom */
+/** `freqRec` do modal (apenas valores válidos pós-redesign): semanal|mensal|quinzenal|anual|personalizado. */
 export function mapUiFreqRecToApi(freqRec) {
   const m = {
-    diário: "monthly",
-    diario: "monthly",
     semanal: "weekly",
     mensal: "monthly",
     quinzenal: "biweekly",
     anual: "yearly",
-    custom: "monthly",
+    personalizado: "custom",
   };
   return m[freqRec] || "monthly";
 }
 
+function derivedDayOfMonthFromYmd(ymd) {
+  const n = Number.parseInt(String(ymd || "").slice(8, 10), 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+function derivedDayOfWeekFromYmd(ymd) {
+  const d = new Date(`${ymd}T12:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d.getDay();
+}
+
+function applyFrequencyFields(payload, {
+  frequency,
+  startDateYmd,
+  dayOfMonth,
+  dayOfWeek,
+  interval,
+  intervalUnit,
+}) {
+  if (frequency === "monthly" || frequency === "yearly") {
+    const dom = dayOfMonth ?? derivedDayOfMonthFromYmd(startDateYmd);
+    if (Number.isFinite(Number(dom))) payload.day_of_month = Number(dom);
+  }
+  if (frequency === "weekly" || frequency === "biweekly") {
+    const dow = dayOfWeek ?? derivedDayOfWeekFromYmd(startDateYmd);
+    if (Number.isFinite(Number(dow))) payload.day_of_week = Number(dow);
+  }
+  if (frequency === "custom") {
+    const n = Math.max(1, Number(interval) || 1);
+    payload.interval = n;
+    payload.interval_unit = intervalUnit || "month";
+  }
+}
+
+function resolveEndDate({ frequency, encRec, endDateYmd, repetitions, startDateYmd, dayOfMonth, dayOfWeek, interval, intervalUnit }) {
+  if (encRec === "data" && endDateYmd && /^\d{4}-\d{2}-\d{2}$/.test(endDateYmd)) {
+    return endDateYmd;
+  }
+  if (encRec === "repeticoes" && Number.isFinite(Number(repetitions)) && Number(repetitions) >= 1) {
+    return computeEndDateFromOccurrences({
+      startDateYmd,
+      frequency,
+      n: Number(repetitions),
+      dayOfMonth: dayOfMonth ?? derivedDayOfMonthFromYmd(startDateYmd),
+      dayOfWeek: dayOfWeek ?? derivedDayOfWeekFromYmd(startDateYmd),
+      interval,
+      intervalUnit,
+    });
+  }
+  return null;
+}
+
 /**
  * Corpo para POST /recurring-series a partir do modal Nova transação / Nova recorrência.
+ *
+ * Campos novos (opcionais; preservam compat com chamadas antigas):
+ *   dayOfWeek, dayOfMonth   — escolhidos no painel; default = derivado de startDateYmd
+ *   interval, intervalUnit  — usados quando freqRec="personalizado"
+ *   repetitions             — N quando encRec="repeticoes" (UI converte em end_date)
  */
 export function buildCreateRecurringSeriesPayload({
   tipo,
@@ -210,6 +281,11 @@ export function buildCreateRecurringSeriesPayload({
   valorTipoRec,
   categoryLabel,
   cardId = null,
+  dayOfWeek = null,
+  dayOfMonth = null,
+  interval = 1,
+  intervalUnit = null,
+  repetitions = null,
 }) {
   const frequency = mapUiFreqRecToApi(freqRec);
   const payload = {
@@ -224,17 +300,12 @@ export function buildCreateRecurringSeriesPayload({
       : undefined,
     value_kind: valorTipoRec === "estimado" ? "approximate" : "exact",
   };
-  if (frequency === "monthly" || frequency === "yearly") {
-    const dom = Number.parseInt(String(startDateYmd).slice(8, 10), 10);
-    if (Number.isFinite(dom)) payload.day_of_month = dom;
-  }
-  if (frequency === "weekly" || frequency === "biweekly") {
-    const d = new Date(`${startDateYmd}T12:00:00`);
-    if (!Number.isNaN(d.getTime())) payload.day_of_week = d.getDay();
-  }
-  if (encRec === "data" && endDateYmd && /^\d{4}-\d{2}-\d{2}$/.test(endDateYmd)) {
-    payload.end_date = endDateYmd;
-  }
+  applyFrequencyFields(payload, { frequency, startDateYmd, dayOfMonth, dayOfWeek, interval, intervalUnit });
+  const endDate = resolveEndDate({
+    frequency, encRec, endDateYmd, repetitions, startDateYmd,
+    dayOfMonth, dayOfWeek, interval, intervalUnit,
+  });
+  if (endDate) payload.end_date = endDate;
   if (categoryLabel?.trim()) payload.category = categoryLabel.trim();
   if (cardId != null && Number.isFinite(Number(cardId))) {
     payload.credit_card_id = Number(cardId);
@@ -258,6 +329,11 @@ export function buildUpdateRecurringSeriesPayload({
   valorTipoRec,
   categoryLabel,
   cardId = null,
+  dayOfWeek = null,
+  dayOfMonth = null,
+  interval = 1,
+  intervalUnit = null,
+  repetitions = null,
 }) {
   const frequency = mapUiFreqRecToApi(freqRec);
   const payload = {
@@ -270,16 +346,13 @@ export function buildUpdateRecurringSeriesPayload({
       ? mergeSeriesTagIds(categoryTagId, detailTagIds)
       : undefined,
   };
-  if (frequency === "monthly" || frequency === "yearly") {
-    const dom = Number.parseInt(String(startDateYmd).slice(8, 10), 10);
-    if (Number.isFinite(dom)) payload.day_of_month = dom;
-  }
-  if (frequency === "weekly" || frequency === "biweekly") {
-    const d = new Date(`${startDateYmd}T12:00:00`);
-    if (!Number.isNaN(d.getTime())) payload.day_of_week = d.getDay();
-  }
-  if (encRec === "data" && endDateYmd && /^\d{4}-\d{2}-\d{2}$/.test(endDateYmd)) {
-    payload.end_date = endDateYmd;
+  applyFrequencyFields(payload, { frequency, startDateYmd, dayOfMonth, dayOfWeek, interval, intervalUnit });
+  const endDate = resolveEndDate({
+    frequency, encRec, endDateYmd, repetitions, startDateYmd,
+    dayOfMonth, dayOfWeek, interval, intervalUnit,
+  });
+  if (endDate) {
+    payload.end_date = endDate;
   } else if (encRec === "sem-fim") {
     payload.end_date = null;
   }

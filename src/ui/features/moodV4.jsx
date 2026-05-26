@@ -184,8 +184,22 @@ export const PERIODS_V4 = [
   { key: "12m", label: "12 meses", badge: "mar/25–mar/26" },
 ];
 
+const LINE_LABELS = { proj: "Projeção", real: "Real", committed: "Comprometido" };
+
 export function RhythmTooltipV4({ active, payload, label }) {
   if (!active || !payload?.length) return null;
+  // Quando Comprometido coincide com Real (no ponto de "hoje" eles se encontram pra dar
+  // continuidade visual à linha), mostra só Real para evitar duplicidade no tooltip.
+  const realEntry = payload.find((p) => p.name === "real" && p.value != null);
+  const filteredPayload = realEntry
+    ? payload.filter((p) => !(p.name === "committed" && p.value === realEntry.value))
+    : payload;
+  // Em dias futuros (sem entrada "real") expõe quanto já foi gasto até hoje como contexto.
+  const pointData = payload?.[0]?.payload;
+  const realAtToday = pointData?.realAtToday;
+  const showRealAtToday = !realEntry
+    && typeof realAtToday === "number"
+    && realAtToday > 0;
   return (
     <div
       style={{
@@ -203,13 +217,26 @@ export function RhythmTooltipV4({ active, payload, label }) {
           ? payload[0].payload.dayLabel
           : `Dia ${label}`}
       </div>
-      {payload.map(
+      {filteredPayload.map(
         (p, i) =>
           p.value != null && (
             <div key={i} style={{ ...NUM, color: p.color, fontWeight: 600 }}>
-              {p.name === "proj" ? "Projeção" : "Real"}: {fmtAbs(p.value)}
+              {LINE_LABELS[p.name] ?? p.name}: {fmtAbs(p.value)}
             </div>
           )
+      )}
+      {showRealAtToday && (
+        <div style={{
+          ...NUM,
+          color: T.inkLight,
+          fontWeight: 500,
+          fontSize: 10,
+          marginTop: 5,
+          paddingTop: 5,
+          borderTop: `1px solid ${T.border}`,
+        }}>
+          Real até hoje: {fmtAbs(realAtToday)}
+        </div>
       )}
     </div>
   );

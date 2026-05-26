@@ -140,6 +140,10 @@ import {
   formatRecurringTransactionsApiError,
   updateRecurringSeriesForUi,
 } from "./data/recurringTransactionsAdapter.js";
+import {
+  computeEndDateFromOccurrences as computeEndDateFromOccurrencesMath,
+  computeFirstOccurrence as computeFirstOccurrenceMath,
+} from "./data/recurrenceDateMath.js";
 import { CategoryLucideIcon } from "./components/CategoryLucideIcon.jsx";
 import { LocaleDatePicker } from "./components/LocaleDatePicker.jsx";
 import { APP_UI_LOCALE } from "./appLocale.js";
@@ -413,6 +417,19 @@ const NovaTransacaoModal = ({
   const [freqRec,   setFreqRec]   = useState(preConfig?.freqRec || "mensal");
   const [encRec,    setEncRec]    = useState(preConfig?.encRec || "sem-fim");
   const [valorTipoRec, setValorTipoRec] = useState(preConfig?.valorTipoRec || "fixo");
+  // Painel Recorrência — campos novos
+  const [selectedDayOfWeek,    setSelectedDayOfWeek]    = useState(preConfig?.selectedDayOfWeek ?? null);
+  const [selectedDayOfMonth,   setSelectedDayOfMonth]   = useState(preConfig?.selectedDayOfMonth ?? null);
+  const [customIntervalRec, setCustomIntervalRec] = useState(preConfig?.customIntervalRec ?? 1);
+  const [customUnitRec,     setCustomUnitRec]     = useState(preConfig?.customUnitRec || "month");
+  const [firstOccurrenceYmd,    setFirstOccurrenceYmd]    = useState(preConfig?.firstOccurrenceYmd || null);
+  /**
+   * Mensagem efêmera mostrada abaixo do datepicker quando a 1ª ocorrência é ajustada
+   * automaticamente por mudança de dia-da-semana / dia-do-mês. Limpa em ~3s.
+   */
+  const [firstOccurrenceAutoAdjustNote, setFirstOccurrenceAutoAdjustNote] = useState(null);
+  const [encRepetitionsRec, setEncRepetitionsRec] = useState(preConfig?.encRepetitionsRec ?? 12);
+  const [encEndDateYmdRec,  setEncEndDateYmdRec]  = useState(preConfig?.encEndDateYmdRec || preConfig?.dataFimRec || null);
   const [showImpact,setShowImpact]= useState(false);
   /** Revisão mobile: acordeão «Impacto financeiro» (controlado no pai para não ir à API até expandir). */
   const [mobileReviewImpactOpen, setMobileReviewImpactOpen] = useState(false);
@@ -638,6 +655,13 @@ const NovaTransacaoModal = ({
       setFreqRec(pc?.freqRec || "mensal");
       setEncRec(pc?.encRec || "sem-fim");
       setValorTipoRec(pc?.valorTipoRec || "fixo");
+      setSelectedDayOfWeek(pc?.selectedDayOfWeek ?? null);
+      setSelectedDayOfMonth(pc?.selectedDayOfMonth ?? null);
+      setCustomIntervalRec(pc?.customIntervalRec ?? 1);
+      setCustomUnitRec(pc?.customUnitRec || "month");
+      setFirstOccurrenceYmd(pc?.firstOccurrenceYmd || null);
+      setEncRepetitionsRec(pc?.encRepetitionsRec ?? 12);
+      setEncEndDateYmdRec(pc?.encEndDateYmdRec || pc?.dataFimRec || null);
       setCat(pc?.cat || "");
       setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, pc));
       return;
@@ -674,6 +698,13 @@ const NovaTransacaoModal = ({
       setFreqRec(pc.freqRec || "mensal");
       setEncRec(pc.encRec || "sem-fim");
       setValorTipoRec(pc.valorTipoRec || "fixo");
+      setSelectedDayOfWeek(pc?.selectedDayOfWeek ?? null);
+      setSelectedDayOfMonth(pc?.selectedDayOfMonth ?? null);
+      setCustomIntervalRec(pc?.customIntervalRec ?? 1);
+      setCustomUnitRec(pc?.customUnitRec || "month");
+      setFirstOccurrenceYmd(pc?.firstOccurrenceYmd || null);
+      setEncRepetitionsRec(pc?.encRepetitionsRec ?? 12);
+      setEncEndDateYmdRec(pc?.encEndDateYmdRec || pc?.dataFimRec || null);
       const explicitPcCat =
         pc.cat != null && String(pc.cat).trim() !== "";
       const explicitPcCatId =
@@ -759,6 +790,13 @@ const NovaTransacaoModal = ({
     setFreqRec("mensal");
     setEncRec("sem-fim");
     setValorTipoRec("fixo");
+    setSelectedDayOfWeek(null);
+    setSelectedDayOfMonth(null);
+    setCustomIntervalRec(1);
+    setCustomUnitRec("month");
+    setFirstOccurrenceYmd(null);
+    setEncRepetitionsRec(12);
+    setEncEndDateYmdRec(null);
     setCat(
       prefs.cat != null && String(prefs.cat).trim()
         ? String(prefs.cat).trim()
@@ -1194,12 +1232,385 @@ const NovaTransacaoModal = ({
   const typeColor  = effectiveTypeIsMoneyIn ? T.green : T.red;
   const typeLight  = effectiveTypeIsMoneyIn ? T.greenLight : T.redLight;
 
-  const FREQ_LABELS = { diário:"Diário", semanal:"Semanal", mensal:"Mensal", quinzenal:"Quinzenal", anual:"Anual", custom:"Custom" };
+  const FREQ_LABELS = { semanal:"Semanal", quinzenal:"Quinzenal", mensal:"Mensal", anual:"Anual", personalizado:"Personalizado" };
+  // Aceita aliases legados que podem vir de preConfig ou de séries antigas.
+  const normalizeFreqRecId = (id) => {
+    const v = String(id || "").toLowerCase();
+    if (v === "diário" || v === "diario") return "mensal";
+    if (v === "custom") return "personalizado";
+    if (FREQ_LABELS[v]) return v;
+    return "mensal";
+  };
   const ENC_LABELS  = { "sem-fim":"Sem data fim", repeticoes:"Após N repetições", data:"Data específica" };
   const MET_LABELS  = { pix:"Pix", boleto:"Boleto", dinheiro:"Dinheiro", debito:"Débito", credito:"Crédito", transferencia:"Transferência" };
 
-  const freqs = ["Diário","Semanal","Mensal","Quinzenal","Anual","Custom"];
+  const freqs = ["Semanal","Quinzenal","Mensal","Anual","Personalizado"];
   const parcs = [2,3,4,6,8,10,12];
+
+  // Painel Recorrência — valores derivados a partir da data da transação
+  // se o usuário ainda não tiver setado seus próprios.
+  const firstOccurrenceDate = firstOccurrenceYmd || txDateYmd;
+  const effectiveDayOfWeek = useMemo(() => {
+    if (selectedDayOfWeek != null) return selectedDayOfWeek;
+    if (!firstOccurrenceDate) return null;
+    const d = new Date(`${firstOccurrenceDate}T12:00:00`);
+    return Number.isNaN(d.getTime()) ? null : d.getDay();
+  }, [selectedDayOfWeek, firstOccurrenceDate]);
+  const effectiveDayOfMonth = useMemo(() => {
+    if (selectedDayOfMonth != null) return selectedDayOfMonth;
+    if (!firstOccurrenceDate) return null;
+    const n = Number.parseInt(String(firstOccurrenceDate).slice(8, 10), 10);
+    return Number.isFinite(n) ? n : null;
+  }, [selectedDayOfMonth, firstOccurrenceDate]);
+
+  const DOW_LABELS_SHORT = ["dom","seg","ter","qua","qui","sex","sab"];
+  const DOW_LABELS_FULL  = ["domingo","segunda-feira","terça-feira","quarta-feira","quinta-feira","sexta-feira","sábado"];
+  const MONTH_NAMES = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+  const CUSTOM_UNIT_LABEL = { day: ["dia","dias"], week: ["semana","semanas"], month: ["mês","meses"] };
+
+  /** Linha 1 do resumo: descrição da regra ("Todo dia 5", "Toda terça-feira", etc.). */
+  const recurrenceRuleSummary = useMemo(() => {
+    if (freqRec === "semanal" && effectiveDayOfWeek != null) return `Toda ${DOW_LABELS_FULL[effectiveDayOfWeek]}`;
+    if (freqRec === "quinzenal" && effectiveDayOfWeek != null) return `A cada 2 semanas, ${DOW_LABELS_FULL[effectiveDayOfWeek]}`;
+    if (freqRec === "mensal" && effectiveDayOfMonth != null) return `Todo dia ${effectiveDayOfMonth} de cada mês`;
+    if (freqRec === "anual" && firstOccurrenceDate) {
+      const d = new Date(`${firstOccurrenceDate}T12:00:00`);
+      if (!Number.isNaN(d.getTime())) return `Todo dia ${d.getDate()} de ${MONTH_NAMES[d.getMonth()]}`;
+    }
+    if (freqRec === "personalizado") {
+      const n = Math.max(1, Number(customIntervalRec) || 1);
+      const [sing, plur] = CUSTOM_UNIT_LABEL[customUnitRec] || ["unidade","unidades"];
+      return `A cada ${n} ${n === 1 ? sing : plur}`;
+    }
+    return FREQ_LABELS[freqRec] || "";
+  }, [freqRec, effectiveDayOfWeek, effectiveDayOfMonth, firstOccurrenceDate, customIntervalRec, customUnitRec]);
+
+  /**
+   * 1ª ocorrência que o backend vai gravar (espelha compute_first_occurrence).
+   * Para monthly avança ao próximo mês se day_of_month já passou no mês corrente.
+   * Para weekly/biweekly/yearly/custom usa firstOccurrenceDate como âncora literal.
+   */
+  const recurrenceNextOccurrence = useMemo(() => {
+    if (!firstOccurrenceDate) return null;
+    const anchor = new Date(`${firstOccurrenceDate}T12:00:00`);
+    if (Number.isNaN(anchor.getTime())) return firstOccurrenceDate;
+    const apiFreq = (
+      freqRec === "semanal" ? "weekly" :
+      freqRec === "quinzenal" ? "biweekly" :
+      freqRec === "mensal" ? "monthly" :
+      freqRec === "anual" ? "yearly" :
+      freqRec === "personalizado" ? "custom" : "monthly"
+    );
+    const result = computeFirstOccurrenceMath(anchor, apiFreq, {
+      dayOfMonth: effectiveDayOfMonth,
+      dayOfWeek: effectiveDayOfWeek,
+    });
+    if (!(result instanceof Date)) return firstOccurrenceDate;
+    const y = result.getFullYear();
+    const m = String(result.getMonth() + 1).padStart(2, "0");
+    const d = String(result.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }, [firstOccurrenceDate, freqRec, effectiveDayOfMonth, effectiveDayOfWeek]);
+
+  /** end_date calculada quando encRec=repeticoes (apenas para exibir no resumo). */
+  const recurrenceComputedEndDate = useMemo(() => {
+    if (encRec !== "repeticoes") return null;
+    const n = Number(encRepetitionsRec);
+    if (!Number.isFinite(n) || n < 1) return null;
+    const apiFreq = (
+      freqRec === "semanal" ? "weekly" :
+      freqRec === "quinzenal" ? "biweekly" :
+      freqRec === "mensal" ? "monthly" :
+      freqRec === "anual" ? "yearly" :
+      freqRec === "personalizado" ? "custom" : "monthly"
+    );
+    return computeEndDateFromOccurrencesMath({
+      startDateYmd: firstOccurrenceDate,
+      frequency: apiFreq,
+      n,
+      dayOfMonth: effectiveDayOfMonth,
+      dayOfWeek: effectiveDayOfWeek,
+      interval: customIntervalRec,
+      intervalUnit: customUnitRec,
+    });
+  }, [encRec, encRepetitionsRec, freqRec, firstOccurrenceDate, effectiveDayOfMonth, effectiveDayOfWeek, customIntervalRec, customUnitRec]);
+
+  const fmtDateBr = (ymd) => {
+    if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(String(ymd))) return "—";
+    const [y, m, d] = ymd.split("-");
+    return `${d}/${m}/${y}`;
+  };
+
+  const ymdFromDate = (d) => {
+    if (!(d instanceof Date) || Number.isNaN(d.getTime())) return null;
+    const y = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${y}-${mm}-${dd}`;
+  };
+
+  useEffect(() => {
+    if (!firstOccurrenceAutoAdjustNote) return undefined;
+    const id = setTimeout(() => setFirstOccurrenceAutoAdjustNote(null), 3500);
+    return () => clearTimeout(id);
+  }, [firstOccurrenceAutoAdjustNote]);
+
+  /**
+   * Variante A: ao mudar dia-da-semana, avança automaticamente a 1ª ocorrência
+   * para o próximo dia-da-semana selecionado, garantindo que a série gravada no
+   * backend já comece no dia "certo". Mostra um aviso curto para o usuário.
+   */
+  const handleSelectDayOfWeek = (idx) => {
+    setSelectedDayOfWeek(idx);
+    if (!firstOccurrenceDate) return;
+    const anchor = new Date(`${firstOccurrenceDate}T12:00:00`);
+    if (Number.isNaN(anchor.getTime())) return;
+    if (anchor.getDay() === idx) return;
+    const targetMs = anchor.getTime() + ((idx - anchor.getDay() + 7) % 7 || 7) * 24 * 60 * 60 * 1000;
+    const target = new Date(targetMs);
+    const nextYmd = ymdFromDate(target);
+    if (nextYmd && nextYmd !== firstOccurrenceYmd) {
+      setFirstOccurrenceYmd(nextYmd);
+      setFirstOccurrenceAutoAdjustNote(`Primeira ocorrência ajustada para ${fmtDateBr(nextYmd)} (próxima ${DOW_LABELS_FULL[idx]}).`);
+    }
+  };
+
+  /**
+   * Variante A para mensal: ao mudar dia-do-mês, recalcula a 1ª ocorrência
+   * espelhando o backend (mesmo mês se ainda futuro, próximo mês caso contrário).
+   */
+  const handleSelectDayOfMonth = (n) => {
+    setSelectedDayOfMonth(n);
+    if (!firstOccurrenceDate || n == null) return;
+    const anchor = new Date(`${firstOccurrenceDate}T12:00:00`);
+    if (Number.isNaN(anchor.getTime())) return;
+    const next = computeFirstOccurrenceMath(anchor, "monthly", { dayOfMonth: n });
+    const nextYmd = ymdFromDate(next);
+    if (nextYmd && nextYmd !== firstOccurrenceYmd) {
+      setFirstOccurrenceYmd(nextYmd);
+      setFirstOccurrenceAutoAdjustNote(`Primeira ocorrência ajustada para ${fmtDateBr(nextYmd)} (próximo dia ${n}).`);
+    }
+  };
+
+  const customUnitOpts = [
+    { id: "day",   label: "dias" },
+    { id: "week",  label: "semanas" },
+    { id: "month", label: "meses" },
+  ];
+
+  /** Bloco completo do painel "Recorrência" (frequência + condicionais + âncora + encerramento + resumo). */
+  const renderRecurrenceConfigBody = (compact) => {
+    const f = {
+      sectionGap: compact ? 18 : 14,
+      labelSize: compact ? 12 : 10,
+      labelMargin: compact ? 10 : 8,
+      fieldGap: compact ? 8 : 6,
+      pillPadding: compact ? "12px 10px" : "8px 10px",
+      pillFontSize: compact ? 13 : 12,
+      dowSize: compact ? 36 : 28,
+      inputPadding: compact ? "10px 12px" : "8px 10px",
+      smallText: compact ? 12 : 11,
+      hintText: compact ? 11 : 10,
+    };
+    const Label = ({ children }) => (
+      <div style={{ ...G, fontSize: f.labelSize, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: f.labelMargin }}>{children}</div>
+    );
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: f.sectionGap }}>
+        {/* ─── FREQUÊNCIA ─── */}
+        <div>
+          <Label>Frequência</Label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: f.fieldGap }}>
+            {freqs.map((label) => {
+              const fid = label.toLowerCase();
+              const active = freqRec === fid;
+              return (
+                <button key={label} type="button" onClick={() => setFreqRec(fid)}
+                  style={{ ...G, padding: f.pillPadding, borderRadius: 10, border: `1.5px solid ${active ? T.ink : T.border}`, background: active ? T.ink : T.surface, color: active ? "#fff" : T.inkMid, fontSize: f.pillFontSize, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ─── CAMPOS CONDICIONAIS ─── */}
+        {(freqRec === "semanal" || freqRec === "quinzenal") && (
+          <div>
+            <Label>{freqRec === "quinzenal" ? "Dia da semana (a cada 2)" : "Dia da semana"}</Label>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+              {DOW_LABELS_SHORT.map((lbl, idx) => {
+                const active = effectiveDayOfWeek === idx;
+                return (
+                  <button key={idx} type="button" onClick={() => handleSelectDayOfWeek(idx)}
+                    aria-label={DOW_LABELS_FULL[idx]}
+                    title={DOW_LABELS_FULL[idx]}
+                    style={{ ...G, height: f.dowSize, padding: 0, borderRadius: 8, border: `1.5px solid ${active ? T.ink : T.border}`, background: active ? T.ink : T.surface, color: active ? "#fff" : T.inkMid, fontSize: compact ? 12 : 10, fontWeight: 700, cursor: "pointer", textTransform: "lowercase" }}>
+                    {lbl}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {freqRec === "mensal" && (
+          <div>
+            <Label>Dia do mês</Label>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ ...G, fontSize: f.smallText, color: T.inkMid }}>Todo dia</span>
+              <input type="number" min={1} max={31} value={effectiveDayOfMonth ?? ""}
+                onChange={(e) => {
+                  const n = Number.parseInt(e.target.value, 10);
+                  const clamped = Number.isFinite(n) ? Math.min(31, Math.max(1, n)) : null;
+                  handleSelectDayOfMonth(clamped);
+                }}
+                style={{ ...G, width: 64, padding: f.inputPadding, borderRadius: 8, border: `1.5px solid ${T.border}`, fontSize: f.pillFontSize, fontWeight: 700, color: T.ink, textAlign: "center" }} />
+              <span style={{ ...G, fontSize: f.smallText, color: T.inkMid }}>de cada mês</span>
+            </div>
+            {effectiveDayOfMonth != null && effectiveDayOfMonth > 28 && (
+              <div style={{ ...G, fontSize: f.hintText, color: T.inkLight, marginTop: 6, lineHeight: 1.4 }}>
+                Em meses sem o dia {effectiveDayOfMonth}, a transação cai no último dia do mês.
+              </div>
+            )}
+          </div>
+        )}
+
+        {freqRec === "anual" && (
+          <div>
+            <Label>Dia e mês</Label>
+            <LocaleDatePicker
+              locale={APP_UI_LOCALE}
+              value={firstOccurrenceDate}
+              onChange={(ymd) => setFirstOccurrenceYmd(ymd || null)}
+              style={{ width: "100%" }}
+            />
+            <div style={{ ...G, fontSize: f.hintText, color: T.inkLight, marginTop: 6 }}>
+              Repete todo {firstOccurrenceDate ? (() => { const d = new Date(`${firstOccurrenceDate}T12:00:00`); return Number.isNaN(d.getTime()) ? "—" : `${d.getDate()} de ${MONTH_NAMES[d.getMonth()]}`; })() : "—"}.
+            </div>
+          </div>
+        )}
+
+        {freqRec === "personalizado" && (
+          <div>
+            <Label>A cada</Label>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input type="number" min={1} value={customIntervalRec}
+                onChange={(e) => {
+                  const n = Number.parseInt(e.target.value, 10);
+                  setCustomIntervalRec(Number.isFinite(n) && n >= 1 ? n : 1);
+                }}
+                style={{ ...G, width: 64, padding: f.inputPadding, borderRadius: 8, border: `1.5px solid ${T.border}`, fontSize: f.pillFontSize, fontWeight: 700, color: T.ink, textAlign: "center" }} />
+              <select value={customUnitRec} onChange={(e) => setCustomUnitRec(e.target.value)}
+                style={{ ...G, flex: 1, padding: f.inputPadding, borderRadius: 8, border: `1.5px solid ${T.border}`, fontSize: f.pillFontSize, fontWeight: 600, color: T.ink, background: T.surface }}>
+                {customUnitOpts.map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
+
+        {/* ─── PRIMEIRA OCORRÊNCIA (âncora) ─── */}
+        <div>
+          <Label>Primeira ocorrência</Label>
+          <LocaleDatePicker
+            locale={APP_UI_LOCALE}
+            value={firstOccurrenceDate}
+            onChange={(ymd) => { setFirstOccurrenceYmd(ymd || null); setFirstOccurrenceAutoAdjustNote(null); }}
+            style={{ width: "100%" }}
+          />
+          {firstOccurrenceAutoAdjustNote ? (
+            <div role="status" aria-live="polite"
+              style={{ ...G, fontSize: f.hintText, color: T.ink, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 8px", marginTop: 6, lineHeight: 1.4 }}>
+              ↻ {firstOccurrenceAutoAdjustNote}
+            </div>
+          ) : (
+            <div style={{ ...G, fontSize: f.hintText, color: T.inkLight, marginTop: 6 }}>
+              Pode ser diferente da data da transação.
+            </div>
+          )}
+        </div>
+
+        {/* ─── ENCERRAMENTO ─── */}
+        <div>
+          <Label>Encerramento</Label>
+          <div style={{ display: "flex", flexDirection: "column", gap: f.fieldGap }}>
+            {[
+              { id: "sem-fim", label: "Sem data fim", sub: "Até cancelar manualmente" },
+              { id: "repeticoes", label: "Após N repetições", sub: "Informe a quantidade" },
+              { id: "data", label: "Data específica", sub: "Escolher término" },
+            ].map((opt) => {
+              const active = encRec === opt.id;
+              return (
+                <div key={opt.id} onClick={() => setEncRec(opt.id)}
+                  style={{ display: "flex", flexDirection: "column", gap: 8, padding: compact ? "12px 14px" : "10px 12px", borderRadius: 10, border: `1.5px solid ${active ? T.ink : T.border}`, cursor: "pointer", background: active ? T.bg : T.surface }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                    <div style={{ width: compact ? 16 : 14, height: compact ? 16 : 14, borderRadius: 9999, border: `2px solid ${active ? T.ink : T.border}`, background: active ? T.ink : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
+                      {active && <div style={{ width: compact ? 6 : 5, height: compact ? 6 : 5, borderRadius: 9999, background: "#fff" }} />}
+                    </div>
+                    <div>
+                      <div style={{ ...G, fontSize: f.pillFontSize, fontWeight: 600, color: T.ink }}>{opt.label}</div>
+                      <div style={{ ...G, fontSize: f.hintText, color: T.inkLight, marginTop: 1 }}>{opt.sub}</div>
+                    </div>
+                  </div>
+                  {active && opt.id === "repeticoes" && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: compact ? 26 : 24 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ ...G, fontSize: f.smallText, color: T.inkMid }}>Após</span>
+                        <input type="number" min={1} value={encRepetitionsRec}
+                          onChange={(e) => {
+                            const n = Number.parseInt(e.target.value, 10);
+                            setEncRepetitionsRec(Number.isFinite(n) && n >= 1 ? n : 1);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          style={{ ...G, width: 64, padding: f.inputPadding, borderRadius: 8, border: `1.5px solid ${T.border}`, fontSize: f.pillFontSize, fontWeight: 700, color: T.ink, textAlign: "center" }} />
+                        <span style={{ ...G, fontSize: f.smallText, color: T.inkMid }}>
+                          {freqRec === "semanal" ? (Number(encRepetitionsRec) === 1 ? "semana" : "semanas") :
+                            freqRec === "quinzenal" ? (Number(encRepetitionsRec) === 1 ? "quinzena" : "quinzenas") :
+                            freqRec === "mensal" ? (Number(encRepetitionsRec) === 1 ? "mês" : "meses") :
+                            freqRec === "anual" ? (Number(encRepetitionsRec) === 1 ? "ano" : "anos") :
+                            (Number(encRepetitionsRec) === 1 ? "ocorrência" : "ocorrências")}
+                        </span>
+                      </div>
+                      {recurrenceComputedEndDate && (
+                        <div style={{ ...G, fontSize: f.hintText, color: T.inkLight }}>
+                          Termina em <strong style={{ color: T.ink }}>{fmtDateBr(recurrenceComputedEndDate)}</strong>.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {active && opt.id === "data" && (
+                    <div onClick={(e) => e.stopPropagation()} style={{ paddingLeft: compact ? 26 : 24 }}>
+                      <LocaleDatePicker
+                        locale={APP_UI_LOCALE}
+                        value={encEndDateYmdRec}
+                        onChange={(ymd) => setEncEndDateYmdRec(ymd || null)}
+                        style={{ width: "100%" }}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ─── RESUMO ─── */}
+        <div style={{ padding: compact ? "12px 14px" : "10px 12px", background: T.bg, borderRadius: 10, border: `1px solid ${T.border}` }}>
+          <div style={{ ...G, fontSize: f.hintText, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Resumo</div>
+          <div style={{ ...G, fontSize: compact ? 14 : 13, fontWeight: 700, color: T.ink }}>{recurrenceRuleSummary || "—"}</div>
+          <div style={{ ...G, fontSize: f.hintText, color: T.inkLight, marginTop: 2 }}>
+            Próxima: {fmtDateBr(recurrenceNextOccurrence)} · {ENC_LABELS[encRec]?.toLowerCase()}
+            {encRec === "repeticoes" && recurrenceComputedEndDate && (
+              <> · termina em {fmtDateBr(recurrenceComputedEndDate)}</>
+            )}
+            {encRec === "data" && encEndDateYmdRec && (
+              <> · termina em {fmtDateBr(encEndDateYmdRec)}</>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // Methods by tipo
   const METHODS_DESPESA = [["pix","Pix"],["debito","Débito"],["credito","Crédito"],["dinheiro","Dinheiro"],["boleto","Boleto"]];
@@ -1536,48 +1947,39 @@ const NovaTransacaoModal = ({
             ? Number(cartao)
             : null;
         const endYmd =
-          encRec === "data" &&
-          preConfig?.dataFimRec &&
-          /^\d{4}-\d{2}-\d{2}$/.test(String(preConfig.dataFimRec))
-            ? String(preConfig.dataFimRec)
+          encRec === "data" && encEndDateYmdRec &&
+          /^\d{4}-\d{2}-\d{2}$/.test(String(encEndDateYmdRec))
+            ? String(encEndDateYmdRec)
             : undefined;
+        const recurrenceSharedPayload = {
+          description: desc,
+          value: valorNum,
+          paymentMethodKey: method,
+          categoryTagId,
+          detailTagIds: detailIdsForApi,
+          startDateYmd: firstOccurrenceDate,
+          freqRec,
+          encRec,
+          endDateYmd: endYmd,
+          valorTipoRec,
+          categoryLabel: cat,
+          cardId: Number.isFinite(cardId) ? cardId : null,
+          dayOfWeek: effectiveDayOfWeek,
+          dayOfMonth: effectiveDayOfMonth,
+          interval: customIntervalRec,
+          intervalUnit: customUnitRec,
+          repetitions: encRec === "repeticoes" ? Number(encRepetitionsRec) : null,
+        };
         if (isEditSeries) {
           await updateRecurringSeriesForUi(
             String(preConfig.recId),
             organizationId,
-            buildUpdateRecurringSeriesPayload({
-              description: desc,
-              value: valorNum,
-              paymentMethodKey: method,
-              categoryTagId,
-              detailTagIds: detailIdsForApi,
-              startDateYmd: txDateYmd,
-              freqRec,
-              encRec,
-              endDateYmd: endYmd,
-              valorTipoRec,
-              categoryLabel: cat,
-              cardId: Number.isFinite(cardId) ? cardId : null,
-            }),
+            buildUpdateRecurringSeriesPayload(recurrenceSharedPayload),
           );
         } else {
           await createRecurringSeriesForUi(
             organizationId,
-            buildCreateRecurringSeriesPayload({
-              tipo,
-              description: desc,
-              value: valorNum,
-              paymentMethodKey: method,
-              categoryTagId,
-              detailTagIds: detailIdsForApi,
-              startDateYmd: txDateYmd,
-              freqRec,
-              encRec,
-              endDateYmd: endYmd,
-              valorTipoRec,
-              categoryLabel: cat,
-              cardId: Number.isFinite(cardId) ? cardId : null,
-            }),
+            buildCreateRecurringSeriesPayload({ tipo, ...recurrenceSharedPayload }),
           );
         }
         clearNovaTransacaoSummaryCache();
@@ -1704,6 +2106,10 @@ const NovaTransacaoModal = ({
     setRecorre(false);
     setCartao(prefMethod === "credito" && prefs.cartaoId != null ? String(prefs.cartaoId) : "");
     setFreqRec("mensal"); setEncRec("sem-fim"); setValorTipoRec("fixo");
+    setSelectedDayOfWeek(null); setSelectedDayOfMonth(null);
+    setCustomIntervalRec(1); setCustomUnitRec("month");
+    setFirstOccurrenceYmd(null);
+    setEncRepetitionsRec(12); setEncEndDateYmdRec(null);
     setCat(prefs.cat != null && String(prefs.cat).trim() ? String(prefs.cat).trim() : "");
     setCategoryTagId(null);
     if (prefMethod === "credito") {
@@ -1793,7 +2199,7 @@ const NovaTransacaoModal = ({
         </div>
         {(novaRecorrencia || recorre) && (
           <div style={{ ...G, fontSize:11, color:typeColor, opacity:0.65, marginTop:3 }}>
-            Todo dia 8 · {FREQ_LABELS[freqRec]} · {ENC_LABELS[encRec]}
+            {recurrenceRuleSummary || FREQ_LABELS[freqRec]} · {ENC_LABELS[encRec]}
           </div>
         )}
       </div>
@@ -2351,48 +2757,8 @@ const NovaTransacaoModal = ({
 
             {/* ── STEP RECORRÊNCIA ── */}
             {mStep === "recorrencia" && (
-              <div style={{ padding:"18px 20px", display:"flex", flexDirection:"column", gap:16, ...mobileStepInStyle }}>
-                <div>
-                  <div style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid, marginBottom:10 }}>Frequência</div>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
-                    {freqs.map(f => {
-                      const fid = f.toLowerCase();
-                      return (
-                        <button key={f} onClick={() => setFreqRec(fid)}
-                          style={{ ...G, padding:"12px 10px", borderRadius:10, border:`1.5px solid ${freqRec===fid ? T.ink : T.border}`, background:freqRec===fid ? T.ink : T.surface, color:freqRec===fid ? "#fff" : T.inkMid, fontSize:13, fontWeight:600, cursor:"pointer", transition:"all 0.15s" }}>
-                          {f}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid, marginBottom:10 }}>Encerramento</div>
-                  <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                    {[
-                      { id:"sem-fim",    label:"Sem data fim",      sub:"Até cancelar manualmente" },
-                      { id:"repeticoes", label:"Após N repetições", sub:"Ex: 12 meses"             },
-                      { id:"data",       label:"Data específica",   sub:"Escolher término"         },
-                    ].map(opt => (
-                      <div key={opt.id} onClick={() => setEncRec(opt.id)}
-                        style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", borderRadius:12, border:`1.5px solid ${encRec===opt.id ? T.ink : T.border}`, cursor:"pointer", background:encRec===opt.id ? T.bg : T.surface, transition:"all 0.15s" }}>
-                        <div style={{ width:16, height:16, borderRadius:9999, border:`2px solid ${encRec===opt.id ? T.ink : T.border}`, background:encRec===opt.id ? T.ink : "transparent", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                          {encRec===opt.id && <div style={{ width:6, height:6, borderRadius:9999, background:"#fff" }} />}
-                        </div>
-                        <div>
-                          <div style={{ ...G, fontSize:13, fontWeight:600, color:T.ink }}>{opt.label}</div>
-                          <div style={{ ...G, fontSize:11, color:T.inkLight, marginTop:2 }}>{opt.sub}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                {/* Resumo */}
-                <div style={{ padding:"12px 14px", background:T.bg, borderRadius:12, border:`1px solid ${T.border}` }}>
-                  <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:5 }}>Resumo</div>
-                  <div style={{ ...G, fontSize:14, fontWeight:700, color:T.ink }}>Todo dia 8, {FREQ_LABELS[freqRec]?.toLowerCase()}</div>
-                  <div style={{ ...G, fontSize:11, color:T.inkLight, marginTop:2 }}>Próxima: 08/04/2026 · {ENC_LABELS[encRec]?.toLowerCase()}</div>
-                </div>
+              <div style={{ padding:"18px 20px", ...mobileStepInStyle }}>
+                {renderRecurrenceConfigBody(true)}
               </div>
             )}
 
@@ -2500,45 +2866,7 @@ const NovaTransacaoModal = ({
             >
             <PanelHeader icon={Repeat} title="Recorrência" onCollapse={beginCloseRecorrenciaPanel} />
             <div style={{ flex:1, overflowY:"auto", padding:"16px 18px", display:"flex", flexDirection:"column", gap:18 }}>
-              <div>
-                <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:10 }}>Frequência</div>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
-                  {freqs.map(f => {
-                    const fid = f.toLowerCase();
-                    return (
-                      <button key={f} onClick={() => setFreqRec(fid)} style={{ ...G, padding:"8px 10px", borderRadius:8, border:`1.5px solid ${freqRec===fid ? T.ink : T.border}`, background:freqRec===fid ? T.ink : T.surface, color:freqRec===fid ? "#fff" : T.inkMid, fontSize:12, fontWeight:600, cursor:"pointer" }}>
-                        {f}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div>
-                <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:10 }}>Encerramento</div>
-                <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                  {[
-                    { id:"sem-fim",    label:"Sem data fim",      sub:"Até cancelar manualmente" },
-                    { id:"repeticoes", label:"Após N repetições", sub:"Ex: 12 meses"             },
-                    { id:"data",       label:"Data específica",   sub:"Escolher término"         },
-                  ].map(opt => (
-                    <div key={opt.id} onClick={() => setEncRec(opt.id)}
-                      style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"10px 12px", borderRadius:9, border:`1.5px solid ${encRec===opt.id ? T.ink : T.border}`, cursor:"pointer", background:encRec===opt.id ? T.bg : T.surface }}>
-                      <div style={{ width:14, height:14, borderRadius:9999, border:`2px solid ${encRec===opt.id ? T.ink : T.border}`, background:encRec===opt.id ? T.ink : "transparent", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>
-                        {encRec===opt.id && <div style={{ width:5, height:5, borderRadius:9999, background:"#fff" }} />}
-                      </div>
-                      <div>
-                        <div style={{ ...G, fontSize:12, fontWeight:600, color:T.ink }}>{opt.label}</div>
-                        <div style={{ ...G, fontSize:10, color:T.inkLight, marginTop:1 }}>{opt.sub}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div style={{ padding:"12px 14px", background:T.bg, borderRadius:10, border:`1px solid ${T.border}` }}>
-                <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6 }}>Resumo</div>
-                <div style={{ ...G, fontSize:13, fontWeight:700, color:T.ink }}>Todo dia 8, {FREQ_LABELS[freqRec]?.toLowerCase()}</div>
-                <div style={{ ...G, fontSize:11, color:T.inkLight, marginTop:2 }}>Próxima: 08/04/2026 · {ENC_LABELS[encRec]?.toLowerCase()}</div>
-              </div>
+              {renderRecurrenceConfigBody(false)}
               {/* Tipo de valor */}
               <div>
                 <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Tipo de valor</div>
@@ -6277,11 +6605,17 @@ export default function App() {
                 freqRec: freqId,
                 encRec: encId,
                 dataFimRec: rec.endDateRaw || undefined,
+                encEndDateYmdRec: rec.endDateRaw || undefined,
                 valorTipoRec: rec.valorTipo || "fixo",
                 isEditRecorrencia: true,
                 recId: rec.id,
                 cartaoId: rec.creditCardId != null ? String(rec.creditCardId) : undefined,
                 transactionDate: rec.nextOccurrenceIso || undefined,
+                selectedDayOfWeek: rec.dayOfWeek ?? null,
+                selectedDayOfMonth: rec.dayOfMonth ?? null,
+                customIntervalRec: rec.interval ?? 1,
+                customUnitRec: rec.intervalUnit || "month",
+                firstOccurrenceYmd: rec.startDateRaw || rec.nextOccurrenceIso || undefined,
               });
               openTxModal();
             }} />,

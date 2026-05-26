@@ -85,4 +85,114 @@ describe("recurringSeriesAdapter payloads", () => {
     });
     expect(p.end_date).toBeNull();
   });
+
+  it("mapUiFreqRecToApi mapeia personalizado para custom", () => {
+    expect(mapUiFreqRecToApi("personalizado")).toBe("custom");
+  });
+
+  it("buildCreate envia interval/interval_unit para personalizado", () => {
+    const p = buildCreateRecurringSeriesPayload({
+      tipo: "despesa",
+      description: "Vacina pet",
+      value: 200,
+      paymentMethodKey: "pix",
+      categoryTagId: null,
+      startDateYmd: "2026-01-10",
+      freqRec: "personalizado",
+      encRec: "sem-fim",
+      endDateYmd: null,
+      valorTipoRec: "fixo",
+      categoryLabel: null,
+      interval: 3,
+      intervalUnit: "month",
+    });
+    expect(p.frequency).toBe("custom");
+    expect(p.interval).toBe(3);
+    expect(p.interval_unit).toBe("month");
+    expect(p.day_of_month).toBeUndefined();
+    expect(p.day_of_week).toBeUndefined();
+  });
+
+  it("buildCreate usa dayOfWeek explícito do form em vez de derivar da start_date", () => {
+    const p = buildCreateRecurringSeriesPayload({
+      tipo: "despesa",
+      description: "Aula",
+      value: 80,
+      paymentMethodKey: "pix",
+      categoryTagId: null,
+      startDateYmd: "2026-05-22", // sexta
+      freqRec: "semanal",
+      encRec: "sem-fim",
+      endDateYmd: null,
+      valorTipoRec: "fixo",
+      categoryLabel: null,
+      dayOfWeek: 2, // terça
+    });
+    expect(p.day_of_week).toBe(2);
+  });
+
+  it("buildCreate usa dayOfMonth explícito do form em vez de derivar da start_date", () => {
+    const p = buildCreateRecurringSeriesPayload({
+      tipo: "despesa",
+      description: "Aluguel",
+      value: 1800,
+      paymentMethodKey: "pix",
+      categoryTagId: null,
+      startDateYmd: "2026-05-22",
+      freqRec: "mensal",
+      encRec: "sem-fim",
+      endDateYmd: null,
+      valorTipoRec: "fixo",
+      categoryLabel: null,
+      dayOfMonth: 5,
+    });
+    expect(p.day_of_month).toBe(5);
+  });
+
+  it("buildCreate converte 'repetições' em end_date (mensal × 12)", () => {
+    const p = buildCreateRecurringSeriesPayload({
+      tipo: "despesa",
+      description: "Internet",
+      value: 100,
+      paymentMethodKey: "pix",
+      categoryTagId: null,
+      startDateYmd: "2026-01-05",
+      freqRec: "mensal",
+      encRec: "repeticoes",
+      endDateYmd: null,
+      valorTipoRec: "fixo",
+      categoryLabel: null,
+      dayOfMonth: 5,
+      repetitions: 12,
+    });
+    // 12 ocorrências mensais começando em 2026-01-05 → última cai em 2026-12-05
+    expect(p.end_date).toBe("2026-12-05");
+  });
+
+  it("buildCreate converte 'repetições' em end_date para personalizado (a cada 3 meses × 4)", () => {
+    const p = buildCreateRecurringSeriesPayload({
+      tipo: "despesa",
+      description: "Vacina pet",
+      value: 200,
+      paymentMethodKey: "pix",
+      categoryTagId: null,
+      startDateYmd: "2026-01-10",
+      freqRec: "personalizado",
+      encRec: "repeticoes",
+      endDateYmd: null,
+      valorTipoRec: "fixo",
+      categoryLabel: null,
+      interval: 3,
+      intervalUnit: "month",
+      repetitions: 4,
+    });
+    // 4 ocorrências começando 2026-01-10, a cada 3 meses → última = 2026-10-10
+    expect(p.end_date).toBe("2026-10-10");
+  });
+
+  it("não mapeia diário/custom como aliases silenciosos (mapUiFreqRecToApi cai em mensal)", () => {
+    // Diário foi removido da UI; se vier algo desconhecido, default seguro = monthly
+    expect(mapUiFreqRecToApi("diário")).toBe("monthly");
+    expect(mapUiFreqRecToApi("custom")).toBe("monthly");
+  });
 });

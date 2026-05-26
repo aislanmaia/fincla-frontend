@@ -37,6 +37,7 @@ import {
 } from "../features/moodV4";
 import { useDashboardData } from "../features/dashboard/useDashboardData.js";
 import { pickCommittedExpenseForDashboard } from "../features/dashboard/dashboardRecurringKpi.js";
+import { getRecurringProjection } from "../../api/recurringSeries";
 import { DashboardPeriodSelector } from "../features/dashboard/DashboardPeriodSelector.jsx";
 import {
   formatDashboardKpiPeriodPhrase,
@@ -166,17 +167,68 @@ export function DashboardPage({
   const showNeutralLiveHero = apiFailedNoSummary || isPeriodWithoutActivity;
   const refetch = dashboardData.refetch;
   const envelope = Math.max(inc, exp, 1);
+
+  /**
+   * Projeção de recorrências futuras (após hoje) no período do dashboard.
+   * Carregada em paralelo aos dados do dashboard; representa "compromissos
+   * fechados" que ainda não viraram transação real (materialização lazy).
+   */
+  const [recurringProjection, setRecurringProjection] = useState([]);
+  useEffect(() => {
+    if (!apiDataEnabled || !organizationId || !appliedRange.start || !appliedRange.end) {
+      setRecurringProjection([]);
+      return undefined;
+    }
+    let cancelled = false;
+    getRecurringProjection(organizationId, appliedRange.start, appliedRange.end)
+      .then((res) => { if (!cancelled) setRecurringProjection(res.items || []); })
+      .catch(() => { if (!cancelled) setRecurringProjection([]); });
+    return () => { cancelled = true; };
+  }, [apiDataEnabled, organizationId, appliedRange.start, appliedRange.end]);
+
+  /** Mapa dia-do-período (1..dim) → soma de projeções de despesa naquele dia. */
+  const projectedExpenseByDay = useMemo(() => {
+    const map = new Map();
+    if (!appliedRange.start || !recurringProjection.length) return map;
+    const baseMs = new Date(`${appliedRange.start}T00:00:00`).getTime();
+    if (!Number.isFinite(baseMs)) return map;
+    const ONE_DAY = 86400000;
+    for (const item of recurringProjection) {
+      if (item.type !== "expense") continue;
+      const occMs = new Date(`${item.date}T00:00:00`).getTime();
+      if (!Number.isFinite(occMs)) continue;
+      const dia = Math.floor((occMs - baseMs) / ONE_DAY) + 1;
+      if (dia < 1 || dia > dim) continue;
+      map.set(dia, (map.get(dia) || 0) + Number(item.value));
+    }
+    return map;
+  }, [recurringProjection, appliedRange.start, dim]);
+
   const rhythmSafe = useMemo(() => {
-    if (rhythmData.length > 0) return rhythmData;
-    const d = Math.max(dim, 1);
-    const env = Math.max(envelope, 1);
-    return Array.from({ length: d }, (_, i) => ({
-      dia: i + 1,
-      proj: Math.round((env / d) * (i + 1)),
-      real: null,
-      dayLabel: `${i + 1}`,
-    }));
-  }, [rhythmData, dim, envelope]);
+    const base = rhythmData.length > 0
+      ? rhythmData
+      : (() => {
+          const d = Math.max(dim, 1);
+          const env = Math.max(envelope, 1);
+          return Array.from({ length: d }, (_, i) => ({
+            dia: i + 1,
+            proj: Math.round((env / d) * (i + 1)),
+            real: null,
+            dayLabel: `${i + 1}`,
+          }));
+        })();
+    if (projectedExpenseByDay.size === 0) return base;
+    const todayReal = base.find((p) => p.dia === calendarDay)?.real ?? 0;
+    let acc = todayReal;
+    return base.map((point) => {
+      if (point.dia < calendarDay) return { ...point, committed: null };
+      if (point.dia === calendarDay) return { ...point, committed: todayReal };
+      acc += projectedExpenseByDay.get(point.dia) || 0;
+      // realAtToday: contexto p/ tooltip de dias futuros (a linha "Real" para em hoje;
+      // esse campo deixa o usuário ver quanto já foi gasto até agora, sem poluir o gráfico).
+      return { ...point, committed: acc, realAtToday: todayReal };
+    });
+  }, [rhythmData, dim, envelope, projectedExpenseByDay, calendarDay]);
   const day = calendarDay;
   const timePct = Math.round((day / Math.max(dim, 1)) * 100);
   const spendPct =
@@ -1025,7 +1077,15 @@ export function DashboardPage({
             }
             style={{ padding: "16px 18px" }}
           >
-            <div style={{ ...G, fontSize: 11, fontWeight: 500, color: T.inkMid, marginBottom: 8 }}>{label}</div>
+            <div style={{ ...G, fontSize: 11, fontWeight: 500, color: T.inkMid, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
+              {label}
+              {key === "bal" && (
+                <InfoTip
+                  width={260}
+                  text={"Saldo deste ciclo apenas: receitas menos despesas dentro do período escolhido. Não inclui saldo de meses anteriores — o Fincla trata cada período como um ciclo fechado, para incentivar a revisão regular das suas finanças."}
+                />
+              )}
+            </div>
             <div style={{ ...G, ...NUM, fontSize: 20, fontWeight: 700, color: T.ink, marginBottom: 4 }}>{value}</div>
             <div style={{ ...G, display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: up == null ? T.inkLight : up ? T.green : T.red }}>
               {up === true && <TrendingUp size={10} />}
@@ -1076,7 +1136,11 @@ export function DashboardPage({
             </div>
             {!apiFailedNoSummary && !isPeriodWithoutActivity ? (
               <div style={{ display: "flex", gap: 12 }}>
-                {[["#D1D5DB", "Projeção"], [mood.bar, "Real"]].map(([c, l]) => (
+                {[
+                  ["#9CA3AF", "Projeção"],
+                  [mood.bar, "Real"],
+                  ...(projectedExpenseByDay.size > 0 ? [["#7C3AED", "Comprometido"]] : []),
+                ].map(([c, l]) => (
                   <div key={l} style={{ display: "flex", alignItems: "center", gap: 5 }}>
                     <div style={{ width: 14, height: 2, background: c, borderRadius: 1, transition: "background 0.18s" }} />
                     <span style={{ ...G, fontSize: 10, color: T.inkLight }}>{l}</span>
@@ -1160,8 +1224,9 @@ export function DashboardPage({
                       }}
                     />
                   ) : null}
-                  <Line type="monotone" dataKey="proj" stroke="#D1D5DB" strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
+                  <Line type="monotone" dataKey="proj" stroke="#9CA3AF" strokeWidth={1.5} strokeDasharray="5 3" dot={false} />
                   <Line type="monotone" dataKey="real" stroke={mood.bar} strokeWidth={2.5} dot={false} connectNulls={false} style={{ transition: "stroke 0.8s" }} />
+                  <Line type="stepAfter" dataKey="committed" stroke="#7C3AED" strokeWidth={2} strokeDasharray="4 3" dot={false} connectNulls={false} />
                 </ComposedChart>
               </ResponsiveContainer>
             </>
@@ -1190,7 +1255,7 @@ export function DashboardPage({
               <Badge color={T.inkMid} bg={T.grayLight}>{periodBadge}</Badge>
             </div>
             <div style={{ display: "flex", gap: 12, marginBottom: 12, marginTop: 4, flexShrink: 0 }}>
-              {[["#D1D5DB", "atual"], ["#9CA3AF", "referência"], ["#FCA5A5", "acima"]].map(([c, l]) => (
+              {[["#9CA3AF", "atual"], ["#9CA3AF", "referência"], ["#FCA5A5", "acima"]].map(([c, l]) => (
                 <div key={l} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                   <div style={{ width: 10, height: l === "referência" ? 2 : 5, background: c, borderRadius: l === "referência" ? 1 : 2 }} />
                   <span style={{ ...G, fontSize: 10, color: T.inkLight }}>{l}</span>

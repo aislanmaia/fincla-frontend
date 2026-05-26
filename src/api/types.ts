@@ -1142,7 +1142,8 @@ export interface SeriesTag {
   tag_type: { id: string; name: string } | null;
 }
 
-export type RecurringSeriesFrequency = 'monthly' | 'weekly' | 'biweekly' | 'yearly';
+export type RecurringSeriesFrequency = 'monthly' | 'weekly' | 'biweekly' | 'yearly' | 'custom';
+export type RecurringSeriesIntervalUnit = 'day' | 'week' | 'month';
 export type RecurringSeriesValueKind = 'exact' | 'approximate';
 
 export interface RecurringSeries {
@@ -1170,6 +1171,10 @@ export interface RecurringSeries {
   credit_card_id?: number | null;
   notes?: string | null;
   replaces_series_id?: string | null;
+  /** Quantos `interval_unit`s entre ocorrências; sempre 1 quando frequency ≠ 'custom'. */
+  interval: number;
+  /** Obrigatório quando frequency='custom'; null caso contrário. */
+  interval_unit: RecurringSeriesIntervalUnit | null;
 }
 
 /** Resumo da lista de séries; mesmos campos que `RecurringTransactionsSummary`. */
@@ -1213,6 +1218,10 @@ export interface CreateRecurringSeriesRequest {
   end_date?: string | null;
   credit_card_id?: number | null;
   notes?: string | null;
+  /** Obrigatório quando frequency='custom' (>=1). */
+  interval?: number;
+  /** Obrigatório quando frequency='custom'. */
+  interval_unit?: RecurringSeriesIntervalUnit | null;
 }
 
 export interface UpdateRecurringSeriesRequest {
@@ -1228,6 +1237,8 @@ export interface UpdateRecurringSeriesRequest {
   credit_card_id?: number | null;
   notes?: string | null;
   tag_ids?: string[] | null;
+  interval?: number | null;
+  interval_unit?: RecurringSeriesIntervalUnit | null;
 }
 
 export interface RecurringSeriesToggleRequest {

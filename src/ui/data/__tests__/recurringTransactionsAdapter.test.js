@@ -53,12 +53,17 @@ describe("recurringTransactionsAdapter", () => {
       progPct: 0,
       status: "ativa",
       nextOccurrenceIso: "2026-03-13",
+      startDateRaw: "2020-01-15",
       freqId: "mensal",
       methodId: "boleto",
       encId: "sem-fim",
       endDateRaw: null,
       creditCardId: null,
       categoryTagId: "t1",
+      dayOfMonth: 13,
+      dayOfWeek: null,
+      interval: 1,
+      intervalUnit: null,
     });
   });
 

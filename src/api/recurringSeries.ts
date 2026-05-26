@@ -37,6 +37,35 @@ export const listRecurringSeries = async (
   return response.data;
 };
 
+export interface RecurringProjectionItem {
+  series_id: string;
+  date: string; // YYYY-MM-DD
+  value: number;
+  type: 'income' | 'expense';
+  description: string;
+  category: string;
+}
+
+export interface RecurringProjectionResponse {
+  items: RecurringProjectionItem[];
+}
+
+/**
+ * Returns future recurring occurrences (strictly after today, up to date_end).
+ * Past occurrences are not included — they are materialized into transactions
+ * and already counted as realized values.
+ */
+export const getRecurringProjection = async (
+  organizationId: string,
+  dateStart: string,
+  dateEnd: string,
+): Promise<RecurringProjectionResponse> => {
+  const response = await apiClient.get<RecurringProjectionResponse>('/recurring-series/projection', {
+    params: { organization_id: organizationId, date_start: dateStart, date_end: dateEnd },
+  });
+  return response.data;
+};
+
 export const getRecurringSeries = async (
   seriesId: string,
   organizationId: string,
