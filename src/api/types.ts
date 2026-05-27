@@ -1231,6 +1231,7 @@ export interface UpdateRecurringSeriesRequest {
   category?: string;
   payment_method?: string;
   frequency?: RecurringSeriesFrequency;
+  start_date?: string;
   day_of_month?: number | null;
   day_of_week?: number | null;
   end_date?: string | null;

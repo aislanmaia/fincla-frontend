@@ -86,6 +86,23 @@ describe("recurringSeriesAdapter payloads", () => {
     expect(p.end_date).toBeNull();
   });
 
+  it("buildUpdateRecurringSeriesPayload sempre inclui start_date (regression: edição de data)", () => {
+    const p = buildUpdateRecurringSeriesPayload({
+      description: "Z",
+      value: 100,
+      paymentMethodKey: "pix",
+      categoryTagId: null,
+      startDateYmd: "2026-06-20",
+      freqRec: "mensal",
+      encRec: "sem-fim",
+      endDateYmd: null,
+      valorTipoRec: "fixo",
+      categoryLabel: null,
+      dayOfMonth: 5,
+    });
+    expect(p.start_date).toBe("2026-06-20");
+  });
+
   it("mapUiFreqRecToApi mapeia personalizado para custom", () => {
     expect(mapUiFreqRecToApi("personalizado")).toBe("custom");
   });

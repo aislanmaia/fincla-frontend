@@ -341,6 +341,7 @@ export function buildUpdateRecurringSeriesPayload({
     value: Number(value),
     payment_method: mapUiPaymentMethodToApi(paymentMethodKey),
     frequency,
+    start_date: startDateYmd,
     value_kind: valorTipoRec === "estimado" ? "approximate" : "exact",
     tag_ids: categoryTagId
       ? mergeSeriesTagIds(categoryTagId, detailTagIds)
