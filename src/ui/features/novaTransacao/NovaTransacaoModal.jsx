@@ -25,6 +25,7 @@ import {
 import { ParcelaHybrid } from "./ParcelaHybrid.jsx";
 import { RefundLinkPanel } from "./RefundLinkPanel.jsx";
 import { RecurrenceConfigPanel } from "./RecurrenceConfigPanel.jsx";
+import { useRefundPicker } from "./useRefundPicker.js";
 
 import {
   parseApiDecimal,
@@ -35,7 +36,6 @@ import {
   buildCreateTransactionPayload,
   buildUpdateTransactionPayload,
   createTransactionForUi,
-  fetchRefundCandidates,
   formatTransactionsApiError,
   formatYmdToLocaleDisplay,
   clampNovaTxPrefsParcelas,
@@ -101,13 +101,6 @@ export const NovaTransacaoModal = ({
   // Toggle "↺ Isto é um estorno?" — só ativável quando tipo === "despesa".
   // Quando true, o payload enviado ao backend usa type='refund' (dinheiro voltando).
   const [isEstorno, setIsEstorno] = useState(false);
-  // Picker de "🔗 Linkar à compra estornada" — FK opcional pra UI mostrar relação e backend agregar.
-  const [refundOfTransactionId, setRefundOfTransactionId] = useState(null);
-  const [refundLinkedTx, setRefundLinkedTx] = useState(null); // { id, desc, dateLabel, valLabel, val, categoryTagId, cat, paymentMethodKey, cardId }
-  const [refundPickerOpen, setRefundPickerOpen] = useState(false);
-  const [refundPickerQuery, setRefundPickerQuery] = useState("");
-  const [refundPickerCandidates, setRefundPickerCandidates] = useState([]);
-  const [refundPickerLoading, setRefundPickerLoading] = useState(false);
   const [valor,     setValor]     = useState("");
   const [desc,      setDesc]      = useState("");
   const [cat,       setCat]       = useState("");
@@ -242,6 +235,20 @@ export const NovaTransacaoModal = ({
     organizationId,
     categoryTagId,
     enabled: open && useLiveDetailTags,
+  });
+
+  const refund = useRefundPicker({
+    open,
+    isEstorno,
+    organizationId,
+    method,
+    cartao,
+    cat,
+    categoryTagId,
+    setCat,
+    setCategoryTagId,
+    setMethod,
+    setCartao,
   });
 
   const detailTagRowsAvailable = useMemo(() => {
@@ -384,11 +391,7 @@ export const NovaTransacaoModal = ({
     if (pc) {
       setTipo(pc.tipo || "despesa");
       setIsEstorno(Boolean(pc.isEstorno));
-      setRefundOfTransactionId(pc.refundOfTransactionId ?? null);
-      setRefundLinkedTx(pc.refundLinkedTx ?? null);
-      setRefundPickerOpen(false);
-      setRefundPickerQuery("");
-      setRefundPickerCandidates([]);
+      refund.hydrateFromPreConfig(pc);
       applyValor(pc.valorInicial);
       setDesc(pc.desc || "");
       setTags(Array.isArray(pc.tags) ? pc.tags : []);
@@ -1133,90 +1136,10 @@ export const NovaTransacaoModal = ({
     setTipo(t);
     if (t !== "despesa") {
       setIsEstorno(false);
-      setRefundOfTransactionId(null);
-      setRefundLinkedTx(null);
-      setRefundPickerOpen(false);
-      setRefundPickerQuery("");
-      setRefundPickerCandidates([]);
+      refund.resetAll();
     }
     if (t === "receita" && (method === "credito" || method === "boleto")) setMethod("pix");
   };
-
-  // Quando toggle "↺ Isto é um estorno?" volta para OFF, descarta vínculo já escolhido.
-  useEffect(() => {
-    if (!isEstorno) {
-      if (refundOfTransactionId != null) setRefundOfTransactionId(null);
-      if (refundLinkedTx != null) setRefundLinkedTx(null);
-      if (refundPickerOpen) setRefundPickerOpen(false);
-      if (refundPickerQuery) setRefundPickerQuery("");
-      if (refundPickerCandidates.length) setRefundPickerCandidates([]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEstorno]);
-
-  // Busca candidatas (expenses recentes) com debounce quando o picker está aberto.
-  useEffect(() => {
-    if (!isEstorno || !refundPickerOpen || refundLinkedTx) return;
-    if (!organizationId) return;
-    let cancelled = false;
-    setRefundPickerLoading(true);
-    const cardIdNum =
-      method === "credito" && cartao && cartao !== "novo" ? Number(cartao) : null;
-    const handle = setTimeout(async () => {
-      // Quando o usuário já escolheu cartão de crédito, estreita pelo cartão.
-      // Caso contrário, deixa amplo (não filtra por payment_method) — o picker
-      // serve pra qualquer despesa recente, não só pix/credito.
-      const candidates = await fetchRefundCandidates({
-        organizationId,
-        query: refundPickerQuery,
-        paymentMethodKey: method === "credito" ? "credito" : null,
-        cardId: Number.isFinite(cardIdNum) ? cardIdNum : null,
-      });
-      if (cancelled) return;
-      setRefundPickerCandidates(candidates);
-      setRefundPickerLoading(false);
-    }, 250);
-    return () => {
-      cancelled = true;
-      clearTimeout(handle);
-    };
-  }, [isEstorno, refundPickerOpen, refundLinkedTx, refundPickerQuery, method, cartao, organizationId]);
-
-  const handleRefundLink = (candidate) => {
-    const candCardId =
-      candidate.cartaoId != null && Number.isFinite(Number(candidate.cartaoId))
-        ? Number(candidate.cartaoId)
-        : null;
-    setRefundOfTransactionId(Number(candidate.id));
-    setRefundLinkedTx({
-      id: Number(candidate.id),
-      desc: candidate.desc,
-      dateLabel: candidate.date,
-      val: Math.abs(Number(candidate.val) || 0),
-      cat: candidate.cat,
-      categoryTagId: candidate.categoryTagId ?? null,
-      paymentMethodKey: candidate.paymentMethodKey,
-      cardId: candCardId,
-    });
-    if (!cat && candidate.cat) setCat(candidate.cat);
-    if (!categoryTagId && candidate.categoryTagId) setCategoryTagId(candidate.categoryTagId);
-    if (candidate.paymentMethodKey && candidate.paymentMethodKey !== method && method === "pix") {
-      setMethod(candidate.paymentMethodKey);
-    }
-    if (candidate.paymentMethodKey === "credito" && candCardId != null && !cartao) {
-      setCartao(String(candCardId));
-    }
-    setRefundPickerOpen(false);
-    setRefundPickerQuery("");
-    setRefundPickerCandidates([]);
-  };
-
-  const handleRefundUnlink = () => {
-    setRefundOfTransactionId(null);
-    setRefundLinkedTx(null);
-  };
-
-  /**
 
   /**
    * Bloco "🔗 Linkar à compra estornada" — só renderiza quando `isEstorno && tipo==='despesa'`.
@@ -1227,20 +1150,16 @@ export const NovaTransacaoModal = ({
     return (
       <RefundLinkPanel
         variant={variant}
-        refundLinkedTx={refundLinkedTx}
-        refundPickerOpen={refundPickerOpen}
-        refundPickerQuery={refundPickerQuery}
-        refundPickerCandidates={refundPickerCandidates}
-        refundPickerLoading={refundPickerLoading}
-        onOpenPicker={() => setRefundPickerOpen(true)}
-        onCloseAndReset={() => {
-          setRefundPickerOpen(false);
-          setRefundPickerQuery("");
-          setRefundPickerCandidates([]);
-        }}
-        onQueryChange={setRefundPickerQuery}
-        onLink={handleRefundLink}
-        onUnlink={handleRefundUnlink}
+        refundLinkedTx={refund.refundLinkedTx}
+        refundPickerOpen={refund.refundPickerOpen}
+        refundPickerQuery={refund.refundPickerQuery}
+        refundPickerCandidates={refund.refundPickerCandidates}
+        refundPickerLoading={refund.refundPickerLoading}
+        onOpenPicker={refund.openPicker}
+        onCloseAndReset={refund.closePickerAndReset}
+        onQueryChange={refund.setRefundPickerQuery}
+        onLink={refund.handleLink}
+        onUnlink={refund.handleUnlink}
       />
     );
   };
@@ -1514,7 +1433,7 @@ export const NovaTransacaoModal = ({
               installmentsCount,
               modality,
               cardId: Number.isFinite(cardId) ? cardId : null,
-              refundOfTransactionId: isEstorno ? refundOfTransactionId : null,
+              refundOfTransactionId: isEstorno ? refund.refundOfTransactionId : null,
             }),
           );
         }
@@ -1541,11 +1460,7 @@ export const NovaTransacaoModal = ({
     const prefMethod = normalizeStoredNovaTxPaymentMethod(prefs.method, prefTipo) ?? "pix";
     setTipo(prefTipo);
     setIsEstorno(false);
-    setRefundOfTransactionId(null);
-    setRefundLinkedTx(null);
-    setRefundPickerOpen(false);
-    setRefundPickerQuery("");
-    setRefundPickerCandidates([]);
+    refund.resetAll();
     setCentavos(0); setValor("");
     setDesc(""); setTags([]); setDetailTagIds([]); setDetailTagLabelById({});
     setMethod(prefMethod);
