@@ -27,6 +27,7 @@ import { RefundLinkPanel } from "./RefundLinkPanel.jsx";
 import { RecurrenceConfigPanel } from "./RecurrenceConfigPanel.jsx";
 import { useRefundPicker } from "./useRefundPicker.js";
 import { useMobileStepFlow } from "./useMobileStepFlow.js";
+import { useParcelaCalculator } from "./useParcelaCalculator.js";
 
 import {
   parseApiDecimal,
@@ -184,14 +185,6 @@ export const NovaTransacaoModal = ({
   const descRef       = useRef(null);
   // Banking-style valor input (integer cents)
   const [centavos,      setCentavos]     = useState(0);
-  // Parcela calculator
-  const [parcelaMode,   setParcelaMode]  = useState(false);
-  const [pCalcCents,    setPCalcCents]   = useState(0);
-  const [pCalcN,        setPCalcN]       = useState(2);
-  const [pCalcCustom,   setPCalcCustom]  = useState(false); // show custom input in calc
-  const [pCalcCustomInput, setPCalcCustomInput] = useState(""); // raw text while user types
-  const [parcelasCustom,setParcelasCustom]= useState(false); // show custom input in panel
-  const [parcelasInput, setParcelasInput] = useState("");    // raw input for custom parcelas
   // Quick-add card inline
   const [addingCartao,  setAddingCartao] = useState(false);
   const [quickAddCardName, setQuickAddCardName] = useState("");
@@ -252,6 +245,40 @@ export const NovaTransacaoModal = ({
     goPrev,
     resetToFirstStep: resetMobileStep,
   } = useMobileStepFlow({ open, isMobile, tipo, method, recorre });
+
+  const {
+    parcelaMode,
+    setParcelaMode,
+    pCalcCents,
+    setPCalcCents,
+    pCalcN,
+    setPCalcN,
+    pCalcCustom,
+    setPCalcCustom,
+    pCalcCustomInput,
+    setPCalcCustomInput,
+    parcelasCustom,
+    setParcelasCustom,
+    parcelasInput,
+    setParcelasInput,
+    handlePCalcKey,
+    applyParcelaCalc,
+    resetAll: resetParcelaCalc,
+  } = useParcelaCalculator({
+    onApply: ({ totalCents, parcelasN }) => {
+      setCentavos(totalCents);
+      setValor(
+        totalCents === 0
+          ? ""
+          : (totalCents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 }),
+      );
+      setMethod("credito");
+      setPanelCartaoOpen(true);
+      setPanelCartaoExiting(false);
+      setMod("parcelado");
+      setParcelas(parcelasN);
+    },
+  });
 
   const detailTagRowsAvailable = useMemo(() => {
     if (!useLiveDetailTags || !categoryTagId) return [];
@@ -338,13 +365,7 @@ export const NovaTransacaoModal = ({
     setAddingTag(false);
     setDetailTagIds([]);
     setDetailTagLabelById({});
-    setParcelaMode(false);
-    setPCalcCents(0);
-    setPCalcN(2);
-    setPCalcCustom(false);
-    setPCalcCustomInput("");
-    setParcelasCustom(false);
-    setParcelasInput("");
+    resetParcelaCalc();
     setParcelas(3);
     setMod("parcelado");
 
@@ -762,25 +783,6 @@ export const NovaTransacaoModal = ({
         );
       }
     }
-  };
-  const handlePCalcKey = (e) => {
-    if (e.key >= "0" && e.key <= "9") {
-      e.preventDefault();
-      setPCalcCents(prev => Math.min(prev * 10 + parseInt(e.key), 9999999));
-    } else if (e.key === "Backspace") {
-      e.preventDefault();
-      setPCalcCents(prev => Math.floor(prev / 10));
-    } else if (e.key === "Delete") {
-      e.preventDefault();
-      setPCalcCents(0);
-    }
-  };
-  const applyParcelaCalc = () => {
-    const total = pCalcCents * pCalcN;
-    setCentavos(total);
-    setValor(total === 0 ? "" : (total / 100).toLocaleString("pt-BR", { minimumFractionDigits:2 }));
-    setMethod("credito"); setPanelCartaoOpen(true); setPanelCartaoExiting(false); setMod("parcelado"); setParcelas(pCalcN);
-    setParcelaMode(false); setPCalcCents(0);
   };
   const valorNum   = centavos / 100;
 
@@ -1447,8 +1449,7 @@ export const NovaTransacaoModal = ({
     setTxSubmitError(""); setTxSubmitting(false); setDescError(false);
     setMobileReviewImpactOpen(false); setAiSuggestion(null); setAiApplied(false);
     setDescFocused(false); setAddingCartao(false); setQuickAddCardName(""); setQuickAddCardLast4("");
-    setNewTag(""); setAddingTag(false); setParcelaMode(false); setPCalcCents(0);
-    setParcelasCustom(false); setParcelasInput(""); setShowImpact(false);
+    setNewTag(""); setAddingTag(false); resetParcelaCalc(); setShowImpact(false);
   };
 
   const PanelHeader = ({ icon: Icon, title, onCollapse }) => (
