@@ -23,6 +23,8 @@ import {
   clearNovaTransacaoSummaryCache,
 } from "./useNovaTransacaoPeriodSaldo.js";
 import { ParcelaHybrid } from "./ParcelaHybrid.jsx";
+import { RefundLinkPanel } from "./RefundLinkPanel.jsx";
+import { RecurrenceConfigPanel } from "./RecurrenceConfigPanel.jsx";
 
 import {
   parseApiDecimal,
@@ -65,64 +67,25 @@ import {
   formatCreditCardsApiError,
   mapCreditCardToModalPickerRow,
 } from "../../data/creditCardsAdapter.js";
+import {
+  CUSTOM_UNIT_LABEL,
+  DOW_LABELS_FULL,
+  DOW_LABELS_SHORT,
+  ENC_LABELS,
+  FREQ_LABELS,
+  FREQ_OPTIONS,
+  MET_LABELS,
+  METHODS_DESPESA,
+  METHODS_RECEITA,
+  MOCK_CARTOES_MODAL,
+  MONTH_NAMES,
+  NOVA_TX_QUICK_DETAIL_LABELS,
+  PARCELA_PRESETS,
+  normalizeFreqRecId,
+  novaTxModalInitStamp,
+} from "./novaTransacaoConstants.js";
 
 /* ─── NOVA TRANSAÇÃO DRAWER ─────────────────────────────── */
-
-const MOCK_CARTOES_MODAL = [
-  { id: "nubank", banco: "NUBANK", nome: "Nu Roxinho", dig: "1177", disp: 2400, novo: false },
-  { id: "itau", banco: "ITAÚ", nome: "Personnalité", dig: "0034", disp: 8000, novo: false },
-  { id: "inter", banco: "INTER", nome: "Mastercard", dig: "5521", disp: 1200, novo: false },
-  { id: "novo", banco: "", nome: "+ Novo cartão", dig: "", disp: 0, novo: true },
-];
-
-/**
- * Carimbo estável do `preConfig` para o modal reaplicar o preenchimento quando o pai
- * atualiza (hidratação da URL, editar com `flushSync` + `navigate`, etc.), sem
- * reexecutar a cada render com o mesmo conteúdo.
- */
-function novaTxDetailDisplayStamp(detailTagDisplayById) {
-  if (!detailTagDisplayById || typeof detailTagDisplayById !== "object") return "";
-  return Object.keys(detailTagDisplayById)
-    .sort()
-    .map((k) => `${k}=${detailTagDisplayById[k]}`)
-    .join(";");
-}
-
-function novaTxModalInitStamp(organizationId, novaRecorrencia, preConfig) {
-  const oid = organizationId ?? "";
-  if (novaRecorrencia) {
-    const pc = preConfig;
-    return `${oid}|nr|${pc?.recId ?? ""}|${pc?.isEditRecorrencia ? "1" : "0"}|${pc?.tipo ?? ""}|${String(pc?.valorInicial ?? "")}|${pc?.desc ?? ""}|${pc?.freqRec ?? ""}`;
-  }
-  const pc = preConfig;
-  if (pc == null) return `${oid}|empty`;
-  const eid =
-    pc.editingTransactionId != null && String(pc.editingTransactionId) !== ""
-      ? String(pc.editingTransactionId)
-      : "";
-  return [
-    oid,
-    "tx",
-    eid,
-    pc.desc ?? "",
-    String(pc.valorInicial ?? ""),
-    pc.cat ?? "",
-    String(pc.categoryTagId ?? ""),
-    pc.method ?? "",
-    String(pc.cartaoId ?? ""),
-    pc.dateIso ?? "",
-    pc.dateIsoForEdit ?? "",
-    pc.recorre ? "1" : "0",
-    pc.modalidade ?? "",
-    String(pc.parcelas ?? ""),
-    Array.isArray(pc.tags) ? JSON.stringify(pc.tags) : "",
-    Array.isArray(pc.detailTagIds) ? pc.detailTagIds.join(",") : "",
-    novaTxDetailDisplayStamp(pc.detailTagDisplayById),
-    pc.novaRecorrencia ? "1" : "0",
-  ].join("|");
-}
-
-const NOVA_TX_QUICK_DETAIL_LABELS = ["semanal", "família"];
 
 export const NovaTransacaoModal = ({
   open,
@@ -983,20 +946,6 @@ export const NovaTransacaoModal = ({
   const typeColor  = effectiveTypeIsMoneyIn ? T.green : T.red;
   const typeLight  = effectiveTypeIsMoneyIn ? T.greenLight : T.redLight;
 
-  const FREQ_LABELS = { semanal:"Semanal", quinzenal:"Quinzenal", mensal:"Mensal", anual:"Anual", personalizado:"Personalizado" };
-  // Aceita aliases legados que podem vir de preConfig ou de séries antigas.
-  const normalizeFreqRecId = (id) => {
-    const v = String(id || "").toLowerCase();
-    if (v === "diário" || v === "diario") return "mensal";
-    if (v === "custom") return "personalizado";
-    if (FREQ_LABELS[v]) return v;
-    return "mensal";
-  };
-  const ENC_LABELS  = { "sem-fim":"Sem data fim", repeticoes:"Após N repetições", data:"Data específica" };
-  const MET_LABELS  = { pix:"Pix", boleto:"Boleto", dinheiro:"Dinheiro", debito:"Débito", credito:"Crédito", transferencia:"Transferência" };
-
-  const freqs = ["Semanal","Quinzenal","Mensal","Anual","Personalizado"];
-  const parcs = [2,3,4,6,8,10,12];
 
   // Painel Recorrência — valores derivados a partir da data da transação
   // se o usuário ainda não tiver setado seus próprios.
@@ -1013,11 +962,6 @@ export const NovaTransacaoModal = ({
     const n = Number.parseInt(String(firstOccurrenceDate).slice(8, 10), 10);
     return Number.isFinite(n) ? n : null;
   }, [selectedDayOfMonth, firstOccurrenceDate]);
-
-  const DOW_LABELS_SHORT = ["dom","seg","ter","qua","qui","sex","sab"];
-  const DOW_LABELS_FULL  = ["domingo","segunda-feira","terça-feira","quarta-feira","quinta-feira","sexta-feira","sábado"];
-  const MONTH_NAMES = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
-  const CUSTOM_UNIT_LABEL = { day: ["dia","dias"], week: ["semana","semanas"], month: ["mês","meses"] };
 
   /** Linha 1 do resumo: descrição da regra ("Todo dia 5", "Toda terça-feira", etc.). */
   const recurrenceRuleSummary = useMemo(() => {
@@ -1149,223 +1093,39 @@ export const NovaTransacaoModal = ({
     { id: "month", label: "meses" },
   ];
 
-  /** Bloco completo do painel "Recorrência" (frequência + condicionais + âncora + encerramento + resumo). */
-  const renderRecurrenceConfigBody = (compact) => {
-    const f = {
-      sectionGap: compact ? 18 : 14,
-      labelSize: compact ? 12 : 10,
-      labelMargin: compact ? 10 : 8,
-      fieldGap: compact ? 8 : 6,
-      pillPadding: compact ? "12px 10px" : "8px 10px",
-      pillFontSize: compact ? 13 : 12,
-      dowSize: compact ? 36 : 28,
-      inputPadding: compact ? "10px 12px" : "8px 10px",
-      smallText: compact ? 12 : 11,
-      hintText: compact ? 11 : 10,
-    };
-    const Label = ({ children }) => (
-      <div style={{ ...G, fontSize: f.labelSize, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: f.labelMargin }}>{children}</div>
-    );
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: f.sectionGap }}>
-        {/* ─── FREQUÊNCIA ─── */}
-        <div>
-          <Label>Frequência</Label>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: f.fieldGap }}>
-            {freqs.map((label) => {
-              const fid = label.toLowerCase();
-              const active = freqRec === fid;
-              return (
-                <button key={label} type="button" onClick={() => setFreqRec(fid)}
-                  style={{ ...G, padding: f.pillPadding, borderRadius: 10, border: `1.5px solid ${active ? T.ink : T.border}`, background: active ? T.ink : T.surface, color: active ? "#fff" : T.inkMid, fontSize: f.pillFontSize, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
 
-        {/* ─── CAMPOS CONDICIONAIS ─── */}
-        {(freqRec === "semanal" || freqRec === "quinzenal") && (
-          <div>
-            <Label>{freqRec === "quinzenal" ? "Dia da semana (a cada 2)" : "Dia da semana"}</Label>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
-              {DOW_LABELS_SHORT.map((lbl, idx) => {
-                const active = effectiveDayOfWeek === idx;
-                return (
-                  <button key={idx} type="button" onClick={() => handleSelectDayOfWeek(idx)}
-                    aria-label={DOW_LABELS_FULL[idx]}
-                    title={DOW_LABELS_FULL[idx]}
-                    style={{ ...G, height: f.dowSize, padding: 0, borderRadius: 8, border: `1.5px solid ${active ? T.ink : T.border}`, background: active ? T.ink : T.surface, color: active ? "#fff" : T.inkMid, fontSize: compact ? 12 : 10, fontWeight: 700, cursor: "pointer", textTransform: "lowercase" }}>
-                    {lbl}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {freqRec === "mensal" && (
-          <div>
-            <Label>Dia do mês</Label>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ ...G, fontSize: f.smallText, color: T.inkMid }}>Todo dia</span>
-              <input type="number" min={1} max={31} value={effectiveDayOfMonth ?? ""}
-                onChange={(e) => {
-                  const n = Number.parseInt(e.target.value, 10);
-                  const clamped = Number.isFinite(n) ? Math.min(31, Math.max(1, n)) : null;
-                  handleSelectDayOfMonth(clamped);
-                }}
-                style={{ ...G, width: 64, padding: f.inputPadding, borderRadius: 8, border: `1.5px solid ${T.border}`, fontSize: f.pillFontSize, fontWeight: 700, color: T.ink, textAlign: "center" }} />
-              <span style={{ ...G, fontSize: f.smallText, color: T.inkMid }}>de cada mês</span>
-            </div>
-            {effectiveDayOfMonth != null && effectiveDayOfMonth > 28 && (
-              <div style={{ ...G, fontSize: f.hintText, color: T.inkLight, marginTop: 6, lineHeight: 1.4 }}>
-                Em meses sem o dia {effectiveDayOfMonth}, a transação cai no último dia do mês.
-              </div>
-            )}
-          </div>
-        )}
-
-        {freqRec === "anual" && (
-          <div>
-            <Label>Dia e mês</Label>
-            <LocaleDatePicker
-              locale={APP_UI_LOCALE}
-              value={firstOccurrenceDate}
-              onChange={(ymd) => setFirstOccurrenceYmd(ymd || null)}
-              style={{ width: "100%" }}
-            />
-            <div style={{ ...G, fontSize: f.hintText, color: T.inkLight, marginTop: 6 }}>
-              Repete todo {firstOccurrenceDate ? (() => { const d = new Date(`${firstOccurrenceDate}T12:00:00`); return Number.isNaN(d.getTime()) ? "—" : `${d.getDate()} de ${MONTH_NAMES[d.getMonth()]}`; })() : "—"}.
-            </div>
-          </div>
-        )}
-
-        {freqRec === "personalizado" && (
-          <div>
-            <Label>A cada</Label>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <input type="number" min={1} value={customIntervalRec}
-                onChange={(e) => {
-                  const n = Number.parseInt(e.target.value, 10);
-                  setCustomIntervalRec(Number.isFinite(n) && n >= 1 ? n : 1);
-                }}
-                style={{ ...G, width: 64, padding: f.inputPadding, borderRadius: 8, border: `1.5px solid ${T.border}`, fontSize: f.pillFontSize, fontWeight: 700, color: T.ink, textAlign: "center" }} />
-              <select value={customUnitRec} onChange={(e) => setCustomUnitRec(e.target.value)}
-                style={{ ...G, flex: 1, padding: f.inputPadding, borderRadius: 8, border: `1.5px solid ${T.border}`, fontSize: f.pillFontSize, fontWeight: 600, color: T.ink, background: T.surface }}>
-                {customUnitOpts.map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
-              </select>
-            </div>
-          </div>
-        )}
-
-        {/* ─── PRIMEIRA OCORRÊNCIA (âncora) ─── */}
-        <div>
-          <Label>Primeira ocorrência</Label>
-          <LocaleDatePicker
-            locale={APP_UI_LOCALE}
-            value={firstOccurrenceDate}
-            onChange={(ymd) => { setFirstOccurrenceYmd(ymd || null); setFirstOccurrenceAutoAdjustNote(null); }}
-            style={{ width: "100%" }}
-          />
-          {firstOccurrenceAutoAdjustNote ? (
-            <div role="status" aria-live="polite"
-              style={{ ...G, fontSize: f.hintText, color: T.ink, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: "6px 8px", marginTop: 6, lineHeight: 1.4 }}>
-              ↻ {firstOccurrenceAutoAdjustNote}
-            </div>
-          ) : (
-            <div style={{ ...G, fontSize: f.hintText, color: T.inkLight, marginTop: 6 }}>
-              Pode ser diferente da data da transação.
-            </div>
-          )}
-        </div>
-
-        {/* ─── ENCERRAMENTO ─── */}
-        <div>
-          <Label>Encerramento</Label>
-          <div style={{ display: "flex", flexDirection: "column", gap: f.fieldGap }}>
-            {[
-              { id: "sem-fim", label: "Sem data fim", sub: "Até cancelar manualmente" },
-              { id: "repeticoes", label: "Após N repetições", sub: "Informe a quantidade" },
-              { id: "data", label: "Data específica", sub: "Escolher término" },
-            ].map((opt) => {
-              const active = encRec === opt.id;
-              return (
-                <div key={opt.id} onClick={() => setEncRec(opt.id)}
-                  style={{ display: "flex", flexDirection: "column", gap: 8, padding: compact ? "12px 14px" : "10px 12px", borderRadius: 10, border: `1.5px solid ${active ? T.ink : T.border}`, cursor: "pointer", background: active ? T.bg : T.surface }}>
-                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
-                    <div style={{ width: compact ? 16 : 14, height: compact ? 16 : 14, borderRadius: 9999, border: `2px solid ${active ? T.ink : T.border}`, background: active ? T.ink : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
-                      {active && <div style={{ width: compact ? 6 : 5, height: compact ? 6 : 5, borderRadius: 9999, background: "#fff" }} />}
-                    </div>
-                    <div>
-                      <div style={{ ...G, fontSize: f.pillFontSize, fontWeight: 600, color: T.ink }}>{opt.label}</div>
-                      <div style={{ ...G, fontSize: f.hintText, color: T.inkLight, marginTop: 1 }}>{opt.sub}</div>
-                    </div>
-                  </div>
-                  {active && opt.id === "repeticoes" && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: compact ? 26 : 24 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ ...G, fontSize: f.smallText, color: T.inkMid }}>Após</span>
-                        <input type="number" min={1} value={encRepetitionsRec}
-                          onChange={(e) => {
-                            const n = Number.parseInt(e.target.value, 10);
-                            setEncRepetitionsRec(Number.isFinite(n) && n >= 1 ? n : 1);
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                          style={{ ...G, width: 64, padding: f.inputPadding, borderRadius: 8, border: `1.5px solid ${T.border}`, fontSize: f.pillFontSize, fontWeight: 700, color: T.ink, textAlign: "center" }} />
-                        <span style={{ ...G, fontSize: f.smallText, color: T.inkMid }}>
-                          {freqRec === "semanal" ? (Number(encRepetitionsRec) === 1 ? "semana" : "semanas") :
-                            freqRec === "quinzenal" ? (Number(encRepetitionsRec) === 1 ? "quinzena" : "quinzenas") :
-                            freqRec === "mensal" ? (Number(encRepetitionsRec) === 1 ? "mês" : "meses") :
-                            freqRec === "anual" ? (Number(encRepetitionsRec) === 1 ? "ano" : "anos") :
-                            (Number(encRepetitionsRec) === 1 ? "ocorrência" : "ocorrências")}
-                        </span>
-                      </div>
-                      {recurrenceComputedEndDate && (
-                        <div style={{ ...G, fontSize: f.hintText, color: T.inkLight }}>
-                          Termina em <strong style={{ color: T.ink }}>{fmtDateBr(recurrenceComputedEndDate)}</strong>.
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {active && opt.id === "data" && (
-                    <div onClick={(e) => e.stopPropagation()} style={{ paddingLeft: compact ? 26 : 24 }}>
-                      <LocaleDatePicker
-                        locale={APP_UI_LOCALE}
-                        value={encEndDateYmdRec}
-                        onChange={(ymd) => setEncEndDateYmdRec(ymd || null)}
-                        style={{ width: "100%" }}
-                      />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* ─── RESUMO ─── */}
-        <div style={{ padding: compact ? "12px 14px" : "10px 12px", background: T.bg, borderRadius: 10, border: `1px solid ${T.border}` }}>
-          <div style={{ ...G, fontSize: f.hintText, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Resumo</div>
-          <div style={{ ...G, fontSize: compact ? 14 : 13, fontWeight: 700, color: T.ink }}>{recurrenceRuleSummary || "—"}</div>
-          <div style={{ ...G, fontSize: f.hintText, color: T.inkLight, marginTop: 2 }}>
-            Próxima: {fmtDateBr(recurrenceNextOccurrence)} · {ENC_LABELS[encRec]?.toLowerCase()}
-            {encRec === "repeticoes" && recurrenceComputedEndDate && (
-              <> · termina em {fmtDateBr(recurrenceComputedEndDate)}</>
-            )}
-            {encRec === "data" && encEndDateYmdRec && (
-              <> · termina em {fmtDateBr(encEndDateYmdRec)}</>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
+  /** Bloco completo do painel "Recorrência" — delegado a `RecurrenceConfigPanel.jsx`. */
+  const renderRecurrenceConfigBody = (compact) => (
+    <RecurrenceConfigPanel
+      compact={compact}
+      freqRec={freqRec}
+      setFreqRec={setFreqRec}
+      customIntervalRec={customIntervalRec}
+      setCustomIntervalRec={setCustomIntervalRec}
+      customUnitRec={customUnitRec}
+      setCustomUnitRec={setCustomUnitRec}
+      effectiveDayOfWeek={effectiveDayOfWeek}
+      effectiveDayOfMonth={effectiveDayOfMonth}
+      onSelectDayOfWeek={handleSelectDayOfWeek}
+      onSelectDayOfMonth={handleSelectDayOfMonth}
+      firstOccurrenceDate={firstOccurrenceDate}
+      setFirstOccurrenceYmd={setFirstOccurrenceYmd}
+      firstOccurrenceAutoAdjustNote={firstOccurrenceAutoAdjustNote}
+      setFirstOccurrenceAutoAdjustNote={setFirstOccurrenceAutoAdjustNote}
+      encRec={encRec}
+      setEncRec={setEncRec}
+      encRepetitionsRec={encRepetitionsRec}
+      setEncRepetitionsRec={setEncRepetitionsRec}
+      encEndDateYmdRec={encEndDateYmdRec}
+      setEncEndDateYmdRec={setEncEndDateYmdRec}
+      recurrenceRuleSummary={recurrenceRuleSummary}
+      recurrenceNextOccurrence={recurrenceNextOccurrence}
+      recurrenceComputedEndDate={recurrenceComputedEndDate}
+      fmtDateBr={fmtDateBr}
+    />
+  );
 
   // Methods by tipo
-  const METHODS_DESPESA = [["pix","Pix"],["debito","Débito"],["credito","Crédito"],["dinheiro","Dinheiro"],["boleto","Boleto"]];
-  const METHODS_RECEITA = [["pix","Pix"],["dinheiro","Dinheiro"],["transferencia","Transferência"]];
   const methodsList = tipo === "receita" ? METHODS_RECEITA : METHODS_DESPESA;
 
   // Fix method when tipo changes to receita; reset isEstorno when leaving despesa.
@@ -1457,94 +1217,31 @@ export const NovaTransacaoModal = ({
   };
 
   /**
-   * Bloco "🔗 Linkar à compra estornada" — renderizado logo após o toggle
-   * "↺ Isto é um estorno?" tanto no drawer mobile quanto desktop.
-   * Mostra: card de linkado (se houver), ou botão de abrir picker, ou picker aberto.
+
+  /**
+   * Bloco "🔗 Linkar à compra estornada" — só renderiza quando `isEstorno && tipo==='despesa'`.
+   * Sub-componente em `./RefundLinkPanel.jsx`; aqui plumamos o estado/handlers.
    */
   const renderRefundLinkBlock = (variant = "desktop") => {
     if (!isEstorno || tipo !== "despesa") return null;
-    const fsLg = variant === "mobile" ? 13 : 12;
-    const fsSm = variant === "mobile" ? 11 : 10;
-    const pad = variant === "mobile" ? "12px 14px" : "10px 12px";
-    const fmt = (v) => "R$ " + Math.abs(Number(v) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-    if (refundLinkedTx) {
-      return (
-        <div style={{
-          background: T.greenLight, border: `1px solid ${T.green}44`, borderRadius: 10,
-          padding: pad, display: "flex", alignItems: "center", gap: 10,
-        }}>
-          <RotateCcw size={14} color={T.green} style={{ flexShrink: 0 }} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ ...G, fontSize: fsSm, fontWeight: 700, color: T.green, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 2 }}>
-              Estornando a compra
-            </div>
-            <div style={{ ...G, fontSize: fsLg, fontWeight: 600, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-              {refundLinkedTx.desc}
-            </div>
-            <div style={{ ...G, fontSize: fsSm, color: T.inkMid, marginTop: 2 }}>
-              {refundLinkedTx.dateLabel} · <span style={{ fontFamily: "'Geist Mono',monospace", fontWeight: 700 }}>{fmt(refundLinkedTx.val)}</span>
-              {refundLinkedTx.cat ? ` · ${refundLinkedTx.cat}` : ""}
-            </div>
-          </div>
-          <button type="button" onClick={handleRefundUnlink}
-            style={{ ...G, background: "transparent", border: `1px solid ${T.green}66`, color: T.green, borderRadius: 8, padding: "5px 9px", fontSize: fsSm, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
-            Desvincular
-          </button>
-        </div>
-      );
-    }
-
-    if (!refundPickerOpen) {
-      return (
-        <button type="button" onClick={() => setRefundPickerOpen(true)}
-          style={{ ...G, display: "flex", alignItems: "center", gap: 8, padding: pad, borderRadius: 10, border: `1px dashed ${T.green}66`, background: "transparent", cursor: "pointer", textAlign: "left", color: T.green, fontSize: fsLg, fontWeight: 600 }}>
-          🔗 <span>Qual a compra estornada? (opcional)</span>
-        </button>
-      );
-    }
-
     return (
-      <div style={{ border: `1px solid ${T.green}44`, borderRadius: 10, padding: pad, display: "flex", flexDirection: "column", gap: 8, background: T.surface }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <Search size={13} color={T.inkLight} />
-          <input
-            autoFocus
-            value={refundPickerQuery}
-            onChange={(e) => setRefundPickerQuery(e.target.value)}
-            placeholder="Buscar compra original (descrição)…"
-            style={{ ...G, flex: 1, border: "none", outline: "none", background: "transparent", fontSize: fsLg, color: T.ink }}
-          />
-          <button type="button" onClick={() => { setRefundPickerOpen(false); setRefundPickerQuery(""); setRefundPickerCandidates([]); }}
-            style={{ background: "transparent", border: "none", cursor: "pointer", padding: 2, color: T.inkMid }}>
-            <X size={13} />
-          </button>
-        </div>
-        {refundPickerLoading ? (
-          <div style={{ ...G, fontSize: fsSm, color: T.inkLight, padding: "8px 4px" }}>Buscando…</div>
-        ) : refundPickerCandidates.length === 0 ? (
-          <div style={{ ...G, fontSize: fsSm, color: T.inkLight, padding: "8px 4px" }}>
-            {refundPickerQuery ? "Nenhuma compra encontrada nos últimos 365 dias." : "Digite parte da descrição da compra original."}
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 220, overflowY: "auto" }}>
-            {refundPickerCandidates.map((c) => (
-              <button key={c.id} type="button" onClick={() => handleRefundLink(c)}
-                style={{ ...G, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "8px 10px", borderRadius: 8, border: `1px solid ${T.border}`, background: T.bg, cursor: "pointer", textAlign: "left" }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ ...G, fontSize: fsLg, fontWeight: 600, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.desc}</div>
-                  <div style={{ ...G, fontSize: fsSm, color: T.inkMid, marginTop: 1 }}>
-                    {c.date}{c.cat ? ` · ${c.cat}` : ""}{c.method ? ` · ${c.method}` : ""}
-                  </div>
-                </div>
-                <span style={{ ...G, fontFamily: "'Geist Mono',monospace", fontSize: fsLg, fontWeight: 700, color: T.ink, flexShrink: 0 }}>
-                  {fmt(c.val)}
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      <RefundLinkPanel
+        variant={variant}
+        refundLinkedTx={refundLinkedTx}
+        refundPickerOpen={refundPickerOpen}
+        refundPickerQuery={refundPickerQuery}
+        refundPickerCandidates={refundPickerCandidates}
+        refundPickerLoading={refundPickerLoading}
+        onOpenPicker={() => setRefundPickerOpen(true)}
+        onCloseAndReset={() => {
+          setRefundPickerOpen(false);
+          setRefundPickerQuery("");
+          setRefundPickerCandidates([]);
+        }}
+        onQueryChange={setRefundPickerQuery}
+        onLink={handleRefundLink}
+        onUnlink={handleRefundUnlink}
+      />
     );
   };
 
@@ -2487,7 +2184,7 @@ export const NovaTransacaoModal = ({
                   <div>
                     <div style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid, marginBottom:10 }}>Parcelas</div>
                     <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
-                      {parcs.map(p => (
+                      {PARCELA_PRESETS.map(p => (
                         <button key={p} onClick={() => setParcelas(p)} style={{ padding:"10px 4px", borderRadius:10, border:`1.5px solid ${parcelas===p ? T.ink : T.border}`, background:parcelas===p ? T.ink : T.surface, cursor:"pointer", textAlign:"center", transition:"all 0.15s" }}>
                           <div style={{ ...G, fontSize:13, fontWeight:700, color:parcelas===p?"#fff":T.ink }}>{p}×</div>
                           <div style={{ ...G, ...NUM, fontSize:10, color:parcelas===p?"rgba(255,255,255,0.5)":T.inkLight, marginTop:1 }}>{valorNum > 0 ? `R$${(valorNum/p).toFixed(0)}` : "—"}</div>
@@ -2799,7 +2496,7 @@ export const NovaTransacaoModal = ({
                     <span style={{ ...G, ...NUM, fontSize:11, color:T.inkLight }}>R$ {valorNum.toFixed(2)} total</span>
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6 }}>
-                    {parcs.map(p => (
+                    {PARCELA_PRESETS.map(p => (
                       <button key={p} onClick={() => setParcelas(p)} style={{ padding:"8px 4px", borderRadius:8, border:`1.5px solid ${parcelas===p ? T.ink : T.border}`, background:parcelas===p ? T.ink : T.surface, cursor:"pointer", textAlign:"center" }}>
                         <div style={{ ...G, fontSize:12, fontWeight:700, color:parcelas===p?"#fff":T.ink }}>{p}×</div>
                         <div style={{ ...G, ...NUM, fontSize:10, color:parcelas===p?"rgba(255,255,255,0.6)":T.inkLight, marginTop:2 }}>{(valorNum/p).toFixed(2)}</div>
@@ -2838,14 +2535,14 @@ export const NovaTransacaoModal = ({
                     ) : (
                       <button onClick={() => { setParcelasCustom(true); setParcelasInput(""); }}
                         style={{ padding:"8px 4px", borderRadius:8,
-                          border:`1.5px solid ${!parcs.includes(parcelas)?T.ink:T.border}`,
-                          background:!parcs.includes(parcelas)?T.ink:T.surface,
+                          border:`1.5px solid ${!PARCELA_PRESETS.includes(parcelas)?T.ink:T.border}`,
+                          background:!PARCELA_PRESETS.includes(parcelas)?T.ink:T.surface,
                           cursor:"pointer", textAlign:"center" }}>
                         <div style={{ ...G, fontSize:11, fontWeight:700,
-                          color:!parcs.includes(parcelas)?"#fff":T.inkMid }}>
-                          {!parcs.includes(parcelas) ? `${parcelas}×` : "outro"}
+                          color:!PARCELA_PRESETS.includes(parcelas)?"#fff":T.inkMid }}>
+                          {!PARCELA_PRESETS.includes(parcelas) ? `${parcelas}×` : "outro"}
                         </div>
-                        {!parcs.includes(parcelas) && valorNum > 0 && (
+                        {!PARCELA_PRESETS.includes(parcelas) && valorNum > 0 && (
                           <div style={{ ...G, ...NUM, fontSize:10, color:"rgba(255,255,255,0.55)", marginTop:2 }}>
                             {(valorNum/parcelas).toFixed(2)}
                           </div>
