@@ -221,6 +221,7 @@ export const NovaTransacaoModal = ({
     mCurrentIdx,
     mTotalSteps,
     mNextStep,
+    mPrevStep,
     mNextLabel,
     goNext,
     goPrev,

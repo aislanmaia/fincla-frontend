@@ -545,6 +545,14 @@ export const CartoesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstor
     a.click(); setExportModal(false);
   };
 
+  const TABS = [
+    { id: "fatura",       icon: "📋", label: "Fatura" },
+    { id: "recorrencias", icon: "🔄", label: "Recorrências" },
+    { id: "parcelas",     icon: "🧩", label: "Parcelas" },
+    { id: "analises",     icon: "📊", label: "Análises" },
+    { id: "historico",    icon: "📈", label: "Histórico" },
+    { id: "planejamento", icon: "📅", label: "Planejamento" },
+  ];
 
   /* ══════════════════════════════════════════════════════════
      MOBILE
