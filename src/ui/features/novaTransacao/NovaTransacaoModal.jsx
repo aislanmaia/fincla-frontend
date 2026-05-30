@@ -26,6 +26,7 @@ import { ParcelaHybrid } from "./ParcelaHybrid.jsx";
 import { RefundLinkPanel } from "./RefundLinkPanel.jsx";
 import { RecurrenceConfigPanel } from "./RecurrenceConfigPanel.jsx";
 import { useRefundPicker } from "./useRefundPicker.js";
+import { useMobileStepFlow } from "./useMobileStepFlow.js";
 
 import {
   parseApiDecimal,
@@ -174,18 +175,6 @@ export const NovaTransacaoModal = ({
       setDrawerClosing(false);
     }
   }, [open]);
-  // Mobile step state
-  const [mStep,     setMStep]     = useState(1);
-  const [mStepAnimating, setMStepAnimating] = useState(false);
-  const mStepAnimTimerRef = useRef(null);
-  useEffect(() => {
-    if (open) return;
-    if (mStepAnimTimerRef.current) {
-      clearTimeout(mStepAnimTimerRef.current);
-      mStepAnimTimerRef.current = null;
-    }
-    setMStepAnimating(false);
-  }, [open]);
   // AI suggestion simulation
   const [aiSuggestion, setAiSuggestion] = useState(null);
   const [aiApplied,    setAiApplied]    = useState(false);
@@ -250,6 +239,19 @@ export const NovaTransacaoModal = ({
     setMethod,
     setCartao,
   });
+
+  const {
+    mStep,
+    mStepAnimating,
+    mStepsFlow,
+    mCurrentIdx,
+    mTotalSteps,
+    mNextStep,
+    mNextLabel,
+    goNext,
+    goPrev,
+    resetToFirstStep: resetMobileStep,
+  } = useMobileStepFlow({ open, isMobile, tipo, method, recorre });
 
   const detailTagRowsAvailable = useMemo(() => {
     if (!useLiveDetailTags || !categoryTagId) return [];
@@ -318,7 +320,7 @@ export const NovaTransacaoModal = ({
     setTxSubmitError("");
     setTxSubmitting(false);
     setCategoryTagId(null);
-    setMStep(1);
+    resetMobileStep();
     setReview(false);
     setSuccess(false);
     setSuccessOverlay(false);
@@ -1223,48 +1225,6 @@ export const NovaTransacaoModal = ({
     setAiApplied(true);
   };
 
-  // Mobile: dynamic steps flow
-  const mStepsFlow = useMemo(() => {
-    const f = [1, 2];
-    if (tipo === "despesa" && method === "credito") f.push("cartao");
-    if (recorre) f.push("recorrencia");
-    f.push("review");
-    return f;
-  }, [tipo, method, recorre]);
-
-  const mCurrentIdx  = mStepsFlow.indexOf(mStep);
-  const mTotalSteps  = mStepsFlow.length;
-  const mIsLast      = mCurrentIdx === mTotalSteps - 1;
-  const mNextStep    = mStepsFlow[mCurrentIdx + 1];
-  const mPrevStep    = mCurrentIdx > 0 ? mStepsFlow[mCurrentIdx - 1] : null;
-
-  const mNextLabel = () => {
-    if (mNextStep === "review")      return "Revisar →";
-    if (mNextStep === "cartao")      return "Cartão →";
-    if (mNextStep === "recorrencia") return "Recorrência →";
-    return "Continuar →";
-  };
-
-  const animateMobileStepChange = () => {
-    if (!isMobile) return;
-    setMStepAnimating(true);
-    if (mStepAnimTimerRef.current) clearTimeout(mStepAnimTimerRef.current);
-    mStepAnimTimerRef.current = window.setTimeout(() => {
-      mStepAnimTimerRef.current = null;
-      setMStepAnimating(false);
-    }, 260);
-  };
-  const goNext = () => {
-    if (!mNextStep) return;
-    animateMobileStepChange();
-    setMStep(mNextStep);
-  };
-  const goPrev = () => {
-    if (mPrevStep === null) return;
-    animateMobileStepChange();
-    setMStep(mPrevStep);
-  };
-
   const handleSave = async () => {
     const rawEditTxId = preConfig?.editingTransactionId;
     const editingTransactionId =
@@ -1483,7 +1443,7 @@ export const NovaTransacaoModal = ({
       setMod("parcelado"); setParcelas(3);
     }
     setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, null));
-    setReview(false); setMStep(1); setSuccess(false); setSuccessOverlay(false);
+    setReview(false); resetMobileStep(); setSuccess(false); setSuccessOverlay(false);
     setTxSubmitError(""); setTxSubmitting(false); setDescError(false);
     setMobileReviewImpactOpen(false); setAiSuggestion(null); setAiApplied(false);
     setDescFocused(false); setAddingCartao(false); setQuickAddCardName(""); setQuickAddCardLast4("");
