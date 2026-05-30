@@ -109,7 +109,7 @@ export const NovaTransacaoModal = ({
   const [tipo,      setTipo]      = useState("despesa");
   // Toggle "↺ Isto é um estorno?" — só ativável quando tipo === "despesa".
   // Quando true, o payload enviado ao backend usa type='refund' (dinheiro voltando).
-  const [isEstorno, setIsEstorno] = useState(false);
+  const [isRefund, setIsRefund] = useState(false);
   const [desc,      setDesc]      = useState("");
   const [cat,       setCat]       = useState("");
   const [tags,      setTags]      = useState([]);
@@ -120,15 +120,15 @@ export const NovaTransacaoModal = ({
   const [newTag,    setNewTag]    = useState("");
   const [addingTag, setAddingTag] = useState(false);
   const [method,    setMethod]    = useState("pix");
-  const [parcelas,  setParcelas]  = useState(3);
-  const [recorre,   setRecorre]   = useState(false);
+  const [installments,  setInstallments]  = useState(3);
+  const [isRecurring,   setIsRecurring]   = useState(false);
   const [cardPanelOpen, setCardPanelOpen] = useState(false);
   const [cardPanelExiting, setCardPanelExiting] = useState(false);
   const [recurrencePanelOpen, setRecurrencePanelOpen] = useState(false);
   const [recurrencePanelExiting, setRecurrencePanelExiting] = useState(false);
   const [cardId,    setCardId]    = useState("");
   const [txDateYmd, setTxDateYmd]  = useState(() => todayLocalYmd());
-  const [modalidade,setMod]       = useState("parcelado");
+  const [modalityChoice,setModalityChoice]       = useState("parcelado");
   const [freqRec,   setFreqRec]   = useState(preConfig?.freqRec || "mensal");
   const [encRec,    setEncRec]    = useState(preConfig?.encRec || "sem-fim");
   const [valorTipoRec, setValorTipoRec] = useState(preConfig?.valorTipoRec || "fixo");
@@ -174,9 +174,9 @@ export const NovaTransacaoModal = ({
   const [categoryTagId, setCategoryTagId] = useState(null);
   const [txSubmitError, setTxSubmitError] = useState("");
   const [txSubmitting, setTxSubmitting] = useState(false);
-  const [modalCardsRows, setModalCardsRows] = useState([]);
-  const [modalCardsLoading, setModalCardsLoading] = useState(false);
-  const [modalCardsError, setModalCardsError] = useState("");
+  const [modalCardsRows, setModalityChoicealCardsRows] = useState([]);
+  const [modalCardsLoading, setModalityChoicealCardsLoading] = useState(false);
+  const [modalCardsError, setModalityChoicealCardsError] = useState("");
   const appliedModalInitStampRef = useRef(null);
 
   const useLiveCategoryTags = Boolean(organizationId && dataMode === "live");
@@ -202,7 +202,7 @@ export const NovaTransacaoModal = ({
 
   const refund = useRefundPicker({
     open,
-    isEstorno,
+    isRefund,
     organizationId,
     method,
     cardId,
@@ -226,7 +226,7 @@ export const NovaTransacaoModal = ({
     goNext,
     goPrev,
     resetToFirstStep: resetMobileStep,
-  } = useMobileStepFlow({ open, isMobile, tipo, method, recorre });
+  } = useMobileStepFlow({ open, isMobile, tipo, method, isRecurring });
 
   // Ref-shim para quebrar a circularidade entre useAmountInput (precisa de
   // `setCalcOpen` pra cancelar a calculadora quando o usuário digita) e
@@ -272,8 +272,8 @@ export const NovaTransacaoModal = ({
       setMethod("credito");
       setCardPanelOpen(true);
       setCardPanelExiting(false);
-      setMod("parcelado");
-      setParcelas(installmentCount);
+      setModalityChoice("parcelado");
+      setInstallments(installmentCount);
     },
   });
   setCalcOpenRef.current = setCalcOpen;
@@ -376,8 +376,8 @@ export const NovaTransacaoModal = ({
     setDetailTagIds([]);
     setDetailTagLabelById({});
     resetInstallmentCalc();
-    setParcelas(3);
-    setMod("parcelado");
+    setInstallments(3);
+    setModalityChoice("parcelado");
 
     const applyValor = (v) => setAmountFromDecimal(v);
 
@@ -393,7 +393,7 @@ export const NovaTransacaoModal = ({
       setCardPanelExiting(false);
       setRecurrencePanelOpen(true);
       setRecurrencePanelExiting(false);
-      setRecorre(true);
+      setIsRecurring(true);
       setCardId("");
       setFreqRec(pc?.freqRec || "mensal");
       setEncRec(pc?.encRec || "sem-fim");
@@ -412,7 +412,7 @@ export const NovaTransacaoModal = ({
 
     if (pc) {
       setTipo(pc.tipo || "despesa");
-      setIsEstorno(Boolean(pc.isEstorno));
+      setIsRefund(Boolean(pc.isEstorno));
       refund.hydrateFromPreConfig(pc);
       applyValor(pc.valorInicial);
       setDesc(pc.desc || "");
@@ -433,7 +433,7 @@ export const NovaTransacaoModal = ({
       const prefsMerge = editingTx ? null : readStoredNovaTransacaoPrefs(organizationId);
       const m = pc.method || "pix";
       setMethod(typeof m === "string" ? m : "pix");
-      setRecorre(!!pc.recorre);
+      setIsRecurring(!!pc.recorre);
       setFreqRec(pc.freqRec || "mensal");
       setEncRec(pc.encRec || "sem-fim");
       setValorTipoRec(pc.valorTipoRec || "fixo");
@@ -476,17 +476,17 @@ export const NovaTransacaoModal = ({
       setCategoryTagId(mergedCatId);
 
       if (pc.modalidade) {
-        setMod(pc.modalidade);
+        setModalityChoice(pc.modalidade);
       } else if (m === "credito" && prefsMerge) {
         const isAvista = prefsMerge.modalidade === "avista";
-        setMod(isAvista ? "avista" : "parcelado");
+        setModalityChoice(isAvista ? "avista" : "parcelado");
       }
 
       if (pc.parcelas) {
-        setParcelas(pc.parcelas);
+        setInstallments(pc.parcelas);
       } else if (m === "credito" && prefsMerge) {
         const pp = clampNovaTxPrefsParcelas(prefsMerge.parcelas);
-        if (pp != null) setParcelas(pp);
+        if (pp != null) setInstallments(pp);
       }
       if (m === "credito") {
         setCardPanelOpen(true);
@@ -520,7 +520,7 @@ export const NovaTransacaoModal = ({
     setCardPanelExiting(false);
     setRecurrencePanelOpen(false);
     setRecurrencePanelExiting(false);
-    setRecorre(false);
+    setIsRecurring(false);
     setCardId(
       prefMethod === "credito" && prefs.cartaoId != null
         ? String(prefs.cartaoId)
@@ -542,36 +542,36 @@ export const NovaTransacaoModal = ({
         : "",
     );
     if (prefMethod === "credito") {
-      setMod(prefs.modalidade === "avista" ? "avista" : "parcelado");
+      setModalityChoice(prefs.modalidade === "avista" ? "avista" : "parcelado");
       const pp = clampNovaTxPrefsParcelas(prefs.parcelas);
-      if (pp != null) setParcelas(pp);
+      if (pp != null) setInstallments(pp);
     }
     setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, null));
   }, [open, novaRecorrencia, preConfig, organizationId]);
 
   useEffect(() => {
     if (!open) {
-      setModalCardsRows([]);
-      setModalCardsLoading(false);
-      setModalCardsError("");
+      setModalityChoicealCardsRows([]);
+      setModalityChoicealCardsLoading(false);
+      setModalityChoicealCardsError("");
       return;
     }
     if (!organizationId || dataMode !== "live") return;
 
     let cancelled = false;
-    setModalCardsLoading(true);
-    setModalCardsError("");
+    setModalityChoicealCardsLoading(true);
+    setModalityChoicealCardsError("");
     listCreditCards(organizationId)
       .then((cards) => {
         if (cancelled) return;
-        setModalCardsRows(cards.map(mapCreditCardToModalPickerRow));
-        setModalCardsLoading(false);
+        setModalityChoicealCardsRows(cards.map(mapCreditCardToModalPickerRow));
+        setModalityChoicealCardsLoading(false);
       })
       .catch((e) => {
         if (cancelled) return;
-        setModalCardsError(formatCreditCardsApiError(e));
-        setModalCardsRows([]);
-        setModalCardsLoading(false);
+        setModalityChoicealCardsError(formatCreditCardsApiError(e));
+        setModalityChoicealCardsRows([]);
+        setModalityChoicealCardsLoading(false);
       });
     return () => {
       cancelled = true;
@@ -691,9 +691,9 @@ export const NovaTransacaoModal = ({
         method,
         cat,
         categoryTagId,
-        modalidade,
-        parcelas,
-        cardId,
+        modalidade: modalityChoice,
+        parcelas: installments,
+        cartao: cardId,
       }),
     );
   }, [
@@ -704,8 +704,8 @@ export const NovaTransacaoModal = ({
     method,
     cat,
     categoryTagId,
-    modalidade,
-    parcelas,
+    modalityChoice,
+    installments,
     cardId,
   ]);
 
@@ -735,16 +735,16 @@ export const NovaTransacaoModal = ({
     organizationId,
     dataMode,
     novaRecorrencia,
-    recorre,
+    recorre: isRecurring,
     impactPanelOpen,
     txDateYmd,
     categoryTagId,
     tipo,
-    amountNum,
+    valorNum: amountNum,
     method,
-    modalidade,
-    parcelas,
-    cardId,
+    modalidade: modalityChoice,
+    parcelas: installments,
+    cartao: cardId,
   });
 
   const impactKpis = useMemo(() => {
@@ -871,8 +871,8 @@ export const NovaTransacaoModal = ({
     mobileReviewImpactOpen,
   ]);
 
-  // Estorno (despesa + isEstorno) = dinheiro voltando → verde como receita.
-  const effectiveTypeIsMoneyIn = tipo === "receita" || (tipo === "despesa" && isEstorno);
+  // Estorno (despesa + isRefund) = dinheiro voltando → verde como receita.
+  const effectiveTypeIsMoneyIn = tipo === "receita" || (tipo === "despesa" && isRefund);
   const typeColor  = effectiveTypeIsMoneyIn ? T.green : T.red;
   const typeLight  = effectiveTypeIsMoneyIn ? T.greenLight : T.redLight;
 
@@ -1058,22 +1058,22 @@ export const NovaTransacaoModal = ({
   // Methods by tipo
   const methodsList = tipo === "receita" ? METHODS_RECEITA : METHODS_DESPESA;
 
-  // Fix method when tipo changes to receita; reset isEstorno when leaving despesa.
+  // Fix method when tipo changes to receita; reset isRefund when leaving despesa.
   const handleSetTipo = (t) => {
     setTipo(t);
     if (t !== "despesa") {
-      setIsEstorno(false);
+      setIsRefund(false);
       refund.resetAll();
     }
     if (t === "receita" && (method === "credito" || method === "boleto")) setMethod("pix");
   };
 
   /**
-   * Bloco "🔗 Linkar à compra estornada" — só renderiza quando `isEstorno && tipo==='despesa'`.
+   * Bloco "🔗 Linkar à compra estornada" — só renderiza quando `isRefund && tipo==='despesa'`.
    * Sub-componente em `./RefundLinkPanel.jsx`; aqui plumamos o estado/handlers.
    */
   const renderRefundLinkBlock = (variant = "desktop") => {
-    if (!isEstorno || tipo !== "despesa") return null;
+    if (!isRefund || tipo !== "despesa") return null;
     return (
       <RefundLinkPanel
         variant={variant}
@@ -1112,7 +1112,7 @@ export const NovaTransacaoModal = ({
       dataMode === "live" &&
       editingTransactionId == null &&
       editingTransactionIdStr == null &&
-      (novaRecorrencia || recorre || isEditSeries);
+      (novaRecorrencia || isRecurring || isEditSeries);
 
     const detailIdsForApi = useLiveDetailTags ? detailTagIds : [];
 
@@ -1191,7 +1191,7 @@ export const NovaTransacaoModal = ({
       organizationId &&
       dataMode === "live" &&
       !novaRecorrencia &&
-      (!recorre ||
+      (!isRecurring ||
         editingTransactionId != null ||
         editingTransactionIdStr != null);
 
@@ -1213,9 +1213,9 @@ export const NovaTransacaoModal = ({
         }
         let modality = null;
         let installmentsCount = null;
-        if (method === "credito" && modalidade === "parcelado" && parcelas > 1) {
+        if (method === "credito" && modalityChoice === "parcelado" && installments > 1) {
           modality = "installment";
-          installmentsCount = parcelas;
+          installmentsCount = installments;
         } else if (method === "credito") {
           modality = "cash";
         }
@@ -1225,7 +1225,7 @@ export const NovaTransacaoModal = ({
             : null;
         const dateIso = transactionDateIsoFromYmd(txDateYmd);
         if (editingTransactionIdStr != null || editingTransactionId != null) {
-          const effectiveTipoEdit = tipo === "despesa" && isEstorno ? "estorno" : tipo;
+          const effectiveTipoEdit = tipo === "despesa" && isRefund ? "estorno" : tipo;
           // Update endpoint não aceita refund_of_transaction_id (backend preserva o existente).
           await updateTransactionForUi(
             editingTransactionIdStr ?? editingTransactionId,
@@ -1241,11 +1241,11 @@ export const NovaTransacaoModal = ({
               installmentsCount,
               modality,
               cardId: Number.isFinite(cardId) ? cardId : null,
-              recurring: recorre,
+              recurring: isRecurring,
             }),
           );
         } else {
-          const effectiveTipo = tipo === "despesa" && isEstorno ? "estorno" : tipo;
+          const effectiveTipo = tipo === "despesa" && isRefund ? "estorno" : tipo;
           await createTransactionForUi(
             buildCreateTransactionPayload({
               organizationId,
@@ -1259,7 +1259,7 @@ export const NovaTransacaoModal = ({
               installmentsCount,
               modality,
               cardId: Number.isFinite(cardId) ? cardId : null,
-              refundOfTransactionId: isEstorno ? refund.refundOfTransactionId : null,
+              refundOfTransactionId: isRefund ? refund.refundOfTransactionId : null,
             }),
           );
         }
@@ -1285,14 +1285,14 @@ export const NovaTransacaoModal = ({
     const prefTipo = prefs.tipo === "receita" ? "receita" : "despesa";
     const prefMethod = normalizeStoredNovaTxPaymentMethod(prefs.method, prefTipo) ?? "pix";
     setTipo(prefTipo);
-    setIsEstorno(false);
+    setIsRefund(false);
     refund.resetAll();
     resetAmount();
     setDesc(""); setTags([]); setDetailTagIds([]); setDetailTagLabelById({});
     setMethod(prefMethod);
     setCardPanelOpen(prefMethod === "credito"); setCardPanelExiting(false);
     setRecurrencePanelOpen(false); setRecurrencePanelExiting(false);
-    setRecorre(false);
+    setIsRecurring(false);
     setCardId(prefMethod === "credito" && prefs.cartaoId != null ? String(prefs.cartaoId) : "");
     setFreqRec("mensal"); setEncRec("sem-fim"); setValorTipoRec("fixo");
     setSelectedDayOfWeek(null); setSelectedDayOfMonth(null);
@@ -1302,11 +1302,11 @@ export const NovaTransacaoModal = ({
     setCat(prefs.cat != null && String(prefs.cat).trim() ? String(prefs.cat).trim() : "");
     setCategoryTagId(null);
     if (prefMethod === "credito") {
-      setMod(prefs.modalidade === "avista" ? "avista" : "parcelado");
+      setModalityChoice(prefs.modalidade === "avista" ? "avista" : "parcelado");
       const pp = clampNovaTxPrefsParcelas(prefs.parcelas);
-      if (pp != null) setParcelas(pp);
+      if (pp != null) setInstallments(pp);
     } else {
-      setMod("parcelado"); setParcelas(3);
+      setModalityChoice("parcelado"); setInstallments(3);
     }
     setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, null));
     setReview(false); resetMobileStep(); setSuccess(false); setSuccessOverlay(false);
@@ -1371,7 +1371,7 @@ export const NovaTransacaoModal = ({
             <Check size={10} color="#fff" strokeWidth={3} />
           </div>
           <span style={{ ...G, fontSize:10, fontWeight:700, color:typeColor, textTransform:"uppercase", letterSpacing:"0.09em" }}>
-            {novaRecorrencia || recorre ? "Recorrência pronta para confirmar" : "Pronto para registrar"}
+            {novaRecorrencia || isRecurring ? "Recorrência pronta para confirmar" : "Pronto para registrar"}
           </span>
         </div>
         <div style={{ ...G, fontSize:18, fontWeight:800, color:T.ink, letterSpacing:"-0.01em" }}>{desc || "(sem descrição)"}</div>
@@ -1379,13 +1379,13 @@ export const NovaTransacaoModal = ({
           <span style={{ ...G, ...NUM, fontSize:28, fontWeight:800, color:typeColor, letterSpacing:"-0.02em" }}>
             {effectiveTypeIsMoneyIn ? "+" : "−"}R$ {amountNum.toLocaleString("pt-BR",{minimumFractionDigits:2})}
           </span>
-          {(novaRecorrencia || recorre) && (
+          {(novaRecorrencia || isRecurring) && (
             <span style={{ ...G, fontSize:12, color:typeColor, opacity:0.7 }}>
               / {FREQ_LABELS[freqRec]?.toLowerCase() || "mês"}
             </span>
           )}
         </div>
-        {(novaRecorrencia || recorre) && (
+        {(novaRecorrencia || isRecurring) && (
           <div style={{ ...G, fontSize:11, color:typeColor, opacity:0.65, marginTop:3 }}>
             {recurrenceRuleSummary || FREQ_LABELS[freqRec]} · {ENC_LABELS[encRec]}
           </div>
@@ -1394,16 +1394,16 @@ export const NovaTransacaoModal = ({
       <div style={{ padding: mobile ? "14px 18px" : "16px 20px", display:"flex", flexDirection:"column", gap:14 }}>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:1, background:T.border, borderRadius:12, overflow:"hidden", border:`1px solid ${T.border}` }}>
           {[
-            { label:"TIPO",        val: tipo === "despesa" ? (isEstorno ? "↺ Estorno" : "Despesa") : "Receita", valColor: typeColor },
+            { label:"TIPO",        val: tipo === "despesa" ? (isRefund ? "↺ Estorno" : "Despesa") : "Receita", valColor: typeColor },
             { label:"CATEGORIA",   val: cat    },
             { label:"FORMA PAG.",  val: MET_LABELS[method] || method },
             { label:"DATA",        val: formatYmdToLocaleDisplay(txDateYmd, APP_UI_LOCALE) },
-            ...(recorre || novaRecorrencia ? [
+            ...(isRecurring || novaRecorrencia ? [
               { label:"FREQUÊNCIA",   val: FREQ_LABELS[freqRec] || freqRec },
               { label:"ENCERRAMENTO", val: ENC_LABELS[encRec] || encRec },
               { label:"TIPO DE VALOR", val: valorTipoRec === "estimado" ? "≈ Estimado" : "Fixo" },
             ] : [
-              { label:"MODALIDADE", val: method === "credito" ? (modalidade === "avista" ? "À vista (1×)" : `${parcelas}× de R$ ${(amountNum/parcelas).toFixed(2)}`) : "—" },
+              { label:"MODALIDADE", val: method === "credito" ? (modalityChoice === "avista" ? "À vista (1×)" : `${installments}× de R$ ${(amountNum/installments).toFixed(2)}`) : "—" },
               { label:"CARTÃO",    val: method === "credito" ? cards.find(c=>c.id===cardId)?.nome || "—" : "—" },
             ]),
           ].map((f,i) => (
@@ -1459,7 +1459,7 @@ export const NovaTransacaoModal = ({
 
   if (!open && !drawerClosing) return null;
 
-  const isRecurrence = novaRecorrencia || recorre;
+  const isRecurrence = novaRecorrencia || isRecurring;
 
   /* ════════════════════════════════════════════════════════════
      MOBILE — Bottom sheet with dynamic steps
@@ -1499,7 +1499,7 @@ export const NovaTransacaoModal = ({
                   <Check size={36} color={T.green} strokeWidth={2.5} />
                 </div>
                 <div style={{ ...G, fontSize:22, fontWeight:800, color:T.ink, textAlign:"center", marginBottom:6 }}>
-                  {isRecurrence ? "Recorrência salva!" : (tipo==="despesa" ? (isEstorno ? "Estorno registrado!" : "Despesa registrada!") : "Receita registrada!")}
+                  {isRecurrence ? "Recorrência salva!" : (tipo==="despesa" ? (isRefund ? "Estorno registrado!" : "Despesa registrada!") : "Receita registrada!")}
                 </div>
                 <div style={{ ...G, ...NUM, fontSize:28, fontWeight:800, color:typeColor, marginBottom:8 }}>
                   {tipo==="despesa" ? "−" : "+"}R${" "}{amountNum.toLocaleString("pt-BR",{minimumFractionDigits:2})}
@@ -1600,11 +1600,11 @@ export const NovaTransacaoModal = ({
                   </div>
                   {/* Parcela + saldo — same row, pill style */}
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, marginTop:6, flexWrap:"wrap" }}>
-                    {method === "credito" && modalidade === "parcelado" && parcelas > 1 && amountNum > 0 && (
+                    {method === "credito" && modalityChoice === "parcelado" && installments > 1 && amountNum > 0 && (
                       <span style={{ ...G, ...NUM, display:"inline-flex", alignItems:"center",
                         fontSize:13, fontWeight:700, color:T.blue,
                         background:T.blueLight, padding:"3px 10px", borderRadius:99 }}>
-                        {parcelas}× R$ {(amountNum/parcelas).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}
+                        {installments}× R$ {(amountNum/installments).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}
                       </span>
                     )}
                     {periodSaldo.live ? (
@@ -1642,7 +1642,7 @@ export const NovaTransacaoModal = ({
                 {tipo === "despesa" && (
                   <button
                     type="button"
-                    onClick={() => setIsEstorno((v) => !v)}
+                    onClick={() => setIsRefund((v) => !v)}
                     style={{
                       ...G,
                       display: "flex",
@@ -1650,15 +1650,15 @@ export const NovaTransacaoModal = ({
                       gap: 10,
                       padding: "12px 14px",
                       borderRadius: 12,
-                      border: `1px solid ${isEstorno ? T.green : T.border}`,
-                      background: isEstorno ? T.greenLight : T.surface,
+                      border: `1px solid ${isRefund ? T.green : T.border}`,
+                      background: isRefund ? T.greenLight : T.surface,
                       cursor: "pointer",
                       textAlign: "left",
                     }}
                   >
-                    <RotateCcw size={16} color={isEstorno ? T.green : T.inkMid} />
-                    <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: isEstorno ? T.green : T.ink }}>
-                      {isEstorno ? "Lançando como estorno" : "Isto é um estorno?"}
+                    <RotateCcw size={16} color={isRefund ? T.green : T.inkMid} />
+                    <span style={{ flex: 1, fontSize: 14, fontWeight: 600, color: isRefund ? T.green : T.ink }}>
+                      {isRefund ? "Lançando como estorno" : "Isto é um estorno?"}
                     </span>
                     <span
                       aria-hidden
@@ -1666,7 +1666,7 @@ export const NovaTransacaoModal = ({
                         width: 32,
                         height: 18,
                         borderRadius: 9999,
-                        background: isEstorno ? T.green : T.border,
+                        background: isRefund ? T.green : T.border,
                         position: "relative",
                       }}
                     >
@@ -1674,7 +1674,7 @@ export const NovaTransacaoModal = ({
                         style={{
                           position: "absolute",
                           top: 2,
-                          left: isEstorno ? 16 : 2,
+                          left: isRefund ? 16 : 2,
                           width: 14,
                           height: 14,
                           borderRadius: 9999,
@@ -1769,19 +1769,19 @@ export const NovaTransacaoModal = ({
                   </div>
                 </div>
 
-                {/* Recorrência toggle — escondido em modo estorno (v1: refund não pode ser recorrente) */}
-                {!isEstorno && (
-                  <div onClick={() => { setRecorre(r => { if (!r) setMod("avista"); return !r; }); }}
-                    style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 16px", background:recorre ? T.blueLight : T.bg, borderRadius:12, border:`1px solid ${recorre ? T.blue : T.border}`, cursor:"pointer", transition:"all 0.18s" }}>
+                {/* Recorrência toggle — escondido em modo estorno (v1: refund não pode ser isRecurringnte) */}
+                {!isRefund && (
+                  <div onClick={() => { setIsRecurring(r => { if (!r) setModalityChoice("avista"); return !r; }); }}
+                    style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 16px", background:isRecurring ? T.blueLight : T.bg, borderRadius:12, border:`1px solid ${isRecurring ? T.blue : T.border}`, cursor:"pointer", transition:"all 0.18s" }}>
                     <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-                      <Repeat size={16} color={recorre ? T.blue : T.inkLight} />
+                      <Repeat size={16} color={isRecurring ? T.blue : T.inkLight} />
                       <div>
-                        <div style={{ ...G, fontSize:13, fontWeight:600, color:T.ink }}>Transação recorrente</div>
+                        <div style={{ ...G, fontSize:13, fontWeight:600, color:T.ink }}>Transação isRecurringnte</div>
                         <div style={{ ...G, fontSize:11, color:T.inkLight, marginTop:1 }}>Repetir automaticamente</div>
                       </div>
                     </div>
-                    <div style={{ width:42, height:24, borderRadius:12, background:recorre ? T.blue : T.inkGhost, position:"relative", transition:"background 0.2s", flexShrink:0 }}>
-                      <div style={{ position:"absolute", top:3, left:recorre ? 21 : 3, width:18, height:18, borderRadius:9999, background:"#fff", transition:"left 0.2s", boxShadow:T.sm }} />
+                    <div style={{ width:42, height:24, borderRadius:12, background:isRecurring ? T.blue : T.inkGhost, position:"relative", transition:"background 0.2s", flexShrink:0 }}>
+                      <div style={{ position:"absolute", top:3, left:isRecurring ? 21 : 3, width:18, height:18, borderRadius:9999, background:"#fff", transition:"left 0.2s", boxShadow:T.sm }} />
                     </div>
                   </div>
                 )}
@@ -1891,15 +1891,15 @@ export const NovaTransacaoModal = ({
                     ))}
                   </div>
                 </div>
-                {!isEstorno && (
+                {!isRefund && (
                   <div>
                     <div style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid, marginBottom:10 }}>Modalidade</div>
                     <div style={{ display:"flex", gap:8 }}>
-                      {[["avista","À vista","1× sem juros"],["parcelado","Parcelado","Dividir em parcelas"]].map(([id, label, sub]) => {
-                        const disabled = id === "parcelado" && recorre;
-                        const selected = modalidade === id;
+                      {[["avista","À vista","1× sem juros"],["parcelado","Parcelado","Dividir em installments"]].map(([id, label, sub]) => {
+                        const disabled = id === "parcelado" && isRecurring;
+                        const selected = modalityChoice === id;
                         return (
-                          <button key={id} onClick={() => !disabled && setMod(id)}
+                          <button key={id} onClick={() => !disabled && setModalityChoice(id)}
                             style={{ flex:1, padding:"12px", borderRadius:12,
                               border:`1.5px solid ${disabled ? T.border : selected ? T.ink : T.border}`,
                               background: disabled ? T.grayLight : selected ? T.ink : T.surface,
@@ -1915,26 +1915,26 @@ export const NovaTransacaoModal = ({
                     </div>
                   </div>
                 )}
-                {isEstorno && (
+                {isRefund && (
                   <div style={{ ...G, fontSize:11, color:T.inkMid, padding:"10px 12px", background:T.greenLight, borderRadius:10, border:`1px solid ${T.green}33` }}>
                     <strong style={{ color:T.green }}>↺ Estorno em cartão:</strong> sempre 1 parcela na fatura cuja janela contém a data — sem opção de parcelamento.
                   </div>
                 )}
-                {!isEstorno && modalidade === "parcelado" && (
+                {!isRefund && modalityChoice === "parcelado" && (
                   <div>
                     <div style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid, marginBottom:10 }}>Parcelas</div>
                     <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:8 }}>
                       {PARCELA_PRESETS.map(p => (
-                        <button key={p} onClick={() => setParcelas(p)} style={{ padding:"10px 4px", borderRadius:10, border:`1.5px solid ${parcelas===p ? T.ink : T.border}`, background:parcelas===p ? T.ink : T.surface, cursor:"pointer", textAlign:"center", transition:"all 0.15s" }}>
-                          <div style={{ ...G, fontSize:13, fontWeight:700, color:parcelas===p?"#fff":T.ink }}>{p}×</div>
-                          <div style={{ ...G, ...NUM, fontSize:10, color:parcelas===p?"rgba(255,255,255,0.5)":T.inkLight, marginTop:1 }}>{amountNum > 0 ? `R$${(amountNum/p).toFixed(0)}` : "—"}</div>
+                        <button key={p} onClick={() => setInstallments(p)} style={{ padding:"10px 4px", borderRadius:10, border:`1.5px solid ${installments===p ? T.ink : T.border}`, background:installments===p ? T.ink : T.surface, cursor:"pointer", textAlign:"center", transition:"all 0.15s" }}>
+                          <div style={{ ...G, fontSize:13, fontWeight:700, color:installments===p?"#fff":T.ink }}>{p}×</div>
+                          <div style={{ ...G, ...NUM, fontSize:10, color:installments===p?"rgba(255,255,255,0.5)":T.inkLight, marginTop:1 }}>{amountNum > 0 ? `R$${(amountNum/p).toFixed(0)}` : "—"}</div>
                         </button>
                       ))}
                     </div>
                   </div>
                 )}
                 {/* Aviso academia */}
-                {recorre && modalidade === "avista" && (
+                {isRecurring && modalityChoice === "avista" && (
                   <div style={{ display:"flex", gap:8, padding:"10px 12px", background:T.amberLight, border:`1px solid ${T.amber}44`, borderRadius:10 }}>
                     <span style={{ fontSize:14, flexShrink:0 }}>⚠️</span>
                     <span style={{ ...G, fontSize:11, color:T.inkMid, lineHeight:1.55 }}>Recorrente + à vista: será cobrado <strong style={{ color:T.ink }}>1× por mês</strong> no cartão selecionado.</span>
@@ -1973,7 +1973,7 @@ export const NovaTransacaoModal = ({
                 </button>
                 <button onClick={handleSave} disabled={txSubmitting || !desc.trim()}
                   style={{ ...G, flex:1, padding:"13px", borderRadius:12, border:"none", background:success ? T.green : (!desc.trim() ? T.inkGhost : typeColor), fontSize:14, fontWeight:800, color:"#fff", cursor:(txSubmitting || !desc.trim()) ? "not-allowed" : "pointer", opacity:(txSubmitting || !desc.trim()) ? 0.75 : 1, display:"flex", alignItems:"center", justifyContent:"center", gap:7, transition:"background 0.25s" }}>
-                  {success ? <><Check size={16} /> {recorre || novaRecorrencia ? "Recorrência salva!" : "Registrado!"}</> : (recorre || novaRecorrencia ? "Confirmar recorrência" : (txSubmitting ? "Enviando…" : `Confirmar ${tipo === "despesa" ? (isEstorno ? "estorno" : "despesa") : "receita"}`))}
+                  {success ? <><Check size={16} /> {isRecurring || novaRecorrencia ? "Recorrência salva!" : "Registrado!"}</> : (isRecurring || novaRecorrencia ? "Confirmar recorrência" : (txSubmitting ? "Enviando…" : `Confirmar ${tipo === "despesa" ? (isRefund ? "estorno" : "despesa") : "receita"}`))}
                 </button>
               </div>
               </div>
@@ -2200,15 +2200,15 @@ export const NovaTransacaoModal = ({
                   </div>
                 </div>
               )}
-              {!isEstorno && (
+              {!isRefund && (
                 <div>
                   <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Modalidade</div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
-                    {[["avista","À vista","1× sem juros"],["parcelado","Parcelado","Dividir em parcelas"]].map(([id,label,sub]) => {
-                      const disabled = id === "parcelado" && recorre;
-                      const selected = modalidade === id;
+                    {[["avista","À vista","1× sem juros"],["parcelado","Parcelado","Dividir em installments"]].map(([id,label,sub]) => {
+                      const disabled = id === "parcelado" && isRecurring;
+                      const selected = modalityChoice === id;
                       return (
-                        <button key={id} onClick={() => !disabled && setMod(id)}
+                        <button key={id} onClick={() => !disabled && setModalityChoice(id)}
                           style={{ padding:"10px 12px", borderRadius:9,
                             border:`1.5px solid ${disabled ? T.border : selected ? T.ink : T.border}`,
                             background: disabled ? T.grayLight : selected ? T.ink : T.surface,
@@ -2224,12 +2224,12 @@ export const NovaTransacaoModal = ({
                   </div>
                 </div>
               )}
-              {isEstorno && (
+              {isRefund && (
                 <div style={{ ...G, fontSize:11, color:T.inkMid, padding:"10px 12px", background:T.greenLight, borderRadius:9, border:`1px solid ${T.green}33` }}>
                   <strong style={{ color:T.green }}>↺ Estorno em cartão:</strong> sempre 1 parcela na fatura cuja janela contém a data.
                 </div>
               )}
-              {!isEstorno && modalidade==="parcelado" && (
+              {!isRefund && modalityChoice==="parcelado" && (
                 <div>
                   <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
                     <span style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em" }}>Parcelas</span>
@@ -2237,9 +2237,9 @@ export const NovaTransacaoModal = ({
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6 }}>
                     {PARCELA_PRESETS.map(p => (
-                      <button key={p} onClick={() => setParcelas(p)} style={{ padding:"8px 4px", borderRadius:8, border:`1.5px solid ${parcelas===p ? T.ink : T.border}`, background:parcelas===p ? T.ink : T.surface, cursor:"pointer", textAlign:"center" }}>
-                        <div style={{ ...G, fontSize:12, fontWeight:700, color:parcelas===p?"#fff":T.ink }}>{p}×</div>
-                        <div style={{ ...G, ...NUM, fontSize:10, color:parcelas===p?"rgba(255,255,255,0.6)":T.inkLight, marginTop:2 }}>{(amountNum/p).toFixed(2)}</div>
+                      <button key={p} onClick={() => setInstallments(p)} style={{ padding:"8px 4px", borderRadius:8, border:`1.5px solid ${installments===p ? T.ink : T.border}`, background:installments===p ? T.ink : T.surface, cursor:"pointer", textAlign:"center" }}>
+                        <div style={{ ...G, fontSize:12, fontWeight:700, color:installments===p?"#fff":T.ink }}>{p}×</div>
+                        <div style={{ ...G, ...NUM, fontSize:10, color:installments===p?"rgba(255,255,255,0.6)":T.inkLight, marginTop:2 }}>{(amountNum/p).toFixed(2)}</div>
                       </button>
                     ))}
                     {installmentsCustom ? (
@@ -2253,7 +2253,7 @@ export const NovaTransacaoModal = ({
                             const raw = e.target.value.replace(/\D/g,"");
                             setInstallmentsInput(raw);
                             const n = parseInt(raw);
-                            if (n >= 1 && n <= 360) setParcelas(n);
+                            if (n >= 1 && n <= 360) setInstallments(n);
                           }}
                           onBlur={() => {
                             if (!installmentsInput || parseInt(installmentsInput) < 1) {
@@ -2275,16 +2275,16 @@ export const NovaTransacaoModal = ({
                     ) : (
                       <button onClick={() => { setInstallmentsCustom(true); setInstallmentsInput(""); }}
                         style={{ padding:"8px 4px", borderRadius:8,
-                          border:`1.5px solid ${!PARCELA_PRESETS.includes(parcelas)?T.ink:T.border}`,
-                          background:!PARCELA_PRESETS.includes(parcelas)?T.ink:T.surface,
+                          border:`1.5px solid ${!PARCELA_PRESETS.includes(installments)?T.ink:T.border}`,
+                          background:!PARCELA_PRESETS.includes(installments)?T.ink:T.surface,
                           cursor:"pointer", textAlign:"center" }}>
                         <div style={{ ...G, fontSize:11, fontWeight:700,
-                          color:!PARCELA_PRESETS.includes(parcelas)?"#fff":T.inkMid }}>
-                          {!PARCELA_PRESETS.includes(parcelas) ? `${parcelas}×` : "outro"}
+                          color:!PARCELA_PRESETS.includes(installments)?"#fff":T.inkMid }}>
+                          {!PARCELA_PRESETS.includes(installments) ? `${installments}×` : "outro"}
                         </div>
-                        {!PARCELA_PRESETS.includes(parcelas) && amountNum > 0 && (
+                        {!PARCELA_PRESETS.includes(installments) && amountNum > 0 && (
                           <div style={{ ...G, ...NUM, fontSize:10, color:"rgba(255,255,255,0.55)", marginTop:2 }}>
-                            {(amountNum/parcelas).toFixed(2)}
+                            {(amountNum/installments).toFixed(2)}
                           </div>
                         )}
                       </button>
@@ -2292,8 +2292,8 @@ export const NovaTransacaoModal = ({
                   </div>
                 </div>
               )}
-              {modalidade === "parcelado" && (
-                <ParcelaHybrid parcelas={parcelas} amountNum={amountNum}/>
+              {modalityChoice === "parcelado" && (
+                <ParcelaHybrid installments={installments} amountNum={amountNum}/>
               )}
             </div>
             </div>
@@ -2307,7 +2307,7 @@ export const NovaTransacaoModal = ({
                   <Check size={36} color={T.green} strokeWidth={2.5} />
                 </div>
                 <div style={{ ...G, fontSize:22, fontWeight:800, color:T.ink, textAlign:"center", marginBottom:6 }}>
-                  {isRecurrence ? "Recorrência salva!" : (tipo==="despesa" ? (isEstorno ? "Estorno registrado!" : "Despesa registrada!") : "Receita registrada!")}
+                  {isRecurrence ? "Recorrência salva!" : (tipo==="despesa" ? (isRefund ? "Estorno registrado!" : "Despesa registrada!") : "Receita registrada!")}
                 </div>
                 <div style={{ ...G, ...NUM, fontSize:28, fontWeight:800, color:typeColor, marginBottom:8 }}>
                   {tipo==="despesa" ? "−" : "+"}R${" "}{amountNum.toLocaleString("pt-BR",{minimumFractionDigits:2})}
@@ -2371,12 +2371,12 @@ export const NovaTransacaoModal = ({
                         letterSpacing:"-0.02em", caretColor:T.ink, cursor:"text",
                         minWidth:0 }} />
                   </div>
-                  {method === "credito" && modalidade === "parcelado" && parcelas > 1 && amountNum > 0 && (
+                  {method === "credito" && modalityChoice === "parcelado" && installments > 1 && amountNum > 0 && (
                     <div style={{ display:"flex", alignItems:"baseline", gap:5, marginTop:4 }}>
                       <span style={{ ...G, fontSize:11, color:T.inkGhost, fontWeight:400 }}>em</span>
-                      <span style={{ ...G, ...NUM, fontSize:13, fontWeight:700, color:T.inkMid }}>{parcelas}×</span>
+                      <span style={{ ...G, ...NUM, fontSize:13, fontWeight:700, color:T.inkMid }}>{installments}×</span>
                       <span style={{ ...G, ...NUM, fontSize:13, fontWeight:600, color:T.blue, opacity:.8 }}>
-                        R$ {(amountNum/parcelas).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}
+                        R$ {(amountNum/installments).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}
                       </span>
                     </div>
                   )}
@@ -2514,7 +2514,7 @@ export const NovaTransacaoModal = ({
                 {tipo === "despesa" && (
                   <button
                     type="button"
-                    onClick={() => setIsEstorno((v) => !v)}
+                    onClick={() => setIsRefund((v) => !v)}
                     style={{
                       ...G,
                       display: "flex",
@@ -2522,16 +2522,16 @@ export const NovaTransacaoModal = ({
                       gap: 9,
                       padding: "10px 12px",
                       borderRadius: 10,
-                      border: `1px solid ${isEstorno ? T.green : T.border}`,
-                      background: isEstorno ? T.greenLight : T.surface,
+                      border: `1px solid ${isRefund ? T.green : T.border}`,
+                      background: isRefund ? T.greenLight : T.surface,
                       cursor: "pointer",
                       textAlign: "left",
                       transition: "all 0.15s",
                     }}
                   >
-                    <RotateCcw size={14} color={isEstorno ? T.green : T.inkMid} />
-                    <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: isEstorno ? T.green : T.ink }}>
-                      {isEstorno ? "Lançando como estorno" : "Isto é um estorno?"}
+                    <RotateCcw size={14} color={isRefund ? T.green : T.inkMid} />
+                    <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: isRefund ? T.green : T.ink }}>
+                      {isRefund ? "Lançando como estorno" : "Isto é um estorno?"}
                     </span>
                     <span
                       aria-hidden
@@ -2539,7 +2539,7 @@ export const NovaTransacaoModal = ({
                         width: 28,
                         height: 16,
                         borderRadius: 9999,
-                        background: isEstorno ? T.green : T.border,
+                        background: isRefund ? T.green : T.border,
                         position: "relative",
                         transition: "background 0.15s",
                       }}
@@ -2548,7 +2548,7 @@ export const NovaTransacaoModal = ({
                         style={{
                           position: "absolute",
                           top: 2,
-                          left: isEstorno ? 14 : 2,
+                          left: isRefund ? 14 : 2,
                           width: 12,
                           height: 12,
                           borderRadius: 9999,
@@ -2776,27 +2776,27 @@ export const NovaTransacaoModal = ({
                     ))}
                   </div>
                 </div>
-                {!isEstorno && (
-                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 14px", background:T.bg, borderRadius:10, border:`1px solid ${recorre ? T.blue : T.border}`, cursor:"pointer", transition:"border-color 0.15s" }}
+                {!isRefund && (
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 14px", background:T.bg, borderRadius:10, border:`1px solid ${isRecurring ? T.blue : T.border}`, cursor:"pointer", transition:"border-color 0.15s" }}
                     onClick={() => {
-                      setRecorre((r) => {
-                        if (!r) setMod("avista");
+                      setIsRecurring((r) => {
+                        if (!r) setModalityChoice("avista");
                         return !r;
                       });
-                      if (!recorre) {
+                      if (!isRecurring) {
                         setRecurrencePanelOpen(true);
                         setRecurrencePanelExiting(false);
                       } else beginCloseRecurrencePanel();
                     }}>
                     <div style={{ display:"flex", alignItems:"center", gap:9 }}>
-                      <Repeat size={14} color={recorre ? T.blue : T.inkLight} />
+                      <Repeat size={14} color={isRecurring ? T.blue : T.inkLight} />
                       <div>
-                        <div style={{ ...G, fontSize:12, fontWeight:600, color:T.ink }}>Transação recorrente</div>
+                        <div style={{ ...G, fontSize:12, fontWeight:600, color:T.ink }}>Transação isRecurringnte</div>
                         <div style={{ ...G, fontSize:10, color:T.inkLight }}>Repetir automaticamente</div>
                       </div>
                     </div>
-                    <div style={{ width:38, height:22, borderRadius:11, background:recorre ? T.blue : T.inkGhost, position:"relative", transition:"background 0.2s", flexShrink:0 }}>
-                      <div style={{ position:"absolute", top:3, left:recorre?18:3, width:16, height:16, borderRadius:9999, background:"#fff", transition:"left 0.2s", boxShadow:T.sm }} />
+                    <div style={{ width:38, height:22, borderRadius:11, background:isRecurring ? T.blue : T.inkGhost, position:"relative", transition:"background 0.2s", flexShrink:0 }}>
+                      <div style={{ position:"absolute", top:3, left:isRecurring?18:3, width:16, height:16, borderRadius:9999, background:"#fff", transition:"left 0.2s", boxShadow:T.sm }} />
                     </div>
                   </div>
                 )}
@@ -2851,15 +2851,15 @@ export const NovaTransacaoModal = ({
                 <button onClick={handleSave} disabled={txSubmitting}
                   style={{ ...G, flex:1, padding:"11px", borderRadius:10, border:"none", background:success ? T.green : typeColor, fontSize:13, fontWeight:700, color:"#fff", cursor:txSubmitting ? "not-allowed" : "pointer", opacity:txSubmitting ? 0.75 : 1, display:"flex", alignItems:"center", justifyContent:"center", gap:6, transition:"background 0.25s", animation:success?"successPop 0.35s ease-out":"none" }}>
                   {success
-                    ? <><Check size={14} /> {novaRecorrencia || recorre ? "Recorrência salva!" : "Registrado!"}</>
-                    : novaRecorrencia || recorre ? "Confirmar recorrência" : (txSubmitting ? "Enviando…" : `Confirmar ${tipo === "despesa" ? (isEstorno ? "estorno" : "despesa") : "receita"}`)
+                    ? <><Check size={14} /> {novaRecorrencia || isRecurring ? "Recorrência salva!" : "Registrado!"}</>
+                    : novaRecorrencia || isRecurring ? "Confirmar recorrência" : (txSubmitting ? "Enviando…" : `Confirmar ${tipo === "despesa" ? (isRefund ? "estorno" : "despesa") : "receita"}`)
                   }
                 </button>
               </div>
             ) : (
               <div style={{ display:"flex", gap:8 }}>
                 <Btn variant="outGray" onClick={beginClose}>Cancelar</Btn>
-                {novaRecorrencia || recorre ? (
+                {novaRecorrencia || isRecurring ? (
                   <button onClick={() => { if (!desc.trim()) { setDescError(true); descRef.current?.focus(); return; } goReview(); }}
                     style={{ ...G, flex:1, padding:"11px", borderRadius:10, border:"none", background:typeColor, fontSize:13, fontWeight:700, color:"#fff", cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}>
                     Revisar recorrência <ChevronRight size={14} />

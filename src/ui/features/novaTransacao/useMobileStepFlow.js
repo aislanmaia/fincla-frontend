@@ -15,7 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
  *   - navegação (`goNext`, `goPrev`) e `resetToFirstStep()` consumido pelo
  *     init effect de `preConfig` e por `handleNewTransaction`.
  */
-export function useMobileStepFlow({ open, isMobile, tipo, method, recorre }) {
+export function useMobileStepFlow({ open, isMobile, tipo, method, isRecurring }) {
   const [mStep, setMStep] = useState(1);
   const [mStepAnimating, setMStepAnimating] = useState(false);
   const mStepAnimTimerRef = useRef(null);
@@ -32,10 +32,10 @@ export function useMobileStepFlow({ open, isMobile, tipo, method, recorre }) {
   const mStepsFlow = useMemo(() => {
     const f = [1, 2];
     if (tipo === "despesa" && method === "credito") f.push("card");
-    if (recorre) f.push("recurrence");
+    if (isRecurring) f.push("recurrence");
     f.push("review");
     return f;
-  }, [tipo, method, recorre]);
+  }, [tipo, method, isRecurring]);
 
   const mCurrentIdx = mStepsFlow.indexOf(mStep);
   const mTotalSteps = mStepsFlow.length;

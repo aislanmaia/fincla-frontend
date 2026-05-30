@@ -13,7 +13,7 @@ import { fetchRefundCandidates } from "../../data/transactionsAdapter.js";
  */
 export function useRefundPicker({
   open,
-  isEstorno,
+  isRefund,
   organizationId,
   method,
   cartao,
@@ -33,19 +33,19 @@ export function useRefundPicker({
 
   // Toggle volta para OFF → descarta vínculo já escolhido.
   useEffect(() => {
-    if (isEstorno) return;
+    if (isRefund) return;
     if (refundOfTransactionId != null) setRefundOfTransactionId(null);
     if (refundLinkedTx != null) setRefundLinkedTx(null);
     if (refundPickerOpen) setRefundPickerOpen(false);
     if (refundPickerQuery) setRefundPickerQuery("");
     if (refundPickerCandidates.length) setRefundPickerCandidates([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEstorno]);
+  }, [isRefund]);
 
   // Busca debounced de candidatas (expenses recentes) com o picker aberto.
   useEffect(() => {
     if (!open) return undefined;
-    if (!isEstorno || !refundPickerOpen || refundLinkedTx) return undefined;
+    if (!isRefund || !refundPickerOpen || refundLinkedTx) return undefined;
     if (!organizationId) return undefined;
     let cancelled = false;
     setRefundPickerLoading(true);
@@ -68,7 +68,7 @@ export function useRefundPicker({
     };
   }, [
     open,
-    isEstorno,
+    isRefund,
     refundPickerOpen,
     refundLinkedTx,
     refundPickerQuery,
