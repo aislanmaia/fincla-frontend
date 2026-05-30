@@ -37,6 +37,7 @@ import {
 import { CardEmptyWithCta } from "../features/shellExtras.jsx";
 import { shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { RitmoPageLive } from "./RitmoPageLive.jsx";
+import { RitmoEmptyState } from "../features/spendingPace/RitmoEmptyState.jsx";
 
 const DOW_DATA_MAR = [
   { day: "Dom", short: "D", val: 145 },
@@ -436,6 +437,9 @@ export function RitmoPage({
   organizationId = null,
   onNewTx,
 }) {
+  if (dataMode === "empty") {
+    return <RitmoEmptyState onNewTx={onNewTx} />;
+  }
   if (dataMode === "mock") {
     return <RitmoPageMock onNav={onNav} isMobile={isMobile} />;
   }

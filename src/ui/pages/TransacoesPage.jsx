@@ -29,6 +29,7 @@ import { useCategoryTagsData } from "../features/tags/useCategoryTagsData.js";
 import { PeriodCalendar } from "../features/transactions/PeriodCalendar.jsx";
 import { useTransactionsData } from "../features/transactions/useTransactionsData.js";
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
+import { TransactionsEmptyState } from "../features/transactions/TransactionsEmptyState.jsx";
 import { CardEmptyWithCta } from "../features/shellExtras.jsx";
 import { FINCLA_CALENDAR_SHADOW } from "../components/finclaCalendarStyles.js";
 import {
@@ -39,7 +40,14 @@ import {
 
 const TRANSACTIONS_SEARCH_DEBOUNCE_MS = 1500;
 
-export function TransacoesPage({
+export function TransacoesPage(props) {
+  if (props.dataMode === "empty") {
+    return <TransactionsEmptyState extraTx={props.extraTx ?? []} onNewTx={props.onNewTx} />;
+  }
+  return <TransacoesPageBody {...props} />;
+}
+
+function TransacoesPageBody({
   onNav,
   isMobile = false,
   onEditTx,

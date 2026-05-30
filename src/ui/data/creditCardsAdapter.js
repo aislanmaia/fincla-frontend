@@ -787,3 +787,35 @@ export async function fetchPastInvoiceItemsForUi(cardId, year, month, organizati
 export function formatCreditCardsApiError(error) {
   return handleApiError(error);
 }
+
+/* ─── UI helpers (CartoesPage) ────────────────────────────── */
+
+/** Porcentagem segura (num/den). Retorna `fallback` se denominador for falsy ou divisão for NaN. */
+export const safePctOrFallback = (num, den, fallback = 0) =>
+  (!den || isNaN(num / den)) ? fallback : Math.round((num / den) * 100);
+
+export const CARD_BRAND_OPTIONS = [
+  "Visa", "Mastercard", "Elo", "Amex", "Hipercard", "Visa Infinite", "Mastercard Black",
+];
+
+export function matchBrandToSelectOption(raw) {
+  const r = String(raw ?? "").trim();
+  const exact = CARD_BRAND_OPTIONS.find((o) => o.toLowerCase() === r.toLowerCase());
+  if (exact) return exact;
+  const lo = r.toLowerCase();
+  if (lo.includes("infinite")) return "Visa Infinite";
+  if (lo.includes("black")) return "Mastercard Black";
+  if (lo.includes("master")) return "Mastercard";
+  if (lo.includes("visa")) return "Visa";
+  if (lo.includes("elo")) return "Elo";
+  if (lo.includes("amex") || lo.includes("american")) return "Amex";
+  if (lo.includes("hiper")) return "Hipercard";
+  return CARD_BRAND_OPTIONS[0];
+}
+
+export function formatLimitInputFromNumber(value) {
+  if (value == null || value === "") return "";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
+  return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}

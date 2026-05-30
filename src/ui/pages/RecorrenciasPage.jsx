@@ -29,6 +29,7 @@ import { CategoryLucideIcon } from "../components/CategoryLucideIcon.jsx";
 import { buildUpcomingRecurringSummary } from "../data/recurringTransactionsAdapter.js";
 import { useRecurringTransactionsData } from "../features/recurringTransactions/useRecurringTransactionsData.js";
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
+import { RecurringEmptyState } from "../features/recurringTransactions/RecurringEmptyState.jsx";
 import { weekdayLabelsShort, formatCalendarNavMonth } from "../components/finclaCalendarI18n.js";
 import {
   FINCLA_CAL_DAY_PX,
@@ -376,7 +377,14 @@ function daysUntil(dateIso) {
   return Math.ceil((target.getTime() - base.getTime()) / 86400000);
 }
 
-export function RecorrenciasPage({ onNav, cenarios = [], onNovaRec, onEditar, isMobile = false, dataMode = "live", extraRecs = [], organizationId = null, recurringRefreshToken = 0 }) {
+export function RecorrenciasPage(props) {
+  if (props.dataMode === "empty" && (props.extraRecs ?? []).length === 0) {
+    return <RecurringEmptyState isMobile={props.isMobile} onNew={(tipo) => props.onNovaRec?.(tipo)} />;
+  }
+  return <RecorrenciasPageBody {...props} />;
+}
+
+function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMobile = false, dataMode = "live", extraRecs = [], organizationId = null, recurringRefreshToken = 0 }) {
   const [list, setList] = useState(() => resolveLocalData({
     dataMode,
     mockData: RECORRENCIAS,
