@@ -33,6 +33,7 @@ import {
   SIDE_PANEL_MS,
   useDrawerCloseAnim,
 } from "./useDrawerCloseAnim.js";
+import { useAiSuggestion } from "./useAiSuggestion.js";
 
 import {
   parseApiDecimal,
@@ -162,9 +163,6 @@ export const NovaTransacaoModal = ({
     setPanelRecorrenciaOpen(false);
     setPanelRecorrenciaExiting(true);
   }, [panelRecorrenciaOpen, panelRecorrenciaExiting]);
-  // AI suggestion simulation
-  const [aiSuggestion, setAiSuggestion] = useState(null);
-  const [aiApplied,    setAiApplied]    = useState(false);
   const [descFocused,  setDescFocused]  = useState(false);
   const [descError,    setDescError]    = useState(false);
   const valorInputRef = useRef(null);
@@ -266,6 +264,19 @@ export const NovaTransacaoModal = ({
     },
   });
 
+  const { aiSuggestion, aiApplied, applyAi, resetAi } = useAiSuggestion({
+    desc,
+    useLiveCategoryTags,
+    useLiveDetailTags,
+    categoryTagsData,
+    ensureDetailTag,
+    setCat,
+    setCategoryTagId,
+    setDetailTagIds,
+    setDetailTagLabelById,
+    setTags,
+  });
+
   const detailTagRowsAvailable = useMemo(() => {
     if (!useLiveDetailTags || !categoryTagId) return [];
     const sel = new Set(detailTagIds.map((id) => String(id)));
@@ -341,8 +352,7 @@ export const NovaTransacaoModal = ({
     setPanelRecorrenciaExiting(false);
     setShowImpact(false);
     setMobileReviewImpactOpen(false);
-    setAiSuggestion(null);
-    setAiApplied(false);
+    resetAi();
     setDescFocused(false);
     setAddingCartao(false);
     setQuickAddCardName("");
@@ -1154,65 +1164,6 @@ export const NovaTransacaoModal = ({
     );
   };
 
-  // AI simulation: trigger when desc >= 4 chars
-  useEffect(() => {
-    if (desc.length < 4) { setAiSuggestion(null); setAiApplied(false); return; }
-    const lower = desc.toLowerCase();
-    let suggestion = null;
-    if (lower.includes("mercado") || lower.includes("supermercado") || lower.includes("extra") || lower.includes("pão de açúcar"))
-      suggestion = { cat: "Alimentação", iconKey: "shopping-cart", tags: ["mercado", "compras"] };
-    else if (lower.includes("uber") || lower.includes("99") || lower.includes("gasolina") || lower.includes("combustível"))
-      suggestion = { cat: "Transporte", iconKey: "car", tags: ["transporte"] };
-    else if (lower.includes("netflix") || lower.includes("spotify") || lower.includes("adobe") || lower.includes("amazon"))
-      suggestion = { cat: "Assinaturas", iconKey: "smartphone", tags: ["streaming", "assinatura"] };
-    else if (lower.includes("academia") || lower.includes("smartfit") || lower.includes("farmácia") || lower.includes("remédio"))
-      suggestion = { cat: "Saúde", iconKey: "pill", tags: ["saúde"] };
-    else if (lower.includes("aluguel") || lower.includes("condomínio") || lower.includes("iptu"))
-      suggestion = { cat: "Moradia", iconKey: "home", tags: ["moradia", "fixo"] };
-    else if (lower.includes("salário") || lower.includes("freela") || lower.includes("aporte"))
-      suggestion = { cat: "Receita", iconKey: "wallet", tags: ["receita"] };
-    setAiSuggestion(suggestion);
-    setAiApplied(false);
-  }, [desc]);
-
-  const applyAi = async () => {
-    if (!aiSuggestion) return;
-    const rows = useLiveCategoryTags ? categoryTagsData.categories : [];
-    const byKey =
-      aiSuggestion.iconKey && rows.length
-        ? rows.find((c) => c.iconKey === aiSuggestion.iconKey)
-        : null;
-    const byLabel = rows.find((c) => c.labelPt === aiSuggestion.cat);
-    const row = byKey || byLabel;
-    if (row?.labelPt) setCat(row.labelPt);
-    else setCat(aiSuggestion.cat);
-    const catIdForDetailTags = row?.id ?? null;
-    if (row?.id) setCategoryTagId(row.id);
-    if (useLiveDetailTags && catIdForDetailTags) {
-      const nextIds = [];
-      const nextLabels = {};
-      for (const t of aiSuggestion.tags || []) {
-        try {
-          const id = await ensureDetailTag(String(t), catIdForDetailTags);
-          if (!nextIds.includes(id)) {
-            nextIds.push(id);
-            nextLabels[String(id)] = String(t);
-          }
-        } catch {
-          /* ignora tag individual */
-        }
-      }
-      setDetailTagIds(nextIds);
-      setDetailTagLabelById(nextLabels);
-      setTags([]);
-    } else {
-      setTags(aiSuggestion.tags || []);
-      setDetailTagIds([]);
-      setDetailTagLabelById({});
-    }
-    setAiApplied(true);
-  };
-
   const handleSave = async () => {
     const rawEditTxId = preConfig?.editingTransactionId;
     const editingTransactionId =
@@ -1433,7 +1384,7 @@ export const NovaTransacaoModal = ({
     setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, null));
     setReview(false); resetMobileStep(); setSuccess(false); setSuccessOverlay(false);
     setTxSubmitError(""); setTxSubmitting(false); setDescError(false);
-    setMobileReviewImpactOpen(false); setAiSuggestion(null); setAiApplied(false);
+    setMobileReviewImpactOpen(false); resetAi();
     setDescFocused(false); setAddingCartao(false); setQuickAddCardName(""); setQuickAddCardLast4("");
     setNewTag(""); setAddingTag(false); resetParcelaCalc(); setShowImpact(false);
   };
