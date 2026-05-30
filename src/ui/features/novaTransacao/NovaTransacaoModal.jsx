@@ -28,6 +28,11 @@ import { RecurrenceConfigPanel } from "./RecurrenceConfigPanel.jsx";
 import { useRefundPicker } from "./useRefundPicker.js";
 import { useMobileStepFlow } from "./useMobileStepFlow.js";
 import { useParcelaCalculator } from "./useParcelaCalculator.js";
+import {
+  DRAWER_CLOSE_MS,
+  SIDE_PANEL_MS,
+  useDrawerCloseAnim,
+} from "./useDrawerCloseAnim.js";
 
 import {
   parseApiDecimal,
@@ -146,10 +151,7 @@ export const NovaTransacaoModal = ({
   const [reviewDir, setReviewDir] = useState("forward");
   const [success,        setSuccess]        = useState(false);
   const [successOverlay, setSuccessOverlay] = useState(false);
-  const [drawerClosing, setDrawerClosing] = useState(false);
-  const closeAnimGuardRef = useRef(false);
-  const DRAWER_CLOSE_MS = 320;
-  const SIDE_PANEL_MS = 320;
+  const { drawerClosing, beginClose } = useDrawerCloseAnim({ open, onClose });
   const beginCloseCartaoPanel = useCallback(() => {
     if (!(panelCartaoOpen || panelCartaoExiting)) return;
     setPanelCartaoOpen(false);
@@ -160,22 +162,6 @@ export const NovaTransacaoModal = ({
     setPanelRecorrenciaOpen(false);
     setPanelRecorrenciaExiting(true);
   }, [panelRecorrenciaOpen, panelRecorrenciaExiting]);
-  const beginClose = useCallback(() => {
-    if (closeAnimGuardRef.current) return;
-    closeAnimGuardRef.current = true;
-    setDrawerClosing(true);
-    window.setTimeout(() => {
-      closeAnimGuardRef.current = false;
-      setDrawerClosing(false);
-      onClose();
-    }, DRAWER_CLOSE_MS);
-  }, [onClose]);
-  useEffect(() => {
-    if (open) {
-      closeAnimGuardRef.current = false;
-      setDrawerClosing(false);
-    }
-  }, [open]);
   // AI suggestion simulation
   const [aiSuggestion, setAiSuggestion] = useState(null);
   const [aiApplied,    setAiApplied]    = useState(false);
