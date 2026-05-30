@@ -17,12 +17,10 @@ import { MiniChecklist, StatePanelV4 } from "./features/shellExtras.jsx";
 
 import { useSession } from "./features/auth/useSession.js";
 import { parseAuthEntryUrl, stripAuthEntryQueryAndHash } from "./features/auth/authEntryUrl.js";
-import {
-  AcceptInvitationPage,
-  LoginPage,
-  PasswordResetPage,
-  ErrorBoundary,
-} from "./features/authViews.jsx";
+import { AcceptInvitationPage } from "./features/auth/AcceptInvitationPage.jsx";
+import { LoginPage } from "./features/auth/LoginPage.jsx";
+import { PasswordResetPage } from "./features/auth/PasswordResetPage.jsx";
+import { ErrorBoundary } from "./features/auth/ErrorBoundary.jsx";
 
 import { OnboardingFlow } from "./features/onboarding/OnboardingFlow.jsx";
 import { useFirstStepsLiveStatus } from "./features/onboarding/useFirstStepsLiveStatus.js";

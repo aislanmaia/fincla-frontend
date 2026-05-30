@@ -4,7 +4,7 @@ import React from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, waitFor, within, cleanup } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { LoginPage } from "../authViews.jsx";
+import { LoginPage } from "../auth/LoginPage.jsx";
 
 describe("LoginPage (RTL)", () => {
   afterEach(() => {
