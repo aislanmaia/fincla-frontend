@@ -20,7 +20,7 @@ import {
   CatBars,
 } from "../features/creditCards/cartoesPanels.jsx";
 import { DateGroup, TxRow } from "../features/creditCards/CardFaturaList.jsx";
-import { ExportModal, ParcelaModal } from "../features/creditCards/CartoesModals.jsx";
+import { CartoesPageModals } from "../features/creditCards/CartoesPageModals.jsx";
 import {
   AnalisesTab,
   HistoricoTab,
@@ -554,6 +554,55 @@ export const CartoesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstor
     { id: "planejamento", icon: "📅", label: "Planejamento" },
   ];
 
+  const modalsBundle = (
+    <CartoesPageModals
+      isMobile={isMobile}
+      card={card}
+      fatura={fatura}
+      fmtBRL={fmtBRL}
+      parcelaModal={parcelaModal}
+      parcelaTarget={parcelaTarget}
+      setParcelaTarget={setParcelaTarget}
+      parcelaOk={parcelaOk}
+      onCloseParcelaModal={() => { setParcelaModal(null); setParcelaTarget(null); }}
+      onConfirmParcela={handleRealoc}
+      exportModal={exportModal}
+      displayItens={displayItens}
+      expCats={expCats}
+      setExpCats={setExpCats}
+      expParcelas={expParcelas}
+      setExpParcelas={setExpParcelas}
+      expRec={expRec}
+      setExpRec={setExpRec}
+      expNormal={expNormal}
+      setExpNormal={setExpNormal}
+      onCloseExportModal={() => setExportModal(false)}
+      onExportCSV={handleExportCSV}
+      cardSheetOpen={cardSheetOpen}
+      editCardSheet={editCardSheet}
+      draftIssuer={draftIssuer}
+      setDraftIssuer={setDraftIssuer}
+      draftName={draftName}
+      setDraftName={setDraftName}
+      draftLast4={draftLast4}
+      setDraftLast4={setDraftLast4}
+      draftBrand={draftBrand}
+      setDraftBrand={setDraftBrand}
+      draftLimit={draftLimit}
+      setDraftLimit={setDraftLimit}
+      draftDueDay={draftDueDay}
+      setDraftDueDay={setDraftDueDay}
+      draftClosingDay={draftClosingDay}
+      setDraftClosingDay={setDraftClosingDay}
+      draftSuccess={draftSuccess}
+      savingCard={editCardSheet ? creditCardsData.isUpdatingCard : creditCardsData.isSavingCard}
+      cardSheetError={creditCardsData.error}
+      onSaveCard={handleSaveCard}
+      onUpdateCard={handleUpdateCard}
+      onCancelCardForm={clearCardFormState}
+    />
+  );
+
   /* ══════════════════════════════════════════════════════════
      MOBILE
   ══════════════════════════════════════════════════════════ */
@@ -563,57 +612,7 @@ export const CartoesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstor
       <style>{`
         @keyframes tabIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
       `}</style>
-      <ParcelaModal
-        parcelaModal={parcelaModal}
-        parcelaTarget={parcelaTarget}
-        setParcelaTarget={setParcelaTarget}
-        parcelaOk={parcelaOk}
-        card={card}
-        fmtBRL={fmtBRL}
-        isMobile={isMobile}
-        onClose={() => { setParcelaModal(null); setParcelaTarget(null); }}
-        onConfirm={handleRealoc}
-      /><ExportModal
-        open={exportModal}
-        card={card}
-        fatura={fatura}
-        displayItens={displayItens}
-        expCats={expCats}
-        setExpCats={setExpCats}
-        expParcelas={expParcelas}
-        setExpParcelas={setExpParcelas}
-        expRec={expRec}
-        setExpRec={setExpRec}
-        expNormal={expNormal}
-        setExpNormal={setExpNormal}
-        isMobile={isMobile}
-        onClose={() => setExportModal(false)}
-        onExport={handleExportCSV}
-      /><CardFormSheet
-        open={cardSheetOpen}
-        isMobile={isMobile}
-        isEdit={editCardSheet}
-        draftIssuer={draftIssuer}
-        setDraftIssuer={setDraftIssuer}
-        draftName={draftName}
-        setDraftName={setDraftName}
-        draftLast4={draftLast4}
-        setDraftLast4={setDraftLast4}
-        draftBrand={draftBrand}
-        setDraftBrand={setDraftBrand}
-        draftLimit={draftLimit}
-        setDraftLimit={setDraftLimit}
-        draftDueDay={draftDueDay}
-        setDraftDueDay={setDraftDueDay}
-        draftClosingDay={draftClosingDay}
-        setDraftClosingDay={setDraftClosingDay}
-        draftSuccess={draftSuccess}
-        saving={editCardSheet ? creditCardsData.isUpdatingCard : creditCardsData.isSavingCard}
-        error={creditCardsData.error}
-        onSave={handleSaveCard}
-        onUpdate={handleUpdateCard}
-        onCancel={clearCardFormState}
-      />
+      {modalsBundle}
 
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,gap:8}}>
         <PageTitle sans="Meus" serif="Cartões"/>
@@ -789,57 +788,7 @@ export const CartoesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstor
   return (
     <>
       <style>{`@keyframes drawerIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}`}</style>
-      <ParcelaModal
-        parcelaModal={parcelaModal}
-        parcelaTarget={parcelaTarget}
-        setParcelaTarget={setParcelaTarget}
-        parcelaOk={parcelaOk}
-        card={card}
-        fmtBRL={fmtBRL}
-        isMobile={isMobile}
-        onClose={() => { setParcelaModal(null); setParcelaTarget(null); }}
-        onConfirm={handleRealoc}
-      /><ExportModal
-        open={exportModal}
-        card={card}
-        fatura={fatura}
-        displayItens={displayItens}
-        expCats={expCats}
-        setExpCats={setExpCats}
-        expParcelas={expParcelas}
-        setExpParcelas={setExpParcelas}
-        expRec={expRec}
-        setExpRec={setExpRec}
-        expNormal={expNormal}
-        setExpNormal={setExpNormal}
-        isMobile={isMobile}
-        onClose={() => setExportModal(false)}
-        onExport={handleExportCSV}
-      /><CardFormSheet
-        open={cardSheetOpen}
-        isMobile={isMobile}
-        isEdit={editCardSheet}
-        draftIssuer={draftIssuer}
-        setDraftIssuer={setDraftIssuer}
-        draftName={draftName}
-        setDraftName={setDraftName}
-        draftLast4={draftLast4}
-        setDraftLast4={setDraftLast4}
-        draftBrand={draftBrand}
-        setDraftBrand={setDraftBrand}
-        draftLimit={draftLimit}
-        setDraftLimit={setDraftLimit}
-        draftDueDay={draftDueDay}
-        setDraftDueDay={setDraftDueDay}
-        draftClosingDay={draftClosingDay}
-        setDraftClosingDay={setDraftClosingDay}
-        draftSuccess={draftSuccess}
-        saving={editCardSheet ? creditCardsData.isUpdatingCard : creditCardsData.isSavingCard}
-        error={creditCardsData.error}
-        onSave={handleSaveCard}
-        onUpdate={handleUpdateCard}
-        onCancel={clearCardFormState}
-      />
+      {modalsBundle}
 
       {/* Header */}
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20, flexWrap:"wrap", gap:10 }}>
