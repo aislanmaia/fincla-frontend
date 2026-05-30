@@ -16,6 +16,13 @@ import { DragScrollTabs } from "../layouts/DragScrollTabs.jsx";
 import { M_MONO } from "../features/moodV4";
 import { useCreditCardsData } from "../features/creditCards/useCreditCardsData.js";
 import { CardFormSheet } from "../features/creditCards/CardFormSheet.jsx";
+import {
+  CardVisual,
+  FaturaNav,
+  KpiStrip,
+  LimitBar,
+  CatBars,
+} from "../features/creditCards/cartoesPanels.jsx";
 import { shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { FC } from "../routing/searchContract.js";
 import {
@@ -533,148 +540,6 @@ export const CartoesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstor
     a.click(); setExportModal(false);
   };
 
-
-  /* ── CardVisual ──────────────────────────────────────────── */
-  const CardVisual = ({ c, selected, size="md" }) => {
-    const W = size==="sm"?130:size==="md"?200:260, H=Math.round(W/1.586);
-    const pct = safe(c.limite-c.disponivel, c.limite);
-    return (
-      <div onClick={()=>switchCard(c.id)} style={{
-        width:W,height:H,borderRadius:size==="sm"?12:16,flexShrink:0,cursor:"pointer",
-        position:"relative",overflow:"hidden",
-        background:`linear-gradient(135deg, ${c.cor1} 0%, ${c.cor2} 100%)`,
-        boxShadow:selected?`0 20px 50px ${c.cor2}55,0 0 0 2px ${c.corChip}88`:"0 4px 20px rgba(0,0,0,0.18)",
-        transition:"all 0.25s cubic-bezier(0.4,0,0.2,1)",
-        transform:selected?"translateY(-4px) scale(1.02)":"none",
-        padding:size==="sm"?"11px 13px":"16px 18px",
-        display:"flex",flexDirection:"column",justifyContent:"space-between",userSelect:"none",
-      }}>
-        <div style={{position:"absolute",top:-W*0.3,right:-W*0.2,width:W*0.8,height:W*0.8,
-          borderRadius:"50%",background:`${c.corChip}12`,pointerEvents:"none"}}/>
-        <div style={{position:"absolute",bottom:-W*0.2,left:-W*0.1,width:W*0.55,height:W*0.55,
-          borderRadius:"50%",background:"rgba(255,255,255,0.04)",pointerEvents:"none"}}/>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",position:"relative"}}>
-          <div style={{...G,fontSize:size==="sm"?8:10,fontWeight:800,color:c.corChip,
-            textTransform:"uppercase",letterSpacing:"0.16em"}}>{c.banco}</div>
-          <svg width={size==="sm"?14:17} height={size==="sm"?18:22} viewBox="0 0 17 22" fill="none">
-            <circle cx="4" cy="11" r="2" fill="rgba(255,255,255,0.7)"/>
-            <path d="M7 6 Q14 11 7 16" stroke="rgba(255,255,255,0.55)" strokeWidth="1.3" strokeLinecap="round" fill="none"/>
-            <path d="M10 3 Q20 11 10 19" stroke="rgba(255,255,255,0.3)" strokeWidth="1.3" strokeLinecap="round" fill="none"/>
-          </svg>
-        </div>
-        {size!=="sm" && (
-          <div style={{width:30,height:22,borderRadius:4,alignSelf:"flex-start",
-            background:"linear-gradient(135deg,#C9A84C 0%,#F0D060 45%,#C9A84C 100%)",position:"relative"}}>
-            <div style={{position:"absolute",top:"40%",left:0,right:0,height:"1px",background:"rgba(0,0,0,0.2)"}}/>
-            <div style={{position:"absolute",left:"33%",top:0,bottom:0,width:"1px",background:"rgba(0,0,0,0.15)"}}/>
-          </div>
-        )}
-        <div style={{...M_MONO,...NUM,fontSize:size==="sm"?9:11,color:"rgba(255,255,255,0.65)",letterSpacing:"0.18em"}}>
-          ···· ···· ···· {c.dig}
-        </div>
-        <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",position:"relative"}}>
-          <div>
-            <div style={{...G,fontSize:size==="sm"?7.5:9,color:"rgba(255,255,255,0.5)",marginBottom:2}}>vence dia {c.vencimento}</div>
-            <div style={{...G,fontSize:size==="sm"?10:12,fontWeight:700,color:"rgba(255,255,255,0.92)"}}>{c.nome}</div>
-          </div>
-          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
-            {pct>=70&&<div style={{...G,fontSize:7,fontWeight:800,color:pct>=90?"#7F1D1D":"#78350F",
-              background:pct>=90?"#FCA5A5":"#FCD34D",borderRadius:5,padding:"2px 6px"}}>{pct}%</div>}
-            <div style={{...G,fontSize:size==="sm"?7:8,color:"rgba(255,255,255,0.35)",textTransform:"uppercase",letterSpacing:"0.1em"}}>{c.bandeira}</div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  /* ── FaturaNav ───────────────────────────────────────────── */
-  const FaturaNav = ({ compact=false }) => (
-    <div style={{display:"flex",alignItems:"center",gap:compact?8:12}}>
-      <button onClick={()=>fatPrev&&setFaturaIdx(i=>i-1)} style={{width:30,height:30,borderRadius:9,
-        border:`1px solid ${T.border}`,background:fatPrev?T.surface:T.grayLight,
-        cursor:fatPrev?"pointer":"not-allowed",display:"flex",alignItems:"center",
-        justifyContent:"center",opacity:fatPrev?1:0.3,transition:"all 0.15s"}}>
-        <ChevronLeft size={14} color={T.inkMid}/>
-      </button>
-      <div style={{textAlign:"center",minWidth:compact?80:100}}>
-        <div style={{...G,...NUM,fontSize:compact?12:14,fontWeight:800,color:T.ink}}>{fatura?.mes}</div>
-        {fatura?.atual&&<div style={{...G,fontSize:10,fontWeight:700,color:T.blue,textTransform:"uppercase",letterSpacing:"0.09em"}}>Atual</div>}
-      </div>
-      <button onClick={()=>fatNext&&setFaturaIdx(i=>i+1)} style={{width:30,height:30,borderRadius:9,
-        border:`1px solid ${T.border}`,background:fatNext?T.surface:T.grayLight,
-        cursor:fatNext?"pointer":"not-allowed",display:"flex",alignItems:"center",
-        justifyContent:"center",opacity:fatNext?1:0.3,transition:"all 0.15s"}}>
-        <ChevronRight size={14} color={T.inkMid}/>
-      </button>
-    </div>
-  );
-
-  /* ── KPI strip (always visible at top) ──────────────────── */
-  const KpiStrip = () => {
-    const limiteUtilizado = safe(card.limite-card.disponivel, card.limite);
-    const saudeLabel = limiteUtilizado<=30?"Saudável":limiteUtilizado<=60?"Regular":limiteUtilizado<=80?"Atenção":"Crítico";
-    const saudeColor = limiteUtilizado<=30?T.green:limiteUtilizado<=60?T.blue:limiteUtilizado<=80?T.amber:T.red;
-    return (
-      <div style={{display:"grid",gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)",gap:isMobile?10:12}}>
-        {[
-          { label:"Fatura atual",   val:fmtBRL((fatura?.val||0)), sub: diffPct!==0?`${diffPct>0?"↑":"↓"} ${Math.abs(diffPct)}% vs ${fatPrev?.mes||"—"}`:"Primeira fatura", color:diffPct>0?T.red:T.green },
-          { label:"Disponível",     val:fmtBRL(card.disponivel), sub:`${100-limiteUtilizado}% do limite livre`, color:usoColor },
-          { label:"Média mensal",   val:fmtBRL(mediaVal), sub:`últimos ${cardFaturas.length} meses`, color:T.blue },
-          { label:"Saúde do cartão",val:saudeLabel, sub:`${limiteUtilizado}% do limite utilizado`, color:saudeColor },
-        ].map((k,i)=>(
-          <div key={i} style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:12,padding:isMobile?"12px 14px":"14px 16px"}}>
-            <div style={{...G,fontSize:10,fontWeight:700,color:T.inkMid,textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:5}}>{k.label}</div>
-            <div style={{...G,...NUM,fontSize:isMobile?15:18,fontWeight:800,color:k.color,lineHeight:1.2}}>{k.val}</div>
-            <div style={{...G,fontSize:10,color:T.inkMid,marginTop:4}}>{k.sub}</div>
-          </div>
-        ))}
-      </div>
-    );
-  };
-
-  /* ── LimitBar ────────────────────────────────────────────── */
-  const LimitBar = () => (
-    <div>
-      <div style={{display:"flex",justifyContent:"space-between",marginBottom:7}}>
-        <span style={{...G,fontSize:11,color:T.inkMid}}>Limite utilizado</span>
-        <span style={{...G,fontSize:11,fontWeight:700,color:usoColor}}>{usoPct}%</span>
-      </div>
-      <div style={{height:6,background:T.grayLight,borderRadius:99,overflow:"hidden"}}>
-        <div style={{height:"100%",width:`${usoPct}%`,
-          background:`linear-gradient(90deg,${usoColor}88,${usoColor})`,
-          borderRadius:99,transition:"width 0.9s cubic-bezier(0.4,0,0.2,1)"}}/>
-      </div>
-      <div style={{display:"flex",justifyContent:"space-between",marginTop:5}}>
-        <span style={{...G,...NUM,fontSize:10,color:T.inkLight}}>{fmtBRL(card.limite-card.disponivel)} usados</span>
-        <span style={{...G,...NUM,fontSize:10,color:T.inkLight}}>limite {fmtBRL(card.limite)}</span>
-      </div>
-    </div>
-  );
-
-  /* ── CatBars ─────────────────────────────────────────────── */
-  const CatBars = () => (
-    <div style={{display:"flex",flexDirection:"column",gap:10}}>
-      {catTotals.map((c,i)=>(
-        <div key={i} onClick={()=>setFilterCat(filterCat===c.cat?null:c.cat)}
-          style={{cursor:"pointer",opacity:filterCat&&filterCat!==c.cat?0.35:1,transition:"opacity 0.15s"}}>
-          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-            <div style={{display:"flex",alignItems:"center",gap:7}}>
-              <div style={{width:8,height:8,borderRadius:2,background:c.color,flexShrink:0}}/>
-              <span style={{...G,fontSize:12,color:T.ink,fontWeight:filterCat===c.cat?700:400}}>{c.cat}</span>
-            </div>
-            <div style={{display:"flex",gap:10}}>
-              <span style={{...G,...NUM,fontSize:12,fontWeight:700,color:T.ink}}>{fmtBRL(c.val)}</span>
-              <span style={{...G,fontSize:10,color:T.inkLight,minWidth:28,textAlign:"right"}}>{c.pct}%</span>
-            </div>
-          </div>
-          <div style={{height:4,background:T.grayLight,borderRadius:99,overflow:"hidden"}}>
-            <div style={{height:"100%",width:`${c.pct}%`,background:c.color,borderRadius:99,transition:"width 0.7s cubic-bezier(0.4,0,0.2,1)"}}/>
-          </div>
-        </div>
-      ))}
-      {filterCat&&<button onClick={()=>setFilterCat(null)} style={{...G,fontSize:11,color:T.inkMid,background:"none",border:`1px solid ${T.border}`,borderRadius:8,padding:"5px 12px",cursor:"pointer",alignSelf:"flex-start"}}>✕ Limpar filtro</button>}
-    </div>
-  );
 
   /* ── TxRow ───────────────────────────────────────────────── */
   const TxRow = ({ item }) => {
@@ -1784,7 +1649,7 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
         <DragScrollTabs bg={T.bg}>
           {CARDS.map(c=>(
             <div key={c.id} style={{paddingTop:8,paddingBottom:0}}>
-              <CardVisual c={c} selected={c.id===cardId} size="sm"/>
+              <CardVisual c={c} selected={c.id===cardId} size="sm" onClick={switchCard}/>
             </div>
           ))}
           <div onClick={openAddCardSheet}
@@ -1800,14 +1665,14 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
       {/* Fatura summary */}
       <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:16,padding:"16px 18px",marginBottom:14}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-          <FaturaNav compact/>
+          <FaturaNav compact fatura={fatura} fatPrev={fatPrev} fatNext={fatNext} onPrev={()=>fatPrev&&setFaturaIdx(i=>i-1)} onNext={()=>fatNext&&setFaturaIdx(i=>i+1)}/>
           <div style={{textAlign:"right"}}>
             {fatura?.atual&&<div style={{...G,fontSize:10,fontWeight:700,color:T.blue,textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:3}}>Fatura aberta</div>}
             <div style={{...G,...NUM,fontSize:22,fontWeight:800,color:T.ink,lineHeight:1}}>{fmtBRL((fatura?.val||0))}</div>
             {diffPct!==0&&<div style={{...G,fontSize:11,fontWeight:600,marginTop:3,color:diffPct>0?T.red:T.green}}>{diffPct>0?"↑":"↓"} {Math.abs(diffPct)}% vs {fatPrev?.mes}</div>}
           </div>
         </div>
-        <LimitBar/>
+        <LimitBar card={card} usoPct={usoPct} usoColor={usoColor} fmtBRL={fmtBRL}/>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:12}}>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
             <Calendar size={12} color={T.inkLight}/>
@@ -1830,7 +1695,7 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
       </div>
 
       {/* KPI Strip */}
-      <div style={{marginBottom:14}}><KpiStrip/></div>
+      <div style={{marginBottom:14}}><KpiStrip card={card} fatura={fatura} fatPrev={fatPrev} fmtBRL={fmtBRL} diffPct={diffPct} usoColor={usoColor} mediaVal={mediaVal} cardFaturas={cardFaturas} isMobile={isMobile}/></div>
 
       {/* Tabs — drag-scrollable */}
       <div style={{marginBottom:14}}>
@@ -1908,8 +1773,8 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
               </div>
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:14}}>
-              <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:14,padding:"18px 20px"}}><LimitBar/><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:14}}>{[{label:"Disponível",val:fmtBRL(card.disponivel),c:usoColor},{label:"Utilizado",val:fmtBRL(card.limite-card.disponivel),c:T.ink},{label:"Limite",val:fmtBRL(card.limite),c:T.inkMid},{label:"Parcelas",val:fmtBRL(totalParcelas),c:T.blue}].map((k,i)=><div key={i} style={{background:T.bg,borderRadius:9,padding:"9px 10px"}}><div style={{...G,fontSize:8,fontWeight:700,color:T.inkLight,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:3}}>{k.label}</div><div style={{...G,...NUM,fontSize:13,fontWeight:700,color:k.c}}>{k.val}</div></div>)}</div></div>
-              {isAtual&&catTotals.length>0&&<div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:14,padding:"18px 20px"}}><div style={{...G,fontSize:12,fontWeight:700,color:T.ink,marginBottom:4}}>Análise de gastos</div><div style={{...G,fontSize:10,color:T.inkLight,marginBottom:14}}>Clique para filtrar</div><CatBars/>{recTotal>0&&<div style={{display:"flex",alignItems:"center",gap:7,background:T.purpleLight,border:`1px solid ${T.purple}22`,borderRadius:9,padding:"8px 12px",marginTop:14}}><Repeat size={12} color={T.purple}/><span style={{...G,fontSize:11,color:T.inkMid}}>Assinaturas: <strong style={{color:T.purple}}>{fmtBRL(recTotal)}</strong></span></div>}</div>}
+              <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:14,padding:"18px 20px"}}><LimitBar card={card} usoPct={usoPct} usoColor={usoColor} fmtBRL={fmtBRL}/><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:14}}>{[{label:"Disponível",val:fmtBRL(card.disponivel),c:usoColor},{label:"Utilizado",val:fmtBRL(card.limite-card.disponivel),c:T.ink},{label:"Limite",val:fmtBRL(card.limite),c:T.inkMid},{label:"Parcelas",val:fmtBRL(totalParcelas),c:T.blue}].map((k,i)=><div key={i} style={{background:T.bg,borderRadius:9,padding:"9px 10px"}}><div style={{...G,fontSize:8,fontWeight:700,color:T.inkLight,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:3}}>{k.label}</div><div style={{...G,...NUM,fontSize:13,fontWeight:700,color:k.c}}>{k.val}</div></div>)}</div></div>
+              {isAtual&&catTotals.length>0&&<div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:14,padding:"18px 20px"}}><div style={{...G,fontSize:12,fontWeight:700,color:T.ink,marginBottom:4}}>Análise de gastos</div><div style={{...G,fontSize:10,color:T.inkLight,marginBottom:14}}>Clique para filtrar</div><CatBars catTotals={catTotals} filterCat={filterCat} setFilterCat={setFilterCat} fmtBRL={fmtBRL}/>{recTotal>0&&<div style={{display:"flex",alignItems:"center",gap:7,background:T.purpleLight,border:`1px solid ${T.purple}22`,borderRadius:9,padding:"8px 12px",marginTop:14}}><Repeat size={12} color={T.purple}/><span style={{...G,fontSize:11,color:T.inkMid}}>Assinaturas: <strong style={{color:T.purple}}>{fmtBRL(recTotal)}</strong></span></div>}</div>}
               {fatPrev&&<div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 14px"}}><div style={{...G,fontSize:10,fontWeight:700,color:T.inkMid,textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:8}}>Média mensal</div><div style={{...G,...NUM,fontSize:18,fontWeight:800,color:T.ink}}>{fmtBRL(mediaVal)}</div><div style={{...G,fontSize:11,fontWeight:600,marginTop:4,color:diffPct>0?T.red:T.green}}>{diffPct>0?"↑":"↓"} {Math.abs(diffPct)}% vs {fatPrev.mes}</div></div>}
             </div>
           </div>
@@ -1979,7 +1844,7 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
       {/* Card carousel */}
       <div style={{ marginBottom:16 }}>
         <div style={{ display:"flex", gap:14, overflowX:"auto", paddingBottom:8, paddingTop:6, scrollbarWidth:"none" }}>
-          {CARDS.map(c=><CardVisual key={c.id} c={c} selected={c.id===cardId} size="md"/>)}
+          {CARDS.map(c=><CardVisual key={c.id} c={c} selected={c.id===cardId} size="md" onClick={switchCard}/>)}
           <div onClick={openAddCardSheet} style={{ width:200, height:Math.round(200/1.586), borderRadius:16, flexShrink:0, border:`2px dashed ${T.border}`, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6, cursor:"pointer", background:T.surface }}>
             <Plus size={22} color={T.inkLight}/>
             <span style={{...G,fontSize:11,color:T.inkMid}}>Novo cartão</span>
@@ -1990,14 +1855,14 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
       {/* Fatura header */}
       <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:14, padding:"16px 20px", marginBottom:14 }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-          <FaturaNav/>
+          <FaturaNav fatura={fatura} fatPrev={fatPrev} fatNext={fatNext} onPrev={()=>fatPrev&&setFaturaIdx(i=>i-1)} onNext={()=>fatNext&&setFaturaIdx(i=>i+1)}/>
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
             {fatura?.atual && <div style={{...G,fontSize:11,fontWeight:700,color:T.blue,textTransform:"uppercase",letterSpacing:"0.08em"}}>Fatura aberta</div>}
             <div style={{...G,...NUM,fontSize:24,fontWeight:800,color:T.ink,lineHeight:1}}>{fmtBRL((fatura?.val||0))}</div>
             {diffPct!==0 && <div style={{...G,fontSize:12,fontWeight:600,color:diffPct>0?T.red:T.green}}>{diffPct>0?"↑":"↓"} {Math.abs(diffPct)}% vs {fatPrev?.mes}</div>}
           </div>
         </div>
-        <LimitBar/>
+        <LimitBar card={card} usoPct={usoPct} usoColor={usoColor} fmtBRL={fmtBRL}/>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:12 }}>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
             <Calendar size={13} color={T.inkLight}/>
@@ -2012,7 +1877,7 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
       </div>
 
       {/* KPI strip */}
-      <div style={{ marginBottom:14 }}><KpiStrip/></div>
+      <div style={{ marginBottom:14 }}><KpiStrip card={card} fatura={fatura} fatPrev={fatPrev} fmtBRL={fmtBRL} diffPct={diffPct} usoColor={usoColor} mediaVal={mediaVal} cardFaturas={cardFaturas} isMobile={isMobile}/></div>
 
       {/* Tabs */}
       <div style={{ display:"flex", gap:2, background:T.grayLight, borderRadius:12, padding:4, width:"fit-content", marginBottom:14 }}>
@@ -2082,7 +1947,7 @@ const trendCats = (cardTendencia && cardTendencia.length > 0) ? Object.keys(card
               </div>
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:14}}>
-              <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:14,padding:"18px 20px"}}><LimitBar/><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:14}}>{[{label:"Disponível",val:fmtBRL(card.disponivel),c:usoColor},{label:"Utilizado",val:fmtBRL(card.limite-card.disponivel),c:T.ink},{label:"Limite",val:fmtBRL(card.limite),c:T.inkMid},{label:"Parcelas",val:fmtBRL(totalParcelas),c:T.blue}].map((k,i)=><div key={i} style={{background:T.bg,borderRadius:9,padding:"9px 10px"}}><div style={{...G,fontSize:10,fontWeight:700,color:T.inkLight,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:3}}>{k.label}</div><div style={{...G,...NUM,fontSize:13,fontWeight:700,color:k.c}}>{k.val}</div></div>)}</div></div>
+              <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:14,padding:"18px 20px"}}><LimitBar card={card} usoPct={usoPct} usoColor={usoColor} fmtBRL={fmtBRL}/><div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:14}}>{[{label:"Disponível",val:fmtBRL(card.disponivel),c:usoColor},{label:"Utilizado",val:fmtBRL(card.limite-card.disponivel),c:T.ink},{label:"Limite",val:fmtBRL(card.limite),c:T.inkMid},{label:"Parcelas",val:fmtBRL(totalParcelas),c:T.blue}].map((k,i)=><div key={i} style={{background:T.bg,borderRadius:9,padding:"9px 10px"}}><div style={{...G,fontSize:10,fontWeight:700,color:T.inkLight,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:3}}>{k.label}</div><div style={{...G,...NUM,fontSize:13,fontWeight:700,color:k.c}}>{k.val}</div></div>)}</div></div>
               {fatPrev&&<div style={{background:T.bg,border:`1px solid ${T.border}`,borderRadius:12,padding:"12px 14px"}}><div style={{...G,fontSize:10,fontWeight:700,color:T.inkLight,textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:8}}>Média mensal</div><div style={{...G,...NUM,fontSize:18,fontWeight:800,color:T.ink}}>{fmtBRL(mediaVal)}</div><div style={{...G,fontSize:11,fontWeight:600,marginTop:4,color:diffPct>0?T.red:T.green}}>{diffPct>0?"↑":"↓"} {Math.abs(diffPct)}% vs {fatPrev.mes}</div></div>}
             </div>
           </div>
