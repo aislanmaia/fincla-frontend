@@ -34,6 +34,7 @@ import {
   useDrawerCloseAnim,
 } from "./useDrawerCloseAnim.js";
 import { useAiSuggestion } from "./useAiSuggestion.js";
+import { useValorInput } from "./useValorInput.js";
 
 import {
   parseApiDecimal,
@@ -109,7 +110,6 @@ export const NovaTransacaoModal = ({
   // Toggle "↺ Isto é um estorno?" — só ativável quando tipo === "despesa".
   // Quando true, o payload enviado ao backend usa type='refund' (dinheiro voltando).
   const [isEstorno, setIsEstorno] = useState(false);
-  const [valor,     setValor]     = useState("");
   const [desc,      setDesc]      = useState("");
   const [cat,       setCat]       = useState("");
   const [tags,      setTags]      = useState([]);
@@ -165,10 +165,7 @@ export const NovaTransacaoModal = ({
   }, [panelRecorrenciaOpen, panelRecorrenciaExiting]);
   const [descFocused,  setDescFocused]  = useState(false);
   const [descError,    setDescError]    = useState(false);
-  const valorInputRef = useRef(null);
   const descRef       = useRef(null);
-  // Banking-style valor input (integer cents)
-  const [centavos,      setCentavos]     = useState(0);
   // Quick-add card inline
   const [addingCartao,  setAddingCartao] = useState(false);
   const [quickAddCardName, setQuickAddCardName] = useState("");
@@ -230,6 +227,26 @@ export const NovaTransacaoModal = ({
     resetToFirstStep: resetMobileStep,
   } = useMobileStepFlow({ open, isMobile, tipo, method, recorre });
 
+  // Ref-shim para quebrar a circularidade entre useValorInput (precisa de
+  // `setParcelaMode` pra cancelar a calculadora quando o usuário digita) e
+  // useParcelaCalculator (precisa de `setAmountCents` no onApply).
+  const setParcelaModeRef = useRef(null);
+
+  const {
+    valor,
+    centavos,
+    valorNum,
+    valorInputRef,
+    handleValorKey,
+    setAmountCents,
+    setAmountFromDecimal,
+    resetAmount,
+  } = useValorInput({
+    open,
+    descFocused,
+    onClearParcelaMode: () => setParcelaModeRef.current?.(false),
+  });
+
   const {
     parcelaMode,
     setParcelaMode,
@@ -250,12 +267,7 @@ export const NovaTransacaoModal = ({
     resetAll: resetParcelaCalc,
   } = useParcelaCalculator({
     onApply: ({ totalCents, parcelasN }) => {
-      setCentavos(totalCents);
-      setValor(
-        totalCents === 0
-          ? ""
-          : (totalCents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 }),
-      );
+      setAmountCents(totalCents);
       setMethod("credito");
       setPanelCartaoOpen(true);
       setPanelCartaoExiting(false);
@@ -263,6 +275,7 @@ export const NovaTransacaoModal = ({
       setParcelas(parcelasN);
     },
   });
+  setParcelaModeRef.current = setParcelaMode;
 
   const { aiSuggestion, aiApplied, applyAi, resetAi } = useAiSuggestion({
     desc,
@@ -365,18 +378,7 @@ export const NovaTransacaoModal = ({
     setParcelas(3);
     setMod("parcelado");
 
-    const applyValor = (v) => {
-      if (v != null && v !== "") {
-        const cents = Math.round(Number(v) * 100);
-        if (Number.isFinite(cents)) {
-          setCentavos(cents);
-          setValor(cents === 0 ? "" : (cents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 }));
-          return;
-        }
-      }
-      setCentavos(0);
-      setValor("");
-    };
+    const applyValor = (v) => setAmountFromDecimal(v);
 
     if (nr) {
       setTipo(pc?.tipo || "despesa");
@@ -705,82 +707,6 @@ export const NovaTransacaoModal = ({
     parcelas,
     cartao,
   ]);
-
-  // Global key capture: digits typed anywhere → Valor field
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e) => {
-      // O campo Valor já trata teclas em onKeyDown; se duplicar com este listener, cada dígito entra 2×.
-      if (document.activeElement === valorInputRef.current) return;
-
-      // Skip if any input/textarea/select is focused (except our valor field)
-      const tag = document.activeElement?.tagName;
-      const isOtherInput = (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") &&
-                           document.activeElement !== valorInputRef.current;
-      if (isOtherInput || descFocused) return;
-      // Skip modifier keys and non-digit keys
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key >= "0" && e.key <= "9") {
-        // Focus valor input first, then process
-        valorInputRef.current?.focus();
-        e.preventDefault();
-        const next = Math.min(centavos * 10 + parseInt(e.key), 9999999);
-        setCentavos(next);
-        setValor(next === 0 ? "" : (next / 100).toLocaleString("pt-BR", { minimumFractionDigits:2 }));
-        if (parcelaMode) setParcelaMode(false);
-      } else if (e.key === "Backspace" || e.key === "Delete") {
-        if (document.activeElement === valorInputRef.current) return; // handled by onKeyDown
-        valorInputRef.current?.focus();
-        e.preventDefault();
-        if (e.key === "Delete") { setCentavos(0); setValor(""); }
-        else { const n = Math.floor(centavos / 10); setCentavos(n); setValor(n===0?"": (n/100).toLocaleString("pt-BR",{minimumFractionDigits:2})); }
-      }
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [open, centavos, descFocused, parcelaMode]);
-
-  const valorFieldHasSelection = (el) =>
-    el &&
-    typeof el.selectionStart === "number" &&
-    typeof el.selectionEnd === "number" &&
-    el.selectionStart !== el.selectionEnd;
-
-  // Banking-style input handler (digit-shift preserves decimal)
-  const handleValorKey = (e) => {
-    const el = e.currentTarget;
-    const replacing = valorFieldHasSelection(el);
-
-    if (e.key >= "0" && e.key <= "9") {
-      e.preventDefault();
-      e.stopPropagation();
-      const base = replacing ? 0 : centavos;
-      const next = Math.min(base * 10 + parseInt(e.key, 10), 9999999);
-      setCentavos(next);
-      setValor(
-        next === 0
-          ? ""
-          : (next / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 }),
-      );
-      if (parcelaMode) setParcelaMode(false);
-    } else if (e.key === "Backspace" || e.key === "Delete") {
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.key === "Delete" || replacing) {
-        setCentavos(0);
-        setValor("");
-      } else {
-        const next = Math.floor(centavos / 10);
-        setCentavos(next);
-        setValor(
-          next === 0
-            ? ""
-            : (next / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 }),
-        );
-      }
-    }
-  };
-  const valorNum   = centavos / 100;
 
   const periodSaldo = useNovaTransacaoPeriodSaldo({
     open,
@@ -1360,7 +1286,7 @@ export const NovaTransacaoModal = ({
     setTipo(prefTipo);
     setIsEstorno(false);
     refund.resetAll();
-    setCentavos(0); setValor("");
+    resetAmount();
     setDesc(""); setTags([]); setDetailTagIds([]); setDetailTagLabelById({});
     setMethod(prefMethod);
     setPanelCartaoOpen(prefMethod === "credito"); setPanelCartaoExiting(false);
