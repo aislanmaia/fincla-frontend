@@ -1,34 +1,34 @@
 import { CardFormSheet } from "./CardFormSheet.jsx";
-import { ExportModal, ParcelaModal } from "./CartoesModals.jsx";
+import { ExportInvoiceModal, ReallocateInstallmentModal } from "./CartoesModals.jsx";
 
 /**
  * Stack global de modais/sheets da `CartoesPage` (realocar parcela, exportar
  * fatura, e add/editar cartão). Encapsula o wiring de props que era duplicado
  * idêntico nos shells mobile e desktop.
  */
-export function CartoesPageModals({
+export function CardsPageModals({
   isMobile,
   card,
-  fatura,
-  fmtBRL,
-  // ParcelaModal
-  parcelaModal,
-  parcelaTarget,
-  setParcelaTarget,
-  parcelaOk,
-  onCloseParcelaModal,
-  onConfirmParcela,
-  // ExportModal
-  exportModal,
-  displayItens,
-  expCats,
-  setExpCats,
-  expParcelas,
-  setExpParcelas,
-  expRec,
-  setExpRec,
-  expNormal,
-  setExpNormal,
+  invoice,
+  formatBRL,
+  // ReallocateInstallmentModal
+  installmentModal,
+  installmentTarget,
+  setInstallmentTarget,
+  installmentSaved,
+  onCloseInstallmentModal,
+  onConfirmInstallment,
+  // ExportInvoiceModal
+  exportModalOpen,
+  displayItems,
+  exportCategories,
+  setExportCategories,
+  exportInstallments,
+  setExportInstallments,
+  exportRecurring,
+  setExportRecurring,
+  exportOneTime,
+  setExportOneTime,
   onCloseExportModal,
   onExportCSV,
   // CardFormSheet
@@ -57,30 +57,30 @@ export function CartoesPageModals({
 }) {
   return (
     <>
-      <ParcelaModal
-        parcelaModal={parcelaModal}
-        parcelaTarget={parcelaTarget}
-        setParcelaTarget={setParcelaTarget}
-        parcelaOk={parcelaOk}
+      <ReallocateInstallmentModal
+        installmentModal={installmentModal}
+        installmentTarget={installmentTarget}
+        setInstallmentTarget={setInstallmentTarget}
+        installmentSaved={installmentSaved}
         card={card}
-        fmtBRL={fmtBRL}
+        formatBRL={formatBRL}
         isMobile={isMobile}
-        onClose={onCloseParcelaModal}
-        onConfirm={onConfirmParcela}
+        onClose={onCloseInstallmentModal}
+        onConfirm={onConfirmInstallment}
       />
-      <ExportModal
-        open={exportModal}
+      <ExportInvoiceModal
+        open={exportModalOpen}
         card={card}
-        fatura={fatura}
-        displayItens={displayItens}
-        expCats={expCats}
-        setExpCats={setExpCats}
-        expParcelas={expParcelas}
-        setExpParcelas={setExpParcelas}
-        expRec={expRec}
-        setExpRec={setExpRec}
-        expNormal={expNormal}
-        setExpNormal={setExpNormal}
+        invoice={invoice}
+        displayItems={displayItems}
+        exportCategories={exportCategories}
+        setExportCategories={setExportCategories}
+        exportInstallments={exportInstallments}
+        setExportInstallments={setExportInstallments}
+        exportRecurring={exportRecurring}
+        setExportRecurring={setExportRecurring}
+        exportOneTime={exportOneTime}
+        setExportOneTime={setExportOneTime}
         isMobile={isMobile}
         onClose={onCloseExportModal}
         onExport={onExportCSV}

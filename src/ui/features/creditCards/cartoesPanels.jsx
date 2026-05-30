@@ -56,20 +56,20 @@ export function CardVisual({ c, selected, size = "md", onClick }) {
   );
 }
 
-/* ── FaturaNav ──────────────────────────────────────────────── */
-export function FaturaNav({ compact = false, fatura, fatPrev, fatNext, onPrev, onNext }) {
+/* ── InvoiceNav ─────────────────────────────────────────────── */
+export function InvoiceNav({ compact = false, invoice, previousInvoice, nextInvoice, onPrev, onNext }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: compact ? 8 : 12 }}>
-      <button onClick={onPrev} disabled={!fatPrev}
-        style={{ width: 30, height: 30, borderRadius: 9, border: `1px solid ${T.border}`, background: fatPrev ? T.surface : T.grayLight, cursor: fatPrev ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", opacity: fatPrev ? 1 : 0.3, transition: "all 0.15s" }}>
+      <button onClick={onPrev} disabled={!previousInvoice}
+        style={{ width: 30, height: 30, borderRadius: 9, border: `1px solid ${T.border}`, background: previousInvoice ? T.surface : T.grayLight, cursor: previousInvoice ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", opacity: previousInvoice ? 1 : 0.3, transition: "all 0.15s" }}>
         <ChevronLeft size={14} color={T.inkMid} />
       </button>
       <div style={{ textAlign: "center", minWidth: compact ? 80 : 100 }}>
-        <div style={{ ...G, ...NUM, fontSize: compact ? 12 : 14, fontWeight: 800, color: T.ink }}>{fatura?.mes}</div>
-        {fatura?.atual && <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.blue, textTransform: "uppercase", letterSpacing: "0.09em" }}>Atual</div>}
+        <div style={{ ...G, ...NUM, fontSize: compact ? 12 : 14, fontWeight: 800, color: T.ink }}>{invoice?.mes}</div>
+        {invoice?.atual && <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.blue, textTransform: "uppercase", letterSpacing: "0.09em" }}>Atual</div>}
       </div>
-      <button onClick={onNext} disabled={!fatNext}
-        style={{ width: 30, height: 30, borderRadius: 9, border: `1px solid ${T.border}`, background: fatNext ? T.surface : T.grayLight, cursor: fatNext ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", opacity: fatNext ? 1 : 0.3, transition: "all 0.15s" }}>
+      <button onClick={onNext} disabled={!nextInvoice}
+        style={{ width: 30, height: 30, borderRadius: 9, border: `1px solid ${T.border}`, background: nextInvoice ? T.surface : T.grayLight, cursor: nextInvoice ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", opacity: nextInvoice ? 1 : 0.3, transition: "all 0.15s" }}>
         <ChevronRight size={14} color={T.inkMid} />
       </button>
     </div>
@@ -79,23 +79,23 @@ export function FaturaNav({ compact = false, fatura, fatPrev, fatNext, onPrev, o
 /* ── KpiStrip ───────────────────────────────────────────────── */
 export function KpiStrip({
   card,
-  fatura,
-  fatPrev,
-  fmtBRL,
-  diffPct,
-  usoColor,
-  mediaVal,
-  cardFaturas,
+  invoice,
+  previousInvoice,
+  formatBRL,
+  diffPercent,
+  usageColor,
+  averageValue,
+  cardInvoices,
   isMobile,
 }) {
-  const limiteUtilizado = safe(card.limite - card.disponivel, card.limite);
-  const saudeLabel = limiteUtilizado <= 30 ? "Saudável" : limiteUtilizado <= 60 ? "Regular" : limiteUtilizado <= 80 ? "Atenção" : "Crítico";
-  const saudeColor = limiteUtilizado <= 30 ? T.green : limiteUtilizado <= 60 ? T.blue : limiteUtilizado <= 80 ? T.amber : T.red;
+  const usagePercent = safe(card.limite - card.disponivel, card.limite);
+  const healthLabel = usagePercent <= 30 ? "Saudável" : usagePercent <= 60 ? "Regular" : usagePercent <= 80 ? "Atenção" : "Crítico";
+  const healthColor = usagePercent <= 30 ? T.green : usagePercent <= 60 ? T.blue : usagePercent <= 80 ? T.amber : T.red;
   const items = [
-    { label: "Fatura atual", val: fmtBRL(fatura?.val || 0), sub: diffPct !== 0 ? `${diffPct > 0 ? "↑" : "↓"} ${Math.abs(diffPct)}% vs ${fatPrev?.mes || "—"}` : "Primeira fatura", color: diffPct > 0 ? T.red : T.green },
-    { label: "Disponível", val: fmtBRL(card.disponivel), sub: `${100 - limiteUtilizado}% do limite livre`, color: usoColor },
-    { label: "Média mensal", val: fmtBRL(mediaVal), sub: `últimos ${cardFaturas.length} meses`, color: T.blue },
-    { label: "Saúde do cartão", val: saudeLabel, sub: `${limiteUtilizado}% do limite utilizado`, color: saudeColor },
+    { label: "Fatura atual", val: formatBRL(invoice?.val || 0), sub: diffPercent !== 0 ? `${diffPercent > 0 ? "↑" : "↓"} ${Math.abs(diffPercent)}% vs ${previousInvoice?.mes || "—"}` : "Primeira fatura", color: diffPercent > 0 ? T.red : T.green },
+    { label: "Disponível", val: formatBRL(card.disponivel), sub: `${100 - usagePercent}% do limite livre`, color: usageColor },
+    { label: "Média mensal", val: formatBRL(averageValue), sub: `últimos ${cardInvoices.length} meses`, color: T.blue },
+    { label: "Saúde do cartão", val: healthLabel, sub: `${usagePercent}% do limite utilizado`, color: healthColor },
   ];
   return (
     <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: isMobile ? 10 : 12 }}>
@@ -111,38 +111,38 @@ export function KpiStrip({
 }
 
 /* ── LimitBar ───────────────────────────────────────────────── */
-export function LimitBar({ card, usoPct, usoColor, fmtBRL }) {
+export function LimitBar({ card, usagePercent, usageColor, formatBRL }) {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 7 }}>
         <span style={{ ...G, fontSize: 11, color: T.inkMid }}>Limite utilizado</span>
-        <span style={{ ...G, fontSize: 11, fontWeight: 700, color: usoColor }}>{usoPct}%</span>
+        <span style={{ ...G, fontSize: 11, fontWeight: 700, color: usageColor }}>{usagePercent}%</span>
       </div>
       <div style={{ height: 6, background: T.grayLight, borderRadius: 99, overflow: "hidden" }}>
-        <div style={{ height: "100%", width: `${usoPct}%`, background: `linear-gradient(90deg,${usoColor}88,${usoColor})`, borderRadius: 99, transition: "width 0.9s cubic-bezier(0.4,0,0.2,1)" }} />
+        <div style={{ height: "100%", width: `${usagePercent}%`, background: `linear-gradient(90deg,${usageColor}88,${usageColor})`, borderRadius: 99, transition: "width 0.9s cubic-bezier(0.4,0,0.2,1)" }} />
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5 }}>
-        <span style={{ ...G, ...NUM, fontSize: 10, color: T.inkLight }}>{fmtBRL(card.limite - card.disponivel)} usados</span>
-        <span style={{ ...G, ...NUM, fontSize: 10, color: T.inkLight }}>limite {fmtBRL(card.limite)}</span>
+        <span style={{ ...G, ...NUM, fontSize: 10, color: T.inkLight }}>{formatBRL(card.limite - card.disponivel)} usados</span>
+        <span style={{ ...G, ...NUM, fontSize: 10, color: T.inkLight }}>limite {formatBRL(card.limite)}</span>
       </div>
     </div>
   );
 }
 
-/* ── CatBars ────────────────────────────────────────────────── */
-export function CatBars({ catTotals, filterCat, setFilterCat, fmtBRL }) {
+/* ── CategoryBars ──────────────────────────────────────────── */
+export function CategoryBars({ categoryTotals, filterCategory, setFilterCategory, formatBRL }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {catTotals.map((c, i) => (
-        <div key={i} onClick={() => setFilterCat(filterCat === c.cat ? null : c.cat)}
-          style={{ cursor: "pointer", opacity: filterCat && filterCat !== c.cat ? 0.35 : 1, transition: "opacity 0.15s" }}>
+      {categoryTotals.map((c, i) => (
+        <div key={i} onClick={() => setFilterCategory(filterCategory === c.cat ? null : c.cat)}
+          style={{ cursor: "pointer", opacity: filterCategory && filterCategory !== c.cat ? 0.35 : 1, transition: "opacity 0.15s" }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
               <div style={{ width: 8, height: 8, borderRadius: 2, background: c.color, flexShrink: 0 }} />
-              <span style={{ ...G, fontSize: 12, color: T.ink, fontWeight: filterCat === c.cat ? 700 : 400 }}>{c.cat}</span>
+              <span style={{ ...G, fontSize: 12, color: T.ink, fontWeight: filterCategory === c.cat ? 700 : 400 }}>{c.cat}</span>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
-              <span style={{ ...G, ...NUM, fontSize: 12, fontWeight: 700, color: T.ink }}>{fmtBRL(c.val)}</span>
+              <span style={{ ...G, ...NUM, fontSize: 12, fontWeight: 700, color: T.ink }}>{formatBRL(c.val)}</span>
               <span style={{ ...G, fontSize: 10, color: T.inkLight, minWidth: 28, textAlign: "right" }}>{c.pct}%</span>
             </div>
           </div>
@@ -151,8 +151,8 @@ export function CatBars({ catTotals, filterCat, setFilterCat, fmtBRL }) {
           </div>
         </div>
       ))}
-      {filterCat && (
-        <button onClick={() => setFilterCat(null)}
+      {filterCategory && (
+        <button onClick={() => setFilterCategory(null)}
           style={{ ...G, fontSize: 11, color: T.inkMid, background: "none", border: `1px solid ${T.border}`, borderRadius: 8, padding: "5px 12px", cursor: "pointer", alignSelf: "flex-start" }}>
           ✕ Limpar filtro
         </button>

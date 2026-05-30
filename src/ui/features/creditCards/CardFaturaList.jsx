@@ -9,24 +9,24 @@ import { G } from "../../typography";
  * + valor) + bloco expansível com chips de detalhe, progresso de parcelamento,
  * banner de estornos vinculados e CTA pra lançar novo estorno.
  */
-export function TxRow({ item, card, catColor, fmtBRL, onLancarEstorno }) {
-  const isParcela = item.parcela && item.parcela.n;
-  const parcelaVal = isParcela
+export function TxRow({ item, card, categoryColor, formatBRL, onLaunchRefund }) {
+  const isInstallment = item.parcela && item.parcela.n;
+  const installmentValue = isInstallment
     ? (item.parcela.val != null && Number.isFinite(Number(item.parcela.val))
       ? item.parcela.val
       : item.val)
     : 0;
-  const parcelaTotal = isParcela
+  const installmentTotal = isInstallment
     ? (item.parcela.total != null && Number.isFinite(Number(item.parcela.total))
       ? item.parcela.total
-      : parcelaVal * item.parcela.t)
+      : installmentValue * item.parcela.t)
     : 0;
-  const cc = catColor(item);
+  const cc = categoryColor(item);
   const [expanded, setExpanded] = useState(false);
   const hasLinkedRefunds = !!(item.refundsSummary && item.refundsSummary.count > 0);
-  const canLancarEstorno =
-    !item.isRefund && item.transactionId != null && !!onLancarEstorno && !hasLinkedRefunds;
-  const expandable = !!(item.method || isParcela || hasLinkedRefunds || canLancarEstorno);
+  const canLaunchRefund =
+    !item.isRefund && item.transactionId != null && !!onLaunchRefund && !hasLinkedRefunds;
+  const expandable = !!(item.method || isInstallment || hasLinkedRefunds || canLaunchRefund);
 
   return (
     <div style={{ borderBottom: `1px solid ${T.border}` }}>
@@ -50,7 +50,7 @@ export function TxRow({ item, card, catColor, fmtBRL, onLancarEstorno }) {
             <span style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {item.desc}
             </span>
-            {isParcela && (
+            {isInstallment && (
               <span style={{ ...G, fontSize: 10, fontWeight: 800, color: T.blue, background: T.blueLight, borderRadius: 6, padding: "1px 6px", flexShrink: 0, letterSpacing: "0.02em" }}>
                 {item.parcela.n}/{item.parcela.t}×
               </span>
@@ -59,7 +59,7 @@ export function TxRow({ item, card, catColor, fmtBRL, onLancarEstorno }) {
               <span style={{ ...G, fontSize: 10, fontWeight: 700, color: T.purple, background: T.purpleLight, borderRadius: 6, padding: "1px 6px", flexShrink: 0 }}>↻</span>
             )}
             {hasLinkedRefunds && !item.isRefund && (
-              <span title={`${item.refundsSummary.count} estorno${item.refundsSummary.count !== 1 ? "s" : ""} relacionado${item.refundsSummary.count !== 1 ? "s" : ""} · ${fmtBRL(item.refundsSummary.totalValue)} abatido${item.refundsSummary.count !== 1 ? "s" : ""}`}
+              <span title={`${item.refundsSummary.count} estorno${item.refundsSummary.count !== 1 ? "s" : ""} relacionado${item.refundsSummary.count !== 1 ? "s" : ""} · ${formatBRL(item.refundsSummary.totalValue)} abatido${item.refundsSummary.count !== 1 ? "s" : ""}`}
                 style={{ ...G, fontSize: 10, fontWeight: 700, color: T.green, background: T.greenLight, borderRadius: 99, padding: "1px 6px", flexShrink: 0, cursor: "help", whiteSpace: "nowrap" }}>
                 ↺ Estorno
               </span>
@@ -70,10 +70,10 @@ export function TxRow({ item, card, catColor, fmtBRL, onLancarEstorno }) {
             <span style={{ ...G, fontSize: 11, color: cc, fontWeight: 600 }}>{item.cat}</span>
             <span style={{ color: T.border }}>·</span>
             <span style={{ ...G, fontSize: 11, color: T.inkLight }}>{item.data}</span>
-            {isParcela && (
+            {isInstallment && (
               <>
                 <span style={{ color: T.border }}>·</span>
-                <span style={{ ...G, fontSize: 11, color: T.inkLight }}>{fmtBRL(parcelaVal)}/mês</span>
+                <span style={{ ...G, fontSize: 11, color: T.inkLight }}>{formatBRL(installmentValue)}/mês</span>
               </>
             )}
           </div>
@@ -81,11 +81,11 @@ export function TxRow({ item, card, catColor, fmtBRL, onLancarEstorno }) {
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0, paddingLeft: 12 }}>
           <div style={{ textAlign: "right" }}>
             <div style={{ ...G, fontFamily: "'Geist Mono',monospace", fontSize: 14, fontWeight: 700, color: T.ink, letterSpacing: "-0.01em" }}>
-              {fmtBRL(item.val)}
+              {formatBRL(item.val)}
             </div>
-            {isParcela && (
+            {isInstallment && (
               <div style={{ ...G, fontSize: 10, color: T.blue, fontFamily: "'Geist Mono',monospace" }}>
-                total {fmtBRL(parcelaTotal)}
+                total {formatBRL(installmentTotal)}
               </div>
             )}
           </div>
@@ -96,12 +96,12 @@ export function TxRow({ item, card, catColor, fmtBRL, onLancarEstorno }) {
       {expanded && expandable && (() => {
         const detailChips = [
           item.method && { label: "Método", val: item.method },
-          isParcela && { label: "Parcela", val: `${item.parcela.n}ª de ${item.parcela.t}` },
-          isParcela && { label: "Valor mensal", val: fmtBRL(parcelaVal), mono: true },
-          isParcela && { label: "Total compra", val: fmtBRL(parcelaTotal), mono: true },
-          isParcela && { label: "Restante", val: fmtBRL(parcelaTotal - item.parcela.n * parcelaVal), mono: true, color: T.blue },
+          isInstallment && { label: "Parcela", val: `${item.parcela.n}ª de ${item.parcela.t}` },
+          isInstallment && { label: "Valor mensal", val: formatBRL(installmentValue), mono: true },
+          isInstallment && { label: "Total compra", val: formatBRL(installmentTotal), mono: true },
+          isInstallment && { label: "Restante", val: formatBRL(installmentTotal - item.parcela.n * installmentValue), mono: true, color: T.blue },
         ].filter(Boolean);
-        if (detailChips.length === 0 && !isParcela && !hasLinkedRefunds && !canLancarEstorno) return null;
+        if (detailChips.length === 0 && !isInstallment && !hasLinkedRefunds && !canLaunchRefund) return null;
         return (
           <div style={{ padding: "0 20px 14px 71px", background: `${cc}06`, animation: "fadeIn 0.15s ease" }}>
             {detailChips.length > 0 && (
@@ -118,7 +118,7 @@ export function TxRow({ item, card, catColor, fmtBRL, onLancarEstorno }) {
                 ))}
               </div>
             )}
-            {isParcela && (
+            {isInstallment && (
               <div style={{ marginTop: detailChips.length > 0 ? 10 : 0 }}>
                 <div style={{ height: 4, background: T.grayLight, borderRadius: 99, overflow: "hidden" }}>
                   <div style={{ height: "100%", borderRadius: 99, width: `${Math.round((item.parcela.n / item.parcela.t) * 100)}%`, background: `linear-gradient(to right, ${cc}, ${T.blue})`, transition: "width 0.6s cubic-bezier(0.16,1,0.3,1)" }} />
@@ -139,17 +139,17 @@ export function TxRow({ item, card, catColor, fmtBRL, onLancarEstorno }) {
                     {item.refundsSummary.count} lançamento{item.refundsSummary.count !== 1 ? "s" : ""} de estorno
                     {" · "}
                     <span style={{ fontFamily: "'Geist Mono',monospace", fontWeight: 700 }}>
-                      {fmtBRL(item.refundsSummary.totalValue)}
+                      {formatBRL(item.refundsSummary.totalValue)}
                     </span>
                     {" abatido"}{item.refundsSummary.count !== 1 ? "s" : ""}{" no total"}
                   </div>
                 </div>
               </div>
             )}
-            {canLancarEstorno && (
+            {canLaunchRefund && (
               <div style={{ marginTop: 10 }}>
                 <button type="button"
-                  onClick={(e) => { e.stopPropagation(); onLancarEstorno(item, card); }}
+                  onClick={(e) => { e.stopPropagation(); onLaunchRefund(item, card); }}
                   style={{ ...G, display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 8, border: `1px dashed ${T.green}66`, background: "transparent", color: T.green, fontSize: 11, fontWeight: 700, cursor: "pointer" }}
                   onMouseEnter={(e) => { e.currentTarget.style.background = T.greenLight; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
@@ -175,9 +175,9 @@ export function DateGroup({
   card,
   expandedDate,
   setExpandedDate,
-  catColor,
-  fmtBRL,
-  onLancarEstorno,
+  categoryColor,
+  formatBRL,
+  onLaunchRefund,
 }) {
   const total = items.reduce((s, i) => s + i.val, 0);
   const isOpen = expandedDate === null || expandedDate === date;
@@ -217,11 +217,11 @@ export function DateGroup({
           </span>
         </div>
         <span style={{ ...G, fontFamily: "'Geist Mono',monospace", fontSize: 12, fontWeight: 700, color: T.inkMid, letterSpacing: "-0.01em" }}>
-          {fmtBRL(total)}
+          {formatBRL(total)}
         </span>
       </div>
       {isOpen && items.map((item) => (
-        <TxRow key={item.id} item={item} card={card} catColor={catColor} fmtBRL={fmtBRL} onLancarEstorno={onLancarEstorno} />
+        <TxRow key={item.id} item={item} card={card} categoryColor={categoryColor} formatBRL={formatBRL} onLaunchRefund={onLaunchRefund} />
       ))}
     </div>
   );

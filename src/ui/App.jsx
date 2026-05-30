@@ -300,7 +300,7 @@ export default function App() {
               });
               openTxModal();
             }} />,
-    cards:      <CartoesPage    onNav={navTo} isMobile={isMobile} cards={dataMode==="empty" ? extraCards : undefined} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onNovaItem={(cartaoId) => {
+    cards:      <CartoesPage    onNav={navTo} isMobile={isMobile} cards={dataMode==="empty" ? extraCards : undefined} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onNewItem={(cartaoId) => {
       const id = String(cartaoId);
       setModalPreConfig((p) => ({
         ...(p || {}),
@@ -309,7 +309,7 @@ export default function App() {
         cartaoId: id,
       }));
       openTxModal(isUuidString(id) ? { [FC.CARD]: id } : {});
-    }} onLancarEstorno={(item, fromCard) => {
+    }} onLaunchRefund={(item, fromCard) => {
       // Abre o drawer já configurado pra estorno linkado à compra original (transaction_id pai).
       if (!item || item.transactionId == null) return;
       const cardIdNum = fromCard?.cardId != null && Number.isFinite(Number(fromCard.cardId))

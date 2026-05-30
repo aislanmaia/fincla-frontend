@@ -12,18 +12,18 @@ import { useCreditCardsData } from "../features/creditCards/useCreditCardsData.j
 import { CardFormSheet } from "../features/creditCards/CardFormSheet.jsx";
 import {
   CardVisual,
-  FaturaNav,
+  InvoiceNav,
   KpiStrip,
   LimitBar,
 } from "../features/creditCards/cartoesPanels.jsx";
-import { CartoesPageModals } from "../features/creditCards/CartoesPageModals.jsx";
-import { CartoesFaturaTab } from "../features/creditCards/CartoesFaturaTab.jsx";
+import { CardsPageModals } from "../features/creditCards/CartoesPageModals.jsx";
+import { InvoiceTab } from "../features/creditCards/CartoesFaturaTab.jsx";
 import {
-  AnalisesTab,
-  HistoricoTab,
-  ParcelasTab,
-  PlanejamentoTab,
-  RecorrenciasTab,
+  AnalyticsTab,
+  HistoryTab,
+  InstallmentsTab,
+  PlanningTab,
+  RecurringTab,
 } from "../features/creditCards/CartoesTabs.jsx";
 import { shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { FC } from "../routing/searchContract.js";
@@ -44,7 +44,16 @@ import {
   safePctOrFallback as safe,
 } from "../data/creditCardsAdapter.js";
 
-export const CartoesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstorno = null, cards: cardsProp, dataMode = "mock", organizationId = null, transactionsRefreshToken = 0 }) => {
+export const CartoesPage = ({
+  onNav,
+  isMobile = false,
+  onNewItem,
+  onLaunchRefund = null,
+  cards: cardsProp,
+  dataMode = "mock",
+  organizationId = null,
+  transactionsRefreshToken = 0,
+}) => {
   const urlSearch = useSearch({ strict: false });
   const navigate = useNavigate();
   const shouldUseRealData = shouldUseRealDataForMode(organizationId, dataMode);
@@ -62,37 +71,37 @@ export const CartoesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstor
     : localCards;
   const isEmptyCards = (dataMode === "empty" && hasSeededCards && CARDS.length === 0) || (shouldUseRealData && !creditCardsData.isLoading && CARDS.length === 0);
   /* ── State ───────────────────────────────────────────────── */
-  const [cardId,        setCardId]        = useState(() => (cardsProp && cardsProp.length > 0 ? cardsProp[0].id : "nubank"));
-  const [tab,           setTab]           = useState("fatura");
-  const [faturaIdx,     setFaturaIdx]     = useState(5);
-  const faturaIdxRef = useRef(faturaIdx);
+  const [cardId,             setCardId]             = useState(() => (cardsProp && cardsProp.length > 0 ? cardsProp[0].id : "nubank"));
+  const [tab,                setTab]                = useState("invoice");
+  const [invoiceIdx,         setInvoiceIdx]         = useState(5);
+  const invoiceIdxRef = useRef(invoiceIdx);
   const prevCardsSnapshotRef = useRef(null);
-  faturaIdxRef.current = faturaIdx;
-  const [search,        setSearch]        = useState("");
-  const [filterCat,     setFilterCat]     = useState(null);
-  const [expandedDate,  setExpandedDate]  = useState(null);
-  const [parcelaModal,  setParcelaModal]  = useState(null);
-  const [parcelaTarget, setParcelaTarget] = useState(null);
-  const [parcelaOk,     setParcelaOk]     = useState(false);
-  const [markedPago,    setMarkedPago]    = useState({});
-  const [markingPago,   setMarkingPago]   = useState(false);
-  const [exportModal,   setExportModal]   = useState(false);
-  const [expCats,       setExpCats]       = useState({});
-  const [expParcelas,   setExpParcelas]   = useState(true);
-  const [expRec,        setExpRec]        = useState(true);
-  const [expNormal,     setExpNormal]     = useState(true);
-  const [addCardSheet,  setAddCardSheet]  = useState(false);
-  const [editCardSheet, setEditCardSheet] = useState(false);
-  const [editingCardId, setEditingCardId] = useState(null);
-  const [visibleGroups, setVisibleGroups] = useState(8); // pagination
-  const [draftIssuer,     setDraftIssuer]     = useState("");
-  const [draftName,       setDraftName]       = useState("");
-  const [draftLast4,      setDraftLast4]      = useState("");
-  const [draftBrand,      setDraftBrand]      = useState("Visa");
-  const [draftLimit,      setDraftLimit]      = useState("");
-  const [draftDueDay,     setDraftDueDay]     = useState("");
-  const [draftClosingDay, setDraftClosingDay] = useState("");
-  const [draftSuccess,    setDraftSuccess]    = useState(false);
+  invoiceIdxRef.current = invoiceIdx;
+  const [search,             setSearch]             = useState("");
+  const [filterCategory,     setFilterCategory]     = useState(null);
+  const [expandedDate,       setExpandedDate]       = useState(null);
+  const [installmentModal,   setInstallmentModal]   = useState(null);
+  const [installmentTarget,  setInstallmentTarget]  = useState(null);
+  const [installmentSaved,   setInstallmentSaved]   = useState(false);
+  const [markedPaid,         setMarkedPaid]         = useState({});
+  const [markingPaid,        setMarkingPaid]        = useState(false);
+  const [exportModalOpen,    setExportModalOpen]    = useState(false);
+  const [exportCategories,   setExportCategories]   = useState({});
+  const [exportInstallments, setExportInstallments] = useState(true);
+  const [exportRecurring,    setExportRecurring]    = useState(true);
+  const [exportOneTime,      setExportOneTime]      = useState(true);
+  const [addCardSheet,       setAddCardSheet]       = useState(false);
+  const [editCardSheet,      setEditCardSheet]      = useState(false);
+  const [editingCardId,      setEditingCardId]      = useState(null);
+  const [visibleGroups,      setVisibleGroups]      = useState(8); // pagination
+  const [draftIssuer,        setDraftIssuer]        = useState("");
+  const [draftName,          setDraftName]          = useState("");
+  const [draftLast4,         setDraftLast4]         = useState("");
+  const [draftBrand,         setDraftBrand]         = useState("Visa");
+  const [draftLimit,         setDraftLimit]         = useState("");
+  const [draftDueDay,        setDraftDueDay]        = useState("");
+  const [draftClosingDay,    setDraftClosingDay]    = useState("");
+  const [draftSuccess,       setDraftSuccess]       = useState(false);
   const cardSheetOpen = addCardSheet || editCardSheet;
   const clearCardFormState = () => {
     setDraftSuccess(false);
@@ -188,11 +197,11 @@ export const CartoesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstor
     const firstSync = prevCards == null;
 
     if (refresh) {
-      setFaturaIdx(
-        faturaIdxAfterCardsRefresh(nextCard, prevCards, faturaIdxRef.current),
+      setInvoiceIdx(
+        faturaIdxAfterCardsRefresh(nextCard, prevCards, invoiceIdxRef.current),
       );
     } else if (fixCardId || firstSync) {
-      setFaturaIdx(defaultFaturaIndexForCard(nextCard.faturas || []));
+      setInvoiceIdx(defaultFaturaIndexForCard(nextCard.faturas || []));
     }
 
     prevCardsSnapshotRef.current = CARDS;
@@ -200,36 +209,36 @@ export const CartoesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstor
 
   const card =
     CARDS.length > 0 ? (CARDS.find((c) => c.id === cardId) || CARDS[0]) : null;
-  // Sentinel for cards with no billing history (e.g. freshly onboarded card)
-  const EMPTY_FATURA = { id:"empty", mes:"—", val:0, pago:false, venc:"—", atual:true };
-  const faturas   = card?.faturas || [];
-  const fatura    = faturas.length > 0
-    ? (faturas[faturaIdx] ?? faturas[faturas.length-1])
-    : EMPTY_FATURA;
-  const fatPrev   = faturaIdx > 0 ? faturas[faturaIdx-1] : null;
-  const fatNext   = faturaIdx < faturas.length-1 ? faturas[faturaIdx+1] : null;
-  const isAtual   = !!fatura?.atual;
-  const isPago    = markedPago[fatura?.id] || fatura?.pago;
+  // Sentinel para cartões sem histórico de fatura (ex.: cartão recém-onboarded)
+  const EMPTY_INVOICE = { id:"empty", mes:"—", val:0, pago:false, venc:"—", atual:true };
+  const invoices       = card?.faturas || [];
+  const invoice        = invoices.length > 0
+    ? (invoices[invoiceIdx] ?? invoices[invoices.length-1])
+    : EMPTY_INVOICE;
+  const previousInvoice = invoiceIdx > 0 ? invoices[invoiceIdx-1] : null;
+  const nextInvoice     = invoiceIdx < invoices.length-1 ? invoices[invoiceIdx+1] : null;
+  const isCurrent       = !!invoice?.atual;
+  const isPaid          = markedPaid[invoice?.id] || invoice?.pago;
 
-  const usoPct   = card ? safe(card.limite - card.disponivel, card.limite) : 0;
-  const usoColor = usoPct >= 90 ? T.red : usoPct >= 70 ? T.amber : T.green;
-  const mediaVal = faturas.length > 0 ? Math.round(faturas.reduce((s,f) => s+f.val, 0) / faturas.length) : 0;
-  const diffPct  = fatPrev && fatPrev.val > 0
-    ? Math.round((((fatura?.val||0)||0) - fatPrev.val) / fatPrev.val * 100)
+  const usagePercent = card ? safe(card.limite - card.disponivel, card.limite) : 0;
+  const usageColor   = usagePercent >= 90 ? T.red : usagePercent >= 70 ? T.amber : T.green;
+  const averageValue = invoices.length > 0 ? Math.round(invoices.reduce((s,f) => s+f.val, 0) / invoices.length) : 0;
+  const diffPercent  = previousInvoice && previousInvoice.val > 0
+    ? Math.round((((invoice?.val||0)||0) - previousInvoice.val) / previousInvoice.val * 100)
     : 0;
 
-  const fmtBRL = v => "R$\u00a0" + Math.abs(v).toLocaleString("pt-BR",{minimumFractionDigits:2});
-  const fmtK   = v => Math.abs(v)>=1000 ? (Math.abs(v)/1000).toFixed(1)+"k" : String(Math.abs(v));
+  const formatBRL = v => "R$ " + Math.abs(v).toLocaleString("pt-BR",{minimumFractionDigits:2});
+  const formatK   = v => Math.abs(v)>=1000 ? (Math.abs(v)/1000).toFixed(1)+"k" : String(Math.abs(v));
 
   const switchCard = (id) => {
     const fromCard = CARDS.find((x) => x.id === cardId) || CARDS[0];
     const fromList = fromCard?.faturas || [];
-    const viewedInvoice = fromList[faturaIdx];
+    const viewedInvoice = fromList[invoiceIdx];
 
     setCardId(id);
     const c = CARDS.find((x) => x.id === id) || CARDS[0];
-    setFaturaIdx(faturaIdxMatchingInvoiceRef(c?.faturas || [], viewedInvoice));
-    setSearch(""); setFilterCat(null); setTab("fatura"); setVisibleGroups(8);
+    setInvoiceIdx(faturaIdxMatchingInvoiceRef(c?.faturas || [], viewedInvoice));
+    setSearch(""); setFilterCategory(null); setTab("invoice"); setVisibleGroups(8);
   };
 
   const canEditSelectedCard =
@@ -250,85 +259,85 @@ export const CartoesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstor
     setEditCardSheet(true);
   };
 
-  useEffect(() => { setVisibleGroups(8); }, [cardId, filterCat, search, faturaIdx]);
+  useEffect(() => { setVisibleGroups(8); }, [cardId, filterCategory, search, invoiceIdx]);
 
   // Itens de faturas anteriores (busca sob demanda ao navegar entre meses)
-  const [pastItens,        setPastItens]        = useState([]);
-  const [pastItensLoading, setPastItensLoading] = useState(false);
+  const [pastItems,        setPastItems]        = useState([]);
+  const [pastItemsLoading, setPastItemsLoading] = useState(false);
 
   useEffect(() => {
-    if (isAtual || !shouldUseRealData || !card || !fatura?.year || !fatura?.month || !organizationId) {
-      setPastItens([]);
-      setPastItensLoading(false);
+    if (isCurrent || !shouldUseRealData || !card || !invoice?.year || !invoice?.month || !organizationId) {
+      setPastItems([]);
+      setPastItemsLoading(false);
       return;
     }
     let cancelled = false;
-    setPastItensLoading(true);
-    fetchPastInvoiceItemsForUi(card.cardId, fatura.year, fatura.month, organizationId)
-      .then((items) => { if (!cancelled) setPastItens(items); })
-      .catch(() => { if (!cancelled) setPastItens([]); })
-      .finally(() => { if (!cancelled) setPastItensLoading(false); });
+    setPastItemsLoading(true);
+    fetchPastInvoiceItemsForUi(card.cardId, invoice.year, invoice.month, organizationId)
+      .then((items) => { if (!cancelled) setPastItems(items); })
+      .catch(() => { if (!cancelled) setPastItems([]); })
+      .finally(() => { if (!cancelled) setPastItemsLoading(false); });
     return () => { cancelled = true; };
   }, [
-    isAtual,
+    isCurrent,
     shouldUseRealData,
     card?.cardId,
-    fatura?.year,
-    fatura?.month,
+    invoice?.year,
+    invoice?.month,
     organizationId,
     transactionsRefreshToken,
   ]);
 
   // Safe aliases — guard against empty onboarding card
-  const cardFaturas    = faturas;
-  const cardItens      = card?.itens           || [];
-  const cardParcelas   = card?.parcelas_ativas || [];
-  const cardTendencia  = card?.tendencia       || [];
-  const displayItens   = isAtual ? cardItens : pastItens;
-  const recItems     = displayItens.filter(i => i.rec);
-  const recTotal     = recItems.reduce((s,i) => s+i.val, 0);
+  const cardInvoices     = invoices;
+  const cardItems        = card?.itens           || [];
+  const cardInstallments = card?.parcelas_ativas || [];
+  const cardTrend        = card?.tendencia       || [];
+  const displayItems     = isCurrent ? cardItems : pastItems;
+  const recurringItems   = displayItems.filter(i => i.rec);
+  const recurringTotal   = recurringItems.reduce((s,i) => s+i.val, 0);
   // Total comprometido em parcelas futuras (LÍQUIDO — descontando estornos).
   // Usa `card.limite − card.disponivel` que reflete o `used_limit` do backend,
   // já calculado como (Σ parcelas futuras − Σ estornos futuros), clamp em 0.
-  const totalParcelasBruto = cardParcelas.reduce((s,p) => s+p.vParcela*(p.total-p.pago), 0);
-  const totalEstornos = cardParcelas.reduce(
+  const grossInstallmentsTotal = cardInstallments.reduce((s,p) => s+p.vParcela*(p.total-p.pago), 0);
+  const totalRefunds           = cardInstallments.reduce(
     (s,p) => s + (p.refundsSummary ? Number(p.refundsSummary.totalValue) : 0),
     0,
   );
-  const totalParcelas = Math.max(0, totalParcelasBruto - totalEstornos);
-  const hasParcelasEstornadas = totalEstornos > 0;
+  const totalInstallments       = Math.max(0, grossInstallmentsTotal - totalRefunds);
+  const hasRefundedInstallments = totalRefunds > 0;
 
-  const catColor = (it) => it.catColor || CAT_COLORS_CARD[it.cat] || T.inkMid;
+  const categoryColor = (it) => it.catColor || CAT_COLORS_CARD[it.cat] || T.inkMid;
 
-  const faturaFilterChips = useMemo(() => {
+  const invoiceFilterChips = useMemo(() => {
     const m = new Map();
-    displayItens.forEach((it) => {
+    displayItems.forEach((it) => {
       if (m.has(it.cat)) return;
-      m.set(it.cat, catColor(it));
+      m.set(it.cat, categoryColor(it));
     });
     return Array.from(m.entries());
-  }, [displayItens]);
+  }, [displayItems]);
 
-  const TODAY_DAY  = 18;
-  const projecao =
-    card && isAtual && TODAY_DAY > 0 && ((fatura?.val || 0) || 0) > 0
+  const TODAY_DAY = 18;
+  const projection =
+    card && isCurrent && TODAY_DAY > 0 && ((invoice?.val || 0) || 0) > 0
       ? Math.round(
-          (((fatura?.val || 0) || 0) / TODAY_DAY) *
+          (((invoice?.val || 0) || 0) / TODAY_DAY) *
             (card.vencimento > card.fechamento
               ? card.vencimento - card.fechamento
               : 30 + card.vencimento - card.fechamento),
         )
       : 0;
-  const projecaoRisk = (card?.disponivel||0) > 0 && projecao > (card.disponivel + ((fatura?.val||0)||0));
+  const projectionRisk = (card?.disponivel||0) > 0 && projection > (card.disponivel + ((invoice?.val||0)||0));
 
   const filtered = useMemo(() => {
-    let items = displayItens;
-    if (filterCat) items = items.filter(i => i.cat === filterCat);
-    if (search)    items = items.filter(i =>
+    let items = displayItems;
+    if (filterCategory) items = items.filter(i => i.cat === filterCategory);
+    if (search)         items = items.filter(i =>
       i.desc.toLowerCase().includes(search.toLowerCase()) ||
       i.cat.toLowerCase().includes(search.toLowerCase()));
     return items;
-  }, [displayItens, filterCat, search]);
+  }, [displayItems, filterCategory, search]);
 
   const grouped = useMemo(() => {
     const map = {};
@@ -359,14 +368,14 @@ export const CartoesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstor
   const totalItems    = filtered.length;
   const visibleItems  = pagedGroups.reduce((s,[,items])=>s+items.length, 0);
 
-  const catTotals = useMemo(() => {
+  const categoryTotals = useMemo(() => {
     const map = {};
     const colorByCat = {};
-    displayItens.forEach((i) => {
+    displayItems.forEach((i) => {
       map[i.cat] = (map[i.cat] || 0) + i.val;
-      if (colorByCat[i.cat] == null) colorByCat[i.cat] = catColor(i);
+      if (colorByCat[i.cat] == null) colorByCat[i.cat] = categoryColor(i);
     });
-    const total = displayItens.reduce((s,i)=>s+i.val,0);
+    const total = displayItems.reduce((s,i)=>s+i.val,0);
     return Object.entries(map)
       .sort((a,b) => b[1]-a[1])
       .map(([cat,val]) => ({
@@ -374,13 +383,13 @@ export const CartoesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstor
         pct: total > 0 ? Math.round(val/total*100) : 0,
         color: colorByCat[cat] || T.inkMid,
       }));
-  }, [displayItens]);
+  }, [displayItems]);
 
-  // Category alerts: grew >20% vs prev month
-  const catAlerts = useMemo(() => {
-    if (!cardTendencia || cardTendencia.length < 2) return [];
-    const last = cardTendencia.length > 0 ? cardTendencia[cardTendencia.length-1] : null;
-    const prev = cardTendencia[cardTendencia.length-2];
+  // Alertas por categoria: cresceram >20% vs mês anterior
+  const categoryAlerts = useMemo(() => {
+    if (!cardTrend || cardTrend.length < 2) return [];
+    const last = cardTrend.length > 0 ? cardTrend[cardTrend.length-1] : null;
+    const prev = cardTrend[cardTrend.length-2];
     return Object.entries(last)
       .filter(([cat,val]) => cat!=="mes" && prev[cat]>0 && val>prev[cat] && ((val-prev[cat])/prev[cat])>0.15)
       .map(([cat,val]) => ({ cat, val, prev:prev[cat], pct:Math.round((val-prev[cat])/prev[cat]*100) }))
@@ -441,30 +450,30 @@ export const CartoesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstor
           </div>
         </div>
         <CardFormSheet
-        open={cardSheetOpen}
-        isMobile={isMobile}
-        isEdit={editCardSheet}
-        draftIssuer={draftIssuer}
-        setDraftIssuer={setDraftIssuer}
-        draftName={draftName}
-        setDraftName={setDraftName}
-        draftLast4={draftLast4}
-        setDraftLast4={setDraftLast4}
-        draftBrand={draftBrand}
-        setDraftBrand={setDraftBrand}
-        draftLimit={draftLimit}
-        setDraftLimit={setDraftLimit}
-        draftDueDay={draftDueDay}
-        setDraftDueDay={setDraftDueDay}
-        draftClosingDay={draftClosingDay}
-        setDraftClosingDay={setDraftClosingDay}
-        draftSuccess={draftSuccess}
-        saving={editCardSheet ? creditCardsData.isUpdatingCard : creditCardsData.isSavingCard}
-        error={creditCardsData.error}
-        onSave={handleSaveCard}
-        onUpdate={handleUpdateCard}
-        onCancel={clearCardFormState}
-      />
+          open={cardSheetOpen}
+          isMobile={isMobile}
+          isEdit={editCardSheet}
+          draftIssuer={draftIssuer}
+          setDraftIssuer={setDraftIssuer}
+          draftName={draftName}
+          setDraftName={setDraftName}
+          draftLast4={draftLast4}
+          setDraftLast4={setDraftLast4}
+          draftBrand={draftBrand}
+          setDraftBrand={setDraftBrand}
+          draftLimit={draftLimit}
+          setDraftLimit={setDraftLimit}
+          draftDueDay={draftDueDay}
+          setDraftDueDay={setDraftDueDay}
+          draftClosingDay={draftClosingDay}
+          setDraftClosingDay={setDraftClosingDay}
+          draftSuccess={draftSuccess}
+          saving={editCardSheet ? creditCardsData.isUpdatingCard : creditCardsData.isSavingCard}
+          error={creditCardsData.error}
+          onSave={handleSaveCard}
+          onUpdate={handleUpdateCard}
+          onCancel={clearCardFormState}
+        />
       </>
     );
   }
@@ -480,37 +489,37 @@ export const CartoesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstor
     return { year, month };
   };
 
-  const handleMarkPago = async () => {
-    if (shouldUseRealData && fatura?.year && fatura?.month) {
-      setMarkingPago(true);
+  const handleMarkPaid = async () => {
+    if (shouldUseRealData && invoice?.year && invoice?.month) {
+      setMarkingPaid(true);
       try {
         await creditCardsData.markInvoicePaid({
           cardId: card.cardId,
-          year: fatura.year,
-          month: fatura.month,
+          year: invoice.year,
+          month: invoice.month,
           organizationId,
         });
       } catch {
-        setMarkingPago(false);
+        setMarkingPaid(false);
         return;
       }
-      setMarkingPago(false);
+      setMarkingPaid(false);
       return;
     }
 
-    setMarkingPago(true);
-    setTimeout(()=>{ setMarkingPago(false); setMarkedPago(m=>({...m,[fatura?.id]:true})); }, 800);
+    setMarkingPaid(true);
+    setTimeout(()=>{ setMarkingPaid(false); setMarkedPaid(m=>({...m,[invoice?.id]:true})); }, 800);
   };
 
-  const handleRealoc = async () => {
-    if (shouldUseRealData && parcelaModal?.chargeId && parcelaModal?.installmentId && parcelaTarget) {
-      const target = parseFutureLabel(parcelaTarget);
+  const handleReallocate = async () => {
+    if (shouldUseRealData && installmentModal?.chargeId && installmentModal?.installmentId && installmentTarget) {
+      const target = parseFutureLabel(installmentTarget);
       if (!target) return;
       try {
         await creditCardsData.moveInstallment({
           cardId: card.cardId,
-          chargeId: parcelaModal.chargeId,
-          installmentId: parcelaModal.installmentId,
+          chargeId: installmentModal.chargeId,
+          installmentId: installmentModal.installmentId,
           organizationId,
           targetYear: target.year,
           targetMonth: target.month,
@@ -520,60 +529,60 @@ export const CartoesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstor
       }
     }
 
-    setParcelaOk(true);
-    setTimeout(()=>{ setParcelaOk(false); setParcelaModal(null); setParcelaTarget(null); }, 1100);
+    setInstallmentSaved(true);
+    setTimeout(()=>{ setInstallmentSaved(false); setInstallmentModal(null); setInstallmentTarget(null); }, 1100);
   };
 
   const handleExportCSV = () => {
     let rows = ["Descrição,Categoria,Valor,Data,Parcela,Recorrente"];
-    let items = displayItens;
-    const activeCats = Object.entries(expCats).filter(([,v])=>v).map(([k])=>k);
-    if (activeCats.length>0) items = items.filter(i=>activeCats.includes(i.cat));
-    if (!expParcelas) items = items.filter(i=>!i.parcela);
-    if (!expRec)      items = items.filter(i=>!i.rec);
-    if (!expNormal)   items = items.filter(i=>i.rec||i.parcela);
+    let items = displayItems;
+    const activeCats = Object.entries(exportCategories).filter(([,v])=>v).map(([k])=>k);
+    if (activeCats.length>0)  items = items.filter(i=>activeCats.includes(i.cat));
+    if (!exportInstallments)  items = items.filter(i=>!i.parcela);
+    if (!exportRecurring)     items = items.filter(i=>!i.rec);
+    if (!exportOneTime)       items = items.filter(i=>i.rec||i.parcela);
     items.forEach(i => rows.push(
       `"${i.desc}","${i.cat}","${i.val.toFixed(2).replace(".",",")}","${i.data}","${i.parcela?`${i.parcela.n}/${i.parcela.t}`:"-"}","${i.rec?"Sim":"Não"}"`
     ));
     const a = Object.assign(document.createElement("a"),{
       href:URL.createObjectURL(new Blob([rows.join("\n")],{type:"text/csv"})),
-      download:`fatura-${card.nome}-${fatura?.mes}.csv`
+      download:`fatura-${card.nome}-${invoice?.mes}.csv`
     });
-    a.click(); setExportModal(false);
+    a.click(); setExportModalOpen(false);
   };
 
   const TABS = [
-    { id: "fatura",       icon: "📋", label: "Fatura" },
-    { id: "recorrencias", icon: "🔄", label: "Recorrências" },
-    { id: "parcelas",     icon: "🧩", label: "Parcelas" },
-    { id: "analises",     icon: "📊", label: "Análises" },
-    { id: "historico",    icon: "📈", label: "Histórico" },
-    { id: "planejamento", icon: "📅", label: "Planejamento" },
+    { id: "invoice",      icon: "📋", label: "Fatura" },
+    { id: "recurring",    icon: "🔄", label: "Recorrências" },
+    { id: "installments", icon: "🧩", label: "Parcelas" },
+    { id: "analytics",    icon: "📊", label: "Análises" },
+    { id: "history",      icon: "📈", label: "Histórico" },
+    { id: "planning",     icon: "📅", label: "Planejamento" },
   ];
 
   const modalsBundle = (
-    <CartoesPageModals
+    <CardsPageModals
       isMobile={isMobile}
       card={card}
-      fatura={fatura}
-      fmtBRL={fmtBRL}
-      parcelaModal={parcelaModal}
-      parcelaTarget={parcelaTarget}
-      setParcelaTarget={setParcelaTarget}
-      parcelaOk={parcelaOk}
-      onCloseParcelaModal={() => { setParcelaModal(null); setParcelaTarget(null); }}
-      onConfirmParcela={handleRealoc}
-      exportModal={exportModal}
-      displayItens={displayItens}
-      expCats={expCats}
-      setExpCats={setExpCats}
-      expParcelas={expParcelas}
-      setExpParcelas={setExpParcelas}
-      expRec={expRec}
-      setExpRec={setExpRec}
-      expNormal={expNormal}
-      setExpNormal={setExpNormal}
-      onCloseExportModal={() => setExportModal(false)}
+      invoice={invoice}
+      formatBRL={formatBRL}
+      installmentModal={installmentModal}
+      installmentTarget={installmentTarget}
+      setInstallmentTarget={setInstallmentTarget}
+      installmentSaved={installmentSaved}
+      onCloseInstallmentModal={() => { setInstallmentModal(null); setInstallmentTarget(null); }}
+      onConfirmInstallment={handleReallocate}
+      exportModalOpen={exportModalOpen}
+      displayItems={displayItems}
+      exportCategories={exportCategories}
+      setExportCategories={setExportCategories}
+      exportInstallments={exportInstallments}
+      setExportInstallments={setExportInstallments}
+      exportRecurring={exportRecurring}
+      setExportRecurring={setExportRecurring}
+      exportOneTime={exportOneTime}
+      setExportOneTime={setExportOneTime}
+      onCloseExportModal={() => setExportModalOpen(false)}
       onExportCSV={handleExportCSV}
       cardSheetOpen={cardSheetOpen}
       editCardSheet={editCardSheet}
@@ -600,6 +609,28 @@ export const CartoesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstor
     />
   );
 
+  const invoiceTabBundle = (variant) => (
+    <InvoiceTab
+      variant={variant}
+      card={card} invoice={invoice} previousInvoice={previousInvoice}
+      filtered={filtered} displayItems={displayItems}
+      grouped={grouped} pagedGroups={pagedGroups}
+      categoryTotals={categoryTotals} recurringTotal={recurringTotal}
+      averageValue={averageValue} diffPercent={diffPercent}
+      totalItems={totalItems} visibleItems={visibleItems} hasMoreGroups={hasMoreGroups}
+      pastItemsLoading={pastItemsLoading} isCurrent={isCurrent}
+      shouldUseRealData={shouldUseRealData} totalInstallments={totalInstallments}
+      usagePercent={usagePercent} usageColor={usageColor} pageGroupsLimit={PAGE_GROUPS}
+      formatBRL={formatBRL} categoryColor={categoryColor}
+      search={search} setSearch={setSearch}
+      invoiceFilterChips={invoiceFilterChips}
+      filterCategory={filterCategory} setFilterCategory={setFilterCategory}
+      expandedDate={expandedDate} setExpandedDate={setExpandedDate}
+      visibleGroups={visibleGroups} setVisibleGroups={setVisibleGroups}
+      onLaunchRefund={onLaunchRefund}
+    />
+  );
+
   /* ══════════════════════════════════════════════════════════
      MOBILE
   ══════════════════════════════════════════════════════════ */
@@ -614,7 +645,7 @@ export const CartoesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstor
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,gap:8}}>
         <PageTitle sans="Meus" serif="Cartões"/>
         <div style={{display:"flex",gap:6,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end"}}>
-          <button onClick={()=>onNovaItem&&onNovaItem(cardId)}
+          <button onClick={()=>onNewItem&&onNewItem(cardId)}
             title="Novo item"
             style={{...G,display:"flex",alignItems:"center",gap:5,background:T.green,border:"none",
               borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",flexShrink:0}}>
@@ -654,40 +685,45 @@ export const CartoesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstor
         </DragScrollTabs>
       </div>
 
-      {/* Fatura summary */}
+      {/* Invoice summary */}
       <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:16,padding:"16px 18px",marginBottom:14}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-          <FaturaNav compact fatura={fatura} fatPrev={fatPrev} fatNext={fatNext} onPrev={()=>fatPrev&&setFaturaIdx(i=>i-1)} onNext={()=>fatNext&&setFaturaIdx(i=>i+1)}/>
+          <InvoiceNav compact invoice={invoice} previousInvoice={previousInvoice} nextInvoice={nextInvoice}
+            onPrev={()=>previousInvoice&&setInvoiceIdx(i=>i-1)} onNext={()=>nextInvoice&&setInvoiceIdx(i=>i+1)}/>
           <div style={{textAlign:"right"}}>
-            {fatura?.atual&&<div style={{...G,fontSize:10,fontWeight:700,color:T.blue,textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:3}}>Fatura aberta</div>}
-            <div style={{...G,...NUM,fontSize:22,fontWeight:800,color:T.ink,lineHeight:1}}>{fmtBRL((fatura?.val||0))}</div>
-            {diffPct!==0&&<div style={{...G,fontSize:11,fontWeight:600,marginTop:3,color:diffPct>0?T.red:T.green}}>{diffPct>0?"↑":"↓"} {Math.abs(diffPct)}% vs {fatPrev?.mes}</div>}
+            {invoice?.atual&&<div style={{...G,fontSize:10,fontWeight:700,color:T.blue,textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:3}}>Fatura aberta</div>}
+            <div style={{...G,...NUM,fontSize:22,fontWeight:800,color:T.ink,lineHeight:1}}>{formatBRL((invoice?.val||0))}</div>
+            {diffPercent!==0&&<div style={{...G,fontSize:11,fontWeight:600,marginTop:3,color:diffPercent>0?T.red:T.green}}>{diffPercent>0?"↑":"↓"} {Math.abs(diffPercent)}% vs {previousInvoice?.mes}</div>}
           </div>
         </div>
-        <LimitBar card={card} usoPct={usoPct} usoColor={usoColor} fmtBRL={fmtBRL}/>
+        <LimitBar card={card} usagePercent={usagePercent} usageColor={usageColor} formatBRL={formatBRL}/>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:12}}>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
             <Calendar size={12} color={T.inkLight}/>
-            <span style={{...G,fontSize:11,color:T.inkMid}}>Vence {fatura?.venc}</span>
+            <span style={{...G,fontSize:11,color:T.inkMid}}>Vence {invoice?.venc}</span>
           </div>
           <div style={{display:"flex",gap:8}}>
-            {isAtual&&(
-              <button onClick={()=>setExportModal(true)} style={{...G,display:"flex",alignItems:"center",gap:5,fontSize:11,fontWeight:600,color:T.inkMid,background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,padding:"5px 10px",cursor:"pointer"}}>
+            {isCurrent&&(
+              <button onClick={()=>setExportModalOpen(true)} style={{...G,display:"flex",alignItems:"center",gap:5,fontSize:11,fontWeight:600,color:T.inkMid,background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,padding:"5px 10px",cursor:"pointer"}}>
                 <Download size={11}/> CSV
               </button>
             )}
-            {isAtual&&!isPago&&(
-              <button onClick={handleMarkPago} style={{...G,display:"flex",alignItems:"center",gap:5,padding:"5px 12px",borderRadius:8,border:`1.5px solid ${T.green}`,background:T.greenLight,color:T.green,fontSize:11,fontWeight:700,cursor:"pointer"}}>
-                {markingPago?<><RefreshCw size={11}/> …</>:<><Check size={11}/> Pagar</>}
+            {isCurrent&&!isPaid&&(
+              <button onClick={handleMarkPaid} style={{...G,display:"flex",alignItems:"center",gap:5,padding:"5px 12px",borderRadius:8,border:`1.5px solid ${T.green}`,background:T.greenLight,color:T.green,fontSize:11,fontWeight:700,cursor:"pointer"}}>
+                {markingPaid?<><RefreshCw size={11}/> …</>:<><Check size={11}/> Pagar</>}
               </button>
             )}
-            {isPago&&<div style={{...G,display:"flex",alignItems:"center",gap:5,fontSize:11,fontWeight:700,color:T.green}}><Check size={12}/> Paga</div>}
+            {isPaid&&<div style={{...G,display:"flex",alignItems:"center",gap:5,fontSize:11,fontWeight:700,color:T.green}}><Check size={12}/> Paga</div>}
           </div>
         </div>
       </div>
 
       {/* KPI Strip */}
-      <div style={{marginBottom:14}}><KpiStrip card={card} fatura={fatura} fatPrev={fatPrev} fmtBRL={fmtBRL} diffPct={diffPct} usoColor={usoColor} mediaVal={mediaVal} cardFaturas={cardFaturas} isMobile={isMobile}/></div>
+      <div style={{marginBottom:14}}>
+        <KpiStrip card={card} invoice={invoice} previousInvoice={previousInvoice} formatBRL={formatBRL}
+          diffPercent={diffPercent} usageColor={usageColor} averageValue={averageValue}
+          cardInvoices={cardInvoices} isMobile={isMobile}/>
+      </div>
 
       {/* Tabs — drag-scrollable */}
       <div style={{marginBottom:14}}>
@@ -708,31 +744,12 @@ export const CartoesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstor
 
       {/* Tab content */}
       <div key={tab+cardId} style={{animation:"tabIn 0.2s ease-out"}}>
-        {tab==="fatura"&&(
-          <CartoesFaturaTab
-            variant="mobile"
-            card={card} fatura={fatura} fatPrev={fatPrev}
-            filtered={filtered} displayItens={displayItens}
-            grouped={grouped} pagedGroups={pagedGroups}
-            catTotals={catTotals} recTotal={recTotal} mediaVal={mediaVal} diffPct={diffPct}
-            totalItems={totalItems} visibleItems={visibleItems} hasMoreGroups={hasMoreGroups}
-            pastItensLoading={pastItensLoading} isAtual={isAtual}
-            shouldUseRealData={shouldUseRealData} totalParcelas={totalParcelas}
-            usoPct={usoPct} usoColor={usoColor} PAGE_GROUPS={PAGE_GROUPS}
-            fmtBRL={fmtBRL} catColor={catColor}
-            search={search} setSearch={setSearch}
-            faturaFilterChips={faturaFilterChips}
-            filterCat={filterCat} setFilterCat={setFilterCat}
-            expandedDate={expandedDate} setExpandedDate={setExpandedDate}
-            visibleGroups={visibleGroups} setVisibleGroups={setVisibleGroups}
-            onLancarEstorno={onLancarEstorno}
-          />
-        )}
-        {tab==="recorrencias"&&<RecorrenciasTab recItems={recItems} recTotal={recTotal} fatura={fatura} card={card} isMobile={isMobile} fmtBRL={fmtBRL} catColor={catColor} onLancarEstorno={onLancarEstorno}/>}
-        {tab==="parcelas"    &&<ParcelasTab cardParcelas={cardParcelas} card={card} totalParcelas={totalParcelas} totalEstornos={totalEstornos} hasParcelasEstornadas={hasParcelasEstornadas} isMobile={isMobile} fmtBRL={fmtBRL} onMoverParcela={setParcelaModal}/>}
-        {tab==="analises"    &&<AnalisesTab cardFaturas={cardFaturas} cardTendencia={cardTendencia} fatura={fatura} card={card} usoPct={usoPct} totalParcelas={totalParcelas} totalEstornos={totalEstornos} hasParcelasEstornadas={hasParcelasEstornadas} catAlerts={catAlerts} mediaVal={mediaVal} projecao={projecao} cardParcelas={cardParcelas} isMobile={isMobile} fmtBRL={fmtBRL} fmtK={fmtK}/>}
-        {tab==="historico"   &&<HistoricoTab cardFaturas={cardFaturas} isMobile={isMobile} fmtBRL={fmtBRL}/>}
-        {tab==="planejamento"&&<PlanejamentoTab card={card} cardParcelas={cardParcelas} isMobile={isMobile} fmtBRL={fmtBRL}/>}
+        {tab==="invoice"     && invoiceTabBundle("mobile")}
+        {tab==="recurring"   && <RecurringTab recurringItems={recurringItems} recurringTotal={recurringTotal} invoice={invoice} card={card} isMobile={isMobile} formatBRL={formatBRL} categoryColor={categoryColor} onLaunchRefund={onLaunchRefund}/>}
+        {tab==="installments"&& <InstallmentsTab cardInstallments={cardInstallments} card={card} totalInstallments={totalInstallments} totalRefunds={totalRefunds} hasRefundedInstallments={hasRefundedInstallments} isMobile={isMobile} formatBRL={formatBRL} onMoveInstallment={setInstallmentModal}/>}
+        {tab==="analytics"   && <AnalyticsTab cardInvoices={cardInvoices} cardTrend={cardTrend} invoice={invoice} card={card} usagePercent={usagePercent} totalInstallments={totalInstallments} totalRefunds={totalRefunds} hasRefundedInstallments={hasRefundedInstallments} categoryAlerts={categoryAlerts} averageValue={averageValue} projection={projection} cardInstallments={cardInstallments} isMobile={isMobile} formatBRL={formatBRL} formatK={formatK}/>}
+        {tab==="history"     && <HistoryTab cardInvoices={cardInvoices} isMobile={isMobile} formatBRL={formatBRL}/>}
+        {tab==="planning"    && <PlanningTab card={card} cardInstallments={cardInstallments} isMobile={isMobile} formatBRL={formatBRL}/>}
       </div>
     </div>
     </>
@@ -748,7 +765,7 @@ export const CartoesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstor
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20, flexWrap:"wrap", gap:10 }}>
         <PageTitle sans="Meus" serif="Cartões"/>
         <div style={{ display:"flex", gap:10, flexWrap:"wrap", justifyContent:"flex-end" }}>
-          <button type="button" onClick={()=>onNovaItem&&onNovaItem(cardId)}
+          <button type="button" onClick={()=>onNewItem&&onNewItem(cardId)}
             style={{...G,display:"flex",alignItems:"center",gap:6,background:T.green,border:"none",borderRadius:10,padding:"9px 16px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
             <Plus size={14}/> Novo item
           </button>
@@ -777,32 +794,37 @@ export const CartoesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstor
         </div>
       </div>
 
-      {/* Fatura header */}
+      {/* Invoice header */}
       <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:14, padding:"16px 20px", marginBottom:14 }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-          <FaturaNav fatura={fatura} fatPrev={fatPrev} fatNext={fatNext} onPrev={()=>fatPrev&&setFaturaIdx(i=>i-1)} onNext={()=>fatNext&&setFaturaIdx(i=>i+1)}/>
+          <InvoiceNav invoice={invoice} previousInvoice={previousInvoice} nextInvoice={nextInvoice}
+            onPrev={()=>previousInvoice&&setInvoiceIdx(i=>i-1)} onNext={()=>nextInvoice&&setInvoiceIdx(i=>i+1)}/>
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            {fatura?.atual && <div style={{...G,fontSize:11,fontWeight:700,color:T.blue,textTransform:"uppercase",letterSpacing:"0.08em"}}>Fatura aberta</div>}
-            <div style={{...G,...NUM,fontSize:24,fontWeight:800,color:T.ink,lineHeight:1}}>{fmtBRL((fatura?.val||0))}</div>
-            {diffPct!==0 && <div style={{...G,fontSize:12,fontWeight:600,color:diffPct>0?T.red:T.green}}>{diffPct>0?"↑":"↓"} {Math.abs(diffPct)}% vs {fatPrev?.mes}</div>}
+            {invoice?.atual && <div style={{...G,fontSize:11,fontWeight:700,color:T.blue,textTransform:"uppercase",letterSpacing:"0.08em"}}>Fatura aberta</div>}
+            <div style={{...G,...NUM,fontSize:24,fontWeight:800,color:T.ink,lineHeight:1}}>{formatBRL((invoice?.val||0))}</div>
+            {diffPercent!==0 && <div style={{...G,fontSize:12,fontWeight:600,color:diffPercent>0?T.red:T.green}}>{diffPercent>0?"↑":"↓"} {Math.abs(diffPercent)}% vs {previousInvoice?.mes}</div>}
           </div>
         </div>
-        <LimitBar card={card} usoPct={usoPct} usoColor={usoColor} fmtBRL={fmtBRL}/>
+        <LimitBar card={card} usagePercent={usagePercent} usageColor={usageColor} formatBRL={formatBRL}/>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:12 }}>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
             <Calendar size={13} color={T.inkLight}/>
-            <span style={{...G,fontSize:12,color:T.inkMid}}>Vence {fatura?.venc}</span>
+            <span style={{...G,fontSize:12,color:T.inkMid}}>Vence {invoice?.venc}</span>
           </div>
           <div style={{ display:"flex", gap:8 }}>
-            {isAtual && <button onClick={()=>setExportModal(true)} style={{...G,display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:600,color:T.inkMid,background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 12px",cursor:"pointer"}}><Download size={12}/> CSV</button>}
-            {isAtual&&!isPago && <button onClick={handleMarkPago} style={{...G,display:"flex",alignItems:"center",gap:5,padding:"6px 14px",borderRadius:8,border:`1.5px solid ${T.green}`,background:T.greenLight,color:T.green,fontSize:12,fontWeight:700,cursor:"pointer"}}>{markingPago?<><RefreshCw size={12}/> …</>:<><Check size={12}/> Marcar como paga</>}</button>}
-            {isPago && <div style={{...G,display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:700,color:T.green}}><Check size={13}/> Paga</div>}
+            {isCurrent && <button onClick={()=>setExportModalOpen(true)} style={{...G,display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:600,color:T.inkMid,background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 12px",cursor:"pointer"}}><Download size={12}/> CSV</button>}
+            {isCurrent&&!isPaid && <button onClick={handleMarkPaid} style={{...G,display:"flex",alignItems:"center",gap:5,padding:"6px 14px",borderRadius:8,border:`1.5px solid ${T.green}`,background:T.greenLight,color:T.green,fontSize:12,fontWeight:700,cursor:"pointer"}}>{markingPaid?<><RefreshCw size={12}/> …</>:<><Check size={12}/> Marcar como paga</>}</button>}
+            {isPaid && <div style={{...G,display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:700,color:T.green}}><Check size={13}/> Paga</div>}
           </div>
         </div>
       </div>
 
       {/* KPI strip */}
-      <div style={{ marginBottom:14 }}><KpiStrip card={card} fatura={fatura} fatPrev={fatPrev} fmtBRL={fmtBRL} diffPct={diffPct} usoColor={usoColor} mediaVal={mediaVal} cardFaturas={cardFaturas} isMobile={isMobile}/></div>
+      <div style={{ marginBottom:14 }}>
+        <KpiStrip card={card} invoice={invoice} previousInvoice={previousInvoice} formatBRL={formatBRL}
+          diffPercent={diffPercent} usageColor={usageColor} averageValue={averageValue}
+          cardInvoices={cardInvoices} isMobile={isMobile}/>
+      </div>
 
       {/* Tabs */}
       <div style={{ display:"flex", gap:2, background:T.grayLight, borderRadius:12, padding:4, width:"fit-content", marginBottom:14 }}>
@@ -815,31 +837,12 @@ export const CartoesPage = ({ onNav, isMobile = false, onNovaItem, onLancarEstor
 
       {/* Tab content */}
       <div key={tab+cardId} style={{animation:"tabIn 0.2s ease-out"}}>
-        {tab==="fatura"&&(
-          <CartoesFaturaTab
-            variant="desktop"
-            card={card} fatura={fatura} fatPrev={fatPrev}
-            filtered={filtered} displayItens={displayItens}
-            grouped={grouped} pagedGroups={pagedGroups}
-            catTotals={catTotals} recTotal={recTotal} mediaVal={mediaVal} diffPct={diffPct}
-            totalItems={totalItems} visibleItems={visibleItems} hasMoreGroups={hasMoreGroups}
-            pastItensLoading={pastItensLoading} isAtual={isAtual}
-            shouldUseRealData={shouldUseRealData} totalParcelas={totalParcelas}
-            usoPct={usoPct} usoColor={usoColor} PAGE_GROUPS={PAGE_GROUPS}
-            fmtBRL={fmtBRL} catColor={catColor}
-            search={search} setSearch={setSearch}
-            faturaFilterChips={faturaFilterChips}
-            filterCat={filterCat} setFilterCat={setFilterCat}
-            expandedDate={expandedDate} setExpandedDate={setExpandedDate}
-            visibleGroups={visibleGroups} setVisibleGroups={setVisibleGroups}
-            onLancarEstorno={onLancarEstorno}
-          />
-        )}
-        {tab==="recorrencias"&&<RecorrenciasTab recItems={recItems} recTotal={recTotal} fatura={fatura} card={card} isMobile={isMobile} fmtBRL={fmtBRL} catColor={catColor} onLancarEstorno={onLancarEstorno}/>}
-        {tab==="parcelas"    &&<ParcelasTab cardParcelas={cardParcelas} card={card} totalParcelas={totalParcelas} totalEstornos={totalEstornos} hasParcelasEstornadas={hasParcelasEstornadas} isMobile={isMobile} fmtBRL={fmtBRL} onMoverParcela={setParcelaModal}/>}
-        {tab==="analises"    &&<AnalisesTab cardFaturas={cardFaturas} cardTendencia={cardTendencia} fatura={fatura} card={card} usoPct={usoPct} totalParcelas={totalParcelas} totalEstornos={totalEstornos} hasParcelasEstornadas={hasParcelasEstornadas} catAlerts={catAlerts} mediaVal={mediaVal} projecao={projecao} cardParcelas={cardParcelas} isMobile={isMobile} fmtBRL={fmtBRL} fmtK={fmtK}/>}
-        {tab==="historico"   &&<HistoricoTab cardFaturas={cardFaturas} isMobile={isMobile} fmtBRL={fmtBRL}/>}
-        {tab==="planejamento"&&<PlanejamentoTab card={card} cardParcelas={cardParcelas} isMobile={isMobile} fmtBRL={fmtBRL}/>}
+        {tab==="invoice"     && invoiceTabBundle("desktop")}
+        {tab==="recurring"   && <RecurringTab recurringItems={recurringItems} recurringTotal={recurringTotal} invoice={invoice} card={card} isMobile={isMobile} formatBRL={formatBRL} categoryColor={categoryColor} onLaunchRefund={onLaunchRefund}/>}
+        {tab==="installments"&& <InstallmentsTab cardInstallments={cardInstallments} card={card} totalInstallments={totalInstallments} totalRefunds={totalRefunds} hasRefundedInstallments={hasRefundedInstallments} isMobile={isMobile} formatBRL={formatBRL} onMoveInstallment={setInstallmentModal}/>}
+        {tab==="analytics"   && <AnalyticsTab cardInvoices={cardInvoices} cardTrend={cardTrend} invoice={invoice} card={card} usagePercent={usagePercent} totalInstallments={totalInstallments} totalRefunds={totalRefunds} hasRefundedInstallments={hasRefundedInstallments} categoryAlerts={categoryAlerts} averageValue={averageValue} projection={projection} cardInstallments={cardInstallments} isMobile={isMobile} formatBRL={formatBRL} formatK={formatK}/>}
+        {tab==="history"     && <HistoryTab cardInvoices={cardInvoices} isMobile={isMobile} formatBRL={formatBRL}/>}
+        {tab==="planning"    && <PlanningTab card={card} cardInstallments={cardInstallments} isMobile={isMobile} formatBRL={formatBRL}/>}
       </div>
     </>
   );
