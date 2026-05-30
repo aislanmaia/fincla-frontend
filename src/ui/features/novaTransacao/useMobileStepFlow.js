@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
  * Stepper do bottom-sheet mobile do drawer Nova Transação.
  *
  * O fluxo é dinâmico: sempre começa em Valor → Detalhes, ganha
- * "cartao" quando despesa + crédito, ganha "recorrencia" quando o toggle de
+ * "card" quando despesa + crédito, ganha "recurrence" quando o toggle de
  * recorrência está ligado, e termina em "review".
  *
  * Encapsula:
@@ -31,8 +31,8 @@ export function useMobileStepFlow({ open, isMobile, tipo, method, recorre }) {
 
   const mStepsFlow = useMemo(() => {
     const f = [1, 2];
-    if (tipo === "despesa" && method === "credito") f.push("cartao");
-    if (recorre) f.push("recorrencia");
+    if (tipo === "despesa" && method === "credito") f.push("card");
+    if (recorre) f.push("recurrence");
     f.push("review");
     return f;
   }, [tipo, method, recorre]);
@@ -44,8 +44,8 @@ export function useMobileStepFlow({ open, isMobile, tipo, method, recorre }) {
 
   const mNextLabel = useCallback(() => {
     if (mNextStep === "review") return "Revisar →";
-    if (mNextStep === "cartao") return "Cartão →";
-    if (mNextStep === "recorrencia") return "Recorrência →";
+    if (mNextStep === "card") return "Cartão →";
+    if (mNextStep === "recurrence") return "Recorrência →";
     return "Continuar →";
   }, [mNextStep]);
 
