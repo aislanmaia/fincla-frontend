@@ -1,23 +1,16 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import {
-  Calendar, Check, CreditCard, Download, Pencil, Plus, RefreshCw,
-} from "lucide-react";
+import { Plus } from "lucide-react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 
 import { T } from "../tokens";
-import { G, NUM } from "../typography";
-import { Card, PageTitle } from "../components/primitives";
-import { DragScrollTabs } from "../layouts/DragScrollTabs.jsx";
+import { G } from "../typography";
 import { useCreditCardsData } from "../features/creditCards/useCreditCardsData.js";
 import { CardFormSheet } from "../features/creditCards/CardFormSheet.jsx";
-import {
-  CardVisual,
-  InvoiceNav,
-  KpiStrip,
-  LimitBar,
-} from "../features/creditCards/cartoesPanels.jsx";
+import { CardVisual, KpiStrip } from "../features/creditCards/cartoesPanels.jsx";
 import { CardsPageModals } from "../features/creditCards/CartoesPageModals.jsx";
 import { InvoiceTab } from "../features/creditCards/CartoesFaturaTab.jsx";
+import { CardsPageHeader } from "../features/creditCards/CardsPageHeader.jsx";
+import { CardsInvoiceHeader } from "../features/creditCards/CardsInvoiceHeader.jsx";
 import {
   AnalyticsTab,
   HistoryTab,
@@ -642,30 +635,14 @@ export const CartoesPage = ({
       `}</style>
       {modalsBundle}
 
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,gap:8}}>
-        <PageTitle sans="Meus" serif="Cartões"/>
-        <div style={{display:"flex",gap:6,flexShrink:0,flexWrap:"wrap",justifyContent:"flex-end"}}>
-          <button onClick={()=>onNewItem&&onNewItem(cardId)}
-            title="Novo item"
-            style={{...G,display:"flex",alignItems:"center",gap:5,background:T.green,border:"none",
-              borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",flexShrink:0}}>
-            <Plus size={13}/> <span>Item</span>
-          </button>
-          {canEditSelectedCard && (
-            <button type="button" onClick={openEditCardSheet} title="Editar cartão selecionado"
-              style={{...G,display:"flex",alignItems:"center",gap:5,background:T.surface,border:`1px solid ${T.border}`,
-                borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:700,color:T.ink,cursor:"pointer",flexShrink:0}}>
-              <Pencil size={13}/> <span>Editar</span>
-            </button>
-          )}
-          <button onClick={openAddCardSheet} type="button"
-            title="Novo cartão"
-            style={{...G,display:"flex",alignItems:"center",gap:5,background:T.ink,border:"none",
-              borderRadius:9,padding:"8px 12px",fontSize:12,fontWeight:700,color:"#fff",cursor:"pointer",flexShrink:0}}>
-            <CreditCard size={13}/> <span style={{whiteSpace:"nowrap"}}>+ Cartão</span>
-          </button>
-        </div>
-      </div>
+      <CardsPageHeader
+        variant="mobile"
+        cardId={cardId}
+        canEditSelectedCard={canEditSelectedCard}
+        onNewItem={onNewItem}
+        onEditCard={openEditCardSheet}
+        onAddCard={openAddCardSheet}
+      />
 
       {/* Card carousel */}
       <div style={{marginBottom:2}}>
@@ -686,37 +663,17 @@ export const CartoesPage = ({
       </div>
 
       {/* Invoice summary */}
-      <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:16,padding:"16px 18px",marginBottom:14}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-          <InvoiceNav compact invoice={invoice} previousInvoice={previousInvoice} nextInvoice={nextInvoice}
-            onPrev={()=>previousInvoice&&setInvoiceIdx(i=>i-1)} onNext={()=>nextInvoice&&setInvoiceIdx(i=>i+1)}/>
-          <div style={{textAlign:"right"}}>
-            {invoice?.atual&&<div style={{...G,fontSize:10,fontWeight:700,color:T.blue,textTransform:"uppercase",letterSpacing:"0.09em",marginBottom:3}}>Fatura aberta</div>}
-            <div style={{...G,...NUM,fontSize:22,fontWeight:800,color:T.ink,lineHeight:1}}>{formatBRL((invoice?.val||0))}</div>
-            {diffPercent!==0&&<div style={{...G,fontSize:11,fontWeight:600,marginTop:3,color:diffPercent>0?T.red:T.green}}>{diffPercent>0?"↑":"↓"} {Math.abs(diffPercent)}% vs {previousInvoice?.mes}</div>}
-          </div>
-        </div>
-        <LimitBar card={card} usagePercent={usagePercent} usageColor={usageColor} formatBRL={formatBRL}/>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:12}}>
-          <div style={{display:"flex",alignItems:"center",gap:6}}>
-            <Calendar size={12} color={T.inkLight}/>
-            <span style={{...G,fontSize:11,color:T.inkMid}}>Vence {invoice?.venc}</span>
-          </div>
-          <div style={{display:"flex",gap:8}}>
-            {isCurrent&&(
-              <button onClick={()=>setExportModalOpen(true)} style={{...G,display:"flex",alignItems:"center",gap:5,fontSize:11,fontWeight:600,color:T.inkMid,background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,padding:"5px 10px",cursor:"pointer"}}>
-                <Download size={11}/> CSV
-              </button>
-            )}
-            {isCurrent&&!isPaid&&(
-              <button onClick={handleMarkPaid} style={{...G,display:"flex",alignItems:"center",gap:5,padding:"5px 12px",borderRadius:8,border:`1.5px solid ${T.green}`,background:T.greenLight,color:T.green,fontSize:11,fontWeight:700,cursor:"pointer"}}>
-                {markingPaid?<><RefreshCw size={11}/> …</>:<><Check size={11}/> Pagar</>}
-              </button>
-            )}
-            {isPaid&&<div style={{...G,display:"flex",alignItems:"center",gap:5,fontSize:11,fontWeight:700,color:T.green}}><Check size={12}/> Paga</div>}
-          </div>
-        </div>
-      </div>
+      <CardsInvoiceHeader
+        variant="mobile"
+        card={card} invoice={invoice} previousInvoice={previousInvoice} nextInvoice={nextInvoice}
+        diffPercent={diffPercent} usagePercent={usagePercent} usageColor={usageColor}
+        isCurrent={isCurrent} isPaid={isPaid} markingPaid={markingPaid}
+        formatBRL={formatBRL}
+        onPrevInvoice={()=>previousInvoice&&setInvoiceIdx(i=>i-1)}
+        onNextInvoice={()=>nextInvoice&&setInvoiceIdx(i=>i+1)}
+        onOpenExport={()=>setExportModalOpen(true)}
+        onMarkPaid={handleMarkPaid}
+      />
 
       {/* KPI Strip */}
       <div style={{marginBottom:14}}>
@@ -761,27 +718,14 @@ export const CartoesPage = ({
       <style>{`@keyframes drawerIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}`}</style>
       {modalsBundle}
 
-      {/* Header */}
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20, flexWrap:"wrap", gap:10 }}>
-        <PageTitle sans="Meus" serif="Cartões"/>
-        <div style={{ display:"flex", gap:10, flexWrap:"wrap", justifyContent:"flex-end" }}>
-          <button type="button" onClick={()=>onNewItem&&onNewItem(cardId)}
-            style={{...G,display:"flex",alignItems:"center",gap:6,background:T.green,border:"none",borderRadius:10,padding:"9px 16px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
-            <Plus size={14}/> Novo item
-          </button>
-          {canEditSelectedCard && (
-            <button type="button" onClick={openEditCardSheet} title="Editar cartão selecionado"
-              style={{...G,display:"flex",alignItems:"center",gap:6,background:T.surface,border:`1px solid ${T.border}`,
-                borderRadius:10,padding:"9px 16px",fontSize:13,fontWeight:700,color:T.ink,cursor:"pointer"}}>
-              <Pencil size={14}/> Editar
-            </button>
-          )}
-          <button type="button" onClick={openAddCardSheet}
-            style={{...G,display:"flex",alignItems:"center",gap:6,background:T.ink,border:"none",borderRadius:10,padding:"9px 16px",fontSize:13,fontWeight:700,color:"#fff",cursor:"pointer"}}>
-            <CreditCard size={14}/> + Cartão
-          </button>
-        </div>
-      </div>
+      <CardsPageHeader
+        variant="desktop"
+        cardId={cardId}
+        canEditSelectedCard={canEditSelectedCard}
+        onNewItem={onNewItem}
+        onEditCard={openEditCardSheet}
+        onAddCard={openAddCardSheet}
+      />
 
       {/* Card carousel */}
       <div style={{ marginBottom:16 }}>
@@ -794,30 +738,17 @@ export const CartoesPage = ({
         </div>
       </div>
 
-      {/* Invoice header */}
-      <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:14, padding:"16px 20px", marginBottom:14 }}>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:10 }}>
-          <InvoiceNav invoice={invoice} previousInvoice={previousInvoice} nextInvoice={nextInvoice}
-            onPrev={()=>previousInvoice&&setInvoiceIdx(i=>i-1)} onNext={()=>nextInvoice&&setInvoiceIdx(i=>i+1)}/>
-          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-            {invoice?.atual && <div style={{...G,fontSize:11,fontWeight:700,color:T.blue,textTransform:"uppercase",letterSpacing:"0.08em"}}>Fatura aberta</div>}
-            <div style={{...G,...NUM,fontSize:24,fontWeight:800,color:T.ink,lineHeight:1}}>{formatBRL((invoice?.val||0))}</div>
-            {diffPercent!==0 && <div style={{...G,fontSize:12,fontWeight:600,color:diffPercent>0?T.red:T.green}}>{diffPercent>0?"↑":"↓"} {Math.abs(diffPercent)}% vs {previousInvoice?.mes}</div>}
-          </div>
-        </div>
-        <LimitBar card={card} usagePercent={usagePercent} usageColor={usageColor} formatBRL={formatBRL}/>
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginTop:12 }}>
-          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <Calendar size={13} color={T.inkLight}/>
-            <span style={{...G,fontSize:12,color:T.inkMid}}>Vence {invoice?.venc}</span>
-          </div>
-          <div style={{ display:"flex", gap:8 }}>
-            {isCurrent && <button onClick={()=>setExportModalOpen(true)} style={{...G,display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:600,color:T.inkMid,background:T.bg,border:`1px solid ${T.border}`,borderRadius:8,padding:"6px 12px",cursor:"pointer"}}><Download size={12}/> CSV</button>}
-            {isCurrent&&!isPaid && <button onClick={handleMarkPaid} style={{...G,display:"flex",alignItems:"center",gap:5,padding:"6px 14px",borderRadius:8,border:`1.5px solid ${T.green}`,background:T.greenLight,color:T.green,fontSize:12,fontWeight:700,cursor:"pointer"}}>{markingPaid?<><RefreshCw size={12}/> …</>:<><Check size={12}/> Marcar como paga</>}</button>}
-            {isPaid && <div style={{...G,display:"flex",alignItems:"center",gap:5,fontSize:12,fontWeight:700,color:T.green}}><Check size={13}/> Paga</div>}
-          </div>
-        </div>
-      </div>
+      <CardsInvoiceHeader
+        variant="desktop"
+        card={card} invoice={invoice} previousInvoice={previousInvoice} nextInvoice={nextInvoice}
+        diffPercent={diffPercent} usagePercent={usagePercent} usageColor={usageColor}
+        isCurrent={isCurrent} isPaid={isPaid} markingPaid={markingPaid}
+        formatBRL={formatBRL}
+        onPrevInvoice={()=>previousInvoice&&setInvoiceIdx(i=>i-1)}
+        onNextInvoice={()=>nextInvoice&&setInvoiceIdx(i=>i+1)}
+        onOpenExport={()=>setExportModalOpen(true)}
+        onMarkPaid={handleMarkPaid}
+      />
 
       {/* KPI strip */}
       <div style={{ marginBottom:14 }}>
