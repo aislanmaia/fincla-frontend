@@ -129,22 +129,22 @@ export const NovaTransacaoModal = ({
   const [cardId,    setCardId]    = useState("");
   const [txDateYmd, setTxDateYmd]  = useState(() => todayLocalYmd());
   const [modalityChoice,setModalityChoice]       = useState("parcelado");
-  const [freqRec,   setFreqRec]   = useState(preConfig?.freqRec || "mensal");
-  const [encRec,    setEncRec]    = useState(preConfig?.encRec || "sem-fim");
-  const [valorTipoRec, setValorTipoRec] = useState(preConfig?.valorTipoRec || "fixo");
+  const [recurrenceFrequency,   setRecurrenceFrequency]   = useState(preConfig?.freqRec || "mensal");
+  const [recurrenceEndKind,    setRecurrenceEndKind]    = useState(preConfig?.encRec || "sem-fim");
+  const [recurrenceValueKind, setRecurrenceValueKind] = useState(preConfig?.valorTipoRec || "fixo");
   // Painel Recorrência — campos novos
   const [selectedDayOfWeek,    setSelectedDayOfWeek]    = useState(preConfig?.selectedDayOfWeek ?? null);
   const [selectedDayOfMonth,   setSelectedDayOfMonth]   = useState(preConfig?.selectedDayOfMonth ?? null);
-  const [customIntervalRec, setCustomIntervalRec] = useState(preConfig?.customIntervalRec ?? 1);
-  const [customUnitRec,     setCustomUnitRec]     = useState(preConfig?.customUnitRec || "month");
+  const [customRecurrenceInterval, setCustomRecurrenceInterval] = useState(preConfig?.customIntervalRec ?? 1);
+  const [customRecurrenceUnit,     setCustomRecurrenceUnit]     = useState(preConfig?.customUnitRec || "month");
   const [firstOccurrenceYmd,    setFirstOccurrenceYmd]    = useState(preConfig?.firstOccurrenceYmd || null);
   /**
    * Mensagem efêmera mostrada abaixo do datepicker quando a 1ª ocorrência é ajustada
    * automaticamente por mudança de dia-da-semana / dia-do-mês. Limpa em ~3s.
    */
   const [firstOccurrenceAutoAdjustNote, setFirstOccurrenceAutoAdjustNote] = useState(null);
-  const [encRepetitionsRec, setEncRepetitionsRec] = useState(preConfig?.encRepetitionsRec ?? 12);
-  const [encEndDateYmdRec,  setEncEndDateYmdRec]  = useState(preConfig?.encEndDateYmdRec || preConfig?.dataFimRec || null);
+  const [recurrenceRepetitions, setRecurrenceRepetitions] = useState(preConfig?.encRepetitionsRec ?? 12);
+  const [recurrenceEndDateYmd,  setRecurrenceEndDateYmd]  = useState(preConfig?.encEndDateYmdRec || preConfig?.dataFimRec || null);
   const [showImpact,setShowImpact]= useState(false);
   /** Revisão mobile: acordeão «Impacto financeiro» (controlado no pai para não ir à API até expandir). */
   const [mobileReviewImpactOpen, setMobileReviewImpactOpen] = useState(false);
@@ -395,16 +395,16 @@ export const NovaTransacaoModal = ({
       setRecurrencePanelExiting(false);
       setIsRecurring(true);
       setCardId("");
-      setFreqRec(pc?.freqRec || "mensal");
-      setEncRec(pc?.encRec || "sem-fim");
-      setValorTipoRec(pc?.valorTipoRec || "fixo");
+      setRecurrenceFrequency(pc?.freqRec || "mensal");
+      setRecurrenceEndKind(pc?.encRec || "sem-fim");
+      setRecurrenceValueKind(pc?.valorTipoRec || "fixo");
       setSelectedDayOfWeek(pc?.selectedDayOfWeek ?? null);
       setSelectedDayOfMonth(pc?.selectedDayOfMonth ?? null);
-      setCustomIntervalRec(pc?.customIntervalRec ?? 1);
-      setCustomUnitRec(pc?.customUnitRec || "month");
+      setCustomRecurrenceInterval(pc?.customIntervalRec ?? 1);
+      setCustomRecurrenceUnit(pc?.customUnitRec || "month");
       setFirstOccurrenceYmd(pc?.firstOccurrenceYmd || null);
-      setEncRepetitionsRec(pc?.encRepetitionsRec ?? 12);
-      setEncEndDateYmdRec(pc?.encEndDateYmdRec || pc?.dataFimRec || null);
+      setRecurrenceRepetitions(pc?.encRepetitionsRec ?? 12);
+      setRecurrenceEndDateYmd(pc?.encEndDateYmdRec || pc?.dataFimRec || null);
       setCat(pc?.cat || "");
       setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, pc));
       return;
@@ -434,16 +434,16 @@ export const NovaTransacaoModal = ({
       const m = pc.method || "pix";
       setMethod(typeof m === "string" ? m : "pix");
       setIsRecurring(!!pc.recorre);
-      setFreqRec(pc.freqRec || "mensal");
-      setEncRec(pc.encRec || "sem-fim");
-      setValorTipoRec(pc.valorTipoRec || "fixo");
+      setRecurrenceFrequency(pc.freqRec || "mensal");
+      setRecurrenceEndKind(pc.encRec || "sem-fim");
+      setRecurrenceValueKind(pc.valorTipoRec || "fixo");
       setSelectedDayOfWeek(pc?.selectedDayOfWeek ?? null);
       setSelectedDayOfMonth(pc?.selectedDayOfMonth ?? null);
-      setCustomIntervalRec(pc?.customIntervalRec ?? 1);
-      setCustomUnitRec(pc?.customUnitRec || "month");
+      setCustomRecurrenceInterval(pc?.customIntervalRec ?? 1);
+      setCustomRecurrenceUnit(pc?.customUnitRec || "month");
       setFirstOccurrenceYmd(pc?.firstOccurrenceYmd || null);
-      setEncRepetitionsRec(pc?.encRepetitionsRec ?? 12);
-      setEncEndDateYmdRec(pc?.encEndDateYmdRec || pc?.dataFimRec || null);
+      setRecurrenceRepetitions(pc?.encRepetitionsRec ?? 12);
+      setRecurrenceEndDateYmd(pc?.encEndDateYmdRec || pc?.dataFimRec || null);
       const explicitPcCat =
         pc.cat != null && String(pc.cat).trim() !== "";
       const explicitPcCatId =
@@ -526,16 +526,16 @@ export const NovaTransacaoModal = ({
         ? String(prefs.cartaoId)
         : "",
     );
-    setFreqRec("mensal");
-    setEncRec("sem-fim");
-    setValorTipoRec("fixo");
+    setRecurrenceFrequency("mensal");
+    setRecurrenceEndKind("sem-fim");
+    setRecurrenceValueKind("fixo");
     setSelectedDayOfWeek(null);
     setSelectedDayOfMonth(null);
-    setCustomIntervalRec(1);
-    setCustomUnitRec("month");
+    setCustomRecurrenceInterval(1);
+    setCustomRecurrenceUnit("month");
     setFirstOccurrenceYmd(null);
-    setEncRepetitionsRec(12);
-    setEncEndDateYmdRec(null);
+    setRecurrenceRepetitions(12);
+    setRecurrenceEndDateYmd(null);
     setCat(
       prefs.cat != null && String(prefs.cat).trim()
         ? String(prefs.cat).trim()
@@ -895,20 +895,20 @@ export const NovaTransacaoModal = ({
 
   /** Linha 1 do resumo: descrição da regra ("Todo dia 5", "Toda terça-feira", etc.). */
   const recurrenceRuleSummary = useMemo(() => {
-    if (freqRec === "semanal" && effectiveDayOfWeek != null) return `Toda ${DOW_LABELS_FULL[effectiveDayOfWeek]}`;
-    if (freqRec === "quinzenal" && effectiveDayOfWeek != null) return `A cada 2 semanas, ${DOW_LABELS_FULL[effectiveDayOfWeek]}`;
-    if (freqRec === "mensal" && effectiveDayOfMonth != null) return `Todo dia ${effectiveDayOfMonth} de cada mês`;
-    if (freqRec === "anual" && firstOccurrenceDate) {
+    if (recurrenceFrequency === "semanal" && effectiveDayOfWeek != null) return `Toda ${DOW_LABELS_FULL[effectiveDayOfWeek]}`;
+    if (recurrenceFrequency === "quinzenal" && effectiveDayOfWeek != null) return `A cada 2 semanas, ${DOW_LABELS_FULL[effectiveDayOfWeek]}`;
+    if (recurrenceFrequency === "mensal" && effectiveDayOfMonth != null) return `Todo dia ${effectiveDayOfMonth} de cada mês`;
+    if (recurrenceFrequency === "anual" && firstOccurrenceDate) {
       const d = new Date(`${firstOccurrenceDate}T12:00:00`);
       if (!Number.isNaN(d.getTime())) return `Todo dia ${d.getDate()} de ${MONTH_NAMES[d.getMonth()]}`;
     }
-    if (freqRec === "personalizado") {
-      const n = Math.max(1, Number(customIntervalRec) || 1);
-      const [sing, plur] = CUSTOM_UNIT_LABEL[customUnitRec] || ["unidade","unidades"];
+    if (recurrenceFrequency === "personalizado") {
+      const n = Math.max(1, Number(customRecurrenceInterval) || 1);
+      const [sing, plur] = CUSTOM_UNIT_LABEL[customRecurrenceUnit] || ["unidade","unidades"];
       return `A cada ${n} ${n === 1 ? sing : plur}`;
     }
-    return FREQ_LABELS[freqRec] || "";
-  }, [freqRec, effectiveDayOfWeek, effectiveDayOfMonth, firstOccurrenceDate, customIntervalRec, customUnitRec]);
+    return FREQ_LABELS[recurrenceFrequency] || "";
+  }, [recurrenceFrequency, effectiveDayOfWeek, effectiveDayOfMonth, firstOccurrenceDate, customRecurrenceInterval, customRecurrenceUnit]);
 
   /**
    * 1ª ocorrência que o backend vai gravar (espelha compute_first_occurrence).
@@ -920,11 +920,11 @@ export const NovaTransacaoModal = ({
     const anchor = new Date(`${firstOccurrenceDate}T12:00:00`);
     if (Number.isNaN(anchor.getTime())) return firstOccurrenceDate;
     const apiFreq = (
-      freqRec === "semanal" ? "weekly" :
-      freqRec === "quinzenal" ? "biweekly" :
-      freqRec === "mensal" ? "monthly" :
-      freqRec === "anual" ? "yearly" :
-      freqRec === "personalizado" ? "custom" : "monthly"
+      recurrenceFrequency === "semanal" ? "weekly" :
+      recurrenceFrequency === "quinzenal" ? "biweekly" :
+      recurrenceFrequency === "mensal" ? "monthly" :
+      recurrenceFrequency === "anual" ? "yearly" :
+      recurrenceFrequency === "personalizado" ? "custom" : "monthly"
     );
     const result = computeFirstOccurrenceMath(anchor, apiFreq, {
       dayOfMonth: effectiveDayOfMonth,
@@ -935,19 +935,19 @@ export const NovaTransacaoModal = ({
     const m = String(result.getMonth() + 1).padStart(2, "0");
     const d = String(result.getDate()).padStart(2, "0");
     return `${y}-${m}-${d}`;
-  }, [firstOccurrenceDate, freqRec, effectiveDayOfMonth, effectiveDayOfWeek]);
+  }, [firstOccurrenceDate, recurrenceFrequency, effectiveDayOfMonth, effectiveDayOfWeek]);
 
-  /** end_date calculada quando encRec=repeticoes (apenas para exibir no resumo). */
+  /** end_date calculada quando recurrenceEndKind=repeticoes (apenas para exibir no resumo). */
   const recurrenceComputedEndDate = useMemo(() => {
-    if (encRec !== "repeticoes") return null;
-    const n = Number(encRepetitionsRec);
+    if (recurrenceEndKind !== "repeticoes") return null;
+    const n = Number(recurrenceRepetitions);
     if (!Number.isFinite(n) || n < 1) return null;
     const apiFreq = (
-      freqRec === "semanal" ? "weekly" :
-      freqRec === "quinzenal" ? "biweekly" :
-      freqRec === "mensal" ? "monthly" :
-      freqRec === "anual" ? "yearly" :
-      freqRec === "personalizado" ? "custom" : "monthly"
+      recurrenceFrequency === "semanal" ? "weekly" :
+      recurrenceFrequency === "quinzenal" ? "biweekly" :
+      recurrenceFrequency === "mensal" ? "monthly" :
+      recurrenceFrequency === "anual" ? "yearly" :
+      recurrenceFrequency === "personalizado" ? "custom" : "monthly"
     );
     return computeEndDateFromOccurrencesMath({
       startDateYmd: firstOccurrenceDate,
@@ -955,10 +955,10 @@ export const NovaTransacaoModal = ({
       n,
       dayOfMonth: effectiveDayOfMonth,
       dayOfWeek: effectiveDayOfWeek,
-      interval: customIntervalRec,
-      intervalUnit: customUnitRec,
+      interval: customRecurrenceInterval,
+      intervalUnit: customRecurrenceUnit,
     });
-  }, [encRec, encRepetitionsRec, freqRec, firstOccurrenceDate, effectiveDayOfMonth, effectiveDayOfWeek, customIntervalRec, customUnitRec]);
+  }, [recurrenceEndKind, recurrenceRepetitions, recurrenceFrequency, firstOccurrenceDate, effectiveDayOfMonth, effectiveDayOfWeek, customRecurrenceInterval, customRecurrenceUnit]);
 
   const fmtDateBr = (ymd) => {
     if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(String(ymd))) return "—";
@@ -1028,12 +1028,12 @@ export const NovaTransacaoModal = ({
   const renderRecurrenceConfigBody = (compact) => (
     <RecurrenceConfigPanel
       compact={compact}
-      freqRec={freqRec}
-      setFreqRec={setFreqRec}
-      customIntervalRec={customIntervalRec}
-      setCustomIntervalRec={setCustomIntervalRec}
-      customUnitRec={customUnitRec}
-      setCustomUnitRec={setCustomUnitRec}
+      recurrenceFrequency={recurrenceFrequency}
+      setRecurrenceFrequency={setRecurrenceFrequency}
+      customRecurrenceInterval={customRecurrenceInterval}
+      setCustomRecurrenceInterval={setCustomRecurrenceInterval}
+      customRecurrenceUnit={customRecurrenceUnit}
+      setCustomRecurrenceUnit={setCustomRecurrenceUnit}
       effectiveDayOfWeek={effectiveDayOfWeek}
       effectiveDayOfMonth={effectiveDayOfMonth}
       onSelectDayOfWeek={handleSelectDayOfWeek}
@@ -1042,12 +1042,12 @@ export const NovaTransacaoModal = ({
       setFirstOccurrenceYmd={setFirstOccurrenceYmd}
       firstOccurrenceAutoAdjustNote={firstOccurrenceAutoAdjustNote}
       setFirstOccurrenceAutoAdjustNote={setFirstOccurrenceAutoAdjustNote}
-      encRec={encRec}
-      setEncRec={setEncRec}
-      encRepetitionsRec={encRepetitionsRec}
-      setEncRepetitionsRec={setEncRepetitionsRec}
-      encEndDateYmdRec={encEndDateYmdRec}
-      setEncEndDateYmdRec={setEncEndDateYmdRec}
+      recurrenceEndKind={recurrenceEndKind}
+      setRecurrenceEndKind={setRecurrenceEndKind}
+      recurrenceRepetitions={recurrenceRepetitions}
+      setRecurrenceRepetitions={setRecurrenceRepetitions}
+      recurrenceEndDateYmd={recurrenceEndDateYmd}
+      setRecurrenceEndDateYmd={setRecurrenceEndDateYmd}
       recurrenceRuleSummary={recurrenceRuleSummary}
       recurrenceNextOccurrence={recurrenceNextOccurrence}
       recurrenceComputedEndDate={recurrenceComputedEndDate}
@@ -1140,9 +1140,9 @@ export const NovaTransacaoModal = ({
             ? Number(cardId)
             : null;
         const endYmd =
-          encRec === "data" && encEndDateYmdRec &&
-          /^\d{4}-\d{2}-\d{2}$/.test(String(encEndDateYmdRec))
-            ? String(encEndDateYmdRec)
+          recurrenceEndKind === "data" && recurrenceEndDateYmd &&
+          /^\d{4}-\d{2}-\d{2}$/.test(String(recurrenceEndDateYmd))
+            ? String(recurrenceEndDateYmd)
             : undefined;
         const recurrenceSharedPayload = {
           description: desc,
@@ -1151,17 +1151,17 @@ export const NovaTransacaoModal = ({
           categoryTagId,
           detailTagIds: detailIdsForApi,
           startDateYmd: firstOccurrenceDate,
-          freqRec,
-          encRec,
+          freqRec: recurrenceFrequency,
+          encRec: recurrenceEndKind,
           endDateYmd: endYmd,
-          valorTipoRec,
+          valorTipoRec: recurrenceValueKind,
           categoryLabel: cat,
           cardId: Number.isFinite(cardId) ? cardId : null,
           dayOfWeek: effectiveDayOfWeek,
           dayOfMonth: effectiveDayOfMonth,
-          interval: customIntervalRec,
-          intervalUnit: customUnitRec,
-          repetitions: encRec === "repeticoes" ? Number(encRepetitionsRec) : null,
+          interval: customRecurrenceInterval,
+          intervalUnit: customRecurrenceUnit,
+          repetitions: recurrenceEndKind === "repeticoes" ? Number(recurrenceRepetitions) : null,
         };
         if (isEditSeries) {
           await updateRecurringSeriesForUi(
@@ -1294,11 +1294,11 @@ export const NovaTransacaoModal = ({
     setRecurrencePanelOpen(false); setRecurrencePanelExiting(false);
     setIsRecurring(false);
     setCardId(prefMethod === "credito" && prefs.cartaoId != null ? String(prefs.cartaoId) : "");
-    setFreqRec("mensal"); setEncRec("sem-fim"); setValorTipoRec("fixo");
+    setRecurrenceFrequency("mensal"); setRecurrenceEndKind("sem-fim"); setRecurrenceValueKind("fixo");
     setSelectedDayOfWeek(null); setSelectedDayOfMonth(null);
-    setCustomIntervalRec(1); setCustomUnitRec("month");
+    setCustomRecurrenceInterval(1); setCustomRecurrenceUnit("month");
     setFirstOccurrenceYmd(null);
-    setEncRepetitionsRec(12); setEncEndDateYmdRec(null);
+    setRecurrenceRepetitions(12); setRecurrenceEndDateYmd(null);
     setCat(prefs.cat != null && String(prefs.cat).trim() ? String(prefs.cat).trim() : "");
     setCategoryTagId(null);
     if (prefMethod === "credito") {
@@ -1381,13 +1381,13 @@ export const NovaTransacaoModal = ({
           </span>
           {(novaRecorrencia || isRecurring) && (
             <span style={{ ...G, fontSize:12, color:typeColor, opacity:0.7 }}>
-              / {FREQ_LABELS[freqRec]?.toLowerCase() || "mês"}
+              / {FREQ_LABELS[recurrenceFrequency]?.toLowerCase() || "mês"}
             </span>
           )}
         </div>
         {(novaRecorrencia || isRecurring) && (
           <div style={{ ...G, fontSize:11, color:typeColor, opacity:0.65, marginTop:3 }}>
-            {recurrenceRuleSummary || FREQ_LABELS[freqRec]} · {ENC_LABELS[encRec]}
+            {recurrenceRuleSummary || FREQ_LABELS[recurrenceFrequency]} · {ENC_LABELS[recurrenceEndKind]}
           </div>
         )}
       </div>
@@ -1399,9 +1399,9 @@ export const NovaTransacaoModal = ({
             { label:"FORMA PAG.",  val: MET_LABELS[method] || method },
             { label:"DATA",        val: formatYmdToLocaleDisplay(txDateYmd, APP_UI_LOCALE) },
             ...(isRecurring || novaRecorrencia ? [
-              { label:"FREQUÊNCIA",   val: FREQ_LABELS[freqRec] || freqRec },
-              { label:"ENCERRAMENTO", val: ENC_LABELS[encRec] || encRec },
-              { label:"TIPO DE VALOR", val: valorTipoRec === "estimado" ? "≈ Estimado" : "Fixo" },
+              { label:"FREQUÊNCIA",   val: FREQ_LABELS[recurrenceFrequency] || recurrenceFrequency },
+              { label:"ENCERRAMENTO", val: ENC_LABELS[recurrenceEndKind] || recurrenceEndKind },
+              { label:"TIPO DE VALOR", val: recurrenceValueKind === "estimado" ? "≈ Estimado" : "Fixo" },
             ] : [
               { label:"MODALIDADE", val: method === "credito" ? (modalityChoice === "avista" ? "À vista (1×)" : `${installments}× de R$ ${(amountNum/installments).toFixed(2)}`) : "—" },
               { label:"CARTÃO",    val: method === "credito" ? cards.find(c=>c.id===cardId)?.nome || "—" : "—" },
@@ -2063,18 +2063,18 @@ export const NovaTransacaoModal = ({
                     { id:"fixo",     label:"Valor fixo",      sub:"Mesmo valor todo mês",             icon:"🔒" },
                     { id:"estimado", label:"Valor estimado",   sub:"Varia, mas use como referência",   icon:"≈"  },
                   ].map(opt => (
-                    <button key={opt.id} onClick={() => setValorTipoRec(opt.id)}
+                    <button key={opt.id} onClick={() => setRecurrenceValueKind(opt.id)}
                       style={{ padding:"10px 12px", borderRadius:9, textAlign:"left", cursor:"pointer",
-                        border:`1.5px solid ${valorTipoRec===opt.id ? T.ink : T.border}`,
-                        background:valorTipoRec===opt.id ? T.ink : T.surface,
+                        border:`1.5px solid ${recurrenceValueKind===opt.id ? T.ink : T.border}`,
+                        background:recurrenceValueKind===opt.id ? T.ink : T.surface,
                         transition:"all 0.15s" }}>
                       <div style={{ ...G, fontSize:13, marginBottom:2 }}>{opt.icon}</div>
-                      <div style={{ ...G, fontSize:12, fontWeight:700, color:valorTipoRec===opt.id?"#fff":T.ink }}>{opt.label}</div>
-                      <div style={{ ...G, fontSize:10, color:valorTipoRec===opt.id?"rgba(255,255,255,0.55)":T.inkLight, marginTop:2, lineHeight:1.4 }}>{opt.sub}</div>
+                      <div style={{ ...G, fontSize:12, fontWeight:700, color:recurrenceValueKind===opt.id?"#fff":T.ink }}>{opt.label}</div>
+                      <div style={{ ...G, fontSize:10, color:recurrenceValueKind===opt.id?"rgba(255,255,255,0.55)":T.inkLight, marginTop:2, lineHeight:1.4 }}>{opt.sub}</div>
                     </button>
                   ))}
                 </div>
-                {valorTipoRec==="estimado" && (
+                {recurrenceValueKind==="estimado" && (
                   <div style={{ display:"flex", alignItems:"flex-start", gap:7, background:T.amberLight,
                     border:`1px solid ${T.amber}33`, borderRadius:9, padding:"8px 11px", marginTop:8 }}>
                     <AlertTriangle size={12} color={T.amber} style={{ flexShrink:0, marginTop:1 }} />

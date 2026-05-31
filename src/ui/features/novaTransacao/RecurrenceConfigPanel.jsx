@@ -31,13 +31,13 @@ const ENC_OPTIONS = [
 export function RecurrenceConfigPanel({
   compact = false,
   // Frequência
-  freqRec,
-  setFreqRec,
+  recurrenceFrequency,
+  setRecurrenceFrequency,
   // Personalizado
-  customIntervalRec,
-  setCustomIntervalRec,
-  customUnitRec,
-  setCustomUnitRec,
+  customRecurrenceInterval,
+  setCustomRecurrenceInterval,
+  customRecurrenceUnit,
+  setCustomRecurrenceUnit,
   // Semana/Mês
   effectiveDayOfWeek,
   effectiveDayOfMonth,
@@ -49,12 +49,12 @@ export function RecurrenceConfigPanel({
   firstOccurrenceAutoAdjustNote,
   setFirstOccurrenceAutoAdjustNote,
   // Encerramento
-  encRec,
-  setEncRec,
-  encRepetitionsRec,
-  setEncRepetitionsRec,
-  encEndDateYmdRec,
-  setEncEndDateYmdRec,
+  recurrenceEndKind,
+  setRecurrenceEndKind,
+  recurrenceRepetitions,
+  setRecurrenceRepetitions,
+  recurrenceEndDateYmd,
+  setRecurrenceEndDateYmd,
   // Derivados
   recurrenceRuleSummary,
   recurrenceNextOccurrence,
@@ -85,9 +85,9 @@ export function RecurrenceConfigPanel({
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: f.fieldGap }}>
           {FREQ_OPTIONS.map((label) => {
             const fid = label.toLowerCase();
-            const active = freqRec === fid;
+            const active = recurrenceFrequency === fid;
             return (
-              <button key={label} type="button" onClick={() => setFreqRec(fid)}
+              <button key={label} type="button" onClick={() => setRecurrenceFrequency(fid)}
                 style={{ ...G, padding: f.pillPadding, borderRadius: 10, border: `1.5px solid ${active ? T.ink : T.border}`, background: active ? T.ink : T.surface, color: active ? "#fff" : T.inkMid, fontSize: f.pillFontSize, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
                 {label}
               </button>
@@ -97,9 +97,9 @@ export function RecurrenceConfigPanel({
       </div>
 
       {/* ─── CAMPOS CONDICIONAIS ─── */}
-      {(freqRec === "semanal" || freqRec === "quinzenal") && (
+      {(recurrenceFrequency === "semanal" || recurrenceFrequency === "quinzenal") && (
         <div>
-          <Label>{freqRec === "quinzenal" ? "Dia da semana (a cada 2)" : "Dia da semana"}</Label>
+          <Label>{recurrenceFrequency === "quinzenal" ? "Dia da semana (a cada 2)" : "Dia da semana"}</Label>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
             {DOW_LABELS_SHORT.map((lbl, idx) => {
               const active = effectiveDayOfWeek === idx;
@@ -116,7 +116,7 @@ export function RecurrenceConfigPanel({
         </div>
       )}
 
-      {freqRec === "mensal" && (
+      {recurrenceFrequency === "mensal" && (
         <div>
           <Label>Dia do mês</Label>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -138,7 +138,7 @@ export function RecurrenceConfigPanel({
         </div>
       )}
 
-      {freqRec === "anual" && (
+      {recurrenceFrequency === "anual" && (
         <div>
           <Label>Dia e mês</Label>
           <LocaleDatePicker
@@ -153,17 +153,17 @@ export function RecurrenceConfigPanel({
         </div>
       )}
 
-      {freqRec === "personalizado" && (
+      {recurrenceFrequency === "personalizado" && (
         <div>
           <Label>A cada</Label>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <input type="number" min={1} value={customIntervalRec}
+            <input type="number" min={1} value={customRecurrenceInterval}
               onChange={(e) => {
                 const n = Number.parseInt(e.target.value, 10);
-                setCustomIntervalRec(Number.isFinite(n) && n >= 1 ? n : 1);
+                setCustomRecurrenceInterval(Number.isFinite(n) && n >= 1 ? n : 1);
               }}
               style={{ ...G, width: 64, padding: f.inputPadding, borderRadius: 8, border: `1.5px solid ${T.border}`, fontSize: f.pillFontSize, fontWeight: 700, color: T.ink, textAlign: "center" }} />
-            <select value={customUnitRec} onChange={(e) => setCustomUnitRec(e.target.value)}
+            <select value={customRecurrenceUnit} onChange={(e) => setCustomRecurrenceUnit(e.target.value)}
               style={{ ...G, flex: 1, padding: f.inputPadding, borderRadius: 8, border: `1.5px solid ${T.border}`, fontSize: f.pillFontSize, fontWeight: 600, color: T.ink, background: T.surface }}>
               {CUSTOM_UNIT_OPTS.map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
             </select>
@@ -197,9 +197,9 @@ export function RecurrenceConfigPanel({
         <Label>Encerramento</Label>
         <div style={{ display: "flex", flexDirection: "column", gap: f.fieldGap }}>
           {ENC_OPTIONS.map((opt) => {
-            const active = encRec === opt.id;
+            const active = recurrenceEndKind === opt.id;
             return (
-              <div key={opt.id} onClick={() => setEncRec(opt.id)}
+              <div key={opt.id} onClick={() => setRecurrenceEndKind(opt.id)}
                 style={{ display: "flex", flexDirection: "column", gap: 8, padding: compact ? "12px 14px" : "10px 12px", borderRadius: 10, border: `1.5px solid ${active ? T.ink : T.border}`, cursor: "pointer", background: active ? T.bg : T.surface }}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
                   <div style={{ width: compact ? 16 : 14, height: compact ? 16 : 14, borderRadius: 9999, border: `2px solid ${active ? T.ink : T.border}`, background: active ? T.ink : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 1 }}>
@@ -214,19 +214,19 @@ export function RecurrenceConfigPanel({
                   <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: compact ? 26 : 24 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <span style={{ ...G, fontSize: f.smallText, color: T.inkMid }}>Após</span>
-                      <input type="number" min={1} value={encRepetitionsRec}
+                      <input type="number" min={1} value={recurrenceRepetitions}
                         onChange={(e) => {
                           const n = Number.parseInt(e.target.value, 10);
-                          setEncRepetitionsRec(Number.isFinite(n) && n >= 1 ? n : 1);
+                          setRecurrenceRepetitions(Number.isFinite(n) && n >= 1 ? n : 1);
                         }}
                         onClick={(e) => e.stopPropagation()}
                         style={{ ...G, width: 64, padding: f.inputPadding, borderRadius: 8, border: `1.5px solid ${T.border}`, fontSize: f.pillFontSize, fontWeight: 700, color: T.ink, textAlign: "center" }} />
                       <span style={{ ...G, fontSize: f.smallText, color: T.inkMid }}>
-                        {freqRec === "semanal" ? (Number(encRepetitionsRec) === 1 ? "semana" : "semanas") :
-                          freqRec === "quinzenal" ? (Number(encRepetitionsRec) === 1 ? "quinzena" : "quinzenas") :
-                          freqRec === "mensal" ? (Number(encRepetitionsRec) === 1 ? "mês" : "meses") :
-                          freqRec === "anual" ? (Number(encRepetitionsRec) === 1 ? "ano" : "anos") :
-                          (Number(encRepetitionsRec) === 1 ? "ocorrência" : "ocorrências")}
+                        {recurrenceFrequency === "semanal" ? (Number(recurrenceRepetitions) === 1 ? "semana" : "semanas") :
+                          recurrenceFrequency === "quinzenal" ? (Number(recurrenceRepetitions) === 1 ? "quinzena" : "quinzenas") :
+                          recurrenceFrequency === "mensal" ? (Number(recurrenceRepetitions) === 1 ? "mês" : "meses") :
+                          recurrenceFrequency === "anual" ? (Number(recurrenceRepetitions) === 1 ? "ano" : "anos") :
+                          (Number(recurrenceRepetitions) === 1 ? "ocorrência" : "ocorrências")}
                       </span>
                     </div>
                     {recurrenceComputedEndDate && (
@@ -240,8 +240,8 @@ export function RecurrenceConfigPanel({
                   <div onClick={(e) => e.stopPropagation()} style={{ paddingLeft: compact ? 26 : 24 }}>
                     <LocaleDatePicker
                       locale={APP_UI_LOCALE}
-                      value={encEndDateYmdRec}
-                      onChange={(ymd) => setEncEndDateYmdRec(ymd || null)}
+                      value={recurrenceEndDateYmd}
+                      onChange={(ymd) => setRecurrenceEndDateYmd(ymd || null)}
                       style={{ width: "100%" }}
                     />
                   </div>
@@ -257,12 +257,12 @@ export function RecurrenceConfigPanel({
         <div style={{ ...G, fontSize: f.hintText, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Resumo</div>
         <div style={{ ...G, fontSize: compact ? 14 : 13, fontWeight: 700, color: T.ink }}>{recurrenceRuleSummary || "—"}</div>
         <div style={{ ...G, fontSize: f.hintText, color: T.inkLight, marginTop: 2 }}>
-          Próxima: {fmtDateBr(recurrenceNextOccurrence)} · {ENC_LABELS[encRec]?.toLowerCase()}
-          {encRec === "repeticoes" && recurrenceComputedEndDate && (
+          Próxima: {fmtDateBr(recurrenceNextOccurrence)} · {ENC_LABELS[recurrenceEndKind]?.toLowerCase()}
+          {recurrenceEndKind === "repeticoes" && recurrenceComputedEndDate && (
             <> · termina em {fmtDateBr(recurrenceComputedEndDate)}</>
           )}
-          {encRec === "data" && encEndDateYmdRec && (
-            <> · termina em {fmtDateBr(encEndDateYmdRec)}</>
+          {recurrenceEndKind === "data" && recurrenceEndDateYmd && (
+            <> · termina em {fmtDateBr(recurrenceEndDateYmd)}</>
           )}
         </div>
       </div>
