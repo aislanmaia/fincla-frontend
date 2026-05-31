@@ -1,16 +1,17 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Plus } from "lucide-react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 
 import { T } from "../tokens";
 import { G } from "../typography";
+import { DragScrollTabs } from "../layouts/DragScrollTabs.jsx";
 import { useCreditCardsData } from "../features/creditCards/useCreditCardsData.js";
 import { CardFormSheet } from "../features/creditCards/CardFormSheet.jsx";
-import { CardVisual, KpiStrip } from "../features/creditCards/cartoesPanels.jsx";
+import { KpiStrip } from "../features/creditCards/cartoesPanels.jsx";
 import { CardsPageModals } from "../features/creditCards/CartoesPageModals.jsx";
 import { InvoiceTab } from "../features/creditCards/CartoesFaturaTab.jsx";
 import { CardsPageHeader } from "../features/creditCards/CardsPageHeader.jsx";
 import { CardsInvoiceHeader } from "../features/creditCards/CardsInvoiceHeader.jsx";
+import { CardsCarousel } from "../features/creditCards/CardsCarousel.jsx";
 import {
   AnalyticsTab,
   HistoryTab,
@@ -624,6 +625,20 @@ export const CartoesPage = ({
     />
   );
 
+  // Bloco compartilhado entre mobile e desktop — só o `variant` interno do
+  // invoiceTab muda. Mantemos `key={tab+cardId}` para forçar replay do
+  // `animation:"tabIn"` quando troca de tab ou cartão.
+  const tabContentBundle = (
+    <div key={tab + cardId} style={{ animation: "tabIn 0.2s ease-out" }}>
+      {tab === "invoice"      && invoiceTabBundle(isMobile ? "mobile" : "desktop")}
+      {tab === "recurring"    && <RecurringTab recurringItems={recurringItems} recurringTotal={recurringTotal} invoice={invoice} card={card} isMobile={isMobile} formatBRL={formatBRL} categoryColor={categoryColor} onLaunchRefund={onLaunchRefund} />}
+      {tab === "installments" && <InstallmentsTab cardInstallments={cardInstallments} card={card} totalInstallments={totalInstallments} totalRefunds={totalRefunds} hasRefundedInstallments={hasRefundedInstallments} isMobile={isMobile} formatBRL={formatBRL} onMoveInstallment={setInstallmentModal} />}
+      {tab === "analytics"    && <AnalyticsTab cardInvoices={cardInvoices} cardTrend={cardTrend} invoice={invoice} card={card} usagePercent={usagePercent} totalInstallments={totalInstallments} totalRefunds={totalRefunds} hasRefundedInstallments={hasRefundedInstallments} categoryAlerts={categoryAlerts} averageValue={averageValue} projection={projection} cardInstallments={cardInstallments} isMobile={isMobile} formatBRL={formatBRL} formatK={formatK} />}
+      {tab === "history"      && <HistoryTab cardInvoices={cardInvoices} isMobile={isMobile} formatBRL={formatBRL} />}
+      {tab === "planning"     && <PlanningTab card={card} cardInstallments={cardInstallments} isMobile={isMobile} formatBRL={formatBRL} />}
+    </div>
+  );
+
   /* ══════════════════════════════════════════════════════════
      MOBILE
   ══════════════════════════════════════════════════════════ */
@@ -644,23 +659,13 @@ export const CartoesPage = ({
         onAddCard={openAddCardSheet}
       />
 
-      {/* Card carousel */}
-      <div style={{marginBottom:2}}>
-        <DragScrollTabs bg={T.bg}>
-          {CARDS.map(c=>(
-            <div key={c.id} style={{paddingTop:8,paddingBottom:0}}>
-              <CardVisual c={c} selected={c.id===cardId} size="sm" onClick={switchCard}/>
-            </div>
-          ))}
-          <div onClick={openAddCardSheet}
-            style={{width:130,height:Math.round(130/1.586),marginTop:8,borderRadius:12,flexShrink:0,
-              border:`2px dashed ${T.border}`,display:"flex",flexDirection:"column",
-              alignItems:"center",justifyContent:"center",gap:5,cursor:"pointer",background:T.surface}}>
-            <Plus size={18} color={T.inkLight}/>
-            <span style={{...G,fontSize:10,color:T.inkMid}}>Novo cartão</span>
-          </div>
-        </DragScrollTabs>
-      </div>
+      <CardsCarousel
+        variant="mobile"
+        cards={CARDS}
+        selectedCardId={cardId}
+        onSwitchCard={switchCard}
+        onAddCard={openAddCardSheet}
+      />
 
       {/* Invoice summary */}
       <CardsInvoiceHeader
@@ -699,15 +704,7 @@ export const CartoesPage = ({
         </DragScrollTabs>
       </div>
 
-      {/* Tab content */}
-      <div key={tab+cardId} style={{animation:"tabIn 0.2s ease-out"}}>
-        {tab==="invoice"     && invoiceTabBundle("mobile")}
-        {tab==="recurring"   && <RecurringTab recurringItems={recurringItems} recurringTotal={recurringTotal} invoice={invoice} card={card} isMobile={isMobile} formatBRL={formatBRL} categoryColor={categoryColor} onLaunchRefund={onLaunchRefund}/>}
-        {tab==="installments"&& <InstallmentsTab cardInstallments={cardInstallments} card={card} totalInstallments={totalInstallments} totalRefunds={totalRefunds} hasRefundedInstallments={hasRefundedInstallments} isMobile={isMobile} formatBRL={formatBRL} onMoveInstallment={setInstallmentModal}/>}
-        {tab==="analytics"   && <AnalyticsTab cardInvoices={cardInvoices} cardTrend={cardTrend} invoice={invoice} card={card} usagePercent={usagePercent} totalInstallments={totalInstallments} totalRefunds={totalRefunds} hasRefundedInstallments={hasRefundedInstallments} categoryAlerts={categoryAlerts} averageValue={averageValue} projection={projection} cardInstallments={cardInstallments} isMobile={isMobile} formatBRL={formatBRL} formatK={formatK}/>}
-        {tab==="history"     && <HistoryTab cardInvoices={cardInvoices} isMobile={isMobile} formatBRL={formatBRL}/>}
-        {tab==="planning"    && <PlanningTab card={card} cardInstallments={cardInstallments} isMobile={isMobile} formatBRL={formatBRL}/>}
-      </div>
+      {tabContentBundle}
     </div>
     </>
   );
@@ -727,16 +724,13 @@ export const CartoesPage = ({
         onAddCard={openAddCardSheet}
       />
 
-      {/* Card carousel */}
-      <div style={{ marginBottom:16 }}>
-        <div style={{ display:"flex", gap:14, overflowX:"auto", paddingBottom:8, paddingTop:6, scrollbarWidth:"none" }}>
-          {CARDS.map(c=><CardVisual key={c.id} c={c} selected={c.id===cardId} size="md" onClick={switchCard}/>)}
-          <div onClick={openAddCardSheet} style={{ width:200, height:Math.round(200/1.586), borderRadius:16, flexShrink:0, border:`2px dashed ${T.border}`, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:6, cursor:"pointer", background:T.surface }}>
-            <Plus size={22} color={T.inkLight}/>
-            <span style={{...G,fontSize:11,color:T.inkMid}}>Novo cartão</span>
-          </div>
-        </div>
-      </div>
+      <CardsCarousel
+        variant="desktop"
+        cards={CARDS}
+        selectedCardId={cardId}
+        onSwitchCard={switchCard}
+        onAddCard={openAddCardSheet}
+      />
 
       <CardsInvoiceHeader
         variant="desktop"
@@ -766,15 +760,7 @@ export const CartoesPage = ({
         ))}
       </div>
 
-      {/* Tab content */}
-      <div key={tab+cardId} style={{animation:"tabIn 0.2s ease-out"}}>
-        {tab==="invoice"     && invoiceTabBundle("desktop")}
-        {tab==="recurring"   && <RecurringTab recurringItems={recurringItems} recurringTotal={recurringTotal} invoice={invoice} card={card} isMobile={isMobile} formatBRL={formatBRL} categoryColor={categoryColor} onLaunchRefund={onLaunchRefund}/>}
-        {tab==="installments"&& <InstallmentsTab cardInstallments={cardInstallments} card={card} totalInstallments={totalInstallments} totalRefunds={totalRefunds} hasRefundedInstallments={hasRefundedInstallments} isMobile={isMobile} formatBRL={formatBRL} onMoveInstallment={setInstallmentModal}/>}
-        {tab==="analytics"   && <AnalyticsTab cardInvoices={cardInvoices} cardTrend={cardTrend} invoice={invoice} card={card} usagePercent={usagePercent} totalInstallments={totalInstallments} totalRefunds={totalRefunds} hasRefundedInstallments={hasRefundedInstallments} categoryAlerts={categoryAlerts} averageValue={averageValue} projection={projection} cardInstallments={cardInstallments} isMobile={isMobile} formatBRL={formatBRL} formatK={formatK}/>}
-        {tab==="history"     && <HistoryTab cardInvoices={cardInvoices} isMobile={isMobile} formatBRL={formatBRL}/>}
-        {tab==="planning"    && <PlanningTab card={card} cardInstallments={cardInstallments} isMobile={isMobile} formatBRL={formatBRL}/>}
-      </div>
+      {tabContentBundle}
     </>
   );
 
