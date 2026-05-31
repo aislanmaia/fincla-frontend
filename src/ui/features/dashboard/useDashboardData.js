@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchAllTransactionsPages,
   formatDashboardApiError,
@@ -515,8 +515,13 @@ export function useDashboardData({
 }) {
   const [state, setState] = useState(EMPTY_STATE);
   const [fetchTick, setFetchTick] = useState(0);
+  const autoRetryTimeoutRef = useRef(null);
 
   const refetch = useCallback(() => {
+    if (autoRetryTimeoutRef.current) {
+      clearTimeout(autoRetryTimeoutRef.current);
+      autoRetryTimeoutRef.current = null;
+    }
     setFetchTick((n) => n + 1);
   }, []);
 
@@ -607,7 +612,10 @@ export function useDashboardData({
       ] = results;
 
       // Se a `summary` falhou MESMO COM retry, é erro real — UI mostra
-      // "Dados indisponíveis" e botão "Tentar novamente".
+      // "Dados indisponíveis" e botão "Tentar novamente". Antes de capitular
+      // agendamos UM auto-retry após 1500ms (dropouts do tunnel sob carga
+      // costumam reabilitar em poucos segundos; sem isso, KPIs ficariam em
+      // "—" até o usuário notar e clicar manualmente em "Tentar novamente").
       if (summaryRes.status === "rejected") {
         setState({
           isLoading: false,
@@ -628,6 +636,10 @@ export function useDashboardData({
           recurringSummary: null,
           recurringInPeriod: null,
         });
+        const retryAfterErrorHandle = window.setTimeout(() => {
+          if (!cancelled) setFetchTick((n) => n + 1);
+        }, 1500);
+        autoRetryTimeoutRef.current = retryAfterErrorHandle;
         return;
       }
 
@@ -684,6 +696,10 @@ export function useDashboardData({
 
     return () => {
       cancelled = true;
+      if (autoRetryTimeoutRef.current) {
+        clearTimeout(autoRetryTimeoutRef.current);
+        autoRetryTimeoutRef.current = null;
+      }
     };
   }, [enabled, organizationId, fetchTick, dateStart, dateEnd]);
 

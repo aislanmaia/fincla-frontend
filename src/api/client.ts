@@ -17,23 +17,80 @@ const apiClient = axios.create({
   },
 });
 
-// Interceptor para adicionar token automaticamente
+// Timeout padrão (10s) cobre GETs simples. Writes (POST/PATCH/PUT/DELETE)
+// frequentemente fazem materialização em cascata no backend (séries
+// recorrentes geram N transações; estornos abatem parcelas, etc.) — sob
+// carga ou via tunnel residencial isso passa de 10s rotineiramente, sem
+// que seja um problema real. 30s é mais alinhado com a realidade de
+// escrita do produto e evita "request abortado" no meio do POST.
+const WRITE_TIMEOUT_MS = 30_000;
+const WRITE_METHODS = new Set(['post', 'put', 'patch', 'delete']);
+
+// Interceptor para adicionar token automaticamente + ajustar timeout em writes.
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('auth_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+  const method = (config.method || 'get').toLowerCase();
+  if (config.timeout === API_CONFIG.REQUEST_CONFIG.TIMEOUT && WRITE_METHODS.has(method)) {
+    config.timeout = WRITE_TIMEOUT_MS;
+  }
   return config;
 });
 
-// Interceptor para tratar erros de autenticação
+// Retry leve em erros de rede transientes (conexão derrubada antes do
+// servidor responder). Cobre dropouts do tunnel residencial / proxy sob
+// carga sem mascarar erros de produto. GETs são sempre seguros para
+// retry; writes (POST/PATCH/PUT/DELETE) só retentam se `error.response`
+// estiver ausente — o servidor garantidamente não recebeu o request,
+// então não há risco de duplicação. Timeout de servidor (ETIMEDOUT após
+// envio bem-sucedido) NÃO retenta para writes — pode duplicar.
+const RETRYABLE_NETWORK_CODES = new Set([
+  'ERR_NETWORK',
+  'ECONNRESET',
+  'ECONNABORTED',
+  'ETIMEDOUT',
+]);
+const MAX_RETRY_ATTEMPTS = 2;
+const RETRY_BASE_DELAY_MS = 350;
+
+type RetryableConfig = AxiosError['config'] & { __retryCount?: number };
+
+function isSafeToRetry(error: AxiosError): boolean {
+  // Resposta HTTP recebida → servidor processou (mesmo que 5xx). Não retenta.
+  if (error.response) return false;
+  if (!error.code || !RETRYABLE_NETWORK_CODES.has(error.code)) return false;
+  const cfg = error.config as RetryableConfig | undefined;
+  if (!cfg) return false;
+  const method = (cfg.method || 'get').toLowerCase();
+  if (method === 'get') return true;
+  // Para writes: só ERR_NETWORK / ECONNRESET (conexão derrubada antes
+  // de qualquer byte ser enviado) é seguro. ECONNABORTED / ETIMEDOUT
+  // significa que o cliente desistiu, mas o servidor pode ter processado.
+  return error.code === 'ERR_NETWORK' || error.code === 'ECONNRESET';
+}
+
+// Interceptor para tratar erros de autenticação + retry transiente.
 apiClient.interceptors.response.use(
   (response) => response,
-  (error: AxiosError) => {
+  async (error: AxiosError) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('auth_token');
       window.dispatchEvent(new CustomEvent('fincla:auth-expired'));
+      return Promise.reject(error);
     }
+
+    if (isSafeToRetry(error)) {
+      const cfg = error.config as RetryableConfig;
+      cfg.__retryCount = (cfg.__retryCount ?? 0) + 1;
+      if (cfg.__retryCount <= MAX_RETRY_ATTEMPTS) {
+        const delay = RETRY_BASE_DELAY_MS * 2 ** (cfg.__retryCount - 1);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return apiClient.request(cfg);
+      }
+    }
+
     return Promise.reject(error);
   }
 );
