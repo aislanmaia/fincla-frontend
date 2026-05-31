@@ -47,8 +47,12 @@ test.describe("/profile/billing — fluxo de assinatura", () => {
       page.getByRole("dialog", { name: /comparar planos/i }),
     ).toBeVisible();
 
-    // Pelo menos um botão "Selecionar" deve aparecer (plano diferente do atual).
-    const selectButton = page.getByRole("button", { name: /selecionar/i }).first();
+    // Pelo menos um CTA de troca deve aparecer no plano diferente do atual.
+    // O modal mostra "Selecionar plano" no genérico e "Fazer upgrade" no
+    // tier recomendado — ambos contam para "modal de comparação funcional".
+    const selectButton = page
+      .getByRole("button", { name: /selecionar plano|fazer upgrade/i })
+      .first();
     await expect(selectButton).toBeVisible();
 
     // Fechar o modal sem confirmar.

@@ -1184,6 +1184,11 @@ export const NovaTransacaoModal = ({
       }
       setTxSubmitting(false);
       setSuccessOverlay(true);
+      // Auto-close: para série recorrente o overlay só tem "Fechar"
+      // (não tem botão de continuação como "Nova transação"), então o usuário
+      // sempre precisaria fechar na mão — o que bloqueia a interação com a
+      // sidebar e com a própria lista de recorrências por causa do backdrop.
+      window.setTimeout(() => { onClose(); }, 1500);
       return;
     }
 
@@ -1477,7 +1482,7 @@ export const NovaTransacaoModal = ({
       : {};
 
     return (
-      <div style={{ position:"fixed", inset:0, zIndex:300, overflow:"hidden", display:"flex", flexDirection:"column", justifyContent:"flex-end" }}>
+      <div style={{ position:"fixed", inset:0, zIndex:300, overflow:"hidden", display:"flex", flexDirection:"column", justifyContent:"flex-end", pointerEvents: successOverlay ? "none" : "auto" }}>
         <style>{`
           @keyframes sheetUp { from { transform:translateY(100%) } to { transform:translateY(0) } }
           @keyframes sheetDown { from { transform:translateY(0) } to { transform:translateY(100%) } }
@@ -1489,8 +1494,9 @@ export const NovaTransacaoModal = ({
         {/* Backdrop */}
         <div onClick={beginClose} style={{ position:"absolute", inset:0, background:"rgba(15,23,35,0.5)" }} />
 
-        {/* Sheet */}
-        <div style={{ position:"relative", background:T.surface, borderRadius:"24px 24px 0 0", maxHeight:"94vh", display:"flex", flexDirection:"column", animation: drawerClosing ? "sheetDown 0.32s cubic-bezier(0.32,0.72,0,1) forwards" : "sheetUp 0.5s cubic-bezier(0.32,0.72,0,1) both", boxShadow:"0 -2px 0 rgba(0,0,0,0.05), 0 -8px 32px rgba(0,0,0,0.14), 0 -24px 80px rgba(0,0,0,0.08)" }}>
+        {/* Sheet — re-habilita pointer-events caso o container externo esteja
+            com `pointer-events:none` durante o overlay de sucesso. */}
+        <div style={{ position:"relative", background:T.surface, borderRadius:"24px 24px 0 0", maxHeight:"94vh", display:"flex", flexDirection:"column", pointerEvents: "auto", animation: drawerClosing ? "sheetDown 0.32s cubic-bezier(0.32,0.72,0,1) forwards" : "sheetUp 0.5s cubic-bezier(0.32,0.72,0,1) both", boxShadow:"0 -2px 0 rgba(0,0,0,0.05), 0 -8px 32px rgba(0,0,0,0.14), 0 -24px 80px rgba(0,0,0,0.08)" }}>
 
           {successOverlay && (
             <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"40px 28px 36px" }}>
@@ -2001,7 +2007,7 @@ export const NovaTransacaoModal = ({
      DESKTOP — original drawer (preserved)
   ════════════════════════════════════════════════════════════ */
   return (
-    <div style={{ position:"fixed", inset:0, zIndex:200, overflow:"hidden", display:"flex", justifyContent:"flex-end" }}>
+    <div style={{ position:"fixed", inset:0, zIndex:200, overflow:"hidden", display:"flex", justifyContent:"flex-end", pointerEvents: successOverlay ? "none" : "auto" }}>
       <style>{`
         @keyframes drawerIn    { from { transform:translateX(100%); opacity:0 } to { transform:translateX(0); opacity:1 } }
         @keyframes drawerOut   { from { transform:translateX(0); opacity:1 } to { transform:translateX(100%); opacity:1 } }
@@ -2018,7 +2024,10 @@ export const NovaTransacaoModal = ({
         @keyframes checkBounce  { from { opacity:0; transform:scale(0.4) } to { opacity:1; transform:scale(1) } }
       `}</style>
       <div onClick={beginClose} style={{ position:"absolute", inset:0, background:"rgba(15,23,35,0.18)" }} />
-      <div style={{ position:"relative", display:"flex", height:"100vh", boxShadow:T.dark, animation: drawerClosing ? `drawerOut ${DRAWER_CLOSE_MS}ms cubic-bezier(0.32,0.72,0,1) forwards` : "drawerIn 0.22s ease-out" }}>
+      {/* Drawer panel: re-habilita pointer-events caso o container externo
+          esteja com `pointer-events:none` durante o overlay de sucesso, pra
+          que a celebração + botão "Fechar" continuem clicáveis. */}
+      <div style={{ position:"relative", display:"flex", height:"100vh", boxShadow:T.dark, pointerEvents: "auto", animation: drawerClosing ? `drawerOut ${DRAWER_CLOSE_MS}ms cubic-bezier(0.32,0.72,0,1) forwards` : "drawerIn 0.22s ease-out" }}>
 
         {/* SUB-PANEL: Recorrência — shell colapsa no flex (evita “fantasma” de borda); conteúdo faz fade+slide */}
         {(recurrencePanelOpen || recurrencePanelExiting) && (

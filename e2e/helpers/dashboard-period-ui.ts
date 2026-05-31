@@ -1,13 +1,26 @@
 import { expect, type Page } from "@playwright/test";
 
 export async function waitForDashboardSummary(page: Page): Promise<void> {
-  await page.waitForResponse(
-    (r) =>
-      r.url().includes("/v1/transactions/summary") &&
-      r.request().method() === "GET" &&
-      r.ok(),
-    { timeout: 45_000 },
-  );
+  // O click no sidebar "Visão Geral" pode ser no-op (já está no dashboard),
+  // então nem sempre uma resposta nova vai chegar — race entre "resposta
+  // nova chegar" e "KPI já populado" para evitar timeout falso.
+  const responsePromise = page
+    .waitForResponse(
+      (r) =>
+        r.url().includes("/v1/transactions/summary") &&
+        r.request().method() === "GET" &&
+        r.ok(),
+      { timeout: 45_000 },
+    )
+    .catch(() => undefined);
+
+  const alreadyLoadedPromise = expect(
+    page.getByTestId("dashboard-kpi-receitas").locator("> div").nth(1),
+  )
+    .not.toHaveText("—", { timeout: 45_000 })
+    .catch(() => undefined);
+
+  await Promise.race([responsePromise, alreadyLoadedPromise]);
 }
 
 /** Gatilho do datepicker (presets ou personalizado já aplicado). */

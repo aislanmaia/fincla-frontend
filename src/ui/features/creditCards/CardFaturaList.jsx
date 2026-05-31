@@ -1,8 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronRight, RotateCcw } from "lucide-react";
 
 import { T } from "../../tokens";
 import { G } from "../../typography";
+
+/**
+ * Cache module-level do estado expandido por item.id. Sobrevive a remounts
+ * de `TxRow` causados por refetch do cartão (a árvore pai do tabContentBundle
+ * usa `key={tab + cardId}` — qualquer toggle de prop dispara remount e
+ * resetaria `useState`). Não polui localStorage; some no reload.
+ */
+const expandedItemRegistry = new Map();
 
 /**
  * Linha de transação dentro de uma fatura: cabeçalho (descrição + categoria
@@ -22,7 +30,19 @@ export function TxRow({ item, card, categoryColor, formatBRL, onLaunchRefund }) 
       : installmentValue * item.parcela.t)
     : 0;
   const cc = categoryColor(item);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpandedState] = useState(() => expandedItemRegistry.get(item.id) === true);
+  const setExpanded = (updater) => {
+    setExpandedState((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      expandedItemRegistry.set(item.id, next);
+      return next;
+    });
+  };
+  useEffect(() => {
+    const cached = expandedItemRegistry.get(item.id) === true;
+    if (cached !== expanded) setExpandedState(cached);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
   const hasLinkedRefunds = !!(item.refundsSummary && item.refundsSummary.count > 0);
   const canLaunchRefund =
     !item.isRefund && item.transactionId != null && !!onLaunchRefund && !hasLinkedRefunds;

@@ -231,7 +231,22 @@ export function CollapsibleSection({ open, children }) {
         overflow: "hidden",
       }}
     >
-      <div style={{ minHeight: 0 }}>{children}</div>
+      {/*
+        `visibility: hidden` + `pointer-events: none` quando fechado garantem
+        que tecnologias assistivas (screen readers, Playwright hit-test) não
+        enxerguem os filhos clippedos. Caso contrário, o filho conserva
+        bounding-box "visível" e gera cliques fantasmas em coordenadas onde
+        o usuário NÃO consegue interagir.
+      */}
+      <div
+        style={{
+          minHeight: 0,
+          visibility: open ? "visible" : "hidden",
+          pointerEvents: open ? "auto" : "none",
+        }}
+      >
+        {children}
+      </div>
     </div>
   );
 }

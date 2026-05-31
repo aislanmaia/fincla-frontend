@@ -56,6 +56,56 @@ function formatOrgTipoLabelForSettings(t) {
   return String(t);
 }
 
+function SectionCard({ children, style = {} }) {
+  return (
+    <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:16, overflow:"hidden", width:"100%", ...style }}>
+      {children}
+    </div>
+  );
+}
+
+function SectionHeader({ icon, title, sub }) {
+  return (
+    <div style={{ padding:"20px 24px 14px", borderBottom:`1px solid ${T.border}`, display:"flex", alignItems:"center", gap:12 }}>
+      <div style={{ width:36, height:36, borderRadius:10, background:T.blueLight, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+        {icon}
+      </div>
+      <div>
+        <h2 style={{ ...G, fontSize:16, fontWeight:800, color:T.ink, margin:0 }}>{title}</h2>
+        {sub && <div style={{ ...G, fontSize:12, color:T.inkMid, marginTop:2 }}>{sub}</div>}
+      </div>
+    </div>
+  );
+}
+
+function FieldRow({ label, value, action }) {
+  return (
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"13px 24px", borderBottom:`1px solid ${T.border}` }}>
+      <div>
+        <div style={{ ...G, fontSize:11, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:3 }}>{label}</div>
+        <div style={{ ...G, fontSize:14, color:T.ink }}>{value}</div>
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function BtnPrimary({ onClick, children, small }) {
+  return (
+    <button onClick={onClick} style={{ ...G, background:T.ink, color:"#fff", border:"none", borderRadius:9, padding:small?"7px 14px":"9px 18px", fontSize:small?11:13, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>
+      {children}
+    </button>
+  );
+}
+
+function BtnGhost({ onClick, children, danger }) {
+  return (
+    <button onClick={onClick} style={{ ...G, background:"none", color:danger?T.red:T.inkMid, border:`1px solid ${danger?T.red+"44":T.border}`, borderRadius:9, padding:"7px 14px", fontSize:12, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", gap:5, whiteSpace:"nowrap" }}>
+      {children}
+    </button>
+  );
+}
+
 export function ConfiguracoesPage({
   onNav,
   isMobile = false,
@@ -294,43 +344,6 @@ export function ConfiguracoesPage({
     };
     return titles[id] || id;
   };
-
-  // ── Shared UI helpers ──────────────────────────────────────────────────────
-  const SectionCard = ({ children, style={} }) => (
-    <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:16, overflow:"hidden", width:"100%", ...style }}>
-      {children}
-    </div>
-  );
-  const SectionHeader = ({ icon, title, sub }) => (
-    <div style={{ padding:"20px 24px 14px", borderBottom:`1px solid ${T.border}`, display:"flex", alignItems:"center", gap:12 }}>
-      <div style={{ width:36, height:36, borderRadius:10, background:T.blueLight, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-        {icon}
-      </div>
-      <div>
-        <div style={{ ...G, fontSize:16, fontWeight:800, color:T.ink }}>{title}</div>
-        {sub && <div style={{ ...G, fontSize:12, color:T.inkMid, marginTop:2 }}>{sub}</div>}
-      </div>
-    </div>
-  );
-  const FieldRow = ({ label, value, action }) => (
-    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"13px 24px", borderBottom:`1px solid ${T.border}` }}>
-      <div>
-        <div style={{ ...G, fontSize:11, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:3 }}>{label}</div>
-        <div style={{ ...G, fontSize:14, color:T.ink }}>{value}</div>
-      </div>
-      {action}
-    </div>
-  );
-  const BtnPrimary = ({ onClick, children, small }) => (
-    <button onClick={onClick} style={{ ...G, background:T.ink, color:"#fff", border:"none", borderRadius:9, padding:small?"7px 14px":"9px 18px", fontSize:small?11:13, fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:6, whiteSpace:"nowrap" }}>
-      {children}
-    </button>
-  );
-  const BtnGhost = ({ onClick, children, danger }) => (
-    <button onClick={onClick} style={{ ...G, background:"none", color:danger?T.red:T.inkMid, border:`1px solid ${danger?T.red+"44":T.border}`, borderRadius:9, padding:"7px 14px", fontSize:12, fontWeight:600, cursor:"pointer", display:"flex", alignItems:"center", gap:5, whiteSpace:"nowrap" }}>
-      {children}
-    </button>
-  );
 
   // ── Content renderers ──────────────────────────────────────────────────────
   const renderPerfil = () => {

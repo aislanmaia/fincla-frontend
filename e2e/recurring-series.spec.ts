@@ -52,6 +52,20 @@ async function submitNovaRecorrenciaDesktop(page: Page) {
   await expect(page.getByText(REC_DESCRIPTION).first()).toBeVisible({ timeout: 25_000 });
 }
 
+/**
+ * Espera o modal fechar (fc_modal sai da URL), localiza a linha da série
+ * via `.fincla-row` + REC_DESCRIPTION (evita pegar a descrição no overlay
+ * de sucesso) e expande para liberar os botões Editar/Pausar/Excluir.
+ */
+async function expandRecurringRow(page: Page) {
+  await page.waitForURL((url) => !url.searchParams.has("fc_modal"), { timeout: 15_000 });
+
+  const row = page.locator(".fincla-row", { hasText: REC_DESCRIPTION }).first();
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  await row.click();
+  await expect(page.getByRole("button", { name: "Pausar" })).toBeVisible({ timeout: 15_000 });
+}
+
 test.describe("recorrências — org limpa a cada teste", () => {
   test.beforeEach(async () => {
     if (!e2eReady) return;
@@ -74,7 +88,7 @@ test.describe("recorrências — org limpa a cada teste", () => {
     await navViaSidebar(page, "Recorrências");
     await submitNovaRecorrenciaDesktop(page);
 
-    await page.getByText(REC_DESCRIPTION).first().click();
+    await expandRecurringRow(page);
     await page.getByRole("button", { name: "Pausar" }).click();
     await expect(page.getByText("PAUSADA").first()).toBeVisible({ timeout: 15_000 });
 
