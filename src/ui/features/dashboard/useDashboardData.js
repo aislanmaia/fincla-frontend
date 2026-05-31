@@ -537,89 +537,81 @@ export function useDashboardData({
       error: "",
     }));
 
-    Promise.all([
+    // Buscas paralelas com retry leve por entrada — a `summary` é a única
+    // bloqueante (sem ela o dashboard cai pro placeholder "—"). Categorias
+    // do mês anterior + recurring são auxiliares: se falharem persistentemente
+    // a UI ainda mostra KPIs reais (somente "vs mês passado" e listagem de
+    // vencimentos ficam vazios). Isto elimina o efeito "tudo ou nada" quando
+    // o tunnel/backend dropa 1 request raro sob carga.
+    const fetchWithRetry = (fn, { attempts = 3, baseDelayMs = 350 } = {}) => {
+      const run = (n) =>
+        fn().catch((err) => {
+          if (cancelled) throw err;
+          if (n >= attempts) throw err;
+          return new Promise((resolve) => {
+            setTimeout(resolve, baseDelayMs * 2 ** (n - 1));
+          }).then(() => run(n + 1));
+        });
+      return run(1);
+    };
+
+    const summaryPromise = fetchWithRetry(() =>
       getTransactionsSummary({
         organization_id: organizationId,
         date_start: start,
         date_end: end,
       }),
-      fetchAllTransactionsPages({
-        organization_id: organizationId,
-        date_start: start,
-        date_end: end,
-        sort_by: "date",
-        sort_order: "desc",
-      }),
-      getByCategory(organizationId, {
-        dateStart: start,
-        dateEnd: end,
-        transactionType: "expense",
-      }),
-      getByCategory(organizationId, {
-        dateStart: prevPeriod.start,
-        dateEnd: prevPeriod.end,
-        transactionType: "expense",
-      }),
-      listRecurringTransactions(organizationId, {
-        isActive: true,
-        dateStart: start,
-        dateEnd: end,
-      }),
-    ])
-      .then(
-        ([
-          summary,
-          transactionsResponse,
-          categoriesResponse,
-          prevCategoriesResponse,
-          recurring,
-        ]) => {
-        if (cancelled) return;
+    );
 
-        const rawTx = transactionsResponse.data ?? [];
-        const recent = rawTx.slice(0, 5).map(mapTransaction);
-        const rhythm = buildRhythmChart(rawTx, summary, start, end);
+    Promise.allSettled([
+      summaryPromise,
+      fetchWithRetry(() =>
+        fetchAllTransactionsPages({
+          organization_id: organizationId,
+          date_start: start,
+          date_end: end,
+          sort_by: "date",
+          sort_order: "desc",
+        }),
+      ),
+      fetchWithRetry(() =>
+        getByCategory(organizationId, {
+          dateStart: start,
+          dateEnd: end,
+          transactionType: "expense",
+        }),
+      ),
+      fetchWithRetry(() =>
+        getByCategory(organizationId, {
+          dateStart: prevPeriod.start,
+          dateEnd: prevPeriod.end,
+          transactionType: "expense",
+        }),
+      ),
+      fetchWithRetry(() =>
+        listRecurringTransactions(organizationId, {
+          isActive: true,
+          dateStart: start,
+          dateEnd: end,
+        }),
+      ),
+    ]).then((results) => {
+      if (cancelled) return;
 
-        const prevTotalByTagId = new Map(
-          (prevCategoriesResponse.categories ?? []).map((c) => [
-            c.tag_id,
-            Number(c.total) || 0,
-          ]),
-        );
-        const categories = buildDashboardCategoryRows(
-          rawTx,
-          start,
-          end,
-          categoriesResponse.categories,
-          prevTotalByTagId,
-        );
+      const [
+        summaryRes,
+        transactionsRes,
+        categoriesRes,
+        prevCategoriesRes,
+        recurringRes,
+      ] = results;
 
+      // Se a `summary` falhou MESMO COM retry, é erro real — UI mostra
+      // "Dados indisponíveis" e botão "Tentar novamente".
+      if (summaryRes.status === "rejected") {
         setState({
           isLoading: false,
-          error: "",
-          summary,
-          transactions: recent,
-          categories,
-          rhythmChart: rhythm.series,
-          rhythmMeta: {
-            dim: rhythm.dim,
-            today: rhythm.today,
-            showTodayMarker: rhythm.showTodayMarker,
-            refLabel: rhythm.refLabel,
-            progressSuffix: rhythm.progressSuffix,
-            rhythmMode: rhythm.rhythmMode,
-          },
-          upcomingDebits: mapUpcomingDebits(recurring),
-          recurringSummary: recurring?.summary ?? null,
-          recurringInPeriod: summary?.recurring_in_period ?? null,
-        });
-      })
-      .catch((error) => {
-        if (cancelled) return;
-
-        setState({
-          isLoading: false,
-          error: formatDashboardApiError(error),
+          error: formatDashboardApiError(summaryRes.reason),
           summary: null,
           transactions: [],
           categories: [],
@@ -636,7 +628,59 @@ export function useDashboardData({
           recurringSummary: null,
           recurringInPeriod: null,
         });
+        return;
+      }
+
+      const summary = summaryRes.value;
+      const transactionsResponse =
+        transactionsRes.status === "fulfilled" ? transactionsRes.value : { data: [] };
+      const categoriesResponse =
+        categoriesRes.status === "fulfilled" ? categoriesRes.value : { categories: [] };
+      const prevCategoriesResponse =
+        prevCategoriesRes.status === "fulfilled"
+          ? prevCategoriesRes.value
+          : { categories: [] };
+      const recurring =
+        recurringRes.status === "fulfilled" ? recurringRes.value : null;
+
+      const rawTx = transactionsResponse.data ?? [];
+      const recent = rawTx.slice(0, 5).map(mapTransaction);
+      const rhythm = buildRhythmChart(rawTx, summary, start, end);
+
+      const prevTotalByTagId = new Map(
+        (prevCategoriesResponse.categories ?? []).map((c) => [
+          c.tag_id,
+          Number(c.total) || 0,
+        ]),
+      );
+      const categories = buildDashboardCategoryRows(
+        rawTx,
+        start,
+        end,
+        categoriesResponse.categories,
+        prevTotalByTagId,
+      );
+
+      setState({
+        isLoading: false,
+        error: "",
+        summary,
+        transactions: recent,
+        categories,
+        rhythmChart: rhythm.series,
+        rhythmMeta: {
+          dim: rhythm.dim,
+          today: rhythm.today,
+          showTodayMarker: rhythm.showTodayMarker,
+          refLabel: rhythm.refLabel,
+          progressSuffix: rhythm.progressSuffix,
+          rhythmMode: rhythm.rhythmMode,
+        },
+        upcomingDebits: recurring ? mapUpcomingDebits(recurring) : [],
+        recurringSummary: recurring?.summary ?? null,
+        recurringInPeriod: summary?.recurring_in_period ?? null,
       });
+    });
 
     return () => {
       cancelled = true;
