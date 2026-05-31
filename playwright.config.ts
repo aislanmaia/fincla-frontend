@@ -41,6 +41,10 @@ export default defineConfig({
       testMatch: "**/refund-ui.spec.ts",
       dependencies: ["smoke"],
     },
+    {
+      name: "settings-categories-tags",
+      testMatch: "**/settings-categories-tags.spec.ts",
+    },
   ],
   use: {
     baseURL,
