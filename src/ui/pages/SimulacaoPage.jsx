@@ -131,6 +131,10 @@ const ModalNovoCenario = ({ open, onClose, onCriar, initialTipo = null }) => {
 
   const budgetNum  = parseFloat(budgetVal.replace(/[^\d.,]/g,"").replace(",",".")) || BUDGET_FALLBACK;
   const overridden = budgetNum !== BUDGET_FALLBACK;
+  // Formatação BR para o display readonly do orçamento (antes mostrava
+  // sempre o hardcoded "R$ 4.200,00", ignorando o valor digitado pelo
+  // usuário).
+  const budgetDisplay = `R$ ${budgetNum.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const totalItems = items.reduce((s,i) => s + i.total, 0);
   const totalMes   = items.reduce((s,i) => s + i.valParcela, 0);
 
@@ -191,11 +195,11 @@ const ModalNovoCenario = ({ open, onClose, onCriar, initialTipo = null }) => {
               <span style={{ ...G, fontSize: 10, color: T.inkLight }}>opcional</span>
             </div>
             {!budgetEdit ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 13px", background: T.grayLight, border: `1.5px solid ${T.border}`, borderRadius: 10, cursor: "pointer" }}
+              <div data-testid="sim-modal-budget-display" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 13px", background: overridden ? T.purpleLight : T.grayLight, border: `1.5px solid ${overridden ? T.purple + "44" : T.border}`, borderRadius: 10, cursor: "pointer" }}
                 onClick={() => setBudgetEdit(true)}>
                 <span style={{ fontSize: 13 }}>💰</span>
-                <span style={{ ...M_MONO, ...NUM, fontSize: 14, fontWeight: 800, color: T.ink, flex: 1 }}>R$ 4.200,00</span>
-                <span style={{ ...G, fontSize: 10, color: T.inkLight, display: "flex", alignItems: "center", gap: 4 }}>✏️ Ajustar para este cenário</span>
+                <span style={{ ...M_MONO, ...NUM, fontSize: 14, fontWeight: 800, color: overridden ? T.purple : T.ink, flex: 1 }}>{budgetDisplay}</span>
+                <span style={{ ...G, fontSize: 10, color: T.inkLight, display: "flex", alignItems: "center", gap: 4 }}>✏️ {overridden ? "Editar ajuste" : "Ajustar para este cenário"}</span>
               </div>
             ) : (
               <div style={{ border: `1.5px solid ${overridden && budgetNum > BUDGET_FALLBACK ? T.purple : T.border}`, borderRadius: 10, overflow: "hidden" }}>
@@ -465,7 +469,17 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
   }, [runSimulation]);
 
   // ── Derived data from API ──
-  const apiBudgetBase = simResult ? Math.round(simResult.summary.income / (simResult.months.length || 1)) : BUDGET_FALLBACK;
+  // O backend devolve totais agregados como Decimal serializado em string
+  // sob nomes `total_projected_income`/`total_base_expenses`/etc — usar
+  // `simResult.summary.income` diretamente (como antes) virava NaN.
+  // Renormalizar para Number aqui mantém a chamada simples nos consumidores.
+  const apiSummary = simResult?.summary ?? {};
+  const apiSummaryIncomeRaw = apiSummary.total_projected_income ?? apiSummary.income ?? 0;
+  const apiSummaryIncome = Number(apiSummaryIncomeRaw) || 0;
+  const monthsCount = Array.isArray(simResult?.months) ? simResult.months.length : 0;
+  const apiBudgetBase = simResult && monthsCount > 0
+    ? Math.round(apiSummaryIncome / monthsCount)
+    : BUDGET_FALLBACK;
 
   // Budget override inline
   const budgetOverride = cenario?.budgetOverride || null;
@@ -488,6 +502,12 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
   const margem     = apiKpis ? apiKpis.margem : budgetAtivo - total;
   const projecaoOk = apiKpis ? apiKpis.projecaoOk : total <= budgetAtivo;
   const projFim    = apiKpis ? apiKpis.totalExpenses : total;
+  // Label dinâmico para o KPI "Projeção" — antes era hardcoded "março",
+  // ignorando o intervalo real da simulação. Usa o mês final do array
+  // `months` retornado pela API.
+  const projecaoLabel = apiKpis?.lastMonthLabel
+    ? `Projeção ${apiKpis.lastMonthLabel.split("/")[0]}`
+    : "Projeção final";
 
   const projFimOkPreview = (apiKpis ? apiKpis.totalExpenses : total) <= budgetPreview;
 
@@ -576,7 +596,7 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
     <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: 1, background: T.border, borderRadius: 10, overflow: "hidden" }}>
       {[
         { label: "Total simulado",  val: fmtAbs(total),    delta: `+${fmtAbs(total)}`, sub: "mês 1", deltaColor: T.red, bg: T.surface },
-        { label: "Projeção março",  val: fmtAbs(projFim),  delta: projecaoOk ? `${Math.round(projFim/budgetAtivo*100)}% do orçamento` : `+${fmtAbs(Math.abs(margem))}`, sub: projecaoOk ? "dentro do limite ✓" : "acima do orçamento", deltaColor: projecaoOk ? T.green : T.red, bg: T.surface },
+        { label: projecaoLabel,     val: fmtAbs(projFim),  delta: projecaoOk ? `${budgetAtivo > 0 ? Math.round(projFim/budgetAtivo*100) : 0}% do orçamento` : `+${fmtAbs(Math.abs(margem))}`, sub: projecaoOk ? "dentro do limite ✓" : "acima do orçamento", deltaColor: projecaoOk ? T.green : T.red, bg: T.surface },
         { label: "Margem",          val: (margem < 0 ? "−" : "+") + fmtAbs(Math.abs(margem)), delta: margem < 0 ? "ultrapassado" : "dentro do limite", sub: "saldo do cenário", deltaColor: margem < 0 ? T.red : T.green, bg: margem < 0 ? T.redLight : T.greenLight },
       ].map((k, i) => (
         <div key={i} style={{ background: k.bg, padding: isMobile ? "12px 11px" : "13px 12px", gridColumn: isMobile && i === 2 ? "1 / -1" : undefined, transition: "background 0.4s" }}>

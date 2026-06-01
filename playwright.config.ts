@@ -45,6 +45,11 @@ export default defineConfig({
       name: "settings-categories-tags",
       testMatch: "**/settings-categories-tags.spec.ts",
     },
+    {
+      name: "simulation",
+      testMatch: "**/simulation.spec.ts",
+      dependencies: ["smoke"],
+    },
   ],
   use: {
     baseURL,

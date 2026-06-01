@@ -40,9 +40,10 @@ function fmtMonthLabel(isoMonth) {
 
 export function deriveRisksFromResponse(response, fmtCurrency) {
   const risks = [];
-  const dangerMonths = response.months.filter((m) => m.status === "danger");
-  const warningMonths = response.months.filter((m) => m.status === "warning");
-  const successMonths = response.months.filter((m) => m.status === "success");
+  const months = response?.months ?? [];
+  const dangerMonths = months.filter((m) => m.status === "danger");
+  const warningMonths = months.filter((m) => m.status === "warning");
+  const successMonths = months.filter((m) => m.status === "success");
 
   if (dangerMonths.length > 0) {
     const first = dangerMonths[0];
@@ -51,7 +52,7 @@ export function deriveRisksFromResponse(response, fmtCurrency) {
       color: "#DC2626",
       dot: "#EF4444",
       title: `Estouro do orçamento em ${fmtMonthLabel(first.month)}`,
-      desc: `A simulação ultrapassa o orçamento em ${fmtCurrency(Math.abs(first.balance))} em ${dangerMonths.length} ${dangerMonths.length === 1 ? "mês" : "meses"}.`,
+      desc: `A simulação ultrapassa o orçamento em ${fmtCurrency(Math.abs(num(first.balance)))} em ${dangerMonths.length} ${dangerMonths.length === 1 ? "mês" : "meses"}.`,
     });
   }
 
@@ -65,7 +66,7 @@ export function deriveRisksFromResponse(response, fmtCurrency) {
     });
   }
 
-  if (successMonths.length === response.months.length) {
+  if (months.length > 0 && successMonths.length === months.length) {
     risks.push({
       nivel: "BAIXO",
       color: "#059669",
@@ -84,6 +85,30 @@ export function deriveRisksFromResponse(response, fmtCurrency) {
   }
 
   return risks;
+}
+
+// Os campos numéricos do backend chegam como string (Decimal serializado).
+// `num` normaliza para Number, tolerando null/undefined/strings vazias.
+function num(value) {
+  if (value === null || value === undefined || value === "") return 0;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Lê os totais agregados do summary respeitando o contrato real da API
+ * (`total_projected_income`, `total_base_expenses`, etc).
+ * Tolerante a snake_case curto (`income`, `base_expenses`) caso o backend
+ * evolua para enviar os atalhos.
+ */
+function summaryTotals(response) {
+  const s = response?.summary ?? {};
+  return {
+    income: num(s.total_projected_income ?? s.income),
+    baseExpenses: num(s.total_base_expenses ?? s.base_expenses),
+    cardCommitments: num(s.total_card_commitments ?? s.card_commitments),
+    savingsGoal: num(s.total_savings_goal ?? s.savings_goal),
+  };
 }
 
 export function deriveImpactsFromResponse(response, items) {
@@ -108,7 +133,9 @@ export function deriveImpactsFromResponse(response, items) {
     Outros: "📦",
   };
 
-  const budget = response.summary.base_expenses / (response.months.length || 1);
+  const { baseExpenses } = summaryTotals(response);
+  const monthsCount = Array.isArray(response?.months) ? response.months.length : 0;
+  const budget = monthsCount > 0 ? baseExpenses / monthsCount : 0;
 
   return Object.values(catMap)
     .sort((a, b) => b.val - a.val)
@@ -181,33 +208,40 @@ export function deriveRecsFromResponse(response, items) {
 }
 
 export function deriveChartDataFromResponse(response) {
-  return response.months.map((m) => ({
+  return (response?.months ?? []).map((m) => ({
     label: fmtMonthLabel(m.month),
     month: m.month,
-    receita: m.projected_income,
-    despBase: m.base_expenses,
-    comSim: m.total_expenses,
-    saldo: m.balance,
+    receita: num(m.projected_income),
+    despBase: num(m.base_expenses),
+    comSim: num(m.total_expenses),
+    saldo: num(m.balance),
     status: m.status,
   }));
 }
 
-export function deriveKpisFromResponse(response, budgetAtivo) {
-  const s = response.summary;
-  const totalSim = s.card_commitments + s.savings_goal;
-  const totalExpenses = s.base_expenses + totalSim;
-  const margem = s.income - totalExpenses;
+export function deriveKpisFromResponse(response /*, budgetAtivo */) {
+  const totals = summaryTotals(response);
+  const totalSim = totals.cardCommitments + totals.savingsGoal;
+  const totalExpenses = totals.baseExpenses + totalSim;
+  const margem = totals.income - totalExpenses;
   const projecaoOk = margem >= 0;
+  const lastMonth = Array.isArray(response?.months) && response.months.length > 0
+    ? response.months[response.months.length - 1].month
+    : null;
 
   return {
     totalSim,
     totalExpenses,
-    income: s.income,
-    baseExpenses: s.base_expenses,
-    cardCommitments: s.card_commitments,
-    savingsGoal: s.savings_goal,
+    income: totals.income,
+    baseExpenses: totals.baseExpenses,
+    cardCommitments: totals.cardCommitments,
+    savingsGoal: totals.savingsGoal,
     margem,
     projecaoOk,
     verdict: response.global_verdict,
+    // Mês final da janela de simulação — usado pelo label "Projeção <mês>"
+    // (antes hardcoded "março") para refletir dinamicamente o intervalo.
+    lastMonthIso: lastMonth,
+    lastMonthLabel: lastMonth ? fmtMonthLabel(lastMonth) : null,
   };
 }
