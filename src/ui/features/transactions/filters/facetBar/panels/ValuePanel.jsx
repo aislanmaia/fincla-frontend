@@ -5,15 +5,22 @@ import { PanelHeader } from "./PanelHeader.jsx";
 
 const MONO = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
 
-export function ValuePanel({ valueMin, valueMax, setValueMin, setValueMax, onClose }) {
+export function ValuePanel({ valueMin, valueMax, setValueMin, setValueMax, onClose, compact = false }) {
   return (
     <div>
       <PanelHeader
         title="Faixa de valor"
         hint="Filtre por valor absoluto da transação"
         onClose={onClose}
+        compact={compact}
       />
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: compact ? "1fr" : "1fr 1fr",
+          gap: compact ? 12 : 16,
+        }}
+      >
         <ValueField
           label="Mínimo"
           value={valueMin}

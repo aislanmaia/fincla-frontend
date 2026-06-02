@@ -34,20 +34,40 @@ export function mapTypeToLegacy(type) {
   return "todos";
 }
 
-export function mapCatsToLegacy(cats) {
+/**
+ * Backend aceita um único `filterCat`. Mapeamento da seleção multi do front:
+ *  - vazia → "todas" (sem filtro)
+ *  - todas selecionadas (clicar "Todas" na UI) → "todas" (equivalente a sem filtro)
+ *  - 1 categoria → o id dela
+ *  - >1 mas não todas → primeira da lista (limitação registrada do contrato atual)
+ */
+export function mapCatsToLegacy(cats, totalCategories) {
   if (!Array.isArray(cats) || cats.length === 0) return "todas";
-  // Backend aceita só uma; enviamos a primeira.
+  if (typeof totalCategories === "number" && totalCategories > 0 && cats.length >= totalCategories) {
+    return "todas";
+  }
   return cats[0];
 }
 
 /**
  * Devolve o objeto consumido por `buildTransactionsQuery` / `useTransactionsData`.
+ *
+ * @param {object} state - estado dos filtros (do `useTransactionsFilterState`)
+ * @param {object} options
+ * @param {number} options.limit - limite do paginador
+ * @param {string} options.debouncedSearch - termo de busca já estabilizado
+ * @param {number} [options.totalCategories] - total de categorias disponíveis;
+ *   quando informado, permite detectar "Todas selecionadas" e mapear para o
+ *   filtro vazio do backend (caso contrário ele aceitaria só a primeira).
  */
-export function filtersToLegacyParams(state, { limit, debouncedSearch = "" } = {}) {
+export function filtersToLegacyParams(
+  state,
+  { limit, debouncedSearch = "", totalCategories } = {},
+) {
   return {
     search: debouncedSearch,
     filterType: mapTypeToLegacy(state.type),
-    filterCat: mapCatsToLegacy(state.cats),
+    filterCat: mapCatsToLegacy(state.cats, totalCategories),
     filterMethod: "todos",
     period: state.period,
     customFrom: state.customFrom,

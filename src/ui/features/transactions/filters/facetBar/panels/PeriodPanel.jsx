@@ -32,6 +32,7 @@ export function PeriodPanel({
         title="Período"
         hint="Escolha um intervalo rápido ou personalize as datas"
         onClose={onClose}
+        compact={compact}
       />
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
         {PRESETS.map((o) => {
@@ -67,8 +68,8 @@ export function PeriodPanel({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: compact ? "1fr 1fr" : "1fr 1fr 1fr",
-          gap: 14,
+          gridTemplateColumns: compact ? "1fr" : "1fr 1fr 1fr",
+          gap: compact ? 10 : 14,
           alignItems: "flex-start",
           borderTop: `1px solid ${T.border}`,
           paddingTop: 14,

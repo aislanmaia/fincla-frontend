@@ -13,6 +13,7 @@ export function CardPanel({ cardSel, setCardSel, cards = [], onClose, compact = 
         title="Cartão"
         hint="Filtre por um ou mais cartões cadastrados"
         onClose={onClose}
+        compact={compact}
       />
       {cards.length === 0 ? (
         <div
@@ -32,7 +33,7 @@ export function CardPanel({ cardSel, setCardSel, cards = [], onClose, compact = 
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: compact ? "1fr 1fr" : "1fr 1fr 1fr",
+            gridTemplateColumns: compact ? "1fr" : "1fr 1fr 1fr",
             gap: 10,
           }}
         >

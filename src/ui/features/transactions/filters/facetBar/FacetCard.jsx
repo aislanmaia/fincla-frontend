@@ -5,15 +5,16 @@ import { Icon } from "../shared/Icon.jsx";
 import { CountChip } from "../shared/CountChip.jsx";
 
 /**
- * Card individual da FacetBar (modo "cards"). Mostra label uppercase, valor formatado,
+ * Card individual da FacetBar. Mostra label uppercase, valor formatado,
  * ícone (com cor de status quando aplicável) e badge "+N" para multi-seleção.
  *
  * Props:
  *  - facet: { key, label, value, icon, color, active, multi }
  *  - expanded: boolean
+ *  - compact: boolean (modo mobile, touch targets maiores, mais respiração)
  *  - onClick(): toggle do painel inline
  */
-export function FacetCard({ facet, expanded, onClick }) {
+export function FacetCard({ facet, expanded, onClick, compact = false }) {
   const { key, label, value, icon, color, active, multi } = facet;
   return (
     <button
@@ -27,32 +28,40 @@ export function FacetCard({ facet, expanded, onClick }) {
       aria-label={`${label}: ${value}`}
       style={{
         ...G,
-        flex: "1 1 130px",
-        minWidth: 110,
+        flex: compact ? undefined : "1 1 130px",
+        minWidth: compact ? 0 : 110,
+        minHeight: compact ? 60 : undefined,
         display: "flex",
         flexDirection: "column",
         alignItems: "flex-start",
-        gap: 2,
-        padding: "8px 12px",
-        borderRadius: 9,
-        border: "none",
-        background: expanded ? T.bg : "transparent",
+        justifyContent: "center",
+        gap: compact ? 4 : 2,
+        padding: compact ? "10px 12px" : "8px 12px",
+        borderRadius: compact ? 12 : 9,
+        border: compact ? `1px solid ${expanded ? T.ink : T.border}` : "none",
+        background: expanded ? (compact ? T.bg : T.bg) : compact ? T.surface : "transparent",
         cursor: "pointer",
         textAlign: "left",
         position: "relative",
-        transition: "background 0.15s",
+        transition: "background 0.15s, border-color 0.15s",
+        width: compact ? "100%" : undefined,
+        boxSizing: "border-box",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-        <Icon name={icon} size={10} color={active ? color || T.ink : T.inkLight} />
+      <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%" }}>
+        <Icon name={icon} size={compact ? 12 : 10} color={active ? color || T.ink : T.inkLight} />
         <span
           style={{
             ...G,
-            fontSize: 10,
+            fontSize: compact ? 10.5 : 10,
             fontWeight: 700,
             color: T.inkMid,
             letterSpacing: "0.04em",
             textTransform: "uppercase",
+            flex: 1,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
           }}
         >
           {label}
@@ -62,7 +71,7 @@ export function FacetCard({ facet, expanded, onClick }) {
       <div
         style={{
           ...G,
-          fontSize: 13,
+          fontSize: compact ? 13.5 : 13,
           fontWeight: active ? 700 : 500,
           color: active ? color || T.ink : T.inkLight,
           whiteSpace: "nowrap",

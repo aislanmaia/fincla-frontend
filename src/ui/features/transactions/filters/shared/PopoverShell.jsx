@@ -1,8 +1,47 @@
 import React from "react";
 import { T } from "../../../../tokens";
 
-/** Caixa de popover ancorada em um elemento `position: relative` pai. */
-export function PopoverShell({ anchorRight = false, minWidth = 420, maxWidth = 480, children, style }) {
+/**
+ * Caixa de popover.
+ *
+ * Modo padrão (desktop): ancorada em um elemento `position: relative` pai com
+ * largura fixa (minWidth/maxWidth) flutuando absoluto abaixo dele.
+ *
+ * Modo `compact` (mobile/sheet): renderiza inline (position: static), ocupa
+ * 100% da largura disponível e não tem min/max — útil dentro de um bottom
+ * sheet ou em qualquer container narrow onde uma posição absoluta vazaria
+ * para fora dos limites visíveis.
+ */
+export function PopoverShell({
+  anchorRight = false,
+  minWidth = 420,
+  maxWidth = 480,
+  compact = false,
+  children,
+  style,
+}) {
+  if (compact) {
+    return (
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: "relative",
+          width: "100%",
+          marginTop: 10,
+          background: T.surface,
+          border: `1px solid ${T.border}`,
+          borderRadius: 14,
+          boxShadow: T.md,
+          padding: "16px 14px",
+          animation: "fadeInDown 0.16s ease",
+          ...style,
+        }}
+      >
+        {children}
+      </div>
+    );
+  }
+
   return (
     <div
       onClick={(e) => e.stopPropagation()}

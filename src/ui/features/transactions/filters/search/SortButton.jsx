@@ -30,7 +30,7 @@ function summary(sort) {
  * Botão "Ordenar por X" da Search bar. Abre `SortMenu` no click e mostra
  * `SortTooltip` no hover (somente com menu fechado).
  */
-export function SortButton({ sort, setSort }) {
+export function SortButton({ sort, setSort, compact = false }) {
   const [open, setOpen] = useState(false);
   const [hover, setHover] = useState(false);
   const wrapperRef = useRef(null);
@@ -54,7 +54,14 @@ export function SortButton({ sort, setSort }) {
   return (
     <div
       ref={wrapperRef}
-      style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 6 }}
+      style={{
+        position: "relative",
+        display: compact ? "flex" : "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        width: compact ? "100%" : undefined,
+        flexWrap: compact ? "wrap" : undefined,
+      }}
       onClick={(e) => e.stopPropagation()}
     >
       <span
@@ -80,17 +87,19 @@ export function SortButton({ sort, setSort }) {
         aria-label={`Ordenar transações: ${summary(sort)}`}
         style={{
           ...G,
-          display: "inline-flex",
+          display: compact ? "flex" : "inline-flex",
           alignItems: "center",
+          justifyContent: compact ? "space-between" : undefined,
           gap: 5,
-          padding: "5px 10px",
-          borderRadius: 7,
+          padding: compact ? "10px 14px" : "5px 10px",
+          borderRadius: compact ? 10 : 7,
           border: `1px solid ${open ? T.ink : T.border}`,
           background: open ? T.bg : T.surface,
-          fontSize: 11.5,
+          fontSize: compact ? 13 : 11.5,
           fontWeight: 600,
           color: T.inkMid,
           cursor: "pointer",
+          flex: compact ? 1 : undefined,
         }}
       >
         <Icon name="arrow-up-down" size={11} />
@@ -117,8 +126,10 @@ export function SortButton({ sort, setSort }) {
           </span>
         )}
       </button>
-      {open && <SortMenu sort={sort} setSort={setSort} onClose={() => setOpen(false)} />}
-      {hover && !open && sort.length > 0 && <SortTooltip rules={sort} />}
+      {open && (
+        <SortMenu sort={sort} setSort={setSort} onClose={() => setOpen(false)} compact={compact} />
+      )}
+      {hover && !open && sort.length > 0 && !compact && <SortTooltip rules={sort} />}
     </div>
   );
 }

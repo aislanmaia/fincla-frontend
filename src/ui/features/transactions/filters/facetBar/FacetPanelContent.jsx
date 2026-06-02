@@ -93,6 +93,7 @@ export function FacetPanelContent({
           setValueMin={setValueMin}
           setValueMax={setValueMax}
           onClose={onClose}
+          compact={compact}
         />
       );
     case "recorrencia":

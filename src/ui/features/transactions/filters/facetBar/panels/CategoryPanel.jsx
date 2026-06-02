@@ -26,6 +26,7 @@ export function CategoryPanel({
         title="Categoria"
         hint="Selecione uma ou mais para combinar com OU"
         onClose={onClose}
+        compact={compact}
       />
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
         <input
@@ -77,8 +78,8 @@ export function CategoryPanel({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: compact ? "1fr 1fr" : "repeat(3, 1fr)",
-            gap: 8,
+            gridTemplateColumns: compact ? "1fr" : "repeat(3, 1fr)",
+            gap: compact ? 6 : 8,
           }}
         >
           {filtered.map((c) => {

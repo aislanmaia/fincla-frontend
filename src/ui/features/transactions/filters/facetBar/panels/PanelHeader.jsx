@@ -3,7 +3,7 @@ import { T } from "../../../../../tokens";
 import { G } from "../../../../../typography";
 import { Icon } from "../../shared/Icon.jsx";
 
-export function PanelHeader({ title, hint, onClose }) {
+export function PanelHeader({ title, hint, onClose, compact = false }) {
   return (
     <div
       style={{
@@ -11,13 +11,14 @@ export function PanelHeader({ title, hint, onClose }) {
         alignItems: "center",
         justifyContent: "space-between",
         marginBottom: 14,
+        gap: 10,
       }}
     >
-      <div>
+      <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
             ...G,
-            fontSize: 15,
+            fontSize: compact ? 16 : 15,
             fontWeight: 800,
             color: T.ink,
             letterSpacing: "-0.01em",
@@ -26,7 +27,9 @@ export function PanelHeader({ title, hint, onClose }) {
           {title}
         </div>
         {hint && (
-          <div style={{ ...G, fontSize: 11.5, color: T.inkLight, marginTop: 2 }}>{hint}</div>
+          <div style={{ ...G, fontSize: compact ? 12 : 11.5, color: T.inkLight, marginTop: 2 }}>
+            {hint}
+          </div>
         )}
       </div>
       <button
@@ -37,11 +40,17 @@ export function PanelHeader({ title, hint, onClose }) {
           background: "none",
           border: "none",
           cursor: "pointer",
-          padding: 6,
+          padding: compact ? 10 : 6,
+          minWidth: compact ? 40 : undefined,
+          minHeight: compact ? 40 : undefined,
+          borderRadius: compact ? 10 : undefined,
           display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0,
         }}
       >
-        <Icon name="x" size={14} color={T.inkMid} />
+        <Icon name="x" size={compact ? 16 : 14} color={T.inkMid} />
       </button>
     </div>
   );

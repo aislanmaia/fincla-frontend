@@ -14,7 +14,7 @@ import { Icon } from "../shared/Icon.jsx";
  *   - "row"    → ícone à direita de uma row (menu)
  *   - "inline" → ícone inline no fim de uma pill (mantido por compatibilidade)
  */
-export function DeleteViewControl({ view, onDelete, variant = "corner", cardActive = false }) {
+export function DeleteViewControl({ view, onDelete, variant = "corner", cardActive = false, compact = false }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -75,7 +75,7 @@ export function DeleteViewControl({ view, onDelete, variant = "corner", cardActi
     >
       <button
         type="button"
-        className={`delete-view-btn delete-view-${variant}${open ? " open" : ""}`}
+        className={`delete-view-btn delete-view-${variant}${open ? " open" : ""}${compact ? " delete-view-always" : ""}`}
         onClick={(e) => {
           e.stopPropagation();
           setOpen(true);
@@ -111,6 +111,7 @@ export function DeleteViewControl({ view, onDelete, variant = "corner", cardActi
           color={view.color}
           icon={view.icon}
           anchor={variant}
+          compact={compact}
           onCancel={() => setOpen(false)}
           onConfirm={() => {
             onDelete(view.id);
@@ -122,13 +123,16 @@ export function DeleteViewControl({ view, onDelete, variant = "corner", cardActi
   );
 }
 
-function DeleteConfirmPopover({ viewLabel, color, icon, anchor, onCancel, onConfirm }) {
-  // Em "corner" o popover sai do canto sup. dir. do card e estende para a
-  // esquerda — quando o card está na borda esquerda da tela (caso comum em
-  // listas curtas), `left: -4` evita o vazamento.
+function DeleteConfirmPopover({ viewLabel, color, icon, anchor, compact = false, onCancel, onConfirm }) {
+  // Em "corner": no desktop o card costuma estar próximo da borda esquerda,
+  // então o popover abre para a direita (left: -4). No mobile (compact) os
+  // cards são full-width e o "x" fica na borda direita: ancoramos pelo
+  // `right: -4` para evitar vazar para fora da viewport.
   const posStyle =
     anchor === "corner"
-      ? { position: "absolute", top: 28, left: -4 }
+      ? compact
+        ? { position: "absolute", top: 28, right: -4 }
+        : { position: "absolute", top: 28, left: -4 }
       : anchor === "row"
       ? { position: "absolute", top: "calc(100% + 4px)", right: 0 }
       : { position: "absolute", top: "calc(100% + 6px)", right: -4 };
@@ -240,6 +244,7 @@ const DELETE_VIEW_CSS = `
   .saved-view-pill:hover .delete-view-inline,
   .saved-view-row:hover .delete-view-row,
   .delete-view-btn.open,
+  .delete-view-btn.delete-view-always,
   .delete-view-btn:focus-visible { opacity: 1; pointer-events: auto; }
 `;
 

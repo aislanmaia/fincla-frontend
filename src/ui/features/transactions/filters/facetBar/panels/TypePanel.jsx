@@ -13,7 +13,7 @@ const OPTIONS = [
 export function TypePanel({ type, setType, onClose, compact = false }) {
   return (
     <div>
-      <PanelHeader title="Tipo" onClose={onClose} />
+      <PanelHeader title="Tipo" onClose={onClose} compact={compact} />
       <div
         style={{
           display: "grid",

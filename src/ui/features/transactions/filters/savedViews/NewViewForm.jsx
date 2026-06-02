@@ -14,7 +14,7 @@ const COLORS = [T.ink, T.blue, T.green, T.amber, T.red, T.purple];
  *  - onCancel(): fecha sem salvar.
  *  - onSave({ name, icon, color }): cria.
  */
-export function NewViewForm({ activeFacets = [], onCancel, onSave }) {
+export function NewViewForm({ activeFacets = [], onCancel, onSave, compact = false }) {
   const [name, setName] = useState("");
   const [color, setColor] = useState(T.blue);
   const [icon, setIcon] = useState("bookmark");
@@ -26,7 +26,7 @@ export function NewViewForm({ activeFacets = [], onCancel, onSave }) {
   };
 
   return (
-    <div style={{ width: 340, display: "flex", flexDirection: "column", gap: 14 }}>
+    <div style={{ width: compact ? "100%" : 340, display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink, letterSpacing: "-0.01em" }}>
           Nova visualização
@@ -134,7 +134,15 @@ export function NewViewForm({ activeFacets = [], onCancel, onSave }) {
 
       <div>
         <FormLabel>Ícone</FormLabel>
-        <div role="radiogroup" aria-label="Ícone" style={{ display: "grid", gridTemplateColumns: "repeat(10, 1fr)", gap: 4 }}>
+        <div
+          role="radiogroup"
+          aria-label="Ícone"
+          style={{
+            display: "grid",
+            gridTemplateColumns: compact ? "repeat(6, 1fr)" : "repeat(10, 1fr)",
+            gap: compact ? 6 : 4,
+          }}
+        >
           {FILTER_ICONS.map((i) => {
             const active = i === icon;
             return (
@@ -181,8 +189,8 @@ export function NewViewForm({ activeFacets = [], onCancel, onSave }) {
                 onClick={() => setColor(c)}
                 style={{
                   ...G,
-                  width: 24,
-                  height: 24,
+                  width: compact ? 32 : 24,
+                  height: compact ? 32 : 24,
                   borderRadius: 99,
                   background: c,
                   cursor: "pointer",
@@ -245,18 +253,18 @@ export function NewViewForm({ activeFacets = [], onCancel, onSave }) {
         )}
       </div>
 
-      <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
+      <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
         <button
           type="button"
           onClick={onCancel}
           style={{
             ...G,
-            padding: "9px 14px",
-            borderRadius: 8,
+            padding: compact ? "12px 16px" : "9px 14px",
+            borderRadius: 9,
             border: `1px solid ${T.border}`,
             background: T.surface,
             color: T.inkMid,
-            fontSize: 12.5,
+            fontSize: compact ? 13 : 12.5,
             fontWeight: 600,
             cursor: "pointer",
           }}
@@ -270,12 +278,12 @@ export function NewViewForm({ activeFacets = [], onCancel, onSave }) {
           style={{
             ...G,
             flex: 1,
-            padding: "9px 14px",
+            padding: compact ? "12px 16px" : "9px 14px",
             borderRadius: 8,
             border: `1px solid ${canSave ? T.ink : T.border}`,
             background: canSave ? T.ink : T.grayLight,
             color: canSave ? "#fff" : T.inkGhost,
-            fontSize: 12.5,
+            fontSize: compact ? 13 : 12.5,
             fontWeight: 700,
             cursor: canSave ? "pointer" : "not-allowed",
             display: "inline-flex",

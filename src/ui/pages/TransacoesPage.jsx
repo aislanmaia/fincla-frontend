@@ -202,6 +202,15 @@ function TransacoesPageBody({
   const searchAwaitingCommit = searchInput.trim() !== debouncedSearch;
 
   const shouldUseRealData = shouldUseRealDataForMode(organizationId, dataMode);
+  const categoryTagsData = useCategoryTagsData({
+    organizationId,
+    enabled: shouldUseRealData,
+  });
+  // Necessário aqui (antes de `transactionsFilters`) para detectar "Todas
+  // categorias selecionadas" e mapear pro filtro vazio do backend.
+  const totalCategoriesForBackend = shouldUseRealData
+    ? categoryTagsData.categories?.length || 0
+    : 0;
   const transactionsFilters = useMemo(
     () =>
       filtersToLegacyParams(
@@ -213,7 +222,11 @@ function TransacoesPageBody({
           customTo: filter.customTo,
           sort: filter.sort,
         },
-        { limit: visible, debouncedSearch },
+        {
+          limit: visible,
+          debouncedSearch,
+          totalCategories: totalCategoriesForBackend,
+        },
       ),
     [
       debouncedSearch,
@@ -224,6 +237,7 @@ function TransacoesPageBody({
       filter.customTo,
       filter.sort,
       visible,
+      totalCategoriesForBackend,
     ],
   );
   const transactionsData = useTransactionsData({
@@ -231,10 +245,6 @@ function TransacoesPageBody({
     enabled: shouldUseRealData,
     filters: transactionsFilters,
     refreshToken: transactionsRefreshToken,
-  });
-  const categoryTagsData = useCategoryTagsData({
-    organizationId,
-    enabled: shouldUseRealData,
   });
   const txList = shouldUseRealData
     ? transactionsData.transactions
@@ -1163,9 +1173,15 @@ function TransacoesPageBody({
                 cards={cardsForFilter}
                 allTags={allTagsForFilter}
                 savedViews={savedViewsProp}
+                compact
+                hideSearch
                 searchInput={searchInput}
                 setSearchInput={(v) => {
                   setSearchInput(v);
+                  setVisible(PAGE_SIZE);
+                }}
+                onClearAll={() => {
+                  setSearchInput("");
                   setVisible(PAGE_SIZE);
                 }}
               />

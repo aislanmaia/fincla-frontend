@@ -18,18 +18,25 @@ import {
  * Popover de edição da ordenação multi-nível.
  * `sort` é o array de regras `[{ field, dir }]` controlado externamente.
  */
-export function SortMenu({ sort, setSort, onClose }) {
+export function SortMenu({ sort, setSort, onClose, compact = false }) {
   const inactive = availableFields(sort);
   const isDefault = isDefaultSort(sort);
 
   const resetDefault = () => setSort(DEFAULT_SORT);
 
-  return (
-    <div
-      role="dialog"
-      aria-label="Editor de ordenação"
-      onClick={(e) => e.stopPropagation()}
-      style={{
+  const popoverStyle = compact
+    ? {
+        position: "relative",
+        width: "100%",
+        marginTop: 8,
+        background: T.surface,
+        border: `1px solid ${T.border}`,
+        borderRadius: 12,
+        boxShadow: T.md,
+        padding: 8,
+        animation: "fadeInDown 0.14s ease",
+      }
+    : {
         position: "absolute",
         top: "calc(100% + 6px)",
         right: 0,
@@ -41,7 +48,14 @@ export function SortMenu({ sort, setSort, onClose }) {
         padding: 6,
         zIndex: 80,
         animation: "fadeInDown 0.14s ease",
-      }}
+      };
+
+  return (
+    <div
+      role="dialog"
+      aria-label="Editor de ordenação"
+      onClick={(e) => e.stopPropagation()}
+      style={popoverStyle}
     >
       <div
         style={{

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { T } from "../../../tokens";
 import { FacetBar } from "./facetBar/FacetBar.jsx";
 import { FacetPanelContent } from "./facetBar/FacetPanelContent.jsx";
@@ -10,10 +10,18 @@ import { Icon } from "./shared/Icon.jsx";
  * Componente raiz da Variação C — Faceted Pills.
  *
  * Composição (de cima pra baixo):
- *   1. SavedViewsCards (opcional via `showSavedViews`)
- *   2. SearchBar  (search + SortButton multi-nível)
- *   3. FacetBar   (7 facets como cards)
+ *   1. SavedViewsCards (opcional via `savedViews`)
+ *   2. SearchBar  (search + SortButton multi-nível) — modo compact stackeia
+ *   3. FacetBar   (7 facets como cards) — modo compact = grid 2 colunas
  *   4. Painel inline da facet expandida (empurra conteúdo abaixo)
+ *
+ * Modo `compact`:
+ *   - Saved views stackeiam verticalmente
+ *   - Search e Sort stackeiam (ou só Sort se hideSearch)
+ *   - FacetBar em grid 2 colunas com touch targets ≥ 56px
+ *   - Painéis com grid single-column
+ *   - Popovers viram inline-stacked (sem absolute)
+ *   - Ao expandir um facet, scroll suave faz o painel entrar em view
  *
  * Controlado: o estado vive no `useTransactionsFilterState` no consumidor.
  *
@@ -24,6 +32,9 @@ import { Icon } from "./shared/Icon.jsx";
  *  - allTags:       string[]
  *  - savedViews:    { items, active, onActivate, onCreate, onDelete }
  *  - searchInput / setSearchInput: opcional, para quando a página debounce a busca fora.
+ *  - hideSearch: oculta a SearchBar (útil quando o consumidor já mostra o input fora).
+ *  - compact: modo mobile — vertical stack, touch targets, popovers inline.
+ *  - onClearAll: callback executado antes do `filter.clearAll()`.
  */
 export function TransactionsFilterBar({
   filter,
@@ -34,11 +45,11 @@ export function TransactionsFilterBar({
   searchInput,
   setSearchInput,
   hideSearch = false,
-  /** Callback opcional executado ao limpar tudo, antes de `filter.clearAll()`.
-   *  Útil para o consumidor zerar estado externo (search debounced, paginação). */
+  compact = false,
   onClearAll,
 }) {
   const [expanded, setExpanded] = useState(null);
+  const panelRef = useRef(null);
 
   // Fecha o painel inline quando troca de saved view ativa
   useEffect(() => {
@@ -53,6 +64,24 @@ export function TransactionsFilterBar({
     };
     document.addEventListener("keydown", onEsc);
     return () => document.removeEventListener("keydown", onEsc);
+  }, [expanded]);
+
+  // Quando um painel é expandido, faz scroll suave para ele entrar em view.
+  // Importante no mobile (dentro do bottom sheet) e também em viewports
+  // pequenos no desktop. Aguarda o próximo frame para o nó renderizar.
+  useEffect(() => {
+    if (!expanded) return;
+    const id = window.requestAnimationFrame(() => {
+      const el = panelRef.current;
+      if (el && typeof el.scrollIntoView === "function") {
+        try {
+          el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+        } catch {
+          el.scrollIntoView();
+        }
+      }
+    });
+    return () => window.cancelAnimationFrame(id);
   }, [expanded]);
 
   const categoriesById = useMemo(() => {
@@ -89,13 +118,7 @@ export function TransactionsFilterBar({
       : (v) => filter.setSearch(v);
 
   return (
-    <div
-      style={{ display: "flex", flexDirection: "column", gap: 12 }}
-      onClick={() => {
-        // click fora dos popovers fecha o painel inline
-        // (popovers param propagação no click interno)
-      }}
-    >
+    <div style={{ display: "flex", flexDirection: "column", gap: compact ? 14 : 12 }}>
       {savedViews && (
         <SavedViewsCards
           items={savedViews.items}
@@ -104,6 +127,7 @@ export function TransactionsFilterBar({
           onDelete={savedViews.onDelete}
           onCreate={savedViews.onCreate}
           activeFacets={activeFacets}
+          compact={compact}
         />
       )}
 
@@ -113,6 +137,21 @@ export function TransactionsFilterBar({
           setSearch={setSearch}
           sort={filter.sort}
           setSort={filter.setSort}
+          compact={compact}
+        />
+      )}
+
+      {/* Quando hideSearch=true (mobile: search externa ao sheet) ainda
+          precisamos do controle de ordenação dentro do sheet, então
+          renderizamos um SearchBar compacto só com o SortButton. */}
+      {hideSearch && compact && (
+        <SearchBar
+          search={search}
+          setSearch={setSearch}
+          sort={filter.sort}
+          setSort={filter.setSort}
+          compact
+          hideSearchField
         />
       )}
 
@@ -126,10 +165,12 @@ export function TransactionsFilterBar({
           setExpanded(null);
         }}
         hasAnyActive={filter.hasAnyActive}
+        compact={compact}
       />
 
       {expanded && (
         <div
+          ref={panelRef}
           id={`facet-panel-${expanded}`}
           role="region"
           aria-label={`Filtro: ${expanded}`}
@@ -137,9 +178,10 @@ export function TransactionsFilterBar({
             background: T.surface,
             border: `1px solid ${T.border}`,
             borderRadius: 14,
-            padding: "18px 22px",
+            padding: compact ? "14px 14px 16px" : "18px 22px",
             boxShadow: T.md,
             animation: "fadeInDown 0.18s ease",
+            scrollMarginTop: compact ? 12 : 24,
           }}
         >
           <FacetPanelContent
@@ -176,7 +218,7 @@ export function TransactionsFilterBar({
             setRec={filter.setRec}
             // chrome
             onClose={() => setExpanded(null)}
-            compact={false}
+            compact={compact}
           />
         </div>
       )}

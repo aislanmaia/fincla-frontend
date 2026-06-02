@@ -23,6 +23,7 @@ export function RecPanel({ rec, setRec, onClose, compact = false }) {
         title="Recorrência"
         hint="Lançamentos que se repetem (assinaturas, salário, aluguel…)"
         onClose={onClose}
+        compact={compact}
       />
       <div
         style={{

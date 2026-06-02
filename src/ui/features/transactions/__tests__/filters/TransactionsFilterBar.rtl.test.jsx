@@ -131,4 +131,83 @@ describe("<TransactionsFilterBar>", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /Cancelar/i }));
     expect(screen.getByRole("button", { name: "Existente" })).toBeInTheDocument();
   });
+
+  describe("modo compact (mobile sheet)", () => {
+    function CompactHarness({ hideSearch = false } = {}) {
+      const filter = useTransactionsFilterState();
+      const [views, setViews] = useState([]);
+      const [active, setActive] = useState(null);
+      return (
+        <TransactionsFilterBar
+          filter={filter}
+          categories={CATEGORIES}
+          cards={CARDS}
+          allTags={ALL_TAGS}
+          compact
+          hideSearch={hideSearch}
+          savedViews={{
+            items: views,
+            active,
+            onActivate: setActive,
+            onCreate: ({ name, icon, color }) => {
+              const v = { id: "v" + (views.length + 1), label: name, icon, color, hint: "" };
+              setViews([...views, v]);
+              setActive(v.id);
+            },
+            onDelete: (id) => {
+              setViews(views.filter((v) => v.id !== id));
+              if (active === id) setActive(null);
+            },
+          }}
+        />
+      );
+    }
+
+    it("compact: renderiza SearchBar quando hideSearch=false e oculta search quando hideSearch=true (mas mantém Sort)", () => {
+      const { rerender } = render(<CompactHarness />);
+      expect(screen.getByLabelText(/Buscar transações/i)).toBeInTheDocument();
+      // Sort button presente
+      expect(screen.getByRole("button", { name: /Ordenar transações:/i })).toBeInTheDocument();
+
+      rerender(<CompactHarness hideSearch />);
+      expect(screen.queryByLabelText(/Buscar transações/i)).not.toBeInTheDocument();
+      // Sort button continua presente
+      expect(screen.getByRole("button", { name: /Ordenar transações:/i })).toBeInTheDocument();
+    });
+
+    it("compact: expandir facet renderiza o painel inline (sem absolute, no fluxo)", async () => {
+      render(<CompactHarness hideSearch />);
+      await userEvent.click(screen.getByRole("button", { name: /Tipo:/i }));
+      const region = screen.getByRole("region", { name: /Filtro: tipo/i });
+      expect(region).toBeInTheDocument();
+      // Stacked vertical: o region é irmão dos cards no DOM, não absolute
+      expect(region.style.position).not.toBe("absolute");
+    });
+
+    it("compact: SortMenu inline (não absolute) ao abrir dentro do sheet", async () => {
+      render(<CompactHarness hideSearch />);
+      await userEvent.click(screen.getByRole("button", { name: /Ordenar transações:/i }));
+      const dialog = screen.getByRole("dialog", { name: /Editor de ordenação/i });
+      expect(dialog.style.position).toBe("relative");
+    });
+
+    it("compact: NewViewForm popover renderiza inline (no fluxo, não absolute)", async () => {
+      render(<CompactHarness hideSearch />);
+      await userEvent.click(screen.getByRole("button", { name: /^Nova$/ }));
+      // O dialog do formulário existe no DOM via input "Nome da visualização"
+      const input = screen.getByLabelText(/Nome da visualização/i);
+      expect(input).toBeInTheDocument();
+      // Caminhamos até o ancestor com style.position
+      let el = input.parentElement;
+      let foundStatic = false;
+      while (el) {
+        if (el.style && el.style.position === "relative" && el.style.marginTop === "10px") {
+          foundStatic = true;
+          break;
+        }
+        el = el.parentElement;
+      }
+      expect(foundStatic).toBe(true);
+    });
+  });
 });
