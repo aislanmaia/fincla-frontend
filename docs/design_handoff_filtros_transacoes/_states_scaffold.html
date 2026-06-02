@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Component states — captura</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@500;600;700&family=Instrument+Serif:ital@0;1&display=swap"
+    />
+    <style>
+      html, body { margin: 0; padding: 0; background: #EDEBE7; font-family: 'Geist', system-ui, sans-serif; }
+      * { box-sizing: border-box; }
+      @keyframes fadeInDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+      .grid { display: flex; flex-wrap: wrap; gap: 40px; padding: 56px; align-items: flex-start; }
+      .cap { font: 600 11px 'Geist Mono', monospace; text-transform: uppercase; letter-spacing: 0.1em; color: #6B6963; margin-bottom: 14px; }
+      .cell { background: transparent; }
+      .surface { background: #fff; border: 1px solid #E5E3DF; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.08); padding: 16px 18px; }
+      .anchor { position: relative; }
+      /* Força os popovers absolutos a fluírem normalmente para captura isolada */
+      .anchor > div { position: static !important; top: auto !important; right: auto !important; left: auto !important; animation: none !important; }
+    </style>
+    <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel">
+      window.TweaksContext = React.createContext({ savedViews: "cards", facetBar: "cards", facetPanel: "inline" });
+    </script>
+    <script type="text/babel" src="shared.jsx"></script>
+    <script type="text/babel" src="variation-c-panels.jsx"></script>
+    <script type="text/babel" src="variation-c.jsx"></script>
+    <script type="text/babel">
+      const facetsDemo = [
+        { label: "Período", value: "Este mês", icon: "calendar", color: T.ink },
+        { label: "Tipo", value: "Despesa", icon: "trending-down", color: T.red },
+        { label: "Categoria", value: "2 categorias", icon: "circle", color: T.ink },
+        { label: "Tags", value: "#trabalho", icon: "tag", color: T.ink },
+      ];
+
+      function NewViewCell() {
+        return (
+          <div className="cell">
+            <div className="cap">NewViewForm</div>
+            <div className="surface" style={{ width: 340 }}>
+              <window.NewViewForm activeFacets={facetsDemo} onCancel={() => {}} onSave={() => {}} />
+            </div>
+          </div>
+        );
+      }
+
+      function SortSingleCell() {
+        const [sort, setSort] = React.useState([{ field: "date", dir: "desc" }]);
+        return (
+          <div className="cell">
+            <div className="cap">SortMenu · 1 nível</div>
+            <div className="anchor" style={{ width: 380 }}>
+              <window.SortMenu sort={sort} setSort={setSort} onClose={() => {}} />
+            </div>
+          </div>
+        );
+      }
+
+      function SortMultiCell() {
+        const [sort, setSort] = React.useState([
+          { field: "date", dir: "desc" },
+          { field: "val", dir: "asc" },
+          { field: "tipo", dir: "desc" },
+        ]);
+        return (
+          <div className="cell">
+            <div className="cap">SortMenu · multi-nível</div>
+            <div className="anchor" style={{ width: 380 }}>
+              <window.SortMenu sort={sort} setSort={setSort} onClose={() => {}} />
+            </div>
+          </div>
+        );
+      }
+
+      function SortTooltipCell() {
+        return (
+          <div className="cell">
+            <div className="cap">SortTooltip (hover)</div>
+            <div className="anchor" style={{ width: 280 }}>
+              <window.SortTooltip rules={[
+                { field: "date", dir: "desc" },
+                { field: "val", dir: "asc" },
+              ]} />
+            </div>
+          </div>
+        );
+      }
+
+      function DeleteCell() {
+        return (
+          <div className="cell">
+            <div className="cap">DeleteConfirmPopover</div>
+            <div className="anchor" style={{ width: 240 }}>
+              <window.DeleteConfirmPopover
+                viewLabel="Cartão Nubank"
+                color="#7C3AED"
+                icon="card"
+                anchor="row"
+                onCancel={() => {}}
+                onConfirm={() => {}}
+              />
+            </div>
+          </div>
+        );
+      }
+
+      function FacetInlineCell() {
+        const [cats, setCats] = React.useState(["alim", "trans"]);
+        const panelProps = {
+          period: "mes", setPeriod: () => {},
+          type: "despesa", setType: () => {},
+          cats, setCats,
+          tags: ["trabalho"], setTags: () => {},
+          cardSel: ["nub-1177"], setCardSel: () => {},
+          rec: "any", setRec: () => {},
+          onClose: () => {}, compact: false,
+        };
+        return (
+          <div className="cell" style={{ width: 760 }}>
+            <div className="cap">Painel de facet — INLINE (modo aprovado) · ex.: Categoria</div>
+            <div style={{ background: "#fff", border: "1px solid #E5E3DF", borderRadius: 14, padding: "18px 22px", boxShadow: "0 6px 18px rgba(0,0,0,0.06)" }}>
+              <window.FacetPanelContent facetKey="categoria" {...panelProps} />
+            </div>
+          </div>
+        );
+      }
+
+      function App() {
+        return (
+          <div className="grid">
+            <NewViewCell />
+            <SortSingleCell />
+            <SortMultiCell />
+            <SortTooltipCell />
+            <DeleteCell />
+            <FacetInlineCell />
+          </div>
+        );
+      }
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

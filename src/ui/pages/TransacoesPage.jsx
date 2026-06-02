@@ -12,31 +12,37 @@ import {
   Search,
   ChevronRight,
   X,
-  Check,
   Pencil,
   Trash2,
   Download,
   SlidersHorizontal,
-  Calendar,
-  ArrowUpDown,
 } from "lucide-react";
 import { T } from "../tokens";
 import { G } from "../typography";
 import { PageTitle } from "../components/primitives";
 import { TRANSACTIONS } from "../data/mockFinance";
-import { buildTransactionsCsvOptions, downloadTransactionsCsvForUi } from "../data/transactionsAdapter.js";
+import { downloadTransactionsCsvForUi } from "../data/transactionsAdapter.js";
 import { useCategoryTagsData } from "../features/tags/useCategoryTagsData.js";
-import { PeriodCalendar } from "../features/transactions/PeriodCalendar.jsx";
 import { useTransactionsData } from "../features/transactions/useTransactionsData.js";
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { TransactionsEmptyState } from "../features/transactions/TransactionsEmptyState.jsx";
 import { CardEmptyWithCta } from "../features/shellExtras.jsx";
-import { FINCLA_CALENDAR_SHADOW } from "../components/finclaCalendarStyles.js";
 import {
   getTransactionsPeriodBootstrap,
   writeTransactionsPeriodToStorage,
-  TRANSACTIONS_DEFAULT_PERIOD,
 } from "../features/transactions/transactionsPeriodStorage.js";
+import {
+  TransactionsFilterBar,
+  useTransactionsFilterState,
+  useSavedViews,
+  describeView,
+  countActiveFiltersInSnapshot,
+  DEFAULT_SORT,
+} from "../features/transactions/filters/index.js";
+import {
+  filtersToLegacyParams,
+  filtersToCsvOptions,
+} from "../features/transactions/filters/filtersToLegacyParams.js";
 
 const TRANSACTIONS_SEARCH_DEBOUNCE_MS = 1500;
 
@@ -104,29 +110,34 @@ function TransacoesPageBody({
   // ── State ─────────────────────────────────────────────────────────────────
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [filterType,  setFilterType]  = useState("todos");
-  const [filterCat,   setFilterCat]   = useState("todas");
-  const [filterMethod,setFilterMethod]= useState("todos");
-  const [sortBy,      setSortBy]      = useState("date-desc"); // date-desc|date-asc|val-desc|val-asc|name-asc|name-desc
   /** Período: default "mes" + persistência por org (`transactionsPeriodStorage`). */
   const periodBootstrapRef = useRef(null);
   if (periodBootstrapRef.current === null) {
     periodBootstrapRef.current = getTransactionsPeriodBootstrap(organizationId);
   }
   const b0 = periodBootstrapRef.current;
-  const [period,      setPeriod]      = useState(b0.period);
-  const [customFrom,  setCustomFrom]  = useState(b0.customFrom);
-  const [customTo,    setCustomTo]    = useState(b0.customTo);
+
+  /**
+   * Estado canônico dos filtros + ordenação multi-nível (Variação C — Faceted Pills).
+   * O período inicial vem do localStorage por org (preservado da implementação anterior).
+   */
+  const filter = useTransactionsFilterState({
+    initial: {
+      period: b0.period,
+      customFrom: b0.customFrom,
+      customTo: b0.customTo,
+    },
+    initialSort: DEFAULT_SORT,
+  });
+
   const periodPersistFingerprintRef = useRef("");
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [periodOpen,  setPeriodOpen]  = useState(false);
   // ── Bottom sheet drag-to-dismiss ──────────────────────────────
   const sheetRef      = useRef(null);
   const snapFullRef   = useRef(false);   // read in RAF/touch handlers (no stale closure)
   const isClosingRef  = useRef(false);   // prevents double-close
   const [snapFull,    setSnapFull]    = useState(false);  // false=72dvh, true=92dvh
   const [sheetClosing,setSheetClosing]= useState(false);  // drives exit animation
-  const [sortOpen,    setSortOpen]    = useState(false);
   const [selected,    setSelected]    = useState(null);
   const [visible,     setVisible]     = useState(PAGE_SIZE);
   const listScrollRef = useRef(null);
@@ -134,6 +145,10 @@ function TransacoesPageBody({
   const loadMoreCooldownRef = useRef(false);
   const [deletingId,  setDeletingId]  = useState(null);
   const [mockTxList,  setMockTxList]  = useState(TRANSACTIONS);
+
+  /** Saved views (Variação C) persistidas em localStorage por org. */
+  const savedViewsApi = useSavedViews(organizationId);
+  const [savedViewActive, setSavedViewActive] = useState(null);
 
   useLayoutEffect(() => {
     if (!organizationId) {
@@ -147,27 +162,28 @@ function TransacoesPageBody({
       customFrom: row.customFrom,
       customTo: row.customTo,
     });
-    setPeriod(row.period);
-    setCustomFrom(row.customFrom);
-    setCustomTo(row.customTo);
+    filter.setPeriod(row.period);
+    filter.setCustomFrom(row.customFrom);
+    filter.setCustomTo(row.customTo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organizationId]);
 
   useEffect(() => {
     if (!organizationId) return;
     const fp = JSON.stringify({
       org: organizationId,
-      period,
-      customFrom,
-      customTo,
+      period: filter.period,
+      customFrom: filter.customFrom,
+      customTo: filter.customTo,
     });
     if (fp === periodPersistFingerprintRef.current) return;
     periodPersistFingerprintRef.current = fp;
     writeTransactionsPeriodToStorage(organizationId, {
-      period,
-      customFrom,
-      customTo,
+      period: filter.period,
+      customFrom: filter.customFrom,
+      customTo: filter.customTo,
     });
-  }, [organizationId, period, customFrom, customTo]);
+  }, [organizationId, filter.period, filter.customFrom, filter.customTo]);
 
   useEffect(() => {
     const trimmed = searchInput.trim();
@@ -186,17 +202,30 @@ function TransacoesPageBody({
   const searchAwaitingCommit = searchInput.trim() !== debouncedSearch;
 
   const shouldUseRealData = shouldUseRealDataForMode(organizationId, dataMode);
-  const transactionsFilters = useMemo(() => ({
-    search: debouncedSearch,
-    filterType,
-    filterCat,
-    filterMethod,
-    period,
-    customFrom,
-    customTo,
-    sortBy,
-    limit: visible,
-  }), [debouncedSearch, filterMethod, filterType, filterCat, period, customFrom, customTo, sortBy, visible]);
+  const transactionsFilters = useMemo(
+    () =>
+      filtersToLegacyParams(
+        {
+          type: filter.type,
+          cats: filter.cats,
+          period: filter.period,
+          customFrom: filter.customFrom,
+          customTo: filter.customTo,
+          sort: filter.sort,
+        },
+        { limit: visible, debouncedSearch },
+      ),
+    [
+      debouncedSearch,
+      filter.type,
+      filter.cats,
+      filter.period,
+      filter.customFrom,
+      filter.customTo,
+      filter.sort,
+      visible,
+    ],
+  );
   const transactionsData = useTransactionsData({
     organizationId,
     enabled: shouldUseRealData,
@@ -211,28 +240,49 @@ function TransacoesPageBody({
     ? transactionsData.transactions
     : resolveLocalData({ dataMode, mockData: mockTxList, emptyData: [] });
 
-  const ALL_CAT_CHIPS = useMemo(() => {
+  /** Categorias normalizadas para a FacetBar (id + label + color + icon). */
+  const categoriesForFilter = useMemo(() => {
     if (shouldUseRealData && categoryTagsData.categories?.length) {
       return categoryTagsData.categories.map((c) => ({
-        value: c.id,
+        id: c.id,
         label: c.labelPt,
-        colorHex: c.color || null,
+        color: c.color || CAT_COLORS[c.labelPt] || T.inkMid,
+        icon: "●",
       }));
     }
     return [...new Set(txList.map((t) => t.cat))]
       .sort()
-      .map((label) => ({ value: label, label, colorHex: null }));
+      .map((label) => ({
+        id: label,
+        label,
+        color: CAT_COLORS[label] || T.inkMid,
+        icon: "●",
+      }));
   }, [shouldUseRealData, categoryTagsData.categories, txList]);
 
-  const catColorForChip = (row) => row.colorHex || CAT_COLORS[row.label] || T.inkMid;
-  const catBgForChip = (row) => `${catColorForChip(row)}18`;
+  /** Tags disponíveis para o painel de Tags. */
+  const allTagsForFilter = useMemo(() => {
+    const set = new Set();
+    txList.forEach((t) => (t.tags || []).forEach((tg) => set.add(tg)));
+    return Array.from(set).sort();
+  }, [txList]);
 
-  const filterCatLabel =
-    filterCat === "todas"
-      ? ""
-      : ALL_CAT_CHIPS.find((r) => r.value === filterCat)?.label ?? filterCat;
-
-  const ALL_METHODS = [...new Set(txList.map(t=>t.method))].sort();
+  /** Cartões cadastrados — placeholder até integração com `useCreditCardsData`. */
+  const cardsForFilter = useMemo(() => {
+    const set = new Map();
+    txList.forEach((t) => {
+      const id = t.parcela?.cartao || null;
+      if (id && !set.has(id)) {
+        set.set(id, {
+          id,
+          label: id.split("••")[0]?.trim() || id,
+          last4: id.split("••")[1]?.trim() || "",
+          color: T.purple,
+        });
+      }
+    });
+    return Array.from(set.values());
+  }, [txList]);
 
   const categoryFromUrl = urlSearch[FC.CATEGORY];
   useEffect(() => {
@@ -253,23 +303,24 @@ function TransacoesPageBody({
       if (categoryTagsData.categories?.length) {
         const byId = categoryTagsData.categories.find((c) => c.id === slug);
         if (byId) {
-          setFilterCat(byId.id);
+          filter.setCats([byId.id]);
           setFiltersOpen(false);
           strip();
           return;
         }
         const byLabel = categoryTagsData.categories.find((c) => c.labelPt === slug);
         if (byLabel) {
-          setFilterCat(byLabel.id);
+          filter.setCats([byLabel.id]);
           setFiltersOpen(false);
           strip();
           return;
         }
       }
     }
-    setFilterCat(slug);
+    filter.setCats([slug]);
     setFiltersOpen(false);
     strip();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     categoryFromUrl,
     shouldUseRealData,
@@ -280,13 +331,9 @@ function TransacoesPageBody({
 
   // Period presets
   const TODAY = new Date();
-  const PERIOD_LABELS = {
-    tudo:"Todo período", hoje:"Hoje", semana:"Esta semana",
-    mes:"Este mês", "mes-ant":"Mês anterior", "3m":"Últimos 3 meses",
-    ano:"Este ano", custom:"Personalizado"
-  };
   const periodFilter = (t) => {
     const d = parseDate(t.date);
+    const period = filter.period;
     if (period === "tudo")    return true;
     if (period === "hoje")    return d.toDateString() === TODAY.toDateString();
     if (period === "semana")  { const w = new Date(TODAY); w.setDate(w.getDate()-7); return d >= w; }
@@ -295,8 +342,8 @@ function TransacoesPageBody({
     if (period === "3m")      { const m3 = new Date(TODAY); m3.setMonth(m3.getMonth()-3); return d >= m3; }
     if (period === "ano")     return d.getFullYear()===TODAY.getFullYear();
     if (period === "custom")  {
-      const from = customFrom ? new Date(customFrom) : null;
-      const to   = customTo   ? new Date(customTo+"T23:59:59") : null;
+      const from = filter.customFrom ? new Date(filter.customFrom) : null;
+      const to   = filter.customTo   ? new Date(filter.customTo+"T23:59:59") : null;
       if (from && d < from) return false;
       if (to   && d > to)   return false;
       return true;
@@ -304,55 +351,46 @@ function TransacoesPageBody({
     return true;
   };
 
-  const SORT_LABELS = {
-    "date-desc":"Data ↓ (mais recente)", "date-asc":"Data ↑ (mais antiga)",
-    "val-desc":"Valor ↓ (maior)", "val-asc":"Valor ↑ (menor)",
-    "name-asc":"Nome A→Z", "name-desc":"Nome Z→A"
-  };
-  const sortFn = (a,b) => {
-    if (sortBy==="date-desc") return parseDate(b.date)-parseDate(a.date);
-    if (sortBy==="date-asc")  return parseDate(a.date)-parseDate(b.date);
-    if (sortBy==="val-desc")  return Math.abs(b.val)-Math.abs(a.val);
-    if (sortBy==="val-asc")   return Math.abs(a.val)-Math.abs(b.val);
-    if (sortBy==="name-asc")  return a.desc.localeCompare(b.desc,"pt-BR");
-    if (sortBy==="name-desc") return b.desc.localeCompare(a.desc,"pt-BR");
-    return 0;
-  };
-
+  /** Limpa filtros + sort + busca + paginação. Mantém saved view selecionada. */
   const clearAll = () => {
-    setSearchInput(""); setFilterType("todos"); setFilterCat("todas");
-    setFilterMethod("todos");
-    setPeriod(TRANSACTIONS_DEFAULT_PERIOD);
-    setCustomFrom("");
-    setCustomTo("");
-    setSortBy("date-desc");
-    setCustomFrom(""); setCustomTo(""); setVisible(PAGE_SIZE);
+    setSearchInput("");
+    filter.clearAll();
+    setVisible(PAGE_SIZE);
   };
 
-  const activeChips = [
-    period !== TRANSACTIONS_DEFAULT_PERIOD && { key:"period",  label: period==="custom" ? `${customFrom||"?"} → ${customTo||"?"}` : PERIOD_LABELS[period], onRemove:()=>{ setPeriod(TRANSACTIONS_DEFAULT_PERIOD); setCustomFrom(""); setCustomTo(""); } },
-    filterType!=="todos"  && { key:"type",    label: filterType==="receita"?"↑ Receitas":filterType==="estorno"?"↺ Estornos":"↓ Despesas",            onRemove:()=>setFilterType("todos") },
-    filterCat!=="todas"   && { key:"cat",     label: filterCatLabel,                                               onRemove:()=>setFilterCat("todas") },
-    filterMethod!=="todos"&& { key:"method",  label: filterMethod,                                                 onRemove:()=>setFilterMethod("todos") },
-    sortBy!=="date-desc"  && { key:"sort",    label: "↕ "+SORT_LABELS[sortBy].split("(")[0].trim(),               onRemove:()=>setSortBy("date-desc") },
-    debouncedSearch && { key:"search", label: `"${debouncedSearch}"`, onRemove: () => setSearchInput("") },
-  ].filter(Boolean);
-
-  // ── Filter + sort ─────────────────────────────────────────────────────────
+  // ── Filter + sort (modo mock — em modo live a API faz tudo) ──────────────
   const filtered = useMemo(() => {
     if (shouldUseRealData) return txList;
 
-    return txList.filter(t => {
+    const matches = txList.filter((t) => {
       if (!periodFilter(t)) return false;
-      if (filterType === "receita"  && (t.type !== "income" || t.val < 0)) return false;
-      if (filterType === "despesa"  && (t.type !== "expense" || t.val > 0)) return false;
-      if (filterType === "estorno"  && t.type !== "refund") return false;
-      if (filterCat   !== "todas"   && t.cat !== filterCat) return false;
-      if (filterMethod!== "todos"   && t.method !== filterMethod) return false;
-      if (debouncedSearch && ![t.desc, t.cat, ...(t.tags||[])].some(s => s.toLowerCase().includes(debouncedSearch.toLowerCase()))) return false;
+      if (filter.type === "receita" && (t.type !== "income" || t.val < 0)) return false;
+      if (filter.type === "despesa" && (t.type !== "expense" || t.val > 0)) return false;
+      if (filter.cats.length > 0 && !filter.cats.includes(t.cat)) return false;
+      if (filter.tags.length > 0 && !(t.tags || []).some((tg) => filter.tags.includes(tg))) return false;
+      if (filter.rec === "yes" && !t.rec) return false;
+      if (filter.rec === "no" && t.rec) return false;
+      if (debouncedSearch) {
+        const needle = debouncedSearch.toLowerCase();
+        const haystack = [t.desc, t.cat, ...(t.tags || [])];
+        if (!haystack.some((s) => String(s).toLowerCase().includes(needle))) return false;
+      }
       return true;
-    }).sort(sortFn);
-  }, [shouldUseRealData, txList, debouncedSearch, filterType, filterCat, filterMethod, period, sortBy, customFrom, customTo]);
+    });
+    return filter.sortItems(matches);
+  }, [
+    shouldUseRealData,
+    txList,
+    debouncedSearch,
+    filter.type,
+    filter.cats,
+    filter.tags,
+    filter.rec,
+    filter.period,
+    filter.customFrom,
+    filter.customTo,
+    filter.sort,
+  ]);
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
   const canUseRemoteSummary = shouldUseRealData;
@@ -433,26 +471,64 @@ function TransacoesPageBody({
   }, [hasMore, isMobile, tryLoadMore]);
 
   const listFiltersActive =
-    searchInput.trim() !== "" ||
-    filterType !== "todos" ||
-    filterCat !== "todas" ||
-    filterMethod !== "todos" ||
-    period !== TRANSACTIONS_DEFAULT_PERIOD ||
-    sortBy !== "date-desc" ||
-    (period === "custom" && (Boolean(customFrom) || Boolean(customTo)));
+    searchInput.trim() !== "" || filter.hasAnyActive;
+
+  /** Snapshot do estado atual para alimentar saved views. */
+  const currentSnapshot = useMemo(
+    () => ({ ...filter.snapshot, searchInput, debouncedSearch }),
+    [filter.snapshot, searchInput, debouncedSearch],
+  );
+
+  /** Saved views adaptadas para a `<TransactionsFilterBar>`. */
+  const savedViewsProp = useMemo(
+    () => ({
+      items: savedViewsApi.views.map((v) => ({
+        id: v.id,
+        label: v.label,
+        icon: v.icon,
+        color: v.color,
+        hint: describeView(v, countActiveFiltersInSnapshot(v.filters)),
+      })),
+      active: savedViewActive,
+      onActivate: (id) => {
+        if (!id) {
+          setSavedViewActive(null);
+          return;
+        }
+        const view = savedViewsApi.views.find((v) => v.id === id);
+        if (!view) return;
+        setSavedViewActive(id);
+        filter.applySnapshot(view.filters);
+        setVisible(PAGE_SIZE);
+      },
+      onCreate: ({ name, icon, color }) => {
+        const view = savedViewsApi.createView({
+          name,
+          icon,
+          color,
+          filters: currentSnapshot,
+        });
+        if (view) setSavedViewActive(view.id);
+      },
+      onDelete: (id) => {
+        savedViewsApi.removeView(id);
+        if (savedViewActive === id) setSavedViewActive(null);
+      },
+    }),
+    [savedViewsApi, savedViewActive, currentSnapshot, filter],
+  );
 
   // ── CSV export ────────────────────────────────────────────────────────────
   const exportCSV = () => {
     const header = "Data,Descrição,Categoria,Método,Valor,Status,Tags";
-    if (shouldUseRealData && organizationId && !debouncedSearch && filterCat === "todas") {
+    if (shouldUseRealData && organizationId && !debouncedSearch && filter.cats.length === 0) {
       downloadTransactionsCsvForUi(
         organizationId,
-        buildTransactionsCsvOptions({
-          filterType,
-          filterMethod,
-          period,
-          customFrom,
-          customTo,
+        filtersToCsvOptions({
+          type: filter.type,
+          period: filter.period,
+          customFrom: filter.customFrom,
+          customTo: filter.customTo,
         }),
       ).catch(() => {});
       return;
@@ -809,56 +885,7 @@ function TransacoesPageBody({
   };
 
 
-  // ── Filter bar (advanced: tipo, método, categoria) ───────────────────────
-  const FilterBar = () => (
-    <div style={{ display:"flex", flexDirection:"column", gap:10,
-      background:T.surface, border:`1px solid ${T.border}`, borderRadius:12, padding:"14px 16px",
-      animation:"fadeIn 0.15s ease" }}>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-        <div>
-          <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase",
-            letterSpacing:"0.07em", marginBottom:6 }}>Tipo</div>
-          <div style={{ display:"flex", gap:5 }}>
-            {[["todos","Todos"],["receita","↑ Receita"],["despesa","↓ Despesa"],["estorno","↺ Estornos"]].map(([v,l])=>(
-              <button key={v} onClick={()=>{setFilterType(v);setVisible(PAGE_SIZE);}}
-                style={{ ...G, flex:1, padding:"6px 0", borderRadius:8,
-                  border:`1px solid ${filterType===v?T.ink:T.border}`,
-                  background:filterType===v?T.ink:"none",
-                  color:filterType===v?"#fff":T.inkMid,
-                  fontSize:11, fontWeight:700, cursor:"pointer" }}>{l}</button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase",
-            letterSpacing:"0.07em", marginBottom:6 }}>Método</div>
-          <select value={filterMethod} onChange={e=>{setFilterMethod(e.target.value);setVisible(PAGE_SIZE);}}
-            style={{ ...G, width:"100%", padding:"7px 10px", borderRadius:8,
-              border:`1px solid ${T.border}`, background:T.surface,
-              fontSize:12, color:T.ink, cursor:"pointer", outline:"none" }}>
-            <option value="todos">Todos</option>
-            {ALL_METHODS.map(m=><option key={m} value={m}>{m}</option>)}
-          </select>
-        </div>
-      </div>
-      <div>
-        <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase",
-          letterSpacing:"0.07em", marginBottom:6 }}>Categoria</div>
-        <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
-          {[{ value: "todas", label: "Todas" }, ...ALL_CAT_CHIPS].map((row) => (
-            <button key={row.value} onClick={()=>{setFilterCat(row.value);setVisible(PAGE_SIZE);}}
-              style={{ ...G, padding:"4px 10px", borderRadius:99,
-                border:`1px solid ${filterCat===row.value?(row.value==="todas"?T.ink:catColorForChip(row)):T.border}`,
-                background:filterCat===row.value?(row.value==="todas"?T.ink:catBgForChip(row)):"none",
-                color:filterCat===row.value?(row.value==="todas"?"#fff":catColorForChip(row)):T.inkMid,
-                fontSize:11, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" }}>
-              {row.label}
-            </button>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+  // ── Filter UI: extraído para `<TransactionsFilterBar>` (Variação C) ──────
 
   const listContent = (
     <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
@@ -1022,151 +1049,51 @@ function TransacoesPageBody({
         </button>
       </div>
 
-      {/* ── Row 2: Search + filter buttons ─────────────────────────── */}
-      <div style={{ display:"flex", gap:8 }}>
-
-        {/* Search */}
-        <div style={{ flex:1, display:"flex", alignItems:"center", gap:8,
-          background:T.surface, border:`1px solid ${T.border}`, borderRadius:10, padding:"9px 14px" }}>
-          <Search size={14} color={T.inkMid}/>
-          <input value={searchInput} onChange={e=>{setSearchInput(e.target.value);setVisible(PAGE_SIZE);}}
-            placeholder="Buscar por descrição, categoria ou tag…"
-            style={{ ...G, flex:1, minWidth:0, border:"none", outline:"none",
-              background:"transparent", fontSize:13, color:T.ink }}/>
-          {searchInput && <button onClick={()=>setSearchInput("")} style={{ background:"none", border:"none",
-            cursor:"pointer", padding:2, display:"flex" }}><X size={12} color={T.inkLight}/></button>}
-        </div>
-
-        {isMobile ? (
-          /* ── MOBILE: single "Filtros" button → bottom sheet ── */
+      {/* ── Row 2 (mobile): Search compacto + botão Filtros que abre o bottom sheet ─ */}
+      {isMobile && (
+        <div style={{ display:"flex", gap:8 }}>
+          <div style={{ flex:1, display:"flex", alignItems:"center", gap:8,
+            background:T.surface, border:`1px solid ${T.border}`, borderRadius:10, padding:"9px 14px" }}>
+            <Search size={14} color={T.inkMid}/>
+            <input value={searchInput} onChange={e=>{setSearchInput(e.target.value);setVisible(PAGE_SIZE);}}
+              placeholder="Buscar por descrição, categoria ou tag…"
+              style={{ ...G, flex:1, minWidth:0, border:"none", outline:"none",
+                background:"transparent", fontSize:13, color:T.ink }}/>
+            {searchInput && <button onClick={()=>setSearchInput("")} style={{ background:"none", border:"none",
+              cursor:"pointer", padding:2, display:"flex" }}><X size={12} color={T.inkLight}/></button>}
+          </div>
           <button onClick={()=>{ setFiltersOpen(true); setSnapFull(false); }}
             style={{ ...G, display:"flex", alignItems:"center", gap:6, padding:"9px 13px",
-              background: (activeChips.length > 0) ? T.ink : T.surface,
-              color:       (activeChips.length > 0) ? "#fff" : T.inkMid,
-              border:`1px solid ${activeChips.length > 0 ? T.ink : T.border}`,
-              borderRadius:10, fontSize:12, fontWeight:700, cursor:"pointer", flexShrink:0 }}>
+              background: filter.hasAnyActive ? T.ink : T.surface,
+              color:       filter.hasAnyActive ? "#fff" : T.inkMid,
+              border:`1px solid ${filter.hasAnyActive ? T.ink : T.border}`,
+              borderRadius:10, fontSize:12, fontWeight:700, cursor:"pointer", flexShrink:0 }}
+            aria-label="Abrir filtros">
             <SlidersHorizontal size={14}/>
-            {activeChips.length > 0 && (
-              <span style={{ background:"#fff", color:T.ink, borderRadius:"50%",
-                width:18, height:18, fontSize:11, fontWeight:800, display:"flex",
-                alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                {activeChips.length}
-              </span>
-            )}
+            Filtros
           </button>
-        ) : (
-          /* ── DESKTOP: individual dropdowns ── */
-          <>
-            {/* Period picker */}
-            <div style={{ position:"relative", flexShrink:0 }}>
-              <button onClick={()=>{setPeriodOpen(o=>!o);setSortOpen(false);setFiltersOpen(false);}}
-                style={{ ...G, display:"flex", alignItems:"center", gap:6, padding:"9px 13px",
-                  background: period !== TRANSACTIONS_DEFAULT_PERIOD ? T.ink : T.surface,
-                  color:       period !== TRANSACTIONS_DEFAULT_PERIOD ? "#fff"  : T.inkMid,
-                  border:`1px solid ${period !== TRANSACTIONS_DEFAULT_PERIOD ? T.ink : T.border}`,
-                  borderRadius:10, fontSize:12, fontWeight:700, cursor:"pointer",
-                  whiteSpace:"nowrap", transition:"all 0.15s" }}>
-                <Calendar size={13}/>
-                {period==="custom" && customFrom
-                  ? `${new Date(customFrom+"T00:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"short"})}${customTo?" → "+new Date(customTo+"T00:00:00").toLocaleDateString("pt-BR",{day:"2-digit",month:"short"}):" →…"}`
-                  : PERIOD_LABELS[period] || "Período"}
-              </button>
-              {periodOpen && (
-                <>
-                <div onClick={()=>setPeriodOpen(false)} style={{ position:"fixed", inset:0, zIndex:199 }}/>
-                <div style={{ position:"absolute", top:"calc(100% + 8px)", right:0, zIndex:200,
-                  background:T.surface, border:`1px solid ${T.border}`, borderRadius:16,
-                  boxShadow: FINCLA_CALENDAR_SHADOW,
-                  minWidth:300, overflow:"hidden", animation:"fadeIn 0.14s ease" }}>
-                  <div style={{ padding:"14px 14px 10px", borderBottom:`1px solid ${T.border}` }}>
-                    <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid,
-                      textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>Intervalo rápido</div>
-                    <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
-                      {[["tudo","Todo período"],["hoje","Hoje"],["semana","Esta semana"],
-                        ["mes","Este mês"],["mes-ant","Mês anterior"],["3m","Últimos 3m"],["ano","Este ano"]
-                      ].map(([key,label])=>(
-                        <button key={key}
-                          onClick={()=>{ setPeriod(key); setCustomFrom(""); setCustomTo(""); setVisible(PAGE_SIZE); setPeriodOpen(false); }}
-                          style={{ ...G, display:"flex", alignItems:"center", gap:5, padding:"5px 11px", borderRadius:99, fontSize:12, fontWeight:600,
-                            cursor:"pointer", transition:"all 0.13s",
-                            border:`1.5px solid ${period===key ? T.ink : T.border}`,
-                            background: period===key ? T.ink : "none",
-                            color: period===key ? "#fff" : T.inkMid }}>
-                          {period===key && <Check size={10} color="#fff"/>}
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <PeriodCalendar
-                    period={period} setPeriod={setPeriod}
-                    customFrom={customFrom} setCustomFrom={setCustomFrom}
-                    customTo={customTo}     setCustomTo={setCustomTo}
-                    setVisible={setVisible} PAGE_SIZE={PAGE_SIZE}
-                    onClose={()=>setPeriodOpen(false)}
-                  />
-                </div>
-                </>
-              )}
-            </div>
+        </div>
+      )}
 
-            {/* Sort */}
-            <div style={{ position:"relative", flexShrink:0 }}>
-              <button onClick={()=>{setSortOpen(o=>!o);setPeriodOpen(false);setFiltersOpen(false);}}
-                style={{ ...G, display:"flex", alignItems:"center", gap:6, padding:"9px 13px",
-                  background: sortBy!=="date-desc" ? T.ink : T.surface,
-                  color:       sortBy!=="date-desc" ? "#fff"  : T.inkMid,
-                  border:`1px solid ${sortBy!=="date-desc" ? T.ink : T.border}`,
-                  borderRadius:10, fontSize:12, fontWeight:700, cursor:"pointer",
-                  whiteSpace:"nowrap", transition:"all 0.15s" }}>
-                <ArrowUpDown size={13}/>
-                {sortBy==="date-desc" ? "Ordenar" : SORT_LABELS[sortBy].split("(")[0].trim()}
-              </button>
-              {sortOpen && (
-                <>
-                <div onClick={()=>setSortOpen(false)} style={{ position:"fixed", inset:0, zIndex:199 }}/>
-                <div style={{ position:"absolute", top:"calc(100% + 6px)", right:0, zIndex:200,
-                  background:T.surface, border:`1px solid ${T.border}`, borderRadius:14,
-                  boxShadow:T.lg, minWidth:220, overflow:"hidden", animation:"fadeIn 0.12s ease" }}>
-                  <div style={{ padding:"10px 12px 4px", ...G, fontSize:10, fontWeight:700,
-                    color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.07em" }}>Ordenação</div>
-                  {Object.entries(SORT_LABELS).map(([key,label])=>(
-                    <button key={key} onClick={()=>{ setSortBy(key); setSortOpen(false); setVisible(PAGE_SIZE); }}
-                      style={{ ...G, display:"flex", alignItems:"center", justifyContent:"space-between",
-                        width:"100%", textAlign:"left", padding:"9px 14px",
-                        background:sortBy===key?`${T.ink}08`:"none", border:"none",
-                        color:sortBy===key?T.ink:T.inkMid, fontWeight:sortBy===key?700:400,
-                        fontSize:13, cursor:"pointer",
-                        borderLeft:sortBy===key?`3px solid ${T.ink}`:"3px solid transparent" }}>
-                      <span>{label}</span>
-                      {sortBy===key && <Check size={13} color={T.ink}/>}
-                    </button>
-                  ))}
-                </div>
-                </>
-              )}
-            </div>
-
-            {/* Advanced filters */}
-            <button onClick={()=>{setFiltersOpen(o=>!o);setPeriodOpen(false);setSortOpen(false);}}
-              style={{ ...G, display:"flex", alignItems:"center", gap:6, padding:"9px 13px",
-                background: [filterType!=="todos",filterCat!=="todas",filterMethod!=="todos"].some(Boolean) ? T.ink : T.surface,
-                color: [filterType!=="todos",filterCat!=="todas",filterMethod!=="todos"].some(Boolean) ? "#fff" : T.inkMid,
-                border:`1px solid ${[filterType!=="todos",filterCat!=="todas",filterMethod!=="todos"].some(Boolean)?T.ink:T.border}`,
-                borderRadius:10, fontSize:12, fontWeight:700, cursor:"pointer", flexShrink:0, transition:"all 0.15s" }}>
-              <SlidersHorizontal size={13}/>
-              Filtros
-              {[filterType!=="todos",filterCat!=="todas",filterMethod!=="todos"].filter(Boolean).length > 0 && (
-                <span style={{ background:"#fff", color:T.ink, borderRadius:"50%",
-                  width:16, height:16, fontSize:10, fontWeight:800, display:"flex",
-                  alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-                  {[filterType!=="todos",filterCat!=="todas",filterMethod!=="todos"].filter(Boolean).length}
-                </span>
-              )}
-            </button>
-          </>
-        )}
-      </div>
+      {/* ── Row 2 (desktop): TransactionsFilterBar — Variação C completa ─────── */}
+      {!isMobile && (
+        <TransactionsFilterBar
+          filter={filter}
+          categories={categoriesForFilter}
+          cards={cardsForFilter}
+          allTags={allTagsForFilter}
+          savedViews={savedViewsProp}
+          searchInput={searchInput}
+          setSearchInput={(v) => {
+            setSearchInput(v);
+            setVisible(PAGE_SIZE);
+          }}
+          onClearAll={() => {
+            setSearchInput("");
+            setVisible(PAGE_SIZE);
+          }}
+        />
+      )}
 
       {/* ── MOBILE FILTER BOTTOM SHEET ───────────────────────────────── */}
       {isMobile && (filtersOpen || sheetClosing) && (
@@ -1211,7 +1138,7 @@ function TransacoesPageBody({
               padding:"4px 20px 10px", borderBottom:`1px solid ${T.border}`, flexShrink:0 }}>
               <div style={{ ...G, fontSize:16, fontWeight:800, color:T.ink }}>Filtros</div>
               <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-                {activeChips.length > 0 && (
+                {filter.hasAnyActive && (
                   <button onClick={clearAll}
                     style={{ ...G, background:T.redLight, border:"none", cursor:"pointer",
                       fontSize:12, color:T.red, fontWeight:700, padding:"6px 12px",
@@ -1220,150 +1147,28 @@ function TransacoesPageBody({
                   </button>
                 )}
                 <button onClick={onSheetClose}
+                  aria-label="Fechar filtros"
                   style={{ background:"none", border:"none", cursor:"pointer", padding:6,
                     borderRadius:8, display:"flex" }}>
                   <X size={18} color={T.inkMid}/>
                 </button>
               </div>
             </div>
-            {/* Scrollable content */}
-            <div style={{ overflowY:"auto", flex:1, padding:"0 0 16px",
+            {/* Scrollable content — Variação C inteira dentro do sheet */}
+            <div style={{ overflowY:"auto", flex:1, padding:"16px 16px 20px",
               overscrollBehavior:"contain" }}>
-
-              {/* ── PERÍODO ── */}
-              <div style={{ padding:"16px 20px 0" }}>
-                <div style={{ ...G, fontSize:11, fontWeight:700, color:T.inkMid,
-                  textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:12 }}>Período</div>
-                <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:12 }}>
-                  {[["tudo","Todo período"],["hoje","Hoje"],["semana","Esta semana"],
-                    ["mes","Este mês"],["mes-ant","Mês anterior"],["3m","Últimos 3m"],["ano","Este ano"]
-                  ].map(([key,label])=>(
-                    <button key={key}
-                      onClick={()=>{ setPeriod(key); setCustomFrom(""); setCustomTo(""); setVisible(PAGE_SIZE); }}
-                      style={{ ...G, display:"flex", alignItems:"center", gap:5,
-                        padding:"8px 14px", borderRadius:99, fontSize:13, fontWeight:600,
-                        cursor:"pointer", transition:"all 0.13s",
-                        border:`1.5px solid ${period===key ? T.ink : T.border}`,
-                        background: period===key ? T.ink : T.surface,
-                        color: period===key ? "#fff" : T.inkMid }}>
-                      {period===key && <Check size={11} color="#fff"/>}
-                      {label}
-                    </button>
-                  ))}
-                  <button
-                    onClick={()=>setPeriod("custom")}
-                    style={{ ...G, display:"flex", alignItems:"center", gap:5,
-                      padding:"8px 14px", borderRadius:99, fontSize:13, fontWeight:600,
-                      cursor:"pointer", transition:"all 0.13s",
-                      border:`1.5px solid ${period==="custom" ? T.ink : T.border}`,
-                      background: period==="custom" ? T.ink : T.surface,
-                      color: period==="custom" ? "#fff" : T.inkMid }}>
-                    {period==="custom" && <Check size={11} color="#fff"/>}
-                    Personalizado
-                  </button>
-                </div>
-                {/* Custom date pickers — inline when custom selected */}
-                {period==="custom" && (
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12,
-                    padding:"14px", background:T.bg, borderRadius:12, border:`1px solid ${T.border}` }}>
-                    <div>
-                      <div style={{ ...G, fontSize:11, color:T.inkMid, fontWeight:600, marginBottom:6 }}>De</div>
-                      <input type="date" value={customFrom}
-                        onChange={e=>{setCustomFrom(e.target.value);setVisible(PAGE_SIZE);}}
-                        style={{ ...G, width:"100%", padding:"10px 12px", borderRadius:9,
-                          border:`1px solid ${T.border}`, fontSize:13, color:T.ink,
-                          background:T.surface, outline:"none" }}/>
-                    </div>
-                    <div>
-                      <div style={{ ...G, fontSize:11, color:T.inkMid, fontWeight:600, marginBottom:6 }}>Até</div>
-                      <input type="date" value={customTo}
-                        onChange={e=>{setCustomTo(e.target.value);setVisible(PAGE_SIZE);}}
-                        style={{ ...G, width:"100%", padding:"10px 12px", borderRadius:9,
-                          border:`1px solid ${T.border}`, fontSize:13, color:T.ink,
-                          background:T.surface, outline:"none" }}/>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* ── ORDENAÇÃO ── */}
-              <div style={{ padding:"16px 20px 0" }}>
-                <div style={{ ...G, fontSize:11, fontWeight:700, color:T.inkMid,
-                  textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:12 }}>Ordenação</div>
-                <div style={{ background:T.surface, borderRadius:12,
-                  border:`1px solid ${T.border}`, overflow:"hidden" }}>
-                  {Object.entries(SORT_LABELS).map(([key,label],i)=>(
-                    <button key={key}
-                      onClick={()=>{ setSortBy(key); setVisible(PAGE_SIZE); }}
-                      style={{ ...G, display:"flex", alignItems:"center", justifyContent:"space-between",
-                        width:"100%", padding:"14px 16px", border:"none",
-                        borderTop: i>0 ? `1px solid ${T.border}` : "none",
-                        background: sortBy===key ? `${T.ink}06` : T.surface,
-                        color: sortBy===key ? T.ink : T.inkMid,
-                        fontWeight: sortBy===key ? 700 : 400,
-                        fontSize:14, cursor:"pointer",
-                        borderLeft: sortBy===key ? `3px solid ${T.ink}` : "3px solid transparent" }}>
-                      {label}
-                      {sortBy===key && <Check size={15} color={T.ink}/>}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* ── TIPO ── */}
-              <div style={{ padding:"16px 20px 0" }}>
-                <div style={{ ...G, fontSize:11, fontWeight:700, color:T.inkMid,
-                  textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:12 }}>Tipo</div>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
-                  {[["todos","Todos"],["receita","↑ Receita"],["despesa","↓ Despesa"],["estorno","↺ Estornos"]].map(([v,l])=>(
-                    <button key={v} onClick={()=>{setFilterType(v);setVisible(PAGE_SIZE);}}
-                      style={{ ...G, padding:"12px 0", borderRadius:10,
-                        border:`1.5px solid ${filterType===v ? T.ink : T.border}`,
-                        background: filterType===v ? T.ink : T.surface,
-                        color: filterType===v ? "#fff" : T.inkMid,
-                        fontSize:13, fontWeight:700, cursor:"pointer" }}>{l}</button>
-                  ))}
-                </div>
-              </div>
-
-              {/* ── MÉTODO ── */}
-              <div style={{ padding:"16px 20px 0" }}>
-                <div style={{ ...G, fontSize:11, fontWeight:700, color:T.inkMid,
-                  textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:12 }}>Método</div>
-                <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
-                  {["todos",...ALL_METHODS].map(m=>(
-                    <button key={m}
-                      onClick={()=>{setFilterMethod(m);setVisible(PAGE_SIZE);}}
-                      style={{ ...G, padding:"10px 16px", borderRadius:99, fontSize:13, fontWeight:600,
-                        cursor:"pointer",
-                        border:`1.5px solid ${filterMethod===m ? T.ink : T.border}`,
-                        background: filterMethod===m ? T.ink : T.surface,
-                        color: filterMethod===m ? "#fff" : T.inkMid }}>
-                      {m==="todos" ? "Todos" : m}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* ── CATEGORIA ── */}
-              <div style={{ padding:"16px 20px 0" }}>
-                <div style={{ ...G, fontSize:11, fontWeight:700, color:T.inkMid,
-                  textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:12 }}>Categoria</div>
-                <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
-                  {[{ value: "todas", label: "Todas" }, ...ALL_CAT_CHIPS].map((row)=>(
-                    <button key={row.value}
-                      onClick={()=>{setFilterCat(row.value);setVisible(PAGE_SIZE);}}
-                      style={{ ...G, padding:"10px 16px", borderRadius:99, fontSize:13, fontWeight:600,
-                        cursor:"pointer",
-                        border:`1.5px solid ${filterCat===row.value ? (row.value==="todas" ? T.ink : catColorForChip(row)) : T.border}`,
-                        background: filterCat===row.value ? (row.value==="todas" ? T.ink : catBgForChip(row)) : T.surface,
-                        color: filterCat===row.value ? (row.value==="todas" ? "#fff" : catColorForChip(row)) : T.inkMid }}>
-                      {row.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
+              <TransactionsFilterBar
+                filter={filter}
+                categories={categoriesForFilter}
+                cards={cardsForFilter}
+                allTags={allTagsForFilter}
+                savedViews={savedViewsProp}
+                searchInput={searchInput}
+                setSearchInput={(v) => {
+                  setSearchInput(v);
+                  setVisible(PAGE_SIZE);
+                }}
+              />
             </div>
             {/* Footer CTA — safe area aware */}
             <div style={{ padding:"12px 20px", paddingBottom:"calc(12px + env(safe-area-inset-bottom, 0px))",
@@ -1377,35 +1182,6 @@ function TransacoesPageBody({
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-            {/* ── Row 3: Advanced filter panel (desktop only) ────────── */}
-      {!isMobile && filtersOpen && <FilterBar/>}
-
-      {/* ── Row 4: Active filter chips ───────────────────────────── */}
-      {activeChips.length > 0 && (
-        <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap" }}>
-          <span style={{ ...G, fontSize:11, color:T.inkMid, fontWeight:600, flexShrink:0 }}>Filtros:</span>
-          {activeChips.map(chip => (
-            <span key={chip.key} style={{ display:"flex", alignItems:"center", gap:5,
-              background:T.ink, color:"#fff", borderRadius:99, padding:"4px 10px 4px 12px",
-              fontSize:12, fontWeight:600, animation:"fadeIn 0.15s ease" }}>
-              <span style={{ ...G }}>{chip.label}</span>
-              <button onClick={chip.onRemove}
-                style={{ background:"rgba(255,255,255,0.25)", border:"none", cursor:"pointer",
-                  borderRadius:"50%", width:16, height:16, display:"flex",
-                  alignItems:"center", justifyContent:"center", padding:0, flexShrink:0 }}>
-                <X size={9} color="#fff"/>
-              </button>
-            </span>
-          ))}
-          <button onClick={clearAll}
-            style={{ ...G, background:"none", border:"none", cursor:"pointer",
-              fontSize:11, color:T.red, fontWeight:700, padding:"4px 8px",
-              borderRadius:8, flexShrink:0 }}>
-            Limpar tudo
-          </button>
         </div>
       )}
 

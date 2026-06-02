@@ -8,6 +8,10 @@ export const ANIM_CSS = `
     from { opacity:0; }
     to   { opacity:1; }
   }
+  @keyframes fadeInDown {
+    from { opacity:0; transform:translateY(-6px); }
+    to   { opacity:1; transform:translateY(0);    }
+  }
   @keyframes slideInRight {
     from { opacity:0; transform:translateX(18px); }
     to   { opacity:1; transform:translateX(0);    }
