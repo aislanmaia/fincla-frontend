@@ -172,7 +172,7 @@ function aggregateExpenseCategoriesFromTransactions(rawTx) {
   return Array.from(map.values());
 }
 
-function buildDashboardCategoryRows(
+export function buildDashboardCategoryRows(
   rawTx,
   rangeStartYmd,
   rangeEndYmd,
@@ -198,6 +198,17 @@ function buildDashboardCategoryRows(
       c.tag_color,
     ]),
   );
+  const apiMetaByName = new Map(
+    apiList.map((c) => {
+      const normalizedName = normalizeTagNameKey(
+        categoryLabelPtForTag({
+          name: c.tag_name,
+          icon_key: c.tag_icon_key ?? null,
+        }),
+      );
+      return [normalizedName, c];
+    }),
+  );
 
   const sourceRows =
     fromTx.length > 0
@@ -215,24 +226,26 @@ function buildDashboardCategoryRows(
     .sort((a, b) => b.total - a.total)
     .slice(0, DASHBOARD_CATEGORY_CARD_LIMIT)
     .map((row) => {
+      const rowNameKey = normalizeTagNameKey(
+        categoryLabelPtForTag({
+          name: row.tagName,
+          icon_key: row.icon_key ?? null,
+        }),
+      );
+      const apiMeta = apiMetaByName.get(rowNameKey);
+      const tagId = row.tagId || apiMeta?.tag_id || undefined;
+      const iconKey = row.icon_key || apiMeta?.tag_icon_key || null;
       const color =
         row.color ||
-        (row.tagId ? apiColorByTagId.get(String(row.tagId)) : null) ||
-        apiColorByName.get(
-          normalizeTagNameKey(
-            categoryLabelPtForTag({
-              name: row.tagName,
-              icon_key: row.icon_key,
-            }),
-          ),
-        ) ||
+        (tagId ? apiColorByTagId.get(String(tagId)) : null) ||
+        apiColorByName.get(rowNameKey) ||
         resolveCategoryColorForTag(row);
 
       return mapCategory(
         {
-          tag_id: row.tagId || undefined,
+          tag_id: tagId,
           tag_name: row.tagName,
-          tag_icon_key: row.icon_key,
+          tag_icon_key: iconKey,
           total: row.total,
           tag_color: color,
         },
