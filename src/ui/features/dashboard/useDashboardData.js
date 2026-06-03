@@ -216,14 +216,9 @@ function buildDashboardCategoryRows(
     });
 }
 
-function mapCategory(category, prevTotalByTagId) {
-  const prev =
-    category.tag_id
-      ? prevTotalByTagId.get(category.tag_id)
-      : undefined;
-  const fallbackAvg = Math.max(Math.round(category.total * 0.82), 1);
-  const avg =
-    typeof prev === "number" && prev > 0 ? prev : fallbackAvg;
+export function mapCategory(category, prevTotalByTagId) {
+  const prev = category.tag_id ? prevTotalByTagId.get(category.tag_id) : undefined;
+  const avg = typeof prev === "number" && prev > 0 ? prev : null;
 
   return {
     tagId: category.tag_id,

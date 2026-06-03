@@ -137,6 +137,7 @@ export function DashboardPage({
   });
   const recentTransactions = dashboardData.transactions;
   const categoryData = dashboardData.categories;
+  const hasComparison = categoryData.some((c) => typeof c.avg === "number" && c.avg > 0);
   const rhythmData = dashboardData.rhythmChart;
   const upcomingDebits = dashboardData.upcomingDebits;
   const {
@@ -1254,14 +1255,16 @@ export function DashboardPage({
               <div style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink }}>Gastos por Categoria</div>
               <Badge color={T.inkMid} bg={T.grayLight}>{periodBadge}</Badge>
             </div>
-            <div style={{ display: "flex", gap: 12, marginBottom: 12, marginTop: 4, flexShrink: 0 }}>
-              {[["#9CA3AF", "atual"], ["#9CA3AF", "referência"], ["#FCA5A5", "acima"]].map(([c, l]) => (
-                <div key={l} style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                  <div style={{ width: 10, height: l === "referência" ? 2 : 5, background: c, borderRadius: l === "referência" ? 1 : 2 }} />
-                  <span style={{ ...G, fontSize: 10, color: T.inkLight }}>{l}</span>
-                </div>
-              ))}
-            </div>
+            {hasComparison && (
+              <div style={{ display: "flex", gap: 12, marginBottom: 12, marginTop: 4, flexShrink: 0 }}>
+                {[["#9CA3AF", "atual"], ["#9CA3AF", "referência"], ["#FCA5A5", "acima"]].map(([c, l]) => (
+                  <div key={l} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <div style={{ width: 10, height: l === "referência" ? 2 : 5, background: c, borderRadius: l === "referência" ? 1 : 2 }} />
+                    <span style={{ ...G, fontSize: 10, color: T.inkLight }}>{l}</span>
+                  </div>
+                ))}
+              </div>
+            )}
             {categoryData.length === 0 ? (
               <div style={{ flex: isMobile ? undefined : 1, display: "flex", flexDirection: "column", justifyContent: "center", minHeight: isMobile ? undefined : 0 }}>
                 <CardEmptyWithCta
@@ -1274,34 +1277,35 @@ export function DashboardPage({
                 />
               </div>
             ) : (() => {
-              const maxVal = Math.max(...categoryData.map((c) => Math.max(c.value, c.avg)));
+              const maxVal = Math.max(...categoryData.map((c) => Math.max(c.value, c.avg ?? 0)));
               return (
                 <div style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingRight: 2 }}>
                   {categoryData.map((c) => {
-                const barPct = (c.value / maxVal) * 100;
-                const avgPct = (c.avg / maxVal) * 100;
-                const isOver = c.value > c.avg;
-                const safePct = Math.min(barPct, avgPct);
-                const overPct = isOver ? barPct - avgPct : 0;
-                return (
-                  <div key={c.tagId || c.name} style={{ marginBottom: 9 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <div style={{ width: 7, height: 7, borderRadius: 2, background: c.color, flexShrink: 0 }} />
-                        <span style={{ ...G, fontSize: 12, fontWeight: 500, color: T.ink }}>{c.name}</span>
+                    const hasRowComparison = typeof c.avg === "number" && c.avg > 0;
+                    const barPct = (c.value / maxVal) * 100;
+                    const avgPct = hasRowComparison ? (c.avg / maxVal) * 100 : 0;
+                    const isOver = hasRowComparison && c.value > c.avg;
+                    const safePct = hasRowComparison ? Math.min(barPct, avgPct) : barPct;
+                    const overPct = isOver ? barPct - avgPct : 0;
+                    return (
+                      <div key={c.tagId || c.name} style={{ marginBottom: 9 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <div style={{ width: 7, height: 7, borderRadius: 2, background: c.color, flexShrink: 0 }} />
+                            <span style={{ ...G, fontSize: 12, fontWeight: 500, color: T.ink }}>{c.name}</span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            {isOver && <span style={{ ...G, fontSize: 10, fontWeight: 700, color: T.red, background: T.redLight, borderRadius: 99, padding: "1px 5px" }}>+{Math.round((c.value / c.avg - 1) * 100)}%</span>}
+                            <span style={{ ...M_MONO, ...NUM, fontSize: 11, fontWeight: 600, color: T.ink }}>{fmtAbs(c.value)}</span>
+                          </div>
+                        </div>
+                        <div style={{ position: "relative", height: 6, background: T.grayLight, borderRadius: 99 }}>
+                          <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${safePct}%`, background: c.color, opacity: 0.55, borderRadius: 99 }} />
+                          {hasRowComparison && overPct > 0 && <div style={{ position: "absolute", left: `${avgPct}%`, top: 0, height: "100%", width: `${overPct}%`, background: T.red, opacity: 0.5, borderRadius: "0 99px 99px 0" }} />}
+                          {hasRowComparison && <div style={{ position: "absolute", top: -3, left: `${avgPct}%`, width: 2, height: 12, background: T.inkMid, borderRadius: 1, transform: "translateX(-50%)", zIndex: 2 }} />}
+                        </div>
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        {isOver && <span style={{ ...G, fontSize: 10, fontWeight: 700, color: T.red, background: T.redLight, borderRadius: 99, padding: "1px 5px" }}>+{Math.round((c.value / c.avg - 1) * 100)}%</span>}
-                        <span style={{ ...M_MONO, ...NUM, fontSize: 11, fontWeight: 600, color: T.ink }}>{fmtAbs(c.value)}</span>
-                      </div>
-                    </div>
-                    <div style={{ position: "relative", height: 6, background: T.grayLight, borderRadius: 99 }}>
-                      <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${safePct}%`, background: c.color, opacity: 0.55, borderRadius: 99 }} />
-                      {overPct > 0 && <div style={{ position: "absolute", left: `${avgPct}%`, top: 0, height: "100%", width: `${overPct}%`, background: T.red, opacity: 0.5, borderRadius: "0 99px 99px 0" }} />}
-                      <div style={{ position: "absolute", top: -3, left: `${avgPct}%`, width: 2, height: 12, background: T.inkMid, borderRadius: 1, transform: "translateX(-50%)", zIndex: 2 }} />
-                    </div>
-                  </div>
-                );
+                    );
                   })}
                 </div>
               );

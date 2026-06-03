@@ -1,46 +1,14 @@
 /** @vitest-environment jsdom */
 
 import React from "react";
-import { describe, it, expect, vi } from "vitest";
+import { beforeEach, describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { DashboardPage } from "../DashboardPage.jsx";
 
+let mockDashboardData;
+
 vi.mock("../../features/dashboard/useDashboardData.js", () => ({
-  useDashboardData: () => ({
-    isLoading: false,
-    error: "",
-    summary: {
-      total_income: 1000,
-      total_expenses: 400,
-      balance: 600,
-      total_transactions: 2,
-      recurring_in_period: {
-        total_expense: 50,
-        total_income: 0,
-        period: { start_date: "2026-04-01", end_date: "2026-04-30" },
-      },
-    },
-    transactions: [],
-    categories: [],
-    rhythmChart: [{ dia: 1, proj: 10, real: 5, dayLabel: "1" }],
-    rhythmMeta: {
-      dim: 30,
-      today: 15,
-      showTodayMarker: true,
-      refLabel: "Hoje",
-      progressSuffix: "",
-      rhythmMode: "daily",
-    },
-    upcomingDebits: [],
-    recurringSummary: { total_monthly_expense: 200 },
-    recurringInPeriod: {
-      total_expense: 50,
-      total_income: 0,
-      period: { start_date: "2026-04-01", end_date: "2026-04-30" },
-    },
-    hasRealData: true,
-    refetch: vi.fn(),
-  }),
+  useDashboardData: () => mockDashboardData,
 }));
 
 vi.mock("recharts", () => ({
@@ -55,6 +23,44 @@ vi.mock("recharts", () => ({
 }));
 
 describe("DashboardPage (RTL)", () => {
+  beforeEach(() => {
+    mockDashboardData = {
+      isLoading: false,
+      error: "",
+      summary: {
+        total_income: 1000,
+        total_expenses: 400,
+        balance: 600,
+        total_transactions: 2,
+        recurring_in_period: {
+          total_expense: 50,
+          total_income: 0,
+          period: { start_date: "2026-04-01", end_date: "2026-04-30" },
+        },
+      },
+      transactions: [],
+      categories: [],
+      rhythmChart: [{ dia: 1, proj: 10, real: 5, dayLabel: "1" }],
+      rhythmMeta: {
+        dim: 30,
+        today: 15,
+        showTodayMarker: true,
+        refLabel: "Hoje",
+        progressSuffix: "",
+        rhythmMode: "daily",
+      },
+      upcomingDebits: [],
+      recurringSummary: { total_monthly_expense: 200 },
+      recurringInPeriod: {
+        total_expense: 50,
+        total_income: 0,
+        period: { start_date: "2026-04-01", end_date: "2026-04-30" },
+      },
+      hasRealData: true,
+      refetch: vi.fn(),
+    };
+  });
+
   it("renderiza Visão Geral com KPIs quando o hook retorna resumo", () => {
     render(
       <DashboardPage
@@ -67,5 +73,34 @@ describe("DashboardPage (RTL)", () => {
     );
     expect(screen.getByText("Geral")).toBeInTheDocument();
     expect(screen.getByText(/Receitas ·/)).toBeInTheDocument();
+  });
+
+  it("não mostra comparação falsa quando o avg não existe", () => {
+    mockDashboardData = {
+      ...mockDashboardData,
+      categories: [
+        {
+          tagId: 1,
+          name: "Alimentação",
+          value: 220,
+          avg: null,
+          color: "#EF4444",
+        },
+      ],
+    };
+
+    render(
+      <DashboardPage
+        onNav={vi.fn()}
+        stateCtrl={{ mounted: true, isMobile: false }}
+        dataMode="live"
+        organizationId="org-rtl"
+        onNewTx={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Alimentação")).toBeInTheDocument();
+    expect(screen.queryByText(/\+22%/)).not.toBeInTheDocument();
+    expect(screen.queryByText("referência")).not.toBeInTheDocument();
   });
 });
