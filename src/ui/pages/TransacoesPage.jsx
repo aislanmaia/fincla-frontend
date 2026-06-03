@@ -1062,7 +1062,7 @@ function TransacoesPageBody({
       {/* ── Row 2 (mobile): Search compacto + botão Filtros que abre o bottom sheet ─ */}
       {isMobile && (
         <div style={{ display:"flex", gap:8 }}>
-          <div style={{ flex:1, display:"flex", alignItems:"center", gap:8,
+          <div style={{ flex:1, minWidth:0, display:"flex", alignItems:"center", gap:8,
             background:T.surface, border:`1px solid ${T.border}`, borderRadius:10, padding:"9px 14px" }}>
             <Search size={14} color={T.inkMid}/>
             <input value={searchInput} onChange={e=>{setSearchInput(e.target.value);setVisible(PAGE_SIZE);}}
