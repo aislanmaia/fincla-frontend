@@ -3,6 +3,7 @@ import { Hash, Pencil, Plus, Search, Tag, Trash2 } from "lucide-react";
 
 import { createTag, deleteTag, listTags, listTagTypes, updateTag as apiUpdateTag } from "../../../api/tags";
 import { handleApiError } from "../../../api/client";
+import { resolveCategoryColorForTag } from "../../data/categoryLabels.js";
 import { CardEmptyWithCta } from "../shellExtras.jsx";
 import { T } from "../../tokens";
 import { G } from "../../typography";
@@ -47,7 +48,7 @@ export function CategoriesTagsSettingsPanel({
     try {
       const resp = await listTags(organizationId, "categoria");
       const raw = resp.tags ?? [];
-      setCats(raw.map(t => ({ id: t.id, name: t.name, color: t.color ?? "#6B7280", tags: [], _tagTypeId: t.tag_type?.id ?? null })));
+      setCats(raw.map(t => ({ id: t.id, name: t.name, color: resolveCategoryColorForTag(t), tags: [], _tagTypeId: t.tag_type?.id ?? null })));
     } catch (e) {
       setCatsError(handleApiError(e));
     } finally {

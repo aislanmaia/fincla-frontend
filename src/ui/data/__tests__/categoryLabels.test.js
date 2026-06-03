@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   categoryLabelPtForTag,
+  resolveCategoryColorForTag,
   resolveCategoryIconKey,
 } from "../categoryLabels.js";
 
@@ -18,6 +19,10 @@ describe("categoryLabels", () => {
   it("fallback para name quando fora do dicionário", () => {
     expect(categoryLabelPtForTag({ name: "Custom PT", icon_key: null })).toBe("Custom PT");
   });
+
+  it("normaliza nomes PT sem acento/caixa baixa", () => {
+    expect(categoryLabelPtForTag({ name: "alimentacao", icon_key: null })).toBe("Alimentação");
+  });
 });
 
 describe("resolveCategoryIconKey", () => {
@@ -32,5 +37,19 @@ describe("resolveCategoryIconKey", () => {
   it("atalhos do mock (protótipo)", () => {
     expect(resolveCategoryIconKey(null, "Lazer")).toBe("party-popper");
     expect(resolveCategoryIconKey(null, "Outros")).toBe(null);
+  });
+});
+
+describe("resolveCategoryColorForTag", () => {
+  it("prioriza a cor explícita da API", () => {
+    expect(resolveCategoryColorForTag({ name: "Alimentação", color: "#123456" })).toBe("#123456");
+  });
+
+  it("usa a cor canônica quando a API não envia cor", () => {
+    expect(resolveCategoryColorForTag({ name: "alimentacao" })).toBe("#059669");
+  });
+
+  it("nunca cai no cinza neutro para nomes conhecidos e sem cor", () => {
+    expect(resolveCategoryColorForTag({ name: "Transporte" })).not.toBe("#6B7280");
   });
 });

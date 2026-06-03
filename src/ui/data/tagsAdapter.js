@@ -1,6 +1,9 @@
 import { handleApiError } from "../../api/client";
 import { listTags } from "../../api/tags";
-import { categoryLabelPtForTag } from "./categoryLabels.js";
+import {
+  categoryLabelPtForTag,
+  resolveCategoryColorForTag,
+} from "./categoryLabels.js";
 
 export async function listCategoryTagsForUi(organizationId) {
   return listTags(organizationId, "categoria");
@@ -9,7 +12,7 @@ export async function listCategoryTagsForUi(organizationId) {
 /**
  * Uma linha por nome de tag API (dedupe), ordenada por sort_order e nome.
  * @param {import("../../api/types").Tag[] | undefined | null} tags
- * @returns {{ id: string; apiName: string; labelPt: string; iconKey: string | null; color: string | null; sortOrder: number }[]}
+ * @returns {{ id: string; apiName: string; labelPt: string; iconKey: string | null; color: string; sortOrder: number }[]}
  */
 export function mapCategoryTagsForUi(tags) {
   const list = (tags ?? []).filter((t) => t?.name && t?.id);
@@ -32,7 +35,7 @@ export function mapCategoryTagsForUi(tags) {
       apiName: t.name,
       labelPt: categoryLabelPtForTag(t),
       iconKey: t.icon_key ?? null,
-      color: t.color ?? null,
+      color: resolveCategoryColorForTag(t),
       sortOrder: t.sort_order ?? 1e9,
     }));
 }

@@ -6,7 +6,10 @@ import {
   getTransactionsSummary,
   listRecurringTransactions,
 } from "../../data/dashboardAdapter";
-import { categoryLabelPtForTag } from "../../data/categoryLabels.js";
+import {
+  categoryLabelPtForTag,
+  resolveCategoryColorForTag,
+} from "../../data/categoryLabels.js";
 import {
   expandExpenseTxToAttributedParts,
   pickCategoryTagFromApiTransaction,
@@ -89,7 +92,7 @@ function pickCategoryName(transaction) {
 }
 
 function pickCategoryColor(category) {
-  return category.tag_color ?? "#9CA3AF";
+  return resolveCategoryColorForTag(category);
 }
 
 function pickTransactionIcon(transaction) {
@@ -124,6 +127,7 @@ function normalizeTagNameKey(name) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
     .trim();
 }
 
@@ -138,10 +142,14 @@ function aggregateExpenseCategoriesFromTransactions(rawTx) {
 
     const tag = pickCategoryTagFromApiTransaction(tx);
     const rawName = tag?.name ?? tx.category ?? "Sem categoria";
+    const normalizedName = categoryLabelPtForTag({
+      name: rawName,
+      icon_key: tag?.icon_key ?? null,
+    });
     const mapKey =
       tag?.id != null && tag.id !== ""
         ? `id:${tag.id}`
-        : `name:${normalizeTagNameKey(rawName)}`;
+        : `name:${normalizeTagNameKey(normalizedName)}`;
 
     const add = pickDisplayAmount(tx);
     const cur = map.get(mapKey);
@@ -175,10 +183,20 @@ function buildDashboardCategoryRows(
   const apiList = apiCategories ?? [];
 
   const apiColorByTagId = new Map(
-    apiList.map((c) => [c.tag_id, c.tag_color]),
+    apiList
+      .filter((c) => c.tag_id != null && c.tag_id !== "")
+      .map((c) => [String(c.tag_id), c.tag_color]),
   );
   const apiColorByName = new Map(
-    apiList.map((c) => [normalizeTagNameKey(c.tag_name), c.tag_color]),
+    apiList.map((c) => [
+      normalizeTagNameKey(
+        categoryLabelPtForTag({
+          name: c.tag_name,
+          icon_key: c.tag_icon_key ?? null,
+        }),
+      ),
+      c.tag_color,
+    ]),
   );
 
   const sourceRows =
@@ -199,9 +217,16 @@ function buildDashboardCategoryRows(
     .map((row) => {
       const color =
         row.color ||
-        (row.tagId ? apiColorByTagId.get(row.tagId) : null) ||
-        apiColorByName.get(normalizeTagNameKey(row.tagName)) ||
-        "#9CA3AF";
+        (row.tagId ? apiColorByTagId.get(String(row.tagId)) : null) ||
+        apiColorByName.get(
+          normalizeTagNameKey(
+            categoryLabelPtForTag({
+              name: row.tagName,
+              icon_key: row.icon_key,
+            }),
+          ),
+        ) ||
+        resolveCategoryColorForTag(row);
 
       return mapCategory(
         {

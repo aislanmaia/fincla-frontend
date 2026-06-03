@@ -7,6 +7,7 @@ import { getMonthlyEvolution } from "../../api/analytics";
 import { handleApiError } from "../../api/client";
 import {
   categoryLabelPtForTag,
+  resolveCategoryColorForTag,
   resolveCategoryIconKey,
 } from "./categoryLabels.js";
 import { normalizeCategoryIconKey } from "./categoryLucideIcons.js";
@@ -130,7 +131,7 @@ export function mapBudgetToUi(budget) {
     membros: meta.membros,
     envelopes: [],
     navFilter: budget.tag_id,
-    color: budget.tag_color || null,
+    color: resolveCategoryColorForTag(budget),
   };
 }
 
@@ -178,7 +179,7 @@ export function buildBudgetCreateChoices(tags, budgets) {
         nome: nomePt,
         categoryIconKey,
         emoji: meta.emoji,
-        color: row.color || null,
+        color: row.color || resolveCategoryColorForTag(row),
         suggestedLimit: meta.suggestedLimit,
       };
     })

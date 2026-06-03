@@ -31,4 +31,21 @@ describe("tagsAdapter", () => {
       }),
     ]);
   });
+
+  it("mapCategoryTagsForUi resolve cor estável quando a API não envia color", () => {
+    const rows = mapCategoryTagsForUi([
+      {
+        id: "u2",
+        name: "alimentacao",
+        color: null,
+        sort_order: 0,
+      },
+    ]);
+
+    expect(rows[0]).toEqual(
+      expect.objectContaining({
+        color: "#059669",
+      }),
+    );
+  });
 });

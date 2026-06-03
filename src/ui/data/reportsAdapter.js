@@ -6,7 +6,10 @@ import {
 } from "../../api/analytics";
 import { handleApiError } from "../../api/client";
 import { listTransactions } from "../../api/transactions";
-import { categoryLabelPtForTag } from "./categoryLabels.js";
+import {
+  categoryLabelPtForTag,
+  resolveCategoryColorForTag,
+} from "./categoryLabels.js";
 import { expandExpenseTxToAttributedParts } from "./transactionsAdapter.js";
 
 /**
@@ -94,7 +97,7 @@ export function buildCategoryComposition(categories) {
     .map((category) => ({
       name: analyticsCategoryLabelPt(category),
       value: Number(category.total) || 0,
-      color: category.tag_color || "#9CA3AF",
+      color: resolveCategoryColorForTag(category),
     }));
 }
 
@@ -116,7 +119,7 @@ export function buildDriftData(response) {
   const driftColors = Object.fromEntries(
     (response?.categories ?? []).map((category) => [
       analyticsCategoryLabelPt(category),
-      category.tag_color || "#9CA3AF",
+      resolveCategoryColorForTag(category),
     ]),
   );
 
