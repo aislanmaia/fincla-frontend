@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { formatCustomPeriodLabel } from "./customPeriodLabel.js";
 import { DEFAULT_SORT, sortItems as sortItemsFn } from "./search/sortModel.js";
 
 /**
@@ -75,7 +76,7 @@ export function useTransactionsFilterState({
   /** Lista canônica de facets para a FacetBar, derivada do estado. */
   const buildFacets = useCallback(
     ({ categoriesById = {}, cardsById = {} } = {}) => {
-      const periodLabel = {
+      const presetPeriodLabels = {
         tudo: "Todo período",
         hoje: "Hoje",
         semana: "Esta semana",
@@ -83,8 +84,11 @@ export function useTransactionsFilterState({
         "mes-ant": "Mês anterior",
         "3m": "Últimos 3m",
         ano: "Este ano",
-        custom: state.customFrom || state.customTo ? "Personalizado" : "Personalizado",
-      }[state.period];
+      };
+      const periodLabel =
+        state.period === "custom"
+          ? formatCustomPeriodLabel(state.customFrom, state.customTo)
+          : presetPeriodLabels[state.period];
 
       return [
         {
