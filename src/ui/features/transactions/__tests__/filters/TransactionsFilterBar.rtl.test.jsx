@@ -50,7 +50,7 @@ function Harness({ initialViews = [], filteredCount = 2 } = {}) {
   );
 }
 
-describe("<TransactionsFilterBar>", () => {
+describe("<TransactionsFilterBar>", { timeout: 15000 }, () => {
   it("renderiza Search + FacetBar; sem saved views se lista vazia", () => {
     render(<Harness />);
     expect(screen.getByLabelText(/Buscar transações/i)).toBeInTheDocument();

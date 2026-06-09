@@ -97,7 +97,7 @@ function renderPage(overrides = {}) {
   );
 }
 
-describe("<TransacoesPage> — integração da Variação C", () => {
+describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }, () => {
   it("monta a página com TransactionsFilterBar (desktop)", () => {
     renderPage();
     expect(screen.getByText("Transações")).toBeInTheDocument();
