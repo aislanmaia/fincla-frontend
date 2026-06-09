@@ -3,8 +3,7 @@ import { T } from "../../../../../tokens";
 import { G } from "../../../../../typography";
 import { Icon } from "../../shared/Icon.jsx";
 import { PanelHeader } from "./PanelHeader.jsx";
-
-const MONO = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
+import { LocaleDateRangePicker } from "../../../../../components/LocaleDateRangePicker.jsx";
 
 const PRESETS = [
   { v: "tudo", l: "Todo período" },
@@ -49,6 +48,7 @@ export function PeriodPanel({
               key={o.v}
               onClick={() => applyPreset(o.v)}
               aria-pressed={active}
+              aria-label={`Preset: ${o.l}`}
               style={{
                 ...G,
                 padding: "8px 14px",
@@ -73,102 +73,21 @@ export function PeriodPanel({
 
       <div
         style={{
-          display: "grid",
-          gridTemplateColumns: compact ? "1fr" : "1fr 1fr 1fr",
-          gap: compact ? 10 : 14,
-          alignItems: "flex-start",
           borderTop: `1px solid ${T.border}`,
           paddingTop: 14,
         }}
       >
-        <div>
-          <FieldLabel>De</FieldLabel>
-          <input
-            type="date"
-            value={customFrom}
-            onChange={(e) => {
-              setCustomFrom(e.target.value);
-              if (period !== "custom") setPeriod("custom");
-            }}
-            aria-label="Data inicial"
-            style={dateInputStyle}
-          />
-        </div>
-        <div>
-          <FieldLabel>Até</FieldLabel>
-          <input
-            type="date"
-            value={customTo}
-            onChange={(e) => {
-              setCustomTo(e.target.value);
-              if (period !== "custom") setPeriod("custom");
-            }}
-            aria-label="Data final"
-            style={dateInputStyle}
-          />
-        </div>
-        {!compact && (
-          <div>
-            <FieldLabel>Intervalo</FieldLabel>
-            <div
-              style={{
-                ...G,
-                ...MONO,
-                padding: "9px 11px",
-                borderRadius: 9,
-                background: T.bg,
-                border: `1px solid ${T.border}`,
-                fontSize: 13,
-                color: T.inkMid,
-              }}
-            >
-              {describeRange(customFrom, customTo)}
-            </div>
-          </div>
-        )}
+        <LocaleDateRangePicker
+          customFrom={customFrom}
+          customTo={customTo}
+          setCustomFrom={setCustomFrom}
+          setCustomTo={setCustomTo}
+          onCustomPeriod={() => {
+            if (period !== "custom") setPeriod("custom");
+          }}
+          compact={compact}
+        />
       </div>
     </div>
   );
-}
-
-function FieldLabel({ children }) {
-  return (
-    <div
-      style={{
-        ...G,
-        fontSize: 10,
-        fontWeight: 700,
-        color: T.inkMid,
-        textTransform: "uppercase",
-        letterSpacing: "0.08em",
-        marginBottom: 6,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-const dateInputStyle = {
-  width: "100%",
-  padding: "9px 11px",
-  borderRadius: 9,
-  border: `1px solid ${T.border}`,
-  fontSize: 13,
-  outline: "none",
-  color: T.ink,
-  background: T.surface,
-  boxSizing: "border-box",
-  fontFamily: "'Geist', sans-serif",
-};
-
-function describeRange(from, to) {
-  if (!from && !to) return "—";
-  if (from && to) {
-    const a = new Date(`${from}T00:00:00`);
-    const b = new Date(`${to}T00:00:00`);
-    const days = Math.round((b - a) / (1000 * 60 * 60 * 24)) + 1;
-    if (Number.isFinite(days) && days > 0) return `${days} dia${days === 1 ? "" : "s"}`;
-  }
-  return from || to;
 }

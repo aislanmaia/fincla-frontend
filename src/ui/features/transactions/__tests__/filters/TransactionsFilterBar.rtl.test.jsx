@@ -97,7 +97,7 @@ describe("<TransactionsFilterBar>", { timeout: 15000 }, () => {
   it("preset de período aplica e fecha o painel inline", async () => {
     render(<Harness />);
     await userEvent.click(screen.getByRole("button", { name: /Período:/i }));
-    await userEvent.click(within(screen.getByRole("region")).getByRole("button", { name: "Este mês" }));
+    await userEvent.click(within(screen.getByRole("region")).getByRole("button", { name: "Preset: Este mês" }));
     expect(screen.getByRole("button", { name: /Período: Este mês/i })).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: /Filtro: periodo/i })).not.toBeInTheDocument();
   });
@@ -106,14 +106,24 @@ describe("<TransactionsFilterBar>", { timeout: 15000 }, () => {
     render(<Harness />);
     await userEvent.click(screen.getByRole("button", { name: /Período:/i }));
     const region = screen.getByRole("region", { name: /Filtro: periodo/i });
-    fireEvent.change(within(region).getByLabelText(/Data inicial/i), {
-      target: { value: "2026-10-01" },
-    });
-    fireEvent.change(within(region).getByLabelText(/Data final/i), {
-      target: { value: "2026-10-15" },
-    });
+    const fromInput = within(region).getByLabelText(/^De$/i);
+    fireEvent.change(fromInput, { target: { value: "01/10/2026" } });
+    fireEvent.blur(fromInput);
+    const toInput = within(region).getByLabelText(/^Até$/i);
+    fireEvent.change(toInput, { target: { value: "15/10/2026" } });
+    fireEvent.blur(toInput);
     expect(screen.getByRole("button", { name: /Período: 1–15 out/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Personalizado/i })).not.toBeInTheDocument();
+  });
+
+  it("período personalizado aberto: só De exibe A partir de no facet", async () => {
+    render(<Harness />);
+    await userEvent.click(screen.getByRole("button", { name: /Período:/i }));
+    const region = screen.getByRole("region", { name: /Filtro: periodo/i });
+    const fromInput = within(region).getByLabelText(/^De$/i);
+    fireEvent.change(fromInput, { target: { value: "01/05/2026" } });
+    fireEvent.blur(fromInput);
+    expect(screen.getByRole("button", { name: /Período: A partir de 1 mai/i })).toBeInTheDocument();
   });
 
   it("CTA Ver N transações fecha painel multi-select sem reverter filtro", async () => {

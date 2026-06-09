@@ -39,19 +39,20 @@ describe("<PeriodPanel>", () => {
   }
   it("preset ativo tem aria-pressed=true", () => {
     render(<Harness />);
-    expect(screen.getByRole("button", { name: /Este mês/i })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Preset: Este mês/i })).toHaveAttribute("aria-pressed", "true");
   });
   it("trocar preset atualiza aria-pressed", async () => {
     render(<Harness />);
-    await userEvent.click(screen.getByRole("button", { name: /Hoje/i }));
-    expect(screen.getByRole("button", { name: /Hoje/i })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: /Este mês/i })).toHaveAttribute("aria-pressed", "false");
+    await userEvent.click(screen.getByRole("button", { name: /Preset: Hoje/i }));
+    expect(screen.getByRole("button", { name: /Preset: Hoje/i })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Preset: Este mês/i })).toHaveAttribute("aria-pressed", "false");
   });
   it("inserir data muda para período custom", () => {
     render(<Harness />);
-    fireEvent.change(screen.getByLabelText(/Data inicial/i), { target: { value: "2026-05-01" } });
-    // o preset "Este mês" deve perder o ativo, pois mudou para custom
-    expect(screen.getByRole("button", { name: /Este mês/i })).toHaveAttribute("aria-pressed", "false");
+    const fromInput = screen.getByLabelText(/^De$/i);
+    fireEvent.change(fromInput, { target: { value: "01/05/2026" } });
+    fireEvent.blur(fromInput);
+    expect(screen.getByRole("button", { name: /Preset: Este mês/i })).toHaveAttribute("aria-pressed", "false");
   });
 });
 
