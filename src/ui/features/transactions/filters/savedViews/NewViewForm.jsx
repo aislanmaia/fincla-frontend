@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { T } from "../../../../tokens";
 import { G } from "../../../../typography";
 import { Icon, FILTER_ICONS } from "../shared/Icon.jsx";
@@ -6,30 +6,63 @@ import { FormLabel } from "../shared/FormLabel.jsx";
 
 const COLORS = [T.ink, T.blue, T.green, T.amber, T.red, T.purple];
 
+function truncateLabel(text, max = 28) {
+  const s = String(text || "").trim();
+  if (s.length <= max) return s;
+  return `${s.slice(0, max - 1)}…`;
+}
+
 /**
- * Formulário de criação de uma nova saved view (renderizado dentro de PopoverShell).
+ * Formulário unificado para criar ou atualizar uma saved view.
  *
  * Props:
- *  - activeFacets: lista `{ label, value, icon, color }` para preview em chips.
- *  - onCancel(): fecha sem salvar.
- *  - onSave({ name, icon, color }): cria.
+ *  - mode: "create" | "update"
+ *  - initialName, initialIcon, initialColor — pré-preenchimento (update)
+ *  - updateViewLabel — nome da view ao atualizar (CTA contextual)
+ *  - activeFacets: preview em chips
+ *  - onCancel(), onSave({ name, icon, color })
  */
-export function NewViewForm({ activeFacets = [], onCancel, onSave, compact = false }) {
-  const [name, setName] = useState("");
-  const [color, setColor] = useState(T.blue);
-  const [icon, setIcon] = useState("bookmark");
+export function NewViewForm({
+  mode = "create",
+  initialName = "",
+  initialIcon = "bookmark",
+  initialColor = T.blue,
+  updateViewLabel = "",
+  activeFacets = [],
+  onCancel,
+  onSave,
+  compact = false,
+}) {
+  const [name, setName] = useState(initialName);
+  const [color, setColor] = useState(initialColor);
+  const [icon, setIcon] = useState(initialIcon);
 
+  useEffect(() => {
+    setName(initialName);
+    setColor(initialColor);
+    setIcon(initialIcon);
+  }, [initialName, initialColor, initialIcon, mode]);
+
+  const isUpdate = mode === "update";
   const canSave = name.trim().length > 0;
   const handleSave = () => {
     if (!canSave) return;
     onSave({ name: name.trim(), color, icon });
   };
 
+  const title = isUpdate ? "Atualizar visualização" : "Nova visualização";
+  const ctaLabel = isUpdate
+    ? `Salvar na visualização “${truncateLabel(updateViewLabel)}”`
+    : "Salvar como nova visualização";
+  const ctaAriaLabel = isUpdate
+    ? `Salvar na visualização ${updateViewLabel}`
+    : "Salvar como nova visualização";
+
   return (
     <div style={{ width: compact ? "100%" : 340, display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink, letterSpacing: "-0.01em" }}>
-          Nova visualização
+          {title}
         </div>
         <button
           type="button"
@@ -53,7 +86,6 @@ export function NewViewForm({ activeFacets = [], onCancel, onSave, compact = fal
         </button>
       </div>
 
-      {/* Preview do chip resultante */}
       <div
         style={{
           display: "flex",
@@ -127,8 +159,12 @@ export function NewViewForm({ activeFacets = [], onCancel, onSave, compact = fal
             outline: "none",
             boxSizing: "border-box",
           }}
-          onFocus={(e) => (e.target.style.borderColor = T.ink)}
-          onBlur={(e) => (e.target.style.borderColor = T.border)}
+          onFocus={(e) => {
+            e.target.style.borderColor = T.ink;
+          }}
+          onBlur={(e) => {
+            e.target.style.borderColor = T.border;
+          }}
         />
       </div>
 
@@ -230,7 +266,7 @@ export function NewViewForm({ activeFacets = [], onCancel, onSave, compact = fal
           <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
             {activeFacets.map((f) => (
               <span
-                key={f.label}
+                key={`${f.label}-${f.value}`}
                 style={{
                   ...G,
                   display: "inline-flex",
@@ -275,6 +311,8 @@ export function NewViewForm({ activeFacets = [], onCancel, onSave, compact = fal
           type="button"
           onClick={handleSave}
           disabled={!canSave}
+          aria-label={ctaAriaLabel}
+          title={isUpdate ? updateViewLabel : undefined}
           style={{
             ...G,
             flex: 1,
@@ -283,17 +321,21 @@ export function NewViewForm({ activeFacets = [], onCancel, onSave, compact = fal
             border: `1px solid ${canSave ? T.ink : T.border}`,
             background: canSave ? T.ink : T.grayLight,
             color: canSave ? "#fff" : T.inkGhost,
-            fontSize: compact ? 13 : 12.5,
+            fontSize: compact ? 12.5 : 12,
             fontWeight: 700,
             cursor: canSave ? "pointer" : "not-allowed",
             display: "inline-flex",
             alignItems: "center",
             justifyContent: "center",
             gap: 6,
+            minWidth: 0,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
           }}
         >
           <Icon name="save" size={12} color={canSave ? "#fff" : T.inkGhost} />
-          Salvar visualização
+          {ctaLabel}
         </button>
       </div>
     </div>

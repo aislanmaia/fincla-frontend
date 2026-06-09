@@ -8,6 +8,8 @@ import {
   describeView,
   isValidView,
   normalizeView,
+  shouldShowSavedViewsSection,
+  viewSnapshotsEqual,
 } from "../../filters/savedViews/savedViewsModel.js";
 import {
   readSavedViews,
@@ -76,6 +78,7 @@ describe("savedViewsModel", () => {
 
   it("countActiveFiltersInSnapshot ignora defaults", () => {
     expect(countActiveFiltersInSnapshot({ period: "mes", type: "todos" })).toBe(0);
+    expect(countActiveFiltersInSnapshot({ searchInput: "mercado" })).toBe(1);
     expect(
       countActiveFiltersInSnapshot({
         period: "hoje",
@@ -89,11 +92,33 @@ describe("savedViewsModel", () => {
     ).toBe(6);
   });
 
+  it("viewSnapshotsEqual compara busca, sort e facets", () => {
+    expect(
+      viewSnapshotsEqual(
+        { type: "receita", searchInput: "foo" },
+        { type: "receita", searchInput: "foo" },
+      ),
+    ).toBe(true);
+    expect(
+      viewSnapshotsEqual(
+        { type: "receita", searchInput: "foo" },
+        { type: "receita", searchInput: "bar" },
+      ),
+    ).toBe(false);
+  });
+
   it("describeView devolve hint conforme contagem", () => {
     const v = buildNewView({ name: "x", icon: "bookmark", color: "#000", now: 1 });
     expect(describeView(v, 0)).toBe("Sem filtros");
     expect(describeView(v, 1)).toBe("1 filtro");
     expect(describeView(v, 3)).toBe("3 filtros");
+  });
+
+  it("shouldShowSavedViewsSection: views salvas ou filtros ativos", () => {
+    expect(shouldShowSavedViewsSection(0, false)).toBe(false);
+    expect(shouldShowSavedViewsSection(2, false)).toBe(true);
+    expect(shouldShowSavedViewsSection(0, true)).toBe(true);
+    expect(shouldShowSavedViewsSection(1, true)).toBe(true);
   });
 });
 

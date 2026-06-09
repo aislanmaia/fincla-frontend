@@ -16,9 +16,59 @@
  *   }
  */
 
+import { DEFAULT_SORT } from "../search/sortModel.js";
 import { FILTER_ICONS } from "../shared/Icon.jsx";
 
 const VALID_ICONS = new Set(FILTER_ICONS);
+
+function sortedStrings(arr) {
+  return [...(Array.isArray(arr) ? arr : [])].sort();
+}
+
+/** Normaliza snapshot para comparação (inclui busca e sort). */
+export function normalizeViewSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== "object") {
+    return {
+      period: "mes",
+      customFrom: "",
+      customTo: "",
+      type: "todos",
+      cats: [],
+      tags: [],
+      cardSel: [],
+      rec: "any",
+      valueMin: "",
+      valueMax: "",
+      search: "",
+      sort: JSON.stringify(DEFAULT_SORT),
+    };
+  }
+  const search = String(
+    snapshot.searchInput ?? snapshot.debouncedSearch ?? snapshot.search ?? "",
+  ).trim();
+  return {
+    period: snapshot.period ?? "mes",
+    customFrom: snapshot.customFrom ?? "",
+    customTo: snapshot.customTo ?? "",
+    type: snapshot.type ?? "todos",
+    cats: sortedStrings(snapshot.cats),
+    tags: sortedStrings(snapshot.tags),
+    cardSel: sortedStrings(snapshot.cardSel),
+    rec: snapshot.rec ?? "any",
+    valueMin: snapshot.valueMin ?? "",
+    valueMax: snapshot.valueMax ?? "",
+    search,
+    sort: JSON.stringify(
+      Array.isArray(snapshot.sort) && snapshot.sort.length ? snapshot.sort : DEFAULT_SORT,
+    ),
+  };
+}
+
+export function viewSnapshotsEqual(a, b) {
+  return (
+    JSON.stringify(normalizeViewSnapshot(a)) === JSON.stringify(normalizeViewSnapshot(b))
+  );
+}
 
 export function isValidView(v) {
   if (!v || typeof v !== "object") return false;
@@ -67,6 +117,10 @@ export function describeView(view, activeFacetsCount = 0) {
 export function countActiveFiltersInSnapshot(snapshot) {
   if (!snapshot || typeof snapshot !== "object") return 0;
   let n = 0;
+  const search = String(
+    snapshot.searchInput ?? snapshot.debouncedSearch ?? snapshot.search ?? "",
+  ).trim();
+  if (search) n += 1;
   if (snapshot.period && snapshot.period !== "mes") n += 1;
   if (snapshot.type && snapshot.type !== "todos") n += 1;
   if (Array.isArray(snapshot.cats) && snapshot.cats.length) n += 1;
@@ -75,4 +129,25 @@ export function countActiveFiltersInSnapshot(snapshot) {
   if (snapshot.rec && snapshot.rec !== "any") n += 1;
   if (snapshot.valueMin || snapshot.valueMax) n += 1;
   return n;
+}
+
+/** Mescla metadados + filtros ao atualizar uma view existente. */
+export function buildUpdatedView(view, { name, icon, color, filters }) {
+  if (!view) return null;
+  return normalizeView({
+    ...view,
+    label: typeof name === "string" ? name.trim() : view.label,
+    icon: icon ?? view.icon,
+    color: color ?? view.color,
+    filters: filters ?? view.filters,
+  });
+}
+
+/**
+ * Exibe a seção de visualizações salvas acima da busca quando:
+ *  - já existe ao menos uma view salva, ou
+ *  - há filtros/busca ativos (para permitir "+ Nova").
+ */
+export function shouldShowSavedViewsSection(savedViewsCount, filtersActive) {
+  return savedViewsCount > 0 || Boolean(filtersActive);
 }

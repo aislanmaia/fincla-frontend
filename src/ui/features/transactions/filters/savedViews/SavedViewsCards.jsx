@@ -7,22 +7,35 @@ import { DeleteViewControl, DeleteViewStyles } from "./DeleteViewControl.jsx";
 import { NewViewForm } from "./NewViewForm.jsx";
 
 /**
- * Tira de saved views como cards + botão "+ Nova" que abre o NewViewForm.
- *
- * Modo `compact`: cards stackeiam verticalmente (1 por linha), o botão Nova
- * ocupa a largura toda e o popover do NewViewForm renderiza inline abaixo
- * (não absoluto). Visual de app nativo num bottom sheet.
+ * Tira de saved views como cards + botão "+ Nova" que abre o formulário unificado.
  */
 export function SavedViewsCards({
   items,
   active,
   onActivate,
   onDelete,
-  onCreate,
+  onOpenSaveForm,
+  onSaveView,
   activeFacets = [],
   compact = false,
+  saveFormMode = "create",
+  saveFormInitialName = "",
+  saveFormInitialIcon = "bookmark",
+  saveFormInitialColor,
+  updateViewLabel = "",
+  newFormOpen: newFormOpenProp,
+  onNewFormOpenChange,
 }) {
-  const [newOpen, setNewOpen] = useState(false);
+  const [newOpenInternal, setNewOpenInternal] = useState(false);
+  const newOpen = newFormOpenProp !== undefined ? newFormOpenProp : newOpenInternal;
+  const setNewOpen = onNewFormOpenChange ?? setNewOpenInternal;
+
+  const openCreateForm = () => {
+    if (typeof onOpenSaveForm === "function") onOpenSaveForm("create");
+    setNewOpen(true);
+  };
+
+  const closeForm = () => setNewOpen(false);
 
   return (
     <div>
@@ -58,14 +71,14 @@ export function SavedViewsCards({
       >
         {items.map((v) => {
           const isActive = active === v.id;
-          const onSelect = () => onActivate(isActive ? null : v.id);
+          const onSelect = () => onActivate(v.id);
           return (
             <div
               key={v.id}
               role="button"
               tabIndex={0}
               aria-pressed={isActive}
-              aria-label={v.label}
+              aria-label={v.modified ? `${v.label} — filtros alterados` : v.label}
               className="saved-view-card"
               onClick={onSelect}
               onKeyDown={(e) => {
@@ -123,16 +136,30 @@ export function SavedViewsCards({
                 >
                   {v.label}
                 </div>
-                <div
-                  style={{
-                    ...G,
-                    fontSize: 10.5,
-                    color: isActive ? "rgba(255,255,255,0.65)" : T.inkLight,
-                    marginTop: 2,
-                  }}
-                >
-                  {v.hint || ""}
-                </div>
+                {v.modified ? (
+                  <div
+                    style={{
+                      ...G,
+                      fontSize: 10.5,
+                      fontStyle: "italic",
+                      color: isActive ? "rgba(255,255,255,0.75)" : T.amber,
+                      marginTop: 2,
+                    }}
+                  >
+                    Filtros alterados
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      ...G,
+                      fontSize: 10.5,
+                      color: isActive ? "rgba(255,255,255,0.65)" : T.inkLight,
+                      marginTop: 2,
+                    }}
+                  >
+                    {v.hint || ""}
+                  </div>
+                )}
               </div>
               <DeleteViewControl
                 view={v}
@@ -154,7 +181,7 @@ export function SavedViewsCards({
         >
           <button
             type="button"
-            onClick={() => setNewOpen((o) => !o)}
+            onClick={openCreateForm}
             aria-haspopup="dialog"
             aria-expanded={newOpen}
             style={{
@@ -179,18 +206,20 @@ export function SavedViewsCards({
             Nova
           </button>
           {newOpen && (
-            <PopoverShell
-              minWidth={340}
-              maxWidth={380}
-              compact={compact}
-            >
+            <PopoverShell minWidth={340} maxWidth={380} compact={compact}>
               <NewViewForm
+                key={`${saveFormMode}-${updateViewLabel}-${saveFormInitialName}`}
+                mode={saveFormMode}
+                initialName={saveFormInitialName}
+                initialIcon={saveFormInitialIcon}
+                initialColor={saveFormInitialColor}
+                updateViewLabel={updateViewLabel}
                 activeFacets={activeFacets}
-                onCancel={() => setNewOpen(false)}
+                onCancel={closeForm}
                 compact={compact}
                 onSave={(draft) => {
-                  onCreate(draft);
-                  setNewOpen(false);
+                  onSaveView({ mode: saveFormMode, ...draft });
+                  closeForm();
                 }}
               />
             </PopoverShell>

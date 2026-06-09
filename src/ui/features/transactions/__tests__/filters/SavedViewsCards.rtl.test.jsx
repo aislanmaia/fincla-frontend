@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import React from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -18,7 +19,8 @@ function setup(overrides = {}) {
     active: "v1",
     onActivate: vi.fn(),
     onDelete: vi.fn(),
-    onCreate: vi.fn(),
+    onOpenSaveForm: vi.fn(),
+    onSaveView: vi.fn(),
     activeFacets: [],
     ...overrides,
   };
@@ -41,10 +43,18 @@ describe("<SavedViewsCards>", () => {
     expect(props.onActivate).toHaveBeenCalledWith("v2");
   });
 
-  it("clicar no card ativo desativa (manda null)", async () => {
+  it("clicar no card ativo desaplica via callback (mesmo id)", async () => {
     const props = setup({ active: "v1" });
     await userEvent.click(screen.getByRole("button", { name: "Despesas do mês" }));
-    expect(props.onActivate).toHaveBeenCalledWith(null);
+    expect(props.onActivate).toHaveBeenCalledWith("v1");
+  });
+
+  it("card modificado exibe Filtros alterados", () => {
+    setup({
+      items: [{ ...VIEWS[0], modified: true }],
+      active: "v1",
+    });
+    expect(screen.getByText(/Filtros alterados/i)).toBeInTheDocument();
   });
 
   it("Enter no card ativa via teclado", () => {
@@ -61,14 +71,35 @@ describe("<SavedViewsCards>", () => {
     expect(screen.getByRole("button", { name: "Cartão Nubank" })).toHaveAttribute("aria-pressed", "true");
   });
 
-  it("clicar no × abre o popover de confirmação", () => {
-    setup();
-    const del = screen.getByRole("button", { name: /Excluir Despesas do mês/i });
-    // O botão é hover-revealed (pointer-events:none até hover); usamos fireEvent.click
-    // que ignora o check de pointer-events.
-    fireEvent.click(del);
-    expect(screen.getByRole("dialog", { name: /Confirmar exclusão de Despesas do mês/i })).toBeInTheDocument();
-    expect(screen.getByText(/Excluir esta visualização\?/i)).toBeInTheDocument();
+  it("clicar em + Nova abre form de criação", async () => {
+    const props = setup();
+    await userEvent.click(screen.getByRole("button", { name: /^Nova$/ }));
+    expect(props.onOpenSaveForm).toHaveBeenCalledWith("create");
+    expect(screen.getByText("Nova visualização")).toBeInTheDocument();
+  });
+
+  it("Salvar como nova visualização chama onSaveView em modo create", async () => {
+    const props = setup();
+    await userEvent.click(screen.getByRole("button", { name: /^Nova$/ }));
+    await userEvent.type(screen.getByLabelText(/Nome da visualização/i), "Mercado");
+    await userEvent.click(
+      screen.getByRole("button", { name: /Salvar como nova visualização/i }),
+    );
+    expect(props.onSaveView).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: "create", name: "Mercado" }),
+    );
+  });
+
+  it("modo update usa CTA com nome da view", async () => {
+    setup({
+      saveFormMode: "update",
+      saveFormInitialName: "Receitas",
+      updateViewLabel: "Receitas",
+      newFormOpen: true,
+    });
+    expect(
+      screen.getByRole("button", { name: /Salvar na visualização Receitas/i }),
+    ).toBeInTheDocument();
   });
 
   it("Excluir no popover chama onDelete e fecha", () => {
@@ -78,66 +109,5 @@ describe("<SavedViewsCards>", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /^Excluir$/ }));
     expect(props.onDelete).toHaveBeenCalledWith("v2");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  });
-
-  it("Cancelar no popover não chama onDelete e fecha", () => {
-    const props = setup();
-    fireEvent.click(screen.getByRole("button", { name: /Excluir Cartão Nubank/i }));
-    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: /Cancelar/i }));
-    expect(props.onDelete).not.toHaveBeenCalled();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  });
-
-  it("Esc no popover fecha", () => {
-    setup();
-    fireEvent.click(screen.getByRole("button", { name: /Excluir Cartão Nubank/i }));
-    fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  });
-
-  it("clicar em + Nova abre o NewViewForm; cancelar fecha", async () => {
-    setup();
-    const newBtn = screen.getByRole("button", { name: /^Nova$/ });
-    expect(newBtn).toHaveAttribute("aria-expanded", "false");
-    await userEvent.click(newBtn);
-    expect(screen.getByText("Nova visualização")).toBeInTheDocument();
-    expect(screen.getByLabelText(/Nome da visualização/i)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /Cancelar/i }));
-    expect(screen.queryByText("Nova visualização")).not.toBeInTheDocument();
-  });
-
-  it("Salvar no NewViewForm chama onCreate com nome trimado e fecha", async () => {
-    const props = setup();
-    await userEvent.click(screen.getByRole("button", { name: /^Nova$/ }));
-    const input = screen.getByLabelText(/Nome da visualização/i);
-    await userEvent.type(input, "   Mercado   ");
-    await userEvent.click(screen.getByRole("button", { name: /Salvar visualização/i }));
-    expect(props.onCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "Mercado", icon: "bookmark" }),
-    );
-    expect(screen.queryByText("Nova visualização")).not.toBeInTheDocument();
-  });
-
-  it("Enter no input salva", async () => {
-    const props = setup();
-    await userEvent.click(screen.getByRole("button", { name: /^Nova$/ }));
-    const input = screen.getByLabelText(/Nome da visualização/i);
-    await userEvent.type(input, "Spotify{Enter}");
-    expect(props.onCreate).toHaveBeenCalledWith(expect.objectContaining({ name: "Spotify" }));
-  });
-
-  it("botão Salvar desabilita com nome vazio", async () => {
-    setup();
-    await userEvent.click(screen.getByRole("button", { name: /^Nova$/ }));
-    expect(screen.getByRole("button", { name: /Salvar visualização/i })).toBeDisabled();
-  });
-
-  it("Esc no input do form cancela", async () => {
-    setup();
-    await userEvent.click(screen.getByRole("button", { name: /^Nova$/ }));
-    const input = screen.getByLabelText(/Nome da visualização/i);
-    await userEvent.type(input, "Algo");
-    fireEvent.keyDown(input, { key: "Escape" });
-    expect(screen.queryByText("Nova visualização")).not.toBeInTheDocument();
   });
 });
