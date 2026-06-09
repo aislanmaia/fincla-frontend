@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { T } from "../../../tokens";
 import { FacetBar } from "./facetBar/FacetBar.jsx";
 import { FacetPanelContent } from "./facetBar/FacetPanelContent.jsx";
 import { SavedViewsCards } from "./savedViews/SavedViewsCards.jsx";
 import { SearchBar } from "./search/SearchBar.jsx";
+import { FacetApplyFooter } from "./shared/FacetApplyFooter.jsx";
 import { Icon } from "./shared/Icon.jsx";
 
 /**
@@ -35,6 +36,9 @@ import { Icon } from "./shared/Icon.jsx";
  *  - hideSearch: oculta a SearchBar (útil quando o consumidor já mostra o input fora).
  *  - compact: modo mobile — vertical stack, touch targets, popovers inline.
  *  - onClearAll: callback executado antes do `filter.clearAll()`.
+ *  - filteredCount: total de transações visíveis (CTA "Ver N transações").
+ *  - resultsLoading: desabilita CTA enquanto a lista recarrega (ex.: debounce busca).
+ *  - onAfterApply: callback após dismiss (ex.: scroll suave para a lista).
  */
 export function TransactionsFilterBar({
   filter,
@@ -47,24 +51,38 @@ export function TransactionsFilterBar({
   hideSearch = false,
   compact = false,
   onClearAll,
+  filteredCount = 0,
+  resultsLoading = false,
+  onAfterApply,
+  hideSavedViews = false,
+  hideFacets = false,
+  onSaveViewCreate,
+  onSaveViewUpdate,
+  saveViewUpdateLabel = "",
+  filterToolbarActive,
 }) {
   const [expanded, setExpanded] = useState(null);
   const panelRef = useRef(null);
+
+  const dismissPanel = useCallback(() => {
+    setExpanded(null);
+    if (typeof onAfterApply === "function") onAfterApply();
+  }, [onAfterApply]);
 
   // Fecha o painel inline quando troca de saved view ativa
   useEffect(() => {
     setExpanded(null);
   }, [savedViews?.active]);
 
-  // Fecha o painel com Esc global
+  // Fecha o painel com Esc global (mantém filtros já aplicados)
   useEffect(() => {
     if (!expanded) return;
     const onEsc = (e) => {
-      if (e.key === "Escape") setExpanded(null);
+      if (e.key === "Escape") dismissPanel();
     };
     document.addEventListener("keydown", onEsc);
     return () => document.removeEventListener("keydown", onEsc);
-  }, [expanded]);
+  }, [expanded, dismissPanel]);
 
   // Quando um painel é expandido, faz scroll suave para ele entrar em view.
   // Importante no mobile (dentro do bottom sheet) e também em viewports
@@ -119,15 +137,30 @@ export function TransactionsFilterBar({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: compact ? 14 : 12 }}>
-      {savedViews && (
+      {savedViews && !hideSavedViews && (
         <SavedViewsCards
           items={savedViews.items}
           active={savedViews.active}
           onActivate={savedViews.onActivate}
           onDelete={savedViews.onDelete}
-          onCreate={savedViews.onCreate}
+          onOpenSaveForm={savedViews.onOpenSaveForm ?? (() => {})}
+          onSaveView={
+            savedViews.onSaveView ??
+            ((draft) => {
+              if (savedViews.onCreate) {
+                savedViews.onCreate(draft);
+              }
+            })
+          }
           activeFacets={activeFacets}
           compact={compact}
+          saveFormMode={savedViews.saveFormMode ?? "create"}
+          saveFormInitialName={savedViews.saveFormInitialName ?? ""}
+          saveFormInitialIcon={savedViews.saveFormInitialIcon ?? "bookmark"}
+          saveFormInitialColor={savedViews.saveFormInitialColor}
+          updateViewLabel={savedViews.updateViewLabel ?? ""}
+          newFormOpen={savedViews.newFormOpen}
+          onNewFormOpenChange={savedViews.onNewFormOpenChange}
         />
       )}
 
@@ -155,72 +188,87 @@ export function TransactionsFilterBar({
         />
       )}
 
-      <FacetBar
-        facets={facets}
-        expanded={expanded}
-        onToggle={handleToggle}
-        onClearAll={() => {
-          if (typeof onClearAll === "function") onClearAll();
-          filter.clearAll();
-          setExpanded(null);
-        }}
-        hasAnyActive={filter.hasAnyActive}
-        compact={compact}
-      />
-
-      {expanded && (
-        <div
-          ref={panelRef}
-          id={`facet-panel-${expanded}`}
-          role="region"
-          aria-label={`Filtro: ${expanded}`}
-          style={{
-            background: T.surface,
-            border: `1px solid ${T.border}`,
-            borderRadius: 14,
-            padding: compact ? "14px 14px 16px" : "18px 22px",
-            boxShadow: T.md,
-            animation: "fadeInDown 0.18s ease",
-            scrollMarginTop: compact ? 12 : 24,
-          }}
-        >
-          <FacetPanelContent
-            facetKey={expanded}
-            // period
-            period={filter.period}
-            setPeriod={filter.setPeriod}
-            customFrom={filter.customFrom}
-            setCustomFrom={filter.setCustomFrom}
-            customTo={filter.customTo}
-            setCustomTo={filter.setCustomTo}
-            // type
-            type={filter.type}
-            setType={filter.setType}
-            // category
-            cats={filter.cats}
-            setCats={filter.setCats}
-            categories={categories}
-            // tag
-            tags={filter.tags}
-            setTags={filter.setTags}
-            allTags={allTags}
-            // card
-            cardSel={filter.cardSel}
-            setCardSel={filter.setCardSel}
-            cards={cards}
-            // value
-            valueMin={filter.valueMin}
-            valueMax={filter.valueMax}
-            setValueMin={filter.setValueMin}
-            setValueMax={filter.setValueMax}
-            // rec
-            rec={filter.rec}
-            setRec={filter.setRec}
-            // chrome
-            onClose={() => setExpanded(null)}
+      {!hideFacets && (
+        <>
+          <FacetBar
+            facets={facets}
+            expanded={expanded}
+            onToggle={handleToggle}
+            onClearAll={() => {
+              if (typeof onClearAll === "function") onClearAll();
+              filter.clearAll();
+              setExpanded(null);
+            }}
+            onSaveViewCreate={onSaveViewCreate}
+            onSaveViewUpdate={onSaveViewUpdate}
+            saveViewUpdateLabel={saveViewUpdateLabel}
+            hasAnyActive={filterToolbarActive ?? filter.hasAnyActive}
             compact={compact}
           />
-        </div>
+
+          {expanded && (
+            <div
+              ref={panelRef}
+              id={`facet-panel-${expanded}`}
+              role="region"
+              aria-label={`Filtro: ${expanded}`}
+              style={{
+                background: T.surface,
+                border: `1px solid ${T.border}`,
+                borderRadius: 14,
+                padding: compact ? "14px 14px 16px" : "18px 22px",
+                boxShadow: T.md,
+                animation: "fadeInDown 0.18s ease",
+                scrollMarginTop: compact ? 12 : 24,
+              }}
+            >
+              <FacetPanelContent
+                facetKey={expanded}
+                // period
+                period={filter.period}
+                setPeriod={filter.setPeriod}
+                customFrom={filter.customFrom}
+                setCustomFrom={filter.setCustomFrom}
+                customTo={filter.customTo}
+                setCustomTo={filter.setCustomTo}
+                // type
+                type={filter.type}
+                setType={filter.setType}
+                // category
+                cats={filter.cats}
+                setCats={filter.setCats}
+                categories={categories}
+                // tag
+                tags={filter.tags}
+                setTags={filter.setTags}
+                allTags={allTags}
+                // card
+                cardSel={filter.cardSel}
+                setCardSel={filter.setCardSel}
+                cards={cards}
+                // value
+                valueMin={filter.valueMin}
+                valueMax={filter.valueMax}
+                setValueMin={filter.setValueMin}
+                setValueMax={filter.setValueMax}
+                // rec
+                rec={filter.rec}
+                setRec={filter.setRec}
+                // chrome
+                onClose={dismissPanel}
+                onApply={dismissPanel}
+                compact={compact}
+              />
+              {!compact && (
+                <FacetApplyFooter
+                  count={filteredCount}
+                  onApply={dismissPanel}
+                  loading={resultsLoading}
+                />
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

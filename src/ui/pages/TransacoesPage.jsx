@@ -38,13 +38,28 @@ import {
   describeView,
   countActiveFiltersInSnapshot,
   DEFAULT_SORT,
+  DEFAULT_FILTER_STATE,
 } from "../features/transactions/filters/index.js";
+import { SavedViewsCards } from "../features/transactions/filters/savedViews/SavedViewsCards.jsx";
+import { shouldShowSavedViewsSection, viewSnapshotsEqual } from "../features/transactions/filters/savedViews/savedViewsModel.js";
 import {
   filtersToLegacyParams,
   filtersToCsvOptions,
+  matchesValueRange,
 } from "../features/transactions/filters/filtersToLegacyParams.js";
 
 const TRANSACTIONS_SEARCH_DEBOUNCE_MS = 1500;
+
+/** Snapshot restaurado ao desaplicar uma view criada sem ativação prévia. */
+const DEFAULT_RESTORE_SNAPSHOT = Object.freeze({
+  ...DEFAULT_FILTER_STATE,
+  sort: DEFAULT_SORT,
+  searchInput: "",
+  debouncedSearch: "",
+});
+
+/** Viewport ≥ breakpoint: filtros desktop sempre visíveis. Abaixo: colapsados por padrão. */
+const DESKTOP_FILTERS_EXPAND_BREAKPOINT = 1280;
 
 export function TransacoesPage(props) {
   if (props.dataMode === "empty") {
@@ -132,6 +147,12 @@ function TransacoesPageBody({
 
   const periodPersistFingerprintRef = useRef("");
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState(
+    () => (typeof window !== "undefined" ? window.innerWidth : DESKTOP_FILTERS_EXPAND_BREAKPOINT),
+  );
+  const [compactDesktopFiltersOpen, setCompactDesktopFiltersOpen] = useState(false);
+  const [saveViewFormOpen, setSaveViewFormOpen] = useState(false);
+  const [saveViewFormMode, setSaveViewFormMode] = useState("create");
   // ── Bottom sheet drag-to-dismiss ──────────────────────────────
   const sheetRef      = useRef(null);
   const snapFullRef   = useRef(false);   // read in RAF/touch handlers (no stale closure)
@@ -141,6 +162,9 @@ function TransacoesPageBody({
   const [selected,    setSelected]    = useState(null);
   const [visible,     setVisible]     = useState(PAGE_SIZE);
   const listScrollRef = useRef(null);
+  const savedViewsSectionRef = useRef(null);
+  /** Snapshot imediatamente anterior à aplicação da view ativa (para desaplicar). */
+  const snapshotBeforeViewRef = useRef(null);
   const loadMoreSentinelRef = useRef(null);
   const loadMoreCooldownRef = useRef(false);
   const [deletingId,  setDeletingId]  = useState(null);
@@ -149,6 +173,19 @@ function TransacoesPageBody({
   /** Saved views (Variação C) persistidas em localStorage por org. */
   const savedViewsApi = useSavedViews(organizationId);
   const [savedViewActive, setSavedViewActive] = useState(null);
+
+  const isDesktopCompact =
+    !isMobile && viewportWidth < DESKTOP_FILTERS_EXPAND_BREAKPOINT;
+
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useEffect(() => {
+    if (!isDesktopCompact) setCompactDesktopFiltersOpen(false);
+  }, [isDesktopCompact]);
 
   useLayoutEffect(() => {
     if (!organizationId) {
@@ -221,6 +258,8 @@ function TransacoesPageBody({
           customFrom: filter.customFrom,
           customTo: filter.customTo,
           sort: filter.sort,
+          valueMin: filter.valueMin,
+          valueMax: filter.valueMax,
         },
         {
           limit: visible,
@@ -236,6 +275,8 @@ function TransacoesPageBody({
       filter.customFrom,
       filter.customTo,
       filter.sort,
+      filter.valueMin,
+      filter.valueMax,
       visible,
       totalCategoriesForBackend,
     ],
@@ -361,10 +402,13 @@ function TransacoesPageBody({
     return true;
   };
 
-  /** Limpa filtros + sort + busca + paginação. Mantém saved view selecionada. */
+  /** Limpa filtros + sort + busca + paginação e desseleciona visualização salva. */
   const clearAll = () => {
     setSearchInput("");
     filter.clearAll();
+    setSavedViewActive(null);
+    setSaveViewFormOpen(false);
+    snapshotBeforeViewRef.current = null;
     setVisible(PAGE_SIZE);
   };
 
@@ -380,6 +424,7 @@ function TransacoesPageBody({
       if (filter.tags.length > 0 && !(t.tags || []).some((tg) => filter.tags.includes(tg))) return false;
       if (filter.rec === "yes" && !t.rec) return false;
       if (filter.rec === "no" && t.rec) return false;
+      if (!matchesValueRange(Math.abs(t.val), filter.valueMin, filter.valueMax)) return false;
       if (debouncedSearch) {
         const needle = debouncedSearch.toLowerCase();
         const haystack = [t.desc, t.cat, ...(t.tags || [])];
@@ -396,6 +441,8 @@ function TransacoesPageBody({
     filter.cats,
     filter.tags,
     filter.rec,
+    filter.valueMin,
+    filter.valueMax,
     filter.period,
     filter.customFrom,
     filter.customTo,
@@ -489,7 +536,101 @@ function TransacoesPageBody({
     [filter.snapshot, searchInput, debouncedSearch],
   );
 
-  /** Saved views adaptadas para a `<TransactionsFilterBar>`. */
+  const activeSavedView = useMemo(
+    () => savedViewsApi.views.find((v) => v.id === savedViewActive) ?? null,
+    [savedViewsApi.views, savedViewActive],
+  );
+
+  const activeSavedViewDirty = useMemo(() => {
+    if (!activeSavedView) return false;
+    return !viewSnapshotsEqual(currentSnapshot, activeSavedView.filters);
+  }, [activeSavedView, currentSnapshot]);
+
+  const applySavedViewFilters = useCallback(
+    (view) => {
+      if (!view?.filters) return;
+      filter.applySnapshot(view.filters);
+      const search =
+        view.filters.searchInput ?? view.filters.debouncedSearch ?? "";
+      setSearchInput(search);
+      setVisible(PAGE_SIZE);
+    },
+    [filter],
+  );
+
+  const captureSnapshotBeforeView = useCallback(() => {
+    snapshotBeforeViewRef.current = { ...currentSnapshot };
+  }, [currentSnapshot]);
+
+  const deapplyActiveSavedView = useCallback(() => {
+    const snap = snapshotBeforeViewRef.current;
+    if (snap) {
+      filter.applySnapshot(snap);
+      setSearchInput(snap.searchInput ?? snap.debouncedSearch ?? "");
+    } else {
+      setSearchInput("");
+      filter.clearAll();
+    }
+    snapshotBeforeViewRef.current = null;
+    setSavedViewActive(null);
+    setVisible(PAGE_SIZE);
+  }, [filter]);
+
+  const openSaveViewForm = useCallback(
+    (mode) => {
+      setSaveViewFormMode(mode);
+      setSaveViewFormOpen(true);
+      if (isMobile) {
+        setFiltersOpen(false);
+        setSheetClosing(false);
+        setSnapFull(false);
+        snapFullRef.current = false;
+        isClosingRef.current = false;
+      }
+      window.requestAnimationFrame(() => {
+        savedViewsSectionRef.current?.scrollIntoView?.({
+          behavior: "smooth",
+          block: "nearest",
+        });
+      });
+    },
+    [isMobile],
+  );
+
+  const handleSaveViewForm = useCallback(
+    ({ mode, name, icon, color }) => {
+      if (mode === "update" && savedViewActive) {
+        savedViewsApi.updateView({
+          id: savedViewActive,
+          name,
+          icon,
+          color,
+          filters: currentSnapshot,
+        });
+      } else {
+        const view = savedViewsApi.createView({
+          name,
+          icon,
+          color,
+          filters: currentSnapshot,
+        });
+        if (view) {
+          if (!snapshotBeforeViewRef.current) {
+            snapshotBeforeViewRef.current = { ...DEFAULT_RESTORE_SNAPSHOT };
+          }
+          setSavedViewActive(view.id);
+        }
+      }
+      setSaveViewFormOpen(false);
+    },
+    [savedViewsApi, savedViewActive, currentSnapshot],
+  );
+
+  const canSaveNewView =
+    listFiltersActive && (!savedViewActive || activeSavedViewDirty);
+  const canUpdateSavedView = Boolean(savedViewActive && activeSavedViewDirty);
+
+  /** Saved views adaptadas para `<SavedViewsCards>`. */
   const savedViewsProp = useMemo(
     () => ({
       items: savedViewsApi.views.map((v) => ({
@@ -498,34 +639,82 @@ function TransacoesPageBody({
         icon: v.icon,
         color: v.color,
         hint: describeView(v, countActiveFiltersInSnapshot(v.filters)),
+        modified: savedViewActive === v.id && activeSavedViewDirty,
       })),
       active: savedViewActive,
       onActivate: (id) => {
-        if (!id) {
-          setSavedViewActive(null);
-          return;
-        }
         const view = savedViewsApi.views.find((v) => v.id === id);
         if (!view) return;
+
+        if (savedViewActive === id) {
+          deapplyActiveSavedView();
+          return;
+        }
+
+        captureSnapshotBeforeView();
         setSavedViewActive(id);
-        filter.applySnapshot(view.filters);
-        setVisible(PAGE_SIZE);
-      },
-      onCreate: ({ name, icon, color }) => {
-        const view = savedViewsApi.createView({
-          name,
-          icon,
-          color,
-          filters: currentSnapshot,
-        });
-        if (view) setSavedViewActive(view.id);
+        applySavedViewFilters(view);
       },
       onDelete: (id) => {
+        if (savedViewActive === id) {
+          deapplyActiveSavedView();
+        }
         savedViewsApi.removeView(id);
-        if (savedViewActive === id) setSavedViewActive(null);
       },
     }),
-    [savedViewsApi, savedViewActive, currentSnapshot, filter],
+    [
+      savedViewsApi,
+      savedViewActive,
+      activeSavedViewDirty,
+      applySavedViewFilters,
+      captureSnapshotBeforeView,
+      deapplyActiveSavedView,
+    ],
+  );
+
+  const showSavedViewsSection = shouldShowSavedViewsSection(
+    savedViewsProp.items.length,
+    listFiltersActive,
+  );
+
+  const activeFacetsForSavedViews = useMemo(() => {
+    const categoriesById = Object.fromEntries(
+      categoriesForFilter.map((c) => [c.id, c]),
+    );
+    const cardsById = Object.fromEntries(cardsForFilter.map((c) => [c.id, c]));
+    return filter
+      .buildFacets({ categoriesById, cardsById })
+      .filter((f) => f.active)
+      .map((f) => ({
+        label: f.label,
+        value: f.value,
+        icon: f.icon,
+        color: f.color || T.ink,
+      }));
+  }, [filter, categoriesForFilter, cardsForFilter]);
+
+  const scrollListToTop = useCallback(() => {
+    const el = listScrollRef.current;
+    if (!el || typeof el.scrollTo !== "function") return;
+    el.scrollTo({ top: 0, behavior: "smooth" });
+  }, []);
+
+  const filterBarApplyProps = useMemo(
+    () => ({
+      filteredCount,
+      resultsLoading:
+        searchAwaitingCommit ||
+        (shouldUseRealData && transactionsData.isLoading),
+      onAfterApply: isMobile ? undefined : scrollListToTop,
+    }),
+    [
+      filteredCount,
+      searchAwaitingCommit,
+      shouldUseRealData,
+      transactionsData.isLoading,
+      isMobile,
+      scrollListToTop,
+    ],
   );
 
   // ── CSV export ────────────────────────────────────────────────────────────
@@ -897,6 +1086,54 @@ function TransacoesPageBody({
 
   // ── Filter UI: extraído para `<TransactionsFilterBar>` (Variação C) ──────
 
+  const filterBarCommonProps = {
+    filter,
+    categories: categoriesForFilter,
+    cards: cardsForFilter,
+    allTags: allTagsForFilter,
+    hideSavedViews: true,
+    searchInput,
+    setSearchInput: (v) => {
+      setSearchInput(v);
+      setVisible(PAGE_SIZE);
+    },
+    onClearAll: clearAll,
+    onSaveViewCreate:
+      canSaveNewView && !saveViewFormOpen ? () => openSaveViewForm("create") : undefined,
+    onSaveViewUpdate:
+      canUpdateSavedView && !saveViewFormOpen ? () => openSaveViewForm("update") : undefined,
+    saveViewUpdateLabel: activeSavedView?.label ?? "",
+    filterToolbarActive: listFiltersActive,
+    ...filterBarApplyProps,
+  };
+
+  const filtersToggleButton = (expanded, onToggle) => (
+    <button
+      type="button"
+      onClick={onToggle}
+      style={{
+        ...G,
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        padding: "9px 13px",
+        background: filter.hasAnyActive || expanded ? T.ink : T.surface,
+        color: filter.hasAnyActive || expanded ? "#fff" : T.inkMid,
+        border: `1px solid ${filter.hasAnyActive || expanded ? T.ink : T.border}`,
+        borderRadius: 10,
+        fontSize: 12,
+        fontWeight: 700,
+        cursor: "pointer",
+        flexShrink: 0,
+      }}
+      aria-label={expanded ? "Ocultar filtros" : "Abrir filtros"}
+      aria-expanded={expanded}
+    >
+      <SlidersHorizontal size={14} />
+      {expanded ? "Ocultar" : "Filtros"}
+    </button>
+  );
+
   const listContent = (
     <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
       {groups.length === 0 ? (
@@ -1059,6 +1296,30 @@ function TransacoesPageBody({
         </button>
       </div>
 
+      {showSavedViewsSection && (
+        <div ref={savedViewsSectionRef}>
+          <SavedViewsCards
+            items={savedViewsProp.items}
+            active={savedViewsProp.active}
+            onActivate={savedViewsProp.onActivate}
+            onDelete={savedViewsProp.onDelete}
+            onOpenSaveForm={openSaveViewForm}
+            onSaveView={handleSaveViewForm}
+            activeFacets={activeFacetsForSavedViews}
+            compact={isMobile}
+            saveFormMode={saveViewFormMode}
+            saveFormInitialName={
+              saveViewFormMode === "update" ? activeSavedView?.label ?? "" : ""
+            }
+            saveFormInitialIcon={activeSavedView?.icon ?? "bookmark"}
+            saveFormInitialColor={activeSavedView?.color}
+            updateViewLabel={activeSavedView?.label ?? ""}
+            newFormOpen={saveViewFormOpen}
+            onNewFormOpenChange={setSaveViewFormOpen}
+          />
+        </div>
+      )}
+
       {/* ── Row 2 (mobile): Search compacto + botão Filtros que abre o bottom sheet ─ */}
       {isMobile && (
         <div style={{ display:"flex", gap:8 }}>
@@ -1072,37 +1333,35 @@ function TransacoesPageBody({
             {searchInput && <button onClick={()=>setSearchInput("")} style={{ background:"none", border:"none",
               cursor:"pointer", padding:2, display:"flex" }}><X size={12} color={T.inkLight}/></button>}
           </div>
-          <button onClick={()=>{ setFiltersOpen(true); setSnapFull(false); }}
-            style={{ ...G, display:"flex", alignItems:"center", gap:6, padding:"9px 13px",
-              background: filter.hasAnyActive ? T.ink : T.surface,
-              color:       filter.hasAnyActive ? "#fff" : T.inkMid,
-              border:`1px solid ${filter.hasAnyActive ? T.ink : T.border}`,
-              borderRadius:10, fontSize:12, fontWeight:700, cursor:"pointer", flexShrink:0 }}
-            aria-label="Abrir filtros">
-            <SlidersHorizontal size={14}/>
-            Filtros
-          </button>
+          {filtersToggleButton(filtersOpen, () => { setFiltersOpen(true); setSnapFull(false); })}
         </div>
       )}
 
-      {/* ── Row 2 (desktop): TransactionsFilterBar — Variação C completa ─────── */}
-      {!isMobile && (
-        <TransactionsFilterBar
-          filter={filter}
-          categories={categoriesForFilter}
-          cards={cardsForFilter}
-          allTags={allTagsForFilter}
-          savedViews={savedViewsProp}
-          searchInput={searchInput}
-          setSearchInput={(v) => {
-            setSearchInput(v);
-            setVisible(PAGE_SIZE);
-          }}
-          onClearAll={() => {
-            setSearchInput("");
-            setVisible(PAGE_SIZE);
-          }}
-        />
+      {/* ── Desktop compacto (md): busca + toggle na mesma linha; facets abaixo quando expandido ─ */}
+      {isDesktopCompact && (
+        <>
+          <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <TransactionsFilterBar
+                {...filterBarCommonProps}
+                hideSavedViews
+                hideFacets
+              />
+            </div>
+            {filtersToggleButton(
+              compactDesktopFiltersOpen,
+              () => setCompactDesktopFiltersOpen((open) => !open),
+            )}
+          </div>
+          {compactDesktopFiltersOpen && (
+            <TransactionsFilterBar {...filterBarCommonProps} hideSearch />
+          )}
+        </>
+      )}
+
+      {/* ── Desktop wide: barra completa ─ */}
+      {!isMobile && !isDesktopCompact && (
+        <TransactionsFilterBar {...filterBarCommonProps} />
       )}
 
       {/* ── MOBILE FILTER BOTTOM SHEET ───────────────────────────────── */}
@@ -1168,22 +1427,9 @@ function TransacoesPageBody({
             <div style={{ overflowY:"auto", flex:1, padding:"16px 16px 20px",
               overscrollBehavior:"contain" }}>
               <TransactionsFilterBar
-                filter={filter}
-                categories={categoriesForFilter}
-                cards={cardsForFilter}
-                allTags={allTagsForFilter}
-                savedViews={savedViewsProp}
+                {...filterBarCommonProps}
                 compact
                 hideSearch
-                searchInput={searchInput}
-                setSearchInput={(v) => {
-                  setSearchInput(v);
-                  setVisible(PAGE_SIZE);
-                }}
-                onClearAll={() => {
-                  setSearchInput("");
-                  setVisible(PAGE_SIZE);
-                }}
               />
             </div>
             {/* Footer CTA — safe area aware */}

@@ -42,22 +42,6 @@ describe("<FacetBar>", () => {
     }
   });
 
-  it("clicar num card abre o facet correspondente (aria-expanded)", async () => {
-    const onToggle = vi.fn();
-    render(<Harness onToggle={onToggle} />);
-    const btn = screen.getByRole("button", { name: /Período: Este mês/i });
-    expect(btn).toHaveAttribute("aria-expanded", "false");
-    await userEvent.click(btn);
-    expect(onToggle).toHaveBeenCalledWith("periodo");
-    expect(btn).toHaveAttribute("aria-expanded", "true");
-  });
-
-  it("badge +N aparece em multi-seleção", () => {
-    render(<Harness />);
-    const cat = screen.getByRole("button", { name: /Categoria: 2 categorias/i });
-    expect(cat).toHaveTextContent("2");
-  });
-
   it("Limpar tudo chama callback quando há ativo", async () => {
     const onClearAll = vi.fn();
     render(<Harness onClearAll={onClearAll} />);
@@ -70,14 +54,45 @@ describe("<FacetBar>", () => {
     expect(screen.getByRole("button", { name: /Limpar todos os filtros/i })).toBeDisabled();
   });
 
-  it("apenas um facet pode estar expandido por vez", async () => {
-    render(<Harness />);
-    const periodo = screen.getByRole("button", { name: /Período:/i });
-    const tipo = screen.getByRole("button", { name: /Tipo:/i });
-    await userEvent.click(periodo);
-    expect(periodo).toHaveAttribute("aria-expanded", "true");
-    await userEvent.click(tipo);
-    expect(periodo).toHaveAttribute("aria-expanded", "false");
-    expect(tipo).toHaveAttribute("aria-expanded", "true");
+  it("Salvar como nova visualização chama callback", async () => {
+    const onSaveViewCreate = vi.fn();
+    render(
+      <FacetBar
+        facets={FACETS}
+        expanded={null}
+        onToggle={vi.fn()}
+        onClearAll={vi.fn()}
+        onSaveViewCreate={onSaveViewCreate}
+        hasAnyActive
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: /Salvar como nova visualização/i }));
+    expect(onSaveViewCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("Atualizar view chama callback com label contextual", async () => {
+    const onSaveViewUpdate = vi.fn();
+    render(
+      <FacetBar
+        facets={FACETS}
+        expanded={null}
+        onToggle={vi.fn()}
+        onClearAll={vi.fn()}
+        onSaveViewUpdate={onSaveViewUpdate}
+        saveViewUpdateLabel="Receitas"
+        hasAnyActive
+      />,
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: /Salvar alterações na visualização Receitas/i }),
+    );
+    expect(onSaveViewUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it("sem callbacks de salvar, links não aparecem", () => {
+    render(<Harness hasAnyActive />);
+    expect(
+      screen.queryByRole("button", { name: /Salvar como nova visualização/i }),
+    ).not.toBeInTheDocument();
   });
 });

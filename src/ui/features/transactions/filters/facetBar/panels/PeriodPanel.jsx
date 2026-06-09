@@ -24,8 +24,14 @@ export function PeriodPanel({
   setCustomFrom = () => {},
   setCustomTo = () => {},
   onClose,
+  onApply,
   compact = false,
 }) {
+  const applyPreset = (value) => {
+    setPeriod(value);
+    if (typeof onApply === "function") onApply();
+  };
+
   return (
     <div>
       <PanelHeader
@@ -41,7 +47,7 @@ export function PeriodPanel({
             <button
               type="button"
               key={o.v}
-              onClick={() => setPeriod(o.v)}
+              onClick={() => applyPreset(o.v)}
               aria-pressed={active}
               style={{
                 ...G,

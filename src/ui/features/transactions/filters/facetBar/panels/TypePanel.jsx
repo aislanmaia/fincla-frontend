@@ -10,7 +10,12 @@ const OPTIONS = [
   { v: "despesa", l: "Despesa", hint: "Saídas e gastos", icon: "trending-down", color: T.red },
 ];
 
-export function TypePanel({ type, setType, onClose, compact = false }) {
+export function TypePanel({ type, setType, onClose, onApply, compact = false }) {
+  const select = (value) => {
+    setType(value);
+    if (typeof onApply === "function") onApply();
+  };
+
   return (
     <div>
       <PanelHeader title="Tipo" onClose={onClose} compact={compact} />
@@ -27,7 +32,7 @@ export function TypePanel({ type, setType, onClose, compact = false }) {
             <button
               type="button"
               key={o.v}
-              onClick={() => setType(o.v)}
+              onClick={() => select(o.v)}
               aria-pressed={active}
               aria-label={o.l}
               style={{

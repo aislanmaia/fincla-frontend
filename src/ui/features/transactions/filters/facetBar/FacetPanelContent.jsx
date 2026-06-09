@@ -45,6 +45,7 @@ export function FacetPanelContent({
   setRec,
   // chrome
   onClose,
+  onApply,
   compact,
 }) {
   switch (facetKey) {
@@ -58,11 +59,14 @@ export function FacetPanelContent({
           customTo={customTo}
           setCustomTo={setCustomTo}
           onClose={onClose}
+          onApply={onApply}
           compact={compact}
         />
       );
     case "tipo":
-      return <TypePanel type={type} setType={setType} onClose={onClose} compact={compact} />;
+      return (
+        <TypePanel type={type} setType={setType} onClose={onClose} onApply={onApply} compact={compact} />
+      );
     case "categoria":
       return (
         <CategoryPanel
@@ -97,7 +101,9 @@ export function FacetPanelContent({
         />
       );
     case "recorrencia":
-      return <RecPanel rec={rec} setRec={setRec} onClose={onClose} compact={compact} />;
+      return (
+        <RecPanel rec={rec} setRec={setRec} onClose={onClose} onApply={onApply} compact={compact} />
+      );
     default:
       return null;
   }

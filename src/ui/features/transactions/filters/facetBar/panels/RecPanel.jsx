@@ -16,7 +16,12 @@ const OPTIONS = [
   { v: "no", l: "Apenas únicas", hint: "Lançamento isolado", icon: "circle" },
 ];
 
-export function RecPanel({ rec, setRec, onClose, compact = false }) {
+export function RecPanel({ rec, setRec, onClose, onApply, compact = false }) {
+  const select = (value) => {
+    setRec(value);
+    if (typeof onApply === "function") onApply();
+  };
+
   return (
     <div>
       <PanelHeader
@@ -39,7 +44,7 @@ export function RecPanel({ rec, setRec, onClose, compact = false }) {
             <button
               type="button"
               key={o.v}
-              onClick={() => setRec(o.v)}
+              onClick={() => select(o.v)}
               aria-pressed={active}
               aria-label={o.l}
               style={{

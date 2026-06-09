@@ -67,6 +67,12 @@ import { TransacoesPage } from "../TransacoesPage.jsx";
 
 beforeEach(() => {
   localStorage.clear();
+  Object.defineProperty(window, "innerWidth", {
+    configurable: true,
+    writable: true,
+    value: 1440,
+  });
+  window.dispatchEvent(new Event("resize"));
 });
 
 afterEach(() => {
@@ -94,12 +100,54 @@ function renderPage(overrides = {}) {
 describe("<TransacoesPage> — integração da Variação C", () => {
   it("monta a página com TransactionsFilterBar (desktop)", () => {
     renderPage();
-    // Título da página
     expect(screen.getByText("Transações")).toBeInTheDocument();
-    // Variação C — busca, saved views, facets
     expect(screen.getByLabelText(/Buscar transações/i)).toBeInTheDocument();
-    expect(screen.getByText(/Visualizações salvas/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Visualizações salvas/i)).not.toBeInTheDocument();
     expect(screen.getByRole("toolbar", { name: /Filtros de transações/i })).toBeInTheDocument();
+  });
+
+  it("exibe visualizações salvas ao aplicar filtro (sem views persistidas)", async () => {
+    renderPage();
+    expect(screen.queryByText(/Visualizações salvas/i)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
+    await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
+    expect(screen.getByText(/Visualizações salvas/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Limpar todos os filtros/i }));
+    expect(screen.queryByText(/Visualizações salvas/i)).not.toBeInTheDocument();
+  });
+
+  it("atalho na FacetBar abre o formulário para salvar como nova visualização", async () => {
+    renderPage();
+    await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
+    await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
+    await userEvent.click(
+      screen.getByRole("button", { name: /Salvar como nova visualização/i }),
+    );
+    expect(screen.getByText("Nova visualização")).toBeInTheDocument();
+  });
+
+  it("exibe visualizações salvas por padrão quando já existem views persistidas", () => {
+    localStorage.setItem(
+      "fincla.transactions.savedViews.v1",
+      JSON.stringify({
+        version: 1,
+        orgs: {
+          "org-test": [
+            {
+              id: "v1",
+              label: "Minha view",
+              icon: "bookmark",
+              color: "#2563EB",
+              filters: { period: "mes", type: "todos" },
+              createdAt: 1,
+            },
+          ],
+        },
+      }),
+    );
+    renderPage();
+    expect(screen.getByText(/Visualizações salvas/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Minha view" })).toBeInTheDocument();
   });
 
   it("renderiza os 7 facet cards com valores derivados do estado inicial", () => {
@@ -114,12 +162,13 @@ describe("<TransacoesPage> — integração da Variação C", () => {
     expect(screen.getByRole("button", { name: /Recorrência: Todas/i })).toBeInTheDocument();
   });
 
-  it("expande o painel inline da facet Tipo e a seleção atualiza o card", async () => {
+  it("expande o painel inline da facet Tipo e a seleção atualiza o card e fecha o painel", async () => {
     renderPage();
     await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
     expect(screen.getByRole("region", { name: /Filtro: tipo/i })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
     expect(screen.getByRole("button", { name: /Tipo: Despesa/i })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /Filtro: tipo/i })).not.toBeInTheDocument();
   });
 
   it("ordenação multi-nível é acessível via SortButton da SearchBar", async () => {
@@ -156,6 +205,8 @@ describe("<TransacoesPage> — integração da Variação C", () => {
   });
 
   it("mobile: mostra search compacto + botão Filtros que abre o sheet com a Variação C", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 375 });
+    window.dispatchEvent(new Event("resize"));
     renderPage({ isMobile: true });
     expect(screen.getByPlaceholderText(/Buscar por descrição, categoria ou tag/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /Abrir filtros/i }));
@@ -166,15 +217,61 @@ describe("<TransacoesPage> — integração da Variação C", () => {
 
   it("criar saved view persiste em localStorage por org", async () => {
     renderPage();
+    await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
+    await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
     await userEvent.click(screen.getByRole("button", { name: /^Nova$/ }));
     await userEvent.type(screen.getByLabelText(/Nome da visualização/i), "Minha view");
-    await userEvent.click(screen.getByRole("button", { name: /Salvar visualização/i }));
+    await userEvent.click(screen.getByRole("button", { name: /Salvar como nova visualização/i }));
     expect(screen.getByRole("button", { name: "Minha view" })).toBeInTheDocument();
-    // localStorage gravado para a org
     const raw = localStorage.getItem("fincla.transactions.savedViews.v1");
     expect(raw).toBeTruthy();
     const parsed = JSON.parse(raw);
     expect(parsed.orgs["org-test"]).toBeDefined();
     expect(parsed.orgs["org-test"][0].label).toBe("Minha view");
+  });
+
+  it("clicar na view ativa desaplica filtros e desseleciona o card", async () => {
+    renderPage();
+    expect(screen.getByRole("button", { name: /Tipo: Todos/i })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
+    await userEvent.click(screen.getByRole("button", { name: "Receita" }));
+    await userEvent.click(screen.getByRole("button", { name: /^Nova$/ }));
+    await userEvent.type(screen.getByLabelText(/Nome da visualização/i), "receitas");
+    await userEvent.click(screen.getByRole("button", { name: /Salvar como nova visualização/i }));
+    const card = screen.getByRole("button", { name: "receitas" });
+    expect(card).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /Tipo: Receita/i })).toBeInTheDocument();
+    await userEvent.click(card);
+    expect(card).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: /Tipo: Todos/i })).toBeInTheDocument();
+  });
+
+  it("view dirty: card mostra Filtros alterados; Limpar tudo desseleciona", async () => {
+    renderPage();
+    await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
+    await userEvent.click(screen.getByRole("button", { name: "Receita" }));
+    await userEvent.click(screen.getByRole("button", { name: /^Nova$/ }));
+    await userEvent.type(screen.getByLabelText(/Nome da visualização/i), "receitas");
+    await userEvent.click(screen.getByRole("button", { name: /Salvar como nova visualização/i }));
+    const card = screen.getByRole("button", { name: "receitas" });
+    expect(card).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(screen.getByRole("button", { name: /Categoria:/i }));
+    await userEvent.click(screen.getByRole("button", { name: "Alimentação" }));
+    expect(screen.getByText(/Filtros alterados/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Limpar todos os filtros/i }));
+    expect(card).toHaveAttribute("aria-pressed", "false");
+    expect(screen.queryByText(/Filtros alterados/i)).not.toBeInTheDocument();
+  });
+
+  it("desktop compacto: facets ocultos por padrão; botão Filtros expande inline", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1200 });
+    window.dispatchEvent(new Event("resize"));
+    renderPage();
+    expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Abrir filtros/i })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Abrir filtros/i }));
+    expect(screen.getByRole("toolbar", { name: /Filtros de transações/i })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Ocultar filtros/i }));
+    expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).not.toBeInTheDocument();
   });
 });

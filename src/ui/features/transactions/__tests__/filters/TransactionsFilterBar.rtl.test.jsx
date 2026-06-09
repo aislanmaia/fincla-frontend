@@ -20,7 +20,7 @@ const CARDS = [
 ];
 const ALL_TAGS = ["trabalho", "casa"];
 
-function Harness({ initialViews = [] } = {}) {
+function Harness({ initialViews = [], filteredCount = 2 } = {}) {
   const filter = useTransactionsFilterState();
   const [views, setViews] = useState(initialViews);
   const [active, setActive] = useState(null);
@@ -31,10 +31,11 @@ function Harness({ initialViews = [] } = {}) {
       categories={CATEGORIES}
       cards={CARDS}
       allTags={ALL_TAGS}
+      filteredCount={filteredCount}
       savedViews={{
         items: views,
         active,
-        onActivate: setActive,
+        onActivate: (id) => setActive((prev) => (prev === id ? null : id)),
         onCreate: ({ name, icon, color }) => {
           const v = { id: "v" + (views.length + 1), label: name, icon, color, hint: "" };
           setViews([...views, v]);
@@ -84,13 +85,45 @@ describe("<TransactionsFilterBar>", () => {
     expect(screen.queryByRole("region", { name: /Filtro: tipo/i })).not.toBeInTheDocument();
   });
 
-  it("mudar facet atualiza o card com o valor formatado", async () => {
+  it("mudar facet atualiza o card com o valor formatado e fecha o painel (apply & dismiss)", async () => {
     render(<Harness />);
     await userEvent.click(screen.getByRole("button", { name: /Tipo:/i }));
     await userEvent.click(within(screen.getByRole("region")).getByRole("button", { name: "Despesa" }));
     expect(screen.getByRole("button", { name: /Tipo: Despesa/i })).toBeInTheDocument();
-    // botão Limpar tudo fica habilitado
+    expect(screen.queryByRole("region", { name: /Filtro: tipo/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Limpar todos os filtros/i })).toBeEnabled();
+  });
+
+  it("preset de período aplica e fecha o painel inline", async () => {
+    render(<Harness />);
+    await userEvent.click(screen.getByRole("button", { name: /Período:/i }));
+    await userEvent.click(within(screen.getByRole("region")).getByRole("button", { name: "Este mês" }));
+    expect(screen.getByRole("button", { name: /Período: Este mês/i })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /Filtro: periodo/i })).not.toBeInTheDocument();
+  });
+
+  it("período personalizado exibe intervalo amigável no facet card", async () => {
+    render(<Harness />);
+    await userEvent.click(screen.getByRole("button", { name: /Período:/i }));
+    const region = screen.getByRole("region", { name: /Filtro: periodo/i });
+    fireEvent.change(within(region).getByLabelText(/Data inicial/i), {
+      target: { value: "2026-10-01" },
+    });
+    fireEvent.change(within(region).getByLabelText(/Data final/i), {
+      target: { value: "2026-10-15" },
+    });
+    expect(screen.getByRole("button", { name: /Período: 1–15 out/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Personalizado/i })).not.toBeInTheDocument();
+  });
+
+  it("CTA Ver N transações fecha painel multi-select sem reverter filtro", async () => {
+    render(<Harness filteredCount={5} />);
+    await userEvent.click(screen.getByRole("button", { name: /Categoria:/i }));
+    await userEvent.click(within(screen.getByRole("region")).getByRole("button", { name: "Alimentação" }));
+    expect(screen.getByRole("button", { name: /Categoria: Alimentação/i })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Ver 5 transações/i }));
+    expect(screen.queryByRole("region", { name: /Filtro: categoria/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Categoria: Alimentação/i })).toBeInTheDocument();
   });
 
   it("Limpar tudo zera filtros e fecha o painel", async () => {
@@ -103,11 +136,13 @@ describe("<TransactionsFilterBar>", () => {
     expect(screen.queryByRole("region", { name: /Filtro: categoria/i })).not.toBeInTheDocument();
   });
 
-  it("criar saved view via + Nova e clicar ativa/desativa", async () => {
+  it("criar saved view via + Nova; segundo clique desaplica", async () => {
     render(<Harness />);
+    await userEvent.click(screen.getByRole("button", { name: /Tipo:/i }));
+    await userEvent.click(within(screen.getByRole("region")).getByRole("button", { name: "Despesa" }));
     await userEvent.click(screen.getByRole("button", { name: /^Nova$/ }));
     await userEvent.type(screen.getByLabelText(/Nome da visualização/i), "Minha view");
-    await userEvent.click(screen.getByRole("button", { name: /Salvar visualização/i }));
+    await userEvent.click(screen.getByRole("button", { name: /Salvar como nova visualização/i }));
     const card = screen.getByRole("button", { name: "Minha view" });
     expect(card).toHaveAttribute("aria-pressed", "true");
     await userEvent.click(card);
@@ -143,12 +178,13 @@ describe("<TransactionsFilterBar>", () => {
           categories={CATEGORIES}
           cards={CARDS}
           allTags={ALL_TAGS}
+          filteredCount={3}
           compact
           hideSearch={hideSearch}
           savedViews={{
             items: views,
             active,
-            onActivate: setActive,
+            onActivate: (id) => setActive((prev) => (prev === id ? null : id)),
             onCreate: ({ name, icon, color }) => {
               const v = { id: "v" + (views.length + 1), label: name, icon, color, hint: "" };
               setViews([...views, v]);
@@ -173,6 +209,14 @@ describe("<TransactionsFilterBar>", () => {
       expect(screen.queryByLabelText(/Buscar transações/i)).not.toBeInTheDocument();
       // Sort button continua presente
       expect(screen.getByRole("button", { name: /Ordenar transações:/i })).toBeInTheDocument();
+    });
+
+    it("compact: preset de tipo fecha o painel inline (apply & dismiss)", async () => {
+      render(<CompactHarness hideSearch />);
+      await userEvent.click(screen.getByRole("button", { name: /Tipo:/i }));
+      await userEvent.click(within(screen.getByRole("region")).getByRole("button", { name: "Despesa" }));
+      expect(screen.queryByRole("region", { name: /Filtro: tipo/i })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Tipo: Despesa/i })).toBeInTheDocument();
     });
 
     it("compact: expandir facet renderiza o painel inline (sem absolute, no fluxo)", async () => {

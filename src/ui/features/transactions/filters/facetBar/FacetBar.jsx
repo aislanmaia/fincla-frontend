@@ -3,16 +3,96 @@ import { T } from "../../../../tokens";
 import { G } from "../../../../typography";
 import { FacetCard } from "./FacetCard.jsx";
 
+function truncateLabel(text, max = 22) {
+  const s = String(text || "").trim();
+  if (s.length <= max) return s;
+  return `${s.slice(0, max - 1)}…`;
+}
+
+const saveLinkStyle = (compact) => ({
+  ...G,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 5,
+  padding: compact ? "11px 12px" : "0 12px",
+  borderRadius: compact ? 10 : 9,
+  border: compact ? `1px solid ${T.border}` : "none",
+  background: compact ? T.surface : "transparent",
+  fontSize: compact ? 12.5 : 11.5,
+  fontWeight: 700,
+  color: T.blue,
+  cursor: "pointer",
+  width: compact ? "100%" : undefined,
+  flex: compact ? 1 : undefined,
+  minWidth: 0,
+  whiteSpace: compact ? "normal" : "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+});
+
 /**
  * Barra/grade de facets. Estado `expanded` indica qual facet está aberta —
  * apenas uma por vez. O painel é renderizado fora da barra, inline abaixo
  * (responsabilidade do componente pai).
- *
- * Modo padrão (desktop): flex horizontal com wrap.
- * Modo `compact` (mobile): grid 2 colunas com cards mais altos (touch
- * targets ≥ 56px). Ações ("Limpar tudo") em uma linha própria abaixo.
  */
-export function FacetBar({ facets, expanded, onToggle, onClearAll, hasAnyActive = false, compact = false }) {
+export function FacetBar({
+  facets,
+  expanded,
+  onToggle,
+  onClearAll,
+  onSaveViewCreate,
+  onSaveViewUpdate,
+  saveViewUpdateLabel = "",
+  hasAnyActive = false,
+  compact = false,
+}) {
+  const saveActions = [];
+
+  if (typeof onSaveViewUpdate === "function") {
+    const short = truncateLabel(saveViewUpdateLabel);
+    saveActions.push(
+      <button
+        key="update"
+        type="button"
+        onClick={onSaveViewUpdate}
+        aria-label={`Salvar alterações na visualização ${saveViewUpdateLabel}`}
+        style={saveLinkStyle(compact)}
+      >
+        {compact ? "Salvar alterações" : `Atualizar “${short}”`}
+      </button>,
+    );
+  }
+
+  if (typeof onSaveViewCreate === "function") {
+    saveActions.push(
+      <button
+        key="create"
+        type="button"
+        onClick={onSaveViewCreate}
+        aria-label="Salvar como nova visualização"
+        style={saveLinkStyle(compact)}
+      >
+        Salvar como nova visualização
+      </button>,
+    );
+  }
+
+  const saveButtons =
+    saveActions.length > 0 ? (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: compact ? "column" : "row",
+          gap: compact ? 8 : 4,
+          alignItems: compact ? "stretch" : "center",
+          flexShrink: 0,
+        }}
+      >
+        {saveActions}
+      </div>
+    ) : null;
+
   if (compact) {
     return (
       <div
@@ -46,31 +126,40 @@ export function FacetBar({ facets, expanded, onToggle, onClearAll, hasAnyActive 
             />
           ))}
         </div>
-        <button
-          type="button"
-          onClick={onClearAll}
-          disabled={!hasAnyActive}
-          aria-label="Limpar todos os filtros"
+        <div
           style={{
-            ...G,
             display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 6,
-            padding: "11px 12px",
-            borderRadius: 10,
-            border: `1px solid ${hasAnyActive ? T.redLight : T.border}`,
-            background: hasAnyActive ? T.redLight : "transparent",
-            fontSize: 12.5,
-            fontWeight: 700,
-            color: hasAnyActive ? T.red : T.inkGhost,
-            cursor: hasAnyActive ? "pointer" : "not-allowed",
-            opacity: hasAnyActive ? 1 : 0.55,
-            width: "100%",
+            gap: 8,
+            flexDirection: "column",
           }}
         >
-          Limpar tudo
-        </button>
+          {saveButtons}
+          <button
+            type="button"
+            onClick={onClearAll}
+            disabled={!hasAnyActive}
+            aria-label="Limpar todos os filtros"
+            style={{
+              ...G,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              padding: "11px 12px",
+              borderRadius: 10,
+              border: `1px solid ${hasAnyActive ? T.redLight : T.border}`,
+              background: hasAnyActive ? T.redLight : "transparent",
+              fontSize: 12.5,
+              fontWeight: 700,
+              color: hasAnyActive ? T.red : T.inkGhost,
+              cursor: hasAnyActive ? "pointer" : "not-allowed",
+              opacity: hasAnyActive ? 1 : 0.55,
+              width: "100%",
+            }}
+          >
+            Limpar tudo
+          </button>
+        </div>
       </div>
     );
   }
@@ -101,29 +190,32 @@ export function FacetBar({ facets, expanded, onToggle, onClearAll, hasAnyActive 
         />
       ))}
       <div style={{ flex: 1 }} />
-      <button
-        type="button"
-        onClick={onClearAll}
-        disabled={!hasAnyActive}
-        aria-label="Limpar todos os filtros"
-        style={{
-          ...G,
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 5,
-          padding: "0 12px",
-          borderRadius: 9,
-          border: "none",
-          background: "transparent",
-          fontSize: 11.5,
-          fontWeight: 700,
-          color: hasAnyActive ? T.red : T.inkGhost,
-          cursor: hasAnyActive ? "pointer" : "not-allowed",
-          opacity: hasAnyActive ? 1 : 0.6,
-        }}
-      >
-        Limpar tudo
-      </button>
+      <div style={{ display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+        {saveButtons}
+        <button
+          type="button"
+          onClick={onClearAll}
+          disabled={!hasAnyActive}
+          aria-label="Limpar todos os filtros"
+          style={{
+            ...G,
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 5,
+            padding: "0 12px",
+            borderRadius: 9,
+            border: "none",
+            background: "transparent",
+            fontSize: 11.5,
+            fontWeight: 700,
+            color: hasAnyActive ? T.red : T.inkGhost,
+            cursor: hasAnyActive ? "pointer" : "not-allowed",
+            opacity: hasAnyActive ? 1 : 0.6,
+          }}
+        >
+          Limpar tudo
+        </button>
+      </div>
     </div>
   );
 }
