@@ -472,8 +472,8 @@ function resolveDateRange(period, customFrom, customTo) {
 
   if (period === "custom" && (customFrom || customTo)) {
     return {
-      date_start: customFrom || undefined,
-      date_end: customTo || undefined,
+      ...(customFrom ? { date_start: customFrom } : {}),
+      ...(customTo ? { date_end: customTo } : {}),
     };
   }
 

@@ -163,6 +163,31 @@ describe("transactionsAdapter", () => {
     ]);
   });
 
+  it("período custom envia só date_start quando apenas De está definido", () => {
+    expect(
+      buildTransactionsQuery({
+        organizationId: "org-1",
+        period: "custom",
+        customFrom: "2026-03-01",
+        customTo: "",
+        limit: 10,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        date_start: "2026-03-01",
+      }),
+    );
+    expect(
+      buildTransactionsQuery({
+        organizationId: "org-1",
+        period: "custom",
+        customFrom: "2026-03-01",
+        customTo: "",
+        limit: 10,
+      }),
+    ).not.toHaveProperty("date_end");
+  });
+
   it("converte filtros da UI para query da API", () => {
     expect(
       buildTransactionsQuery({

@@ -38,9 +38,13 @@ function normalizeRow(raw) {
   if (period === "custom") {
     const f = parseYmd(customFrom);
     const t = parseYmd(customTo);
-    if (!f || !t) return null;
-    if (f > t) return null;
-    return { period, customFrom, customTo };
+    if (!f && !t) return null;
+    if (f && t && f > t) return null;
+    return {
+      period,
+      customFrom: f ? customFrom : "",
+      customTo: t ? customTo : "",
+    };
   }
   return { period, customFrom: "", customTo: "" };
 }
