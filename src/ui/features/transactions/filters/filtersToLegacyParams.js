@@ -8,10 +8,10 @@
  *  - Não há `method`/forma de pagamento na Variação C (foi removido do design);
  *    sempre enviamos "todos".
  *  - O sort do backend é único; enviamos o primeiro critério da lista multi-nível.
- *  - Faixa de valor (`valueMin`/`valueMax`) e recorrência (`rec`) não têm filtros
- *    correspondentes no contrato atual — são aplicados client-side quando em modo mock,
- *    e ignorados quando em modo live (até o backend suportar).
+ *  - Recorrência (`rec`) ainda não tem filtro correspondente no backend.
  */
+
+import { parseMoneyInput } from "../../onboarding/onboardingValueUtils.js";
 
 const SORT_FIELD_TO_LEGACY = {
   date: { asc: "date-asc", desc: "date-desc" },
@@ -49,6 +49,26 @@ export function mapCatsToLegacy(cats, totalCategories) {
   return cats[0];
 }
 
+/** Converte strings BRL ("200,00") em números para `value_min`/`value_max` da API. */
+export function mapValueRangeToLegacy(valueMin, valueMax) {
+  const min = parseMoneyInput(valueMin);
+  const max = parseMoneyInput(valueMax);
+  return {
+    ...(min != null ? { valueMin: min } : {}),
+    ...(max != null ? { valueMax: max } : {}),
+  };
+}
+
+/** Filtro client-side (mock): compara valor absoluto da transação com a faixa informada. */
+export function matchesValueRange(absAmount, valueMin, valueMax) {
+  if (!valueMin && !valueMax) return true;
+  const min = parseMoneyInput(valueMin);
+  const max = parseMoneyInput(valueMax);
+  if (min != null && absAmount < min) return false;
+  if (max != null && absAmount > max) return false;
+  return true;
+}
+
 /**
  * Devolve o objeto consumido por `buildTransactionsQuery` / `useTransactionsData`.
  *
@@ -73,6 +93,7 @@ export function filtersToLegacyParams(
     customFrom: state.customFrom,
     customTo: state.customTo,
     sortBy: mapSortToLegacy(state.sort),
+    ...mapValueRangeToLegacy(state.valueMin, state.valueMax),
     limit,
   };
 }

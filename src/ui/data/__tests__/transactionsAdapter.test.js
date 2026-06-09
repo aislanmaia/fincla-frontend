@@ -175,6 +175,8 @@ describe("transactionsAdapter", () => {
         customFrom: "2026-03-01",
         customTo: "2026-03-31",
         sortBy: "val-desc",
+        valueMin: 50,
+        valueMax: 200,
         limit: 20,
       }),
     ).toEqual({
@@ -185,6 +187,8 @@ describe("transactionsAdapter", () => {
       payment_method: "Crédito",
       date_start: "2026-03-01",
       date_end: "2026-03-31",
+      value_min: 50,
+      value_max: 200,
       page: 1,
       limit: 20,
       sort_by: "value",

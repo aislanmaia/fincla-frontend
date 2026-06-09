@@ -499,6 +499,8 @@ export function buildTransactionsQuery({
   customFrom = "",
   customTo = "",
   sortBy = "date-desc",
+  valueMin,
+  valueMax,
   limit = 10,
 }) {
   const categoryFilter =
@@ -517,6 +519,8 @@ export function buildTransactionsQuery({
     ...categoryFilter,
     ...(filterMethod !== "todos" ? { payment_method: filterMethod } : {}),
     ...resolveDateRange(period, customFrom, customTo),
+    ...(valueMin != null ? { value_min: valueMin } : {}),
+    ...(valueMax != null ? { value_max: valueMax } : {}),
     page: 1,
     limit,
     ...resolveSort(sortBy),
@@ -600,6 +604,8 @@ export function buildTransactionsSummaryQuery({
   period = "tudo",
   customFrom = "",
   customTo = "",
+  valueMin,
+  valueMax,
 }) {
   const categoryFilter =
     filterCat !== "todas"
@@ -617,6 +623,8 @@ export function buildTransactionsSummaryQuery({
     ...categoryFilter,
     ...(filterMethod !== "todos" ? { payment_method: filterMethod } : {}),
     ...resolveDateRange(period, customFrom, customTo),
+    ...(valueMin != null ? { value_min: valueMin } : {}),
+    ...(valueMax != null ? { value_max: valueMax } : {}),
   };
 }
 

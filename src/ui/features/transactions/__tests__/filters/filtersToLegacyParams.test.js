@@ -4,6 +4,8 @@ import {
   mapCatsToLegacy,
   mapSortToLegacy,
   mapTypeToLegacy,
+  mapValueRangeToLegacy,
+  matchesValueRange,
 } from "../../filters/filtersToLegacyParams.js";
 
 describe("mapCatsToLegacy", () => {
@@ -62,6 +64,34 @@ describe("mapTypeToLegacy", () => {
   });
 });
 
+describe("mapValueRangeToLegacy", () => {
+  it("converte strings BRL em números", () => {
+    expect(mapValueRangeToLegacy("100,00", "500,00")).toEqual({
+      valueMin: 100,
+      valueMax: 500,
+    });
+  });
+
+  it("ignora campos vazios ou inválidos", () => {
+    expect(mapValueRangeToLegacy("", "")).toEqual({});
+    expect(mapValueRangeToLegacy("200,00", "")).toEqual({ valueMin: 200 });
+    expect(mapValueRangeToLegacy("", "abc")).toEqual({});
+  });
+});
+
+describe("matchesValueRange", () => {
+  it("aceita qualquer valor quando a faixa está vazia", () => {
+    expect(matchesValueRange(150, "", "")).toBe(true);
+  });
+
+  it("filtra por mínimo, máximo ou ambos", () => {
+    expect(matchesValueRange(50, "100", "")).toBe(false);
+    expect(matchesValueRange(150, "100", "")).toBe(true);
+    expect(matchesValueRange(600, "", "500")).toBe(false);
+    expect(matchesValueRange(400, "100,00", "500,00")).toBe(true);
+  });
+});
+
 describe("filtersToLegacyParams", () => {
   const base = {
     type: "todos",
@@ -71,6 +101,20 @@ describe("filtersToLegacyParams", () => {
     customTo: "",
     sort: [{ field: "date", dir: "desc" }],
   };
+
+  it("inclui faixa de valor quando informada", () => {
+    expect(
+      filtersToLegacyParams(
+        { ...base, valueMin: "50,00", valueMax: "200,00" },
+        { limit: 30 },
+      ),
+    ).toEqual(
+      expect.objectContaining({
+        valueMin: 50,
+        valueMax: 200,
+      }),
+    );
+  });
 
   it("monta o objeto completo com defaults sensatos", () => {
     expect(
