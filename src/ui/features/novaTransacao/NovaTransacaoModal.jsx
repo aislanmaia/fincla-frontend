@@ -1135,9 +1135,10 @@ export const NovaTransacaoModal = ({
       setTxSubmitting(true);
       setTxSubmitError("");
       try {
-        const cardId =
-          method === "credito" && cardId && cardId !== "novo"
-            ? Number(cardId)
+        const selectedCardId = cardId;
+        const cardIdNum =
+          method === "credito" && selectedCardId && selectedCardId !== "novo"
+            ? Number(selectedCardId)
             : null;
         const endYmd =
           recurrenceEndKind === "data" && recurrenceEndDateYmd &&
@@ -1156,7 +1157,7 @@ export const NovaTransacaoModal = ({
           endDateYmd: endYmd,
           valorTipoRec: recurrenceValueKind,
           categoryLabel: cat,
-          cardId: Number.isFinite(cardId) ? cardId : null,
+          cardId: Number.isFinite(cardIdNum) ? cardIdNum : null,
           dayOfWeek: effectiveDayOfWeek,
           dayOfMonth: effectiveDayOfMonth,
           interval: customRecurrenceInterval,
@@ -1224,9 +1225,10 @@ export const NovaTransacaoModal = ({
         } else if (method === "credito") {
           modality = "cash";
         }
-        const cardId =
-          method === "credito" && cardId && cardId !== "novo"
-            ? Number(cardId)
+        const selectedCardId = cardId;
+        const cardIdNum =
+          method === "credito" && selectedCardId && selectedCardId !== "novo"
+            ? Number(selectedCardId)
             : null;
         const dateIso = transactionDateIsoFromYmd(txDateYmd);
         if (editingTransactionIdStr != null || editingTransactionId != null) {
@@ -1245,7 +1247,7 @@ export const NovaTransacaoModal = ({
               dateIso,
               installmentsCount,
               modality,
-              cardId: Number.isFinite(cardId) ? cardId : null,
+              cardId: Number.isFinite(cardIdNum) ? cardIdNum : null,
               recurring: isRecurring,
             }),
           );
@@ -1263,7 +1265,7 @@ export const NovaTransacaoModal = ({
               dateIso,
               installmentsCount,
               modality,
-              cardId: Number.isFinite(cardId) ? cardId : null,
+              cardId: Number.isFinite(cardIdNum) ? cardIdNum : null,
               refundOfTransactionId: isRefund ? refund.refundOfTransactionId : null,
             }),
           );

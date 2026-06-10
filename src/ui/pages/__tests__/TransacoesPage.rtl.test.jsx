@@ -43,8 +43,29 @@ const transactionsDataMock = vi.fn(() => ({
       rec: true,
       tags: [],
     },
+    {
+      id: "tx-3",
+      date: "23/05",
+      desc: "Notebook",
+      cat: "Compras",
+      val: -4299,
+      method: "Cartão de crédito",
+      paymentMethodKey: "credito",
+      type: "expense",
+      icon: "💳",
+      status: "confirmado",
+      rec: false,
+      tags: [],
+      parcela: {
+        atual: 2,
+        total: 12,
+        valParcela: 358.25,
+        cartao: "Nubank •• 1177",
+        vencimento: "10/06/2026",
+      },
+    },
   ],
-  total: 2,
+  total: 3,
   hasMore: false,
   removeTransaction: vi.fn(),
 }));
@@ -202,6 +223,12 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     renderPage();
     expect(screen.getAllByText("Almoço").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Salário").length).toBeGreaterThan(0);
+  });
+
+  it("mostra crédito inline com cartão quando paymentMethodKey indica crédito", () => {
+    renderPage();
+    expect(screen.getByText("Crédito")).toBeInTheDocument();
+    expect(screen.getByText(/1177/)).toBeInTheDocument();
   });
 
   it("mobile: mostra search compacto + botão Filtros que abre o sheet com a Variação C", async () => {

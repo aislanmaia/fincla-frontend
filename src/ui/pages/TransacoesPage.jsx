@@ -926,7 +926,7 @@ function TransacoesPageBody({
     const isRefund   = tx.type === "refund";
     const isReceita  = tx.type === "income" || isRefund;
     const hasParcela = !!tx.parcela && !isRefund;
-    const isCredito  = tx.method === "Crédito";
+    const isCredito  = tx.paymentMethodKey === "credito" || tx.method === "Crédito";
     const hasRefundsLinked = tx.refundsSummary && tx.refundsSummary.count > 0;
     const tags       = tx.tags || [];
     const visibleTags = tags.slice(0,2);
