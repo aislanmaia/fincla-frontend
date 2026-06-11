@@ -199,7 +199,7 @@ export function PlansComparisonModal({ currentPlanId, onClose }) {
         <BillingCycleToggle
           value={billingCycle}
           onChange={setBillingCycle}
-          yearlyDiscountPct={maxYearlyDiscount}
+          yearlyDiscountPercentValue={maxYearlyDiscount}
         />
 
         {isLoading && (
@@ -278,7 +278,7 @@ export function PlansComparisonModal({ currentPlanId, onClose }) {
   );
 }
 
-function BillingCycleToggle({ value, onChange, yearlyDiscountPct }) {
+function BillingCycleToggle({ value, onChange, yearlyDiscountPercentValue }) {
   return (
     <div
       role="tablist"
@@ -304,7 +304,9 @@ function BillingCycleToggle({ value, onChange, yearlyDiscountPct }) {
         active={value === "yearly"}
         onClick={() => onChange("yearly")}
         label={
-          yearlyDiscountPct ? `Anual -${yearlyDiscountPct}%` : "Anual"
+          yearlyDiscountPercentValue
+            ? `Anual -${yearlyDiscountPercentValue}%`
+            : "Anual"
         }
       />
     </div>

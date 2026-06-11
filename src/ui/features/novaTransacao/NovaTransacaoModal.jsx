@@ -562,9 +562,9 @@ export const NovaTransacaoModal = ({
     setModalityChoicealCardsLoading(true);
     setModalityChoicealCardsError("");
     listCreditCards(organizationId)
-      .then((cards) => {
+      .then((cardRows) => {
         if (cancelled) return;
-        setModalityChoicealCardsRows(cards.map(mapCreditCardToModalPickerRow));
+        setModalityChoicealCardsRows(cardRows.map(mapCreditCardToModalPickerRow));
         setModalityChoicealCardsLoading(false);
       })
       .catch((e) => {

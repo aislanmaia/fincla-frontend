@@ -58,11 +58,13 @@ export function useTransactionsFilterState({
   }, []);
 
   /** Restaura todo o estado (filtros + sort) para o snapshot fornecido. */
-  const applySnapshot = useCallback((snapshot) => {
-    if (!snapshot || typeof snapshot !== "object") return;
-    const next = normalizeInitial(snapshot);
+  const applySnapshot = useCallback((nextSnapshot) => {
+    if (!nextSnapshot || typeof nextSnapshot !== "object") return;
+    const next = normalizeInitial(nextSnapshot);
     setState(next);
-    if (Array.isArray(snapshot.sort) && snapshot.sort.length) setSort(snapshot.sort);
+    if (Array.isArray(nextSnapshot.sort) && nextSnapshot.sort.length) {
+      setSort(nextSnapshot.sort);
+    }
   }, []);
 
   /** Resgata o snapshot serializável atual — usado por NewViewForm e localStorage. */
