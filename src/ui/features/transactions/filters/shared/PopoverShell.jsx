@@ -17,9 +17,13 @@ export function PopoverShell({
   minWidth = 420,
   maxWidth = 480,
   compact = false,
+  dashed = false,
   children,
   style,
 }) {
+  const borderStyle = dashed ? "dashed" : "solid";
+  const borderColor = dashed ? T.border : T.border;
+
   if (compact) {
     return (
       <div
@@ -29,7 +33,7 @@ export function PopoverShell({
           width: "100%",
           marginTop: 10,
           background: T.surface,
-          border: `1px solid ${T.border}`,
+          border: `1px ${borderStyle} ${borderColor}`,
           borderRadius: 14,
           boxShadow: T.md,
           padding: "16px 14px",
@@ -53,7 +57,7 @@ export function PopoverShell({
         minWidth,
         maxWidth,
         background: T.surface,
-        border: `1px solid ${T.border}`,
+        border: `1px ${borderStyle} ${borderColor}`,
         borderRadius: 12,
         boxShadow: T.lg,
         padding: "16px 18px",

@@ -8,6 +8,7 @@ import { NewViewForm } from "./NewViewForm.jsx";
 
 /**
  * Tira de saved views como cards + botão "+ Nova" que abre o formulário unificado.
+ * Create: popover abaixo de "+ Nova". Update: popover abaixo do card ativo.
  */
 export function SavedViewsCards({
   items,
@@ -30,12 +31,36 @@ export function SavedViewsCards({
   const newOpen = newFormOpenProp !== undefined ? newFormOpenProp : newOpenInternal;
   const setNewOpen = onNewFormOpenChange ?? setNewOpenInternal;
 
+  const isUpdateMode = saveFormMode === "update";
+  const showCreateForm = newOpen && !isUpdateMode;
+  const showUpdateForm = newOpen && isUpdateMode;
+
   const openCreateForm = () => {
     if (typeof onOpenSaveForm === "function") onOpenSaveForm("create");
     setNewOpen(true);
   };
 
   const closeForm = () => setNewOpen(false);
+
+  const saveForm = (
+    <PopoverShell minWidth={340} maxWidth={380} compact={compact} dashed>
+      <NewViewForm
+        key={`${saveFormMode}-${updateViewLabel}-${saveFormInitialName}`}
+        mode={saveFormMode}
+        initialName={saveFormInitialName}
+        initialIcon={saveFormInitialIcon}
+        initialColor={saveFormInitialColor}
+        updateViewLabel={updateViewLabel}
+        activeFacets={activeFacets}
+        onCancel={closeForm}
+        compact={compact}
+        onSave={(draft) => {
+          onSaveView({ mode: saveFormMode, ...draft });
+          closeForm();
+        }}
+      />
+    </PopoverShell>
+  );
 
   return (
     <div>
@@ -67,107 +92,118 @@ export function SavedViewsCards({
           overflowX: "visible",
           paddingBottom: 4,
           flexWrap: compact ? undefined : "wrap",
+          alignItems: compact ? undefined : "flex-start",
         }}
       >
         {items.map((v) => {
           const isActive = active === v.id;
           const onSelect = () => onActivate(v.id);
+          const anchorUpdateForm = showUpdateForm && isActive;
+
           return (
             <div
               key={v.id}
-              role="button"
-              tabIndex={0}
-              aria-pressed={isActive}
-              aria-label={v.modified ? `${v.label} — filtros alterados` : v.label}
-              className="saved-view-card"
-              onClick={onSelect}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  onSelect();
-                }
-              }}
               style={{
-                ...G,
                 position: "relative",
-                display: "flex",
-                alignItems: "center",
-                gap: 9,
-                padding: compact ? "12px 14px 12px 12px" : "10px 14px 10px 12px",
-                borderRadius: 11,
-                border: `1px solid ${isActive ? T.ink : T.border}`,
-                background: isActive ? T.ink : T.surface,
-                cursor: "pointer",
-                textAlign: "left",
                 flexShrink: 0,
                 width: compact ? "100%" : undefined,
-                boxSizing: "border-box",
-                transition: "all 0.15s",
-                boxShadow: isActive ? T.md : T.sm,
               }}
             >
               <div
+                role="button"
+                tabIndex={0}
+                aria-pressed={isActive}
+                aria-label={v.modified ? `${v.label} — filtros alterados` : v.label}
+                className="saved-view-card"
+                onClick={onSelect}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onSelect();
+                  }
+                }}
                 style={{
-                  width: 26,
-                  height: 26,
-                  borderRadius: 7,
-                  background: isActive ? "rgba(255,255,255,0.12)" : `${v.color}15`,
-                  color: isActive ? "#fff" : v.color,
+                  ...G,
+                  position: "relative",
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
+                  gap: 9,
+                  padding: compact ? "12px 14px 12px 12px" : "10px 14px 10px 12px",
+                  borderRadius: 11,
+                  border: `1px solid ${isActive ? T.ink : T.border}`,
+                  background: isActive ? T.ink : T.surface,
+                  cursor: "pointer",
+                  textAlign: "left",
+                  width: compact ? "100%" : undefined,
+                  boxSizing: "border-box",
+                  transition: "all 0.15s",
+                  boxShadow: isActive ? T.md : T.sm,
                 }}
               >
-                <Icon name={v.icon} size={13} color={isActive ? "#fff" : v.color} />
-              </div>
-              <div style={{ flex: compact ? 1 : undefined, minWidth: 0 }}>
                 <div
                   style={{
-                    ...G,
-                    fontSize: 12.5,
-                    fontWeight: 700,
-                    color: isActive ? "#fff" : T.ink,
-                    lineHeight: 1.2,
-                    whiteSpace: compact ? "nowrap" : undefined,
-                    overflow: compact ? "hidden" : undefined,
-                    textOverflow: compact ? "ellipsis" : undefined,
+                    width: 26,
+                    height: 26,
+                    borderRadius: 7,
+                    background: isActive ? "rgba(255,255,255,0.12)" : `${v.color}15`,
+                    color: isActive ? "#fff" : v.color,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
                   }}
                 >
-                  {v.label}
+                  <Icon name={v.icon} size={13} color={isActive ? "#fff" : v.color} />
                 </div>
-                {v.modified ? (
+                <div style={{ flex: compact ? 1 : undefined, minWidth: 0 }}>
                   <div
                     style={{
                       ...G,
-                      fontSize: 10.5,
-                      fontStyle: "italic",
-                      color: isActive ? "rgba(255,255,255,0.75)" : T.amber,
-                      marginTop: 2,
+                      fontSize: 12.5,
+                      fontWeight: 700,
+                      color: isActive ? "#fff" : T.ink,
+                      lineHeight: 1.2,
+                      whiteSpace: compact ? "nowrap" : undefined,
+                      overflow: compact ? "hidden" : undefined,
+                      textOverflow: compact ? "ellipsis" : undefined,
                     }}
                   >
-                    Filtros alterados
+                    {v.label}
                   </div>
-                ) : (
-                  <div
-                    style={{
-                      ...G,
-                      fontSize: 10.5,
-                      color: isActive ? "rgba(255,255,255,0.65)" : T.inkLight,
-                      marginTop: 2,
-                    }}
-                  >
-                    {v.hint || ""}
-                  </div>
-                )}
+                  {v.modified ? (
+                    <div
+                      style={{
+                        ...G,
+                        fontSize: 10.5,
+                        fontStyle: "italic",
+                        color: isActive ? "rgba(255,255,255,0.75)" : T.amber,
+                        marginTop: 2,
+                      }}
+                    >
+                      Filtros alterados
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        ...G,
+                        fontSize: 10.5,
+                        color: isActive ? "rgba(255,255,255,0.65)" : T.inkLight,
+                        marginTop: 2,
+                      }}
+                    >
+                      {v.hint || ""}
+                    </div>
+                  )}
+                </div>
+                <DeleteViewControl
+                  view={v}
+                  onDelete={onDelete}
+                  variant="corner"
+                  cardActive={isActive}
+                  compact={compact}
+                />
               </div>
-              <DeleteViewControl
-                view={v}
-                onDelete={onDelete}
-                variant="corner"
-                cardActive={isActive}
-                compact={compact}
-              />
+              {anchorUpdateForm ? saveForm : null}
             </div>
           );
         })}
@@ -183,7 +219,7 @@ export function SavedViewsCards({
             type="button"
             onClick={openCreateForm}
             aria-haspopup="dialog"
-            aria-expanded={newOpen}
+            aria-expanded={showCreateForm}
             style={{
               ...G,
               display: "flex",
@@ -192,9 +228,9 @@ export function SavedViewsCards({
               gap: 7,
               padding: compact ? "13px 14px" : "10px 14px",
               borderRadius: 11,
-              border: `1px dashed ${newOpen ? T.ink : T.border}`,
-              background: newOpen ? T.surface : "transparent",
-              color: newOpen ? T.ink : T.inkLight,
+              border: `1px dashed ${showCreateForm ? T.ink : T.border}`,
+              background: showCreateForm ? T.surface : "transparent",
+              color: showCreateForm ? T.ink : T.inkLight,
               fontSize: compact ? 13 : 12,
               fontWeight: 600,
               cursor: "pointer",
@@ -205,25 +241,7 @@ export function SavedViewsCards({
             <Icon name="plus" size={12} />
             Nova
           </button>
-          {newOpen && (
-            <PopoverShell minWidth={340} maxWidth={380} compact={compact}>
-              <NewViewForm
-                key={`${saveFormMode}-${updateViewLabel}-${saveFormInitialName}`}
-                mode={saveFormMode}
-                initialName={saveFormInitialName}
-                initialIcon={saveFormInitialIcon}
-                initialColor={saveFormInitialColor}
-                updateViewLabel={updateViewLabel}
-                activeFacets={activeFacets}
-                onCancel={closeForm}
-                compact={compact}
-                onSave={(draft) => {
-                  onSaveView({ mode: saveFormMode, ...draft });
-                  closeForm();
-                }}
-              />
-            </PopoverShell>
-          )}
+          {showCreateForm ? saveForm : null}
         </div>
       </div>
     </div>

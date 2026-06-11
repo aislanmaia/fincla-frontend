@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { FacetPanelContent } from "../../filters/facetBar/FacetPanelContent.jsx";
 
@@ -20,6 +20,15 @@ const CARDS = [
 ];
 
 describe("<PeriodPanel>", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 5, 8, 12, 0, 0));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   function Harness() {
     const [period, setPeriod] = useState("mes");
     const [from, setFrom] = useState("");
@@ -37,13 +46,26 @@ describe("<PeriodPanel>", () => {
       />
     );
   }
+  it("preset ativo reflete datas nos inputs e no intervalo", () => {
+    render(<Harness />);
+    expect(screen.getByLabelText(/^De$/i)).toHaveValue("01/06/2026");
+    expect(screen.getByLabelText(/^Até$/i)).toHaveValue("30/06/2026");
+    expect(screen.getByText("1–30 jun")).toBeInTheDocument();
+  });
+  it("trocar para Últimos 3m atualiza De/Até e intervalo", () => {
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: /Preset: Últimos 3m/i }));
+    expect(screen.getByLabelText(/^De$/i)).toHaveValue("08/03/2026");
+    expect(screen.getByLabelText(/^Até$/i)).toHaveValue("08/06/2026");
+    expect(screen.getByText(/8 mar.*8 jun/i)).toBeInTheDocument();
+  });
   it("preset ativo tem aria-pressed=true", () => {
     render(<Harness />);
     expect(screen.getByRole("button", { name: /Preset: Este mês/i })).toHaveAttribute("aria-pressed", "true");
   });
-  it("trocar preset atualiza aria-pressed", async () => {
+  it("trocar preset atualiza aria-pressed", () => {
     render(<Harness />);
-    await userEvent.click(screen.getByRole("button", { name: /Preset: Hoje/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Preset: Hoje/i }));
     expect(screen.getByRole("button", { name: /Preset: Hoje/i })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: /Preset: Este mês/i })).toHaveAttribute("aria-pressed", "false");
   });

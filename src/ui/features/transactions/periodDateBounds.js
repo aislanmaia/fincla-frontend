@@ -28,3 +28,56 @@ export function normalizeOpenRange(fromYmd, toYmd) {
   if (a.getTime() <= b.getTime()) return { from: fromYmd, to: toYmd };
   return { from: toYmd, to: fromYmd };
 }
+
+/**
+ * Datas efetivas para exibir no seletor (inputs + resumo).
+ * Presets derivam De/Até; custom usa o estado salvo; "tudo" fica vazio.
+ * Manter alinhado com resolveDateRange em transactionsAdapter.js.
+ *
+ * @returns {{ from: string; to: string }}
+ */
+export function resolvePeriodDisplayBounds(period, customFrom = "", customTo = "") {
+  if (period === "custom") {
+    return { from: customFrom || "", to: customTo || "" };
+  }
+
+  const today = new Date();
+  const todayYmd = ymdFromDate(today);
+
+  if (period === "hoje") {
+    return { from: todayYmd, to: todayYmd };
+  }
+
+  if (period === "semana") {
+    const start = new Date(today);
+    start.setDate(start.getDate() - 7);
+    return { from: ymdFromDate(start), to: todayYmd };
+  }
+
+  if (period === "mes") {
+    const y = today.getFullYear();
+    const m = today.getMonth();
+    const start = new Date(y, m, 1);
+    const end = new Date(y, m + 1, 0);
+    return { from: ymdFromDate(start), to: ymdFromDate(end) };
+  }
+
+  if (period === "mes-ant") {
+    const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const end = new Date(today.getFullYear(), today.getMonth(), 0);
+    return { from: ymdFromDate(start), to: ymdFromDate(end) };
+  }
+
+  if (period === "3m") {
+    const start = new Date(today);
+    start.setMonth(start.getMonth() - 3);
+    return { from: ymdFromDate(start), to: todayYmd };
+  }
+
+  if (period === "ano") {
+    const start = new Date(today.getFullYear(), 0, 1);
+    return { from: ymdFromDate(start), to: todayYmd };
+  }
+
+  return { from: "", to: "" };
+}

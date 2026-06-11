@@ -1,7 +1,21 @@
 /**
- * Interpreta digitação rápida de datas (pt-BR): dd/mm/aaaa, só dígitos 6 ou 8.
- * 8 dígitos: DDMMYYYY · 6 dígitos: DDMMYY → 20YY
+ * Interpreta digitação de datas (pt-BR): dd/mm/aaaa.
+ * Durante a digitação exige ano com 4 dígitos; no commit (blur/Enter) aceita dd/mm/aa → 20aa.
  */
+
+/** Placeholder visual da máscara pt-BR (dia/mês/ano). */
+export const BR_DATE_INPUT_MASK_PLACEHOLDER = "dd/mm/aaaa";
+
+/**
+ * Aplica máscara ##/##/#### enquanto o usuário digita (até 8 dígitos).
+ * @param {string} raw
+ */
+export function maskBrDateInput(raw) {
+  const digits = String(raw ?? "").replace(/\D/g, "").slice(0, 8);
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+}
 
 function parseYmdStrict(s) {
   if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return null;
@@ -67,29 +81,21 @@ export function parseBrDateLooseResult(raw, minYmd, maxYmd) {
     return mapClamp(clampAttempt(yyyy, mm, dd));
   }
 
-  if (digits.length === 6) {
-    const dd = parseInt(digits.slice(0, 2), 10);
-    const mm = parseInt(digits.slice(2, 4), 10);
-    const yy = parseInt(digits.slice(4, 6), 10);
-    const yyyy = 2000 + yy;
+  const slashFull = s.match(/^(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{4})$/);
+  if (slashFull) {
+    const dd = parseInt(slashFull[1], 10);
+    const mm = parseInt(slashFull[2], 10);
+    const yyyy = parseInt(slashFull[3], 10);
     return mapClamp(clampAttempt(yyyy, mm, dd));
   }
 
-  const slash = s.match(/^(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{2}|\d{4})$/);
-  if (slash) {
-    const dd = parseInt(slash[1], 10);
-    const mm = parseInt(slash[2], 10);
-    let yyyy = parseInt(slash[3], 10);
-    if (yyyy < 100) yyyy += 2000;
-    return mapClamp(clampAttempt(yyyy, mm, dd));
-  }
-
-  if (digits.length > 0 && digits.length < 6) {
+  const slashPartialYear = s.match(/^(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{1,3})$/);
+  if (slashPartialYear) {
     return { status: "incomplete" };
   }
 
-  if (digits.length === 7) {
-    return { status: "invalid_format" };
+  if (digits.length > 0 && digits.length < 8) {
+    return { status: "incomplete" };
   }
 
   if (s.length > 0) {
@@ -97,6 +103,39 @@ export function parseBrDateLooseResult(raw, minYmd, maxYmd) {
   }
 
   return { status: "empty" };
+}
+
+/**
+ * Parse no commit (blur/Enter): expande dd/mm/aa ou 6 dígitos para ano completo.
+ * @param {string} raw
+ * @param {string} minYmd
+ * @param {string} maxYmd
+ * @returns {{ status: 'ok'; ymd: string } | { status: Exclude<BrDateParseStatus, 'ok'>; ymd?: undefined }}
+ */
+export function parseBrDateLooseOnCommit(raw, minYmd, maxYmd) {
+  const res = parseBrDateLooseResult(raw, minYmd, maxYmd);
+  if (res.status !== "incomplete") return res;
+
+  const s = String(raw ?? "").trim();
+  const slashShortYear = s.match(/^(\d{1,2})\s*\/\s*(\d{1,2})\s*\/\s*(\d{2})$/);
+  if (slashShortYear) {
+    const dd = parseInt(slashShortYear[1], 10);
+    const mm = parseInt(slashShortYear[2], 10);
+    const yyyy = 2000 + parseInt(slashShortYear[3], 10);
+    const expanded = `${String(dd).padStart(2, "0")}/${String(mm).padStart(2, "0")}/${yyyy}`;
+    return parseBrDateLooseResult(expanded, minYmd, maxYmd);
+  }
+
+  const digits = s.replace(/\D/g, "");
+  if (digits.length === 6) {
+    const dd = parseInt(digits.slice(0, 2), 10);
+    const mm = parseInt(digits.slice(2, 4), 10);
+    const yyyy = 2000 + parseInt(digits.slice(4, 6), 10);
+    const expanded = `${String(dd).padStart(2, "0")}/${String(mm).padStart(2, "0")}/${yyyy}`;
+    return parseBrDateLooseResult(expanded, minYmd, maxYmd);
+  }
+
+  return res;
 }
 
 /**

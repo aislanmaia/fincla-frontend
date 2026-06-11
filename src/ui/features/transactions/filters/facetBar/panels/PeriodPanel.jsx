@@ -28,7 +28,15 @@ export function PeriodPanel({
 }) {
   const applyPreset = (value) => {
     setPeriod(value);
+    if (value !== "custom") {
+      setCustomFrom("");
+      setCustomTo("");
+    }
     if (typeof onApply === "function") onApply();
+  };
+
+  const switchToCustomPeriod = () => {
+    if (period !== "custom") setPeriod("custom");
   };
 
   return (
@@ -78,12 +86,16 @@ export function PeriodPanel({
         }}
       >
         <LocaleDateRangePicker
+          period={period}
           customFrom={customFrom}
           customTo={customTo}
           setCustomFrom={setCustomFrom}
           setCustomTo={setCustomTo}
-          onCustomPeriod={() => {
-            if (period !== "custom") setPeriod("custom");
+          onCustomPeriod={switchToCustomPeriod}
+          onClearRange={() => {
+            setCustomFrom("");
+            setCustomTo("");
+            setPeriod("tudo");
           }}
           compact={compact}
         />

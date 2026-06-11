@@ -4,16 +4,28 @@ import { T } from "../tokens";
 import { G, NUM } from "../typography";
 import { formatYmdToLocaleDisplay, todayLocalYmd } from "../data/transactionsAdapter.js";
 import { APP_UI_LOCALE } from "../appLocale.js";
-import { parseBrDateLooseResult } from "./localeDateInputParse.js";
+import {
+  BR_DATE_INPUT_MASK_PLACEHOLDER,
+  maskBrDateInput,
+  parseBrDateLooseOnCommit,
+  parseBrDateLooseResult,
+} from "./localeDateInputParse.js";
 import { resolveLocaleDatePickerMessages } from "./LocaleDatePicker.jsx";
 import { RangeCalendarGrid } from "./RangeCalendarGrid.jsx";
 import { formatCustomPeriodLabel } from "../features/transactions/filters/customPeriodLabel.js";
 import {
   normalizeOpenRange,
   parseLocalYmd,
+  resolvePeriodDisplayBounds,
   TRANSACTIONS_DATE_MAX,
   TRANSACTIONS_DATE_MIN,
 } from "../features/transactions/periodDateBounds.js";
+
+function ymdToDraft(ymd, locale) {
+  if (!ymd) return "";
+  const formatted = formatYmdToLocaleDisplay(ymd, locale);
+  return formatted === "—" ? "" : formatted;
+}
 
 function countRangeDays(fromYmd, toYmd) {
   if (!fromYmd || !toYmd) return null;
@@ -32,17 +44,19 @@ function RangeDateInput({
   onClear,
   active,
   onFocus,
+  onCalendarClick,
+  calendarOpen = false,
   locale,
   min,
   max,
   messages,
 }) {
-  const [draft, setDraft] = useState(() => formatYmdToLocaleDisplay(value, locale));
+  const [draft, setDraft] = useState(() => ymdToDraft(value, locale));
   const [error, setError] = useState(null);
   const errId = useId();
 
   useEffect(() => {
-    setDraft(formatYmdToLocaleDisplay(value, locale));
+    setDraft(ymdToDraft(value, locale));
     setError(null);
   }, [value, locale]);
 
@@ -54,10 +68,11 @@ function RangeDateInput({
   };
 
   const commitDraft = (raw, { blur = false } = {}) => {
-    const res = parseBrDateLooseResult(raw, min, max);
+    const parse = blur ? parseBrDateLooseOnCommit : parseBrDateLooseResult;
+    const res = parse(raw, min, max);
     if (res.status === "ok") {
       onChange(res.ymd);
-      setDraft(formatYmdToLocaleDisplay(res.ymd, locale));
+      setDraft(ymdToDraft(res.ymd, locale));
       setError(null);
       return;
     }
@@ -68,13 +83,27 @@ function RangeDateInput({
       return;
     }
     if (blur) {
-      setDraft(formatYmdToLocaleDisplay(value, locale));
+      setDraft(ymdToDraft(value, locale));
       if (res.status === "incomplete") {
         setError(null);
         return;
       }
       const msg = formatError(res.status);
       setError(msg);
+    }
+  };
+
+  const handleChange = (raw) => {
+    const masked = maskBrDateInput(raw);
+    setDraft(masked);
+    const res = parseBrDateLooseResult(masked, min, max);
+    if (res.status === "ok") {
+      onChange(res.ymd);
+      setError(null);
+    } else if (res.status === "empty" || res.status === "incomplete") {
+      setError(null);
+    } else {
+      setError(formatError(res.status));
     }
   };
 
@@ -106,30 +135,37 @@ function RangeDateInput({
           transition: "border-color 0.15s, box-shadow 0.15s",
         }}
       >
-        <Calendar size={14} color={T.inkMid} aria-hidden />
+        <button
+          type="button"
+          onClick={onCalendarClick}
+          aria-label={`${calendarOpen ? "Ocultar" : "Abrir"} calendário — ${label}`}
+          aria-expanded={calendarOpen}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 0,
+            border: "none",
+            background: "transparent",
+            cursor: "pointer",
+            flexShrink: 0,
+          }}
+        >
+          <Calendar size={14} color={active ? T.ink : T.inkMid} aria-hidden />
+        </button>
         <input
           id={id}
           type="text"
           inputMode="numeric"
           autoComplete="off"
-          placeholder="dd/mm/aaaa"
+          placeholder={BR_DATE_INPUT_MASK_PLACEHOLDER}
           aria-label={label}
           aria-invalid={error ? "true" : "false"}
           aria-describedby={error ? errId : undefined}
           value={draft}
           onFocus={onFocus}
-          onChange={(e) => {
-            setDraft(e.target.value);
-            const res = parseBrDateLooseResult(e.target.value, min, max);
-            if (res.status === "ok") {
-              onChange(res.ymd);
-              setError(null);
-            } else if (res.status === "empty" || res.status === "incomplete") {
-              setError(null);
-            } else {
-              setError(formatError(res.status));
-            }
-          }}
+          onClick={onFocus}
+          onChange={(e) => handleChange(e.target.value)}
           onBlur={(e) => commitDraft(e.target.value, { blur: true })}
           onKeyDown={(e) => {
             if (e.key !== "Enter") return;
@@ -147,6 +183,7 @@ function RangeDateInput({
             fontSize: 13,
             fontWeight: 600,
             color: T.ink,
+            letterSpacing: "0.04em",
           }}
         />
       </div>
@@ -164,31 +201,39 @@ function RangeDateInput({
  * Suporta intervalo aberto (só De ou só Até).
  */
 export function LocaleDateRangePicker({
+  period = "custom",
   customFrom = "",
   customTo = "",
   setCustomFrom,
   setCustomTo,
   onCustomPeriod = () => {},
+  onClearRange,
   compact = false,
   locale = APP_UI_LOCALE,
 }) {
   const messages = useMemo(() => resolveLocaleDatePickerMessages(locale), [locale]);
   const [activeEdge, setActiveEdge] = useState("from");
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [hoverYmd, setHoverYmd] = useState(null);
 
-  const anchorYmd = customFrom || customTo || todayLocalYmd();
+  const { from: displayFrom, to: displayTo } = useMemo(
+    () => resolvePeriodDisplayBounds(period, customFrom, customTo),
+    [period, customFrom, customTo],
+  );
+
+  const anchorYmd = displayFrom || displayTo || todayLocalYmd();
   const anchor = parseLocalYmd(anchorYmd) || new Date();
   const [cursorYear, setCursorYear] = useState(() => anchor.getFullYear());
   const [cursorMonth, setCursorMonth] = useState(() => anchor.getMonth());
 
   useEffect(() => {
-    const src = customFrom || customTo;
+    const src = displayFrom || displayTo;
     const dt = src ? parseLocalYmd(src) : null;
     if (dt) {
       setCursorYear(dt.getFullYear());
       setCursorMonth(dt.getMonth());
     }
-  }, [customFrom, customTo]);
+  }, [displayFrom, displayTo]);
 
   const markCustom = useCallback(() => {
     onCustomPeriod();
@@ -196,35 +241,37 @@ export function LocaleDateRangePicker({
 
   const applyFrom = useCallback(
     (ymd) => {
-      markCustom();
-      const next = normalizeOpenRange(ymd, customTo);
+      const fromPreset = period !== "custom";
+      if (fromPreset) markCustom();
+      const next = normalizeOpenRange(ymd, fromPreset ? "" : customTo);
       setCustomFrom(next.from);
       setCustomTo(next.to);
     },
-    [customTo, markCustom, setCustomFrom, setCustomTo],
+    [period, customTo, markCustom, setCustomFrom, setCustomTo],
   );
 
   const applyTo = useCallback(
     (ymd) => {
-      markCustom();
-      const next = normalizeOpenRange(customFrom, ymd);
+      const fromPreset = period !== "custom";
+      if (fromPreset) markCustom();
+      const next = normalizeOpenRange(fromPreset ? "" : customFrom, ymd);
       setCustomFrom(next.from);
       setCustomTo(next.to);
     },
-    [customFrom, markCustom, setCustomFrom, setCustomTo],
+    [period, customFrom, markCustom, setCustomFrom, setCustomTo],
   );
 
   const handleDayClick = useCallback(
     (ymd) => {
       markCustom();
-      if (!customFrom || (customFrom && customTo)) {
+      if (!displayFrom || (displayFrom && displayTo)) {
         setCustomFrom(ymd);
         setCustomTo("");
         setActiveEdge("to");
         return;
       }
       const clicked = parseLocalYmd(ymd);
-      const from = parseLocalYmd(customFrom);
+      const from = parseLocalYmd(displayFrom);
       if (!clicked || !from) {
         setCustomFrom(ymd);
         setCustomTo("");
@@ -232,17 +279,34 @@ export function LocaleDateRangePicker({
       }
       if (clicked.getTime() < from.getTime()) {
         setCustomFrom(ymd);
-        setCustomTo(customFrom);
+        setCustomTo(displayFrom);
       } else {
         setCustomTo(ymd);
       }
       setActiveEdge("from");
     },
-    [customFrom, customTo, markCustom, setCustomFrom, setCustomTo],
+    [displayFrom, displayTo, markCustom, setCustomFrom, setCustomTo],
   );
 
-  const summaryLabel = formatCustomPeriodLabel(customFrom, customTo, locale);
-  const dayCount = countRangeDays(customFrom, customTo);
+  const openCalendar = (edge) => {
+    setActiveEdge(edge);
+    setCalendarOpen(true);
+  };
+
+  const toggleCalendar = (edge) => {
+    if (calendarOpen && activeEdge === edge) {
+      setCalendarOpen(false);
+      return;
+    }
+    setActiveEdge(edge);
+    setCalendarOpen(true);
+  };
+
+  const summaryLabel =
+    period === "tudo" && !displayFrom && !displayTo
+      ? "Todo período"
+      : formatCustomPeriodLabel(displayFrom, displayTo, locale);
+  const dayCount = countRangeDays(displayFrom, displayTo);
 
   const shiftMonth = (delta) => {
     const dt = new Date(cursorYear, cursorMonth + delta, 1);
@@ -250,20 +314,25 @@ export function LocaleDateRangePicker({
     setCursorMonth(dt.getMonth());
   };
 
-  const setToday = () => {
-    const t = todayLocalYmd();
-    markCustom();
-    setCustomFrom(t);
-    setCustomTo(t);
+  const clearRange = () => {
+    if (typeof onClearRange === "function") {
+      onClearRange();
+    } else {
+      markCustom();
+      setCustomFrom("");
+      setCustomTo("");
+    }
     setActiveEdge("from");
+    setCalendarOpen(false);
   };
 
-  const clearRange = () => {
-    markCustom();
-    setCustomFrom("");
-    setCustomTo("");
-    setActiveEdge("from");
-  };
+  const hintText = calendarOpen
+    ? displayFrom && !displayTo
+      ? "1 clique no calendário define o fim — ou deixe em aberto."
+      : !displayFrom && !displayTo
+        ? "2 cliques no calendário ou digite as datas."
+        : "Mesmo dia nos 2 cliques = 1 dia."
+    : "Digite dd/mm/aaaa ou toque no campo para abrir o calendário.";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -278,9 +347,11 @@ export function LocaleDateRangePicker({
         <RangeDateInput
           id="period-range-from"
           label="De"
-          value={customFrom}
+          value={displayFrom}
           active={activeEdge === "from"}
-          onFocus={() => setActiveEdge("from")}
+          onFocus={() => openCalendar("from")}
+          onCalendarClick={() => toggleCalendar("from")}
+          calendarOpen={calendarOpen && activeEdge === "from"}
           onChange={applyFrom}
           onClear={() => {
             markCustom();
@@ -294,9 +365,11 @@ export function LocaleDateRangePicker({
         <RangeDateInput
           id="period-range-to"
           label="Até"
-          value={customTo}
+          value={displayTo}
           active={activeEdge === "to"}
-          onFocus={() => setActiveEdge("to")}
+          onFocus={() => openCalendar("to")}
+          onCalendarClick={() => toggleCalendar("to")}
+          calendarOpen={calendarOpen && activeEdge === "to"}
           onChange={applyTo}
           onClear={() => {
             markCustom();
@@ -350,42 +423,26 @@ export function LocaleDateRangePicker({
         )}
       </div>
 
-      <RangeCalendarGrid
-        cursorYear={cursorYear}
-        cursorMonth={cursorMonth}
-        monthCount={compact ? 1 : 2}
-        fromYmd={customFrom}
-        toYmd={customTo}
-        hoverYmd={hoverYmd}
-        minYmd={TRANSACTIONS_DATE_MIN}
-        maxYmd={TRANSACTIONS_DATE_MAX}
-        locale={locale}
-        onDayClick={handleDayClick}
-        onDayHover={setHoverYmd}
-        onPrevMonth={() => shiftMonth(-1)}
-        onNextMonth={() => shiftMonth(1)}
-      />
+      {calendarOpen && (
+        <RangeCalendarGrid
+          cursorYear={cursorYear}
+          cursorMonth={cursorMonth}
+          monthCount={compact ? 1 : 2}
+          fromYmd={displayFrom}
+          toYmd={displayTo}
+          hoverYmd={hoverYmd}
+          minYmd={TRANSACTIONS_DATE_MIN}
+          maxYmd={TRANSACTIONS_DATE_MAX}
+          locale={locale}
+          onDayClick={handleDayClick}
+          onDayHover={setHoverYmd}
+          onPrevMonth={() => shiftMonth(-1)}
+          onNextMonth={() => shiftMonth(1)}
+        />
+      )}
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-        <button
-          type="button"
-          onClick={setToday}
-          aria-label="Atalho: hoje (1 dia)"
-          style={{
-            ...G,
-            padding: "7px 12px",
-            borderRadius: 99,
-            border: `1px solid ${T.border}`,
-            background: T.surface,
-            fontSize: 12,
-            fontWeight: 600,
-            color: T.inkMid,
-            cursor: "pointer",
-          }}
-        >
-          Hoje
-        </button>
-        {(customFrom || customTo) && (
+      {(displayFrom || displayTo) ? (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
           <button
             type="button"
             onClick={clearRange}
@@ -403,17 +460,15 @@ export function LocaleDateRangePicker({
           >
             Limpar intervalo
           </button>
-        )}
-        <span style={{ ...G, fontSize: 11, color: T.inkLight, flex: 1, minWidth: 140 }}>
-          {customFrom && !customTo
-            ? "1 clique no calendário define o fim — ou deixe em aberto."
-            : !customFrom && customTo
-              ? "Intervalo aberto até a data final."
-              : !customFrom && !customTo
-                ? "2 cliques no calendário ou digite as datas."
-                : "Mesmo dia nos 2 cliques = 1 dia."}
-        </span>
-      </div>
+          {calendarOpen ? (
+            <span style={{ ...G, fontSize: 11, color: T.inkLight, flex: 1, minWidth: 140 }}>
+              {hintText}
+            </span>
+          ) : null}
+        </div>
+      ) : (
+        <span style={{ ...G, fontSize: 11, color: T.inkLight }}>{hintText}</span>
+      )}
     </div>
   );
 }

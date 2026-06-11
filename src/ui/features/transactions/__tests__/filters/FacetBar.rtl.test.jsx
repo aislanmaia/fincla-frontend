@@ -70,7 +70,7 @@ describe("<FacetBar>", () => {
     expect(onSaveViewCreate).toHaveBeenCalledTimes(1);
   });
 
-  it("Atualizar view chama callback com label contextual", async () => {
+  it("Salvar alterações chama callback quando view dirty", async () => {
     const onSaveViewUpdate = vi.fn();
     render(
       <FacetBar
@@ -83,9 +83,7 @@ describe("<FacetBar>", () => {
         hasAnyActive
       />,
     );
-    await userEvent.click(
-      screen.getByRole("button", { name: /Salvar alterações na visualização Receitas/i }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: /Salvar alterações/i }));
     expect(onSaveViewUpdate).toHaveBeenCalledTimes(1);
   });
 

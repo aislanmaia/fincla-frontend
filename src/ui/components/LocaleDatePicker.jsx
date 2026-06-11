@@ -21,7 +21,7 @@ import {
   finclaCalNavButtonBase,
   finclaCalMonthTitleStyle,
 } from "./finclaCalendarStyles.js";
-import { parseBrDateLooseResult } from "./localeDateInputParse.js";
+import { parseBrDateLooseOnCommit, parseBrDateLooseResult } from "./localeDateInputParse.js";
 
 const UI_FALLBACK_EN = {
   today: "Today",
@@ -277,7 +277,7 @@ export function LocaleDatePicker({
   };
 
   const handleDraftBlur = (e) => {
-    const res = parseBrDateLooseResult(draft, min, max);
+    const res = parseBrDateLooseOnCommit(draft, min, max);
     if (res.status === "ok") {
       setDraft(formatYmdToLocaleDisplay(res.ymd, locale));
       setDraftError(null);
@@ -329,7 +329,7 @@ export function LocaleDatePicker({
     if (e.key !== "Enter") return;
     e.preventDefault();
     const raw = inputRef.current?.value ?? draft;
-    const res = parseBrDateLooseResult(raw, min, max);
+    const res = parseBrDateLooseOnCommit(raw, min, max);
     if (res.status === "ok") {
       onChange(res.ymd);
       setDraft(formatYmdToLocaleDisplay(res.ymd, locale));

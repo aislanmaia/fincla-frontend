@@ -84,6 +84,23 @@ export function TransactionsFilterBar({
     return () => document.removeEventListener("keydown", onEsc);
   }, [expanded, dismissPanel]);
 
+  // Enter dentro do painel aplica (dismiss) — espelha o CTA "Ver N transações"
+  useEffect(() => {
+    if (!expanded) return;
+    const onEnter = (e) => {
+      if (e.key !== "Enter") return;
+      const panel = panelRef.current;
+      if (!panel) return;
+      const target = e.target;
+      if (!(target instanceof Node) || !panel.contains(target)) return;
+      if (target instanceof HTMLTextAreaElement) return;
+      e.preventDefault();
+      dismissPanel();
+    };
+    document.addEventListener("keydown", onEnter);
+    return () => document.removeEventListener("keydown", onEnter);
+  }, [expanded, dismissPanel]);
+
   // Quando um painel é expandido, faz scroll suave para ele entrar em view.
   // Importante no mobile (dentro do bottom sheet) e também em viewports
   // pequenos no desktop. Aguarda o próximo frame para o nó renderizar.
