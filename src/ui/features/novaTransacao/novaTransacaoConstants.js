@@ -129,6 +129,7 @@ export function novaTxModalInitStamp(organizationId, novaRecorrencia, preConfig)
     String(pc.valorInicial ?? ""),
     pc.cat ?? "",
     String(pc.categoryTagId ?? ""),
+    pc.categoryTagIsActive === false ? "0" : "1",
     pc.method ?? "",
     String(pc.cartaoId ?? ""),
     pc.dateIso ?? "",
@@ -139,6 +140,7 @@ export function novaTxModalInitStamp(organizationId, novaRecorrencia, preConfig)
     Array.isArray(pc.tags) ? JSON.stringify(pc.tags) : "",
     Array.isArray(pc.detailTagIds) ? pc.detailTagIds.join(",") : "",
     novaTxDetailDisplayStamp(pc.detailTagDisplayById),
+    JSON.stringify(pc.detailTagMetaById ?? {}),
     pc.novaRecorrencia ? "1" : "0",
   ].join("|");
 }

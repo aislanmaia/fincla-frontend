@@ -271,6 +271,7 @@ export function useTransactionModalController({
           desc: ui.desc,
           cat: ui.cat,
           categoryTagId: ui.categoryTagId ?? null,
+          categoryTagIsActive: ui.categoryTagIsActive !== false,
           method: txMethod,
           valorInicial: transactionUiValAbsForEdit(ui),
           recorre: ui.rec,
@@ -290,6 +291,7 @@ export function useTransactionModalController({
           tags: ui.tags ?? [],
           detailTagIds: ui.detailTagIds ?? [],
           detailTagDisplayById: ui.detailTagDisplayById ?? {},
+          detailTagMetaById: ui.detailTagMetaById ?? {},
         }));
       })
       .catch(() => {

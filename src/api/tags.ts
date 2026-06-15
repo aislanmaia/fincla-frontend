@@ -56,12 +56,14 @@ export const listTagTypes = async (): Promise<TagTypesResponse> => {
  */
 export const listTags = async (
   organizationId: string,
-  tagType?: string
+  tagType?: string,
+  options?: { status?: 'active' | 'inactive' | 'all' }
 ): Promise<TagsResponse> => {
   const response = await apiClient.get<TagsResponse | Tag[]>('/tags', {
     params: {
       organization_id: organizationId,
       tag_type: tagType, // Opcional: nome do tipo de tag (ex: "categoria")
+      ...(options?.status ? { status: options.status } : {}),
     },
   });
   const data = response.data;

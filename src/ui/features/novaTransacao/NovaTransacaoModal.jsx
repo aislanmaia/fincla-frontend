@@ -117,6 +117,8 @@ export const NovaTransacaoModal = ({
   const [detailTagIds, setDetailTagIds] = useState([]);
   /** Rótulos vindos do GET da transação (id → nome), para chips sem depender só de GET /tags?tag_type=detalhe. */
   const [detailTagLabelById, setDetailTagLabelById] = useState({});
+  /** Metadados vindos do GET da transação (id → { name, isActive }). */
+  const [detailTagMetaById, setDetailTagMetaById] = useState({});
   const [newTag,    setNewTag]    = useState("");
   const [addingTag, setAddingTag] = useState(false);
   const [method,    setMethod]    = useState("pix");
@@ -172,6 +174,7 @@ export const NovaTransacaoModal = ({
   const [quickAddCardLast4, setQuickAddCardLast4] = useState("");
 
   const [categoryTagId, setCategoryTagId] = useState(null);
+  const [categoryTagIsActive, setCategoryTagIsActive] = useState(true);
   const [txSubmitError, setTxSubmitError] = useState("");
   const [txSubmitting, setTxSubmitting] = useState(false);
   const [modalCardsRows, setModalityChoicealCardsRows] = useState([]);
@@ -309,14 +312,23 @@ export const NovaTransacaoModal = ({
     const name = row.name != null && String(row.name).trim() ? String(row.name).trim() : "";
     setDetailTagIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
     if (name) setDetailTagLabelById((prev) => ({ ...prev, [id]: name }));
+    setDetailTagMetaById((prev) => ({
+      ...prev,
+      [id]: { name: name || prev[id]?.name || id, isActive: true },
+    }));
   }, []);
 
   const detailChipLabel = useCallback(
     (id) => {
       const sid = String(id);
-      return detailTagLabelById[sid] || labelForDetailId(sid);
+      return detailTagMetaById[sid]?.name || detailTagLabelById[sid] || labelForDetailId(sid);
     },
-    [detailTagLabelById, labelForDetailId],
+    [detailTagMetaById, detailTagLabelById, labelForDetailId],
+  );
+
+  const isDetailTagInactive = useCallback(
+    (id) => detailTagMetaById[String(id)]?.isActive === false,
+    [detailTagMetaById],
   );
 
   const addQuickDetailTag = useCallback(
@@ -331,6 +343,10 @@ export const NovaTransacaoModal = ({
       try {
         const id = await ensureDetailTag(trimmed);
         setDetailTagLabelById((prev) => ({ ...prev, [String(id)]: trimmed }));
+        setDetailTagMetaById((prev) => ({
+          ...prev,
+          [String(id)]: { name: trimmed, isActive: true },
+        }));
         setDetailTagIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
       } catch (err) {
         setTxSubmitError(
@@ -422,6 +438,11 @@ export const NovaTransacaoModal = ({
           ? pc.detailTagIds.map((id) => String(id))
           : [],
       );
+      setDetailTagMetaById(
+        pc.detailTagMetaById && typeof pc.detailTagMetaById === "object"
+          ? { ...pc.detailTagMetaById }
+          : {},
+      );
       setDetailTagLabelById(
         pc.detailTagDisplayById && typeof pc.detailTagDisplayById === "object"
           ? { ...pc.detailTagDisplayById }
@@ -474,6 +495,7 @@ export const NovaTransacaoModal = ({
 
       setCat(mergedCat);
       setCategoryTagId(mergedCatId);
+      setCategoryTagIsActive(pc.categoryTagIsActive !== false);
 
       if (pc.modalidade) {
         setModalityChoice(pc.modalidade);
@@ -512,6 +534,7 @@ export const NovaTransacaoModal = ({
     setDesc("");
     setTags([]);
     setDetailTagIds([]);
+    setDetailTagMetaById({});
     setDetailTagLabelById({});
     const prefMethod =
       normalizeStoredNovaTxPaymentMethod(prefs.method, prefTipo) ?? "pix";
@@ -645,10 +668,22 @@ export const NovaTransacaoModal = ({
     setTxSubmitError("");
     if (!useLiveCategoryTags) {
       setCategoryTagId(null);
+      setCategoryTagIsActive(true);
       return;
     }
     const rows = categoryTagsData.categories;
     if (!rows.length) return;
+    const editingInactiveCategory =
+      preConfig?.editingTransactionId != null &&
+      String(preConfig.editingTransactionId).trim() !== "" &&
+      preConfig?.categoryTagId &&
+      preConfig?.categoryTagIsActive === false;
+    if (editingInactiveCategory) {
+      setCategoryTagId(String(preConfig.categoryTagId));
+      setCategoryTagIsActive(false);
+      if (preConfig?.cat) setCat(String(preConfig.cat));
+      return;
+    }
     const prefs = shouldApplyStoredNovaTxCategoryPrefs(preConfig)
       ? readStoredNovaTransacaoPrefs(organizationId)
       : null;
@@ -667,6 +702,7 @@ export const NovaTransacaoModal = ({
     const row = matchById ?? match ?? rows[0];
     setCategoryTagId(row.id);
     setCat(row.labelPt);
+    setCategoryTagIsActive(true);
   }, [
     open,
     useLiveCategoryTags,
@@ -675,7 +711,35 @@ export const NovaTransacaoModal = ({
     preConfig,
     preConfig?.cat,
     preConfig?.categoryTagId,
+    preConfig?.categoryTagIsActive,
+    preConfig?.editingTransactionId,
   ]);
+
+  const categorySelectRows = useMemo(() => {
+    const rows = modalCategoryChoices.filter((r) => r.id);
+    if (
+      categoryTagId != null &&
+      !categoryTagIsActive &&
+      cat &&
+      !rows.some((r) => String(r.id) === String(categoryTagId))
+    ) {
+      return [
+        {
+          id: String(categoryTagId),
+          labelPt: `${cat} (indisponível)`,
+          iconKey: null,
+          isInactive: true,
+        },
+        ...rows,
+      ];
+    }
+    return rows;
+  }, [modalCategoryChoices, categoryTagId, categoryTagIsActive, cat]);
+
+  const inactiveSelectedDetailIds = useMemo(
+    () => detailTagIds.filter((id) => isDetailTagInactive(id)),
+    [detailTagIds, isDetailTagInactive],
+  );
 
   const skipPersistNovaTxPrefs =
     novaRecorrencia ||
@@ -1117,6 +1181,14 @@ export const NovaTransacaoModal = ({
     const detailIdsForApi = useLiveDetailTags ? detailTagIds : [];
 
     if (shouldSaveLiveSeries) {
+      if (categoryTagId && !categoryTagIsActive) {
+        setTxSubmitError("Selecione uma nova categoria ativa antes de salvar.");
+        return;
+      }
+      if (inactiveSelectedDetailIds.length > 0) {
+        setTxSubmitError("Remova ou substitua as tags indisponíveis antes de salvar.");
+        return;
+      }
       if (!categoryTagId) {
         setTxSubmitError("Escolha uma categoria da lista.");
         return;
@@ -1202,6 +1274,14 @@ export const NovaTransacaoModal = ({
         editingTransactionIdStr != null);
 
     if (liveOneShot) {
+      if (categoryTagId && !categoryTagIsActive) {
+        setTxSubmitError("Selecione uma nova categoria ativa antes de salvar.");
+        return;
+      }
+      if (inactiveSelectedDetailIds.length > 0) {
+        setTxSubmitError("Remova ou substitua as tags indisponíveis antes de salvar.");
+        return;
+      }
       if (!categoryTagId) {
         setTxSubmitError("Escolha uma categoria da lista.");
         return;
@@ -1296,6 +1376,7 @@ export const NovaTransacaoModal = ({
     refund.resetAll();
     resetAmount();
     setDesc(""); setTags([]); setDetailTagIds([]); setDetailTagLabelById({});
+    setDetailTagMetaById({});
     setMethod(prefMethod);
     setCardPanelOpen(prefMethod === "credito"); setCardPanelExiting(false);
     setRecurrencePanelOpen(false); setRecurrencePanelExiting(false);
@@ -1426,7 +1507,7 @@ export const NovaTransacaoModal = ({
             <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
               {useLiveDetailTags
                 ? detailTagIds.map((id) => (
-                    <span key={id} style={{ ...G, fontSize:11, fontWeight:600, color:"#fff", background:T.purple, padding:"4px 10px", borderRadius:9999 }}>+ {detailChipLabel(id)}</span>
+                    <span key={id} style={{ ...G, fontSize:11, fontWeight:600, color:"#fff", background:isDetailTagInactive(id) ? T.amber : T.purple, padding:"4px 10px", borderRadius:9999 }}>+ {detailChipLabel(id)}{isDetailTagInactive(id) ? " (indisponível)" : ""}</span>
                   ))
                 : tags.map((tag) => (
                     <span key={tag} style={{ ...G, fontSize:11, fontWeight:600, color:"#fff", background:T.purple, padding:"4px 10px", borderRadius:9999 }}>+ {tag}</span>
@@ -1811,9 +1892,14 @@ export const NovaTransacaoModal = ({
                               delete next[sid];
                               return next;
                             });
+                            setDetailTagMetaById((prev) => {
+                              const next = { ...prev };
+                              delete next[sid];
+                              return next;
+                            });
                           }}
-                            style={{ ...G, fontSize:12, fontWeight:600, color:"#fff", background:T.purple, padding:"5px 11px", borderRadius:9999, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}>
-                            + {detailChipLabel(id)} <span style={{ opacity:0.7, fontSize:10 }}>✕</span>
+                            style={{ ...G, fontSize:12, fontWeight:600, color:"#fff", background:isDetailTagInactive(id) ? T.amber : T.purple, padding:"5px 11px", borderRadius:9999, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}>
+                            + {detailChipLabel(id)}{isDetailTagInactive(id) ? " (indisponível)" : ""} <span style={{ opacity:0.7, fontSize:10 }}>✕</span>
                           </span>
                         ))
                       : tags.map((tag) => (
@@ -2626,14 +2712,16 @@ export const NovaTransacaoModal = ({
                         value={categoryTagId || ""}
                         onChange={(e) => {
                           const id = e.target.value;
-                          const row = modalCategoryChoices.find((r) => r.id === id);
+                          const row = categorySelectRows.find((r) => String(r.id) === String(id));
                           setCategoryTagId(id || null);
+                          setCategoryTagIsActive(row?.isInactive !== true);
                           if (row?.labelPt) setCat(row.labelPt);
                           setDetailTagIds([]);
                           setDetailTagLabelById({});
+                          setDetailTagMetaById({});
                         }}
                         style={{ ...G, width:"100%", boxSizing:"border-box", padding:"9px 12px", border:`1.5px solid ${T.blue}`, borderRadius:9, background:"#EFF6FF", fontSize:12, fontWeight:600, color:T.ink, cursor:"pointer" }}>
-                        {modalCategoryChoices.filter((r) => r.id).map((r) => (
+                        {categorySelectRows.map((r) => (
                           <option key={r.id} value={r.id}>{r.labelPt}</option>
                         ))}
                       </select>
@@ -2649,6 +2737,11 @@ export const NovaTransacaoModal = ({
                         <ChevronDown size={11} color={T.inkLight} style={{ marginLeft:"auto" }} />
                       </div>
                     )}
+                    {!categoryTagIsActive && categoryTagId ? (
+                      <div style={{ ...G, fontSize:11, color:T.amber, marginTop:6 }}>
+                        Esta categoria foi removida e precisa ser substituida antes de salvar.
+                      </div>
+                    ) : null}
                   </div>
                   <div>
                     <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Data</div>
@@ -2680,9 +2773,14 @@ export const NovaTransacaoModal = ({
                               delete next[sid];
                               return next;
                             });
+                            setDetailTagMetaById((prev) => {
+                              const next = { ...prev };
+                              delete next[sid];
+                              return next;
+                            });
                           }}
-                            style={{ ...G, fontSize:11, fontWeight:600, color:"#fff", background:T.purple, padding:"4px 9px", borderRadius:9999, cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
-                            + {detailChipLabel(id)} <span style={{ opacity:0.7, fontSize:10 }}>✕</span>
+                            style={{ ...G, fontSize:11, fontWeight:600, color:"#fff", background:isDetailTagInactive(id) ? T.amber : T.purple, padding:"4px 9px", borderRadius:9999, cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
+                            + {detailChipLabel(id)}{isDetailTagInactive(id) ? " (indisponível)" : ""} <span style={{ opacity:0.7, fontSize:10 }}>✕</span>
                           </span>
                         ))
                       : tags.map((tag) => (

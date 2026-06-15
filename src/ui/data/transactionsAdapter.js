@@ -79,21 +79,22 @@ function isCategoryTagGroupKey(groupKey) {
 }
 
 function pickCategoryTag(transaction) {
+  const entries = Object.entries(transaction.tags ?? {});
+  const categoryGroup = entries.find(([groupName, tags]) =>
+    isCategoryTagGroupKey(groupName) || (tags ?? []).some(isApiTagTypeCategory),
+  );
+
+  if (categoryGroup?.[1]?.length) {
+    return categoryGroup[1][0];
+  }
+
   if (transaction.category) {
     return {
       id: null,
       name: transaction.category,
       icon_key: null,
+      is_active: true,
     };
-  }
-
-  const entries = Object.entries(transaction.tags ?? {});
-  const categoryGroup = entries.find(([groupName]) =>
-    normalizeText(groupName).includes("categoria"),
-  );
-
-  if (categoryGroup?.[1]?.length) {
-    return categoryGroup[1][0];
   }
 
   const firstTag = entries.flatMap(([, tags]) => tags ?? [])[0];
@@ -112,9 +113,44 @@ export function pickCategoryTagFromApiTransaction(transaction) {
     id: t.id != null && t.id !== "" ? t.id : null,
     name: t.name ?? null,
     icon_key: t.icon_key ?? null,
+    is_active: t.is_active !== false,
     color:
       typeof t.color === "string" && t.color.trim() ? t.color : null,
   };
+}
+
+export function pickDetailTagMetaMapFromApiTransaction(transaction) {
+  const catTag = pickCategoryTag(transaction);
+  const catId =
+    catTag && catTag.id != null && String(catTag.id) !== ""
+      ? String(catTag.id)
+      : null;
+  const map = {};
+  for (const [groupKey, tags] of Object.entries(transaction.tags ?? {})) {
+    if (isCategoryTagGroupKey(groupKey)) continue;
+    for (const t of tags ?? []) {
+      if (!t?.id) continue;
+      if (isApiTagTypeCategory(t)) continue;
+      const id = String(t.id);
+      if (catId && id === catId) continue;
+      if (
+        catId &&
+        t.parent_category_tag_id != null &&
+        String(t.parent_category_tag_id).trim() !== "" &&
+        String(t.parent_category_tag_id) !== catId
+      ) {
+        continue;
+      }
+      map[id] = {
+        name:
+          t.name != null && String(t.name).trim() !== ""
+            ? String(t.name).trim()
+            : `Tag ${id.slice(0, 8)}…`,
+        isActive: t.is_active !== false,
+      };
+    }
+  }
+  return map;
 }
 
 function pickCategoryName(transaction) {
@@ -197,31 +233,10 @@ export function pickNonCategoryTagIdsFromApiTransaction(transaction) {
  * @returns {Record<string, string>}
  */
 export function pickDetailTagDisplayMapFromApiTransaction(transaction) {
-  const catTag = pickCategoryTag(transaction);
-  const catId =
-    catTag && catTag.id != null && String(catTag.id) !== ""
-      ? String(catTag.id)
-      : null;
-  /** @type {Record<string, string>} */
+  const meta = pickDetailTagMetaMapFromApiTransaction(transaction);
   const map = {};
-  for (const [groupKey, tags] of Object.entries(transaction.tags ?? {})) {
-    if (isCategoryTagGroupKey(groupKey)) continue;
-    for (const t of tags ?? []) {
-      if (!t?.id) continue;
-      if (isApiTagTypeCategory(t)) continue;
-      const id = String(t.id);
-      if (catId && id === catId) continue;
-      if (
-        catId &&
-        t.parent_category_tag_id != null &&
-        String(t.parent_category_tag_id).trim() !== "" &&
-        String(t.parent_category_tag_id) !== catId
-      ) {
-        continue;
-      }
-      const raw = t.name != null && String(t.name).trim() !== "" ? String(t.name).trim() : "";
-      map[id] = raw || `Tag ${id.slice(0, 8)}…`;
-    }
+  for (const [id, row] of Object.entries(meta)) {
+    map[id] = row.name;
   }
   return map;
 }
@@ -362,6 +377,7 @@ export function expandExpenseTxToAttributedParts(transaction) {
 export function mapApiTransactionToUi(transaction) {
   const catTag = pickCategoryTag(transaction);
   const categoryName = catTag ? categoryLabelPtForTag(catTag) : "Sem categoria";
+  const detailTagMetaById = pickDetailTagMetaMapFromApiTransaction(transaction);
   const amount = pickDisplayAmount(transaction);
   // Refund é dinheiro voltando — sinal positivo como income.
   const isMoneyIn = transaction.type === "income" || transaction.type === "refund";
@@ -384,6 +400,7 @@ export function mapApiTransactionToUi(transaction) {
     desc: transaction.description,
     cat: categoryName,
     categoryTagId: catTag?.id ?? null,
+    categoryTagIsActive: catTag?.is_active !== false,
     categoryIconKey: catTag?.icon_key ?? null,
     date: dateLabel,
     dateIsoForEdit: pickDateIsoForEditTransaction(transaction),
@@ -401,6 +418,7 @@ export function mapApiTransactionToUi(transaction) {
     tags: pickTagNames(transaction, categoryName),
     detailTagIds: pickNonCategoryTagIdsFromApiTransaction(transaction),
     detailTagDisplayById: pickDetailTagDisplayMapFromApiTransaction(transaction),
+    detailTagMetaById,
     parcela: mapInstallmentInfo(transaction),
     // Tipo bruto do backend — UI usa pra renderizar badge/avatar de estorno.
     type: transaction.type,

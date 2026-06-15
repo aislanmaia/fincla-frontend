@@ -4,6 +4,7 @@ import {
   buildUpdateTransactionPayload,
   mapApiTransactionToUi,
   pickDetailTagDisplayMapFromApiTransaction,
+  pickDetailTagMetaMapFromApiTransaction,
   pickNonCategoryTagIdsFromApiTransaction,
 } from "../transactionsAdapter.js";
 
@@ -126,6 +127,21 @@ describe("mapApiTransactionToUi — detailTagIds", () => {
     expect(ui.detailTagDisplayById[DET1]).toBe("família");
     expect(ui.detailTagDisplayById[DET2]).toBe("semanal");
   });
+
+  it("preserva categoria e detalhes inativos vindos do payload da transação", () => {
+    const ui = mapApiTransactionToUi(minimalTransaction({
+      category: "Alimentação",
+      tags: {
+        categoria: [{ ...tagStub(CAT_ID, "Alimentação", "categoria", null), is_active: false }],
+        detalhe: [{ ...tagStub(DET1, "família", "detalhe", CAT_ID), is_active: false }],
+      },
+    }));
+
+    expect(ui.categoryTagId).toBe(CAT_ID);
+    expect(ui.categoryTagIsActive).toBe(false);
+    expect(ui.detailTagIds).toEqual([DET1]);
+    expect(ui.detailTagMetaById[DET1]).toEqual({ name: "família", isActive: false });
+  });
 });
 
 describe("pickDetailTagDisplayMapFromApiTransaction", () => {
@@ -146,6 +162,25 @@ describe("pickDetailTagDisplayMapFromApiTransaction", () => {
     const m = pickDetailTagDisplayMapFromApiTransaction(tx);
     expect(m[DET1]).toBe("combustível");
     expect(m[ghost]).toBe(`Tag ${ghost.slice(0, 8)}…`);
+  });
+});
+
+describe("pickDetailTagMetaMapFromApiTransaction", () => {
+  it("expõe nome e disponibilidade por id", () => {
+    const tx = minimalTransaction({
+      tags: {
+        categoria: [tagStub(CAT_ID, "Alimentação", "categoria", null)],
+        detalhe: [
+          { ...tagStub(DET1, "combustível", "detalhe", CAT_ID), is_active: false },
+          tagStub(DET2, "semanal", "detalhe", CAT_ID),
+        ],
+      },
+    });
+
+    expect(pickDetailTagMetaMapFromApiTransaction(tx)).toEqual({
+      [DET1]: { name: "combustível", isActive: false },
+      [DET2]: { name: "semanal", isActive: true },
+    });
   });
 });
 
