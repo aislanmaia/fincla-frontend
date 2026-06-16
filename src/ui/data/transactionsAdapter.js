@@ -412,7 +412,7 @@ export function mapApiTransactionToUi(transaction) {
     valAbsForEdit: pickAmountAbsForTransactionEdit(transaction),
     icon: pickTransactionIcon(transaction),
     rec: transaction.recurring,
-    recurringSeriesId: transaction.recurring_series_id ?? null,
+    seriesId: transaction.series_id ?? null,
     status: statusLabel,
     method: formatMethodLabel(transaction.payment_method),
     tags: pickTagNames(transaction, categoryName),

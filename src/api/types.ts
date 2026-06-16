@@ -514,7 +514,7 @@ export interface Transaction {
   status: 'pending' | 'completed' | 'cancelled';
   recurring: boolean;
   /** Presente quando a transação foi materializada a partir de uma série (`/v1/recurring-series`). */
-  recurring_series_id?: string | null;
+  series_id?: string | null;
   created_at: string;
   updated_at: string;
   credit_card_charge?: CreditCardChargeInfo | null;
