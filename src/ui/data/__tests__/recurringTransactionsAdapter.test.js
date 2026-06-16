@@ -10,7 +10,6 @@ describe("recurringTransactionsAdapter", () => {
     expect(mapRecurringTransactionToUi({
       id: "rt-1",
       organization_id: "org-1",
-      logical_series_id: "log-1",
       type: "expense",
       description: "Conta de luz",
       value: 180,
@@ -29,10 +28,8 @@ describe("recurringTransactionsAdapter", () => {
       end_date: null,
       credit_card_id: null,
       notes: null,
-      replaces_series_id: null,
     })).toEqual({
       id: "rt-1",
-      logicalSeriesId: "log-1",
       desc: "Conta de luz",
       cat: "Utilidades",
       val: 180,

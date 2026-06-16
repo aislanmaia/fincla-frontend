@@ -1149,8 +1149,6 @@ export type RecurringSeriesValueKind = 'exact' | 'approximate';
 export interface RecurringSeries {
   id: string;
   organization_id: string;
-  /** Mesma assinatura lógica após troca de valor (`change-value`). */
-  logical_series_id: string;
   type: 'income' | 'expense';
   description: string;
   value: number;
@@ -1170,7 +1168,6 @@ export interface RecurringSeries {
   end_date?: string | null;
   credit_card_id?: number | null;
   notes?: string | null;
-  replaces_series_id?: string | null;
   /** Quantos `interval_unit`s entre ocorrências; sempre 1 quando frequency ≠ 'custom'. */
   interval: number;
   /** Obrigatório quando frequency='custom'; null caso contrário. */
@@ -1248,14 +1245,12 @@ export interface RecurringSeriesToggleRequest {
 
 export interface ChangeSeriesValueRequest {
   new_value: number;
-  effective_start_date: string;
   value_kind?: RecurringSeriesValueKind;
   notes?: string | null;
 }
 
 export interface ChangeSeriesValueResponse {
-  closed_series: RecurringSeries;
-  new_series: RecurringSeries;
+  series: RecurringSeries;
 }
 
 // ===== ANALYTICS =====

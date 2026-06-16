@@ -131,7 +131,6 @@ export function mapRecurringSeriesToUi(series) {
 
   return {
     id: series.id,
-    logicalSeriesId: series.logical_series_id,
     desc: series.description,
     cat: pickCategoryLabelPtSeries(series),
     categoryIconKey: pickCategoryIconKeySeries(series),
