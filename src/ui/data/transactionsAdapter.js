@@ -268,38 +268,19 @@ function mapInstallmentInfo(transaction) {
   const installment = transaction.installment_info?.[0];
   if (!installment) return null;
 
-  const charge = transaction.credit_card_charge?.charge;
-  const card = transaction.credit_card_charge?.card;
-  const cartaoLabel = card
-    ? `${card.description || card.brand} •• ${card.last4}`
-    : "";
-
-  if (charge && card) {
-    const paid = Number(
-      (installment.amount * installment.installment_number).toFixed(2),
-    );
-    const total = charge.total_amount;
-    return {
-      atual: installment.installment_number,
-      total: installment.total_installments,
-      valParcela: installment.amount,
-      cartao: cartaoLabel,
-      vencimento: formatDate(installment.due_date),
-      valorTotal: total,
-      valorPago: paid,
-      valorResidual: Number((total - paid).toFixed(2)),
-    };
-  }
-
+  // Occurrence-based: each installment is its own transaction; the purchase total is
+  // derived from the installment value × count (installments are equal-split).
+  const total = Number((installment.amount * installment.total_installments).toFixed(2));
+  const paid = Number((installment.amount * installment.installment_number).toFixed(2));
   return {
     atual: installment.installment_number,
     total: installment.total_installments,
     valParcela: installment.amount,
-    cartao: cartaoLabel,
+    cartao: "",
     vencimento: formatDate(installment.due_date),
-    valorTotal: null,
-    valorPago: null,
-    valorResidual: null,
+    valorTotal: total,
+    valorPago: paid,
+    valorResidual: Number((total - paid).toFixed(2)),
   };
 }
 
@@ -315,13 +296,12 @@ export function pickDisplayAmount(transaction) {
 /** Valor absoluto para o modal de edição; na lista usa-se pickDisplayAmount. */
 export function pickAmountAbsForTransactionEdit(transaction) {
   if (!transaction) return 0;
-  const charge = transaction.credit_card_charge?.charge;
-  if (charge?.modality === "installment") {
-    const total = charge.total_amount;
-    if (total != null && total !== "") {
-      const n = Number(total);
-      if (Number.isFinite(n)) return Math.abs(n);
-    }
+  // Occurrence-based: an installment carries its own value; the purchase total for
+  // the edit modal is value × installment count.
+  const installment = transaction.installment_info?.[0];
+  if (installment && installment.total_installments > 1) {
+    const total = Number(installment.amount) * Number(installment.total_installments);
+    if (Number.isFinite(total)) return Math.abs(total);
   }
   const v = Number(transaction.value ?? 0);
   return Number.isFinite(v) ? Math.abs(v) : 0;
@@ -344,11 +324,8 @@ export function transactionUiValAbsForEdit(ui) {
  * @param {import("../../api/types").Transaction} transaction
  */
 export function pickTransactionListDateRawForDisplay(transaction) {
-  if (transaction.credit_card_charge?.charge?.modality === "cash") {
-    return transaction.date;
-  }
-  const due = transaction.installment_info?.[0]?.due_date;
-  if (due) return due;
+  // Occurrence-based: the transaction's own `date` is already the effective date
+  // (cash → purchase date; installment → its due date).
   return transaction.date;
 }
 
@@ -360,13 +337,8 @@ export function pickTransactionListDateRawForDisplay(transaction) {
  */
 export function expandExpenseTxToAttributedParts(transaction) {
   if (transaction.type !== "expense") return [];
-  const modality = transaction.credit_card_charge?.charge?.modality;
-  if (modality === "installment" && transaction.installment_info?.length) {
-    return transaction.installment_info.map((p) => ({
-      date: String(p.due_date ?? ""),
-      amount: Number(p.amount ?? 0),
-    }));
-  }
+  // Occurrence-based: each installment is its own transaction attributed to its own
+  // date, so a single entry per transaction is correct.
   const amount = pickDisplayAmount(transaction);
   const ymd =
     ymdFromAnyDateInput(transaction.date) ||
@@ -390,10 +362,7 @@ export function mapApiTransactionToUi(transaction) {
   const listDateRaw = pickTransactionListDateRawForDisplay(transaction);
   const dateLabel = formatDate(listDateRaw);
 
-  const cardIdFromCharge =
-    transaction.credit_card_charge?.charge?.card_id ??
-    transaction.credit_card_charge?.card?.id ??
-    null;
+  const cardIdFromCharge = transaction.credit_card_id ?? null;
 
   return {
     id: transaction.id,
@@ -941,10 +910,7 @@ export function ymdFromAnyDateInput(value) {
 }
 
 function pickDateIsoForEditTransaction(transaction) {
-  for (const value of [
-    transaction.date,
-    transaction.credit_card_charge?.charge?.purchase_date,
-  ]) {
+  for (const value of [transaction.date]) {
     if (value == null || String(value).trim() === "") continue;
     const ymd = ymdFromAnyDateInput(value);
     if (ymd) return `${ymd}T12:00:00`;

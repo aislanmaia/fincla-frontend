@@ -472,30 +472,6 @@ export interface UpdateTransactionRequest {
   installments_count?: number;
 }
 
-export interface CreditCardChargeInfo {
-  charge: {
-    id: number;
-    organization_id: string;
-    card_id: number;
-    transaction_id: number;
-    total_amount: number;
-    installments_count: number;
-    modality: 'cash' | 'installment' | 'refund';
-    purchase_date: string;
-  };
-  card: {
-    id: number;
-    organization_id: string;
-    last4: string;
-    brand: string;
-    due_day: number;
-    description: string | null;
-  };
-}
-
-// Legacy alias for backwards compatibility
-export type CreditCardCharge = CreditCardChargeInfo;
-
 /** Resumo agregado dos estornos linkados a uma transação. */
 export interface RefundsSummary {
   count: number;
@@ -517,10 +493,11 @@ export interface Transaction {
   series_id?: string | null;
   created_at: string;
   updated_at: string;
-  credit_card_charge?: CreditCardChargeInfo | null;
+  /** Occurrence-based: set when the transaction is a credit-card installment. */
+  credit_card_id?: number | null;
   installment_info?: InstallmentInfo[] | null;
   category?: string | null; // Campo legado
-  // Campos derivados do credit_card_charge para acesso direto
+  // Campos derivados (modality é inferido de installment_info no adapter)
   card_last4?: string | null;
   modality?: 'cash' | 'installment' | 'refund' | null;
   installments_count?: number | null;
@@ -693,7 +670,10 @@ export interface PurchaseInfo {
 
 export interface InvoiceItemResponse {
   id: number;
-  charge_id: number;
+  // Occurrence-based: the installment IS a transaction; `id` and `transaction_id`
+  // are the installment transaction id; `series_id` groups the purchase.
+  series_id: string | null;
+  transaction_id: number;
   transaction_date: string;
   description: string;
   amount: number;

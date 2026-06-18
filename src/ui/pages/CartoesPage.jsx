@@ -506,14 +506,13 @@ export const CartoesPage = ({
   };
 
   const handleReallocate = async () => {
-    if (shouldUseRealData && installmentModal?.chargeId && installmentModal?.installmentId && installmentTarget) {
+    if (shouldUseRealData && installmentModal?.transactionId && installmentTarget) {
       const target = parseFutureLabel(installmentTarget);
       if (!target) return;
       try {
         await creditCardsData.moveInstallment({
           cardId: card.cardId,
-          chargeId: installmentModal.chargeId,
-          installmentId: installmentModal.installmentId,
+          transactionId: installmentModal.transactionId,
           organizationId,
           targetYear: target.year,
           targetMonth: target.month,

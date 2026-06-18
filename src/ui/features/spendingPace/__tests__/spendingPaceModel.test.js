@@ -41,17 +41,18 @@ describe("aggregateExpenseByDay", () => {
     expect(daily[1]).toBe(0);
   });
 
-  it("cartão parcelado: atribui cada parcela ao dia de vencimento no mês", () => {
+  it("cartão parcelado: cada parcela (transação) cai no seu dia de vencimento", () => {
+    // Occurrence-based: a parcela é uma transação cuja data é o vencimento.
     const tx = [
       {
         type: "expense",
-        date: "2026-02-20T12:00:00",
-        value: 900,
-        credit_card_charge: {
-          charge: { modality: "installment" },
-          card: {},
-        },
-        installment_info: [{ due_date: "2026-03-12", amount: 300 }],
+        date: "2026-03-12T12:00:00",
+        value: 300,
+        credit_card_id: 7,
+        series_id: "series-1",
+        installment_info: [
+          { installment_number: 2, total_installments: 3, due_date: "2026-03-12", amount: 300 },
+        ],
       },
     ];
     const daily = aggregateExpenseByDay(tx, 2026, 3, 31);

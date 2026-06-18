@@ -160,18 +160,18 @@ export const unmarkInvoicePaid = async (
 };
 
 /**
- * Move uma parcela específica para uma fatura diferente (mês/ano)
- * Todas as outras parcelas da mesma compra serão recalculadas automaticamente
+ * Move uma parcela (transação) para uma fatura diferente (mês/ano).
+ * Modelo occurrence-based: a parcela é uma transação; as demais parcelas da
+ * mesma compra (série) são reposicionadas automaticamente em torno da âncora.
  */
 export const moveInstallmentToInvoice = async (
   cardId: number,
-  chargeId: number,
-  installmentId: number,
+  transactionId: number,
   organizationId: string,
   target: MoveInstallmentRequest
 ): Promise<MoveInstallmentResponse> => {
   const response = await apiClient.patch<MoveInstallmentResponse>(
-    `/credit-cards/${cardId}/charges/${chargeId}/installments/${installmentId}/invoice`,
+    `/credit-cards/${cardId}/installments/${transactionId}/move-invoice`,
     target,
     {
       params: { organization_id: organizationId },

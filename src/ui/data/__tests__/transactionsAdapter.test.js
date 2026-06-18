@@ -20,13 +20,16 @@ describe("transactionsAdapter", () => {
         categoria: [{ id: "tag-cat", name: "Compras" }],
         contexto: [{ id: "tag-ctx", name: "trabalho" }],
       },
-      value: 3600,
+      value: 300,
       payment_method: "Crédito",
-      date: "2026-03-18T10:00:00",
+      // Occurrence-based: an installment IS a transaction; its date is the due date.
+      date: "2026-04-10T00:00:00",
       status: "pending",
       recurring: false,
       created_at: "2026-03-18T10:00:00",
       updated_at: "2026-03-18T10:00:00",
+      credit_card_id: 10,
+      series_id: "series-1",
       installment_info: [
         {
           installment_number: 1,
@@ -35,26 +38,6 @@ describe("transactionsAdapter", () => {
           amount: 300,
         },
       ],
-      credit_card_charge: {
-        charge: {
-          id: 1,
-          organization_id: "org-1",
-          card_id: 10,
-          transaction_id: 21,
-          total_amount: 3600,
-          installments_count: 12,
-          modality: "installment",
-          purchase_date: "2026-03-18T10:00:00",
-        },
-        card: {
-          id: 10,
-          organization_id: "org-1",
-          last4: "1177",
-          brand: "Nubank",
-          due_day: 10,
-          description: "Nubank",
-        },
-      },
     });
 
     expect(mapped).toMatchObject({
@@ -73,7 +56,7 @@ describe("transactionsAdapter", () => {
         atual: 1,
         total: 12,
         valParcela: 300,
-        cartao: "Nubank •• 1177",
+        cartao: "",
         vencimento: "10/04/2026",
         valorTotal: 3600,
         valorPago: 300,
@@ -129,34 +112,31 @@ describe("transactionsAdapter", () => {
     expect(mapped.date).toBe("16/03/2026");
   });
 
-  it("expandExpenseTxToAttributedParts: parcelado por due_date; à vista na data da transação", () => {
+  it("expandExpenseTxToAttributedParts: occurrence-based, cada parcela na sua própria data", () => {
+    // Modelo occurrence: cada parcela é uma transação própria, atribuída à sua data.
     const installmentTx = {
       type: "expense",
-      value: 3600,
-      date: "2026-03-18T10:00:00",
-      credit_card_charge: {
-        charge: { modality: "installment" },
-        card: {},
-      },
+      value: 300,
+      date: "2026-04-10T00:00:00",
+      credit_card_id: 5,
+      series_id: "series-1",
       installment_info: [
-        { due_date: "2026-04-10", amount: 300 },
-        { due_date: "2026-05-10", amount: 300 },
+        { installment_number: 1, total_installments: 12, due_date: "2026-04-10", amount: 300 },
       ],
     };
     expect(expandExpenseTxToAttributedParts(installmentTx)).toEqual([
       { date: "2026-04-10", amount: 300 },
-      { date: "2026-05-10", amount: 300 },
     ]);
 
     const cashTx = {
       type: "expense",
       value: 95.99,
       date: "2026-03-16T00:00:00",
-      credit_card_charge: {
-        charge: { modality: "cash" },
-        card: {},
-      },
-      installment_info: [{ due_date: "2026-04-10", amount: 95.99 }],
+      credit_card_id: 5,
+      series_id: "series-2",
+      installment_info: [
+        { installment_number: 1, total_installments: 1, due_date: "2026-03-16", amount: 95.99 },
+      ],
     };
     expect(expandExpenseTxToAttributedParts(cashTx)).toEqual([
       { date: "2026-03-16", amount: 95.99 },
