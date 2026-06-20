@@ -979,6 +979,8 @@ export function buildCreateTransactionPayload({
   installmentsCount = null,
   modality = null,
   refundOfTransactionId = null,
+  accountId = null,
+  paidAt = null,
 }) {
   let type;
   if (tipo === "receita") type = "income";
@@ -1012,6 +1014,10 @@ export function buildCreateTransactionPayload({
       payload.installments_count = Number(installmentsCount);
     }
   }
+  // Fase 0 (cash model): conta de liquidação + settlement opcional.
+  // Omitir account_id => backend usa a conta default; omitir paid_at => compromisso pendente.
+  if (accountId) payload.account_id = accountId;
+  if (paidAt) payload.paid_at = paidAt;
   return payload;
 }
 

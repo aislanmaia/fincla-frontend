@@ -455,6 +455,10 @@ export interface CreateTransactionRequest {
   category?: string | null; // Campo legado
   /** FK opcional para a transação estornada. Só válida quando type='refund'. */
   refund_of_transaction_id?: number | null;
+  /** Conta de liquidação (Fase 0). Omitido => conta default da org. */
+  account_id?: string | null;
+  /** Quando preenchido, a transação nasce paga (status='paid'); omitir => compromisso pendente (confirmed). */
+  paid_at?: string | null;
 }
 
 export interface UpdateTransactionRequest {
