@@ -13,6 +13,7 @@ const SEGMENT_TITLES = {
   recurring: "Recorrências",
   simulation: "Simulação",
   goals: "Metas",
+  accounts: "Contas",
   cards: "Cartões",
   reports: "Relatórios",
   profile: "Configurações",

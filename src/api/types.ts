@@ -1653,3 +1653,96 @@ export interface SimulationTimelineItem {
     meets_goal: boolean;
   };
 }
+
+// ===== CONTAS / SALDO / TRANSFERÊNCIAS (Fase 0 — cash model) =====
+
+export type AccountType = 'checking' | 'savings' | 'investment' | 'wallet' | 'crypto';
+
+export interface Account {
+  id: string;
+  organization_id: string;
+  name: string;
+  type: AccountType;
+  currency: string;
+  initial_balance: number;
+  initial_date: string; // YYYY-MM-DD
+  is_active: boolean;
+  include_in_total: boolean;
+  created_at: string;
+  institution?: string | null;
+  color?: string | null;
+  icon_key?: string | null;
+  updated_at?: string | null;
+}
+
+export interface CreateAccountRequest {
+  name: string;
+  type: AccountType;
+  initial_balance?: number;
+  initial_date?: string | null; // YYYY-MM-DD
+  currency?: string;
+  institution?: string | null;
+  color?: string | null;
+  icon_key?: string | null;
+  include_in_total?: boolean | null;
+}
+
+export interface UpdateAccountRequest {
+  name?: string;
+  type?: AccountType;
+  institution?: string | null;
+  color?: string | null;
+  icon_key?: string | null;
+  is_active?: boolean;
+  include_in_total?: boolean;
+}
+
+/** Saldo realizado de uma conta (caixa). */
+export interface AccountBalance {
+  account_id: string;
+  name: string;
+  type: AccountType;
+  currency: string;
+  initial_balance: number;
+  balance: number;
+  include_in_total: boolean;
+}
+
+export interface OrgBalances {
+  as_of: string;
+  total: number; // soma das contas include_in_total
+  accounts: AccountBalance[];
+}
+
+export interface TypeBalance {
+  type: AccountType;
+  balance: number;
+  account_count: number;
+}
+
+export interface BalanceSummary {
+  as_of: string;
+  total_available: number; // contas include_in_total
+  total_all: number;       // todas as contas ativas
+  account_count: number;
+  by_type: TypeBalance[];
+}
+
+export interface CreateTransferRequest {
+  from_account_id: string;
+  to_account_id: string;
+  amount: number;
+  date?: string | null;
+  note?: string | null;
+}
+
+export interface Transfer {
+  id: string;
+  organization_id: string;
+  from_account_id: string;
+  to_account_id: string;
+  amount: number;
+  date: string;
+  created_at: string;
+  note?: string | null;
+}
