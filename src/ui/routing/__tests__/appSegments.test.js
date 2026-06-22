@@ -11,6 +11,7 @@ describe("appSegments", () => {
     expect(AUTH_ROUTE_SEGMENTS).toContain("dashboard");
     expect(AUTH_ROUTE_SEGMENTS).toContain("rhythm");
     expect(AUTH_ROUTE_SEGMENTS).toContain("transactions");
+    expect(AUTH_ROUTE_SEGMENTS).toContain("accounts");
   });
 
   it("firstPathSegment extrai o primeiro segmento", () => {

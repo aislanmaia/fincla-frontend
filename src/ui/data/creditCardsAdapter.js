@@ -407,9 +407,10 @@ function mapInvoiceItemToUi(item) {
     : item.description;
   return {
     id: item.id,
-    chargeId: item.charge_id,
-    installmentId: item.id,
-    transactionId: item.transaction_id ?? null,
+    // Occurrence-based: the installment IS a transaction; `transactionId` (= item.id)
+    // is the move anchor; `seriesId` groups the purchase.
+    seriesId: item.series_id ?? null,
+    transactionId: item.id,
     desc: cleanDesc,
     cat: category,
     catColor: pickCategoryColor(item),
@@ -479,7 +480,7 @@ function aggregateInstallments(currentInvoice) {
   (currentInvoice?.items || []).forEach((item) => {
     if (item.modality === "refund") return;
     if (item.total_installments <= 1) return;
-    const key = `${item.charge_id}-${item.description}`;
+    const key = `${item.series_id ?? item.id}-${item.description}`;
     map.set(key, {
       id: key,
       desc: item.description,
@@ -496,8 +497,8 @@ function aggregateInstallments(currentInvoice) {
           }
         : null,
       icon: pickIcon(pickCategory(item)),
-      chargeId: item.charge_id,
-      installmentId: item.id,
+      seriesId: item.series_id ?? null,
+      transactionId: item.id,
     });
   });
 
@@ -764,8 +765,8 @@ export async function markInvoicePaidForUi({ cardId, year, month, organizationId
   return markInvoicePaid(cardId, year, month, organizationId, paidDate);
 }
 
-export async function moveInstallmentForUi({ cardId, chargeId, installmentId, organizationId, targetYear, targetMonth }) {
-  return moveInstallmentToInvoice(cardId, chargeId, installmentId, organizationId, {
+export async function moveInstallmentForUi({ cardId, transactionId, organizationId, targetYear, targetMonth }) {
+  return moveInstallmentToInvoice(cardId, transactionId, organizationId, {
     target_year: targetYear,
     target_month: targetMonth,
   });

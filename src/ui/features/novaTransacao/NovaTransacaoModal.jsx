@@ -72,6 +72,7 @@ import {
   computeFirstOccurrence as computeFirstOccurrenceMath,
 } from "../../data/recurrenceDateMath.js";
 import { listCreditCards } from "../../../api/creditCards";
+import { getOrgBalances } from "../../../api/balances";
 import {
   formatCreditCardsApiError,
   mapCreditCardToModalPickerRow,
@@ -130,6 +131,31 @@ export const NovaTransacaoModal = ({
   const [recurrencePanelExiting, setRecurrencePanelExiting] = useState(false);
   const [cardId,    setCardId]    = useState("");
   const [txDateYmd, setTxDateYmd]  = useState(() => todayLocalYmd());
+  // Fase 0 (cash model): conta de liquidação + "já paguei?" (settlement) p/ métodos não-cartão.
+  const [accountOptions, setAccountOptions] = useState([]);
+  const [settleAccountId, setSettleAccountId] = useState("");
+  const [settled, setSettled] = useState(true);
+  const accountsLoadedOrgRef = useRef(null);
+  useEffect(() => {
+    if (!open || !organizationId || dataMode !== "live") return undefined;
+    // Só busca uma vez por org — evita refetch a cada reabertura do modal.
+    if (accountsLoadedOrgRef.current === organizationId) return undefined;
+    let cancelled = false;
+    getOrgBalances(organizationId)
+      .then((d) => {
+        if (cancelled) return;
+        const accts = d.accounts || [];
+        setAccountOptions(accts);
+        setSettleAccountId(
+          (cur) => cur || accts.find((a) => a.include_in_total)?.account_id || accts[0]?.account_id || "",
+        );
+        accountsLoadedOrgRef.current = organizationId;
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open, organizationId, dataMode]);
   const [modalityChoice,setModalityChoice]       = useState("parcelado");
   const [recurrenceFrequency,   setRecurrenceFrequency]   = useState(preConfig?.freqRec || "mensal");
   const [recurrenceEndKind,    setRecurrenceEndKind]    = useState(preConfig?.encRec || "sem-fim");
@@ -1088,6 +1114,40 @@ export const NovaTransacaoModal = ({
   ];
 
 
+  /** Conta de liquidação + toggle "já paguei?" (settlement). Só p/ métodos não-cartão. */
+  const renderAccountSettlement = () => {
+    if (method === "credito") return null;
+    return (
+      <div>
+        <div style={{ ...G, fontSize: 12, fontWeight: 600, color: T.inkMid, marginBottom: 8 }}>Conta</div>
+        <select
+          value={settleAccountId}
+          onChange={(e) => setSettleAccountId(e.target.value)}
+          style={{ ...G, width: "100%", fontSize: 13, color: T.ink, background: T.surface, border: `1.5px solid ${T.border}`, borderRadius: 10, padding: "10px 12px", outline: "none", boxSizing: "border-box", marginBottom: 10 }}
+        >
+          {accountOptions.length === 0 ? <option value="">Conta padrão</option> : null}
+          {accountOptions.map((a) => (
+            <option key={a.account_id} value={a.account_id}>{a.name}</option>
+          ))}
+        </select>
+        <div
+          onClick={() => setSettled((s) => !s)}
+          style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", background: settled ? T.greenLight : T.bg, borderRadius: 10, border: `1px solid ${settled ? T.green : T.border}`, cursor: "pointer", transition: "all 0.15s" }}
+        >
+          <div>
+            <div style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink }}>{settled ? "Já paguei" : "Ainda não paguei"}</div>
+            <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 1 }}>
+              {settled ? "Entra no saldo da conta agora." : "Fica como compromisso pendente."}
+            </div>
+          </div>
+          <div style={{ width: 42, height: 24, borderRadius: 12, background: settled ? T.green : T.inkGhost, position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+            <div style={{ position: "absolute", top: 3, left: settled ? 21 : 3, width: 18, height: 18, borderRadius: 9999, background: "#fff", transition: "left 0.2s", boxShadow: T.sm }} />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   /** Bloco completo do painel "Recorrência" — delegado a `RecurrenceConfigPanel.jsx`. */
   const renderRecurrenceConfigBody = (compact) => (
     <RecurrenceConfigPanel
@@ -1347,6 +1407,8 @@ export const NovaTransacaoModal = ({
               modality,
               cardId: Number.isFinite(cardIdNum) ? cardIdNum : null,
               refundOfTransactionId: isRefund ? refund.refundOfTransactionId : null,
+              accountId: settleAccountId || null,
+              paidAt: method !== "credito" && settled ? transactionDateIsoFromYmd(txDateYmd) : null,
             }),
           );
         }
@@ -1857,6 +1919,9 @@ export const NovaTransacaoModal = ({
                     ))}
                   </div>
                 </div>
+
+                {/* Conta de liquidação + "já paguei?" (Fase 0) */}
+                {renderAccountSettlement()}
 
                 {/* Recorrência toggle — escondido em modo estorno (v1: refund não pode ser isRecurringnte) */}
                 {!isRefund && (
@@ -2885,6 +2950,7 @@ export const NovaTransacaoModal = ({
                     ))}
                   </div>
                 </div>
+                {renderAccountSettlement()}
                 {!isRefund && (
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 14px", background:T.bg, borderRadius:10, border:`1px solid ${isRecurring ? T.blue : T.border}`, cursor:"pointer", transition:"border-color 0.15s" }}
                     onClick={() => {

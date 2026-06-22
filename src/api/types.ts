@@ -455,6 +455,10 @@ export interface CreateTransactionRequest {
   category?: string | null; // Campo legado
   /** FK opcional para a transação estornada. Só válida quando type='refund'. */
   refund_of_transaction_id?: number | null;
+  /** Conta de liquidação (Fase 0). Omitido => conta default da org. */
+  account_id?: string | null;
+  /** Quando preenchido, a transação nasce paga (status='paid'); omitir => compromisso pendente (confirmed). */
+  paid_at?: string | null;
 }
 
 export interface UpdateTransactionRequest {
@@ -471,30 +475,6 @@ export interface UpdateTransactionRequest {
   modality?: 'cash' | 'installment' | 'refund';
   installments_count?: number;
 }
-
-export interface CreditCardChargeInfo {
-  charge: {
-    id: number;
-    organization_id: string;
-    card_id: number;
-    transaction_id: number;
-    total_amount: number;
-    installments_count: number;
-    modality: 'cash' | 'installment' | 'refund';
-    purchase_date: string;
-  };
-  card: {
-    id: number;
-    organization_id: string;
-    last4: string;
-    brand: string;
-    due_day: number;
-    description: string | null;
-  };
-}
-
-// Legacy alias for backwards compatibility
-export type CreditCardCharge = CreditCardChargeInfo;
 
 /** Resumo agregado dos estornos linkados a uma transação. */
 export interface RefundsSummary {
@@ -514,13 +494,14 @@ export interface Transaction {
   status: 'pending' | 'completed' | 'cancelled';
   recurring: boolean;
   /** Presente quando a transação foi materializada a partir de uma série (`/v1/recurring-series`). */
-  recurring_series_id?: string | null;
+  series_id?: string | null;
   created_at: string;
   updated_at: string;
-  credit_card_charge?: CreditCardChargeInfo | null;
+  /** Occurrence-based: set when the transaction is a credit-card installment. */
+  credit_card_id?: number | null;
   installment_info?: InstallmentInfo[] | null;
   category?: string | null; // Campo legado
-  // Campos derivados do credit_card_charge para acesso direto
+  // Campos derivados (modality é inferido de installment_info no adapter)
   card_last4?: string | null;
   modality?: 'cash' | 'installment' | 'refund' | null;
   installments_count?: number | null;
@@ -693,7 +674,10 @@ export interface PurchaseInfo {
 
 export interface InvoiceItemResponse {
   id: number;
-  charge_id: number;
+  // Occurrence-based: the installment IS a transaction; `id` and `transaction_id`
+  // are the installment transaction id; `series_id` groups the purchase.
+  series_id: string | null;
+  transaction_id: number;
   transaction_date: string;
   description: string;
   amount: number;
@@ -1149,8 +1133,6 @@ export type RecurringSeriesValueKind = 'exact' | 'approximate';
 export interface RecurringSeries {
   id: string;
   organization_id: string;
-  /** Mesma assinatura lógica após troca de valor (`change-value`). */
-  logical_series_id: string;
   type: 'income' | 'expense';
   description: string;
   value: number;
@@ -1170,7 +1152,6 @@ export interface RecurringSeries {
   end_date?: string | null;
   credit_card_id?: number | null;
   notes?: string | null;
-  replaces_series_id?: string | null;
   /** Quantos `interval_unit`s entre ocorrências; sempre 1 quando frequency ≠ 'custom'. */
   interval: number;
   /** Obrigatório quando frequency='custom'; null caso contrário. */
@@ -1248,14 +1229,12 @@ export interface RecurringSeriesToggleRequest {
 
 export interface ChangeSeriesValueRequest {
   new_value: number;
-  effective_start_date: string;
   value_kind?: RecurringSeriesValueKind;
   notes?: string | null;
 }
 
 export interface ChangeSeriesValueResponse {
-  closed_series: RecurringSeries;
-  new_series: RecurringSeries;
+  series: RecurringSeries;
 }
 
 // ===== ANALYTICS =====
@@ -1677,4 +1656,97 @@ export interface SimulationTimelineItem {
     status: SimulationStatus;
     meets_goal: boolean;
   };
+}
+
+// ===== CONTAS / SALDO / TRANSFERÊNCIAS (Fase 0 — cash model) =====
+
+export type AccountType = 'checking' | 'savings' | 'investment' | 'wallet' | 'crypto';
+
+export interface Account {
+  id: string;
+  organization_id: string;
+  name: string;
+  type: AccountType;
+  currency: string;
+  initial_balance: number;
+  initial_date: string; // YYYY-MM-DD
+  is_active: boolean;
+  include_in_total: boolean;
+  created_at: string;
+  institution?: string | null;
+  color?: string | null;
+  icon_key?: string | null;
+  updated_at?: string | null;
+}
+
+export interface CreateAccountRequest {
+  name: string;
+  type: AccountType;
+  initial_balance?: number;
+  initial_date?: string | null; // YYYY-MM-DD
+  currency?: string;
+  institution?: string | null;
+  color?: string | null;
+  icon_key?: string | null;
+  include_in_total?: boolean | null;
+}
+
+export interface UpdateAccountRequest {
+  name?: string;
+  type?: AccountType;
+  institution?: string | null;
+  color?: string | null;
+  icon_key?: string | null;
+  is_active?: boolean;
+  include_in_total?: boolean;
+}
+
+/** Saldo realizado de uma conta (caixa). */
+export interface AccountBalance {
+  account_id: string;
+  name: string;
+  type: AccountType;
+  currency: string;
+  initial_balance: number;
+  balance: number;
+  include_in_total: boolean;
+}
+
+export interface OrgBalances {
+  as_of: string;
+  total: number; // soma das contas include_in_total
+  accounts: AccountBalance[];
+}
+
+export interface TypeBalance {
+  type: AccountType;
+  balance: number;
+  account_count: number;
+}
+
+export interface BalanceSummary {
+  as_of: string;
+  total_available: number; // contas include_in_total
+  total_all: number;       // todas as contas ativas
+  account_count: number;
+  by_type: TypeBalance[];
+}
+
+export interface CreateTransferRequest {
+  from_account_id: string;
+  to_account_id: string;
+  amount: number;
+  date?: string | null;
+  note?: string | null;
+}
+
+export interface Transfer {
+  id: string;
+  organization_id: string;
+  from_account_id: string;
+  to_account_id: string;
+  amount: number;
+  date: string;
+  created_at: string;
+  note?: string | null;
 }

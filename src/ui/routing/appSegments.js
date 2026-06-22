@@ -7,6 +7,7 @@ export const AUTH_ROUTE_SEGMENTS = [
   "recurring",
   "simulation",
   "goals",
+  "accounts",
   "cards",
   "reports",
   "profile",
