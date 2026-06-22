@@ -27,7 +27,7 @@ const NAV = [
   { id: "transactions", label: "Transações", Icon: ArrowLeftRight },
   { id: "recurring", label: "Recorrências", Icon: Repeat },
   { id: "rhythm", label: "Ritmo de Gastos", Icon: Activity },
-  { id: "planejamento", label: "Planejamento", Icon: Compass },
+  { id: "planning", label: "Planejamento", Icon: Compass },
   { sec: "GESTÃO" },
   { id: "accounts", label: "Contas & Saldo", Icon: Wallet },
   { id: "cards", label: "Cartões", Icon: CreditCard },

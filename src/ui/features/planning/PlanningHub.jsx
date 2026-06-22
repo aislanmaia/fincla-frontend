@@ -5,7 +5,7 @@ import { PageEnter, Card } from "../../components/primitives";
 import { MetasPage } from "../../pages/MetasPage.jsx";
 import { OrcamentosPage } from "../../pages/OrcamentosPage.jsx";
 import { SimulacaoPage } from "../../pages/SimulacaoPage.jsx";
-import { CapacidadePanel } from "../financialHealth/CapacidadePanel.jsx";
+import { CapacityPanel } from "../financialHealth/CapacityPanel.jsx";
 import { UpgradeWall, useEntitlement } from "../entitlements/index.js";
 
 /** Sub-áreas do hub. `soon` = placeholder (M5/M6/M7 ainda não implementados). */
@@ -62,7 +62,7 @@ const groupLabelStyle = { ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, 
  * Hub "Planejamento" — sub-nav lateral no desktop (≥1024, estilo Perfil) e dropdown
  * de seção no tablet/mobile (sem scroll lateral). Renderiza a sub-área ativa.
  */
-export function PlanejamentoHub({ organizationId, dataMode = "live", isMobile = false, navTo, onContribuir, simulation, user, initialMetas }) {
+export function PlanningHub({ organizationId, dataMode = "live", isMobile = false, navTo, onContribuir, simulation, user, initialMetas }) {
   const [area, setArea] = useState(FIRST_AREA);
   const isWide = useIsWide(1024);
   const canSimulate = useEntitlement("what_if_simulations", user);
@@ -70,7 +70,7 @@ export function PlanejamentoHub({ organizationId, dataMode = "live", isMobile = 
   function renderArea() {
     switch (area) {
       case "capacidade":
-        return <CapacidadePanel organizationId={organizationId} dataMode={dataMode} />;
+        return <CapacityPanel organizationId={organizationId} dataMode={dataMode} />;
       case "metas":
         return (
           <MetasPage

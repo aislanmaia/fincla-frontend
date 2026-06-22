@@ -51,7 +51,7 @@ function MonthBars({ months }) {
 }
 
 /** M3 — Capacidade de Economia (direção A). Vive dentro do hub Planejamento. */
-export function CapacidadePanel({ organizationId, dataMode = "live", months = 3 }) {
+export function CapacityPanel({ organizationId, dataMode = "live", months = 3 }) {
   const enabled = !!organizationId && dataMode === "live";
   const { isLoading, error, data, hasLoaded } = useEconomyCapacityData({ organizationId, months, enabled });
 

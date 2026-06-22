@@ -24,7 +24,7 @@ function todayISO() {
 }
 
 /** Modal de transferência entre contas próprias da org. */
-export function TransferenciaModal({ accounts, onClose, onSubmit, isSaving, error }) {
+export function TransferModal({ accounts, onClose, onSubmit, isSaving, error }) {
   const [fromId, setFromId] = useState(accounts[0]?.account_id || "");
   const [toId, setToId] = useState(accounts[1]?.account_id || accounts[0]?.account_id || "");
   const [amount, setAmount] = useState("");

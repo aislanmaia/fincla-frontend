@@ -3,7 +3,7 @@
 import React from "react";
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { ContasPage } from "../ContasPage.jsx";
+import { AccountsPage } from "../AccountsPage.jsx";
 
 vi.mock("../../features/accounts/useAccountsData.js", () => ({
   useAccountsData: () => ({
@@ -26,9 +26,9 @@ vi.mock("../../features/accounts/useAccountsData.js", () => ({
   }),
 }));
 
-describe("ContasPage", () => {
+describe("AccountsPage", () => {
   it("renderiza o saldo disponível, a lista de contas e as ações", () => {
-    const { container } = render(<ContasPage organizationId="org-1" dataMode="live" />);
+    const { container } = render(<AccountsPage organizationId="org-1" dataMode="live" />);
     const text = container.textContent || "";
 
     // rótulos únicos
