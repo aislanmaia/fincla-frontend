@@ -11,7 +11,9 @@ function _user(features = [], extras = {}) {
 }
 
 describe("<Sidebar>", () => {
-  it("shows Pro badges on /reports and /simulation for Essential users", () => {
+  // Simulação migrou para o hub Planejamento (gating via UpgradeWall lá dentro);
+  // o único item Pro que resta no sidebar é Relatórios (/reports).
+  it("shows a Pro badge on /reports for Essential users", () => {
     render(
       <Sidebar
         page="dashboard"
@@ -21,18 +23,14 @@ describe("<Sidebar>", () => {
       />,
     );
 
-    const simulation = screen.getByRole("button", { name: /simulação/i });
     const reports = screen.getByRole("button", { name: /relatórios/i });
     // PlanBadge renders an `img` role with label containing "Pro".
-    expect(
-      within(simulation).getByRole("img", { name: /pro/i }),
-    ).toBeInTheDocument();
     expect(
       within(reports).getByRole("img", { name: /pro/i }),
     ).toBeInTheDocument();
   });
 
-  it("hides Pro badges when the user has the corresponding feature", () => {
+  it("hides the Pro badge when the user has the corresponding feature", () => {
     render(
       <Sidebar
         page="dashboard"
@@ -45,18 +43,14 @@ describe("<Sidebar>", () => {
         ])}
       />,
     );
-    const simulation = screen.getByRole("button", { name: /simulação/i });
     const reports = screen.getByRole("button", { name: /relatórios/i });
-    expect(
-      within(simulation).queryByRole("img", { name: /pro/i }),
-    ).not.toBeInTheDocument();
     expect(
       within(reports).queryByRole("img", { name: /pro/i }),
     ).not.toBeInTheDocument();
   });
 
-  it("hides Pro badges entirely when user is missing", () => {
-    // No subscription info → treat everything as locked (defensive: show badges).
+  it("shows the Pro badge defensively when user info is missing", () => {
+    // No subscription info → treat as locked (defensive: show badge).
     render(
       <Sidebar
         page="dashboard"
@@ -65,9 +59,9 @@ describe("<Sidebar>", () => {
         user={undefined}
       />,
     );
-    const simulation = screen.getByRole("button", { name: /simulação/i });
+    const reports = screen.getByRole("button", { name: /relatórios/i });
     expect(
-      within(simulation).getByRole("img", { name: /pro/i }),
+      within(reports).getByRole("img", { name: /pro/i }),
     ).toBeInTheDocument();
   });
 

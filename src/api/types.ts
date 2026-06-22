@@ -1750,3 +1750,25 @@ export interface Transfer {
   created_at: string;
   note?: string | null;
 }
+
+// ===== SAÚDE FINANCEIRA · CAPACIDADE DE ECONOMIA (M3) =====
+
+export interface MonthlyCapacityPoint {
+  year: number;
+  month: number;
+  month_name: string;
+  income: number;
+  expense: number; // líquido (bruto − estornos)
+  surplus: number; // income − expense
+}
+
+export interface EconomyCapacity {
+  window_months: number;       // tamanho da janela pedida
+  months_with_data: number;    // meses da janela que tiveram movimento
+  avg_income: number;
+  avg_expense: number;
+  avg_surplus: number;
+  trend: 'increasing' | 'stable' | 'decreasing';
+  months: MonthlyCapacityPoint[];        // meses completos, do mais antigo ao mais recente
+  current_month: MonthlyCapacityPoint | null; // mês corrente parcial (não entra na média)
+}

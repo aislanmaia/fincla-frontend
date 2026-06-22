@@ -3,15 +3,15 @@ export const AUTH_ROUTE_SEGMENTS = [
   "dashboard",
   "transactions",
   "rhythm",
-  "budgets",
+  "planning",
   "recurring",
-  "simulation",
-  "goals",
   "accounts",
   "cards",
   "reports",
   "profile",
 ];
+// goals/budgets/simulation migraram para o hub Planejamento; suas rotas antigas
+// redirecionam para /planning/$area (ver finclaRouter.jsx).
 
 export function firstPathSegment(pathname) {
   const raw = String(pathname ?? "").replace(/^\//, "");
