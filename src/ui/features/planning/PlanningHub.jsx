@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import { T } from "../../tokens";
 import { G } from "../../typography";
 import { PageEnter, Card } from "../../components/primitives";
@@ -7,34 +8,7 @@ import { OrcamentosPage } from "../../pages/OrcamentosPage.jsx";
 import { SimulacaoPage } from "../../pages/SimulacaoPage.jsx";
 import { CapacityPanel } from "../financialHealth/CapacityPanel.jsx";
 import { UpgradeWall, useEntitlement } from "../entitlements/index.js";
-
-/** Sub-áreas do hub. `soon` = placeholder (M5/M6/M7 ainda não implementados). */
-const NAV = [
-  {
-    group: "Saúde Financeira",
-    items: [
-      { id: "capacidade", label: "Capacidade de Economia" },
-      { id: "painel", label: "Painel de Saúde", soon: true },
-    ],
-  },
-  {
-    group: "Objetivos",
-    items: [
-      { id: "metas", label: "Metas" },
-      { id: "simulador", label: "Simulador" },
-    ],
-  },
-  {
-    group: "Rotina",
-    items: [
-      { id: "orcamentos", label: "Orçamentos" },
-      { id: "planejado", label: "Planejado × Realizado", soon: true },
-      { id: "calendario", label: "Calendário", soon: true },
-    ],
-  },
-];
-const FIRST_AREA = "capacidade";
-const ALL_ITEMS = NAV.flatMap((g) => g.items);
+import { PLANNING_NAV, DEFAULT_PLANNING_AREA, isPlanningArea, planningAreaItem } from "./planningAreas.js";
 
 function useIsWide(bp = 1024) {
   const [wide, setWide] = useState(() => (typeof window !== "undefined" ? window.innerWidth >= bp : true));
@@ -60,18 +34,23 @@ const groupLabelStyle = { ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, 
 
 /**
  * Hub "Planejamento" — sub-nav lateral no desktop (≥1024, estilo Perfil) e dropdown
- * de seção no tablet/mobile (sem scroll lateral). Renderiza a sub-área ativa.
+ * de seção no tablet/mobile (sem scroll lateral). A área ativa vem da URL
+ * (/planning/$area), deep-linkável; o "voltar" do navegador troca de área.
  */
 export function PlanningHub({ organizationId, dataMode = "live", isMobile = false, navTo, onContribuir, simulation, user, initialMetas }) {
-  const [area, setArea] = useState(FIRST_AREA);
+  const navigate = useNavigate();
+  const params = useParams({ strict: false });
+  const area = isPlanningArea(params?.area) ? params.area : DEFAULT_PLANNING_AREA;
   const isWide = useIsWide(1024);
   const canSimulate = useEntitlement("what_if_simulations", user);
 
+  const selectArea = (id) => navigate({ to: `/planning/${id}` });
+
   function renderArea() {
     switch (area) {
-      case "capacidade":
+      case "capacity":
         return <CapacityPanel organizationId={organizationId} dataMode={dataMode} />;
-      case "metas":
+      case "goals":
         return (
           <MetasPage
             isMobile={isMobile}
@@ -81,9 +60,9 @@ export function PlanningHub({ organizationId, dataMode = "live", isMobile = fals
             onContribuir={onContribuir}
           />
         );
-      case "orcamentos":
+      case "budgets":
         return <OrcamentosPage onNav={navTo} isMobile={isMobile} dataMode={dataMode} organizationId={organizationId} />;
-      case "simulador":
+      case "simulator":
         return canSimulate ? (
           <SimulacaoPage
             cenarios={simulation?.cenarios}
@@ -103,10 +82,8 @@ export function PlanningHub({ organizationId, dataMode = "live", isMobile = fals
             currentPlanId={user?.subscription?.plan}
           />
         );
-      default: {
-        const item = ALL_ITEMS.find((i) => i.id === area);
-        return <Placeholder label={item?.label || "Em breve"} />;
-      }
+      default:
+        return <Placeholder label={planningAreaItem(area)?.label || "Em breve"} />;
     }
   }
 
@@ -115,7 +92,7 @@ export function PlanningHub({ organizationId, dataMode = "live", isMobile = fals
       {isWide ? (
         <div style={{ display: "flex", gap: 22, alignItems: "flex-start" }}>
           <nav style={{ width: 188, flex: "0 0 188px", display: "flex", flexDirection: "column", gap: 2, position: "sticky", top: 0 }}>
-            {NAV.map((g) => (
+            {PLANNING_NAV.map((g) => (
               <div key={g.group}>
                 <div style={groupLabelStyle}>{g.group}</div>
                 {g.items.map((it) => {
@@ -123,7 +100,7 @@ export function PlanningHub({ organizationId, dataMode = "live", isMobile = fals
                   return (
                     <button
                       key={it.id}
-                      onClick={it.soon ? undefined : () => setArea(it.id)}
+                      onClick={it.soon ? undefined : () => selectArea(it.id)}
                       disabled={it.soon}
                       style={{
                         ...G,
@@ -159,11 +136,11 @@ export function PlanningHub({ organizationId, dataMode = "live", isMobile = fals
           </div>
           <select
             value={area}
-            onChange={(e) => setArea(e.target.value)}
+            onChange={(e) => selectArea(e.target.value)}
             aria-label="Seção do planejamento"
             style={{ ...G, width: "100%", fontSize: 14, fontWeight: 600, color: T.ink, background: T.surface, border: `1.5px solid ${T.border}`, borderRadius: 11, padding: "11px 14px", outline: "none", boxSizing: "border-box" }}
           >
-            {NAV.map((g) => (
+            {PLANNING_NAV.map((g) => (
               <optgroup key={g.group} label={g.group}>
                 {g.items.map((it) => (
                   <option key={it.id} value={it.id} disabled={it.soon}>

@@ -15,6 +15,7 @@ import { FinclaNotFoundPage } from "./FinclaNotFoundPage.jsx";
 import { FinclaAuthenticatedRouteError } from "./FinclaAuthenticatedRouteError.jsx";
 import { GatedAuthenticatedPageOutlet } from "./GatedAuthenticatedPageOutlet.jsx";
 import { AUTH_ROUTE_SEGMENTS } from "./appSegments.js";
+import { isPlanningArea, DEFAULT_PLANNING_AREA } from "../features/planning/planningAreas.js";
 import { finclaRootSearchSchema } from "./finclaRootSearchSchema.js";
 import { requireSessionTokenBeforeLoad } from "./requireSessionTokenBeforeLoad.js";
 import { isProfileSettingsTabSlug } from "./profileSettingsTabs.js";
@@ -63,7 +64,7 @@ const GATED_SEGMENTS = {
 };
 
 const segmentRoutes = AUTH_ROUTE_SEGMENTS.filter(
-  (s) => s !== "profile" && s !== "transactions",
+  (s) => s !== "profile" && s !== "transactions" && s !== "planning",
 ).map((segment) => {
   const gate = GATED_SEGMENTS[segment];
   return createRoute({
@@ -148,6 +149,53 @@ const profileBillingReturnRoute = createRoute({
 
 profileRoute.addChildren([profileIndexRoute, profileBillingReturnRoute, profileTabRoute]);
 
+/* ─── Hub Planejamento: /planning/$area (deep-linkável, estilo /profile/$tab) ─── */
+const planningRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "planning",
+  beforeLoad: requireSessionTokenBeforeLoad,
+  errorComponent: FinclaAuthenticatedRouteError,
+  component: () => <Outlet />,
+});
+
+const planningIndexRoute = createRoute({
+  getParentRoute: () => planningRoute,
+  path: "/",
+  beforeLoad: () => {
+    throw redirect({ to: `/planning/${DEFAULT_PLANNING_AREA}`, replace: true });
+  },
+});
+
+const planningAreaRoute = createRoute({
+  getParentRoute: () => planningRoute,
+  path: "$area",
+  beforeLoad: ({ params }) => {
+    if (!isPlanningArea(params.area)) {
+      throw notFound();
+    }
+  },
+  errorComponent: FinclaAuthenticatedRouteError,
+  component: function PlanningAreaPage() {
+    return <AuthenticatedPageOutlet segment="planning" />;
+  },
+});
+
+planningRoute.addChildren([planningIndexRoute, planningAreaRoute]);
+
+/** Rotas antigas → hub (back-compat de bookmarks/links). */
+function planningRedirectRoute(path, area) {
+  return createRoute({
+    getParentRoute: () => rootRoute,
+    path,
+    beforeLoad: () => {
+      throw redirect({ to: `/planning/${area}`, replace: true });
+    },
+  });
+}
+const goalsRedirectRoute = planningRedirectRoute("goals", "goals");
+const budgetsRedirectRoute = planningRedirectRoute("budgets", "budgets");
+const simulationRedirectRoute = planningRedirectRoute("simulation", "simulator");
+
 const notFoundRoute = new NotFoundRoute({
   getParentRoute: () => rootRoute,
   component: FinclaNotFoundPage,
@@ -158,6 +206,10 @@ const routeTree = rootRoute.addChildren([
   ...segmentRoutes,
   transactionsRoute,
   profileRoute,
+  planningRoute,
+  goalsRedirectRoute,
+  budgetsRedirectRoute,
+  simulationRedirectRoute,
   notFoundRoute,
 ]);
 
