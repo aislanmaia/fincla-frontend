@@ -34,10 +34,10 @@ const NAV = [
   { id: "simulation", label: "Simulação", Icon: FlaskConical, proFeature: "what_if_simulations" },
   { id: "goals", label: "Metas", Icon: BarChart2 },
   { sec: "GESTÃO" },
-  { id: "accounts", label: "Contas", Icon: Wallet },
+  { id: "accounts", label: "Contas & Saldo", Icon: Wallet },
   { id: "cards", label: "Cartões", Icon: CreditCard },
   { id: "reports", label: "Relatórios", Icon: FileText, proFeature: "advanced_reports" },
-  { sec: "CONTA" },
+  { sec: "CONFIGURAÇÕES" },
   { id: "profile", label: "Perfil", Icon: Settings },
 ];
 
