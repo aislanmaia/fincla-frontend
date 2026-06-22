@@ -20,7 +20,7 @@ const inputStyle = {
 const labelStyle = { ...G, fontSize: 12, fontWeight: 600, color: T.inkMid, marginBottom: 6, display: "block" };
 
 /** Modal de criar/editar conta. `account` preenchido => modo edição (sem saldo inicial). */
-export function NovaContaModal({ account, onClose, onSubmit, isSaving, error }) {
+export function AccountFormModal({ account, onClose, onSubmit, isSaving, error }) {
   const editing = !!account;
   const [name, setName] = useState(account?.name || "");
   const [type, setType] = useState(account?.type || "checking");

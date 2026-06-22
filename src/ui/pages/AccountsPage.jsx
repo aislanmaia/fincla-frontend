@@ -4,8 +4,9 @@ import { G, NUM } from "../typography";
 import { PageTitle, Card, Btn, Badge, PageEnter } from "../components/primitives";
 import { useAccountsData } from "../features/accounts/useAccountsData.js";
 import { accountMeta, formatBRL } from "../features/accounts/accountMeta.js";
-import { NovaContaModal } from "../features/accounts/NovaContaModal.jsx";
-import { TransferenciaModal } from "../features/accounts/TransferenciaModal.jsx";
+import { AccountFormModal } from "../features/accounts/AccountFormModal.jsx";
+import { TransferModal } from "../features/accounts/TransferModal.jsx";
+import { ConfirmDialog } from "../features/accounts/ConfirmDialog.jsx";
 
 const menuItemStyle = {
   ...G,
@@ -21,7 +22,7 @@ const menuItemStyle = {
   color: T.inkMid,
 };
 
-export function ContasPage({ organizationId, dataMode = "live", isMobile = false }) {
+export function AccountsPage({ organizationId, dataMode = "live", isMobile = false }) {
   const enabled = !!organizationId && dataMode === "live";
   const data = useAccountsData({ organizationId, enabled });
 
@@ -29,9 +30,11 @@ export function ContasPage({ organizationId, dataMode = "live", isMobile = false
   const [editAccount, setEditAccount] = useState(null);
   const [showTransfer, setShowTransfer] = useState(false);
   const [openMenuId, setOpenMenuId] = useState(null);
+  const [deactivateTarget, setDeactivateTarget] = useState(null);
 
   const accounts = data.accounts || [];
   const accountModalOpen = showNova || !!editAccount;
+  const canTransfer = accounts.length >= 2;
 
   function closeAccountModal() {
     setShowNova(false);
@@ -57,13 +60,14 @@ export function ContasPage({ organizationId, dataMode = "live", isMobile = false
     }
   }
 
-  async function handleDeactivate(account) {
-    setOpenMenuId(null);
-    if (!window.confirm(`Desativar a conta "${account.name}"? Ela deixa de aparecer no saldo.`)) return;
+  async function confirmDeactivate() {
+    const account = deactivateTarget;
+    if (!account) return;
     try {
       await data.deactivateAccount(account.id);
+      setDeactivateTarget(null);
     } catch {
-      /* erro em data.error */
+      /* erro em data.error; mantém o diálogo aberto */
     }
   }
 
@@ -74,7 +78,9 @@ export function ContasPage({ organizationId, dataMode = "live", isMobile = false
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <PageTitle sans="Minhas" serif="Contas" />
           <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
-            <Btn variant="outGray" onClick={() => setShowTransfer(true)} small={isMobile}>⇄ Transferir</Btn>
+            {canTransfer ? (
+              <Btn variant="outGray" onClick={() => setShowTransfer(true)} small={isMobile}>⇄ Transferir</Btn>
+            ) : null}
             <Btn variant="dark" onClick={() => setShowNova(true)} small={isMobile}>+ Nova conta</Btn>
           </div>
         </div>
@@ -148,7 +154,7 @@ export function ContasPage({ organizationId, dataMode = "live", isMobile = false
                           <div style={{ position: "absolute", right: 0, top: "100%", marginTop: 4, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, boxShadow: T.md, zIndex: 20, minWidth: 150, overflow: "hidden" }}>
                             <button style={menuItemStyle} onClick={() => { setOpenMenuId(null); setEditAccount(a); }}>Editar</button>
                             <div style={{ height: 1, background: T.border }} />
-                            <button style={{ ...menuItemStyle, color: T.red }} onClick={() => handleDeactivate(a)}>Desativar</button>
+                            <button style={{ ...menuItemStyle, color: T.red }} onClick={() => { setOpenMenuId(null); setDeactivateTarget(a); }}>Desativar</button>
                           </div>
                         </>
                       ) : null}
@@ -167,7 +173,7 @@ export function ContasPage({ organizationId, dataMode = "live", isMobile = false
       </div>
 
       {accountModalOpen ? (
-        <NovaContaModal
+        <AccountFormModal
           account={editAccount}
           onClose={closeAccountModal}
           onSubmit={handleAccountSubmit}
@@ -177,12 +183,25 @@ export function ContasPage({ organizationId, dataMode = "live", isMobile = false
       ) : null}
 
       {showTransfer ? (
-        <TransferenciaModal
+        <TransferModal
           accounts={accounts}
           onClose={() => setShowTransfer(false)}
           onSubmit={handleTransfer}
           isSaving={data.isSaving}
           error={data.error}
+        />
+      ) : null}
+
+      {deactivateTarget ? (
+        <ConfirmDialog
+          titleSans="Desativar"
+          titleSerif="conta"
+          message={`Desativar a conta "${deactivateTarget.name}"? Ela deixa de aparecer no saldo. Você pode reativá-la depois.`}
+          confirmLabel="Desativar"
+          danger
+          busy={data.isSaving}
+          onConfirm={confirmDeactivate}
+          onClose={() => setDeactivateTarget(null)}
         />
       ) : null}
     </PageEnter>

@@ -135,8 +135,11 @@ export const NovaTransacaoModal = ({
   const [accountOptions, setAccountOptions] = useState([]);
   const [settleAccountId, setSettleAccountId] = useState("");
   const [settled, setSettled] = useState(true);
+  const accountsLoadedOrgRef = useRef(null);
   useEffect(() => {
     if (!open || !organizationId || dataMode !== "live") return undefined;
+    // Só busca uma vez por org — evita refetch a cada reabertura do modal.
+    if (accountsLoadedOrgRef.current === organizationId) return undefined;
     let cancelled = false;
     getOrgBalances(organizationId)
       .then((d) => {
@@ -146,6 +149,7 @@ export const NovaTransacaoModal = ({
         setSettleAccountId(
           (cur) => cur || accts.find((a) => a.include_in_total)?.account_id || accts[0]?.account_id || "",
         );
+        accountsLoadedOrgRef.current = organizationId;
       })
       .catch(() => {});
     return () => {
