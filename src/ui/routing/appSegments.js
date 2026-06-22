@@ -3,6 +3,7 @@ export const AUTH_ROUTE_SEGMENTS = [
   "dashboard",
   "transactions",
   "rhythm",
+  "planejamento",
   "budgets",
   "recurring",
   "simulation",

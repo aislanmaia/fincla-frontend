@@ -41,6 +41,7 @@ import { RelatoriosPage } from "./pages/RelatoriosPage.jsx";
 import { SimulacaoPage as SimulacaoPageView } from "./pages/SimulacaoPage.jsx";
 import { CartoesPage } from "./pages/CartoesPage.jsx";
 import { ContasPage } from "./pages/ContasPage.jsx";
+import { PlanejamentoHub } from "./features/planejamento/PlanejamentoHub.jsx";
 
 import { acceptOrganizationInvitation } from "./data/invitationAdapter.js";
 import {
@@ -344,6 +345,7 @@ export default function App() {
     budgets:   <OrcamentosPage onNav={navTo} isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} />,
     goals:        <MetasPageView    isMobile={isMobile} initialMetas={dataMode==="empty" ? [] : undefined} dataMode={dataMode} organizationId={session.activeOrgId} onContribuir={(meta) => { setModalPreConfig({ tipo:"receita", desc:`Aporte — ${meta.nome}`, cat:"Poupança" }); openTxModal(); }} />,
     accounts:     <ContasPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} />,
+    planejamento: <PlanejamentoHub organizationId={session.activeOrgId} dataMode={dataMode} isMobile={isMobile} navTo={navTo} user={session.user} initialMetas={dataMode==="empty" ? [] : undefined} simulation={{ cenarios, setCenarios, cenarioId, setCenarioId }} onContribuir={(meta) => { setModalPreConfig({ tipo:"receita", desc:`Aporte — ${meta.nome}`, cat:"Poupança" }); openTxModal(); }} />,
     profile:        <ConfiguracoesPage onNav={navTo} isMobile={isMobile} onboardingData={onboardingData} dataMode={dataMode} organizationId={session.activeOrgId} currentUser={session.user} />,
     reports:   <RelatoriosPage onNav={(dest)=>{ if(dest==="_nova_transacao") openTxModal(); else navTo(dest); }} isMobile={isMobile} dataMode={dataMode} extraRecs={extraRecs} organizationId={session.activeOrgId} />,
     simulation:    <SimulacaoPageView cenarios={cenarios} setCenarios={setCenarios} cenarioId={cenarioId} setCenarioId={setCenarioId} isMobile={isMobile} organizationId={session.activeOrgId} dataMode={dataMode} />,

@@ -9,6 +9,7 @@ const SEGMENT_TITLES = {
   dashboard: "Visão geral",
   transactions: "Transações",
   rhythm: "Ritmo de gastos",
+  planejamento: "Planejamento",
   budgets: "Orçamentos",
   recurring: "Recorrências",
   simulation: "Simulação",
