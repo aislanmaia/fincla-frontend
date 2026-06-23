@@ -14,7 +14,7 @@ export const PLANNING_NAV = [
   {
     group: "Objetivos",
     items: [
-      { id: "goals", label: "Metas" },
+      { id: "goals", label: "Projetos de Vida" },
       { id: "simulator", label: "Simulador" },
     ],
   },

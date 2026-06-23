@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "@tanstack/react-router";
 import { T } from "../../tokens";
 import { G } from "../../typography";
 import { PageEnter, Card } from "../../components/primitives";
-import { MetasPage } from "../../pages/MetasPage.jsx";
+import { LifeProjectsPage } from "../../pages/LifeProjectsPage.jsx";
 import { OrcamentosPage } from "../../pages/OrcamentosPage.jsx";
 import { SimulacaoPage } from "../../pages/SimulacaoPage.jsx";
 import { CapacityPanel } from "../financialHealth/CapacityPanel.jsx";
@@ -52,7 +52,7 @@ export function PlanningHub({ organizationId, dataMode = "live", isMobile = fals
         return <CapacityPanel organizationId={organizationId} dataMode={dataMode} />;
       case "goals":
         return (
-          <MetasPage
+          <LifeProjectsPage
             isMobile={isMobile}
             initialMetas={dataMode === "empty" ? [] : initialMetas}
             dataMode={dataMode}
