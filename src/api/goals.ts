@@ -2,6 +2,7 @@
 import apiClient from './client';
 import type {
   Goal,
+  GoalProjection,
   CreateGoalRequest,
   UpdateGoalRequest,
   GoalContribution,
@@ -40,6 +41,20 @@ export const getGoal = async (
 ): Promise<Goal> => {
   const response = await apiClient.get<Goal>(`/goals/${goalId}`, {
     params: { organization_id: organizationId },
+  });
+  return response.data;
+};
+
+/**
+ * Projeção de conclusão da meta (M4). Overrides opcionais p/ simular outro cenário.
+ */
+export const getGoalProjection = async (
+  organizationId: string,
+  goalId: string,
+  overrides?: { monthly_contribution?: number; annual_return_rate?: number },
+): Promise<GoalProjection> => {
+  const response = await apiClient.get<GoalProjection>(`/goals/${goalId}/projection`, {
+    params: { organization_id: organizationId, ...overrides },
   });
   return response.data;
 };

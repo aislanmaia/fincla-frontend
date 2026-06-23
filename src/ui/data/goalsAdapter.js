@@ -70,6 +70,15 @@ export function mapGoalToUi(goal) {
     term: effectiveTerm(goal),
     termExplicit: goal.term || null,
     prioridade: priorityFromNumber(goal.priority),
+    projection: goal.projection
+      ? {
+          monthsToTarget: goal.projection.months_to_target,
+          completionDate: goal.projection.completion_date,
+          completionLabel: formatDeadline(goal.projection.completion_date),
+          onTrack: goal.projection.on_track,
+          monthsVsDeadline: goal.projection.months_vs_deadline,
+        }
+      : null,
   };
 }
 
