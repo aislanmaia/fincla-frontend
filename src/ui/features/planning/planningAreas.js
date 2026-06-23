@@ -23,7 +23,7 @@ export const PLANNING_NAV = [
     items: [
       { id: "budgets", label: "Orçamentos" },
       { id: "planned", label: "Planejado × Realizado", soon: true },
-      { id: "calendar", label: "Calendário", soon: true },
+      { id: "calendar", label: "Calendário" },
     ],
   },
 ];
