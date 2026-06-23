@@ -22,7 +22,7 @@ export const PLANNING_NAV = [
     group: "Rotina",
     items: [
       { id: "budgets", label: "Orçamentos" },
-      { id: "planned", label: "Planejado × Realizado", soon: true },
+      { id: "planned", label: "Planejado × Realizado" },
       { id: "calendar", label: "Calendário" },
     ],
   },

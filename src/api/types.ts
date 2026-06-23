@@ -1799,3 +1799,39 @@ export interface EconomyCapacity {
   months: MonthlyCapacityPoint[];        // meses completos, do mais antigo ao mais recente
   current_month: MonthlyCapacityPoint | null; // mês corrente parcial (não entra na média)
 }
+
+// ===== M5 — PLANEJADO × REALIZADO (MONTHLY PLANS) =====
+export interface MonthlyPlanItemComparison {
+  tag_id: string | null;
+  tag_name: string | null;
+  kind: 'income' | 'expense';
+  planned: number;
+  actual: number;
+  variance: number; // actual - planned
+  in_plan: boolean; // false = realizado sem alvo
+}
+export interface MonthlyPlanComparison {
+  year: number;
+  month: number;
+  has_plan: boolean;
+  status: string;
+  notes: string | null;
+  planned_income: number;
+  planned_expense: number;
+  actual_income: number;
+  actual_expense: number;
+  items: MonthlyPlanItemComparison[];
+}
+export interface MonthlyPlanItemBody {
+  tag_id?: string | null;
+  kind: 'income' | 'expense';
+  planned_amount: number;
+  notes?: string | null;
+}
+export interface MonthlyPlanUpsertBody {
+  planned_income: number;
+  planned_expense: number;
+  notes?: string | null;
+  status?: string;
+  items: MonthlyPlanItemBody[];
+}
