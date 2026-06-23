@@ -36,6 +36,16 @@ function barColor(kind, planned, actual) {
   return actual >= planned ? T.greenBar : T.amberBar;
 }
 
+function useIsWide(bp = 1024) {
+  const [w, setW] = useState(() => (typeof window !== "undefined" ? window.innerWidth >= bp : true));
+  useEffect(() => {
+    const on = () => setW(window.innerWidth >= bp);
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, [bp]);
+  return w;
+}
+
 function CompareCard({ title, planned, actual, kind }) {
   const variance = actual - planned;
   const pct = planned > 0 ? Math.min(100, (actual / planned) * 100) : actual > 0 ? 100 : 0;
@@ -47,7 +57,7 @@ function CompareCard({ title, planned, actual, kind }) {
   return (
     <div style={{ flex: 1, minWidth: 200, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14, background: T.surface }}>
       <div style={cap}>{title}</div>
-      <div style={{ ...G, ...NUM, fontSize: 20, fontWeight: 800, letterSpacing: "-0.02em", color: valColor, marginTop: 4 }}>{fmt(actual)} <span style={{ fontSize: 12, color: T.inkLight, fontWeight: 600 }}>real</span></div>
+      <div style={{ ...G, ...NUM, fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", color: valColor, marginTop: 5 }}>{fmt(actual)} <span style={{ fontSize: 13, color: T.inkLight, fontWeight: 600 }}>real</span></div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 3 }}>
         <span style={{ ...G, fontSize: 12, color: T.inkLight }}>planejado {fmt(planned)}</span>
         <span style={{ ...G, fontSize: 10, fontWeight: 700, borderRadius: 9999, padding: "2px 8px", color: vc, background: vc === T.red ? T.redLight : vc === T.amber ? T.amberLight : T.greenLight }}>{label}</span>
@@ -62,6 +72,7 @@ function CompareCard({ title, planned, actual, kind }) {
 /** M5 — Planejado × Realizado. Sub-área "planned" do hub. */
 export function PlannedVsActualPage({ organizationId = null, dataMode = "live", isMobile = false }) {
   const live = shouldUseRealData(organizationId, dataMode);
+  const isWide = useIsWide(1024);
   const now = useMemo(() => ({ year: new Date().getFullYear(), month: new Date().getMonth() + 1 }), []);
   const [cursor, setCursor] = useState(now);
   const { data: liveData, loading, error, saving, save } = useMonthlyPlanData({ organizationId, year: cursor.year, month: cursor.month, enabled: live });
@@ -153,8 +164,10 @@ export function PlannedVsActualPage({ organizationId = null, dataMode = "live", 
             </div>
           )}
 
-          <Section title="Despesas por categoria" items={expenses} editing={editing} form={form} setForm={setForm} inputStyle={inputStyle} />
-          {incomes.length ? <Section title="Receitas por categoria" items={incomes} editing={editing} form={form} setForm={setForm} inputStyle={inputStyle} /> : null}
+          <div style={{ display: "grid", gridTemplateColumns: isWide && incomes.length ? "1fr 1fr" : "1fr", gap: 16, alignItems: "start" }}>
+            <Section title="Despesas por categoria" items={expenses} editing={editing} form={form} setForm={setForm} inputStyle={inputStyle} />
+            {incomes.length ? <Section title="Receitas por categoria" items={incomes} editing={editing} form={form} setForm={setForm} inputStyle={inputStyle} /> : null}
+          </div>
 
           {!editing ? (
             <div style={{ ...ghost, marginTop: 12 }}>Categorias sem alvo aparecem como "fora do plano". Em "Editar plano", o realizado vem como sugestão (placeholder).</div>
@@ -169,7 +182,7 @@ function Section({ title, items, editing, form, setForm, inputStyle }) {
   if (!items.length) return null;
   return (
     <Card style={{ marginTop: 14, padding: "4px 16px 12px" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr 1.2fr 0.9fr", gap: 10, alignItems: "center", padding: "10px 0 6px", ...G, fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: T.inkGhost }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 96px 1fr", gap: 10, alignItems: "center", padding: "10px 0 6px", ...G, fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: T.inkGhost }}>
         <span>{title}</span><span style={{ textAlign: "right" }}>Planejado</span><span style={{ textAlign: "right" }}>Realizado</span><span>Uso</span><span style={{ textAlign: "right" }}>Variação</span>
       </div>
       {items.map((i) => {
@@ -177,19 +190,19 @@ function Section({ title, items, editing, form, setForm, inputStyle }) {
         const pct = i.planned > 0 ? Math.min(100, (i.actual / i.planned) * 100) : i.actual > 0 ? 100 : 0;
         const k = itemKey(i);
         return (
-          <div key={k} style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr 1.2fr 0.9fr", gap: 10, alignItems: "center", padding: "11px 0", borderTop: `1px solid ${T.border}` }}>
-            <span style={{ ...G, fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+          <div key={k} style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 96px 1fr", gap: 10, alignItems: "center", padding: "11px 0", borderTop: `1px solid ${T.border}` }}>
+            <span style={{ ...G, fontSize: 14.5, fontWeight: 600, display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
               {i.tag_name || "—"}
               {!i.in_plan ? <span style={{ ...G, fontSize: 9, fontWeight: 700, borderRadius: 9999, padding: "1px 7px", background: T.grayLight, color: T.inkMid }}>fora do plano</span> : null}
             </span>
             {editing ? (
               <input style={inputStyle} value={form.items[k] ?? ""} onChange={(e) => setForm((f) => ({ ...f, items: { ...f.items, [k]: e.target.value } }))} placeholder={String(Math.round(i.actual))} inputMode="decimal" />
             ) : (
-              <span style={{ ...G, ...NUM, fontSize: 12, color: T.inkLight, textAlign: "right" }}>{i.planned ? fmt(i.planned) : "—"}</span>
+              <span style={{ ...G, ...NUM, fontSize: 13.5, color: T.inkLight, textAlign: "right" }}>{i.planned ? fmt(i.planned) : "—"}</span>
             )}
-            <span style={{ ...G, ...NUM, fontSize: 12, fontWeight: 700, textAlign: "right" }}>{fmt(i.actual)}</span>
+            <span style={{ ...G, ...NUM, fontSize: 13.5, fontWeight: 700, textAlign: "right" }}>{fmt(i.actual)}</span>
             <span style={{ height: 8, borderRadius: 99, background: T.grayLight, overflow: "hidden" }}><span style={{ display: "block", width: `${pct}%`, height: "100%", borderRadius: 99, background: barColor(i.kind, i.planned, i.actual) }} /></span>
-            <span style={{ ...G, ...NUM, fontSize: 12, textAlign: "right", color: vc }}>{i.variance === 0 ? "no alvo" : `${i.variance > 0 ? "+" : ""}${fmt(i.variance)}`}</span>
+            <span style={{ ...G, ...NUM, fontSize: 13.5, textAlign: "right", color: vc }}>{i.variance === 0 ? "no alvo" : `${i.variance > 0 ? "+" : ""}${fmt(i.variance)}`}</span>
           </div>
         );
       })}
