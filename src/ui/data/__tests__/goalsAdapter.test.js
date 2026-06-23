@@ -6,66 +6,89 @@ import {
 } from "../goalsAdapter.js";
 
 describe("goalsAdapter", () => {
-  it("mapeia meta da API para o formato usado na UI", () => {
+  it("mapeia goal da API para a UI com os campos reais", () => {
     expect(mapGoalToUi({
       id: "g1",
       organization_id: "org-1",
       name: "Reserva de emergência",
-      target_amount: 18000,
-      current_amount: 11400,
-      deadline: "2026-12-15",
+      target_amount: 30000,
+      current_amount: 18500,
+      deadline: "2026-12-01",
       status: "active",
-      description: "6 meses de despesas fixas",
-      created_at: "",
-      updated_at: null,
-      progress: 63,
-    }, 0)).toEqual({
+      description: "6 meses de despesas",
+      progress: 62,
+      type: "emergency_fund",
+      term: "short",
+      priority: 3,
+      monthly_target: 1000,
+      annual_return_rate: null,
+    })).toEqual({
       id: "g1",
       nome: "Reserva de emergência",
-      emoji: "🛡️",
-      meta: 18000,
-      atual: 11400,
-      mensal: 550,
-      prazo: "Dez 2026",
-      cor: "#059669",
-      corLight: "#ECFDF5",
-      prioridade: "alta",
-      desc: "6 meses de despesas fixas",
+      desc: "6 meses de despesas",
       status: "active",
+      type: "emergency_fund",
+      meta: 30000,
+      atual: 18500,
+      progress: 62,
+      monthly_target: 1000,
+      annual_return_rate: null,
+      deadline: "2026-12-01",
+      prazo: "Dez 2026",
+      term: "short",
+      termExplicit: "short",
+      prioridade: "alta",
     });
   });
 
-  it("monta payload de criação a partir do formulário da UI", () => {
-    expect(buildCreateGoalPayload({
+  it("buildCreate envia campos reais e NÃO envia current_amount", () => {
+    const payload = buildCreateGoalPayload({
       nome: "Viagem",
       desc: "Portugal",
-      meta: "15.000,00",
-      atual: "4.200,00",
-      prazo: "Jul 2027",
-    })).toEqual({
+      type: "travel",
+      meta: "18.000,00",
+      deadline: "2027-07",
+      prioridade: "media",
+      monthly_target: "600",
+      annual_return_rate: "",
+    });
+    expect(payload).toEqual({
       name: "Viagem",
       description: "Portugal",
-      target_amount: 15000,
-      current_amount: 4200,
+      target_amount: 18000,
       deadline: "2027-07-01",
+      type: "travel",
+      term: null,
+      priority: 2,
+      monthly_target: 600,
+      annual_return_rate: null,
     });
+    expect("current_amount" in payload).toBe(false);
   });
 
-  it("monta payload de edição sem sobrescrever descrição vazia com null indevido", () => {
+  it("buildUpdate inclui status, term explícito e taxa em decimal", () => {
     expect(buildUpdateGoalPayload({
-      nome: "Notebook novo",
+      nome: "Aposentadoria",
       desc: "",
-      meta: "6000",
-      atual: "3800",
-      prazo: "",
+      type: "retirement",
+      meta: "500000",
+      deadline: "",
+      prioridade: "baixa",
+      monthly_target: "1200",
+      annual_return_rate: "10,5",
+      term: "long",
       status: "active",
     })).toEqual({
-      name: "Notebook novo",
+      name: "Aposentadoria",
       description: null,
-      target_amount: 6000,
-      current_amount: 3800,
+      target_amount: 500000,
       deadline: null,
       status: "active",
+      type: "retirement",
+      term: "long",
+      priority: 1,
+      monthly_target: 1200,
+      annual_return_rate: 0.105,
     });
   });
 });

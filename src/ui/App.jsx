@@ -35,7 +35,6 @@ import { RitmoPage as RitmoPageView } from "./pages/RitmoPage.jsx";
 import { TransacoesPage as TransacoesPageView } from "./pages/TransacoesPage.jsx";
 import { RecorrenciasPage as RecorrenciasPageView } from "./pages/RecorrenciasPage.jsx";
 import { ConfiguracoesPage } from "./pages/ConfiguracoesPage.jsx";
-import { MetasPage as MetasPageView } from "./pages/MetasPage.jsx";
 import { OrcamentosPage } from "./pages/OrcamentosPage.jsx";
 import { RelatoriosPage } from "./pages/RelatoriosPage.jsx";
 import { SimulacaoPage as SimulacaoPageView } from "./pages/SimulacaoPage.jsx";
@@ -343,7 +342,6 @@ export default function App() {
       openTxModal(cardIdNum != null ? { [FC.CARD]: String(cardIdNum) } : {});
     }} />,
     budgets:   <OrcamentosPage onNav={navTo} isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} />,
-    goals:        <MetasPageView    isMobile={isMobile} initialMetas={dataMode==="empty" ? [] : undefined} dataMode={dataMode} organizationId={session.activeOrgId} onContribuir={(meta) => { setModalPreConfig({ tipo:"receita", desc:`Aporte — ${meta.nome}`, cat:"Poupança" }); openTxModal(); }} />,
     accounts:     <AccountsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} />,
     planning:     <PlanningHub organizationId={session.activeOrgId} dataMode={dataMode} isMobile={isMobile} navTo={navTo} user={session.user} initialMetas={dataMode==="empty" ? [] : undefined} simulation={{ cenarios, setCenarios, cenarioId, setCenarioId }} onContribuir={(meta) => { setModalPreConfig({ tipo:"receita", desc:`Aporte — ${meta.nome}`, cat:"Poupança" }); openTxModal(); }} />,
     profile:        <ConfiguracoesPage onNav={navTo} isMobile={isMobile} onboardingData={onboardingData} dataMode={dataMode} organizationId={session.activeOrgId} currentUser={session.user} />,
