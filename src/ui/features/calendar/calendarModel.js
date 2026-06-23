@@ -1,0 +1,87 @@
+// M6 — modelo puro do Calendário Financeiro (testável; sem I/O).
+// Agrega transações do mês em eventos por dia (parcelas de cartão por due_date).
+
+const MONTHS_PT = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+const DOW_PT = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+export function pad2(n) {
+  return String(n).padStart(2, "0");
+}
+export function ymd(year, month, day) {
+  return `${year}-${pad2(month)}-${pad2(day)}`;
+}
+export function monthLabel(year, month) {
+  return `${MONTHS_PT[month - 1]} ${year}`;
+}
+export function monthPrefix(year, month) {
+  return `${year}-${pad2(month)}`;
+}
+export const WEEKDAYS = DOW_PT;
+
+/** Matriz do mês: semanas (arrays de 7) de células {day, ymd} ou null (fora do mês). */
+export function monthMatrix(year, month) {
+  const startDow = new Date(year, month - 1, 1).getDay(); // 0=Dom
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < startDow; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push({ day: d, ymd: ymd(year, month, d) });
+  while (cells.length % 7 !== 0) cells.push(null);
+  const weeks = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+  return weeks;
+}
+
+/** Agrupa transações do mês em eventos por dia (chave "YYYY-MM-DD"). */
+export function buildCalendarEvents(transactions, year, month) {
+  const prefix = monthPrefix(year, month);
+  const inMonth = (s) => typeof s === "string" && s.slice(0, 7) === prefix;
+  const byDay = {};
+  const add = (key, ev) => {
+    (byDay[key] ||= []).push(ev);
+  };
+  for (const tx of transactions || []) {
+    // Cartão: cada parcela com vencimento no mês vira um evento de fatura.
+    if (Array.isArray(tx.installment_info) && tx.installment_info.length) {
+      for (const inst of tx.installment_info) {
+        if (inMonth(inst.due_date)) {
+          add(inst.due_date, { kind: "invoice", desc: tx.description, value: -Math.abs(Number(inst.amount) || 0), paid: false });
+        }
+      }
+      continue;
+    }
+    const day = (tx.paid_at || tx.date || "").slice(0, 10);
+    if (!inMonth(day)) continue;
+    const paid = Boolean(tx.paid_at) || tx.status === "paid" || tx.status === "completed";
+    const kind = tx.type === "income" ? "income" : tx.type === "refund" ? "refund" : "expense";
+    const sign = kind === "expense" ? -1 : 1;
+    add(day, { kind, desc: tx.description, value: sign * Math.abs(Number(tx.value) || 0), paid });
+  }
+  return byDay;
+}
+
+/** Resumo do mês: recebido (realizado), gasto (realizado), a pagar (previsto), saldo. */
+export function monthSummary(byDay) {
+  let received = 0;
+  let spent = 0;
+  let toPay = 0;
+  for (const evs of Object.values(byDay)) {
+    for (const e of evs) {
+      if (e.value >= 0 && e.paid) received += e.value;
+      else if (e.value < 0 && e.paid) spent += -e.value;
+      else if (e.value < 0 && !e.paid) toPay += -e.value;
+    }
+  }
+  return { received, spent, toPay, net: received - spent - toPay };
+}
+
+export function dayLongLabel(ymdStr) {
+  if (!ymdStr) return "";
+  const d = new Date(`${ymdStr}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${DOW_PT[d.getDay()]}, ${d.getDate()} de ${MONTHS_PT[d.getMonth()].toLowerCase()}`;
+}
+
+export function todayParts() {
+  const n = new Date();
+  return { year: n.getFullYear(), month: n.getMonth() + 1, ymd: ymd(n.getFullYear(), n.getMonth() + 1, n.getDate()) };
+}

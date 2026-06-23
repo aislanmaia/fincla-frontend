@@ -7,6 +7,7 @@ import { LifeProjectsPage } from "../../pages/LifeProjectsPage.jsx";
 import { OrcamentosPage } from "../../pages/OrcamentosPage.jsx";
 import { SimulacaoPage } from "../../pages/SimulacaoPage.jsx";
 import { CapacityPanel } from "../financialHealth/CapacityPanel.jsx";
+import { CalendarPage } from "../../pages/CalendarPage.jsx";
 import { UpgradeWall, useEntitlement } from "../entitlements/index.js";
 import { PLANNING_NAV, DEFAULT_PLANNING_AREA, isPlanningArea, planningAreaItem } from "./planningAreas.js";
 
@@ -62,6 +63,8 @@ export function PlanningHub({ organizationId, dataMode = "live", isMobile = fals
         );
       case "budgets":
         return <OrcamentosPage onNav={navTo} isMobile={isMobile} dataMode={dataMode} organizationId={organizationId} />;
+      case "calendar":
+        return <CalendarPage organizationId={organizationId} dataMode={dataMode} isMobile={isMobile} />;
       case "simulator":
         return canSimulate ? (
           <SimulacaoPage

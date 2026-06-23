@@ -241,7 +241,7 @@ export function LifeProjectsPage({ organizationId = null, dataMode = "live", isM
           )}
         </Card>
 
-        <Card style={{ padding: 18, display: "flex", flexDirection: "column", justifyContent: "center", background: hasCap ? verdictTint : T.surface, borderColor: hasCap ? (fits === false ? "#FDE68A" : "#A7F3D0") : T.border }}>
+        <Card style={{ padding: 18, display: "flex", flexDirection: "column", justifyContent: "center", background: hasCap ? verdictTint : T.surface, borderColor: hasCap ? (fits === false ? T.amberBorder : T.greenBorder) : T.border }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ width: 32, height: 32, borderRadius: 9, display: "grid", placeItems: "center", fontSize: 16, background: hasCap ? "#fff" : T.grayLight, color: hasCap ? verdictColor : T.inkLight }}>{hasCap ? (fits === false ? "⚠" : "✓") : "ℹ️"}</div>
             <div>
