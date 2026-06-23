@@ -23,6 +23,7 @@ import {
   priorityMeta,
 } from "../features/goals/goalMeta.js";
 import { resolveLocalData, shouldUseRealData } from "../dataMode.js";
+import { GoalProjectionModal } from "../features/goals/GoalProjectionModal.jsx";
 
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const fmt = (v) => brl.format(Number(v || 0));
@@ -56,7 +57,7 @@ function Pill({ children, color, bg }) {
   );
 }
 
-function ProjectCard({ g, onEdit, onContribuir }) {
+function ProjectCard({ g, onEdit, onContribuir, onProjection }) {
   const tm = goalTypeMeta(g.type);
   const pm = priorityMeta(g.prioridade);
   return (
@@ -85,6 +86,18 @@ function ProjectCard({ g, onEdit, onContribuir }) {
           <button onClick={(e) => { e.stopPropagation(); onContribuir(g); }} style={{ ...G, fontSize: 11, fontWeight: 700, color: T.green, background: "none", border: "none", cursor: "pointer", padding: 0 }}>+ Aportar</button>
         ) : null}
       </div>
+      {g.projection && g.projection.monthsToTarget != null ? (
+        <div onClick={(e) => { e.stopPropagation(); onProjection && onProjection(g); }} style={{ marginTop: 8, borderTop: `1px solid ${T.border}`, paddingTop: 8, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, cursor: "pointer" }}>
+          <span style={{ ...G, fontSize: 11, color: T.inkLight, display: "inline-flex", alignItems: "center", gap: 5 }}>📈 No ritmo: <b style={{ color: T.ink }}>{g.projection.completionLabel}</b></span>
+          {g.projection.onTrack === false ? (
+            <span style={{ ...G, fontSize: 10, fontWeight: 700, borderRadius: 9999, padding: "2px 8px", color: T.amber, background: T.amberLight }}>✕ +{g.projection.monthsVsDeadline}m</span>
+          ) : g.projection.onTrack === true ? (
+            <span style={{ ...G, fontSize: 10, fontWeight: 700, borderRadius: 9999, padding: "2px 8px", color: T.green, background: T.greenLight }}>✓ no prazo</span>
+          ) : (
+            <span style={{ ...G, fontSize: 10, fontWeight: 700, borderRadius: 9999, padding: "2px 8px", color: T.inkLight, background: T.grayLight }}>estimado</span>
+          )}
+        </div>
+      ) : null}
     </Card>
   );
 }
@@ -124,6 +137,7 @@ export function LifeProjectsPage({ organizationId = null, dataMode = "live", isM
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [projGoal, setProjGoal] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const setF = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -259,7 +273,7 @@ export function LifeProjectsPage({ organizationId = null, dataMode = "live", isM
                   <span style={{ ...G, fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: tm.color }}>{tm.short}</span>
                   {items.length ? <span style={{ ...ghost, marginLeft: "auto" }}>{laneSubtotal(items)}</span> : null}
                 </div>
-                {items.length ? items.map((g) => <ProjectCard key={g.id} g={g} onEdit={openEdit} onContribuir={onContribuir} />) : <EmptyLane term={tm.id} onCreate={openCreate} />}
+                {items.length ? items.map((g) => <ProjectCard key={g.id} g={g} onEdit={openEdit} onContribuir={onContribuir} onProjection={setProjGoal} />) : <EmptyLane term={tm.id} onCreate={openCreate} />}
               </div>
             );
           })}
@@ -275,7 +289,7 @@ export function LifeProjectsPage({ organizationId = null, dataMode = "live", isM
                   <span style={{ ...G, fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: tm.color }}>{tm.label}</span>
                   <span style={{ ...ghost, marginLeft: "auto" }}>{items.length ? laneSubtotal(items) : "0"}</span>
                 </div>
-                {items.length ? <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>{items.map((g) => <ProjectCard key={g.id} g={g} onEdit={openEdit} onContribuir={onContribuir} />)}</div> : <EmptyLane term={tm.id} onCreate={openCreate} />}
+                {items.length ? <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>{items.map((g) => <ProjectCard key={g.id} g={g} onEdit={openEdit} onContribuir={onContribuir} onProjection={setProjGoal} />)}</div> : <EmptyLane term={tm.id} onCreate={openCreate} />}
               </div>
             );
           })}
@@ -286,12 +300,16 @@ export function LifeProjectsPage({ organizationId = null, dataMode = "live", isM
       {byTerm.none.length ? (
         <Card style={{ marginTop: 14, padding: "12px 14px" }}>
           <div style={{ ...G, fontSize: 12, fontWeight: 700, marginBottom: 8 }}>🗓️ Sem prazo definido · {byTerm.none.length}</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>{byTerm.none.map((g) => <ProjectCard key={g.id} g={g} onEdit={openEdit} onContribuir={onContribuir} />)}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>{byTerm.none.map((g) => <ProjectCard key={g.id} g={g} onEdit={openEdit} onContribuir={onContribuir} onProjection={setProjGoal} />)}</div>
         </Card>
       ) : null}
 
       {modalOpen ? (
         <ProjectFormModal editing={editing} form={form} setF={setF} onClose={() => setModalOpen(false)} onSubmit={submit} isSaving={live && goalsData.isSaving} />
+      ) : null}
+
+      {projGoal ? (
+        <GoalProjectionModal goal={projGoal} organizationId={organizationId} onClose={() => setProjGoal(null)} />
       ) : null}
     </PageEnter>
   );

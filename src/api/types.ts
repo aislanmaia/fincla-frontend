@@ -878,18 +878,45 @@ export interface UpdateGoalRequest {
   description?: string | null;
 }
 
+export type GoalTerm = 'short' | 'medium' | 'long';
+
+/** M4: resumo de projeção embutido em cada Goal (alimenta o chip). */
+export interface GoalProjectionSummary {
+  months_to_target: number | null;
+  completion_date: string | null;
+  on_track: boolean | null;
+  months_vs_deadline: number | null; // >0 atrasado, <0 adiantado
+}
+
+/** M4: projeção detalhada (endpoint /goals/{id}/projection → modal). */
+export interface GoalProjection {
+  summary: GoalProjectionSummary;
+  monthly_contribution: number;
+  annual_return_rate: number;
+  required_monthly: number | null;
+  series: number[];
+}
+
 export interface Goal {
   id: string;
   organization_id: string;
   name: string;
   target_amount: number;
-  current_amount: number;
-  deadline: string;
+  current_amount: number; // derivado (read-only)
+  deadline: string | null;
   status: 'active' | 'completed' | 'cancelled';
   description: string | null;
   created_at: string;
   updated_at: string | null;
   progress: number; // Porcentagem 0-100
+  // Campos de planejamento (M1):
+  type: string | null;
+  term: GoalTerm | null;
+  priority: number | null;
+  monthly_target: number | null;
+  annual_return_rate: number | null;
+  // Projeção (M4):
+  projection: GoalProjectionSummary | null;
 }
 
 // ===== CONTRIBUIÇÕES DE METAS =====

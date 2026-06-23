@@ -38,6 +38,32 @@ describe("goalsAdapter", () => {
       term: "short",
       termExplicit: "short",
       prioridade: "alta",
+      projection: null,
+    });
+  });
+
+  it("mapeia o resumo de projeção (M4) quando presente", () => {
+    const ui = mapGoalToUi({
+      id: "g2",
+      name: "Viagem",
+      target_amount: 18000,
+      current_amount: 5200,
+      deadline: "2027-07-01",
+      status: "active",
+      progress: 29,
+      projection: {
+        months_to_target: 22,
+        completion_date: "2028-04-01",
+        on_track: false,
+        months_vs_deadline: 9,
+      },
+    });
+    expect(ui.projection).toEqual({
+      monthsToTarget: 22,
+      completionDate: "2028-04-01",
+      completionLabel: "Abr 2028",
+      onTrack: false,
+      monthsVsDeadline: 9,
     });
   });
 
