@@ -1,16 +1,19 @@
 // Taxonomia de tipos, prazos e prioridade dos Projetos de Vida (M1).
 // `type` é taxonomia do frontend (backend aceita string livre). Labels em PT; ids em inglês.
+// Cores referenciam os tokens do design system (T) — fonte única.
+
+import { T } from "../../tokens";
 
 export const GOAL_TYPES = [
-  { id: "emergency_fund", label: "Reserva", emoji: "🛡️", tint: "#ECFDF5", color: "#059669", bar: "#34D399" },
-  { id: "travel", label: "Viagem", emoji: "✈️", tint: "#EFF6FF", color: "#2563EB", bar: "#60A5FA" },
-  { id: "home", label: "Casa", emoji: "🏠", tint: "#FFFBEB", color: "#D97706", bar: "#FBBF24" },
-  { id: "education", label: "Educação", emoji: "🎓", tint: "#F5F3FF", color: "#7C3AED", bar: "#A78BFA" },
-  { id: "purchase", label: "Compra", emoji: "🛍️", tint: "#EFF6FF", color: "#2563EB", bar: "#60A5FA" },
-  { id: "debt_payoff", label: "Quitar dívida", emoji: "💳", tint: "#FEF2F2", color: "#DC2626", bar: "#F87171" },
-  { id: "investment", label: "Investimento", emoji: "📈", tint: "#ECFDF5", color: "#059669", bar: "#34D399" },
-  { id: "retirement", label: "Aposentadoria", emoji: "🌅", tint: "#F5F3FF", color: "#7C3AED", bar: "#A78BFA" },
-  { id: "other", label: "Outro", emoji: "🎯", tint: "#F3F4F6", color: "#374151", bar: "#9CA3AF" },
+  { id: "emergency_fund", label: "Reserva", emoji: "🛡️", tint: T.greenLight, color: T.green, bar: T.greenBar },
+  { id: "travel", label: "Viagem", emoji: "✈️", tint: T.blueLight, color: T.blue, bar: T.blueBar },
+  { id: "home", label: "Casa", emoji: "🏠", tint: T.amberLight, color: T.amber, bar: T.amberBar },
+  { id: "education", label: "Educação", emoji: "🎓", tint: T.purpleLight, color: T.purple, bar: T.purpleBar },
+  { id: "purchase", label: "Compra", emoji: "🛍️", tint: T.blueLight, color: T.blue, bar: T.blueBar },
+  { id: "debt_payoff", label: "Quitar dívida", emoji: "💳", tint: T.redLight, color: T.red, bar: T.redBar },
+  { id: "investment", label: "Investimento", emoji: "📈", tint: T.greenLight, color: T.green, bar: T.greenBar },
+  { id: "retirement", label: "Aposentadoria", emoji: "🌅", tint: T.purpleLight, color: T.purple, bar: T.purpleBar },
+  { id: "other", label: "Outro", emoji: "🎯", tint: T.grayLight, color: T.inkMid, bar: T.inkGhost },
 ];
 const TYPE_BY_ID = Object.fromEntries(GOAL_TYPES.map((t) => [t.id, t]));
 export function goalTypeMeta(id) {
@@ -22,11 +25,11 @@ export function typeSupportsReturn(id) {
 }
 
 export const TERMS = [
-  { id: "short", label: "Curto prazo", short: "Curto", color: "#DC2626", hint: "Até ~1 ano", examples: "Reserva, conserto, presente…" },
-  { id: "medium", label: "Médio prazo", short: "Médio", color: "#D97706", hint: "1 a 3 anos", examples: "Viagem, troca de carro, curso…" },
-  { id: "long", label: "Longo prazo", short: "Longo", color: "#7C3AED", hint: "Mais de 3 anos", examples: "Casa, aposentadoria, faculdade…" },
+  { id: "short", label: "Curto prazo", short: "Curto", color: T.red, hint: "Até ~1 ano", examples: "Reserva, conserto, presente…" },
+  { id: "medium", label: "Médio prazo", short: "Médio", color: T.amber, hint: "1 a 3 anos", examples: "Viagem, troca de carro, curso…" },
+  { id: "long", label: "Longo prazo", short: "Longo", color: T.purple, hint: "Mais de 3 anos", examples: "Casa, aposentadoria, faculdade…" },
 ];
-export const TERM_NONE = { id: "none", label: "Sem prazo", short: "Sem prazo", color: "#9CA3AF" };
+export const TERM_NONE = { id: "none", label: "Sem prazo", short: "Sem prazo", color: T.inkGhost };
 const TERM_BY_ID = Object.fromEntries([...TERMS, TERM_NONE].map((t) => [t.id, t]));
 export function termMeta(id) {
   return TERM_BY_ID[id] || TERM_NONE;
@@ -51,9 +54,9 @@ export function effectiveTerm(goal) {
 
 // Prioridade: número no backend (>=0). UI usa 3 níveis.
 export const PRIORITIES = [
-  { id: "alta", label: "Urgente", n: 3, color: "#DC2626", tint: "#FEF2F2" },
-  { id: "media", label: "Média", n: 2, color: "#D97706", tint: "#FFFBEB" },
-  { id: "baixa", label: "Baixa", n: 1, color: "#374151", tint: "#F3F4F6" },
+  { id: "alta", label: "Urgente", n: 3, color: T.red, tint: T.redLight },
+  { id: "media", label: "Média", n: 2, color: T.amber, tint: T.amberLight },
+  { id: "baixa", label: "Baixa", n: 1, color: T.inkMid, tint: T.grayLight },
 ];
 const PRIO_BY_ID = Object.fromEntries(PRIORITIES.map((p) => [p.id, p]));
 export function priorityMeta(id) {

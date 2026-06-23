@@ -111,7 +111,7 @@ export function GoalProjectionModal({ goal, organizationId, onClose }) {
               </div>
 
               {data.required_monthly != null && goal.deadline ? (
-                <div style={{ flex: "1 1 180px", border: "1px solid #A7F3D0", background: T.greenLight, borderRadius: 11, padding: "12px 13px" }}>
+                <div style={{ flex: "1 1 180px", border: `1px solid ${T.greenBorder}`, background: T.greenLight, borderRadius: 11, padding: "12px 13px" }}>
                   <div style={cap}>Para bater {goal.prazo}</div>
                   <div style={{ ...G, ...NUM, fontWeight: 800, fontSize: 18, marginTop: 2, color: T.green }}>{fmt(data.required_monthly)}/mês</div>
                   {data.required_monthly > data.monthly_contribution ? (
