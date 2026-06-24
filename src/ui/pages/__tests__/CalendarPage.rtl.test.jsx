@@ -66,4 +66,18 @@ describe("<CalendarPage> v2 (URL-driven)", () => {
     fireEvent.click(cell);
     expect(document.body.querySelector('button[aria-label="Fechar"]')).toBeTruthy();
   });
+
+  it("rolar DENTRO do popover não fecha; rolar fora fecha", () => {
+    const { container } = render(<CalendarPage dataMode="mock" organizationId={null} />);
+    const cell = [...container.querySelectorAll("div")].find((d) => d.style.height === "96px" && d.style.cursor === "pointer");
+    fireEvent.click(cell);
+    const closeBtn = document.body.querySelector('button[aria-label="Fechar"]');
+    expect(closeBtn).toBeTruthy();
+    // scroll dentro do popover → continua aberto
+    fireEvent.scroll(closeBtn);
+    expect(document.body.querySelector('button[aria-label="Fechar"]')).toBeTruthy();
+    // scroll fora (document) → fecha
+    fireEvent.scroll(document);
+    expect(document.body.querySelector('button[aria-label="Fechar"]')).toBeFalsy();
+  });
 });
