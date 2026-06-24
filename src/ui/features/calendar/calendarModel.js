@@ -59,7 +59,8 @@ export function buildCalendarEvents(transactions, year, month) {
     if (Array.isArray(tx.installment_info) && tx.installment_info.length) {
       for (const inst of tx.installment_info) {
         if (inMonth(inst.due_date)) {
-          add(inst.due_date, { id: tx.id ?? null, kind: "invoice", type: "expense", desc: tx.description, value: -Math.abs(Number(inst.amount) || 0), paid: false, paymentMethod: tx.payment_method || "credit", category: txCategoryName(tx) || "Fatura de cartão" });
+          const cardCat = txCategoryName(tx);
+          add(inst.due_date, { id: tx.id ?? null, kind: "invoice", type: "expense", desc: tx.description, value: -Math.abs(Number(inst.amount) || 0), paid: false, paymentMethod: tx.payment_method || "credit", category: cardCat === "Sem categoria" ? "Fatura de cartão" : cardCat });
         }
       }
       continue;

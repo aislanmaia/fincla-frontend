@@ -95,3 +95,5 @@ playwright-report/
 
 # docs/mockups
 docs/mockups/
+# backups locais do env (não versionar)
+.env.*.local.bak

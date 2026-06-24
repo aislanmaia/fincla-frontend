@@ -59,6 +59,12 @@ export const ANIM_CSS = `
   .dstabs-scroll { -webkit-overflow-scrolling: touch; }
   .dstabs-scroll::-webkit-scrollbar { display: none; width: 0; height: 0; }
   .dstabs-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+  /* Scrollbar visível (popover do calendário e afins) */
+  .fincla-scroll-y { scrollbar-width: thin; scrollbar-color: #C7CDD6 transparent; }
+  .fincla-scroll-y::-webkit-scrollbar { width: 9px; }
+  .fincla-scroll-y::-webkit-scrollbar-thumb { background: #C7CDD6; border-radius: 99px; border: 2px solid transparent; background-clip: padding-box; }
+  .fincla-scroll-y::-webkit-scrollbar-thumb:hover { background: #AAB2BF; background-clip: padding-box; }
+  .fincla-scroll-y::-webkit-scrollbar-track { background: transparent; }
 `;
 
 export function AnimStyles() {

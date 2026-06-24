@@ -205,6 +205,9 @@ function TransacoesPageBody({
       periodPersistFingerprintRef.current = "";
       return;
     }
+    // Deep-link `?fc_date` tem precedência: não deixar o bootstrap de período
+    // (localStorage) sobrescrever o filtro do dia vindo do calendário.
+    if (fcDate) return;
     const row = getTransactionsPeriodBootstrap(organizationId);
     periodPersistFingerprintRef.current = JSON.stringify({
       org: organizationId,

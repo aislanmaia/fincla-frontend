@@ -430,13 +430,17 @@ function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose }) {
       </div>
       {events.length ? (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, margin: "11px 0" }}>
-            {[{ l: "Entradas", v: income, c: T.green }, { l: "Saídas", v: expense, c: T.red }, { l: "Saldo", v: income - expense, c: income - expense < 0 ? T.red : T.ink }].map((s) => (
-              <div key={s.l} style={{ border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, margin: "11px 0 8px" }}>
+            {[{ l: "Entradas", v: income, c: T.green }, { l: "Saídas", v: expense, c: T.red }].map((s) => (
+              <div key={s.l} style={{ minWidth: 0, border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px" }}>
                 <div style={{ ...G, fontSize: 9, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.inkLight }}>{s.l}</div>
-                <div style={{ ...G, ...NUM, fontSize: 13, fontWeight: 800, color: s.c }}>{fmt(s.v)}</div>
+                <div style={{ ...G, ...NUM, fontSize: 13, fontWeight: 800, color: s.c, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmt(s.v)}</div>
               </div>
             ))}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, border: `1px solid ${T.border}`, borderRadius: 9, padding: "8px 11px", marginBottom: 8 }}>
+            <span style={{ ...G, fontSize: 9, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.inkLight }}>Saldo do dia</span>
+            <span style={{ ...G, ...NUM, fontSize: 14, fontWeight: 800, color: income - expense < 0 ? T.red : T.green, whiteSpace: "nowrap" }}>{fmt(income - expense)}</span>
           </div>
           {dense ? (
             <div style={{ display: "inline-flex", border: `1px solid ${T.border}`, borderRadius: 8, overflow: "hidden", marginBottom: 4 }}>
@@ -445,7 +449,7 @@ function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose }) {
               ))}
             </div>
           ) : null}
-          <div style={{ maxHeight: 300, overflowY: "auto", margin: "0 -4px", padding: "0 4px" }}>
+          <div className="fincla-scroll-y" style={{ maxHeight: 300, overflowY: "auto", margin: "0 -4px", padding: "0 4px" }}>
             {useGroups
               ? groups.map((g) => {
                   const isOpen = open[g.name] ?? !dense;
@@ -508,6 +512,11 @@ function DayPopover({ anchor, onClose, children, lockDismiss = false }) {
     setPos({ left, top, ready: true });
   }, [anchor]);
 
+  // a11y: foca o popover ao abrir (Esc fecha; Tab navega pelo conteúdo).
+  useEffect(() => {
+    ref.current?.focus?.({ preventScroll: true });
+  }, []);
+
   useEffect(() => {
     // Enquanto o Painel de Transação está aberto, o popover "resiste": não fecha
     // por Esc nem por cliques fora (inclui interações dentro do painel).
@@ -531,7 +540,15 @@ function DayPopover({ anchor, onClose, children, lockDismiss = false }) {
   }, [onClose, lockDismiss]);
 
   return createPortal(
-    <div ref={ref} style={{ position: "fixed", left: pos.left, top: pos.top, width: WIDTH, zIndex: 150, borderRadius: 14, boxShadow: "0 12px 32px rgba(15,15,13,0.16), 0 4px 10px rgba(15,15,13,0.08)", visibility: pos.ready ? "visible" : "hidden" }}>
+    <div
+      ref={ref}
+      role="dialog"
+      aria-modal="false"
+      aria-label="Lançamentos do dia"
+      tabIndex={-1}
+      className="fincla-scroll-y"
+      style={{ position: "fixed", left: pos.left, top: pos.top, width: WIDTH, maxHeight: "calc(100vh - 24px)", overflowY: "auto", zIndex: 150, borderRadius: 14, boxShadow: "0 12px 32px rgba(15,15,13,0.16), 0 4px 10px rgba(15,15,13,0.08)", visibility: pos.ready ? "visible" : "hidden", outline: "none" }}
+    >
       {children}
     </div>,
     document.body,
