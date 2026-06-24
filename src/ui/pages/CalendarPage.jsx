@@ -1,4 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { X } from "lucide-react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { T } from "../tokens";
 import { G, NUM } from "../typography";
@@ -12,8 +14,24 @@ import {
   dayLongLabel,
   todayParts,
   pad2,
+  ymd,
   WEEKDAYS,
 } from "../features/calendar/calendarModel.js";
+
+const MONTHS_ABBR = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+function weekLabel(ymdStr) {
+  const base = new Date(`${ymdStr}T00:00:00`);
+  if (Number.isNaN(base.getTime())) return "";
+  const start = new Date(base);
+  start.setDate(base.getDate() - base.getDay());
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  const sm = MONTHS_ABBR[start.getMonth()];
+  const em = MONTHS_ABBR[end.getMonth()];
+  return start.getMonth() === end.getMonth()
+    ? `${start.getDate()}–${end.getDate()} ${sm}`
+    : `${start.getDate()} ${sm} – ${end.getDate()} ${em}`;
+}
 import { shouldUseRealData } from "../dataMode.js";
 import { FC, FC_MODAL } from "../routing/searchContract.js";
 
@@ -22,8 +40,12 @@ const fmt = (v) => brl.format(Number(v || 0));
 const fmtShort = (v) => `${v < 0 ? "−" : "+"}${Math.round(Math.abs(Number(v || 0))).toLocaleString("pt-BR")}`;
 const ghost = { ...G, fontSize: 11, color: T.inkGhost };
 
-const PAY_LABELS = { pix: "Pix", credit: "Cartão de crédito", credit_card: "Cartão de crédito", debit: "Débito", debit_card: "Débito", cash: "Dinheiro", boleto: "Boleto", transfer: "Transferência" };
-const payLabel = (m) => PAY_LABELS[m] || (m ? m.charAt(0).toUpperCase() + m.slice(1) : "Outros");
+const PAY_LABELS = { pix: "Pix", credit: "Cartão de crédito", credit_card: "Cartão de crédito", debit: "Débito", debit_card: "Débito", cash: "Dinheiro", boleto: "Boleto", transfer: "Transferência", bank_transfer: "Transferência bancária", money: "Dinheiro" };
+const payLabel = (m) => {
+  if (!m) return "Outros";
+  const key = String(m).toLowerCase();
+  return PAY_LABELS[key] || key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, " ");
+};
 
 function useIsWide(bp = 1024) {
   const [wide, setWide] = useState(() => (typeof window !== "undefined" ? window.innerWidth >= bp : true));
@@ -127,6 +149,17 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
     },
     [cursor, patch],
   );
+  const shiftWeek = useCallback(
+    (delta) => {
+      const d = new Date(`${selected}T00:00:00`);
+      d.setDate(d.getDate() + delta * 7);
+      const y = d.getFullYear();
+      const mo = d.getMonth() + 1;
+      patch({ [FC.CAL_DAY]: ymd(y, mo, d.getDate()), [FC.CAL_MONTH]: `${y}-${pad2(mo)}` });
+    },
+    [selected, patch],
+  );
+  const shiftPeriod = useCallback((delta) => (view === "week" ? shiftWeek(delta) : shiftMonth(delta)), [view, shiftWeek, shiftMonth]);
   const pick = useCallback((ymdStr) => patch({ [FC.CAL_DAY]: ymdStr }), [patch]);
   const setView = useCallback((v) => patch({ [FC.CAL_VIEW]: v === "week" ? "week" : undefined }), [patch]);
   const goToday = useCallback(() => patch({ [FC.CAL_MONTH]: `${today.year}-${pad2(today.month)}`, [FC.CAL_DAY]: today.ymd }), [patch, today]);
@@ -156,6 +189,14 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
   );
   const seeExtrato = useCallback(() => navigate({ to: "/transactions", search: { [FC.DATE]: selected } }), [navigate, selected]);
 
+  // Painel de Transação aberto (overlay) → o popover deve "resistir" ao dismiss.
+  const txModalOpen = Boolean(search?.[FC.MODAL] || search?.[FC.TX]);
+  // Popover do dia ancorado à célula (desktop). Fecha ao trocar período.
+  const [popover, setPopover] = useState(null);
+  const pickCell = useCallback((ymdStr, rect) => { pick(ymdStr); setPopover(rect ? { rect } : null); }, [pick]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setPopover(null); }, [view, cursor.year, cursor.month]);
+
   const liveData = useCalendarData({ organizationId, year: cursor.year, month: cursor.month, enabled: live });
   const mock = useMemo(() => (dataMode === "mock" ? mockByDay() : {}), [dataMode]);
   const rawByDay = live ? liveData.byDay : mock;
@@ -174,24 +215,6 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
   );
   const selectedEvents = byDay[selected] || [];
 
-  // Scroll do mouse sobre a grade troca o mês (modo Mês).
-  const gridRef = useRef(null);
-  useEffect(() => {
-    const el = gridRef.current;
-    if (!el || view !== "month") return undefined;
-    let last = 0;
-    const onWheel = (ev) => {
-      if (Math.abs(ev.deltaY) < 6) return;
-      ev.preventDefault();
-      const now = Date.now();
-      if (now - last < 280) return;
-      last = now;
-      shiftMonth(ev.deltaY > 0 ? 1 : -1);
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, [view, shiftMonth]);
-
   const navBtn = { ...G, width: 32, height: 32, borderRadius: 9, border: `1px solid ${T.border}`, background: T.surface, cursor: "pointer", fontSize: 15, color: T.inkMid, display: "inline-grid", placeItems: "center" };
 
   return (
@@ -201,9 +224,9 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
         <PageTitle sans="Calendário" serif="Financeiro" />
         <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
           <button style={{ ...navBtn, width: "auto", padding: "0 12px", fontSize: 13, fontWeight: 600 }} onClick={goToday}>Hoje</button>
-          <button style={navBtn} onClick={() => shiftMonth(-1)} aria-label="Mês anterior">‹</button>
-          <span style={{ ...G, fontWeight: 700, fontSize: 15, minWidth: 120, textAlign: "center" }}>{monthLabel(cursor.year, cursor.month)}</span>
-          <button style={navBtn} onClick={() => shiftMonth(1)} aria-label="Próximo mês">›</button>
+          <button style={navBtn} onClick={() => shiftPeriod(-1)} aria-label={view === "week" ? "Semana anterior" : "Mês anterior"}>‹</button>
+          <span style={{ ...G, fontWeight: 700, fontSize: 15, minWidth: 130, textAlign: "center" }}>{view === "week" ? weekLabel(selected) : monthLabel(cursor.year, cursor.month)}</span>
+          <button style={navBtn} onClick={() => shiftPeriod(1)} aria-label={view === "week" ? "Próxima semana" : "Próximo mês"}>›</button>
           <Segmented value={view} onChange={setView} />
         </div>
       </div>
@@ -221,9 +244,21 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
             <Filters filters={filters} hiddenTypes={hiddenTypes} onToggleType={toggleType} onToggleMethod={toggleMethod} payMethods={payMethods} />
             <DayList selected={selected} events={selectedEvents} onEdit={openEdit} onNew={onNewTransaction} onSeeExtrato={seeExtrato} />
           </div>
-          <div ref={gridRef}>
-            <Grid grid={grid} byDay={byDay} todayYmd={today.ymd} selected={selected} onPick={pick} onEdit={openEdit} week={view === "week"} />
+          <div>
+            <Grid grid={grid} byDay={byDay} todayYmd={today.ymd} selected={selected} onPick={pick} onPickCell={pickCell} onEdit={openEdit} week={view === "week"} />
           </div>
+          {popover ? (
+            <DayPopover anchor={popover.rect} onClose={() => setPopover(null)} lockDismiss={txModalOpen}>
+              <DayList
+                selected={selected}
+                events={selectedEvents}
+                onEdit={openEdit}
+                onNew={onNewTransaction}
+                onSeeExtrato={() => { setPopover(null); seeExtrato(); }}
+                onClose={() => setPopover(null)}
+              />
+            </DayPopover>
+          ) : null}
         </div>
       ) : (
         <>
@@ -351,7 +386,7 @@ function MoreRow({ n, onSeeExtrato }) {
   );
 }
 
-function DayList({ selected, events, onEdit, onNew, onSeeExtrato }) {
+function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose }) {
   const [mode, setMode] = useState("category"); // category | list
   const [open, setOpen] = useState({});
   const income = events.filter((e) => e.value >= 0).reduce((s, e) => s + e.value, 0);
@@ -382,9 +417,16 @@ function DayList({ selected, events, onEdit, onNew, onSeeExtrato }) {
 
   return (
     <Card style={{ padding: 14 }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <div style={{ ...G, fontWeight: 800, fontSize: 14 }}>{dayLongLabel(selected) || "Selecione um dia"}</div>
-        <div style={{ ...G, ...ghost }}>{events.length} {events.length === 1 ? "lançamento" : "lançamentos"}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ ...G, ...ghost }}>{events.length} {events.length === 1 ? "lançamento" : "lançamentos"}</span>
+          {onClose ? (
+            <button onClick={onClose} aria-label="Fechar" style={{ border: "none", background: "none", cursor: "pointer", color: T.inkLight, display: "inline-flex", padding: 2 }}>
+              <X size={16} />
+            </button>
+          ) : null}
+        </div>
       </div>
       {events.length ? (
         <>
@@ -444,9 +486,57 @@ function DayList({ selected, events, onEdit, onNew, onSeeExtrato }) {
   );
 }
 
-function Grid({ grid, byDay, todayYmd, selected, onPick, onEdit, week, compact }) {
+/** Popover do dia ancorado à célula, com flip quando não há espaço lateral. */
+function DayPopover({ anchor, onClose, children, lockDismiss = false }) {
+  const ref = useRef(null);
+  const WIDTH = 330;
+  const [pos, setPos] = useState({ left: anchor.right + 8, top: anchor.top, ready: false });
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ph = el.offsetHeight;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const gap = 8;
+    let left = anchor.right + gap; // tenta à direita
+    if (left + WIDTH > vw - gap) {
+      left = anchor.left - WIDTH - gap; // flip para a esquerda
+      if (left < gap) left = Math.min(Math.max(anchor.left, gap), vw - WIDTH - gap); // sem espaço lateral → clampa
+    }
+    const top = Math.min(Math.max(anchor.top, gap), Math.max(gap, vh - ph - gap));
+    setPos({ left, top, ready: true });
+  }, [anchor]);
+
+  useEffect(() => {
+    // Enquanto o Painel de Transação está aberto, o popover "resiste": não fecha
+    // por Esc nem por cliques fora (inclui interações dentro do painel).
+    if (lockDismiss) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    // Rolar a página desancoraria o popover da célula → fecha (padrão de popovers).
+    const onScroll = () => onClose();
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onDown, true);
+    window.addEventListener("scroll", onScroll, true);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onDown, true);
+      window.removeEventListener("scroll", onScroll, true);
+    };
+  }, [onClose, lockDismiss]);
+
+  return createPortal(
+    <div ref={ref} style={{ position: "fixed", left: pos.left, top: pos.top, width: WIDTH, zIndex: 150, borderRadius: 14, boxShadow: "0 12px 32px rgba(15,15,13,0.16), 0 4px 10px rgba(15,15,13,0.08)", visibility: pos.ready ? "visible" : "hidden" }}>
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
+function Grid({ grid, byDay, todayYmd, selected, onPick, onPickCell, onEdit, week, compact }) {
   const cells = grid.flat();
-  const minH = week ? 320 : compact ? 64 : 118;
+  const minH = week ? 300 : compact ? 64 : 96;
   const maxEv = week ? 10 : 2;
   return (
     <div>
@@ -463,19 +553,24 @@ function Grid({ grid, byDay, todayYmd, selected, onPick, onEdit, week, compact }
           const isSel = cell.ymd === selected;
           const dim = cell.inMonth === false;
           const dayTotal = evs.reduce((s, e) => s + e.value, 0);
-          const overflow = evs.length - maxEv;
+          // Mantém no máx. 2 linhas de conteúdo: se estoura, mostra 1 chip + resumo.
+          const over = evs.length > maxEv;
+          const shown = over ? Math.max(1, maxEv - 1) : evs.length;
+          const hidden = evs.length - shown;
           return (
             <div
               key={i}
-              onClick={() => onPick(cell.ymd)}
+              onClick={(e) => (onPickCell ? onPickCell(cell.ymd, e.currentTarget.getBoundingClientRect()) : onPick(cell.ymd))}
               style={{
-                background: dim ? "transparent" : T.surface, borderRadius: 11, minHeight: minH, padding: 8, cursor: "pointer",
+                background: dim ? "transparent" : T.surface, borderRadius: 11, padding: 8, cursor: "pointer",
+                // Mês (desktop): altura fixa → células vazias e preenchidas iguais.
+                ...(week || compact ? { minHeight: minH } : { height: minH, overflow: "hidden" }),
                 display: "flex", flexDirection: "column", gap: 4, opacity: dim ? 0.55 : 1,
                 border: isSel ? `2px solid ${T.blue}` : isToday ? `1px solid ${T.ink}` : `1px solid ${T.border}`,
               }}
             >
               <span style={{ ...G, fontSize: compact ? 12 : 13.5, fontWeight: isToday ? 800 : 600, color: isToday ? T.ink : T.inkMid }}>{cell.day}{isToday ? " ·hoje" : ""}</span>
-              {evs.slice(0, maxEv).map((e, j) => {
+              {evs.slice(0, shown).map((e, j) => {
                 const c = evColors(e);
                 const clickable = Boolean(e.id);
                 return (
@@ -488,16 +583,15 @@ function Grid({ grid, byDay, todayYmd, selected, onPick, onEdit, week, compact }
                   </span>
                 );
               })}
-              {overflow > 0 ? (
-                <span style={{ ...G, ...NUM, marginTop: "auto", fontSize: 11, fontWeight: 700, color: T.inkMid, background: T.grayLight, borderRadius: 6, padding: "2px 7px" }}>
-                  +{overflow} · {fmtShort(dayTotal)}
+              {hidden > 0 ? (
+                <span style={{ ...G, ...NUM, fontSize: 11, fontWeight: 700, color: T.inkMid, background: T.grayLight, borderRadius: 6, padding: "2px 7px" }}>
+                  +{hidden} · {fmtShort(dayTotal)}
                 </span>
               ) : null}
             </div>
           );
         })}
       </div>
-      {!week ? <div style={{ ...ghost, fontSize: 11, marginTop: 8 }}>🖱️ role o mouse sobre a grade para trocar de mês</div> : null}
     </div>
   );
 }
