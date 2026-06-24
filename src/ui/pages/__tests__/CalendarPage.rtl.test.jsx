@@ -61,7 +61,7 @@ describe("<CalendarPage> v2 (URL-driven)", () => {
 
   it("clicar numa célula abre o popover do dia (com X de fechar)", () => {
     const { container } = render(<CalendarPage dataMode="mock" organizationId={null} />);
-    const cell = [...container.querySelectorAll("div")].find((d) => d.style.height === "128px" && d.style.cursor === "pointer");
+    const cell = [...container.querySelectorAll("div")].find((d) => d.style.height === "96px" && d.style.cursor === "pointer");
     expect(cell).toBeTruthy();
     fireEvent.click(cell);
     expect(document.body.querySelector('button[aria-label="Fechar"]')).toBeTruthy();

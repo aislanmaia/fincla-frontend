@@ -215,24 +215,6 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
   );
   const selectedEvents = byDay[selected] || [];
 
-  // Scroll do mouse sobre a grade troca o mês (modo Mês).
-  const gridRef = useRef(null);
-  useEffect(() => {
-    const el = gridRef.current;
-    if (!el) return undefined;
-    let last = 0;
-    const onWheel = (ev) => {
-      if (Math.abs(ev.deltaY) < 6) return;
-      ev.preventDefault();
-      const now = Date.now();
-      if (now - last < 280) return;
-      last = now;
-      shiftPeriod(ev.deltaY > 0 ? 1 : -1);
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, [shiftPeriod]);
-
   const navBtn = { ...G, width: 32, height: 32, borderRadius: 9, border: `1px solid ${T.border}`, background: T.surface, cursor: "pointer", fontSize: 15, color: T.inkMid, display: "inline-grid", placeItems: "center" };
 
   return (
@@ -262,7 +244,7 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
             <Filters filters={filters} hiddenTypes={hiddenTypes} onToggleType={toggleType} onToggleMethod={toggleMethod} payMethods={payMethods} />
             <DayList selected={selected} events={selectedEvents} onEdit={openEdit} onNew={onNewTransaction} onSeeExtrato={seeExtrato} />
           </div>
-          <div ref={gridRef}>
+          <div>
             <Grid grid={grid} byDay={byDay} todayYmd={today.ymd} selected={selected} onPick={pick} onPickCell={pickCell} onEdit={openEdit} week={view === "week"} />
           </div>
           {popover ? (
@@ -554,7 +536,7 @@ function DayPopover({ anchor, onClose, children, lockDismiss = false }) {
 
 function Grid({ grid, byDay, todayYmd, selected, onPick, onPickCell, onEdit, week, compact }) {
   const cells = grid.flat();
-  const minH = week ? 320 : compact ? 64 : 128;
+  const minH = week ? 300 : compact ? 64 : 96;
   const maxEv = week ? 10 : 2;
   return (
     <div>
@@ -571,7 +553,10 @@ function Grid({ grid, byDay, todayYmd, selected, onPick, onPickCell, onEdit, wee
           const isSel = cell.ymd === selected;
           const dim = cell.inMonth === false;
           const dayTotal = evs.reduce((s, e) => s + e.value, 0);
-          const overflow = evs.length - maxEv;
+          // Mantém no máx. 2 linhas de conteúdo: se estoura, mostra 1 chip + resumo.
+          const over = evs.length > maxEv;
+          const shown = over ? Math.max(1, maxEv - 1) : evs.length;
+          const hidden = evs.length - shown;
           return (
             <div
               key={i}
@@ -585,7 +570,7 @@ function Grid({ grid, byDay, todayYmd, selected, onPick, onPickCell, onEdit, wee
               }}
             >
               <span style={{ ...G, fontSize: compact ? 12 : 13.5, fontWeight: isToday ? 800 : 600, color: isToday ? T.ink : T.inkMid }}>{cell.day}{isToday ? " ·hoje" : ""}</span>
-              {evs.slice(0, maxEv).map((e, j) => {
+              {evs.slice(0, shown).map((e, j) => {
                 const c = evColors(e);
                 const clickable = Boolean(e.id);
                 return (
@@ -598,16 +583,15 @@ function Grid({ grid, byDay, todayYmd, selected, onPick, onPickCell, onEdit, wee
                   </span>
                 );
               })}
-              {overflow > 0 ? (
-                <span style={{ ...G, ...NUM, marginTop: "auto", fontSize: 11, fontWeight: 700, color: T.inkMid, background: T.grayLight, borderRadius: 6, padding: "2px 7px" }}>
-                  +{overflow} · {fmtShort(dayTotal)}
+              {hidden > 0 ? (
+                <span style={{ ...G, ...NUM, fontSize: 11, fontWeight: 700, color: T.inkMid, background: T.grayLight, borderRadius: 6, padding: "2px 7px" }}>
+                  +{hidden} · {fmtShort(dayTotal)}
                 </span>
               ) : null}
             </div>
           );
         })}
       </div>
-      {!week ? <div style={{ ...ghost, fontSize: 11, marginTop: 8 }}>🖱️ role o mouse sobre a grade para trocar de mês</div> : null}
     </div>
   );
 }
