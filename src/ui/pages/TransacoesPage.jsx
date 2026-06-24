@@ -145,6 +145,19 @@ function TransacoesPageBody({
     initialSort: DEFAULT_SORT,
   });
 
+  // Deep-link vindo do Calendário: `?fc_date=YYYY-MM-DD` filtra exatamente aquele dia.
+  const fcDate = urlSearch?.[FC.DATE];
+  const fcDateAppliedRef = useRef(false);
+  useEffect(() => {
+    if (fcDateAppliedRef.current) return;
+    if (fcDate && /^\d{4}-\d{2}-\d{2}$/.test(fcDate)) {
+      fcDateAppliedRef.current = true;
+      filter.setPeriod("custom");
+      filter.setCustomFrom(fcDate);
+      filter.setCustomTo(fcDate);
+    }
+  }, [fcDate, filter]);
+
   const periodPersistFingerprintRef = useRef("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(
@@ -207,6 +220,9 @@ function TransacoesPageBody({
 
   useEffect(() => {
     if (!organizationId) return;
+    // Deep-link do calendário (`?fc_date=`) é um filtro transiente: não persistir
+    // como período padrão do usuário (senão `/transactions` fica preso naquele dia).
+    if (fcDate) return;
     const fp = JSON.stringify({
       org: organizationId,
       period: filter.period,
@@ -220,7 +236,7 @@ function TransacoesPageBody({
       customFrom: filter.customFrom,
       customTo: filter.customTo,
     });
-  }, [organizationId, filter.period, filter.customFrom, filter.customTo]);
+  }, [organizationId, fcDate, filter.period, filter.customFrom, filter.customTo]);
 
   useEffect(() => {
     const trimmed = searchInput.trim();
