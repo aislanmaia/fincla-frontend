@@ -532,7 +532,7 @@ function DayPopover({ anchor, onClose, children, lockDismiss = false }) {
   }, [onClose, lockDismiss]);
 
   return createPortal(
-    <div ref={ref} style={{ position: "fixed", left: pos.left, top: pos.top, width: WIDTH, zIndex: 1000, borderRadius: 14, boxShadow: T.lg, visibility: pos.ready ? "visible" : "hidden" }}>
+    <div ref={ref} style={{ position: "fixed", left: pos.left, top: pos.top, width: WIDTH, zIndex: 150, borderRadius: 14, boxShadow: T.lg, visibility: pos.ready ? "visible" : "hidden" }}>
       {children}
     </div>,
     document.body,
@@ -541,7 +541,7 @@ function DayPopover({ anchor, onClose, children, lockDismiss = false }) {
 
 function Grid({ grid, byDay, todayYmd, selected, onPick, onPickCell, onEdit, week, compact }) {
   const cells = grid.flat();
-  const minH = week ? 320 : compact ? 64 : 118;
+  const minH = week ? 320 : compact ? 64 : 128;
   const maxEv = week ? 10 : 2;
   return (
     <div>
@@ -564,7 +564,9 @@ function Grid({ grid, byDay, todayYmd, selected, onPick, onPickCell, onEdit, wee
               key={i}
               onClick={(e) => (onPickCell ? onPickCell(cell.ymd, e.currentTarget.getBoundingClientRect()) : onPick(cell.ymd))}
               style={{
-                background: dim ? "transparent" : T.surface, borderRadius: 11, minHeight: minH, padding: 8, cursor: "pointer",
+                background: dim ? "transparent" : T.surface, borderRadius: 11, padding: 8, cursor: "pointer",
+                // Mês (desktop): altura fixa → células vazias e preenchidas iguais.
+                ...(week || compact ? { minHeight: minH } : { height: minH, overflow: "hidden" }),
                 display: "flex", flexDirection: "column", gap: 4, opacity: dim ? 0.55 : 1,
                 border: isSel ? `2px solid ${T.blue}` : isToday ? `1px solid ${T.ink}` : `1px solid ${T.border}`,
               }}
