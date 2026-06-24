@@ -1835,3 +1835,22 @@ export interface MonthlyPlanUpsertBody {
   status?: string;
   items: MonthlyPlanItemBody[];
 }
+
+// ===== M7 — PAINEL DE SAÚDE FINANCEIRA =====
+export interface FinancialHealth {
+  reference_month: string;
+  ativo: number;
+  passivo: number;
+  patrimonio_liquido: number;
+  avg_income: number;
+  avg_expense: number;
+  avg_surplus: number;
+  income_commitment: number; // despesa/renda (0..1+)
+  savings_rate: number; // sobra/renda (0..1)
+  emergency_fund_months: number;
+  goals_on_track: number;
+  goals_total: number;
+  goal_progress_avg: number;
+  cash_flow_risk: 'low' | 'medium' | 'high';
+  score: number; // 0..100
+}

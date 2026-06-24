@@ -8,7 +8,7 @@ export const PLANNING_NAV = [
     group: "Saúde Financeira",
     items: [
       { id: "capacity", label: "Capacidade de Economia" },
-      { id: "health", label: "Painel de Saúde", soon: true },
+      { id: "health", label: "Painel de Saúde" },
     ],
   },
   {

@@ -1,6 +1,6 @@
 // api/financialHealth.ts
 import apiClient from './client';
-import type { EconomyCapacity } from './types';
+import type { EconomyCapacity, FinancialHealth } from './types';
 
 /** Capacidade de economia (sobra média mensal + tendência) por competência. */
 export const getEconomyCapacity = async (
@@ -11,4 +11,12 @@ export const getEconomyCapacity = async (
     params: { organization_id: organizationId, months },
   });
   return response.data;
+};
+
+/** Painel de saúde financeira (M7) — ativo−passivo, métricas, score. */
+export const getFinancialHealth = async (organizationId: string): Promise<FinancialHealth> => {
+  const r = await apiClient.get<FinancialHealth>('/financial-health/score', {
+    params: { organization_id: organizationId },
+  });
+  return r.data;
 };

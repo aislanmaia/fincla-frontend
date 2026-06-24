@@ -9,6 +9,7 @@ import { SimulacaoPage } from "../../pages/SimulacaoPage.jsx";
 import { CapacityPanel } from "../financialHealth/CapacityPanel.jsx";
 import { CalendarPage } from "../../pages/CalendarPage.jsx";
 import { PlannedVsActualPage } from "../../pages/PlannedVsActualPage.jsx";
+import { HealthPanelPage } from "../../pages/HealthPanelPage.jsx";
 import { UpgradeWall, useEntitlement } from "../entitlements/index.js";
 import { PLANNING_NAV, DEFAULT_PLANNING_AREA, isPlanningArea, planningAreaItem } from "./planningAreas.js";
 
@@ -52,6 +53,8 @@ export function PlanningHub({ organizationId, dataMode = "live", isMobile = fals
     switch (area) {
       case "capacity":
         return <CapacityPanel organizationId={organizationId} dataMode={dataMode} />;
+      case "health":
+        return <HealthPanelPage organizationId={organizationId} dataMode={dataMode} isMobile={isMobile} />;
       case "goals":
         return (
           <LifeProjectsPage
