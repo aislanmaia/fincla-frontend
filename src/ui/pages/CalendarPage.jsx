@@ -532,11 +532,15 @@ function DayPopover({ anchor, onClose, children, lockDismiss = false }) {
     if (lockDismiss) return undefined;
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
     const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    // Rolar a página desancoraria o popover da célula → fecha (padrão de popovers).
+    const onScroll = () => onClose();
     document.addEventListener("keydown", onKey);
     document.addEventListener("mousedown", onDown, true);
+    window.addEventListener("scroll", onScroll, true);
     return () => {
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("mousedown", onDown, true);
+      window.removeEventListener("scroll", onScroll, true);
     };
   }, [onClose, lockDismiss]);
 

@@ -49,4 +49,21 @@ describe("<CalendarPage> v2 (URL-driven)", () => {
     const next = call[0].search({});
     expect(next.fc_cal_m).toMatch(/^\d{4}-\d{2}$/);
   });
+
+  it("no modo Semana, 'Próxima semana' avança 7 dias na URL", () => {
+    searchMock.value = { fc_cal_v: "week", fc_cal_d: "2026-06-10" };
+    const { getByLabelText } = render(<CalendarPage dataMode="mock" organizationId={null} />);
+    fireEvent.click(getByLabelText("Próxima semana"));
+    const call = navigateMock.mock.calls.find((c) => typeof c[0]?.search === "function");
+    expect(call).toBeTruthy();
+    expect(call[0].search({}).fc_cal_d).toBe("2026-06-17");
+  });
+
+  it("clicar numa célula abre o popover do dia (com X de fechar)", () => {
+    const { container } = render(<CalendarPage dataMode="mock" organizationId={null} />);
+    const cell = [...container.querySelectorAll("div")].find((d) => d.style.height === "128px" && d.style.cursor === "pointer");
+    expect(cell).toBeTruthy();
+    fireEvent.click(cell);
+    expect(document.body.querySelector('button[aria-label="Fechar"]')).toBeTruthy();
+  });
 });
