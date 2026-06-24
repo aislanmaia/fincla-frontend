@@ -68,6 +68,19 @@ describe("calendarModel", () => {
     expect(t.expenseCount).toBe(1);
   });
 
+  it("eventos de cartão (installment_info) são clicáveis: carregam o id da transação", () => {
+    const byDay = buildCalendarEvents(
+      [{ id: 77, description: "Celular da Vili", payment_method: "credit", installment_info: [{ due_date: "2026-06-10", amount: 269 }] }],
+      2026,
+      6,
+    );
+    const ev = byDay["2026-06-10"][0];
+    expect(ev.id).toBe(77);
+    expect(ev.kind).toBe("invoice");
+    expect(ev.value).toBe(-269);
+    expect(ev.paymentMethod).toBe("credit");
+  });
+
   it("weekMatrix devolve uma semana de 7 contendo o dia de referência", () => {
     const [week] = weekMatrix("2026-06-10", 2026, 6);
     expect(week).toHaveLength(7);

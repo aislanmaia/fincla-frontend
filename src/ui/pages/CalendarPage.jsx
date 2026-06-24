@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { T } from "../tokens";
 import { G, NUM } from "../typography";
@@ -12,8 +13,24 @@ import {
   dayLongLabel,
   todayParts,
   pad2,
+  ymd,
   WEEKDAYS,
 } from "../features/calendar/calendarModel.js";
+
+const MONTHS_ABBR = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+function weekLabel(ymdStr) {
+  const base = new Date(`${ymdStr}T00:00:00`);
+  if (Number.isNaN(base.getTime())) return "";
+  const start = new Date(base);
+  start.setDate(base.getDate() - base.getDay());
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  const sm = MONTHS_ABBR[start.getMonth()];
+  const em = MONTHS_ABBR[end.getMonth()];
+  return start.getMonth() === end.getMonth()
+    ? `${start.getDate()}–${end.getDate()} ${sm}`
+    : `${start.getDate()} ${sm} – ${end.getDate()} ${em}`;
+}
 import { shouldUseRealData } from "../dataMode.js";
 import { FC, FC_MODAL } from "../routing/searchContract.js";
 
@@ -22,8 +39,12 @@ const fmt = (v) => brl.format(Number(v || 0));
 const fmtShort = (v) => `${v < 0 ? "−" : "+"}${Math.round(Math.abs(Number(v || 0))).toLocaleString("pt-BR")}`;
 const ghost = { ...G, fontSize: 11, color: T.inkGhost };
 
-const PAY_LABELS = { pix: "Pix", credit: "Cartão de crédito", credit_card: "Cartão de crédito", debit: "Débito", debit_card: "Débito", cash: "Dinheiro", boleto: "Boleto", transfer: "Transferência" };
-const payLabel = (m) => PAY_LABELS[m] || (m ? m.charAt(0).toUpperCase() + m.slice(1) : "Outros");
+const PAY_LABELS = { pix: "Pix", credit: "Cartão de crédito", credit_card: "Cartão de crédito", debit: "Débito", debit_card: "Débito", cash: "Dinheiro", boleto: "Boleto", transfer: "Transferência", bank_transfer: "Transferência bancária", money: "Dinheiro" };
+const payLabel = (m) => {
+  if (!m) return "Outros";
+  const key = String(m).toLowerCase();
+  return PAY_LABELS[key] || key.charAt(0).toUpperCase() + key.slice(1).replace(/_/g, " ");
+};
 
 function useIsWide(bp = 1024) {
   const [wide, setWide] = useState(() => (typeof window !== "undefined" ? window.innerWidth >= bp : true));
@@ -127,6 +148,17 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
     },
     [cursor, patch],
   );
+  const shiftWeek = useCallback(
+    (delta) => {
+      const d = new Date(`${selected}T00:00:00`);
+      d.setDate(d.getDate() + delta * 7);
+      const y = d.getFullYear();
+      const mo = d.getMonth() + 1;
+      patch({ [FC.CAL_DAY]: ymd(y, mo, d.getDate()), [FC.CAL_MONTH]: `${y}-${pad2(mo)}` });
+    },
+    [selected, patch],
+  );
+  const shiftPeriod = useCallback((delta) => (view === "week" ? shiftWeek(delta) : shiftMonth(delta)), [view, shiftWeek, shiftMonth]);
   const pick = useCallback((ymdStr) => patch({ [FC.CAL_DAY]: ymdStr }), [patch]);
   const setView = useCallback((v) => patch({ [FC.CAL_VIEW]: v === "week" ? "week" : undefined }), [patch]);
   const goToday = useCallback(() => patch({ [FC.CAL_MONTH]: `${today.year}-${pad2(today.month)}`, [FC.CAL_DAY]: today.ymd }), [patch, today]);
@@ -156,6 +188,12 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
   );
   const seeExtrato = useCallback(() => navigate({ to: "/transactions", search: { [FC.DATE]: selected } }), [navigate, selected]);
 
+  // Popover do dia ancorado à célula (desktop). Fecha ao trocar período.
+  const [popover, setPopover] = useState(null);
+  const pickCell = useCallback((ymdStr, rect) => { pick(ymdStr); setPopover(rect ? { rect } : null); }, [pick]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setPopover(null); }, [view, cursor.year, cursor.month]);
+
   const liveData = useCalendarData({ organizationId, year: cursor.year, month: cursor.month, enabled: live });
   const mock = useMemo(() => (dataMode === "mock" ? mockByDay() : {}), [dataMode]);
   const rawByDay = live ? liveData.byDay : mock;
@@ -178,7 +216,7 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
   const gridRef = useRef(null);
   useEffect(() => {
     const el = gridRef.current;
-    if (!el || view !== "month") return undefined;
+    if (!el) return undefined;
     let last = 0;
     const onWheel = (ev) => {
       if (Math.abs(ev.deltaY) < 6) return;
@@ -186,11 +224,11 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
       const now = Date.now();
       if (now - last < 280) return;
       last = now;
-      shiftMonth(ev.deltaY > 0 ? 1 : -1);
+      shiftPeriod(ev.deltaY > 0 ? 1 : -1);
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, [view, shiftMonth]);
+  }, [shiftPeriod]);
 
   const navBtn = { ...G, width: 32, height: 32, borderRadius: 9, border: `1px solid ${T.border}`, background: T.surface, cursor: "pointer", fontSize: 15, color: T.inkMid, display: "inline-grid", placeItems: "center" };
 
@@ -201,9 +239,9 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
         <PageTitle sans="Calendário" serif="Financeiro" />
         <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
           <button style={{ ...navBtn, width: "auto", padding: "0 12px", fontSize: 13, fontWeight: 600 }} onClick={goToday}>Hoje</button>
-          <button style={navBtn} onClick={() => shiftMonth(-1)} aria-label="Mês anterior">‹</button>
-          <span style={{ ...G, fontWeight: 700, fontSize: 15, minWidth: 120, textAlign: "center" }}>{monthLabel(cursor.year, cursor.month)}</span>
-          <button style={navBtn} onClick={() => shiftMonth(1)} aria-label="Próximo mês">›</button>
+          <button style={navBtn} onClick={() => shiftPeriod(-1)} aria-label={view === "week" ? "Semana anterior" : "Mês anterior"}>‹</button>
+          <span style={{ ...G, fontWeight: 700, fontSize: 15, minWidth: 130, textAlign: "center" }}>{view === "week" ? weekLabel(selected) : monthLabel(cursor.year, cursor.month)}</span>
+          <button style={navBtn} onClick={() => shiftPeriod(1)} aria-label={view === "week" ? "Próxima semana" : "Próximo mês"}>›</button>
           <Segmented value={view} onChange={setView} />
         </div>
       </div>
@@ -222,8 +260,19 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
             <DayList selected={selected} events={selectedEvents} onEdit={openEdit} onNew={onNewTransaction} onSeeExtrato={seeExtrato} />
           </div>
           <div ref={gridRef}>
-            <Grid grid={grid} byDay={byDay} todayYmd={today.ymd} selected={selected} onPick={pick} onEdit={openEdit} week={view === "week"} />
+            <Grid grid={grid} byDay={byDay} todayYmd={today.ymd} selected={selected} onPick={pick} onPickCell={pickCell} onEdit={openEdit} week={view === "week"} />
           </div>
+          {popover ? (
+            <DayPopover anchor={popover.rect} onClose={() => setPopover(null)}>
+              <DayList
+                selected={selected}
+                events={selectedEvents}
+                onEdit={(e, ev) => { setPopover(null); openEdit(e, ev); }}
+                onNew={onNewTransaction ? (d) => { setPopover(null); onNewTransaction(d); } : undefined}
+                onSeeExtrato={() => { setPopover(null); seeExtrato(); }}
+              />
+            </DayPopover>
+          ) : null}
         </div>
       ) : (
         <>
@@ -444,7 +493,48 @@ function DayList({ selected, events, onEdit, onNew, onSeeExtrato }) {
   );
 }
 
-function Grid({ grid, byDay, todayYmd, selected, onPick, onEdit, week, compact }) {
+/** Popover do dia ancorado à célula, com flip quando não há espaço lateral. */
+function DayPopover({ anchor, onClose, children }) {
+  const ref = useRef(null);
+  const WIDTH = 330;
+  const [pos, setPos] = useState({ left: anchor.right + 8, top: anchor.top, ready: false });
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ph = el.offsetHeight;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const gap = 8;
+    let left = anchor.right + gap; // tenta à direita
+    if (left + WIDTH > vw - gap) {
+      left = anchor.left - WIDTH - gap; // flip para a esquerda
+      if (left < gap) left = Math.min(Math.max(anchor.left, gap), vw - WIDTH - gap); // sem espaço lateral → clampa
+    }
+    const top = Math.min(Math.max(anchor.top, gap), Math.max(gap, vh - ph - gap));
+    setPos({ left, top, ready: true });
+  }, [anchor]);
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onDown, true);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onDown, true);
+    };
+  }, [onClose]);
+
+  return createPortal(
+    <div ref={ref} style={{ position: "fixed", left: pos.left, top: pos.top, width: WIDTH, zIndex: 1000, borderRadius: 14, boxShadow: T.lg, visibility: pos.ready ? "visible" : "hidden" }}>
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
+function Grid({ grid, byDay, todayYmd, selected, onPick, onPickCell, onEdit, week, compact }) {
   const cells = grid.flat();
   const minH = week ? 320 : compact ? 64 : 118;
   const maxEv = week ? 10 : 2;
@@ -467,7 +557,7 @@ function Grid({ grid, byDay, todayYmd, selected, onPick, onEdit, week, compact }
           return (
             <div
               key={i}
-              onClick={() => onPick(cell.ymd)}
+              onClick={(e) => (onPickCell ? onPickCell(cell.ymd, e.currentTarget.getBoundingClientRect()) : onPick(cell.ymd))}
               style={{
                 background: dim ? "transparent" : T.surface, borderRadius: 11, minHeight: minH, padding: 8, cursor: "pointer",
                 display: "flex", flexDirection: "column", gap: 4, opacity: dim ? 0.55 : 1,
