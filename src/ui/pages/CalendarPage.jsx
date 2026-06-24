@@ -573,8 +573,7 @@ function Grid({ grid, byDay, todayYmd, selected, onPick, onPickCell, onEdit, wee
           const isToday = cell.ymd === todayYmd;
           const isSel = cell.ymd === selected;
           const dim = cell.inMonth === false;
-          const dayTotal = evs.reduce((s, e) => s + e.value, 0);
-          // Mantém no máx. 2 linhas de conteúdo: se estoura, mostra 1 chip + resumo.
+          // Mantém no máx. 2 linhas de conteúdo: se estoura, mostra 1 chip + "Ver mais".
           const over = evs.length > maxEv;
           const shown = over ? Math.max(1, maxEv - 1) : evs.length;
           const hidden = evs.length - shown;
@@ -598,15 +597,16 @@ function Grid({ grid, byDay, todayYmd, selected, onPick, onPickCell, onEdit, wee
                   <span
                     key={e.id || j}
                     onClick={clickable ? (ev) => onEdit(e, ev) : undefined}
-                    style={{ ...G, ...NUM, fontSize: 12, fontWeight: 600, borderRadius: 6, padding: "2px 7px", color: c.color, background: c.bg, border: `1px solid ${c.border}`, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: clickable ? "pointer" : "default" }}
+                    style={{ ...G, fontSize: 12, fontWeight: 600, borderRadius: 6, padding: "2px 7px", color: c.color, background: c.bg, border: `1px solid ${c.border}`, display: "flex", alignItems: "baseline", gap: 6, cursor: clickable ? "pointer" : "default" }}
                   >
-                    {fmtShort(e.value)} {e.desc}
+                    <span style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.desc}</span>
+                    <span style={{ ...NUM, flexShrink: 0 }}>{brl.format(Math.abs(Number(e.value) || 0))}</span>
                   </span>
                 );
               })}
               {hidden > 0 ? (
-                <span style={{ ...G, ...NUM, fontSize: 11, fontWeight: 700, color: T.inkMid, background: T.grayLight, borderRadius: 6, padding: "2px 7px" }}>
-                  +{hidden} · {fmtShort(dayTotal)}
+                <span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, background: T.grayLight, borderRadius: 6, padding: "2px 7px", textAlign: "center" }}>
+                  Ver mais +{hidden}
                 </span>
               ) : null}
             </div>

@@ -32,5 +32,10 @@ export function finclaMainOutletRemountKey(pathname) {
   if (p === "/transactions" || /^\/transactions\/[^/]+$/.test(p)) {
     return "/transactions";
   }
+  // Hub de Planejamento: trocar de área (/planning/$area) não deve remontar o hub
+  // (evita o "flick" do sub-menu). Mesma estratégia do /transactions.
+  if (p === "/planning" || /^\/planning\/[^/]+$/.test(p)) {
+    return "/planning";
+  }
   return p;
 }
