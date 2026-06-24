@@ -220,6 +220,9 @@ function TransacoesPageBody({
 
   useEffect(() => {
     if (!organizationId) return;
+    // Deep-link do calendário (`?fc_date=`) é um filtro transiente: não persistir
+    // como período padrão do usuário (senão `/transactions` fica preso naquele dia).
+    if (fcDate) return;
     const fp = JSON.stringify({
       org: organizationId,
       period: filter.period,
@@ -233,7 +236,7 @@ function TransacoesPageBody({
       customFrom: filter.customFrom,
       customTo: filter.customTo,
     });
-  }, [organizationId, filter.period, filter.customFrom, filter.customTo]);
+  }, [organizationId, fcDate, filter.period, filter.customFrom, filter.customTo]);
 
   useEffect(() => {
     const trimmed = searchInput.trim();
