@@ -188,6 +188,8 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
   );
   const seeExtrato = useCallback(() => navigate({ to: "/transactions", search: { [FC.DATE]: selected } }), [navigate, selected]);
 
+  // Painel de Transação aberto (overlay) → o popover deve "resistir" ao dismiss.
+  const txModalOpen = Boolean(search?.[FC.MODAL] || search?.[FC.TX]);
   // Popover do dia ancorado à célula (desktop). Fecha ao trocar período.
   const [popover, setPopover] = useState(null);
   const pickCell = useCallback((ymdStr, rect) => { pick(ymdStr); setPopover(rect ? { rect } : null); }, [pick]);
@@ -263,12 +265,12 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
             <Grid grid={grid} byDay={byDay} todayYmd={today.ymd} selected={selected} onPick={pick} onPickCell={pickCell} onEdit={openEdit} week={view === "week"} />
           </div>
           {popover ? (
-            <DayPopover anchor={popover.rect} onClose={() => setPopover(null)}>
+            <DayPopover anchor={popover.rect} onClose={() => setPopover(null)} lockDismiss={txModalOpen}>
               <DayList
                 selected={selected}
                 events={selectedEvents}
-                onEdit={(e, ev) => { setPopover(null); openEdit(e, ev); }}
-                onNew={onNewTransaction ? (d) => { setPopover(null); onNewTransaction(d); } : undefined}
+                onEdit={openEdit}
+                onNew={onNewTransaction}
                 onSeeExtrato={() => { setPopover(null); seeExtrato(); }}
               />
             </DayPopover>
@@ -494,7 +496,7 @@ function DayList({ selected, events, onEdit, onNew, onSeeExtrato }) {
 }
 
 /** Popover do dia ancorado à célula, com flip quando não há espaço lateral. */
-function DayPopover({ anchor, onClose, children }) {
+function DayPopover({ anchor, onClose, children, lockDismiss = false }) {
   const ref = useRef(null);
   const WIDTH = 330;
   const [pos, setPos] = useState({ left: anchor.right + 8, top: anchor.top, ready: false });
@@ -516,6 +518,9 @@ function DayPopover({ anchor, onClose, children }) {
   }, [anchor]);
 
   useEffect(() => {
+    // Enquanto o Painel de Transação está aberto, o popover "resiste": não fecha
+    // por Esc nem por cliques fora (inclui interações dentro do painel).
+    if (lockDismiss) return undefined;
     const onKey = (e) => { if (e.key === "Escape") onClose(); };
     const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
     document.addEventListener("keydown", onKey);
@@ -524,7 +529,7 @@ function DayPopover({ anchor, onClose, children }) {
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("mousedown", onDown, true);
     };
-  }, [onClose]);
+  }, [onClose, lockDismiss]);
 
   return createPortal(
     <div ref={ref} style={{ position: "fixed", left: pos.left, top: pos.top, width: WIDTH, zIndex: 1000, borderRadius: 14, boxShadow: T.lg, visibility: pos.ready ? "visible" : "hidden" }}>
