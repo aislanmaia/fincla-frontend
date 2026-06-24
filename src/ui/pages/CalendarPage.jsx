@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { T } from "../tokens";
 import { G, NUM } from "../typography";
 import { PageTitle, PageEnter, Card } from "../components/primitives";
@@ -10,9 +11,11 @@ import {
   monthTotals,
   dayLongLabel,
   todayParts,
+  pad2,
   WEEKDAYS,
 } from "../features/calendar/calendarModel.js";
 import { shouldUseRealData } from "../dataMode.js";
+import { FC, FC_MODAL } from "../routing/searchContract.js";
 
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const fmt = (v) => brl.format(Number(v || 0));
@@ -46,16 +49,19 @@ function evColors(e) {
 
 function mockByDay() {
   const { year, month } = todayParts();
-  const d = (day) => `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const d = (day) => `${year}-${pad2(month)}-${pad2(day)}`;
+  const exp = (id, desc, value, cat, pm) => ({ id, kind: "expense", type: "expense", desc, value, paid: true, paymentMethod: pm, category: cat });
   return {
-    [d(5)]: [{ id: "m1", kind: "income", type: "income", desc: "Salário", value: 7500, paid: true, paymentMethod: "pix" }],
+    [d(5)]: [{ id: "m1", kind: "income", type: "income", desc: "Salário", value: 7500, paid: true, paymentMethod: "pix", category: "Salário" }],
     [d(10)]: [
-      { id: "m2", kind: "expense", type: "expense", desc: "Mercado", value: -380, paid: true, paymentMethod: "credit" },
-      { id: "m3", kind: "expense", type: "expense", desc: "Internet", value: -150, paid: true, paymentMethod: "pix" },
-      { id: "m4", kind: "expense", type: "expense", desc: "Pet shop", value: -130, paid: true, paymentMethod: "debit" },
+      exp("m2", "iFood", -68, "Alimentação", "credit"),
+      exp("m3", "Padaria", -24, "Alimentação", "pix"),
+      exp("m4", "Mercado", -380, "Mercado", "credit"),
+      exp("m5", "Internet", -150, "Casa", "pix"),
+      exp("m6", "Uber", -32, "Transporte", "debit"),
+      exp("m7", "Pet shop", -130, "Pets", "debit"),
     ],
-    [d(12)]: [{ id: null, kind: "invoice", type: "expense", desc: "Fatura Nubank", value: -2340, paid: false, paymentMethod: "credit" }],
-    [d(20)]: [{ id: "m5", kind: "expense", type: "expense", desc: "Academia", value: -120, paid: true, paymentMethod: "debit" }],
+    [d(12)]: [{ id: null, kind: "invoice", type: "expense", desc: "Fatura Nubank", value: -2340, paid: false, paymentMethod: "credit", category: "Fatura de cartão" }],
   };
 }
 
@@ -65,67 +71,108 @@ function filterByDay(byDay, filters) {
     const kept = evs.filter((e) => {
       const typeOk = e.value >= 0 ? filters.income : filters.expense;
       const m = e.paymentMethod || "outros";
-      const methodOk = filters.methods[m] !== false;
-      return typeOk && methodOk;
+      return typeOk && !filters.hiddenPays.has(m);
     });
     if (kept.length) out[day] = kept;
   }
   return out;
 }
 
-/** Calendário Financeiro v2 — workspace (rail + KPIs + Semana/Mês). */
-export function CalendarPage({ organizationId = null, dataMode = "live", isMobile = false, onEditTransaction, onNewTransaction, onCalendarDateChange }) {
+function groupByCategory(events) {
+  const map = new Map();
+  for (const e of events) {
+    const k = e.category || "Sem categoria";
+    if (!map.has(k)) map.set(k, { name: k, items: [], total: 0 });
+    const g = map.get(k);
+    g.items.push(e);
+    g.total += e.value;
+  }
+  return [...map.values()].sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
+}
+
+/** Calendário Financeiro v2 — workspace, estado no URL (deep-linkável). */
+export function CalendarPage({ organizationId = null, dataMode = "live", isMobile = false, onNewTransaction }) {
   const live = shouldUseRealData(organizationId, dataMode);
+  const navigate = useNavigate();
+  const search = useSearch({ strict: false });
   const today = useMemo(() => todayParts(), []);
-  const [cursor, setCursor] = useState({ year: today.year, month: today.month });
-  const [selected, setSelected] = useState(today.ymd);
-  const [view, setView] = useState("month");
   const isWide = useIsWide(1024);
+
+  // Estado derivado do URL (fonte de verdade).
+  const cursor = useMemo(() => {
+    const m = search?.[FC.CAL_MONTH];
+    if (m && /^\d{4}-\d{2}$/.test(m)) {
+      const [y, mo] = m.split("-").map(Number);
+      return { year: y, month: mo };
+    }
+    return { year: today.year, month: today.month };
+  }, [search, today]);
+  const selected = search?.[FC.CAL_DAY] && /^\d{4}-\d{2}-\d{2}$/.test(search[FC.CAL_DAY]) ? search[FC.CAL_DAY] : today.ymd;
+  const view = search?.[FC.CAL_VIEW] === "week" ? "week" : "month";
+  const hiddenTypes = useMemo(() => new Set((search?.[FC.CAL_SHOW] || "").split(",").filter(Boolean)), [search]);
+  const hiddenPays = useMemo(() => new Set((search?.[FC.CAL_PAY] || "").split(",").filter(Boolean)), [search]);
+  const filters = useMemo(
+    () => ({ income: !hiddenTypes.has("income"), expense: !hiddenTypes.has("expense"), hiddenPays }),
+    [hiddenTypes, hiddenPays],
+  );
+
+  const patch = useCallback((p) => navigate({ search: (prev) => ({ ...prev, ...p }), replace: true }), [navigate]);
+  const shiftMonth = useCallback(
+    (delta) => {
+      let { year, month } = cursor;
+      month += delta;
+      if (month < 1) { year -= 1; month = 12; }
+      if (month > 12) { year += 1; month = 1; }
+      patch({ [FC.CAL_MONTH]: `${year}-${pad2(month)}` });
+    },
+    [cursor, patch],
+  );
+  const pick = useCallback((ymdStr) => patch({ [FC.CAL_DAY]: ymdStr }), [patch]);
+  const setView = useCallback((v) => patch({ [FC.CAL_VIEW]: v === "week" ? "week" : undefined }), [patch]);
+  const goToday = useCallback(() => patch({ [FC.CAL_MONTH]: `${today.year}-${pad2(today.month)}`, [FC.CAL_DAY]: today.ymd }), [patch, today]);
+  const toggleType = useCallback(
+    (k) => {
+      const next = new Set(hiddenTypes);
+      next.has(k) ? next.delete(k) : next.add(k);
+      patch({ [FC.CAL_SHOW]: [...next].join(",") || undefined });
+    },
+    [hiddenTypes, patch],
+  );
+  const toggleMethod = useCallback(
+    (m) => {
+      const next = new Set(hiddenPays);
+      next.has(m) ? next.delete(m) : next.add(m);
+      patch({ [FC.CAL_PAY]: [...next].join(",") || undefined });
+    },
+    [hiddenPays, patch],
+  );
+  const openEdit = useCallback(
+    (e, ev) => {
+      ev?.stopPropagation();
+      if (!e?.id) return;
+      navigate({ search: (prev) => ({ ...prev, [FC.TX]: String(e.id), [FC.MODAL]: FC_MODAL.NEW_TRANSACTION }) });
+    },
+    [navigate],
+  );
+  const seeExtrato = useCallback(() => navigate({ to: "/transactions", search: { [FC.DATE]: selected } }), [navigate, selected]);
 
   const liveData = useCalendarData({ organizationId, year: cursor.year, month: cursor.month, enabled: live });
   const mock = useMemo(() => (dataMode === "mock" ? mockByDay() : {}), [dataMode]);
   const rawByDay = live ? liveData.byDay : mock;
 
-  // Métodos de pagamento presentes no mês (para os filtros).
   const payMethods = useMemo(() => {
     const set = new Set();
     for (const evs of Object.values(rawByDay)) for (const e of evs) set.add(e.paymentMethod || "outros");
     return [...set];
   }, [rawByDay]);
 
-  const [filters, setFilters] = useState({ income: true, expense: true, methods: {} });
   const byDay = useMemo(() => filterByDay(rawByDay, filters), [rawByDay, filters]);
   const totals = useMemo(() => monthTotals(rawByDay), [rawByDay]);
-
   const grid = useMemo(
     () => (view === "week" ? weekMatrix(selected, cursor.year, cursor.month) : monthMatrix(cursor.year, cursor.month)),
     [view, selected, cursor],
   );
   const selectedEvents = byDay[selected] || [];
-
-  const shiftMonth = useCallback((delta) => {
-    setCursor((c) => {
-      const m = c.month + delta;
-      if (m < 1) return { year: c.year - 1, month: 12 };
-      if (m > 12) return { year: c.year + 1, month: 1 };
-      return { year: c.year, month: m };
-    });
-  }, []);
-  function goToday() {
-    setCursor({ year: today.year, month: today.month });
-    setSelected(today.ymd);
-  }
-  function pick(ymdStr) {
-    setSelected(ymdStr);
-  }
-  const editEvent = useCallback((e, ev) => {
-    ev?.stopPropagation();
-    if (e?.id && onEditTransaction) onEditTransaction(e.id);
-  }, [onEditTransaction]);
-
-  // Reporta o dia selecionado ao App (topbar "Nova transação" herda a data) + limpa ao sair.
-  useEffect(() => { onCalendarDateChange?.(selected); }, [selected, onCalendarDateChange]);
-  useEffect(() => () => onCalendarDateChange?.(null), [onCalendarDateChange]);
 
   // Scroll do mouse sobre a grade troca o mês (modo Mês).
   const gridRef = useRef(null);
@@ -168,23 +215,23 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
       <KpiCards totals={totals} />
 
       {isWide ? (
-        <div style={{ display: "grid", gridTemplateColumns: "300px minmax(0, 1fr)", gap: 20, marginTop: 16, alignItems: "start" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "320px minmax(0, 1fr)", gap: 20, marginTop: 16, alignItems: "start" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <MiniCalendar year={cursor.year} month={cursor.month} todayYmd={today.ymd} selected={selected} onPick={pick} onShift={shiftMonth} />
-            <Filters filters={filters} setFilters={setFilters} payMethods={payMethods} />
-            <DayList selected={selected} events={selectedEvents} onEdit={editEvent} onNew={onNewTransaction} />
+            <Filters filters={filters} hiddenTypes={hiddenTypes} onToggleType={toggleType} onToggleMethod={toggleMethod} payMethods={payMethods} />
+            <DayList selected={selected} events={selectedEvents} onEdit={openEdit} onNew={onNewTransaction} onSeeExtrato={seeExtrato} />
           </div>
           <div ref={gridRef}>
-            <Grid grid={grid} byDay={byDay} todayYmd={today.ymd} selected={selected} onPick={pick} onEdit={editEvent} week={view === "week"} />
+            <Grid grid={grid} byDay={byDay} todayYmd={today.ymd} selected={selected} onPick={pick} onEdit={openEdit} week={view === "week"} />
           </div>
         </div>
       ) : (
         <>
           <div style={{ marginTop: 14 }}>
-            <Grid grid={grid} byDay={byDay} todayYmd={today.ymd} selected={selected} onPick={pick} onEdit={editEvent} week={view === "week"} compact />
+            <Grid grid={grid} byDay={byDay} todayYmd={today.ymd} selected={selected} onPick={pick} onEdit={openEdit} week={view === "week"} compact />
           </div>
           <div style={{ marginTop: 14 }}>
-            <DayList selected={selected} events={selectedEvents} onEdit={editEvent} onNew={onNewTransaction} />
+            <DayList selected={selected} events={selectedEvents} onEdit={openEdit} onNew={onNewTransaction} onSeeExtrato={seeExtrato} />
           </div>
         </>
       )}
@@ -267,25 +314,23 @@ function MiniCalendar({ year, month, todayYmd, selected, onPick, onShift }) {
   );
 }
 
-function Filters({ filters, setFilters, payMethods }) {
+function Filters({ filters, onToggleType, onToggleMethod, payMethods }) {
   const flt = { ...G, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: T.inkLight, margin: "2px 0 8px" };
   const row = { ...G, display: "flex", alignItems: "center", gap: 9, padding: "5px 2px", fontSize: 13, color: T.inkMid, cursor: "pointer" };
   const Box = ({ on }) => (
     <span style={{ width: 16, height: 16, borderRadius: 5, border: `1.5px solid ${on ? T.ink : T.border}`, background: on ? T.ink : "transparent", display: "grid", placeItems: "center", fontSize: 11, color: "#fff", flexShrink: 0 }}>{on ? "✓" : ""}</span>
   );
   const Leg = ({ c }) => <span style={{ width: 9, height: 9, borderRadius: 9999, background: c, flexShrink: 0 }} />;
-  const toggleType = (k) => setFilters((f) => ({ ...f, [k]: !f[k] }));
-  const toggleMethod = (m) => setFilters((f) => ({ ...f, methods: { ...f.methods, [m]: f.methods[m] === false } }));
   return (
     <Card style={{ padding: 14 }}>
       <div style={flt}>Exibir</div>
-      <label style={row} onClick={() => toggleType("income")}><Box on={filters.income} /><Leg c={T.greenBar} />Entradas</label>
-      <label style={row} onClick={() => toggleType("expense")}><Box on={filters.expense} /><Leg c={T.redBar} />Saídas</label>
+      <label style={row} onClick={() => onToggleType("income")}><Box on={filters.income} /><Leg c={T.greenBar} />Entradas</label>
+      <label style={row} onClick={() => onToggleType("expense")}><Box on={filters.expense} /><Leg c={T.redBar} />Saídas</label>
       {payMethods.length ? (
         <>
           <div style={{ ...flt, marginTop: 12 }}>Forma de pagamento</div>
           {payMethods.map((m) => (
-            <label key={m} style={row} onClick={() => toggleMethod(m)}><Box on={filters.methods[m] !== false} />{payLabel(m)}</label>
+            <label key={m} style={row} onClick={() => onToggleMethod(m)}><Box on={!filters.hiddenPays.has(m)} />{payLabel(m)}</label>
           ))}
         </>
       ) : null}
@@ -293,46 +338,88 @@ function Filters({ filters, setFilters, payMethods }) {
   );
 }
 
-function DayList({ selected, events, onEdit, onNew }) {
-  const total = events.reduce((s, e) => s + e.value, 0);
+function DayList({ selected, events, onEdit, onNew, onSeeExtrato }) {
+  const [mode, setMode] = useState("category"); // category | list
+  const [open, setOpen] = useState({});
+  const income = events.filter((e) => e.value >= 0).reduce((s, e) => s + e.value, 0);
+  const expense = events.filter((e) => e.value < 0).reduce((s, e) => s + -e.value, 0);
+  const groups = useMemo(() => groupByCategory(events), [events]);
+  const dense = events.length > 6;
+  const useGroups = mode === "category" && groups.length > 1;
+
+  const Item = ({ e, indent }) => {
+    const c = evColors(e);
+    const clickable = Boolean(e.id);
+    return (
+      <div
+        onClick={clickable ? (ev) => onEdit(e, ev) : undefined}
+        style={{ display: "flex", alignItems: "center", gap: 10, padding: indent ? "8px 4px 8px 24px" : "9px 6px", borderRadius: 9, cursor: clickable ? "pointer" : "default" }}
+        onMouseEnter={(ev) => { if (clickable) ev.currentTarget.style.background = T.grayLight; }}
+        onMouseLeave={(ev) => { ev.currentTarget.style.background = "transparent"; }}
+      >
+        <span style={{ width: 8, height: 8, borderRadius: 9999, flexShrink: 0, background: c.dot }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ ...G, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.desc}</div>
+          <div style={{ ...G, fontSize: 10.5, color: T.inkLight }}>{[payLabel(e.paymentMethod), mode === "list" ? e.category : null].filter(Boolean).join(" · ")}</div>
+        </div>
+        <span style={{ ...G, ...NUM, fontSize: 13, fontWeight: 700, color: c.dot }}>{fmtShort(e.value)}</span>
+      </div>
+    );
+  };
+
   return (
     <Card style={{ padding: 14 }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
         <div style={{ ...G, fontWeight: 800, fontSize: 14 }}>{dayLongLabel(selected) || "Selecione um dia"}</div>
-        {events.length ? <div style={{ ...G, ...NUM, ...ghost }}>{fmt(total)}</div> : null}
+        <div style={{ ...G, ...ghost }}>{events.length} {events.length === 1 ? "lançamento" : "lançamentos"}</div>
       </div>
       {events.length ? (
-        events.map((e, i) => {
-          const c = evColors(e);
-          const clickable = Boolean(e.id);
-          return (
-            <div
-              key={e.id || i}
-              onClick={clickable ? (ev) => onEdit(e, ev) : undefined}
-              style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", borderRadius: 10, cursor: clickable ? "pointer" : "default" }}
-              onMouseEnter={(ev) => { if (clickable) ev.currentTarget.style.background = T.grayLight; }}
-              onMouseLeave={(ev) => { ev.currentTarget.style.background = "transparent"; }}
-            >
-              <span style={{ width: 9, height: 9, borderRadius: 9999, flexShrink: 0, background: c.dot }} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ ...G, fontSize: 13.5, fontWeight: 600 }}>{e.desc}</div>
-                <div style={{ ...G, fontSize: 11, color: T.inkLight }}>{[payLabel(e.paymentMethod), e.kind === "invoice" ? "fatura" : null].filter(Boolean).join(" · ")}</div>
+        <>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, margin: "11px 0" }}>
+            {[{ l: "Entradas", v: income, c: T.green }, { l: "Saídas", v: expense, c: T.red }, { l: "Saldo", v: income - expense, c: income - expense < 0 ? T.red : T.ink }].map((s) => (
+              <div key={s.l} style={{ border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px" }}>
+                <div style={{ ...G, fontSize: 9, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.inkLight }}>{s.l}</div>
+                <div style={{ ...G, ...NUM, fontSize: 13, fontWeight: 800, color: s.c }}>{fmt(s.v)}</div>
               </div>
-              <span style={{ ...G, ...NUM, fontSize: 13.5, fontWeight: 700, color: c.dot }}>{fmtShort(e.value)}</span>
+            ))}
+          </div>
+          {dense ? (
+            <div style={{ display: "inline-flex", border: `1px solid ${T.border}`, borderRadius: 8, overflow: "hidden", marginBottom: 4 }}>
+              {["category", "list"].map((m) => (
+                <button key={m} onClick={() => setMode(m)} style={{ ...G, border: "none", background: mode === m ? T.ink : "transparent", color: mode === m ? "#fff" : T.inkMid, fontSize: 11, fontWeight: 600, padding: "5px 11px", cursor: "pointer" }}>{m === "category" ? "Por categoria" : "Lista"}</button>
+              ))}
             </div>
-          );
-        })
+          ) : null}
+          <div style={{ maxHeight: 300, overflowY: "auto", margin: "0 -4px", padding: "0 4px" }}>
+            {useGroups
+              ? groups.map((g) => {
+                  const isOpen = open[g.name] ?? !dense;
+                  return (
+                    <div key={g.name} style={{ borderTop: `1px solid ${T.border}` }}>
+                      <div onClick={() => setOpen((o) => ({ ...o, [g.name]: !isOpen }))} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 4px", cursor: "pointer" }}>
+                        <span style={{ ...ghost, width: 12, fontSize: 10 }}>{isOpen ? "▾" : "▸"}</span>
+                        <span style={{ ...G, flex: 1, fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{g.name}</span>
+                        <span style={{ ...ghost, fontSize: 11 }}>{g.items.length}</span>
+                        <span style={{ ...G, ...NUM, fontSize: 13, fontWeight: 700, color: g.total < 0 ? T.red : T.green }}>{fmtShort(g.total)}</span>
+                      </div>
+                      {isOpen ? g.items.map((e, i) => <Item key={e.id || i} e={e} indent />) : null}
+                    </div>
+                  );
+                })
+              : events.map((e, i) => <div key={e.id || i} style={{ borderTop: `1px solid ${T.border}` }}><Item e={e} /></div>)}
+          </div>
+        </>
       ) : (
         <div style={{ ...G, fontSize: 12.5, color: T.inkLight, marginTop: 8 }}>Nenhum lançamento neste dia.</div>
       )}
-      {onNew ? (
-        <button
-          onClick={() => onNew(selected)}
-          style={{ ...G, marginTop: 8, width: "100%", borderRadius: 9, border: `1.5px dashed ${T.border}`, background: "transparent", color: T.inkMid, fontSize: 12.5, fontWeight: 600, padding: "8px 0", cursor: "pointer" }}
-        >
-          + Nova transação neste dia
+      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        {onNew ? (
+          <button onClick={() => onNew(selected)} style={{ ...G, flex: 1, borderRadius: 9, border: `1.5px dashed ${T.border}`, background: "transparent", color: T.inkMid, fontSize: 12, fontWeight: 600, padding: "8px 0", cursor: "pointer" }}>+ Nova neste dia</button>
+        ) : null}
+        <button onClick={onSeeExtrato} style={{ ...G, flex: 1, borderRadius: 9, border: "none", background: "transparent", color: T.blue, fontSize: 12.5, fontWeight: 600, padding: "8px 0", cursor: "pointer" }}>
+          {events.length ? `Ver ${events.length} no extrato →` : "Ver no extrato →"}
         </button>
-      ) : null}
+      </div>
     </Card>
   );
 }
@@ -340,7 +427,7 @@ function DayList({ selected, events, onEdit, onNew }) {
 function Grid({ grid, byDay, todayYmd, selected, onPick, onEdit, week, compact }) {
   const cells = grid.flat();
   const minH = week ? 320 : compact ? 64 : 118;
-  const maxEv = week ? 8 : 3;
+  const maxEv = week ? 10 : 2;
   return (
     <div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 7, marginBottom: 7 }}>
@@ -355,6 +442,8 @@ function Grid({ grid, byDay, todayYmd, selected, onPick, onEdit, week, compact }
           const isToday = cell.ymd === todayYmd;
           const isSel = cell.ymd === selected;
           const dim = cell.inMonth === false;
+          const dayTotal = evs.reduce((s, e) => s + e.value, 0);
+          const overflow = evs.length - maxEv;
           return (
             <div
               key={i}
@@ -363,7 +452,6 @@ function Grid({ grid, byDay, todayYmd, selected, onPick, onEdit, week, compact }
                 background: dim ? "transparent" : T.surface, borderRadius: 11, minHeight: minH, padding: 8, cursor: "pointer",
                 display: "flex", flexDirection: "column", gap: 4, opacity: dim ? 0.55 : 1,
                 border: isSel ? `2px solid ${T.blue}` : isToday ? `1px solid ${T.ink}` : `1px solid ${T.border}`,
-                outline: isSel ? "none" : undefined,
               }}
             >
               <span style={{ ...G, fontSize: compact ? 12 : 13.5, fontWeight: isToday ? 800 : 600, color: isToday ? T.ink : T.inkMid }}>{cell.day}{isToday ? " ·hoje" : ""}</span>
@@ -380,7 +468,11 @@ function Grid({ grid, byDay, todayYmd, selected, onPick, onEdit, week, compact }
                   </span>
                 );
               })}
-              {evs.length > maxEv ? <span style={{ ...ghost, fontSize: 11 }}>+{evs.length - maxEv}</span> : null}
+              {overflow > 0 ? (
+                <span style={{ ...G, ...NUM, marginTop: "auto", fontSize: 11, fontWeight: 700, color: T.inkMid, background: T.grayLight, borderRadius: 6, padding: "2px 7px" }}>
+                  +{overflow} · {fmtShort(dayTotal)}
+                </span>
+              ) : null}
             </div>
           );
         })}

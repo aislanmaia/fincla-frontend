@@ -31,6 +31,23 @@ export function monthMatrix(year, month) {
   return weeks;
 }
 
+/** Nome da categoria de uma transação (a partir das tags; fallback "Sem categoria"). */
+export function txCategoryName(tx) {
+  const tags = tx && tx.tags;
+  if (tags && typeof tags === "object") {
+    for (const [groupKey, list] of Object.entries(tags)) {
+      const gk = String(groupKey).toLowerCase();
+      const typeName = Array.isArray(list) && list[0]?.tag_type?.name ? String(list[0].tag_type.name) : "";
+      const isCat = gk.includes("categoria") || gk.includes("category") || /categor/i.test(typeName);
+      if (isCat && Array.isArray(list) && list.length) return list[0].name;
+    }
+    for (const list of Object.values(tags)) {
+      if (Array.isArray(list) && list.length) return list[0].name;
+    }
+  }
+  return (tx && tx.category) || "Sem categoria";
+}
+
 /** Agrupa transações do mês em eventos por dia (chave "YYYY-MM-DD"). */
 export function buildCalendarEvents(transactions, year, month) {
   const prefix = monthPrefix(year, month);
@@ -44,7 +61,7 @@ export function buildCalendarEvents(transactions, year, month) {
     if (Array.isArray(tx.installment_info) && tx.installment_info.length) {
       for (const inst of tx.installment_info) {
         if (inMonth(inst.due_date)) {
-          add(inst.due_date, { id: null, kind: "invoice", type: "expense", desc: tx.description, value: -Math.abs(Number(inst.amount) || 0), paid: false, paymentMethod: "credit" });
+          add(inst.due_date, { id: null, kind: "invoice", type: "expense", desc: tx.description, value: -Math.abs(Number(inst.amount) || 0), paid: false, paymentMethod: "credit", category: "Fatura de cartão" });
         }
       }
       continue;
@@ -54,7 +71,7 @@ export function buildCalendarEvents(transactions, year, month) {
     const paid = Boolean(tx.paid_at) || tx.status === "paid" || tx.status === "completed";
     const kind = tx.type === "income" ? "income" : tx.type === "refund" ? "refund" : "expense";
     const sign = kind === "expense" ? -1 : 1;
-    add(day, { id: tx.id ?? null, kind, type: kind, desc: tx.description, value: sign * Math.abs(Number(tx.value) || 0), paid, paymentMethod: tx.payment_method || null });
+    add(day, { id: tx.id ?? null, kind, type: kind, desc: tx.description, value: sign * Math.abs(Number(tx.value) || 0), paid, paymentMethod: tx.payment_method || null, category: txCategoryName(tx) });
   }
   return byDay;
 }

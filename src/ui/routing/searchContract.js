@@ -14,6 +14,13 @@ export const FC = {
   ADD: "fc_add",
   SIM_OPEN: "fc_sim_open",
   SIM_ITEM: "fc_sim_item_type",
+  // Calendário v2 — estado partilhável/deep-linkável na URL.
+  CAL_MONTH: "fc_cal_m", // "YYYY-MM" (mês visível)
+  CAL_DAY: "fc_cal_d", // "YYYY-MM-DD" (dia selecionado)
+  CAL_VIEW: "fc_cal_v", // "week" | "month"
+  CAL_SHOW: "fc_cal_show", // tipos ocultos: "income" | "expense" | "income,expense"
+  CAL_PAY: "fc_cal_pay", // formas de pagamento ocultas (csv)
+  DATE: "fc_date", // "YYYY-MM-DD" — filtro de dia no /transactions
 };
 
 /** Valores de `fc_modal` (inglês, partilháveis). */

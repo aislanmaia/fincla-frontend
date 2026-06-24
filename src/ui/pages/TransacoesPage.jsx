@@ -145,6 +145,19 @@ function TransacoesPageBody({
     initialSort: DEFAULT_SORT,
   });
 
+  // Deep-link vindo do Calendário: `?fc_date=YYYY-MM-DD` filtra exatamente aquele dia.
+  const fcDate = urlSearch?.[FC.DATE];
+  const fcDateAppliedRef = useRef(false);
+  useEffect(() => {
+    if (fcDateAppliedRef.current) return;
+    if (fcDate && /^\d{4}-\d{2}-\d{2}$/.test(fcDate)) {
+      fcDateAppliedRef.current = true;
+      filter.setPeriod("custom");
+      filter.setCustomFrom(fcDate);
+      filter.setCustomTo(fcDate);
+    }
+  }, [fcDate, filter]);
+
   const periodPersistFingerprintRef = useRef("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(

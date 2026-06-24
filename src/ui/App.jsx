@@ -68,10 +68,11 @@ export default function App() {
   const session = useSession();
   const mockDataEnabled = import.meta.env.VITE_ENABLE_UI_MOCKS === "true";
   const navigate = useNavigate();
-  const { pathname, searchStr } = useRouterState({
+  const { pathname, searchStr, calDay } = useRouterState({
     select: (s) => ({
       pathname: s.location.pathname,
       searchStr: s.location.searchStr ?? "",
+      calDay: s.location.search?.[FC.CAL_DAY] ?? null,
     }),
   });
   useFinclaDocumentTitle(pathname);
@@ -215,11 +216,8 @@ export default function App() {
     }, []),
   });
 
-  // Calendário v2 ↔ modal de transação: clique numa transação abre em edição;
-  // "Nova transação" (topbar) herda o dia selecionado no calendário.
-  const [calendarDateIso, setCalendarDateIso] = useState(null);
-  const onCalendarDateChange = useCallback((ymd) => setCalendarDateIso(ymd || null), []);
-  const onEditTransaction = useCallback((id) => openTxModal({ [FC.TX]: String(id) }), [openTxModal]);
+  // Calendário v2: estado vive na URL. "Nova transação" herda o dia selecionado
+  // (lido de `fc_cal_d`); a edição é navegada pelo próprio calendário (overlay).
   const onNewTransaction = useCallback(
     (dateIso) => {
       if (dateIso) setModalPreConfig({ dateIso });
@@ -357,7 +355,7 @@ export default function App() {
     }} />,
     budgets:   <OrcamentosPage onNav={navTo} isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} />,
     accounts:     <AccountsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} />,
-    planning:     <PlanningHub organizationId={session.activeOrgId} dataMode={dataMode} isMobile={isMobile} navTo={navTo} user={session.user} initialMetas={dataMode==="empty" ? [] : undefined} simulation={{ cenarios, setCenarios, cenarioId, setCenarioId }} onContribuir={(meta) => { setModalPreConfig({ tipo:"receita", desc:`Aporte — ${meta.nome}`, cat:"Poupança" }); openTxModal(); }} onEditTransaction={onEditTransaction} onNewTransaction={onNewTransaction} onCalendarDateChange={onCalendarDateChange} />,
+    planning:     <PlanningHub organizationId={session.activeOrgId} dataMode={dataMode} isMobile={isMobile} navTo={navTo} user={session.user} initialMetas={dataMode==="empty" ? [] : undefined} simulation={{ cenarios, setCenarios, cenarioId, setCenarioId }} onContribuir={(meta) => { setModalPreConfig({ tipo:"receita", desc:`Aporte — ${meta.nome}`, cat:"Poupança" }); openTxModal(); }} onNewTransaction={onNewTransaction} />,
     profile:        <ConfiguracoesPage onNav={navTo} isMobile={isMobile} onboardingData={onboardingData} dataMode={dataMode} organizationId={session.activeOrgId} currentUser={session.user} />,
     reports:   <RelatoriosPage onNav={(dest)=>{ if(dest==="_nova_transacao") openTxModal(); else navTo(dest); }} isMobile={isMobile} dataMode={dataMode} extraRecs={extraRecs} organizationId={session.activeOrgId} />,
     simulation:    <SimulacaoPageView cenarios={cenarios} setCenarios={setCenarios} cenarioId={cenarioId} setCenarioId={setCenarioId} isMobile={isMobile} organizationId={session.activeOrgId} dataMode={dataMode} />,
@@ -472,7 +470,7 @@ export default function App() {
       />
       <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
         <Topbar
-          onNew={() => onNewTransaction(calendarDateIso)}
+          onNew={() => onNewTransaction(calDay)}
           isMobile={isMobile}
           onMenuOpen={() => setSidebarOpen(true)}
           onNav={navTo}
