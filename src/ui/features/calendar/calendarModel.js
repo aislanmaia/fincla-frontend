@@ -41,9 +41,7 @@ export function txCategoryName(tx) {
       const isCat = gk.includes("categoria") || gk.includes("category") || /categor/i.test(typeName);
       if (isCat && Array.isArray(list) && list.length) return list[0].name;
     }
-    for (const list of Object.values(tags)) {
-      if (Array.isArray(list) && list.length) return list[0].name;
-    }
+    // Sem grupo de categoria: não usar tags de detalhe (evita mis-agrupamento).
   }
   return (tx && tx.category) || "Sem categoria";
 }

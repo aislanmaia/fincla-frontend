@@ -109,7 +109,7 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
   }, [search, today]);
   const selected = search?.[FC.CAL_DAY] && /^\d{4}-\d{2}-\d{2}$/.test(search[FC.CAL_DAY]) ? search[FC.CAL_DAY] : today.ymd;
   const view = search?.[FC.CAL_VIEW] === "week" ? "week" : "month";
-  const hiddenTypes = useMemo(() => new Set((search?.[FC.CAL_SHOW] || "").split(",").filter(Boolean)), [search]);
+  const hiddenTypes = useMemo(() => new Set((search?.[FC.CAL_HIDE] || "").split(",").filter(Boolean)), [search]);
   const hiddenPays = useMemo(() => new Set((search?.[FC.CAL_PAY] || "").split(",").filter(Boolean)), [search]);
   const filters = useMemo(
     () => ({ income: !hiddenTypes.has("income"), expense: !hiddenTypes.has("expense"), hiddenPays }),
@@ -134,7 +134,7 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
     (k) => {
       const next = new Set(hiddenTypes);
       next.has(k) ? next.delete(k) : next.add(k);
-      patch({ [FC.CAL_SHOW]: [...next].join(",") || undefined });
+      patch({ [FC.CAL_HIDE]: [...next].join(",") || undefined });
     },
     [hiddenTypes, patch],
   );
@@ -338,6 +338,19 @@ function Filters({ filters, onToggleType, onToggleMethod, payMethods }) {
   );
 }
 
+const CAP = 50; // máximo de itens renderizados na lista do dia (o resto vai pro extrato)
+
+function MoreRow({ n, onSeeExtrato }) {
+  return (
+    <button
+      onClick={onSeeExtrato}
+      style={{ ...G, width: "100%", textAlign: "left", border: "none", background: "transparent", color: T.blue, fontSize: 12, fontWeight: 600, padding: "9px 4px", cursor: "pointer", borderTop: `1px solid ${T.border}` }}
+    >
+      + {n} {n === 1 ? "outro" : "outros"} — ver no extrato →
+    </button>
+  );
+}
+
 function DayList({ selected, events, onEdit, onNew, onSeeExtrato }) {
   const [mode, setMode] = useState("category"); // category | list
   const [open, setOpen] = useState({});
@@ -394,6 +407,7 @@ function DayList({ selected, events, onEdit, onNew, onSeeExtrato }) {
             {useGroups
               ? groups.map((g) => {
                   const isOpen = open[g.name] ?? !dense;
+                  const extra = g.items.length - CAP;
                   return (
                     <div key={g.name} style={{ borderTop: `1px solid ${T.border}` }}>
                       <div onClick={() => setOpen((o) => ({ ...o, [g.name]: !isOpen }))} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 4px", cursor: "pointer" }}>
@@ -402,11 +416,17 @@ function DayList({ selected, events, onEdit, onNew, onSeeExtrato }) {
                         <span style={{ ...ghost, fontSize: 11 }}>{g.items.length}</span>
                         <span style={{ ...G, ...NUM, fontSize: 13, fontWeight: 700, color: g.total < 0 ? T.red : T.green }}>{fmtShort(g.total)}</span>
                       </div>
-                      {isOpen ? g.items.map((e, i) => <Item key={e.id || i} e={e} indent />) : null}
+                      {isOpen ? g.items.slice(0, CAP).map((e, i) => <Item key={e.id || i} e={e} indent />) : null}
+                      {isOpen && extra > 0 ? <MoreRow n={extra} onSeeExtrato={onSeeExtrato} /> : null}
                     </div>
                   );
                 })
-              : events.map((e, i) => <div key={e.id || i} style={{ borderTop: `1px solid ${T.border}` }}><Item e={e} /></div>)}
+              : (
+                <>
+                  {events.slice(0, CAP).map((e, i) => <div key={e.id || i} style={{ borderTop: `1px solid ${T.border}` }}><Item e={e} /></div>)}
+                  {events.length > CAP ? <MoreRow n={events.length - CAP} onSeeExtrato={onSeeExtrato} /> : null}
+                </>
+              )}
           </div>
         </>
       ) : (

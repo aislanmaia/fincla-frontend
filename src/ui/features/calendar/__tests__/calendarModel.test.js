@@ -47,6 +47,8 @@ describe("calendarModel", () => {
     expect(txCategoryName(tx)).toBe("Alimentação");
     expect(txCategoryName({ tags: {} })).toBe("Sem categoria");
     expect(txCategoryName({ category: "Legado" })).toBe("Legado");
+    // Só tags de detalhe (sem grupo de categoria) → não agrupa por elas.
+    expect(txCategoryName({ tags: { Detalhe: [{ name: "Urgente", tag_type: { name: "detalhe" } }] } })).toBe("Sem categoria");
   });
 
   it("monthTotals soma entradas/saídas/saldo + contagens", () => {

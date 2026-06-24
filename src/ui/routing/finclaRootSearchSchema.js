@@ -108,7 +108,7 @@ export const finclaRootSearchSchema = z.object({
   [FC.CAL_MONTH]: fcYmSchema,
   [FC.CAL_DAY]: fcYmdSchema,
   [FC.CAL_VIEW]: fcCalViewSchema,
-  [FC.CAL_SHOW]: optionalTrimmedString(32),
+  [FC.CAL_HIDE]: optionalTrimmedString(32),
   [FC.CAL_PAY]: optionalTrimmedString(256),
   [FC.DATE]: fcYmdSchema,
 });
