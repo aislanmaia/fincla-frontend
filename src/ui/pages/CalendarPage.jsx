@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { X } from "lucide-react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { T } from "../tokens";
 import { G, NUM } from "../typography";
@@ -272,6 +273,7 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
                 onEdit={openEdit}
                 onNew={onNewTransaction}
                 onSeeExtrato={() => { setPopover(null); seeExtrato(); }}
+                onClose={() => setPopover(null)}
               />
             </DayPopover>
           ) : null}
@@ -402,7 +404,7 @@ function MoreRow({ n, onSeeExtrato }) {
   );
 }
 
-function DayList({ selected, events, onEdit, onNew, onSeeExtrato }) {
+function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose }) {
   const [mode, setMode] = useState("category"); // category | list
   const [open, setOpen] = useState({});
   const income = events.filter((e) => e.value >= 0).reduce((s, e) => s + e.value, 0);
@@ -433,9 +435,16 @@ function DayList({ selected, events, onEdit, onNew, onSeeExtrato }) {
 
   return (
     <Card style={{ padding: 14 }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <div style={{ ...G, fontWeight: 800, fontSize: 14 }}>{dayLongLabel(selected) || "Selecione um dia"}</div>
-        <div style={{ ...G, ...ghost }}>{events.length} {events.length === 1 ? "lançamento" : "lançamentos"}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ ...G, ...ghost }}>{events.length} {events.length === 1 ? "lançamento" : "lançamentos"}</span>
+          {onClose ? (
+            <button onClick={onClose} aria-label="Fechar" style={{ border: "none", background: "none", cursor: "pointer", color: T.inkLight, display: "inline-flex", padding: 2 }}>
+              <X size={16} />
+            </button>
+          ) : null}
+        </div>
       </div>
       {events.length ? (
         <>
@@ -532,7 +541,7 @@ function DayPopover({ anchor, onClose, children, lockDismiss = false }) {
   }, [onClose, lockDismiss]);
 
   return createPortal(
-    <div ref={ref} style={{ position: "fixed", left: pos.left, top: pos.top, width: WIDTH, zIndex: 150, borderRadius: 14, boxShadow: T.lg, visibility: pos.ready ? "visible" : "hidden" }}>
+    <div ref={ref} style={{ position: "fixed", left: pos.left, top: pos.top, width: WIDTH, zIndex: 150, borderRadius: 14, boxShadow: "0 12px 32px rgba(15,15,13,0.16), 0 4px 10px rgba(15,15,13,0.08)", visibility: pos.ready ? "visible" : "hidden" }}>
       {children}
     </div>,
     document.body,
