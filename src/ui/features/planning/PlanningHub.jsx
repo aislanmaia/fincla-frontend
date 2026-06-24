@@ -40,7 +40,7 @@ const groupLabelStyle = { ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, 
  * de seção no tablet/mobile (sem scroll lateral). A área ativa vem da URL
  * (/planning/$area), deep-linkável; o "voltar" do navegador troca de área.
  */
-export function PlanningHub({ organizationId, dataMode = "live", isMobile = false, navTo, onContribuir, simulation, user, initialMetas }) {
+export function PlanningHub({ organizationId, dataMode = "live", isMobile = false, navTo, onContribuir, simulation, user, initialMetas, onEditTransaction, onNewTransaction, onCalendarDateChange }) {
   const navigate = useNavigate();
   const params = useParams({ strict: false });
   const area = isPlanningArea(params?.area) ? params.area : DEFAULT_PLANNING_AREA;
@@ -68,7 +68,7 @@ export function PlanningHub({ organizationId, dataMode = "live", isMobile = fals
       case "budgets":
         return <OrcamentosPage onNav={navTo} isMobile={isMobile} dataMode={dataMode} organizationId={organizationId} />;
       case "calendar":
-        return <CalendarPage organizationId={organizationId} dataMode={dataMode} isMobile={isMobile} />;
+        return <CalendarPage organizationId={organizationId} dataMode={dataMode} isMobile={isMobile} onEditTransaction={onEditTransaction} onNewTransaction={onNewTransaction} onCalendarDateChange={onCalendarDateChange} />;
       case "planned":
         return <PlannedVsActualPage organizationId={organizationId} dataMode={dataMode} isMobile={isMobile} />;
       case "simulator":
