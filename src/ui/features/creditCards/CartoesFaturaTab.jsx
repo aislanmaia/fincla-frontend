@@ -54,6 +54,8 @@ export function InvoiceTab({
   setVisibleGroups,
   // refund entry point
   onLaunchRefund,
+  onOpenTransaction,
+  onDeleteTransaction,
 }) {
   const isMobile = variant === "mobile";
   const gridCols = isMobile ? "1fr" : "minmax(0,1fr) 300px";
@@ -108,9 +110,10 @@ export function InvoiceTab({
             </div>
           ) : grouped.length > 0 ? (
             pagedGroups.map(([date, items]) => (
-              <DateGroup key={date} date={date} items={items} card={card}
+              <DateGroup key={date} date={date} items={items} card={card} invoice={invoice}
                 expandedDate={expandedDate} setExpandedDate={setExpandedDate}
-                categoryColor={categoryColor} formatBRL={formatBRL} onLaunchRefund={onLaunchRefund} />
+                categoryColor={categoryColor} formatBRL={formatBRL} onLaunchRefund={onLaunchRefund}
+                onOpenTransaction={onOpenTransaction} onDeleteTransaction={onDeleteTransaction} />
             ))
           ) : displayItems.length > 0 && filtered.length === 0 ? (
             <div style={{ textAlign: "center", padding: "36px 20px" }}>

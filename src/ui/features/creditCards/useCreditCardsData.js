@@ -7,6 +7,7 @@ import {
   moveInstallmentForUi,
   updateCreditCardForUi,
 } from "../../data/creditCardsAdapter.js";
+import { deleteTransactionForUi } from "../../data/transactionsAdapter.js";
 
 const EMPTY_STATE = {
   isLoading: false,
@@ -14,6 +15,7 @@ const EMPTY_STATE = {
   isUpdatingCard: false,
   isMarkingInvoice: false,
   isMovingInstallment: false,
+  isDeletingInvoiceItem: false,
   error: "",
   cards: [],
   consolidatedCommitments: null,
@@ -146,6 +148,23 @@ export function useCreditCardsData({
     setState((current) => ({ ...current, isMovingInstallment: false }));
   }, [reload]);
 
+  const deleteInvoiceItem = useCallback(async (transactionId) => {
+    if (!organizationId) return;
+    setState((current) => ({ ...current, isDeletingInvoiceItem: true, error: "" }));
+    try {
+      await deleteTransactionForUi(transactionId, organizationId);
+      await reload();
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        isDeletingInvoiceItem: false,
+        error: formatCreditCardsApiError(error),
+      }));
+      throw error;
+    }
+    setState((current) => ({ ...current, isDeletingInvoiceItem: false }));
+  }, [organizationId, reload]);
+
   return useMemo(() => ({
     ...state,
     hasRealData: state.cards.length > 0,
@@ -154,5 +173,6 @@ export function useCreditCardsData({
     updateCard,
     markInvoicePaid,
     moveInstallment,
-  }), [createCard, updateCard, markInvoicePaid, moveInstallment, reload, state]);
+    deleteInvoiceItem,
+  }), [createCard, updateCard, markInvoicePaid, moveInstallment, deleteInvoiceItem, reload, state]);
 }

@@ -1,5 +1,5 @@
 import { CardFormSheet } from "./CardFormSheet.jsx";
-import { ExportInvoiceModal, ReallocateInstallmentModal } from "./CartoesModals.jsx";
+import { DeleteInvoiceItemModal, ExportInvoiceModal, ReallocateInstallmentModal } from "./CartoesModals.jsx";
 
 /**
  * Stack global de modais/sheets da `CartoesPage` (realocar parcela, exportar
@@ -18,6 +18,11 @@ export function CardsPageModals({
   installmentSaved,
   onCloseInstallmentModal,
   onConfirmInstallment,
+  // DeleteInvoiceItemModal
+  deleteItemModal,
+  deletingInvoiceItem,
+  onCloseDeleteItemModal,
+  onConfirmDeleteItem,
   // ExportInvoiceModal
   exportModalOpen,
   displayItems,
@@ -84,6 +89,15 @@ export function CardsPageModals({
         isMobile={isMobile}
         onClose={onCloseExportModal}
         onExport={onExportCSV}
+      />
+      <DeleteInvoiceItemModal
+        open={!!deleteItemModal}
+        item={deleteItemModal}
+        formatBRL={formatBRL}
+        isDeleting={deletingInvoiceItem}
+        isMobile={isMobile}
+        onClose={onCloseDeleteItemModal}
+        onConfirm={onConfirmDeleteItem}
       />
       <CardFormSheet
         open={cardSheetOpen}

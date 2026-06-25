@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronRight, RotateCcw } from "lucide-react";
+import { ChevronRight, ExternalLink, RotateCcw, Trash2 } from "lucide-react";
 
 import { T } from "../../tokens";
 import { G } from "../../typography";
@@ -12,12 +12,38 @@ import { G } from "../../typography";
  */
 const expandedItemRegistry = new Map();
 
+const MONTH_SHORT_PT = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+
+function formatInvoiceRef(year, month) {
+  if (!year || !month) return "";
+  return `${MONTH_SHORT_PT[month - 1] || String(month).padStart(2, "0")}/${String(year).slice(-2)}`;
+}
+
+function shiftYearMonth(year, month, delta) {
+  const base = new Date(year, month - 1 + delta, 1);
+  return { year: base.getFullYear(), month: base.getMonth() + 1 };
+}
+
+function buildAffectedInvoices(item, invoice) {
+  if (!invoice?.year || !invoice?.month) return [];
+  if (!item?.parcela?.n || !item?.parcela?.t) {
+    return [{ year: invoice.year, month: invoice.month, label: formatInvoiceRef(invoice.year, invoice.month) }];
+  }
+  const installmentsTotal = Number(item.parcela.t) || 1;
+  const installmentPosition = Number(item.parcela.n) || 1;
+  const first = shiftYearMonth(invoice.year, invoice.month, -(installmentPosition - 1));
+  return Array.from({ length: installmentsTotal }, (_, index) => {
+    const ref = shiftYearMonth(first.year, first.month, index);
+    return { ...ref, label: formatInvoiceRef(ref.year, ref.month) };
+  });
+}
+
 /**
  * Linha de transação dentro de uma fatura: cabeçalho (descrição + categoria
  * + valor) + bloco expansível com chips de detalhe, progresso de parcelamento,
  * banner de estornos vinculados e CTA pra lançar novo estorno.
  */
-export function TxRow({ item, card, categoryColor, formatBRL, onLaunchRefund }) {
+export function TxRow({ item, card, invoice, categoryColor, formatBRL, onLaunchRefund, onOpenTransaction, onDeleteTransaction }) {
   const isInstallment = item.parcela && item.parcela.n;
   const installmentValue = isInstallment
     ? (item.parcela.val != null && Number.isFinite(Number(item.parcela.val))
@@ -44,6 +70,8 @@ export function TxRow({ item, card, categoryColor, formatBRL, onLaunchRefund }) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);
   const hasLinkedRefunds = !!(item.refundsSummary && item.refundsSummary.count > 0);
+  const canOpenTransaction = item.transactionId != null && !!onOpenTransaction;
+  const canDeleteTransaction = item.transactionId != null && !!onDeleteTransaction;
   const canLaunchRefund =
     !item.isRefund && item.transactionId != null && !!onLaunchRefund && !hasLinkedRefunds;
   const expandable = !!(item.method || isInstallment || hasLinkedRefunds || canLaunchRefund);
@@ -177,6 +205,41 @@ export function TxRow({ item, card, categoryColor, formatBRL, onLaunchRefund }) 
                 </button>
               </div>
             )}
+            {(canOpenTransaction || canDeleteTransaction) && (
+              <div style={{ marginTop: 10, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {canOpenTransaction && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenTransaction(item.transactionId);
+                    }}
+                    style={{ ...G, display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 8, border: `1px solid ${T.border}`, background: T.surface, color: T.ink, fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                  >
+                    <ExternalLink size={12} /> Abrir transação
+                  </button>
+                )}
+                {canDeleteTransaction && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteTransaction({
+                        transactionId: item.transactionId,
+                        description: item.desc,
+                        amount: item.val,
+                        isInstallment,
+                        installmentLabel: isInstallment ? `${item.parcela.n}/${item.parcela.t}` : null,
+                        affectedInvoices: buildAffectedInvoices(item, invoice),
+                      });
+                    }}
+                    style={{ ...G, display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 8, border: `1px solid ${T.red}33`, background: T.surface, color: T.red, fontSize: 11, fontWeight: 700, cursor: "pointer" }}
+                  >
+                    <Trash2 size={12} /> Excluir lançamento
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         );
       })()}
@@ -193,11 +256,14 @@ export function DateGroup({
   date,
   items,
   card,
+  invoice,
   expandedDate,
   setExpandedDate,
   categoryColor,
   formatBRL,
   onLaunchRefund,
+  onOpenTransaction,
+  onDeleteTransaction,
 }) {
   const total = items.reduce((s, i) => s + i.val, 0);
   const isOpen = expandedDate === null || expandedDate === date;
@@ -241,7 +307,7 @@ export function DateGroup({
         </span>
       </div>
       {isOpen && items.map((item) => (
-        <TxRow key={item.id} item={item} card={card} categoryColor={categoryColor} formatBRL={formatBRL} onLaunchRefund={onLaunchRefund} />
+        <TxRow key={item.id} item={item} card={card} invoice={invoice} categoryColor={categoryColor} formatBRL={formatBRL} onLaunchRefund={onLaunchRefund} onOpenTransaction={onOpenTransaction} onDeleteTransaction={onDeleteTransaction} />
       ))}
     </div>
   );

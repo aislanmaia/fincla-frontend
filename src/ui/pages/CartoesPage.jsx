@@ -43,6 +43,8 @@ export const CartoesPage = ({
   isMobile = false,
   onNewItem,
   onLaunchRefund = null,
+  onOpenTransaction = null,
+  onTransactionsInvalidate = null,
   cards: cardsProp,
   dataMode = "mock",
   organizationId = null,
@@ -77,6 +79,7 @@ export const CartoesPage = ({
   const [installmentModal,   setInstallmentModal]   = useState(null);
   const [installmentTarget,  setInstallmentTarget]  = useState(null);
   const [installmentSaved,   setInstallmentSaved]   = useState(false);
+  const [deleteItemModal,    setDeleteItemModal]    = useState(null);
   const [markedPaid,         setMarkedPaid]         = useState({});
   const [markingPaid,        setMarkingPaid]        = useState(false);
   const [exportModalOpen,    setExportModalOpen]    = useState(false);
@@ -391,6 +394,24 @@ export const CartoesPage = ({
       .slice(0,3);
   }, [card]);
 
+  const closeDeleteItemModal = useCallback(() => {
+    if (creditCardsData.isDeletingInvoiceItem) return;
+    setDeleteItemModal(null);
+  }, [creditCardsData.isDeletingInvoiceItem]);
+
+  const handleDeleteInvoiceItem = useCallback(async () => {
+    if (!deleteItemModal?.transactionId) return;
+    if (shouldUseRealData) {
+      try {
+        await creditCardsData.deleteInvoiceItem(deleteItemModal.transactionId);
+        onTransactionsInvalidate?.();
+      } catch {
+        return;
+      }
+    }
+    setDeleteItemModal(null);
+  }, [creditCardsData, deleteItemModal?.transactionId, onTransactionsInvalidate, shouldUseRealData]);
+
   // Loading / erro (dados reais) — antes do empty state; Rules of Hooks ok (só retorno condicional)
   if (
     shouldUseRealData &&
@@ -565,6 +586,10 @@ export const CartoesPage = ({
       installmentSaved={installmentSaved}
       onCloseInstallmentModal={() => { setInstallmentModal(null); setInstallmentTarget(null); }}
       onConfirmInstallment={handleReallocate}
+      deleteItemModal={deleteItemModal}
+      deletingInvoiceItem={creditCardsData.isDeletingInvoiceItem}
+      onCloseDeleteItemModal={closeDeleteItemModal}
+      onConfirmDeleteItem={handleDeleteInvoiceItem}
       exportModalOpen={exportModalOpen}
       displayItems={displayItems}
       exportCategories={exportCategories}
@@ -621,6 +646,8 @@ export const CartoesPage = ({
       expandedDate={expandedDate} setExpandedDate={setExpandedDate}
       visibleGroups={visibleGroups} setVisibleGroups={setVisibleGroups}
       onLaunchRefund={onLaunchRefund}
+      onOpenTransaction={onOpenTransaction}
+      onDeleteTransaction={setDeleteItemModal}
     />
   );
 

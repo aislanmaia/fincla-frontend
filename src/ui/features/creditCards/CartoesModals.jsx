@@ -196,3 +196,83 @@ export function ExportInvoiceModal({
     </ModalWrap>
   );
 }
+
+export function DeleteInvoiceItemModal({
+  open,
+  item,
+  formatBRL,
+  isDeleting,
+  isMobile,
+  onClose,
+  onConfirm,
+}) {
+  if (!open || !item) return null;
+
+  const affectedInvoices = Array.isArray(item.affectedInvoices) ? item.affectedInvoices : [];
+
+  return (
+    <ModalWrap isMobile={isMobile} onBackdrop={onClose} width={460} maxVh="85vh">
+      <div style={{ padding: "16px 20px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+        <div>
+          <div style={{ ...G, fontSize: 14, fontWeight: 800, color: T.ink }}>Excluir lançamento</div>
+          <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 2 }}>
+            {item.description} · {formatBRL(item.amount)}
+          </div>
+        </div>
+        <button onClick={onClose} disabled={isDeleting}
+          style={{ background: T.grayLight, border: "none", cursor: isDeleting ? "not-allowed" : "pointer", padding: 7, borderRadius: 8, display: "flex", opacity: isDeleting ? 0.6 : 1 }}>
+          <X size={14} color={T.inkMid} />
+        </button>
+      </div>
+      <div style={{ padding: "16px 20px", flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 14 }}>
+        <div style={{ ...G, fontSize: 12.5, color: T.inkMid, lineHeight: 1.7 }}>
+          {item.isInstallment ? (
+            <>
+              Este lançamento faz parte de uma <strong style={{ color: T.ink }}>compra parcelada</strong>.
+              Excluir esta linha removerá a compra inteira e o Fincla recalculará as faturas relacionadas.
+            </>
+          ) : (
+            <>
+              Este lançamento será removido da transação e a fatura será recalculada automaticamente.
+            </>
+          )}
+        </div>
+
+        {item.installmentLabel && (
+          <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px" }}>
+            <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 3 }}>
+              Parcela selecionada
+            </div>
+            <div style={{ ...G, fontSize: 12, fontWeight: 700, color: T.ink }}>{item.installmentLabel}</div>
+          </div>
+        )}
+
+        {affectedInvoices.length > 0 && (
+          <div>
+            <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
+              Faturas afetadas
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {affectedInvoices.map((ref) => (
+                <span key={`${ref.year}-${ref.month}`}
+                  style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 999, padding: "6px 10px" }}>
+                  {ref.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+      <div style={{ padding: "14px 20px", borderTop: `1px solid ${T.border}`, flexShrink: 0, display: "flex", gap: 10 }}>
+        <button onClick={onClose} disabled={isDeleting}
+          style={{ ...G, flex: 1, padding: "12px", borderRadius: 10, border: `1px solid ${T.border}`, background: T.surface, color: T.inkMid, fontSize: 13, fontWeight: 700, cursor: isDeleting ? "not-allowed" : "pointer", opacity: isDeleting ? 0.6 : 1 }}>
+          Cancelar
+        </button>
+        <button onClick={onConfirm} disabled={isDeleting}
+          style={{ ...G, flex: 1, padding: "12px", borderRadius: 10, border: "none", background: T.red, color: "#fff", fontSize: 13, fontWeight: 700, cursor: isDeleting ? "not-allowed" : "pointer", opacity: isDeleting ? 0.7 : 1 }}>
+          {isDeleting ? "Excluindo..." : "Confirmar exclusão"}
+        </button>
+      </div>
+    </ModalWrap>
+  );
+}
