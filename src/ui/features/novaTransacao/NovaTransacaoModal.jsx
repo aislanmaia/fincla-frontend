@@ -255,7 +255,7 @@ export const NovaTransacaoModal = ({
     goNext,
     goPrev,
     resetToFirstStep: resetMobileStep,
-  } = useMobileStepFlow({ open, isMobile, tipo, method, isRecurring });
+  } = useMobileStepFlow({ open, isMobile, tipo, method, isRecurring, isRefund });
 
   // Ref-shim para quebrar a circularidade entre useAmountInput (precisa de
   // `setCalcOpen` pra cancelar a calculadora quando o usuário digita) e
@@ -556,6 +556,8 @@ export const NovaTransacaoModal = ({
     const prefs = readStoredNovaTransacaoPrefs(organizationId);
     const prefTipo = prefs.tipo === "receita" ? "receita" : "despesa";
     setTipo(prefTipo);
+    setIsRefund(false);
+    refund.resetAll();
     applyValor(null);
     setDesc("");
     setTags([]);
@@ -805,9 +807,11 @@ export const NovaTransacaoModal = ({
     dataMode,
     txDateYmd,
   });
+  const effectiveTipo = tipo === "despesa" && isRefund ? "estorno" : tipo;
+
   const saldoAposLancamento = projectedBalanceAfterTx(
     periodSaldo.periodBalance,
-    tipo,
+    effectiveTipo,
     amountNum,
   );
 
@@ -829,7 +833,8 @@ export const NovaTransacaoModal = ({
     impactPanelOpen,
     txDateYmd,
     categoryTagId,
-    tipo,
+    tipo: effectiveTipo,
+    isRefund,
     valorNum: amountNum,
     method,
     modalidade: modalityChoice,
@@ -965,6 +970,18 @@ export const NovaTransacaoModal = ({
   const effectiveTypeIsMoneyIn = tipo === "receita" || (tipo === "despesa" && isRefund);
   const typeColor  = effectiveTypeIsMoneyIn ? T.green : T.red;
   const typeLight  = effectiveTypeIsMoneyIn ? T.greenLight : T.redLight;
+  const expenseTabLabel = isRefund ? "↺ Estorno" : "↑ Despesa";
+  const expenseTabColor = isRefund ? T.green : T.red;
+
+  useEffect(() => {
+    if (!isRefund) return;
+    setIsRecurring(false);
+    if (method === "credito") {
+      setModalityChoice("avista");
+      setInstallments(1);
+      setCalcOpen(false);
+    }
+  }, [isRefund, method, setCalcOpen]);
 
 
   // Painel Recorrência — valores derivados a partir da data da transação
@@ -1392,7 +1409,6 @@ export const NovaTransacaoModal = ({
             }),
           );
         } else {
-          const effectiveTipo = tipo === "despesa" && isRefund ? "estorno" : tipo;
           await createTransactionForUi(
             buildCreateTransactionPayload({
               organizationId,
@@ -1553,7 +1569,7 @@ export const NovaTransacaoModal = ({
               { label:"ENCERRAMENTO", val: ENC_LABELS[recurrenceEndKind] || recurrenceEndKind },
               { label:"TIPO DE VALOR", val: recurrenceValueKind === "estimado" ? "≈ Estimado" : "Fixo" },
             ] : [
-              { label:"MODALIDADE", val: method === "credito" ? (modalityChoice === "avista" ? "À vista (1×)" : `${installments}× de R$ ${(amountNum/installments).toFixed(2)}`) : "—" },
+              { label:"MODALIDADE", val: method === "credito" ? (isRefund ? "Estorno em cartão (1×)" : (modalityChoice === "avista" ? "À vista (1×)" : `${installments}× de R$ ${(amountNum/installments).toFixed(2)}`)) : "—" },
               { label:"CARTÃO",    val: method === "credito" ? cards.find(c=>c.id===cardId)?.nome || "—" : "—" },
             ]),
           ].map((f,i) => (
@@ -1709,7 +1725,7 @@ export const NovaTransacaoModal = ({
               <div style={{ padding:"18px 20px", display:"flex", flexDirection:"column", gap:16, ...mobileStepInStyle }}>
                 {/* Tipo tabs */}
                 <div style={{ display:"flex", background:T.grayLight, borderRadius:11, padding:3, gap:2 }}>
-                  {[["despesa","↑ Despesa",T.red],["receita","↓ Receita",T.green]].map(([t, label, color]) => (
+                  {[["despesa", expenseTabLabel, expenseTabColor], ["receita", "↓ Receita", T.green]].map(([t, label, color]) => (
                     <button key={t} onClick={() => handleSetTipo(t)}
                       style={{ ...G, flex:1, padding:"10px 0", borderRadius:9, border:"none", fontSize:13, fontWeight:700, cursor:"pointer",
                         background: tipo === t ? T.surface : "transparent",
@@ -1751,7 +1767,7 @@ export const NovaTransacaoModal = ({
                   </div>
                   {/* Parcela + saldo — same row, pill style */}
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, marginTop:6, flexWrap:"wrap" }}>
-                    {method === "credito" && modalityChoice === "parcelado" && installments > 1 && amountNum > 0 && (
+                    {!isRefund && method === "credito" && modalityChoice === "parcelado" && installments > 1 && amountNum > 0 && (
                       <span style={{ ...G, ...NUM, display:"inline-flex", alignItems:"center",
                         fontSize:13, fontWeight:700, color:T.blue,
                         background:T.blueLight, padding:"3px 10px", borderRadius:99 }}>
@@ -2494,8 +2510,8 @@ export const NovaTransacaoModal = ({
           )}
           {!successOverlay && <>
           <div style={{ display:"flex", flexShrink:0, borderBottom:`1px solid ${T.border}` }}>
-            {[["despesa","↑ Despesa"],["receita","↓ Receita"]].map(([t,label]) => (
-              <button key={t} onClick={() => !review && handleSetTipo(t)} style={{ ...G, flex:1, padding:"15px 16px", border:"none", cursor:review?"default":"pointer", fontSize:13, fontWeight:600, background:tipo===t ? T.surface : T.bg, color:tipo===t ? (t==="despesa" ? T.red : T.green) : T.inkMid, borderBottom:tipo===t ? `2px solid ${t==="despesa" ? T.red : T.green}` : "2px solid transparent", transition:"all 0.12s" }}>
+            {[["despesa",expenseTabLabel,expenseTabColor],["receita","↓ Receita",T.green]].map(([t,label,color]) => (
+              <button key={t} onClick={() => !review && handleSetTipo(t)} style={{ ...G, flex:1, padding:"15px 16px", border:"none", cursor:review?"default":"pointer", fontSize:13, fontWeight:600, background:tipo===t ? T.surface : T.bg, color:tipo===t ? color : T.inkMid, borderBottom:tipo===t ? `2px solid ${color}` : "2px solid transparent", transition:"all 0.12s" }}>
                 {label}
               </button>
             ))}
@@ -2509,13 +2525,13 @@ export const NovaTransacaoModal = ({
                 <div>
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
                     <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em" }}>Valor</div>
-                    <button onClick={() => { setCalcOpen(m=>!m); if(calcOpen){ setCalcCents(0); } }}
+                    {!isRefund && <button onClick={() => { setCalcOpen(m=>!m); if(calcOpen){ setCalcCents(0); } }}
                       style={{ ...G, fontSize:10, fontWeight:700, color:calcOpen?T.purple:T.inkMid,
                         background:calcOpen?T.purpleLight:"none", border:`1px dashed ${calcOpen?T.purple:T.border}`,
                         borderRadius:7, padding:"3px 9px", cursor:"pointer", display:"flex", alignItems:"center", gap:5,
                         transition:"all 0.15s" }}>
                       ÷ {calcOpen ? "Cancelar cálculo" : "Calcular por parcela"}
-                    </button>
+                    </button>}
                   </div>
                   {/* Main valor input — banking style */}
                   <div style={{ display:"flex", alignItems:"baseline", gap:6, marginBottom:6 }}>
@@ -2533,7 +2549,7 @@ export const NovaTransacaoModal = ({
                         letterSpacing:"-0.02em", caretColor:T.ink, cursor:"text",
                         minWidth:0 }} />
                   </div>
-                  {method === "credito" && modalityChoice === "parcelado" && installments > 1 && amountNum > 0 && (
+                  {!isRefund && method === "credito" && modalityChoice === "parcelado" && installments > 1 && amountNum > 0 && (
                     <div style={{ display:"flex", alignItems:"baseline", gap:5, marginTop:4 }}>
                       <span style={{ ...G, fontSize:11, color:T.inkGhost, fontWeight:400 }}>em</span>
                       <span style={{ ...G, ...NUM, fontSize:13, fontWeight:700, color:T.inkMid }}>{installments}×</span>
@@ -2543,7 +2559,7 @@ export const NovaTransacaoModal = ({
                     </div>
                   )}
                   {/* Parcela calculator */}
-                  {calcOpen && (
+                  {!isRefund && calcOpen && (
                     <div style={{ background:T.purpleLight, border:`1px solid ${T.purple}22`,
                       borderRadius:10, padding:"12px 14px", marginBottom:8,
                       animation:"successPop 0.18s ease-out",
@@ -3042,7 +3058,7 @@ export const NovaTransacaoModal = ({
                 ) : (
                   <button onClick={() => { if (!desc.trim()) { setDescError(true); descRef.current?.focus(); return; } goReview(); }} disabled={!amountNum}
                     style={{ ...G, flex:1, padding:"11px", borderRadius:10, border:"none", background:!amountNum ? T.inkGhost : typeColor, fontSize:13, fontWeight:700, color:"#fff", cursor:!amountNum ? "not-allowed" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, transition:"background 0.2s" }}>
-                    Revisar {tipo==="despesa" ? "despesa" : "receita"} <ChevronRight size={14} />
+                      Revisar {tipo==="despesa" ? (isRefund ? "estorno" : "despesa") : "receita"} <ChevronRight size={14} />
                   </button>
                 )}
               </div>

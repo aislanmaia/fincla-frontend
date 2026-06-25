@@ -33,6 +33,7 @@ export function useNovaTransacaoFinancialImpact({
   txDateYmd,
   categoryTagId,
   tipo,
+  isRefund = false,
   valorNum,
   method,
   modalidade,
@@ -59,7 +60,12 @@ export function useNovaTransacaoFinancialImpact({
   const impactPanelWasOpenRef = useRef(false);
   const lastPreviewCommitRef = useRef(null);
 
-  const transactionType = tipo === "receita" ? "income" : "expense";
+  const transactionType =
+    tipo === "receita"
+      ? "income"
+      : tipo === "estorno" || tipo === "refund" || (tipo === "despesa" && isRefund)
+        ? "refund"
+        : "expense";
 
   useEffect(() => {
     let cancelled = false;

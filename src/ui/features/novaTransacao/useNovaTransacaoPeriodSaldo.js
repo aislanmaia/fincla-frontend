@@ -117,13 +117,13 @@ export function useNovaTransacaoPeriodSaldo({
 
 /**
  * @param {number|null} periodBalance
- * @param {'despesa'|'receita'} tipo
+ * @param {'despesa'|'receita'|'estorno'} tipo
  * @param {number} valorNum
  */
 export function projectedBalanceAfterTx(periodBalance, tipo, valorNum) {
   if (periodBalance == null || !Number.isFinite(periodBalance)) return null;
   if (!(valorNum > 0)) return null;
-  const delta = tipo === "receita" ? valorNum : -valorNum;
+  const delta = tipo === "receita" || tipo === "estorno" ? valorNum : -valorNum;
   return periodBalance + delta;
 }
 
