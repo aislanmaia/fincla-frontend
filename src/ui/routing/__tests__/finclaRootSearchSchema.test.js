@@ -52,6 +52,9 @@ describe("finclaRootSearchSchema", () => {
     expect(
       parseFinclaRootSearch({ [FC.MODAL]: FC_MODAL.NEW_RECURRING }),
     ).toEqual({ [FC.MODAL]: FC_MODAL.NEW_RECURRING });
+    expect(
+      parseFinclaRootSearch({ [FC.MODAL]: FC_MODAL.EDIT_TRANSACTION }),
+    ).toEqual({ [FC.MODAL]: FC_MODAL.EDIT_TRANSACTION });
     expect(parseFinclaRootSearch({ [FC.MODAL]: "hack" })).toEqual({});
   });
 

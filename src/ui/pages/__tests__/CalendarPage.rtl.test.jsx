@@ -37,7 +37,7 @@ describe("<CalendarPage> v2 (URL-driven)", () => {
     const arg = navigateMock.mock.calls[0][0];
     const next = typeof arg.search === "function" ? arg.search({}) : arg.search;
     expect(next.fc_tx).toBe("m1");
-    expect(next.fc_modal).toBe("new-transaction");
+    expect(next.fc_modal).toBe("edit-transaction");
   });
 
   it("clicar no mês muda a URL (fc_cal_m) via replace", () => {

@@ -45,6 +45,7 @@ export function useTransactionModalController({
     !showOnboarding &&
     !session.onboardingRequired &&
     (search[FC.MODAL] === FC_MODAL.NEW_TRANSACTION ||
+      search[FC.MODAL] === FC_MODAL.EDIT_TRANSACTION ||
       search[FC.MODAL] === FC_MODAL.NEW_RECURRING ||
       Boolean(transactionRouteEditId));
 

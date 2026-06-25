@@ -183,7 +183,7 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
     (e, ev) => {
       ev?.stopPropagation();
       if (!e?.id) return;
-      navigate({ search: (prev) => ({ ...prev, [FC.TX]: String(e.id), [FC.MODAL]: FC_MODAL.NEW_TRANSACTION }) });
+      navigate({ search: (prev) => ({ ...prev, [FC.TX]: String(e.id), [FC.MODAL]: FC_MODAL.EDIT_TRANSACTION }) });
     },
     [navigate],
   );

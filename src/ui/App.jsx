@@ -313,7 +313,7 @@ export default function App() {
               });
               openTxModal();
             }} />,
-    cards:      <CartoesPage    onNav={navTo} isMobile={isMobile} cards={dataMode==="empty" ? extraCards : undefined} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onTransactionsInvalidate={bumpTransactionsList} onOpenTransaction={(transactionId) => { openTxModal({ [FC.TX]: String(transactionId) }); }} onNewItem={(cartaoId) => {
+    cards:      <CartoesPage    onNav={navTo} isMobile={isMobile} cards={dataMode==="empty" ? extraCards : undefined} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onTransactionsInvalidate={bumpTransactionsList} onOpenTransaction={(transactionId) => { navigate({ search: (prev) => ({ ...prev, [FC.TX]: String(transactionId), [FC.MODAL]: FC_MODAL.EDIT_TRANSACTION }) }); }} onNewItem={(cartaoId) => {
       const id = String(cartaoId);
       setModalPreConfig((p) => ({
         ...(p || {}),
