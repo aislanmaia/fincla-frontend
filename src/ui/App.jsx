@@ -351,7 +351,7 @@ export default function App() {
         },
         valorInicial: Math.abs(totalCompraOriginal),
       });
-      openTxModal(cardIdNum != null ? { [FC.CARD]: String(cardIdNum) } : {});
+      openTxModal({ [FC.MODAL]: FC_MODAL.NEW_REFUND, [FC.TX]: String(item.transactionId) });
     }} />,
     budgets:   <OrcamentosPage onNav={navTo} isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} />,
     accounts:     <AccountsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} />,

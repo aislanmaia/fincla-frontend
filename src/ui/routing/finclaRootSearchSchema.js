@@ -37,9 +37,9 @@ function optionalTxIdParam() {
 
 const fcModalSchema = z.preprocess((val) => {
   const s = val == null || val === "" ? "" : String(val).trim();
-  if (s === FC_MODAL.NEW_TRANSACTION || s === FC_MODAL.EDIT_TRANSACTION || s === FC_MODAL.NEW_RECURRING) return s;
+  if (s === FC_MODAL.NEW_TRANSACTION || s === FC_MODAL.NEW_REFUND || s === FC_MODAL.EDIT_TRANSACTION || s === FC_MODAL.NEW_RECURRING) return s;
   return undefined;
-}, z.enum([FC_MODAL.NEW_TRANSACTION, FC_MODAL.EDIT_TRANSACTION, FC_MODAL.NEW_RECURRING]).optional());
+}, z.enum([FC_MODAL.NEW_TRANSACTION, FC_MODAL.NEW_REFUND, FC_MODAL.EDIT_TRANSACTION, FC_MODAL.NEW_RECURRING]).optional());
 
 const fcSimItemSchema = z.preprocess((val) => {
   const s = val == null || val === "" ? "" : String(val).trim();

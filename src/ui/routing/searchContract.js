@@ -26,6 +26,7 @@ export const FC = {
 /** Valores de `fc_modal` (inglês, partilháveis). */
 export const FC_MODAL = {
   NEW_TRANSACTION: "new-transaction",
+  NEW_REFUND: "new-refund",
   EDIT_TRANSACTION: "edit-transaction",
   NEW_RECURRING: "new-recurring",
 };

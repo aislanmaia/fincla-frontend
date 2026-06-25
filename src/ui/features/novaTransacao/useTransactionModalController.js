@@ -45,6 +45,7 @@ export function useTransactionModalController({
     !showOnboarding &&
     !session.onboardingRequired &&
     (search[FC.MODAL] === FC_MODAL.NEW_TRANSACTION ||
+      search[FC.MODAL] === FC_MODAL.NEW_REFUND ||
       search[FC.MODAL] === FC_MODAL.EDIT_TRANSACTION ||
       search[FC.MODAL] === FC_MODAL.NEW_RECURRING ||
       Boolean(transactionRouteEditId));
@@ -169,10 +170,20 @@ export function useTransactionModalController({
       qTx &&
       (isUuidString(String(qTx)) || /^\d+$/.test(String(qTx).trim()))
     ) {
-      setModalPreConfig((p) => ({
-        ...(p || {}),
-        editingTransactionId: String(qTx),
-      }));
+      setModalPreConfig((p) => {
+        if (search[FC.MODAL] === FC_MODAL.NEW_REFUND) {
+          return {
+            ...(p || {}),
+            tipo: "despesa",
+            isEstorno: true,
+            refundOfTransactionId: Number(qTx),
+          };
+        }
+        return {
+          ...(p || {}),
+          editingTransactionId: String(qTx),
+        };
+      });
       urlHydratedRef.current = true;
       return;
     }
@@ -186,6 +197,7 @@ export function useTransactionModalController({
   }, [
     txModalOpen,
     search[FC.CARD],
+    search[FC.MODAL],
     search[FC.TX],
     transactionRouteEditId,
   ]);
