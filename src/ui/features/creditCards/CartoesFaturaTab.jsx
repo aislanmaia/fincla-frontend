@@ -68,7 +68,7 @@ export function InvoiceTab({
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, padding: "8px 12px" }}>
             <Search size={13} color={T.inkLight} />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar lançamentos..."
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar lançamentos, categoria ou valor..."
               style={{ ...G, flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 13, color: T.ink }} />
             {search && (
               <button onClick={() => setSearch("")}

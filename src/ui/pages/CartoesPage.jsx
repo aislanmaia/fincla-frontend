@@ -38,6 +38,26 @@ import {
   safePctOrFallback as safe,
 } from "../data/creditCardsAdapter.js";
 
+function normalizeSearchText(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function buildMoneySearchTokens(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return [];
+  const absAmount = Math.abs(amount);
+  return [
+    absAmount.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    absAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+    absAmount.toFixed(2),
+    String(Math.round(absAmount * 100)),
+  ];
+}
+
 export const CartoesPage = ({
   onNav,
   isMobile = false,
@@ -330,9 +350,22 @@ export const CartoesPage = ({
   const filtered = useMemo(() => {
     let items = displayItems;
     if (filterCategory) items = items.filter(i => i.cat === filterCategory);
-    if (search)         items = items.filter(i =>
-      i.desc.toLowerCase().includes(search.toLowerCase()) ||
-      i.cat.toLowerCase().includes(search.toLowerCase()));
+    if (search) {
+      const normalizedSearch = normalizeSearchText(search);
+      const numericSearch = normalizedSearch.replace(/\D/g, "");
+      items = items.filter((i) => {
+        const installmentValue = i.parcela?.val;
+        const purchaseTotal = i.parcela?.total;
+        const textMatches = [i.desc, i.cat].some((value) => normalizeSearchText(value).includes(normalizedSearch));
+
+        if (textMatches) return true;
+        if (!numericSearch) return false;
+
+        return [i.val, installmentValue, purchaseTotal]
+          .flatMap(buildMoneySearchTokens)
+          .some((token) => normalizeSearchText(token).replace(/\D/g, "").includes(numericSearch));
+      });
+    }
     return items;
   }, [displayItems, filterCategory, search]);
 
