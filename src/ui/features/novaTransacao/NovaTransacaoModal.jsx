@@ -1939,14 +1939,14 @@ export const NovaTransacaoModal = ({
                 {/* Conta de liquidação + "já paguei?" (Fase 0) */}
                 {renderAccountSettlement()}
 
-                {/* Recorrência toggle — escondido em modo estorno (v1: refund não pode ser isRecurringnte) */}
+                {/* Recorrência toggle — escondido em modo estorno (v1: refund não pode ser recorrente) */}
                 {!isRefund && (
                   <div onClick={() => { setIsRecurring(r => { if (!r) setModalityChoice("avista"); return !r; }); }}
                     style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"14px 16px", background:isRecurring ? T.blueLight : T.bg, borderRadius:12, border:`1px solid ${isRecurring ? T.blue : T.border}`, cursor:"pointer", transition:"all 0.18s" }}>
                     <div style={{ display:"flex", alignItems:"center", gap:10 }}>
                       <Repeat size={16} color={isRecurring ? T.blue : T.inkLight} />
                       <div>
-                        <div style={{ ...G, fontSize:13, fontWeight:600, color:T.ink }}>Transação isRecurringnte</div>
+                        <div style={{ ...G, fontSize:13, fontWeight:600, color:T.ink }}>Transação recorrente</div>
                         <div style={{ ...G, fontSize:11, color:T.inkLight, marginTop:1 }}>Repetir automaticamente</div>
                       </div>
                     </div>
@@ -2982,7 +2982,7 @@ export const NovaTransacaoModal = ({
                     <div style={{ display:"flex", alignItems:"center", gap:9 }}>
                       <Repeat size={14} color={isRecurring ? T.blue : T.inkLight} />
                       <div>
-                        <div style={{ ...G, fontSize:12, fontWeight:600, color:T.ink }}>Transação isRecurringnte</div>
+                        <div style={{ ...G, fontSize:12, fontWeight:600, color:T.ink }}>Transação recorrente</div>
                         <div style={{ ...G, fontSize:10, color:T.inkLight }}>Repetir automaticamente</div>
                       </div>
                     </div>

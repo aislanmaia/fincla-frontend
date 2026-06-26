@@ -72,6 +72,11 @@ export function TxRow({ item, card, invoice, categoryColor, formatBRL, onLaunchR
   const hasLinkedRefunds = !!(item.refundsSummary && item.refundsSummary.count > 0);
   const canOpenTransaction = item.transactionId != null && !!onOpenTransaction;
   const canDeleteTransaction = item.transactionId != null && !!onDeleteTransaction;
+  const openTransactionLabel = isRefund
+    ? "Abrir lançamento do estorno"
+    : isInstallment
+      ? "Abrir lançamento da compra"
+      : "Abrir lançamento";
   const canLaunchRefund =
     !item.isRefund && item.transactionId != null && !!onLaunchRefund && !hasLinkedRefunds;
   const expandable = !!(item.method || isInstallment || hasLinkedRefunds || canLaunchRefund);
@@ -216,7 +221,7 @@ export function TxRow({ item, card, invoice, categoryColor, formatBRL, onLaunchR
                     }}
                     style={{ ...G, display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 8, border: `1px solid ${T.border}`, background: T.surface, color: T.ink, fontSize: 11, fontWeight: 700, cursor: "pointer" }}
                   >
-                    <ExternalLink size={12} /> Abrir transação
+                    <ExternalLink size={12} /> {openTransactionLabel}
                   </button>
                 )}
                 {canDeleteTransaction && (
