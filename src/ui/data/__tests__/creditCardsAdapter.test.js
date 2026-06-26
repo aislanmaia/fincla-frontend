@@ -110,7 +110,7 @@ describe("creditCardsAdapter", () => {
       desc: "iPhone",
       cat: "Eletrônicos",
       val: 420,
-      data: "08/03",
+      data: "08/01",
       parcela: { n: 3, t: 12, val: 420, total: 5040 },
     });
     expect(card.parcelas_ativas[0]).toMatchObject({

@@ -396,8 +396,11 @@ function invoiceDateKey(raw) {
 
 function mapInvoiceItemToUi(item) {
   const category = pickCategory(item);
-  const dk = invoiceDateKey(item.transaction_date);
   const isRefund = item.modality === "refund";
+  const displayDateRaw = isRefund
+    ? item.transaction_date
+    : item.purchase_info?.purchase_date || item.transaction_date;
+  const dk = invoiceDateKey(displayDateRaw);
   // Estorno: avatar/icone ↺ e descrição com prefixo limpo. O valor em si segue item.amount;
   // a soma da fatura no backend considera modality='refund' como negativo.
   const cleanDesc = isRefund
@@ -415,7 +418,7 @@ function mapInvoiceItemToUi(item) {
     cat: category,
     catColor: pickCategoryColor(item),
     val: item.amount,
-    data: formatShortDate(item.transaction_date),
+    data: formatShortDate(displayDateRaw),
     dataKey: dk || undefined,
     icon: isRefund ? "↺" : pickIcon(category),
     rec: !isRefund && isRecurringItem(item),
