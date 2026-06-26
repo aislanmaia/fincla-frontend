@@ -6,6 +6,7 @@ import {
   clampNovaTxPrefsParcelas,
   normalizeStoredNovaTxPaymentMethod,
   readStoredNovaTransacaoPrefs,
+  resolveStoredNovaTxCategorySelection,
   serializeNovaTxFormStateToStoredPrefs,
   shouldApplyStoredNovaTxCategoryPrefs,
   writeStoredNovaTransacaoPrefs,
@@ -153,6 +154,67 @@ describe("Nova transação — prefs persistidas", () => {
           cartaoId: "abc",
         }),
       ).toBe(true);
+    });
+  });
+
+  describe("resolveStoredNovaTxCategorySelection", () => {
+    const rows = [
+      {
+        id: "550e8400-e29b-41d4-a716-446655440000",
+        labelPt: "Alimentação",
+      },
+      {
+        id: "550e8400-e29b-41d4-a716-446655440001",
+        labelPt: "Transporte",
+      },
+    ];
+
+    it("preserva id e label quando a categoria persistida existe", () => {
+      expect(
+        resolveStoredNovaTxCategorySelection(
+          {
+            cat: "Alimentação",
+            categoryTagId: "550e8400-e29b-41d4-a716-446655440000",
+          },
+          rows,
+          { fallbackToFirst: true },
+        ),
+      ).toEqual({
+        cat: "Alimentação",
+        categoryTagId: "550e8400-e29b-41d4-a716-446655440000",
+      });
+    });
+
+    it("reconcilia pelo label quando o id persistido não veio preenchido", () => {
+      expect(
+        resolveStoredNovaTxCategorySelection(
+          {
+            cat: "Transporte",
+            categoryTagId: null,
+          },
+          rows,
+          { fallbackToFirst: true },
+        ),
+      ).toEqual({
+        cat: "Transporte",
+        categoryTagId: "550e8400-e29b-41d4-a716-446655440001",
+      });
+    });
+
+    it("cai para a primeira categoria quando não encontra match", () => {
+      expect(
+        resolveStoredNovaTxCategorySelection(
+          {
+            cat: "Inexistente",
+            categoryTagId: null,
+          },
+          rows,
+          { fallbackToFirst: true },
+        ),
+      ).toEqual({
+        cat: "Alimentação",
+        categoryTagId: "550e8400-e29b-41d4-a716-446655440000",
+      });
     });
   });
 });

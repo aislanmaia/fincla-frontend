@@ -902,6 +902,62 @@ export function shouldApplyStoredNovaTxCategoryPrefs(preConfig) {
   return true;
 }
 
+export function resolveStoredNovaTxCategorySelection(
+  prefs,
+  rows,
+  { fallbackToFirst = false } = {},
+) {
+  const categoryRows = Array.isArray(rows) ? rows : [];
+  const prefCategoryId =
+    prefs?.categoryTagId != null && isUuidString(String(prefs.categoryTagId))
+      ? String(prefs.categoryTagId)
+      : null;
+  const prefCategoryLabel =
+    prefs?.cat != null ? String(prefs.cat).trim() : "";
+
+  if (categoryRows.length === 0) {
+    return {
+      categoryTagId: prefCategoryId,
+      cat: prefCategoryLabel,
+    };
+  }
+
+  const matchById = prefCategoryId
+    ? categoryRows.find(
+        (row) => row?.id != null && String(row.id) === prefCategoryId,
+      )
+    : null;
+  if (matchById) {
+    return {
+      categoryTagId: matchById.id ?? null,
+      cat: matchById.labelPt || prefCategoryLabel,
+    };
+  }
+
+  const matchByLabel = prefCategoryLabel
+    ? categoryRows.find((row) => row?.labelPt === prefCategoryLabel)
+    : null;
+  if (matchByLabel) {
+    return {
+      categoryTagId: matchByLabel.id ?? null,
+      cat: matchByLabel.labelPt,
+    };
+  }
+
+  if (fallbackToFirst) {
+    const firstRow = categoryRows[0] || null;
+    return {
+      categoryTagId: firstRow?.id ?? null,
+      cat: firstRow?.labelPt || prefCategoryLabel,
+    };
+  }
+
+  return {
+    categoryTagId: null,
+    cat: prefCategoryLabel,
+  };
+}
+
 /** Extrai YYYY-MM-DD de ISO ou string de data. */
 export function ymdFromAnyDateInput(value) {
   if (value == null || value === "") return null;

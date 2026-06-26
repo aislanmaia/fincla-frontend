@@ -52,6 +52,7 @@ import {
   isUuidString,
   normalizeStoredNovaTxPaymentMethod,
   readStoredNovaTransacaoPrefs,
+  resolveStoredNovaTxCategorySelection,
   serializeNovaTxFormStateToStoredPrefs,
   shouldApplyStoredNovaTxCategoryPrefs,
   todayLocalYmd,
@@ -1449,6 +1450,15 @@ export const NovaTransacaoModal = ({
     const prefs = readStoredNovaTransacaoPrefs(organizationId);
     const prefTipo = prefs.tipo === "receita" ? "receita" : "despesa";
     const prefMethod = normalizeStoredNovaTxPaymentMethod(prefs.method, prefTipo) ?? "pix";
+    const storedCategorySelection = useLiveCategoryTags
+      ? resolveStoredNovaTxCategorySelection(prefs, modalCategoryChoices, { fallbackToFirst: true })
+      : {
+          categoryTagId: null,
+          cat:
+            prefs.cat != null && String(prefs.cat).trim()
+              ? String(prefs.cat).trim()
+              : "",
+        };
     setTipo(prefTipo);
     setIsRefund(false);
     refund.resetAll();
@@ -1465,8 +1475,9 @@ export const NovaTransacaoModal = ({
     setCustomRecurrenceInterval(1); setCustomRecurrenceUnit("month");
     setFirstOccurrenceYmd(null);
     setRecurrenceRepetitions(12); setRecurrenceEndDateYmd(null);
-    setCat(prefs.cat != null && String(prefs.cat).trim() ? String(prefs.cat).trim() : "");
-    setCategoryTagId(null);
+    setCat(storedCategorySelection.cat);
+    setCategoryTagId(storedCategorySelection.categoryTagId);
+    setCategoryTagIsActive(true);
     if (prefMethod === "credito") {
       setModalityChoice(prefs.modalidade === "avista" ? "avista" : "parcelado");
       const pp = clampNovaTxPrefsParcelas(prefs.parcelas);
