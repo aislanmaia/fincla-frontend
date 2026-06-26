@@ -44,6 +44,7 @@ function buildAffectedInvoices(item, invoice) {
  * banner de estornos vinculados e CTA pra lançar novo estorno.
  */
 export function TxRow({ item, card, invoice, categoryColor, formatBRL, onLaunchRefund, onOpenTransaction, onDeleteTransaction }) {
+  const isRefund = !!item.isRefund;
   const isInstallment = item.parcela && item.parcela.n;
   const installmentValue = isInstallment
     ? (item.parcela.val != null && Number.isFinite(Number(item.parcela.val))
