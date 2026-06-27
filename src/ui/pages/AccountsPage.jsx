@@ -6,6 +6,7 @@ import { useAccountsData } from "../features/accounts/useAccountsData.js";
 import { accountMeta, formatBRL } from "../features/accounts/accountMeta.js";
 import { AccountFormModal } from "../features/accounts/AccountFormModal.jsx";
 import { TransferModal } from "../features/accounts/TransferModal.jsx";
+import { AdjustBalanceModal } from "../features/accounts/AdjustBalanceModal.jsx";
 import { ConfirmDialog } from "../features/accounts/ConfirmDialog.jsx";
 
 const menuItemStyle = {
@@ -31,8 +32,11 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
   const [showTransfer, setShowTransfer] = useState(false);
   const [openMenuId, setOpenMenuId] = useState(null);
   const [deactivateTarget, setDeactivateTarget] = useState(null);
+  const [adjustTargetId, setAdjustTargetId] = useState(null);
 
   const accounts = data.accounts || [];
+  // Live account object so the modal reflects the latest balance after each reload.
+  const adjustTarget = adjustTargetId ? accounts.find((a) => a.id === adjustTargetId) || null : null;
   const accountModalOpen = showNova || !!editAccount;
   const canTransfer = accounts.length >= 2;
 
@@ -55,6 +59,16 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
     try {
       await data.transfer(payload);
       setShowTransfer(false);
+    } catch {
+      /* erro em data.error */
+    }
+  }
+
+  async function handleAdjust(payload) {
+    if (!adjustTargetId) return;
+    try {
+      await data.adjustBalance(adjustTargetId, payload);
+      setAdjustTargetId(null);
     } catch {
       /* erro em data.error */
     }
@@ -153,6 +167,7 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
                           <div onClick={() => setOpenMenuId(null)} style={{ position: "fixed", inset: 0, zIndex: 15 }} />
                           <div style={{ position: "absolute", right: 0, top: "100%", marginTop: 4, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, boxShadow: T.md, zIndex: 20, minWidth: 150, overflow: "hidden" }}>
                             <button style={menuItemStyle} onClick={() => { setOpenMenuId(null); setEditAccount(a); }}>Editar</button>
+                            <button style={menuItemStyle} onClick={() => { setOpenMenuId(null); setAdjustTargetId(a.id); }}>Ajustar saldo</button>
                             <div style={{ height: 1, background: T.border }} />
                             <button style={{ ...menuItemStyle, color: T.red }} onClick={() => { setOpenMenuId(null); setDeactivateTarget(a); }}>Desativar</button>
                           </div>
@@ -189,6 +204,18 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
           onSubmit={handleTransfer}
           isSaving={data.isSaving}
           error={data.error}
+        />
+      ) : null}
+
+      {adjustTarget ? (
+        <AdjustBalanceModal
+          account={adjustTarget}
+          onClose={() => setAdjustTargetId(null)}
+          onSubmit={handleAdjust}
+          isSaving={data.isSaving}
+          error={data.error}
+          loadAdjustments={data.listAdjustments}
+          onDeleteAdjustment={data.deleteAdjustment}
         />
       ) : null}
 

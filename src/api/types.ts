@@ -1778,6 +1778,26 @@ export interface Transfer {
   note?: string | null;
 }
 
+// ===== AJUSTES DE SALDO (Balance Adjustments) =====
+
+/** Body para criar um ajuste de saldo (reconciliação). */
+export interface CreateBalanceAdjustmentRequest {
+  amount: number; // delta com sinal, != 0
+  reason: string; // justificativa obrigatória (1..500)
+  date?: string | null; // "YYYY-MM-DD"; default: agora; futura é rejeitada
+}
+
+/** Ajuste de saldo retornado pela API. NÃO é transação (fora de receita/despesa). */
+export interface BalanceAdjustment {
+  id: string;
+  account_id: string;
+  amount: number;
+  date: string; // datetime
+  reason: string;
+  created_by: string | null;
+  created_at: string;
+}
+
 // ===== SAÚDE FINANCEIRA · CAPACIDADE DE ECONOMIA (M3) =====
 
 export interface MonthlyCapacityPoint {

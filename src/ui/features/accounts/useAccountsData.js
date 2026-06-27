@@ -7,6 +7,11 @@ import {
   deactivateAccount as apiDeactivateAccount,
 } from "../../../api/accounts";
 import { createTransfer as apiCreateTransfer } from "../../../api/transfers";
+import {
+  createBalanceAdjustment as apiCreateBalanceAdjustment,
+  listBalanceAdjustments as apiListBalanceAdjustments,
+  deleteBalanceAdjustment as apiDeleteBalanceAdjustment,
+} from "../../../api/balanceAdjustments";
 
 const EMPTY = {
   isLoading: false,
@@ -94,6 +99,19 @@ export function useAccountsData({ organizationId, enabled = true }) {
     [run, organizationId],
   );
   const transfer = useCallback((body) => run(() => apiCreateTransfer(organizationId, body)), [run, organizationId]);
+  const adjustBalance = useCallback(
+    (accountId, body) => run(() => apiCreateBalanceAdjustment(accountId, organizationId, body)),
+    [run, organizationId],
+  );
+  const deleteAdjustment = useCallback(
+    (adjustmentId) => run(() => apiDeleteBalanceAdjustment(adjustmentId, organizationId)),
+    [run, organizationId],
+  );
+  // Read-only: does not toggle isSaving nor reload balances.
+  const listAdjustments = useCallback(
+    (accountId) => (organizationId ? apiListBalanceAdjustments(accountId, organizationId) : Promise.resolve([])),
+    [organizationId],
+  );
 
   const totalAll = useMemo(
     () => state.accounts.reduce((sum, a) => sum + Number(a.balance || 0), 0),
@@ -101,7 +119,29 @@ export function useAccountsData({ organizationId, enabled = true }) {
   );
 
   return useMemo(
-    () => ({ ...state, totalAll, createAccount, updateAccount, deactivateAccount, transfer, reload }),
-    [state, totalAll, createAccount, updateAccount, deactivateAccount, transfer, reload],
+    () => ({
+      ...state,
+      totalAll,
+      createAccount,
+      updateAccount,
+      deactivateAccount,
+      transfer,
+      adjustBalance,
+      listAdjustments,
+      deleteAdjustment,
+      reload,
+    }),
+    [
+      state,
+      totalAll,
+      createAccount,
+      updateAccount,
+      deactivateAccount,
+      transfer,
+      adjustBalance,
+      listAdjustments,
+      deleteAdjustment,
+      reload,
+    ],
   );
 }
