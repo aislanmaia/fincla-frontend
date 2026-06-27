@@ -207,7 +207,8 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
 
   const payMethods = useMemo(() => {
     const set = new Set();
-    for (const evs of Object.values(rawByDay)) for (const e of evs) set.add(e.paymentMethod || "outros");
+    // Ajustes de saldo não têm forma de pagamento e bypassam o filtro — fora da lista.
+    for (const evs of Object.values(rawByDay)) for (const e of evs) if (e.kind !== "adjustment") set.add(e.paymentMethod || "outros");
     return [...set];
   }, [rawByDay]);
 
