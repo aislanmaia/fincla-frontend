@@ -81,6 +81,37 @@ describe("calendarModel", () => {
     expect(ev.paymentMethod).toBe("credit");
   });
 
+  it("ajustes de saldo viram eventos kind='adjustment' no saldo, fora dos KPIs de entradas/saídas", () => {
+    const byDay = buildCalendarEvents(
+      [{ type: "income", description: "S", value: 1000, paid_at: "2026-06-05", payment_method: "pix" }],
+      2026,
+      6,
+      [
+        { id: "adj-1", amount: -500, date: "2026-06-10", reason: "conciliação" },
+        { id: "adj-2", amount: 200, date: "2026-07-01", reason: "fora do mês" },
+      ],
+    );
+    const ev = byDay["2026-06-10"][0];
+    expect(ev.kind).toBe("adjustment");
+    expect(ev.value).toBe(-500);
+    expect(ev.category).toBe("Ajuste de saldo");
+    expect(byDay["2026-07-01"]).toBeUndefined(); // fora do mês não entra
+
+    const t = monthTotals(byDay);
+    expect(t.income).toBe(1000); // ajuste NÃO conta como entrada
+    expect(t.expense).toBe(0); // nem como saída
+    expect(t.incomeCount).toBe(1);
+    expect(t.expenseCount).toBe(0);
+    expect(t.adjustments).toBe(-500);
+    expect(t.net).toBe(500); // 1000 - 0 + (-500)
+
+    const s = monthSummary(byDay);
+    expect(s.received).toBe(1000);
+    expect(s.spent).toBe(0);
+    expect(s.adjusted).toBe(-500);
+    expect(s.net).toBe(500);
+  });
+
   it("weekMatrix devolve uma semana de 7 contendo o dia de referência", () => {
     const [week] = weekMatrix("2026-06-10", 2026, 6);
     expect(week).toHaveLength(7);

@@ -46,14 +46,32 @@ export function txCategoryName(tx) {
   return (tx && tx.category) || "Sem categoria";
 }
 
-/** Agrupa transações do mês em eventos por dia (chave "YYYY-MM-DD"). */
-export function buildCalendarEvents(transactions, year, month) {
+/** Agrupa transações do mês em eventos por dia (chave "YYYY-MM-DD").
+ *
+ * `adjustments` (opcional) são ajustes de saldo: viram eventos `kind:"adjustment"`,
+ * que entram no SALDO mas ficam FORA dos KPIs de entradas/saídas.
+ */
+export function buildCalendarEvents(transactions, year, month, adjustments = []) {
   const prefix = monthPrefix(year, month);
   const inMonth = (s) => typeof s === "string" && s.slice(0, 7) === prefix;
   const byDay = {};
   const add = (key, ev) => {
     (byDay[key] ||= []).push(ev);
   };
+  for (const adj of adjustments || []) {
+    const day = (adj.date || "").slice(0, 10);
+    if (!inMonth(day)) continue;
+    add(day, {
+      id: adj.id ?? null,
+      kind: "adjustment",
+      type: "adjustment",
+      desc: adj.reason || "Ajuste de saldo",
+      value: Number(adj.amount) || 0,
+      paid: true,
+      paymentMethod: null,
+      category: "Ajuste de saldo",
+    });
+  }
   for (const tx of transactions || []) {
     // Cartão: cada parcela com vencimento no mês vira um evento de fatura.
     if (Array.isArray(tx.installment_info) && tx.installment_info.length) {
@@ -97,9 +115,12 @@ export function monthTotals(byDay) {
   let expense = 0;
   let incomeCount = 0;
   let expenseCount = 0;
+  let adjustments = 0; // entram no saldo, fora dos KPIs de entradas/saídas
   for (const evs of Object.values(byDay)) {
     for (const e of evs) {
-      if (e.value >= 0) {
+      if (e.kind === "adjustment") {
+        adjustments += e.value;
+      } else if (e.value >= 0) {
         income += e.value;
         incomeCount += 1;
       } else {
@@ -108,7 +129,7 @@ export function monthTotals(byDay) {
       }
     }
   }
-  return { income, expense, net: income - expense, incomeCount, expenseCount };
+  return { income, expense, adjustments, net: income - expense + adjustments, incomeCount, expenseCount };
 }
 
 /** Resumo do mês: recebido (realizado), gasto (realizado), a pagar (previsto), saldo. */
@@ -116,14 +137,16 @@ export function monthSummary(byDay) {
   let received = 0;
   let spent = 0;
   let toPay = 0;
+  let adjusted = 0; // ajustes de saldo: entram no saldo, fora de recebido/gasto/a pagar
   for (const evs of Object.values(byDay)) {
     for (const e of evs) {
-      if (e.value >= 0 && e.paid) received += e.value;
+      if (e.kind === "adjustment") adjusted += e.value;
+      else if (e.value >= 0 && e.paid) received += e.value;
       else if (e.value < 0 && e.paid) spent += -e.value;
       else if (e.value < 0 && !e.paid) toPay += -e.value;
     }
   }
-  return { received, spent, toPay, net: received - spent - toPay };
+  return { received, spent, toPay, adjusted, net: received - spent - toPay + adjusted };
 }
 
 export function dayLongLabel(ymdStr) {
