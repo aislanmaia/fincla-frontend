@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { createPortal } from "react-dom";
 import { T } from "../tokens";
 import { G, NUM } from "../typography";
 import { PageTitle, Card, Btn, Badge, PageEnter } from "../components/primitives";
@@ -30,7 +31,7 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
   const [showNova, setShowNova] = useState(false);
   const [editAccount, setEditAccount] = useState(null);
   const [showTransfer, setShowTransfer] = useState(false);
-  const [openMenuId, setOpenMenuId] = useState(null);
+  const [menu, setMenu] = useState(null); // { id, rect } — dropdown via portal (não clipa no Card)
   const [deactivateTarget, setDeactivateTarget] = useState(null);
   const [adjustTargetId, setAdjustTargetId] = useState(null);
 
@@ -154,26 +155,16 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
                     <div style={{ ...G, ...NUM, fontWeight: 700, fontSize: 14, color: a.include_in_total ? T.ink : T.inkLight }}>
                       {formatBRL(a.balance)}
                     </div>
-                    <div style={{ position: "relative" }}>
-                      <button
-                        onClick={() => setOpenMenuId((id) => (id === a.id ? null : a.id))}
-                        aria-label="Ações da conta"
-                        style={{ border: "none", background: "none", cursor: "pointer", color: T.inkGhost, fontSize: 18, lineHeight: 1, padding: 4 }}
-                      >
-                        ⋮
-                      </button>
-                      {openMenuId === a.id ? (
-                        <>
-                          <div onClick={() => setOpenMenuId(null)} style={{ position: "fixed", inset: 0, zIndex: 15 }} />
-                          <div style={{ position: "absolute", right: 0, top: "100%", marginTop: 4, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, boxShadow: T.md, zIndex: 20, minWidth: 150, overflow: "hidden" }}>
-                            <button style={menuItemStyle} onClick={() => { setOpenMenuId(null); setEditAccount(a); }}>Editar</button>
-                            <button style={menuItemStyle} onClick={() => { setOpenMenuId(null); setAdjustTargetId(a.id); }}>Ajustar saldo</button>
-                            <div style={{ height: 1, background: T.border }} />
-                            <button style={{ ...menuItemStyle, color: T.red }} onClick={() => { setOpenMenuId(null); setDeactivateTarget(a); }}>Desativar</button>
-                          </div>
-                        </>
-                      ) : null}
-                    </div>
+                    <button
+                      onClick={(e) => {
+                        const r = e.currentTarget.getBoundingClientRect();
+                        setMenu((m) => (m?.id === a.id ? null : { id: a.id, rect: r }));
+                      }}
+                      aria-label="Ações da conta"
+                      style={{ border: "none", background: "none", cursor: "pointer", color: T.inkGhost, fontSize: 18, lineHeight: 1, padding: 4 }}
+                    >
+                      ⋮
+                    </button>
                   </div>
                 </div>
               );
@@ -186,6 +177,46 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
           Transferências entre contas próprias não contam como receita ou despesa.
         </div>
       </div>
+
+      {menu
+        ? createPortal(
+            (() => {
+              const acc = accounts.find((a) => a.id === menu.id);
+              if (!acc) return null;
+              const W = 170;
+              const flipUp = menu.rect.bottom + 140 > window.innerHeight;
+              const top = flipUp ? menu.rect.top - 4 : menu.rect.bottom + 4;
+              const left = Math.max(8, menu.rect.right - W);
+              return (
+                <>
+                  <div onClick={() => setMenu(null)} style={{ position: "fixed", inset: 0, zIndex: 140 }} />
+                  <div
+                    role="menu"
+                    style={{
+                      position: "fixed",
+                      left,
+                      top,
+                      transform: flipUp ? "translateY(-100%)" : "none",
+                      width: W,
+                      background: T.surface,
+                      border: `1px solid ${T.border}`,
+                      borderRadius: 10,
+                      boxShadow: T.lg,
+                      zIndex: 150,
+                      overflow: "hidden",
+                    }}
+                  >
+                    <button style={menuItemStyle} onClick={() => { setMenu(null); setEditAccount(acc); }}>Editar</button>
+                    <button style={menuItemStyle} onClick={() => { setMenu(null); setAdjustTargetId(acc.id); }}>Ajustar saldo</button>
+                    <div style={{ height: 1, background: T.border }} />
+                    <button style={{ ...menuItemStyle, color: T.red }} onClick={() => { setMenu(null); setDeactivateTarget(acc); }}>Desativar</button>
+                  </div>
+                </>
+              );
+            })(),
+            document.body,
+          )
+        : null}
 
       {accountModalOpen ? (
         <AccountFormModal
