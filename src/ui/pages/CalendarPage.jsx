@@ -62,6 +62,7 @@ const KIND = {
   refund: { color: T.green, bg: T.greenLight, border: T.greenBorder, dot: T.green },
   expense: { color: T.red, bg: T.redLight, border: T.redBorder || "#FECACA", dot: T.red },
   invoice: { color: T.amber, bg: T.amberLight, border: T.amberBorder || "#FDE68A", dot: T.amber },
+  adjustment: { color: T.purple, bg: T.purpleLight, border: T.purpleBorder || "#DDD6FE", dot: T.purple },
 };
 function evColors(e) {
   const base = KIND[e.kind] || KIND.expense;
@@ -91,6 +92,9 @@ function filterByDay(byDay, filters) {
   const out = {};
   for (const [day, evs] of Object.entries(byDay)) {
     const kept = evs.filter((e) => {
+      // Ajustes de saldo não são entrada/saída nem têm forma de pagamento:
+      // não são afetados pelos filtros de tipo/forma.
+      if (e.kind === "adjustment") return true;
       const typeOk = e.value >= 0 ? filters.income : filters.expense;
       const m = e.paymentMethod || "outros";
       return typeOk && !filters.hiddenPays.has(m);
@@ -389,15 +393,19 @@ function MoreRow({ n, onSeeExtrato }) {
 function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose }) {
   const [mode, setMode] = useState("category"); // category | list
   const [open, setOpen] = useState({});
-  const income = events.filter((e) => e.value >= 0).reduce((s, e) => s + e.value, 0);
-  const expense = events.filter((e) => e.value < 0).reduce((s, e) => s + -e.value, 0);
+  // Ajustes de saldo entram no SALDO, fora de Entradas/Saídas.
+  const income = events.filter((e) => e.kind !== "adjustment" && e.value >= 0).reduce((s, e) => s + e.value, 0);
+  const expense = events.filter((e) => e.kind !== "adjustment" && e.value < 0).reduce((s, e) => s + -e.value, 0);
+  const adjust = events.filter((e) => e.kind === "adjustment").reduce((s, e) => s + e.value, 0);
+  const dayNet = income - expense + adjust;
   const groups = useMemo(() => groupByCategory(events), [events]);
   const dense = events.length > 6;
   const useGroups = mode === "category" && groups.length > 1;
 
   const Item = ({ e, indent }) => {
     const c = evColors(e);
-    const clickable = Boolean(e.id);
+    // Ajuste de saldo não é transação → não abre o Painel de Transação.
+    const clickable = Boolean(e.id) && e.kind !== "adjustment";
     return (
       <div
         onClick={clickable ? (ev) => onEdit(e, ev) : undefined}
@@ -408,7 +416,7 @@ function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose }) {
         <span style={{ width: 8, height: 8, borderRadius: 9999, flexShrink: 0, background: c.dot }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ ...G, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.desc}</div>
-          <div style={{ ...G, fontSize: 10.5, color: T.inkLight }}>{[payLabel(e.paymentMethod), mode === "list" ? e.category : null].filter(Boolean).join(" · ")}</div>
+          <div style={{ ...G, fontSize: 10.5, color: T.inkLight }}>{e.kind === "adjustment" ? "Ajuste de saldo" : [payLabel(e.paymentMethod), mode === "list" ? e.category : null].filter(Boolean).join(" · ")}</div>
         </div>
         <span style={{ ...G, ...NUM, fontSize: 13, fontWeight: 700, color: c.dot }}>{fmtShort(e.value)}</span>
       </div>
@@ -439,8 +447,8 @@ function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose }) {
             ))}
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, border: `1px solid ${T.border}`, borderRadius: 9, padding: "8px 11px", marginBottom: 8 }}>
-            <span style={{ ...G, fontSize: 9, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.inkLight }}>Saldo do dia</span>
-            <span style={{ ...G, ...NUM, fontSize: 14, fontWeight: 800, color: income - expense < 0 ? T.red : T.green, whiteSpace: "nowrap" }}>{fmt(income - expense)}</span>
+            <span style={{ ...G, fontSize: 9, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.inkLight }}>Saldo do dia{adjust !== 0 ? " (c/ ajuste)" : ""}</span>
+            <span style={{ ...G, ...NUM, fontSize: 14, fontWeight: 800, color: dayNet < 0 ? T.red : T.green, whiteSpace: "nowrap" }}>{fmt(dayNet)}</span>
           </div>
           {dense ? (
             <div style={{ display: "inline-flex", border: `1px solid ${T.border}`, borderRadius: 8, overflow: "hidden", marginBottom: 4 }}>
@@ -592,7 +600,7 @@ function Grid({ grid, byDay, todayYmd, selected, onPick, onPickCell, onEdit, wee
               <span style={{ ...G, fontSize: compact ? 12 : 13.5, fontWeight: isToday ? 800 : 600, color: isToday ? T.ink : T.inkMid }}>{cell.day}{isToday ? " ·hoje" : ""}</span>
               {evs.slice(0, shown).map((e, j) => {
                 const c = evColors(e);
-                const clickable = Boolean(e.id);
+                const clickable = Boolean(e.id) && e.kind !== "adjustment";
                 return (
                   <span
                     key={e.id || j}
