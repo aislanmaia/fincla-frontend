@@ -9,7 +9,7 @@ import { G, S } from "../../typography";
  */
 export function ConsultantPainelPage() {
   return (
-    <div style={{ ...G, padding: 28, maxWidth: 920, margin: "0 auto" }}>
+    <div style={{ ...G, width: "100%", padding: "clamp(18px, 3.5vw, 32px) clamp(16px, 3.5vw, 40px) 48px" }}>
       <h1 style={{ margin: 0, display: "flex", alignItems: "baseline", gap: 8 }}>
         <span style={{ ...G, fontSize: 28, fontWeight: 800, letterSpacing: "-0.025em", color: T.ink }}>Painel da</span>
         <span style={{ ...S, fontSize: 30, color: T.ink }}>base</span>
