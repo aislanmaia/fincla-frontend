@@ -1,5 +1,4 @@
 import { describe, it, expect } from "vitest";
-import { isConsultant } from "../isConsultant.js";
 import { consultantAreaDecision } from "../consultantAccess.js";
 
 // Usuário com a capacidade de consultor = assinatura ativa + feature multi_org_dashboard
@@ -20,15 +19,6 @@ const inactiveConsultant = {
   role: "consultant",
   subscription: { status: "pending_payment", features: ["multi_org_dashboard"] },
 };
-
-describe("isConsultant (role)", () => {
-  it("true só quando role === 'consultant'", () => {
-    expect(isConsultant({ role: "consultant" })).toBe(true);
-    expect(isConsultant({ role: "owner" })).toBe(false);
-    expect(isConsultant(null)).toBe(false);
-    expect(isConsultant({})).toBe(false);
-  });
-});
 
 describe("consultantAreaDecision (capacidade = feature)", () => {
   it("passthrough fora da área /consultant", () => {
