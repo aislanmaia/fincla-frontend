@@ -55,6 +55,7 @@ import { NovaTransacaoModal } from "./features/novaTransacao/NovaTransacaoModal.
 import { useTransactionModalController } from "./features/novaTransacao/useTransactionModalController.js";
 
 import { finclaMainOutletRemountKey, firstPathSegment, isAuthRouteSegment } from "./routing/appSegments.js";
+import { consultantAreaDecision } from "./features/consultant/consultantAccess.js";
 import { useFinclaDocumentTitle } from "./routing/useFinclaDocumentTitle.js";
 import { FC, FC_MODAL } from "./routing/searchContract.js";
 import { FinclaPageContext } from "./routing/finclaPageContext.jsx";
@@ -177,6 +178,13 @@ export default function App() {
   }, [session.isAuthenticated]);
 
   useAuthRedirects({ session, pathname, searchStr, showOnboarding });
+
+  // Área do Consultor: usuário autenticado sem perfil de consultor é mandado de volta ao app.
+  useEffect(() => {
+    if (session.isAuthenticated && consultantAreaDecision(pathname, session.user) === "redirect") {
+      navigate({ to: "/", replace: true });
+    }
+  }, [session.isAuthenticated, session.user, pathname, navigate]);
 
   useEffect(() => {
     if (!activeOrganization) return;
@@ -446,6 +454,20 @@ export default function App() {
         onRequestPasswordReset={session.requestPasswordReset}
         showDemoAccessHint={mockDataEnabled}
       />
+    );
+  }
+
+  // Área do Consultor: shell próprio (sem a sidebar/topbar do app do cliente).
+  const consultantDecision = consultantAreaDecision(pathname, session.user);
+  if (consultantDecision === "redirect") return null; // o efeito acima redireciona p/ "/"
+  if (consultantDecision === "allow") {
+    return (
+      <>
+        <AnimStyles/>
+        <FinclaPageContext.Provider value={{ pages, user: session.user }}>
+          <Outlet />
+        </FinclaPageContext.Provider>
+      </>
     );
   }
 

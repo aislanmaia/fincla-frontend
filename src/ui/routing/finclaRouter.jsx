@@ -14,6 +14,8 @@ import { BillingReturnPage } from "../pages/BillingReturnPage.jsx";
 import { FinclaNotFoundPage } from "./FinclaNotFoundPage.jsx";
 import { FinclaAuthenticatedRouteError } from "./FinclaAuthenticatedRouteError.jsx";
 import { GatedAuthenticatedPageOutlet } from "./GatedAuthenticatedPageOutlet.jsx";
+import { ConsultantShell } from "../features/consultant/ConsultantShell.jsx";
+import { ConsultantPainelPage } from "../pages/consultant/ConsultantPainelPage.jsx";
 import { AUTH_ROUTE_SEGMENTS } from "./appSegments.js";
 import { isPlanningArea, DEFAULT_PLANNING_AREA } from "../features/planning/planningAreas.js";
 import { finclaRootSearchSchema } from "./finclaRootSearchSchema.js";
@@ -182,6 +184,25 @@ const planningAreaRoute = createRoute({
 
 planningRoute.addChildren([planningIndexRoute, planningAreaRoute]);
 
+/**
+ * Área do Consultor — shell próprio (independente do app do cliente). O acesso
+ * (apenas `role: "consultant"`) é decidido no `App` via `consultantAreaDecision`;
+ * aqui garantimos apenas a sessão. Sub-rotas (clientes, insights, …) entram nas próximas fatias.
+ */
+const consultantRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "consultant",
+  beforeLoad: requireSessionTokenBeforeLoad,
+  errorComponent: FinclaAuthenticatedRouteError,
+  component: ConsultantShell,
+});
+const consultantIndexRoute = createRoute({
+  getParentRoute: () => consultantRoute,
+  path: "/",
+  component: ConsultantPainelPage,
+});
+consultantRoute.addChildren([consultantIndexRoute]);
+
 /** Rotas antigas → hub (back-compat de bookmarks/links). */
 function planningRedirectRoute(path, area) {
   return createRoute({
@@ -207,6 +228,7 @@ const routeTree = rootRoute.addChildren([
   transactionsRoute,
   profileRoute,
   planningRoute,
+  consultantRoute,
   goalsRedirectRoute,
   budgetsRedirectRoute,
   simulationRedirectRoute,
