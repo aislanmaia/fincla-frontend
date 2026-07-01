@@ -3,7 +3,10 @@ import { PageTitle } from "../../components/primitives";
 import { T } from "../../tokens";
 import { G } from "../../typography";
 import { ConsultantKpiCards } from "../../features/consultant/ConsultantKpiCards";
+import { ConsultantSemaphorePanel } from "../../features/consultant/ConsultantSemaphorePanel";
+import { ConsultantAttentionList } from "../../features/consultant/ConsultantAttentionList";
 import { useConsultantHealthIndex } from "../../features/consultant/useConsultantHealthIndex";
+import { useConsultantClientsAtRisk } from "../../features/consultant/useConsultantClientsAtRisk";
 
 /**
  * Painel da base do Consultor (S1). A0.x entregou o shell; A1.2 traz os KPIs
@@ -15,10 +18,13 @@ import { useConsultantHealthIndex } from "../../features/consultant/useConsultan
  * `useConsultantSummary` (A1.1) fica disponível para quando um campo exclusivo
  * do summary (receita/saldo/nº de transações do período) for exibido.
  *
- * Semáforo e "precisam de atenção" chegam em A1.3.
+ * A1.3 acrescenta o semáforo da carteira e a lista "Precisam de atenção"
+ * (`/clients-at-risk`). O clique em "Abrir" ainda é stub — a rota de relatório
+ * do cliente (S3) não existe.
  */
 export function ConsultantPainelPage() {
   const { healthIndex, hasLoaded, error } = useConsultantHealthIndex();
+  const risk = useConsultantClientsAtRisk({ limit: 5 });
 
   // Banner de erro só em falha total (nada carregado); caso contrário os KPIs
   // degradam individualmente para "—".
@@ -38,6 +44,21 @@ export function ConsultantPainelPage() {
       )}
 
       <ConsultantKpiCards healthIndex={healthIndex} hasLoaded={hasLoaded} />
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16, alignItems: "start" }}>
+        <ConsultantAttentionList
+          clients={risk.clients}
+          total={risk.total}
+          base={healthIndex?.organizations_count ?? 0}
+          hasLoaded={risk.hasLoaded}
+        />
+        <ConsultantSemaphorePanel
+          atRiskTotal={risk.total}
+          organizationsCount={healthIndex?.organizations_count}
+          healthIndex={healthIndex?.index}
+          hasLoaded={hasLoaded && risk.hasLoaded}
+        />
+      </div>
     </div>
   );
 }
