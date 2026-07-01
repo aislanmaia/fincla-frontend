@@ -57,7 +57,7 @@ describe("useConsultantSummary", () => {
   });
 
   it("keeps only the latest response when an older fetch resolves last", async () => {
-    // First refresh resolves *after* the second one → it must not overwrite.
+    // The mount fetch stays pending; a newer refresh must win over it.
     let resolveFirst;
     const first = new Promise((resolve) => {
       resolveFirst = resolve;
@@ -68,20 +68,18 @@ describe("useConsultantSummary", () => {
 
     const { result } = renderHook(() => useConsultantSummary());
 
-    // Kick off a newer refresh before the first resolves.
-    let secondDone;
-    await act(async () => {
-      secondDone = result.current.refresh();
-      await secondDone;
+    // Mount fetch (#1) is in flight and still pending; trigger a newer fetch.
+    act(() => {
+      result.current.refresh();
     });
-    expect(result.current.summary.balance).toBe(99000);
+    await waitFor(() => expect(result.current.summary?.balance).toBe(99000));
 
-    // Now the stale first request resolves — it must be ignored.
+    // Now the stale first request resolves last — it must be ignored.
     await act(async () => {
       resolveFirst(sample);
       await first;
     });
-    expect(result.current.summary.balance).toBe(99000);
+    expect(result.current.summary?.balance).toBe(99000);
   });
 
   it("does not fetch when enabled=false", async () => {
@@ -109,12 +107,12 @@ describe("useConsultantSummary", () => {
     const { result } = renderHook(() => useConsultantSummary());
     await waitFor(() => expect(result.current.summary).toBeTruthy());
 
-    await act(async () => {
-      await result.current.refresh();
+    act(() => {
+      result.current.refresh();
     });
+    await waitFor(() => expect(result.current.error).toBeTruthy());
     // Data stays on screen; only the error surfaces.
     expect(result.current.summary?.balance).toBe(18000);
-    expect(result.current.error).toBeTruthy();
   });
 
   it("exposes hasLoaded to tell idle apart from a loaded (possibly empty) result", async () => {
@@ -134,10 +132,10 @@ describe("useConsultantSummary", () => {
     await waitFor(() => expect(result.current.summary).toBeTruthy());
     expect(result.current.summary.balance).toBe(18000);
 
-    await act(async () => {
-      await result.current.refresh();
+    act(() => {
+      result.current.refresh();
     });
-    expect(result.current.summary.balance).toBe(21000);
+    await waitFor(() => expect(result.current.summary.balance).toBe(21000));
     expect(getConsultantSummary).toHaveBeenCalledTimes(2);
   });
 });
