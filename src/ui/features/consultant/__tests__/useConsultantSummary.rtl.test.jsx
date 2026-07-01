@@ -38,8 +38,7 @@ describe("useConsultantSummary", () => {
     expect(result.current.summary?.balance).toBe(18000);
     expect(result.current.summary?.organizations_count).toBe(8);
     expect(result.current.error).toBe("");
-    // No date range → called without params.
-    expect(getConsultantSummary).toHaveBeenCalledWith(undefined);
+    expect(getConsultantSummary).toHaveBeenCalledTimes(1);
   });
 
   it("forwards the date range as snake_case params", async () => {
@@ -57,6 +56,34 @@ describe("useConsultantSummary", () => {
     );
   });
 
+  it("keeps only the latest response when an older fetch resolves last", async () => {
+    // First refresh resolves *after* the second one → it must not overwrite.
+    let resolveFirst;
+    const first = new Promise((resolve) => {
+      resolveFirst = resolve;
+    });
+    vi.mocked(getConsultantSummary)
+      .mockReturnValueOnce(first)
+      .mockResolvedValueOnce({ ...sample, balance: 99000 });
+
+    const { result } = renderHook(() => useConsultantSummary());
+
+    // Kick off a newer refresh before the first resolves.
+    let secondDone;
+    await act(async () => {
+      secondDone = result.current.refresh();
+      await secondDone;
+    });
+    expect(result.current.summary.balance).toBe(99000);
+
+    // Now the stale first request resolves — it must be ignored.
+    await act(async () => {
+      resolveFirst(sample);
+      await first;
+    });
+    expect(result.current.summary.balance).toBe(99000);
+  });
+
   it("does not fetch when enabled=false", async () => {
     renderHook(() => useConsultantSummary({ enabled: false }));
     // Give the effect a microtask to flush; nothing should happen.
@@ -64,13 +91,38 @@ describe("useConsultantSummary", () => {
     expect(getConsultantSummary).not.toHaveBeenCalled();
   });
 
-  it("sets error and clears summary on failure", async () => {
+  it("sets error on an initial-load failure", async () => {
     vi.mocked(getConsultantSummary).mockRejectedValue(new Error("boom"));
 
     const { result } = renderHook(() => useConsultantSummary());
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.summary).toBeNull();
     expect(result.current.error).toBeTruthy();
+    expect(result.current.hasLoaded).toBe(true);
+  });
+
+  it("preserves the last-good summary when a refresh fails", async () => {
+    vi.mocked(getConsultantSummary)
+      .mockResolvedValueOnce(sample)
+      .mockRejectedValueOnce(new Error("blip"));
+
+    const { result } = renderHook(() => useConsultantSummary());
+    await waitFor(() => expect(result.current.summary).toBeTruthy());
+
+    await act(async () => {
+      await result.current.refresh();
+    });
+    // Data stays on screen; only the error surfaces.
+    expect(result.current.summary?.balance).toBe(18000);
+    expect(result.current.error).toBeTruthy();
+  });
+
+  it("exposes hasLoaded to tell idle apart from a loaded (possibly empty) result", async () => {
+    vi.mocked(getConsultantSummary).mockResolvedValue(sample);
+
+    const { result } = renderHook(() => useConsultantSummary());
+    expect(result.current.hasLoaded).toBe(false);
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
   });
 
   it("refresh re-fetches and updates state", async () => {
