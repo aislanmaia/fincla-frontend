@@ -1,0 +1,41 @@
+// @vitest-environment jsdom
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it } from "vitest";
+
+import { ConsultantKpiCards } from "../ConsultantKpiCards.jsx";
+
+afterEach(cleanup);
+
+describe("ConsultantKpiCards", () => {
+  it("renders the 4 KPI labels", () => {
+    render(<ConsultantKpiCards summary={null} healthIndex={null} />);
+    expect(screen.getByText("Clientes ativos")).toBeInTheDocument();
+    expect(screen.getByText("Patrimônio acompanhado")).toBeInTheDocument();
+    expect(screen.getByText("Saúde média da base")).toBeInTheDocument();
+    expect(screen.getByText("Honorários recorrentes")).toBeInTheDocument();
+  });
+
+  it("shows real values for clients and health", () => {
+    render(
+      <ConsultantKpiCards
+        summary={{ organizations_count: 8 }}
+        healthIndex={{ index: 72 }}
+      />
+    );
+    expect(screen.getByText("8")).toBeInTheDocument();
+    expect(screen.getByText("72")).toBeInTheDocument();
+  });
+
+  it("marks the deferred KPIs with a dash value and 'em breve' text", () => {
+    render(
+      <ConsultantKpiCards
+        summary={{ organizations_count: 8 }}
+        healthIndex={{ index: 72 }}
+      />
+    );
+    // With real data present, only patrimonio and mrr render as "—".
+    expect(screen.getAllByText("—")).toHaveLength(2);
+    // ...and the "em breve" wording is present for the deferred cards.
+    expect(screen.getAllByText(/em breve/).length).toBeGreaterThanOrEqual(2);
+  });
+});
