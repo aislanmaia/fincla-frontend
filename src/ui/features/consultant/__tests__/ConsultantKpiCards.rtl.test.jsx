@@ -35,7 +35,8 @@ describe("ConsultantKpiCards", () => {
     );
     // With real data present, only patrimonio and mrr render as "—".
     expect(screen.getAllByText("—")).toHaveLength(2);
-    // ...and the "em breve" wording is present for the deferred cards.
-    expect(screen.getAllByText(/em breve/).length).toBeGreaterThanOrEqual(2);
+    // "em breve" appears exactly twice — one badge per deferred card, not
+    // doubled in the card's sub text.
+    expect(screen.getAllByText("em breve")).toHaveLength(2);
   });
 });
