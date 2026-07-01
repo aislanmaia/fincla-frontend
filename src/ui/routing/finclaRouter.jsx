@@ -14,6 +14,9 @@ import { BillingReturnPage } from "../pages/BillingReturnPage.jsx";
 import { FinclaNotFoundPage } from "./FinclaNotFoundPage.jsx";
 import { FinclaAuthenticatedRouteError } from "./FinclaAuthenticatedRouteError.jsx";
 import { GatedAuthenticatedPageOutlet } from "./GatedAuthenticatedPageOutlet.jsx";
+import { ConsultantShell } from "../features/consultant/ConsultantShell.jsx";
+import { ConsultantPainelPage } from "../pages/consultant/ConsultantPainelPage.jsx";
+import { ConsultantPlaceholderPage } from "../pages/consultant/ConsultantPlaceholderPage.jsx";
 import { AUTH_ROUTE_SEGMENTS } from "./appSegments.js";
 import { isPlanningArea, DEFAULT_PLANNING_AREA } from "../features/planning/planningAreas.js";
 import { finclaRootSearchSchema } from "./finclaRootSearchSchema.js";
@@ -182,6 +185,47 @@ const planningAreaRoute = createRoute({
 
 planningRoute.addChildren([planningIndexRoute, planningAreaRoute]);
 
+/**
+ * Área do Consultor — shell próprio (independente do app do cliente). O acesso
+ * (capacidade `multi_org_dashboard`) é decidido no `App` via `consultantAreaDecision`;
+ * aqui garantimos apenas a sessão. O shell (Sidebar + Topbar, A0.3) envolve as
+ * sub-rotas. `clients`/`insights`/`profile` são placeholders navegáveis criados
+ * na A0.3 — o conteúdo real chega em S2/S4/S6.
+ */
+const consultantRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "consultant",
+  beforeLoad: requireSessionTokenBeforeLoad,
+  errorComponent: FinclaAuthenticatedRouteError,
+  component: ConsultantShell,
+});
+const consultantIndexRoute = createRoute({
+  getParentRoute: () => consultantRoute,
+  path: "/",
+  component: ConsultantPainelPage,
+});
+const consultantClientsRoute = createRoute({
+  getParentRoute: () => consultantRoute,
+  path: "clients",
+  component: () => <ConsultantPlaceholderPage title="Carteira de" soon="clientes" />,
+});
+const consultantInsightsRoute = createRoute({
+  getParentRoute: () => consultantRoute,
+  path: "insights",
+  component: () => <ConsultantPlaceholderPage title="Insights da" soon="carteira" />,
+});
+const consultantProfileRoute = createRoute({
+  getParentRoute: () => consultantRoute,
+  path: "profile",
+  component: () => <ConsultantPlaceholderPage title="Perfil do" soon="consultor" />,
+});
+consultantRoute.addChildren([
+  consultantIndexRoute,
+  consultantClientsRoute,
+  consultantInsightsRoute,
+  consultantProfileRoute,
+]);
+
 /** Rotas antigas → hub (back-compat de bookmarks/links). */
 function planningRedirectRoute(path, area) {
   return createRoute({
@@ -207,6 +251,7 @@ const routeTree = rootRoute.addChildren([
   transactionsRoute,
   profileRoute,
   planningRoute,
+  consultantRoute,
   goalsRedirectRoute,
   budgetsRedirectRoute,
   simulationRedirectRoute,
