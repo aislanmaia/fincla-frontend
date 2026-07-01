@@ -1,6 +1,6 @@
 import React from "react";
 
-import { Card } from "../../components/primitives";
+import { Badge, Card } from "../../components/primitives";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { buildConsultantKpis } from "./consultantKpis";
@@ -17,27 +17,24 @@ function KpiCard({ label, value, sub, accent, soon }) {
           <div style={{ ...G, ...NUM, fontSize: 22, fontWeight: 800, color: soon ? T.inkGhost : T.ink, letterSpacing: "-0.02em", lineHeight: 1 }}>
             {value}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 7 }}>
-            <span style={{ ...G, fontSize: 10.5, color: T.inkLight }}>{sub}</span>
-          </div>
+          <div style={{ ...G, fontSize: 10.5, color: T.inkLight, marginTop: 7 }}>{sub}</div>
         </div>
-        {soon && (
-          <span style={{ ...G, fontSize: 9, fontWeight: 700, color: T.inkLight, background: T.grayLight, border: `1px solid ${T.border}`, borderRadius: 99, padding: "2px 7px", whiteSpace: "nowrap" }}>
-            em breve
-          </span>
-        )}
+        {soon && <Badge color={T.inkLight} bg={T.grayLight}>em breve</Badge>}
       </div>
     </Card>
   );
 }
 
 /**
- * KPIs do topo do Painel da base (A1.2). Card grid responsivo: 1 coluna no
- * mobile, 2 em telas médias, 4 no desktop. Consome o modelo puro
- * `buildConsultantKpis`; recebe os agregados via props (a página faz o fetch).
+ * KPIs do topo do Painel da base (A1.2). Grid responsivo via
+ * `auto-fit, minmax(180px, 1fr)`: os cards se distribuem por coluna conforme a
+ * largura disponível (1 coluna no mobile estreito, mais colunas à medida que
+ * cabem, até os 4 lado a lado em telas largas). Consome o modelo puro
+ * `buildConsultantKpis`; recebe o agregado + `hasLoaded` via props (a página
+ * faz o fetch).
  */
-export function ConsultantKpiCards({ summary, healthIndex, isLoading }) {
-  const kpis = buildConsultantKpis({ summary, healthIndex, isLoading });
+export function ConsultantKpiCards({ healthIndex, hasLoaded }) {
+  const kpis = buildConsultantKpis({ healthIndex, hasLoaded });
   return (
     <div
       style={{

@@ -3,32 +3,37 @@ import { T } from "../../tokens";
 const DASH = "—";
 
 /**
- * Modelo puro dos KPIs do Painel da base do consultor. Mapeia as respostas
- * agregadas (`/consultant/summary` e `/consultant/financial-health-index`)
- * para os 4 cards do topo, na ordem da spec de UI.
+ * Modelo puro dos KPIs do Painel da base do consultor. Mapeia a resposta
+ * agregada `/consultant/financial-health-index` (que já carrega
+ * `organizations_count` e o `index` de saúde) para os 4 cards do topo, na
+ * ordem da spec de UI — uma só chamada cobre os dois KPIs reais.
  *
- * Dois KPIs têm fonte real hoje (clientes, saúde média); "Patrimônio
- * acompanhado" (patrimônio líquido agregado) e "Honorários recorrentes" (MRR)
- * ainda não têm dado no backend — ficam marcados `soon` ("em breve"), sem
- * inventar número. Não há histórico agregado, então não exibimos delta/trend.
+ * "Patrimônio acompanhado" (patrimônio líquido agregado) e "Honorários
+ * recorrentes" (MRR) ainda não têm dado no backend — ficam marcados `soon`
+ * ("em breve"), sem inventar número. Não há histórico agregado, então não
+ * exibimos delta/trend.
  *
- * @param {{ summary?: object|null, healthIndex?: object|null, isLoading?: boolean }} input
+ * `hasLoaded` distingue "ainda buscando" de "carregado e vazio": antes do
+ * primeiro fetch os KPIs reais mostram "…"; só depois de carregado um valor
+ * ausente vira "—" (evita o flash de estado vazio no primeiro render).
+ *
+ * @param {{ healthIndex?: object|null, hasLoaded?: boolean }} input
  * @returns {Array<{ id, label, value, sub, accent, soon }>}
  */
-export function buildConsultantKpis({ summary, healthIndex, isLoading = false } = {}) {
-  const clients = summary?.organizations_count;
+export function buildConsultantKpis({ healthIndex, hasLoaded = false } = {}) {
+  const clients = healthIndex?.organizations_count;
   const health = healthIndex?.index;
 
-  const readyValue = (raw, format) => {
+  const value = (raw, format) => {
     if (raw != null) return format(raw);
-    return isLoading ? "…" : DASH;
+    return hasLoaded ? DASH : "…";
   };
 
   return [
     {
       id: "clients",
       label: "Clientes ativos",
-      value: readyValue(clients, (n) => String(n)),
+      value: value(clients, (n) => String(n)),
       sub: "na carteira",
       accent: T.blue,
       soon: false,
@@ -44,7 +49,7 @@ export function buildConsultantKpis({ summary, healthIndex, isLoading = false } 
     {
       id: "health",
       label: "Saúde média da base",
-      value: readyValue(health, (n) => String(Math.round(n))),
+      value: value(health, (n) => String(Math.round(n))),
       sub: health != null ? "de 100" : "semáforo",
       accent: T.green,
       soon: false,
