@@ -1463,8 +1463,25 @@ export type ConsultantConsolidatedSummaryResponse = ConsultantSummaryResponse;
 export interface ConsultantClient {
   organization_id: string;
   organization_name: string;
-  role: 'owner' | 'member';
+  /** Always 'consultant' — the consultant's own org (role owner) is excluded server-side. */
+  role: 'consultant';
   membership_created_at: string;
+  /** Owner's display name; falls back to organization_name. */
+  client_name: string;
+  /** 0–100 financial health index for this client. */
+  health: number;
+  /** income − expenses over the trailing 12-month window (decimal string). */
+  balance: string;
+  /** balance / income * 100 (can be negative). */
+  savings_pct: number;
+  /** unpaid card debt / income * 100. */
+  debt_pct: number;
+  /** last vs previous month balance. */
+  trend: 'up' | 'down' | 'flat';
+  /** date (YYYY-MM-DD) of the most recent transaction, or null. */
+  last_active: string | null;
+  /** net worth: total_all (all active accounts) − unpaid card debt (decimal string). */
+  patrimonio: string;
 }
 
 export interface ConsultantClientsResponse {
