@@ -3,37 +3,8 @@ import React from "react";
 import { Badge, Btn, Card } from "../../components/primitives";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
-import { fmtAbs, fmtSgn } from "../../formatters";
-import { clientHealthBand } from "./consultantClientsView";
-
-/** Tom (cor/rótulo) por faixa de saúde — compartilhado pelo card e pela tabela. */
-export function healthTone(health) {
-  const band = clientHealthBand(health);
-  if (band === "healthy") return { color: T.green, bg: T.greenLight, label: "Em dia" };
-  if (band === "attention") return { color: T.amber, bg: T.amberLight, label: "Atenção" };
-  return { color: T.red, bg: T.redLight, label: "Em risco" };
-}
-
-/** Dinheiro com sinal só quando negativo (patrimônio/saldo cru). */
-export function fmtMoney(value) {
-  const n = Number(value) || 0;
-  return (n < 0 ? "−" : "") + fmtAbs(n);
-}
-
-/** Seta de tendência do saldo mês a mês. */
-export function trendGlyph(trend) {
-  if (trend === "up") return { glyph: "↑", color: T.green };
-  if (trend === "down") return { glyph: "↓", color: T.red };
-  return { glyph: "→", color: T.inkLight };
-}
-
-/** Última atividade em pt-BR (YYYY-MM-DD → dd/mm/aaaa), ou "—". */
-export function fmtLastActive(iso) {
-  if (!iso) return "—";
-  const [y, m, d] = String(iso).slice(0, 10).split("-");
-  if (!y || !m || !d) return "—";
-  return `${d}/${m}/${y}`;
-}
+import { fmtSgn } from "../../formatters";
+import { fmtLastActive, fmtMoney, fmtPct, healthTone, trendGlyph } from "./consultantFormat";
 
 function Metric({ label, value, tone }) {
   return (
@@ -55,12 +26,14 @@ export function ConsultantClientCard({ client, onOpenClient }) {
   const tone = healthTone(client.health);
   const trend = trendGlyph(client.trend);
   const balance = Number(client.balance) || 0;
+  const savings = Number(client.savings_pct) || 0;
+  const debt = Number(client.debt_pct) || 0;
 
   return (
     <Card style={{ padding: 16, display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <div style={{ ...G, ...NUM, width: 44, height: 44, borderRadius: 12, background: tone.bg, color: tone.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 800, flexShrink: 0 }}>
-          {Math.round(client.health)}
+          {Math.round(Number(client.health) || 0)}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ ...G, fontSize: 14, fontWeight: 700, color: T.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -78,8 +51,8 @@ export function ConsultantClientCard({ client, onOpenClient }) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 16px" }}>
         <Metric label="Patrimônio" value={fmtMoney(client.patrimonio)} />
         <Metric label="Saldo 12m" value={fmtSgn(balance)} tone={balance < 0 ? T.red : T.ink} />
-        <Metric label="Poupança" value={`${client.savings_pct.toFixed(1)}%`} tone={client.savings_pct < 0 ? T.red : T.ink} />
-        <Metric label="Comprometimento" value={`${client.debt_pct.toFixed(1)}%`} tone={client.debt_pct >= 50 ? T.red : T.ink} />
+        <Metric label="Poupança" value={fmtPct(savings)} tone={savings < 0 ? T.red : T.ink} />
+        <Metric label="Comprometimento" value={fmtPct(debt)} tone={debt >= 50 ? T.red : T.ink} />
       </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>

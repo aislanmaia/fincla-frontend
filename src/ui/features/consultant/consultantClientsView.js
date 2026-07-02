@@ -6,7 +6,11 @@
  * Ids em inglês (estado/URL futura), labels PT-BR na UI.
  */
 
-/** Faixa de saúde 0–100 (maior = melhor). Espelha o inverso do risco em `ConsultantAttentionList`. */
+/**
+ * Faixa de saúde 0–100 (maior = melhor): em dia ≥70 · atenção 40–69 · em risco <40.
+ * `health` (índice de saúde) e o `risk_score` de `ConsultantAttentionList` são
+ * campos calculados de forma independente no backend — não são complementares.
+ */
 export function clientHealthBand(health) {
   if (health >= 70) return "healthy";
   if (health >= 40) return "attention";
@@ -59,7 +63,8 @@ export function selectConsultantClients(clients, { query = "", riskFilter = "all
   });
 
   const dir = sortDir === "desc" ? -1 : 1;
-  return filtered.slice().sort((a, b) => {
+  // `filtered` já é um array novo (de `.filter`), então `.sort` aqui não muta a entrada.
+  return filtered.sort((a, b) => {
     const va = sortValue(a, sortKey);
     const vb = sortValue(b, sortKey);
     if (typeof va === "string") return va.localeCompare(vb, "pt-BR") * dir;

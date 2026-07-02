@@ -105,7 +105,7 @@ export function ConsultantClientsToolbar({
 
         <div style={{ display: "inline-flex", border: `1.5px solid ${T.border}`, borderRadius: 9, overflow: "hidden" }} role="group" aria-label="Modo de visualização">
           {[
-            { id: "card", label: "Cards", glyph: "▦" },
+            { id: "card", label: "Cartões", glyph: "▦" },
             { id: "table", label: "Tabela", glyph: "☰" },
           ].map((v) => (
             <button

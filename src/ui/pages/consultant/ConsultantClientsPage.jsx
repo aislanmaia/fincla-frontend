@@ -41,18 +41,20 @@ export function ConsultantClientsPage() {
     [clients, query, riskFilter, sortKey, sortDir],
   );
 
-  const loadError = error && !loadedOk ? error : "";
+  // Com clientes em tela mostramos a lista mesmo se um refetch falhou (preserva a
+  // última lista boa — lição da A1.3). Sem clientes, um erro tem prioridade sobre
+  // "vazio": não afirmar que a carteira está vazia se a busca de fato falhou.
   const state = clients.length > 0
     ? "list"
-    : loadError
+    : error
       ? "error"
       : !hasLoaded || isLoading
         ? "loading"
         : "empty";
 
-  const openClient = () => {
+  const openClient = React.useCallback(() => {
     // TODO(S3): navegar para /consultant/clients/:id (relatório do cliente).
-  };
+  }, []);
 
   return (
     <div style={{ ...G, width: "100%", padding: "clamp(18px, 3.5vw, 32px) clamp(16px, 3.5vw, 40px) 48px", display: "flex", flexDirection: "column", gap: 18 }}>
