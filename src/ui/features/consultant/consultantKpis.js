@@ -1,6 +1,5 @@
 import { T } from "../../tokens";
-
-const DASH = "—";
+import { aggregateValue, DASH } from "./consultantFormat";
 
 /**
  * Modelo puro dos KPIs do Painel da base do consultor. Mapeia a resposta
@@ -24,16 +23,11 @@ export function buildConsultantKpis({ healthIndex, hasLoaded = false } = {}) {
   const clients = healthIndex?.organizations_count;
   const health = healthIndex?.index;
 
-  const value = (raw, format) => {
-    if (raw != null) return format(raw);
-    return hasLoaded ? DASH : "…";
-  };
-
   return [
     {
       id: "clients",
       label: "Clientes ativos",
-      value: value(clients, (n) => String(n)),
+      value: aggregateValue(clients, hasLoaded, (n) => String(n)),
       sub: "na carteira",
       accent: T.blue,
       soon: false,
@@ -49,7 +43,7 @@ export function buildConsultantKpis({ healthIndex, hasLoaded = false } = {}) {
     {
       id: "health",
       label: "Saúde média da base",
-      value: value(health, (n) => String(Math.round(n))),
+      value: aggregateValue(health, hasLoaded, (n) => String(Math.round(n))),
       sub: health != null ? "de 100" : "semáforo",
       accent: T.green,
       soon: false,
