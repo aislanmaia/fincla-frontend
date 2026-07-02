@@ -16,6 +16,7 @@ import { FinclaAuthenticatedRouteError } from "./FinclaAuthenticatedRouteError.j
 import { GatedAuthenticatedPageOutlet } from "./GatedAuthenticatedPageOutlet.jsx";
 import { ConsultantShell } from "../features/consultant/ConsultantShell.jsx";
 import { ConsultantPainelPage } from "../pages/consultant/ConsultantPainelPage.jsx";
+import { ConsultantClientsPage } from "../pages/consultant/ConsultantClientsPage.jsx";
 import { ConsultantPlaceholderPage } from "../pages/consultant/ConsultantPlaceholderPage.jsx";
 import { AUTH_ROUTE_SEGMENTS } from "./appSegments.js";
 import { isPlanningArea, DEFAULT_PLANNING_AREA } from "../features/planning/planningAreas.js";
@@ -207,7 +208,7 @@ const consultantIndexRoute = createRoute({
 const consultantClientsRoute = createRoute({
   getParentRoute: () => consultantRoute,
   path: "clients",
-  component: () => <ConsultantPlaceholderPage title="Carteira de" soon="clientes" />,
+  component: ConsultantClientsPage,
 });
 const consultantInsightsRoute = createRoute({
   getParentRoute: () => consultantRoute,
