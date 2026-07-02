@@ -1,7 +1,5 @@
 import { T } from "../../tokens";
-import { aggregateValue } from "./consultantFormat";
-
-const DASH = "—";
+import { aggregateValue, DASH } from "./consultantFormat";
 
 /**
  * Modelo puro dos KPIs do Painel da base do consultor. Mapeia a resposta

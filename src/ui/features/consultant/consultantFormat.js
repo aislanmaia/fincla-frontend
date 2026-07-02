@@ -1,4 +1,4 @@
-const DASH = "—";
+export const DASH = "—";
 const LOADING = "…";
 
 /**
