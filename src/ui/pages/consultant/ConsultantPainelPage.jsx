@@ -30,9 +30,14 @@ export function ConsultantPainelPage() {
   // degradam individualmente para "—".
   const loadError = error && !healthIndex ? error : "";
 
-  // Risco indisponível = falhou sem nenhum dado bom. Nesse caso não mascaramos
-  // como "tudo sob controle": a lista mostra erro e o semáforo omite a divisão.
-  const riskUnavailable = !!risk.error && risk.clients.length === 0;
+  // Base (nº de clientes) só é conhecida quando o health-index carregou.
+  const base = healthIndex?.organizations_count ?? null;
+  // At-risk só é confiável quando /clients-at-risk teve sucesso ao menos uma
+  // vez (total=0 default é ambíguo). null = ainda não confiável.
+  const atRiskTotal = risk.loadedOk ? risk.total : null;
+  // Semáforo carregando enquanto qualquer um dos dois recursos não assentou.
+  const semaphoreLoading =
+    (base == null && !error) || (!risk.loadedOk && !risk.error);
 
   return (
     <div style={{ ...G, width: "100%", padding: "clamp(18px, 3.5vw, 32px) clamp(16px, 3.5vw, 40px) 48px", display: "flex", flexDirection: "column", gap: 18 }}>
@@ -53,15 +58,16 @@ export function ConsultantPainelPage() {
         <ConsultantAttentionList
           clients={risk.clients}
           total={risk.total}
-          base={healthIndex?.organizations_count ?? 0}
-          hasLoaded={risk.hasLoaded}
+          base={base ?? 0}
+          loadedOk={risk.loadedOk}
           error={risk.error}
         />
         <ConsultantSemaphorePanel
-          atRiskTotal={riskUnavailable ? null : risk.total}
-          organizationsCount={healthIndex?.organizations_count}
+          atRiskTotal={atRiskTotal}
+          organizationsCount={base}
           healthIndex={healthIndex?.index}
-          hasLoaded={hasLoaded && risk.hasLoaded}
+          hasLoaded={hasLoaded}
+          loading={semaphoreLoading}
         />
       </div>
     </div>

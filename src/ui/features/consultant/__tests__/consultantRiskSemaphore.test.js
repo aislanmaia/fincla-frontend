@@ -49,4 +49,16 @@ describe("buildRiskSemaphore", () => {
     expect(splitAvailable).toBe(false);
     expect(segments).toHaveLength(0);
   });
+
+  it("marks the split unavailable when the base is unknown (health failed)", () => {
+    // at-risk succeeded (3) but health-index has no data → don't collapse to 0.
+    const { splitAvailable, segments } = buildRiskSemaphore({
+      atRiskTotal: 3,
+      organizationsCount: null,
+      healthIndex: null,
+      hasLoaded: true,
+    });
+    expect(splitAvailable).toBe(false);
+    expect(segments).toHaveLength(0);
+  });
 });

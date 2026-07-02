@@ -52,49 +52,67 @@ function AttentionMessage({ tone, title, text }) {
 }
 
 /**
- * "Precisam de atenção" (A1.3). Lista os clientes em risco de `/clients-at-risk`
- * (ordenados por `risk_score`); o estado "tudo sob controle" quando a base está
- * saudável; e um estado de **erro** quando a busca falhou (para não mascarar uma
- * falha como base saudável). Presentational — dados via props. O clique em
- * "Abrir" chama `onOpenClient` (stub até a rota de relatório do cliente, S3).
+ * "Precisam de atenção" (A1.3). Quatro estados explícitos, nesta prioridade:
+ *   - **lista** quando há clientes em risco (de sucesso ou último-bom);
+ *   - **tudo sob controle** quando já carregou com sucesso e veio vazio
+ *     (`loadedOk` — base saudável), preservado mesmo em erro de refetch;
+ *   - **erro** quando falhou e nunca houve sucesso (não mascara falha como
+ *     base saudável);
+ *   - **carregando** no primeiro fetch.
+ * Presentational — dados via props. "Abrir" chama `onOpenClient` (stub até a
+ * rota de relatório do cliente, S3).
  */
-export function ConsultantAttentionList({ clients = [], total = 0, base = 0, hasLoaded, error, onOpenClient }) {
-  const hasError = !!error && clients.length === 0;
-  const isEmpty = !hasError && hasLoaded && clients.length === 0;
+export function ConsultantAttentionList({ clients = [], total = 0, base = 0, loadedOk, error, onOpenClient }) {
+  const hasClients = clients.length > 0;
+  const state = hasClients ? "list" : loadedOk ? "clear" : error ? "error" : "loading";
 
-  let pill;
-  if (hasError) pill = <Badge color={T.inkLight} bg={T.grayLight}>indisponível</Badge>;
-  else if (isEmpty) pill = <Badge color={T.green} bg={T.greenLight}>0 alertas</Badge>;
-  else pill = <Badge color={T.red} bg={T.redLight}>{`${total}${base ? ` de ${base}` : ""}`}</Badge>;
+  const PILLS = {
+    list: <Badge color={T.red} bg={T.redLight}>{`${total}${base ? ` de ${base}` : ""}`}</Badge>,
+    clear: <Badge color={T.green} bg={T.greenLight}>0 alertas</Badge>,
+    error: <Badge color={T.inkLight} bg={T.grayLight}>indisponível</Badge>,
+    loading: <Badge color={T.inkLight} bg={T.grayLight}>…</Badge>,
+  };
+  const SUBTITLES = {
+    list: "Ordenados pela maior pontuação de risco",
+    clear: "Base monitorada em tempo real",
+    error: "Não foi possível carregar os clientes em risco",
+    loading: "Carregando clientes em risco…",
+  };
 
   return (
     <Card style={{ padding: 0 }}>
       <div style={{ padding: "15px 16px 12px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
           <div style={{ ...G, fontSize: 14, fontWeight: 800, color: T.ink }}>Precisam de atenção</div>
-          <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 2 }}>
-            {hasError ? "Não foi possível carregar os clientes em risco" : isEmpty ? "Base monitorada em tempo real" : "Ordenados pela maior pontuação de risco"}
-          </div>
+          <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 2 }}>{SUBTITLES[state]}</div>
         </div>
-        {pill}
+        {PILLS[state]}
       </div>
       <div style={{ height: 1, background: T.border }} />
-      {hasError ? (
-        <AttentionMessage
-          tone={{ color: T.red, bg: T.redLight, glyph: "!" }}
-          title="Não foi possível carregar"
-          text="Houve um erro ao buscar os clientes em risco. Tente atualizar em instantes."
-        />
-      ) : isEmpty ? (
+      {state === "list" &&
+        clients.map((client) => (
+          <AttentionItem key={client.organization_id} client={client} onOpenClient={onOpenClient} />
+        ))}
+      {state === "clear" && (
         <AttentionMessage
           tone={{ color: T.green, bg: T.greenLight, glyph: "✓" }}
           title="Tudo sob controle"
           text="Nenhum cliente em risco no momento. Toda a base está com saúde financeira saudável."
         />
-      ) : (
-        clients.map((client) => (
-          <AttentionItem key={client.organization_id} client={client} onOpenClient={onOpenClient} />
-        ))
+      )}
+      {state === "error" && (
+        <AttentionMessage
+          tone={{ color: T.red, bg: T.redLight, glyph: "!" }}
+          title="Não foi possível carregar"
+          text="Houve um erro ao buscar os clientes em risco. Tente atualizar em instantes."
+        />
+      )}
+      {state === "loading" && (
+        <AttentionMessage
+          tone={{ color: T.inkLight, bg: T.grayLight, glyph: "…" }}
+          title="Carregando…"
+          text="Buscando os clientes que precisam de atenção."
+        />
       )}
     </Card>
   );

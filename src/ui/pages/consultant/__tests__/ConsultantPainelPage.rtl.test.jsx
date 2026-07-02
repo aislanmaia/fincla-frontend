@@ -66,8 +66,10 @@ describe("<ConsultantPainelPage> (S1 — Painel da base)", () => {
     await waitFor(() => expect(screen.getByText("8")).toBeInTheDocument());
     expect(getFinancialHealthIndex).toHaveBeenCalledTimes(1);
 
-    // health value renders (both the KPI card and the semáforo center = 72)
-    expect(screen.getAllByText("72").length).toBeGreaterThanOrEqual(1);
+    // health value 72 renders in BOTH the KPI card and the semáforo center;
+    // asserting exactly 2 guards the KPI card specifically (a KPI-card
+    // regression would drop this to 1).
+    expect(screen.getAllByText("72")).toHaveLength(2);
 
     // Semáforo + "precisam de atenção" render below the KPIs.
     expect(screen.getByText("Semáforo da carteira")).toBeInTheDocument();

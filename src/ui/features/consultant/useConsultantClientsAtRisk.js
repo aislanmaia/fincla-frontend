@@ -18,6 +18,11 @@ export function useConsultantClientsAtRisk({ limit, enabled = true } = {}) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [hasLoaded, setHasLoaded] = useState(false);
+  // `loadedOk` fica true assim que UMA resposta de sucesso chega e permanece
+  // true em erros posteriores — distingue "carregado com dado (inclusive vazio
+  // = base saudável)" de "0 default / ainda não carregou". Necessário porque
+  // `total=0` é ambíguo (0 real em risco × nunca carregou).
+  const [loadedOk, setLoadedOk] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
 
   const refresh = useCallback(() => setReloadTick((tick) => tick + 1), []);
@@ -29,6 +34,7 @@ export function useConsultantClientsAtRisk({ limit, enabled = true } = {}) {
       setError("");
       setIsLoading(false);
       setHasLoaded(false);
+      setLoadedOk(false);
       return undefined;
     }
     let cancelled = false;
@@ -40,12 +46,13 @@ export function useConsultantClientsAtRisk({ limit, enabled = true } = {}) {
         setClients(data.clients ?? []);
         setTotal(data.total ?? 0);
         setHasLoaded(true);
+        setLoadedOk(true);
       })
       .catch((err) => {
         if (cancelled) return;
         setError(handleApiError(err));
         setHasLoaded(true);
-        // mantém a última lista boa em tela
+        // mantém a última lista boa em tela e `loadedOk` se já houve sucesso
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false);
@@ -55,5 +62,5 @@ export function useConsultantClientsAtRisk({ limit, enabled = true } = {}) {
     };
   }, [enabled, limit, reloadTick]);
 
-  return { clients, total, isLoading, error, hasLoaded, refresh };
+  return { clients, total, isLoading, error, hasLoaded, loadedOk, refresh };
 }

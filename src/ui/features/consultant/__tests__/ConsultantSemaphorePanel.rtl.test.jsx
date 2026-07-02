@@ -32,4 +32,19 @@ describe("<ConsultantSemaphorePanel>", () => {
     );
     expect(screen.getByText("1 cliente na carteira")).toBeInTheDocument();
   });
+
+  it("shows a loading note (not a fabricated split) while data is unresolved", () => {
+    render(
+      <ConsultantSemaphorePanel atRiskTotal={null} organizationsCount={null} healthIndex={null} hasLoaded={false} loading />
+    );
+    expect(screen.getByText("Carregando distribuição…")).toBeInTheDocument();
+    expect(screen.queryByText("Em dia")).not.toBeInTheDocument();
+  });
+
+  it("shows 'indisponível' when settled without risk data", () => {
+    render(
+      <ConsultantSemaphorePanel atRiskTotal={null} organizationsCount={4} healthIndex={80} hasLoaded loading={false} />
+    );
+    expect(screen.getByText("Distribuição de risco indisponível.")).toBeInTheDocument();
+  });
 });

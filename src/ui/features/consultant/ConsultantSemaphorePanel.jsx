@@ -54,7 +54,7 @@ function RiskDonut({ segments, centerValue, size = 128, stroke = 17 }) {
  * pós-A2.0 (exige saúde por-cliente). Não faz fetch — recebe os agregados via
  * props.
  */
-export function ConsultantSemaphorePanel({ atRiskTotal, organizationsCount, healthIndex, hasLoaded }) {
+export function ConsultantSemaphorePanel({ atRiskTotal, organizationsCount, healthIndex, hasLoaded, loading }) {
   const { segments, base, centerValue, splitAvailable } = buildRiskSemaphore({
     atRiskTotal,
     organizationsCount,
@@ -81,7 +81,7 @@ export function ConsultantSemaphorePanel({ atRiskTotal, organizationsCount, heal
             ))
           ) : (
             <span style={{ ...G, fontSize: 12, color: T.inkLight }}>
-              Distribuição de risco indisponível.
+              {loading ? "Carregando distribuição…" : "Distribuição de risco indisponível."}
             </span>
           )}
         </div>
