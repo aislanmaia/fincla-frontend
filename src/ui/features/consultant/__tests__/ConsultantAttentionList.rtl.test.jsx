@@ -40,6 +40,16 @@ describe("<ConsultantAttentionList>", () => {
     expect(screen.queryByText("Tudo sob controle")).not.toBeInTheDocument();
   });
 
+  it("shows an error state (not the all-clear) when the fetch failed with no data", () => {
+    render(
+      <ConsultantAttentionList clients={[]} total={0} base={4} hasLoaded error="boom" />
+    );
+    expect(screen.getByText("Não foi possível carregar")).toBeInTheDocument();
+    // must NOT masquerade as a healthy base
+    expect(screen.queryByText("Tudo sob controle")).not.toBeInTheDocument();
+    expect(screen.queryByText("0 alertas")).not.toBeInTheDocument();
+  });
+
   it("calls onOpenClient with the org id when 'Abrir' is clicked", () => {
     const onOpenClient = vi.fn();
     render(

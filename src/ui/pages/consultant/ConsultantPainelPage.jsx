@@ -30,6 +30,10 @@ export function ConsultantPainelPage() {
   // degradam individualmente para "—".
   const loadError = error && !healthIndex ? error : "";
 
+  // Risco indisponível = falhou sem nenhum dado bom. Nesse caso não mascaramos
+  // como "tudo sob controle": a lista mostra erro e o semáforo omite a divisão.
+  const riskUnavailable = !!risk.error && risk.clients.length === 0;
+
   return (
     <div style={{ ...G, width: "100%", padding: "clamp(18px, 3.5vw, 32px) clamp(16px, 3.5vw, 40px) 48px", display: "flex", flexDirection: "column", gap: 18 }}>
       <div>
@@ -51,9 +55,10 @@ export function ConsultantPainelPage() {
           total={risk.total}
           base={healthIndex?.organizations_count ?? 0}
           hasLoaded={risk.hasLoaded}
+          error={risk.error}
         />
         <ConsultantSemaphorePanel
-          atRiskTotal={risk.total}
+          atRiskTotal={riskUnavailable ? null : risk.total}
           organizationsCount={healthIndex?.organizations_count}
           healthIndex={healthIndex?.index}
           hasLoaded={hasLoaded && risk.hasLoaded}

@@ -55,7 +55,7 @@ function RiskDonut({ segments, centerValue, size = 128, stroke = 17 }) {
  * props.
  */
 export function ConsultantSemaphorePanel({ atRiskTotal, organizationsCount, healthIndex, hasLoaded }) {
-  const { segments, base, centerValue } = buildRiskSemaphore({
+  const { segments, base, centerValue, splitAvailable } = buildRiskSemaphore({
     atRiskTotal,
     organizationsCount,
     healthIndex,
@@ -71,13 +71,19 @@ export function ConsultantSemaphorePanel({ atRiskTotal, organizationsCount, heal
       <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
         <RiskDonut segments={segments} centerValue={centerValue} />
         <div style={{ flex: 1, minWidth: 130, display: "flex", flexDirection: "column", gap: 11 }}>
-          {segments.map((s) => (
-            <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 9 }}>
-              <span style={{ width: 9, height: 9, borderRadius: 3, background: s.color, flexShrink: 0 }} />
-              <span style={{ ...G, fontSize: 12, color: T.inkMid, flex: 1 }}>{s.label}</span>
-              <span style={{ ...G, ...NUM, fontSize: 13, fontWeight: 800, color: T.ink }}>{s.value}</span>
-            </div>
-          ))}
+          {splitAvailable ? (
+            segments.map((s) => (
+              <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                <span style={{ width: 9, height: 9, borderRadius: 3, background: s.color, flexShrink: 0 }} />
+                <span style={{ ...G, fontSize: 12, color: T.inkMid, flex: 1 }}>{s.label}</span>
+                <span style={{ ...G, ...NUM, fontSize: 13, fontWeight: 800, color: T.ink }}>{s.value}</span>
+              </div>
+            ))
+          ) : (
+            <span style={{ ...G, fontSize: 12, color: T.inkLight }}>
+              Distribuição de risco indisponível.
+            </span>
+          )}
         </div>
       </div>
     </Card>

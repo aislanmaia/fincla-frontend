@@ -39,4 +39,14 @@ describe("buildRiskSemaphore", () => {
     expect(buildRiskSemaphore({ hasLoaded: false }).centerValue).toBe("…");
     expect(buildRiskSemaphore({ hasLoaded: true }).centerValue).toBe("—");
   });
+
+  it("marks the split unavailable when at-risk is unknown (null)", () => {
+    const { splitAvailable, segments } = buildRiskSemaphore({
+      atRiskTotal: null,
+      organizationsCount: 8,
+      healthIndex: 90,
+    });
+    expect(splitAvailable).toBe(false);
+    expect(segments).toHaveLength(0);
+  });
 });

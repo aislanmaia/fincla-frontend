@@ -1,4 +1,5 @@
 import { T } from "../../tokens";
+import { aggregateValue } from "./consultantFormat";
 
 /**
  * Modelo puro do semáforo da carteira (A1.3). Com os endpoints atuais só dá
@@ -8,24 +9,27 @@ import { T } from "../../tokens";
  * em risco) exige saúde por-cliente — deferida para pós-A2.0. Não rotulamos o
  * verde como "Saudável" (seria overclaim): "Em dia" = não sinalizado em risco.
  *
- * `centerValue` = saúde média agregada (health-index.index), arredondada;
- * "…" antes de carregar, "—" se carregado sem dado.
+ * `atRiskTotal == null` sinaliza que o dado de risco está **indisponível**
+ * (ex.: `/clients-at-risk` falhou) — aí `splitAvailable=false` e a divisão não
+ * é exibida (não inventamos "todos em dia"). `centerValue` = saúde média
+ * agregada arredondada ("…" antes de carregar, "—" carregado sem dado).
  *
- * @param {{ atRiskTotal?: number, organizationsCount?: number, healthIndex?: number|null, hasLoaded?: boolean }} input
+ * @param {{ atRiskTotal?: number|null, organizationsCount?: number, healthIndex?: number|null, hasLoaded?: boolean }} input
  */
 export function buildRiskSemaphore({ atRiskTotal, organizationsCount, healthIndex, hasLoaded = false } = {}) {
   const base = organizationsCount ?? 0;
-  const atRisk = Math.max(0, Math.min(atRiskTotal ?? 0, base));
-  const emDia = Math.max(0, base - atRisk);
+  const splitAvailable = atRiskTotal != null;
 
-  const segments = [
-    { id: "attention", label: "Precisam de atenção", value: atRisk, color: T.red },
-    { id: "ok", label: "Em dia", value: emDia, color: T.green },
-  ];
+  let segments = [];
+  if (splitAvailable) {
+    const atRisk = Math.min(Math.max(0, atRiskTotal), base);
+    segments = [
+      { id: "attention", label: "Precisam de atenção", value: atRisk, color: T.red },
+      { id: "ok", label: "Em dia", value: base - atRisk, color: T.green },
+    ];
+  }
 
-  let centerValue;
-  if (healthIndex != null) centerValue = String(Math.round(healthIndex));
-  else centerValue = hasLoaded ? "—" : "…";
+  const centerValue = aggregateValue(healthIndex, hasLoaded, (n) => String(Math.round(n)));
 
-  return { segments, base, centerValue };
+  return { segments, base, centerValue, splitAvailable };
 }
