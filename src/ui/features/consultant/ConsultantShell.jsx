@@ -36,7 +36,7 @@ export function ConsultantShell() {
   const onAddClient = () => { /* S5 — fluxo "Adicionar cliente" (stub) */ };
 
   return (
-    <div style={{ ...G, display: "flex", height: "100vh", width: "100vw", overflow: "hidden", background: T.bg }}>
+    <div style={{ ...G, display: "flex", height: "100vh", width: "100%", overflow: "hidden", background: T.bg }}>
       {!isMobile && <ConsultantSidebar pathname={pathname} onNav={go} user={user} />}
 
       {isMobile && menuOpen && (

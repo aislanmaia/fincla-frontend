@@ -32,6 +32,13 @@ export function fmtMoney(value) {
   return (n < 0 ? "−" : "") + fmtAbs(n);
 }
 
+/** Dinheiro pt-BR sem centavos (R$ 1.234), sinal só quando negativo. Espelha o
+ * `fmtBRL0` da referência de design do consultor. */
+export function fmtBRL0(value) {
+  const n = Math.round(Number(value) || 0);
+  return (n < 0 ? "−" : "") + "R$ " + Math.abs(n).toLocaleString("pt-BR");
+}
+
 /** Percentual com 1 casa, robusto a valor ausente/não-finito. */
 export function fmtPct(value) {
   const n = Number(value);

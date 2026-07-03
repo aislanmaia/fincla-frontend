@@ -1,70 +1,76 @@
 import React from "react";
 
-import { Badge, Btn, Card } from "../../components/primitives";
+import { Card } from "../../components/primitives";
 import { T } from "../../tokens";
-import { G, NUM } from "../../typography";
-import { fmtSgn } from "../../formatters";
-import { fmtLastActive, fmtMoney, fmtPct, healthTone, trendGlyph } from "./consultantFormat";
+import { G } from "../../typography";
+import { fmtLastActive } from "./consultantFormat";
+import { Avatar, HealthRing, Icon, RiskBadge } from "./consultantUi";
 
-function Stat({ label, value, tone }) {
+/** Botão de ação do header. `soon` desabilita com selo "em breve" (Trilha B). */
+function HeaderAction({ variant, icon, label, soon }) {
+  const styles = variant === "purple"
+    ? { bg: T.purple, txt: "#fff", brd: T.purple, iconColor: "#fff" }
+    : { bg: T.surface, txt: T.inkMid, brd: T.border, iconColor: T.inkMid };
   return (
-    <div style={{ minWidth: 0 }}>
-      <div style={{ ...G, fontSize: 10.5, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</div>
-      <div style={{ ...G, ...NUM, fontSize: 14, fontWeight: 700, color: tone ?? T.ink, marginTop: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-        {value}
-      </div>
-    </div>
+    <button
+      type="button"
+      disabled={soon}
+      title={soon ? "Em breve" : undefined}
+      style={{
+        ...G, display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 15px",
+        borderRadius: 9, border: `1px solid ${styles.brd}`, background: styles.bg, color: styles.txt,
+        fontSize: 13, fontWeight: 700, cursor: soon ? "default" : "pointer", whiteSpace: "nowrap",
+        opacity: soon ? 0.55 : 1,
+      }}
+    >
+      <Icon name={icon} size={14} color={styles.iconColor} />
+      {label}
+      {soon && (
+        <span style={{ ...G, fontSize: 8.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: variant === "purple" ? "#fff" : T.inkLight, background: variant === "purple" ? "rgba(255,255,255,0.2)" : T.grayLight, borderRadius: 5, padding: "1px 5px" }}>
+          em breve
+        </span>
+      )}
+    </button>
   );
 }
 
 /**
- * Cabeçalho do relatório do cliente (A3.1, S3). Presentational — recebe o
- * `client` (mesma forma enriquecida da carteira) e `onBack` (volta para a
- * carteira). Mostra saúde/situação, patrimônio e os KPIs de 12m; as abas do
- * relatório (Visão geral, Transações, Cartões, Categorias) chegam em A3.2+.
+ * Cabeçalho do relatório do cliente (RF.1b, S3) — fiel a `cons-relatorio.jsx`:
+ * avatar com anel de risco, nome, `RiskBadge`, linha de contexto, `HealthRing` e
+ * as ações "Avaliar com IA" / "Enviar mensagem" (Trilha B → stub "em breve").
+ * Presentational; recebe o `client` (item enriquecido da carteira).
  */
-export function ConsultantClientReportHeader({ client, onBack }) {
-  const tone = healthTone(client.health);
-  const trend = trendGlyph(client.trend);
-  const balance = Number(client.balance) || 0;
-  const savings = Number(client.savings_pct) || 0;
-  const debt = Number(client.debt_pct) || 0;
+export function ConsultantClientReportHeader({ client }) {
+  const health = Number(client.health) || 0;
+  const tone = { healthy: T.greenLight, attention: T.amberLight, risk: T.redLight };
+  const ringBg = health >= 70 ? tone.healthy : health >= 40 ? tone.attention : tone.risk;
   const showOrg = client.organization_name && client.organization_name !== client.client_name;
 
   return (
-    <Card style={{ padding: 20, display: "flex", flexDirection: "column", gap: 18 }}>
-      <div>
-        <Btn variant="outGray" small onClick={onBack}>← Voltar para a carteira</Btn>
-      </div>
+    <Card style={{ padding: 20 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <Avatar name={client.client_name} seed={client.organization_id} size={58} ring={ringBg} />
 
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <div style={{ ...G, ...NUM, width: 52, height: 52, borderRadius: 14, background: tone.bg, color: tone.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, flexShrink: 0 }}>
-          {Math.round(Number(client.health) || 0)}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ ...G, fontSize: 18, fontWeight: 800, color: T.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {client.client_name}
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <h1 style={{ ...G, margin: 0, fontSize: 24, fontWeight: 800, color: T.ink, letterSpacing: "-0.02em" }}>{client.client_name}</h1>
+            <RiskBadge health={health} />
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5 }}>
-            <Badge color={tone.color} bg={tone.bg}>{tone.label}</Badge>
-            {showOrg && (
-              <span style={{ ...G, fontSize: 12, color: T.inkLight, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {client.organization_name}
-              </span>
-            )}
+          <div style={{ ...G, fontSize: 12.5, color: T.inkLight, marginTop: 4 }}>
+            {showOrg ? `${client.organization_name} · ` : ""}ativo em {fmtLastActive(client.last_active)}
           </div>
         </div>
-        <div title={`Tendência: ${client.trend}`} style={{ ...G, fontSize: 22, fontWeight: 800, color: trend.color, flexShrink: 0 }}>
-          {trend.glyph}
-        </div>
-      </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: "14px 16px", borderTop: `1px solid ${T.border}`, paddingTop: 16 }}>
-        <Stat label="Patrimônio" value={fmtMoney(client.patrimonio)} />
-        <Stat label="Saldo 12m" value={fmtSgn(balance)} tone={balance < 0 ? T.red : T.ink} />
-        <Stat label="Poupança" value={fmtPct(savings)} tone={savings < 0 ? T.red : T.ink} />
-        <Stat label="Comprometimento" value={fmtPct(debt)} tone={debt >= 50 ? T.red : T.ink} />
-        <Stat label="Ativo em" value={fmtLastActive(client.last_active)} tone={T.inkLight} />
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ textAlign: "center" }}>
+            <HealthRing health={health} size={64} stroke={6} />
+            <div style={{ ...G, fontSize: 9.5, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 5 }}>Saúde</div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <HeaderAction variant="purple" icon="sparkles" label="Avaliar com IA" soon />
+            <HeaderAction variant="outline" icon="message" label="Enviar mensagem" soon />
+          </div>
+        </div>
       </div>
     </Card>
   );

@@ -2,75 +2,96 @@ import { describe, expect, it } from "vitest";
 
 import {
   cashFlowRiskLabel,
-  formatOverviewKpi,
-  selectClientOverview,
+  categorySegments,
+  diagnosisFactors,
+  factorTone,
+  overviewGoalsSummary,
+  overviewKpis,
 } from "../consultantClientOverview";
 
 const health = {
-  reference_month: "2026-06-01",
-  ativo: 8500, passivo: 1200, patrimonio_liquido: 7300,
-  avg_income: 7000, avg_expense: 4500, avg_surplus: 2500,
+  patrimonio_liquido: 7300, avg_income: 7000, avg_expense: 4500, avg_surplus: 2500,
   income_commitment: 0.64, savings_rate: 0.36, emergency_fund_months: 1.9,
   goals_on_track: 3, goals_total: 5, goal_progress_avg: 42,
   cash_flow_risk: "low", score: 72,
 };
+const client = { balance: "1200.00", patrimonio: "50000.00" };
 
 describe("cashFlowRiskLabel", () => {
-  it("mapeia as faixas em PT-BR (default médio)", () => {
+  it("mapeia faixas (default médio)", () => {
     expect(cashFlowRiskLabel("low")).toBe("Risco baixo");
     expect(cashFlowRiskLabel("high")).toBe("Risco alto");
-    expect(cashFlowRiskLabel("medium")).toBe("Risco médio");
     expect(cashFlowRiskLabel(undefined)).toBe("Risco médio");
   });
 });
 
-describe("selectClientOverview", () => {
-  it("retorna null sem dados", () => {
-    expect(selectClientOverview(null)).toBeNull();
+describe("overviewKpis", () => {
+  it("produz os 4 KPIs (saldo/renda/poupança/comprometimento)", () => {
+    const kpis = overviewKpis({ client, health });
+    expect(kpis.map((k) => k.key)).toEqual(["balance", "income", "savings", "commitment"]);
+    const byKey = Object.fromEntries(kpis.map((k) => [k.key, k]));
+    expect(byKey.savings.value).toBe("36.0%");
+    expect(byKey.commitment.value).toBe("64.0%");
+    expect(byKey.income.value).toContain("7.000");
   });
 
-  it("extrai score arredondado e risco", () => {
-    const vm = selectClientOverview({ ...health, score: 71.6 });
-    expect(vm.score).toBe(72);
-    expect(vm.risk).toEqual({ key: "low", label: "Risco baixo" });
+  it("tom vermelho para saldo negativo", () => {
+    const kpis = overviewKpis({ client: { balance: -50 }, health });
+    expect(kpis[0].tone).toBe("red");
   });
 
-  it("converte razões 0..1 em % (commitment/savings) e mantém goal_progress 0..100", () => {
-    const vm = selectClientOverview(health);
-    const byKey = Object.fromEntries(vm.kpis.map((k) => [k.key, k]));
-    expect(byKey.commitment.value).toBeCloseTo(64);
-    expect(byKey.savings.value).toBeCloseTo(36);
-    expect(vm.goals).toEqual({ onTrack: 3, total: 5, progress: 42 });
-  });
-
-  it("marca bad: patrimônio/sobra negativos, comprometimento >80%, reserva <1", () => {
-    const vm = selectClientOverview({
-      ...health,
-      patrimonio_liquido: -100, avg_surplus: -50,
-      income_commitment: 0.9, savings_rate: -0.1, emergency_fund_months: 0.5,
-    });
-    const byKey = Object.fromEntries(vm.kpis.map((k) => [k.key, k]));
-    expect(byKey.net_worth.bad).toBe(true);
-    expect(byKey.avg_surplus.bad).toBe(true);
-    expect(byKey.commitment.bad).toBe(true);
-    expect(byKey.savings.bad).toBe(true);
-    expect(byKey.reserve.bad).toBe(true);
-  });
-
-  it("não marca bad em números saudáveis", () => {
-    const vm = selectClientOverview(health);
-    const byKey = Object.fromEntries(vm.kpis.map((k) => [k.key, k]));
-    expect(byKey.net_worth.bad).toBe(false);
-    expect(byKey.commitment.bad).toBe(false); // 64% ≤ 80
-    expect(byKey.reserve.bad).toBe(false); // 1.9 ≥ 1
+  it("é seguro sem dados", () => {
+    expect(overviewKpis()).toHaveLength(4);
   });
 });
 
-describe("formatOverviewKpi", () => {
-  it("formata por kind", () => {
-    expect(formatOverviewKpi({ kind: "pct", value: 64 })).toBe("64.0%");
-    expect(formatOverviewKpi({ kind: "months", value: 1 })).toBe("1 mês");
-    expect(formatOverviewKpi({ kind: "months", value: 1.9 })).toBe("1,9 meses");
-    expect(formatOverviewKpi({ kind: "money", value: 7300 })).toContain("7.300");
+describe("diagnosisFactors", () => {
+  it("retorna 4 fatores 0..100 com hints", () => {
+    const f = diagnosisFactors(health);
+    expect(f.map((x) => x.key)).toEqual(["reserve", "commitment", "savings", "consistency"]);
+    f.forEach((x) => {
+      expect(x.v).toBeGreaterThanOrEqual(0);
+      expect(x.v).toBeLessThanOrEqual(100);
+    });
+  });
+  it("comprometimento alto (0.9) → hint de renda comprometida e valor baixo", () => {
+    const f = diagnosisFactors({ ...health, income_commitment: 0.9 });
+    const commit = f.find((x) => x.key === "commitment");
+    expect(commit.hint).toBe("renda muito comprometida");
+    expect(commit.v).toBe(10);
+  });
+  it("vazio sem health", () => {
+    expect(diagnosisFactors(null)).toEqual([]);
+  });
+});
+
+describe("factorTone", () => {
+  it("verde/âmbar/vermelho por faixa", () => {
+    expect(factorTone(70)).toBe("green");
+    expect(factorTone(50)).toBe("amber");
+    expect(factorTone(20)).toBe("red");
+  });
+});
+
+describe("categorySegments", () => {
+  it("ordena desc, calcula % e usa a cor da tag", () => {
+    const { segments, total } = categorySegments([
+      { tag_name: "Lazer", total: 100, tag_color: "#f00" },
+      { tag_name: "Moradia", total: 300, tag_color: null },
+    ]);
+    expect(total).toBe(400);
+    expect(segments[0].label).toBe("Moradia"); // maior primeiro
+    expect(segments[0].color).toBeTruthy(); // fallback de paleta
+    expect(segments[1].color).toBe("#f00");
+    expect(segments[0].pct).toBe(75);
+  });
+  it("é seguro com entrada inválida", () => {
+    expect(categorySegments(null)).toEqual({ segments: [], total: 0 });
+  });
+});
+
+describe("overviewGoalsSummary", () => {
+  it("extrai on-track/total/progresso", () => {
+    expect(overviewGoalsSummary(health)).toEqual({ onTrack: 3, total: 5, progress: 42 });
   });
 });

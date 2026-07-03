@@ -6,9 +6,12 @@ import { T } from "../../tokens";
 import { G } from "../../typography";
 import { useConsultantClients } from "../../features/consultant/useConsultantClients";
 import { useFinancialHealthData } from "../../features/health/useFinancialHealthData";
+import { useClientCategories } from "../../features/consultant/useClientCategories";
+import { useGoalsData } from "../../features/goals/useGoalsData";
 import { ConsultantClientReportHeader } from "../../features/consultant/ConsultantClientReportHeader";
 import { ConsultantClientReportTabs } from "../../features/consultant/ConsultantClientReportTabs";
 import { ConsultantClientOverviewTab } from "../../features/consultant/ConsultantClientOverviewTab";
+import { Icon } from "../../features/consultant/consultantUi";
 import { resolveClientReportState } from "../../features/consultant/consultantClientReport";
 import { DEFAULT_CLIENT_REPORT_TAB } from "../../features/consultant/consultantReportTabs";
 
@@ -23,11 +26,12 @@ function EmptyState({ title, text, action }) {
 }
 
 /**
- * Relatório do cliente (A3.1/A3.2, S3) — rota `/consultant/clients/$id` ($id = org
- * do cliente). O "Abrir" da carteira leva aqui. Entrega o cabeçalho (nome/saúde/
- * patrimônio, via a carteira) + as abas; a aba "Visão geral" (A3.2a) consome o read
- * por-org `/financial-health/score` com `organization_id` = org do cliente.
- * Transações/Cartões/Categorias chegam em A3.3–A3.5.
+ * Relatório do cliente (RF.1b, S3) — rota `/consultant/clients/$id` ($id = org do
+ * cliente). O "Abrir" da carteira leva aqui. Entrega o cabeçalho (avatar/anel/
+ * saúde/ações), as abas e a aba "Visão geral" fiel à referência de design, que
+ * consome os reads por-org com `organization_id` = org do cliente:
+ * `/financial-health/score` (KPIs+diagnóstico+metas), `/analytics/by-category`
+ * (donut) e `/goals` (metas). Transações/Cartões/Categorias chegam em RF.2–RF.4.
  *
  * Estados: cliente na carteira → relatório; ainda carregando → "carregando";
  * erro sem lista → "erro"; carregou e o id não é cliente do consultor →
@@ -41,9 +45,12 @@ export function ConsultantClientReportPage() {
   const { status, client } = resolveClientReportState({ clients, id, hasLoaded, isLoading, error });
 
   const [tab, setTab] = React.useState(DEFAULT_CLIENT_REPORT_TAB);
-  // Só busca a saúde do cliente quando o cliente é de fato da carteira (status ready):
-  // evita um read por-org para um id inválido/fora da carteira.
-  const health = useFinancialHealthData({ organizationId: id, enabled: status === "ready" });
+  // Os reads por-org só disparam quando o cliente é de fato da carteira (status
+  // ready): evita buscas para um id inválido/fora da carteira.
+  const ready = status === "ready";
+  const health = useFinancialHealthData({ organizationId: id, enabled: ready });
+  const categories = useClientCategories({ organizationId: id, enabled: ready });
+  const goals = useGoalsData({ organizationId: id, enabled: ready });
 
   const goToWallet = React.useCallback(() => {
     navigate({ to: "/consultant/clients" });
@@ -60,18 +67,20 @@ export function ConsultantClientReportPage() {
   );
 
   return (
-    <div style={{ ...G, width: "100%", padding: "clamp(18px, 3.5vw, 32px) clamp(16px, 3.5vw, 40px) 48px", display: "flex", flexDirection: "column", gap: 18 }}>
+    <div style={{ ...G, width: "100%", boxSizing: "border-box", padding: "clamp(18px, 3.5vw, 32px) clamp(16px, 3.5vw, 40px) 48px", display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
       {status === "ready" && (
         <>
-          <ConsultantClientReportHeader client={client} onBack={goToWallet} />
+          <button
+            type="button"
+            onClick={goToWallet}
+            style={{ ...G, display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", border: "none", color: T.inkLight, fontSize: 12.5, fontWeight: 600, cursor: "pointer", alignSelf: "flex-start", padding: 0 }}
+          >
+            <Icon name="chevron-left" size={15} color="currentColor" /> Clientes
+          </button>
+          <ConsultantClientReportHeader client={client} />
           <ConsultantClientReportTabs active={tab} onSelect={setTab} />
           {tab === "overview" && (
-            <ConsultantClientOverviewTab
-              data={health.data}
-              loading={health.loading}
-              error={health.error}
-              hasLoaded={health.hasLoaded}
-            />
+            <ConsultantClientOverviewTab client={client} health={health} categories={categories} goals={goals} />
           )}
         </>
       )}
