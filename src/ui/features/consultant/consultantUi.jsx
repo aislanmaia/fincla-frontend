@@ -157,6 +157,9 @@ export function HealthRing({ health, size = 56, stroke = 5, showNum = true }) {
 
 /** Sparkline SVG (linha + área). `data` = série numérica. */
 export function Sparkline({ data = [], color = T.blue, w = 88, h = 28, fill = true }) {
+  // useId antes de qualquer return: hooks não podem ficar após um early-return
+  // (a ordem tem de ser estável entre renders — rules of hooks).
+  const gid = React.useId();
   if (!Array.isArray(data) || data.length < 2) return <svg width={w} height={h} />;
   const min = Math.min(...data), max = Math.max(...data);
   const span = max - min || 1;
@@ -167,7 +170,6 @@ export function Sparkline({ data = [], color = T.blue, w = 88, h = 28, fill = tr
   });
   const line = pts.map((pt, i) => (i === 0 ? "M" : "L") + pt[0].toFixed(1) + " " + pt[1].toFixed(1)).join(" ");
   const area = line + ` L ${w} ${h} L 0 ${h} Z`;
-  const gid = React.useId();
   return (
     <svg width={w} height={h} style={{ display: "block", overflow: "visible" }}>
       <defs>
