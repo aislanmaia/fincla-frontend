@@ -7,10 +7,12 @@ import { G } from "../../typography";
 import { useConsultantClients } from "../../features/consultant/useConsultantClients";
 import { useFinancialHealthData } from "../../features/health/useFinancialHealthData";
 import { useClientCategories } from "../../features/consultant/useClientCategories";
+import { useClientTransactions } from "../../features/consultant/useClientTransactions";
 import { useGoalsData } from "../../features/goals/useGoalsData";
 import { ConsultantClientReportHeader } from "../../features/consultant/ConsultantClientReportHeader";
 import { ConsultantClientReportTabs } from "../../features/consultant/ConsultantClientReportTabs";
 import { ConsultantClientOverviewTab } from "../../features/consultant/ConsultantClientOverviewTab";
+import { ConsultantClientTransactionsTab } from "../../features/consultant/ConsultantClientTransactionsTab";
 import { Icon } from "../../features/consultant/consultantUi";
 import { resolveClientReportState } from "../../features/consultant/consultantClientReport";
 import { DEFAULT_CLIENT_REPORT_TAB } from "../../features/consultant/consultantReportTabs";
@@ -51,6 +53,8 @@ export function ConsultantClientReportPage() {
   const health = useFinancialHealthData({ organizationId: id, enabled: ready });
   const categories = useClientCategories({ organizationId: id, enabled: ready });
   const goals = useGoalsData({ organizationId: id, enabled: ready });
+  // Transações só carregam ao abrir a aba (evita um fetch pesado no Overview).
+  const transactions = useClientTransactions({ organizationId: id, enabled: ready && tab === "transactions" });
 
   const goToWallet = React.useCallback(() => {
     navigate({ to: "/consultant/clients" });
@@ -82,6 +86,7 @@ export function ConsultantClientReportPage() {
           {tab === "overview" && (
             <ConsultantClientOverviewTab client={client} health={health} categories={categories} goals={goals} />
           )}
+          {tab === "transactions" && <ConsultantClientTransactionsTab transactions={transactions} />}
         </>
       )}
 
