@@ -5,6 +5,7 @@ import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { fmtSgn } from "../../formatters";
 import { fmtLastActive, fmtMoney, fmtPct, healthTone, trendGlyph } from "./consultantFormat";
+import { ConsultantClientActionsMenu } from "./ConsultantClientActionsMenu";
 
 function Metric({ label, value, tone }) {
   return (
@@ -59,9 +60,16 @@ export function ConsultantClientCard({ client, onOpenClient }) {
         <div style={{ ...G, fontSize: 11, color: T.inkLight }}>
           Ativo em <span style={{ ...NUM }}>{fmtLastActive(client.last_active)}</span>
         </div>
-        <Btn variant="outGray" small onClick={() => onOpenClient?.(client.organization_id)}>
-          Abrir
-        </Btn>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <Btn variant="outGray" small onClick={() => onOpenClient?.(client.organization_id)}>
+            Abrir
+          </Btn>
+          <ConsultantClientActionsMenu
+            organizationId={client.organization_id}
+            clientName={client.client_name}
+            onOpen={onOpenClient}
+          />
+        </div>
       </div>
     </Card>
   );

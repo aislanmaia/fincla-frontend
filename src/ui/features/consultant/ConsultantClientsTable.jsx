@@ -5,6 +5,7 @@ import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { fmtSgn } from "../../formatters";
 import { fmtLastActive, fmtMoney, fmtPct, healthTone, trendGlyph } from "./consultantFormat";
+import { ConsultantClientActionsMenu } from "./ConsultantClientActionsMenu";
 
 const TH = { ...G, fontSize: 10.5, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.04em", textAlign: "left", padding: "10px 14px", whiteSpace: "nowrap" };
 const TD = { ...G, fontSize: 13, color: T.ink, padding: "11px 14px", borderTop: `1px solid ${T.border}`, whiteSpace: "nowrap" };
@@ -34,7 +35,14 @@ function Row({ client, onOpenClient }) {
       <td style={{ ...TD, textAlign: "center", color: trend.color, fontWeight: 800, fontSize: 15 }} title={`Tendência: ${client.trend}`}>{trend.glyph}</td>
       <td style={{ ...NUMTD, color: T.inkLight }}>{fmtLastActive(client.last_active)}</td>
       <td style={{ ...TD, textAlign: "right" }}>
-        <Btn variant="outGray" small onClick={() => onOpenClient?.(client.organization_id)}>Abrir</Btn>
+        <div style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+          <Btn variant="outGray" small onClick={() => onOpenClient?.(client.organization_id)}>Abrir</Btn>
+          <ConsultantClientActionsMenu
+            organizationId={client.organization_id}
+            clientName={client.client_name}
+            onOpen={onOpenClient}
+          />
+        </div>
       </td>
     </tr>
   );
