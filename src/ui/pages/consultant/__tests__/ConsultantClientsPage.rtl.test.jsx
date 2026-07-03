@@ -2,6 +2,11 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const navigate = vi.fn();
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => navigate,
+}));
+
 vi.mock("../../../../api/consultant", () => ({
   getConsultantClients: vi.fn(),
 }));
@@ -30,6 +35,7 @@ const ana = client({ organization_id: "a", client_name: "Ana Beatriz", health: 9
 const carla = client({ organization_id: "c", client_name: "Carla Dias", health: 30, patrimonio: "12000.00" });
 
 beforeEach(() => {
+  navigate.mockReset();
   vi.mocked(getConsultantClients).mockReset();
 });
 
@@ -98,5 +104,14 @@ describe("ConsultantClientsPage", () => {
     vi.mocked(getConsultantClients).mockRejectedValue(new Error("boom"));
     render(<ConsultantClientsPage />);
     await waitFor(() => expect(screen.getByText("Não foi possível carregar")).toBeInTheDocument());
+  });
+
+  it("'Abrir' navega para o relatório do cliente com o id da org", async () => {
+    vi.mocked(getConsultantClients).mockResolvedValue({ total: 1, clients: [ana] });
+    render(<ConsultantClientsPage />);
+    await waitFor(() => expect(screen.getByText("Ana Beatriz")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "Abrir" }));
+    expect(navigate).toHaveBeenCalledWith({ to: "/consultant/clients/$id", params: { id: "a" } });
   });
 });

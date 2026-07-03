@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "@tanstack/react-router";
 
 import { Card, PageTitle } from "../../components/primitives";
 import { T } from "../../tokens";
@@ -25,9 +26,10 @@ function EmptyState({ title, text }) {
  *
  * Estados explícitos (na prioridade): erro total (nada carregado) · carregando ·
  * carteira vazia (base sem clientes) · sem resultado para os filtros · lista.
- * O clique em "Abrir" é stub até a rota de relatório do cliente (S3).
+ * "Abrir" navega para o relatório do cliente (`/consultant/clients/$id`, A3.1/S3).
  */
 export function ConsultantClientsPage() {
+  const navigate = useNavigate();
   const { clients, total, isLoading, error, hasLoaded, loadedOk } = useConsultantClients();
 
   const [query, setQuery] = React.useState("");
@@ -52,9 +54,10 @@ export function ConsultantClientsPage() {
         ? "loading"
         : "empty";
 
-  const openClient = React.useCallback(() => {
-    // TODO(S3): navegar para /consultant/clients/:id (relatório do cliente).
-  }, []);
+  const openClient = React.useCallback((organizationId) => {
+    if (!organizationId) return;
+    navigate({ to: "/consultant/clients/$id", params: { id: organizationId } });
+  }, [navigate]);
 
   return (
     <div style={{ ...G, width: "100%", padding: "clamp(18px, 3.5vw, 32px) clamp(16px, 3.5vw, 40px) 48px", display: "flex", flexDirection: "column", gap: 18 }}>

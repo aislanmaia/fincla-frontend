@@ -17,6 +17,7 @@ import { GatedAuthenticatedPageOutlet } from "./GatedAuthenticatedPageOutlet.jsx
 import { ConsultantShell } from "../features/consultant/ConsultantShell.jsx";
 import { ConsultantPainelPage } from "../pages/consultant/ConsultantPainelPage.jsx";
 import { ConsultantClientsPage } from "../pages/consultant/ConsultantClientsPage.jsx";
+import { ConsultantClientReportPage } from "../pages/consultant/ConsultantClientReportPage.jsx";
 import { ConsultantPlaceholderPage } from "../pages/consultant/ConsultantPlaceholderPage.jsx";
 import { AUTH_ROUTE_SEGMENTS } from "./appSegments.js";
 import { isPlanningArea, DEFAULT_PLANNING_AREA } from "../features/planning/planningAreas.js";
@@ -210,6 +211,12 @@ const consultantClientsRoute = createRoute({
   path: "clients",
   component: ConsultantClientsPage,
 });
+/** Relatório do cliente (S3): `$id` = org do cliente. O "Abrir" da carteira leva aqui. */
+const consultantClientReportRoute = createRoute({
+  getParentRoute: () => consultantRoute,
+  path: "clients/$id",
+  component: ConsultantClientReportPage,
+});
 const consultantInsightsRoute = createRoute({
   getParentRoute: () => consultantRoute,
   path: "insights",
@@ -223,6 +230,7 @@ const consultantProfileRoute = createRoute({
 consultantRoute.addChildren([
   consultantIndexRoute,
   consultantClientsRoute,
+  consultantClientReportRoute,
   consultantInsightsRoute,
   consultantProfileRoute,
 ]);
