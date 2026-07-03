@@ -5,8 +5,12 @@ import { Card } from "../../components/primitives";
 import { T } from "../../tokens";
 import { G } from "../../typography";
 import { useConsultantClients } from "../../features/consultant/useConsultantClients";
+import { useFinancialHealthData } from "../../features/health/useFinancialHealthData";
 import { ConsultantClientReportHeader } from "../../features/consultant/ConsultantClientReportHeader";
+import { ConsultantClientReportTabs } from "../../features/consultant/ConsultantClientReportTabs";
+import { ConsultantClientOverviewTab } from "../../features/consultant/ConsultantClientOverviewTab";
 import { resolveClientReportState } from "../../features/consultant/consultantClientReport";
+import { DEFAULT_CLIENT_REPORT_TAB } from "../../features/consultant/consultantReportTabs";
 
 function EmptyState({ title, text, action }) {
   return (
@@ -19,10 +23,11 @@ function EmptyState({ title, text, action }) {
 }
 
 /**
- * Relatório do cliente (A3.1, S3) — rota `/consultant/clients/$id` ($id = org do
- * cliente). O "Abrir" da carteira leva aqui. Nesta fatia entregamos o cabeçalho
- * (nome/saúde/patrimônio, via a própria carteira) e o esqueleto das abas; os
- * reads por-org (Visão geral, Transações, Cartões, Categorias) chegam em A3.2+.
+ * Relatório do cliente (A3.1/A3.2, S3) — rota `/consultant/clients/$id` ($id = org
+ * do cliente). O "Abrir" da carteira leva aqui. Entrega o cabeçalho (nome/saúde/
+ * patrimônio, via a carteira) + as abas; a aba "Visão geral" (A3.2a) consome o read
+ * por-org `/financial-health/score` com `organization_id` = org do cliente.
+ * Transações/Cartões/Categorias chegam em A3.3–A3.5.
  *
  * Estados: cliente na carteira → relatório; ainda carregando → "carregando";
  * erro sem lista → "erro"; carregou e o id não é cliente do consultor →
@@ -34,6 +39,11 @@ export function ConsultantClientReportPage() {
   const { clients, hasLoaded, isLoading, error } = useConsultantClients();
 
   const { status, client } = resolveClientReportState({ clients, id, hasLoaded, isLoading, error });
+
+  const [tab, setTab] = React.useState(DEFAULT_CLIENT_REPORT_TAB);
+  // Só busca a saúde do cliente quando o cliente é de fato da carteira (status ready):
+  // evita um read por-org para um id inválido/fora da carteira.
+  const health = useFinancialHealthData({ organizationId: id, enabled: status === "ready" });
 
   const goToWallet = React.useCallback(() => {
     navigate({ to: "/consultant/clients" });
@@ -54,12 +64,15 @@ export function ConsultantClientReportPage() {
       {status === "ready" && (
         <>
           <ConsultantClientReportHeader client={client} onBack={goToWallet} />
-          <Card style={{ padding: "32px 24px", textAlign: "center" }}>
-            <div style={{ ...G, fontSize: 14, fontWeight: 800, color: T.ink, marginBottom: 6 }}>Relatório em construção</div>
-            <div style={{ ...G, fontSize: 12.5, color: T.inkLight, lineHeight: 1.6, maxWidth: 420, margin: "0 auto" }}>
-              Em breve: visão geral, transações, cartões e categorias deste cliente.
-            </div>
-          </Card>
+          <ConsultantClientReportTabs active={tab} onSelect={setTab} />
+          {tab === "overview" && (
+            <ConsultantClientOverviewTab
+              data={health.data}
+              loading={health.loading}
+              error={health.error}
+              hasLoaded={health.hasLoaded}
+            />
+          )}
         </>
       )}
 
