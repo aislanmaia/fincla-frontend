@@ -5,8 +5,15 @@ import { Card } from "../../components/primitives";
 import { T } from "../../tokens";
 import { G } from "../../typography";
 import { useConsultantClients } from "../../features/consultant/useConsultantClients";
+import { useFinancialHealthData } from "../../features/health/useFinancialHealthData";
+import { useClientCategories } from "../../features/consultant/useClientCategories";
+import { useGoalsData } from "../../features/goals/useGoalsData";
 import { ConsultantClientReportHeader } from "../../features/consultant/ConsultantClientReportHeader";
+import { ConsultantClientReportTabs } from "../../features/consultant/ConsultantClientReportTabs";
+import { ConsultantClientOverviewTab } from "../../features/consultant/ConsultantClientOverviewTab";
+import { Icon } from "../../features/consultant/consultantUi";
 import { resolveClientReportState } from "../../features/consultant/consultantClientReport";
+import { DEFAULT_CLIENT_REPORT_TAB } from "../../features/consultant/consultantReportTabs";
 
 function EmptyState({ title, text, action }) {
   return (
@@ -19,10 +26,12 @@ function EmptyState({ title, text, action }) {
 }
 
 /**
- * Relatório do cliente (A3.1, S3) — rota `/consultant/clients/$id` ($id = org do
- * cliente). O "Abrir" da carteira leva aqui. Nesta fatia entregamos o cabeçalho
- * (nome/saúde/patrimônio, via a própria carteira) e o esqueleto das abas; os
- * reads por-org (Visão geral, Transações, Cartões, Categorias) chegam em A3.2+.
+ * Relatório do cliente (RF.1b, S3) — rota `/consultant/clients/$id` ($id = org do
+ * cliente). O "Abrir" da carteira leva aqui. Entrega o cabeçalho (avatar/anel/
+ * saúde/ações), as abas e a aba "Visão geral" fiel à referência de design, que
+ * consome os reads por-org com `organization_id` = org do cliente:
+ * `/financial-health/score` (KPIs+diagnóstico+metas), `/analytics/by-category`
+ * (donut) e `/goals` (metas). Transações/Cartões/Categorias chegam em RF.2–RF.4.
  *
  * Estados: cliente na carteira → relatório; ainda carregando → "carregando";
  * erro sem lista → "erro"; carregou e o id não é cliente do consultor →
@@ -34,6 +43,14 @@ export function ConsultantClientReportPage() {
   const { clients, hasLoaded, isLoading, error } = useConsultantClients();
 
   const { status, client } = resolveClientReportState({ clients, id, hasLoaded, isLoading, error });
+
+  const [tab, setTab] = React.useState(DEFAULT_CLIENT_REPORT_TAB);
+  // Os reads por-org só disparam quando o cliente é de fato da carteira (status
+  // ready): evita buscas para um id inválido/fora da carteira.
+  const ready = status === "ready";
+  const health = useFinancialHealthData({ organizationId: id, enabled: ready });
+  const categories = useClientCategories({ organizationId: id, enabled: ready });
+  const goals = useGoalsData({ organizationId: id, enabled: ready });
 
   const goToWallet = React.useCallback(() => {
     navigate({ to: "/consultant/clients" });
@@ -50,16 +67,21 @@ export function ConsultantClientReportPage() {
   );
 
   return (
-    <div style={{ ...G, width: "100%", padding: "clamp(18px, 3.5vw, 32px) clamp(16px, 3.5vw, 40px) 48px", display: "flex", flexDirection: "column", gap: 18 }}>
+    <div style={{ ...G, width: "100%", boxSizing: "border-box", padding: "clamp(18px, 3.5vw, 32px) clamp(16px, 3.5vw, 40px) 48px", display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
       {status === "ready" && (
         <>
-          <ConsultantClientReportHeader client={client} onBack={goToWallet} />
-          <Card style={{ padding: "32px 24px", textAlign: "center" }}>
-            <div style={{ ...G, fontSize: 14, fontWeight: 800, color: T.ink, marginBottom: 6 }}>Relatório em construção</div>
-            <div style={{ ...G, fontSize: 12.5, color: T.inkLight, lineHeight: 1.6, maxWidth: 420, margin: "0 auto" }}>
-              Em breve: visão geral, transações, cartões e categorias deste cliente.
-            </div>
-          </Card>
+          <button
+            type="button"
+            onClick={goToWallet}
+            style={{ ...G, display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", border: "none", color: T.inkLight, fontSize: 12.5, fontWeight: 600, cursor: "pointer", alignSelf: "flex-start", padding: 0 }}
+          >
+            <Icon name="chevron-left" size={15} color="currentColor" /> Clientes
+          </button>
+          <ConsultantClientReportHeader client={client} />
+          <ConsultantClientReportTabs active={tab} onSelect={setTab} />
+          {tab === "overview" && (
+            <ConsultantClientOverviewTab client={client} health={health} categories={categories} goals={goals} />
+          )}
         </>
       )}
 
