@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { CLIENT_ROW_ACTIONS, isClientActionEnabled } from "../consultantClientActions.js";
+import { CLIENT_ROW_ACTIONS } from "../consultantClientActions.js";
 
 describe("CLIENT_ROW_ACTIONS", () => {
   it("lista abrir/avaliar/mensagem com ids em inglês", () => {
@@ -20,13 +20,5 @@ describe("CLIENT_ROW_ACTIONS", () => {
       "Avaliar com IA",
       "Enviar mensagem",
     ]);
-  });
-});
-
-describe("isClientActionEnabled", () => {
-  it("verdadeiro só para ações sem 'soon'", () => {
-    expect(isClientActionEnabled({ soon: false })).toBe(true);
-    expect(isClientActionEnabled({ soon: true })).toBe(false);
-    expect(isClientActionEnabled({})).toBe(true);
   });
 });

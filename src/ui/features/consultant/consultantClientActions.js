@@ -11,8 +11,3 @@ export const CLIENT_ROW_ACTIONS = [
   { id: "evaluate", label: "Avaliar com IA", soon: true },
   { id: "message", label: "Enviar mensagem", soon: true },
 ];
-
-/** Uma ação está disponível quando não está marcada como "em breve". */
-export function isClientActionEnabled(action) {
-  return !action.soon;
-}
