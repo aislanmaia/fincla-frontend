@@ -1,10 +1,19 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+const navigate = vi.fn();
+vi.mock("@tanstack/react-router", () => ({ useNavigate: () => navigate }));
+
+vi.mock("../../../../api/consultant", () => ({ createConsultantClient: vi.fn() }));
+
+import { createConsultantClient } from "../../../../api/consultant";
 import { ConsultantAddClientWizard } from "../ConsultantAddClientWizard.jsx";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
 
 function fillStep1() {
   fireEvent.change(screen.getByPlaceholderText("Ex.: Mariana Torres"), { target: { value: "Mariana Torres" } });
@@ -19,14 +28,17 @@ describe("<ConsultantAddClientWizard>", () => {
 
   it("passo 1: 'Continuar' só habilita com nome + e-mail válidos", () => {
     render(<ConsultantAddClientWizard open onClose={() => {}} />);
-    expect(screen.getByPlaceholderText("Ex.: Mariana Torres")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Continuar/ })).toBeDisabled();
-
     fillStep1();
     expect(screen.getByRole("button", { name: /Continuar/ })).not.toBeDisabled();
   });
 
-  it("percorre até a revisão e o 'Criar cliente' leva ao estado honesto 'em breve' (sem forjar sucesso)", () => {
+  it("cria o cliente pela API e mostra o link de definir senha", async () => {
+    vi.mocked(createConsultantClient).mockResolvedValue({
+      organization_id: "org-1",
+      client_name: "Mariana Torres",
+      set_password_link: "https://app/login?reset_token=abc",
+    });
     render(<ConsultantAddClientWizard open onClose={() => {}} />);
     fillStep1();
     fireEvent.click(screen.getByRole("button", { name: /Continuar/ })); // → org
@@ -37,10 +49,13 @@ describe("<ConsultantAddClientWizard>", () => {
     fireEvent.click(screen.getByRole("button", { name: /Continuar/ })); // → perfil
     fireEvent.click(screen.getByRole("button", { name: /Continuar/ })); // → revisar
 
-    const criar = screen.getByRole("button", { name: /Criar cliente/ });
-    fireEvent.click(criar);
+    fireEvent.click(screen.getByRole("button", { name: /Criar cliente/ }));
 
-    expect(screen.getByText("Provisionamento em breve")).toBeInTheDocument();
-    expect(screen.queryByText("Cliente adicionado!")).not.toBeInTheDocument();
-  }, 15000); // modal pesado + 6 re-renders: folga p/ contenção no full-suite paralelo
+    await waitFor(() => expect(createConsultantClient).toHaveBeenCalledTimes(1));
+    expect(createConsultantClient).toHaveBeenCalledWith(
+      expect.objectContaining({ first_name: "Mariana", last_name: "Torres", email: "mariana@email.com", org_name: "Finanças de Mariana" })
+    );
+    expect(await screen.findByText("Cliente adicionado!")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("https://app/login?reset_token=abc")).toBeInTheDocument();
+  }, 15000);
 });

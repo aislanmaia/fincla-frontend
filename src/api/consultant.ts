@@ -126,3 +126,50 @@ export const getClientsAtRisk = async (
   );
   return response.data;
 };
+
+// ── Adicionar cliente (S5) ──────────────────────────────────────
+
+export interface CreateConsultantClientPayload {
+  first_name: string;
+  last_name?: string;
+  email: string;
+  phone?: string;
+  occupation?: string;
+  org_name?: string;
+  org_type?: string;
+  estimated_income?: string;
+  initial_balance?: string;
+  card?: { bank?: string; limit?: string; due_day?: string } | null;
+  income?: { description?: string; value?: string; day?: string } | null;
+  notes?: string;
+  tags?: string[];
+  experience_level?: string;
+  main_goal?: string;
+  priority?: boolean;
+}
+
+export interface CreateConsultantClientResponse {
+  organization_id: string;
+  client_name: string;
+  set_password_link: string;
+}
+
+export const createConsultantClient = async (
+  payload: CreateConsultantClientPayload
+): Promise<CreateConsultantClientResponse> => {
+  const response = await apiClient.post<CreateConsultantClientResponse>(
+    '/consultant/clients',
+    payload
+  );
+  return response.data;
+};
+
+export const regenerateClientActivationLink = async (
+  organizationId: string
+): Promise<{ set_password_link: string }> => {
+  const response = await apiClient.post<{ set_password_link: string }>(
+    `/consultant/clients/${organizationId}/activation-link`,
+    {}
+  );
+  return response.data;
+};

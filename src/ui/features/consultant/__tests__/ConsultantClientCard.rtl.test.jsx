@@ -37,6 +37,18 @@ describe("<ConsultantClientCard>", () => {
     expect(onOpenClient).toHaveBeenCalledWith("org-1");
   });
 
+  it("cliente pendente mostra a ação 'gerar novo link' e chama onRegenerate", () => {
+    const onRegenerate = vi.fn();
+    render(<ConsultantClientCard client={{ ...client, pending_activation: true }} onOpenClient={() => {}} onRegenerate={onRegenerate} />);
+    fireEvent.click(screen.getByRole("button", { name: /gerar novo link/i }));
+    expect(onRegenerate).toHaveBeenCalledWith("org-1");
+  });
+
+  it("cliente não-pendente não mostra a ação de gerar link", () => {
+    render(<ConsultantClientCard client={client} onOpenClient={() => {}} onRegenerate={() => {}} />);
+    expect(screen.queryByRole("button", { name: /gerar novo link/i })).not.toBeInTheDocument();
+  });
+
   it("Avaliar/Mensagem são stubs desabilitados (Trilha B) e não abrem o relatório", () => {
     const onOpenClient = vi.fn();
     render(<ConsultantClientCard client={client} onOpenClient={onOpenClient} />);

@@ -12,7 +12,16 @@ vi.mock("../../../../api/consultant", () => ({
 }));
 
 import { getConsultantClients } from "../../../../api/consultant";
+import { ConsultantAddClientProvider } from "../../../features/consultant/ConsultantAddClientContext.jsx";
 import { ConsultantClientsPage } from "../ConsultantClientsPage.jsx";
+
+function renderWithVersion(clientsVersion) {
+  return render(
+    <ConsultantAddClientProvider openAddClient={() => {}} clientsVersion={clientsVersion} notifyClientsChanged={() => {}}>
+      <ConsultantClientsPage />
+    </ConsultantAddClientProvider>,
+  );
+}
 
 function client(over = {}) {
   return {
@@ -93,6 +102,23 @@ describe("ConsultantClientsPage", () => {
 
     fireEvent.change(screen.getByLabelText("Buscar cliente"), { target: { value: "zzz" } });
     expect(screen.getByText("Nenhum cliente encontrado")).toBeInTheDocument();
+  });
+
+  it("atualiza a lista quando um cliente é criado (clientsVersion muda)", async () => {
+    vi.mocked(getConsultantClients).mockResolvedValue({ total: 1, clients: [ana] });
+    const { rerender } = renderWithVersion(0);
+    await waitFor(() => expect(screen.getByText("Ana Beatriz")).toBeInTheDocument());
+    expect(getConsultantClients).toHaveBeenCalledTimes(1);
+
+    // Criação do cliente → clientsVersion incrementa → refetch (agora com Carla).
+    vi.mocked(getConsultantClients).mockResolvedValue({ total: 2, clients: [ana, carla] });
+    rerender(
+      <ConsultantAddClientProvider openAddClient={() => {}} clientsVersion={1} notifyClientsChanged={() => {}}>
+        <ConsultantClientsPage />
+      </ConsultantAddClientProvider>,
+    );
+    await waitFor(() => expect(getConsultantClients).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText("Carla Dias")).toBeInTheDocument();
   });
 
   it("mostra a carteira vazia quando não há clientes", async () => {

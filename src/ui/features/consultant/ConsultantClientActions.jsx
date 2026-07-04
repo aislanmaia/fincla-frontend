@@ -9,10 +9,16 @@ import { Icon } from "./consultantUi";
  * desabilitados "em breve"**) e, opcionalmente, "Abrir" (seta). O wrapper para a
  * propagação para não disparar o clique de abrir do card/linha ao interagir aqui.
  */
-export function ConsultantClientActions({ onOpen, showOpen = false, radius = 8, pad = "7px 9px" }) {
+export function ConsultantClientActions({ onOpen, showOpen = false, pending = false, onRegenerate, radius = 8, pad = "7px 9px" }) {
   const neutral = { background: T.surface, border: `1px solid ${T.border}`, borderRadius: radius, padding: pad, display: "flex" };
   return (
     <div style={{ display: "flex", gap: 6 }} onClick={(e) => e.stopPropagation()}>
+      {pending && (
+        <button type="button" onClick={onRegenerate} title="Cliente ainda não definiu a senha — gerar novo link"
+          style={{ ...neutral, background: T.amberLight, border: `1px solid ${T.amberBorder}`, cursor: "pointer" }}>
+          <Icon name="clock" size={13} color={T.amber} />
+        </button>
+      )}
       <button type="button" disabled title="Avaliar com IA (em breve)" style={{ ...neutral, background: T.purpleLight, border: "none", cursor: "default", opacity: 0.6 }}>
         <Icon name="sparkles" size={13} color={T.purple} />
       </button>

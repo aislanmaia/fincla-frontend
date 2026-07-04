@@ -12,7 +12,7 @@ const TD = { ...G, fontSize: 13, color: T.ink, padding: "12px 18px", borderTop: 
 
 const debtColor = (v) => (v <= 30 ? T.green : v <= 50 ? T.amber : T.red);
 
-function Row({ client, onOpenClient }) {
+function Row({ client, onOpenClient, onRegenerate }) {
   const debt = Number(client.debt_pct) || 0;
   const trendUp = client.trend === "up";
   const trendDown = client.trend === "down";
@@ -46,7 +46,14 @@ function Row({ client, onOpenClient }) {
       </td>
       <td style={{ ...TD, textAlign: "right" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "inline-flex", justifyContent: "flex-end" }}>
-          <ConsultantClientActions onOpen={() => onOpenClient?.(client.organization_id)} showOpen radius={7} pad="6px 8px" />
+          <ConsultantClientActions
+            onOpen={() => onOpenClient?.(client.organization_id)}
+            showOpen
+            pending={!!client.pending_activation}
+            onRegenerate={() => onRegenerate?.(client.organization_id)}
+            radius={7}
+            pad="6px 8px"
+          />
         </div>
       </td>
     </tr>
@@ -59,7 +66,7 @@ function Row({ client, onOpenClient }) {
  * Tendência · ações. Linha clicável → relatório. `clients` já filtrados/ordenados
  * pela página. Rola horizontalmente no mobile (largura total, sem faixas laterais).
  */
-export function ConsultantClientsTable({ clients = [], onOpenClient }) {
+export function ConsultantClientsTable({ clients = [], onOpenClient, onRegenerate }) {
   return (
     <Card style={{ padding: 0, overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
@@ -75,7 +82,7 @@ export function ConsultantClientsTable({ clients = [], onOpenClient }) {
         </thead>
         <tbody>
           {clients.map((client) => (
-            <Row key={client.organization_id} client={client} onOpenClient={onOpenClient} />
+            <Row key={client.organization_id} client={client} onOpenClient={onOpenClient} onRegenerate={onRegenerate} />
           ))}
         </tbody>
       </table>

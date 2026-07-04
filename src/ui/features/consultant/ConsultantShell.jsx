@@ -26,6 +26,9 @@ export function ConsultantShell() {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [addClientOpen, setAddClientOpen] = React.useState(false);
   const openAddClient = React.useCallback(() => setAddClientOpen(true), []);
+  // Incrementa a cada cliente criado → a carteira observa e faz refetch.
+  const [clientsVersion, setClientsVersion] = React.useState(0);
+  const notifyClientsChanged = React.useCallback(() => setClientsVersion((v) => v + 1), []);
 
   React.useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 768);
@@ -39,7 +42,7 @@ export function ConsultantShell() {
   };
 
   return (
-    <ConsultantAddClientProvider openAddClient={openAddClient}>
+    <ConsultantAddClientProvider openAddClient={openAddClient} clientsVersion={clientsVersion} notifyClientsChanged={notifyClientsChanged}>
     <div style={{ ...G, display: "flex", height: "100vh", width: "100%", overflow: "hidden", background: T.bg }}>
       {!isMobile && <ConsultantSidebar pathname={pathname} onNav={go} user={user} />}
 
@@ -70,7 +73,7 @@ export function ConsultantShell() {
         </div>
       </div>
 
-      <ConsultantAddClientWizard open={addClientOpen} onClose={() => setAddClientOpen(false)} />
+      <ConsultantAddClientWizard open={addClientOpen} onClose={() => setAddClientOpen(false)} onCreated={notifyClientsChanged} />
     </div>
     </ConsultantAddClientProvider>
   );
