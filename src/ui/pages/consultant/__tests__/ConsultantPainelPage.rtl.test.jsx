@@ -5,10 +5,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../../../../api/consultant", () => ({
   getFinancialHealthIndex: vi.fn(),
   getClientsAtRisk: vi.fn(),
+  getConsultantClients: vi.fn(),
+}));
+
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => vi.fn(),
+}));
+
+vi.mock("../../../routing/finclaPageContext.jsx", () => ({
+  useFinclaPages: () => ({ user: { name: "Helena Castro" } }),
 }));
 
 import {
   getClientsAtRisk,
+  getConsultantClients,
   getFinancialHealthIndex,
 } from "../../../../api/consultant";
 import { ConsultantPainelPage } from "../ConsultantPainelPage.jsx";
@@ -42,6 +52,12 @@ beforeEach(() => {
     ],
     total: 1,
     as_of_date: "2026-06-30",
+  });
+  vi.mocked(getConsultantClients).mockResolvedValue({
+    clients: [
+      { organization_id: "org-1", client_name: "Diego Albuquerque", health: 35 },
+      { organization_id: "org-2", client_name: "Ana Souza", health: 82 },
+    ],
   });
 });
 
