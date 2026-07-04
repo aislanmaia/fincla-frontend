@@ -32,6 +32,23 @@ export const SORT_OPTIONS = [
   { id: "name", label: "Nome" },
 ];
 
+/**
+ * Contagem de clientes por faixa (para os contadores dos filtros da carteira,
+ * fiel à referência): `all` + `healthy`/`attention`/`risk`. Pura.
+ */
+export function countClientsByBand(clients) {
+  const list = Array.isArray(clients) ? clients : [];
+  const counts = { all: list.length, healthy: 0, attention: 0, risk: 0 };
+  for (const c of list) counts[clientHealthBand(Number(c?.health) || 0)] += 1;
+  return counts;
+}
+
+/** Soma o patrimônio de todos os clientes (kicker "… sob acompanhamento"). */
+export function totalPatrimonio(clients) {
+  const list = Array.isArray(clients) ? clients : [];
+  return list.reduce((s, c) => s + (Number.parseFloat(c?.patrimonio) || 0), 0);
+}
+
 /** Normaliza para busca: minúsculas e sem acentos. */
 function normalize(text) {
   return String(text ?? "")

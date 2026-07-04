@@ -4,7 +4,9 @@ import {
   RISK_FILTERS,
   SORT_OPTIONS,
   clientHealthBand,
+  countClientsByBand,
   selectConsultantClients,
+  totalPatrimonio,
 } from "../consultantClientsView.js";
 
 /** Fábrica enxuta — só os campos que o modelo de filtro/ordenação usa. */
@@ -117,5 +119,25 @@ describe("selectConsultantClients — pureza e combinação", () => {
   it("entrada não-array devolve []", () => {
     expect(selectConsultantClients(null, {})).toEqual([]);
     expect(selectConsultantClients(undefined, {})).toEqual([]);
+  });
+});
+
+describe("countClientsByBand", () => {
+  it("conta all + por faixa de saúde", () => {
+    // ana 92 (healthy), bruno 55 (attention), carla 30 (risk)
+    expect(countClientsByBand(all)).toEqual({ all: 3, healthy: 1, attention: 1, risk: 1 });
+  });
+  it("tolera entrada ausente", () => {
+    expect(countClientsByBand(null)).toEqual({ all: 0, healthy: 0, attention: 0, risk: 0 });
+  });
+});
+
+describe("totalPatrimonio", () => {
+  it("soma o patrimônio (parse de string)", () => {
+    // 50000 + (−2000) + 12000 = 60000
+    expect(totalPatrimonio(all)).toBe(60000);
+  });
+  it("tolera entrada ausente", () => {
+    expect(totalPatrimonio(undefined)).toBe(0);
   });
 });

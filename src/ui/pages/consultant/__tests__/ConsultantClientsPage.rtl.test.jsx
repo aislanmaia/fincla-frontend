@@ -51,7 +51,8 @@ describe("ConsultantClientsPage", () => {
 
     await waitFor(() => expect(screen.getByText("Ana Beatriz")).toBeInTheDocument());
     expect(screen.getByText("Carla Dias")).toBeInTheDocument();
-    expect(screen.getByText("2 clientes sob sua gestão.")).toBeInTheDocument();
+    // kicker: "2 clientes · R$ … sob acompanhamento"
+    expect(screen.getByText(/2 clientes ·/)).toBeInTheDocument();
   });
 
   it("alterna para a visão de tabela", async () => {
@@ -70,7 +71,7 @@ describe("ConsultantClientsPage", () => {
     render(<ConsultantClientsPage />);
     await waitFor(() => expect(screen.getByText("Ana Beatriz")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: "Em risco" }));
+    fireEvent.click(screen.getByRole("button", { name: /Em risco/ }));
     expect(screen.getByText("Carla Dias")).toBeInTheDocument();
     expect(screen.queryByText("Ana Beatriz")).not.toBeInTheDocument();
   });
@@ -106,12 +107,13 @@ describe("ConsultantClientsPage", () => {
     await waitFor(() => expect(screen.getByText("Não foi possível carregar")).toBeInTheDocument());
   });
 
-  it("'Abrir' navega para o relatório do cliente com o id da org", async () => {
+  it("clicar no card navega para o relatório do cliente com o id da org", async () => {
     vi.mocked(getConsultantClients).mockResolvedValue({ total: 1, clients: [ana] });
     render(<ConsultantClientsPage />);
     await waitFor(() => expect(screen.getByText("Ana Beatriz")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: "Abrir" }));
+    // O card inteiro é clicável (fiel à referência) — clicar o nome abre o relatório.
+    fireEvent.click(screen.getByText("Ana Beatriz"));
     expect(navigate).toHaveBeenCalledWith({ to: "/consultant/clients/$id", params: { id: "a" } });
   });
 });

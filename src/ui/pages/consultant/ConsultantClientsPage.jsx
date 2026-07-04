@@ -8,7 +8,9 @@ import { useConsultantClients } from "../../features/consultant/useConsultantCli
 import { ConsultantClientsToolbar } from "../../features/consultant/ConsultantClientsToolbar";
 import { ConsultantClientCard } from "../../features/consultant/ConsultantClientCard";
 import { ConsultantClientsTable } from "../../features/consultant/ConsultantClientsTable";
-import { selectConsultantClients } from "../../features/consultant/consultantClientsView";
+import { Icon } from "../../features/consultant/consultantUi";
+import { fmtMoney } from "../../features/consultant/consultantFormat";
+import { countClientsByBand, selectConsultantClients, totalPatrimonio } from "../../features/consultant/consultantClientsView";
 
 function EmptyState({ title, text }) {
   return (
@@ -19,14 +21,40 @@ function EmptyState({ title, text }) {
   );
 }
 
+/** Kicker (sobre-título) do header. */
+function Kicker({ children }) {
+  return (
+    <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
+      {children}
+    </div>
+  );
+}
+
+/** Botão de ação "em breve" (Exportar / Adicionar cliente — fatias futuras). */
+function StubActionButton({ icon, label, dark }) {
+  return (
+    <button
+      type="button"
+      disabled
+      title="Em breve"
+      style={{ ...G, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 9, border: `1.5px solid ${dark ? T.ink : T.border}`, background: dark ? T.ink : T.surface, color: dark ? "#fff" : T.inkLight, fontSize: 12, fontWeight: 600, cursor: "default", opacity: 0.6, whiteSpace: "nowrap" }}
+    >
+      <Icon name={icon} size={14} color={dark ? "#fff" : T.inkLight} /> {label}
+      <span style={{ ...G, fontSize: 8.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: dark ? "#fff" : T.inkLight, background: dark ? "rgba(255,255,255,0.2)" : T.grayLight, borderRadius: 5, padding: "1px 5px" }}>em breve</span>
+    </button>
+  );
+}
+
 /**
- * Carteira de clientes do consultor (A2.2, S2). Consome `useConsultantClients`
- * (lista enriquecida) e aplica busca/filtro por risco/ordenação client-side via
- * `selectConsultantClients`. Alterna entre grid de cards e tabela densa.
- *
- * Estados explícitos (na prioridade): erro total (nada carregado) · carregando ·
- * carteira vazia (base sem clientes) · sem resultado para os filtros · lista.
- * "Abrir" navega para o relatório do cliente (`/consultant/clients/$id`, A3.1/S3).
+ * Carteira de clientes do consultor (RF.6 — reimplementada fiel à referência
+ * `cons-clientes.jsx`): header (kicker "{n} clientes · {patrimônio} sob
+ * acompanhamento" + título + ações Exportar/Adicionar[stubs]); toolbar com busca +
+ * **pills de risco coloridas com contadores** + ordenação + toggle cartões/tabela;
+ * cards/linhas fiéis (Avatar + HealthRing + RiskBadge + mini-stats + ações inline
+ * Avaliar/Mensagem = stubs "em breve"). Card/linha clicável → relatório
+ * (`/consultant/clients/$id`, A3.1). Busca/filtro/ordenação client-side via
+ * `selectConsultantClients`. Estados: erro total · carregando · carteira vazia ·
+ * sem-resultado · lista.
  */
 export function ConsultantClientsPage() {
   const navigate = useNavigate();
@@ -42,10 +70,9 @@ export function ConsultantClientsPage() {
     () => selectConsultantClients(clients, { query, riskFilter, sortKey, sortDir }),
     [clients, query, riskFilter, sortKey, sortDir],
   );
+  const counts = React.useMemo(() => countClientsByBand(clients), [clients]);
+  const patrimonio = React.useMemo(() => totalPatrimonio(clients), [clients]);
 
-  // Com clientes em tela mostramos a lista mesmo se um refetch falhou (preserva a
-  // última lista boa — lição da A1.3). Sem clientes, um erro tem prioridade sobre
-  // "vazio": não afirmar que a carteira está vazia se a busca de fato falhou.
   const state = clients.length > 0
     ? "list"
     : error
@@ -60,12 +87,18 @@ export function ConsultantClientsPage() {
   }, [navigate]);
 
   return (
-    <div style={{ ...G, width: "100%", padding: "clamp(18px, 3.5vw, 32px) clamp(16px, 3.5vw, 40px) 48px", display: "flex", flexDirection: "column", gap: 18 }}>
-      <div>
-        <PageTitle sans="Carteira de" serif="clientes" />
-        <p style={{ ...G, fontSize: 13, color: T.inkLight, marginTop: 8 }}>
-          {loadedOk ? `${total} ${total === 1 ? "cliente" : "clientes"} sob sua gestão.` : "Todos os clientes sob sua gestão."}
-        </p>
+    <div style={{ ...G, width: "100%", boxSizing: "border-box", padding: "clamp(18px, 3.5vw, 32px) clamp(16px, 3.5vw, 40px) 48px", display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
+        <div>
+          <Kicker>
+            {loadedOk ? `${total} ${total === 1 ? "cliente" : "clientes"} · ${fmtMoney(patrimonio)} sob acompanhamento` : "Sua carteira de clientes"}
+          </Kicker>
+          <PageTitle sans="Carteira" serif="de clientes" />
+        </div>
+        <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
+          <StubActionButton icon="download" label="Exportar" />
+          <StubActionButton icon="plus" label="Adicionar cliente" dark />
+        </div>
       </div>
 
       {state === "list" && (
@@ -81,6 +114,7 @@ export function ConsultantClientsPage() {
             onSortDirChange={setSortDir}
             view={view}
             onViewChange={setView}
+            counts={counts}
           />
 
           {visible.length === 0 ? (
@@ -91,7 +125,7 @@ export function ConsultantClientsPage() {
           ) : view === "table" ? (
             <ConsultantClientsTable clients={visible} onOpenClient={openClient} />
           ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16, alignItems: "start" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14, alignItems: "start" }}>
               {visible.map((client) => (
                 <ConsultantClientCard key={client.organization_id} client={client} onOpenClient={openClient} />
               ))}
