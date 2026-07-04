@@ -1,104 +1,96 @@
 import React from "react";
 
 import { T } from "../../tokens";
-import { G } from "../../typography";
+import { G, NUM } from "../../typography";
+import { Icon } from "./consultantUi";
 import { RISK_FILTERS, SORT_OPTIONS } from "./consultantClientsView";
 
-function Chip({ active, onClick, children }) {
+/** Cor/fundo/ponto de cada filtro de risco (fiel à referência). */
+const FILTER_TONE = {
+  all: { color: T.ink, bg: T.ink, dot: null, activeText: "#fff" },
+  healthy: { color: T.green, bg: T.greenLight, dot: T.green, activeText: T.green },
+  attention: { color: T.amber, bg: T.amberLight, dot: T.amber, activeText: T.amber },
+  risk: { color: T.red, bg: T.redLight, dot: T.red, activeText: T.red },
+};
+
+function FilterPill({ id, label, count, active, onClick }) {
+  const tone = FILTER_TONE[id] || FILTER_TONE.all;
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={active}
       style={{
-        ...G,
-        padding: "6px 12px",
-        borderRadius: 999,
-        border: `1.5px solid ${active ? T.ink : T.border}`,
-        background: active ? T.ink : "transparent",
-        color: active ? "#fff" : T.inkMid,
-        fontSize: 12,
-        fontWeight: 600,
-        cursor: "pointer",
-        whiteSpace: "nowrap",
+        ...G, display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px", borderRadius: 999,
+        border: `1.5px solid ${active ? tone.color : T.border}`,
+        background: active ? tone.bg : T.surface,
+        color: active ? tone.activeText : T.inkMid,
+        fontSize: 12.5, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
       }}
     >
-      {children}
+      {tone.dot && <span style={{ width: 7, height: 7, borderRadius: 99, background: tone.dot }} />}
+      {label} <span style={{ ...NUM, opacity: 0.65 }}>{count}</span>
     </button>
   );
 }
 
-const SELECT = {
-  ...G,
-  padding: "8px 10px",
-  borderRadius: 9,
-  border: `1.5px solid ${T.border}`,
-  background: "#fff",
-  color: T.ink,
-  fontSize: 12,
-  fontWeight: 600,
-  cursor: "pointer",
-};
+const SORT_BTN = (active) => ({
+  ...G, fontSize: 12, fontWeight: active ? 700 : 500, color: active ? T.ink : T.inkLight,
+  background: active ? T.grayLight : "transparent", border: "none", borderRadius: 7, padding: "5px 9px", cursor: "pointer",
+});
 
 /**
- * Controles da carteira de clientes (A2.2): busca por nome, chips de filtro por
- * faixa de risco, ordenação (chave + direção) e alternância card/tabela. Puramente
- * controlado — estado mora na `ConsultantClientsPage`.
+ * Controles da carteira (RF.6, fiel à referência `cons-clientes.jsx`): busca por
+ * nome, **pills de filtro coloridas com contadores** por faixa de risco, ordenação
+ * inline (chave + direção) e alternância cartões/tabela. Puramente controlado —
+ * estado na `ConsultantClientsPage`; `counts` por faixa vem da página.
  */
 export function ConsultantClientsToolbar({
-  query,
-  onQueryChange,
-  riskFilter,
-  onRiskFilterChange,
-  sortKey,
-  onSortKeyChange,
-  sortDir,
-  onSortDirChange,
-  view,
-  onViewChange,
+  query, onQueryChange,
+  riskFilter, onRiskFilterChange,
+  sortKey, onSortKeyChange,
+  sortDir, onSortDirChange,
+  view, onViewChange,
+  counts = { all: 0, healthy: 0, attention: 0, risk: 0 },
 }) {
   return (
-    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
-      <input
-        type="search"
-        value={query}
-        onChange={(e) => onQueryChange(e.target.value)}
-        placeholder="Buscar cliente…"
-        aria-label="Buscar cliente"
-        style={{
-          ...G,
-          flex: "1 1 220px",
-          minWidth: 160,
-          padding: "9px 12px",
-          borderRadius: 9,
-          border: `1.5px solid ${T.border}`,
-          background: "#fff",
-          fontSize: 13,
-          color: T.ink,
-        }}
-      />
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, padding: "8px 12px", flex: "1 1 220px", minWidth: 160 }}>
+        <Icon name="search" size={14} color={T.inkMid} />
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => onQueryChange(e.target.value)}
+          placeholder="Buscar cliente…"
+          aria-label="Buscar cliente"
+          style={{ ...G, border: "none", outline: "none", fontSize: 13, color: T.ink, background: "transparent", flex: 1, minWidth: 0 }}
+        />
+      </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }} role="group" aria-label="Filtrar por risco">
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }} role="group" aria-label="Filtrar por risco">
         {RISK_FILTERS.map((f) => (
-          <Chip key={f.id} active={riskFilter === f.id} onClick={() => onRiskFilterChange(f.id)}>
-            {f.label}
-          </Chip>
+          <FilterPill
+            key={f.id}
+            id={f.id}
+            label={f.label}
+            count={counts[f.id] ?? 0}
+            active={riskFilter === f.id}
+            onClick={() => onRiskFilterChange(f.id)}
+          />
         ))}
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>
-        <label style={{ ...G, fontSize: 11.5, color: T.inkLight }} htmlFor="clients-sort">Ordenar</label>
-        <select id="clients-sort" value={sortKey} onChange={(e) => onSortKeyChange(e.target.value)} aria-label="Ordenar por" style={SELECT}>
-          {SORT_OPTIONS.map((o) => (
-            <option key={o.id} value={o.id}>{o.label}</option>
-          ))}
-        </select>
+        <span style={{ ...G, fontSize: 11, color: T.inkLight }}>Ordenar:</span>
+        {SORT_OPTIONS.map((o) => (
+          <button key={o.id} type="button" onClick={() => onSortKeyChange(o.id)} style={SORT_BTN(sortKey === o.id)}>{o.label}</button>
+        ))}
         <button
           type="button"
           onClick={() => onSortDirChange(sortDir === "asc" ? "desc" : "asc")}
           aria-label={sortDir === "asc" ? "Ordem crescente" : "Ordem decrescente"}
           title={sortDir === "asc" ? "Crescente" : "Decrescente"}
-          style={{ ...SELECT, padding: "8px 11px", fontWeight: 800 }}
+          style={{ ...G, ...NUM, fontSize: 13, fontWeight: 800, color: T.inkMid, background: "#fff", border: `1.5px solid ${T.border}`, borderRadius: 9, padding: "6px 10px", cursor: "pointer" }}
         >
           {sortDir === "asc" ? "↑" : "↓"}
         </button>
@@ -115,15 +107,7 @@ export function ConsultantClientsToolbar({
               aria-pressed={view === v.id}
               aria-label={v.label}
               title={v.label}
-              style={{
-                ...G,
-                padding: "8px 11px",
-                border: "none",
-                background: view === v.id ? T.ink : "#fff",
-                color: view === v.id ? "#fff" : T.inkMid,
-                fontSize: 13,
-                cursor: "pointer",
-              }}
+              style={{ ...G, padding: "8px 11px", border: "none", background: view === v.id ? T.ink : "#fff", color: view === v.id ? "#fff" : T.inkMid, fontSize: 13, cursor: "pointer" }}
             >
               {v.glyph}
             </button>
