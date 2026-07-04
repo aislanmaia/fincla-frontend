@@ -19,6 +19,7 @@ import { ConsultantPainelPage } from "../pages/consultant/ConsultantPainelPage.j
 import { ConsultantClientsPage } from "../pages/consultant/ConsultantClientsPage.jsx";
 import { ConsultantClientReportPage } from "../pages/consultant/ConsultantClientReportPage.jsx";
 import { ConsultantPlaceholderPage } from "../pages/consultant/ConsultantPlaceholderPage.jsx";
+import { ConsultantInsightsPage } from "../pages/consultant/ConsultantInsightsPage.jsx";
 import { AUTH_ROUTE_SEGMENTS } from "./appSegments.js";
 import { isPlanningArea, DEFAULT_PLANNING_AREA } from "../features/planning/planningAreas.js";
 import { finclaRootSearchSchema } from "./finclaRootSearchSchema.js";
@@ -220,7 +221,7 @@ const consultantClientReportRoute = createRoute({
 const consultantInsightsRoute = createRoute({
   getParentRoute: () => consultantRoute,
   path: "insights",
-  component: () => <ConsultantPlaceholderPage title="Insights da" soon="carteira" />,
+  component: ConsultantInsightsPage,
 });
 const consultantProfileRoute = createRoute({
   getParentRoute: () => consultantRoute,
