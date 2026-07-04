@@ -1,9 +1,10 @@
 import React from "react";
 import { useNavigate } from "@tanstack/react-router";
 
-import { Card, PageTitle } from "../../components/primitives";
+import { Btn, Card, PageTitle } from "../../components/primitives";
 import { T } from "../../tokens";
 import { G } from "../../typography";
+import { useAddClient } from "../../features/consultant/ConsultantAddClientContext.jsx";
 import { useConsultantClients } from "../../features/consultant/useConsultantClients";
 import { ConsultantClientsToolbar } from "../../features/consultant/ConsultantClientsToolbar";
 import { ConsultantClientCard } from "../../features/consultant/ConsultantClientCard";
@@ -58,6 +59,7 @@ function StubActionButton({ icon, label, dark }) {
  */
 export function ConsultantClientsPage() {
   const navigate = useNavigate();
+  const { openAddClient } = useAddClient();
   const { clients, total, isLoading, error, hasLoaded, loadedOk } = useConsultantClients();
 
   const [query, setQuery] = React.useState("");
@@ -97,7 +99,7 @@ export function ConsultantClientsPage() {
         </div>
         <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
           <StubActionButton icon="download" label="Exportar" />
-          <StubActionButton icon="plus" label="Adicionar cliente" dark />
+          <Btn variant="dark" onClick={openAddClient}><Icon name="plus" size={14} color="#fff" /> Adicionar cliente</Btn>
         </div>
       </div>
 
