@@ -6,45 +6,42 @@ import { ConsultantSemaphorePanel } from "../ConsultantSemaphorePanel.jsx";
 
 afterEach(cleanup);
 
+const clients = [
+  { organization_id: "a", health: 85 }, // saudável
+  { organization_id: "b", health: 90 }, // saudável
+  { organization_id: "c", health: 55 }, // atenção
+  { organization_id: "d", health: 30 }, // em risco
+];
+
 describe("<ConsultantSemaphorePanel>", () => {
-  it("renders the legend counts and the average-health center", () => {
-    render(
-      <ConsultantSemaphorePanel
-        atRiskTotal={3}
-        organizationsCount={10}
-        healthIndex={72}
-        hasLoaded
-      />
-    );
-    expect(screen.getByText("Precisam de atenção")).toBeInTheDocument();
-    expect(screen.getByText("Em dia")).toBeInTheDocument();
-    // legend values: 3 attention, 7 em dia
-    expect(screen.getByText("3")).toBeInTheDocument();
-    expect(screen.getByText("7")).toBeInTheDocument();
+  it("renders the 3-way legend and the average-health center", () => {
+    render(<ConsultantSemaphorePanel clients={clients} hasLoaded healthIndex={72} />);
+    expect(screen.getByText("Semáforo da carteira")).toBeInTheDocument();
+    expect(screen.getByText("Saudável")).toBeInTheDocument();
+    expect(screen.getByText("Atenção")).toBeInTheDocument();
+    expect(screen.getByText("Em risco")).toBeInTheDocument();
+    expect(screen.getByText("4 clientes por nível de saúde")).toBeInTheDocument();
+    // legend counts: 2 saudável, 1 atenção, 1 em risco
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(screen.getAllByText("1").length).toBeGreaterThanOrEqual(2);
     // donut center = rounded average health
     expect(screen.getByText("72")).toBeInTheDocument();
     expect(screen.getByText("saúde média")).toBeInTheDocument();
   });
 
   it("pluralizes the client count line", () => {
-    render(
-      <ConsultantSemaphorePanel atRiskTotal={0} organizationsCount={1} healthIndex={100} hasLoaded />
-    );
-    expect(screen.getByText("1 cliente na carteira")).toBeInTheDocument();
+    render(<ConsultantSemaphorePanel clients={[{ organization_id: "x", health: 90 }]} hasLoaded healthIndex={100} />);
+    expect(screen.getByText("1 cliente por nível de saúde")).toBeInTheDocument();
   });
 
   it("shows a loading note (not a fabricated split) while data is unresolved", () => {
-    render(
-      <ConsultantSemaphorePanel atRiskTotal={null} organizationsCount={null} healthIndex={null} hasLoaded={false} loading />
-    );
+    render(<ConsultantSemaphorePanel clients={[]} hasLoaded={false} healthIndex={null} loading />);
     expect(screen.getByText("Carregando distribuição…")).toBeInTheDocument();
-    expect(screen.queryByText("Em dia")).not.toBeInTheDocument();
+    expect(screen.queryByText("Saudável")).not.toBeInTheDocument();
   });
 
-  it("shows 'indisponível' when settled without risk data", () => {
-    render(
-      <ConsultantSemaphorePanel atRiskTotal={null} organizationsCount={4} healthIndex={80} hasLoaded loading={false} />
-    );
+  it("shows 'indisponível' when settled with an empty base", () => {
+    render(<ConsultantSemaphorePanel clients={[]} hasLoaded healthIndex={80} loading={false} />);
     expect(screen.getByText("Distribuição de risco indisponível.")).toBeInTheDocument();
   });
 });

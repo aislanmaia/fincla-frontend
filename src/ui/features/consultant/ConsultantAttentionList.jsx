@@ -1,39 +1,57 @@
 import React from "react";
 
-import { Badge, Btn, Card } from "../../components/primitives";
+import { Badge, Card } from "../../components/primitives";
 import { T } from "../../tokens";
-import { G, NUM } from "../../typography";
+import { G } from "../../typography";
 import { fmtSgn } from "../../formatters";
+import { HealthRing, Icon } from "./consultantUi";
 
-/** Cor do selo de risco por faixa de `risk_score` (1-100, maior = pior). */
-function riskTone(score) {
-  if (score >= 70) return { color: T.red, bg: T.redLight };
-  if (score >= 40) return { color: T.amber, bg: T.amberLight };
-  return { color: T.green, bg: T.greenLight };
+/** Saúde (0-100, maior=melhor) derivada do `risk_score` (1-100, maior=pior). */
+function healthFromRisk(score) {
+  const s = Number(score) || 0;
+  return Math.max(0, Math.min(100, 100 - s));
 }
 
 function AttentionItem({ client, onOpenClient }) {
-  const tone = riskTone(client.risk_score);
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderBottom: `1px solid ${T.border}` }}>
-      <div style={{ ...G, ...NUM, width: 42, height: 42, borderRadius: 12, background: tone.bg, color: tone.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, flexShrink: 0 }}>
-        {client.risk_score}
-      </div>
+      <HealthRing health={healthFromRisk(client.risk_score)} size={42} stroke={4} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ ...G, fontSize: 13.5, fontWeight: 700, color: T.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+        <div
+          style={{ ...G, fontSize: 13.5, fontWeight: 700, color: T.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: "pointer" }}
+          onClick={() => onOpenClient?.(client.organization_id)}
+        >
           {client.client_name}
         </div>
-        <div style={{ ...G, fontSize: 11.5, color: T.inkLight, marginTop: 2 }}>
-          {client.main_situation}
-          {client.current_balance != null && (
-            <span style={{ ...NUM, color: client.current_balance < 0 ? T.red : T.inkLight }}> · {fmtSgn(client.current_balance)}</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 3 }}>
+          {client.main_situation && (
+            <span style={{ ...G, fontSize: 10.5, color: T.red, background: T.redLight, borderRadius: 99, padding: "2px 8px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <Icon name="alert" size={10} color={T.red} />{client.main_situation}
+            </span>
+          )}
+          {client.current_balance != null && client.current_balance < 0 && (
+            <span style={{ ...G, fontSize: 10.5, color: T.inkLight }}>{fmtSgn(client.current_balance)}</span>
           )}
         </div>
       </div>
-      <div style={{ flexShrink: 0 }}>
-        <Btn variant="outGray" small onClick={() => onOpenClient?.(client.organization_id)}>
-          Abrir
-        </Btn>
+      <div style={{ display: "flex", gap: 7, flexShrink: 0 }}>
+        {/* "Avaliar com IA" = Trilha B → stub "em breve". */}
+        <button
+          type="button"
+          disabled
+          title="Avaliar com IA (em breve)"
+          style={{ ...G, display: "inline-flex", alignItems: "center", gap: 5, background: T.purpleLight, color: T.purple, border: "none", borderRadius: 8, padding: "7px 11px", fontSize: 11.5, fontWeight: 700, cursor: "default", opacity: 0.6 }}
+        >
+          <Icon name="sparkles" size={12} color={T.purple} /> Avaliar
+        </button>
+        <button
+          type="button"
+          onClick={() => onOpenClient?.(client.organization_id)}
+          title="Abrir relatório"
+          style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: "7px 9px", cursor: "pointer", display: "flex" }}
+        >
+          <Icon name="arrow-right" size={13} color={T.inkMid} />
+        </button>
       </div>
     </div>
   );
@@ -52,17 +70,17 @@ function AttentionMessage({ tone, title, text }) {
 }
 
 /**
- * "Precisam de atenção" (A1.3). Quatro estados explícitos, nesta prioridade:
- *   - **lista** quando há clientes em risco (de sucesso ou último-bom);
- *   - **tudo sob controle** quando já carregou com sucesso e veio vazio
- *     (`loadedOk` — base saudável), preservado mesmo em erro de refetch;
- *   - **erro** quando falhou e nunca houve sucesso (não mascara falha como
- *     base saudável);
+ * "Precisam de atenção" do Painel da base (RF.5, fiel ao `attentionCard` da
+ * referência): por cliente, `HealthRing` + nome + situação (pílula) + ações
+ * (Avaliar com IA = stub "em breve"; Abrir → relatório). Rodapé "Ver todos os
+ * clientes". Mantém os quatro estados explícitos (A1.3), nesta prioridade:
+ *   - **lista** quando há clientes em risco;
+ *   - **tudo sob controle** quando carregou com sucesso e veio vazio (`loadedOk`);
+ *   - **erro** quando falhou e nunca houve sucesso;
  *   - **carregando** no primeiro fetch.
- * Presentational — dados via props. "Abrir" chama `onOpenClient` (stub até a
- * rota de relatório do cliente, S3).
+ * Presentational — dados via props.
  */
-export function ConsultantAttentionList({ clients = [], total = 0, base = 0, loadedOk, error, onOpenClient }) {
+export function ConsultantAttentionList({ clients = [], total = 0, base = 0, loadedOk, error, onOpenClient, onViewAll }) {
   const hasClients = clients.length > 0;
   const state = hasClients ? "list" : loadedOk ? "clear" : error ? "error" : "loading";
 
@@ -113,6 +131,15 @@ export function ConsultantAttentionList({ clients = [], total = 0, base = 0, loa
           title="Carregando…"
           text="Buscando os clientes que precisam de atenção."
         />
+      )}
+      {state === "list" && (
+        <button
+          type="button"
+          onClick={onViewAll}
+          style={{ ...G, width: "100%", background: "transparent", border: "none", borderTop: `1px solid ${T.border}`, padding: "12px", fontSize: 12.5, fontWeight: 700, color: T.inkMid, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}
+        >
+          Ver todos os clientes <Icon name="arrow-right" size={13} color={T.inkMid} />
+        </button>
       )}
     </Card>
   );

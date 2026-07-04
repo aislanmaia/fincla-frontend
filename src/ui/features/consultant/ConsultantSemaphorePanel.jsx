@@ -3,73 +3,39 @@ import React from "react";
 import { Card } from "../../components/primitives";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
-import { buildRiskSemaphore } from "./consultantRiskSemaphore";
-
-/** Donut SVG puro: desenha os segmentos como arcos e o valor central. */
-function RiskDonut({ segments, centerValue, size = 128, stroke = 17 }) {
-  const total = segments.reduce((sum, s) => sum + s.value, 0);
-  const r = (size - stroke) / 2;
-  const circ = 2 * Math.PI * r;
-  let offset = 0;
-
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Semáforo da carteira">
-      <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={T.border} strokeWidth={stroke} />
-        {total > 0 &&
-          segments.map((seg) => {
-            const len = (seg.value / total) * circ;
-            const dash = `${len} ${circ - len}`;
-            const el = (
-              <circle
-                key={seg.id}
-                cx={size / 2}
-                cy={size / 2}
-                r={r}
-                fill="none"
-                stroke={seg.color}
-                strokeWidth={stroke}
-                strokeDasharray={dash}
-                strokeDashoffset={-offset}
-              />
-            );
-            offset += len;
-            return el;
-          })}
-      </g>
-      <text x="50%" y="46%" textAnchor="middle" dominantBaseline="middle" style={{ ...G, ...NUM, fontSize: 24, fontWeight: 800, fill: T.ink }}>
-        {centerValue}
-      </text>
-      <text x="50%" y="61%" textAnchor="middle" dominantBaseline="middle" style={{ ...G, fontSize: 9, fontWeight: 700, fill: T.inkLight, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-        saúde média
-      </text>
-    </svg>
-  );
-}
+import { Donut } from "./consultantUi";
+import { buildBaseSemaphore } from "./consultantBaseSemaphore";
 
 /**
- * Semáforo da carteira (A1.3). Donut 2-vias (Precisam de atenção / Em dia)
- * derivado de `/clients-at-risk` + `organizations_count`, com a saúde média
- * agregada no centro. A divisão em 3 vias (saudável/atenção/em risco) fica p/
- * pós-A2.0 (exige saúde por-cliente). Não faz fetch — recebe os agregados via
- * props.
+ * Semáforo da carteira (RF.5, fiel ao `RiskDonutPanel` da referência). Donut
+ * **3-vias** (Saudável / Atenção / Em risco) contado pela saúde por-cliente da
+ * carteira (`useConsultantClients`), com a saúde média agregada (`health-index`)
+ * no centro. Presentational — recebe os clientes + agregado via props.
  */
-export function ConsultantSemaphorePanel({ atRiskTotal, organizationsCount, healthIndex, hasLoaded, loading }) {
-  const { segments, base, centerValue, splitAvailable } = buildRiskSemaphore({
-    atRiskTotal,
-    organizationsCount,
-    healthIndex,
-    hasLoaded,
-  });
+export function ConsultantSemaphorePanel({ clients = [], hasLoaded, healthIndex, loading }) {
+  const { counts, total, splitAvailable, centerValue } = buildBaseSemaphore({ clients, hasLoaded, healthIndex });
+
+  const segments = [
+    { id: "healthy", label: "Saudável", value: counts.healthy, color: T.green },
+    { id: "attention", label: "Atenção", value: counts.attention, color: T.amber },
+    { id: "risk", label: "Em risco", value: counts.risk, color: T.red },
+  ];
+
+  const center = (
+    <>
+      <span style={{ ...G, ...NUM, fontSize: 24, fontWeight: 800, color: T.ink, lineHeight: 1 }}>{centerValue}</span>
+      <span style={{ ...G, fontSize: 9, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.06em" }}>saúde média</span>
+    </>
+  );
 
   return (
     <Card style={{ padding: 18 }}>
       <div style={{ ...G, fontSize: 13, fontWeight: 800, color: T.ink, marginBottom: 4 }}>Semáforo da carteira</div>
       <div style={{ ...G, fontSize: 11, color: T.inkLight, marginBottom: 14 }}>
-        {base} {base === 1 ? "cliente" : "clientes"} na carteira
+        {total} {total === 1 ? "cliente" : "clientes"} por nível de saúde
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-        <RiskDonut segments={segments} centerValue={centerValue} />
+        <Donut segments={splitAvailable ? segments : []} size={128} stroke={17} center={center} />
         <div style={{ flex: 1, minWidth: 130, display: "flex", flexDirection: "column", gap: 11 }}>
           {splitAvailable ? (
             segments.map((s) => (
