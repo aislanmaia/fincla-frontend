@@ -61,8 +61,13 @@ function StubActionButton({ icon, label, dark }) {
  */
 export function ConsultantClientsPage() {
   const navigate = useNavigate();
-  const { openAddClient } = useAddClient();
-  const { clients, total, isLoading, error, hasLoaded, loadedOk } = useConsultantClients();
+  const { openAddClient, clientsVersion } = useAddClient();
+  const { clients, total, isLoading, error, hasLoaded, loadedOk, refresh } = useConsultantClients();
+
+  // Ao criar um cliente pelo wizard, atualiza a lista para exibi-lo.
+  React.useEffect(() => {
+    if (clientsVersion > 0) refresh();
+  }, [clientsVersion, refresh]);
 
   const [query, setQuery] = React.useState("");
   const [riskFilter, setRiskFilter] = React.useState("all");

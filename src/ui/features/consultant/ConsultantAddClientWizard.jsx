@@ -109,7 +109,7 @@ function toPayload(f) {
   };
 }
 
-export function ConsultantAddClientWizard({ open, onClose }) {
+export function ConsultantAddClientWizard({ open, onClose, onCreated }) {
   const navigate = useNavigate();
   const [stepIdx, setStepIdx] = React.useState(0);
   const [f, setF] = React.useState(INITIAL);
@@ -143,6 +143,7 @@ export function ConsultantAddClientWizard({ open, onClose }) {
     try {
       const res = await createConsultantClient(toPayload(f));
       setResult(res);
+      onCreated?.(); // sinaliza a carteira p/ atualizar a lista
     } catch (err) {
       setError(handleApiError(err));
     } finally {
