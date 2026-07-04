@@ -8,11 +8,13 @@ import { useConsultantClients } from "../../features/consultant/useConsultantCli
 import { useFinancialHealthData } from "../../features/health/useFinancialHealthData";
 import { useClientCategories } from "../../features/consultant/useClientCategories";
 import { useClientTransactions } from "../../features/consultant/useClientTransactions";
+import { useClientCreditCards } from "../../features/consultant/useClientCreditCards";
 import { useGoalsData } from "../../features/goals/useGoalsData";
 import { ConsultantClientReportHeader } from "../../features/consultant/ConsultantClientReportHeader";
 import { ConsultantClientReportTabs } from "../../features/consultant/ConsultantClientReportTabs";
 import { ConsultantClientOverviewTab } from "../../features/consultant/ConsultantClientOverviewTab";
 import { ConsultantClientTransactionsTab } from "../../features/consultant/ConsultantClientTransactionsTab";
+import { ConsultantClientCardsTab } from "../../features/consultant/ConsultantClientCardsTab";
 import { Icon } from "../../features/consultant/consultantUi";
 import { resolveClientReportState } from "../../features/consultant/consultantClientReport";
 import { DEFAULT_CLIENT_REPORT_TAB } from "../../features/consultant/consultantReportTabs";
@@ -33,7 +35,8 @@ function EmptyState({ title, text, action }) {
  * saúde/ações), as abas e a aba "Visão geral" fiel à referência de design, que
  * consome os reads por-org com `organization_id` = org do cliente:
  * `/financial-health/score` (KPIs+diagnóstico+metas), `/analytics/by-category`
- * (donut) e `/goals` (metas). Transações/Cartões/Categorias chegam em RF.2–RF.4.
+ * (donut) e `/goals` (metas). Transações (RF.2) e Cartões (RF.3) ativas; Categorias
+ * chega em RF.4.
  *
  * Estados: cliente na carteira → relatório; ainda carregando → "carregando";
  * erro sem lista → "erro"; carregou e o id não é cliente do consultor →
@@ -55,6 +58,8 @@ export function ConsultantClientReportPage() {
   const goals = useGoalsData({ organizationId: id, enabled: ready });
   // Transações só carregam ao abrir a aba (evita um fetch pesado no Overview).
   const transactions = useClientTransactions({ organizationId: id, enabled: ready && tab === "transactions" });
+  // Cartões só carregam ao abrir a aba (a resolução de fatura corrente é pesada).
+  const cards = useClientCreditCards({ organizationId: id, enabled: ready && tab === "cards" });
 
   const goToWallet = React.useCallback(() => {
     navigate({ to: "/consultant/clients" });
@@ -87,6 +92,7 @@ export function ConsultantClientReportPage() {
             <ConsultantClientOverviewTab client={client} health={health} categories={categories} goals={goals} />
           )}
           {tab === "transactions" && <ConsultantClientTransactionsTab transactions={transactions} />}
+          {tab === "cards" && <ConsultantClientCardsTab cards={cards} clientName={client?.client_name} />}
         </>
       )}
 
