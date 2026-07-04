@@ -15,12 +15,13 @@ describe("ConsultantClientReportTabs", () => {
     expect(screen.getByRole("tab", { name: "Visão geral" })).toHaveAttribute("aria-selected", "true");
   });
 
-  it("abas ativas (Visão geral, Transações, Cartões) não ficam desabilitadas; as 'em breve' ficam", () => {
+  it("todas as abas do relatório (Visão geral, Transações, Cartões, Categorias) estão ativas", () => {
     render(<ConsultantClientReportTabs active="overview" onSelect={() => {}} />);
     expect(screen.getByRole("tab", { name: "Visão geral" })).not.toBeDisabled();
     expect(screen.getByRole("tab", { name: /Transações/ })).not.toBeDisabled();
     expect(screen.getByRole("tab", { name: /Cartões/ })).not.toBeDisabled();
-    expect(screen.getByRole("tab", { name: /Categorias/ })).toBeDisabled();
+    expect(screen.getByRole("tab", { name: /Categorias/ })).not.toBeDisabled();
+    expect(screen.queryByText("em breve")).not.toBeInTheDocument();
   });
 
   it("clicar numa aba ativa chama onSelect com o id", () => {
@@ -30,10 +31,10 @@ describe("ConsultantClientReportTabs", () => {
     expect(onSelect).toHaveBeenCalledWith("transactions");
   });
 
-  it("clicar numa aba 'em breve' não chama onSelect", () => {
+  it("clicar em Categorias chama onSelect com o id", () => {
     const onSelect = vi.fn();
     render(<ConsultantClientReportTabs active="overview" onSelect={onSelect} />);
     fireEvent.click(screen.getByRole("tab", { name: /Categorias/ }));
-    expect(onSelect).not.toHaveBeenCalled();
+    expect(onSelect).toHaveBeenCalledWith("categories");
   });
 });
