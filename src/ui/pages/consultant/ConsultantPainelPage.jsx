@@ -4,6 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Btn, PageTitle } from "../../components/primitives";
 import { T } from "../../tokens";
 import { G } from "../../typography";
+import { useAddClient } from "../../features/consultant/ConsultantAddClientContext.jsx";
 import { useFinclaPages } from "../../routing/finclaPageContext.jsx";
 import { getDisplayName } from "../../features/auth/userDisplay.js";
 import { ConsultantKpiCards } from "../../features/consultant/ConsultantKpiCards";
@@ -64,6 +65,7 @@ function StubActionButton({ icon, label }) {
 export function ConsultantPainelPage() {
   const navigate = useNavigate();
   const narrow = useIsNarrow(900);
+  const { openAddClient } = useAddClient();
   const pages = useFinclaPages();
   const firstName = (getDisplayName(pages?.user) || "").split(" ")[0];
 
@@ -91,7 +93,7 @@ export function ConsultantPainelPage() {
       </div>
       <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
         <Btn variant="outGray" onClick={goToInsights}><Icon name="bar" size={14} color={T.inkMid} /> Insights</Btn>
-        <StubActionButton icon="plus" label="Adicionar cliente" />
+        <Btn variant="outGray" onClick={openAddClient}><Icon name="plus" size={14} color={T.inkMid} /> Adicionar cliente</Btn>
         <StubActionButton icon="sparkles" label="Relatório com IA" />
       </div>
     </div>

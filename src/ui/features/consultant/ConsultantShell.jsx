@@ -5,6 +5,8 @@ import { G } from "../../typography";
 import { useFinclaPages } from "../../routing/finclaPageContext.jsx";
 import { ConsultantSidebar } from "./ConsultantSidebar.jsx";
 import { ConsultantTopbar } from "./ConsultantTopbar.jsx";
+import { ConsultantAddClientWizard } from "./ConsultantAddClientWizard.jsx";
+import { ConsultantAddClientProvider } from "./ConsultantAddClientContext.jsx";
 
 /**
  * Shell da área do Consultor (A0.3) — layout próprio (independente do app do
@@ -22,6 +24,8 @@ export function ConsultantShell() {
 
   const [isMobile, setIsMobile] = React.useState(() => window.innerWidth < 768);
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [addClientOpen, setAddClientOpen] = React.useState(false);
+  const openAddClient = React.useCallback(() => setAddClientOpen(true), []);
 
   React.useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 768);
@@ -33,9 +37,9 @@ export function ConsultantShell() {
     setMenuOpen(false);
     navigate({ to });
   };
-  const onAddClient = () => { /* S5 — fluxo "Adicionar cliente" (stub) */ };
 
   return (
+    <ConsultantAddClientProvider openAddClient={openAddClient}>
     <div style={{ ...G, display: "flex", height: "100vh", width: "100%", overflow: "hidden", background: T.bg }}>
       {!isMobile && <ConsultantSidebar pathname={pathname} onNav={go} user={user} />}
 
@@ -58,13 +62,16 @@ export function ConsultantShell() {
           isMobile={isMobile}
           onOpenMenu={() => setMenuOpen(true)}
           onNav={go}
-          onAddClient={onAddClient}
+          onAddClient={openAddClient}
           user={user}
         />
         <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
           <Outlet />
         </div>
       </div>
+
+      <ConsultantAddClientWizard open={addClientOpen} onClose={() => setAddClientOpen(false)} />
     </div>
+    </ConsultantAddClientProvider>
   );
 }
