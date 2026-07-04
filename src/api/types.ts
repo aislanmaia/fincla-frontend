@@ -1482,6 +1482,8 @@ export interface ConsultantClient {
   last_active: string | null;
   /** net worth: total_all (all active accounts) − unpaid card debt (decimal string). */
   patrimonio: string;
+  /** true = consultant-created client who hasn't set their password yet. */
+  pending_activation?: boolean;
 }
 
 export interface ConsultantClientsResponse {

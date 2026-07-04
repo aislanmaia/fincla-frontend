@@ -27,7 +27,7 @@ const debtColor = (v) => (v <= 30 ? T.green : v <= 50 ? T.amber : T.red);
  * inline (Avaliar/Mensagem = stubs "em breve"). O card inteiro é clicável → abre o
  * relatório. Presentational — dados via `client` (`ConsultantClient` enriquecido).
  */
-export function ConsultantClientCard({ client, onOpenClient }) {
+export function ConsultantClientCard({ client, onOpenClient, onRegenerate }) {
   const savings = Number(client.savings_pct) || 0;
   const debt = Number(client.debt_pct) || 0;
   const trendUp = client.trend === "up";
@@ -60,7 +60,10 @@ export function ConsultantClientCard({ client, onOpenClient }) {
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <RiskBadge health={client.health} />
         <span style={{ ...G, fontSize: 10.5, color: T.inkGhost, marginLeft: "auto" }}>{fmtLastActive(client.last_active)}</span>
-        <ConsultantClientActions />
+        <ConsultantClientActions
+          pending={!!client.pending_activation}
+          onRegenerate={() => onRegenerate?.(client.organization_id)}
+        />
       </div>
     </Card>
   );

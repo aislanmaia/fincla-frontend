@@ -1,8 +1,11 @@
 import React from "react";
+import { useNavigate } from "@tanstack/react-router";
 
 import { Btn } from "../../components/primitives";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
+import { createConsultantClient } from "../../../api/consultant";
+import { handleApiError } from "../../../api/client";
 import { Icon } from "./consultantUi";
 
 /**
@@ -83,13 +86,40 @@ function TextInput({ value, onChange, placeholder, pre, type = "text" }) {
 
 const toggleBtn = (active) => ({ ...G, flex: 1, padding: "13px", borderRadius: 11, border: `1.5px solid ${active ? T.ink : T.border}`, background: active ? "rgba(15,15,13,0.03)" : "#fff", color: T.ink, fontSize: 13.5, fontWeight: 700, cursor: "pointer" });
 
+/** Mapeia o estado do form (labels PT-BR internos) → payload da API (inglês). */
+function toPayload(f) {
+  const parts = f.nome.trim().split(/\s+/);
+  return {
+    first_name: parts[0] || "",
+    last_name: parts.slice(1).join(" "),
+    email: f.email.trim().toLowerCase(),
+    phone: f.telefone || undefined,
+    occupation: f.ocupacao || undefined,
+    org_name: f.orgNome.trim(),
+    org_type: f.orgTipo,
+    estimated_income: f.renda || undefined,
+    initial_balance: f.saldo || undefined,
+    card: f.temCartao ? { bank: f.cardBanco, limit: f.cardLimite, due_day: f.cardVenc } : null,
+    income: f.temReceita ? { description: f.recDesc, value: f.recValor, day: f.recDia } : null,
+    notes: f.notas || undefined,
+    tags: f.tags,
+    experience_level: f.nivel,
+    main_goal: f.objetivo,
+    priority: f.prioridade,
+  };
+}
+
 export function ConsultantAddClientWizard({ open, onClose }) {
+  const navigate = useNavigate();
   const [stepIdx, setStepIdx] = React.useState(0);
-  const [submitted, setSubmitted] = React.useState(false);
   const [f, setF] = React.useState(INITIAL);
+  const [submitting, setSubmitting] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [result, setResult] = React.useState(null); // { organization_id, client_name, set_password_link }
+  const [copied, setCopied] = React.useState(false);
 
   React.useEffect(() => {
-    if (open) { setStepIdx(0); setSubmitted(false); setF(INITIAL); }
+    if (open) { setStepIdx(0); setF(INITIAL); setSubmitting(false); setError(""); setResult(null); setCopied(false); }
   }, [open]);
 
   if (!open) return null;
@@ -105,7 +135,35 @@ export function ConsultantAddClientWizard({ open, onClose }) {
   };
   const next = () => stepIdx < STEPS.length - 1 && setStepIdx(stepIdx + 1);
   const back = () => stepIdx > 0 && setStepIdx(stepIdx - 1);
-  const submit = () => setSubmitted(true); // TODO: chamar o endpoint de criação quando existir (S5 BE)
+
+  const submit = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const res = await createConsultantClient(toPayload(f));
+      setResult(res);
+    } catch (err) {
+      setError(handleApiError(err));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const copyLink = () => {
+    if (!result?.set_password_link) return;
+    try {
+      navigator.clipboard?.writeText(result.set_password_link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard indisponível */ }
+  };
+
+  const openReport = () => {
+    const orgId = result?.organization_id;
+    onClose();
+    if (orgId) navigate({ to: "/consultant/clients/$id", params: { id: orgId } });
+  };
 
   const orgTypeMeta = ORG_TYPES.find((o) => o.id === f.orgTipo);
   const initials = f.nome.trim().split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
@@ -267,15 +325,22 @@ export function ConsultantAddClientWizard({ open, onClose }) {
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div onClick={onClose} role="presentation" style={{ position: "absolute", inset: 0, background: "rgba(15,15,13,0.5)" }} />
-      <div style={{ position: "relative", width: 920, maxWidth: "100%", height: "min(640px, 92vh)", background: T.surface, borderRadius: 18, overflow: "hidden", boxShadow: T.lg, display: "grid", gridTemplateColumns: submitted ? "1fr" : "minmax(0,300px) 1fr" }}>
-        {submitted ? (
+      <div style={{ position: "relative", width: 920, maxWidth: "100%", height: "min(640px, 92vh)", background: T.surface, borderRadius: 18, overflow: "hidden", boxShadow: T.lg, display: "grid", gridTemplateColumns: result ? "1fr" : "minmax(0,300px) 1fr" }}>
+        {result ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: 40, gap: 8 }}>
-            <div style={{ width: 72, height: 72, borderRadius: 22, background: T.purpleLight, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 8 }}><Icon name="clock" size={34} color={T.purple} /></div>
-            <div style={{ ...G, fontSize: 22, fontWeight: 800, color: T.ink }}>Provisionamento em breve</div>
-            <div style={{ ...G, fontSize: 13.5, color: T.inkLight, maxWidth: 460, lineHeight: 1.6 }}>
-              O fluxo está completo, mas a <strong style={{ color: T.ink }}>criação da conta do cliente</strong> (conta de acesso + organização + convite por e-mail) ainda está sendo habilitada no backend. Assim que estiver pronta, "{f.orgNome || "a organização"}" será criada e o convite enviado para <strong style={{ color: T.ink }}>{f.email || "o e-mail informado"}</strong>.
+            <div style={{ width: 72, height: 72, borderRadius: 22, background: `linear-gradient(135deg, ${T.green}, #0891B2)`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 8, boxShadow: T.md }}><Icon name="check" size={36} color="#fff" /></div>
+            <div style={{ ...G, fontSize: 22, fontWeight: 800, color: T.ink }}>Cliente adicionado!</div>
+            <div style={{ ...G, fontSize: 13.5, color: T.inkLight, maxWidth: 470, lineHeight: 1.6 }}>
+              A conta de <strong style={{ color: T.ink }}>{result.client_name}</strong> foi criada. Envie o link abaixo para {result.client_name.split(" ")[0]} <strong style={{ color: T.ink }}>definir a senha</strong> e acessar. O link expira e é de uso único; você pode gerar um novo depois na carteira.
             </div>
-            <div style={{ marginTop: 16 }}><Btn variant="dark" onClick={onClose}>Voltar à carteira</Btn></div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", maxWidth: 560, marginTop: 6, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "9px 12px" }}>
+              <input readOnly value={result.set_password_link} aria-label="Link de definição de senha" style={{ ...G, flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: 12, color: T.inkMid }} />
+              <Btn variant="outGray" small onClick={copyLink}><Icon name="check" size={12} color={T.inkMid} /> {copied ? "Copiado" : "Copiar"}</Btn>
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+              <Btn variant="outline" onClick={onClose}>Voltar à carteira</Btn>
+              <Btn variant="dark" onClick={openReport}><Icon name="arrow-right" size={14} color="#fff" /> Abrir relatório</Btn>
+            </div>
           </div>
         ) : (
           <>
@@ -312,9 +377,13 @@ export function ConsultantAddClientWizard({ open, onClose }) {
                   {stepIdx === 0 ? "Cancelar" : <><Icon name="chevron-left" size={15} color={T.inkMid} /> Voltar</>}
                 </button>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  {error && <span style={{ ...G, fontSize: 11.5, color: T.red, maxWidth: 260, textAlign: "right" }}>{error}</span>}
                   <span style={{ ...G, ...NUM, fontSize: 11.5, color: T.inkGhost }}>{stepIdx + 1} / {STEPS.length}</span>
                   {step.id === "revisar" ? (
-                    <Btn variant="dark" onClick={submit}><Icon name="check" size={14} color="#fff" /> Criar cliente</Btn>
+                    <button type="button" onClick={submit} disabled={submitting}
+                      style={{ ...G, display: "inline-flex", alignItems: "center", gap: 5, padding: "8px 14px", borderRadius: 9, border: `1.5px solid ${T.ink}`, background: T.ink, color: "#fff", fontSize: 12, fontWeight: 600, cursor: submitting ? "default" : "pointer", opacity: submitting ? 0.6 : 1 }}>
+                      <Icon name="check" size={14} color="#fff" /> {submitting ? "Criando…" : "Criar cliente"}
+                    </button>
                   ) : (
                     <button type="button" onClick={canNext() ? next : undefined} disabled={!canNext()}
                       style={{ ...G, display: "inline-flex", alignItems: "center", gap: 5, padding: "8px 14px", borderRadius: 9, border: `1.5px solid ${T.ink}`, background: T.ink, color: "#fff", fontSize: 12, fontWeight: 600, cursor: canNext() ? "pointer" : "not-allowed", opacity: canNext() ? 1 : 0.45 }}>

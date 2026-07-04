@@ -4,6 +4,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { Btn, Card, PageTitle } from "../../components/primitives";
 import { T } from "../../tokens";
 import { G } from "../../typography";
+import { regenerateClientActivationLink } from "../../../api/consultant";
+import { handleApiError } from "../../../api/client";
 import { useAddClient } from "../../features/consultant/ConsultantAddClientContext.jsx";
 import { useConsultantClients } from "../../features/consultant/useConsultantClients";
 import { ConsultantClientsToolbar } from "../../features/consultant/ConsultantClientsToolbar";
@@ -88,6 +90,18 @@ export function ConsultantClientsPage() {
     navigate({ to: "/consultant/clients/$id", params: { id: organizationId } });
   }, [navigate]);
 
+  const [linkModal, setLinkModal] = React.useState(null); // { link } | { error }
+  const onRegenerate = React.useCallback(async (organizationId) => {
+    if (!organizationId) return;
+    setLinkModal({ loading: true });
+    try {
+      const res = await regenerateClientActivationLink(organizationId);
+      setLinkModal({ link: res.set_password_link });
+    } catch (err) {
+      setLinkModal({ error: handleApiError(err) });
+    }
+  }, []);
+
   return (
     <div style={{ ...G, width: "100%", boxSizing: "border-box", padding: "clamp(18px, 3.5vw, 32px) clamp(16px, 3.5vw, 40px) 48px", display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
@@ -125,11 +139,11 @@ export function ConsultantClientsPage() {
               text="Nenhum cliente corresponde à busca ou ao filtro selecionado. Ajuste os critérios."
             />
           ) : view === "table" ? (
-            <ConsultantClientsTable clients={visible} onOpenClient={openClient} />
+            <ConsultantClientsTable clients={visible} onOpenClient={openClient} onRegenerate={onRegenerate} />
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14, alignItems: "start" }}>
               {visible.map((client) => (
-                <ConsultantClientCard key={client.organization_id} client={client} onOpenClient={openClient} />
+                <ConsultantClientCard key={client.organization_id} client={client} onOpenClient={openClient} onRegenerate={onRegenerate} />
               ))}
             </div>
           )}
@@ -151,6 +165,44 @@ export function ConsultantClientsPage() {
       {state === "loading" && (
         <EmptyState title="Carregando…" text="Buscando a sua carteira de clientes." />
       )}
+
+      {linkModal && <ActivationLinkModal state={linkModal} onClose={() => setLinkModal(null)} />}
+    </div>
+  );
+}
+
+/** Modal simples com o novo link de definição de senha (regenerado). */
+function ActivationLinkModal({ state, onClose }) {
+  const [copied, setCopied] = React.useState(false);
+  const copy = () => {
+    try {
+      navigator.clipboard?.writeText(state.link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard indisponível */ }
+  };
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div role="presentation" onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(15,15,13,0.5)" }} />
+      <Card style={{ position: "relative", width: 520, maxWidth: "100%", padding: 24, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ ...G, fontSize: 16, fontWeight: 800, color: T.ink }}>Novo link de definição de senha</div>
+        {state.loading && <div style={{ ...G, fontSize: 13, color: T.inkLight }}>Gerando link…</div>}
+        {state.error && <div style={{ ...G, fontSize: 13, color: T.red }}>{state.error}</div>}
+        {state.link && (
+          <>
+            <div style={{ ...G, fontSize: 12.5, color: T.inkLight, lineHeight: 1.5 }}>
+              O link anterior foi invalidado. Envie este novo link para o cliente definir a senha. Expira e é de uso único.
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "9px 12px" }}>
+              <input readOnly value={state.link} aria-label="Link de definição de senha" style={{ ...G, flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: 12, color: T.inkMid }} />
+              <Btn variant="outGray" small onClick={copy}>{copied ? "Copiado" : "Copiar"}</Btn>
+            </div>
+          </>
+        )}
+        <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+          <Btn variant="dark" onClick={onClose}>Fechar</Btn>
+        </div>
+      </Card>
     </div>
   );
 }
