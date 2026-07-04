@@ -15,6 +15,7 @@ import { ConsultantClientReportTabs } from "../../features/consultant/Consultant
 import { ConsultantClientOverviewTab } from "../../features/consultant/ConsultantClientOverviewTab";
 import { ConsultantClientTransactionsTab } from "../../features/consultant/ConsultantClientTransactionsTab";
 import { ConsultantClientCardsTab } from "../../features/consultant/ConsultantClientCardsTab";
+import { ConsultantClientCategoriesTab } from "../../features/consultant/ConsultantClientCategoriesTab";
 import { Icon } from "../../features/consultant/consultantUi";
 import { resolveClientReportState } from "../../features/consultant/consultantClientReport";
 import { DEFAULT_CLIENT_REPORT_TAB } from "../../features/consultant/consultantReportTabs";
@@ -35,8 +36,8 @@ function EmptyState({ title, text, action }) {
  * saúde/ações), as abas e a aba "Visão geral" fiel à referência de design, que
  * consome os reads por-org com `organization_id` = org do cliente:
  * `/financial-health/score` (KPIs+diagnóstico+metas), `/analytics/by-category`
- * (donut) e `/goals` (metas). Transações (RF.2) e Cartões (RF.3) ativas; Categorias
- * chega em RF.4.
+ * (donut + aba Categorias) e `/goals` (metas). Todas as abas ativas: Visão geral
+ * (RF.1b), Transações (RF.2), Cartões (RF.3), Categorias (RF.4).
  *
  * Estados: cliente na carteira → relatório; ainda carregando → "carregando";
  * erro sem lista → "erro"; carregou e o id não é cliente do consultor →
@@ -93,6 +94,7 @@ export function ConsultantClientReportPage() {
           )}
           {tab === "transactions" && <ConsultantClientTransactionsTab transactions={transactions} />}
           {tab === "cards" && <ConsultantClientCardsTab cards={cards} clientName={client?.client_name} />}
+          {tab === "categories" && <ConsultantClientCategoriesTab categories={categories} />}
         </>
       )}
 
