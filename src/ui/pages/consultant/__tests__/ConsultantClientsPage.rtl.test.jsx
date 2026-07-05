@@ -121,6 +121,31 @@ describe("ConsultantClientsPage", () => {
     expect(await screen.findByText("Carla Dias")).toBeInTheDocument();
   });
 
+  it("cota cheia → mostra 'Limite do plano atingido' e desabilita 'Adicionar cliente'", async () => {
+    const c3 = client({ organization_id: "x3", client_name: "Cli Tres" });
+    vi.mocked(getConsultantClients).mockResolvedValue({ total: 3, clients: [ana, carla, c3] });
+    render(
+      <ConsultantAddClientProvider openAddClient={() => {}} clientsVersion={0} notifyClientsChanged={() => {}} clientLimit={3}>
+        <ConsultantClientsPage />
+      </ConsultantAddClientProvider>,
+    );
+    await waitFor(() => expect(screen.getByText("Ana Beatriz")).toBeInTheDocument());
+    expect(screen.getByText("Limite do plano atingido")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Adicionar cliente/ })).toBeDisabled();
+  });
+
+  it("cota disponível → mostra vagas restantes e botão habilitado", async () => {
+    vi.mocked(getConsultantClients).mockResolvedValue({ total: 2, clients: [ana, carla] });
+    render(
+      <ConsultantAddClientProvider openAddClient={() => {}} clientsVersion={0} notifyClientsChanged={() => {}} clientLimit={5}>
+        <ConsultantClientsPage />
+      </ConsultantAddClientProvider>,
+    );
+    await waitFor(() => expect(screen.getByText("Ana Beatriz")).toBeInTheDocument());
+    expect(screen.getByText("3 vagas restantes")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Adicionar cliente/ })).not.toBeDisabled();
+  });
+
   it("mostra a carteira vazia quando não há clientes", async () => {
     vi.mocked(getConsultantClients).mockResolvedValue({ total: 0, clients: [] });
     render(<ConsultantClientsPage />);
