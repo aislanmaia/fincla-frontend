@@ -104,7 +104,7 @@ export function IncomeCommitmentChart({ data, loading }) {
             <LineChart data={data} margin={{ top: 6, right: 6, left: -18, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
               <XAxis dataKey="month" tick={{ ...G, fontSize: 10, fill: T.inkLight }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ ...G, fontSize: 10, fill: T.inkLight }} axisLine={false} tickLine={false} width={38} domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
+              <YAxis tick={{ ...G, fontSize: 10, fill: T.inkLight }} axisLine={false} tickLine={false} width={38} domain={[0, (dataMax) => Math.max(100, Math.ceil(dataMax))]} tickFormatter={(v) => `${v}%`} />
               <Tooltip content={<CommitmentTooltip />} cursor={{ stroke: T.border }} />
               <Line dataKey="pct" name="Comprometimento" type="monotone" stroke={T.purple} strokeWidth={2.5} dot={{ r: 2.5, fill: T.purple }} />
             </LineChart>
