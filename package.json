@@ -16,6 +16,7 @@
     "test:e2e:install": "playwright install chromium"
   },
   "dependencies": {
+    "@react-pdf/renderer": "^4.5.1",
     "@tanstack/react-router": "^1.168.23",
     "@tanstack/zod-adapter": "^1.166.9",
     "axios": "^1.13.2",

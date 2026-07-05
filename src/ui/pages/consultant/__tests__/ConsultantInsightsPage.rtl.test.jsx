@@ -116,7 +116,7 @@ describe("<ConsultantInsightsPage> (S4)", () => {
     expect(screen.queryByText("Migração de risco da base")).not.toBeInTheDocument();
   });
 
-  it("o botão Exportar abre o modal de formato (CSV real, PDF em breve)", async () => {
+  it("o botão Exportar abre o modal de formato (PDF default + CSV)", async () => {
     render(<ConsultantInsightsPage />);
     await waitFor(() => expect(screen.getByText("78/100")).toBeInTheDocument());
 
@@ -127,10 +127,9 @@ describe("<ConsultantInsightsPage> (S4)", () => {
 
     expect(screen.getByText("Exportar consolidado")).toBeInTheDocument();
     expect(screen.getByText("Formato de exportação")).toBeInTheDocument();
-    expect(screen.getByText("CSV")).toBeInTheDocument();
     expect(screen.getByText("PDF")).toBeInTheDocument();
-    // PDF fica como opção futura (subtítulo próprio do modal); o download é do CSV
-    expect(screen.getByText("Relatório para apresentar ao cliente")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Exportar CSV/ })).toBeInTheDocument();
+    expect(screen.getByText("CSV")).toBeInTheDocument();
+    // PDF é o default → o botão de ação reflete o formato selecionado
+    expect(screen.getByRole("button", { name: /Exportar PDF/ })).toBeInTheDocument();
   });
 });

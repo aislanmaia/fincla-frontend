@@ -25,6 +25,8 @@ import { useConsultantIncomeCommitment } from "../../features/consultant/useCons
 import { useConsultantGoalsProgress } from "../../features/consultant/useConsultantGoalsProgress";
 import { useConsultantTotalCardDebt } from "../../features/consultant/useConsultantTotalCardDebt";
 import { getConsultantConsolidatedReport } from "../../../api/consultant";
+import { getDisplayName } from "../../features/auth/userDisplay.js";
+import { useFinclaPages } from "../../routing/finclaPageContext.jsx";
 
 function Kicker({ children }) {
   return <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{children}</div>;
@@ -38,6 +40,18 @@ function StubActionButton({ icon, label, dark }) {
       <span style={{ ...G, fontSize: 8.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: dark ? "#fff" : T.inkLight, background: dark ? "rgba(255,255,255,0.2)" : T.grayLight, borderRadius: 5, padding: "1px 5px" }}>em breve</span>
     </button>
   );
+}
+
+/** Dispara o download de um Blob no navegador (CSV/PDF). */
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 /** Botão de ação real (habilitado) — mesmo visual do stub, sem o selo "em breve". */
@@ -138,8 +152,9 @@ function MoversCard({ title, icon, iconColor, clients, dir, onOpen, emptyText })
  * - comprometimento de renda mês a mês (`/consultant/income-commitment`);
  * - dívida de cartão da base (`/consultant/total-credit-card-debt` → KPI);
  * - progresso de metas por tipo (`/consultant/goals-progress-by-type`).
- * "Exportar" abre um modal de formato (CSV real, PDF "em breve") e baixa o
- * consolidado (`/consultant/reports/consolidated`) como CSV.
+ * "Exportar" abre um modal de formato — **PDF** (default, relatório apresentável,
+ * via `@react-pdf/renderer` carregado sob demanda) ou **CSV** — do consolidado
+ * (`/consultant/reports/consolidated`); o PDF cruza os agregados já em tela.
  *
  * Único stub restante = **"Tendências detectadas pela IA"** (Trilha B) e o botão
  * "Relatório com IA". A "taxa de retenção" saiu (é métrica comercial do consultor,
@@ -147,6 +162,7 @@ function MoversCard({ title, icon, iconColor, clients, dir, onOpen, emptyText })
  */
 export function ConsultantInsightsPage() {
   const navigate = useNavigate();
+  const pages = useFinclaPages();
   const { healthIndex } = useConsultantHealthIndex();
   const wallet = useConsultantClients();
   const expenses = useConsultantExpensesByCategory();
@@ -175,24 +191,45 @@ export function ConsultantInsightsPage() {
 
   const openClient = React.useCallback((orgId) => navigate({ to: "/consultant/clients/$id", params: { id: orgId } }), [navigate]);
 
-  // Exportar: modal de formato (CSV real, PDF "em breve") → baixa o consolidado
-  // da base (`/reports/consolidated`) como CSV.
+  // Exportar: modal de formato (PDF default / CSV). Ambos baixam o consolidado
+  // (`/reports/consolidated`); o PDF ainda cruza os agregados já em tela.
   const [exportOpen, setExportOpen] = React.useState(false);
   const [exporting, setExporting] = React.useState(false);
-  const onExport = React.useCallback(async () => {
+
+  // Dados do relatório mantidos num ref (atualizado a cada render) para o handler
+  // ler o valor corrente sem recriar o callback a cada mudança de agregado.
+  const reportRef = React.useRef({});
+  reportRef.current = {
+    consultantName: getDisplayName(pages?.user) || "",
+    patrimonio,
+    health: healthIndex?.index ?? null,
+    risk: counts.risk,
+    totalClients: counts.all,
+    cardDebt: cardDebt.totalDebt,
+    cashFlow: cashFlowSeries,
+    expenses: expenseRows,
+    goals: goalsRows,
+    commitment: commitmentSeries,
+  };
+
+  const onExport = React.useCallback(async (format) => {
     setExporting(true);
     try {
       const summary = await getConsultantConsolidatedReport();
-      const csv = buildConsolidatedCsv(summary);
-      const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `fincla-consultor-consolidado-${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      const stamp = new Date().toISOString().slice(0, 10);
+      if (format === "pdf") {
+        const [{ pdf }, { ConsultantReportDoc }] = await Promise.all([
+          import("@react-pdf/renderer"),
+          import("../../features/consultant/ConsultantReportPdf.jsx"),
+        ]);
+        const generatedAt = new Date().toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" });
+        const blob = await pdf(<ConsultantReportDoc data={{ ...reportRef.current, summary, generatedAt }} />).toBlob();
+        downloadBlob(blob, `fincla-consultor-consolidado-${stamp}.pdf`);
+      } else {
+        const csv = buildConsolidatedCsv(summary);
+        const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+        downloadBlob(blob, `fincla-consultor-consolidado-${stamp}.csv`);
+      }
       setExportOpen(false);
     } catch {
       /* silencioso por ora; futuro: toast de erro */
