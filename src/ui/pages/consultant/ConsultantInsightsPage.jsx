@@ -7,10 +7,23 @@ import { G, NUM } from "../../typography";
 import { Avatar, Icon } from "../../features/consultant/consultantUi";
 import { fmtMoney } from "../../features/consultant/consultantFormat";
 import { countClientsByBand, totalPatrimonio } from "../../features/consultant/consultantClientsView";
-import { selectExpenseRows, selectMovers } from "../../features/consultant/consultantInsights";
+import {
+  buildConsolidatedCsv,
+  selectCashFlowSeries,
+  selectExpenseRows,
+  selectGoalsProgressRows,
+  selectIncomeCommitmentSeries,
+  selectMovers,
+} from "../../features/consultant/consultantInsights";
+import { CashFlowChart, IncomeCommitmentChart } from "../../features/consultant/ConsultantInsightsCharts.jsx";
 import { useConsultantHealthIndex } from "../../features/consultant/useConsultantHealthIndex";
 import { useConsultantClients } from "../../features/consultant/useConsultantClients";
 import { useConsultantExpensesByCategory } from "../../features/consultant/useConsultantExpensesByCategory";
+import { useConsultantCashFlow } from "../../features/consultant/useConsultantCashFlow";
+import { useConsultantIncomeCommitment } from "../../features/consultant/useConsultantIncomeCommitment";
+import { useConsultantGoalsProgress } from "../../features/consultant/useConsultantGoalsProgress";
+import { useConsultantTotalCardDebt } from "../../features/consultant/useConsultantTotalCardDebt";
+import { getConsultantConsolidatedReport } from "../../../api/consultant";
 
 function Kicker({ children }) {
   return <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{children}</div>;
@@ -22,6 +35,16 @@ function StubActionButton({ icon, label, dark }) {
       style={{ ...G, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 9, border: `1.5px solid ${dark ? T.ink : T.border}`, background: dark ? T.ink : T.surface, color: dark ? "#fff" : T.inkLight, fontSize: 12, fontWeight: 600, cursor: "default", opacity: 0.6, whiteSpace: "nowrap" }}>
       <Icon name={icon} size={14} color={dark ? "#fff" : T.inkLight} /> {label}
       <span style={{ ...G, fontSize: 8.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: dark ? "#fff" : T.inkLight, background: dark ? "rgba(255,255,255,0.2)" : T.grayLight, borderRadius: 5, padding: "1px 5px" }}>em breve</span>
+    </button>
+  );
+}
+
+/** Botão de ação real (habilitado) — mesmo visual do stub, sem o selo "em breve". */
+function ActionButton({ icon, label, dark, onClick, disabled }) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled}
+      style={{ ...G, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 9, border: `1.5px solid ${dark ? T.ink : T.border}`, background: dark ? T.ink : T.surface, color: dark ? "#fff" : T.inkMid, fontSize: 12, fontWeight: 600, cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.6 : 1, whiteSpace: "nowrap" }}>
+      <Icon name={icon} size={14} color={dark ? "#fff" : T.inkMid} /> {label}
     </button>
   );
 }
@@ -107,25 +130,40 @@ function MoversCard({ title, icon, iconColor, clients, dir, onOpen, emptyText })
 }
 
 /**
- * Insights da carteira (S4) — reimplementado fiel à referência (`cons-insights.jsx`).
- * Consome os agregados reais do consultor: gasto por categoria
- * (`/consultant/expenses-by-category` → "Onde a base gasta"), saúde média
- * (`/financial-health-index`), patrimônio/tendência/bandas (`/consultant/clients`).
- * Elementos sem fonte de dado — **migração de risco histórica**, **perfil de renda**,
- * **taxa de retenção** e **tendências por IA** — ficam como **stub "em breve"**
- * preservando o layout (Trilha B / dado novo). Exportar/Relatório-IA = stubs.
+ * Insights da carteira (S4). Consome os agregados reais do consultor:
+ * - gasto por categoria (`/consultant/expenses-by-category` → "Onde a base gasta");
+ * - saúde média (`/financial-health-index`); patrimônio/tendência/bandas (`/consultant/clients`);
+ * - fluxo mensal receita×despesa×saldo (`/consultant/cash-flow` → "Fluxo da base");
+ * - comprometimento de renda mês a mês (`/consultant/income-commitment`);
+ * - dívida de cartão da base (`/consultant/total-credit-card-debt` → KPI);
+ * - progresso de metas por tipo (`/consultant/goals-progress-by-type`).
+ * "Exportar CSV" baixa o consolidado (`/consultant/reports/consolidated`).
+ *
+ * Único stub restante = **"Tendências detectadas pela IA"** (Trilha B) e o botão
+ * "Relatório com IA". A "taxa de retenção" saiu (é métrica comercial do consultor,
+ * outro produto — como honorários).
  */
 export function ConsultantInsightsPage() {
   const navigate = useNavigate();
   const { healthIndex } = useConsultantHealthIndex();
   const wallet = useConsultantClients();
   const expenses = useConsultantExpensesByCategory();
+  const cashFlow = useConsultantCashFlow();
+  const commitment = useConsultantIncomeCommitment();
+  const goals = useConsultantGoalsProgress();
+  const cardDebt = useConsultantTotalCardDebt();
 
   const clients = wallet.clients;
   const counts = countClientsByBand(clients);
   const patrimonio = totalPatrimonio(clients);
   const { rows: expenseRows, max: expenseMax } = selectExpenseRows(expenses.categories);
   const { gainers, decliners } = selectMovers(clients);
+  const cashFlowSeries = selectCashFlowSeries(cashFlow.monthly);
+  const commitmentSeries = selectIncomeCommitmentSeries(commitment.monthly);
+  const goalsRows = selectGoalsProgressRows(goals.byType).map((r) => ({
+    ...r,
+    label: r.count ? `${r.label} · ${r.count}` : r.label,
+  }));
 
   const bandRows = [
     { label: "Saudável", value: counts.healthy, color: T.green },
@@ -135,6 +173,29 @@ export function ConsultantInsightsPage() {
 
   const openClient = React.useCallback((orgId) => navigate({ to: "/consultant/clients/$id", params: { id: orgId } }), [navigate]);
 
+  // Exportar: baixa o consolidado da base (`/reports/consolidated`) como CSV.
+  const [exporting, setExporting] = React.useState(false);
+  const onExport = React.useCallback(async () => {
+    setExporting(true);
+    try {
+      const summary = await getConsultantConsolidatedReport();
+      const csv = buildConsolidatedCsv(summary);
+      const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `fincla-consultor-consolidado-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      /* silencioso por ora; futuro: toast de erro */
+    } finally {
+      setExporting(false);
+    }
+  }, []);
+
   return (
     <div style={{ ...G, width: "100%", boxSizing: "border-box", padding: "clamp(18px, 3.5vw, 32px) clamp(16px, 3.5vw, 40px) 48px", display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
@@ -143,7 +204,7 @@ export function ConsultantInsightsPage() {
           <PageTitle sans="Insights" serif="da carteira" />
         </div>
         <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
-          <StubActionButton icon="download" label="Exportar PDF" />
+          <ActionButton icon="download" label={exporting ? "Exportando…" : "Exportar CSV"} onClick={onExport} disabled={exporting} />
           <StubActionButton icon="sparkles" label="Relatório com IA" dark />
         </div>
       </div>
@@ -152,8 +213,10 @@ export function ConsultantInsightsPage() {
         <KpiCard label="Patrimônio total" value={fmtMoney(patrimonio)} sub="sob acompanhamento" />
         <KpiCard label="Saúde média" value={healthIndex?.index != null ? `${Math.round(healthIndex.index)}/100` : "—"} sub="da base" color={T.green} />
         <KpiCard label="Clientes em risco" value={counts.risk} sub={`de ${counts.all} na carteira`} color={T.red} />
-        <KpiCard label="Taxa de retenção" value="—" sub="12 meses" soon />
+        <KpiCard label="Dívida de cartão" value={cardDebt.totalDebt != null ? fmtMoney(cardDebt.totalDebt) : "—"} sub="faturas em aberto" color={T.red} />
       </div>
+
+      <CashFlowChart data={cashFlowSeries} loading={cashFlow.loading && !cashFlow.hasLoaded} />
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16, alignItems: "start" }}>
         <Card style={{ padding: 18 }}>
@@ -167,21 +230,31 @@ export function ConsultantInsightsPage() {
             </div>
           )}
         </Card>
-        <SoonPanel
-          title="Migração de risco da base"
-          subtitle="Quantos clientes em cada nível, mês a mês"
-          text="Em breve: a evolução da distribuição de saúde da carteira ao longo dos meses (exige série histórica agregada)."
-        />
+        <IncomeCommitmentChart data={commitmentSeries} loading={commitment.loading && !commitment.hasLoaded} />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16, alignItems: "start" }}>
-        <MoversCard title="Maiores evoluções" icon="up" iconColor={T.green} clients={gainers} dir="up" onOpen={openClient} emptyText="Nenhum cliente em alta no momento." />
-        <MoversCard title="Precisam de atenção" icon="down" iconColor={T.red} clients={decliners} dir="down" onOpen={openClient} emptyText="Nenhum cliente em queda no momento." />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16, alignItems: "start" }}>
+        <Card style={{ padding: 18 }}>
+          <div style={{ ...G, fontSize: 14, fontWeight: 800, color: T.ink, marginBottom: 4 }}>Progresso de metas por tipo</div>
+          <div style={{ ...G, fontSize: 11, color: T.inkLight, marginBottom: 16 }}>Progresso médio das metas da base, por tipo</div>
+          {goalsRows.length ? (
+            <HBars rows={goalsRows} max={100} fmt={(v) => `${v}%`} />
+          ) : (
+            <div style={{ ...G, fontSize: 12, color: T.inkLight, padding: "12px 0" }}>
+              {goals.loading && !goals.hasLoaded ? "Carregando metas…" : "Nenhuma meta ativa na base."}
+            </div>
+          )}
+        </Card>
         <Card style={{ padding: 18 }}>
           <div style={{ ...G, fontSize: 13.5, fontWeight: 800, color: T.ink, marginBottom: 4 }}>Composição da base</div>
           <div style={{ ...G, fontSize: 11, color: T.inkLight, marginBottom: 16 }}>Por nível de saúde</div>
           <HBars rows={bandRows} max={counts.all} fmt={(v) => String(v)} />
         </Card>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16, alignItems: "start" }}>
+        <MoversCard title="Maiores evoluções" icon="up" iconColor={T.green} clients={gainers} dir="up" onOpen={openClient} emptyText="Nenhum cliente em alta no momento." />
+        <MoversCard title="Precisam de atenção" icon="down" iconColor={T.red} clients={decliners} dir="down" onOpen={openClient} emptyText="Nenhum cliente em queda no momento." />
       </div>
 
       <SoonPanel

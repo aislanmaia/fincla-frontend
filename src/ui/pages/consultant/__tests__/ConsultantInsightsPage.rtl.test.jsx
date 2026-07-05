@@ -5,13 +5,40 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const navigate = vi.fn();
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => navigate }));
 
+// recharts precisa de ResizeObserver (ausente no jsdom) — mock leve, como nos
+// demais testes de página com gráfico (ex.: DashboardPage).
+vi.mock("recharts", () => ({
+  ResponsiveContainer: ({ children }) => <div data-testid="recharts-rc">{children}</div>,
+  CartesianGrid: () => null,
+  ComposedChart: ({ children }) => <div>{children}</div>,
+  LineChart: ({ children }) => <div>{children}</div>,
+  Bar: () => null,
+  Line: () => null,
+  Tooltip: () => null,
+  XAxis: () => null,
+  YAxis: () => null,
+}));
+
 vi.mock("../../../../api/consultant", () => ({
   getFinancialHealthIndex: vi.fn(),
   getConsultantClients: vi.fn(),
   getExpensesByCategory: vi.fn(),
+  getCashFlow: vi.fn(),
+  getIncomeCommitment: vi.fn(),
+  getGoalsProgressByType: vi.fn(),
+  getTotalCreditCardDebt: vi.fn(),
+  getConsultantConsolidatedReport: vi.fn(),
 }));
 
-import { getConsultantClients, getExpensesByCategory, getFinancialHealthIndex } from "../../../../api/consultant";
+import {
+  getCashFlow,
+  getConsultantClients,
+  getExpensesByCategory,
+  getFinancialHealthIndex,
+  getGoalsProgressByType,
+  getIncomeCommitment,
+  getTotalCreditCardDebt,
+} from "../../../../api/consultant";
 import { ConsultantInsightsPage } from "../ConsultantInsightsPage.jsx";
 
 beforeEach(() => {
@@ -32,6 +59,20 @@ beforeEach(() => {
       { name: "Alimentação", total: 300, percentage: 30 },
     ],
   });
+  vi.mocked(getCashFlow).mockResolvedValue({
+    monthly_data: [
+      { month: "2025-01", month_number: 1, year: 2025, total_income: 50000, total_expenses: 32000, balance: 18000 },
+      { month: "2025-02", month_number: 2, year: 2025, total_income: 52000, total_expenses: 35000, balance: 17000 },
+    ],
+  });
+  vi.mocked(getIncomeCommitment).mockResolvedValue({
+    monthly_data: [{ month: "2025-02", month_number: 2, year: 2025, income_commitment_percent: 35.5 }],
+  });
+  vi.mocked(getGoalsProgressByType).mockResolvedValue({
+    by_type: [{ goal_name: "reserva_emergencia", avg_progress: 65.5, count: 5 }],
+    organizations_count: 3,
+  });
+  vi.mocked(getTotalCreditCardDebt).mockResolvedValue({ total_debt: 12345, organizations_count: 3 });
 });
 
 afterEach(() => {
@@ -40,28 +81,38 @@ afterEach(() => {
 });
 
 describe("<ConsultantInsightsPage> (S4)", () => {
-  it("renders KPIs, the real 'onde a base gasta' bars, movers and honest stubs", async () => {
+  it("renders real KPIs, cash-flow, expenses, goals, movers and the honest AI stub", async () => {
     render(<ConsultantInsightsPage />);
 
     expect(screen.getByText("Insights")).toBeInTheDocument();
     expect(screen.getByText("da carteira")).toBeInTheDocument();
 
-    // KPIs reais
+    // KPIs reais — inclui a nova "Dívida de cartão" (substitui a antiga "Taxa de retenção")
     await waitFor(() => expect(screen.getByText("78/100")).toBeInTheDocument());
     expect(screen.getByText("Patrimônio total")).toBeInTheDocument();
     expect(screen.getByText("Clientes em risco")).toBeInTheDocument();
+    expect(screen.getByText("Dívida de cartão")).toBeInTheDocument();
+
+    // Novos painéis reais (backed por endpoints do consultor)
+    expect(screen.getByText("Fluxo da base")).toBeInTheDocument();
+    expect(screen.getByText("Comprometimento de renda")).toBeInTheDocument();
+    expect(screen.getByText("Progresso de metas por tipo")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/Reserva de emergência/)).toBeInTheDocument());
 
     // "Onde a base gasta" com as categorias reais
     await waitFor(() => expect(screen.getByText("Transporte")).toBeInTheDocument());
     expect(screen.getByText("Alimentação")).toBeInTheDocument();
 
-    // Movers: Ana (up) em "Maiores evoluções", Bruno (down) em "Precisam de atenção"
+    // Movers
     expect(screen.getByText("Ana Souza")).toBeInTheDocument();
     expect(screen.getByText("Bruno Lima")).toBeInTheDocument();
 
-    // Stubs honestos preservam o layout
-    expect(screen.getByText("Migração de risco da base")).toBeInTheDocument();
+    // Ação real de exportar + único stub restante (IA)
+    expect(screen.getByRole("button", { name: /Exportar CSV/ })).toBeEnabled();
     expect(screen.getByText("Tendências detectadas pela IA")).toBeInTheDocument();
-    expect(screen.getByText("Taxa de retenção")).toBeInTheDocument();
+
+    // Os stubs comerciais/históricos saíram
+    expect(screen.queryByText("Taxa de retenção")).not.toBeInTheDocument();
+    expect(screen.queryByText("Migração de risco da base")).not.toBeInTheDocument();
   });
 });
