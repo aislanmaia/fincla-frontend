@@ -29,6 +29,8 @@ export function ConsultantShell() {
   // Incrementa a cada cliente criado → a carteira observa e faz refetch.
   const [clientsVersion, setClientsVersion] = React.useState(0);
   const notifyClientsChanged = React.useCallback(() => setClientsVersion((v) => v + 1), []);
+  // Cota do plano: nº máximo de clientes que o consultor pode gerenciar.
+  const clientLimit = user?.subscription?.max_organizations ?? null;
 
   React.useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 768);
@@ -42,7 +44,7 @@ export function ConsultantShell() {
   };
 
   return (
-    <ConsultantAddClientProvider openAddClient={openAddClient} clientsVersion={clientsVersion} notifyClientsChanged={notifyClientsChanged}>
+    <ConsultantAddClientProvider openAddClient={openAddClient} clientsVersion={clientsVersion} notifyClientsChanged={notifyClientsChanged} clientLimit={clientLimit}>
     <div style={{ ...G, display: "flex", height: "100vh", width: "100%", overflow: "hidden", background: T.bg }}>
       {!isMobile && <ConsultantSidebar pathname={pathname} onNav={go} user={user} />}
 
