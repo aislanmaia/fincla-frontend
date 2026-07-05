@@ -54,10 +54,10 @@ function CashFlowTooltip({ active, payload, label }) {
  * (linha) mês a mês de toda a carteira. Consome a série pura de
  * `selectCashFlowSeries` (`/consultant/cash-flow`). Recharts (mesma lib do app).
  */
-export function CashFlowChart({ data, loading }) {
+export function CashFlowChart({ data, loading, title = "Fluxo da base", subtitle = "Receita × despesa e saldo, mês a mês (toda a carteira)", emptyText = "Sem fluxo agregado no período." }) {
   return (
     <Card style={{ padding: 18 }}>
-      <ChartHeader title="Fluxo da base" subtitle="Receita × despesa e saldo, mês a mês (toda a carteira)" />
+      <ChartHeader title={title} subtitle={subtitle} />
       {data.length ? (
         <div style={{ width: "100%", height: 240 }}>
           <ResponsiveContainer width="100%" height="100%">
@@ -73,7 +73,7 @@ export function CashFlowChart({ data, loading }) {
           </ResponsiveContainer>
         </div>
       ) : (
-        <EmptyChart text={loading ? "Carregando fluxo…" : "Sem fluxo agregado no período."} />
+        <EmptyChart text={loading ? "Carregando…" : emptyText} />
       )}
     </Card>
   );

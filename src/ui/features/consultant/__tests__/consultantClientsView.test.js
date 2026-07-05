@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   RISK_FILTERS,
   SORT_OPTIONS,
+  buildClientsCsv,
   clientHealthBand,
   countClientsByBand,
   selectConsultantClients,
@@ -139,5 +140,20 @@ describe("totalPatrimonio", () => {
   });
   it("tolera entrada ausente", () => {
     expect(totalPatrimonio(undefined)).toBe(0);
+  });
+});
+
+describe("buildClientsCsv", () => {
+  it("gera CSV com header + uma linha por cliente e sanitiza ; nos textos", () => {
+    const csv = buildClientsCsv([
+      { client_name: "Ana;Souza", organization_name: "Org A", health: 92.4, patrimonio: "50000.00", balance: "1000.00", savings_pct: 10, debt_pct: 20, last_active: "2026-06-28" },
+    ]);
+    const lines = csv.split("\n");
+    expect(lines[0]).toBe("Cliente;Organização;Saúde;Patrimônio;Saldo;Poupança %;Dívida %;Última atividade");
+    // ";" no nome vira espaço para não quebrar colunas; saúde arredonda
+    expect(lines[1]).toBe("Ana Souza;Org A;92;50000;1000;10;20;2026-06-28");
+  });
+  it("tolera entrada ausente (só header)", () => {
+    expect(buildClientsCsv(null).split("\n")).toHaveLength(1);
   });
 });

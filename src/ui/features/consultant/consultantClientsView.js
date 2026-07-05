@@ -88,3 +88,28 @@ export function selectConsultantClients(clients, { query = "", riskFilter = "all
     return (va - vb) * dir;
   });
 }
+
+/**
+ * CSV (pt-BR, separador ";") da carteira de clientes para o botão "Exportar" —
+ * uma linha por cliente com os campos já carregados por `/consultant/clients`.
+ * Sanitiza `;`/quebras de linha nos textos para não quebrar as colunas.
+ */
+function csvCell(value) {
+  return String(value ?? "").replace(/[;\r\n]+/g, " ").trim();
+}
+
+export function buildClientsCsv(clients) {
+  const list = Array.isArray(clients) ? clients : [];
+  const header = ["Cliente", "Organização", "Saúde", "Patrimônio", "Saldo", "Poupança %", "Dívida %", "Última atividade"];
+  const rows = list.map((c) => [
+    csvCell(c?.client_name),
+    csvCell(c?.organization_name),
+    Math.round(Number(c?.health) || 0),
+    Number.parseFloat(c?.patrimonio) || 0,
+    Number.parseFloat(c?.balance) || 0,
+    Number(c?.savings_pct) || 0,
+    Number(c?.debt_pct) || 0,
+    csvCell(c?.last_active),
+  ]);
+  return [header, ...rows].map((r) => r.join(";")).join("\n");
+}

@@ -20,6 +20,7 @@ vi.mock("../../../../api/financialHealth", () => ({
 
 vi.mock("../../../../api/analytics", () => ({
   getByCategory: vi.fn(),
+  getMonthlyEvolution: vi.fn().mockResolvedValue({ months: [] }),
 }));
 
 vi.mock("../../../data/goalsAdapter.js", () => ({

@@ -98,3 +98,24 @@ export function overviewGoalsSummary(health) {
     progress: Math.round(Number(health?.goal_progress_avg) || 0),
   };
 }
+
+const MONTH_ABBR = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+/**
+ * Série mensal de "Evolução do patrimônio" a partir de `/analytics/monthly-evolution`
+ * (`months`: `{ year, month, total_income, total_expenses, balance }[]`) — reusa o
+ * shape do `CashFlowChart` (barras receita/despesa + linha de saldo) para o cliente.
+ */
+export function selectClientEvolutionSeries(months, limit = 12) {
+  const list = Array.isArray(months) ? months : [];
+  return list.slice(-limit).map((m) => {
+    const abbr = MONTH_ABBR[(Number(m?.month) || 1) - 1] ?? "";
+    const yy = m?.year != null ? `/${String(m.year).slice(-2)}` : "";
+    return {
+      month: `${abbr}${yy}`,
+      income: Number(m?.total_income) || 0,
+      expenses: Number(m?.total_expenses) || 0,
+      balance: Number(m?.balance) || 0,
+    };
+  });
+}
