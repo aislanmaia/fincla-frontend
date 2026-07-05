@@ -7,36 +7,36 @@ import { Icon } from "./consultantUi";
 
 /**
  * Uma opção de formato de exportação (espelha a seção "Formato de exportação" do
- * `ExportInvoiceModal` dos cartões): card com check quando selecionado, selo
- * "em breve" e opacidade reduzida quando desabilitado.
+ * `ExportInvoiceModal` dos cartões): card selecionável com check quando ativo.
  */
-function FormatOption({ selected, disabled, soon, title, subtitle }) {
+function FormatOption({ selected, onSelect, title, subtitle }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, border: `1.5px solid ${selected ? T.ink : T.border}`, background: selected ? T.bg : T.surface, opacity: disabled ? 0.6 : 1 }}>
+    <button
+      type="button"
+      onClick={onSelect}
+      style={{ ...G, textAlign: "left", display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, border: `1.5px solid ${selected ? T.ink : T.border}`, background: selected ? T.bg : T.surface, cursor: "pointer", transition: "all 0.15s" }}
+    >
       <div style={{ width: 22, height: 22, borderRadius: 6, background: selected ? T.ink : "transparent", border: selected ? "none" : `2px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         {selected && <Icon name="check" size={12} color="#fff" />}
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink, display: "flex", alignItems: "center", gap: 7 }}>
-          {title}
-          {soon && (
-            <span style={{ ...G, fontSize: 8.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: T.inkLight, background: T.grayLight, borderRadius: 5, padding: "1px 6px" }}>em breve</span>
-          )}
-        </div>
+        <div style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink }}>{title}</div>
         <div style={{ ...G, fontSize: 10, color: T.inkLight }}>{subtitle}</div>
       </div>
-    </div>
+    </button>
   );
 }
 
 /**
- * Modal "Exportar consolidado" do Insights. Reusa o padrão de seleção de formato
- * do `ExportInvoiceModal`: **CSV** marcado (real) e **PDF** desabilitado com selo
- * "em breve" (o relatório apresentável ao cliente fica para o futuro). O botão
- * dispara `onExport` (download do CSV do consolidado da base).
+ * Modal "Exportar consolidado" do Insights. Formato **PDF** (default — relatório
+ * apresentável ao cliente) ou **CSV** (dados p/ planilha). O botão dispara
+ * `onExport(format)` — ambos baixam o consolidado da base
+ * (`/consultant/reports/consolidated`); o PDF ainda cruza os agregados do Insights.
  */
 export function ConsultantExportModal({ open, exporting, onExport, onClose }) {
+  const [format, setFormat] = React.useState("pdf");
   if (!open) return null;
+  const label = format === "pdf" ? "Exportar PDF" : "Exportar CSV";
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div role="presentation" onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(15,15,13,0.5)" }} />
@@ -52,13 +52,13 @@ export function ConsultantExportModal({ open, exporting, onExport, onClose }) {
         </div>
         <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em" }}>Formato de exportação</div>
-          <FormatOption selected title="CSV" subtitle="Compatível com Excel, Sheets, etc." />
-          <FormatOption disabled soon title="PDF" subtitle="Relatório para apresentar ao cliente" />
+          <FormatOption selected={format === "pdf"} onSelect={() => setFormat("pdf")} title="PDF" subtitle="Relatório para apresentar ao cliente" />
+          <FormatOption selected={format === "csv"} onSelect={() => setFormat("csv")} title="CSV" subtitle="Compatível com Excel, Sheets, etc." />
         </div>
         <div style={{ padding: "14px 20px", borderTop: `1px solid ${T.border}` }}>
-          <button type="button" onClick={onExport} disabled={exporting}
+          <button type="button" onClick={() => onExport(format)} disabled={exporting}
             style={{ ...G, width: "100%", padding: "13px", borderRadius: 10, border: "none", background: T.ink, color: "#fff", fontSize: 13, fontWeight: 700, cursor: exporting ? "default" : "pointer", opacity: exporting ? 0.6 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
-            <Icon name="download" size={14} color="#fff" /> {exporting ? "Exportando…" : "Exportar CSV"}
+            <Icon name="download" size={14} color="#fff" /> {exporting ? "Exportando…" : label}
           </button>
         </div>
       </Card>
