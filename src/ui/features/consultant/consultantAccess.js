@@ -21,3 +21,12 @@ export function consultantAreaDecision(pathname, user) {
   if (firstPathSegment(pathname) !== CONSULTANT_SEGMENT) return "passthrough";
   return useEntitlement(CONSULTANT_FEATURE, user) ? "allow" : "redirect";
 }
+
+/**
+ * `hasConsultantArea(user)` — o usuário tem a área do consultor disponível?
+ * (assinatura ativa + feature `multi_org_dashboard`). Usado para rotear o login
+ * direto para `/consultant` e para exibir o switcher "Consultor ⇄ Minha conta".
+ */
+export function hasConsultantArea(user) {
+  return useEntitlement(CONSULTANT_FEATURE, user);
+}

@@ -4,6 +4,7 @@ import { T } from "../../tokens";
 import { G } from "../../typography";
 import { getDisplayName, getInitials } from "../auth/userDisplay.js";
 import { CONSULTANT_NAV, isConsultantNavActive } from "./consultantNav.js";
+import { AccountAreaSwitcher } from "./AccountAreaSwitcher.jsx";
 
 function ComingSoonPill({ active }) {
   return (
@@ -179,7 +180,8 @@ export function ConsultantSidebar({ pathname, onNav, user, onClose }) {
       </nav>
 
       {/* Rodapé — consultor */}
-      <div style={{ padding: "10px 12px 14px", borderTop: `1px solid ${T.border}` }}>
+      <div style={{ padding: "10px 12px 14px", borderTop: `1px solid ${T.border}`, display: "flex", flexDirection: "column", gap: 8 }}>
+        <AccountAreaSwitcher current="consultant" user={user} onNavigate={onClose} />
         <button
           type="button"
           onClick={() => onNav("/consultant/profile")}
