@@ -20,6 +20,7 @@ import { parseAuthEntryUrl, stripAuthEntryQueryAndHash } from "./features/auth/a
 import { AcceptInvitationPage } from "./features/auth/AcceptInvitationPage.jsx";
 import { LoginPage } from "./features/auth/LoginPage.jsx";
 import { PasswordResetPage } from "./features/auth/PasswordResetPage.jsx";
+import { validateResetToken } from "../api/auth";
 import { ErrorBoundary } from "./features/auth/ErrorBoundary.jsx";
 
 import { OnboardingFlow } from "./features/onboarding/OnboardingFlow.jsx";
@@ -439,6 +440,7 @@ export default function App() {
       return (
         <PasswordResetPage
           token={entry.token}
+          onValidateToken={validateResetToken}
           onResetPassword={session.resetPasswordWithToken}
           onComplete={() => {
             stripAuthEntryQueryAndHash();

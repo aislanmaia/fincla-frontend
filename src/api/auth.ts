@@ -136,6 +136,20 @@ export const forgotPassword = async (
 };
 
 /**
+ * Verifica (sem consumir) se um token de senha/ativação ainda é válido.
+ * Permite à tela de definir senha mostrar "link inválido ou já usado" de cara.
+ */
+export const validateResetToken = async (
+  token: string
+): Promise<{ valid: boolean }> => {
+  const response = await apiClient.get<{ valid: boolean }>(
+    '/auth/reset-password/validate',
+    { params: { token } }
+  );
+  return response.data;
+};
+
+/**
  * Redefine a senha com token recebido por e-mail
  */
 export const resetPassword = async (
