@@ -63,4 +63,22 @@ describe("ConsultantClientOverviewTab", () => {
     expect(screen.getByText("R$ 1.200")).toBeInTheDocument(); // saldo (da carteira)
     expect(screen.getAllByText("…").length).toBeGreaterThanOrEqual(1); // renda/poupança/comprometimento
   });
+
+  it("Notas do consultor: renderiza notas, tags e objetivo quando há perfil", () => {
+    const profile = { loading: false, error: "", hasLoaded: true, profile: {
+      has_profile: true, notes: "Foco em reserva de emergência", tags: ["poupador", "autônomo"],
+      main_goal: "montar_reserva", experience_level: "iniciante", priority: true,
+    } };
+    render(<ConsultantClientOverviewTab client={client} health={healthState} categories={categoriesState} goals={goalsState} profile={profile} />);
+    expect(screen.getByText("Foco em reserva de emergência")).toBeInTheDocument();
+    expect(screen.getByText("poupador")).toBeInTheDocument();
+    expect(screen.getByText("Montar reserva")).toBeInTheDocument();
+    expect(screen.getByText("prioridade")).toBeInTheDocument();
+  });
+
+  it("Notas do consultor: estado vazio quando não há perfil (has_profile=false)", () => {
+    const profile = { loading: false, error: "", hasLoaded: true, profile: { has_profile: false, tags: [] } };
+    render(<ConsultantClientOverviewTab client={client} health={healthState} categories={categoriesState} goals={goalsState} profile={profile} />);
+    expect(screen.getByText("Sem notas registradas para este cliente.")).toBeInTheDocument();
+  });
 });
