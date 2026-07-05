@@ -97,3 +97,6 @@ playwright-report/
 docs/mockups/
 # backups locais do env (não versionar)
 .env.*.local.bak
+
+# Vite config temp artifacts
+vite.config.ts.timestamp-*.mjs
