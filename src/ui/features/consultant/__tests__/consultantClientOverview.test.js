@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   cashFlowRiskLabel,
   categorySegments,
+  selectClientEvolutionSeries,
   diagnosisFactors,
   factorTone,
   overviewGoalsSummary,
@@ -93,5 +94,19 @@ describe("categorySegments", () => {
 describe("overviewGoalsSummary", () => {
   it("extrai on-track/total/progresso", () => {
     expect(overviewGoalsSummary(health)).toEqual({ onTrack: 3, total: 5, progress: 42 });
+  });
+});
+
+describe("selectClientEvolutionSeries", () => {
+  it("mapeia meses para o shape do CashFlowChart (mês/receita/despesa/saldo)", () => {
+    const series = selectClientEvolutionSeries([
+      { year: 2025, month: 1, total_income: 5000, total_expenses: 3200, balance: 1800 },
+      { year: 2025, month: 2, total_income: 5200, total_expenses: 3500, balance: 1700 },
+    ]);
+    expect(series).toEqual([
+      { month: "jan/25", income: 5000, expenses: 3200, balance: 1800 },
+      { month: "fev/25", income: 5200, expenses: 3500, balance: 1700 },
+    ]);
+    expect(selectClientEvolutionSeries(null)).toEqual([]);
   });
 });

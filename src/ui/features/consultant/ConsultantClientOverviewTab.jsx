@@ -6,12 +6,14 @@ import { G, NUM } from "../../typography";
 import { fmtK } from "../../formatters";
 import { Donut, Icon, useIsNarrow } from "./consultantUi";
 import { fmtBRL0 } from "./consultantFormat";
+import { CashFlowChart } from "./ConsultantInsightsCharts.jsx";
 import {
   categorySegments,
   diagnosisFactors,
   factorTone,
   overviewGoalsSummary,
   overviewKpis,
+  selectClientEvolutionSeries,
 } from "./consultantClientOverview";
 
 const TONE = { ink: T.ink, green: T.green, amber: T.amber, red: T.red };
@@ -156,11 +158,12 @@ function DiagnosisCard({ health }) {
  * metas, ritmo (stub) à esquerda; diagnóstico, alertas/notas/próximos-passos
  * (stubs) à direita. Recebe o estado dos hooks por-org via props.
  */
-export function ConsultantClientOverviewTab({ client, health, categories, goals }) {
+export function ConsultantClientOverviewTab({ client, health, categories, goals, evolution }) {
   const narrow = useIsNarrow(900);
   const kpis = overviewKpis({ client, health: health.data });
   const healthReady = health.hasLoaded && !!health.data;
   const goalsSummary = overviewGoalsSummary(health.data);
+  const evolutionSeries = selectClientEvolutionSeries(evolution?.months);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -187,7 +190,13 @@ export function ConsultantClientOverviewTab({ client, health, categories, goals 
       <div style={{ display: "grid", gridTemplateColumns: narrow ? "minmax(0,1fr)" : "minmax(0,1fr) 340px", gap: 16, alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
           <SpendingDonutCard categories={categories} />
-          <StubCard title="Evolução do patrimônio" icon="trending" text="Em breve: a evolução do índice de saúde do cliente mês a mês." />
+          <CashFlowChart
+            data={evolutionSeries}
+            loading={Boolean(evolution?.loading) && !evolution?.hasLoaded}
+            title="Evolução mensal"
+            subtitle="Receita × despesa e saldo, mês a mês"
+            emptyText="Sem histórico mensal para este cliente."
+          />
           <SpendingPaceStub />
           <GoalsCard goals={goals} />
         </div>

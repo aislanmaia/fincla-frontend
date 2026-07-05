@@ -13,7 +13,7 @@ import { ConsultantClientCard } from "../../features/consultant/ConsultantClient
 import { ConsultantClientsTable } from "../../features/consultant/ConsultantClientsTable";
 import { Icon } from "../../features/consultant/consultantUi";
 import { fmtMoney } from "../../features/consultant/consultantFormat";
-import { countClientsByBand, selectConsultantClients, totalPatrimonio } from "../../features/consultant/consultantClientsView";
+import { buildClientsCsv, countClientsByBand, selectConsultantClients, totalPatrimonio } from "../../features/consultant/consultantClientsView";
 
 function EmptyState({ title, text }) {
   return (
@@ -33,17 +33,16 @@ function Kicker({ children }) {
   );
 }
 
-/** Botão de ação "em breve" (Exportar / Adicionar cliente — fatias futuras). */
-function StubActionButton({ icon, label, dark }) {
+/** Botão de ação real (habilitado) — ex.: "Exportar" da carteira. */
+function ActionButton({ icon, label, onClick, disabled }) {
   return (
     <button
       type="button"
-      disabled
-      title="Em breve"
-      style={{ ...G, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 9, border: `1.5px solid ${dark ? T.ink : T.border}`, background: dark ? T.ink : T.surface, color: dark ? "#fff" : T.inkLight, fontSize: 12, fontWeight: 600, cursor: "default", opacity: 0.6, whiteSpace: "nowrap" }}
+      onClick={onClick}
+      disabled={disabled}
+      style={{ ...G, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 9, border: `1.5px solid ${T.border}`, background: T.surface, color: T.inkMid, fontSize: 12, fontWeight: 600, cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.6 : 1, whiteSpace: "nowrap" }}
     >
-      <Icon name={icon} size={14} color={dark ? "#fff" : T.inkLight} /> {label}
-      <span style={{ ...G, fontSize: 8.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: dark ? "#fff" : T.inkLight, background: dark ? "rgba(255,255,255,0.2)" : T.grayLight, borderRadius: 5, padding: "1px 5px" }}>em breve</span>
+      <Icon name={icon} size={14} color={T.inkMid} /> {label}
     </button>
   );
 }
@@ -112,6 +111,20 @@ export function ConsultantClientsPage() {
   const remaining = quota?.remaining ?? null;
   const isFull = quota != null && quota.remaining <= 0;
 
+  // Exportar a carteira (a lista visível, respeitando busca/filtro) como CSV.
+  const onExportCsv = React.useCallback(() => {
+    const csv = buildClientsCsv(visible);
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `fincla-consultor-carteira-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, [visible]);
+
   return (
     <div style={{ ...G, width: "100%", boxSizing: "border-box", padding: "clamp(18px, 3.5vw, 32px) clamp(16px, 3.5vw, 40px) 48px", display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
@@ -129,7 +142,7 @@ export function ConsultantClientsPage() {
               {isFull ? "Limite do plano atingido" : `${remaining} ${remaining === 1 ? "vaga restante" : "vagas restantes"}`}
             </span>
           )}
-          <StubActionButton icon="download" label="Exportar" />
+          <ActionButton icon="download" label="Exportar" onClick={onExportCsv} disabled={state !== "list"} />
           <Btn variant="dark" onClick={openAddClient}><Icon name="plus" size={14} color="#fff" /> Adicionar cliente</Btn>
         </div>
       </div>
