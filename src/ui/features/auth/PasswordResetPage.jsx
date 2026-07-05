@@ -11,13 +11,28 @@ import { G } from "../../typography";
 
 /* ─── RESET PASSWORD (token na URL) ───────────────────────── */
 /* ─── RESET PASSWORD (token na URL) ───────────────────────── */
-export function PasswordResetPage({ token, onResetPassword, onComplete }) {
+export function PasswordResetPage({ token, onResetPassword, onComplete, onValidateToken }) {
   const [password, setPassword] = useState("");
   const [confirmPwd, setConfirmPwd] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  // Pré-validação do token: "checking" | "ok" | "invalid". Sem token → inválido.
+  // Sem `onValidateToken` (ou erro de rede) → segue para o form (fail-open).
+  const [linkStatus, setLinkStatus] = useState(() => (token?.trim() ? "checking" : "invalid"));
+
+  useEffect(() => {
+    let cancelled = false;
+    const t = token?.trim();
+    if (!t) { setLinkStatus("invalid"); return; }
+    if (typeof onValidateToken !== "function") { setLinkStatus("ok"); return; }
+    setLinkStatus("checking");
+    onValidateToken(t)
+      .then((res) => { if (!cancelled) setLinkStatus(res?.valid ? "ok" : "invalid"); })
+      .catch(() => { if (!cancelled) setLinkStatus("ok"); }); // rede falhou → deixa tentar
+    return () => { cancelled = true; };
+  }, [token, onValidateToken]);
 
   const BtnPrimary = ({ onClick, children, disabled }) => (
     <button type="button" onClick={onClick} disabled={disabled}
@@ -59,15 +74,29 @@ export function PasswordResetPage({ token, onResetPassword, onComplete }) {
       <div style={{ display:"flex", height:"100vh", minHeight:"100dvh", background:T.surface, fontFamily:"'Geist',sans-serif", overflow:"hidden", alignItems:"center", justifyContent:"center", padding:24 }}>
         <div style={{ width:"100%", maxWidth:400 }}>
           <div style={{ ...G, fontSize:22, fontWeight:800, color:T.ink, marginBottom:8 }}>
-            {success ? "Senha atualizada" : "Nova senha"}
+            {success ? "Senha atualizada" : linkStatus === "invalid" ? "Link inválido ou expirado" : "Nova senha"}
           </div>
           <div style={{ ...G, fontSize:14, color:T.inkMid, lineHeight:1.65, marginBottom:24 }}>
             {success
               ? "Sua senha foi redefinida. Você já pode entrar com a nova senha."
-              : "Defina uma nova senha para sua conta Fincla."}
+              : linkStatus === "invalid"
+                ? "Este link já foi utilizado ou expirou. Peça um novo link e tente novamente."
+                : "Defina uma nova senha para sua conta Fincla."}
           </div>
 
-          {!success && (
+          {!success && linkStatus === "checking" && (
+            <div style={{ ...G, fontSize:13, color:T.inkMid, display:"flex", alignItems:"center", gap:8 }}>
+              <Loader2 size={16} style={{ animation:"spin 0.65s linear infinite" }} aria-hidden /> Verificando o link…
+            </div>
+          )}
+
+          {!success && linkStatus === "invalid" && BtnPrimary({
+            onClick: onComplete,
+            disabled: false,
+            children: "Ir para o login",
+          })}
+
+          {!success && linkStatus === "ok" && (
             <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
               <div>
                 <label style={{ ...G, fontSize:11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.07em", display:"block", marginBottom:7 }}>Nova senha</label>
