@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
 
 import { firstPathSegment } from "./appSegments.js";
+import { hasConsultantArea } from "../features/consultant/consultantAccess.js";
 import {
   capturePostLoginRedirectFromPathnameAndSearchStr,
   consumePostLoginNavigateArgs,
@@ -50,11 +51,15 @@ export function useAuthRedirects({
       navigate(next);
       return;
     }
-    navigate({ to: "/dashboard", replace: true });
+    // Consultores caem direto na área do consultor (seu trabalho primário); os
+    // demais no app pessoal. O switcher "Consultor ⇄ Minha conta" permite trocar.
+    const fallback = hasConsultantArea(session.user) ? "/consultant" : "/dashboard";
+    navigate({ to: fallback, replace: true });
   }, [
     session.isBootstrapping,
     session.isAuthenticated,
     session.onboardingRequired,
+    session.user,
     showOnboarding,
     pathname,
     navigate,

@@ -15,6 +15,7 @@ import {
 import { T } from "../tokens";
 import { G } from "../typography";
 import { PlanBadge } from "../features/entitlements/index.js";
+import { AccountAreaSwitcher } from "../features/consultant/AccountAreaSwitcher.jsx";
 import {
   getDisplayName,
   getInitials,
@@ -180,7 +181,8 @@ function SidebarInner({ page, onNav, onClose, user }) {
         })}
       </nav>
 
-      <div style={{ padding: "10px 12px 14px", borderTop: `1px solid ${T.border}` }}>
+      <div style={{ padding: "10px 12px 14px", borderTop: `1px solid ${T.border}`, display: "flex", flexDirection: "column", gap: 8 }}>
+        <AccountAreaSwitcher current="personal" user={user} onNavigate={onClose} />
         <div
           role="presentation"
           style={{

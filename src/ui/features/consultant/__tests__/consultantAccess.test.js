@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { consultantAreaDecision } from "../consultantAccess.js";
+import { consultantAreaDecision, hasConsultantArea } from "../consultantAccess.js";
 
 // Usuário com a capacidade de consultor = assinatura ativa + feature multi_org_dashboard
 // (espelha o gate do backend; cobre consultant_* e beta).
@@ -36,5 +36,18 @@ describe("consultantAreaDecision (capacidade = feature)", () => {
     expect(consultantAreaDecision("/consultant", plainOwner)).toBe("redirect");
     expect(consultantAreaDecision("/consultant", inactiveConsultant)).toBe("redirect");
     expect(consultantAreaDecision("/consultant/clients", null)).toBe("redirect");
+  });
+});
+
+describe("hasConsultantArea (capacidade p/ redirect de login + switcher)", () => {
+  it("true para quem tem a feature (consultant_* ou beta) com assinatura ativa", () => {
+    expect(hasConsultantArea(withConsultantFeature)).toBe(true);
+    expect(hasConsultantArea(betaTester)).toBe(true);
+  });
+
+  it("false para usuário comum, assinatura inativa, ou sem usuário", () => {
+    expect(hasConsultantArea(plainOwner)).toBe(false);
+    expect(hasConsultantArea(inactiveConsultant)).toBe(false);
+    expect(hasConsultantArea(null)).toBe(false);
   });
 });
