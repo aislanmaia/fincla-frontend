@@ -173,3 +173,15 @@ export const regenerateClientActivationLink = async (
   );
   return response.data;
 };
+
+export interface ConsultantQuota {
+  limit: number;
+  used: number;
+  remaining: number;
+}
+
+/** Plan client quota: how many clients the consultant may still add. */
+export const getConsultantQuota = async (): Promise<ConsultantQuota> => {
+  const response = await apiClient.get<ConsultantQuota>('/consultant/quota');
+  return response.data;
+};

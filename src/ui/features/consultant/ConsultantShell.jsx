@@ -7,6 +7,7 @@ import { ConsultantSidebar } from "./ConsultantSidebar.jsx";
 import { ConsultantTopbar } from "./ConsultantTopbar.jsx";
 import { ConsultantAddClientWizard } from "./ConsultantAddClientWizard.jsx";
 import { ConsultantAddClientProvider } from "./ConsultantAddClientContext.jsx";
+import { getConsultantQuota } from "../../../api/consultant";
 
 /**
  * Shell da área do Consultor (A0.3) — layout próprio (independente do app do
@@ -29,8 +30,16 @@ export function ConsultantShell() {
   // Incrementa a cada cliente criado → a carteira observa e faz refetch.
   const [clientsVersion, setClientsVersion] = React.useState(0);
   const notifyClientsChanged = React.useCallback(() => setClientsVersion((v) => v + 1), []);
-  // Cota do plano: nº máximo de clientes que o consultor pode gerenciar.
-  const clientLimit = user?.subscription?.max_organizations ?? null;
+  // Cota do plano (fonte autoritativa = mesma contagem do enforcement).
+  // Refetch a cada cliente criado (clientsVersion) p/ manter "vagas" em dia.
+  const [quota, setQuota] = React.useState(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    getConsultantQuota()
+      .then((q) => { if (!cancelled) setQuota(q); })
+      .catch(() => { /* silencioso: sem cota, o 402 do backend ainda protege */ });
+    return () => { cancelled = true; };
+  }, [clientsVersion]);
 
   React.useEffect(() => {
     const onResize = () => setIsMobile(window.innerWidth < 768);
@@ -44,7 +53,7 @@ export function ConsultantShell() {
   };
 
   return (
-    <ConsultantAddClientProvider openAddClient={openAddClient} clientsVersion={clientsVersion} notifyClientsChanged={notifyClientsChanged} clientLimit={clientLimit}>
+    <ConsultantAddClientProvider openAddClient={openAddClient} clientsVersion={clientsVersion} notifyClientsChanged={notifyClientsChanged} quota={quota}>
     <div style={{ ...G, display: "flex", height: "100vh", width: "100%", overflow: "hidden", background: T.bg }}>
       {!isMobile && <ConsultantSidebar pathname={pathname} onNav={go} user={user} />}
 
@@ -75,7 +84,7 @@ export function ConsultantShell() {
         </div>
       </div>
 
-      <ConsultantAddClientWizard open={addClientOpen} onClose={() => setAddClientOpen(false)} onCreated={notifyClientsChanged} />
+      <ConsultantAddClientWizard open={addClientOpen} onClose={() => setAddClientOpen(false)} onCreated={notifyClientsChanged} quota={quota} />
     </div>
     </ConsultantAddClientProvider>
   );

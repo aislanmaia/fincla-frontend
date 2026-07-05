@@ -11,13 +11,13 @@ const ConsultantAddClientContext = React.createContext({
   openAddClient: () => {},
   clientsVersion: 0,
   notifyClientsChanged: () => {},
-  clientLimit: null, // cota do plano (max_organizations); null = desconhecida
+  quota: null, // { limit, used, remaining } | null (desconhecida)
 });
 
-export function ConsultantAddClientProvider({ openAddClient, clientsVersion, notifyClientsChanged, clientLimit = null, children }) {
+export function ConsultantAddClientProvider({ openAddClient, clientsVersion, notifyClientsChanged, quota = null, children }) {
   const value = React.useMemo(
-    () => ({ openAddClient, clientsVersion, notifyClientsChanged, clientLimit }),
-    [openAddClient, clientsVersion, notifyClientsChanged, clientLimit],
+    () => ({ openAddClient, clientsVersion, notifyClientsChanged, quota }),
+    [openAddClient, clientsVersion, notifyClientsChanged, quota],
   );
   return <ConsultantAddClientContext.Provider value={value}>{children}</ConsultantAddClientContext.Provider>;
 }

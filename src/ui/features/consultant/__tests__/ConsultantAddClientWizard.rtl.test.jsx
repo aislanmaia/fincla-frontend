@@ -33,6 +33,19 @@ describe("<ConsultantAddClientWizard>", () => {
     expect(screen.getByRole("button", { name: /Continuar/ })).not.toBeDisabled();
   });
 
+  it("no limite do plano → mostra o paywall com CTA comercial, não o wizard", () => {
+    render(<ConsultantAddClientWizard open onClose={() => {}} quota={{ limit: 3, used: 3, remaining: 0 }} />);
+    expect(screen.getByText("Limite de clientes atingido")).toBeInTheDocument();
+    expect(screen.getByText(/Falar com o time comercial/)).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Ex.: Mariana Torres")).not.toBeInTheDocument();
+  });
+
+  it("com créditos disponíveis → mostra o wizard normalmente", () => {
+    render(<ConsultantAddClientWizard open onClose={() => {}} quota={{ limit: 10, used: 2, remaining: 8 }} />);
+    expect(screen.getByPlaceholderText("Ex.: Mariana Torres")).toBeInTheDocument();
+    expect(screen.queryByText("Limite de clientes atingido")).not.toBeInTheDocument();
+  });
+
   it("cria o cliente pela API e mostra o link de definir senha", async () => {
     vi.mocked(createConsultantClient).mockResolvedValue({
       organization_id: "org-1",

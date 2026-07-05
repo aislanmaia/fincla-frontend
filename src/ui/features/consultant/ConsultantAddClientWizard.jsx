@@ -109,7 +109,7 @@ function toPayload(f) {
   };
 }
 
-export function ConsultantAddClientWizard({ open, onClose, onCreated }) {
+export function ConsultantAddClientWizard({ open, onClose, onCreated, quota = null }) {
   const navigate = useNavigate();
   const [stepIdx, setStepIdx] = React.useState(0);
   const [f, setF] = React.useState(INITIAL);
@@ -123,6 +123,9 @@ export function ConsultantAddClientWizard({ open, onClose, onCreated }) {
   }, [open]);
 
   if (!open) return null;
+
+  // Sem créditos no plano → o modal vira um paywall (não o wizard).
+  const isFull = quota != null && quota.remaining <= 0;
 
   const step = STEPS[stepIdx];
   const set = (k, v) => setF((p) => ({ ...p, [k]: v }));
@@ -326,7 +329,7 @@ export function ConsultantAddClientWizard({ open, onClose, onCreated }) {
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div onClick={onClose} role="presentation" style={{ position: "absolute", inset: 0, background: "rgba(15,15,13,0.5)" }} />
-      <div style={{ position: "relative", width: 920, maxWidth: "100%", height: "min(640px, 92vh)", background: T.surface, borderRadius: 18, overflow: "hidden", boxShadow: T.lg, display: "grid", gridTemplateColumns: result ? "1fr" : "minmax(0,300px) 1fr" }}>
+      <div style={{ position: "relative", width: 920, maxWidth: "100%", height: "min(640px, 92vh)", background: T.surface, borderRadius: 18, overflow: "hidden", boxShadow: T.lg, display: "grid", gridTemplateColumns: (result || isFull) ? "1fr" : "minmax(0,300px) 1fr" }}>
         {result ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: 40, gap: 8 }}>
             <div style={{ width: 72, height: 72, borderRadius: 22, background: `linear-gradient(135deg, ${T.green}, #0891B2)`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 8, boxShadow: T.md }}><Icon name="check" size={36} color="#fff" /></div>
@@ -341,6 +344,20 @@ export function ConsultantAddClientWizard({ open, onClose, onCreated }) {
             <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
               <Btn variant="outline" onClick={onClose}>Voltar à carteira</Btn>
               <Btn variant="dark" onClick={openReport}><Icon name="arrow-right" size={14} color="#fff" /> Abrir relatório</Btn>
+            </div>
+          </div>
+        ) : isFull ? (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: 40, gap: 10 }}>
+            <div style={{ width: 72, height: 72, borderRadius: 22, background: "linear-gradient(135deg, #7C3AED, #2563EB)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 4, boxShadow: T.md }}><Icon name="sparkles" size={32} color="#fff" /></div>
+            <div style={{ ...G, fontSize: 22, fontWeight: 800, color: T.ink }}>Limite de clientes atingido</div>
+            <div style={{ ...G, fontSize: 13.5, color: T.inkLight, maxWidth: 480, lineHeight: 1.6 }}>
+              Seu plano permite gerenciar até <strong style={{ color: T.ink }}>{quota.limit} {quota.limit === 1 ? "cliente" : "clientes"}</strong>, e todos já estão em uso. Para ampliar sua carteira, faça upgrade do seu plano de consultor — fale com o nosso time comercial.
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+              <Btn variant="outline" onClick={onClose}>Fechar</Btn>
+              <a href="mailto:comercial@fincla.com.br?subject=Upgrade%20do%20plano%20de%20consultor%20Fincla" style={{ textDecoration: "none" }}>
+                <Btn variant="dark"><Icon name="message" size={14} color="#fff" /> Falar com o time comercial</Btn>
+              </a>
             </div>
           </div>
         ) : (

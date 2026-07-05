@@ -121,23 +121,24 @@ describe("ConsultantClientsPage", () => {
     expect(await screen.findByText("Carla Dias")).toBeInTheDocument();
   });
 
-  it("cota cheia → mostra 'Limite do plano atingido' e desabilita 'Adicionar cliente'", async () => {
+  it("cota cheia → mostra 'Limite do plano atingido' (botão segue ativo → abre o paywall)", async () => {
     const c3 = client({ organization_id: "x3", client_name: "Cli Tres" });
     vi.mocked(getConsultantClients).mockResolvedValue({ total: 3, clients: [ana, carla, c3] });
     render(
-      <ConsultantAddClientProvider openAddClient={() => {}} clientsVersion={0} notifyClientsChanged={() => {}} clientLimit={3}>
+      <ConsultantAddClientProvider openAddClient={() => {}} clientsVersion={0} notifyClientsChanged={() => {}} quota={{ limit: 3, used: 3, remaining: 0 }}>
         <ConsultantClientsPage />
       </ConsultantAddClientProvider>,
     );
     await waitFor(() => expect(screen.getByText("Ana Beatriz")).toBeInTheDocument());
     expect(screen.getByText("Limite do plano atingido")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Adicionar cliente/ })).toBeDisabled();
+    // Botão continua ativo — o paywall aparece no modal, não desabilitamos a ação.
+    expect(screen.getByRole("button", { name: /Adicionar cliente/ })).not.toBeDisabled();
   });
 
   it("cota disponível → mostra vagas restantes e botão habilitado", async () => {
     vi.mocked(getConsultantClients).mockResolvedValue({ total: 2, clients: [ana, carla] });
     render(
-      <ConsultantAddClientProvider openAddClient={() => {}} clientsVersion={0} notifyClientsChanged={() => {}} clientLimit={5}>
+      <ConsultantAddClientProvider openAddClient={() => {}} clientsVersion={0} notifyClientsChanged={() => {}} quota={{ limit: 5, used: 2, remaining: 3 }}>
         <ConsultantClientsPage />
       </ConsultantAddClientProvider>,
     );
