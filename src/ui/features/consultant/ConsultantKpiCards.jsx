@@ -33,8 +33,8 @@ function KpiCard({ label, value, sub, accent, soon }) {
  * `buildConsultantKpis`; recebe o agregado + `hasLoaded` via props (a página
  * faz o fetch).
  */
-export function ConsultantKpiCards({ healthIndex, hasLoaded }) {
-  const kpis = buildConsultantKpis({ healthIndex, hasLoaded });
+export function ConsultantKpiCards({ healthIndex, hasLoaded, patrimonio, patrimonioLoaded, attention, attentionLoaded }) {
+  const kpis = buildConsultantKpis({ healthIndex, hasLoaded, patrimonio, patrimonioLoaded, attention, attentionLoaded });
   return (
     <div
       style={{

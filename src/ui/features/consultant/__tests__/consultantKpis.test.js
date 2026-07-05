@@ -9,8 +9,13 @@ describe("buildConsultantKpis", () => {
       "clients",
       "patrimonio",
       "health",
-      "mrr",
+      "attention",
     ]);
+  });
+
+  it("has no deferred (soon) KPIs — all 4 are backed by real data", () => {
+    const kpis = buildConsultantKpis({});
+    expect(kpis.every((k) => k.soon === false)).toBe(true);
   });
 
   it("maps real data for clients and health from the health-index aggregate", () => {
@@ -26,16 +31,34 @@ describe("buildConsultantKpis", () => {
     expect(byId.health.sub).toBe("de 100");
   });
 
-  it("marks patrimonio and mrr as deferred without inventing a number", () => {
+  it("maps the aggregated patrimônio (BRL, no cents) and attention count", () => {
     const kpis = buildConsultantKpis({
-      healthIndex: { organizations_count: 8, index: 72 },
+      healthIndex: { organizations_count: 10, index: 92 },
       hasLoaded: true,
+      patrimonio: 384210,
+      patrimonioLoaded: true,
+      attention: 1,
+      attentionLoaded: true,
     });
     const byId = Object.fromEntries(kpis.map((k) => [k.id, k]));
-    expect(byId.patrimonio.soon).toBe(true);
-    expect(byId.patrimonio.value).toBe("—");
-    expect(byId.mrr.soon).toBe(true);
-    expect(byId.mrr.value).toBe("—");
+    expect(byId.patrimonio.value).toBe("R$ 384.210");
+    expect(byId.patrimonio.soon).toBe(false);
+    expect(byId.attention.value).toBe("1");
+    expect(byId.attention.sub).toBe("de 10 clientes");
+  });
+
+  it("shows real zero (not a dash) once loaded — R$ 0 and 0 em atenção", () => {
+    const kpis = buildConsultantKpis({
+      healthIndex: { organizations_count: 3, index: 88 },
+      hasLoaded: true,
+      patrimonio: 0,
+      patrimonioLoaded: true,
+      attention: 0,
+      attentionLoaded: true,
+    });
+    const byId = Object.fromEntries(kpis.map((k) => [k.id, k]));
+    expect(byId.patrimonio.value).toBe("R$ 0");
+    expect(byId.attention.value).toBe("0");
   });
 
   it("shows a loading placeholder for real KPIs before the first load", () => {
@@ -43,13 +66,18 @@ describe("buildConsultantKpis", () => {
     const byId = Object.fromEntries(kpis.map((k) => [k.id, k]));
     expect(byId.clients.value).toBe("…");
     expect(byId.health.value).toBe("…");
+    expect(byId.patrimonio.value).toBe("…");
+    expect(byId.attention.value).toBe("…");
   });
 
   it("falls back to a dash once loaded with no data", () => {
-    const kpis = buildConsultantKpis({ hasLoaded: true });
+    const kpis = buildConsultantKpis({ hasLoaded: true, patrimonioLoaded: true, attentionLoaded: true });
     const byId = Object.fromEntries(kpis.map((k) => [k.id, k]));
     expect(byId.clients.value).toBe("—");
     expect(byId.health.value).toBe("—");
     expect(byId.health.sub).toBe("semáforo");
+    expect(byId.patrimonio.value).toBe("—");
+    expect(byId.attention.value).toBe("—");
+    expect(byId.attention.sub).toBe("acompanhamento");
   });
 });
