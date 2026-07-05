@@ -61,7 +61,7 @@ function StubActionButton({ icon, label, dark }) {
  */
 export function ConsultantClientsPage() {
   const navigate = useNavigate();
-  const { openAddClient, clientsVersion, clientLimit } = useAddClient();
+  const { openAddClient, clientsVersion, quota } = useAddClient();
   const { clients, total, isLoading, error, hasLoaded, loadedOk, refresh } = useConsultantClients();
 
   // Ao criar um cliente pelo wizard, atualiza a lista para exibi-lo.
@@ -107,9 +107,10 @@ export function ConsultantClientsPage() {
     }
   }, []);
 
-  // Cota do plano: créditos = limite − clientes atuais.
-  const remaining = clientLimit != null ? Math.max(0, clientLimit - total) : null;
-  const isFull = clientLimit != null && total >= clientLimit;
+  // Cota do plano (autoritativa, do endpoint /consultant/quota).
+  const limit = quota?.limit ?? null;
+  const remaining = quota?.remaining ?? null;
+  const isFull = quota != null && quota.remaining <= 0;
 
   return (
     <div style={{ ...G, width: "100%", boxSizing: "border-box", padding: "clamp(18px, 3.5vw, 32px) clamp(16px, 3.5vw, 40px) 48px", display: "flex", flexDirection: "column", gap: 18, minWidth: 0 }}>
@@ -117,7 +118,7 @@ export function ConsultantClientsPage() {
         <div>
           <Kicker>
             {loadedOk
-              ? `${clientLimit != null ? `${total} de ${clientLimit}` : total} ${total === 1 && clientLimit == null ? "cliente" : "clientes"} · ${fmtMoney(patrimonio)} sob acompanhamento`
+              ? `${limit != null ? `${total} de ${limit}` : total} ${total === 1 && limit == null ? "cliente" : "clientes"} · ${fmtMoney(patrimonio)} sob acompanhamento`
               : "Sua carteira de clientes"}
           </Kicker>
           <PageTitle sans="Carteira" serif="de clientes" />
@@ -129,14 +130,7 @@ export function ConsultantClientsPage() {
             </span>
           )}
           <StubActionButton icon="download" label="Exportar" />
-          {isFull ? (
-            <button type="button" disabled title="Limite de clientes do plano atingido — faça upgrade para adicionar mais"
-              style={{ ...G, display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 14px", borderRadius: 10, border: `1px solid ${T.border}`, background: T.bg, color: T.inkGhost, fontSize: 13, fontWeight: 600, cursor: "not-allowed" }}>
-              <Icon name="plus" size={14} color={T.inkGhost} /> Adicionar cliente
-            </button>
-          ) : (
-            <Btn variant="dark" onClick={openAddClient}><Icon name="plus" size={14} color="#fff" /> Adicionar cliente</Btn>
-          )}
+          <Btn variant="dark" onClick={openAddClient}><Icon name="plus" size={14} color="#fff" /> Adicionar cliente</Btn>
         </div>
       </div>
 
