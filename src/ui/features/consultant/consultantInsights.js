@@ -39,3 +39,98 @@ export function selectMovers(clients, limit = 3) {
   const decliners = list.filter((c) => c.trend === "down").slice(0, limit);
   return { gainers, decliners };
 }
+
+const MONTH_ABBR = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+/** Rótulo curto de mês (ex.: "mar/25") a partir de `month_number` + `year`. */
+function monthLabel(monthNumber, year) {
+  const abbr = MONTH_ABBR[(Number(monthNumber) || 1) - 1] ?? "";
+  const yy = year != null ? `/${String(year).slice(-2)}` : "";
+  return `${abbr}${yy}`;
+}
+
+/**
+ * Série mensal do "Fluxo da base" a partir de `/consultant/cash-flow`
+ * (`monthly_data`): últimos `limit` meses com receita, despesa e saldo — pronta
+ * para o `ComposedChart` (barras receita/despesa + linha de saldo).
+ */
+export function selectCashFlowSeries(monthlyData, limit = 12) {
+  const list = Array.isArray(monthlyData) ? monthlyData : [];
+  return list.slice(-limit).map((m) => ({
+    month: monthLabel(m?.month_number, m?.year),
+    income: Number(m?.total_income) || 0,
+    expenses: Number(m?.total_expenses) || 0,
+    balance: Number(m?.balance) || 0,
+  }));
+}
+
+/**
+ * Série mensal do "Comprometimento de renda" a partir de
+ * `/consultant/income-commitment` (`monthly_data`): últimos `limit` meses com o
+ * percentual da renda comprometido com faturas de cartão.
+ */
+export function selectIncomeCommitmentSeries(monthlyData, limit = 12) {
+  const list = Array.isArray(monthlyData) ? monthlyData : [];
+  return list.slice(-limit).map((m) => ({
+    month: monthLabel(m?.month_number, m?.year),
+    pct: Math.round((Number(m?.income_commitment_percent) || 0) * 10) / 10,
+  }));
+}
+
+const GOAL_LABELS = {
+  reserva_emergencia: "Reserva de emergência",
+  viagem: "Viagem",
+  carro: "Carro",
+  casa: "Casa",
+  imovel: "Imóvel",
+  aposentadoria: "Aposentadoria",
+  investimento: "Investimento",
+  educacao: "Educação",
+  outros: "Outros",
+};
+
+/** Humaniza o tipo de meta (`reserva_emergencia` → "Reserva de emergência"). */
+function humanizeGoal(name) {
+  if (!name) return "Meta";
+  if (GOAL_LABELS[name]) return GOAL_LABELS[name];
+  const spaced = String(name).replace(/_/g, " ");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+/**
+ * Linhas do "Progresso de metas por tipo" a partir de
+ * `/consultant/goals-progress-by-type` (`by_type`): top N por progresso médio,
+ * com rótulo humanizado, o `value` 0–100 (para a barra, max=100) e a contagem.
+ */
+export function selectGoalsProgressRows(byType, limit = 6) {
+  const list = Array.isArray(byType) ? byType : [];
+  return [...list]
+    .sort((a, b) => (Number(b?.avg_progress) || 0) - (Number(a?.avg_progress) || 0))
+    .slice(0, limit)
+    .map((g, i) => ({
+      label: humanizeGoal(g?.goal_name),
+      value: Math.round(Number(g?.avg_progress) || 0),
+      count: Number(g?.count) || 0,
+      color: EXPENSE_PALETTE[i % EXPENSE_PALETTE.length],
+    }));
+}
+
+/**
+ * CSV (pt-BR, separador ";") do relatório consolidado da base
+ * (`/consultant/reports/consolidated` → mesmo shape do `/summary`). Usado pelo
+ * botão "Exportar" para baixar os números agregados da carteira.
+ */
+export function buildConsolidatedCsv(summary) {
+  const s = summary || {};
+  const rows = [
+    ["Métrica", "Valor"],
+    ["Receita total", s.total_income ?? 0],
+    ["Despesa total", s.total_expenses ?? 0],
+    ["Saldo", s.balance ?? 0],
+    ["Transações", s.total_transactions ?? 0],
+    ["Organizações", s.organizations_count ?? 0],
+    ["Período início", s.period_start ?? ""],
+    ["Período fim", s.period_end ?? ""],
+  ];
+  return rows.map((r) => r.join(";")).join("\n");
+}
