@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const navigate = vi.fn();
@@ -107,12 +107,30 @@ describe("<ConsultantInsightsPage> (S4)", () => {
     expect(screen.getByText("Ana Souza")).toBeInTheDocument();
     expect(screen.getByText("Bruno Lima")).toBeInTheDocument();
 
-    // Ação real de exportar + único stub restante (IA)
-    expect(screen.getByRole("button", { name: /Exportar CSV/ })).toBeEnabled();
+    // Ação de exportar (abre o modal) + único stub restante (IA)
+    expect(screen.getByRole("button", { name: "Exportar" })).toBeEnabled();
     expect(screen.getByText("Tendências detectadas pela IA")).toBeInTheDocument();
 
     // Os stubs comerciais/históricos saíram
     expect(screen.queryByText("Taxa de retenção")).not.toBeInTheDocument();
     expect(screen.queryByText("Migração de risco da base")).not.toBeInTheDocument();
+  });
+
+  it("o botão Exportar abre o modal de formato (CSV real, PDF em breve)", async () => {
+    render(<ConsultantInsightsPage />);
+    await waitFor(() => expect(screen.getByText("78/100")).toBeInTheDocument());
+
+    // Modal fechado por padrão
+    expect(screen.queryByText("Formato de exportação")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Exportar" }));
+
+    expect(screen.getByText("Exportar consolidado")).toBeInTheDocument();
+    expect(screen.getByText("Formato de exportação")).toBeInTheDocument();
+    expect(screen.getByText("CSV")).toBeInTheDocument();
+    expect(screen.getByText("PDF")).toBeInTheDocument();
+    // PDF fica como opção futura (subtítulo próprio do modal); o download é do CSV
+    expect(screen.getByText("Relatório para apresentar ao cliente")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Exportar CSV/ })).toBeInTheDocument();
   });
 });

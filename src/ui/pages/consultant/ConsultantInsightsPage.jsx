@@ -16,6 +16,7 @@ import {
   selectMovers,
 } from "../../features/consultant/consultantInsights";
 import { CashFlowChart, IncomeCommitmentChart } from "../../features/consultant/ConsultantInsightsCharts.jsx";
+import { ConsultantExportModal } from "../../features/consultant/ConsultantExportModal.jsx";
 import { useConsultantHealthIndex } from "../../features/consultant/useConsultantHealthIndex";
 import { useConsultantClients } from "../../features/consultant/useConsultantClients";
 import { useConsultantExpensesByCategory } from "../../features/consultant/useConsultantExpensesByCategory";
@@ -137,7 +138,8 @@ function MoversCard({ title, icon, iconColor, clients, dir, onOpen, emptyText })
  * - comprometimento de renda mês a mês (`/consultant/income-commitment`);
  * - dívida de cartão da base (`/consultant/total-credit-card-debt` → KPI);
  * - progresso de metas por tipo (`/consultant/goals-progress-by-type`).
- * "Exportar CSV" baixa o consolidado (`/consultant/reports/consolidated`).
+ * "Exportar" abre um modal de formato (CSV real, PDF "em breve") e baixa o
+ * consolidado (`/consultant/reports/consolidated`) como CSV.
  *
  * Único stub restante = **"Tendências detectadas pela IA"** (Trilha B) e o botão
  * "Relatório com IA". A "taxa de retenção" saiu (é métrica comercial do consultor,
@@ -173,7 +175,9 @@ export function ConsultantInsightsPage() {
 
   const openClient = React.useCallback((orgId) => navigate({ to: "/consultant/clients/$id", params: { id: orgId } }), [navigate]);
 
-  // Exportar: baixa o consolidado da base (`/reports/consolidated`) como CSV.
+  // Exportar: modal de formato (CSV real, PDF "em breve") → baixa o consolidado
+  // da base (`/reports/consolidated`) como CSV.
+  const [exportOpen, setExportOpen] = React.useState(false);
   const [exporting, setExporting] = React.useState(false);
   const onExport = React.useCallback(async () => {
     setExporting(true);
@@ -189,6 +193,7 @@ export function ConsultantInsightsPage() {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
+      setExportOpen(false);
     } catch {
       /* silencioso por ora; futuro: toast de erro */
     } finally {
@@ -204,7 +209,7 @@ export function ConsultantInsightsPage() {
           <PageTitle sans="Insights" serif="da carteira" />
         </div>
         <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
-          <ActionButton icon="download" label={exporting ? "Exportando…" : "Exportar CSV"} onClick={onExport} disabled={exporting} />
+          <ActionButton icon="download" label="Exportar" onClick={() => setExportOpen(true)} />
           <StubActionButton icon="sparkles" label="Relatório com IA" dark />
         </div>
       </div>
@@ -261,6 +266,8 @@ export function ConsultantInsightsPage() {
         title="Tendências detectadas pela IA"
         text="Em breve: a IA vai cruzar os números de toda a carteira e apontar padrões — concentração de risco, janelas para investimento, categorias que corroem a base — com ações sugeridas."
       />
+
+      <ConsultantExportModal open={exportOpen} exporting={exporting} onExport={onExport} onClose={() => setExportOpen(false)} />
     </div>
   );
 }
