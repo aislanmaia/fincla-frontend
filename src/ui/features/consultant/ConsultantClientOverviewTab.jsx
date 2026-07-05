@@ -58,6 +58,60 @@ function StubCard({ title, icon, text, dark }) {
   );
 }
 
+// ── Notas do consultor (perfil privado persistido) ──────────────
+const GOAL_LABELS = { montar_reserva: "Montar reserva", quitar_dividas: "Quitar dívidas", investir: "Investir", aposentadoria: "Aposentadoria", comprar_imovel: "Comprar imóvel" };
+const LEVEL_LABELS = { iniciante: "Iniciante", intermediario: "Intermediário", avancado: "Avançado" };
+const humanize = (map, v) => (v ? map[v] || (String(v).charAt(0).toUpperCase() + String(v).slice(1)) : null);
+
+function NotesCard({ profile }) {
+  const p = profile?.profile;
+  const loading = Boolean(profile?.loading) && !profile?.hasLoaded;
+  const hasProfile = Boolean(p?.has_profile);
+  const goal = humanize(GOAL_LABELS, p?.main_goal);
+  const level = humanize(LEVEL_LABELS, p?.experience_level);
+  return (
+    <Card style={{ padding: 18 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+        <Icon name="pencil" size={15} color={T.inkGhost} />
+        <span style={{ ...G, fontSize: 13.5, fontWeight: 800, color: T.ink }}>Notas do consultor</span>
+        {hasProfile && p?.priority && (
+          <span style={{ marginLeft: "auto", ...G, fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: T.amber, background: T.amberLight, borderRadius: 99, padding: "2px 8px" }}>prioridade</span>
+        )}
+      </div>
+      {loading ? (
+        <div style={{ ...G, fontSize: 12, color: T.inkLight }}>Carregando…</div>
+      ) : !hasProfile ? (
+        <div style={{ ...G, fontSize: 12, color: T.inkLight, lineHeight: 1.55 }}>Sem notas registradas para este cliente.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {p.notes ? (
+            <p style={{ ...G, fontSize: 12.5, color: T.inkMid, lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap" }}>{p.notes}</p>
+          ) : (
+            <p style={{ ...G, fontSize: 12, color: T.inkGhost, fontStyle: "italic", margin: 0 }}>Sem anotações escritas.</p>
+          )}
+          {Array.isArray(p.tags) && p.tags.length > 0 && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {p.tags.map((t) => (
+                <span key={t} style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid, background: T.grayLight, borderRadius: 99, padding: "3px 10px" }}>{t}</span>
+              ))}
+            </div>
+          )}
+          {(goal || level) && (
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 16, borderTop: `1px solid ${T.border}`, paddingTop: 10 }}>
+              {goal && (
+                <div><div style={{ ...G, fontSize: 9, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.06em" }}>Objetivo</div><div style={{ ...G, fontSize: 12, fontWeight: 600, color: T.ink, marginTop: 2 }}>{goal}</div></div>
+              )}
+              {level && (
+                <div><div style={{ ...G, fontSize: 9, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.06em" }}>Experiência</div><div style={{ ...G, fontSize: 12, fontWeight: 600, color: T.ink, marginTop: 2 }}>{level}</div></div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // ── Donut "para onde vai o dinheiro" ────────────────────────────
 function SpendingDonutCard({ categories }) {
   const { segments, total } = categorySegments(categories.categories);
@@ -158,7 +212,7 @@ function DiagnosisCard({ health }) {
  * metas, ritmo (stub) à esquerda; diagnóstico, alertas/notas/próximos-passos
  * (stubs) à direita. Recebe o estado dos hooks por-org via props.
  */
-export function ConsultantClientOverviewTab({ client, health, categories, goals, evolution }) {
+export function ConsultantClientOverviewTab({ client, health, categories, goals, evolution, profile }) {
   const narrow = useIsNarrow(900);
   const kpis = overviewKpis({ client, health: health.data });
   const healthReady = health.hasLoaded && !!health.data;
@@ -214,7 +268,7 @@ export function ConsultantClientOverviewTab({ client, health, categories, goals,
             <div style={{ ...G, ...NUM, fontSize: 12, color: T.inkLight, marginTop: 3 }}>progresso médio {goalsSummary.progress}%</div>
           </Card>
           <StubCard title="Alertas ativos" icon="alert" text="Em breve: alertas automáticos de risco (dívida, orçamento estourado, atividade parada)." />
-          <StubCard title="Notas do consultor" icon="pencil" text="Em breve: anotações privadas do consultor sobre este cliente." />
+          <NotesCard profile={profile} />
           <StubCard title="Próximos passos sugeridos" icon="flag" text="Em breve: um plano de ação priorizado, detalhável com IA." dark />
         </div>
       </div>

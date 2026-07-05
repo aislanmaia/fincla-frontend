@@ -12,6 +12,7 @@ vi.mock("@tanstack/react-router", () => ({
 
 vi.mock("../../../../api/consultant", () => ({
   getConsultantClients: vi.fn(),
+  getConsultantClientProfile: vi.fn().mockResolvedValue({ organization_id: "o", has_profile: false, tags: [] }),
 }));
 
 vi.mock("../../../../api/financialHealth", () => ({

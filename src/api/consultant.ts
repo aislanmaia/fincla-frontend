@@ -174,6 +174,29 @@ export const regenerateClientActivationLink = async (
   return response.data;
 };
 
+export interface ConsultantClientProfile {
+  organization_id: string;
+  has_profile: boolean;
+  notes: string | null;
+  tags: string[];
+  experience_level: string | null;
+  main_goal: string | null;
+  priority: boolean;
+  phone: string | null;
+  occupation: string | null;
+  estimated_income: string | null;
+}
+
+/** The consultant's private profile (notes/tags/…) for one client org. */
+export const getConsultantClientProfile = async (
+  organizationId: string
+): Promise<ConsultantClientProfile> => {
+  const response = await apiClient.get<ConsultantClientProfile>(
+    `/consultant/clients/${organizationId}/profile`
+  );
+  return response.data;
+};
+
 export interface ConsultantQuota {
   limit: number;
   used: number;

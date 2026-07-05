@@ -10,6 +10,7 @@ import { useClientCategories } from "../../features/consultant/useClientCategori
 import { useClientTransactions } from "../../features/consultant/useClientTransactions";
 import { useClientCreditCards } from "../../features/consultant/useClientCreditCards";
 import { useClientMonthlyEvolution } from "../../features/consultant/useClientMonthlyEvolution";
+import { useConsultantClientProfile } from "../../features/consultant/useConsultantClientProfile";
 import { useGoalsData } from "../../features/goals/useGoalsData";
 import { ConsultantClientReportHeader } from "../../features/consultant/ConsultantClientReportHeader";
 import { ConsultantClientReportTabs } from "../../features/consultant/ConsultantClientReportTabs";
@@ -60,6 +61,8 @@ export function ConsultantClientReportPage() {
   const goals = useGoalsData({ organizationId: id, enabled: ready });
   // Evolução mensal (por-org) — só na aba Visão geral (default), onde o card vive.
   const evolution = useClientMonthlyEvolution({ organizationId: id, enabled: ready && tab === "overview" });
+  // Perfil privado (notas/tags) do consultor sobre o cliente — aba Visão geral.
+  const profile = useConsultantClientProfile({ organizationId: id, enabled: ready && tab === "overview" });
   // Transações só carregam ao abrir a aba (evita um fetch pesado no Overview).
   const transactions = useClientTransactions({ organizationId: id, enabled: ready && tab === "transactions" });
   // Cartões só carregam ao abrir a aba (a resolução de fatura corrente é pesada).
@@ -93,7 +96,7 @@ export function ConsultantClientReportPage() {
           <ConsultantClientReportHeader client={client} />
           <ConsultantClientReportTabs active={tab} onSelect={setTab} />
           {tab === "overview" && (
-            <ConsultantClientOverviewTab client={client} health={health} categories={categories} goals={goals} evolution={evolution} />
+            <ConsultantClientOverviewTab client={client} health={health} categories={categories} goals={goals} evolution={evolution} profile={profile} />
           )}
           {tab === "transactions" && <ConsultantClientTransactionsTab transactions={transactions} />}
           {tab === "cards" && <ConsultantClientCardsTab cards={cards} clientName={client?.client_name} />}
