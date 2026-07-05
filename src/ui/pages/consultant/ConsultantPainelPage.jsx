@@ -16,6 +16,7 @@ import { Icon, useIsNarrow } from "../../features/consultant/consultantUi";
 import { useConsultantHealthIndex } from "../../features/consultant/useConsultantHealthIndex";
 import { useConsultantClientsAtRisk } from "../../features/consultant/useConsultantClientsAtRisk";
 import { useConsultantClients } from "../../features/consultant/useConsultantClients";
+import { totalPatrimonio } from "../../features/consultant/consultantClientsView";
 
 /** Kicker (sobre-título) do header — pequeno, uppercase, fiel à referência. */
 function Kicker({ children }) {
@@ -77,6 +78,14 @@ export function ConsultantPainelPage() {
   const loadError = error && !healthIndex ? error : "";
   const base = healthIndex?.organizations_count ?? null;
 
+  // KPIs alimentados por dados reais das outras cargas do Painel: patrimônio
+  // agregado (soma da carteira) e clientes em atenção (endpoint de risco).
+  // `loadedOk` distingue "carregado (inclusive 0)" de "ainda buscando / erro".
+  const patrimonio = wallet.loadedOk ? totalPatrimonio(wallet.clients) : null;
+  const patrimonioLoaded = wallet.loadedOk || Boolean(wallet.error);
+  const attention = risk.loadedOk ? risk.total : null;
+  const attentionLoaded = risk.loadedOk || Boolean(risk.error);
+
   const openClient = React.useCallback((orgId) => {
     navigate({ to: "/consultant/clients/$id", params: { id: orgId } });
   }, [navigate]);
@@ -131,7 +140,14 @@ export function ConsultantPainelPage() {
       {header}
       {loadError && <p style={{ ...G, fontSize: 12.5, color: T.red }}>{loadError}</p>}
 
-      <ConsultantKpiCards healthIndex={healthIndex} hasLoaded={hasLoaded} />
+      <ConsultantKpiCards
+        healthIndex={healthIndex}
+        hasLoaded={hasLoaded}
+        patrimonio={patrimonio}
+        patrimonioLoaded={patrimonioLoaded}
+        attention={attention}
+        attentionLoaded={attentionLoaded}
+      />
 
       <div style={{ display: "grid", gridTemplateColumns: narrow ? "minmax(0,1fr)" : "minmax(0,1fr) 340px", gap: 16, alignItems: "start" }}>
         {leftColumn}

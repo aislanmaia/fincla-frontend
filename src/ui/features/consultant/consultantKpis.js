@@ -1,25 +1,34 @@
 import { T } from "../../tokens";
-import { aggregateValue, DASH } from "./consultantFormat";
+import { aggregateValue, fmtBRL0 } from "./consultantFormat";
 
 /**
- * Modelo puro dos KPIs do Painel da base do consultor. Mapeia a resposta
- * agregada `/consultant/financial-health-index` (que já carrega
- * `organizations_count` e o `index` de saúde) para os 4 cards do topo, na
- * ordem da spec de UI — uma só chamada cobre os dois KPIs reais.
+ * Modelo puro dos KPIs do Painel da base do consultor — 4 cards reais, na ordem
+ * da spec de UI. As fontes:
+ *   - `/consultant/financial-health-index` → `organizations_count` (clientes) e
+ *     `index` (saúde média);
+ *   - `/consultant/clients` → soma de `patrimonio` (patrimônio líquido agregado
+ *     da base), computada na página via `totalPatrimonio` e passada aqui;
+ *   - `/consultant/clients-at-risk` → `total` de clientes que precisam de atenção.
  *
- * "Patrimônio acompanhado" (patrimônio líquido agregado) e "Honorários
- * recorrentes" (MRR) ainda não têm dado no backend — ficam marcados `soon`
- * ("em breve"), sem inventar número. Não há histórico agregado, então não
- * exibimos delta/trend.
+ * Cada valor tem seu par `*Loaded` para distinguir "ainda buscando" ("…") de
+ * "carregado e vazio/zero" ("—" quando ausente, ou o número real — inclusive 0).
+ * Sem histórico agregado, então não exibimos delta/trend.
  *
- * `hasLoaded` distingue "ainda buscando" de "carregado e vazio": antes do
- * primeiro fetch os KPIs reais mostram "…"; só depois de carregado um valor
- * ausente vira "—" (evita o flash de estado vazio no primeiro render).
- *
- * @param {{ healthIndex?: object|null, hasLoaded?: boolean }} input
+ * @param {{
+ *   healthIndex?: object|null, hasLoaded?: boolean,
+ *   patrimonio?: number|null, patrimonioLoaded?: boolean,
+ *   attention?: number|null, attentionLoaded?: boolean,
+ * }} input
  * @returns {Array<{ id, label, value, sub, accent, soon }>}
  */
-export function buildConsultantKpis({ healthIndex, hasLoaded = false } = {}) {
+export function buildConsultantKpis({
+  healthIndex,
+  hasLoaded = false,
+  patrimonio = null,
+  patrimonioLoaded = false,
+  attention = null,
+  attentionLoaded = false,
+} = {}) {
   const clients = healthIndex?.organizations_count;
   const health = healthIndex?.index;
 
@@ -35,10 +44,10 @@ export function buildConsultantKpis({ healthIndex, hasLoaded = false } = {}) {
     {
       id: "patrimonio",
       label: "Patrimônio acompanhado",
-      value: DASH,
+      value: aggregateValue(patrimonio, patrimonioLoaded, fmtBRL0),
       sub: "sob gestão",
-      accent: T.inkGhost,
-      soon: true,
+      accent: T.purple,
+      soon: false,
     },
     {
       id: "health",
@@ -49,12 +58,12 @@ export function buildConsultantKpis({ healthIndex, hasLoaded = false } = {}) {
       soon: false,
     },
     {
-      id: "mrr",
-      label: "Honorários recorrentes",
-      value: DASH,
-      sub: "MRR da carteira",
-      accent: T.inkGhost,
-      soon: true,
+      id: "attention",
+      label: "Precisam de atenção",
+      value: aggregateValue(attention, attentionLoaded, (n) => String(n)),
+      sub: clients != null ? `de ${clients} clientes` : "acompanhamento",
+      accent: T.amber,
+      soon: false,
     },
   ];
 }

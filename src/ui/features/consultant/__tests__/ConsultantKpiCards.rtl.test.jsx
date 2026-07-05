@@ -12,31 +12,37 @@ describe("ConsultantKpiCards", () => {
     expect(screen.getByText("Clientes ativos")).toBeInTheDocument();
     expect(screen.getByText("Patrimônio acompanhado")).toBeInTheDocument();
     expect(screen.getByText("Saúde média da base")).toBeInTheDocument();
-    expect(screen.getByText("Honorários recorrentes")).toBeInTheDocument();
+    expect(screen.getByText("Precisam de atenção")).toBeInTheDocument();
   });
 
-  it("shows real values for clients and health once loaded", () => {
+  it("shows real values for all 4 KPIs once loaded", () => {
+    render(
+      <ConsultantKpiCards
+        healthIndex={{ organizations_count: 10, index: 92 }}
+        hasLoaded
+        patrimonio={384210}
+        patrimonioLoaded
+        attention={1}
+        attentionLoaded
+      />
+    );
+    expect(screen.getByText("10")).toBeInTheDocument();
+    expect(screen.getByText("92")).toBeInTheDocument();
+    expect(screen.getByText("R$ 384.210")).toBeInTheDocument();
+    expect(screen.getByText("de 10 clientes")).toBeInTheDocument();
+  });
+
+  it("has no 'em breve' badge — all KPIs are backed by real data now", () => {
     render(
       <ConsultantKpiCards
         healthIndex={{ organizations_count: 8, index: 72 }}
         hasLoaded
+        patrimonio={1000}
+        patrimonioLoaded
+        attention={0}
+        attentionLoaded
       />
     );
-    expect(screen.getByText("8")).toBeInTheDocument();
-    expect(screen.getByText("72")).toBeInTheDocument();
-  });
-
-  it("marks the deferred KPIs with a dash value and a single 'em breve' badge each", () => {
-    render(
-      <ConsultantKpiCards
-        healthIndex={{ organizations_count: 8, index: 72 }}
-        hasLoaded
-      />
-    );
-    // With real data present, only patrimonio and mrr render as "—".
-    expect(screen.getAllByText("—")).toHaveLength(2);
-    // "em breve" appears exactly twice — one badge per deferred card, not
-    // doubled in the card's sub text.
-    expect(screen.getAllByText("em breve")).toHaveLength(2);
+    expect(screen.queryByText("em breve")).not.toBeInTheDocument();
   });
 });
