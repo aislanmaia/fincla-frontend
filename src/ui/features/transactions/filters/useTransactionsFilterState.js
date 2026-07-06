@@ -15,7 +15,7 @@ import { DEFAULT_SORT, sortItems as sortItemsFn } from "./search/sortModel.js";
  *   customFrom:  "yyyy-mm-dd" (somente quando period === "custom")
  *   customTo:    "yyyy-mm-dd"
  *   type:        "todos" | "receita" | "despesa"
- *   method:      "todos" | "pix" | "dinheiro" | "transferencia" | "debito" | "credito" | "boleto"
+ *   method:      string[] (keys de forma de pagamento)
  *   cats:        string[] (ids de categorias)
  *   tags:        string[]
  *   cardSel:     string[] (ids de cartões)
@@ -34,7 +34,7 @@ export const DEFAULT_FILTER_STATE = Object.freeze({
   customFrom: "",
   customTo: "",
   type: "todos",
-  method: "todos",
+  method: [],
   cats: [],
   tags: [],
   cardSel: [],
@@ -45,7 +45,12 @@ export const DEFAULT_FILTER_STATE = Object.freeze({
 
 function normalizeInitial(partial) {
   const next = { ...DEFAULT_FILTER_STATE, ...(partial || {}) };
-  if (!isPaymentMethodAllowedForType(next.method, next.type)) next.method = "todos";
+  next.method = Array.isArray(next.method)
+    ? next.method.filter(Boolean)
+    : typeof next.method === "string" && next.method !== "todos" && next.method.trim()
+      ? [next.method]
+      : [];
+  if (!isPaymentMethodAllowedForType(next.method, next.type)) next.method = [];
   return next;
 }
 
@@ -67,7 +72,9 @@ export function useTransactionsFilterState({
 
   const setType = useCallback((value) => {
     setState((prev) => {
-      const nextMethod = isPaymentMethodAllowedForType(prev.method, value) ? prev.method : "todos";
+      const nextMethod = isPaymentMethodAllowedForType(prev.method, value)
+        ? prev.method
+        : prev.method.filter((item) => isPaymentMethodAllowedForType(item, value));
       if (prev.type === value && prev.method === nextMethod) return prev;
       return { ...prev, type: value, method: nextMethod };
     });
@@ -135,7 +142,8 @@ export function useTransactionsFilterState({
           label: "Forma de pagamento",
           value: getPaymentMethodLabel(state.method),
           icon: "wallet",
-          active: state.method !== "todos",
+          active: state.method.length > 0,
+          multi: state.method.length,
         },
         {
           key: "categoria",
@@ -201,7 +209,7 @@ export function useTransactionsFilterState({
   const hasAnyActive = useMemo(() => {
     if (state.period !== DEFAULT_FILTER_STATE.period) return true;
     if (state.type !== DEFAULT_FILTER_STATE.type) return true;
-    if (state.method !== DEFAULT_FILTER_STATE.method) return true;
+    if (state.method.length) return true;
     if (state.cats.length) return true;
     if (state.tags.length) return true;
     if (state.cardSel.length) return true;

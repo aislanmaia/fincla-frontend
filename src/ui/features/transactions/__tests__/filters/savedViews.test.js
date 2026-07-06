@@ -83,7 +83,7 @@ describe("savedViewsModel", () => {
       countActiveFiltersInSnapshot({
         period: "hoje",
         type: "despesa",
-        method: "credito",
+        method: ["credito"],
         cats: ["alim"],
         tags: ["trabalho"],
         cardSel: [],

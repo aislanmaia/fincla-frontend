@@ -91,7 +91,7 @@ describe("<TypePanel>", () => {
 });
 
 describe("<PaymentMethodPanel>", () => {
-  function Harness({ type = "todos", initial = "todos" } = {}) {
+  function Harness({ type = "todos", initial = [] } = {}) {
     const [method, setMethod] = useState(initial);
     return (
       <FacetPanelContent
@@ -117,10 +117,12 @@ describe("<PaymentMethodPanel>", () => {
     expect(screen.queryByRole("button", { name: "Crédito" })).not.toBeInTheDocument();
   });
 
-  it("seleciona uma forma de pagamento", async () => {
+  it("seleciona mais de uma forma de pagamento sem fechar automaticamente", async () => {
     render(<Harness type="despesa" />);
     await userEvent.click(screen.getByRole("button", { name: "Crédito" }));
     expect(screen.getByRole("button", { name: "Crédito" })).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(screen.getByRole("button", { name: "Pix" }));
+    expect(screen.getByRole("button", { name: "Pix" })).toHaveAttribute("aria-pressed", "true");
   });
 });
 

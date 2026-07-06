@@ -19,11 +19,13 @@ export function getPaymentMethodOptions(type) {
 }
 
 export function getPaymentMethodLabel(method) {
-  if (!method || method === "todos") return "Todas";
-  return MET_LABELS[method] || method;
+  if (!Array.isArray(method) || method.length === 0) return "Todas";
+  if (method.length === 1) return MET_LABELS[method[0]] || method[0];
+  return `${method.length} formas`;
 }
 
 export function isPaymentMethodAllowedForType(method, type) {
-  if (!method || method === "todos") return true;
-  return getPaymentMethodOptions(type).some(([value]) => value === method);
+  if (!method) return true;
+  const values = Array.isArray(method) ? method : [method];
+  return values.every((value) => getPaymentMethodOptions(type).some(([candidate]) => candidate === value));
 }

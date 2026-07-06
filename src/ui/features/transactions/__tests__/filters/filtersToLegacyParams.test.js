@@ -67,9 +67,10 @@ describe("mapTypeToLegacy", () => {
 
 describe("mapMethodToLegacy", () => {
   it("normaliza forma de pagamento para o contrato da API", () => {
-    expect(mapMethodToLegacy("todos")).toBe("todos");
-    expect(mapMethodToLegacy("credito")).toBe("credit_card");
-    expect(mapMethodToLegacy("dinheiro")).toBe("cash");
+    expect(mapMethodToLegacy([])).toBe("todos");
+    expect(mapMethodToLegacy(["credito"])).toBe("credit_card");
+    expect(mapMethodToLegacy(["dinheiro"])).toBe("cash");
+    expect(mapMethodToLegacy(["pix", "credito"])).toBe("todos");
   });
 });
 
@@ -104,7 +105,7 @@ describe("matchesValueRange", () => {
 describe("filtersToLegacyParams", () => {
   const base = {
     type: "todos",
-    method: "todos",
+    method: [],
     cats: [],
     period: "mes",
     customFrom: "",
@@ -157,7 +158,7 @@ describe("filtersToLegacyParams", () => {
   });
 
   it("inclui forma de pagamento mapeada para a API", () => {
-    const out = filtersToLegacyParams({ ...base, method: "credito" }, { limit: 30 });
+    const out = filtersToLegacyParams({ ...base, method: ["credito"] }, { limit: 30 });
     expect(out.filterMethod).toBe("credit_card");
   });
 });

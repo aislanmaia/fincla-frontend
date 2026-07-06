@@ -25,6 +25,12 @@ function sortedStrings(arr) {
   return [...(Array.isArray(arr) ? arr : [])].sort();
 }
 
+function normalizeMethods(method) {
+  if (Array.isArray(method)) return sortedStrings(method);
+  if (typeof method === "string" && method !== "todos" && method.trim()) return [method];
+  return [];
+}
+
 /** Normaliza snapshot para comparação (inclui busca e sort). */
 export function normalizeViewSnapshot(snapshot) {
   if (!snapshot || typeof snapshot !== "object") {
@@ -33,7 +39,7 @@ export function normalizeViewSnapshot(snapshot) {
       customFrom: "",
       customTo: "",
       type: "todos",
-      method: "todos",
+      method: [],
       cats: [],
       tags: [],
       cardSel: [],
@@ -52,7 +58,7 @@ export function normalizeViewSnapshot(snapshot) {
     customFrom: snapshot.customFrom ?? "",
     customTo: snapshot.customTo ?? "",
     type: snapshot.type ?? "todos",
-    method: snapshot.method ?? "todos",
+    method: normalizeMethods(snapshot.method),
     cats: sortedStrings(snapshot.cats),
     tags: sortedStrings(snapshot.tags),
     cardSel: sortedStrings(snapshot.cardSel),
@@ -125,7 +131,7 @@ export function countActiveFiltersInSnapshot(snapshot) {
   if (search) n += 1;
   if (snapshot.period && snapshot.period !== "mes") n += 1;
   if (snapshot.type && snapshot.type !== "todos") n += 1;
-  if (snapshot.method && snapshot.method !== "todos") n += 1;
+  if (normalizeMethods(snapshot.method).length) n += 1;
   if (Array.isArray(snapshot.cats) && snapshot.cats.length) n += 1;
   if (Array.isArray(snapshot.tags) && snapshot.tags.length) n += 1;
   if (Array.isArray(snapshot.cardSel) && snapshot.cardSel.length) n += 1;

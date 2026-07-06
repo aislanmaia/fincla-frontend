@@ -34,6 +34,26 @@ function getTagId(tag, fallback) {
   return typeof tag === "string" ? `local-${fallback}` : tag?.id ?? `local-${fallback}`;
 }
 
+function appendTagToCategory(rows, catId, tag) {
+  return rows.map((row) =>
+    row.id === catId ? { ...row, tags: [...(row.tags || []), tag] } : row,
+  );
+}
+
+function removeTagFromCategory(rows, catId, tagId, tagIndex) {
+  return rows.map((row) =>
+    row.id === catId
+      ? {
+          ...row,
+          tags: (row.tags || []).filter((tag, index) => {
+            if (tagId) return String(getTagId(tag, index)) !== String(tagId);
+            return index !== tagIndex;
+          }),
+        }
+      : row,
+  );
+}
+
 const DEFAULT_CATEGORIES = [
   { id:"alim",  name:"Alimentação",           color:"#059669", tags:["mercado","restaurante","delivery"] },
   { id:"trans", name:"Transporte",             color:"#2563EB", tags:["combustível","uber","ônibus"] },
@@ -150,13 +170,14 @@ export function CategoriesTagsSettingsPanel({
           setCatsError('Tipo de tag "detalhe" não encontrado.');
           return;
         }
-        await createTag(organizationId, {
+        const created = await createTag(organizationId, {
           name: tagName,
           tag_type_id: detailTypeId,
           parent_category_tag_id: cat.id,
         });
+        setCats((prev) => appendTagToCategory(prev, cat.id, created));
         setNewTagInputs((prev) => ({ ...prev, [cat.id]: "" }));
-        await refreshCats();
+        setCatsError("");
       } catch (e) {
         setCatsError(handleApiError(e));
       }
@@ -174,7 +195,8 @@ export function CategoriesTagsSettingsPanel({
       if (!tagId) return;
       try {
         await deleteTag(tagId);
-        await refreshCats();
+        setCats((prev) => removeTagFromCategory(prev, cat.id, tagId, tagIndex));
+        setCatsError("");
       } catch (e) {
         setCatsError(handleApiError(e));
       }

@@ -104,6 +104,18 @@ describe("<TransactionsFilterBar>", { timeout: 15000 }, () => {
     expect(within(region).queryByRole("button", { name: "Crédito" })).not.toBeInTheDocument();
   });
 
+  it("forma de pagamento permite multiselecao e so fecha no CTA", async () => {
+    render(<Harness filteredCount={5} />);
+    await userEvent.click(screen.getByRole("button", { name: /Forma de pagamento:/i }));
+    const region = screen.getByRole("region", { name: /Filtro: forma/i });
+    await userEvent.click(within(region).getByRole("button", { name: "Pix" }));
+    await userEvent.click(within(region).getByRole("button", { name: "Transferência" }));
+    expect(screen.getByRole("region", { name: /Filtro: forma/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Forma de pagamento: 2 formas/i })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Ver 5 transações/i }));
+    expect(screen.queryByRole("region", { name: /Filtro: forma/i })).not.toBeInTheDocument();
+  });
+
   it("preset de período aplica e fecha o painel inline", async () => {
     render(<Harness />);
     await userEvent.click(screen.getByRole("button", { name: /Período:/i }));

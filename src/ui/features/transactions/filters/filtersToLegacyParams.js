@@ -36,8 +36,8 @@ export function mapTypeToLegacy(type) {
 }
 
 export function mapMethodToLegacy(method) {
-  if (!method || method === "todos") return "todos";
-  return mapUiPaymentMethodToApi(method);
+  if (!Array.isArray(method) || method.length !== 1) return "todos";
+  return mapUiPaymentMethodToApi(method[0]);
 }
 
 /**

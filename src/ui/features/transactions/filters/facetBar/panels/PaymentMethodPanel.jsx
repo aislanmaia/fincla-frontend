@@ -16,23 +16,22 @@ const TYPE_HINT = {
 
 export function PaymentMethodPanel({
   type = "todos",
-  method = "todos",
+  method = [],
   setMethod,
   onClose,
-  onApply,
   compact = false,
 }) {
   const options = getPaymentMethodOptions(type);
 
   const select = (value) => {
-    const next = value === method ? "todos" : value;
+    const next = method.includes(value)
+      ? method.filter((item) => item !== value)
+      : [...method, value];
     if (typeof setMethod === "function") setMethod(next);
-    if (typeof onApply === "function") onApply();
   };
 
   const selectAll = () => {
-    if (typeof setMethod === "function") setMethod("todos");
-    if (typeof onApply === "function") onApply();
+    if (typeof setMethod === "function") setMethod([]);
   };
 
   return (
@@ -53,18 +52,18 @@ export function PaymentMethodPanel({
         <button
           type="button"
           onClick={selectAll}
-          aria-pressed={method === "todos"}
+          aria-pressed={method.length === 0}
           aria-label="Todas as formas"
-          style={optionStyle(method === "todos", compact)}
+          style={optionStyle(method.length === 0, compact)}
         >
-          <OptionIcon active={method === "todos"} compact={compact} />
+          <OptionIcon active={method.length === 0} compact={compact} />
           <div>
             <div style={titleStyle}>Todas</div>
             <div style={hintStyle}>Sem filtro por forma</div>
           </div>
         </button>
         {options.map(([value, label]) => {
-          const active = method === value;
+          const active = method.includes(value);
           const allowed = isPaymentMethodAllowedForType(value, type);
           return (
             <button

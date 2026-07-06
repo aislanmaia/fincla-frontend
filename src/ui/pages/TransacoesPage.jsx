@@ -435,13 +435,11 @@ function TransacoesPageBody({
 
   // ── Filter + sort (modo mock — em modo live a API faz tudo) ──────────────
   const filtered = useMemo(() => {
-    if (shouldUseRealData) return txList;
-
     const matches = txList.filter((t) => {
       if (!periodFilter(t)) return false;
       if (filter.type === "receita" && (t.type !== "income" || t.val < 0)) return false;
       if (filter.type === "despesa" && (t.type !== "expense" || t.val > 0)) return false;
-      if (filter.method !== "todos" && t.paymentMethodKey !== filter.method) return false;
+      if (filter.method.length > 0 && !filter.method.includes(t.paymentMethodKey)) return false;
       if (filter.cats.length > 0 && !filter.cats.includes(t.cat)) return false;
       if (filter.tags.length > 0 && !(t.tags || []).some((tg) => filter.tags.includes(tg))) return false;
       if (filter.rec === "yes" && !t.rec) return false;
@@ -456,7 +454,6 @@ function TransacoesPageBody({
     });
     return filter.sortItems(matches);
   }, [
-    shouldUseRealData,
     txList,
     debouncedSearch,
     filter.type,
@@ -473,7 +470,7 @@ function TransacoesPageBody({
   ]);
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
-  const canUseRemoteSummary = shouldUseRealData;
+  const canUseRemoteSummary = shouldUseRealData && filter.method.length <= 1;
   const totalReceita = canUseRemoteSummary && transactionsData.summary
     ? transactionsData.summary.total_income
     : filtered.filter(t=>t.type==="income").reduce((s,t)=>s+t.val,0);
@@ -743,7 +740,13 @@ function TransacoesPageBody({
   // ── CSV export ────────────────────────────────────────────────────────────
   const exportCSV = () => {
     const header = "Data,Descrição,Categoria,Método,Valor,Status,Tags";
-    if (shouldUseRealData && organizationId && !debouncedSearch && filter.cats.length === 0) {
+    if (
+      shouldUseRealData &&
+      organizationId &&
+      !debouncedSearch &&
+      filter.cats.length === 0 &&
+      filter.method.length <= 1
+    ) {
       downloadTransactionsCsvForUi(
         organizationId,
         filtersToCsvOptions({
