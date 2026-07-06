@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatCustomPeriodLabel } from "./customPeriodLabel.js";
+import {
+  getPaymentMethodLabel,
+  isPaymentMethodAllowedForType,
+} from "./paymentMethodOptions.js";
 import { DEFAULT_SORT, sortItems as sortItemsFn } from "./search/sortModel.js";
 
 /**
@@ -11,6 +15,7 @@ import { DEFAULT_SORT, sortItems as sortItemsFn } from "./search/sortModel.js";
  *   customFrom:  "yyyy-mm-dd" (somente quando period === "custom")
  *   customTo:    "yyyy-mm-dd"
  *   type:        "todos" | "receita" | "despesa"
+ *   method:      "todos" | "pix" | "dinheiro" | "transferencia" | "debito" | "credito" | "boleto"
  *   cats:        string[] (ids de categorias)
  *   tags:        string[]
  *   cardSel:     string[] (ids de cartões)
@@ -29,6 +34,7 @@ export const DEFAULT_FILTER_STATE = Object.freeze({
   customFrom: "",
   customTo: "",
   type: "todos",
+  method: "todos",
   cats: [],
   tags: [],
   cardSel: [],
@@ -38,7 +44,9 @@ export const DEFAULT_FILTER_STATE = Object.freeze({
 });
 
 function normalizeInitial(partial) {
-  return { ...DEFAULT_FILTER_STATE, ...(partial || {}) };
+  const next = { ...DEFAULT_FILTER_STATE, ...(partial || {}) };
+  if (!isPaymentMethodAllowedForType(next.method, next.type)) next.method = "todos";
+  return next;
 }
 
 export function useTransactionsFilterState({
@@ -55,6 +63,14 @@ export function useTransactionsFilterState({
 
   const setField = useCallback((field, value) => {
     setState((prev) => (prev[field] === value ? prev : { ...prev, [field]: value }));
+  }, []);
+
+  const setType = useCallback((value) => {
+    setState((prev) => {
+      const nextMethod = isPaymentMethodAllowedForType(prev.method, value) ? prev.method : "todos";
+      if (prev.type === value && prev.method === nextMethod) return prev;
+      return { ...prev, type: value, method: nextMethod };
+    });
   }, []);
 
   /** Restaura todo o estado (filtros + sort) para o snapshot fornecido. */
@@ -113,6 +129,13 @@ export function useTransactionsFilterState({
           color:
             state.type === "receita" ? "#059669" : state.type === "despesa" ? "#DC2626" : null,
           active: state.type !== "todos",
+        },
+        {
+          key: "forma",
+          label: "Forma de pagamento",
+          value: getPaymentMethodLabel(state.method),
+          icon: "wallet",
+          active: state.method !== "todos",
         },
         {
           key: "categoria",
@@ -178,6 +201,7 @@ export function useTransactionsFilterState({
   const hasAnyActive = useMemo(() => {
     if (state.period !== DEFAULT_FILTER_STATE.period) return true;
     if (state.type !== DEFAULT_FILTER_STATE.type) return true;
+    if (state.method !== DEFAULT_FILTER_STATE.method) return true;
     if (state.cats.length) return true;
     if (state.tags.length) return true;
     if (state.cardSel.length) return true;
@@ -197,7 +221,8 @@ export function useTransactionsFilterState({
     setPeriod: (v) => setField("period", v),
     setCustomFrom: (v) => setField("customFrom", v),
     setCustomTo: (v) => setField("customTo", v),
-    setType: (v) => setField("type", v),
+    setType,
+    setMethod: (v) => setField("method", v),
     setCats: (v) => setField("cats", v),
     setTags: (v) => setField("tags", v),
     setCardSel: (v) => setField("cardSel", v),

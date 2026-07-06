@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   filtersToLegacyParams,
   mapCatsToLegacy,
+  mapMethodToLegacy,
   mapSortToLegacy,
   mapTypeToLegacy,
   mapValueRangeToLegacy,
@@ -64,6 +65,14 @@ describe("mapTypeToLegacy", () => {
   });
 });
 
+describe("mapMethodToLegacy", () => {
+  it("normaliza forma de pagamento para o contrato da API", () => {
+    expect(mapMethodToLegacy("todos")).toBe("todos");
+    expect(mapMethodToLegacy("credito")).toBe("credit_card");
+    expect(mapMethodToLegacy("dinheiro")).toBe("cash");
+  });
+});
+
 describe("mapValueRangeToLegacy", () => {
   it("converte strings BRL em números", () => {
     expect(mapValueRangeToLegacy("100,00", "500,00")).toEqual({
@@ -95,6 +104,7 @@ describe("matchesValueRange", () => {
 describe("filtersToLegacyParams", () => {
   const base = {
     type: "todos",
+    method: "todos",
     cats: [],
     period: "mes",
     customFrom: "",
@@ -121,9 +131,9 @@ describe("filtersToLegacyParams", () => {
       filtersToLegacyParams(base, { limit: 30, debouncedSearch: "mercado" }),
     ).toEqual({
       search: "mercado",
-      filterType: "todos",
-      filterCat: "todas",
-      filterMethod: "todos",
+        filterType: "todos",
+        filterCat: "todas",
+        filterMethod: "todos",
       period: "mes",
       customFrom: "",
       customTo: "",
@@ -144,5 +154,10 @@ describe("filtersToLegacyParams", () => {
       { limit: 30, totalCategories: 3 },
     );
     expect(partial.filterCat).toBe("a");
+  });
+
+  it("inclui forma de pagamento mapeada para a API", () => {
+    const out = filtersToLegacyParams({ ...base, method: "credito" }, { limit: 30 });
+    expect(out.filterMethod).toBe("credit_card");
   });
 });

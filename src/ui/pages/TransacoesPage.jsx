@@ -272,6 +272,7 @@ function TransacoesPageBody({
       filtersToLegacyParams(
         {
           type: filter.type,
+          method: filter.method,
           cats: filter.cats,
           period: filter.period,
           customFrom: filter.customFrom,
@@ -289,6 +290,7 @@ function TransacoesPageBody({
     [
       debouncedSearch,
       filter.type,
+      filter.method,
       filter.cats,
       filter.period,
       filter.customFrom,
@@ -439,6 +441,7 @@ function TransacoesPageBody({
       if (!periodFilter(t)) return false;
       if (filter.type === "receita" && (t.type !== "income" || t.val < 0)) return false;
       if (filter.type === "despesa" && (t.type !== "expense" || t.val > 0)) return false;
+      if (filter.method !== "todos" && t.paymentMethodKey !== filter.method) return false;
       if (filter.cats.length > 0 && !filter.cats.includes(t.cat)) return false;
       if (filter.tags.length > 0 && !(t.tags || []).some((tg) => filter.tags.includes(tg))) return false;
       if (filter.rec === "yes" && !t.rec) return false;
@@ -457,6 +460,7 @@ function TransacoesPageBody({
     txList,
     debouncedSearch,
     filter.type,
+    filter.method,
     filter.cats,
     filter.tags,
     filter.rec,
@@ -744,6 +748,7 @@ function TransacoesPageBody({
         organizationId,
         filtersToCsvOptions({
           type: filter.type,
+          method: filter.method,
           period: filter.period,
           customFrom: filter.customFrom,
           customTo: filter.customTo,

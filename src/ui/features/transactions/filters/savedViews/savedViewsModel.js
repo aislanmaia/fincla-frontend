@@ -33,6 +33,7 @@ export function normalizeViewSnapshot(snapshot) {
       customFrom: "",
       customTo: "",
       type: "todos",
+      method: "todos",
       cats: [],
       tags: [],
       cardSel: [],
@@ -51,6 +52,7 @@ export function normalizeViewSnapshot(snapshot) {
     customFrom: snapshot.customFrom ?? "",
     customTo: snapshot.customTo ?? "",
     type: snapshot.type ?? "todos",
+    method: snapshot.method ?? "todos",
     cats: sortedStrings(snapshot.cats),
     tags: sortedStrings(snapshot.tags),
     cardSel: sortedStrings(snapshot.cardSel),
@@ -123,6 +125,7 @@ export function countActiveFiltersInSnapshot(snapshot) {
   if (search) n += 1;
   if (snapshot.period && snapshot.period !== "mes") n += 1;
   if (snapshot.type && snapshot.type !== "todos") n += 1;
+  if (snapshot.method && snapshot.method !== "todos") n += 1;
   if (Array.isArray(snapshot.cats) && snapshot.cats.length) n += 1;
   if (Array.isArray(snapshot.tags) && snapshot.tags.length) n += 1;
   if (Array.isArray(snapshot.cardSel) && snapshot.cardSel.length) n += 1;

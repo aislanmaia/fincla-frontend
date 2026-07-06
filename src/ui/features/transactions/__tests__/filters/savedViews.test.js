@@ -83,13 +83,14 @@ describe("savedViewsModel", () => {
       countActiveFiltersInSnapshot({
         period: "hoje",
         type: "despesa",
+        method: "credito",
         cats: ["alim"],
         tags: ["trabalho"],
         cardSel: [],
         rec: "yes",
         valueMin: "100",
       }),
-    ).toBe(6);
+    ).toBe(7);
   });
 
   it("viewSnapshotsEqual compara busca, sort e facets", () => {

@@ -90,6 +90,40 @@ describe("<TypePanel>", () => {
   });
 });
 
+describe("<PaymentMethodPanel>", () => {
+  function Harness({ type = "todos", initial = "todos" } = {}) {
+    const [method, setMethod] = useState(initial);
+    return (
+      <FacetPanelContent
+        facetKey="forma"
+        type={type}
+        method={method}
+        setMethod={setMethod}
+        onClose={() => {}}
+      />
+    );
+  }
+
+  it("lista opcoes de despesa quando o tipo e despesa", () => {
+    render(<Harness type="despesa" />);
+    expect(screen.getByRole("button", { name: "Crédito" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Boleto" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Transferência" })).not.toBeInTheDocument();
+  });
+
+  it("lista opcoes de receita quando o tipo e receita", () => {
+    render(<Harness type="receita" />);
+    expect(screen.getByRole("button", { name: "Transferência" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Crédito" })).not.toBeInTheDocument();
+  });
+
+  it("seleciona uma forma de pagamento", async () => {
+    render(<Harness type="despesa" />);
+    await userEvent.click(screen.getByRole("button", { name: "Crédito" }));
+    expect(screen.getByRole("button", { name: "Crédito" })).toHaveAttribute("aria-pressed", "true");
+  });
+});
+
 describe("<CategoryPanel>", () => {
   function Harness({ initial = [] }) {
     const [cats, setCats] = useState(initial);

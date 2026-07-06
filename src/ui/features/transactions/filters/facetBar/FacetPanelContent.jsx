@@ -1,6 +1,7 @@
 import React from "react";
 import { CardPanel } from "./panels/CardPanel.jsx";
 import { CategoryPanel } from "./panels/CategoryPanel.jsx";
+import { PaymentMethodPanel } from "./panels/PaymentMethodPanel.jsx";
 import { PeriodPanel } from "./panels/PeriodPanel.jsx";
 import { RecPanel } from "./panels/RecPanel.jsx";
 import { TagPanel } from "./panels/TagPanel.jsx";
@@ -23,6 +24,8 @@ export function FacetPanelContent({
   // type
   type,
   setType,
+  method,
+  setMethod,
   // category
   cats,
   setCats,
@@ -66,6 +69,17 @@ export function FacetPanelContent({
     case "tipo":
       return (
         <TypePanel type={type} setType={setType} onClose={onClose} onApply={onApply} compact={compact} />
+      );
+    case "forma":
+      return (
+        <PaymentMethodPanel
+          type={type}
+          method={method}
+          setMethod={setMethod}
+          onClose={onClose}
+          onApply={onApply}
+          compact={compact}
+        />
       );
     case "categoria":
       return (

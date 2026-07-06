@@ -12,6 +12,7 @@
  */
 
 import { parseMoneyInput } from "../../onboarding/onboardingValueUtils.js";
+import { mapUiPaymentMethodToApi } from "../../../data/transactionsAdapter.js";
 
 const SORT_FIELD_TO_LEGACY = {
   date: { asc: "date-asc", desc: "date-desc" },
@@ -32,6 +33,11 @@ export function mapTypeToLegacy(type) {
   if (type === "receita") return "receita";
   if (type === "despesa") return "despesa";
   return "todos";
+}
+
+export function mapMethodToLegacy(method) {
+  if (!method || method === "todos") return "todos";
+  return mapUiPaymentMethodToApi(method);
 }
 
 /**
@@ -88,7 +94,7 @@ export function filtersToLegacyParams(
     search: debouncedSearch,
     filterType: mapTypeToLegacy(state.type),
     filterCat: mapCatsToLegacy(state.cats, totalCategories),
-    filterMethod: "todos",
+    filterMethod: mapMethodToLegacy(state.method),
     period: state.period,
     customFrom: state.customFrom,
     customTo: state.customTo,
@@ -104,7 +110,7 @@ export function filtersToLegacyParams(
 export function filtersToCsvOptions(state) {
   return {
     filterType: mapTypeToLegacy(state.type),
-    filterMethod: "todos",
+    filterMethod: mapMethodToLegacy(state.method),
     period: state.period,
     customFrom: state.customFrom,
     customTo: state.customTo,

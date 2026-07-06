@@ -13,7 +13,7 @@ import { Icon } from "./shared/Icon.jsx";
  * Composição (de cima pra baixo):
  *   1. SavedViewsCards (opcional via `savedViews`)
  *   2. SearchBar  (search + SortButton multi-nível) — modo compact stackeia
- *   3. FacetBar   (7 facets como cards) — modo compact = grid 2 colunas
+ *   3. FacetBar   (8 facets como cards) — modo compact = grid 2 colunas
  *   4. Painel inline da facet expandida (empurra conteúdo abaixo)
  *
  * Modo `compact`:
@@ -251,6 +251,9 @@ export function TransactionsFilterBar({
                 // type
                 type={filter.type}
                 setType={filter.setType}
+                // payment method
+                method={filter.method}
+                setMethod={filter.setMethod}
                 // category
                 cats={filter.cats}
                 setCats={filter.setCats}

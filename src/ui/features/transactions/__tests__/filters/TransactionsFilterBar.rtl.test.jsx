@@ -94,6 +94,16 @@ describe("<TransactionsFilterBar>", { timeout: 15000 }, () => {
     expect(screen.getByRole("button", { name: /Limpar todos os filtros/i })).toBeEnabled();
   });
 
+  it("forma de pagamento segue o tipo selecionado", async () => {
+    render(<Harness />);
+    await userEvent.click(screen.getByRole("button", { name: /Tipo:/i }));
+    await userEvent.click(within(screen.getByRole("region")).getByRole("button", { name: "Receita" }));
+    await userEvent.click(screen.getByRole("button", { name: /Forma de pagamento:/i }));
+    const region = screen.getByRole("region", { name: /Filtro: forma/i });
+    expect(within(region).getByRole("button", { name: "Transferência" })).toBeInTheDocument();
+    expect(within(region).queryByRole("button", { name: "Crédito" })).not.toBeInTheDocument();
+  });
+
   it("preset de período aplica e fecha o painel inline", async () => {
     render(<Harness />);
     await userEvent.click(screen.getByRole("button", { name: /Período:/i }));
