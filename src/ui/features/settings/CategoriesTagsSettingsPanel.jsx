@@ -8,6 +8,32 @@ import { CardEmptyWithCta } from "../shellExtras.jsx";
 import { T } from "../../tokens";
 import { G } from "../../typography";
 
+function normalizeLabel(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function formatTagName(value) {
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, "-");
+}
+
+function resolveTagTypeId(rows, names) {
+  return (
+    rows.find((row) => names.includes(normalizeLabel(row.name)))?.id ?? null
+  );
+}
+
+function getTagName(tag) {
+  return typeof tag === "string" ? tag : tag?.name ?? "";
+}
+
+function getTagId(tag, fallback) {
+  return typeof tag === "string" ? `local-${fallback}` : tag?.id ?? `local-${fallback}`;
+}
+
 const DEFAULT_CATEGORIES = [
   { id:"alim",  name:"Alimentação",           color:"#059669", tags:["mercado","restaurante","delivery"] },
   { id:"trans", name:"Transporte",             color:"#2563EB", tags:["combustível","uber","ônibus"] },
@@ -46,9 +72,23 @@ export function CategoriesTagsSettingsPanel({
     setCatsLoading(true);
     setCatsError("");
     try {
-      const resp = await listTags(organizationId, "categoria");
-      const raw = resp.tags ?? [];
-      setCats(raw.map(t => ({ id: t.id, name: t.name, color: resolveCategoryColorForTag(t), tags: [], _tagTypeId: t.tag_type?.id ?? null })));
+      const [categoriesResp, detailResp] = await Promise.all([
+        listTags(organizationId, "categoria"),
+        listTags(organizationId, "detalhe"),
+      ]);
+      const rawCategories = categoriesResp.tags ?? [];
+      const detailTags = detailResp.tags ?? [];
+      setCats(
+        rawCategories.map((tag) => ({
+          id: tag.id,
+          name: tag.name,
+          color: resolveCategoryColorForTag(tag),
+          tags: detailTags.filter(
+            (detailTag) => String(detailTag.parent_category_tag_id ?? "") === String(tag.id),
+          ),
+          _tagTypeId: tag.tag_type?.id ?? null,
+        })),
+      );
     } catch (e) {
       setCatsError(handleApiError(e));
     } finally {
@@ -98,12 +138,56 @@ export function CategoriesTagsSettingsPanel({
     }
   }, [liveEnabled, refreshCats]);
 
-  const addTag = useCallback((cat) => {
-    const tag = (newTagInputs[cat.id]||"").trim().toLowerCase().replace(/\s+/g, "-");
-    if (!tag || (cat.tags||[]).includes(tag)) return;
-    setCats(prev => prev.map(c => c.id===cat.id ? {...c, tags:[...(c.tags||[]), tag]} : c));
-    setNewTagInputs(p => ({...p, [cat.id]: ""}));
-  }, [newTagInputs]);
+  const addTag = useCallback(async (cat) => {
+    const tagName = formatTagName(newTagInputs[cat.id] || "");
+    const hasTag = (cat.tags || []).some((tag) => formatTagName(getTagName(tag)) === tagName);
+    if (!tagName || hasTag) return;
+    if (liveEnabled) {
+      try {
+        const typesResp = await listTagTypes();
+        const detailTypeId = resolveTagTypeId(typesResp.tag_types ?? [], ["detalhe", "detail"]);
+        if (!detailTypeId) {
+          setCatsError('Tipo de tag "detalhe" não encontrado.');
+          return;
+        }
+        await createTag(organizationId, {
+          name: tagName,
+          tag_type_id: detailTypeId,
+          parent_category_tag_id: cat.id,
+        });
+        setNewTagInputs((prev) => ({ ...prev, [cat.id]: "" }));
+        await refreshCats();
+      } catch (e) {
+        setCatsError(handleApiError(e));
+      }
+      return;
+    }
+    setCats((prev) => prev.map((c) => (c.id === cat.id ? { ...c, tags: [...(c.tags || []), tagName] } : c)));
+    setNewTagInputs((prev) => ({ ...prev, [cat.id]: "" }));
+  }, [liveEnabled, newTagInputs, organizationId, refreshCats]);
+
+  const removeTag = useCallback(async (cat, tagIndex) => {
+    const tag = (cat.tags || [])[tagIndex];
+    if (!tag) return;
+    if (liveEnabled) {
+      const tagId = typeof tag === "string" ? null : tag.id;
+      if (!tagId) return;
+      try {
+        await deleteTag(tagId);
+        await refreshCats();
+      } catch (e) {
+        setCatsError(handleApiError(e));
+      }
+      return;
+    }
+    setCats((prev) =>
+      prev.map((row) =>
+        row.id === cat.id
+          ? { ...row, tags: (row.tags || []).filter((_, index) => index !== tagIndex) }
+          : row,
+      ),
+    );
+  }, [liveEnabled, refreshCats]);
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
@@ -226,13 +310,12 @@ export function CategoriesTagsSettingsPanel({
                 </div>
                 <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:10 }}>
                   {(cat.tags||[]).map((tag, ti) => (
-                    <span key={ti} style={{ ...G, display:"flex", alignItems:"center", gap:5, fontSize:12,
+                    <span key={getTagId(tag, ti)} style={{ ...G, display:"flex", alignItems:"center", gap:5, fontSize:12,
                       background:T.surface, border:`1px solid ${T.border}`, borderRadius:99,
                       padding:"4px 10px", color:T.inkMid }}>
-                      #{tag}
-                      <button onClick={() => setCats(prev => prev.map(c =>
-                          c.id===cat.id ? {...c, tags:(c.tags||[]).filter((_,j)=>j!==ti)} : c))}
-                        aria-label={`Remover tag ${tag}`}
+                      #{getTagName(tag)}
+                      <button onClick={() => void removeTag(cat, ti)}
+                        aria-label={`Remover tag ${getTagName(tag)}`}
                         style={{ background:"none", border:"none", cursor:"pointer", padding:0, lineHeight:1,
                           color:T.inkGhost, fontSize:14, display:"flex", alignItems:"center" }}>×</button>
                     </span>
@@ -248,22 +331,23 @@ export function CategoriesTagsSettingsPanel({
                     border:`1.5px solid ${T.border}`, borderRadius:9, padding:"7px 12px", minWidth:0 }}>
                     <span style={{ ...G, fontSize:12, color:T.inkLight, flexShrink:0 }}>#</span>
                     <input
-                      value={newTagInputs[cat.id] || ""}
-                      onChange={e => setNewTagInputs(p => ({...p, [cat.id]: e.target.value}))}
-                      onKeyDown={e => {
-                        if (e.key !== "Enter") return;
-                        addTag(cat);
-                      }}
+                       value={newTagInputs[cat.id] || ""}
+                       onChange={e => setNewTagInputs(p => ({...p, [cat.id]: e.target.value}))}
+                       onKeyDown={e => {
+                         if (e.key !== "Enter") return;
+                         e.preventDefault();
+                         void addTag(cat);
+                       }}
                       placeholder="nova tag (Enter)"
                       aria-label={`Nova tag de ${cat.name}`}
                       style={{ ...G, flex:1, minWidth:0, border:"none", outline:"none",
                         background:"transparent", fontSize:12, color:T.ink }}/>
                   </div>
-                  <button
-                    onClick={() => addTag(cat)}
-                    style={{ ...G, flexShrink:0, background:cat.color, color:"#fff", border:"none",
-                      borderRadius:9, padding:"8px 14px", fontSize:12, fontWeight:700, cursor:"pointer" }}>
-                    + Tag
+                   <button
+                     onClick={() => void addTag(cat)}
+                     style={{ ...G, flexShrink:0, background:cat.color, color:"#fff", border:"none",
+                       borderRadius:9, padding:"8px 14px", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+                     + Tag
                   </button>
                 </div>
               </div>
