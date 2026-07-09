@@ -219,6 +219,10 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     expect(screen.getByText("Saldo")).toBeInTheDocument();
   });
 
+  // Também é o teste de regressão do modo live: a API já aplicou período, tipo,
+  // categorias etc. Quando a página passou a refiltrar tudo no cliente, o
+  // `periodFilter` descartava a lista inteira (as linhas de apresentação trazem
+  // `date` = "21/05", sem ano) — tela vazia com dados no banco.
   it("renderiza lista de transações vinda do hook mockado", () => {
     renderPage();
     expect(screen.getAllByText("Almoço").length).toBeGreaterThan(0);

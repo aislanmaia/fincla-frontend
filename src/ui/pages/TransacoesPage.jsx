@@ -433,8 +433,22 @@ function TransacoesPageBody({
     setVisible(PAGE_SIZE);
   };
 
-  // ── Filter + sort (modo mock — em modo live a API faz tudo) ──────────────
+  // ── Filter + sort ────────────────────────────────────────────────────────
+  //
+  // Em modo **live** a API já aplicou período, tipo, categorias, tags,
+  // recorrência, faixa de valor, busca e ordenação. Refiltrar aqui quebraria a
+  // lista: `txList` carrega linhas de *apresentação* (ex.: `date` é "21/05",
+  // sem ano), e `periodFilter` as descartaria todas.
+  //
+  // A **única** exceção é a seleção de vários meios de pagamento: o endpoint
+  // aceita no máximo um, então esse recorte precisa acontecer no cliente — é
+  // pelo mesmo motivo que `canUseRemoteSummary` exige `method.length <= 1`.
   const filtered = useMemo(() => {
+    if (shouldUseRealData) {
+      if (filter.method.length <= 1) return txList;
+      return txList.filter((t) => filter.method.includes(t.paymentMethodKey));
+    }
+
     const matches = txList.filter((t) => {
       if (!periodFilter(t)) return false;
       if (filter.type === "receita" && (t.type !== "income" || t.val < 0)) return false;
@@ -454,6 +468,7 @@ function TransacoesPageBody({
     });
     return filter.sortItems(matches);
   }, [
+    shouldUseRealData,
     txList,
     debouncedSearch,
     filter.type,
