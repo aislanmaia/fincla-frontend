@@ -8,18 +8,18 @@ import { AiChart } from "../AiChart.jsx";
 afterEach(cleanup);
 
 // Mesmo padrão dos demais testes de gráfico do repo: recharts não mede nada em
-// jsdom. Aqui os stubs registram as props num data-attribute, para afirmar que
-// o AiChart escolhe o gráfico certo e mapeia as séries do ChartSpec.
+// jsdom. Os stubs registram as props num data-attribute, para afirmar que o
+// AiChart escolhe o gráfico certo e traduz o ChartSpec corretamente.
 vi.mock("recharts", () => {
   const box = (testid) => ({ children }) => <div data-testid={testid}>{children}</div>;
   const serie = (testid) => (props) => (
-    <div data-testid={testid} data-key={props.dataKey} data-name={props.name} data-fill={props.fill} data-stroke={props.stroke} />
+    <div data-testid={testid} data-key={props.dataKey} data-name={props.name}
+      data-fill={props.fill} data-stroke={props.stroke} />
   );
   return {
     ResponsiveContainer: box("recharts-rc"),
-    BarChart: box("bar-chart"),
+    ComposedChart: box("composed-chart"),
     LineChart: box("line-chart"),
-    AreaChart: box("area-chart"),
     PieChart: box("pie-chart"),
     Bar: serie("bar"),
     Line: serie("line"),
@@ -36,70 +36,90 @@ vi.mock("recharts", () => {
   };
 });
 
+/** Forma REAL de `ChartSpec` (fincla-api/src/application/ai/contracts.py). */
 const barSpec = {
   type: "bar",
   title: "Gastos por categoria",
-  x: { key: "category", label: "Categoria" },
-  series: [{ key: "amount", label: "Valor" }],
+  x: { key: "label" },
+  series: [{ key: "value", name: "Valor", kind: "bar", color: "purple" }],
   data: [
-    { category: "Moradia", amount: 2500 },
-    { category: "Alimentação", amount: 1200 },
+    { label: "Moradia", value: 3400 },
+    { label: "Alimentação", value: 2100 },
   ],
+  value_format: "brl0",
 };
 
 describe("AiChart", () => {
-  it("renders a bar chart with the spec's title, x key and series", () => {
+  it("renders a bar chart with the spec's title, x key and series name", () => {
     render(<AiChart spec={barSpec} />);
 
     expect(screen.getByText("Gastos por categoria")).toBeInTheDocument();
-    expect(screen.getByTestId("bar-chart")).toBeInTheDocument();
-    expect(screen.getByTestId("x-axis")).toHaveAttribute("data-key", "category");
+    expect(screen.getByTestId("x-axis")).toHaveAttribute("data-key", "label");
 
     const bar = screen.getByTestId("bar");
-    expect(bar).toHaveAttribute("data-key", "amount");
+    expect(bar).toHaveAttribute("data-key", "value");
+    // `name`, não `label` — o contrato chama o rótulo de legenda de `name`.
     expect(bar).toHaveAttribute("data-name", "Valor");
   });
 
-  it.each([
-    ["line", "line-chart", "line"],
-    ["area", "area-chart", "area"],
-  ])("renders a %s chart for that spec type", (type, chartTestId, serieTestId) => {
-    render(<AiChart spec={{ ...barSpec, type }} />);
-    expect(screen.getByTestId(chartTestId)).toBeInTheDocument();
-    expect(screen.getByTestId(serieTestId)).toHaveAttribute("data-key", "amount");
-  });
-
-  it("renders a pie chart with one Cell per data row", () => {
-    render(<AiChart spec={{ ...barSpec, type: "pie" }} />);
-    expect(screen.getByTestId("pie-chart")).toBeInTheDocument();
-    expect(screen.getByTestId("pie")).toHaveAttribute("data-key", "amount");
-    expect(screen.getByTestId("pie")).toHaveAttribute("data-namekey", "category");
-    expect(screen.getAllByTestId("cell")).toHaveLength(2);
-  });
-
-  it("falls back to a bar chart for an unknown type", () => {
-    render(<AiChart spec={{ ...barSpec, type: "sankey" }} />);
-    expect(screen.getByTestId("bar-chart")).toBeInTheDocument();
-  });
-
-  it("honours an explicit series color and otherwise uses the palette", () => {
-    const { rerender } = render(
-      <AiChart spec={{ ...barSpec, series: [{ key: "amount", color: "#ff0000" }] }} />
-    );
-    expect(screen.getByTestId("bar")).toHaveAttribute("data-fill", "#ff0000");
-
-    rerender(<AiChart spec={barSpec} />);
+  it("maps a color token to the design-system palette, never passing the token through", () => {
+    render(<AiChart spec={barSpec} />);
     expect(screen.getByTestId("bar")).toHaveAttribute("data-fill", "#7C3AED"); // T.purple
   });
 
-  it("shows a legend only when the spec has more than one series", () => {
-    const { rerender } = render(<AiChart spec={barSpec} />);
-    expect(screen.queryByTestId("legend")).not.toBeInTheDocument();
-
-    rerender(
-      <AiChart spec={{ ...barSpec, series: [{ key: "amount" }, { key: "budget" }] }} />
+  // "ink" não é uma cor CSS válida: passar o token direto ao recharts pintaria
+  // a série de preto (ou nada). Precisa virar T.ink.
+  it("maps the 'ink' token, which is not a valid CSS color on its own", () => {
+    render(
+      <AiChart
+        spec={{ ...barSpec, type: "composed", series: [{ key: "value", name: "Saldo", kind: "line", color: "ink" }] }}
+      />
     );
+    expect(screen.getByTestId("line")).toHaveAttribute("data-stroke", "#0F0F0D"); // T.ink
+  });
+
+  it("renders a line chart for type=line", () => {
+    render(<AiChart spec={{ ...barSpec, type: "line" }} />);
+    expect(screen.getByTestId("line-chart")).toBeInTheDocument();
+    expect(screen.getByTestId("line")).toHaveAttribute("data-key", "value");
+  });
+
+  it("renders a donut with one Cell per data row", () => {
+    render(<AiChart spec={{ ...barSpec, type: "donut" }} />);
+    expect(screen.getByTestId("pie-chart")).toBeInTheDocument();
+    expect(screen.getByTestId("pie")).toHaveAttribute("data-key", "value");
+    expect(screen.getByTestId("pie")).toHaveAttribute("data-namekey", "label");
+    expect(screen.getAllByTestId("cell")).toHaveLength(2);
+  });
+
+  // O ponto do `composed`: cada série honra o seu próprio `kind`.
+  it("renders a composed chart honouring each series' kind", () => {
+    render(
+      <AiChart
+        spec={{
+          ...barSpec,
+          type: "composed",
+          series: [
+            { key: "income", name: "Receita", kind: "bar", color: "green" },
+            { key: "expense", name: "Despesa", kind: "bar", color: "red" },
+            { key: "balance", name: "Saldo", kind: "line", color: "ink" },
+          ],
+          data: [{ label: "abr", income: 10, expense: 8, balance: 2 }],
+        }}
+      />
+    );
+
+    expect(screen.getByTestId("composed-chart")).toBeInTheDocument();
+    expect(screen.getAllByTestId("bar")).toHaveLength(2);
+    const line = screen.getByTestId("line");
+    expect(line).toHaveAttribute("data-key", "balance");
+    expect(line).toHaveAttribute("data-stroke", "#0F0F0D");
     expect(screen.getByTestId("legend")).toBeInTheDocument();
+  });
+
+  it("shows a legend only when the spec has more than one series", () => {
+    render(<AiChart spec={barSpec} />);
+    expect(screen.queryByTestId("legend")).not.toBeInTheDocument();
   });
 
   // Uma spec quebrada não pode derrubar o drawer inteiro.
@@ -112,6 +132,6 @@ describe("AiChart", () => {
   ])("degrades gracefully: %s", (_label, spec) => {
     render(<AiChart spec={spec} />);
     expect(screen.getByText("Gráfico indisponível.")).toBeInTheDocument();
-    expect(screen.queryByTestId("bar-chart")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("composed-chart")).not.toBeInTheDocument();
   });
 });

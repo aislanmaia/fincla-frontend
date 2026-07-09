@@ -60,17 +60,28 @@ function VerdictBlock({ healthRead }) {
   );
 }
 
-/** Bloco `list` da referência: bullet roxo + texto. */
-function BulletList({ title, items }) {
+/**
+ * Bloco `list` da referência: bullet roxo + texto.
+ *
+ * Cada `watch_point` é um objeto `{ metric, note }` (contrato `WatchPoint` em
+ * `contracts.py`), não uma string — a `note` é o texto e a `metric` identifica
+ * o indicador a acompanhar.
+ */
+function WatchPointList({ title, items }) {
   if (!items?.length) return null;
   return (
     <div>
       <div style={SECTION_LABEL}>{title}</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-        {items.map((it, i) => (
-          <div key={i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+        {items.map((wp, i) => (
+          <div key={wp.metric ?? i} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
             <span style={{ width: 5, height: 5, borderRadius: 99, background: T.purple, marginTop: 7, flexShrink: 0 }} />
-            <span style={{ ...G, fontSize: 12.5, color: T.inkMid, lineHeight: 1.5 }}>{it}</span>
+            <span style={{ ...G, fontSize: 12.5, color: T.inkMid, lineHeight: 1.5 }}>
+              {wp.note}
+              {wp.metric && (
+                <span style={{ ...G, ...NUM, fontSize: 10, color: T.inkGhost, marginLeft: 6 }}>({wp.metric})</span>
+              )}
+            </span>
           </div>
         ))}
       </div>
@@ -234,7 +245,7 @@ export function ConsultantEvaluationDrawer({ open, organizationId, clientName, o
 
               {result.charts?.map((spec, i) => <AiChart key={i} spec={spec} />)}
 
-              <BulletList title="Pontos de atenção" items={result.watch_points} />
+              <WatchPointList title="Pontos de atenção" items={result.watch_points} />
 
               <ActionPlan items={result.action_plan} />
 
