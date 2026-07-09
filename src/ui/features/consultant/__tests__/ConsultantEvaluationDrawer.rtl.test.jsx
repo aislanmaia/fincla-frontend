@@ -152,6 +152,27 @@ describe("ConsultantEvaluationDrawer", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  // O painel se anuncia como aria-modal; sem Escape ele prende quem navega
+  // pelo teclado (e ocupa 92vw no mobile).
+  it("closes on Escape", () => {
+    const onClose = vi.fn();
+    vi.mocked(useClientEvaluation).mockReturnValue(hookState({ result }));
+    renderDrawer({ onClose });
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("stops listening for Escape once closed", () => {
+    const onClose = vi.fn();
+    vi.mocked(useClientEvaluation).mockReturnValue(hookState({ result }));
+    const { unmount } = renderDrawer({ onClose });
+    unmount();
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("closes when the backdrop is clicked", () => {
     const onClose = vi.fn();
     vi.mocked(useClientEvaluation).mockReturnValue(hookState({ result }));

@@ -48,7 +48,16 @@ export function useClientEvaluation(organizationId) {
 
   // Trocar de cliente invalida o resultado anterior — senão o drawer mostraria
   // a avaliação do cliente errado por um frame.
+  //
+  // O reset é guardado por um ref em vez de depender só da lista de deps: em
+  // `<StrictMode>` os efeitos rodam duas vezes, e este está registrado ANTES do
+  // efeito de auto-run do drawer. Sem o guard, a segunda passada rodaria depois
+  // de `run()` já ter setado `loading` e apagaria esse estado — o drawer ficava
+  // em branco durante toda a requisição (~55s) em dev.
+  const lastOrganizationId = useRef(organizationId);
   useEffect(() => {
+    if (lastOrganizationId.current === organizationId) return;
+    lastOrganizationId.current = organizationId;
     setState(IDLE);
   }, [organizationId]);
 

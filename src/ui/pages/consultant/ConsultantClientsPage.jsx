@@ -200,6 +200,15 @@ export function ConsultantClientsPage() {
       )}
 
       {linkModal && <ActivationLinkModal state={linkModal} onClose={() => setLinkModal(null)} />}
+
+      {evaluation.target && (
+        <ConsultantEvaluationDrawer
+          open
+          organizationId={evaluation.target.organizationId}
+          clientName={evaluation.target.clientName}
+          onClose={evaluation.close}
+        />
+      )}
     </div>
   );
 }

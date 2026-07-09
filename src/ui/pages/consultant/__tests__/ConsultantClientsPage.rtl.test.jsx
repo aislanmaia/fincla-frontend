@@ -9,9 +9,11 @@ vi.mock("@tanstack/react-router", () => ({
 
 vi.mock("../../../../api/consultant", () => ({
   getConsultantClients: vi.fn(),
+  evaluateClientWithAi: vi.fn(),
+  newEvaluationRequestId: vi.fn(() => "11111111-1111-4111-8111-111111111111"),
 }));
 
-import { getConsultantClients } from "../../../../api/consultant";
+import { evaluateClientWithAi, getConsultantClients } from "../../../../api/consultant";
 import { ConsultantAddClientProvider } from "../../../features/consultant/ConsultantAddClientContext.jsx";
 import { ConsultantClientsPage } from "../ConsultantClientsPage.jsx";
 
@@ -167,5 +169,31 @@ describe("ConsultantClientsPage", () => {
     // O card inteiro é clicável (fiel à referência) — clicar o nome abre o relatório.
     fireEvent.click(screen.getByText("Ana Beatriz"));
     expect(navigate).toHaveBeenCalledWith({ to: "/consultant/clients/$id", params: { id: "a" } });
+  });
+});
+
+/**
+ * A Carteira habilita "Avaliar com IA" nos cards e na tabela. Sem o drawer
+ * montado na página, o botão fica habilitado e o clique não faz nada — foi
+ * exatamente esse o bug encontrado no review da etapa 9.
+ */
+describe("<ConsultantClientsPage> — Avaliar com IA", () => {
+  it("abre o drawer de avaliação ao clicar em 'Avaliar com IA'", async () => {
+    vi.mocked(getConsultantClients).mockResolvedValue({ total: 1, clients: [ana] });
+    vi.mocked(evaluateClientWithAi).mockReturnValue(new Promise(() => {})); // fica carregando
+
+    renderWithVersion(0);
+    await waitFor(() => expect(screen.getByText("Ana Beatriz")).toBeInTheDocument());
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    const avaliar = screen.getAllByRole("button", { name: /Avaliar com IA/ })[0];
+    expect(avaliar).toBeEnabled();
+    fireEvent.click(avaliar);
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Ana Beatriz")).toBeInTheDocument();
+    expect(within(dialog).getByText(/Analisando dados de Ana/)).toBeInTheDocument();
+    expect(evaluateClientWithAi).toHaveBeenCalledWith("a", "11111111-1111-4111-8111-111111111111");
   });
 });

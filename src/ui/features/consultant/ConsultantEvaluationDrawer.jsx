@@ -177,9 +177,21 @@ export function ConsultantEvaluationDrawer({ open, organizationId, clientName, o
     run();
   }, [open, organizationId, run]);
 
+  // Fecha no Escape: o painel se anuncia como `aria-modal`, então precisa ser
+  // dispensável pelo teclado — no mobile ele ocupa 92vw e prende a navegação.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") onClose?.();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
+  // `run()` direto, sem tocar em `startedFor`: o guard protege só o efeito de
+  // auto-run, e aqui a intenção do consultor é explícita.
   const retry = () => {
     reset();
-    startedFor.current = organizationId;
     run();
   };
 
