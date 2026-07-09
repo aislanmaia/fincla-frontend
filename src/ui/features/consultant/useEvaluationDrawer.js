@@ -1,0 +1,25 @@
+import { useCallback, useState } from "react";
+
+/**
+ * Estado do drawer "Avaliar com IA", compartilhado pelas três superfícies que
+ * expõem a ação (Carteira, Painel e Relatório).
+ *
+ * O alvo carrega `organizationId` + `clientName` porque o drawer precisa do id
+ * para chamar o endpoint e do nome para o cabeçalho — os três chamadores já têm
+ * o objeto `client` enriquecido em mãos.
+ *
+ * Renderize o drawer **somente quando `target` existir**: assim cada abertura é
+ * uma montagem nova, e o efeito de auto-run parte de um estado limpo.
+ */
+export function useEvaluationDrawer() {
+  const [target, setTarget] = useState(null);
+
+  const openFor = useCallback((client) => {
+    if (!client?.organization_id) return;
+    setTarget({ organizationId: client.organization_id, clientName: client.client_name });
+  }, []);
+
+  const close = useCallback(() => setTarget(null), []);
+
+  return { target, openFor, close };
+}

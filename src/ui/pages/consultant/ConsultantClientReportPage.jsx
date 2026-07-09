@@ -13,6 +13,9 @@ import { useClientMonthlyEvolution } from "../../features/consultant/useClientMo
 import { useConsultantClientProfile } from "../../features/consultant/useConsultantClientProfile";
 import { useGoalsData } from "../../features/goals/useGoalsData";
 import { ConsultantClientReportHeader } from "../../features/consultant/ConsultantClientReportHeader";
+import { ConsultantEvaluationDrawer } from "../../features/consultant/ConsultantEvaluationDrawer.jsx";
+import { useEvaluationDrawer } from "../../features/consultant/useEvaluationDrawer.js";
+import { useCanEvaluateClientWithAi } from "../../features/consultant/consultantAiAccess.js";
 import { ConsultantClientReportTabs } from "../../features/consultant/ConsultantClientReportTabs";
 import { ConsultantClientOverviewTab } from "../../features/consultant/ConsultantClientOverviewTab";
 import { ConsultantClientTransactionsTab } from "../../features/consultant/ConsultantClientTransactionsTab";
@@ -46,6 +49,8 @@ function EmptyState({ title, text, action }) {
  * "não encontrado" (protege deep-links inválidos e ids fora da carteira).
  */
 export function ConsultantClientReportPage() {
+  const evaluation = useEvaluationDrawer();
+  const canEvaluate = useCanEvaluateClientWithAi();
   const { id } = useParams({ strict: false });
   const navigate = useNavigate();
   const { clients, hasLoaded, isLoading, error } = useConsultantClients();
@@ -93,7 +98,8 @@ export function ConsultantClientReportPage() {
           >
             <Icon name="chevron-left" size={15} color="currentColor" /> Clientes
           </button>
-          <ConsultantClientReportHeader client={client} />
+          <ConsultantClientReportHeader client={client}
+            onEvaluate={canEvaluate ? evaluation.openFor : undefined} evaluateLocked={!canEvaluate} />
           <ConsultantClientReportTabs active={tab} onSelect={setTab} />
           {tab === "overview" && (
             <ConsultantClientOverviewTab client={client} health={health} categories={categories} goals={goals} evolution={evolution} profile={profile} />
@@ -117,6 +123,15 @@ export function ConsultantClientReportPage() {
           title="Cliente não encontrado"
           text="Este cliente não está na sua carteira, ou o endereço está incorreto."
           action={backLink}
+        />
+      )}
+
+      {evaluation.target && (
+        <ConsultantEvaluationDrawer
+          open
+          organizationId={evaluation.target.organizationId}
+          clientName={evaluation.target.clientName}
+          onClose={evaluation.close}
         />
       )}
     </div>

@@ -5,12 +5,25 @@ import { Icon } from "./consultantUi";
 
 /**
  * Ações inline de um cliente da carteira (RF.6, fiel à referência
- * `cons-clientes.jsx`): "Avaliar com IA" + "Mensagem" (**Trilha B → stubs
- * desabilitados "em breve"**) e, opcionalmente, "Abrir" (seta). O wrapper para a
- * propagação para não disparar o clique de abrir do card/linha ao interagir aqui.
+ * `cons-clientes.jsx`): "Avaliar com IA" + "Mensagem" e, opcionalmente, "Abrir"
+ * (seta). "Avaliar com IA" está ativo desde a entrega A1 do Consultor IA;
+ * "Mensagem" segue **stub desabilitado "em breve"** (Trilha B / Frente B).
+ * O wrapper para a propagação para não disparar o clique de abrir do card/linha
+ * ao interagir aqui.
+ *
+ * `onEvaluate` ausente mantém o botão de IA desabilitado — assim uma superfície
+ * que ainda não montou o drawer não oferece uma ação que não funciona.
+ * `evaluateLocked` distingue "o plano não inclui" de "em breve": são motivos
+ * diferentes para o mesmo botão apagado, e o consultor merece saber qual é.
  */
-export function ConsultantClientActions({ onOpen, showOpen = false, pending = false, onRegenerate, radius = 8, pad = "7px 9px" }) {
+export function ConsultantClientActions({ onOpen, onEvaluate, evaluateLocked = false, showOpen = false, pending = false, onRegenerate, radius = 8, pad = "7px 9px" }) {
   const neutral = { background: T.surface, border: `1px solid ${T.border}`, borderRadius: radius, padding: pad, display: "flex" };
+  const canEvaluate = typeof onEvaluate === "function" && !evaluateLocked;
+  const evaluateTitle = evaluateLocked
+    ? "Avaliar com IA — disponível no plano Pro"
+    : canEvaluate
+      ? "Avaliar com IA"
+      : "Avaliar com IA (em breve)";
   return (
     <div style={{ display: "flex", gap: 6 }} onClick={(e) => e.stopPropagation()}>
       {pending && (
@@ -19,7 +32,9 @@ export function ConsultantClientActions({ onOpen, showOpen = false, pending = fa
           <Icon name="clock" size={13} color={T.amber} />
         </button>
       )}
-      <button type="button" disabled title="Avaliar com IA (em breve)" style={{ ...neutral, background: T.purpleLight, border: "none", cursor: "default", opacity: 0.6 }}>
+      <button type="button" onClick={canEvaluate ? onEvaluate : undefined} disabled={!canEvaluate}
+        title={evaluateTitle}
+        style={{ ...neutral, background: T.purpleLight, border: "none", cursor: canEvaluate ? "pointer" : "default", opacity: canEvaluate ? 1 : 0.6 }}>
         <Icon name="sparkles" size={13} color={T.purple} />
       </button>
       <button type="button" disabled title="Mensagem (em breve)" style={{ ...neutral, cursor: "default", opacity: 0.6 }}>

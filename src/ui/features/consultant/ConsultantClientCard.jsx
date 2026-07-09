@@ -24,10 +24,10 @@ const debtColor = (v) => (v <= 30 ? T.green : v <= 50 ? T.amber : T.red);
  * Card de um cliente da carteira (RF.6, fiel a `ClientCard` da referência):
  * Avatar + nome + org + `HealthRing`; mini-stats (Patrimônio / Poupança /
  * Comprometimento) + tendência; rodapé com `RiskBadge` + última atividade + ações
- * inline (Avaliar/Mensagem = stubs "em breve"). O card inteiro é clicável → abre o
+ * inline (Avaliar com IA ativo; Mensagem = stub "em breve"). O card inteiro é clicável → abre o
  * relatório. Presentational — dados via `client` (`ConsultantClient` enriquecido).
  */
-export function ConsultantClientCard({ client, onOpenClient, onRegenerate }) {
+export function ConsultantClientCard({ client, onOpenClient, onRegenerate, onEvaluate, evaluateLocked = false }) {
   const savings = Number(client.savings_pct) || 0;
   const debt = Number(client.debt_pct) || 0;
   const trendUp = client.trend === "up";
@@ -63,6 +63,8 @@ export function ConsultantClientCard({ client, onOpenClient, onRegenerate }) {
         <ConsultantClientActions
           pending={!!client.pending_activation}
           onRegenerate={() => onRegenerate?.(client.organization_id)}
+          onEvaluate={onEvaluate ? () => onEvaluate(client) : undefined}
+          evaluateLocked={evaluateLocked}
         />
       </div>
     </Card>

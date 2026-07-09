@@ -16,12 +16,38 @@ const client = {
 };
 
 describe("<ConsultantAttentionList>", () => {
-  it("lists at-risk clients with situation, count, and a disabled 'Avaliar' (Trilha B) stub", () => {
+  it("lists at-risk clients with situation, count, and a disabled 'Avaliar' when no handler is given", () => {
     render(<ConsultantAttentionList clients={[client]} total={1} base={10} loadedOk />);
     expect(screen.getByText("Diego Albuquerque")).toBeInTheDocument();
     expect(screen.getByText(/Gasto maior que a renda/)).toBeInTheDocument();
     expect(screen.getByText("1 de 10")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Avaliar/ })).toBeDisabled();
+  });
+
+  it("fires onEvaluate for the client when the handler is provided", () => {
+    const onEvaluate = vi.fn();
+    const onOpenClient = vi.fn();
+    render(
+      <ConsultantAttentionList clients={[client]} total={1} base={10} loadedOk
+        onEvaluate={onEvaluate} onOpenClient={onOpenClient} />
+    );
+    const avaliar = screen.getByRole("button", { name: /Avaliar/ });
+    expect(avaliar).toBeEnabled();
+    fireEvent.click(avaliar);
+    expect(onEvaluate).toHaveBeenCalledWith(client);
+    expect(onOpenClient).not.toHaveBeenCalled();
+  });
+
+  it("keeps 'Avaliar' locked when the plan lacks consultant_ai", () => {
+    const onEvaluate = vi.fn();
+    render(
+      <ConsultantAttentionList clients={[client]} total={1} base={10} loadedOk
+        onEvaluate={onEvaluate} evaluateLocked />
+    );
+    const avaliar = screen.getByRole("button", { name: /Avaliar/ });
+    expect(avaliar).toBeDisabled();
+    fireEvent.click(avaliar);
+    expect(onEvaluate).not.toHaveBeenCalled();
   });
 
   it("shows the all-clear empty state when loaded ok with no clients", () => {

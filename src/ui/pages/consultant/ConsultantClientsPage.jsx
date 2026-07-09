@@ -11,6 +11,9 @@ import { useConsultantClients } from "../../features/consultant/useConsultantCli
 import { ConsultantClientsToolbar } from "../../features/consultant/ConsultantClientsToolbar";
 import { ConsultantClientCard } from "../../features/consultant/ConsultantClientCard";
 import { ConsultantClientsTable } from "../../features/consultant/ConsultantClientsTable";
+import { ConsultantEvaluationDrawer } from "../../features/consultant/ConsultantEvaluationDrawer.jsx";
+import { useEvaluationDrawer } from "../../features/consultant/useEvaluationDrawer.js";
+import { useCanEvaluateClientWithAi } from "../../features/consultant/consultantAiAccess.js";
 import { Icon } from "../../features/consultant/consultantUi";
 import { fmtMoney } from "../../features/consultant/consultantFormat";
 import { buildClientsCsv, countClientsByBand, selectConsultantClients, totalPatrimonio } from "../../features/consultant/consultantClientsView";
@@ -59,6 +62,8 @@ function ActionButton({ icon, label, onClick, disabled }) {
  * sem-resultado · lista.
  */
 export function ConsultantClientsPage() {
+  const evaluation = useEvaluationDrawer();
+  const canEvaluate = useCanEvaluateClientWithAi();
   const navigate = useNavigate();
   const { openAddClient, clientsVersion, quota } = useAddClient();
   const { clients, total, isLoading, error, hasLoaded, loadedOk, refresh } = useConsultantClients();
@@ -169,11 +174,11 @@ export function ConsultantClientsPage() {
               text="Nenhum cliente corresponde à busca ou ao filtro selecionado. Ajuste os critérios."
             />
           ) : view === "table" ? (
-            <ConsultantClientsTable clients={visible} onOpenClient={openClient} onRegenerate={onRegenerate} />
+            <ConsultantClientsTable clients={visible} onOpenClient={openClient} onRegenerate={onRegenerate} onEvaluate={canEvaluate ? evaluation.openFor : undefined} evaluateLocked={!canEvaluate} />
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14, alignItems: "start" }}>
               {visible.map((client) => (
-                <ConsultantClientCard key={client.organization_id} client={client} onOpenClient={openClient} onRegenerate={onRegenerate} />
+                <ConsultantClientCard key={client.organization_id} client={client} onOpenClient={openClient} onRegenerate={onRegenerate} onEvaluate={canEvaluate ? evaluation.openFor : undefined} evaluateLocked={!canEvaluate} />
               ))}
             </div>
           )}
@@ -197,6 +202,15 @@ export function ConsultantClientsPage() {
       )}
 
       {linkModal && <ActivationLinkModal state={linkModal} onClose={() => setLinkModal(null)} />}
+
+      {evaluation.target && (
+        <ConsultantEvaluationDrawer
+          open
+          organizationId={evaluation.target.organizationId}
+          clientName={evaluation.target.clientName}
+          onClose={evaluation.close}
+        />
+      )}
     </div>
   );
 }
