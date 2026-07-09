@@ -15,9 +15,11 @@ import { useClientEvaluation } from "../useClientEvaluation.js";
 
 const ORG = "org-1";
 
+// Forma REAL do contrato (fincla-api/src/application/ai/contracts.py):
+// watch_points são objetos {metric, note}; ChartSpec tem type/series[].name/kind/color.
 const result = {
   summary: "Cliente comprometeu 61% da renda com dívidas.",
-  health_read: { score: 38, label: "Em risco", headline: "Situação exige ação imediata." },
+  health_read: { score: 38, label: "em risco", headline: "Situação exige ação imediata." },
   action_plan: [
     {
       title: "Renegociar o rotativo do cartão",
@@ -25,10 +27,27 @@ const result = {
       priority: "high",
       evidence: [{ metric: "income_commitment", value: 0.61, source_tool: "get_client_overview" }],
     },
-    { title: "Montar reserva de 1 mês", rationale: "Sem colchão.", priority: "medium", evidence: [] },
+    {
+      title: "Montar reserva de 1 mês",
+      rationale: "Sem colchão.",
+      priority: "medium",
+      evidence: [{ metric: "savings_rate", value: 0.04, source_tool: "get_client_overview" }],
+    },
   ],
-  watch_points: ["Reserva abaixo de 1 mês", "Renda variável"],
-  charts: [{ type: "bar", title: "Gastos por categoria", x: { key: "c" }, series: [{ key: "v" }], data: [{ c: "a", v: 1 }] }],
+  watch_points: [
+    { metric: "emergency_fund_months", note: "Reserva abaixo de 1 mês" },
+    { metric: "income_type", note: "Renda variável" },
+  ],
+  charts: [
+    {
+      type: "bar",
+      title: "Gastos por categoria",
+      x: { key: "label" },
+      series: [{ key: "value", name: "Valor", kind: "bar", color: "purple" }],
+      data: [{ label: "Moradia", value: 3400 }],
+      value_format: "brl0",
+    },
+  ],
   disclaimers: ["Análise de apoio ao consultor."],
 };
 

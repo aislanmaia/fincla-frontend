@@ -1895,44 +1895,65 @@ export interface FinancialHealth {
 }
 
 // ===== CONSULTOR IA — A1 ("Avaliar com IA") =====
-// Contrato canônico: fincla-api/docs/FRONTEND_API_GUIDE.md §17.
-// O modelo nunca gera imagens — só `ChartSpec` JSON, renderizado por <AiChart>.
+// Contrato canônico: fincla-api/src/application/ai/contracts.py (`EvaluateClientOutput`).
+// O `FRONTEND_API_GUIDE.md` §17 documenta o mesmo contrato — se os dois divergirem,
+// o Pydantic ganha. O modelo nunca gera imagens nem hex: só `ChartSpec` com tokens.
 
-/** Um eixo/série de um `ChartSpec`: `key` referencia um campo de `data`. */
-export interface ChartSpecAxis {
+/** Tokens do design system que o modelo pode referenciar. Nunca hex. */
+export type ChartColor = 'green' | 'red' | 'ink' | 'purple' | 'amber' | 'blue';
+
+/** Conjunto FECHADO: cada tipo exige um renderer correspondente no <AiChart>. */
+export type ChartType = 'line' | 'bar' | 'composed' | 'donut';
+
+/** Como a série é desenhada. Relevante sobretudo em `composed`. */
+export type ChartSeriesKind = 'bar' | 'line' | 'area';
+
+/** Formatadores que já existem no FE. O backend escolhe; o FE aplica. */
+export type ChartValueFormat = 'brl0' | 'pct' | 'int';
+
+export type ActionPriority = 'high' | 'medium' | 'low';
+
+export interface ChartSeries {
   key: string;
-  label?: string;
+  name: string;
+  kind: ChartSeriesKind;
+  color: ChartColor;
 }
 
-export interface ChartSpecSeries {
+export interface ChartAxis {
   key: string;
-  label?: string;
-  color?: string;
 }
 
 export interface ChartSpec {
-  type: 'bar' | 'line' | 'area' | 'pie';
-  title?: string;
-  x: ChartSpecAxis;
-  series: ChartSpecSeries[];
-  data: Array<Record<string, string | number>>;
+  type: ChartType;
+  title: string;
+  x: ChartAxis;
+  series: ChartSeries[];
+  data: Array<Record<string, unknown>>;
+  value_format: ChartValueFormat;
 }
 
-/** Evidência que ancora um item do plano de ação a uma tool real (grounding). */
-export interface EvaluateClientEvidence {
+/** Liga um item do plano de ação a uma métrica real de tool (grounding). */
+export interface EvidenceItem {
   metric: string;
-  value: number | string;
+  value: string | number | boolean | null;
   source_tool: string;
 }
 
-export interface EvaluateClientActionItem {
+export interface ActionPlanItem {
   title: string;
   rationale: string;
-  priority: 'high' | 'medium' | 'low';
-  evidence: EvaluateClientEvidence[];
+  priority: ActionPriority;
+  evidence: EvidenceItem[];
 }
 
-export interface EvaluateClientHealthRead {
+/** Indicador a acompanhar. É um OBJETO, não uma string. */
+export interface WatchPoint {
+  metric: string;
+  note: string;
+}
+
+export interface HealthRead {
   score: number;
   label: string;
   headline: string;
@@ -1940,9 +1961,9 @@ export interface EvaluateClientHealthRead {
 
 export interface EvaluateClientOutput {
   summary: string;
-  health_read: EvaluateClientHealthRead;
-  action_plan: EvaluateClientActionItem[];
-  watch_points: string[];
+  health_read: HealthRead;
+  action_plan: ActionPlanItem[];
+  watch_points: WatchPoint[];
   charts: ChartSpec[];
   /** Obrigatório (>= 1) — framing CVM, advisor-facing. */
   disclaimers: string[];

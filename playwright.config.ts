@@ -50,6 +50,12 @@ export default defineConfig({
       testMatch: "**/simulation.spec.ts",
       dependencies: ["smoke"],
     },
+    {
+      // Provisiona o próprio consultor e cliente via API; não depende do seed
+      // do owner, então roda sem `smoke`.
+      name: "consultant-ai-evaluation",
+      testMatch: "**/consultant-ai-evaluation.spec.ts",
+    },
   ],
   use: {
     baseURL,

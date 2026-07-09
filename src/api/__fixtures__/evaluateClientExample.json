@@ -1,0 +1,66 @@
+{
+  "summary": "Rafael compromete 61% da renda com dívidas e poupa apenas 4%. O saldo do mês fechou positivo, mas a reserva cobre menos de um mês de despesas. O rotativo do cartão é o principal dreno.",
+  "health_read": {
+    "score": 38,
+    "label": "em risco",
+    "headline": "Comprometimento de renda alto e reserva insuficiente."
+  },
+  "action_plan": [
+    {
+      "title": "Renegociar o rotativo do cartão",
+      "rationale": "O rotativo concentra a maior fatia do comprometimento de renda e tem o custo mais alto da carteira do cliente.",
+      "priority": "high",
+      "evidence": [
+        { "metric": "income_commitment", "value": 0.61, "source_tool": "get_client_overview" },
+        { "metric": "card_debt_total", "value": 18500.0, "source_tool": "get_client_cards" }
+      ]
+    },
+    {
+      "title": "Construir reserva mínima de um mês",
+      "rationale": "Sem colchão, qualquer imprevisto volta a virar dívida de cartão.",
+      "priority": "medium",
+      "evidence": [
+        { "metric": "savings_rate", "value": 0.04, "source_tool": "get_client_overview" }
+      ]
+    }
+  ],
+  "watch_points": [
+    { "metric": "income_commitment", "note": "Acompanhar mensalmente; acima de 50% o plano precisa ser revisto." },
+    { "metric": "emergency_fund_months", "note": "Meta de 3 meses; hoje abaixo de 1." }
+  ],
+  "charts": [
+    {
+      "type": "donut",
+      "title": "Para onde vai o dinheiro",
+      "x": { "key": "label" },
+      "series": [
+        { "key": "value", "name": "Gasto por categoria", "kind": "bar", "color": "purple" }
+      ],
+      "data": [
+        { "label": "Moradia", "value": 3400 },
+        { "label": "Alimentação", "value": 2100 },
+        { "label": "Cartão/Juros", "value": 1850 }
+      ],
+      "value_format": "brl0"
+    },
+    {
+      "type": "composed",
+      "title": "Receita, despesa e saldo",
+      "x": { "key": "label" },
+      "series": [
+        { "key": "income", "name": "Receita", "kind": "bar", "color": "green" },
+        { "key": "expense", "name": "Despesa", "kind": "bar", "color": "red" },
+        { "key": "balance", "name": "Saldo", "kind": "line", "color": "ink" }
+      ],
+      "data": [
+        { "label": "abr", "income": 14200, "expense": 13100, "balance": 1100 },
+        { "label": "mai", "income": 14200, "expense": 14800, "balance": -600 },
+        { "label": "jun", "income": 14200, "expense": 13500, "balance": 700 }
+      ],
+      "value_format": "brl0"
+    }
+  ],
+  "disclaimers": [
+    "Análise de apoio ao consultor; não constitui recomendação de investimento."
+  ]
+}
