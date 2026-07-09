@@ -117,15 +117,20 @@ export function AiChart({ spec, height = 220 }) {
   );
 
   /** Uma série vira Bar/Line/Area conforme `kind` — o que dá sentido ao `composed`. */
+  // `key` vai direto no JSX, nunca no spread: espalhá-la faz o React avisar e
+  // não a trata como chave de reconciliação.
   const renderSeries = (s) => {
-    const common = { key: s.key, dataKey: s.key, name: s.name || s.key };
+    const common = { dataKey: s.key, name: s.name || s.key };
     if (s.kind === "line") {
-      return <Line {...common} type="monotone" stroke={colorOf(s)} strokeWidth={2} dot={false} />;
+      return <Line key={s.key} {...common} type="monotone" stroke={colorOf(s)} strokeWidth={2} dot={false} />;
     }
     if (s.kind === "area") {
-      return <Area {...common} type="monotone" stroke={colorOf(s)} fill={colorOf(s)} fillOpacity={0.15} strokeWidth={2} />;
+      return (
+        <Area key={s.key} {...common} type="monotone" stroke={colorOf(s)}
+          fill={colorOf(s)} fillOpacity={0.15} strokeWidth={2} />
+      );
     }
-    return <Bar {...common} fill={colorOf(s)} radius={[3, 3, 0, 0]} maxBarSize={22} />;
+    return <Bar key={s.key} {...common} fill={colorOf(s)} radius={[3, 3, 0, 0]} maxBarSize={22} />;
   };
 
   let chart;
