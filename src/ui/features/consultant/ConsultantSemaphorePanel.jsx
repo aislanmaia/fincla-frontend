@@ -15,10 +15,13 @@ import { buildBaseSemaphore } from "./consultantBaseSemaphore";
 export function ConsultantSemaphorePanel({ clients = [], hasLoaded, healthIndex, loading }) {
   const { counts, total, splitAvailable, centerValue } = buildBaseSemaphore({ clients, hasLoaded, healthIndex });
 
+  // "Frágil", não "Em risco": risco é o gatilho por regras de "Precisam de atenção".
+  // "Sem score" só aparece quando existe alguém nele — é um estado transitório.
   const segments = [
     { id: "healthy", label: "Saudável", value: counts.healthy, color: T.green },
     { id: "attention", label: "Atenção", value: counts.attention, color: T.amber },
-    { id: "risk", label: "Em risco", value: counts.risk, color: T.red },
+    { id: "risk", label: "Frágil", value: counts.risk, color: T.red },
+    ...(counts.none > 0 ? [{ id: "none", label: "Sem score", value: counts.none, color: T.inkGhost }] : []),
   ];
 
   const center = (

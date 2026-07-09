@@ -11,7 +11,7 @@ describe("buildBaseSemaphore", () => {
       { organization_id: "d", health: 30 }, // risk (<40)
     ];
     const r = buildBaseSemaphore({ clients, hasLoaded: true, healthIndex: 71.6 });
-    expect(r.counts).toEqual({ healthy: 2, attention: 1, risk: 1 });
+    expect(r.counts).toEqual({ healthy: 2, attention: 1, risk: 1, none: 0 });
     expect(r.total).toBe(4);
     expect(r.splitAvailable).toBe(true);
     expect(r.centerValue).toBe("72"); // saúde média arredondada
@@ -24,6 +24,18 @@ describe("buildBaseSemaphore", () => {
 
   it("centro '—' sem health index; tolera entrada ausente", () => {
     expect(buildBaseSemaphore({ clients: [{ health: 80 }], hasLoaded: true }).centerValue).toBe("—");
-    expect(buildBaseSemaphore().counts).toEqual({ healthy: 0, attention: 0, risk: 0 });
+    expect(buildBaseSemaphore().counts).toEqual({ healthy: 0, attention: 0, risk: 0, none: 0 });
+  });
+});
+
+describe("cliente sem score não infla a fatia de frágil", () => {
+  it("conta `none` separado e não como risco", () => {
+    // `Number(null) || 0` contava um cliente nunca avaliado como 0 => "frágil".
+    const { counts, total } = buildBaseSemaphore({
+      clients: [{ health: 90 }, { health: null }, { health: 20 }],
+      hasLoaded: true,
+    });
+    expect(counts).toEqual({ healthy: 1, attention: 0, risk: 1, none: 1 });
+    expect(counts.healthy + counts.attention + counts.risk + counts.none).toBe(total);
   });
 });

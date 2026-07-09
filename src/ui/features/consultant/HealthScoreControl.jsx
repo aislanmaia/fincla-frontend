@@ -324,7 +324,20 @@ export function HealthScoreControl({
       <button
         type="button"
         onClick={onToggleClick}
-        onFocus={() => setOpen(true)}
+        // Só foco por TECLADO abre (e fixa): sem o pin não haveria como fechar,
+        // já que o fechamento por hover depende do mouse. Um `onFocus` cru abriria
+        // no clique também — e aí o próprio clique, logo em seguida, fecharia.
+        onFocus={(e) => {
+          let keyboard = false;
+          try {
+            keyboard = e.target.matches(":focus-visible");
+          } catch {
+            keyboard = false; // jsdom / browsers sem suporte ao seletor
+          }
+          if (!keyboard) return;
+          setOpen(true);
+          setPinned(true);
+        }}
         aria-expanded={open}
         aria-label={label}
         title="Detalhes da saúde financeira"
