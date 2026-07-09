@@ -49,12 +49,24 @@ describe("<ConsultantClientCard>", () => {
     expect(screen.queryByRole("button", { name: /gerar novo link/i })).not.toBeInTheDocument();
   });
 
-  it("Avaliar/Mensagem são stubs desabilitados (Trilha B) e não abrem o relatório", () => {
+  it("sem onEvaluate, 'Avaliar com IA' fica desabilitado e não abre o relatório", () => {
     const onOpenClient = vi.fn();
     render(<ConsultantClientCard client={client} onOpenClient={onOpenClient} />);
     const avaliar = screen.getByRole("button", { name: /Avaliar com IA/ });
     expect(avaliar).toBeDisabled();
     fireEvent.click(avaliar);
+    expect(onOpenClient).not.toHaveBeenCalled();
+  });
+
+  it("com onEvaluate, 'Avaliar com IA' dispara a avaliação sem abrir o relatório", () => {
+    const onOpenClient = vi.fn();
+    const onEvaluate = vi.fn();
+    render(<ConsultantClientCard client={client} onOpenClient={onOpenClient} onEvaluate={onEvaluate} />);
+    const avaliar = screen.getByRole("button", { name: /Avaliar com IA/ });
+    expect(avaliar).toBeEnabled();
+    fireEvent.click(avaliar);
+    expect(onEvaluate).toHaveBeenCalledWith(client);
+    // O clique não pode borbulhar para o card, que navegaria para o relatório.
     expect(onOpenClient).not.toHaveBeenCalled();
   });
 });

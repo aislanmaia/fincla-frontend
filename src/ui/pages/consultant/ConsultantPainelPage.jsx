@@ -10,6 +10,8 @@ import { getDisplayName } from "../../features/auth/userDisplay.js";
 import { ConsultantKpiCards } from "../../features/consultant/ConsultantKpiCards";
 import { ConsultantSemaphorePanel } from "../../features/consultant/ConsultantSemaphorePanel";
 import { ConsultantAttentionList } from "../../features/consultant/ConsultantAttentionList";
+import { ConsultantEvaluationDrawer } from "../../features/consultant/ConsultantEvaluationDrawer.jsx";
+import { useEvaluationDrawer } from "../../features/consultant/useEvaluationDrawer.js";
 import { ConsultantAiInsightCard } from "../../features/consultant/ConsultantAiInsightCard";
 import { ConsultantActivityFeed } from "../../features/consultant/ConsultantActivityFeed";
 import { Icon, useIsNarrow } from "../../features/consultant/consultantUi";
@@ -64,6 +66,7 @@ function StubActionButton({ icon, label }) {
  * "Relatório com IA" (Trilha B) são stubs.
  */
 export function ConsultantPainelPage() {
+  const evaluation = useEvaluationDrawer();
   const navigate = useNavigate();
   const narrow = useIsNarrow(900);
   const { openAddClient } = useAddClient();
@@ -118,6 +121,7 @@ export function ConsultantPainelPage() {
         error={risk.error}
         onOpenClient={openClient}
         onViewAll={goToWallet}
+        onEvaluate={evaluation.openFor}
       />
       <ConsultantSemaphorePanel
         clients={wallet.clients}
@@ -153,6 +157,15 @@ export function ConsultantPainelPage() {
         {leftColumn}
         {rightColumn}
       </div>
+
+      {evaluation.target && (
+        <ConsultantEvaluationDrawer
+          open
+          organizationId={evaluation.target.organizationId}
+          clientName={evaluation.target.clientName}
+          onClose={evaluation.close}
+        />
+      )}
     </div>
   );
 }

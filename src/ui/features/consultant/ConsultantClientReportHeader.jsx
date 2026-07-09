@@ -7,15 +7,16 @@ import { fmtLastActive } from "./consultantFormat";
 import { Avatar, HealthRing, Icon, RiskBadge } from "./consultantUi";
 
 /** Botão de ação do header. `soon` desabilita com selo "em breve" (Trilha B). */
-function HeaderAction({ variant, icon, label, soon }) {
+function HeaderAction({ variant, icon, label, soon, onClick }) {
   const styles = variant === "purple"
     ? { bg: T.purple, txt: "#fff", brd: T.purple, iconColor: "#fff" }
     : { bg: T.surface, txt: T.inkMid, brd: T.border, iconColor: T.inkMid };
   return (
     <button
       type="button"
+      onClick={onClick}
       disabled={soon}
-      title={soon ? "Em breve" : undefined}
+      title={soon ? "Em breve" : label}
       style={{
         ...G, display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 15px",
         borderRadius: 9, border: `1px solid ${styles.brd}`, background: styles.bg, color: styles.txt,
@@ -37,10 +38,11 @@ function HeaderAction({ variant, icon, label, soon }) {
 /**
  * Cabeçalho do relatório do cliente (RF.1b, S3) — fiel a `cons-relatorio.jsx`:
  * avatar com anel de risco, nome, `RiskBadge`, linha de contexto, `HealthRing` e
- * as ações "Avaliar com IA" / "Enviar mensagem" (Trilha B → stub "em breve").
+ * as ações "Avaliar com IA" (ativa desde a entrega A1) e "Enviar mensagem"
+ * (Frente B → stub "em breve").
  * Presentational; recebe o `client` (item enriquecido da carteira).
  */
-export function ConsultantClientReportHeader({ client }) {
+export function ConsultantClientReportHeader({ client, onEvaluate }) {
   const health = Number(client.health) || 0;
   const tone = { healthy: T.greenLight, attention: T.amberLight, risk: T.redLight };
   const ringBg = health >= 70 ? tone.healthy : health >= 40 ? tone.attention : tone.risk;
@@ -67,7 +69,8 @@ export function ConsultantClientReportHeader({ client }) {
             <div style={{ ...G, fontSize: 9.5, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 5 }}>Saúde</div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <HeaderAction variant="purple" icon="sparkles" label="Avaliar com IA" soon />
+            <HeaderAction variant="purple" icon="sparkles" label="Avaliar com IA"
+              soon={!onEvaluate} onClick={onEvaluate ? () => onEvaluate(client) : undefined} />
             <HeaderAction variant="outline" icon="message" label="Enviar mensagem" soon />
           </div>
         </div>

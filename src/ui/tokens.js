@@ -35,5 +35,7 @@ export const T = {
   sm: "0 1px 2px rgba(0,0,0,0.05)",
   md: "0 4px 12px rgba(0,0,0,0.07)",
   lg: "0 8px 28px rgba(0,0,0,0.10)",
+  // Sombra de painel flutuante (drawer). Portada da referência `cons-shared.jsx`.
+  xl: "0 16px 48px rgba(0,0,0,0.14)",
   dark: "0 8px 32px rgba(0,0,0,0.35)",
 };

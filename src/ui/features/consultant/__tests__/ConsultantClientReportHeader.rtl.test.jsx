@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ConsultantClientReportHeader } from "../ConsultantClientReportHeader.jsx";
 
@@ -34,11 +34,22 @@ describe("ConsultantClientReportHeader", () => {
     expect(screen.getByText(/ativo em 28\/06\/2026/)).toBeInTheDocument();
   });
 
-  it("as ações de IA/mensagem ficam como stub 'em breve' (desabilitadas)", () => {
+  it("sem onEvaluate, a ação de IA fica como stub 'em breve' (desabilitada)", () => {
     render(<ConsultantClientReportHeader client={client()} />);
     const ai = screen.getByRole("button", { name: /Avaliar com IA/ });
     const msg = screen.getByRole("button", { name: /Enviar mensagem/ });
     expect(ai).toBeDisabled();
     expect(msg).toBeDisabled();
+  });
+
+  it("com onEvaluate, 'Avaliar com IA' fica ativo; 'Enviar mensagem' segue stub (Frente B)", () => {
+    const onEvaluate = vi.fn();
+    const c = client();
+    render(<ConsultantClientReportHeader client={c} onEvaluate={onEvaluate} />);
+    const ai = screen.getByRole("button", { name: /Avaliar com IA/ });
+    expect(ai).toBeEnabled();
+    fireEvent.click(ai);
+    expect(onEvaluate).toHaveBeenCalledWith(c);
+    expect(screen.getByRole("button", { name: /Enviar mensagem/ })).toBeDisabled();
   });
 });

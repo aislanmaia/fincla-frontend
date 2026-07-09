@@ -55,6 +55,19 @@ export const ANIM_CSS = `
     from { opacity: 1; }
     to   { opacity: 0; }
   }
+  /* Drawer lateral (AiDrawer da referência cons-copiloto.jsx).
+     slideInRight desloca só 18px — suficiente para um card, não para um
+     painel de 440px, que precisa entrar da borda da viewport. */
+  @keyframes slideInPanel {
+    from { transform: translateX(100%); }
+    to   { transform: translateX(0);    }
+  }
+  .ai-spin { animation: spin 0.7s linear infinite; }
+  .ai-shimmer {
+    background: linear-gradient(90deg, #F3F4F6, #E9EBEF, #F3F4F6);
+    background-size: 200% 100%;
+    animation: shimmer 1.2s linear infinite;
+  }
   /* DragScrollTabs — hide native scrollbar everywhere */
   .dstabs-scroll { -webkit-overflow-scrolling: touch; }
   .dstabs-scroll::-webkit-scrollbar { display: none; width: 0; height: 0; }

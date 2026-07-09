@@ -18,6 +18,8 @@ import type {
   ClientsAtRiskQuery,
   ClientsAtRiskResponse,
   FinancialHealthIndexResponse,
+  AiEvaluationRequest,
+  AiEvaluationResponse,
 } from './types';
 
 export const getConsultantSummary = async (
@@ -206,5 +208,58 @@ export interface ConsultantQuota {
 /** Plan client quota: how many clients the consultant may still add. */
 export const getConsultantQuota = async (): Promise<ConsultantQuota> => {
   const response = await apiClient.get<ConsultantQuota>('/consultant/quota');
+  return response.data;
+};
+
+// ===== Consultor IA — A1 ("Avaliar com IA") =====
+
+/**
+ * Gera o `correlation_id` da avaliação.
+ *
+ * Precisa ser um **UUID**: o backend responde `400` para um `X-Request-Id`
+ * malformado (ele não substitui o id em silêncio, senão cada retry geraria um
+ * correlation_id novo e a run cara re-executaria). `crypto.randomUUID` exige
+ * secure context; o fallback cobre http:// em dev e jsdom antigo.
+ */
+export const newEvaluationRequestId = (): string => {
+  const c = globalThis.crypto;
+  if (c && typeof c.randomUUID === 'function') return c.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (ch) => {
+    const r = (Math.random() * 16) | 0;
+    const v = ch === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
+
+/**
+ * O backend tem budget de wall-clock de ~55s (`LLM_TOTAL_BUDGET_SECONDS`) e
+ * ainda roda tools + audit por cima. O timeout de write padrão do `apiClient`
+ * (30s) abortaria a avaliação no meio, então esta chamada pede mais folga.
+ */
+const AI_EVALUATION_TIMEOUT_MS = 90_000;
+
+/**
+ * `POST /v1/consultant/clients/{organization_id}/ai-evaluation` — roda a Skill
+ * `evaluate-client` contra UM cliente. Requer a feature `consultant_ai`.
+ *
+ * O escopo do tenant vem do path + sessão autenticada, nunca do body.
+ *
+ * `requestId` é ecoado como `correlation_id` em todas as respostas (sucesso e
+ * erro) e é a **chave de idempotência**: repetir o mesmo id devolve `409`.
+ * Para um retry legítimo, gere um novo id com `newEvaluationRequestId()`.
+ */
+export const evaluateClientWithAi = async (
+  organizationId: string,
+  requestId: string,
+  body: AiEvaluationRequest = {}
+): Promise<AiEvaluationResponse> => {
+  const response = await apiClient.post<AiEvaluationResponse>(
+    `/consultant/clients/${organizationId}/ai-evaluation`,
+    body,
+    {
+      headers: { 'X-Request-Id': requestId },
+      timeout: AI_EVALUATION_TIMEOUT_MS,
+    }
+  );
   return response.data;
 };

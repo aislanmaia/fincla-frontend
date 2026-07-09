@@ -1893,3 +1893,69 @@ export interface FinancialHealth {
   cash_flow_risk: 'low' | 'medium' | 'high';
   score: number; // 0..100
 }
+
+// ===== CONSULTOR IA — A1 ("Avaliar com IA") =====
+// Contrato canônico: fincla-api/docs/FRONTEND_API_GUIDE.md §17.
+// O modelo nunca gera imagens — só `ChartSpec` JSON, renderizado por <AiChart>.
+
+/** Um eixo/série de um `ChartSpec`: `key` referencia um campo de `data`. */
+export interface ChartSpecAxis {
+  key: string;
+  label?: string;
+}
+
+export interface ChartSpecSeries {
+  key: string;
+  label?: string;
+  color?: string;
+}
+
+export interface ChartSpec {
+  type: 'bar' | 'line' | 'area' | 'pie';
+  title?: string;
+  x: ChartSpecAxis;
+  series: ChartSpecSeries[];
+  data: Array<Record<string, string | number>>;
+}
+
+/** Evidência que ancora um item do plano de ação a uma tool real (grounding). */
+export interface EvaluateClientEvidence {
+  metric: string;
+  value: number | string;
+  source_tool: string;
+}
+
+export interface EvaluateClientActionItem {
+  title: string;
+  rationale: string;
+  priority: 'high' | 'medium' | 'low';
+  evidence: EvaluateClientEvidence[];
+}
+
+export interface EvaluateClientHealthRead {
+  score: number;
+  label: string;
+  headline: string;
+}
+
+export interface EvaluateClientOutput {
+  summary: string;
+  health_read: EvaluateClientHealthRead;
+  action_plan: EvaluateClientActionItem[];
+  watch_points: string[];
+  charts: ChartSpec[];
+  /** Obrigatório (>= 1) — framing CVM, advisor-facing. */
+  disclaimers: string[];
+}
+
+export interface AiEvaluationRequest {
+  /** Continuidade de sessão Agno. A1 é one-shot — normalmente ausente. */
+  session_id?: string;
+}
+
+export interface AiEvaluationResponse {
+  correlation_id: string;
+  session_id: string;
+  run_id: string;
+  output: EvaluateClientOutput;
+}

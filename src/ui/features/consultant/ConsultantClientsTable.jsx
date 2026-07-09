@@ -12,7 +12,7 @@ const TD = { ...G, fontSize: 13, color: T.ink, padding: "12px 18px", borderTop: 
 
 const debtColor = (v) => (v <= 30 ? T.green : v <= 50 ? T.amber : T.red);
 
-function Row({ client, onOpenClient, onRegenerate }) {
+function Row({ client, onOpenClient, onRegenerate, onEvaluate }) {
   const debt = Number(client.debt_pct) || 0;
   const trendUp = client.trend === "up";
   const trendDown = client.trend === "down";
@@ -51,6 +51,7 @@ function Row({ client, onOpenClient, onRegenerate }) {
             showOpen
             pending={!!client.pending_activation}
             onRegenerate={() => onRegenerate?.(client.organization_id)}
+            onEvaluate={onEvaluate ? () => onEvaluate(client) : undefined}
             radius={7}
             pad="6px 8px"
           />
@@ -66,7 +67,7 @@ function Row({ client, onOpenClient, onRegenerate }) {
  * Tendência · ações. Linha clicável → relatório. `clients` já filtrados/ordenados
  * pela página. Rola horizontalmente no mobile (largura total, sem faixas laterais).
  */
-export function ConsultantClientsTable({ clients = [], onOpenClient, onRegenerate }) {
+export function ConsultantClientsTable({ clients = [], onOpenClient, onRegenerate, onEvaluate }) {
   return (
     <Card style={{ padding: 0, overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
@@ -82,7 +83,7 @@ export function ConsultantClientsTable({ clients = [], onOpenClient, onRegenerat
         </thead>
         <tbody>
           {clients.map((client) => (
-            <Row key={client.organization_id} client={client} onOpenClient={onOpenClient} onRegenerate={onRegenerate} />
+            <Row key={client.organization_id} client={client} onOpenClient={onOpenClient} onRegenerate={onRegenerate} onEvaluate={onEvaluate} />
           ))}
         </tbody>
       </table>

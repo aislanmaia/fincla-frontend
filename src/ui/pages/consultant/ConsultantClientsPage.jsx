@@ -11,6 +11,8 @@ import { useConsultantClients } from "../../features/consultant/useConsultantCli
 import { ConsultantClientsToolbar } from "../../features/consultant/ConsultantClientsToolbar";
 import { ConsultantClientCard } from "../../features/consultant/ConsultantClientCard";
 import { ConsultantClientsTable } from "../../features/consultant/ConsultantClientsTable";
+import { ConsultantEvaluationDrawer } from "../../features/consultant/ConsultantEvaluationDrawer.jsx";
+import { useEvaluationDrawer } from "../../features/consultant/useEvaluationDrawer.js";
 import { Icon } from "../../features/consultant/consultantUi";
 import { fmtMoney } from "../../features/consultant/consultantFormat";
 import { buildClientsCsv, countClientsByBand, selectConsultantClients, totalPatrimonio } from "../../features/consultant/consultantClientsView";
@@ -59,6 +61,7 @@ function ActionButton({ icon, label, onClick, disabled }) {
  * sem-resultado · lista.
  */
 export function ConsultantClientsPage() {
+  const evaluation = useEvaluationDrawer();
   const navigate = useNavigate();
   const { openAddClient, clientsVersion, quota } = useAddClient();
   const { clients, total, isLoading, error, hasLoaded, loadedOk, refresh } = useConsultantClients();
@@ -169,11 +172,11 @@ export function ConsultantClientsPage() {
               text="Nenhum cliente corresponde à busca ou ao filtro selecionado. Ajuste os critérios."
             />
           ) : view === "table" ? (
-            <ConsultantClientsTable clients={visible} onOpenClient={openClient} onRegenerate={onRegenerate} />
+            <ConsultantClientsTable clients={visible} onOpenClient={openClient} onRegenerate={onRegenerate} onEvaluate={evaluation.openFor} />
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14, alignItems: "start" }}>
               {visible.map((client) => (
-                <ConsultantClientCard key={client.organization_id} client={client} onOpenClient={openClient} onRegenerate={onRegenerate} />
+                <ConsultantClientCard key={client.organization_id} client={client} onOpenClient={openClient} onRegenerate={onRegenerate} onEvaluate={evaluation.openFor} />
               ))}
             </div>
           )}
