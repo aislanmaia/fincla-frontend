@@ -15,6 +15,10 @@ vi.mock("../../../routing/finclaPageContext.jsx", () => ({
 
 vi.mock("../../../../api/consultant", () => ({
   getConsultantClients: vi.fn(),
+  // A Carteira cruza `clients-at-risk` para marcar o selo de alerta no card:
+  // risco é outro eixo que saúde, e sem isto ele ficaria invisível aqui.
+  getClientsAtRisk: vi.fn(() => Promise.resolve({ clients: [], total: 0 })),
+  recomputeClientHealth: vi.fn(),
   evaluateClientWithAi: vi.fn(),
   newEvaluationRequestId: vi.fn(() => "11111111-1111-4111-8111-111111111111"),
 }));
@@ -83,12 +87,12 @@ describe("ConsultantClientsPage", () => {
     expect(within(table).getByText("Ana Beatriz")).toBeInTheDocument();
   });
 
-  it("filtra por faixa de risco (Em risco → só Carla)", async () => {
+  it("filtra por faixa de saúde (Frágil → só Carla)", async () => {
     vi.mocked(getConsultantClients).mockResolvedValue({ total: 2, clients: [ana, carla] });
     render(<ConsultantClientsPage />);
     await waitFor(() => expect(screen.getByText("Ana Beatriz")).toBeInTheDocument());
 
-    fireEvent.click(screen.getByRole("button", { name: /Em risco/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Frágil/ }));
     expect(screen.getByText("Carla Dias")).toBeInTheDocument();
     expect(screen.queryByText("Ana Beatriz")).not.toBeInTheDocument();
   });

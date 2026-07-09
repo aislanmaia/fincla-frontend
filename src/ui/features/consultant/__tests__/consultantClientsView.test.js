@@ -42,7 +42,7 @@ describe("clientHealthBand", () => {
 
 describe("catálogos (ids em inglês, labels PT-BR)", () => {
   it("expõe os filtros de risco começando por 'all'", () => {
-    expect(RISK_FILTERS.map((f) => f.id)).toEqual(["all", "risk", "attention", "healthy"]);
+    expect(RISK_FILTERS.map((f) => f.id)).toEqual(["all", "risk", "attention", "healthy", "none"]);
     expect(RISK_FILTERS.every((f) => typeof f.label === "string" && f.label.length > 0)).toBe(true);
   });
   it("expõe as chaves de ordenação saúde/patrimônio/nome", () => {
@@ -126,10 +126,10 @@ describe("selectConsultantClients — pureza e combinação", () => {
 describe("countClientsByBand", () => {
   it("conta all + por faixa de saúde", () => {
     // ana 92 (healthy), bruno 55 (attention), carla 30 (risk)
-    expect(countClientsByBand(all)).toEqual({ all: 3, healthy: 1, attention: 1, risk: 1 });
+    expect(countClientsByBand(all)).toEqual({ all: 3, healthy: 1, attention: 1, risk: 1, none: 0 });
   });
   it("tolera entrada ausente", () => {
-    expect(countClientsByBand(null)).toEqual({ all: 0, healthy: 0, attention: 0, risk: 0 });
+    expect(countClientsByBand(null)).toEqual({ all: 0, healthy: 0, attention: 0, risk: 0, none: 0 });
   });
 });
 

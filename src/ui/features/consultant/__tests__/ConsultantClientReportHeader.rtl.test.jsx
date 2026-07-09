@@ -24,7 +24,7 @@ describe("ConsultantClientReportHeader", () => {
     render(<ConsultantClientReportHeader client={client()} />);
     expect(screen.getByText("Mariana Costa")).toBeInTheDocument();
     expect(screen.getByText("MC")).toBeInTheDocument(); // avatar
-    expect(screen.getByText("Em dia")).toBeInTheDocument(); // RiskBadge (health 82)
+    expect(screen.getByText("Saudável")).toBeInTheDocument(); // RiskBadge (health 82)
     expect(screen.getByText("82")).toBeInTheDocument(); // HealthRing
   });
 

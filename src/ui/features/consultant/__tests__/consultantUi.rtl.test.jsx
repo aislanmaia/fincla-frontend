@@ -59,11 +59,11 @@ describe("Avatar", () => {
 describe("RiskBadge", () => {
   it("rotula pela faixa de saúde", () => {
     const { rerender } = render(<RiskBadge health={90} />);
-    expect(screen.getByText("Em dia")).toBeInTheDocument();
+    expect(screen.getByText("Saudável")).toBeInTheDocument();
     rerender(<RiskBadge health={50} />);
     expect(screen.getByText("Atenção")).toBeInTheDocument();
     rerender(<RiskBadge health={20} />);
-    expect(screen.getByText("Em risco")).toBeInTheDocument();
+    expect(screen.getByText("Frágil")).toBeInTheDocument();
   });
 });
 

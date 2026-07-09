@@ -65,9 +65,9 @@ describe("fmtLastActive", () => {
 
 describe("healthTone — faixa por saúde", () => {
   it("rotula em dia / atenção / em risco", () => {
-    expect(healthTone(92).label).toBe("Em dia");
+    expect(healthTone(92).label).toBe("Saudável");
     expect(healthTone(55).label).toBe("Atenção");
-    expect(healthTone(30).label).toBe("Em risco");
+    expect(healthTone(30).label).toBe("Frágil");
   });
 });
 

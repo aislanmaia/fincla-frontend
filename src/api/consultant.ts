@@ -1,5 +1,6 @@
 import apiClient from './client';
 import type {
+  ClientHealthResponse,
   ConsultantSummaryQuery,
   ConsultantSummaryResponse,
   ConsultantClientsResponse,
@@ -55,6 +56,20 @@ export const getFinancialHealthIndex = async (
   const response = await apiClient.get<FinancialHealthIndexResponse>(
     '/consultant/financial-health-index',
     { params }
+  );
+  return response.data;
+};
+
+/**
+ * Força o recálculo do snapshot canônico de saúde de UM cliente.
+ *
+ * A carteira preenche as lacunas sozinha, mas com teto por request; este endpoint
+ * é a saída explícita do consultor quando o score está velho ou ainda pendente.
+ * Depois de um 200, invalide a query da carteira para o anel refletir o número novo.
+ */
+export const recomputeClientHealth = async (organizationId: string): Promise<ClientHealthResponse> => {
+  const response = await apiClient.post<ClientHealthResponse>(
+    `/consultant/clients/${organizationId}/health/recompute`
   );
   return response.data;
 };

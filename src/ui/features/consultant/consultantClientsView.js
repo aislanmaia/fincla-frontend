@@ -10,19 +10,39 @@
  * Faixa de saúde 0–100 (maior = melhor): em dia ≥70 · atenção 40–69 · em risco <40.
  * `health` (índice de saúde) e o `risk_score` de `ConsultantAttentionList` são
  * campos calculados de forma independente no backend — não são complementares.
+ *
+ * `health == null` = **ainda não calculado**, e não zero. O backend só tem score
+ * depois que o snapshot canônico (`financial_health_scores`) existe. Um cliente
+ * não avaliado não pode ser pintado de vermelho: ele recebe a faixa neutra
+ * `"none"`, que não aparece em nenhum filtro de risco.
  */
+export const HEALTH_BAND_NONE = "none";
+
 export function clientHealthBand(health) {
+  if (health == null || Number.isNaN(Number(health))) return HEALTH_BAND_NONE;
   if (health >= 70) return "healthy";
   if (health >= 40) return "attention";
   return "risk";
 }
 
-/** Filtros de risco — 'all' primeiro; os demais casam com `clientHealthBand`. */
+/**
+ * Filtros por faixa de SAÚDE — 'all' primeiro; os demais casam com `clientHealthBand`.
+ *
+ * Os rótulos descrevem o **nível** de saúde, não risco. "Em risco" ficou reservado
+ * para a lista do Painel (`clients-at-risk`), que é outra coisa: um **gatilho** por
+ * regras ("gasto > renda em 4 meses"), com motivo textual e limiares configuráveis.
+ *
+ * Os dois são ortogonais. Cliente sem transação nenhuma tem saúde baixa e risco
+ * ZERO; cliente com patrimônio alto pode estar gastando mais do que ganha há 4
+ * meses — saúde boa, risco real. Chamar a faixa `<40` de "Em risco" fazia parecer
+ * que um substituía o outro.
+ */
 export const RISK_FILTERS = [
   { id: "all", label: "Todos" },
-  { id: "risk", label: "Em risco" },
+  { id: "risk", label: "Frágil" },
   { id: "attention", label: "Atenção" },
-  { id: "healthy", label: "Em dia" },
+  { id: "healthy", label: "Saudável" },
+  { id: HEALTH_BAND_NONE, label: "Sem score" },
 ];
 
 /** Chaves de ordenação (saúde/patrimônio/nome). */
@@ -38,8 +58,10 @@ export const SORT_OPTIONS = [
  */
 export function countClientsByBand(clients) {
   const list = Array.isArray(clients) ? clients : [];
-  const counts = { all: list.length, healthy: 0, attention: 0, risk: 0 };
-  for (const c of list) counts[clientHealthBand(Number(c?.health) || 0)] += 1;
+  // `none` conta separado: cliente sem score não é "em risco". `Number(x) || 0`
+  // transformaria `null` em 0 e o jogaria na pior faixa.
+  const counts = { all: list.length, healthy: 0, attention: 0, risk: 0, none: 0 };
+  for (const c of list) counts[clientHealthBand(c?.health)] += 1;
   return counts;
 }
 
@@ -57,11 +79,11 @@ function normalize(text) {
     .replace(/[̀-ͯ]/g, "");
 }
 
-/** Valor comparável de uma chave de ordenação. */
+/** Valor comparável de uma chave de ordenação. `null` em `health` vira `null`, não 0. */
 function sortValue(clientItem, sortKey) {
   if (sortKey === "patrimonio") return Number.parseFloat(clientItem.patrimonio) || 0;
   if (sortKey === "name") return normalize(clientItem.client_name || clientItem.organization_name);
-  return Number(clientItem.health) || 0; // health (default)
+  return clientItem.health == null ? null : Number(clientItem.health);
 }
 
 /**
@@ -85,6 +107,11 @@ export function selectConsultantClients(clients, { query = "", riskFilter = "all
     const va = sortValue(a, sortKey);
     const vb = sortValue(b, sortKey);
     if (typeof va === "string") return va.localeCompare(vb, "pt-BR") * dir;
+    // Sem score vai SEMPRE para o fim, independente da direção: ele não é "pior"
+    // nem "melhor" que ninguém — não há diagnóstico para ordenar.
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
     return (va - vb) * dir;
   });
 }
@@ -104,7 +131,8 @@ export function buildClientsCsv(clients) {
   const rows = list.map((c) => [
     csvCell(c?.client_name),
     csvCell(c?.organization_name),
-    Math.round(Number(c?.health) || 0),
+    // Sem score exporta vazio, não `0`: uma planilha com 0 vira um diagnóstico falso.
+    c?.health == null ? "" : Math.round(Number(c.health)),
     Number.parseFloat(c?.patrimonio) || 0,
     Number.parseFloat(c?.balance) || 0,
     Number(c?.savings_pct) || 0,

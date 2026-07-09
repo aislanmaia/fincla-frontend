@@ -67,6 +67,7 @@ export function Icon({ name, size = 16, color = "currentColor", strokeWidth = 1.
     case "repeat": return (<svg {...p}><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>);
     case "file": return (<svg {...p}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>);
     case "clock": return (<svg {...p}><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>);
+    case "refresh": return (<svg {...p}><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>);
     case "pencil": return (<svg {...p}><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>);
     case "flag": return (<svg {...p}><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>);
     case "trending": return (<svg {...p}><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>);
@@ -134,21 +135,29 @@ export function RiskBadge({ health }) {
 /** Anel de score de saúde (0–100). */
 export function HealthRing({ health, size = 56, stroke = 5, showNum = true }) {
   const r = healthTone(health);
-  const value = Math.max(0, Math.min(100, Math.round(Number(health) || 0)));
+  const empty = health == null;
+  const value = empty ? null : Math.max(0, Math.min(100, Math.round(Number(health))));
   const radius = (size - stroke) / 2;
   const circ = 2 * Math.PI * radius;
-  const off = circ * (1 - value / 100);
+  const off = empty ? circ : circ * (1 - value / 100);
   return (
     <div style={{ position: "relative", width: size, height: size, flexShrink: 0 }}>
       <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
-        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={T.grayLight} strokeWidth={stroke} />
-        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={r.color} strokeWidth={stroke}
-          strokeDasharray={circ} strokeDashoffset={off} strokeLinecap="round"
-          style={{ transition: "stroke-dashoffset 0.9s cubic-bezier(0.16,1,0.3,1)" }} />
+        {/* Score ausente: trilho pontilhado, sem arco. Desenhar um arco de 0%
+            pintaria de vermelho um cliente que ninguém avaliou. */}
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={T.grayLight} strokeWidth={stroke}
+          strokeDasharray={empty ? "3 4" : undefined} strokeLinecap={empty ? "round" : undefined} />
+        {!empty && (
+          <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={r.color} strokeWidth={stroke}
+            strokeDasharray={circ} strokeDashoffset={off} strokeLinecap="round"
+            style={{ transition: "stroke-dashoffset 0.9s cubic-bezier(0.16,1,0.3,1)" }} />
+        )}
       </svg>
       {showNum && (
         <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <span style={{ ...G, ...NUM, fontSize: size * 0.3, fontWeight: 800, color: r.color, lineHeight: 1 }}>{value}</span>
+          <span style={{ ...G, ...NUM, fontSize: size * 0.3, fontWeight: 800, color: r.color, lineHeight: 1 }}>
+            {empty ? "—" : value}
+          </span>
         </div>
       )}
     </div>

@@ -11,6 +11,8 @@ const FILTER_TONE = {
   healthy: { color: T.green, bg: T.greenLight, dot: T.green, activeText: T.green },
   attention: { color: T.amber, bg: T.amberLight, dot: T.amber, activeText: T.amber },
   risk: { color: T.red, bg: T.redLight, dot: T.red, activeText: T.red },
+  // Sem score: neutro. Nem verde nem vermelho — não há diagnóstico.
+  none: { color: T.inkGhost, bg: T.grayLight, dot: T.inkGhost, activeText: T.inkMid },
 };
 
 function FilterPill({ id, label, count, active, onClick }) {
@@ -51,7 +53,7 @@ export function ConsultantClientsToolbar({
   sortKey, onSortKeyChange,
   sortDir, onSortDirChange,
   view, onViewChange,
-  counts = { all: 0, healthy: 0, attention: 0, risk: 0 },
+  counts = { all: 0, healthy: 0, attention: 0, risk: 0, none: 0 },
 }) {
   return (
     <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
@@ -67,17 +69,21 @@ export function ConsultantClientsToolbar({
         />
       </div>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }} role="group" aria-label="Filtrar por risco">
-        {RISK_FILTERS.map((f) => (
-          <FilterPill
-            key={f.id}
-            id={f.id}
-            label={f.label}
-            count={counts[f.id] ?? 0}
-            active={riskFilter === f.id}
-            onClick={() => onRiskFilterChange(f.id)}
-          />
-        ))}
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }} role="group" aria-label="Filtrar por faixa de saúde">
+        {RISK_FILTERS
+          // "Sem score" é um estado transitório (o backend preenche o snapshot nas
+          // próximas visitas): só aparece quando há alguém nele, ou quando está ativo.
+          .filter((f) => f.id !== "none" || (counts.none ?? 0) > 0 || riskFilter === "none")
+          .map((f) => (
+            <FilterPill
+              key={f.id}
+              id={f.id}
+              label={f.label}
+              count={counts[f.id] ?? 0}
+              active={riskFilter === f.id}
+              onClick={() => onRiskFilterChange(f.id)}
+            />
+          ))}
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: "auto" }}>

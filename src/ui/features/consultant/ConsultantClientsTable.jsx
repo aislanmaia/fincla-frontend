@@ -4,7 +4,8 @@ import { Card } from "../../components/primitives";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { fmtMoney, fmtPct } from "./consultantFormat";
-import { Avatar, HealthRing, Icon, RiskBadge } from "./consultantUi";
+import { Avatar, Icon, RiskBadge } from "./consultantUi";
+import { HealthScoreControl } from "./HealthScoreControl";
 import { ConsultantClientActions } from "./ConsultantClientActions";
 
 const TH = { ...G, fontSize: 10, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "left", padding: "11px 18px", whiteSpace: "nowrap", background: T.bg };
@@ -12,7 +13,7 @@ const TD = { ...G, fontSize: 13, color: T.ink, padding: "12px 18px", borderTop: 
 
 const debtColor = (v) => (v <= 30 ? T.green : v <= 50 ? T.amber : T.red);
 
-function Row({ client, onOpenClient, onRegenerate, onEvaluate, evaluateLocked }) {
+function Row({ client, onOpenClient, onRegenerate, onEvaluate, onRecomputeHealth, evaluateLocked }) {
   const debt = Number(client.debt_pct) || 0;
   const trendUp = client.trend === "up";
   const trendDown = client.trend === "down";
@@ -33,7 +34,14 @@ function Row({ client, onOpenClient, onRegenerate, onEvaluate, evaluateLocked })
       </td>
       <td style={TD}>
         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-          <HealthRing health={client.health} size={32} stroke={4} />
+          <HealthScoreControl
+            health={client.health}
+            computedAt={client.health_computed_at}
+            size={32}
+            stroke={4}
+            align="left"
+            onRecompute={() => onRecomputeHealth?.(client.organization_id)}
+          />
           <RiskBadge health={client.health} />
         </div>
       </td>
@@ -68,7 +76,7 @@ function Row({ client, onOpenClient, onRegenerate, onEvaluate, evaluateLocked })
  * Tendência · ações. Linha clicável → relatório. `clients` já filtrados/ordenados
  * pela página. Rola horizontalmente no mobile (largura total, sem faixas laterais).
  */
-export function ConsultantClientsTable({ clients = [], onOpenClient, onRegenerate, onEvaluate, evaluateLocked = false }) {
+export function ConsultantClientsTable({ clients = [], onOpenClient, onRegenerate, onEvaluate, onRecomputeHealth, evaluateLocked = false }) {
   return (
     <Card style={{ padding: 0, overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
@@ -84,7 +92,15 @@ export function ConsultantClientsTable({ clients = [], onOpenClient, onRegenerat
         </thead>
         <tbody>
           {clients.map((client) => (
-            <Row key={client.organization_id} client={client} onOpenClient={onOpenClient} onRegenerate={onRegenerate} onEvaluate={onEvaluate} evaluateLocked={evaluateLocked} />
+            <Row
+              key={client.organization_id}
+              client={client}
+              onOpenClient={onOpenClient}
+              onRegenerate={onRegenerate}
+              onEvaluate={onEvaluate}
+              onRecomputeHealth={onRecomputeHealth}
+              evaluateLocked={evaluateLocked}
+            />
           ))}
         </tbody>
       </table>

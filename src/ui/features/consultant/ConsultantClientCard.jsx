@@ -4,7 +4,8 @@ import { Card } from "../../components/primitives";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { fmtLastActive, fmtMoney, fmtPct } from "./consultantFormat";
-import { Avatar, HealthRing, Icon, RiskBadge } from "./consultantUi";
+import { Avatar, Icon, RiskBadge } from "./consultantUi";
+import { HealthScoreControl } from "./HealthScoreControl";
 import { ConsultantClientActions } from "./ConsultantClientActions";
 
 function MiniStat({ label, value, color = T.ink }) {
@@ -27,7 +28,7 @@ const debtColor = (v) => (v <= 30 ? T.green : v <= 50 ? T.amber : T.red);
  * inline (Avaliar com IA ativo; Mensagem = stub "em breve"). O card inteiro é clicável → abre o
  * relatório. Presentational — dados via `client` (`ConsultantClient` enriquecido).
  */
-export function ConsultantClientCard({ client, onOpenClient, onRegenerate, onEvaluate, evaluateLocked = false }) {
+export function ConsultantClientCard({ client, onOpenClient, onRegenerate, onEvaluate, onRecomputeHealth, riskAlert, evaluateLocked = false }) {
   const savings = Number(client.savings_pct) || 0;
   const debt = Number(client.debt_pct) || 0;
   const trendUp = client.trend === "up";
@@ -45,7 +46,14 @@ export function ConsultantClientCard({ client, onOpenClient, onRegenerate, onEva
           <div style={{ ...G, fontSize: 14, fontWeight: 700, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{client.client_name}</div>
           <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{client.organization_name}</div>
         </div>
-        <HealthRing health={client.health} size={44} stroke={4.5} />
+        <HealthScoreControl
+          health={client.health}
+          computedAt={client.health_computed_at}
+          size={44}
+          stroke={4.5}
+          align="right"
+          onRecompute={() => onRecomputeHealth?.(client.organization_id)}
+        />
       </div>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "11px 0", borderTop: `1px solid ${T.border}`, borderBottom: `1px solid ${T.border}` }}>
@@ -59,6 +67,17 @@ export function ConsultantClientCard({ client, onOpenClient, onRegenerate, onEva
 
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <RiskBadge health={client.health} />
+        {/* Risco é OUTRO eixo: um gatilho por regras, com motivo. Um cliente pode
+            ter saúde boa e ainda assim precisar de um telefonema hoje. */}
+        {riskAlert && (
+          <span
+            title={riskAlert}
+            style={{ ...G, fontSize: 10, color: T.red, background: T.redLight, borderRadius: 99, padding: "2px 7px", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4, maxWidth: 150, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}
+          >
+            <Icon name="alert" size={10} color={T.red} />
+            {riskAlert}
+          </span>
+        )}
         <span style={{ ...G, fontSize: 10.5, color: T.inkGhost, marginLeft: "auto" }}>{fmtLastActive(client.last_active)}</span>
         <ConsultantClientActions
           pending={!!client.pending_activation}
