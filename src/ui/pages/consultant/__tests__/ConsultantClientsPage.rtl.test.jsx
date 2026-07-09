@@ -7,6 +7,12 @@ vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => navigate,
 }));
 
+// O gate de "Avaliar com IA" lê o usuário do contexto de páginas.
+const pageUser = { subscription: { status: "active", features: [] } };
+vi.mock("../../../routing/finclaPageContext.jsx", () => ({
+  useFinclaPages: () => ({ user: pageUser }),
+}));
+
 vi.mock("../../../../api/consultant", () => ({
   getConsultantClients: vi.fn(),
   evaluateClientWithAi: vi.fn(),
@@ -178,6 +184,10 @@ describe("ConsultantClientsPage", () => {
  * exatamente esse o bug encontrado no review da etapa 9.
  */
 describe("<ConsultantClientsPage> — Avaliar com IA", () => {
+  beforeEach(() => {
+    pageUser.subscription = { status: "active", features: ["consultant_ai"] };
+  });
+
   it("abre o drawer de avaliação ao clicar em 'Avaliar com IA'", async () => {
     vi.mocked(getConsultantClients).mockResolvedValue({ total: 1, clients: [ana] });
     vi.mocked(evaluateClientWithAi).mockReturnValue(new Promise(() => {})); // fica carregando
@@ -195,5 +205,23 @@ describe("<ConsultantClientsPage> — Avaliar com IA", () => {
     expect(within(dialog).getByText("Ana Beatriz")).toBeInTheDocument();
     expect(within(dialog).getByText(/Analisando dados de Ana/)).toBeInTheDocument();
     expect(evaluateClientWithAi).toHaveBeenCalledWith("a", "11111111-1111-4111-8111-111111111111");
+  });
+
+  // O backend barra com 403; o gate no cliente evita o round-trip e comunica o
+  // motivo antes do clique.
+  it("mantém 'Avaliar com IA' trancado quando o plano não inclui consultant_ai", async () => {
+    pageUser.subscription = { status: "active", features: ["multi_org_dashboard"] };
+    vi.mocked(getConsultantClients).mockResolvedValue({ total: 1, clients: [ana] });
+
+    renderWithVersion(0);
+    await waitFor(() => expect(screen.getByText("Ana Beatriz")).toBeInTheDocument());
+
+    const avaliar = screen.getAllByRole("button", { name: /Avaliar com IA/ })[0];
+    expect(avaliar).toBeDisabled();
+    expect(avaliar).toHaveAttribute("title", expect.stringContaining("plano Pro"));
+
+    fireEvent.click(avaliar);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(evaluateClientWithAi).not.toHaveBeenCalled();
   });
 });

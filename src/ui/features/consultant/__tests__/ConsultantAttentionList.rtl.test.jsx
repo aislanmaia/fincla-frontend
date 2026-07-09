@@ -38,6 +38,18 @@ describe("<ConsultantAttentionList>", () => {
     expect(onOpenClient).not.toHaveBeenCalled();
   });
 
+  it("keeps 'Avaliar' locked when the plan lacks consultant_ai", () => {
+    const onEvaluate = vi.fn();
+    render(
+      <ConsultantAttentionList clients={[client]} total={1} base={10} loadedOk
+        onEvaluate={onEvaluate} evaluateLocked />
+    );
+    const avaliar = screen.getByRole("button", { name: /Avaliar/ });
+    expect(avaliar).toBeDisabled();
+    fireEvent.click(avaliar);
+    expect(onEvaluate).not.toHaveBeenCalled();
+  });
+
   it("shows the all-clear empty state when loaded ok with no clients", () => {
     render(<ConsultantAttentionList clients={[]} total={0} base={5} loadedOk />);
     expect(screen.getByText("Tudo sob controle")).toBeInTheDocument();

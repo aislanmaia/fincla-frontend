@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ConsultantClientReportHeader } from "../ConsultantClientReportHeader.jsx";
@@ -51,5 +51,15 @@ describe("ConsultantClientReportHeader", () => {
     fireEvent.click(ai);
     expect(onEvaluate).toHaveBeenCalledWith(c);
     expect(screen.getByRole("button", { name: /Enviar mensagem/ })).toBeDisabled();
+  });
+
+  it("com evaluateLocked, mostra o PlanBadge Pro e não dispara a avaliação", () => {
+    const onEvaluate = vi.fn();
+    render(<ConsultantClientReportHeader client={client()} onEvaluate={onEvaluate} evaluateLocked />);
+    const ai = screen.getByRole("button", { name: /Avaliar com IA/ });
+    expect(ai).toBeDisabled();
+    expect(within(ai).getByRole("img", { name: /plano Pro/i })).toBeInTheDocument();
+    fireEvent.click(ai);
+    expect(onEvaluate).not.toHaveBeenCalled();
   });
 });

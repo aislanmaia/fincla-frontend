@@ -12,6 +12,7 @@ import { ConsultantSemaphorePanel } from "../../features/consultant/ConsultantSe
 import { ConsultantAttentionList } from "../../features/consultant/ConsultantAttentionList";
 import { ConsultantEvaluationDrawer } from "../../features/consultant/ConsultantEvaluationDrawer.jsx";
 import { useEvaluationDrawer } from "../../features/consultant/useEvaluationDrawer.js";
+import { useCanEvaluateClientWithAi } from "../../features/consultant/consultantAiAccess.js";
 import { ConsultantAiInsightCard } from "../../features/consultant/ConsultantAiInsightCard";
 import { ConsultantActivityFeed } from "../../features/consultant/ConsultantActivityFeed";
 import { Icon, useIsNarrow } from "../../features/consultant/consultantUi";
@@ -67,6 +68,7 @@ function StubActionButton({ icon, label }) {
  */
 export function ConsultantPainelPage() {
   const evaluation = useEvaluationDrawer();
+  const canEvaluate = useCanEvaluateClientWithAi();
   const navigate = useNavigate();
   const narrow = useIsNarrow(900);
   const { openAddClient } = useAddClient();
@@ -121,7 +123,8 @@ export function ConsultantPainelPage() {
         error={risk.error}
         onOpenClient={openClient}
         onViewAll={goToWallet}
-        onEvaluate={evaluation.openFor}
+        onEvaluate={canEvaluate ? evaluation.openFor : undefined}
+        evaluateLocked={!canEvaluate}
       />
       <ConsultantSemaphorePanel
         clients={wallet.clients}

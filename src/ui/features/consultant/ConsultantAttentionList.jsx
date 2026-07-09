@@ -12,7 +12,8 @@ function healthFromRisk(score) {
   return Math.max(0, Math.min(100, 100 - s));
 }
 
-function AttentionItem({ client, onOpenClient, onEvaluate }) {
+function AttentionItem({ client, onOpenClient, onEvaluate, evaluateLocked }) {
+  const canEvaluate = typeof onEvaluate === "function" && !evaluateLocked;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderBottom: `1px solid ${T.border}` }}>
       <HealthRing health={healthFromRisk(client.risk_score)} size={42} stroke={4} />
@@ -38,10 +39,10 @@ function AttentionItem({ client, onOpenClient, onEvaluate }) {
         {/* "Avaliar com IA" ativo desde a entrega A1 do Consultor IA. */}
         <button
           type="button"
-          onClick={onEvaluate ? () => onEvaluate(client) : undefined}
-          disabled={!onEvaluate}
-          title={onEvaluate ? "Avaliar com IA" : "Avaliar com IA (em breve)"}
-          style={{ ...G, display: "inline-flex", alignItems: "center", gap: 5, background: T.purpleLight, color: T.purple, border: "none", borderRadius: 8, padding: "7px 11px", fontSize: 11.5, fontWeight: 700, cursor: onEvaluate ? "pointer" : "default", opacity: onEvaluate ? 1 : 0.6 }}
+          onClick={canEvaluate ? () => onEvaluate(client) : undefined}
+          disabled={!canEvaluate}
+          title={evaluateLocked ? "Avaliar com IA — disponível no plano Pro" : canEvaluate ? "Avaliar com IA" : "Avaliar com IA (em breve)"}
+          style={{ ...G, display: "inline-flex", alignItems: "center", gap: 5, background: T.purpleLight, color: T.purple, border: "none", borderRadius: 8, padding: "7px 11px", fontSize: 11.5, fontWeight: 700, cursor: canEvaluate ? "pointer" : "default", opacity: canEvaluate ? 1 : 0.6 }}
         >
           <Icon name="sparkles" size={12} color={T.purple} /> Avaliar
         </button>
@@ -81,7 +82,7 @@ function AttentionMessage({ tone, title, text }) {
  *   - **carregando** no primeiro fetch.
  * Presentational — dados via props.
  */
-export function ConsultantAttentionList({ clients = [], total = 0, base = 0, loadedOk, error, onOpenClient, onViewAll, onEvaluate }) {
+export function ConsultantAttentionList({ clients = [], total = 0, base = 0, loadedOk, error, onOpenClient, onViewAll, onEvaluate, evaluateLocked = false }) {
   const hasClients = clients.length > 0;
   const state = hasClients ? "list" : loadedOk ? "clear" : error ? "error" : "loading";
 
@@ -110,7 +111,7 @@ export function ConsultantAttentionList({ clients = [], total = 0, base = 0, loa
       <div style={{ height: 1, background: T.border }} />
       {state === "list" &&
         clients.map((client) => (
-          <AttentionItem key={client.organization_id} client={client} onOpenClient={onOpenClient} onEvaluate={onEvaluate} />
+          <AttentionItem key={client.organization_id} client={client} onOpenClient={onOpenClient} onEvaluate={onEvaluate} evaluateLocked={evaluateLocked} />
         ))}
       {state === "clear" && (
         <AttentionMessage

@@ -69,4 +69,14 @@ describe("<ConsultantClientCard>", () => {
     // O clique não pode borbulhar para o card, que navegaria para o relatório.
     expect(onOpenClient).not.toHaveBeenCalled();
   });
+
+  it("com evaluateLocked, o botão trava e explica que é do plano Pro", () => {
+    const onEvaluate = vi.fn();
+    render(<ConsultantClientCard client={client} onEvaluate={onEvaluate} evaluateLocked />);
+    const avaliar = screen.getByRole("button", { name: /Avaliar com IA/ });
+    expect(avaliar).toBeDisabled();
+    expect(avaliar).toHaveAttribute("title", expect.stringContaining("plano Pro"));
+    fireEvent.click(avaliar);
+    expect(onEvaluate).not.toHaveBeenCalled();
+  });
 });

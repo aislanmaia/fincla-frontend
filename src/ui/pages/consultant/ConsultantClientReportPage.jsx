@@ -15,6 +15,7 @@ import { useGoalsData } from "../../features/goals/useGoalsData";
 import { ConsultantClientReportHeader } from "../../features/consultant/ConsultantClientReportHeader";
 import { ConsultantEvaluationDrawer } from "../../features/consultant/ConsultantEvaluationDrawer.jsx";
 import { useEvaluationDrawer } from "../../features/consultant/useEvaluationDrawer.js";
+import { useCanEvaluateClientWithAi } from "../../features/consultant/consultantAiAccess.js";
 import { ConsultantClientReportTabs } from "../../features/consultant/ConsultantClientReportTabs";
 import { ConsultantClientOverviewTab } from "../../features/consultant/ConsultantClientOverviewTab";
 import { ConsultantClientTransactionsTab } from "../../features/consultant/ConsultantClientTransactionsTab";
@@ -49,6 +50,7 @@ function EmptyState({ title, text, action }) {
  */
 export function ConsultantClientReportPage() {
   const evaluation = useEvaluationDrawer();
+  const canEvaluate = useCanEvaluateClientWithAi();
   const { id } = useParams({ strict: false });
   const navigate = useNavigate();
   const { clients, hasLoaded, isLoading, error } = useConsultantClients();
@@ -96,7 +98,8 @@ export function ConsultantClientReportPage() {
           >
             <Icon name="chevron-left" size={15} color="currentColor" /> Clientes
           </button>
-          <ConsultantClientReportHeader client={client} onEvaluate={evaluation.openFor} />
+          <ConsultantClientReportHeader client={client}
+            onEvaluate={canEvaluate ? evaluation.openFor : undefined} evaluateLocked={!canEvaluate} />
           <ConsultantClientReportTabs active={tab} onSelect={setTab} />
           {tab === "overview" && (
             <ConsultantClientOverviewTab client={client} health={health} categories={categories} goals={goals} evolution={evolution} profile={profile} />
