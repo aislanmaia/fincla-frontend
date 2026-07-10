@@ -528,7 +528,8 @@ export interface ListTransactionsQuery {
   organization_id: string;
   type?: 'income' | 'expense' | 'refund';
   category?: string;
-  payment_method?: string;
+  /** Um valor, ou vários (casa com qualquer um) — serializado como param repetido. */
+  payment_method?: string | string[];
   description?: string;
   status?: 'pending' | 'completed' | 'cancelled';
   tag_id?: string;
@@ -563,7 +564,8 @@ export interface TransactionsSummaryQuery {
   category?: string;
   /** Quando o filtro da UI usa UUID da tag categoria (alinhado a GET /transactions) */
   tag_id?: string;
-  payment_method?: string;
+  /** Um valor, ou vários (casa com qualquer um) — serializado como param repetido. */
+  payment_method?: string | string[];
   description?: string;
   date_start?: string;
   date_end?: string;
@@ -582,7 +584,8 @@ export interface FiltersInfo {
   organization_id: string;
   type: string | null;
   category: string | null;
-  payment_method: string | null;
+  /** Eco dos métodos aplicados, já normalizados. */
+  payment_methods: string[] | null;
   date_start: string | null;
   date_end: string | null;
   recurring?: boolean | null;

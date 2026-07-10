@@ -1,5 +1,6 @@
 // api/analytics.ts
 import apiClient from './client';
+import { repeatArrayParams } from './paramsSerializer';
 import type {
   MonthlyEvolutionResponse,
   ByCategoryResponse,
@@ -122,7 +123,7 @@ export const exportTransactionsCsv = async (
     dateStart?: string;
     dateEnd?: string;
     type?: string;
-    paymentMethod?: string;
+    paymentMethod?: string | string[];
     statusFilter?: string;
     tagId?: string;
   }
@@ -137,6 +138,7 @@ export const exportTransactionsCsv = async (
       status_filter: options?.statusFilter,
       tag_id: options?.tagId,
     },
+    paramsSerializer: repeatArrayParams,
     responseType: 'blob',
   });
   return response.data;
@@ -151,7 +153,7 @@ export const downloadTransactionsCsv = async (
     dateStart?: string;
     dateEnd?: string;
     type?: string;
-    paymentMethod?: string;
+    paymentMethod?: string | string[];
     statusFilter?: string;
     tagId?: string;
   },

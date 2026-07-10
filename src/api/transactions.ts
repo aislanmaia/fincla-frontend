@@ -1,5 +1,6 @@
 // api/transactions.ts
 import apiClient from './client';
+import { repeatArrayParams } from './paramsSerializer';
 import type {
   CreateTransactionRequest,
   UpdateTransactionRequest,
@@ -32,7 +33,7 @@ export const listTransactions = async (
 ): Promise<PaginatedTransactionsResponse> => {
   const response = await apiClient.get<PaginatedTransactionsResponse>(
     '/transactions',
-    { params: filters }
+    { params: filters, paramsSerializer: repeatArrayParams }
   );
   return response.data;
 };
@@ -46,7 +47,7 @@ export const getTransactionsSummary = async (
 ): Promise<TransactionsSummaryResponse> => {
   const response = await apiClient.get<TransactionsSummaryResponse>(
     '/transactions/summary',
-    { params: filters }
+    { params: filters, paramsSerializer: repeatArrayParams }
   );
   return response.data;
 };

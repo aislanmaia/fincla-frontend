@@ -2,7 +2,7 @@
 
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // Mocks: router (TransacoesPage usa useSearch + useNavigate) ─────────────────
@@ -304,5 +304,34 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     expect(screen.getByRole("toolbar", { name: /Filtros de transações/i })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /Ocultar filtros/i }));
     expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).not.toBeInTheDocument();
+  });
+
+  // Regressão do bug relatado: selecionar 2+ formas de pagamento fazia a lista
+  // sumir. A causa era o recorte client-side por página — a API devolvia uma
+  // página sem filtro de forma e a página descartava as linhas que não casavam
+  // com `paymentMethodKey`. Agora a API filtra por todas as formas (param
+  // repetido) e a página confia no resultado, sem refiltrar.
+  it("modo live: selecionar várias formas de pagamento não esvazia a lista", async () => {
+    renderPage();
+    // Todas as linhas do hook aparecem antes de qualquer filtro.
+    expect(screen.getAllByText("Almoço").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Salário").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Notebook").length).toBeGreaterThan(0);
+
+    await userEvent.click(
+      screen.getByRole("button", { name: /Forma de pagamento: Todas/i }),
+    );
+    const panel = screen.getByRole("region", { name: /Filtro: forma/i });
+    await userEvent.click(within(panel).getByRole("button", { name: "Pix" }));
+    await userEvent.click(within(panel).getByRole("button", { name: "Crédito" }));
+
+    // Duas formas marcadas — a lista continua com todas as linhas do backend.
+    expect(screen.getAllByText("Almoço").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Salário").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Notebook").length).toBeGreaterThan(0);
+
+    // E o hook recebeu as duas formas mapeadas para os valores da API.
+    const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
+    expect(lastCall.filters.filterMethod).toEqual(["pix", "credit_card"]);
   });
 });

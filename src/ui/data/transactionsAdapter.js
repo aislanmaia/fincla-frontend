@@ -476,6 +476,18 @@ function resolveSort(sortBy) {
   return { sort_by: "date", sort_order: "desc" };
 }
 
+/**
+ * Normaliza `filterMethod` para os valores de `payment_method` enviados à API.
+ * Aceita array (`["pix", "credit_card"]`), string única legada, ou o sentinela
+ * `"todos"`/vazio (sem filtro). Devolve `null` quando não há filtro por forma.
+ */
+function resolvePaymentMethodParam(filterMethod) {
+  if (!filterMethod || filterMethod === "todos") return null;
+  const list = Array.isArray(filterMethod) ? filterMethod : [filterMethod];
+  const cleaned = list.filter((m) => m && m !== "todos");
+  return cleaned.length ? cleaned : null;
+}
+
 export function buildTransactionsQuery({
   organizationId,
   search = "",
@@ -496,6 +508,7 @@ export function buildTransactionsQuery({
         ? { tag_id: filterCat }
         : { category: filterCat }
       : {};
+  const paymentMethod = resolvePaymentMethodParam(filterMethod);
 
   return {
     organization_id: organizationId,
@@ -504,7 +517,7 @@ export function buildTransactionsQuery({
     ...(filterType === "despesa" ? { type: "expense" } : {}),
     ...(filterType === "estorno" ? { type: "refund" } : {}),
     ...categoryFilter,
-    ...(filterMethod !== "todos" ? { payment_method: filterMethod } : {}),
+    ...(paymentMethod ? { payment_method: paymentMethod } : {}),
     ...resolveDateRange(period, customFrom, customTo),
     ...(valueMin != null ? { value_min: valueMin } : {}),
     ...(valueMax != null ? { value_max: valueMax } : {}),
@@ -571,12 +584,13 @@ export function buildTransactionsCsvOptions({
   customTo = "",
 }) {
   const dateRange = resolveDateRange(period, customFrom, customTo);
+  const paymentMethod = resolvePaymentMethodParam(filterMethod);
 
   return {
     ...(filterType === "receita" ? { type: "income" } : {}),
     ...(filterType === "despesa" ? { type: "expense" } : {}),
     ...(filterType === "estorno" ? { type: "refund" } : {}),
-    ...(filterMethod !== "todos" ? { paymentMethod: filterMethod } : {}),
+    ...(paymentMethod ? { paymentMethod } : {}),
     ...(dateRange.date_start ? { dateStart: dateRange.date_start } : {}),
     ...(dateRange.date_end ? { dateEnd: dateRange.date_end } : {}),
   };
@@ -600,6 +614,7 @@ export function buildTransactionsSummaryQuery({
         ? { tag_id: filterCat }
         : { category: filterCat }
       : {};
+  const paymentMethod = resolvePaymentMethodParam(filterMethod);
 
   return {
     organization_id: organizationId,
@@ -608,7 +623,7 @@ export function buildTransactionsSummaryQuery({
     ...(filterType === "despesa" ? { type: "expense" } : {}),
     ...(filterType === "estorno" ? { type: "refund" } : {}),
     ...categoryFilter,
-    ...(filterMethod !== "todos" ? { payment_method: filterMethod } : {}),
+    ...(paymentMethod ? { payment_method: paymentMethod } : {}),
     ...resolveDateRange(period, customFrom, customTo),
     ...(valueMin != null ? { value_min: valueMin } : {}),
     ...(valueMax != null ? { value_max: valueMax } : {}),
@@ -692,7 +707,10 @@ export async function deleteTransactionForUi(transactionId, organizationId) {
 }
 
 export async function downloadTransactionsCsvForUi(organizationId, options) {
-  return downloadTransactionsCsv(organizationId, options, "transacoes.csv");
+  // `options` chega no formato legado (filterType/filterMethod/period/...);
+  // buildTransactionsCsvOptions traduz para o contrato do endpoint
+  // (type/paymentMethod/dateStart/dateEnd). Sem isso o export ia sem filtro nenhum.
+  return downloadTransactionsCsv(organizationId, buildTransactionsCsvOptions(options), "transacoes.csv");
 }
 
 export function formatTransactionsApiError(error) {
