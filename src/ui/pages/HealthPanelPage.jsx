@@ -66,7 +66,10 @@ function Metric({ label, value, sub, color }) {
 /** M7 — Painel de Saúde Financeira. Sub-área "health" do hub. */
 export function HealthPanelPage({ organizationId = null, dataMode = "live", isMobile = false }) {
   const live = shouldUseRealData(organizationId, dataMode);
-  const { data: liveData, loading, error } = useFinancialHealthData({ organizationId, enabled: live });
+  const { data: liveData, loading, error, insufficientData } = useFinancialHealthData({
+    organizationId,
+    enabled: live,
+  });
   const data = live ? liveData : MOCK;
 
   const band = data ? scoreBand(data.score) : null;
@@ -77,8 +80,18 @@ export function HealthPanelPage({ organizationId = null, dataMode = "live", isMo
       <div style={{ ...G, fontSize: 11, color: T.inkLight, marginBottom: 6 }}>Planejamento · Saúde Financeira</div>
       <PageTitle sans="Saúde" serif="Financeira" />
 
+      {/* Conta sem transação nenhuma não é falha: é uma conta nova. Pintá-la de
+          vermelho diria ao usuário que algo quebrou quando nada quebrou. */}
       {live && error ? (
-        <div style={{ ...G, fontSize: 12, color: T.red, background: T.redLight, borderRadius: 9, padding: "9px 12px", marginTop: 12 }}>{error}</div>
+        <div
+          style={{
+            ...G, fontSize: 12, borderRadius: 9, padding: "9px 12px", marginTop: 12,
+            color: insufficientData ? T.inkMid : T.red,
+            background: insufficientData ? T.grayLight : T.redLight,
+          }}
+        >
+          {error}
+        </div>
       ) : null}
       {live && loading && !data ? (
         <div style={{ ...G, fontSize: 13, color: T.inkLight, padding: "24px 4px" }}>Calculando sua saúde financeira…</div>

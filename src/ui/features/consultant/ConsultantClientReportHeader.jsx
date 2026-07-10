@@ -50,9 +50,14 @@ function HeaderAction({ variant, icon, label, soon, locked, onClick }) {
  * Presentational; recebe o `client` (item enriquecido da carteira).
  */
 export function ConsultantClientReportHeader({ client, onEvaluate, evaluateLocked = false }) {
-  const health = Number(client.health) || 0;
+  // `Number(client.health) || 0` transformava "nunca calculado" (null) em zero, e
+  // o cabeçalho mostrava "Frágil · 0" em vermelho para um cliente que ninguém
+  // avaliou. `HealthRing` e `RiskBadge` já tratam `null` ("—" / "Sem score"); era
+  // este cast que destruía a informação antes de chegar neles.
+  const health = client.health == null ? null : Number(client.health);
   const tone = { healthy: T.greenLight, attention: T.amberLight, risk: T.redLight };
-  const ringBg = health >= 70 ? tone.healthy : health >= 40 ? tone.attention : tone.risk;
+  const ringBg =
+    health == null ? T.grayLight : health >= 70 ? tone.healthy : health >= 40 ? tone.attention : tone.risk;
   const showOrg = client.organization_name && client.organization_name !== client.client_name;
 
   return (

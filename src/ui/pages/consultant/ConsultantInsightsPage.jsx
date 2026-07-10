@@ -117,7 +117,10 @@ function MoverRow({ client, dir, onOpen }) {
       <Avatar name={client.client_name} seed={client.organization_id} size={32} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ ...G, fontSize: 12.5, fontWeight: 700, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{client.client_name}</div>
-        <div style={{ ...G, fontSize: 10.5, color: T.inkLight }}>saúde {Math.round(Number(client.health) || 0)}</div>
+        {/* `|| 0` diria "saúde 0" para quem nunca foi avaliado. */}
+        <div style={{ ...G, fontSize: 10.5, color: T.inkLight }}>
+          {client.health == null ? "sem score" : `saúde ${Math.round(Number(client.health))}`}
+        </div>
       </div>
       <span style={{ ...G, fontSize: 11.5, fontWeight: 700, color, display: "inline-flex", alignItems: "center", gap: 3 }}>
         <Icon name={up ? "up" : "down"} size={12} color={color} />{up ? "Em alta" : "Em queda"}

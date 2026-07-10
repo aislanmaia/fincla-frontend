@@ -5,7 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConsultantEvaluationDrawer } from "../ConsultantEvaluationDrawer.jsx";
 
-vi.mock("../useClientEvaluation.js", () => ({ useClientEvaluation: vi.fn() }));
+// `ERROR_INSUFFICIENT_DATA` vem junto: o drawer o importa deste módulo, e um mock
+// que só devolve o hook faz o componente explodir na renderização, não na asserção.
+vi.mock("../useClientEvaluation.js", () => ({
+  useClientEvaluation: vi.fn(),
+  ERROR_INSUFFICIENT_DATA: "insufficient_data",
+}));
 // O <AiChart> tem teste próprio; aqui só interessa que o drawer renderize um por spec.
 vi.mock("../AiChart.jsx", () => ({
   AiChart: ({ spec }) => <div data-testid="ai-chart" data-title={spec.title} />,
