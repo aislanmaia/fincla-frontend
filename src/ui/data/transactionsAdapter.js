@@ -508,6 +508,7 @@ export function buildTransactionsQuery({
         ? { tag_id: filterCat }
         : { category: filterCat }
       : {};
+  const paymentMethod = resolvePaymentMethodParam(filterMethod);
 
   return {
     organization_id: organizationId,
@@ -516,7 +517,7 @@ export function buildTransactionsQuery({
     ...(filterType === "despesa" ? { type: "expense" } : {}),
     ...(filterType === "estorno" ? { type: "refund" } : {}),
     ...categoryFilter,
-    ...(resolvePaymentMethodParam(filterMethod) ? { payment_method: resolvePaymentMethodParam(filterMethod) } : {}),
+    ...(paymentMethod ? { payment_method: paymentMethod } : {}),
     ...resolveDateRange(period, customFrom, customTo),
     ...(valueMin != null ? { value_min: valueMin } : {}),
     ...(valueMax != null ? { value_max: valueMax } : {}),
@@ -583,12 +584,13 @@ export function buildTransactionsCsvOptions({
   customTo = "",
 }) {
   const dateRange = resolveDateRange(period, customFrom, customTo);
+  const paymentMethod = resolvePaymentMethodParam(filterMethod);
 
   return {
     ...(filterType === "receita" ? { type: "income" } : {}),
     ...(filterType === "despesa" ? { type: "expense" } : {}),
     ...(filterType === "estorno" ? { type: "refund" } : {}),
-    ...(resolvePaymentMethodParam(filterMethod) ? { paymentMethod: resolvePaymentMethodParam(filterMethod) } : {}),
+    ...(paymentMethod ? { paymentMethod } : {}),
     ...(dateRange.date_start ? { dateStart: dateRange.date_start } : {}),
     ...(dateRange.date_end ? { dateEnd: dateRange.date_end } : {}),
   };
@@ -612,6 +614,7 @@ export function buildTransactionsSummaryQuery({
         ? { tag_id: filterCat }
         : { category: filterCat }
       : {};
+  const paymentMethod = resolvePaymentMethodParam(filterMethod);
 
   return {
     organization_id: organizationId,
@@ -620,7 +623,7 @@ export function buildTransactionsSummaryQuery({
     ...(filterType === "despesa" ? { type: "expense" } : {}),
     ...(filterType === "estorno" ? { type: "refund" } : {}),
     ...categoryFilter,
-    ...(resolvePaymentMethodParam(filterMethod) ? { payment_method: resolvePaymentMethodParam(filterMethod) } : {}),
+    ...(paymentMethod ? { payment_method: paymentMethod } : {}),
     ...resolveDateRange(period, customFrom, customTo),
     ...(valueMin != null ? { value_min: valueMin } : {}),
     ...(valueMax != null ? { value_max: valueMax } : {}),
