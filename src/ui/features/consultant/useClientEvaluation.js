@@ -3,15 +3,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { evaluateClientWithAi, newEvaluationRequestId } from "../../../api/consultant";
 import { handleApiError } from "../../../api/client";
 
-const IDLE = { loading: false, error: "", result: null, correlationId: "" };
+const IDLE = { loading: false, error: "", errorCode: "", result: null, correlationId: "" };
+
+/** `detail.code` que o backend devolve; o front ramifica por ele, nunca por mensagem. */
+export const ERROR_INSUFFICIENT_DATA = "insufficient_data";
 
 /**
  * Mensagens por status HTTP do endpoint de avaliação (§17 do guia da API).
  *
- * O `422` do backend é deliberadamente genérico (anti-leak: nunca vaza texto de
- * provider nem motivo de grounding), então não adianta repassar o `detail` cru
- * ao consultor — traduzimos para uma ação possível. Os demais status têm causa
- * distinta e merecem mensagem própria, senão tudo vira "erro ao carregar".
+ * O texto de erro do backend é deliberadamente genérico (anti-leak: nunca vaza
+ * texto de provider nem motivo de grounding), então não repassamos o `detail`
+ * cru ao consultor — traduzimos para uma ação possível.
+ *
+ * `422` é ambíguo por status: pode ser "o modelo falhou" ou "o cliente não tem
+ * dado nenhum". Só o `detail.code` distingue — ver `ERROR_BY_CODE`.
  */
 const ERROR_BY_STATUS = {
   402: "Você atingiu o limite de uso da IA. Tente novamente mais tarde.",
@@ -19,6 +24,18 @@ const ERROR_BY_STATUS = {
   404: "Cliente não encontrado na sua carteira.",
   409: "Já existe uma avaliação em andamento para este cliente. Aguarde e tente de novo.",
   422: "Não foi possível gerar a avaliação agora. Tente novamente em instantes.",
+};
+
+/**
+ * Mensagens por `detail.code`, quando presente. Tem precedência sobre o status.
+ *
+ * Ramificar por `code` e não por substring da mensagem: a mensagem é copy, muda;
+ * o `code` é contrato. O texto exibido é NOSSO, não o do backend — a UI é PT-BR
+ * e o backend não deve ditar a copy do produto.
+ */
+const ERROR_BY_CODE = {
+  [ERROR_INSUFFICIENT_DATA]:
+    "Este cliente ainda não registrou nenhuma transação. Assim que houver lançamentos, a IA poderá analisar o histórico dele.",
 };
 
 /**
@@ -67,7 +84,7 @@ export function useClientEvaluation(organizationId) {
     if (!organizationId || inFlight.current) return;
     inFlight.current = true;
     const correlationId = newEvaluationRequestId();
-    setState({ loading: true, error: "", result: null, correlationId });
+    setState({ loading: true, error: "", errorCode: "", result: null, correlationId });
 
     try {
       const response = await evaluateClientWithAi(organizationId, correlationId);
@@ -75,6 +92,7 @@ export function useClientEvaluation(organizationId) {
       setState({
         loading: false,
         error: "",
+        errorCode: "",
         result: response.output,
         // O backend ecoa o correlation_id definitivo; guardamos o dele, não o nosso.
         correlationId: response.correlation_id || correlationId,
@@ -82,9 +100,14 @@ export function useClientEvaluation(organizationId) {
     } catch (err) {
       if (!mounted.current) return;
       const status = err?.response?.status;
+      // `detail` é um objeto `{code, message}` desde o fix de `insufficient_data`.
+      // Guardamos contra o formato antigo (string) — um deploy do FE pode preceder
+      // o do backend, e `detail.code` viraria `undefined` sem quebrar nada.
+      const code = err?.response?.data?.detail?.code ?? "";
       setState({
         loading: false,
-        error: ERROR_BY_STATUS[status] || handleApiError(err),
+        error: ERROR_BY_CODE[code] || ERROR_BY_STATUS[status] || handleApiError(err),
+        errorCode: code,
         result: null,
         correlationId,
       });

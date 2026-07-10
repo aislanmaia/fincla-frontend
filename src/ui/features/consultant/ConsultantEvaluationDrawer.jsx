@@ -5,7 +5,7 @@ import { G, NUM } from "../../typography";
 import { AiChart } from "./AiChart.jsx";
 import { healthTone } from "./consultantFormat";
 import { HealthRing, Icon } from "./consultantUi";
-import { useClientEvaluation } from "./useClientEvaluation.js";
+import { ERROR_INSUFFICIENT_DATA, useClientEvaluation } from "./useClientEvaluation.js";
 
 /**
  * Drawer "Avaliar com IA" (Consultor IA — A1).
@@ -146,6 +146,32 @@ function LoadingState({ firstName }) {
   );
 }
 
+/**
+ * Cliente sem dado NÃO é um erro — é um estado do cliente.
+ *
+ * Pintá-lo de vermelho com "Tentar novamente" fazia o consultor retentar contra
+ * um cliente vazio: nada mudaria, e antes do pre-check no backend cada tentativa
+ * queimava uma run de LLM. A saída aqui é o consultor pedir lançamentos ao
+ * cliente, não apertar um botão. Por isso: tom neutro, e sem retry.
+ */
+function InsufficientDataState({ firstName, message }) {
+  return (
+    <div style={{ background: T.purpleLight, border: `1px solid ${T.purple}22`, borderRadius: 10, padding: "16px 18px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+        <Icon name="sparkles" size={15} color={T.purple} />
+        <span style={{ ...G, fontSize: 12.5, fontWeight: 800, color: T.ink }}>
+          Ainda não há dados para analisar
+        </span>
+      </div>
+      <p style={{ ...G, fontSize: 12.5, color: T.inkMid, lineHeight: 1.6, margin: 0 }}>{message}</p>
+      <p style={{ ...G, fontSize: 11.5, color: T.inkGhost, lineHeight: 1.55, margin: "10px 0 0" }}>
+        Combine com {firstName} o registro das primeiras receitas e despesas — a avaliação fica
+        disponível assim que houver histórico.
+      </p>
+    </div>
+  );
+}
+
 function ErrorState({ message, onRetry }) {
   return (
     <div style={{ background: T.redLight, border: `1px solid ${T.red}22`, borderRadius: 10, padding: "14px 16px" }}>
@@ -175,7 +201,7 @@ function SoonButton({ icon, children }) {
 }
 
 export function ConsultantEvaluationDrawer({ open, organizationId, clientName, onClose }) {
-  const { loading, error, result, correlationId, run, reset } = useClientEvaluation(organizationId);
+  const { loading, error, errorCode, result, correlationId, run, reset } = useClientEvaluation(organizationId);
   const startedFor = useRef(null);
 
   // Dispara a avaliação ao abrir. Só uma vez por cliente: reabrir o drawer
@@ -236,7 +262,12 @@ export function ConsultantEvaluationDrawer({ open, organizationId, clientName, o
         {/* Corpo */}
         <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
           {loading && <LoadingState firstName={firstName} />}
-          {!loading && error && <ErrorState message={error} onRetry={retry} />}
+          {!loading && error && errorCode === ERROR_INSUFFICIENT_DATA && (
+            <InsufficientDataState firstName={firstName} message={error} />
+          )}
+          {!loading && error && errorCode !== ERROR_INSUFFICIENT_DATA && (
+            <ErrorState message={error} onRetry={retry} />
+          )}
           {!loading && !error && result && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <VerdictBlock healthRead={result.health_read} />
