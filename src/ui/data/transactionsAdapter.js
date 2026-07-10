@@ -476,6 +476,18 @@ function resolveSort(sortBy) {
   return { sort_by: "date", sort_order: "desc" };
 }
 
+/**
+ * Normaliza `filterMethod` para os valores de `payment_method` enviados à API.
+ * Aceita array (`["pix", "credit_card"]`), string única legada, ou o sentinela
+ * `"todos"`/vazio (sem filtro). Devolve `null` quando não há filtro por forma.
+ */
+function resolvePaymentMethodParam(filterMethod) {
+  if (!filterMethod || filterMethod === "todos") return null;
+  const list = Array.isArray(filterMethod) ? filterMethod : [filterMethod];
+  const cleaned = list.filter((m) => m && m !== "todos");
+  return cleaned.length ? cleaned : null;
+}
+
 export function buildTransactionsQuery({
   organizationId,
   search = "",
@@ -504,7 +516,7 @@ export function buildTransactionsQuery({
     ...(filterType === "despesa" ? { type: "expense" } : {}),
     ...(filterType === "estorno" ? { type: "refund" } : {}),
     ...categoryFilter,
-    ...(filterMethod !== "todos" ? { payment_method: filterMethod } : {}),
+    ...(resolvePaymentMethodParam(filterMethod) ? { payment_method: resolvePaymentMethodParam(filterMethod) } : {}),
     ...resolveDateRange(period, customFrom, customTo),
     ...(valueMin != null ? { value_min: valueMin } : {}),
     ...(valueMax != null ? { value_max: valueMax } : {}),
@@ -576,7 +588,7 @@ export function buildTransactionsCsvOptions({
     ...(filterType === "receita" ? { type: "income" } : {}),
     ...(filterType === "despesa" ? { type: "expense" } : {}),
     ...(filterType === "estorno" ? { type: "refund" } : {}),
-    ...(filterMethod !== "todos" ? { paymentMethod: filterMethod } : {}),
+    ...(resolvePaymentMethodParam(filterMethod) ? { paymentMethod: resolvePaymentMethodParam(filterMethod) } : {}),
     ...(dateRange.date_start ? { dateStart: dateRange.date_start } : {}),
     ...(dateRange.date_end ? { dateEnd: dateRange.date_end } : {}),
   };
@@ -608,7 +620,7 @@ export function buildTransactionsSummaryQuery({
     ...(filterType === "despesa" ? { type: "expense" } : {}),
     ...(filterType === "estorno" ? { type: "refund" } : {}),
     ...categoryFilter,
-    ...(filterMethod !== "todos" ? { payment_method: filterMethod } : {}),
+    ...(resolvePaymentMethodParam(filterMethod) ? { payment_method: resolvePaymentMethodParam(filterMethod) } : {}),
     ...resolveDateRange(period, customFrom, customTo),
     ...(valueMin != null ? { value_min: valueMin } : {}),
     ...(valueMax != null ? { value_max: valueMax } : {}),

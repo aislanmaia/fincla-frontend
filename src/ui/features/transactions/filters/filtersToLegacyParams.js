@@ -5,10 +5,12 @@
  *
  * Algumas limitações do contrato atual:
  *  - O backend aceita UMA categoria (`filterCat`); enviamos a primeira da seleção.
- *  - Não há `method`/forma de pagamento na Variação C (foi removido do design);
- *    sempre enviamos "todos".
  *  - O sort do backend é único; enviamos o primeiro critério da lista multi-nível.
  *  - Recorrência (`rec`) ainda não tem filtro correspondente no backend.
+ *
+ * Forma de pagamento é multi-seleção: o backend casa com qualquer um dos valores
+ * enviados (param `payment_method` repetido), então mandamos todos os métodos
+ * marcados — sem recorte client-side.
  */
 
 import { parseMoneyInput } from "../../onboarding/onboardingValueUtils.js";
@@ -35,9 +37,14 @@ export function mapTypeToLegacy(type) {
   return "todos";
 }
 
+/**
+ * Converte a seleção de formas de pagamento da UI (`["pix", "credito"]`) nos
+ * valores da API (`["pix", "credit_card"]`). Seleção vazia → `[]` (sem filtro).
+ * O backend casa com qualquer um dos valores enviados.
+ */
 export function mapMethodToLegacy(method) {
-  if (!Array.isArray(method) || method.length !== 1) return "todos";
-  return mapUiPaymentMethodToApi(method[0]);
+  if (!Array.isArray(method) || method.length === 0) return [];
+  return method.map(mapUiPaymentMethodToApi);
 }
 
 /**

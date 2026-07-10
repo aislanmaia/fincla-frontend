@@ -175,7 +175,7 @@ describe("transactionsAdapter", () => {
         search: "uber",
         filterType: "despesa",
         filterCat: "Alimentação",
-        filterMethod: "Crédito",
+        filterMethod: ["credit_card"],
         period: "custom",
         customFrom: "2026-03-01",
         customTo: "2026-03-31",
@@ -189,7 +189,7 @@ describe("transactionsAdapter", () => {
       description: "uber",
       type: "expense",
       category: "Alimentação",
-      payment_method: "Crédito",
+      payment_method: ["credit_card"],
       date_start: "2026-03-01",
       date_end: "2026-03-31",
       value_min: 50,
@@ -199,6 +199,24 @@ describe("transactionsAdapter", () => {
       sort_by: "value",
       sort_order: "desc",
     });
+  });
+
+  it("envia várias formas de pagamento como array (param repetido no backend)", () => {
+    const query = buildTransactionsQuery({
+      organizationId: "org-1",
+      filterMethod: ["pix", "credit_card"],
+      limit: 10,
+    });
+    expect(query.payment_method).toEqual(["pix", "credit_card"]);
+  });
+
+  it("não inclui payment_method quando a seleção está vazia ou é 'todos'", () => {
+    expect(
+      buildTransactionsQuery({ organizationId: "org-1", filterMethod: [], limit: 10 }),
+    ).not.toHaveProperty("payment_method");
+    expect(
+      buildTransactionsQuery({ organizationId: "org-1", filterMethod: "todos", limit: 10 }),
+    ).not.toHaveProperty("payment_method");
   });
 
   it("usa tag_id quando o filtro de categoria é UUID", () => {
@@ -269,7 +287,7 @@ describe("transactionsAdapter", () => {
         search: "freela",
         filterType: "receita",
         filterCat: "Receita",
-        filterMethod: "Pix",
+        filterMethod: ["pix"],
         period: "custom",
         customFrom: "2026-03-01",
         customTo: "2026-03-31",
@@ -279,7 +297,7 @@ describe("transactionsAdapter", () => {
       description: "freela",
       type: "income",
       category: "Receita",
-      payment_method: "Pix",
+      payment_method: ["pix"],
       date_start: "2026-03-01",
       date_end: "2026-03-31",
     });

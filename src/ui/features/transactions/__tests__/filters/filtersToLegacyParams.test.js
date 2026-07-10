@@ -66,11 +66,18 @@ describe("mapTypeToLegacy", () => {
 });
 
 describe("mapMethodToLegacy", () => {
-  it("normaliza forma de pagamento para o contrato da API", () => {
-    expect(mapMethodToLegacy([])).toBe("todos");
-    expect(mapMethodToLegacy(["credito"])).toBe("credit_card");
-    expect(mapMethodToLegacy(["dinheiro"])).toBe("cash");
-    expect(mapMethodToLegacy(["pix", "credito"])).toBe("todos");
+  it("mapeia cada forma da UI para o valor da API", () => {
+    expect(mapMethodToLegacy(["credito"])).toEqual(["credit_card"]);
+    expect(mapMethodToLegacy(["dinheiro"])).toEqual(["cash"]);
+  });
+
+  it("preserva a seleção múltipla (backend casa com qualquer uma)", () => {
+    expect(mapMethodToLegacy(["pix", "credito"])).toEqual(["pix", "credit_card"]);
+  });
+
+  it("seleção vazia ou inválida vira lista vazia (sem filtro)", () => {
+    expect(mapMethodToLegacy([])).toEqual([]);
+    expect(mapMethodToLegacy(undefined)).toEqual([]);
   });
 });
 
@@ -134,7 +141,7 @@ describe("filtersToLegacyParams", () => {
       search: "mercado",
         filterType: "todos",
         filterCat: "todas",
-        filterMethod: "todos",
+        filterMethod: [],
       period: "mes",
       customFrom: "",
       customTo: "",
@@ -157,8 +164,21 @@ describe("filtersToLegacyParams", () => {
     expect(partial.filterCat).toBe("a");
   });
 
-  it("inclui forma de pagamento mapeada para a API", () => {
+  it("mapeia uma forma de pagamento para o valor da API", () => {
     const out = filtersToLegacyParams({ ...base, method: ["credito"] }, { limit: 30 });
-    expect(out.filterMethod).toBe("credit_card");
+    expect(out.filterMethod).toEqual(["credit_card"]);
+  });
+
+  it("mapeia várias formas de pagamento (casa com qualquer uma no backend)", () => {
+    const out = filtersToLegacyParams(
+      { ...base, method: ["pix", "credito"] },
+      { limit: 30 },
+    );
+    expect(out.filterMethod).toEqual(["pix", "credit_card"]);
+  });
+
+  it("seleção vazia de forma de pagamento não vira filtro", () => {
+    const out = filtersToLegacyParams({ ...base, method: [] }, { limit: 30 });
+    expect(out.filterMethod).toEqual([]);
   });
 });

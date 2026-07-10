@@ -436,17 +436,15 @@ function TransacoesPageBody({
   // ── Filter + sort ────────────────────────────────────────────────────────
   //
   // Em modo **live** a API já aplicou período, tipo, categorias, tags,
-  // recorrência, faixa de valor, busca e ordenação. Refiltrar aqui quebraria a
-  // lista: `txList` carrega linhas de *apresentação* (ex.: `date` é "21/05",
-  // sem ano), e `periodFilter` as descartaria todas.
-  //
-  // A **única** exceção é a seleção de vários meios de pagamento: o endpoint
-  // aceita no máximo um, então esse recorte precisa acontecer no cliente — é
-  // pelo mesmo motivo que `canUseRemoteSummary` exige `method.length <= 1`.
+  // recorrência, faixa de valor, busca, ordenação e forma(s) de pagamento
+  // (`payment_method` repetido casa com qualquer uma das selecionadas).
+  // Refiltrar aqui quebraria a lista: `txList` carrega linhas de *apresentação*
+  // (ex.: `date` é "21/05", sem ano), e o recorte por página descartaria linhas
+  // que na verdade casam nas demais páginas — era exatamente o bug da lista
+  // vazia com 2+ formas selecionadas.
   const filtered = useMemo(() => {
     if (shouldUseRealData) {
-      if (filter.method.length <= 1) return txList;
-      return txList.filter((t) => filter.method.includes(t.paymentMethodKey));
+      return txList;
     }
 
     const matches = txList.filter((t) => {
@@ -485,7 +483,9 @@ function TransacoesPageBody({
   ]);
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
-  const canUseRemoteSummary = shouldUseRealData && filter.method.length <= 1;
+  // A API já filtra por todas as formas selecionadas, então o summary remoto
+  // vale mesmo com múltiplas formas.
+  const canUseRemoteSummary = shouldUseRealData;
   const totalReceita = canUseRemoteSummary && transactionsData.summary
     ? transactionsData.summary.total_income
     : filtered.filter(t=>t.type==="income").reduce((s,t)=>s+t.val,0);
