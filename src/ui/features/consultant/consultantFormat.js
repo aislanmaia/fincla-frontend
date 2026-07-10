@@ -1,6 +1,6 @@
 import { T } from "../../tokens";
 import { fmtAbs } from "../../formatters";
-import { clientHealthBand } from "./consultantClientsView";
+import { HEALTH_BAND_NONE, clientHealthBand } from "./consultantClientsView";
 
 export const DASH = "—";
 const LOADING = "…";
@@ -18,12 +18,19 @@ export function aggregateValue(raw, hasLoaded, format) {
 
 // --- Apresentação por-cliente (compartilhado entre o card e a tabela da carteira) ---
 
-/** Tom (cor/fundo/rótulo) por faixa de saúde 0–100. */
+/**
+ * Tom (cor/fundo/rótulo) por faixa de saúde 0–100.
+ *
+ * `health == null` (score ainda não calculado) recebe um tom NEUTRO. Cair no
+ * `return` vermelho pintaria de "Em risco" um cliente que ninguém avaliou.
+ */
 export function healthTone(health) {
   const band = clientHealthBand(health);
-  if (band === "healthy") return { color: T.green, bg: T.greenLight, label: "Em dia" };
+  if (band === HEALTH_BAND_NONE) return { color: T.inkGhost, bg: T.grayLight, label: "Sem score" };
+  if (band === "healthy") return { color: T.green, bg: T.greenLight, label: "Saudável" };
   if (band === "attention") return { color: T.amber, bg: T.amberLight, label: "Atenção" };
-  return { color: T.red, bg: T.redLight, label: "Em risco" };
+  // "Frágil", não "Em risco": risco é o gatilho por regras do Painel, com motivo.
+  return { color: T.red, bg: T.redLight, label: "Frágil" };
 }
 
 /** Dinheiro (patrimônio/saldo cru) com sinal só quando negativo. `fmtSgn` força "+". */

@@ -8,6 +8,8 @@ import { regenerateClientActivationLink } from "../../../api/consultant";
 import { handleApiError } from "../../../api/client";
 import { useAddClient } from "../../features/consultant/ConsultantAddClientContext.jsx";
 import { useConsultantClients } from "../../features/consultant/useConsultantClients";
+import { useConsultantClientsAtRisk } from "../../features/consultant/useConsultantClientsAtRisk";
+import { recomputeClientHealth } from "../../../api/consultant";
 import { ConsultantClientsToolbar } from "../../features/consultant/ConsultantClientsToolbar";
 import { ConsultantClientCard } from "../../features/consultant/ConsultantClientCard";
 import { ConsultantClientsTable } from "../../features/consultant/ConsultantClientsTable";
@@ -67,6 +69,35 @@ export function ConsultantClientsPage() {
   const navigate = useNavigate();
   const { openAddClient, clientsVersion, quota } = useAddClient();
   const { clients, total, isLoading, error, hasLoaded, loadedOk, refresh } = useConsultantClients();
+  const risk = useConsultantClientsAtRisk({ limit: 50 });
+
+  /**
+   * Risco é OUTRO eixo que saúde: um gatilho por regras, com motivo. Um cliente
+   * pode estar "Saudável" e ainda assim gastar mais do que ganha há 4 meses — o
+   * selo no card é o único lugar onde isso fica visível na Carteira.
+   */
+  const riskAlertByOrg = React.useMemo(
+    () => Object.fromEntries((risk.clients ?? []).map((c) => [c.organization_id, c.main_situation])),
+    [risk.clients],
+  );
+
+  /**
+   * Recalcula o snapshot canônico de UM cliente e recarrega a carteira, para o
+   * anel refletir o número novo. O mesmo vale ao fechar o drawer de "Avaliar com
+   * IA": a avaliação também grava o snapshot (ela lê o painel).
+   */
+  const recomputeHealth = React.useCallback(
+    async (organizationId) => {
+      await recomputeClientHealth(organizationId);
+      refresh();
+    },
+    [refresh],
+  );
+
+  const closeEvaluation = React.useCallback(() => {
+    evaluation.close();
+    refresh();
+  }, [evaluation, refresh]);
 
   // Ao criar um cliente pelo wizard, atualiza a lista para exibi-lo.
   React.useEffect(() => {
@@ -174,11 +205,11 @@ export function ConsultantClientsPage() {
               text="Nenhum cliente corresponde à busca ou ao filtro selecionado. Ajuste os critérios."
             />
           ) : view === "table" ? (
-            <ConsultantClientsTable clients={visible} onOpenClient={openClient} onRegenerate={onRegenerate} onEvaluate={canEvaluate ? evaluation.openFor : undefined} evaluateLocked={!canEvaluate} />
+            <ConsultantClientsTable clients={visible} onOpenClient={openClient} onRegenerate={onRegenerate} onEvaluate={canEvaluate ? evaluation.openFor : undefined} onRecomputeHealth={recomputeHealth} evaluateLocked={!canEvaluate} />
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14, alignItems: "start" }}>
               {visible.map((client) => (
-                <ConsultantClientCard key={client.organization_id} client={client} onOpenClient={openClient} onRegenerate={onRegenerate} onEvaluate={canEvaluate ? evaluation.openFor : undefined} evaluateLocked={!canEvaluate} />
+                <ConsultantClientCard key={client.organization_id} client={client} onOpenClient={openClient} onRegenerate={onRegenerate} onEvaluate={canEvaluate ? evaluation.openFor : undefined} onRecomputeHealth={recomputeHealth} riskAlert={riskAlertByOrg[client.organization_id]} evaluateLocked={!canEvaluate} />
               ))}
             </div>
           )}
@@ -208,7 +239,7 @@ export function ConsultantClientsPage() {
           open
           organizationId={evaluation.target.organizationId}
           clientName={evaluation.target.clientName}
-          onClose={evaluation.close}
+          onClose={closeEvaluation}
         />
       )}
     </div>

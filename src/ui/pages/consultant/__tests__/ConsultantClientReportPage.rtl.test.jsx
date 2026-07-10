@@ -86,7 +86,7 @@ describe("ConsultantClientReportPage", () => {
 
     await waitFor(() => expect(screen.getByText("Mariana Costa")).toBeInTheDocument());
     expect(screen.getByRole("tab", { name: "Visão geral" })).toBeInTheDocument();
-    expect(screen.getByText("Em dia")).toBeInTheDocument(); // RiskBadge no header (health 82)
+    expect(screen.getByText("Saudável")).toBeInTheDocument(); // RiskBadge no header (health 82)
     // A aba "Visão geral" consome os reads por-org (metas do /score, donut de by-category).
     await waitFor(() => expect(screen.getByText("3 de 5")).toBeInTheDocument());
     expect(screen.getByText("Para onde vai o dinheiro")).toBeInTheDocument();

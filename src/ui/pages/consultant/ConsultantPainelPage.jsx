@@ -78,6 +78,13 @@ export function ConsultantPainelPage() {
   const { healthIndex, hasLoaded, error } = useConsultantHealthIndex();
   const risk = useConsultantClientsAtRisk({ limit: 5 });
   const wallet = useConsultantClients();
+  // `clients-at-risk` não devolve `health`; a carteira sim. Cruzamos por org para
+  // que o anel de "Precisam de atenção" mostre o MESMO score canônico do card,
+  // em vez de derivar um número do `risk_score` (escala invertida).
+  const healthByOrg = React.useMemo(
+    () => Object.fromEntries((wallet.clients ?? []).map((c) => [c.organization_id, c.health])),
+    [wallet.clients],
+  );
 
   // Banner de erro só em falha total (nada carregado); senão os KPIs degradam a "—".
   const loadError = error && !healthIndex ? error : "";
@@ -117,6 +124,7 @@ export function ConsultantPainelPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
       <ConsultantAttentionList
         clients={risk.clients}
+        healthByOrg={healthByOrg}
         total={risk.total}
         base={base ?? 0}
         loadedOk={risk.loadedOk}

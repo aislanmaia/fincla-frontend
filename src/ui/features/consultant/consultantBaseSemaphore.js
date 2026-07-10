@@ -12,9 +12,12 @@ import { clientHealthBand } from "./consultantClientsView";
 /** Conta os clientes por faixa de saúde + expõe o valor central (saúde média). */
 export function buildBaseSemaphore({ clients, hasLoaded = false, healthIndex = null } = {}) {
   const list = Array.isArray(clients) ? clients : [];
-  const counts = { healthy: 0, attention: 0, risk: 0 };
+  // `none` é uma faixa de verdade. `Number(c?.health) || 0` transformava `null` em
+  // 0 e contava como "frágil" um cliente que ninguém avaliou — inflando a pior
+  // fatia do donut com quem não tem diagnóstico.
+  const counts = { healthy: 0, attention: 0, risk: 0, none: 0 };
   for (const c of list) {
-    counts[clientHealthBand(Number(c?.health) || 0)] += 1;
+    counts[clientHealthBand(c?.health)] += 1;
   }
   const total = list.length;
   return {

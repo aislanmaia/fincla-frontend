@@ -1468,8 +1468,17 @@ export interface ConsultantClient {
   membership_created_at: string;
   /** Owner's display name; falls back to organization_name. */
   client_name: string;
-  /** 0–100 financial health index for this client. */
-  health: number;
+  /**
+   * Canonical 0–100 financial health score (`financial_health_scores`) — the same
+   * number the client's own panel and the AI evaluation report.
+   *
+   * `null` means "not computed yet", NOT zero. A client that was never evaluated
+   * must not be painted green or red, does not belong to any health band, and
+   * sorts last. Use `POST /consultant/clients/{id}/health/recompute` to force it.
+   */
+  health: number | null;
+  /** ISO 8601 timestamp of the canonical snapshot, or null when never computed. */
+  health_computed_at: string | null;
   /** income − expenses over the trailing 12-month window (decimal string). */
   balance: string;
   /** balance / income * 100 (can be negative). */
@@ -1489,6 +1498,19 @@ export interface ConsultantClient {
 export interface ConsultantClientsResponse {
   total: number;
   clients: ConsultantClient[];
+  /**
+   * Clients still without a score in THIS response, because the server-side
+   * backfill hit its per-request cap. They are filled in on later visits.
+   */
+  health_pending: number;
+}
+
+/** `POST /consultant/clients/{organization_id}/health/recompute`. */
+export interface ClientHealthResponse {
+  organization_id: string;
+  score: number;
+  /** Read back from the persisted snapshot — never the caller's clock. */
+  computed_at: string;
 }
 
 // Alias for naming consistency
@@ -1530,10 +1552,16 @@ export interface ClientsAtRiskQuery {
 }
 
 export interface FinancialHealthIndexResponse {
-  index: number;
-  balance_score: number;
-  debt_score: number;
-  reserve_score: number;
+  /**
+   * Mean of the canonical health score of every client that has a snapshot.
+   * `null` when nobody has been scored yet — NOT `0`, which would read as
+   * "the whole wallet is bankrupt".
+   */
+  index: number | null;
+  /** How many clients entered the mean. */
+  clients_scored: number;
+  /** Clients without a snapshot: excluded from the mean, never counted as zero. */
+  clients_pending: number;
   total_income: number;
   total_expenses: number;
   balance: number;

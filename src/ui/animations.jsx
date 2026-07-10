@@ -39,6 +39,7 @@ export const ANIM_CSS = `
   .fincla-btn { transition: opacity 0.13s, transform 0.13s; }
   .fincla-btn:active { transform: scale(0.97) !important; }
   @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes popIn { from { opacity: 0; transform: scale(0.96) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
   @keyframes sheetUp {
     from { transform: translateY(100%); opacity: 0;   }
     to   { transform: translateY(0);    opacity: 1;   }

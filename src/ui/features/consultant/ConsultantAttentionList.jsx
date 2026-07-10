@@ -6,17 +6,23 @@ import { G } from "../../typography";
 import { fmtSgn } from "../../formatters";
 import { HealthRing, Icon } from "./consultantUi";
 
-/** Saúde (0-100, maior=melhor) derivada do `risk_score` (1-100, maior=pior). */
-function healthFromRisk(score) {
-  const s = Number(score) || 0;
-  return Math.max(0, Math.min(100, 100 - s));
-}
-
-function AttentionItem({ client, onOpenClient, onEvaluate, evaluateLocked }) {
+/**
+ * O anel mostra o `health` CANÔNICO do cliente, não `100 - risk_score`.
+ *
+ * Antes, esta lista derivava uma "saúde" do `risk_score` e a desenhava no mesmo
+ * `HealthRing` da Carteira. Para a Mariana isso pintava `100 - 50 = 50` aqui e
+ * `20` lá — duas escalas invertidas (`health`: maior=melhor; `risk_score`:
+ * maior=pior) no mesmo componente visual, sem nada que avisasse o consultor.
+ *
+ * Saúde e risco são ortogonais: quem entra nesta lista é decidido pelo
+ * `risk_score` (gatilho por regras), e o `main_situation` diz o porquê. O anel só
+ * responde "como esse cliente está".
+ */
+function AttentionItem({ client, health, onOpenClient, onEvaluate, evaluateLocked }) {
   const canEvaluate = typeof onEvaluate === "function" && !evaluateLocked;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "13px 16px", borderBottom: `1px solid ${T.border}` }}>
-      <HealthRing health={healthFromRisk(client.risk_score)} size={42} stroke={4} />
+      <HealthRing health={health} size={42} stroke={4} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{ ...G, fontSize: 13.5, fontWeight: 700, color: T.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", cursor: "pointer" }}
@@ -82,7 +88,20 @@ function AttentionMessage({ tone, title, text }) {
  *   - **carregando** no primeiro fetch.
  * Presentational — dados via props.
  */
-export function ConsultantAttentionList({ clients = [], total = 0, base = 0, loadedOk, error, onOpenClient, onViewAll, onEvaluate, evaluateLocked = false }) {
+export function ConsultantAttentionList({
+  clients = [],
+  // `org_id -> health` canônico, vindo da carteira (`useConsultantClients`), que o
+  // Painel já carrega. `undefined`/`null` => anel "—", nunca um número derivado.
+  healthByOrg = {},
+  total = 0,
+  base = 0,
+  loadedOk,
+  error,
+  onOpenClient,
+  onViewAll,
+  onEvaluate,
+  evaluateLocked = false,
+}) {
   const hasClients = clients.length > 0;
   const state = hasClients ? "list" : loadedOk ? "clear" : error ? "error" : "loading";
 
@@ -93,10 +112,13 @@ export function ConsultantAttentionList({ clients = [], total = 0, base = 0, loa
     loading: <Badge color={T.inkLight} bg={T.grayLight}>…</Badge>,
   };
   const SUBTITLES = {
-    list: "Ordenados pela maior pontuação de risco",
+    // Não citar "pontuação de risco": ela não está na tela. O anel mostra SAÚDE
+    // (menor = pior) e a ordenação é por gravidade do alerta (`risk_score` desc).
+    // A frase antiga lia como contradição — "maior pontuação" com o menor número no topo.
+    list: "Ordenados pela gravidade do alerta",
     clear: "Base monitorada em tempo real",
-    error: "Não foi possível carregar os clientes em risco",
-    loading: "Carregando clientes em risco…",
+    error: "Não foi possível carregar os alertas",
+    loading: "Carregando alertas…",
   };
 
   return (
@@ -111,7 +133,14 @@ export function ConsultantAttentionList({ clients = [], total = 0, base = 0, loa
       <div style={{ height: 1, background: T.border }} />
       {state === "list" &&
         clients.map((client) => (
-          <AttentionItem key={client.organization_id} client={client} onOpenClient={onOpenClient} onEvaluate={onEvaluate} evaluateLocked={evaluateLocked} />
+          <AttentionItem
+            key={client.organization_id}
+            client={client}
+            health={healthByOrg[client.organization_id] ?? null}
+            onOpenClient={onOpenClient}
+            onEvaluate={onEvaluate}
+            evaluateLocked={evaluateLocked}
+          />
         ))}
       {state === "clear" && (
         <AttentionMessage

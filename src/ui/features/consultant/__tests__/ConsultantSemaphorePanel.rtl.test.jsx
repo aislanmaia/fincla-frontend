@@ -14,12 +14,12 @@ const clients = [
 ];
 
 describe("<ConsultantSemaphorePanel>", () => {
-  it("renders the 3-way legend and the average-health center", () => {
+  it("renders the health-band legend and the average-health center", () => {
     render(<ConsultantSemaphorePanel clients={clients} hasLoaded healthIndex={72} />);
     expect(screen.getByText("Semáforo da carteira")).toBeInTheDocument();
     expect(screen.getByText("Saudável")).toBeInTheDocument();
     expect(screen.getByText("Atenção")).toBeInTheDocument();
-    expect(screen.getByText("Em risco")).toBeInTheDocument();
+    expect(screen.getByText("Frágil")).toBeInTheDocument();
     expect(screen.getByText("4 clientes por nível de saúde")).toBeInTheDocument();
     // legend counts: 2 saudável, 1 atenção, 1 em risco
     expect(screen.getByText("2")).toBeInTheDocument();
