@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildCreateTransactionPayload,
   buildUpdateTransactionPayload,
+  buildTransactionsCsvOptions,
   buildTransactionsSummaryQuery,
   buildTransactionsQuery,
   expandExpenseTxToAttributedParts,
@@ -301,6 +302,29 @@ describe("transactionsAdapter", () => {
       date_start: "2026-03-01",
       date_end: "2026-03-31",
     });
+  });
+
+  it("buildTransactionsCsvOptions traduz filtros legados para o contrato do endpoint", () => {
+    const opts = buildTransactionsCsvOptions({
+      filterType: "despesa",
+      filterMethod: ["pix", "credit_card"],
+      period: "custom",
+      customFrom: "2026-03-01",
+      customTo: "2026-03-31",
+    });
+    // chaves que exportTransactionsCsv realmente lê: type/paymentMethod/dateStart/dateEnd
+    expect(opts).toEqual({
+      type: "expense",
+      paymentMethod: ["pix", "credit_card"],
+      dateStart: "2026-03-01",
+      dateEnd: "2026-03-31",
+    });
+  });
+
+  it("buildTransactionsCsvOptions omite paymentMethod quando não há forma selecionada", () => {
+    const opts = buildTransactionsCsvOptions({ filterType: "todos", filterMethod: [], period: "tudo" });
+    expect(opts).not.toHaveProperty("paymentMethod");
+    expect(opts).not.toHaveProperty("type");
   });
 
   it("POST create: nunca inclui card_last4; parcelado envia installments_count", () => {

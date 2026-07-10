@@ -707,7 +707,10 @@ export async function deleteTransactionForUi(transactionId, organizationId) {
 }
 
 export async function downloadTransactionsCsvForUi(organizationId, options) {
-  return downloadTransactionsCsv(organizationId, options, "transacoes.csv");
+  // `options` chega no formato legado (filterType/filterMethod/period/...);
+  // buildTransactionsCsvOptions traduz para o contrato do endpoint
+  // (type/paymentMethod/dateStart/dateEnd). Sem isso o export ia sem filtro nenhum.
+  return downloadTransactionsCsv(organizationId, buildTransactionsCsvOptions(options), "transacoes.csv");
 }
 
 export function formatTransactionsApiError(error) {

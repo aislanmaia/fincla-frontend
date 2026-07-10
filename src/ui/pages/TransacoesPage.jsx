@@ -755,12 +755,14 @@ function TransacoesPageBody({
   // ── CSV export ────────────────────────────────────────────────────────────
   const exportCSV = () => {
     const header = "Data,Descrição,Categoria,Método,Valor,Status,Tags";
+    // A busca e o filtro por categoria não têm equivalente no endpoint de CSV,
+    // então esses casos caem no export client-side. Forma(s) de pagamento agora
+    // vão para o backend (param repetido), então não limitam mais o caminho remoto.
     if (
       shouldUseRealData &&
       organizationId &&
       !debouncedSearch &&
-      filter.cats.length === 0 &&
-      filter.method.length <= 1
+      filter.cats.length === 0
     ) {
       downloadTransactionsCsvForUi(
         organizationId,
