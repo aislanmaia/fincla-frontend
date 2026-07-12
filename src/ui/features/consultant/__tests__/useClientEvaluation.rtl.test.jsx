@@ -62,7 +62,7 @@ describe("useClientEvaluation", () => {
     });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(evaluateClientWithAi).toHaveBeenCalledWith(ORG, REQ_ID);
+    expect(evaluateClientWithAi).toHaveBeenCalledWith(ORG, REQ_ID, {}, false);
     expect(result.current.result?.health_read.score).toBe(61);
     expect(result.current.correlationId).toBe(REQ_ID);
     expect(result.current.error).toBe("");
@@ -144,9 +144,11 @@ describe("useClientEvaluation", () => {
     await act(async () => { await result.current.run(); });
     await act(async () => { await result.current.run(); });
 
-    expect(evaluateClientWithAi).toHaveBeenNthCalledWith(1, ORG, REQ_ID);
+    // `{}, false` = body vazio, sem `?refresh` — a assinatura ganhou esses dois
+    // argumentos com o cache (dívida 1.1b); o id novo por run continua sendo o ponto.
+    expect(evaluateClientWithAi).toHaveBeenNthCalledWith(1, ORG, REQ_ID, {}, false);
     expect(evaluateClientWithAi).toHaveBeenNthCalledWith(
-      2, ORG, "55555555-5555-4555-8555-555555555555"
+      2, ORG, "55555555-5555-4555-8555-555555555555", {}, false
     );
   });
 
@@ -176,5 +178,58 @@ describe("useClientEvaluation", () => {
 
     expect(result.current.result).toBeNull();
     expect(result.current.correlationId).toBe("");
+  });
+});
+
+describe("useClientEvaluation — cache (dívida 1.1b)", () => {
+  it("expõe cached/computedAt quando o backend reaproveita uma avaliação", async () => {
+    evaluateClientWithAi.mockResolvedValue({
+      output,
+      correlation_id: REQ_ID,
+      cached: true,
+      computed_at: "2026-07-11T14:20:00-03:00",
+    });
+
+    const { result } = renderHook(() => useClientEvaluation(ORG));
+    await act(async () => { await result.current.run(); });
+
+    await waitFor(() => expect(result.current.result).not.toBeNull());
+    expect(result.current.cached).toBe(true);
+    expect(result.current.computedAt).toBe("2026-07-11T14:20:00-03:00");
+  });
+
+  it("trata um backend SEM os campos de cache como 'não é cache'", async () => {
+    // Deploy do FE pode preceder o do backend. Ausência não pode virar `undefined`
+    // vazando para a UI — o drawer mostraria a faixa de cache sem ter idade nenhuma.
+    evaluateClientWithAi.mockResolvedValue({ output, correlation_id: REQ_ID });
+
+    const { result } = renderHook(() => useClientEvaluation(ORG));
+    await act(async () => { await result.current.run(); });
+
+    await waitFor(() => expect(result.current.result).not.toBeNull());
+    expect(result.current.cached).toBe(false);
+    expect(result.current.computedAt).toBeNull();
+  });
+
+  it("run() normal NÃO pede refresh — senão o cache nunca serviria pra nada", async () => {
+    evaluateClientWithAi.mockResolvedValue({ output, correlation_id: REQ_ID, cached: true });
+
+    const { result } = renderHook(() => useClientEvaluation(ORG));
+    await act(async () => { await result.current.run(); });
+
+    expect(evaluateClientWithAi).toHaveBeenCalledWith(ORG, REQ_ID, {}, false);
+  });
+
+  it("refresh() envia refresh=true — o botão 'Recalcular' tem de furar o cache", async () => {
+    // O teste que carrega o peso. Um `X-Request-Id` novo evita o 409 mas NÃO fura
+    // o cache: sem o `refresh=true`, "Recalcular" devolveria a MESMA avaliação em
+    // cache e o botão estaria mentindo para o consultor.
+    evaluateClientWithAi.mockResolvedValue({ output, correlation_id: REQ_ID, cached: false });
+
+    const { result } = renderHook(() => useClientEvaluation(ORG));
+    await act(async () => { await result.current.refresh(); });
+
+    expect(evaluateClientWithAi).toHaveBeenCalledWith(ORG, REQ_ID, {}, true);
+    await waitFor(() => expect(result.current.cached).toBe(false));
   });
 });

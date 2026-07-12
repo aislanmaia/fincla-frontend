@@ -262,11 +262,20 @@ const AI_EVALUATION_TIMEOUT_MS = 90_000;
  * `requestId` é ecoado como `correlation_id` em todas as respostas (sucesso e
  * erro) e é a **chave de idempotência**: repetir o mesmo id devolve `409`.
  * Para um retry legítimo, gere um novo id com `newEvaluationRequestId()`.
+ *
+ * `refresh` fura o cache do backend e força uma execução nova do LLM. Sem ele,
+ * uma avaliação recente do MESMO consultor para o MESMO cliente é reaproveitada
+ * (resposta com `cached: true` + `computed_at`).
+ *
+ * Note que `refresh` e `requestId` resolvem coisas diferentes e não se
+ * substituem: um `requestId` novo evita o `409` (retry da mesma request), mas
+ * ainda assim cairia no cache. Recalcular de verdade exige os dois.
  */
 export const evaluateClientWithAi = async (
   organizationId: string,
   requestId: string,
-  body: AiEvaluationRequest = {}
+  body: AiEvaluationRequest = {},
+  refresh = false
 ): Promise<AiEvaluationResponse> => {
   const response = await apiClient.post<AiEvaluationResponse>(
     `/consultant/clients/${organizationId}/ai-evaluation`,
@@ -274,6 +283,7 @@ export const evaluateClientWithAi = async (
     {
       headers: { 'X-Request-Id': requestId },
       timeout: AI_EVALUATION_TIMEOUT_MS,
+      ...(refresh ? { params: { refresh: true } } : {}),
     }
   );
   return response.data;

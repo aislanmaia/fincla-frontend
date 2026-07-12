@@ -3,7 +3,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { evaluateClientWithAi, newEvaluationRequestId } from "../../../api/consultant";
 import { handleApiError } from "../../../api/client";
 
-const IDLE = { loading: false, error: "", errorCode: "", result: null, correlationId: "" };
+const IDLE = {
+  loading: false,
+  error: "",
+  errorCode: "",
+  result: null,
+  correlationId: "",
+  // `cached` só é `true` quando o backend reaproveitou uma run anterior; `computedAt`
+  // é quando ela foi DE FATO calculada (ISO com offset). Ver §17 do guia da API.
+  cached: false,
+  computedAt: null,
+};
 
 /** `detail.code` que o backend devolve; o front ramifica por ele, nunca por mensagem. */
 export const ERROR_INSUFFICIENT_DATA = "insufficient_data";
@@ -80,41 +90,58 @@ export function useClientEvaluation(organizationId) {
 
   const reset = useCallback(() => setState(IDLE), []);
 
-  const run = useCallback(async () => {
-    if (!organizationId || inFlight.current) return;
-    inFlight.current = true;
-    const correlationId = newEvaluationRequestId();
-    setState({ loading: true, error: "", errorCode: "", result: null, correlationId });
+  /**
+   * `refresh: true` fura o cache do backend e paga uma execução nova do LLM.
+   *
+   * Um `X-Request-Id` novo (que geramos a cada `run`) evita o `409`, mas NÃO
+   * fura o cache — sem `?refresh=true` o backend devolveria a run recente. Só o
+   * consultor pedindo "Recalcular" justifica gastar de novo.
+   */
+  const run = useCallback(
+    // `refresh: force` — a opção pública se chama `refresh`, mas ligá-la a esse
+    // nome sombrearia o callback `refresh` definido abaixo.
+    async ({ refresh: force = false } = {}) => {
+      if (!organizationId || inFlight.current) return;
+      inFlight.current = true;
+      const correlationId = newEvaluationRequestId();
+      setState({ ...IDLE, loading: true, correlationId });
 
-    try {
-      const response = await evaluateClientWithAi(organizationId, correlationId);
-      if (!mounted.current) return;
-      setState({
-        loading: false,
-        error: "",
-        errorCode: "",
-        result: response.output,
-        // O backend ecoa o correlation_id definitivo; guardamos o dele, não o nosso.
-        correlationId: response.correlation_id || correlationId,
-      });
-    } catch (err) {
-      if (!mounted.current) return;
-      const status = err?.response?.status;
-      // `detail` é um objeto `{code, message}` desde o fix de `insufficient_data`.
-      // Guardamos contra o formato antigo (string) — um deploy do FE pode preceder
-      // o do backend, e `detail.code` viraria `undefined` sem quebrar nada.
-      const code = err?.response?.data?.detail?.code ?? "";
-      setState({
-        loading: false,
-        error: ERROR_BY_CODE[code] || ERROR_BY_STATUS[status] || handleApiError(err),
-        errorCode: code,
-        result: null,
-        correlationId,
-      });
-    } finally {
-      inFlight.current = false;
-    }
-  }, [organizationId]);
+      try {
+        const response = await evaluateClientWithAi(organizationId, correlationId, {}, force);
+        if (!mounted.current) return;
+        setState({
+          loading: false,
+          error: "",
+          errorCode: "",
+          result: response.output,
+          // O backend ecoa o correlation_id definitivo; guardamos o dele, não o nosso.
+          correlationId: response.correlation_id || correlationId,
+          // Backend anterior ao cache não manda os campos — ausência é "não é cache".
+          cached: response.cached === true,
+          computedAt: response.computed_at ?? null,
+        });
+      } catch (err) {
+        if (!mounted.current) return;
+        const status = err?.response?.status;
+        // `detail` é um objeto `{code, message}` desde o fix de `insufficient_data`.
+        // Guardamos contra o formato antigo (string) — um deploy do FE pode preceder
+        // o do backend, e `detail.code` viraria `undefined` sem quebrar nada.
+        const code = err?.response?.data?.detail?.code ?? "";
+        setState({
+          ...IDLE,
+          error: ERROR_BY_CODE[code] || ERROR_BY_STATUS[status] || handleApiError(err),
+          errorCode: code,
+          correlationId,
+        });
+      } finally {
+        inFlight.current = false;
+      }
+    },
+    [organizationId]
+  );
 
-  return { ...state, run, reset };
+  /** "Recalcular": descarta a avaliação em cache e paga uma run nova. */
+  const refresh = useCallback(() => run({ refresh: true }), [run]);
+
+  return { ...state, run, refresh, reset };
 }

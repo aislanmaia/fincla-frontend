@@ -66,3 +66,34 @@ export function fmtLastActive(iso) {
   if (!y || !m || !d) return DASH;
   return `${d}/${m}/${y}`;
 }
+
+/**
+ * "há 3 minutos" — quando uma avaliação em cache foi de fato calculada.
+ *
+ * Recebe o `computed_at` do backend: ISO **com offset**. O offset não é detalhe:
+ * sem ele o JS interpretaria o timestamp como hora local e um servidor em UTC
+ * daria 3h de erro para um browser em BRT — o drawer anunciaria "há 3 horas"
+ * numa avaliação de 3 minutos.
+ *
+ * Devolve `null` (e não uma string qualquer) quando não há o que dizer: quem
+ * chama decide se some com o rótulo, em vez de exibir um "—" sem sentido.
+ */
+export function fmtComputedAt(iso, now = Date.now()) {
+  if (!iso) return null;
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return null;
+
+  const seconds = Math.round((now - then) / 1000);
+  // Relógios de cliente e servidor divergem; um "há -2 minutos" seria absurdo na
+  // tela. Tudo que parece futuro vira "agora mesmo".
+  if (seconds < 60) return "agora mesmo";
+
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `há ${minutes} ${minutes === 1 ? "minuto" : "minutos"}`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `há ${hours} ${hours === 1 ? "hora" : "horas"}`;
+
+  const days = Math.floor(hours / 24);
+  return `há ${days} ${days === 1 ? "dia" : "dias"}`;
+}

@@ -3,7 +3,7 @@ import React, { useEffect, useRef } from "react";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { AiChart } from "./AiChart.jsx";
-import { healthTone } from "./consultantFormat";
+import { fmtComputedAt, healthTone } from "./consultantFormat";
 import { HealthRing, Icon } from "./consultantUi";
 import { ERROR_INSUFFICIENT_DATA, useClientEvaluation } from "./useClientEvaluation.js";
 
@@ -189,6 +189,44 @@ function ErrorState({ message, onRetry }) {
 }
 
 /** Botão de rodapé desabilitado — Trilha B (fora do escopo do A1). */
+/**
+ * Faixa "esta avaliação não é nova" + ação de recalcular.
+ *
+ * Existe porque o cache do backend torna o segundo clique instantâneo, e um
+ * resultado que aparece rápido demais, sem explicação, faz o consultor duvidar
+ * se está vendo dado velho. Melhor dizer a idade da análise do que deixá-lo
+ * adivinhar — e dar a saída (`?refresh=true`) na mesma linha.
+ *
+ * Some quando `fmtComputedAt` não tem o que dizer: um rótulo "há —" seria pior
+ * que rótulo nenhum.
+ */
+function CachedNotice({ computedAt, onRefresh }) {
+  const when = fmtComputedAt(computedAt);
+  if (!when) return null;
+
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+      background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "9px 12px",
+    }}>
+      <span style={{ ...G, fontSize: 11.5, color: T.inkLight }}>
+        Avaliação de <strong style={{ color: T.inkMid, fontWeight: 700 }}>{when}</strong>
+      </span>
+      <button
+        type="button"
+        onClick={onRefresh}
+        style={{
+          ...G, fontSize: 11.5, fontWeight: 700, color: T.purple,
+          background: "transparent", border: "none", padding: 0, cursor: "pointer",
+          textDecoration: "underline", textUnderlineOffset: 2, flexShrink: 0,
+        }}
+      >
+        Recalcular
+      </button>
+    </div>
+  );
+}
+
 function SoonButton({ icon, children }) {
   return (
     <button type="button" disabled title={`${children} (em breve)`}
@@ -201,7 +239,8 @@ function SoonButton({ icon, children }) {
 }
 
 export function ConsultantEvaluationDrawer({ open, organizationId, clientName, onClose }) {
-  const { loading, error, errorCode, result, correlationId, run, reset } = useClientEvaluation(organizationId);
+  const { loading, error, errorCode, result, correlationId, cached, computedAt, run, refresh, reset } =
+    useClientEvaluation(organizationId);
   const startedFor = useRef(null);
 
   // Dispara a avaliação ao abrir. Só uma vez por cliente: reabrir o drawer
@@ -270,6 +309,8 @@ export function ConsultantEvaluationDrawer({ open, organizationId, clientName, o
           )}
           {!loading && !error && result && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {cached && <CachedNotice computedAt={computedAt} onRefresh={refresh} />}
+
               <VerdictBlock healthRead={result.health_read} />
 
               <p style={{ ...G, fontSize: 13, color: T.inkMid, lineHeight: 1.65, margin: 0 }}>{result.summary}</p>

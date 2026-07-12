@@ -2007,4 +2007,18 @@ export interface AiEvaluationResponse {
   session_id: string;
   run_id: string;
   output: EvaluateClientOutput;
+  /**
+   * `true` => output reaproveitado de uma avaliação recente; nenhum token gasto.
+   *
+   * Opcional no tipo, e não por preciosismo: um backend anterior ao cache não
+   * envia o campo, e declará-lo obrigatório seria uma mentira de tipo que o
+   * TypeScript não teria como pegar. Ausente é tratado como "não veio do cache".
+   */
+  cached?: boolean;
+  /**
+   * ISO datetime **com offset** de quando a análise foi DE FATO calculada — não
+   * é "agora". É o que sustenta o "Avaliação de há N minutos". Sem o offset, o
+   * JS leria o timestamp como hora local e a conta daria errado por fusos.
+   */
+  computed_at?: string | null;
 }

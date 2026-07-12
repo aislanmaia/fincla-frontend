@@ -208,7 +208,11 @@ describe("<ConsultantClientsPage> — Avaliar com IA", () => {
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByText("Ana Beatriz")).toBeInTheDocument();
     expect(within(dialog).getByText(/Analisando dados de Ana/)).toBeInTheDocument();
-    expect(evaluateClientWithAi).toHaveBeenCalledWith("a", "11111111-1111-4111-8111-111111111111");
+    // `{}, false` = body vazio e sem `?refresh`: abrir o drawer PODE cair no cache
+    // do backend. Só o "Recalcular" explícito manda `refresh=true` (dívida 1.1b).
+    expect(evaluateClientWithAi).toHaveBeenCalledWith(
+      "a", "11111111-1111-4111-8111-111111111111", {}, false
+    );
   });
 
   // O backend barra com 403; o gate no cliente evita o round-trip e comunica o
