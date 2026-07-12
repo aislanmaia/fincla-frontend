@@ -234,13 +234,9 @@ export function ConsultantClientsPage() {
 
       {linkModal && <ActivationLinkModal state={linkModal} onClose={() => setLinkModal(null)} />}
 
-      {/* Montado desde a primeira avaliação e NUNCA desmontado ao fechar: o
-          estado da run vive dentro do drawer, e desmontá-lo abandonaria uma
-          avaliação em voo (que o backend termina e cobra assim mesmo). Só `open`
-          controla a visibilidade. */}
       {evaluation.target && (
         <ConsultantEvaluationDrawer
-          open={evaluation.open}
+          open
           organizationId={evaluation.target.organizationId}
           clientName={evaluation.target.clientName}
           onClose={closeEvaluation}

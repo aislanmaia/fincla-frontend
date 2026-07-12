@@ -20,6 +20,7 @@ vi.mock("../../../../api/client", () => ({ handleApiError: vi.fn(() => "erro gen
 vi.mock("../AiChart.jsx", () => ({ AiChart: () => null }));
 
 import { evaluateClientWithAi } from "../../../../api/consultant";
+import { __resetStore } from "../clientEvaluationStore.js";
 import { ConsultantEvaluationDrawer } from "../ConsultantEvaluationDrawer.jsx";
 
 const output = {
@@ -36,6 +37,9 @@ const drawer = (
 );
 
 beforeEach(() => {
+  // O estado das avaliações vive fora do React (por cliente) — sem isto um
+  // teste herda a avaliação do anterior.
+  __resetStore();
   vi.mocked(evaluateClientWithAi).mockReset();
 });
 afterEach(() => {

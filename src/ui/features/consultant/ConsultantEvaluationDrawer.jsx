@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
@@ -270,17 +270,14 @@ function SoonButton({ icon, children }) {
 export function ConsultantEvaluationDrawer({ open, organizationId, clientName, onClose }) {
   const { loading, error, errorCode, result, correlationId, computedAt, run, refresh, reset } =
     useClientEvaluation(organizationId);
-  const startedFor = useRef(null);
 
-  // Dispara a avaliação ao abrir. Só uma vez por cliente: reabrir o drawer
-  // mostra a run já existente — em voo ou pronta — em vez de disparar outra.
-  // O `startedFor` só cumpre esse papel porque o drawer NÃO é mais desmontado ao
-  // fechar; antes ele nascia zerado a cada abertura e o "reabrir" pagava uma
-  // segunda avaliação em paralelo com a primeira.
+  // "Garanta que existe uma avaliação para este cliente." O `run` é idempotente
+  // por cliente (ver `clientEvaluationStore`): se já há uma run em voo ou um
+  // resultado, isto não dispara nada. É o que faz reabrir o painel reencontrar a
+  // run em vez de pagar por uma segunda — inclusive depois de o consultor ter ido
+  // olhar outro cliente no meio.
   useEffect(() => {
     if (!open || !organizationId) return;
-    if (startedFor.current === organizationId) return;
-    startedFor.current = organizationId;
     run();
   }, [open, organizationId, run]);
 

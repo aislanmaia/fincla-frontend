@@ -8,36 +8,19 @@ import { useCallback, useState } from "react";
  * para chamar o endpoint e do nome para o cabeçalho — os três chamadores já têm
  * o objeto `client` enriquecido em mãos.
  *
- * **`target` é pegajoso: `close()` NÃO o apaga.** Ele existe para manter o drawer
- * *montado* mesmo fechado, e `open` diz apenas se ele aparece. A versão anterior
- * desmontava o drawer ao fechar ("cada abertura é uma montagem nova") — e isso
- * matava o estado do `useClientEvaluation` junto. Uma avaliação em voo virava
- * órfã: o backend a levava até o fim (gastando ~20 mil tokens), o resultado era
- * descartado, e reabrir o painel disparava uma SEGUNDA avaliação paga em
- * paralelo. Medido no ledger: duas runs do mesmo cliente com 4 s de diferença,
- * 45.853 tokens de entrada para uma única avaliação pedida.
- *
- * Mantendo o drawer montado, fechar e reabrir reencontra a MESMA run — rodando
- * ou já pronta.
+ * Fechar o drawer pode desmontá-lo à vontade: a avaliação **não mora aqui**, e
+ * sim em `clientEvaluationStore` (fora do React), por cliente. Reabrir
+ * reencontra a run — em voo ou pronta — em vez de disparar outra.
  */
 export function useEvaluationDrawer() {
   const [target, setTarget] = useState(null);
-  const [open, setOpen] = useState(false);
 
   const openFor = useCallback((client) => {
     if (!client?.organization_id) return;
-    // Preserva a identidade do objeto quando é o mesmo cliente: trocar `target`
-    // por um objeto novo mudaria a prop `organizationId`… não, o id é o mesmo —
-    // mas manter a referência evita renders inúteis do drawer.
-    setTarget((prev) =>
-      prev?.organizationId === client.organization_id
-        ? prev
-        : { organizationId: client.organization_id, clientName: client.client_name }
-    );
-    setOpen(true);
+    setTarget({ organizationId: client.organization_id, clientName: client.client_name });
   }, []);
 
-  const close = useCallback(() => setOpen(false), []);
+  const close = useCallback(() => setTarget(null), []);
 
-  return { target, open, openFor, close };
+  return { target, openFor, close };
 }

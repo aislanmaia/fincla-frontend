@@ -24,6 +24,7 @@ vi.mock("../../../../api/consultant", () => ({
 }));
 
 import { evaluateClientWithAi, getConsultantClients } from "../../../../api/consultant";
+import { __resetStore } from "../../../features/consultant/clientEvaluationStore.js";
 import { ConsultantAddClientProvider } from "../../../features/consultant/ConsultantAddClientContext.jsx";
 import { ConsultantClientsPage } from "../ConsultantClientsPage.jsx";
 
@@ -58,6 +59,9 @@ const carla = client({ organization_id: "c", client_name: "Carla Dias", health: 
 beforeEach(() => {
   navigate.mockReset();
   vi.mocked(getConsultantClients).mockReset();
+  // O store das avaliações vive fora do React (é o que faz a run sobreviver ao
+  // fechamento do painel) — logo sobrevive também entre os testes.
+  __resetStore();
 });
 
 afterEach(() => {
@@ -243,6 +247,47 @@ describe("<ConsultantClientsPage> — Avaliar com IA", () => {
     expect(within(dialog).getByText(/Analisando dados de Ana/)).toBeInTheDocument();
     expect(evaluateClientWithAi).toHaveBeenCalledTimes(1);
   });
+
+  it("avaliar A, espiar B e voltar para A não paga o A duas vezes", async () => {
+    // Medido no ledger antes da correção: o consultor pediu Carlos, abriu Mariana,
+    // voltou ao Carlos — e a volta disparou uma SEGUNDA avaliação do Carlos, que
+    // voltou `blocked`. Ele viu "Não foi possível avaliar" enquanto a primeira run
+    // do Carlos, que deu `ok` e custou 9.831 tokens, era descartada. Três runs
+    // pagas para dois clientes.
+    vi.mocked(getConsultantClients).mockResolvedValue({ total: 2, clients: [ana, carla] });
+    vi.mocked(evaluateClientWithAi).mockReturnValue(new Promise(() => {})); // tudo fica em voo
+
+    renderWithVersion(0);
+    await waitFor(() => expect(screen.getByText("Ana Beatriz")).toBeInTheDocument());
+
+    // A busca isola um cliente por vez. Clicar por índice dependeria da ordenação
+    // da carteira (saúde ascendente), que não é o assunto deste teste — e foi o
+    // que me fez ler um falso negativo aqui.
+    const avaliarCliente = (nome) => {
+      fireEvent.change(screen.getByLabelText("Buscar cliente"), { target: { value: nome } });
+      fireEvent.click(screen.getByRole("button", { name: /Avaliar com IA/ }));
+      return screen.findByRole("dialog");
+    };
+    const fechar = async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Fechar" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    };
+
+    await avaliarCliente("ana"); // A
+    await fechar();
+
+    await avaliarCliente("carla"); // B — a run de A segue em voo
+    await fechar();
+
+    const dialog = await avaliarCliente("ana"); // volta para A, ainda rodando
+
+    // Reencontrou a run de A em voo — não disparou outra.
+    expect(within(dialog).getByText(/Analisando dados de Ana/)).toBeInTheDocument();
+    // Uma chamada por cliente. Nunca duas para o mesmo.
+    expect(vi.mocked(evaluateClientWithAi).mock.calls.map((c) => c[0])).toEqual(["a", "c"]);
+    // Três ciclos de abrir/fechar, e cada fechamento ainda refaz o fetch da
+    // carteira: sob a suíte inteira em paralelo isto passa dos 5s padrão.
+  }, 15_000);
 
   it("a avaliação sobrevive ao fechamento: reabrir mostra o resultado que chegou com o painel fechado", async () => {
     // O consultor fecha o painel para ir fazer outra coisa. A avaliação continua

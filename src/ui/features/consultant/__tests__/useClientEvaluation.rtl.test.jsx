@@ -14,6 +14,7 @@ vi.mock("../../../../api/client", () => ({
 }));
 
 import { evaluateClientWithAi, newEvaluationRequestId } from "../../../../api/consultant";
+import { __resetStore } from "../clientEvaluationStore.js";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 const REQ_ID = "22222222-2222-4222-8222-222222222222";
@@ -35,6 +36,9 @@ const httpError = (status) => Object.assign(new Error(`HTTP ${status}`), {
 beforeEach(() => {
   vi.mocked(evaluateClientWithAi).mockReset();
   vi.mocked(newEvaluationRequestId).mockReset().mockReturnValue(REQ_ID);
+  // O estado vive fora do React (por cliente) — sem isto um teste herda a
+  // avaliação do anterior.
+  __resetStore();
 });
 
 afterEach(() => {
@@ -132,7 +136,10 @@ describe("useClientEvaluation", () => {
     expect(result.current.error).toBe("erro generico");
   });
 
-  it("generates a fresh request id per run — reusing it would 409", async () => {
+  it("cada execução leva um request id novo — reusá-lo daria 409", async () => {
+    // `run()` é idempotente por cliente (ele GARANTE uma avaliação, não dispara
+    // uma), então quem executa de novo é o `refresh()`. O ponto do teste continua
+    // sendo o mesmo: nenhuma execução reaproveita o id da anterior.
     vi.mocked(newEvaluationRequestId)
       .mockReturnValueOnce(REQ_ID)
       .mockReturnValueOnce("55555555-5555-4555-8555-555555555555");
@@ -142,14 +149,28 @@ describe("useClientEvaluation", () => {
 
     const { result } = renderHook(() => useClientEvaluation(ORG));
     await act(async () => { await result.current.run(); });
-    await act(async () => { await result.current.run(); });
+    await act(async () => { await result.current.refresh(); });
 
-    // `{}, false` = body vazio, sem `?refresh` — a assinatura ganhou esses dois
-    // argumentos com o cache (dívida 1.1b); o id novo por run continua sendo o ponto.
     expect(evaluateClientWithAi).toHaveBeenNthCalledWith(1, ORG, REQ_ID, {}, false);
     expect(evaluateClientWithAi).toHaveBeenNthCalledWith(
-      2, ORG, "55555555-5555-4555-8555-555555555555", {}, false
+      2, ORG, "55555555-5555-4555-8555-555555555555", {}, true
     );
+  });
+
+  it("run() é idempotente: chamá-lo de novo NÃO paga outra avaliação", async () => {
+    // O drawer chama `run()` toda vez que abre. Se isso disparasse uma execução,
+    // reabrir o painel custaria uma avaliação nova — que é o bug que originou o
+    // store.
+    vi.mocked(evaluateClientWithAi).mockResolvedValue({
+      correlation_id: REQ_ID, session_id: "s", run_id: "r", output,
+    });
+
+    const { result } = renderHook(() => useClientEvaluation(ORG));
+    await act(async () => { await result.current.run(); });
+    await act(async () => { await result.current.run(); });
+    await act(async () => { await result.current.run(); });
+
+    expect(evaluateClientWithAi).toHaveBeenCalledTimes(1);
   });
 
   it("clears a stale result when the client changes", async () => {

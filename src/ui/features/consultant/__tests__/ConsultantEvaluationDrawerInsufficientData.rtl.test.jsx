@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
+import { __resetStore } from "../clientEvaluationStore.js";
 import { ConsultantEvaluationDrawer } from "../ConsultantEvaluationDrawer.jsx";
 import { evaluateClientWithAi } from "../../../../api/consultant";
 
@@ -20,6 +21,11 @@ vi.mock("../../../../api/consultant", () => ({
  */
 const reject = (status, detail) =>
   Promise.reject({ response: { status, data: { detail } } });
+
+beforeEach(() => {
+  // O estado vive fora do React (por cliente) — zere entre os casos.
+  __resetStore();
+});
 
 afterEach(() => {
   cleanup();
