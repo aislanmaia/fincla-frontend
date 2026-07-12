@@ -189,17 +189,18 @@ function ErrorState({ message, onRetry }) {
 }
 
 /**
- * Faixa "esta avaliação não é nova" + ação de recalcular.
+ * Idade da avaliação + ação de recalcular.
  *
- * Existe porque o cache do backend torna o segundo clique instantâneo, e um
- * resultado que aparece rápido demais, sem explicação, faz o consultor duvidar
- * se está vendo dado velho. Melhor dizer a idade da análise do que deixá-lo
- * adivinhar — e dar a saída (`?refresh=true`) na mesma linha.
+ * Nasceu do cache (que torna o segundo clique instantâneo e faria o consultor
+ * duvidar se está vendo dado velho), mas hoje vale para QUALQUER avaliação: o
+ * drawer sobrevive ao fechamento, então a análise na tela pode ter horas mesmo
+ * sem ter vindo do cache. Amarrar a faixa a `cached` esconderia justamente o
+ * caso pior — resultado velho, sem idade e sem botão de recalcular.
  *
  * Some quando `fmtComputedAt` não tem o que dizer: um rótulo "há —" seria pior
  * que rótulo nenhum.
  */
-function CachedNotice({ computedAt, onRefresh }) {
+function EvaluationAgeNotice({ computedAt, onRefresh }) {
   const when = fmtComputedAt(computedAt);
   if (!when) return null;
 
@@ -267,13 +268,15 @@ function SoonButton({ icon, children }) {
 }
 
 export function ConsultantEvaluationDrawer({ open, organizationId, clientName, onClose }) {
-  const { loading, error, errorCode, result, correlationId, cached, computedAt, run, refresh, reset } =
+  const { loading, error, errorCode, result, correlationId, computedAt, run, refresh, reset } =
     useClientEvaluation(organizationId);
   const startedFor = useRef(null);
 
   // Dispara a avaliação ao abrir. Só uma vez por cliente: reabrir o drawer
-  // mostra o resultado já obtido em vez de gastar outra run de LLM (a
-  // referência re-executa a cada abertura, mas lá a resposta é mock e grátis).
+  // mostra a run já existente — em voo ou pronta — em vez de disparar outra.
+  // O `startedFor` só cumpre esse papel porque o drawer NÃO é mais desmontado ao
+  // fechar; antes ele nascia zerado a cada abertura e o "reabrir" pagava uma
+  // segunda avaliação em paralelo com a primeira.
   useEffect(() => {
     if (!open || !organizationId) return;
     if (startedFor.current === organizationId) return;
@@ -341,7 +344,7 @@ export function ConsultantEvaluationDrawer({ open, organizationId, clientName, o
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               {error && <RefreshFailedNotice message={error} onRetry={refresh} />}
 
-              {cached && <CachedNotice computedAt={computedAt} onRefresh={refresh} />}
+              <EvaluationAgeNotice computedAt={computedAt} onRefresh={refresh} />
 
               <VerdictBlock healthRead={result.health_read} />
 

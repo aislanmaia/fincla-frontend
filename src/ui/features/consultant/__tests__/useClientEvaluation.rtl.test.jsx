@@ -200,7 +200,7 @@ describe("useClientEvaluation — cache (dívida 1.1b)", () => {
 
   it("trata um backend SEM os campos de cache como 'não é cache'", async () => {
     // Deploy do FE pode preceder o do backend. Ausência não pode virar `undefined`
-    // vazando para a UI — o drawer mostraria a faixa de cache sem ter idade nenhuma.
+    // vazando para a UI.
     evaluateClientWithAi.mockResolvedValue({ output, correlation_id: REQ_ID });
 
     const { result } = renderHook(() => useClientEvaluation(ORG));
@@ -208,7 +208,9 @@ describe("useClientEvaluation — cache (dívida 1.1b)", () => {
 
     await waitFor(() => expect(result.current.result).not.toBeNull());
     expect(result.current.cached).toBe(false);
-    expect(result.current.computedAt).toBeNull();
+    // A data, porém, nós mesmos cravamos: o resultado fica na tela mesmo com o
+    // painel fechado, então ele precisa de idade mesmo contra um backend velho.
+    expect(Number.isNaN(Date.parse(result.current.computedAt))).toBe(false);
   });
 
   it("run() normal NÃO pede refresh — senão o cache nunca serviria pra nada", async () => {
@@ -254,6 +256,61 @@ describe("useClientEvaluation — cache (dívida 1.1b)", () => {
 
     expect(result.current.result).toBeNull();
     expect(result.current.error).toMatch(/não foi possível gerar/i);
+  });
+
+  it("trocar de cliente com uma run em voo: a resposta velha NÃO se pinta no cliente novo", async () => {
+    // O hook agora sobrevive ao fechamento do drawer, então a avaliação do
+    // cliente A pode ainda estar em voo quando o consultor abre o cliente B.
+    // Sem o token de run, a resposta de A chegaria depois e apareceria como se
+    // fosse a análise de B — o pior erro possível num produto financeiro.
+    let responderA;
+    evaluateClientWithAi.mockReturnValueOnce(new Promise((r) => { responderA = r; }));
+
+    const outraOrg = "99999999-9999-4999-8999-999999999999";
+    const { result, rerender } = renderHook(({ org }) => useClientEvaluation(org), {
+      initialProps: { org: ORG },
+    });
+    act(() => { result.current.run(); });
+
+    rerender({ org: outraOrg });
+
+    await act(async () => {
+      responderA({ output, correlation_id: REQ_ID });
+    });
+
+    expect(result.current.result).toBeNull();
+    expect(result.current.loading).toBe(false);
+  });
+
+  it("trocar de cliente libera o guard: o cliente novo consegue ser avaliado", async () => {
+    // O `inFlight` da run velha não pode trancar a avaliação do cliente novo.
+    evaluateClientWithAi.mockReturnValueOnce(new Promise(() => {})); // A fica em voo pra sempre
+    evaluateClientWithAi.mockResolvedValueOnce({ output, correlation_id: REQ_ID });
+
+    const outraOrg = "99999999-9999-4999-8999-999999999999";
+    const { result, rerender } = renderHook(({ org }) => useClientEvaluation(org), {
+      initialProps: { org: ORG },
+    });
+    act(() => { result.current.run(); });
+
+    rerender({ org: outraOrg });
+    await act(async () => { await result.current.run(); });
+
+    expect(evaluateClientWithAi).toHaveBeenNthCalledWith(2, outraOrg, REQ_ID, {}, false);
+    expect(result.current.result?.health_read.score).toBe(61);
+  });
+
+  it("data uma run nova mesmo sem o backend mandar computed_at", async () => {
+    // O drawer não é mais desmontado ao fechar: esta análise pode passar horas na
+    // tela. Sem uma data, a faixa de idade sumiria e o consultor olharia um
+    // diagnóstico velho achando que é de agora.
+    evaluateClientWithAi.mockResolvedValue({ output, correlation_id: REQ_ID, cached: false });
+
+    const { result } = renderHook(() => useClientEvaluation(ORG));
+    await act(async () => { await result.current.run(); });
+
+    expect(result.current.cached).toBe(false);
+    expect(Number.isNaN(Date.parse(result.current.computedAt))).toBe(false);
   });
 
   it("refresh() envia refresh=true — o botão 'Recalcular' tem de furar o cache", async () => {

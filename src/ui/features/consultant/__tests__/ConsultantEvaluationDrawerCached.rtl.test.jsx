@@ -63,12 +63,19 @@ describe("ConsultantEvaluationDrawer — avaliação em cache", () => {
     expect(screen.getByRole("button", { name: /recalcular/i })).toBeTruthy();
   });
 
-  it("NÃO mostra a faixa quando a avaliação acabou de ser calculada", () => {
-    vi.mocked(useClientEvaluation).mockReturnValue(hookState({ result, cached: false }));
+  it("mostra a faixa também numa avaliação recém-calculada (não só nas do cache)", () => {
+    // Antes a faixa dependia de `cached`. Agora o drawer sobrevive ao fechamento,
+    // então uma análise NÃO-cacheada pode ficar horas na tela — e era justamente
+    // esse o caso pior: velha, sem idade e sem botão de recalcular. A idade manda,
+    // não a procedência.
+    vi.mocked(useClientEvaluation).mockReturnValue(
+      hookState({ result, cached: false, computedAt: threeMinutesAgo() })
+    );
 
     renderDrawer();
 
-    expect(screen.queryByRole("button", { name: /recalcular/i })).toBeNull();
+    expect(screen.getByText(/há 3 minutos/i)).toBeTruthy();
+    expect(screen.getByRole("button", { name: /recalcular/i })).toBeTruthy();
   });
 
   it("'Recalcular' chama refresh — e é ele que fura o cache", () => {

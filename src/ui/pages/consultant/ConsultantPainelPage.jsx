@@ -169,9 +169,10 @@ export function ConsultantPainelPage() {
         {rightColumn}
       </div>
 
+      {/* Fica montado ao fechar — desmontar abandonaria a avaliação em voo. */}
       {evaluation.target && (
         <ConsultantEvaluationDrawer
-          open
+          open={evaluation.open}
           organizationId={evaluation.target.organizationId}
           clientName={evaluation.target.clientName}
           onClose={evaluation.close}

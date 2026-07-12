@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const navigate = vi.fn();
@@ -213,6 +213,70 @@ describe("<ConsultantClientsPage> — Avaliar com IA", () => {
     expect(evaluateClientWithAi).toHaveBeenCalledWith(
       "a", "11111111-1111-4111-8111-111111111111", {}, false
     );
+  });
+
+  it("fechar e reabrir o painel NÃO dispara uma segunda avaliação paga", async () => {
+    // O bug mais caro que este código já teve. Fechar desmontava o drawer e
+    // matava o estado da run; reabrir montava tudo de novo, gerava um
+    // `X-Request-Id` novo e disparava OUTRA avaliação — em paralelo com a
+    // primeira, que o backend levava até o fim e cobrava do mesmo jeito.
+    // Medido no ledger: 2 runs do mesmo cliente com 4s de diferença, 45.853
+    // tokens de entrada para uma avaliação só. O 409 não pega (é por request-id)
+    // e o cache não pega (só enxerga runs terminadas).
+    vi.mocked(getConsultantClients).mockResolvedValue({ total: 1, clients: [ana] });
+    vi.mocked(evaluateClientWithAi).mockReturnValue(new Promise(() => {})); // fica em voo
+
+    renderWithVersion(0);
+    await waitFor(() => expect(screen.getByText("Ana Beatriz")).toBeInTheDocument());
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Avaliar com IA/ })[0]);
+    await screen.findByRole("dialog");
+    expect(evaluateClientWithAi).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Fechar" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Avaliar com IA/ })[0]);
+    const dialog = await screen.findByRole("dialog");
+
+    // Reabriu na MESMA run: ainda carregando, e nenhuma requisição nova.
+    expect(within(dialog).getByText(/Analisando dados de Ana/)).toBeInTheDocument();
+    expect(evaluateClientWithAi).toHaveBeenCalledTimes(1);
+  });
+
+  it("a avaliação sobrevive ao fechamento: reabrir mostra o resultado que chegou com o painel fechado", async () => {
+    // O consultor fecha o painel para ir fazer outra coisa. A avaliação continua
+    // no servidor; quando ele volta, o resultado tem de estar lá — não uma tela
+    // em branco nem uma requisição nova.
+    let entregar;
+    vi.mocked(getConsultantClients).mockResolvedValue({ total: 1, clients: [ana] });
+    vi.mocked(evaluateClientWithAi).mockReturnValue(new Promise((r) => { entregar = r; }));
+
+    renderWithVersion(0);
+    await waitFor(() => expect(screen.getByText("Ana Beatriz")).toBeInTheDocument());
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Avaliar com IA/ })[0]);
+    await screen.findByRole("dialog");
+    fireEvent.click(screen.getByRole("button", { name: "Fechar" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+
+    // A IA responde com o painel FECHADO.
+    await act(async () => {
+      entregar({
+        correlation_id: "11111111-1111-4111-8111-111111111111",
+        output: {
+          summary: "Cliente em atenção.",
+          health_read: { score: 61, label: "Atenção", headline: "Renda comprometida." },
+          action_plan: [], watch_points: [], charts: [], disclaimers: [],
+        },
+      });
+    });
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Avaliar com IA/ })[0]);
+    const dialog = await screen.findByRole("dialog");
+
+    expect(within(dialog).getByText("Cliente em atenção.")).toBeInTheDocument();
+    expect(evaluateClientWithAi).toHaveBeenCalledTimes(1);
   });
 
   // O backend barra com 403; o gate no cliente evita o round-trip e comunica o

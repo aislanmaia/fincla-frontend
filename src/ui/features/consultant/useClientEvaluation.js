@@ -65,6 +65,9 @@ export function useClientEvaluation(organizationId) {
   const [state, setState] = useState(IDLE);
   const mounted = useRef(true);
   const inFlight = useRef(false);
+  // Sequencial da run "válida". Uma resposta que chega com token vencido é de um
+  // cliente que o consultor já trocou — descartada, nunca pintada na tela.
+  const runToken = useRef(0);
 
   // Espelho do último estado commitado. Efeitos rodam antes do próximo event
   // handler, então quando `run()` é chamado isto já reflete o que está na tela.
@@ -88,10 +91,18 @@ export function useClientEvaluation(organizationId) {
   // efeito de auto-run do drawer. Sem o guard, a segunda passada rodaria depois
   // de `run()` já ter setado `loading` e apagaria esse estado — o drawer ficava
   // em branco durante toda a requisição (~55s) em dev.
+  //
+  // Trocar de cliente também LIBERA o `inFlight` e invalida a run anterior: o
+  // hook agora sobrevive ao fechamento do drawer, então uma avaliação do cliente
+  // A pode continuar em voo quando o consultor abre o cliente B. Sem isto, o
+  // guard de `inFlight` bloquearia a avaliação de B, e pior — a resposta de A
+  // chegaria depois e se pintaria na tela de B.
   const lastOrganizationId = useRef(organizationId);
   useEffect(() => {
     if (lastOrganizationId.current === organizationId) return;
     lastOrganizationId.current = organizationId;
+    runToken.current += 1;
+    inFlight.current = false;
     setState(IDLE);
   }, [organizationId]);
 
@@ -110,6 +121,7 @@ export function useClientEvaluation(organizationId) {
     async ({ refresh: force = false } = {}) => {
       if (!organizationId || inFlight.current) return;
       inFlight.current = true;
+      const token = (runToken.current += 1);
       const correlationId = newEvaluationRequestId();
 
       // Um "Recalcular" que falha NÃO pode custar ao consultor a avaliação que
@@ -124,7 +136,7 @@ export function useClientEvaluation(organizationId) {
 
       try {
         const response = await evaluateClientWithAi(organizationId, correlationId, {}, force);
-        if (!mounted.current) return;
+        if (!mounted.current || token !== runToken.current) return;
         setState({
           loading: false,
           error: "",
@@ -134,10 +146,14 @@ export function useClientEvaluation(organizationId) {
           correlationId: response.correlation_id || correlationId,
           // Backend anterior ao cache não manda os campos — ausência é "não é cache".
           cached: response.cached === true,
-          computedAt: response.computed_at ?? null,
+          // O backend só data as respostas que vieram do cache. Para uma run nova
+          // datamos aqui: o drawer agora sobrevive ao fechamento, então esta
+          // avaliação pode ficar horas na tela — e o consultor precisa enxergar a
+          // idade dela e ter o "Recalcular" à mão, venha ela do cache ou não.
+          computedAt: response.computed_at ?? new Date().toISOString(),
         });
       } catch (err) {
-        if (!mounted.current) return;
+        if (!mounted.current || token !== runToken.current) return;
         const status = err?.response?.status;
         // `detail` é um objeto `{code, message}` desde o fix de `insufficient_data`.
         // Guardamos contra o formato antigo (string) — um deploy do FE pode preceder
@@ -156,7 +172,11 @@ export function useClientEvaluation(organizationId) {
           correlationId: fallback ? fallback.correlationId : correlationId,
         });
       } finally {
-        inFlight.current = false;
+        // Só a run corrente pode destrancar a porta. Se o consultor trocou de
+        // cliente, quem está em voo agora é OUTRA run — e a run velha, ao
+        // terminar, liberaria o `inFlight` dela por engano, permitindo um
+        // segundo disparo pago para o cliente novo.
+        if (token === runToken.current) inFlight.current = false;
       }
     },
     [organizationId]
