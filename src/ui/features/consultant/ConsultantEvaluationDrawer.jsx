@@ -226,6 +226,34 @@ function CachedNotice({ computedAt, onRefresh }) {
   );
 }
 
+/**
+ * "O recálculo falhou, mas sua avaliação continua aqui."
+ *
+ * Só aparece quando um `refresh` falha COM um resultado preservado na tela. É
+ * deliberadamente um aviso, não a `ErrorState`: bloquear a tela apagaria uma
+ * análise boa por causa de uma run que não vingou.
+ */
+function RefreshFailedNotice({ message, onRetry }) {
+  return (
+    <div style={{ background: T.redLight, border: `1px solid ${T.red}22`, borderRadius: 10, padding: "10px 12px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Icon name="alert" size={14} color={T.red} />
+        <span style={{ ...G, fontSize: 11.5, fontWeight: 700, color: T.red, flex: 1 }}>
+          Não foi possível recalcular
+        </span>
+        <button type="button" onClick={onRetry}
+          style={{ ...G, fontSize: 11.5, fontWeight: 700, color: T.red, background: "transparent", border: "none",
+            padding: 0, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 2, flexShrink: 0 }}>
+          Tentar de novo
+        </button>
+      </div>
+      <p style={{ ...G, fontSize: 11.5, color: T.inkMid, lineHeight: 1.5, margin: "5px 0 0" }}>
+        {message} Você continua vendo a avaliação anterior.
+      </p>
+    </div>
+  );
+}
+
 /** Botão de rodapé desabilitado — Trilha B (fora do escopo do A1). */
 function SoonButton({ icon, children }) {
   return (
@@ -301,14 +329,18 @@ export function ConsultantEvaluationDrawer({ open, organizationId, clientName, o
         {/* Corpo */}
         <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
           {loading && <LoadingState firstName={firstName} />}
-          {!loading && error && errorCode === ERROR_INSUFFICIENT_DATA && (
+          {/* As telas de erro são exclusivas: só tomam o corpo quando NÃO há uma
+              avaliação preservada. Com resultado em tela, o erro vira aviso. */}
+          {!loading && error && !result && errorCode === ERROR_INSUFFICIENT_DATA && (
             <InsufficientDataState firstName={firstName} message={error} />
           )}
-          {!loading && error && errorCode !== ERROR_INSUFFICIENT_DATA && (
+          {!loading && error && !result && errorCode !== ERROR_INSUFFICIENT_DATA && (
             <ErrorState message={error} onRetry={retry} />
           )}
-          {!loading && !error && result && (
+          {!loading && result && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {error && <RefreshFailedNotice message={error} onRetry={refresh} />}
+
               {cached && <CachedNotice computedAt={computedAt} onRefresh={refresh} />}
 
               <VerdictBlock healthRead={result.health_read} />
@@ -337,7 +369,7 @@ export function ConsultantEvaluationDrawer({ open, organizationId, clientName, o
         </div>
 
         {/* Rodapé — ações da Trilha B, ainda stubs */}
-        {!loading && !error && result && (
+        {!loading && result && (
           <div style={{ padding: "12px 20px 16px", borderTop: `1px solid ${T.border}`, display: "flex", gap: 8 }}>
             <SoonButton icon="download">Exportar</SoonButton>
             <SoonButton icon="message">Enviar ao cliente</SoonButton>

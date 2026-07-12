@@ -88,6 +88,38 @@ describe("ConsultantEvaluationDrawer — avaliação em cache", () => {
     expect(run).toHaveBeenCalledTimes(1);
   });
 
+  it("recálculo falho: mantém a análise na tela e degrada o erro a um aviso", () => {
+    // Com um resultado preservado, o erro NÃO pode tomar o corpo do drawer: a
+    // avaliação anterior continua válida e é o que o consultor veio ver.
+    vi.mocked(useClientEvaluation).mockReturnValue(
+      hookState({
+        result,
+        cached: true,
+        computedAt: threeMinutesAgo(),
+        error: "Não foi possível gerar a avaliação agora. Tente novamente em instantes.",
+      })
+    );
+
+    renderDrawer();
+
+    expect(screen.getByText(/não foi possível recalcular/i)).toBeTruthy();
+    expect(screen.getByText(/continua vendo a avaliação anterior/i)).toBeTruthy();
+    // A análise segue lá — e a tela de erro bloqueante NÃO aparece.
+    expect(screen.getByText("Cliente em atenção.")).toBeTruthy();
+    expect(screen.queryByText(/não foi possível avaliar/i)).toBeNull();
+  });
+
+  it("erro SEM resultado preservado continua bloqueando a tela", () => {
+    vi.mocked(useClientEvaluation).mockReturnValue(
+      hookState({ result: null, error: "Não foi possível gerar a avaliação agora." })
+    );
+
+    renderDrawer();
+
+    expect(screen.getByText(/não foi possível avaliar/i)).toBeTruthy();
+    expect(screen.queryByText(/não foi possível recalcular/i)).toBeNull();
+  });
+
   it("some com a faixa se o backend não disser quando calculou", () => {
     // Um rótulo "Avaliação de —" seria pior que rótulo nenhum.
     vi.mocked(useClientEvaluation).mockReturnValue(

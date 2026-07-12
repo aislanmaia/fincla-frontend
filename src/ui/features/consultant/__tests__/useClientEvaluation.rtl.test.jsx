@@ -220,6 +220,42 @@ describe("useClientEvaluation — cache (dívida 1.1b)", () => {
     expect(evaluateClientWithAi).toHaveBeenCalledWith(ORG, REQ_ID, {}, false);
   });
 
+  it("um refresh que FALHA preserva a avaliação que estava na tela", async () => {
+    // Encontrado exercitando contra o backend real: a pipeline de IA falha com
+    // frequência (grounding, schema, timeout do provider). Se um "Recalcular"
+    // frustrado apagasse a análise boa, o botão seria uma aposta — o consultor
+    // clica e pode sair com MENOS do que tinha. O resultado anterior sobrevive.
+    evaluateClientWithAi
+      .mockResolvedValueOnce({
+        output, correlation_id: REQ_ID, cached: true, computed_at: "2026-07-12T11:38:22-03:00",
+      })
+      .mockRejectedValueOnce(httpError(422));
+
+    const { result } = renderHook(() => useClientEvaluation(ORG));
+    await act(async () => { await result.current.run(); });
+    expect(result.current.result).toBeTruthy();
+
+    await act(async () => { await result.current.refresh(); });
+
+    expect(result.current.result?.health_read.score).toBe(61);
+    expect(result.current.error).toMatch(/não foi possível gerar/i);
+    // A idade e o id continuam sendo os da análise EXIBIDA, não os da run morta.
+    expect(result.current.cached).toBe(true);
+    expect(result.current.computedAt).toBe("2026-07-12T11:38:22-03:00");
+    expect(result.current.correlationId).toBe(REQ_ID);
+  });
+
+  it("mas a PRIMEIRA run que falha não tem o que preservar — cai no erro", async () => {
+    // O guard-rail do teste acima: preservar não pode virar "nunca mostrar erro".
+    evaluateClientWithAi.mockRejectedValue(httpError(422));
+
+    const { result } = renderHook(() => useClientEvaluation(ORG));
+    await act(async () => { await result.current.run(); });
+
+    expect(result.current.result).toBeNull();
+    expect(result.current.error).toMatch(/não foi possível gerar/i);
+  });
+
   it("refresh() envia refresh=true — o botão 'Recalcular' tem de furar o cache", async () => {
     // O teste que carrega o peso. Um `X-Request-Id` novo evita o 409 mas NÃO fura
     // o cache: sem o `refresh=true`, "Recalcular" devolveria a MESMA avaliação em

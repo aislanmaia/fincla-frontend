@@ -66,6 +66,13 @@ export function useClientEvaluation(organizationId) {
   const mounted = useRef(true);
   const inFlight = useRef(false);
 
+  // Espelho do último estado commitado. Efeitos rodam antes do próximo event
+  // handler, então quando `run()` é chamado isto já reflete o que está na tela.
+  const latest = useRef(state);
+  useEffect(() => {
+    latest.current = state;
+  }, [state]);
+
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -104,6 +111,15 @@ export function useClientEvaluation(organizationId) {
       if (!organizationId || inFlight.current) return;
       inFlight.current = true;
       const correlationId = newEvaluationRequestId();
+
+      // Um "Recalcular" que falha NÃO pode custar ao consultor a avaliação que
+      // ele já tinha na tela: a pipeline de IA erra com frequência (grounding,
+      // schema, timeout do provider), e trocar uma análise boa por uma tela de
+      // erro faz do botão uma aposta. Guardamos o resultado atual para devolvê-lo
+      // se a nova run não vingar. Só vale no refresh — na primeira run não há o
+      // que preservar.
+      const fallback = force && latest.current.result ? latest.current : null;
+
       setState({ ...IDLE, loading: true, correlationId });
 
       try {
@@ -127,11 +143,17 @@ export function useClientEvaluation(organizationId) {
         // Guardamos contra o formato antigo (string) — um deploy do FE pode preceder
         // o do backend, e `detail.code` viraria `undefined` sem quebrar nada.
         const code = err?.response?.data?.detail?.code ?? "";
+        const message = ERROR_BY_CODE[code] || ERROR_BY_STATUS[status] || handleApiError(err);
         setState({
-          ...IDLE,
-          error: ERROR_BY_CODE[code] || ERROR_BY_STATUS[status] || handleApiError(err),
+          // No refresh falho preservamos result/cached/computedAt — e o
+          // `correlationId` ANTIGO junto, porque ele identifica a análise que
+          // segue na tela. Trocá-lo pelo da run que falhou faria o "ID da
+          // análise" apontar para uma run que não produziu nada.
+          ...(fallback ?? IDLE),
+          loading: false,
+          error: message,
           errorCode: code,
-          correlationId,
+          correlationId: fallback ? fallback.correlationId : correlationId,
         });
       } finally {
         inFlight.current = false;
