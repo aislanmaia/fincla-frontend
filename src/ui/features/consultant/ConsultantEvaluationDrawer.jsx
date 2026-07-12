@@ -188,7 +188,6 @@ function ErrorState({ message, onRetry }) {
   );
 }
 
-/** Botão de rodapé desabilitado — Trilha B (fora do escopo do A1). */
 /**
  * Faixa "esta avaliação não é nova" + ação de recalcular.
  *
@@ -227,6 +226,7 @@ function CachedNotice({ computedAt, onRefresh }) {
   );
 }
 
+/** Botão de rodapé desabilitado — Trilha B (fora do escopo do A1). */
 function SoonButton({ icon, children }) {
   return (
     <button type="button" disabled title={`${children} (em breve)`}
