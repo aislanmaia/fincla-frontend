@@ -41,15 +41,23 @@ export function WhatsAppPendingVerification({
     return () => clearInterval(id);
   }, [expiresAt]);
 
+  // Reset the "copied" hint without leaking a timer if the card unmounts (the
+  // poll can drop the card mid-window once the number verifies).
+  useEffect(() => {
+    if (!copied) return;
+    const id = setTimeout(() => setCopied(false), 1800);
+    return () => clearTimeout(id);
+  }, [copied]);
+
   const expired = remaining <= 0;
 
   const handleCopy = useCallback(async () => {
+    if (!navigator.clipboard) return; // no clipboard → the code is on screen
     try {
-      await navigator.clipboard?.writeText(code);
+      await navigator.clipboard.writeText(code);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
     } catch {
-      /* clipboard unavailable — the code is on screen to copy by hand */
+      /* permission denied — the code is on screen to copy by hand */
     }
   }, [code]);
 
@@ -66,9 +74,15 @@ export function WhatsAppPendingVerification({
         Verificação pendente
       </div>
       <div style={{ ...G, fontSize: 13, color: T.inkMid, lineHeight: 1.6, marginBottom: 14 }}>
-        Envie o código abaixo para o assistente pelo WhatsApp,{" "}
-        <strong style={{ color: T.ink }}>a partir do número {phoneNumber}</strong>. Assim que
-        recebermos o código, o número é verificado e ativado.
+        {expired ? (
+          <>Este código expirou. Gere um novo para continuar a verificação.</>
+        ) : (
+          <>
+            Envie o código abaixo para o assistente pelo WhatsApp,{" "}
+            <strong style={{ color: T.ink }}>a partir do número {phoneNumber}</strong>. Assim que
+            recebermos o código, o número é verificado e ativado.
+          </>
+        )}
       </div>
 
       {/* The code */}
@@ -86,13 +100,17 @@ export function WhatsAppPendingVerification({
             borderRadius: 11,
             padding: "10px 18px",
           }}
-          aria-label="Código de verificação"
+          // Space the digits so a screen reader reads "1 2 3 4 5 6", not a single
+          // large number — and so the value is announced at all (a bare label
+          // would replace the content).
+          aria-label={`Código de verificação: ${code.split("").join(" ")}`}
         >
           {code}
         </div>
         <button
           type="button"
           onClick={handleCopy}
+          disabled={expired}
           aria-label="Copiar código"
           style={{
             ...G,
@@ -106,19 +124,25 @@ export function WhatsAppPendingVerification({
             border: `1.5px solid ${copied ? T.greenBorder : T.border}`,
             borderRadius: 9,
             padding: "9px 12px",
-            cursor: "pointer",
+            cursor: expired ? "default" : "pointer",
+            opacity: expired ? 0.5 : 1,
           }}
         >
           {copied ? <Check size={14} /> : <Copy size={14} />}
           {copied ? "Copiado" : "Copiar"}
         </button>
+        {/* role="timer" alone; NO aria-live on the per-second tick or a screen
+            reader would announce every second. */}
         <div
           style={{ ...G, fontSize: 12, fontWeight: 700, color: expired ? T.red : T.inkLight }}
           role="timer"
-          aria-live="polite"
         >
           {expired ? "Código expirado" : `Expira em ${formatCountdown(remaining)}`}
         </div>
+        {/* One-shot announcements for state changes, kept out of the ticking region. */}
+        <span aria-live="polite" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>
+          {copied ? "Código copiado" : expired ? "Código expirado" : ""}
+        </span>
       </div>
 
       {/* Actions */}

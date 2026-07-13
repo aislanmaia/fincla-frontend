@@ -25,7 +25,10 @@ describe("WhatsAppPendingVerification", () => {
   it("shows the code, a live countdown and the deep link to the bot", () => {
     renderCard();
 
-    expect(screen.getByLabelText("Código de verificação")).toHaveTextContent("123456");
+    // Visible code, and an aria-label that reads the digits (not a bare label
+    // that would hide them from a screen reader).
+    expect(screen.getByText("123456")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Código de verificação: 1 2 3 4 5 6/)).toBeInTheDocument();
     expect(screen.getByRole("timer")).toHaveTextContent(/Expira em \d+:\d{2}/);
 
     const openLink = screen.getByRole("link", { name: /Abrir no WhatsApp/ });
@@ -54,11 +57,12 @@ describe("WhatsAppPendingVerification", () => {
     expect(onRegenerate).toHaveBeenCalledTimes(1);
   });
 
-  it("marks an expired code and hides the deep link", () => {
+  it("marks an expired code, hides the deep link and disables copy", () => {
     renderCard({ expiresAt: new Date(Date.now() - 1000).toISOString() });
 
     expect(screen.getByRole("timer")).toHaveTextContent("Código expirado");
     expect(screen.queryByRole("link", { name: /Abrir no WhatsApp/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copiar código" })).toBeDisabled();
     // Regenerate stays available so the user can recover.
     expect(screen.getByRole("button", { name: /Gerar novo código/ })).toBeInTheDocument();
   });

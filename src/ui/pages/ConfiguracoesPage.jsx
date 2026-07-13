@@ -11,6 +11,7 @@ import { changePassword as apiChangePassword } from "../../api/auth";
 import { getOrganization } from "../../api/organizations";
 import { listWhatsAppConnections, linkWhatsAppPhone, unlinkWhatsAppPhone, getAssistantInfo } from "../../api/whatsappConnections";
 import { WhatsAppPendingVerification } from "../features/settings/WhatsAppPendingVerification.jsx";
+import { phoneDigitsMatch } from "../features/settings/whatsappPhoneMatch.js";
 import { handleApiError } from "../../api/client";
 import {
   Settings,
@@ -154,6 +155,7 @@ export function ConfiguracoesPage({
   const [pendingLink, setPendingLink] = useState(null);
   const [regenerating, setRegenerating] = useState(false);
   const [numeroCopiado, setNumeroCopiado] = useState(false);
+  const [whatsVerified, setWhatsVerified] = useState(false);
 
   const orgNome  = onboardingData?.orgNome  || "Família Alves";
   const orgTipo  = onboardingData?.orgTipo  || "personal";
@@ -197,10 +199,16 @@ export function ConfiguracoesPage({
     return () => { cancelled = true; };
   }, [liveEnabled]);
 
+  // A pending link is per-organization and per-session; drop it (and any stale
+  // error/success) when the active org changes, so its card and poll never bleed
+  // into another org.
+  useEffect(() => { setPendingLink(null); setWhatsError(""); setWhatsVerified(false); }, [organizationId]);
+
   // ── WhatsApp CRUD handlers ─────────────────────────────────────────────────
   const handleLinkWhats = useCallback(async () => {
     if (!novoNum.trim()) return;
     if (liveEnabled) {
+      setWhatsError("");
       try {
         // POST returns a PENDING link with a one-time code — not an active
         // connection. Show the verification card; the poll below watches for
@@ -218,6 +226,7 @@ export function ConfiguracoesPage({
   const handleRegenerateCode = useCallback(async () => {
     if (!pendingLink || !liveEnabled) return;
     setRegenerating(true);
+    setWhatsError("");
     try {
       const pending = await linkWhatsAppPhone({ organization_id: organizationId, phone_number: pendingLink.phone_number });
       setPendingLink(pending);
@@ -229,34 +238,50 @@ export function ConfiguracoesPage({
   useEffect(() => {
     if (!liveEnabled || !pendingLink) return;
     let cancelled = false;
-    const normalize = (p) => (p || "").replace(/\D/g, "");
-    const target = normalize(pendingLink.phone_number);
     const id = setInterval(async () => {
       try {
         const resp = await listWhatsAppConnections(organizationId);
         const conns = resp.connections ?? [];
         if (cancelled) return;
         setWhatsConns(conns);
-        // Match on digits so the Brazilian 9th-digit variance never misses it.
-        const active = conns.some(c => c.is_active && normalize(c.phone_number).endsWith(target.slice(-8)));
-        if (active) setPendingLink(null); // verified → back to the list
+        // Match on the exact line (tolerating only the BR 9th-digit variance),
+        // NOT on a digit suffix — a different DDD must never look verified.
+        const active = conns.some(c => c.is_active && phoneDigitsMatch(c.phone_number, pendingLink.phone_number));
+        if (active) {
+          setPendingLink(null); // verified → back to the list
+          setWhatsVerified(true);
+        }
       } catch { /* transient; keep polling */ }
     }, 3000);
     return () => { cancelled = true; clearInterval(id); };
   }, [liveEnabled, pendingLink, organizationId]);
 
+  // Auto-dismiss the "verified" banner.
+  useEffect(() => {
+    if (!whatsVerified) return;
+    const id = setTimeout(() => setWhatsVerified(false), 5000);
+    return () => clearTimeout(id);
+  }, [whatsVerified]);
+
   const handleCopyAssistant = useCallback(async () => {
     const number = assistantInfo?.phone_number;
-    if (!number) return;
+    if (!number || !navigator.clipboard) return;
     try {
-      await navigator.clipboard?.writeText(number);
+      await navigator.clipboard.writeText(number);
       setNumeroCopiado(true);
-      setTimeout(() => setNumeroCopiado(false), 1800);
-    } catch { /* clipboard unavailable — the number is on screen */ }
+    } catch { /* permission denied — the number is on screen */ }
   }, [assistantInfo]);
+
+  // Reset the "copied" hint without leaking a timer if the page unmounts.
+  useEffect(() => {
+    if (!numeroCopiado) return;
+    const id = setTimeout(() => setNumeroCopiado(false), 1800);
+    return () => clearTimeout(id);
+  }, [numeroCopiado]);
 
   const handleUnlinkWhats = useCallback(async (connId) => {
     if (liveEnabled) {
+      setWhatsError("");
       try {
         await unlinkWhatsAppPhone(connId);
         await refreshWhats();
@@ -671,6 +696,11 @@ export function ConfiguracoesPage({
         </div>
         {whatsLoading && <div style={{ padding:"12px 24px", ...G, fontSize:13, color:T.inkLight }}>Carregando conexões…</div>}
         {whatsError && <div style={{ padding:"12px 24px", ...G, fontSize:12, color:T.red }}>{whatsError}</div>}
+        {liveEnabled && whatsVerified && (
+          <div role="status" style={{ padding:"11px 24px", ...G, fontSize:13, fontWeight:700, color:T.green, background:T.greenLight, borderBottom:`1px solid ${T.border}` }}>
+            ✅ Número verificado e ativado.
+          </div>
+        )}
         {/* Pending verification — the number was just linked and awaits its code */}
         {liveEnabled && pendingLink && (
           <WhatsAppPendingVerification
