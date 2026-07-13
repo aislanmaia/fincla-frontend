@@ -306,6 +306,27 @@ export interface CreateWhatsAppConnectionRequest {
   phone_number: string;
 }
 
+/**
+ * Resposta do POST /whatsapp-connections: o vínculo nasce PENDENTE. O
+ * `verification_code` (6 dígitos) aparece só aqui — o usuário precisa enviá-lo
+ * ao bot pelo WhatsApp, do número que está vinculando, para ativar.
+ */
+export interface PendingWhatsAppLink {
+  status: 'pending';
+  connection_id: string;
+  phone_number: string;
+  verification_code: string;
+  expires_at: string; // ISO 8601
+  wa_me_url: string; // deep link para o bot com o código: "https://wa.me/55...?text=123456"
+}
+
+/** Número do próprio bot, para a UI exibir e criar deep link. */
+export interface WhatsAppAssistantInfo {
+  phone_number: string;
+  display_name: string;
+  wa_me_url: string;
+}
+
 export interface ListWhatsAppConnectionsResponse {
   total: number;
   connections: WhatsAppConnection[];

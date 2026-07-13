@@ -9,7 +9,9 @@ import { formatOrganizationsApiError } from "../data/organizationsAdapter.js";
 import { useOrganizationMembersData } from "../features/organization/useOrganizationMembersData.js";
 import { changePassword as apiChangePassword } from "../../api/auth";
 import { getOrganization } from "../../api/organizations";
-import { listWhatsAppConnections, linkWhatsAppPhone, unlinkWhatsAppPhone } from "../../api/whatsappConnections";
+import { listWhatsAppConnections, linkWhatsAppPhone, unlinkWhatsAppPhone, getAssistantInfo } from "../../api/whatsappConnections";
+import { WhatsAppPendingVerification } from "../features/settings/WhatsAppPendingVerification.jsx";
+import { phoneDigitsMatch } from "../features/settings/whatsappPhoneMatch.js";
 import { handleApiError } from "../../api/client";
 import {
   Settings,
@@ -148,8 +150,12 @@ export function ConfiguracoesPage({
   const [whatsLoading, setWhatsLoading] = useState(false);
   const [whatsError, setWhatsError] = useState("");
   const [novoNum, setNovoNum] = useState("");
-  const [novoNome, setNovoNome] = useState("");
   const [addNumOpen, setAddNumOpen] = useState(false);
+  const [assistantInfo, setAssistantInfo] = useState(null);
+  const [pendingLink, setPendingLink] = useState(null);
+  const [regenerating, setRegenerating] = useState(false);
+  const [numeroCopiado, setNumeroCopiado] = useState(false);
+  const [whatsVerified, setWhatsVerified] = useState(false);
 
   const orgNome  = onboardingData?.orgNome  || "Família Alves";
   const orgTipo  = onboardingData?.orgTipo  || "personal";
@@ -185,23 +191,97 @@ export function ConfiguracoesPage({
 
   useEffect(() => { if (liveEnabled) void refreshWhats(); }, [liveEnabled, refreshWhats]);
 
+  // ── Assistant number (the bot's own number, shown in the hero) ──────────────
+  useEffect(() => {
+    if (!liveEnabled) return;
+    let cancelled = false;
+    getAssistantInfo().then(info => { if (!cancelled) setAssistantInfo(info); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [liveEnabled]);
+
+  // A pending link is per-organization and per-session; drop it (and any stale
+  // error/success) when the active org changes, so its card and poll never bleed
+  // into another org.
+  useEffect(() => { setPendingLink(null); setWhatsError(""); setWhatsVerified(false); }, [organizationId]);
+
   // ── WhatsApp CRUD handlers ─────────────────────────────────────────────────
   const handleLinkWhats = useCallback(async () => {
     if (!novoNum.trim()) return;
     if (liveEnabled) {
+      setWhatsError("");
       try {
-        await linkWhatsAppPhone({ organization_id: organizationId, phone_number: novoNum.trim() });
-        setNovoNum(""); setNovoNome(""); setAddNumOpen(false);
-        await refreshWhats();
+        // POST returns a PENDING link with a one-time code — not an active
+        // connection. Show the verification card; the poll below watches for
+        // the number to activate once the user sends the code over WhatsApp.
+        const pending = await linkWhatsAppPhone({ organization_id: organizationId, phone_number: novoNum.trim() });
+        setPendingLink(pending);
+        setNovoNum(""); setAddNumOpen(false);
       } catch (e) { setWhatsError(handleApiError(e)); }
     } else {
-      setWhatsNums(prev => [...prev, { id: Date.now(), num: novoNum.trim(), nome: novoNome.trim() || novoNum.trim(), status: "pendente", ultimo: "nunca" }]);
-      setNovoNum(""); setNovoNome(""); setAddNumOpen(false);
+      setWhatsNums(prev => [...prev, { id: Date.now(), num: novoNum.trim(), nome: novoNum.trim(), status: "pendente", ultimo: "nunca" }]);
+      setNovoNum(""); setAddNumOpen(false);
     }
-  }, [liveEnabled, organizationId, novoNum, novoNome, refreshWhats]);
+  }, [liveEnabled, organizationId, novoNum]);
+
+  const handleRegenerateCode = useCallback(async () => {
+    if (!pendingLink || !liveEnabled) return;
+    setRegenerating(true);
+    setWhatsError("");
+    try {
+      const pending = await linkWhatsAppPhone({ organization_id: organizationId, phone_number: pendingLink.phone_number });
+      setPendingLink(pending);
+    } catch (e) { setWhatsError(handleApiError(e)); }
+    finally { setRegenerating(false); }
+  }, [pendingLink, liveEnabled, organizationId]);
+
+  // ── Poll for the pending number to activate ─────────────────────────────────
+  useEffect(() => {
+    if (!liveEnabled || !pendingLink) return;
+    let cancelled = false;
+    const id = setInterval(async () => {
+      try {
+        const resp = await listWhatsAppConnections(organizationId);
+        const conns = resp.connections ?? [];
+        if (cancelled) return;
+        setWhatsConns(conns);
+        // Match on the exact line (tolerating only the BR 9th-digit variance),
+        // NOT on a digit suffix — a different DDD must never look verified.
+        const active = conns.some(c => c.is_active && phoneDigitsMatch(c.phone_number, pendingLink.phone_number));
+        if (active) {
+          setPendingLink(null); // verified → back to the list
+          setWhatsVerified(true);
+        }
+      } catch { /* transient; keep polling */ }
+    }, 3000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [liveEnabled, pendingLink, organizationId]);
+
+  // Auto-dismiss the "verified" banner.
+  useEffect(() => {
+    if (!whatsVerified) return;
+    const id = setTimeout(() => setWhatsVerified(false), 5000);
+    return () => clearTimeout(id);
+  }, [whatsVerified]);
+
+  const handleCopyAssistant = useCallback(async () => {
+    const number = assistantInfo?.phone_number;
+    if (!number || !navigator.clipboard) return;
+    try {
+      await navigator.clipboard.writeText(number);
+      setNumeroCopiado(true);
+    } catch { /* permission denied — the number is on screen */ }
+  }, [assistantInfo]);
+
+  // Reset the "copied" hint without leaking a timer if the page unmounts.
+  useEffect(() => {
+    if (!numeroCopiado) return;
+    const id = setTimeout(() => setNumeroCopiado(false), 1800);
+    return () => clearTimeout(id);
+  }, [numeroCopiado]);
 
   const handleUnlinkWhats = useCallback(async (connId) => {
     if (liveEnabled) {
+      setWhatsError("");
       try {
         await unlinkWhatsAppPhone(connId);
         await refreshWhats();
@@ -591,8 +671,16 @@ export function ConfiguracoesPage({
         </div>
         <div style={{ marginTop:14, display:"flex", alignItems:"center", gap:10, background:"rgba(255,255,255,0.06)", borderRadius:10, padding:"10px 14px" }}>
           <div style={{ ...G, fontSize:11, color:"rgba(255,255,255,0.4)", textTransform:"uppercase", letterSpacing:"0.07em" }}>Número do assistente</div>
-          <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:14, fontWeight:700, color:"#60A5FA", flex:1 }}>+55 11 9xxxx-xxxx</div>
-          <button style={{ ...G, fontSize:11, fontWeight:700, color:"rgba(255,255,255,0.5)", background:"rgba(255,255,255,0.08)", border:"none", borderRadius:7, padding:"5px 10px", cursor:"pointer" }}>Copiar</button>
+          <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:14, fontWeight:700, color:"#60A5FA", flex:1 }}>
+            {assistantInfo?.phone_number || (liveEnabled ? "carregando…" : "+55 11 9xxxx-xxxx")}
+          </div>
+          <button
+            onClick={handleCopyAssistant}
+            disabled={!assistantInfo?.phone_number}
+            aria-label="Copiar número do assistente"
+            style={{ ...G, fontSize:11, fontWeight:700, color: numeroCopiado ? "#34D399" : "rgba(255,255,255,0.5)", background:"rgba(255,255,255,0.08)", border:"none", borderRadius:7, padding:"5px 10px", cursor: assistantInfo?.phone_number ? "pointer" : "default" }}>
+            {numeroCopiado ? "Copiado" : "Copiar"}
+          </button>
         </div>
       </div>
 
@@ -608,19 +696,33 @@ export function ConfiguracoesPage({
         </div>
         {whatsLoading && <div style={{ padding:"12px 24px", ...G, fontSize:13, color:T.inkLight }}>Carregando conexões…</div>}
         {whatsError && <div style={{ padding:"12px 24px", ...G, fontSize:12, color:T.red }}>{whatsError}</div>}
+        {liveEnabled && whatsVerified && (
+          <div role="status" style={{ padding:"11px 24px", ...G, fontSize:13, fontWeight:700, color:T.green, background:T.greenLight, borderBottom:`1px solid ${T.border}` }}>
+            ✅ Número verificado e ativado.
+          </div>
+        )}
+        {/* Pending verification — the number was just linked and awaits its code */}
+        {liveEnabled && pendingLink && (
+          <WhatsAppPendingVerification
+            code={pendingLink.verification_code}
+            phoneNumber={pendingLink.phone_number}
+            expiresAt={pendingLink.expires_at}
+            waMeUrl={pendingLink.wa_me_url}
+            onRegenerate={handleRegenerateCode}
+            regenerating={regenerating}
+          />
+        )}
         {/* Add form */}
         {addNumOpen && (
           <div style={{ padding:"14px 24px", borderBottom:`1px solid ${T.border}`, background:T.greenLight }}>
             <div style={{ ...G, fontSize:11, fontWeight:700, color:T.green, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:10 }}>Novo número</div>
             <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
               <input value={novoNum} onChange={e => setNovoNum(e.target.value)} placeholder="+55 11 99999-0000"
-                style={{ ...G, flex:"1 1 160px", padding:"9px 12px", border:`1.5px solid ${T.border}`, borderRadius:9, fontSize:13, color:T.ink, background:T.surface, outline:"none" }}/>
-              <input value={novoNome} onChange={e => setNovoNome(e.target.value)} placeholder="Nome (ex: Ana — pessoal)"
-                style={{ ...G, flex:"1 1 180px", padding:"9px 12px", border:`1.5px solid ${T.border}`, borderRadius:9, fontSize:13, color:T.ink, background:T.surface, outline:"none" }}/>
+                style={{ ...G, flex:"1 1 220px", padding:"9px 12px", border:`1.5px solid ${T.border}`, borderRadius:9, fontSize:13, color:T.ink, background:T.surface, outline:"none" }}/>
               <BtnPrimary small onClick={handleLinkWhats}>Vincular</BtnPrimary>
-              <BtnGhost onClick={() => { setAddNumOpen(false); setNovoNum(""); setNovoNome(""); }}>Cancelar</BtnGhost>
+              <BtnGhost onClick={() => { setAddNumOpen(false); setNovoNum(""); }}>Cancelar</BtnGhost>
             </div>
-            <div style={{ ...G, fontSize:11, color:T.green, marginTop:8 }}>💡 O número receberá um código de verificação via WhatsApp.</div>
+            <div style={{ ...G, fontSize:11, color:T.green, marginTop:8 }}>💡 Geramos um código; você o envia ao assistente pelo WhatsApp, do próprio número, para verificá-lo.</div>
           </div>
         )}
         {/* Numbers list — live */}
