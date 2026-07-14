@@ -2046,3 +2046,29 @@ export interface AiEvaluationResponse {
    */
   computed_at?: string | null;
 }
+
+/**
+ * Estado de uma run já iniciada — o caminho de volta para quem a perdeu de vista.
+ *
+ * `status` é o `RunStatus` do domínio, não um código HTTP: `running` enquanto a
+ * avaliação roda, `ok` quando ela deu certo, e um dos motivos de falha
+ * (`insufficient_data`, `schema_fail`, `blocked`, `tool_error`, `error`,
+ * `budget_exceeded`) quando não deu. `output` só vem em `ok`.
+ */
+export type AiRunStatus =
+  | 'running'
+  | 'ok'
+  | 'insufficient_data'
+  | 'schema_fail'
+  | 'blocked'
+  | 'tool_error'
+  | 'error'
+  | 'budget_exceeded';
+
+export interface AiEvaluationRunStatusResponse {
+  run_id: string;
+  correlation_id: string;
+  status: AiRunStatus;
+  output?: EvaluateClientOutput | null;
+  computed_at?: string | null;
+}
