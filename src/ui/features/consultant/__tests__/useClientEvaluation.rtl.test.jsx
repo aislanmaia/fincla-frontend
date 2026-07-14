@@ -14,6 +14,7 @@ vi.mock("../../../../api/client", () => ({
 }));
 
 import { evaluateClientWithAi, newEvaluationRequestId } from "../../../../api/consultant";
+import { __resetStore } from "../clientEvaluationStore.js";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 const REQ_ID = "22222222-2222-4222-8222-222222222222";
@@ -35,6 +36,9 @@ const httpError = (status) => Object.assign(new Error(`HTTP ${status}`), {
 beforeEach(() => {
   vi.mocked(evaluateClientWithAi).mockReset();
   vi.mocked(newEvaluationRequestId).mockReset().mockReturnValue(REQ_ID);
+  // O estado vive fora do React (por cliente) — sem isto um teste herda a
+  // avaliação do anterior.
+  __resetStore();
 });
 
 afterEach(() => {
@@ -62,7 +66,7 @@ describe("useClientEvaluation", () => {
     });
 
     await waitFor(() => expect(result.current.loading).toBe(false));
-    expect(evaluateClientWithAi).toHaveBeenCalledWith(ORG, REQ_ID);
+    expect(evaluateClientWithAi).toHaveBeenCalledWith(ORG, REQ_ID, {}, false);
     expect(result.current.result?.health_read.score).toBe(61);
     expect(result.current.correlationId).toBe(REQ_ID);
     expect(result.current.error).toBe("");
@@ -132,7 +136,10 @@ describe("useClientEvaluation", () => {
     expect(result.current.error).toBe("erro generico");
   });
 
-  it("generates a fresh request id per run — reusing it would 409", async () => {
+  it("cada execução leva um request id novo — reusá-lo daria 409", async () => {
+    // `run()` é idempotente por cliente (ele GARANTE uma avaliação, não dispara
+    // uma), então quem executa de novo é o `refresh()`. O ponto do teste continua
+    // sendo o mesmo: nenhuma execução reaproveita o id da anterior.
     vi.mocked(newEvaluationRequestId)
       .mockReturnValueOnce(REQ_ID)
       .mockReturnValueOnce("55555555-5555-4555-8555-555555555555");
@@ -142,12 +149,28 @@ describe("useClientEvaluation", () => {
 
     const { result } = renderHook(() => useClientEvaluation(ORG));
     await act(async () => { await result.current.run(); });
+    await act(async () => { await result.current.refresh(); });
+
+    expect(evaluateClientWithAi).toHaveBeenNthCalledWith(1, ORG, REQ_ID, {}, false);
+    expect(evaluateClientWithAi).toHaveBeenNthCalledWith(
+      2, ORG, "55555555-5555-4555-8555-555555555555", {}, true
+    );
+  });
+
+  it("run() é idempotente: chamá-lo de novo NÃO paga outra avaliação", async () => {
+    // O drawer chama `run()` toda vez que abre. Se isso disparasse uma execução,
+    // reabrir o painel custaria uma avaliação nova — que é o bug que originou o
+    // store.
+    vi.mocked(evaluateClientWithAi).mockResolvedValue({
+      correlation_id: REQ_ID, session_id: "s", run_id: "r", output,
+    });
+
+    const { result } = renderHook(() => useClientEvaluation(ORG));
+    await act(async () => { await result.current.run(); });
+    await act(async () => { await result.current.run(); });
     await act(async () => { await result.current.run(); });
 
-    expect(evaluateClientWithAi).toHaveBeenNthCalledWith(1, ORG, REQ_ID);
-    expect(evaluateClientWithAi).toHaveBeenNthCalledWith(
-      2, ORG, "55555555-5555-4555-8555-555555555555"
-    );
+    expect(evaluateClientWithAi).toHaveBeenCalledTimes(1);
   });
 
   it("clears a stale result when the client changes", async () => {
@@ -176,5 +199,151 @@ describe("useClientEvaluation", () => {
 
     expect(result.current.result).toBeNull();
     expect(result.current.correlationId).toBe("");
+  });
+});
+
+describe("useClientEvaluation — cache (dívida 1.1b)", () => {
+  it("expõe cached/computedAt quando o backend reaproveita uma avaliação", async () => {
+    evaluateClientWithAi.mockResolvedValue({
+      output,
+      correlation_id: REQ_ID,
+      cached: true,
+      computed_at: "2026-07-11T14:20:00-03:00",
+    });
+
+    const { result } = renderHook(() => useClientEvaluation(ORG));
+    await act(async () => { await result.current.run(); });
+
+    await waitFor(() => expect(result.current.result).not.toBeNull());
+    expect(result.current.cached).toBe(true);
+    expect(result.current.computedAt).toBe("2026-07-11T14:20:00-03:00");
+  });
+
+  it("trata um backend SEM os campos de cache como 'não é cache'", async () => {
+    // Deploy do FE pode preceder o do backend. Ausência não pode virar `undefined`
+    // vazando para a UI.
+    evaluateClientWithAi.mockResolvedValue({ output, correlation_id: REQ_ID });
+
+    const { result } = renderHook(() => useClientEvaluation(ORG));
+    await act(async () => { await result.current.run(); });
+
+    await waitFor(() => expect(result.current.result).not.toBeNull());
+    expect(result.current.cached).toBe(false);
+    // A data, porém, nós mesmos cravamos: o resultado fica na tela mesmo com o
+    // painel fechado, então ele precisa de idade mesmo contra um backend velho.
+    expect(Number.isNaN(Date.parse(result.current.computedAt))).toBe(false);
+  });
+
+  it("run() normal NÃO pede refresh — senão o cache nunca serviria pra nada", async () => {
+    evaluateClientWithAi.mockResolvedValue({ output, correlation_id: REQ_ID, cached: true });
+
+    const { result } = renderHook(() => useClientEvaluation(ORG));
+    await act(async () => { await result.current.run(); });
+
+    expect(evaluateClientWithAi).toHaveBeenCalledWith(ORG, REQ_ID, {}, false);
+  });
+
+  it("um refresh que FALHA preserva a avaliação que estava na tela", async () => {
+    // Encontrado exercitando contra o backend real: a pipeline de IA falha com
+    // frequência (grounding, schema, timeout do provider). Se um "Recalcular"
+    // frustrado apagasse a análise boa, o botão seria uma aposta — o consultor
+    // clica e pode sair com MENOS do que tinha. O resultado anterior sobrevive.
+    evaluateClientWithAi
+      .mockResolvedValueOnce({
+        output, correlation_id: REQ_ID, cached: true, computed_at: "2026-07-12T11:38:22-03:00",
+      })
+      .mockRejectedValueOnce(httpError(422));
+
+    const { result } = renderHook(() => useClientEvaluation(ORG));
+    await act(async () => { await result.current.run(); });
+    expect(result.current.result).toBeTruthy();
+
+    await act(async () => { await result.current.refresh(); });
+
+    expect(result.current.result?.health_read.score).toBe(61);
+    expect(result.current.error).toMatch(/não foi possível gerar/i);
+    // A idade e o id continuam sendo os da análise EXIBIDA, não os da run morta.
+    expect(result.current.cached).toBe(true);
+    expect(result.current.computedAt).toBe("2026-07-12T11:38:22-03:00");
+    expect(result.current.correlationId).toBe(REQ_ID);
+  });
+
+  it("mas a PRIMEIRA run que falha não tem o que preservar — cai no erro", async () => {
+    // O guard-rail do teste acima: preservar não pode virar "nunca mostrar erro".
+    evaluateClientWithAi.mockRejectedValue(httpError(422));
+
+    const { result } = renderHook(() => useClientEvaluation(ORG));
+    await act(async () => { await result.current.run(); });
+
+    expect(result.current.result).toBeNull();
+    expect(result.current.error).toMatch(/não foi possível gerar/i);
+  });
+
+  it("trocar de cliente com uma run em voo: a resposta velha NÃO se pinta no cliente novo", async () => {
+    // O hook agora sobrevive ao fechamento do drawer, então a avaliação do
+    // cliente A pode ainda estar em voo quando o consultor abre o cliente B.
+    // Sem o token de run, a resposta de A chegaria depois e apareceria como se
+    // fosse a análise de B — o pior erro possível num produto financeiro.
+    let responderA;
+    evaluateClientWithAi.mockReturnValueOnce(new Promise((r) => { responderA = r; }));
+
+    const outraOrg = "99999999-9999-4999-8999-999999999999";
+    const { result, rerender } = renderHook(({ org }) => useClientEvaluation(org), {
+      initialProps: { org: ORG },
+    });
+    act(() => { result.current.run(); });
+
+    rerender({ org: outraOrg });
+
+    await act(async () => {
+      responderA({ output, correlation_id: REQ_ID });
+    });
+
+    expect(result.current.result).toBeNull();
+    expect(result.current.loading).toBe(false);
+  });
+
+  it("trocar de cliente libera o guard: o cliente novo consegue ser avaliado", async () => {
+    // O `inFlight` da run velha não pode trancar a avaliação do cliente novo.
+    evaluateClientWithAi.mockReturnValueOnce(new Promise(() => {})); // A fica em voo pra sempre
+    evaluateClientWithAi.mockResolvedValueOnce({ output, correlation_id: REQ_ID });
+
+    const outraOrg = "99999999-9999-4999-8999-999999999999";
+    const { result, rerender } = renderHook(({ org }) => useClientEvaluation(org), {
+      initialProps: { org: ORG },
+    });
+    act(() => { result.current.run(); });
+
+    rerender({ org: outraOrg });
+    await act(async () => { await result.current.run(); });
+
+    expect(evaluateClientWithAi).toHaveBeenNthCalledWith(2, outraOrg, REQ_ID, {}, false);
+    expect(result.current.result?.health_read.score).toBe(61);
+  });
+
+  it("data uma run nova mesmo sem o backend mandar computed_at", async () => {
+    // O drawer não é mais desmontado ao fechar: esta análise pode passar horas na
+    // tela. Sem uma data, a faixa de idade sumiria e o consultor olharia um
+    // diagnóstico velho achando que é de agora.
+    evaluateClientWithAi.mockResolvedValue({ output, correlation_id: REQ_ID, cached: false });
+
+    const { result } = renderHook(() => useClientEvaluation(ORG));
+    await act(async () => { await result.current.run(); });
+
+    expect(result.current.cached).toBe(false);
+    expect(Number.isNaN(Date.parse(result.current.computedAt))).toBe(false);
+  });
+
+  it("refresh() envia refresh=true — o botão 'Recalcular' tem de furar o cache", async () => {
+    // O teste que carrega o peso. Um `X-Request-Id` novo evita o 409 mas NÃO fura
+    // o cache: sem o `refresh=true`, "Recalcular" devolveria a MESMA avaliação em
+    // cache e o botão estaria mentindo para o consultor.
+    evaluateClientWithAi.mockResolvedValue({ output, correlation_id: REQ_ID, cached: false });
+
+    const { result } = renderHook(() => useClientEvaluation(ORG));
+    await act(async () => { await result.current.refresh(); });
+
+    expect(evaluateClientWithAi).toHaveBeenCalledWith(ORG, REQ_ID, {}, true);
+    await waitFor(() => expect(result.current.cached).toBe(false));
   });
 });

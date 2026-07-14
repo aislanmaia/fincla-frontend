@@ -94,9 +94,16 @@ describe("ConsultantEvaluationDrawer", () => {
     expect(run).toHaveBeenCalledTimes(1);
   });
 
-  // React 18 StrictMode monta/desmonta os efeitos duas vezes em dev. Sem o guard
-  // por cliente, isso dispararia DUAS runs de LLM a cada abertura do drawer.
-  it("runs only once under StrictMode's double-invoked effects", () => {
+  // React 18 StrictMode monta/desmonta os efeitos duas vezes em dev, então o
+  // drawer pode PEDIR a avaliação duas vezes. Isso deixou de ser um problema: o
+  // `run()` é idempotente por cliente (`clientEvaluationStore`), e é lá que a
+  // deduplicação vive agora — antes ela morava num ref do drawer, que morria
+  // junto com ele ao fechar o painel e por isso não protegia nada.
+  //
+  // A garantia que importa — UMA requisição, não duas — é verificada com o hook
+  // real em `ConsultantEvaluationDrawer.integration.rtl.test.jsx`. Aqui o hook é
+  // mock, então só dá para afirmar que o drawer pede a avaliação ao abrir.
+  it("pede a avaliação ao abrir, mesmo sob StrictMode", () => {
     const run = vi.fn();
     vi.mocked(useClientEvaluation).mockReturnValue(hookState({ run }));
     render(
@@ -104,7 +111,7 @@ describe("ConsultantEvaluationDrawer", () => {
         <ConsultantEvaluationDrawer open organizationId={ORG} clientName="Rafael" onClose={() => {}} />
       </StrictMode>
     );
-    expect(run).toHaveBeenCalledTimes(1);
+    expect(run).toHaveBeenCalled();
   });
 
   it("shows the loading skeleton with the client's first name", () => {

@@ -13,6 +13,7 @@ import {
   buildSessionAfterOnboarding,
   isOnboardingRequired,
 } from "./sessionState.js";
+import { clearAllEvaluations } from "../consultant/clientEvaluationStore.js";
 import { clearPostLoginRedirect } from "../../routing/postLoginRedirect.js";
 
 const ACTIVE_ORG_KEY = "fincla_active_org_id";
@@ -54,7 +55,15 @@ function pickActiveOrgId(organizations) {
 export function useSession() {
   const [session, setSession] = useState(EMPTY_SESSION);
 
+  // Todo fim de sessão passa por aqui — logout, token expirado e falha de
+  // bootstrap. É o único ponto por onde dá para garantir que nada de um usuário
+  // sobrevive para o próximo.
   const resetSession = useCallback((next = {}) => {
+    // As avaliações de IA do consultor vivem num store de módulo (fora do React,
+    // para a run sobreviver ao fechamento do painel). Sair da conta não recarrega
+    // a página, então esse store atravessaria o logout: o próximo consultor a
+    // entrar nesta aba veria a análise que o anterior mandou gerar.
+    clearAllEvaluations();
     setSession({
       ...EMPTY_SESSION,
       isBootstrapping: false,

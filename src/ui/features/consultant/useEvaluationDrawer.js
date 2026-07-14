@@ -8,8 +8,9 @@ import { useCallback, useState } from "react";
  * para chamar o endpoint e do nome para o cabeçalho — os três chamadores já têm
  * o objeto `client` enriquecido em mãos.
  *
- * Renderize o drawer **somente quando `target` existir**: assim cada abertura é
- * uma montagem nova, e o efeito de auto-run parte de um estado limpo.
+ * Fechar o drawer pode desmontá-lo à vontade: a avaliação **não mora aqui**, e
+ * sim em `clientEvaluationStore` (fora do React), por cliente. Reabrir
+ * reencontra a run — em voo ou pronta — em vez de disparar outra.
  */
 export function useEvaluationDrawer() {
   const [target, setTarget] = useState(null);

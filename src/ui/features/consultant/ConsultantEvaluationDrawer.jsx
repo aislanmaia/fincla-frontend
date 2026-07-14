@@ -1,9 +1,9 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { AiChart } from "./AiChart.jsx";
-import { healthTone } from "./consultantFormat";
+import { fmtComputedAt, healthTone } from "./consultantFormat";
 import { HealthRing, Icon } from "./consultantUi";
 import { ERROR_INSUFFICIENT_DATA, useClientEvaluation } from "./useClientEvaluation.js";
 
@@ -188,6 +188,73 @@ function ErrorState({ message, onRetry }) {
   );
 }
 
+/**
+ * Idade da avaliação + ação de recalcular.
+ *
+ * Nasceu do cache (que torna o segundo clique instantâneo e faria o consultor
+ * duvidar se está vendo dado velho), mas hoje vale para QUALQUER avaliação: o
+ * drawer sobrevive ao fechamento, então a análise na tela pode ter horas mesmo
+ * sem ter vindo do cache. Amarrar a faixa a `cached` esconderia justamente o
+ * caso pior — resultado velho, sem idade e sem botão de recalcular.
+ *
+ * Some quando `fmtComputedAt` não tem o que dizer: um rótulo "há —" seria pior
+ * que rótulo nenhum.
+ */
+function EvaluationAgeNotice({ computedAt, onRefresh }) {
+  const when = fmtComputedAt(computedAt);
+  if (!when) return null;
+
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+      background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "9px 12px",
+    }}>
+      <span style={{ ...G, fontSize: 11.5, color: T.inkLight }}>
+        Avaliação de <strong style={{ color: T.inkMid, fontWeight: 700 }}>{when}</strong>
+      </span>
+      <button
+        type="button"
+        onClick={onRefresh}
+        style={{
+          ...G, fontSize: 11.5, fontWeight: 700, color: T.purple,
+          background: "transparent", border: "none", padding: 0, cursor: "pointer",
+          textDecoration: "underline", textUnderlineOffset: 2, flexShrink: 0,
+        }}
+      >
+        Recalcular
+      </button>
+    </div>
+  );
+}
+
+/**
+ * "O recálculo falhou, mas sua avaliação continua aqui."
+ *
+ * Só aparece quando um `refresh` falha COM um resultado preservado na tela. É
+ * deliberadamente um aviso, não a `ErrorState`: bloquear a tela apagaria uma
+ * análise boa por causa de uma run que não vingou.
+ */
+function RefreshFailedNotice({ message, onRetry }) {
+  return (
+    <div style={{ background: T.redLight, border: `1px solid ${T.red}22`, borderRadius: 10, padding: "10px 12px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <Icon name="alert" size={14} color={T.red} />
+        <span style={{ ...G, fontSize: 11.5, fontWeight: 700, color: T.red, flex: 1 }}>
+          Não foi possível recalcular
+        </span>
+        <button type="button" onClick={onRetry}
+          style={{ ...G, fontSize: 11.5, fontWeight: 700, color: T.red, background: "transparent", border: "none",
+            padding: 0, cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 2, flexShrink: 0 }}>
+          Tentar de novo
+        </button>
+      </div>
+      <p style={{ ...G, fontSize: 11.5, color: T.inkMid, lineHeight: 1.5, margin: "5px 0 0" }}>
+        {message} Você continua vendo a avaliação anterior.
+      </p>
+    </div>
+  );
+}
+
 /** Botão de rodapé desabilitado — Trilha B (fora do escopo do A1). */
 function SoonButton({ icon, children }) {
   return (
@@ -201,16 +268,16 @@ function SoonButton({ icon, children }) {
 }
 
 export function ConsultantEvaluationDrawer({ open, organizationId, clientName, onClose }) {
-  const { loading, error, errorCode, result, correlationId, run, reset } = useClientEvaluation(organizationId);
-  const startedFor = useRef(null);
+  const { loading, error, errorCode, result, correlationId, computedAt, run, refresh, reset } =
+    useClientEvaluation(organizationId);
 
-  // Dispara a avaliação ao abrir. Só uma vez por cliente: reabrir o drawer
-  // mostra o resultado já obtido em vez de gastar outra run de LLM (a
-  // referência re-executa a cada abertura, mas lá a resposta é mock e grátis).
+  // "Garanta que existe uma avaliação para este cliente." O `run` é idempotente
+  // por cliente (ver `clientEvaluationStore`): se já há uma run em voo ou um
+  // resultado, isto não dispara nada. É o que faz reabrir o painel reencontrar a
+  // run em vez de pagar por uma segunda — inclusive depois de o consultor ter ido
+  // olhar outro cliente no meio.
   useEffect(() => {
     if (!open || !organizationId) return;
-    if (startedFor.current === organizationId) return;
-    startedFor.current = organizationId;
     run();
   }, [open, organizationId, run]);
 
@@ -225,8 +292,9 @@ export function ConsultantEvaluationDrawer({ open, organizationId, clientName, o
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
 
-  // `run()` direto, sem tocar em `startedFor`: o guard protege só o efeito de
-  // auto-run, e aqui a intenção do consultor é explícita.
+  // `run()` é idempotente e não redispara sozinho depois de um erro — por isso o
+  // `reset()` antes: aqui a intenção do consultor é explícita, e é a única coisa
+  // que reabre a porta para uma execução nova.
   const retry = () => {
     reset();
     run();
@@ -262,14 +330,20 @@ export function ConsultantEvaluationDrawer({ open, organizationId, clientName, o
         {/* Corpo */}
         <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
           {loading && <LoadingState firstName={firstName} />}
-          {!loading && error && errorCode === ERROR_INSUFFICIENT_DATA && (
+          {/* As telas de erro são exclusivas: só tomam o corpo quando NÃO há uma
+              avaliação preservada. Com resultado em tela, o erro vira aviso. */}
+          {!loading && error && !result && errorCode === ERROR_INSUFFICIENT_DATA && (
             <InsufficientDataState firstName={firstName} message={error} />
           )}
-          {!loading && error && errorCode !== ERROR_INSUFFICIENT_DATA && (
+          {!loading && error && !result && errorCode !== ERROR_INSUFFICIENT_DATA && (
             <ErrorState message={error} onRetry={retry} />
           )}
-          {!loading && !error && result && (
+          {!loading && result && (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {error && <RefreshFailedNotice message={error} onRetry={refresh} />}
+
+              <EvaluationAgeNotice computedAt={computedAt} onRefresh={refresh} />
+
               <VerdictBlock healthRead={result.health_read} />
 
               <p style={{ ...G, fontSize: 13, color: T.inkMid, lineHeight: 1.65, margin: 0 }}>{result.summary}</p>
@@ -296,7 +370,7 @@ export function ConsultantEvaluationDrawer({ open, organizationId, clientName, o
         </div>
 
         {/* Rodapé — ações da Trilha B, ainda stubs */}
-        {!loading && !error && result && (
+        {!loading && result && (
           <div style={{ padding: "12px 20px 16px", borderTop: `1px solid ${T.border}`, display: "flex", gap: 8 }}>
             <SoonButton icon="download">Exportar</SoonButton>
             <SoonButton icon="message">Enviar ao cliente</SoonButton>
