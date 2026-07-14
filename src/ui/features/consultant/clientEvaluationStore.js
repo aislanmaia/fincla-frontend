@@ -104,9 +104,15 @@ const RUN_FAILED_MESSAGE = ERROR_BY_STATUS[422];
 const POLL_INTERVAL_MS = 3_000;
 
 /**
- * Desistir de acompanhar. Casado com o `CONSULTANT_AI_RUN_STALE_AFTER_SECONDS`
- * do backend (5 min), que é quando ele mesmo dá a run por morta. Esperar mais que
- * isso seria esperar por algo que o backend já enterrou.
+ * Desistir de acompanhar. Espelha o `CONSULTANT_AI_RUN_STALE_AFTER_SECONDS` do
+ * backend (5 min), que é quando ele mesmo dá a run por morta.
+ *
+ * Espelha, não coincide: o backend conta do início da RUN, e nós contamos de
+ * quando ESTA aba recebeu o 409 — que pode ser minutos depois. Uma run travada
+ * fica `running` na tabela até alguém tentar começar outra (é aí que o backend a
+ * enterra), então não há como o poll distinguir "rodando" de "morta há 4 min".
+ * O caminho de volta é o mesmo nos dois casos: desistir, e o "Tentar novamente"
+ * do consultor dispara o POST que enterra a run velha e abre uma nova.
  */
 const POLL_TIMEOUT_MS = 300_000;
 
