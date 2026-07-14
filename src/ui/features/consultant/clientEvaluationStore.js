@@ -73,6 +73,14 @@ const listeners = new Map();
 /** `organizationId` → `true` enquanto há requisição em voo para aquele cliente. */
 const inFlight = new Map();
 
+/**
+ * Geração do store. `clearAllEvaluations()` a incrementa, e toda run em voo
+ * carrega a geração em que nasceu: uma resposta que chega DEPOIS de a sessão ser
+ * encerrada é descartada em vez de se escrever de volta no store — senão o
+ * logout limparia a memória e a run de 40s a repovoaria logo em seguida.
+ */
+let epoch = 0;
+
 export function getSlice(organizationId) {
   return slices.get(organizationId) ?? IDLE;
 }
@@ -94,12 +102,40 @@ export function resetSlice(organizationId) {
 }
 
 /**
+ * Esquece TUDO: chamada quando a sessão termina (logout ou token expirado).
+ *
+ * Sem isto o store seria um vazamento entre contas. O `signOut` do Fincla não
+ * recarrega a página — ele apaga o token e reseta o estado do React —, então
+ * este `Map` de nível de módulo sobreviveria ao logout. O próximo consultor a
+ * entrar NA MESMA ABA abriria o painel de um cliente que também está na carteira
+ * dele e veria, instantaneamente e sem nenhuma chamada à API, a análise que o
+ * consultor anterior mandou gerar. O cache do backend é isolado por consultor;
+ * este cache do front furaria essa isolação.
+ *
+ * Os `listeners` NÃO são descartados: eles pertencem aos componentes montados, e
+ * jogá-los fora deixaria um drawer aberto surdo a qualquer emit futuro. Em vez
+ * disso, são notificados — quem estiver na tela volta para `IDLE`.
+ */
+export function clearAllEvaluations() {
+  epoch += 1;
+  slices.clear();
+  inFlight.clear();
+  for (const set of listeners.values()) {
+    for (const cb of set) cb();
+  }
+}
+
+/**
  * Garante que existe uma avaliação para este cliente.
  *
  * É **idempotente por cliente**: se já há uma run em voo ou um resultado, não
  * dispara nada. É isso que faz reabrir o painel reencontrar a run em vez de
- * pagar outra. `refresh: true` é a única forma de forçar uma execução nova — e
- * ela também espera a run em voo terminar, em vez de correr em paralelo com ela.
+ * pagar outra. `refresh: true` é a única forma de forçar uma execução nova.
+ *
+ * O guard de run em voo vem antes de tudo e vale inclusive para o `refresh`:
+ * enquanto uma avaliação deste cliente está rodando, nada dispara outra. Não há
+ * o que perder aí — durante a run a UI mostra o skeleton, e "Recalcular" não
+ * existe na tela.
  */
 export async function runEvaluation(organizationId, { refresh = false } = {}) {
   if (!organizationId || inFlight.get(organizationId)) return;
@@ -108,6 +144,10 @@ export async function runEvaluation(organizationId, { refresh = false } = {}) {
   if (!refresh && (current.result || current.error)) return;
 
   inFlight.set(organizationId, true);
+  // A geração em que esta run nasceu. Se a sessão for encerrada no meio dela, a
+  // resposta que chegar depois não pode se escrever no store de quem entrar em
+  // seguida.
+  const myEpoch = epoch;
   const correlationId = newEvaluationRequestId();
 
   // Um "Recalcular" que falha NÃO pode custar ao consultor a avaliação que ele
@@ -120,6 +160,7 @@ export async function runEvaluation(organizationId, { refresh = false } = {}) {
 
   try {
     const response = await evaluateClientWithAi(organizationId, correlationId, {}, refresh);
+    if (myEpoch !== epoch) return;
     emit(organizationId, {
       loading: false,
       error: "",
@@ -135,6 +176,7 @@ export async function runEvaluation(organizationId, { refresh = false } = {}) {
       computedAt: response.computed_at ?? new Date().toISOString(),
     });
   } catch (err) {
+    if (myEpoch !== epoch) return;
     const status = err?.response?.status;
     // `detail` é `{code, message}` desde o fix de `insufficient_data`; guardamos
     // contra o formato antigo (string) — um deploy do FE pode preceder o do backend.

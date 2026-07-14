@@ -292,8 +292,9 @@ export function ConsultantEvaluationDrawer({ open, organizationId, clientName, o
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
 
-  // `run()` direto, sem tocar em `startedFor`: o guard protege só o efeito de
-  // auto-run, e aqui a intenção do consultor é explícita.
+  // `run()` é idempotente e não redispara sozinho depois de um erro — por isso o
+  // `reset()` antes: aqui a intenção do consultor é explícita, e é a única coisa
+  // que reabre a porta para uma execução nova.
   const retry = () => {
     reset();
     run();
