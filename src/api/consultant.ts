@@ -21,6 +21,7 @@ import type {
   FinancialHealthIndexResponse,
   AiEvaluationRequest,
   AiEvaluationResponse,
+  AiEvaluationRunStatusResponse,
 } from './types';
 
 export const getConsultantSummary = async (
@@ -285,6 +286,28 @@ export const evaluateClientWithAi = async (
       timeout: AI_EVALUATION_TIMEOUT_MS,
       ...(refresh ? { params: { refresh: true } } : {}),
     }
+  );
+  return response.data;
+};
+
+/**
+ * `GET /v1/consultant/clients/{organization_id}/ai-evaluation/{run_id}` — o
+ * estado de uma avaliação **já iniciada**.
+ *
+ * Serve a quem perdeu a run de vista: um F5 no meio dela, uma segunda aba, um
+ * navegador reaberto. O caminho antigo era pedir outra avaliação — que o backend
+ * recusa com `409 evaluation_in_progress` (e faz bem: a run existe e já está
+ * sendo paga). Esse 409 carrega o `run_id`, e é com ele que se volta para cá.
+ *
+ * Consulta barata: lê a linha de audit, não toca no LLM. Pode ser chamada em
+ * loop enquanto `status === "running"`.
+ */
+export const getAiEvaluationRun = async (
+  organizationId: string,
+  runId: string
+): Promise<AiEvaluationRunStatusResponse> => {
+  const response = await apiClient.get<AiEvaluationRunStatusResponse>(
+    `/consultant/clients/${organizationId}/ai-evaluation/${runId}`
   );
   return response.data;
 };

@@ -1,4 +1,8 @@
-import { evaluateClientWithAi, newEvaluationRequestId } from "../../../api/consultant";
+import {
+  evaluateClientWithAi,
+  getAiEvaluationRun,
+  newEvaluationRequestId,
+} from "../../../api/consultant";
 import { handleApiError } from "../../../api/client";
 
 /**
@@ -40,6 +44,13 @@ export const IDLE = {
 export const ERROR_INSUFFICIENT_DATA = "insufficient_data";
 
 /**
+ * `409` com este código = já existe uma avaliação DESTE cliente em execução, e o
+ * `detail.run_id` diz qual. É um convite, não uma recusa: em vez de mostrar "tente
+ * de novo", o front volta para a run que já está lá — e já está sendo paga.
+ */
+const ERROR_EVALUATION_IN_PROGRESS = "evaluation_in_progress";
+
+/**
  * Mensagens por status HTTP do endpoint de avaliação (§17 do guia da API).
  *
  * O texto de erro do backend é deliberadamente genérico (anti-leak: nunca vaza
@@ -65,6 +76,53 @@ const ERROR_BY_CODE = {
   [ERROR_INSUFFICIENT_DATA]:
     "Este cliente ainda não registrou nenhuma transação. Assim que houver lançamentos, a IA poderá analisar o histórico dele.",
 };
+
+/**
+ * Uma run reencontrada não termina em código HTTP — termina num `RunStatus` do
+ * domínio. Traduzimos os terminais para a mesma linguagem dos erros do POST, para
+ * o consultor não ver duas histórias diferentes para a mesma falha.
+ *
+ * `ok` não está aqui de propósito: é sucesso, e o sucesso tem outro caminho.
+ */
+const ERROR_BY_RUN_STATUS = {
+  [ERROR_INSUFFICIENT_DATA]: {
+    code: ERROR_INSUFFICIENT_DATA,
+    message: ERROR_BY_CODE[ERROR_INSUFFICIENT_DATA],
+  },
+  budget_exceeded: { code: "", message: ERROR_BY_STATUS[402] },
+};
+
+/** Qualquer outro terminal (`error`, `blocked`, `schema_fail`, `tool_error`). */
+const RUN_FAILED_MESSAGE = ERROR_BY_STATUS[422];
+
+/**
+ * De quanto em quanto tempo se pergunta pela run reencontrada.
+ *
+ * A consulta é barata (lê a linha de audit; não toca no LLM), mas uma avaliação
+ * leva de 12 a 50 segundos — pesquisar de meio em meio segundo só geraria ruído.
+ */
+const POLL_INTERVAL_MS = 3_000;
+
+/**
+ * Desistir de acompanhar. Casado com o `CONSULTANT_AI_RUN_STALE_AFTER_SECONDS`
+ * do backend (5 min), que é quando ele mesmo dá a run por morta. Esperar mais que
+ * isso seria esperar por algo que o backend já enterrou.
+ */
+const POLL_TIMEOUT_MS = 300_000;
+
+const TOOK_TOO_LONG_MESSAGE =
+  "A avaliação está demorando mais do que o normal. Tente novamente em instantes.";
+
+/**
+ * `404` no GET da run é OUTRA coisa que `404` no POST: aqui o cliente está na
+ * carteira — quem sumiu foi a run (o backend a deu por morta e a enterrou).
+ * Reusar o "Cliente não encontrado na sua carteira" mandaria o consultor caçar um
+ * problema que não existe.
+ */
+const RUN_NOT_FOUND_MESSAGE =
+  "Não foi possível recuperar a avaliação em andamento. Peça uma nova.";
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** `organizationId` → fatia de estado. */
 const slices = new Map();
@@ -180,20 +238,113 @@ export async function runEvaluation(organizationId, { refresh = false } = {}) {
     const status = err?.response?.status;
     // `detail` é `{code, message}` desde o fix de `insufficient_data`; guardamos
     // contra o formato antigo (string) — um deploy do FE pode preceder o do backend.
-    const code = err?.response?.data?.detail?.code ?? "";
+    const detail = err?.response?.data?.detail;
+    const code = detail?.code ?? "";
+
+    // O backend recusou porque JÁ EXISTE uma avaliação deste cliente rodando — e
+    // mandou o id dela. Dizer "tente de novo" aqui seria mandar o consultor
+    // esperar por uma resposta que já está a caminho, e que ele já está pagando.
+    // Então voltamos para ela. É este o caminho de quem deu F5 no meio da run ou
+    // abriu o cliente numa segunda aba.
+    if (status === 409 && code === ERROR_EVALUATION_IN_PROGRESS && detail?.run_id) {
+      await followRun(organizationId, detail.run_id, myEpoch, fallback);
+      return;
+    }
+
     const message = ERROR_BY_CODE[code] || ERROR_BY_STATUS[status] || handleApiError(err);
-    emit(organizationId, {
-      // No refresh falho preservamos result/cached/computedAt — e o `correlationId`
-      // ANTIGO junto, porque ele identifica a análise que segue na tela.
-      ...(fallback ?? IDLE),
-      loading: false,
-      error: message,
-      errorCode: code,
-      correlationId: fallback ? fallback.correlationId : correlationId,
-    });
+    emitFailure(organizationId, { message, code, fallback, correlationId });
   } finally {
     inFlight.set(organizationId, false);
   }
+}
+
+/**
+ * Acompanha até o fim uma run que já estava rodando.
+ *
+ * Roda DENTRO do `try/finally` de `runEvaluation`, e isso é deliberado: o
+ * `inFlight` daquele cliente continua marcado durante todo o acompanhamento, de
+ * modo que reabrir o painel no meio dele não dispara uma terceira requisição.
+ *
+ * O `loading` já está na tela desde o `emit` inicial — enquanto a run não termina,
+ * não emitimos nada, e o consultor segue vendo o skeleton. Do ponto de vista dele
+ * não houve 409 nenhum: só uma avaliação que demorou.
+ */
+async function followRun(organizationId, runId, myEpoch, fallback) {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < POLL_TIMEOUT_MS) {
+    await sleep(POLL_INTERVAL_MS);
+    if (myEpoch !== epoch) return;
+
+    let run;
+    try {
+      run = await getAiEvaluationRun(organizationId, runId);
+    } catch (err) {
+      if (myEpoch !== epoch) return;
+      // Não há o que acompanhar, e insistir não traria a run de volta.
+      const failedStatus = err?.response?.status;
+      const message =
+        failedStatus === 404
+          ? RUN_NOT_FOUND_MESSAGE
+          : ERROR_BY_STATUS[failedStatus] || handleApiError(err);
+      emitFailure(organizationId, { message, code: "", fallback, correlationId: runId });
+      return;
+    }
+    if (myEpoch !== epoch) return;
+
+    if (run.status === "running") continue;
+
+    if (run.status === "ok" && run.output) {
+      emit(organizationId, {
+        loading: false,
+        error: "",
+        errorCode: "",
+        result: run.output,
+        correlationId: run.correlation_id || runId,
+        // Não veio do cache: é a run que nós mesmos pedimos, reencontrada.
+        cached: false,
+        computedAt: run.computed_at ?? new Date().toISOString(),
+      });
+      return;
+    }
+
+    // Terminou, mas não em `ok`. O motivo cru nunca vem (anti-leak); o `status` é
+    // o que temos, e ele basta para escolher a história certa.
+    const failure = ERROR_BY_RUN_STATUS[run.status] ?? {
+      code: "",
+      message: RUN_FAILED_MESSAGE,
+    };
+    emitFailure(organizationId, {
+      ...failure,
+      fallback,
+      correlationId: run.correlation_id || runId,
+    });
+    return;
+  }
+
+  if (myEpoch !== epoch) return;
+  emitFailure(organizationId, {
+    message: TOOK_TOO_LONG_MESSAGE,
+    code: "",
+    fallback,
+    correlationId: runId,
+  });
+}
+
+/**
+ * Uma falha nunca apaga uma avaliação boa da tela.
+ *
+ * Quando havia resultado (o caso do "Recalcular" que não vingou), ele volta
+ * inteiro — com a idade e o id da análise EXIBIDA, não os da run que morreu.
+ */
+function emitFailure(organizationId, { message, code, fallback, correlationId }) {
+  emit(organizationId, {
+    ...(fallback ?? IDLE),
+    loading: false,
+    error: message,
+    errorCode: code,
+    correlationId: fallback ? fallback.correlationId : correlationId,
+  });
 }
 
 /** Só para os testes: zera o store entre casos. */
