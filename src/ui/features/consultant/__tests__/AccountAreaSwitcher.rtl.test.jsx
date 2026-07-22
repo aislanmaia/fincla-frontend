@@ -8,6 +8,9 @@ vi.mock("@tanstack/react-router", () => ({ useNavigate: () => navigate }));
 import { AccountAreaSwitcher } from "../AccountAreaSwitcher.jsx";
 
 const consultant = {
+  // `is_consultant` vem do backend e passou a ser o que decide a área: a feature
+  // sozinha mandava todo usuário beta para o painel do consultor (§1.7).
+  is_consultant: true,
   subscription: { status: "active", features: ["multi_org_dashboard", "client_list"] },
 };
 const plainOwner = { subscription: { status: "active", features: ["basic_reports"] } };
