@@ -26,7 +26,18 @@ export const CONSULTANT_FEATURE = "multi_org_dashboard";
  * só lê a resposta.
  */
 function isConsultant(user) {
-  return user?.is_consultant === true;
+  // Backend ANTIGO (campo ausente): cai para a feature, que é o comportamento
+  // de hoje em produção. Sem este fallback, um frontend que chegue antes do
+  // backend — ou um rollback do backend com o bundle novo em cache — tranca
+  // TODO consultor fora do painel. Trocaríamos "beta demais" por "ninguém",
+  // que é pior: quebra quem paga.
+  //
+  // É transitório e deve sair assim que o backend novo estiver em produção;
+  // enquanto existir, um cliente beta continua entrando por este ramo. Por isso
+  // a preferência é sempre pelo campo, e só a AUSÊNCIA dele cai no fallback —
+  // um `false` explícito é resposta, não silêncio.
+  if (typeof user?.is_consultant === "boolean") return user.is_consultant;
+  return useEntitlement(CONSULTANT_FEATURE, user);
 }
 
 /**

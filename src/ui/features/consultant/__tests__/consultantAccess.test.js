@@ -73,9 +73,21 @@ describe("hasConsultantArea (redirect de login + switcher)", () => {
     expect(hasConsultantArea(null)).toBe(false);
   });
 
-  it("false quando o backend não mandou o campo (versão antiga da API)", () => {
-    // Fail closed: sem a resposta do backend, ninguém entra. O contrário faria
-    // um deploy de frontend adiantado reabrir o bug em silêncio.
-    expect(hasConsultantArea({ subscription: { status: "active", features: ["multi_org_dashboard"] } })).toBe(false);
+  it("campo ausente (backend antigo) cai para a feature — janela de deploy", () => {
+    // NÃO é fail-closed aqui, e a escolha é deliberada: se o frontend chegar
+    // antes do backend, ou o backend for revertido com este bundle em cache,
+    // fechar trancaria TODO consultor fora do painel. Trocar "beta demais" por
+    // "ninguém" é pior — quebra quem paga. O fallback é transitório e sai
+    // quando o backend novo estiver em produção.
+    expect(
+      hasConsultantArea({ subscription: { status: "active", features: ["multi_org_dashboard"] } }),
+    ).toBe(true);
+  });
+
+  it("`false` explícito é resposta e NÃO cai no fallback", () => {
+    // A distinção que faz o fallback ser seguro: só a AUSÊNCIA do campo é
+    // silêncio. Se o backend disse `false`, é o backend novo respondendo, e
+    // ignorar isso reabriria o bug de produção com o deploy já feito.
+    expect(hasConsultantArea(betaClient)).toBe(false);
   });
 });
