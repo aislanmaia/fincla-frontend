@@ -14,6 +14,7 @@ import {
   isOnboardingRequired,
 } from "./sessionState.js";
 import { clearAllEvaluations } from "../consultant/clientEvaluationStore.js";
+import { clearAllPortfolioSummaries } from "../consultant/portfolioSummaryStore.js";
 import { clearPostLoginRedirect } from "../../routing/postLoginRedirect.js";
 
 const ACTIVE_ORG_KEY = "fincla_active_org_id";
@@ -62,8 +63,10 @@ export function useSession() {
     // As avaliações de IA do consultor vivem num store de módulo (fora do React,
     // para a run sobreviver ao fechamento do painel). Sair da conta não recarrega
     // a página, então esse store atravessaria o logout: o próximo consultor a
-    // entrar nesta aba veria a análise que o anterior mandou gerar.
+    // entrar nesta aba veria a análise que o anterior mandou gerar. O mesmo vale
+    // para o relatório da base (A2), que tem o mesmo tipo de store.
     clearAllEvaluations();
+    clearAllPortfolioSummaries();
     setSession({
       ...EMPTY_SESSION,
       isBootstrapping: false,
