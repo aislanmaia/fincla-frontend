@@ -43,10 +43,11 @@ const QUICK_PROMPTS = [
 ];
 
 // ── Renderização do markdown do `answer` ────────────────────────────────────
-// O backend devolve markdown leve (negrito, listas). Sem dependência de um parser
-// externo, cobrimos o que o modelo realmente emite: **negrito**, linhas de bullet
-// (`- `) e quebras de parágrafo. É deliberadamente conservador — texto que não
-// casa um padrão sai como texto puro, nunca como HTML cru.
+// O backend devolve markdown leve. Sem dependência de parser externo (nem
+// `dangerouslySetInnerHTML`: tudo sai como texto escapado do React), um parser por
+// LINHA agrupa o que o modelo realmente emite — cabeçalhos `#`, tabelas `| … |`,
+// listas `- `, parágrafos — e **negrito** inline. Linha que não casa um padrão sai
+// como texto puro, nunca como HTML cru.
 
 function renderInline(text, keyPrefix) {
   const parts = String(text).split(/(\*\*[^*]+\*\*)/g);
@@ -62,21 +63,140 @@ function renderInline(text, keyPrefix) {
   });
 }
 
+const HEADING_RE = /^\s{0,3}(#{1,6})\s+(.*)$/;
+const BULLET_RE = /^\s*[-*]\s+/;
+// Linha separadora de tabela markdown: só `-`, `:`, `|`, espaço. Uma classe com
+// UM quantificador `*` (linear) em vez de `[…]*-[…]*` (O(n²) por backtracking numa
+// tira longa de `-` que falha no fim — 8k hifens ~200ms). A obrigatoriedade de um
+// `-` fica por conta do `.includes("-")` nos dois pontos de uso, então o gate não
+// afrouxa. (Review adversarial.)
+const TABLE_SEP_RE = /^\s*\|?[\s:|-]*\|?\s*$/;
+
+/** Quebra `| a | b |` em células, tolerando (ou não) as barras das pontas. */
+function splitTableRow(line) {
+  let s = line.trim();
+  if (s.startsWith("|")) s = s.slice(1);
+  if (s.endsWith("|")) s = s.slice(0, -1);
+  return s.split("|").map((c) => c.trim());
+}
+
+/** Agrupa o texto em blocos por tipo, linha a linha. */
+function parseMarkdownBlocks(text) {
+  const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
+  const blocks = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line.trim() === "") { i += 1; continue; }
+
+    const heading = line.match(HEADING_RE);
+    if (heading) {
+      blocks.push({ kind: "heading", level: heading[1].length, text: heading[2] });
+      i += 1;
+      continue;
+    }
+
+    // Tabela: linha com `|` seguida de uma linha separadora (`|---|`).
+    const next = lines[i + 1] ?? "";
+    if (line.includes("|") && TABLE_SEP_RE.test(next) && next.includes("-")) {
+      const header = splitTableRow(line);
+      i += 2; // consome cabeçalho + separador
+      const rows = [];
+      while (i < lines.length && lines[i].trim() !== "" && lines[i].includes("|")) {
+        rows.push(splitTableRow(lines[i]));
+        i += 1;
+      }
+      blocks.push({ kind: "table", header, rows });
+      continue;
+    }
+
+    if (BULLET_RE.test(line)) {
+      const items = [];
+      while (i < lines.length && BULLET_RE.test(lines[i])) {
+        items.push(lines[i].replace(BULLET_RE, ""));
+        i += 1;
+      }
+      blocks.push({ kind: "list", items });
+      continue;
+    }
+
+    // Parágrafo: linhas consecutivas que não são cabeçalho/lista/tabela.
+    const para = [];
+    while (
+      i < lines.length &&
+      lines[i].trim() !== "" &&
+      !HEADING_RE.test(lines[i]) &&
+      !BULLET_RE.test(lines[i]) &&
+      !(lines[i].includes("|") && TABLE_SEP_RE.test(lines[i + 1] ?? "") && (lines[i + 1] ?? "").includes("-"))
+    ) {
+      para.push(lines[i]);
+      i += 1;
+    }
+    blocks.push({ kind: "paragraph", lines: para });
+  }
+  return blocks;
+}
+
+function MarkdownTable({ header, rows }) {
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <table style={{ ...G, borderCollapse: "collapse", width: "100%", fontSize: 12.5 }}>
+        <thead>
+          <tr>
+            {header.map((cell, ci) => (
+              <th
+                key={`h${ci}`}
+                style={{ textAlign: "left", padding: "7px 10px", color: T.inkLight, fontWeight: 700, borderBottom: `1px solid ${T.border}`, whiteSpace: "nowrap" }}
+              >
+                {renderInline(cell, `th${ci}`)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, ri) => (
+            <tr key={`r${ri}`} style={{ background: ri % 2 ? T.bg : "transparent" }}>
+              {header.map((_h, ci) => (
+                <td key={`c${ci}`} style={{ padding: "7px 10px", color: T.inkMid, borderBottom: `1px solid ${T.border}`, whiteSpace: "nowrap" }}>
+                  {renderInline(row[ci] ?? "", `td${ri}-${ci}`)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+const HEADING_SIZE = { 1: 15, 2: 14.5, 3: 14, 4: 13.5, 5: 13, 6: 13 };
+
 function Markdown({ text }) {
-  const blocks = String(text || "").split(/\n{2,}/);
+  const blocks = parseMarkdownBlocks(text);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {blocks.map((block, bi) => {
-        const lines = block.split("\n").filter((l) => l.trim() !== "");
-        const isList = lines.length > 0 && lines.every((l) => /^\s*[-*]\s+/.test(l));
-        if (isList) {
+        if (block.kind === "heading") {
           return (
-            <div key={`bl${bi}`} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {lines.map((line, li) => (
+            <div
+              key={`b${bi}`}
+              style={{ ...G, fontSize: HEADING_SIZE[block.level] ?? 13, fontWeight: 800, color: T.ink, marginTop: bi > 0 ? 4 : 0 }}
+            >
+              {renderInline(block.text, `h${bi}`)}
+            </div>
+          );
+        }
+        if (block.kind === "table") {
+          return <MarkdownTable key={`b${bi}`} header={block.header} rows={block.rows} />;
+        }
+        if (block.kind === "list") {
+          return (
+            <div key={`b${bi}`} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {block.items.map((item, li) => (
                 <div key={`li${li}`} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
                   <span style={{ width: 5, height: 5, borderRadius: 99, background: T.purple, marginTop: 8, flexShrink: 0 }} />
                   <span style={{ ...G, fontSize: 13, color: T.inkMid, lineHeight: 1.55 }}>
-                    {renderInline(line.replace(/^\s*[-*]\s+/, ""), `l${bi}-${li}`)}
+                    {renderInline(item, `l${bi}-${li}`)}
                   </span>
                 </div>
               ))}
@@ -84,8 +204,8 @@ function Markdown({ text }) {
           );
         }
         return (
-          <p key={`bl${bi}`} style={{ ...G, fontSize: 13, color: T.inkMid, lineHeight: 1.65, margin: 0 }}>
-            {lines.map((line, li) => (
+          <p key={`b${bi}`} style={{ ...G, fontSize: 13, color: T.inkMid, lineHeight: 1.65, margin: 0 }}>
+            {block.lines.map((line, li) => (
               <React.Fragment key={`p${li}`}>
                 {li > 0 && <br />}
                 {renderInline(line, `p${bi}-${li}`)}
