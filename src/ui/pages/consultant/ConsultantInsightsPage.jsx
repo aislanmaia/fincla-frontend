@@ -27,6 +27,12 @@ import { useConsultantTotalCardDebt } from "../../features/consultant/useConsult
 import { getConsultantConsolidatedReport } from "../../../api/consultant";
 import { getDisplayName } from "../../features/auth/userDisplay.js";
 import { useFinclaPages } from "../../routing/finclaPageContext.jsx";
+import { useAddClient } from "../../features/consultant/ConsultantAddClientContext.jsx";
+import { useCanDetectTrendsWithAi } from "../../features/consultant/consultantAiAccess.js";
+import {
+  ConsultantTrendsSection,
+  ConsultantTrendsProTeaser,
+} from "../../features/consultant/ConsultantTrendsSection.jsx";
 
 function Kicker({ children }) {
   return <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>{children}</div>;
@@ -96,19 +102,6 @@ function HBars({ rows, max, fmt }) {
   );
 }
 
-function SoonPanel({ title, subtitle, text }) {
-  return (
-    <Card style={{ padding: 18 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-        <div style={{ ...G, fontSize: 14, fontWeight: 800, color: T.ink }}>{title}</div>
-        <span style={{ ...G, fontSize: 8.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: T.inkLight, background: T.grayLight, borderRadius: 5, padding: "2px 6px" }}>em breve</span>
-      </div>
-      {subtitle && <div style={{ ...G, fontSize: 11, color: T.inkLight, marginBottom: 14 }}>{subtitle}</div>}
-      <div style={{ ...G, fontSize: 12, color: T.inkLight, lineHeight: 1.6 }}>{text}</div>
-    </Card>
-  );
-}
-
 function MoverRow({ client, dir, onOpen }) {
   const up = dir === "up";
   const color = up ? T.green : T.red;
@@ -166,6 +159,8 @@ function MoversCard({ title, icon, iconColor, clients, dir, onOpen, emptyText })
 export function ConsultantInsightsPage() {
   const navigate = useNavigate();
   const pages = useFinclaPages();
+  const canDetectTrends = useCanDetectTrendsWithAi();
+  const { openAddClient } = useAddClient();
   const { healthIndex } = useConsultantHealthIndex();
   const wallet = useConsultantClients();
   const expenses = useConsultantExpensesByCategory();
@@ -302,10 +297,11 @@ export function ConsultantInsightsPage() {
         <MoversCard title="Precisam de atenção" icon="down" iconColor={T.red} clients={decliners} dir="down" onOpen={openClient} emptyText="Nenhum cliente em queda no momento." />
       </div>
 
-      <SoonPanel
-        title="Tendências detectadas pela IA"
-        text="Em breve: a IA vai cruzar os números de toda a carteira e apontar padrões — concentração de risco, janelas para investimento, categorias que corroem a base — com ações sugeridas."
-      />
+      {canDetectTrends ? (
+        <ConsultantTrendsSection onAddClient={openAddClient} />
+      ) : (
+        <ConsultantTrendsProTeaser />
+      )}
 
       <ConsultantExportModal open={exportOpen} exporting={exporting} onExport={onExport} onClose={() => setExportOpen(false)} />
     </div>

@@ -24,6 +24,8 @@ import type {
   AiEvaluationRunStatusResponse,
   AiPortfolioSummaryResponse,
   AiPortfolioSummaryRunStatusResponse,
+  AiPortfolioTrendsResponse,
+  AiPortfolioTrendsRunStatusResponse,
 } from './types';
 
 export const getConsultantSummary = async (
@@ -358,6 +360,45 @@ export const getAiPortfolioSummaryRun = async (
 ): Promise<AiPortfolioSummaryRunStatusResponse> => {
   const response = await apiClient.get<AiPortfolioSummaryRunStatusResponse>(
     `/consultant/ai-portfolio-summary/${runId}`
+  );
+  return response.data;
+};
+
+// ===== Consultor IA — A3 ("Tendências detectadas pela IA") =====
+
+/**
+ * `POST /v1/consultant/ai-portfolio-trends` — detecta 3-6 tendências agregadas da
+ * carteira. Mesma forma do resumo (sem `organization_id`, corpo vazio), gated por
+ * `consultant_ai`. A tela de Insights auto-dispara isto ao abrir; o cache do
+ * backend (1 dia) absorve as reaberturas. `refresh=true` fura o cache (botão
+ * "Atualizar"). Reusa `newEvaluationRequestId()` e o timeout longo.
+ */
+export const detectPortfolioTrendsWithAi = async (
+  requestId: string,
+  refresh = false
+): Promise<AiPortfolioTrendsResponse> => {
+  const response = await apiClient.post<AiPortfolioTrendsResponse>(
+    '/consultant/ai-portfolio-trends',
+    {},
+    {
+      headers: { 'X-Request-Id': requestId },
+      timeout: AI_EVALUATION_TIMEOUT_MS,
+      ...(refresh ? { params: { refresh: true } } : {}),
+    }
+  );
+  return response.data;
+};
+
+/**
+ * `GET /v1/consultant/ai-portfolio-trends/{run_id}` — estado de uma detecção já
+ * iniciada. Irmão do rejoin do resumo; consulta barata (audit, não LLM). Existe
+ * porque o `409 trends_detection_in_progress` entrega um `run_id`.
+ */
+export const getAiPortfolioTrendsRun = async (
+  runId: string
+): Promise<AiPortfolioTrendsRunStatusResponse> => {
+  const response = await apiClient.get<AiPortfolioTrendsRunStatusResponse>(
+    `/consultant/ai-portfolio-trends/${runId}`
   );
   return response.data;
 };

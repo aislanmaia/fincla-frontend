@@ -15,6 +15,7 @@ import {
 } from "./sessionState.js";
 import { clearAllEvaluations } from "../consultant/clientEvaluationStore.js";
 import { clearAllPortfolioSummaries } from "../consultant/portfolioSummaryStore.js";
+import { clearAllPortfolioTrends } from "../consultant/portfolioTrendsStore.js";
 import { clearPostLoginRedirect } from "../../routing/postLoginRedirect.js";
 
 const ACTIVE_ORG_KEY = "fincla_active_org_id";
@@ -67,6 +68,7 @@ export function useSession() {
     // para o relatório da base (A2), que tem o mesmo tipo de store.
     clearAllEvaluations();
     clearAllPortfolioSummaries();
+    clearAllPortfolioTrends();
     setSession({
       ...EMPTY_SESSION,
       isBootstrapping: false,

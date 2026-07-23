@@ -41,3 +41,16 @@ export function useCanSummarizePortfolioWithAi() {
   const pages = useFinclaPages();
   return useEntitlement(CONSULTANT_AI_FEATURE, pages?.user);
 }
+
+/**
+ * O consultor logado pode ver as "Tendências detectadas pela IA" (A3)?
+ *
+ * Mesma feature `consultant_ai` das outras Skills. Importa mais aqui que nas
+ * irmãs: a seção de tendências AUTO-DISPARA a geração ao montar, então sem este
+ * gate a tela de Insights de um consultor sem o recurso dispararia uma chamada
+ * que o backend recusa com 403 — melhor não montar a seção.
+ */
+export function useCanDetectTrendsWithAi() {
+  const pages = useFinclaPages();
+  return useEntitlement(CONSULTANT_AI_FEATURE, pages?.user);
+}
