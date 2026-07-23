@@ -19,6 +19,7 @@ import { ConsultantPainelPage } from "../pages/consultant/ConsultantPainelPage.j
 import { ConsultantClientsPage } from "../pages/consultant/ConsultantClientsPage.jsx";
 import { ConsultantClientReportPage } from "../pages/consultant/ConsultantClientReportPage.jsx";
 import { ConsultantInsightsPage } from "../pages/consultant/ConsultantInsightsPage.jsx";
+import { ConsultantCopilotoPage } from "../pages/consultant/ConsultantCopilotoPage.jsx";
 import { ConsultantProfilePage } from "../pages/consultant/ConsultantProfilePage.jsx";
 import { AUTH_ROUTE_SEGMENTS } from "./appSegments.js";
 import { isPlanningArea, DEFAULT_PLANNING_AREA } from "../features/planning/planningAreas.js";
@@ -223,6 +224,11 @@ const consultantInsightsRoute = createRoute({
   path: "insights",
   component: ConsultantInsightsPage,
 });
+const consultantCopilotoRoute = createRoute({
+  getParentRoute: () => consultantRoute,
+  path: "copiloto",
+  component: ConsultantCopilotoPage,
+});
 const consultantProfileRoute = createRoute({
   getParentRoute: () => consultantRoute,
   path: "profile",
@@ -233,6 +239,7 @@ consultantRoute.addChildren([
   consultantClientsRoute,
   consultantClientReportRoute,
   consultantInsightsRoute,
+  consultantCopilotoRoute,
   consultantProfileRoute,
 ]);
 
