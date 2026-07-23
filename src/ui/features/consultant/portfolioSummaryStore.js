@@ -201,7 +201,17 @@ export async function runPortfolioSummary({ refresh = false } = {}) {
     const message = ERROR_BY_CODE[code] || ERROR_BY_STATUS[status] || handleApiError(err);
     emitFailure({ message, code, fallback, correlationId });
   } finally {
-    inFlight.set(KEY, false);
+    // Só libera o guard se a run ainda é da geração ATUAL. Com uma chave única
+    // (a carteira é uma só), sem esta guarda uma run de uma sessão ANTERIOR que
+    // resolve tarde limparia o `inFlight` da run da sessão nova — que ainda está
+    // em voo. Cenário real (mesma aba, sem reload, que é como o `signOut` da
+    // Fincla funciona): X abre o relatório → run A em voo; X sai (epoch++,
+    // `inFlight` limpo); Y entra e abre → run B em voo; A resolve tarde, cai na
+    // guarda de epoch e NÃO emite, MAS o finally liberava o slot de B — e um
+    // reabrir de Y dispararia uma SEGUNDA run paga. Na A1, chaveada por org, isso
+    // só colidia se o próximo cliente fosse a MESMA org (raro); aqui colidiria
+    // sempre. A guarda de epoch fecha os dois casos.
+    if (myEpoch === epoch) inFlight.set(KEY, false);
   }
 }
 

@@ -187,6 +187,34 @@ describe("portfolioSummaryStore — fim de sessão", () => {
     expect(getSlice().result).toBeNull();
   });
 
+  it("uma run da sessão ANTERIOR que resolve tarde não libera o guard da run atual", async () => {
+    // O race que a chave única amplifica: numa mesma aba (como o signOut da
+    // Fincla, sem reload), a run de X que resolve depois do login de Y não pode
+    // liberar o `inFlight` da run de Y — senão um reabrir de Y pagaria de novo.
+    let resolveA;
+    let resolveB;
+    vi.mocked(summarizePortfolioWithAi)
+      .mockReturnValueOnce(new Promise((r) => { resolveA = r; })) // run A (X)
+      .mockReturnValueOnce(new Promise((r) => { resolveB = r; })) // run B (Y)
+      .mockReturnValueOnce(new Promise(() => {})); // run C — NÃO deve acontecer
+
+    const runA = runPortfolioSummary(); // epoch 0, inFlight=true
+    clearAllPortfolioSummaries(); // logout de X: epoch 1, inFlight limpo
+    const runB = runPortfolioSummary(); // login de Y: epoch 1, inFlight=true
+    expect(summarizePortfolioWithAi).toHaveBeenCalledTimes(2);
+
+    resolveA({ output, correlation_id: REQ_ID }); // A resolve na geração velha
+    await runA;
+
+    // Y reabre o drawer no meio da run B: NÃO pode disparar uma terceira run.
+    await runPortfolioSummary();
+    expect(summarizePortfolioWithAi).toHaveBeenCalledTimes(2);
+
+    clearAllPortfolioSummaries();
+    resolveB?.({ output, correlation_id: REQ_ID });
+    await runB;
+  });
+
   it("notifica quem está montado, em vez de descartar os listeners", async () => {
     vi.mocked(summarizePortfolioWithAi).mockResolvedValue({ output, correlation_id: REQ_ID });
     const cb = vi.fn();

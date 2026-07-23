@@ -118,6 +118,35 @@ describe("ConsultantBaseSummaryDrawer + usePortfolioSummary (hook real)", () => 
     expect(screen.getByText(/limite de uso da IA/i)).toBeInTheDocument();
   });
 
+  it("formata valores de evidência boolean/null sem vazar 'true'/'null' em inglês", async () => {
+    // O contrato permite `bool|null` em `EvidenceItem.value`; sem tratar, um
+    // `String(true)` mostraria "true" e `String(null)` mostraria "null" num chip.
+    const withEdgeEvidence = {
+      ...output,
+      priorities: [],
+      opportunities: [
+        {
+          note: "Cliente com reserva formada.",
+          evidence: [
+            { metric: "tem_reserva", value: true, source_tool: "query_clients" },
+            { metric: "score_pendente", value: null, source_tool: "query_clients" },
+          ],
+        },
+      ],
+    };
+    vi.mocked(summarizePortfolioWithAi).mockResolvedValue({
+      correlation_id: "c", session_id: "s", run_id: "r", output: withEdgeEvidence,
+    });
+
+    render(<StrictMode>{drawer()}</StrictMode>);
+
+    await waitFor(() => expect(screen.getByText("Cliente com reserva formada.")).toBeInTheDocument());
+    expect(screen.getByText(/tem_reserva: sim/)).toBeInTheDocument();
+    expect(screen.getByText(/score_pendente: —/)).toBeInTheDocument();
+    expect(screen.queryByText(/: true/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/: null/)).not.toBeInTheDocument();
+  });
+
   it("clicar numa prioridade linka para o cliente pelo organization_id e fecha o drawer", async () => {
     vi.mocked(summarizePortfolioWithAi).mockResolvedValue({
       correlation_id: "corr-1", session_id: "s", run_id: "r", output,

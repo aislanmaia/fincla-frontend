@@ -260,7 +260,14 @@ export async function runEvaluation(organizationId, { refresh = false } = {}) {
     const message = ERROR_BY_CODE[code] || ERROR_BY_STATUS[status] || handleApiError(err);
     emitFailure(organizationId, { message, code, fallback, correlationId });
   } finally {
-    inFlight.set(organizationId, false);
+    // Só libera o guard se a run ainda é da geração ATUAL. Sem isto, uma run de
+    // uma sessão anterior que resolve tarde (depois de um logout→login na mesma
+    // aba) limparia o `inFlight` da run da sessão nova para o MESMO cliente,
+    // deixando um reabrir do painel disparar uma segunda avaliação paga. Aqui,
+    // chaveado por org, isso só colide se o próximo consultor abrir a MESMA org
+    // com uma run ainda em voo — raro, mas real. Ver o irmão da carteira
+    // (`portfolioSummaryStore`), onde a chave única torna a colisão certa.
+    if (myEpoch === epoch) inFlight.set(organizationId, false);
   }
 }
 

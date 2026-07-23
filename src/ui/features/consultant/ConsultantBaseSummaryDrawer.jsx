@@ -78,6 +78,18 @@ function PortfolioReadCard({ read }) {
   );
 }
 
+/**
+ * Formata o valor escalar de uma evidência. O contrato (`EvidenceItem.value`)
+ * permite `str|int|float|bool|null`; sem tratar boolean/null, um `String(true)`
+ * mostraria "true" e um `String(null)` mostraria o literal "null" num chip PT-BR.
+ */
+function formatEvidenceValue(value) {
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "boolean") return value ? "sim" : "não";
+  if (typeof value === "number") return value.toLocaleString("pt-BR");
+  return String(value);
+}
+
 /** Chips de evidência, iguais aos do plano de ação do A1 (grounding visível). */
 function EvidenceChips({ evidence }) {
   if (!evidence?.length) return null;
@@ -86,7 +98,7 @@ function EvidenceChips({ evidence }) {
       {evidence.map((e, j) => (
         <span key={j} title={`Fonte: ${e.source_tool}`}
           style={{ ...G, ...NUM, fontSize: 10, fontWeight: 700, color: T.purple, background: T.purpleLight, borderRadius: 6, padding: "3px 7px" }}>
-          {e.metric}: {typeof e.value === "number" ? e.value.toLocaleString("pt-BR") : String(e.value)}
+          {e.metric}: {formatEvidenceValue(e.value)}
         </span>
       ))}
     </div>

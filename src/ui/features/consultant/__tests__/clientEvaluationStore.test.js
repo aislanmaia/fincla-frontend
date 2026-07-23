@@ -129,6 +129,32 @@ describe("clientEvaluationStore — fim de sessão", () => {
     expect(avisado).toHaveBeenCalled();
   });
 
+  it("uma run da sessão anterior que resolve tarde não libera o guard da run atual (mesma org)", async () => {
+    // O race que a carteira (chave única) torna certo, aqui só colide se a
+    // próxima sessão abrir a MESMA org com uma run em voo — mas é o mesmo bug.
+    let resolveA;
+    let resolveB;
+    vi.mocked(evaluateClientWithAi)
+      .mockReturnValueOnce(new Promise((r) => { resolveA = r; })) // run A (X)
+      .mockReturnValueOnce(new Promise((r) => { resolveB = r; })) // run B (Y, mesma org)
+      .mockReturnValueOnce(new Promise(() => {})); // run C — NÃO deve acontecer
+
+    const runA = runEvaluation(ORG); // epoch 0
+    clearAllEvaluations(); // logout: epoch 1, inFlight limpo
+    const runB = runEvaluation(ORG); // login de Y, mesma org: epoch 1
+    expect(evaluateClientWithAi).toHaveBeenCalledTimes(2);
+
+    resolveA({ output, correlation_id: REQ_ID }); // A resolve na geração velha
+    await runA;
+
+    await runEvaluation(ORG); // Y reabre o painel: não pode disparar a 3ª run
+    expect(evaluateClientWithAi).toHaveBeenCalledTimes(2);
+
+    clearAllEvaluations();
+    resolveB?.({ output, correlation_id: REQ_ID });
+    await runB;
+  });
+
   it("depois da limpeza o store volta a funcionar para o novo usuário", async () => {
     // O guard de geração não pode trancar o store: quem entra depois precisa
     // conseguir avaliar normalmente.
