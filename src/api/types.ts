@@ -2156,3 +2156,51 @@ export interface AiPortfolioSummaryRunStatusResponse {
   output?: PortfolioSummaryOutput | null;
   computed_at?: string | null;
 }
+
+// ===== CONSULTOR IA — A3 ("Tendências detectadas pela IA") =====
+// Contrato canônico: fincla-api/src/application/ai/contracts.py (`PortfolioTrendsOutput`).
+// Reusa `EvidenceItem` do bloco A1. A seção de Insights auto-dispara a geração ao
+// abrir a tela; o cache do backend (1 dia) é o que torna isso viável.
+
+/**
+ * O tom de uma tendência. Casa 1:1 com as cores do design:
+ * `risk`→vermelho, `opportunity`→verde, `watch`→âmbar. A UI renderiza um card
+ * por tendência, com ícone/cor pelo tom.
+ */
+export type TrendTone = 'risk' | 'opportunity' | 'watch';
+
+/** Uma tendência agregada da carteira, com evidência ancorada num número de tool. */
+export interface PortfolioTrend {
+  tone: TrendTone;
+  title: string;
+  description: string;
+  evidence: EvidenceItem[];
+}
+
+export interface PortfolioTrendsOutput {
+  /**
+   * De 1 a 6 tendências, contagem DINÂMICA conforme o que o dado sustenta. O piso
+   * é 1 (não 3) de propósito: forçar 3 empurraria o modelo a inventar a terceira,
+   * e o grounding ancora números, não narrativas.
+   */
+  trends: PortfolioTrend[];
+  /** Obrigatório (>= 1) — framing CVM, advisor-facing. */
+  disclaimers: string[];
+}
+
+export interface AiPortfolioTrendsResponse {
+  correlation_id: string;
+  session_id: string;
+  run_id: string;
+  output: PortfolioTrendsOutput;
+  cached?: boolean;
+  computed_at?: string | null;
+}
+
+export interface AiPortfolioTrendsRunStatusResponse {
+  run_id: string;
+  correlation_id: string;
+  status: AiRunStatus;
+  output?: PortfolioTrendsOutput | null;
+  computed_at?: string | null;
+}
