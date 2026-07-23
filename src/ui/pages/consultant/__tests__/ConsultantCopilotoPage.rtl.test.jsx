@@ -135,4 +135,34 @@ describe("ConsultantCopilotoPage", () => {
     const sentMessage = vi.mocked(askCopiloto).mock.calls[0][1];
     expect(sentMessage).toContain("Mariana Costa");
   });
+
+  it("renderiza cabeçalhos markdown e tabelas (não como texto cru)", async () => {
+    const user = userEvent.setup();
+    vi.mocked(askCopiloto).mockResolvedValue({
+      correlation_id: "c", session_id: "s", run_id: "r",
+      output: {
+        answer:
+          "### Fluxo de Caixa\n| Mês | Renda | Saldo |\n|------|-------|-------|\n| jul/26 | R$ 5.500 | R$ 650 |\n| ago/26 | R$ 5.200 | -R$ 300 |",
+        blocks: [],
+        suggested_actions: [],
+        disclaimers: ["d"],
+      },
+    });
+
+    render(<ConsultantCopilotoPage />);
+    await user.type(screen.getByLabelText("Mensagem para o Copiloto"), "fluxo?");
+    await user.click(screen.getByLabelText("Enviar mensagem"));
+
+    // Cabeçalho renderiza SEM o `###` cru.
+    const heading = await screen.findByText("Fluxo de Caixa");
+    expect(heading).toBeInTheDocument();
+    expect(screen.queryByText(/### Fluxo/)).not.toBeInTheDocument();
+    // Vira uma <table> de verdade com as células, não o `| Mês |` cru.
+    const table = document.querySelector("table");
+    expect(table).not.toBeNull();
+    expect(table).toHaveTextContent("Mês");
+    expect(table).toHaveTextContent("jul/26");
+    expect(table).toHaveTextContent("-R$ 300");
+    expect(screen.queryByText(/\|------\|/)).not.toBeInTheDocument();
+  });
 });
