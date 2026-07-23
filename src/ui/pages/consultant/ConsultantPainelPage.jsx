@@ -11,8 +11,9 @@ import { ConsultantKpiCards } from "../../features/consultant/ConsultantKpiCards
 import { ConsultantSemaphorePanel } from "../../features/consultant/ConsultantSemaphorePanel";
 import { ConsultantAttentionList } from "../../features/consultant/ConsultantAttentionList";
 import { ConsultantEvaluationDrawer } from "../../features/consultant/ConsultantEvaluationDrawer.jsx";
+import { ConsultantBaseSummaryDrawer } from "../../features/consultant/ConsultantBaseSummaryDrawer.jsx";
 import { useEvaluationDrawer } from "../../features/consultant/useEvaluationDrawer.js";
-import { useCanEvaluateClientWithAi } from "../../features/consultant/consultantAiAccess.js";
+import { useCanEvaluateClientWithAi, useCanSummarizePortfolioWithAi } from "../../features/consultant/consultantAiAccess.js";
 import { ConsultantAiInsightCard } from "../../features/consultant/ConsultantAiInsightCard";
 import { ConsultantActivityFeed } from "../../features/consultant/ConsultantActivityFeed";
 import { Icon, useIsNarrow } from "../../features/consultant/consultantUi";
@@ -69,6 +70,13 @@ function StubActionButton({ icon, label }) {
 export function ConsultantPainelPage() {
   const evaluation = useEvaluationDrawer();
   const canEvaluate = useCanEvaluateClientWithAi();
+  const canSummarize = useCanSummarizePortfolioWithAi();
+  // Estado do drawer "Resumo da base por IA" (A2). Um booleano basta: a carteira
+  // é uma só, e o relatório em si vive fora do React (`portfolioSummaryStore`),
+  // então fechar/reabrir reencontra a run em vez de perdê-la.
+  const [baseSummaryOpen, setBaseSummaryOpen] = React.useState(false);
+  const openBaseSummary = React.useCallback(() => setBaseSummaryOpen(true), []);
+  const closeBaseSummary = React.useCallback(() => setBaseSummaryOpen(false), []);
   const navigate = useNavigate();
   const narrow = useIsNarrow(900);
   const { openAddClient } = useAddClient();
@@ -115,7 +123,14 @@ export function ConsultantPainelPage() {
       <div style={{ display: "flex", gap: 9, flexWrap: "wrap" }}>
         <Btn variant="outGray" onClick={goToInsights}><Icon name="bar" size={14} color={T.inkMid} /> Insights</Btn>
         <Btn variant="outGray" onClick={openAddClient}><Icon name="plus" size={14} color={T.inkMid} /> Adicionar cliente</Btn>
-        <StubActionButton icon="sparkles" label="Relatório com IA" />
+        {/* "Relatório com IA" e o card do painel abrem o MESMO drawer (A2): dois
+            gatilhos para a mesma ação, ambos gateados por `consultant_ai`. Sem o
+            recurso, mantém-se o stub "em breve" como convite de upgrade. */}
+        {canSummarize ? (
+          <Btn variant="dark" onClick={openBaseSummary}><Icon name="sparkles" size={14} color="#fff" /> Relatório com IA</Btn>
+        ) : (
+          <StubActionButton icon="sparkles" label="Relatório com IA" />
+        )}
       </div>
     </div>
   );
@@ -145,7 +160,7 @@ export function ConsultantPainelPage() {
 
   const rightColumn = (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
-      <ConsultantAiInsightCard />
+      <ConsultantAiInsightCard onOpen={canSummarize ? openBaseSummary : undefined} />
       <ConsultantActivityFeed />
     </div>
   );
@@ -175,6 +190,15 @@ export function ConsultantPainelPage() {
           organizationId={evaluation.target.organizationId}
           clientName={evaluation.target.clientName}
           onClose={evaluation.close}
+        />
+      )}
+
+      {baseSummaryOpen && (
+        <ConsultantBaseSummaryDrawer
+          open
+          onClose={closeBaseSummary}
+          onOpenClient={openClient}
+          onAddClient={openAddClient}
         />
       )}
     </div>

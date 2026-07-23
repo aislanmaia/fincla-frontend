@@ -22,6 +22,8 @@ import type {
   AiEvaluationRequest,
   AiEvaluationResponse,
   AiEvaluationRunStatusResponse,
+  AiPortfolioSummaryResponse,
+  AiPortfolioSummaryRunStatusResponse,
 } from './types';
 
 export const getConsultantSummary = async (
@@ -308,6 +310,54 @@ export const getAiEvaluationRun = async (
 ): Promise<AiEvaluationRunStatusResponse> => {
   const response = await apiClient.get<AiEvaluationRunStatusResponse>(
     `/consultant/clients/${organizationId}/ai-evaluation/${runId}`
+  );
+  return response.data;
+};
+
+// ===== Consultor IA — A2 ("Resumo da base por IA") =====
+
+/**
+ * `POST /v1/consultant/ai-portfolio-summary` — roda a Skill `summarize-portfolio`
+ * sobre a carteira INTEIRA do consultor. Requer a feature `consultant_ai`.
+ *
+ * **Sem `organization_id`**: o alvo é a base, e o escopo vem da sessão — não há
+ * id vindo do cliente para o backend validar. O corpo é vazio de propósito (o
+ * backend rejeita qualquer campo com `extra="forbid"`).
+ *
+ * O `requestId`/`refresh` seguem exatamente a semântica do `evaluateClientWithAi`:
+ * `requestId` é `correlation_id` + chave de idempotência (repetir → `409`), e
+ * `refresh` fura o cache. Reusa `newEvaluationRequestId()` e o mesmo timeout
+ * (o budget de wall-clock do backend é o mesmo).
+ */
+export const summarizePortfolioWithAi = async (
+  requestId: string,
+  refresh = false
+): Promise<AiPortfolioSummaryResponse> => {
+  const response = await apiClient.post<AiPortfolioSummaryResponse>(
+    '/consultant/ai-portfolio-summary',
+    {},
+    {
+      headers: { 'X-Request-Id': requestId },
+      timeout: AI_EVALUATION_TIMEOUT_MS,
+      ...(refresh ? { params: { refresh: true } } : {}),
+    }
+  );
+  return response.data;
+};
+
+/**
+ * `GET /v1/consultant/ai-portfolio-summary/{run_id}` — estado de um relatório da
+ * base já iniciado. Irmão do `getAiEvaluationRun`, mas SEM `organization_id` na
+ * rota: o alvo é a carteira. Consulta barata (lê o audit, não toca no LLM);
+ * chamada em loop enquanto `status === "running"`. Existe porque o
+ * `409 portfolio_summary_in_progress` devolve um `run_id`, e é com ele que se
+ * reencontra a run em vez de pagar outra.
+ */
+export const getAiPortfolioSummaryRun = async (
+  runId: string
+): Promise<AiPortfolioSummaryRunStatusResponse> => {
+  const response = await apiClient.get<AiPortfolioSummaryRunStatusResponse>(
+    `/consultant/ai-portfolio-summary/${runId}`
   );
   return response.data;
 };

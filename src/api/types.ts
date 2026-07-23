@@ -2072,3 +2072,87 @@ export interface AiEvaluationRunStatusResponse {
   output?: EvaluateClientOutput | null;
   computed_at?: string | null;
 }
+
+// ===== CONSULTOR IA — A2 ("Resumo da base por IA") =====
+// Contrato canônico: fincla-api/src/application/ai/contracts.py (`PortfolioSummaryOutput`).
+// Mesma regra do A1: se este arquivo divergir do Pydantic, o Pydantic ganha.
+// Reusa `ChartSpec` e `EvidenceItem` do bloco A1 acima — o modelo emite os mesmos
+// primitivos de gráfico e de evidência nas duas Skills.
+
+/**
+ * Os números da carteira, COM a cobertura junto. `clients_scored`/`clients_pending`
+ * não são enfeite: uma média de 3 clientes numa base de 200 não é "a saúde da
+ * base". `avg_health` é `null` quando ninguém tem score — zero é nota ruim,
+ * ausência não é; a UI não deve renderizar `0` no lugar de `null`.
+ */
+export interface PortfolioRead {
+  client_count: number;
+  /** `null` quando ninguém foi pontuado. Não é `0`. */
+  avg_health: number | null;
+  clients_scored: number;
+  clients_pending: number;
+  at_risk_count: number;
+}
+
+/**
+ * Um cliente que precisa de atenção, nomeado e ancorado.
+ *
+ * `organization_id` é obrigatório porque o card do Painel LINKA para o cliente —
+ * um nome mascarado ("Ana P.") não identifica ninguém. O backend recusa a
+ * resposta se o modelo citar um id que nenhuma tool retornou
+ * (`grounding_unknown_client`), então ele sempre existe na carteira.
+ */
+export interface PortfolioPriority {
+  organization_id: string;
+  /** Já minimizado ("Ana P."). Não é identificador — use `organization_id`. */
+  client_name: string;
+  note: string;
+  evidence: EvidenceItem[];
+}
+
+/** Uma ação AGREGADA sobre a base ("3 clientes prontos para investir"), não sobre um cliente. */
+export interface PortfolioOpportunity {
+  note: string;
+  evidence: EvidenceItem[];
+}
+
+export interface PortfolioSummaryOutput {
+  summary: string;
+  portfolio_read: PortfolioRead;
+  priorities: PortfolioPriority[];
+  opportunities: PortfolioOpportunity[];
+  charts: ChartSpec[];
+  /** Obrigatório (>= 1) — framing CVM, advisor-facing. */
+  disclaimers: string[];
+}
+
+/**
+ * Corpo do POST — VAZIO. A carteira é o alvo (vem da sessão), e o backend rejeita
+ * qualquer campo (`extra="forbid"`), inclusive `session_id`: o relatório é
+ * one-shot, então um id de sessão do cliente só serviria para carimbar a run com
+ * a sessão de outra pessoa.
+ */
+export type AiPortfolioSummaryRequest = Record<string, never>;
+
+export interface AiPortfolioSummaryResponse {
+  correlation_id: string;
+  session_id: string;
+  run_id: string;
+  output: PortfolioSummaryOutput;
+  /** `true` => reaproveitado de um relatório recente; nenhum token gasto. Ausente = não-cache. */
+  cached?: boolean;
+  /** ISO datetime COM offset de quando o relatório foi de fato calculado. Nunca "agora". */
+  computed_at?: string | null;
+}
+
+/**
+ * Estado de um relatório já iniciado — o caminho de volta para quem o perdeu de
+ * vista (F5, segunda aba). Mesmo `RunStatus` do A1; `output` só vem em `ok`.
+ */
+export interface AiPortfolioSummaryRunStatusResponse {
+  run_id: string;
+  correlation_id: string;
+  status: AiRunStatus;
+  output?: PortfolioSummaryOutput | null;
+  computed_at?: string | null;
+}

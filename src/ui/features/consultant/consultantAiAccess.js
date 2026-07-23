@@ -27,3 +27,17 @@ export function useCanEvaluateClientWithAi() {
   const pages = useFinclaPages();
   return useEntitlement(CONSULTANT_AI_FEATURE, pages?.user);
 }
+
+/**
+ * O consultor logado pode gerar o "Resumo da base por IA" (A2)?
+ *
+ * É a MESMA feature `consultant_ai` da avaliação individual — o backend gateia as
+ * duas Skills com `require_consultant_feature("consultant_ai")`. Existe como
+ * função à parte só pela clareza no ponto de uso (o card do Painel não fala de
+ * "avaliar cliente"), e para que, no dia em que as duas Skills tiverem tiers
+ * diferentes, haja um único lugar por superfície para mudar.
+ */
+export function useCanSummarizePortfolioWithAi() {
+  const pages = useFinclaPages();
+  return useEntitlement(CONSULTANT_AI_FEATURE, pages?.user);
+}
