@@ -27,18 +27,24 @@ describe("<ConsultantSidebar>", () => {
     expect(onNav).toHaveBeenCalledWith("/consultant/clients");
   });
 
-  it("Mensagens e Copiloto IA aparecem como 'em breve', desabilitados e não navegam", () => {
+  it("Mensagens aparece como 'em breve', desabilitado e não navega", () => {
     const onNav = vi.fn();
     render(<ConsultantSidebar pathname="/consultant" onNav={onNav} user={user} />);
-    expect(screen.getAllByText(/em breve/i).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText(/em breve/i).length).toBeGreaterThanOrEqual(1);
 
     const mensagens = screen.getByRole("button", { name: /mensagens/i });
-    const copiloto = screen.getByRole("button", { name: /copiloto ia/i });
     expect(mensagens).toBeDisabled();
-    expect(copiloto).toBeDisabled();
     mensagens.click();
-    copiloto.click();
     expect(onNav).not.toHaveBeenCalled();
+  });
+
+  it("Copiloto IA (A4) é navegável e chama onNav com a rota do chat", () => {
+    const onNav = vi.fn();
+    render(<ConsultantSidebar pathname="/consultant" onNav={onNav} user={user} />);
+    const copiloto = screen.getByRole("button", { name: /copiloto ia/i });
+    expect(copiloto).not.toBeDisabled();
+    copiloto.click();
+    expect(onNav).toHaveBeenCalledWith("/consultant/copiloto");
   });
 
   it("destaca o item ativo conforme a rota atual (aria-current)", () => {

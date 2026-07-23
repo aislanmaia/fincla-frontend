@@ -54,3 +54,16 @@ export function useCanDetectTrendsWithAi() {
   const pages = useFinclaPages();
   return useEntitlement(CONSULTANT_AI_FEATURE, pages?.user);
 }
+
+/**
+ * O consultor logado pode usar o "Copiloto IA" (A4)?
+ *
+ * Mesma feature `consultant_ai` das outras Skills. Gateia a página do chat: sem o
+ * recurso, a rota mostra um teaser de upgrade em vez do chat, e o item da sidebar
+ * leva ao mesmo lugar — o backend recusaria toda mensagem com 403, então não vale
+ * montar o composer.
+ */
+export function useCanUseCopilotoAi() {
+  const pages = useFinclaPages();
+  return useEntitlement(CONSULTANT_AI_FEATURE, pages?.user);
+}

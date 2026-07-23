@@ -26,6 +26,8 @@ import type {
   AiPortfolioSummaryRunStatusResponse,
   AiPortfolioTrendsResponse,
   AiPortfolioTrendsRunStatusResponse,
+  AiCopilotoResponse,
+  AiCopilotoRunStatusResponse,
 } from './types';
 
 export const getConsultantSummary = async (
@@ -399,6 +401,52 @@ export const getAiPortfolioTrendsRun = async (
 ): Promise<AiPortfolioTrendsRunStatusResponse> => {
   const response = await apiClient.get<AiPortfolioTrendsRunStatusResponse>(
     `/consultant/ai-portfolio-trends/${runId}`
+  );
+  return response.data;
+};
+
+// ===== Consultor IA — A4 ("Copiloto IA") =====
+
+/**
+ * `POST /v1/consultant/ai-copiloto` — uma mensagem do chat escopado à carteira.
+ * Requer a feature `consultant_ai`.
+ *
+ * Diferente dos relatórios (corpo vazio, one-shot), este é CONVERSACIONAL:
+ * - `message` é o turno do consultor.
+ * - `sessionId` é o THREAD da conversa: passe o MESMO valor em todas as mensagens
+ *   de um chat para manter o contexto multi-turno. O backend o namespaceia sob o
+ *   consultor autenticado, então um valor forjado nunca lê a conversa de outro.
+ * - `requestId` é `correlation_id` + chave de idempotência (repetir → `409`); use
+ *   um novo a cada mensagem (`newEvaluationRequestId()`).
+ *
+ * Cada mensagem é uma run paga (sem cache), com o mesmo timeout longo das irmãs.
+ */
+export const askCopiloto = async (
+  requestId: string,
+  message: string,
+  sessionId: string
+): Promise<AiCopilotoResponse> => {
+  const response = await apiClient.post<AiCopilotoResponse>(
+    '/consultant/ai-copiloto',
+    { message, session_id: sessionId },
+    {
+      headers: { 'X-Request-Id': requestId },
+      timeout: AI_EVALUATION_TIMEOUT_MS,
+    }
+  );
+  return response.data;
+};
+
+/**
+ * `GET /v1/consultant/ai-copiloto/{run_id}` — estado de uma mensagem já iniciada.
+ * Irmão dos outros rejoins; consulta barata (audit, não LLM). Existe porque o
+ * `409 copilot_in_progress` entrega um `run_id`.
+ */
+export const getAiCopilotoRun = async (
+  runId: string
+): Promise<AiCopilotoRunStatusResponse> => {
+  const response = await apiClient.get<AiCopilotoRunStatusResponse>(
+    `/consultant/ai-copiloto/${runId}`
   );
   return response.data;
 };

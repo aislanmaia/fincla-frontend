@@ -24,15 +24,21 @@ describe("CONSULTANT_NAV (modelo de navegação)", () => {
     expect(byId.copilot.label).toBe("Copiloto IA");
   });
 
-  it("marca Mensagens e Copiloto IA como 'em breve' (sem rota)", () => {
+  it("marca Mensagens como 'em breve' (sem rota)", () => {
     expect(byId.messages.comingSoon).toBe(true);
     expect(byId.messages.to).toBeUndefined();
-    expect(byId.copilot.comingSoon).toBe(true);
-    expect(byId.copilot.to).toBeUndefined();
   });
 
-  it("itens navegáveis (painel/clients/insights/profile) têm rota e não são 'em breve'", () => {
-    for (const id of ["painel", "clients", "insights", "profile"]) {
+  it("Copiloto IA (A4) é navegável e realçado como item de IA", () => {
+    // Deixou de ser 'em breve' quando a A4 entregou a página do chat; o gate
+    // `consultant_ai` decide na própria página se abre o chat ou o teaser.
+    expect(byId.copilot.comingSoon).toBeFalsy();
+    expect(byId.copilot.to).toBe("/consultant/copiloto");
+    expect(byId.copilot.ai).toBe(true);
+  });
+
+  it("itens navegáveis (painel/clients/insights/copilot/profile) têm rota e não são 'em breve'", () => {
+    for (const id of ["painel", "clients", "insights", "copilot", "profile"]) {
       expect(byId[id].to).toMatch(/^\/consultant/);
       expect(byId[id].comingSoon).toBeFalsy();
     }

@@ -14,7 +14,9 @@ import {
  * - `to` — rota de destino (item navegável). Ausente em itens "em breve".
  * - `comingSoon` — recurso ainda não disponível (Trilha B): renderiza desabilitado
  *   com selo "em breve" e não navega.
- * - `ai` — item da trilha de Inteligência (acento/realce); hoje sempre `comingSoon`.
+ * - `ai` — item da trilha de Inteligência (acento/realce). O Copiloto IA (A4) já
+ *   é navegável; o gate `consultant_ai` decide, na própria página, se abre o chat
+ *   ou um teaser de upgrade.
  */
 export const CONSULTANT_NAV = [
   { sec: "PRINCIPAL" },
@@ -25,7 +27,7 @@ export const CONSULTANT_NAV = [
   { sec: "RELACIONAMENTO" },
   { id: "messages", label: "Mensagens", Icon: MessageSquare, comingSoon: true },
   { sec: "INTELIGÊNCIA" },
-  { id: "copilot", label: "Copiloto IA", Icon: Sparkles, ai: true, comingSoon: true },
+  { id: "copilot", label: "Copiloto IA", Icon: Sparkles, ai: true, to: "/consultant/copiloto" },
   { sec: "CONTA" },
   { id: "profile", label: "Perfil", Icon: Settings, to: "/consultant/profile" },
 ];

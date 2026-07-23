@@ -32,7 +32,8 @@ function ComingSoonPill({ active }) {
  * design, reimplementada no design system do Fincla (tokens + lucide, sem Tailwind).
  * Apresentacional: o roteamento entra via `pathname`/`onNav`.
  *
- * - Mensagens e Copiloto IA aparecem desabilitados com selo "em breve" (Trilha B).
+ * - Mensagens aparece desabilitado com selo "em breve" (Trilha B); Copiloto IA (A4)
+ *   já é navegável.
  * - `onClose` (opcional) renderiza o "X" do drawer mobile.
  */
 export function ConsultantSidebar({ pathname, onNav, user, onClose }) {

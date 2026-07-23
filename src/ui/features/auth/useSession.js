@@ -16,6 +16,7 @@ import {
 import { clearAllEvaluations } from "../consultant/clientEvaluationStore.js";
 import { clearAllPortfolioSummaries } from "../consultant/portfolioSummaryStore.js";
 import { clearAllPortfolioTrends } from "../consultant/portfolioTrendsStore.js";
+import { clearCopiloto } from "../consultant/copilotoStore.js";
 import { clearPostLoginRedirect } from "../../routing/postLoginRedirect.js";
 
 const ACTIVE_ORG_KEY = "fincla_active_org_id";
@@ -69,6 +70,9 @@ export function useSession() {
     clearAllEvaluations();
     clearAllPortfolioSummaries();
     clearAllPortfolioTrends();
+    // A conversa do Copiloto (A4) vive fora do React pela MESMA razão — sem isto,
+    // o próximo consultor a logar nesta aba herdaria o thread do anterior.
+    clearCopiloto();
     setSession({
       ...EMPTY_SESSION,
       isBootstrapping: false,

@@ -2204,3 +2204,77 @@ export interface AiPortfolioTrendsRunStatusResponse {
   output?: PortfolioTrendsOutput | null;
   computed_at?: string | null;
 }
+
+// ===== CONSULTOR IA — A4 ("Copiloto IA", chat escopado) =====
+// Contrato canônico: fincla-api/src/application/ai/contracts.py (`CopilotoOutput`).
+// Diferente das três Skills de relatório, esta é CONVERSACIONAL e MULTI-TURNO: o
+// campo principal é `answer` (markdown), e `blocks`/`suggested_actions` são anexos
+// opcionais que a UI renderiza ao lado do texto. Reusa `ChartSpec` (do A1/A2).
+
+/** Um gráfico anexado a uma resposta do Copiloto — reusa o `<AiChart>` do A1/A2. */
+export interface CopilotoChartBlock {
+  type: 'chart';
+  spec: ChartSpec;
+}
+
+/** Uma referência a um cliente da carteira — a UI vira um chip que LINKA pelo id. */
+export interface CopilotoClientRefBlock {
+  type: 'client_ref';
+  organization_id: string;
+  /** Já mascarado pelo backend. */
+  client_name: string;
+}
+
+/** União discriminada por `type` — o backend garante um id de escopo real em cada. */
+export type CopilotoBlock = CopilotoChartBlock | CopilotoClientRefBlock;
+
+/**
+ * Um hand-off que a UI vira botão ("Avaliar {cliente} com IA"). Hoje só
+ * `evaluate-client`: o clique abre o drawer de avaliação (A1) daquele cliente. O
+ * Copiloto não dispara a avaliação sozinho — apenas sugere.
+ */
+export interface CopilotoSuggestedAction {
+  label: string;
+  skill: 'evaluate-client';
+  organization_id: string;
+}
+
+export interface CopilotoOutput {
+  /** Resposta conversacional em markdown PT-BR, grounded nas tools. */
+  answer: string;
+  blocks: CopilotoBlock[];
+  suggested_actions: CopilotoSuggestedAction[];
+  /** Obrigatório (>= 1) — framing CVM, advisor-facing. */
+  disclaimers: string[];
+}
+
+/**
+ * Corpo do `POST /v1/consultant/ai-copiloto`. Diferente dos relatórios (corpo
+ * vazio), o chat carrega a `message` e o `session_id` do THREAD da conversa.
+ */
+export interface AiCopilotoRequest {
+  message: string;
+  /**
+   * Id da conversa (thread). Passe o mesmo em todas as mensagens de um chat para
+   * manter contexto multi-turno. O backend o namespaceia sob o consultor
+   * autenticado — um valor forjado nunca lê a conversa de outro consultor.
+   */
+  session_id?: string;
+}
+
+export interface AiCopilotoResponse {
+  correlation_id: string;
+  /** O `session_id` NAMESPACED que o backend usou (prefixo do consultor + thread). */
+  session_id: string;
+  run_id: string;
+  output: CopilotoOutput;
+}
+
+/** Estado de uma mensagem já iniciada — rejoin por F5/segunda aba. `output` só em `ok`. */
+export interface AiCopilotoRunStatusResponse {
+  run_id: string;
+  correlation_id: string;
+  status: AiRunStatus;
+  output?: CopilotoOutput | null;
+  computed_at?: string | null;
+}
