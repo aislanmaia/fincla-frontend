@@ -72,6 +72,18 @@ const BULLET_RE = /^\s*[-*]\s+/;
 // afrouxa. (Review adversarial.)
 const TABLE_SEP_RE = /^\s*\|?[\s:|-]*\|?\s*$/;
 
+// Imagem markdown `![alt](url)`. A IA NUNCA produz imagem legítima — um gráfico
+// sempre vai no chart block, não na prosa. Mas o modelo às vezes "desenha" com um
+// `![...](data:image/png;base64,…)` (um PNG placeholder gigante) que o renderer não
+// interpreta e despejava cru na tela. Removemos a sintaxe antes de renderizar. As
+// classes negadas (`[^\]]`, `[^)]`) são lineares — sem ReDoS numa tira base64 longa.
+const IMAGE_MD_RE = /!\[[^\]]*\]\([^)]*\)/g;
+
+/** Remove imagem markdown (inclusive base64) do texto do `answer`. */
+export function stripImageMarkdown(text) {
+  return String(text || "").replace(IMAGE_MD_RE, "");
+}
+
 /** Quebra `| a | b |` em células, tolerando (ou não) as barras das pontas. */
 function splitTableRow(line) {
   let s = line.trim();
@@ -82,7 +94,9 @@ function splitTableRow(line) {
 
 /** Agrupa o texto em blocos por tipo, linha a linha. */
 function parseMarkdownBlocks(text) {
-  const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
+  // Tira imagem markdown antes de agrupar: uma linha que era só `![…](base64…)`
+  // vira vazia e é pulada como as demais em branco (não vira parágrafo cru).
+  const lines = stripImageMarkdown(text).replace(/\r\n/g, "\n").split("\n");
   const blocks = [];
   let i = 0;
   while (i < lines.length) {

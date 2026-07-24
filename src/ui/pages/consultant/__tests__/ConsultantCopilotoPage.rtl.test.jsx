@@ -93,6 +93,36 @@ describe("ConsultantCopilotoPage", () => {
     expect(screen.getByText(/não é recomendação de investimento/)).toBeInTheDocument();
   });
 
+  it("descarta imagem markdown (base64) da prosa, sem despejar o blob cru", async () => {
+    // O modelo às vezes "desenha" com `![alt](data:image/png;base64,…)` — o gráfico
+    // de verdade vem no chart block. O blob base64 não pode aparecer cru na tela.
+    const user = userEvent.setup();
+    vi.mocked(askCopiloto).mockResolvedValue({
+      correlation_id: "c", session_id: "s", run_id: "r",
+      output: {
+        answer:
+          "Aqui estão as despesas por categoria:\n\n" +
+          "![Despesas por Categoria](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEsAAAA+/=)\n\n" +
+          "A maior é **Moradia**.",
+        blocks: [],
+        suggested_actions: [],
+        disclaimers: ["d"],
+      },
+    });
+
+    render(<ConsultantCopilotoPage />);
+    await user.type(screen.getByLabelText("Mensagem para o Copiloto"), "despesas por categoria?");
+    await user.click(screen.getByLabelText("Enviar mensagem"));
+
+    await waitFor(() => expect(screen.getByText(/Aqui estão as despesas/)).toBeInTheDocument());
+    // A prosa em volta continua; o negrito também.
+    expect(screen.getByText("Moradia")).toBeInTheDocument();
+    // Mas nada do base64 / sintaxe de imagem sobra na tela.
+    expect(document.body.textContent).not.toContain("base64");
+    expect(document.body.textContent).not.toContain("![");
+    expect(document.body.textContent).not.toContain("data:image");
+  });
+
   it("um hand-off resolve o NOME real do cliente pela carteira, não o rótulo do botão", async () => {
     const user = userEvent.setup();
     // O rótulo é copy de botão ("Avaliar Ana com IA"), NÃO o nome. Se ele vazasse
