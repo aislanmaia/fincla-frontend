@@ -152,7 +152,7 @@ export function PlansComparisonModal({ currentPlanId, onClose }) {
           padding: 28,
           maxWidth: 920,
           width: "100%",
-          maxHeight: "90vh",
+          maxHeight: "90dvh",
           overflowY: "auto",
           position: "relative",
         }}

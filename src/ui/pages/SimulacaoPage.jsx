@@ -166,7 +166,7 @@ const ModalNovoCenario = ({ open, onClose, onCriar, initialTipo = null }) => {
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(15,15,13,0.5)", zIndex: 500, display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: 48 }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: T.surface, borderRadius: 18, width: 560, maxHeight: "85vh", display: "flex", flexDirection: "column", boxShadow: "0 24px 64px rgba(0,0,0,0.22)", overflow: "hidden" }}>
+      <div style={{ background: T.surface, borderRadius: 18, width: 560, maxHeight: "85dvh", display: "flex", flexDirection: "column", boxShadow: "0 24px 64px rgba(0,0,0,0.22)", overflow: "hidden" }}>
 
         {/* Header roxo */}
         <div style={{ background: "linear-gradient(135deg, #4C1D95 0%, #6D28D9 100%)", padding: "20px 24px 18px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexShrink: 0 }}>

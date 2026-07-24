@@ -71,7 +71,7 @@ export function BillingReturnPage() {
       role="status"
       aria-live="polite"
       style={{
-        minHeight: "70vh",
+        minHeight: "70dvh",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

@@ -71,7 +71,7 @@ export function PasswordResetPage({ token, onResetPassword, onComplete, onValida
   return (
     <>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      <div style={{ display:"flex", height:"100vh", minHeight:"100dvh", background:T.surface, fontFamily:"'Geist',sans-serif", overflow:"hidden", alignItems:"center", justifyContent:"center", padding:24 }}>
+      <div className="fincla-scroll" style={{ display:"flex", height:"100dvh", background:T.surface, fontFamily:"'Geist',sans-serif", overflowY:"auto", alignItems:"safe center", justifyContent:"center", padding:24 }}>
         <div style={{ width:"100%", maxWidth:400 }}>
           <div style={{ ...G, fontSize:22, fontWeight:800, color:T.ink, marginBottom:8 }}>
             {success ? "Senha atualizada" : linkStatus === "invalid" ? "Link inválido ou expirado" : "Nova senha"}

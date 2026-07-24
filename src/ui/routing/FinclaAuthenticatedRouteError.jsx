@@ -12,7 +12,7 @@ export function FinclaAuthenticatedRouteError() {
   return (
     <div
       style={{
-        minHeight: "60vh",
+        minHeight: "60dvh",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

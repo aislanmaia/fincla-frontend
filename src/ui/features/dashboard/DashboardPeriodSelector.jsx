@@ -244,7 +244,7 @@ export function DashboardPeriodSelector({
         flexDirection: "column",
         padding: isMobile ? "0 10px 8px" : "0 8px 10px",
         overflowY: "auto",
-        maxHeight: isMobile ? "42vh" : 320,
+        maxHeight: isMobile ? "42dvh" : 320,
         WebkitOverflowScrolling: "touch",
       }}
     >
@@ -360,7 +360,7 @@ export function DashboardPeriodSelector({
               right: 0,
               bottom: 0,
               zIndex: 9600,
-              maxHeight: "min(90vh, 720px)",
+              maxHeight: "min(90dvh, 720px)",
               display: "flex",
               flexDirection: "column",
               background: T.surface,
@@ -384,7 +384,7 @@ export function DashboardPeriodSelector({
               flexDirection: "column",
               overflow: "hidden",
               maxHeight:
-                menuTab === "personalizado" ? "min(92vh, 720px)" : "min(85vh, 480px)",
+                menuTab === "personalizado" ? "min(92dvh, 720px)" : "min(85dvh, 480px)",
             }
       }
     >

@@ -556,7 +556,7 @@ function DayPopover({ anchor, onClose, children, lockDismiss = false }) {
       aria-label="Lançamentos do dia"
       tabIndex={-1}
       className="fincla-scroll-y"
-      style={{ position: "fixed", left: pos.left, top: pos.top, width: WIDTH, maxHeight: "calc(100vh - 24px)", overflowY: "auto", zIndex: 150, borderRadius: 14, boxShadow: "0 12px 32px rgba(15,15,13,0.16), 0 4px 10px rgba(15,15,13,0.08)", visibility: pos.ready ? "visible" : "hidden", outline: "none" }}
+      style={{ position: "fixed", left: pos.left, top: pos.top, width: WIDTH, maxHeight: "calc(100dvh - 24px)", overflowY: "auto", zIndex: 150, borderRadius: 14, boxShadow: "0 12px 32px rgba(15,15,13,0.16), 0 4px 10px rgba(15,15,13,0.08)", visibility: pos.ready ? "visible" : "hidden", outline: "none" }}
     >
       {children}
     </div>,

@@ -106,8 +106,9 @@ export const OnboardingFlow = ({
   return (
     <>
       <style>{`
+        /* Zera as margens padrão de h1/h2/p que esta tela usa. NÃO defina
+           regras de body/html aqui: quem manda no shell é app-shell.css. */
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-        body{background:${T.bg}}
         @keyframes sfwd {from{opacity:0;transform:translateX(26px)}to{opacity:1;transform:translateX(0)}}
         @keyframes sback{from{opacity:0;transform:translateX(-26px)}to{opacity:1;transform:translateX(0)}}
         @keyframes fup  {from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
@@ -120,11 +121,13 @@ export const OnboardingFlow = ({
         select{appearance:none}
       `}</style>
 
-      <div style={{minHeight:"100vh",display:"flex",flexDirection:mobile?"column":"row"}}>
+      {/* Takeover de tela cheia: ocupa a viewport e não rola — quem rola é a
+          coluna da direita (o documento é travado em `app-shell.css`). */}
+      <div style={{height:"100%",overflow:"hidden",display:"flex",flexDirection:mobile?"column":"row"}}>
 
         {/* ══ LEFT ══ */}
         <div style={{
-          width:mobile?"100%":330, minHeight:mobile?170:"100vh",
+          width:mobile?"100%":330, minHeight:mobile?170:"100%",
           background:cfg.leftBg, flexShrink:0,
           position:"relative", overflow:"hidden",
           display:"flex", flexDirection:"column", justifyContent:"space-between",
@@ -175,7 +178,7 @@ export const OnboardingFlow = ({
         </div>
 
         {/* ══ RIGHT ══ */}
-        <div style={{flex:1,display:"flex",flexDirection:"column",overflowY:"auto",background:T.bg}}>
+        <div className="fincla-scroll" style={{flex:1,minHeight:0,minWidth:0,display:"flex",flexDirection:"column",overflowY:"auto",background:T.bg}}>
           {/* progress bar — accent color */}
           <div style={{height:3,background:T.border}}>
             <div style={{height:"100%",
