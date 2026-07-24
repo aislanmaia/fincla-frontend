@@ -4,12 +4,12 @@ import { T } from "../../tokens";
 import { G } from "../../typography";
 import { CAT_COLORS_CARD } from "../../data/creditCardsMockData.js";
 
-function ModalWrap({ isMobile, onBackdrop, width = 400, maxVh = "80vh", children }) {
+function ModalWrap({ isMobile, onBackdrop, width = 400, maxVh = "80dvh", children }) {
   if (isMobile) {
     return (
       <div style={{ position: "fixed", inset: 0, zIndex: 400, overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
         <div onClick={onBackdrop} style={{ position: "absolute", inset: 0, background: "rgba(15,23,35,0.5)" }} />
-        <div style={{ position: "relative", background: T.surface, borderRadius: "24px 24px 0 0", maxHeight: `calc(${maxVh} + 6vh)`, display: "flex", flexDirection: "column", animation: "sheetUp 0.5s cubic-bezier(0.32,0.72,0,1) both" }}>
+        <div style={{ position: "relative", background: T.surface, borderRadius: "24px 24px 0 0", maxHeight: `calc(${maxVh} + 6dvh)`, display: "flex", flexDirection: "column", animation: "sheetUp 0.5s cubic-bezier(0.32,0.72,0,1) both" }}>
           <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
             <div style={{ width: 36, height: 4, borderRadius: 99, background: T.inkGhost }} />
           </div>
@@ -120,7 +120,7 @@ export function ExportInvoiceModal({
     ["oneTime",       exportOneTime,      setExportOneTime,      "Avulsos",     "Compras únicas"],
   ];
   return (
-    <ModalWrap isMobile={isMobile} onBackdrop={onClose} width={440} maxVh="85vh">
+    <ModalWrap isMobile={isMobile} onBackdrop={onClose} width={440} maxVh="85dvh">
       <div style={{ padding: "16px 20px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
         <div>
           <div style={{ ...G, fontSize: 14, fontWeight: 800, color: T.ink }}>Exportar fatura</div>
@@ -211,7 +211,7 @@ export function DeleteInvoiceItemModal({
   const affectedInvoices = Array.isArray(item.affectedInvoices) ? item.affectedInvoices : [];
 
   return (
-    <ModalWrap isMobile={isMobile} onBackdrop={onClose} width={460} maxVh="85vh">
+    <ModalWrap isMobile={isMobile} onBackdrop={onClose} width={460} maxVh="85dvh">
       <div style={{ padding: "16px 20px", borderBottom: `1px solid ${T.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
         <div>
           <div style={{ ...G, fontSize: 14, fontWeight: 800, color: T.ink }}>Excluir lançamento</div>

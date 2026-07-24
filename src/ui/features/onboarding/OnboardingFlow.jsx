@@ -106,8 +106,9 @@ export const OnboardingFlow = ({
   return (
     <>
       <style>{`
+        /* Zera as margens padrão de h1/h2/p que esta tela usa. NÃO defina
+           regras de body/html aqui: quem manda no shell é app-shell.css. */
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-        body{background:${T.bg}}
         @keyframes sfwd {from{opacity:0;transform:translateX(26px)}to{opacity:1;transform:translateX(0)}}
         @keyframes sback{from{opacity:0;transform:translateX(-26px)}to{opacity:1;transform:translateX(0)}}
         @keyframes fup  {from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}

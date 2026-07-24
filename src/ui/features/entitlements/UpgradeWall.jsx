@@ -37,7 +37,7 @@ export function UpgradeWall({
       role="region"
       aria-label={`Recurso bloqueado: ${feature}`}
       style={{
-        minHeight: "60vh",
+        minHeight: "60dvh",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",

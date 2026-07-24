@@ -220,7 +220,7 @@ export function Topbar({ onNew, isMobile, onMenuOpen, onNav, page: _page, user }
             display: "flex",
             alignItems: "flex-start",
             justifyContent: "center",
-            paddingTop: "15vh",
+            paddingTop: "15dvh",
           }}
           onClick={() => setCmdOpen(false)}
         >

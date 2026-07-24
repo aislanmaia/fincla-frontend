@@ -173,7 +173,7 @@ export const LoginPage = ({
   // ── Form panel ─────────────────────────────────────────────────────────────
   const FormPanel = () => {
     if (view === "sent") return (
-      <div style={{ display:"flex", flexDirection:"column", justifyContent:"center", padding:"clamp(24px,5vw,48px) clamp(20px,5vw,44px)", flex:1, overflowY:"auto" }}>
+      <div className="fincla-scroll" style={{ display:"flex", flexDirection:"column", justifyContent:"safe center", padding:"clamp(24px,5vw,48px) clamp(20px,5vw,44px)", flex:1, minHeight:0, overflowY:"auto" }}>
         <div style={{ maxWidth:380, margin:"0 auto", width:"100%", textAlign:"center" }}>
           <div style={{ fontSize:44, marginBottom:20 }}>📬</div>
           <div style={{ ...G, fontSize:24, fontWeight:800, color:T.ink, marginBottom:10 }}>Verifique seu e-mail</div>
@@ -194,7 +194,7 @@ export const LoginPage = ({
     );
 
     if (view === "forgot") return (
-      <div style={{ display:"flex", flexDirection:"column", justifyContent:"center", padding:"clamp(24px,5vw,48px) clamp(20px,5vw,44px)", flex:1, overflowY:"auto" }}>
+      <div className="fincla-scroll" style={{ display:"flex", flexDirection:"column", justifyContent:"safe center", padding:"clamp(24px,5vw,48px) clamp(20px,5vw,44px)", flex:1, minHeight:0, overflowY:"auto" }}>
         <div style={{ maxWidth:380, margin:"0 auto", width:"100%" }}>
           <button onClick={() => { setView("login"); setError(""); }}
             style={{ ...G, display:"flex", alignItems:"center", gap:6, background:"none", border:"none", cursor:"pointer", color:T.inkMid, fontSize:13, marginBottom:32, padding:0 }}>
@@ -240,7 +240,7 @@ export const LoginPage = ({
 
     // Default: login
     return (
-      <div style={{ display:"flex", flexDirection:"column", justifyContent:"center", padding:"clamp(24px,5vw,48px) clamp(20px,5vw,44px)", flex:1, overflowY:"auto" }}>
+      <div className="fincla-scroll" style={{ display:"flex", flexDirection:"column", justifyContent:"safe center", padding:"clamp(24px,5vw,48px) clamp(20px,5vw,44px)", flex:1, minHeight:0, overflowY:"auto" }}>
         <div
           data-testid="login-form-panel"
           style={{ maxWidth:380, margin:"0 auto", width:"100%" }}
@@ -400,7 +400,8 @@ export const LoginPage = ({
         `}</style>
 
         {/* Form panel */}
-        <div className="fincla-scroll" style={{ flex:1, minWidth:0, display:"flex", flexDirection:"column", overflowY:"auto", background:T.surface }}>
+        {/* Não rola: quem rola é o painel da view (login/esqueci/enviado). */}
+        <div style={{ flex:1, minWidth:0, display:"flex", flexDirection:"column", overflow:"hidden", background:T.surface }}>
           {/* Logo — visible on mobile, hidden on desktop when brand panel shows */}
           <div style={{ padding:"28px 28px 0", display:"flex", alignItems:"center", gap:10 }} id="fincla-mobile-logo">
             <img

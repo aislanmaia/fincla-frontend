@@ -160,7 +160,7 @@ export function CardFormSheet({
     return (
       <div style={{ position: "fixed", inset: 0, zIndex: 400, overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
         <div onClick={onCancel} style={{ position: "absolute", inset: 0, background: "rgba(15,23,35,0.5)" }} />
-        <div style={{ position: "relative", background: T.surface, borderRadius: "24px 24px 0 0", maxHeight: "95vh", display: "flex", flexDirection: "column", animation: "sheetUp 0.5s cubic-bezier(0.32,0.72,0,1) both" }}>
+        <div style={{ position: "relative", background: T.surface, borderRadius: "24px 24px 0 0", maxHeight: "95dvh", display: "flex", flexDirection: "column", animation: "sheetUp 0.5s cubic-bezier(0.32,0.72,0,1) both" }}>
           <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
             <div style={{ width: 36, height: 4, borderRadius: 99, background: T.inkGhost }} />
           </div>
@@ -173,7 +173,7 @@ export function CardFormSheet({
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 400, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div onClick={onCancel} style={{ position: "absolute", inset: 0, background: "rgba(15,23,35,0.38)" }} />
-      <div style={{ position: "relative", width: 460, maxHeight: "88vh", background: T.surface, borderRadius: 18, boxShadow: T.dark, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ position: "relative", width: 460, maxHeight: "88dvh", background: T.surface, borderRadius: 18, boxShadow: T.dark, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {inner}
       </div>
     </div>

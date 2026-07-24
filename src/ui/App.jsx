@@ -373,7 +373,11 @@ export default function App() {
   if (session.isBootstrapping) return (
     <>
       <AnimStyles/>
-      <div className="fincla-scroll" style={{ ...G, height:"100%", overflowY:"auto", display:"flex", alignItems:"center", justifyContent:"center", background:T.bg, padding:24 }}>
+      {/* `safe center`: centraliza quando cabe e cai para o topo quando não
+          cabe. Com `center` puro, o que passa da borda superior fica em
+          coordenada negativa e nunca é alcançável — `scrollTop` não vai abaixo
+          de zero, e agora não há mais scroll de documento para salvar. */}
+      <div className="fincla-scroll" style={{ ...G, height:"100%", overflowY:"auto", display:"flex", alignItems:"safe center", justifyContent:"center", background:T.bg, padding:24 }}>
         <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:16, padding:"28px 24px", minWidth:320, textAlign:"center", boxShadow:T.sm }}>
           <img src="/logo.png" alt="Fincla" width={32} height={32} style={{ objectFit:"contain", display:"block", margin:"0 auto 14px" }} />
           <div style={{ ...S, fontSize:28, color:T.ink, marginBottom:10 }}>

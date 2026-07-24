@@ -7,17 +7,21 @@ SaaS de finanças pessoais BR. A **UI** replica o protótipo de referência em `
 
 O Fincla é uma **aplicação**, não um documento. `src/ui/app-shell.css` (importado uma única vez em `src/main.jsx`) é a fonte de verdade e trava três invariantes:
 
-1. **O documento nunca rola.** `html`/`body` são `overflow: hidden` + `overscroll-behavior: none`. Não existe barra de rolagem global, nem rubber-band, nem pull-to-refresh — independente do que uma tela faça.
-2. **Cada tela é dona do seu scroll interno.** Se o conteúdo passa do espaço disponível, ele rola dentro da própria região, marcada com a classe `.fincla-scroll` (`.fincla-scroll-y` é alias legado da mesma coisa).
-3. **Barra de rolagem é oculta por padrão** em todo elemento. `.fincla-scroll` revela um thumb fino no hover/foco (overlay, tipo macOS) **sem reflow** — a calha já é reservada, só o thumb aparece.
+1. **Nem a viewport nem o `body` rolam.** `html` é `overflow: hidden` (propaga para a viewport) e `body` é `overflow: **clip**` — `clip` de propósito: com o overflow do html propagado, o valor usado do html vira `visible`, e um `body { overflow: hidden }` faria do body um container de rolagem invisível, onde um `scrollIntoView()` empurra o app para fora da tela sem volta.
+2. **Cada tela é dona do seu scroll interno.** Se o conteúdo passa do espaço disponível, ele rola dentro da própria região. `.fincla-scroll` marca essas regiões e isola o gesto (`overscroll-behavior: contain`); `.fincla-scroll-y` é alias legado.
+3. **A barra é invisível em repouso e aparece ao apontar** — vale para *toda* região rolável, não para uma lista de opt-ins, então tela nova nasce certa. Sem reflow: a calha é reservada e só a cor do thumb muda. No toque não há regra — o overlay nativo já aparece só durante o gesto.
 
 Ao criar tela nova:
 
-- **Nunca** use `100vh` para dimensionar conteúdo — ignora a barra do browser no mobile e estoura o shell. Peça altura ao pai: `height: 100%`, ou `flex: 1` + `min-height: 0`. Quando a viewport é mesmo a referência (shell raiz, elemento `position: fixed`), use `100dvh`.
-- **Nunca** conte com o scroll da página; ponha `.fincla-scroll` + `overflow-y: auto` + `min-height: 0` na região rolável.
-- **Nunca** use `min-height` fixo em painel que precisa caber na tela (ex.: card de chat) — ele empurra o conteúdo além do shell e ressuscita a barra global. Deixe encolher com `min-height: 0`.
+- **Nunca** use `vh` para dimensionar conteúdo — ignora a barra do browser no mobile. Peça altura ao pai: `height: 100%`, ou `flex: 1`. Quando a viewport é mesmo a referência (shell raiz, elemento `position: fixed`), use `dvh`.
+- **Nunca** conte com o scroll da página; ponha `overflow-y: auto` (+ `.fincla-scroll` nas regiões grandes) na região rolável.
+- **Nunca** centralize no eixo do scroll. `align-items: center` (linha) ou `justify-content: center` (coluna) num elemento que rola torna **inalcançável** tudo que passa da borda inicial — `scrollTop` não vai abaixo de zero. Use `safe center`, que degrada para `start` quando não cabe.
+- **Nunca** use `min-height` fixo em painel que precisa caber na tela (ex.: card de chat) — empurra o conteúdo além do shell. Deixe encolher com `min-height: 0`.
+- **Nunca** defina regras de `html`/`body` num `<style>` injetado — ele vence a folha empacotada e ressuscita o bug original.
 
-`src/ui/__tests__/appShell.test.js` guarda essas invariantes (inclusive varrendo `src/ui` atrás de `100vh`).
+Consequências aceitas conscientemente: `overscroll-behavior: none` desliga o pull-to-refresh e o swipe-back do trackpad em todo o app.
+
+`src/ui/__tests__/appShell.test.js` guarda tudo isso — inclusive varrendo `src` inteiro atrás de `vh`, de containers de rolagem centralizados e de `<style>` injetado disputando o shell, e conferindo o contraste WCAG do thumb.
 
 ---
 

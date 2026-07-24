@@ -24,7 +24,7 @@ export function ModalShell({ titleSans, titleSerif, onClose, children, footer })
         style={{
           width: 460,
           maxWidth: "100%",
-          maxHeight: "90vh",
+          maxHeight: "90dvh",
           display: "flex",
           flexDirection: "column",
           background: T.surface,

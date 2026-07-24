@@ -329,7 +329,7 @@ export function ConsultantAddClientWizard({ open, onClose, onCreated, quota = nu
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div onClick={onClose} role="presentation" style={{ position: "absolute", inset: 0, background: "rgba(15,15,13,0.5)" }} />
-      <div style={{ position: "relative", width: 920, maxWidth: "100%", height: "min(640px, 92vh)", background: T.surface, borderRadius: 18, overflow: "hidden", boxShadow: T.lg, display: "grid", gridTemplateColumns: (result || isFull) ? "1fr" : "minmax(0,300px) 1fr" }}>
+      <div style={{ position: "relative", width: 920, maxWidth: "100%", height: "min(640px, 92dvh)", background: T.surface, borderRadius: 18, overflow: "hidden", boxShadow: T.lg, display: "grid", gridTemplateColumns: (result || isFull) ? "1fr" : "minmax(0,300px) 1fr" }}>
         {result ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: 40, gap: 8 }}>
             <div style={{ width: 72, height: 72, borderRadius: 22, background: `linear-gradient(135deg, ${T.green}, #0891B2)`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 8, boxShadow: T.md }}><Icon name="check" size={36} color="#fff" /></div>

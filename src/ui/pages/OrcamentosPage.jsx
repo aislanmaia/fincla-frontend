@@ -474,7 +474,7 @@ export function OrcamentosPage({
             padding: isMobile ? 0 : 24 }}
             onClick={() => { if (!budgetsData.isSaving) { setShowAdd(false); resetAddForm(); } }}>
             <div style={{ width:"100%", maxWidth: isMobile ? "100%" : 460,
-              maxHeight: isMobile ? "min(88vh, 720px)" : "min(90vh, 640px)",
+              maxHeight: isMobile ? "min(88dvh, 720px)" : "min(90dvh, 640px)",
               display:"flex", flexDirection:"column", overflow:"hidden",
               background:T.surface,
               borderRadius: isMobile ? "18px 18px 0 0" : 18,
@@ -594,7 +594,7 @@ export function OrcamentosPage({
             padding: isMobile ? 0 : 24 }}
             onClick={closeEdit}>
             <div style={{ width:"100%", maxWidth: isMobile ? "100%" : 460,
-              maxHeight: isMobile ? "min(88vh, 720px)" : "min(90vh, 640px)",
+              maxHeight: isMobile ? "min(88dvh, 720px)" : "min(90dvh, 640px)",
               display:"flex", flexDirection:"column", overflow:"hidden",
               background:T.surface,
               borderRadius: isMobile ? "18px 18px 0 0" : 18,

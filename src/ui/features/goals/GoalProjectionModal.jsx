@@ -70,7 +70,7 @@ export function GoalProjectionModal({ goal, organizationId, onClose }) {
   const monthsToDeadline = monthsUntil(goal.deadline);
 
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 16px", overflowY: "auto" }}>
+    <div onClick={onClose} className="fincla-scroll" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 60, display: "flex", alignItems: "safe center", justifyContent: "center", padding: "40px 16px", overflowY: "auto" }}>
       <div onClick={(e) => e.stopPropagation()} style={{ width: 460, maxWidth: "100%", background: T.surface, borderRadius: 16, boxShadow: T.lg, padding: 20 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 38, height: 38, borderRadius: 11, display: "grid", placeItems: "center", fontSize: 19, background: meta.tint }}>{meta.emoji}</div>

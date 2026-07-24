@@ -79,7 +79,11 @@ export function ConsultantShell() {
           onAddClient={openAddClient}
           user={user}
         />
-        <div className="fincla-scroll" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", minHeight: 0 }}>
+        {/* Sem `overflowX: hidden` de propósito: com `overflow-y: auto`, o eixo
+            X computa para `auto`, então conteúdo largo demais (nome comprido de
+            cliente, tabela gerada pela IA) continua alcançável por rolagem
+            lateral em vez de ser cortado sem saída. */}
+        <div className="fincla-scroll" style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
           <Outlet />
         </div>
       </div>

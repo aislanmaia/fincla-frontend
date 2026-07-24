@@ -292,7 +292,7 @@ function AnswerRenderer({ output, onOpenClient, onEvaluate }) {
 
 function CopilotoProTeaser() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: "32px 40px 48px" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: "clamp(18px, 3.5vw, 32px) clamp(16px, 3.5vw, 40px) 48px" }}>
       <div>
         <Kicker>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
@@ -364,7 +364,7 @@ export function ConsultantCopilotoPage() {
   const empty = messages.length === 0;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%", minHeight: 0, boxSizing: "border-box", padding: "32px 40px 32px" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%", minHeight: 0, boxSizing: "border-box", padding: "clamp(18px, 3.5vw, 32px) clamp(16px, 3.5vw, 40px) clamp(18px, 3.5vw, 32px)" }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
         <div>
           <Kicker>
@@ -483,7 +483,10 @@ export function ConsultantCopilotoPage() {
               disabled={sending}
               placeholder={scopeName ? `Pergunte sobre ${scopeName}…` : "Pergunte algo sobre sua carteira…"}
               aria-label="Mensagem para o Copiloto"
-              style={{ ...G, flex: 1, border: "none", outline: "none", fontSize: 13.5, color: T.ink, background: "transparent", padding: "9px 0" }}
+              /* `minWidth: 0`: sem isso o input não encolhe abaixo da largura
+                 intrínseca e joga TODO o excesso no botão de enviar, que some
+                 cortado em telas estreitas (~320px). */
+              style={{ ...G, flex: 1, minWidth: 0, border: "none", outline: "none", fontSize: 13.5, color: T.ink, background: "transparent", padding: "9px 0" }}
             />
             <button
               type="button"
