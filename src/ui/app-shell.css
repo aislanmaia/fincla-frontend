@@ -1,0 +1,148 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Fincla — shell global do app (fonte única de verdade do layout de rolagem)
+
+   O Fincla é uma APLICAÇÃO, não um documento. Três consequências de layout:
+
+   1. O documento NUNCA rola. `html`/`body` ficam travados na viewport, então é
+      impossível surgir barra de rolagem global — independente do que uma tela
+      faça. (Antes deste arquivo não havia reset algum: o `margin: 8px` padrão
+      do user-agent no `<body>` somado aos shells em `100vh` deixava o
+      documento 16px mais alto que a viewport em TODAS as telas.)
+   2. Toda tela que passar da altura/largura disponível é dona do seu próprio
+      container de rolagem interno — marcado com a classe `.fincla-scroll`.
+   3. Barra de rolagem é oculta por padrão em todo lugar. `.fincla-scroll`
+      revela um thumb fino no hover/foco (padrão overlay, tipo macOS) SEM
+      reflow: a calha já fica reservada, só o thumb é que aparece.
+
+   Regra prática ao criar tela nova: nunca use `100vh` em altura de conteúdo e
+   nunca conte com o scroll da página. Peça altura ao pai (`height: 100%`, ou
+   `flex: 1` + `min-height: 0`) e ponha `.fincla-scroll` na região rolável.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  /* Trava o documento: sem barra global, sem rubber-band, sem pull-to-refresh. */
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: #f8f7f5; /* T.bg — evita flash branco antes do shell montar */
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+  /* Look and feel nativo: sem flash de toque e sem delay de duplo-toque. */
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+#root {
+  height: 100%;
+  /* Contexto de empilhamento próprio: z-index de modal/drawer não escapa. */
+  isolation: isolate;
+}
+
+/* ── Barras de rolagem ─────────────────────────────────────────────────────
+   Padrão do app: invisíveis. O conteúdo continua rolável (roda, trackpad,
+   teclado, toque) — só o cromo nativo é que some. */
+* {
+  scrollbar-width: none; /* Firefox */
+}
+
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* ── `.fincla-scroll` — região rolável de uma tela ─────────────────────────
+   Opt-in para as regiões grandes (shell, listas longas, log de chat), onde
+   sumir 100% com a barra atrapalha a percepção de "tem mais conteúdo".
+   Thumb transparente em repouso e sólido no hover: a largura nunca muda, logo
+   não existe reflow ao passar o mouse. */
+.fincla-scroll,
+.fincla-scroll-y /* alias legado — call sites antigos (popover do calendário) */ {
+  /* Impede o scroll de "vazar" para o container pai ao chegar no fim. */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin; /* Firefox: calha estável */
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.15s ease;
+}
+
+.fincla-scroll:hover,
+.fincla-scroll:focus-within,
+.fincla-scroll-y:hover,
+.fincla-scroll-y:focus-within {
+  scrollbar-color: rgba(15, 15, 13, 0.2) transparent;
+}
+
+.fincla-scroll::-webkit-scrollbar,
+.fincla-scroll-y::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.fincla-scroll::-webkit-scrollbar-track,
+.fincla-scroll-y::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.fincla-scroll::-webkit-scrollbar-thumb,
+.fincla-scroll-y::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 99px;
+  /* Borda transparente + clip no content-box = thumb de 6px com respiro. */
+  border: 2px solid transparent;
+  background-clip: content-box;
+  transition: background-color 0.15s ease;
+}
+
+.fincla-scroll:hover::-webkit-scrollbar-thumb,
+.fincla-scroll:focus-within::-webkit-scrollbar-thumb,
+.fincla-scroll-y:hover::-webkit-scrollbar-thumb,
+.fincla-scroll-y:focus-within::-webkit-scrollbar-thumb {
+  background-color: rgba(15, 15, 13, 0.2);
+}
+
+.fincla-scroll::-webkit-scrollbar-thumb:hover,
+.fincla-scroll-y::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(15, 15, 13, 0.34);
+}
+
+.fincla-scroll::-webkit-scrollbar-corner,
+.fincla-scroll-y::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ── Controles de formulário ──────────────────────────────────────────────
+   Vinha do `<style>` inline do App do cliente, onde só valia para aquele
+   shell — a área do Consultor, os modais e as telas de auth ficavam de fora. */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 99px;
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #0f0f0d; /* T.ink */
+  border: 2px solid #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}

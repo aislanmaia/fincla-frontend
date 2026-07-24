@@ -69,16 +69,11 @@ export const ANIM_CSS = `
     background-size: 200% 100%;
     animation: shimmer 1.2s linear infinite;
   }
-  /* DragScrollTabs — hide native scrollbar everywhere */
+  /* DragScrollTabs — mantém o arrasto por toque; a barra já é oculta pelo
+     padrão global de app-shell.css. */
   .dstabs-scroll { -webkit-overflow-scrolling: touch; }
-  .dstabs-scroll::-webkit-scrollbar { display: none; width: 0; height: 0; }
-  .dstabs-scroll { scrollbar-width: none; -ms-overflow-style: none; }
-  /* Scrollbar visível (popover do calendário e afins) */
-  .fincla-scroll-y { scrollbar-width: thin; scrollbar-color: #C7CDD6 transparent; }
-  .fincla-scroll-y::-webkit-scrollbar { width: 9px; }
-  .fincla-scroll-y::-webkit-scrollbar-thumb { background: #C7CDD6; border-radius: 99px; border: 2px solid transparent; background-clip: padding-box; }
-  .fincla-scroll-y::-webkit-scrollbar-thumb:hover { background: #AAB2BF; background-clip: padding-box; }
-  .fincla-scroll-y::-webkit-scrollbar-track { background: transparent; }
+  /* .fincla-scroll-y foi absorvida por .fincla-scroll (app-shell.css):
+     uma convenção só para região rolável em todo o app. */
 `;
 
 export function AnimStyles() {

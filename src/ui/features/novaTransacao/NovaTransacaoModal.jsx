@@ -2207,7 +2207,7 @@ export const NovaTransacaoModal = ({
       {/* Drawer panel: re-habilita pointer-events caso o container externo
           esteja com `pointer-events:none` durante o overlay de sucesso, pra
           que a celebração + botão "Fechar" continuem clicáveis. */}
-      <div style={{ position:"relative", display:"flex", height:"100vh", boxShadow:T.dark, pointerEvents: "auto", animation: drawerClosing ? `drawerOut ${DRAWER_CLOSE_MS}ms cubic-bezier(0.32,0.72,0,1) forwards` : "drawerIn 0.22s ease-out" }}>
+      <div style={{ position:"relative", display:"flex", height:"100dvh", boxShadow:T.dark, pointerEvents: "auto", animation: drawerClosing ? `drawerOut ${DRAWER_CLOSE_MS}ms cubic-bezier(0.32,0.72,0,1) forwards` : "drawerIn 0.22s ease-out" }}>
 
         {/* SUB-PANEL: Recorrência — shell colapsa no flex (evita “fantasma” de borda); conteúdo faz fade+slide */}
         {(recurrencePanelOpen || recurrencePanelExiting) && (
@@ -2235,7 +2235,7 @@ export const NovaTransacaoModal = ({
                 borderLeft: `1px solid ${T.border}`,
                 display: "flex",
                 flexDirection: "column",
-                minHeight: "100vh",
+                minHeight: "100%",
                 animation: recurrencePanelExiting
                   ? `novaSidePanelContentOut ${SIDE_PANEL_MS}ms cubic-bezier(0.32,0.72,0,1) forwards`
                   : `novaSidePanelContentIn ${SIDE_PANEL_MS}ms cubic-bezier(0.32,0.72,0,1) both`,
@@ -2309,7 +2309,7 @@ export const NovaTransacaoModal = ({
                 borderLeft: `1px solid ${T.border}`,
                 display: "flex",
                 flexDirection: "column",
-                minHeight: "100vh",
+                minHeight: "100%",
                 animation: cardPanelExiting
                   ? `novaSidePanelContentOut ${SIDE_PANEL_MS}ms cubic-bezier(0.32,0.72,0,1) forwards`
                   : `novaSidePanelContentIn ${SIDE_PANEL_MS}ms cubic-bezier(0.32,0.72,0,1) both`,
@@ -2488,7 +2488,7 @@ export const NovaTransacaoModal = ({
             </div>
           </div>
         )}
-        <div style={{ width:400, background:T.surface, borderLeft:`1px solid ${T.border}`, display:"flex", flexDirection:"column", height:"100vh", overflow:"hidden" }}>
+        <div style={{ width:400, background:T.surface, borderLeft:`1px solid ${T.border}`, display:"flex", flexDirection:"column", height:"100%", overflow:"hidden" }}>
           {successOverlay && (
             <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"40px 32px" }}>
               <div style={{ display:"flex", flexDirection:"column", alignItems:"center", width:"100%", animation:"overlayContentIn 0.3s cubic-bezier(0.32,0.72,0,1)" }}>

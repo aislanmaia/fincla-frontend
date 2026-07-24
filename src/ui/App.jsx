@@ -373,7 +373,7 @@ export default function App() {
   if (session.isBootstrapping) return (
     <>
       <AnimStyles/>
-      <div style={{ ...G, minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background:T.bg, padding:24 }}>
+      <div className="fincla-scroll" style={{ ...G, height:"100%", overflowY:"auto", display:"flex", alignItems:"center", justifyContent:"center", background:T.bg, padding:24 }}>
         <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:16, padding:"28px 24px", minWidth:320, textAlign:"center", boxShadow:T.sm }}>
           <img src="/logo.png" alt="Fincla" width={32} height={32} style={{ objectFit:"contain", display:"block", margin:"0 auto 14px" }} />
           <div style={{ ...S, fontSize:28, color:T.ink, marginBottom:10 }}>
@@ -477,14 +477,9 @@ export default function App() {
     <>
     <AnimStyles/>
     <FinclaPageContext.Provider value={{ pages, user: session.user }}>
-    <div style={{ ...G, display:"flex", height:"100vh", background:T.bg, overflow:"hidden" }}>
-      <style>{`
-        * { box-sizing: border-box; }
-        ::-webkit-scrollbar { width: 4px; }
-        ::-webkit-scrollbar-thumb { background: ${T.border}; border-radius: 99px; }
-        input[type=range] { -webkit-appearance: none; height: 4px; border-radius: 99px; outline: none; cursor: pointer; }
-        input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: ${T.ink}; border: 2px solid white; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
-      `}</style>
+    {/* Shell: ocupa exatamente a viewport e não rola — quem rola é a região
+        de conteúdo abaixo. Reset, scrollbars e inputs vivem em `app-shell.css`. */}
+    <div style={{ ...G, display:"flex", height:"100dvh", background:T.bg, overflow:"hidden" }}>
       <Sidebar
         page={activeSegment} onNav={navTo}
         isMobile={isMobile}
@@ -516,7 +511,7 @@ export default function App() {
 
         {!isMobile && <StatePanelV4 open={panelOpen} day={day} setDay={setDay} budgetPct={budgetPct} setBudgetPct={setBudgetPct} freePct={freePct} setFreePct={setFreePct} moodKey={moodKey} onStartOnboarding={() => { setPanelOpen(false); setShowOnboarding(true); }} dataMode={dataMode} allowDataModeToggle={mockDataEnabled} onSetDataMode={(mode) => { setRequestedDataMode(mode); if (mode === 'empty') { setCenarios([]); setCenarioId(null); } else { setCenarios(SIM_CENARIOS_INIT); setCenarioId(SIM_CENARIOS_INIT[0].id); } }} />}
 
-        <div data-fincla-main-scroll style={{ flex:1, overflowY:"auto", overflowX:"hidden", padding:isMobile?"14px 14px 40px":"20px 28px 40px" }}>
+        <div data-fincla-main-scroll className="fincla-scroll" style={{ flex:1, minHeight:0, overflowY:"auto", overflowX:"hidden", padding:isMobile?"14px 14px 40px":"20px 28px 40px" }}>
           {activeSegment === "dashboard" && onboardingData && !checklistDismissed && (
             <MiniChecklist
               onboardingData={onboardingData}

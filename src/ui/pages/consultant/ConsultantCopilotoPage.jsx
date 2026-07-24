@@ -292,7 +292,7 @@ function AnswerRenderer({ output, onOpenClient, onEvaluate }) {
 
 function CopilotoProTeaser() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: "32px 40px 48px" }}>
       <div>
         <Kicker>
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
@@ -364,7 +364,7 @@ export function ConsultantCopilotoPage() {
   const empty = messages.length === 0;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%", minHeight: 0, boxSizing: "border-box", padding: "32px 40px 32px" }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 14, flexWrap: "wrap" }}>
         <div>
           <Kicker>
@@ -404,8 +404,11 @@ export function ConsultantCopilotoPage() {
         </div>
       )}
 
-      <Card style={{ flex: 1, minHeight: 480, display: "flex", flexDirection: "column", overflow: "hidden", padding: 0 }}>
-        <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: empty ? 0 : 22 }}>
+      {/* O chat encolhe para caber na tela — quem rola é o log, nunca o shell.
+          Um `minHeight` fixo aqui empurrava o conteúdo além do shell e criava
+          uma segunda barra de rolagem envolvendo a página inteira. */}
+      <Card style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden", padding: 0 }}>
+        <div ref={scrollRef} className="fincla-scroll" style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: empty ? 0 : 22 }}>
           {empty ? (
             <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 28, textAlign: "center" }}>
               <div style={{ width: 52, height: 52, borderRadius: 15, background: `linear-gradient(135deg, ${T.purple}, ${T.blue})`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 16 }}>

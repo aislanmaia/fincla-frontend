@@ -107,7 +107,7 @@ export function ConsultantSidebar({ pathname, onNav, user, onClose }) {
       </div>
 
       {/* Navegação */}
-      <nav style={{ flex: 1, padding: "6px 9px", overflowY: "auto" }}>
+      <nav className="fincla-scroll" style={{ flex: 1, minHeight: 0, padding: "6px 9px", overflowY: "auto" }}>
         {CONSULTANT_NAV.map((item, i) => {
           if (item.sec) {
             return (

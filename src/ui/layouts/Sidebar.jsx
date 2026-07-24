@@ -53,7 +53,9 @@ function SidebarInner({ page, onNav, onClose, user }) {
         borderRight: `1px solid ${T.border}`,
         display: "flex",
         flexDirection: "column",
-        height: "100vh",
+        // Altura vem do pai (shell em `100dvh` no desktop, drawer `inset:0` no
+        // mobile). `100vh` ignorava a barra do browser mobile e estourava.
+        height: "100%",
       }}
     >
       <div
@@ -101,7 +103,7 @@ function SidebarInner({ page, onNav, onClose, user }) {
         )}
       </div>
 
-      <nav style={{ flex: 1, padding: "6px 8px", overflowY: "auto" }}>
+      <nav className="fincla-scroll" style={{ flex: 1, minHeight: 0, padding: "6px 8px", overflowY: "auto" }}>
         {NAV.map((item, i) => {
           if (item.sec) {
             return (

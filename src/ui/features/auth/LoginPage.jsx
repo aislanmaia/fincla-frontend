@@ -124,7 +124,7 @@ export const LoginPage = ({
 
   // ── Brand panel ────────────────────────────────────────────────────────────
   const BrandPanel = () => (
-    <div style={{ background:"#0F0F0D", display:"flex", flexDirection:"column", justifyContent:"space-between", padding:"48px 44px", position:"relative", overflow:"hidden", flex:1, minHeight:"100vh" }}>
+    <div style={{ background:"#0F0F0D", display:"flex", flexDirection:"column", justifyContent:"space-between", padding:"48px 44px", position:"relative", overflow:"hidden", flex:1, minHeight:"100%" }}>
       {/* Decorative circles */}
       <div style={{ position:"absolute", top:-80, right:-80, width:300, height:300, borderRadius:"50%", background:"rgba(37,99,235,0.08)" }}/>
       <div style={{ position:"absolute", bottom:-60, left:-60, width:220, height:220, borderRadius:"50%", background:"rgba(124,58,237,0.1)" }}/>
@@ -387,9 +387,9 @@ export const LoginPage = ({
           100% { transform: translateX(280%); }
         }
       `}</style>
-      <div style={{ display:"flex", height:"100vh", minHeight:"100dvh", background:T.surface, fontFamily:"'Geist',sans-serif", overflow:"hidden" }}>
+      <div style={{ display:"flex", height:"100dvh", background:T.surface, fontFamily:"'Geist',sans-serif", overflow:"hidden" }}>
         {/* Brand panel — hidden on mobile */}
-        <div style={{ flex:"0 0 42%", display:"none", minHeight:"100vh" }} id="fincla-brand-panel">
+        <div style={{ flex:"0 0 42%", display:"none", minHeight:"100%" }} id="fincla-brand-panel">
           {BrandPanel()}
         </div>
         <style>{`
@@ -400,7 +400,7 @@ export const LoginPage = ({
         `}</style>
 
         {/* Form panel */}
-        <div style={{ flex:1, display:"flex", flexDirection:"column", overflowY:"auto", background:T.surface }}>
+        <div className="fincla-scroll" style={{ flex:1, minWidth:0, display:"flex", flexDirection:"column", overflowY:"auto", background:T.surface }}>
           {/* Logo — visible on mobile, hidden on desktop when brand panel shows */}
           <div style={{ padding:"28px 28px 0", display:"flex", alignItems:"center", gap:10 }} id="fincla-mobile-logo">
             <img

@@ -54,7 +54,7 @@ export function ConsultantShell() {
 
   return (
     <ConsultantAddClientProvider openAddClient={openAddClient} clientsVersion={clientsVersion} notifyClientsChanged={notifyClientsChanged} quota={quota}>
-    <div style={{ ...G, display: "flex", height: "100vh", width: "100%", overflow: "hidden", background: T.bg }}>
+    <div style={{ ...G, display: "flex", height: "100dvh", width: "100%", overflow: "hidden", background: T.bg }}>
       {!isMobile && <ConsultantSidebar pathname={pathname} onNav={go} user={user} />}
 
       {isMobile && menuOpen && (
@@ -79,7 +79,7 @@ export function ConsultantShell() {
           onAddClient={openAddClient}
           user={user}
         />
-        <div style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+        <div className="fincla-scroll" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", minHeight: 0 }}>
           <Outlet />
         </div>
       </div>

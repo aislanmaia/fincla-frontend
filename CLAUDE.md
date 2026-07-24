@@ -3,6 +3,24 @@
 SaaS de finanças pessoais BR. A **UI** replica o protótipo de referência em `docs/` (objeto `T` + estilos inline), **sem Tailwind** por enquanto. Cliente REST em `src/api/` (TypeScript).
 
 
+## Layout do shell — experiência de app nativo (regra dura)
+
+O Fincla é uma **aplicação**, não um documento. `src/ui/app-shell.css` (importado uma única vez em `src/main.jsx`) é a fonte de verdade e trava três invariantes:
+
+1. **O documento nunca rola.** `html`/`body` são `overflow: hidden` + `overscroll-behavior: none`. Não existe barra de rolagem global, nem rubber-band, nem pull-to-refresh — independente do que uma tela faça.
+2. **Cada tela é dona do seu scroll interno.** Se o conteúdo passa do espaço disponível, ele rola dentro da própria região, marcada com a classe `.fincla-scroll` (`.fincla-scroll-y` é alias legado da mesma coisa).
+3. **Barra de rolagem é oculta por padrão** em todo elemento. `.fincla-scroll` revela um thumb fino no hover/foco (overlay, tipo macOS) **sem reflow** — a calha já é reservada, só o thumb aparece.
+
+Ao criar tela nova:
+
+- **Nunca** use `100vh` para dimensionar conteúdo — ignora a barra do browser no mobile e estoura o shell. Peça altura ao pai: `height: 100%`, ou `flex: 1` + `min-height: 0`. Quando a viewport é mesmo a referência (shell raiz, elemento `position: fixed`), use `100dvh`.
+- **Nunca** conte com o scroll da página; ponha `.fincla-scroll` + `overflow-y: auto` + `min-height: 0` na região rolável.
+- **Nunca** use `min-height` fixo em painel que precisa caber na tela (ex.: card de chat) — ele empurra o conteúdo além do shell e ressuscita a barra global. Deixe encolher com `min-height: 0`.
+
+`src/ui/__tests__/appShell.test.js` guarda essas invariantes (inclusive varrendo `src/ui` atrás de `100vh`).
+
+---
+
 ## API
 - Base: `VITE_API_BASE_URL` — `src/api/config.ts` acrescenta `/v1`
 - Auth: Bearer em `localStorage.getItem('auth_token')`
