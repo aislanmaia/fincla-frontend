@@ -65,6 +65,46 @@ const formatterFor = (valueFormat) => FORMATTERS[valueFormat] ?? FORMATTERS.int;
 const AXIS_TICK = { ...G, fontSize: 10, fill: T.inkLight };
 const MARGIN = { top: 6, right: 6, left: -8, bottom: 0 };
 
+/**
+ * Gráfico de TENDÊNCIA? (linha/área — não barra/pizza).
+ *
+ * Barra e pizza codificam MAGNITUDE: o comprimento/ângulo é o dado, então têm de
+ * partir do zero. Linha e área codificam a VARIAÇÃO ao longo do eixo x, e aí forçar
+ * o zero achata a tendência (despesas de 4.730 a 4.970 viram uma reta colada no
+ * topo). Um `composed` só conta como tendência se NENHUMA série é barra.
+ */
+export const isTrendChart = (type, series) =>
+  type === "line" ||
+  type === "area" ||
+  (type === "composed" && series.every((s) => s.kind === "line" || s.kind === "area"));
+
+/**
+ * Janela do eixo Y para um gráfico de tendência: [min, max] das séries com folga,
+ * revelando a inclinação em vez de esmagá-la contra o zero.
+ *
+ * Isto é escala de EXIBIÇÃO, não dado: os valores plotados não mudam, então nada
+ * aqui escapa do grounding — só a moldura do eixo. `undefined` = deixa o default do
+ * recharts (ancorado no zero), usado quando não há o que "dar zoom".
+ */
+export function trendYDomain(series, data) {
+  const values = [];
+  for (const row of data) {
+    for (const s of series) {
+      const v = row?.[s.key];
+      if (typeof v === "number" && Number.isFinite(v)) values.push(v);
+    }
+  }
+  if (values.length < 2) return undefined;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  if (min === max) return undefined; // série plana: nada a revelar
+  const pad = (max - min) * 0.18;
+  const lo = min - pad;
+  // Não cruza o zero à toa: se o dado é todo positivo e a folga furaria o zero,
+  // ancora no zero — aí a magnitude volta a fazer sentido.
+  return [lo < 0 && min >= 0 ? 0 : lo, max + pad];
+}
+
 function AiTooltip({ active, payload, label, format }) {
   if (!active || !payload?.length) return null;
   const fmt = formatterFor(format);
@@ -106,11 +146,15 @@ export function AiChart({ spec, height = 220 }) {
   const tooltip = <Tooltip content={<AiTooltip format={valueFormat} />} cursor={{ fill: `${T.ink}08` }} />;
   const legend = <Legend wrapperStyle={{ ...G, fontSize: 11 }} iconType="circle" iconSize={7} />;
 
+  // Só gráficos de tendência ganham janela [min,max]; barra/composed-com-barra
+  // ficam no default (zero). `undefined` → recharts usa o default (ancorado no zero).
+  const yDomain = isTrendChart(type, series) ? trendYDomain(series, data) : undefined;
+
   const cartesianAxes = (
     <>
       <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
       <XAxis dataKey={x.key} tick={AXIS_TICK} axisLine={false} tickLine={false} />
-      <YAxis tick={AXIS_TICK} axisLine={false} tickLine={false} width={54} tickFormatter={fmt} />
+      <YAxis domain={yDomain} tick={AXIS_TICK} axisLine={false} tickLine={false} width={54} tickFormatter={fmt} />
       {tooltip}
       {series.length > 1 && legend}
     </>
