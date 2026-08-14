@@ -1111,6 +1111,7 @@ export function buildUpdateTransactionPayload({
   installmentsCount = null,
   modality = null,
   recurring = false,
+  baseline = null,
 }) {
   let type;
   if (tipo === "receita") type = "income";
@@ -1142,7 +1143,35 @@ export function buildUpdateTransactionPayload({
       payload.installments_count = Number(installmentsCount);
     }
   }
-  return payload;
+  if (!baseline) return payload;
+
+  // Envia só o que o usuário mexeu. Sem isso o backend recebe o pacote inteiro em toda
+  // edição e precisa adivinhar o que mudou — comparando contra valores que chegam
+  // *derivados*, não fiéis:
+  //   - `value` é remontado como (parcela editada × N). Numa compra de R$ 100,00 em 3x
+  //     (33,33 / 33,33 / 33,34) isso dá 99,99 ou 100,02, nunca 100,00.
+  //   - `modality` é derivado da contagem de parcelas.
+  // Foi assim que editar a categoria de cinco compras moveu R$ 885,05 para fora de uma
+  // fatura já paga (fincla-api#90).
+  const before = buildUpdateTransactionPayload({ ...baseline, baseline: null });
+  const changed = {};
+  for (const [key, current] of Object.entries(payload)) {
+    if (!sameUpdateField(current, before[key])) changed[key] = current;
+  }
+  // `date` segue obrigatório no UpdateTxBody da API (fincla-api#91); enquanto for,
+  // mandamos sempre. Quando virar opcional, sai daqui junto com os demais.
+  changed.date = payload.date;
+  return changed;
+}
+
+/** Compara dois valores de campo do payload de update, tratando arrays por conteúdo. */
+function sameUpdateField(a, b) {
+  if (Array.isArray(a) || Array.isArray(b)) {
+    const left = Array.isArray(a) ? a.map(String).slice().sort() : [];
+    const right = Array.isArray(b) ? b.map(String).slice().sort() : [];
+    return left.length === right.length && left.every((v, i) => v === right[i]);
+  }
+  return a === b;
 }
 
 export async function createTransactionForUi(payload) {

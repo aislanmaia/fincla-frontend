@@ -1407,6 +1407,9 @@ export const NovaTransacaoModal = ({
               modality,
               cardId: Number.isFinite(cardIdNum) ? cardIdNum : null,
               recurring: isRecurring,
+              // Envia só o que mudou. Sem baseline (edição aberta sem hidratação da API)
+              // o payload sai completo, como antes.
+              baseline: preConfig?.editBaseline ?? null,
             }),
           );
         } else {
