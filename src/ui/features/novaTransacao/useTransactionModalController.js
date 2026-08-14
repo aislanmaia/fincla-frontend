@@ -4,6 +4,7 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import { getTransaction } from "../../../api/transactions";
 import { TRANSACTIONS } from "../../data/mockFinance.js";
 import {
+  buildEditBaselineFromUi,
   isUuidString,
   mapApiTransactionToUi,
   modalPaymentKeyFromTransactionUi,
@@ -308,23 +309,7 @@ export function useTransactionModalController({
           // Estado tal como veio da API, para o submit enviar só o que o usuário mexeu.
           // Sem isso o backend recebe o pacote inteiro e precisa adivinhar o que mudou —
           // comparando contra valores que chegam derivados (fincla-api#90).
-          editBaseline: {
-            tipo: ui.val > 0 ? "receita" : "despesa",
-            description: ui.desc,
-            value: transactionUiValAbsForEdit(ui),
-            paymentMethodKey: txMethod,
-            categoryTagId: ui.categoryTagId ?? null,
-            detailTagIds: ui.detailTagIds ?? [],
-            dateIso:
-              ui.dateIsoForEdit ??
-              transactionDateIsoFromBrDisplay(ui.date) ??
-              undefined,
-            cardId: ui.cartaoId != null ? Number(ui.cartaoId) : null,
-            modality:
-              txMethod === "credito" ? (isParcelado ? "installment" : "cash") : null,
-            installmentsCount: isParcelado ? ui.parcela.total : null,
-            recurring: !!ui.rec,
-          },
+          editBaseline: buildEditBaselineFromUi(ui),
         }));
       })
       .catch(() => {

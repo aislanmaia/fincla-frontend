@@ -301,7 +301,9 @@ export function pickAmountAbsForTransactionEdit(transaction) {
   const installment = transaction.installment_info?.[0];
   if (installment && installment.total_installments > 1) {
     const total = Number(installment.amount) * Number(installment.total_installments);
-    if (Number.isFinite(total)) return Math.abs(total);
+    // Arredonda em centavos: 33.34 × 3 dá 100.02000000000001, e esse resíduo faz o
+    // total reconstruído nunca bater com o valor digitado (que já passa por centavos).
+    if (Number.isFinite(total)) return Math.round(Math.abs(total) * 100) / 100;
   }
   const v = Number(transaction.value ?? 0);
   return Number.isFinite(v) ? Math.abs(v) : 0;
@@ -773,6 +775,33 @@ export function transactionDateIsoFromBrDisplay(display) {
   return `${y}-${m}-${d}T12:00:00`;
 }
 
+/**
+ * Estado da transação tal como o servidor a entregou, para o submit mandar só o que
+ * o usuário mexeu (`diffUpdateTransactionPayload`). Construtor único porque o modal
+ * é hidratado por dois caminhos — o fetch do deep-link e o clique na lista — e um
+ * baseline ausente faz o PATCH degradar para o pacote inteiro (fincla-api#90).
+ */
+export function buildEditBaselineFromUi(ui) {
+  if (!ui) return null;
+  const paymentMethodKey = modalPaymentKeyFromTransactionUi(ui);
+  const isParcelado = !!(ui.parcela && ui.parcela.total > 1);
+  const isCard = paymentMethodKey === "credito";
+  return {
+    tipo: ui.val > 0 ? "receita" : "despesa",
+    description: ui.desc,
+    value: transactionUiValAbsForEdit(ui),
+    paymentMethodKey,
+    categoryTagId: ui.categoryTagId ?? null,
+    detailTagIds: ui.detailTagIds ?? [],
+    dateIso:
+      ui.dateIsoForEdit ?? transactionDateIsoFromBrDisplay(ui.date) ?? undefined,
+    cardId: ui.cartaoId != null ? Number(ui.cartaoId) : null,
+    modality: isCard ? (isParcelado ? "installment" : "cash") : null,
+    installmentsCount: isParcelado ? ui.parcela.total : null,
+    recurring: !!ui.rec,
+  };
+}
+
 /** Data local do dia (YYYY-MM-DD). */
 export function todayLocalYmd() {
   const d = new Date();
@@ -1170,6 +1199,11 @@ function sameUpdateField(a, b) {
     const left = Array.isArray(a) ? a.map(String).slice().sort() : [];
     const right = Array.isArray(b) ? b.map(String).slice().sort() : [];
     return left.length === right.length && left.every((v, i) => v === right[i]);
+  }
+  // Dinheiro em ponto flutuante não sobrevive a `===`: compara na menor unidade real
+  // (centavos), que é onde o input já opera. Inteiros passam por aqui sem efeito.
+  if (typeof a === "number" && typeof b === "number") {
+    return Math.round(a * 100) === Math.round(b * 100);
   }
   return a === b;
 }

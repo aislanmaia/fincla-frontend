@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { buildUpdateTransactionPayload } from "../transactionsAdapter";
+import {
+  buildEditBaselineFromUi,
+  buildUpdateTransactionPayload,
+  pickAmountAbsForTransactionEdit,
+} from "../transactionsAdapter";
 
 /**
  * O backend já trata "campo ausente = não mudou" (UpdateTransaction._merge_with_existing).
@@ -96,10 +100,110 @@ describe("buildUpdateTransactionPayload — atualização parcial", () => {
   it("mudança de parcelas é enviada junto com o valor", () => {
     const payload = buildUpdateTransactionPayload({
       ...compraParcelada,
+      value: 120,
       installmentsCount: 6,
       baseline: compraParcelada,
     });
 
     expect(payload.installments_count).toBe(6);
+    expect(payload.value).toBe(120);
+  });
+
+  it("resíduo de ponto flutuante no total remontado não conta como mudança de valor", () => {
+    // 33,34 × 3 = 100.02000000000001; o input devolve 100.02. Comparados com `===`,
+    // o value ia junto e o backend voltava a adivinhar o que mudou (fincla-api#90).
+    const emCentavos = { ...compraParcelada, value: 100.02 };
+    const payload = buildUpdateTransactionPayload({
+      ...emCentavos,
+      value: 33.34 * 3,
+      description: "Cafeteira nova",
+      baseline: emCentavos,
+    });
+
+    expect(payload).not.toHaveProperty("value");
+    expect(payload.description).toBe("Cafeteira nova");
+  });
+});
+
+describe("pickAmountAbsForTransactionEdit — total remontado", () => {
+  it("arredonda o produto parcela × N em centavos", () => {
+    const total = pickAmountAbsForTransactionEdit({
+      value: 33.34,
+      installment_info: [{ amount: 33.34, total_installments: 3 }],
+    });
+
+    expect(total).toBe(100.02);
+  });
+});
+
+describe("buildEditBaselineFromUi", () => {
+  const parcelaUi = {
+    id: 7,
+    desc: "Cafeteira",
+    val: -33.34,
+    valAbsForEdit: 100.02,
+    cat: "Casa",
+    categoryTagId: "tag-casa",
+    detailTagIds: ["tag-cozinha"],
+    paymentMethodKey: "credito",
+    cartaoId: 3,
+    dateIsoForEdit: "2026-05-10T00:00:00",
+    parcela: { total: 3, atual: 1 },
+    rec: false,
+  };
+
+  it("descreve a compra parcelada como o servidor a entregou", () => {
+    expect(buildEditBaselineFromUi(parcelaUi)).toEqual({
+      tipo: "despesa",
+      description: "Cafeteira",
+      value: 100.02,
+      paymentMethodKey: "credito",
+      categoryTagId: "tag-casa",
+      detailTagIds: ["tag-cozinha"],
+      dateIso: "2026-05-10T00:00:00",
+      cardId: 3,
+      modality: "installment",
+      installmentsCount: 3,
+      recurring: false,
+    });
+  });
+
+  it("um lançamento fora do cartão não ganha modalidade nem parcelas", () => {
+    const baseline = buildEditBaselineFromUi({
+      ...parcelaUi,
+      paymentMethodKey: "pix",
+      cartaoId: null,
+      parcela: null,
+    });
+
+    expect(baseline).toMatchObject({
+      paymentMethodKey: "pix",
+      cardId: null,
+      modality: null,
+      installmentsCount: null,
+    });
+  });
+
+  it("o baseline que ele constrói neutraliza uma edição só de categoria", () => {
+    const payload = buildUpdateTransactionPayload({
+      tipo: "despesa",
+      description: parcelaUi.desc,
+      value: 33.34 * 3, // a tela remonta o total com o resíduo do float
+      paymentMethodKey: "credito",
+      categoryTagId: "tag-lazer", // <- única mudança real
+      detailTagIds: ["tag-cozinha"],
+      dateIso: parcelaUi.dateIsoForEdit,
+      cardId: 3,
+      modality: "installment",
+      installmentsCount: 3,
+      recurring: false,
+      baseline: buildEditBaselineFromUi(parcelaUi),
+    });
+
+    expect(payload).not.toHaveProperty("value");
+    expect(payload).not.toHaveProperty("modality");
+    expect(payload).not.toHaveProperty("installments_count");
+    expect(payload).not.toHaveProperty("card_id");
+    expect(payload.tag_ids).toContain("tag-lazer");
   });
 });
