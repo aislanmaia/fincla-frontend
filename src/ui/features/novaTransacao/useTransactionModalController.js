@@ -4,6 +4,7 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import { getTransaction } from "../../../api/transactions";
 import { TRANSACTIONS } from "../../data/mockFinance.js";
 import {
+  buildEditBaselineFromUi,
   isUuidString,
   mapApiTransactionToUi,
   modalPaymentKeyFromTransactionUi,
@@ -305,6 +306,10 @@ export function useTransactionModalController({
           detailTagIds: ui.detailTagIds ?? [],
           detailTagDisplayById: ui.detailTagDisplayById ?? {},
           detailTagMetaById: ui.detailTagMetaById ?? {},
+          // Estado tal como veio da API, para o submit enviar só o que o usuário mexeu.
+          // Sem isso o backend recebe o pacote inteiro e precisa adivinhar o que mudou —
+          // comparando contra valores que chegam derivados (fincla-api#90).
+          editBaseline: buildEditBaselineFromUi(ui),
         }));
       })
       .catch(() => {

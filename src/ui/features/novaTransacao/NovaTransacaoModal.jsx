@@ -175,6 +175,13 @@ export const NovaTransacaoModal = ({
   const [recurrenceRepetitions, setRecurrenceRepetitions] = useState(preConfig?.encRepetitionsRec ?? 12);
   const [recurrenceEndDateYmd,  setRecurrenceEndDateYmd]  = useState(preConfig?.encEndDateYmdRec || preConfig?.dataFimRec || null);
   const [showImpact,setShowImpact]= useState(false);
+  /**
+   * «Nova transação» limpa os campos locais mas não o `preConfig` — que é prop e só some
+   * no fechamento do drawer. Sem descartar o baseline junto, o diff do submit compararia
+   * o lançamento novo contra a transação anterior e engoliria os campos coincidentes.
+   */
+  const [editBaselineDropped, setEditBaselineDropped] = useState(false);
+  useEffect(() => { setEditBaselineDropped(false); }, [preConfig]);
   /** Revisão mobile: acordeão «Impacto financeiro» (controlado no pai para não ir à API até expandir). */
   const [mobileReviewImpactOpen, setMobileReviewImpactOpen] = useState(false);
   const [review,    setReview]    = useState(false);
@@ -1407,6 +1414,9 @@ export const NovaTransacaoModal = ({
               modality,
               cardId: Number.isFinite(cardIdNum) ? cardIdNum : null,
               recurring: isRecurring,
+              // Envia só o que mudou. Sem baseline (edição aberta sem hidratação da API)
+              // o payload sai completo, como antes.
+              baseline: editBaselineDropped ? null : (preConfig?.editBaseline ?? null),
             }),
           );
         } else {
@@ -1491,6 +1501,7 @@ export const NovaTransacaoModal = ({
     setMobileReviewImpactOpen(false); resetAi();
     setDescFocused(false); setAddingCartao(false); setQuickAddCardName(""); setQuickAddCardLast4("");
     setNewTag(""); setAddingTag(false); resetInstallmentCalc(); setShowImpact(false);
+    setEditBaselineDropped(true);
   };
 
   const PanelHeader = ({ icon: Icon, title, onCollapse }) => (

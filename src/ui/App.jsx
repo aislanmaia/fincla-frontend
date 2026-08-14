@@ -45,6 +45,7 @@ import { PlanningHub } from "./features/planning/PlanningHub.jsx";
 
 import { acceptOrganizationInvitation } from "./data/invitationAdapter.js";
 import {
+  buildEditBaselineFromUi,
   isUuidString,
   modalPaymentKeyFromTransactionUi,
   transactionDateIsoFromBrDisplay,
@@ -285,6 +286,10 @@ export default function App() {
             detailTagIds: tx.detailTagIds ?? [],
             detailTagDisplayById: tx.detailTagDisplayById ?? {},
             refundOfTransactionId: tx.refundOfTransactionId ?? null,
+            // A lista traz a transação inteira, então o baseline nasce aqui: este caminho
+            // curto-circuita o fetch de hidratação (`hasEditorPayload`) e sem isso o
+            // submit voltaria a mandar o pacote cheio.
+            editBaseline: buildEditBaselineFromUi(tx),
           });
         });
         openTxModal({ [FC.TX]: String(tx.id) });
