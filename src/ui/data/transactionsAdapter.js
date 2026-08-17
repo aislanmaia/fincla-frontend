@@ -418,6 +418,9 @@ export function mapApiTransactionToUi(transaction) {
     // não se aplica a ele, e o badge "A pagar" mentiria sobre o que o usuário controla.
     settleable: !isCreditCardApiTransaction(transaction),
     paidAt: transaction.paid_at ?? null,
+    // Conta de liquidação — a UI precisa dela para saber qual âncora de saldo se
+    // aplica a este lançamento (S4).
+    accountId: transaction.account_id ?? null,
     method: formatMethodLabel(transaction.payment_method),
     tags: pickTagNames(transaction, categoryName),
     detailTagIds: pickNonCategoryTagIdsFromApiTransaction(transaction),

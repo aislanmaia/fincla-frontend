@@ -1871,16 +1871,31 @@ export interface Transfer {
 
 /** Body para criar um ajuste de saldo (reconciliação). */
 export interface CreateBalanceAdjustmentRequest {
-  amount: number; // delta com sinal, != 0
+  /**
+   * Delta com sinal. Obrigatório e != 0 APENAS quando `asserted_balance` é omitido.
+   * Com `asserted_balance` presente, é só auditoria ("de quanto foi o acerto").
+   */
+  amount?: number | null;
   reason: string; // justificativa obrigatória (1..500)
   date?: string | null; // "YYYY-MM-DD"; default: agora; futura é rejeitada
+  /**
+   * Saldo que o usuário AFIRMA ter na conta nessa data — vira a âncora do cálculo.
+   * PREFIRA mandá-lo: é exatamente o "Saldo desejado" que a UI já pede. Omitido, o
+   * backend deriva de (saldo vigente + amount), que é compatibilidade com clientes
+   * antigos — o delta foi calculado contra o saldo que a tela exibia, não contra o
+   * saldo daquela data.
+   */
+  asserted_balance?: number;
 }
 
 /** Ajuste de saldo retornado pela API. NÃO é transação (fora de receita/despesa). */
 export interface BalanceAdjustment {
   id: string;
   account_id: string;
+  /** Delta — histórico/auditoria; NÃO participa mais do cálculo do saldo. */
   amount: number;
+  /** O saldo afirmado nessa data; é ele que ancora o cálculo daí para frente. */
+  asserted_balance: number;
   date: string; // datetime
   reason: string;
   created_by: string | null;

@@ -31,7 +31,17 @@ function cents(n) {
  * Ajuste de saldo (reconciliação). O usuário informa o SALDO DESEJADO; o app
  * calcula o delta (= desejado − atual). NÃO é receita/despesa — só desloca o saldo.
  */
-export function AdjustBalanceModal({ account, onClose, onSubmit, isSaving, error, loadAdjustments, onDeleteAdjustment }) {
+export function AdjustBalanceModal({
+  account,
+  onClose,
+  onSubmit,
+  isSaving,
+  error,
+  loadAdjustments,
+  onDeleteAdjustment,
+  /** `({ accountId, ymd }) => ({count, total})` — quanto este acerto passa a cobrir. */
+  countCoveredEntries,
+}) {
   const current = Number(account?.balance || 0);
   const [desired, setDesired] = useState("");
   const [date, setDate] = useState(todayISO());
@@ -53,11 +63,17 @@ export function AdjustBalanceModal({ account, onClose, onSubmit, isSaving, error
   const desiredNum = parseBRL(desired);
   const delta = (cents(desiredNum) - cents(current)) / 100;
   const hasDesired = desired.trim() !== "";
-  const canSave = hasDesired && cents(delta) !== 0 && reason.trim() !== "" && !isSaving;
+  // Sem exigir delta != 0: reafirmar o saldo que a tela já mostra é a forma natural
+  // de fixar uma âncora numa data, e o backend passou a aceitar isso.
+  const canSave = hasDesired && reason.trim() !== "" && !isSaving;
 
   function handleSubmit() {
     if (!canSave) return;
-    onSubmit({ amount: delta, reason: reason.trim(), date });
+    // `asserted_balance` é o que o usuário DIGITOU; o `amount` vai junto só como
+    // auditoria. Antes mandávamos só o delta e o backend derivava a afirmação a
+    // partir dele — mas o delta foi calculado contra o saldo que ESTA tela exibia
+    // (corte "agora"), que não é necessariamente o saldo da data escolhida.
+    onSubmit({ amount: delta, asserted_balance: desiredNum, reason: reason.trim(), date });
   }
 
   async function handleDelete(id) {
@@ -73,6 +89,17 @@ export function AdjustBalanceModal({ account, onClose, onSubmit, isSaving, error
   }
 
   const deltaColor = delta > 0 ? T.green : delta < 0 ? T.red : T.inkLight;
+
+  // Quantos lançamentos este acerto passaria a cobrir. Calculado sob demanda: o
+  // usuário merece ver o tamanho do efeito ANTES de confirmar, não descobrir depois
+  // que o saldo parou de responder aos lançamentos antigos.
+  const coverage = React.useMemo(
+    () =>
+      typeof countCoveredEntries === "function" && account?.id && date
+        ? countCoveredEntries({ accountId: account.id, ymd: date })
+        : null,
+    [countCoveredEntries, account?.id, date],
+  );
 
   return (
     <ModalShell
@@ -146,10 +173,29 @@ export function AdjustBalanceModal({ account, onClose, onSubmit, isSaving, error
         />
       </div>
 
-      <div style={{ ...G, display: "flex", alignItems: "center", gap: 7, fontSize: 11, color: T.inkGhost, marginTop: 12 }}>
-        <span style={{ width: 7, height: 7, borderRadius: 9999, background: T.inkGhost, flex: "0 0 7px" }} />
-        Não conta como receita ou despesa — só corrige o saldo a partir da data.
+      <div style={{ ...G, display: "flex", alignItems: "flex-start", gap: 7, fontSize: 11, color: T.inkGhost, marginTop: 12 }}>
+        <span style={{ width: 7, height: 7, borderRadius: 9999, background: T.inkGhost, flex: "0 0 7px", marginTop: 4 }} />
+        <span>
+          Não conta como receita ou despesa. <strong>Deste dia em diante o saldo passa a
+          ser calculado a partir deste valor</strong> — lançamentos anteriores a{" "}
+          {String(date).split("-").reverse().join("/")} deixam de alterá-lo, porque já
+          estão contemplados no que você está afirmando.
+        </span>
       </div>
+      {coverage && coverage.count > 0 ? (
+        <div style={{ ...G, display: "flex", alignItems: "flex-start", gap: 7, fontSize: 11.5,
+          color: T.amber, background: T.amberLight, borderRadius: 9, padding: "8px 10px", marginTop: 8 }}>
+          <span aria-hidden="true">⏳</span>
+          <span>
+            {coverage.count === 1
+              ? "1 lançamento desta conta"
+              : `${coverage.count} lançamentos desta conta`}{" "}
+            ({formatBRL(coverage.total)}) {coverage.count === 1 ? "passa" : "passam"} a ser
+            {coverage.count === 1 ? " coberto" : " cobertos"} por este acerto e não
+            {coverage.count === 1 ? " altera" : " alteram"} mais o saldo.
+          </span>
+        </div>
+      ) : null}
 
       {/* Histórico */}
       <div style={{ marginTop: 18, borderTop: `1px solid ${T.border}`, paddingTop: 14 }}>
