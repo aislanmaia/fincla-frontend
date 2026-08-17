@@ -128,20 +128,46 @@ export function calcMood(day, budgetPct, freePct, daysInMonth = 31) {
  * Saudação do humor, corrigida pelo ritmo real (issue #67).
  *
  * A faixa `watchful` vai de 0,95 a 1,10, ou seja de *ligeiramente abaixo* do ritmo
- * até 10% acima. Na metade de baixo, `ratio < 1` significa gastar mais devagar do
- * que o mês passa — e a tela dizia "você está acelerando" ao lado de um
- * "R$ X à frente do ritmo esperado ✓". Os dois liam o mesmo número e discordavam.
+ * até 10% acima. Na metade de baixo o usuário gasta mais devagar do que o período
+ * passa — e a tela dizia "você está acelerando" ao lado de um "R$ X à frente do
+ * ritmo esperado ✓". Os dois liam o mesmo número e discordavam.
  *
- * Aqui a copy para de afirmar aceleração quando ela não existe. O LIMIAR fica como
- * está de propósito: movê-lo de 0,95 para 1,0 muda a régua de humor de todos os
- * usuários, e o 0,95 pode ter sido escolhido para avisar cedo — é decisão de
- * produto, registrada na #67, e vira uma linha quando for tomada.
+ * `aheadOfPace` é passado pelo chamador com EXATAMENTE a mesma expressão que decide
+ * o "à frente / acima" (`spendPct <= timePct`), e não um ratio recalculado. Não é
+ * preciosismo: `timePct` é arredondado e o ratio não, então derivar cada frase da
+ * sua própria conta deixa uma faixa estreita em que elas voltam a discordar — 37
+ * combinações de (dia, dias-no-período) fazem isso. Compartilhando a expressão, a
+ * contradição fica impossível por construção, não por coincidência numérica.
+ *
+ * O LIMIAR fica como está de propósito: movê-lo de 0,95 para 1,0 muda a régua de
+ * humor de todos os usuários, e o 0,95 pode ter sido escolhido para avisar cedo —
+ * é decisão de produto, registrada na #67, e vira uma linha quando for tomada.
  */
-export function moodGreeting(moodKey, ratio) {
-  if (moodKey === "watchful" && Number.isFinite(ratio) && ratio <= 1) {
-    return "Ritmo apertado — perto do limite do mês.";
+export function moodGreeting(moodKey, aheadOfPace) {
+  if (moodKey === "watchful" && aheadOfPace) {
+    return "Ritmo apertado — perto do limite do período.";
   }
   return MOODS[moodKey]?.greeting ?? "";
+}
+
+/**
+ * Conselho do card de insight, na mesma régua da saudação.
+ *
+ * `watchful` era uma string fixa — "Reduza cerca de R$ 80/dia" — que renderizava
+ * logo abaixo de "R$ X à frente do ritmo esperado ✓": a mesma contradição da #67,
+ * um card mais abaixo. E os R$ 80 eram constante mágica, sem relação com os dados
+ * do usuário, enquanto todas as outras faixas usam `dailyBudget`.
+ */
+export function moodInsightBody(moodKey, { aheadOfPace, dailyBudgetLabel, daysLeft, periodPhrase }) {
+  return {
+    serene: `Com ${daysLeft} dias restantes no período, você pode gastar até ${dailyBudgetLabel}/dia com folga.`,
+    healthy: `Ritmo equilibrado — tente manter ${dailyBudgetLabel}/dia pelos próximos ${daysLeft} dias.`,
+    watchful: aheadOfPace
+      ? `Ainda à frente, mas com pouca folga — manter ${dailyBudgetLabel}/dia fecha o período no zero.`
+      : `Reduza para cerca de ${dailyBudgetLabel}/dia para fechar o período no zero. Revise categorias variáveis.`,
+    tense: `Limite gastos a ${dailyBudgetLabel}/dia para não estourar o orçamento no período (${periodPhrase}).`,
+    alert: "Evite novas despesas e avalie pausar recorrências não essenciais esta semana.",
+  }[moodKey];
 }
 
 export function getMoodActions(moodKey) {

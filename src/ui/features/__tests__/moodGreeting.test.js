@@ -1,15 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { calcMood, moodGreeting, moodRatio } from "../moodV4.jsx";
+import { calcMood, moodGreeting, moodInsightBody, moodRatio } from "../moodV4.jsx";
 
 /**
  * O invariante que a issue #67 pede: para o mesmo par (gasto, dia), o humor e a
  * frase "à frente / acima" não podem discordar de sinal.
  *
- * `ratio < 1` = gastou mais devagar do que o mês passou = a tela mostra
- * "R$ X à frente do ritmo esperado ✓". Nesse caso nenhuma saudação pode afirmar
- * que o usuário está acelerando.
+ * A tela decide "à frente" com `spendPct <= timePct`, e `timePct` é ARREDONDADO
+ * (`DashboardPage.jsx`). Reproduzimos essa expressão exatamente — derivar o teste
+ * de um ratio cru esconderia a fresta em que as duas frases voltam a discordar.
  */
-const isAheadOfPace = (spendPct, timePct) => spendPct <= timePct;
+const timePctAsRendered = (day, dim) => Math.round((day / Math.max(dim, 1)) * 100);
+const isAheadOfPace = (spendPct, day, dim) => spendPct <= timePctAsRendered(day, dim);
 
 describe("moodGreeting — não contradiz o 'à frente do ritmo' (#67)", () => {
   it("o caso real da issue: dia 16/31, 49,24% do envelope", () => {
@@ -21,48 +22,85 @@ describe("moodGreeting — não contradiz o 'à frente do ritmo' (#67)", () => {
     // A faixa continua sendo watchful — o limiar 0.95 NÃO foi mexido.
     expect(calcMood(day, spendPct, freePct, dim)).toBe("watchful");
     // ...mas a frase para de afirmar aceleração.
-    const greeting = moodGreeting("watchful", moodRatio(day, spendPct, dim));
+    const greeting = moodGreeting("watchful", isAheadOfPace(spendPct, day, dim));
     expect(greeting).not.toMatch(/acelerando/i);
     expect(greeting).toMatch(/Ritmo apertado/i);
   });
 
-  it("varre a faixa 0,95–1,0: abaixo do ritmo nunca diz 'acelerando'", () => {
-    const dim = 31;
-    for (let day = 1; day <= dim; day += 1) {
-      const timePct = (day / dim) * 100;
-      // ratio de 0,955 a 1,0 — a metade de baixo da faixa watchful
-      for (const target of [0.955, 0.97, 0.99, 1.0]) {
-        const spendPct = timePct * target;
-        if (!isAheadOfPace(spendPct, timePct)) continue;
-        const mood = calcMood(day, spendPct, 50, dim);
-        const greeting = moodGreeting(mood, moodRatio(day, spendPct, dim));
-        expect(
-          greeting,
-          `dia ${day}, ratio ${target}: gasto abaixo do ritmo não pode dizer "acelerando"`,
-        ).not.toMatch(/acelerando/i);
+  it("varredura exaustiva: nenhum par (dia, gasto) pode dizer 'acelerando' estando à frente", () => {
+    const offenders = [];
+    for (const dim of [28, 29, 30, 31]) {
+      for (let day = 1; day <= dim; day += 1) {
+        // centésimos de ponto percentual cobrem a fresta do arredondamento:
+        // `timePct` arredonda para cima e um ratio cru não, então existe uma faixa
+        // `exato < spendPct <= round(exato)` onde a tela diz "à frente ✓" e um
+        // ratio > 1 ainda diria "acelerando". O review enumerou 37 casos assim.
+        for (let pct = 0; pct <= 250; pct += 1) {
+          const spendPct = pct / 2;
+          const ahead = isAheadOfPace(spendPct, day, dim);
+          if (!ahead) continue;
+          const mood = calcMood(day, spendPct, 50, dim);
+          const greeting = moodGreeting(mood, ahead);
+          if (/acelerando/i.test(greeting)) {
+            offenders.push({ dim, day, spendPct, ratio: moodRatio(day, spendPct, dim) });
+          }
+        }
       }
     }
+    expect(offenders).toEqual([]);
   });
 
   it("acima do ritmo continua dizendo que está acelerando", () => {
     const day = 16;
     const dim = 31;
-    const timePct = (day / dim) * 100;
-    const spendPct = timePct * 1.05; // 5% acima
+    const spendPct = timePctAsRendered(day, dim) * 1.05; // 5% acima
     expect(calcMood(day, spendPct, 50, dim)).toBe("watchful");
-    expect(moodGreeting("watchful", moodRatio(day, spendPct, dim))).toMatch(/acelerando/i);
+    expect(moodGreeting("watchful", isAheadOfPace(spendPct, day, dim))).toMatch(/acelerando/i);
   });
 
   it("não mexe nas outras faixas", () => {
-    expect(moodGreeting("serene", 0.5)).toMatch(/respiram bem/i);
-    expect(moodGreeting("healthy", 0.9)).toMatch(/equilibrado/i);
-    expect(moodGreeting("tense", 1.2)).toMatch(/pressionado/i);
-    expect(moodGreeting("alert", 1.5)).toMatch(/crítica/i);
+    expect(moodGreeting("serene", true)).toMatch(/respiram bem/i);
+    expect(moodGreeting("healthy", true)).toMatch(/equilibrado/i);
+    expect(moodGreeting("tense", false)).toMatch(/pressionado/i);
+    expect(moodGreeting("alert", false)).toMatch(/crítica/i);
   });
 
-  it("ratio inválido (envelope zero) cai na saudação padrão, sem quebrar", () => {
-    expect(moodGreeting("watchful", Number.NaN)).toMatch(/acelerando/i);
-    expect(moodGreeting("watchful", Number.POSITIVE_INFINITY)).toMatch(/acelerando/i);
+  it("fala em 'período', não em 'mês' — o intervalo é escolhido pelo usuário", () => {
+    // O resto da tela diz "do período" (KPIs, "Sobra do período"); dizer "do mês"
+    // numa faixa custom de 90 dias contradiz o próprio card.
+    expect(moodGreeting("watchful", true)).not.toMatch(/do mês/i);
+    expect(moodGreeting("watchful", true)).toMatch(/do período/i);
+  });
+});
+
+describe("moodInsightBody — o conselho não contradiz o número acima dele", () => {
+  const base = { dailyBudgetLabel: "R$ 120,00", daysLeft: 15, periodPhrase: "este mês" };
+
+  it("estando à frente, não manda reduzir", () => {
+    const body = moodInsightBody("watchful", { ...base, aheadOfPace: true });
+    expect(body).not.toMatch(/reduza/i);
+    expect(body).toMatch(/à frente/i);
+  });
+
+  it("estando acima, manda reduzir", () => {
+    const body = moodInsightBody("watchful", { ...base, aheadOfPace: false });
+    expect(body).toMatch(/reduza/i);
+  });
+
+  it("usa o orçamento diário do usuário, não uma constante mágica", () => {
+    // Era "Reduza cerca de R$ 80/dia" — número fixo, sem relação com os dados.
+    for (const ahead of [true, false]) {
+      const body = moodInsightBody("watchful", { ...base, aheadOfPace: ahead });
+      expect(body).toContain("R$ 120,00");
+      expect(body).not.toContain("R$ 80");
+    }
+  });
+
+  it("as outras faixas seguem iguais", () => {
+    expect(moodInsightBody("serene", { ...base, aheadOfPace: true })).toMatch(/com folga/i);
+    expect(moodInsightBody("healthy", { ...base, aheadOfPace: true })).toMatch(/equilibrado/i);
+    expect(moodInsightBody("tense", { ...base, aheadOfPace: false })).toMatch(/Limite gastos/i);
+    expect(moodInsightBody("alert", { ...base, aheadOfPace: false })).toMatch(/Evite novas despesas/i);
   });
 });
 

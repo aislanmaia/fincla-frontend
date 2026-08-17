@@ -33,7 +33,7 @@ import {
   M_MONO,
   MOODS,
   moodGreeting,
-  moodRatio,
+  moodInsightBody,
   RhythmTooltipV4,
   calcMood,
 } from "../features/moodV4";
@@ -243,6 +243,11 @@ export function DashboardPage({
   const timePct = Math.round((day / Math.max(dim, 1)) * 100);
   const spendPct =
     envelope > 0 ? Math.min(250, (exp / envelope) * 100) : 0;
+  // Fonte única do "está à frente?": a saudação, o conselho do insight e o número
+  // "R$ X à frente/acima" saem todos daqui. Recalcular em cada lugar reabre a
+  // contradição da #67 numa faixa estreita — `timePct` é arredondado e um ratio
+  // cru não é, e 37 combinações de (dia, dias-no-período) caem nessa fresta.
+  const aheadOfPace = spendPct <= timePct;
   const freePctMood =
     inc > 0
       ? Math.min(100, Math.max(0, (bal / inc) * 100))
@@ -257,7 +262,7 @@ export function DashboardPage({
   const mood = MOODS[moodKey];
   // A saudação depende do ritmo, não só da faixa: dentro de `watchful`, ratio <= 1
   // é gasto ABAIXO do esperado e não pode ser anunciado como aceleração (#67).
-  const moodGreetingText = moodGreeting(moodKey, moodRatio(day, spendPct, dim));
+  const moodGreetingText = moodGreeting(moodKey, aheadOfPace);
   const moodActions = getMoodActions(moodKey);
   const kpiPeriodPhrase = useMemo(
     () =>
@@ -304,19 +309,18 @@ export function DashboardPage({
 
   const { Icon: MoodIcon, InsightIcon } = mood;
   const insightStat =
-    spendPct <= timePct
+    aheadOfPace
       ? `R$ ${Math.abs(Math.round((envelope * (timePct - spendPct)) / 100))} à frente`
       : `R$ ${Math.abs(Math.round((envelope * (spendPct - timePct)) / 100))} acima`;
 
   const rhythmVsProj = Math.round((envelope * (timePct - spendPct)) / 100);
 
-  const insightBody = {
-    serene: `Com ${daysLeftInRange} dias restantes no período, você pode gastar até ${fmtAbs(dailyBudget)}/dia com folga.`,
-    healthy: `Ritmo equilibrado — tente manter ${fmtAbs(dailyBudget)}/dia pelos próximos ${daysLeftInRange} dias.`,
-    watchful: "Reduza cerca de R$ 80/dia para fechar o mês no zero. Revise categorias variáveis.",
-    tense: `Limite gastos a ${fmtAbs(dailyBudget)}/dia para não estourar o orçamento no período (${kpiPeriodPhrase}).`,
-    alert: "Evite novas despesas e avalie pausar recorrências não essenciais esta semana.",
-  }[moodKey];
+  const insightBody = moodInsightBody(moodKey, {
+    aheadOfPace,
+    dailyBudgetLabel: fmtAbs(dailyBudget),
+    daysLeft: daysLeftInRange,
+    periodPhrase: kpiPeriodPhrase,
+  });
 
   /** KPI "Saldo em conta" — dinheiro real nas contas, independente do período.
    *
