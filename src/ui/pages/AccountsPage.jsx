@@ -11,6 +11,7 @@ import { AdjustBalanceModal } from "../features/accounts/AdjustBalanceModal.jsx"
 import { ConfirmDialog } from "../features/accounts/ConfirmDialog.jsx";
 import { entriesCoveredBy } from "../features/accounts/balanceAnchors.js";
 import { fetchAllTransactionsPages, mapApiTransactionToUi } from "../data/transactionsAdapter.js";
+import { getAccountBalance } from "../../api/balances";
 
 const menuItemStyle = {
   ...G,
@@ -50,9 +51,20 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
       return undefined;
     }
     let cancelled = false;
-    fetchAllTransactionsPages({ organization_id: organizationId })
-      .then((rows) => {
-        if (!cancelled) setEntriesForCoverage((rows ?? []).map(mapApiTransactionToUi));
+    fetchAllTransactionsPages({
+      organization_id: organizationId,
+      // Só liquidados: o backend só soma `status='paid'` no saldo, então pendente não
+      // é coberto por âncora nenhuma e contá-lo inflaria o aviso. Também corta o
+      // volume — abrir o modal puxava o histórico INTEIRO da org em páginas de 100
+      // sequenciais. O endpoint não filtra por conta; o resto é client-side.
+      settled: true,
+    })
+      .then((response) => {
+        // `fetchAllTransactionsPages` devolve `{ data, pagination }`, não um array —
+        // o `.map` direto estourava dentro do `.then`, caía no `.catch` abaixo, e o
+        // aviso de cobertura nunca aparecia em produção. Os testes não pegaram porque
+        // injetam `countCoveredEntries`.
+        if (!cancelled) setEntriesForCoverage((response?.data ?? []).map(mapApiTransactionToUi));
       })
       .catch(() => {
         // Sem os lançamentos o modal simplesmente não mostra o aviso — melhor do que
@@ -67,6 +79,13 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
   const countCoveredEntries = React.useCallback(
     (target) => entriesCoveredBy(entriesForCoverage, target),
     [entriesForCoverage],
+  );
+
+  /** Saldo da conta NAQUELA data — é contra ele que o acerto tem de ser calculado. */
+  const loadBalanceAt = React.useCallback(
+    (accountId, ymd) =>
+      getAccountBalance(accountId, organizationId, ymd).then((row) => row?.balance),
+    [organizationId],
   );
   const accountModalOpen = showNova || !!editAccount;
   const canTransfer = accounts.length >= 2;
@@ -278,6 +297,7 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
           loadAdjustments={data.listAdjustments}
           onDeleteAdjustment={data.deleteAdjustment}
           countCoveredEntries={countCoveredEntries}
+          loadBalanceAt={loadBalanceAt}
         />
       ) : null}
 

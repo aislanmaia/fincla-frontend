@@ -39,10 +39,19 @@ export function AdjustBalanceModal({
   error,
   loadAdjustments,
   onDeleteAdjustment,
-  /** `({ accountId, ymd }) => ({count, total})` — quanto este acerto passa a cobrir. */
+  /** `({ accountId, ymd, sinceYmd }) => ({count, total})` — o que este acerto cobre. */
   countCoveredEntries,
+  /** `(accountId, ymd) => Promise<number>` — saldo da conta NAQUELA data. */
+  loadBalanceAt,
 }) {
-  const current = Number(account?.balance || 0);
+  const balanceToday = Number(account?.balance || 0);
+  // Saldo da DATA escolhida. Sem isto, o delta era calculado contra o saldo de HOJE
+  // enquanto o backend passou a ancorar o valor digitado NAQUELE DIA: o usuário
+  // conciliava contra o extrato de 01/08, digitava 800, a tela mostrava "ajuste
+  // −R$ 200" e o saldo final virava 1300 (800 + o que entrou desde então). Um número
+  // na tela, outro no servidor — exatamente o que esta fatia existe para impedir.
+  const [balanceAtDate, setBalanceAtDate] = useState(null);
+  const current = balanceAtDate ?? balanceToday;
   const [desired, setDesired] = useState("");
   const [date, setDate] = useState(todayISO());
   const [reason, setReason] = useState("");
@@ -59,6 +68,24 @@ export function AdjustBalanceModal({
   useEffect(() => {
     refreshHistory();
   }, [refreshHistory]);
+
+  useEffect(() => {
+    if (typeof loadBalanceAt !== "function" || !account?.id || !date) return undefined;
+    let cancelled = false;
+    setBalanceAtDate(null);
+    loadBalanceAt(account.id, date)
+      .then((value) => {
+        if (!cancelled && Number.isFinite(Number(value))) setBalanceAtDate(Number(value));
+      })
+      .catch(() => {
+        // Cai no saldo de hoje. Só é impreciso quando a data escolhida é passada, e
+        // aí o rótulo abaixo deixa de prometer que é o saldo daquele dia.
+        if (!cancelled) setBalanceAtDate(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadBalanceAt, account?.id, date]);
 
   const desiredNum = parseBRL(desired);
   const delta = (cents(desiredNum) - cents(current)) / 100;
@@ -93,12 +120,22 @@ export function AdjustBalanceModal({
   // Quantos lançamentos este acerto passaria a cobrir. Calculado sob demanda: o
   // usuário merece ver o tamanho do efeito ANTES de confirmar, não descobrir depois
   // que o saldo parou de responder aos lançamentos antigos.
+  /** Âncora que já existe nesta conta — o que ela cobre não "passa" a ser coberto. */
+  const currentAnchorYmd = React.useMemo(() => {
+    if (!Array.isArray(history) || history.length === 0) return "";
+    return history
+      .map((adj) => String(adj.date ?? "").slice(0, 10))
+      .filter(Boolean)
+      .sort()
+      .at(-1) ?? "";
+  }, [history]);
+
   const coverage = React.useMemo(
     () =>
       typeof countCoveredEntries === "function" && account?.id && date
-        ? countCoveredEntries({ accountId: account.id, ymd: date })
+        ? countCoveredEntries({ accountId: account.id, ymd: date, sinceYmd: currentAnchorYmd })
         : null,
-    [countCoveredEntries, account?.id, date],
+    [countCoveredEntries, account?.id, date, currentAnchorYmd],
   );
 
   return (
@@ -126,7 +163,11 @@ export function AdjustBalanceModal({
       </div>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 10 }}>
-        <span style={{ ...G, fontSize: 12, color: T.inkMid }}>Saldo atual</span>
+        <span style={{ ...G, fontSize: 12, color: T.inkMid }}>
+          {balanceAtDate != null && date !== todayISO()
+            ? `Saldo em ${String(date).split("-").reverse().join("/")}`
+            : "Saldo atual"}
+        </span>
         <span style={{ ...G, ...NUM, fontSize: 15, fontWeight: 700, color: T.ink }}>{formatBRL(current)}</span>
       </div>
 
@@ -177,9 +218,10 @@ export function AdjustBalanceModal({
         <span style={{ width: 7, height: 7, borderRadius: 9999, background: T.inkGhost, flex: "0 0 7px", marginTop: 4 }} />
         <span>
           Não conta como receita ou despesa. <strong>Deste dia em diante o saldo passa a
-          ser calculado a partir deste valor</strong> — lançamentos anteriores a{" "}
-          {String(date).split("-").reverse().join("/")} deixam de alterá-lo, porque já
-          estão contemplados no que você está afirmando.
+          ser calculado a partir deste valor</strong> — lançamentos de{" "}
+          {String(date).split("-").reverse().join("/")} (inclusive) para trás deixam de
+          alterá-lo, porque já estão contemplados no que você está afirmando. O acerto
+          cobre o dia inteiro, como o fechamento de um extrato.
         </span>
       </div>
       {coverage && coverage.count > 0 ? (
@@ -190,9 +232,13 @@ export function AdjustBalanceModal({
             {coverage.count === 1
               ? "1 lançamento desta conta"
               : `${coverage.count} lançamentos desta conta`}{" "}
-            ({formatBRL(coverage.total)}) {coverage.count === 1 ? "passa" : "passam"} a ser
+            {coverage.count === 1 ? "passa" : "passam"} a ser
             {coverage.count === 1 ? " coberto" : " cobertos"} por este acerto e não
-            {coverage.count === 1 ? " altera" : " alteram"} mais o saldo.
+            {coverage.count === 1 ? " altera" : " alteram"} mais o saldo
+            {coverage.net !== 0
+              ? ` (efeito líquido de ${coverage.net > 0 ? "+" : "−"}${formatBRL(Math.abs(coverage.net))})`
+              : ""}
+            .
           </span>
         </div>
       ) : null}

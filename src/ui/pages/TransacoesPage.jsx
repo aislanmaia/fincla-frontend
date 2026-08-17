@@ -248,7 +248,7 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor }) => {
               tem como saber por quê — o modelo de âncora trocaria um erro silencioso
               por outro. É esta marca que fecha o ciclo. */}
           {coveringAnchor && (
-            <Tip label={`Você acertou o saldo desta conta em ${coveringAnchor.ymd.split("-").reverse().join("/")}. Este lançamento é anterior ao acerto, então já está contemplado nele e não altera o saldo.`}>
+            <Tip label={`Você acertou o saldo desta conta em ${coveringAnchor.ymd.split("-").reverse().join("/")}. O acerto cobre esse dia inteiro, então este lançamento já está contemplado nele e não altera o saldo.`}>
               <span style={{ ...G, fontSize:11, color:T.inkMid, background:T.grayLight,
                 borderRadius:99, padding:"1px 6px", fontWeight:600 }}>⚓ Já no acerto</span>
             </Tip>

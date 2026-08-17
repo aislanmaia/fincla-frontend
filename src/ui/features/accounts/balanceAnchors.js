@@ -51,7 +51,10 @@ export function latestAnchorByAccount(adjustments) {
     const ymd = toYmd(adj.date);
     if (!ymd) continue;
     const current = byAccount[accountId];
-    const key = [ymd, String(adj.created_at ?? ""), String(adj.id ?? "")];
+    // Data CRUA no primeiro componente, como o `ORDER BY date DESC` do backend.
+    // Truncar para o dia inverteria a escolha entre dois ajustes do mesmo dia cuja
+    // ordem por `date` difere da ordem por `created_at`.
+    const key = [String(adj.date ?? ""), String(adj.created_at ?? ""), String(adj.id ?? "")];
     if (current && !(key > current._key)) continue;
     byAccount[accountId] = {
       _key: key,
@@ -83,7 +86,13 @@ export function anchorCovering(entry, anchorsByAccount) {
   if (!accountId) return null;
   const anchor = anchorsByAccount?.[accountId];
   if (!anchor) return null;
-  // Caixa: quando pago, vale `paidAt`; senão a competência — igual ao backend.
+  // SÓ liquidado. O backend só soma `status='paid'`, então um pendente não é
+  // "coberto pela âncora" — ele simplesmente não entra no saldo, por outro motivo.
+  // Marcá-lo colocaria a mensagem "já está contemplado no acerto" ao lado do badge
+  // "A pagar", que diz o contrário. E pior: `PATCH /settle` grava `paid_at = agora`,
+  // então ao liquidá-lo o caixa cai DEPOIS da âncora e o saldo se move — logo após a
+  // UI ter prometido que não se moveria.
+  if (!entry?.settled) return null;
   const cash = toYmd(entry.paidAt ?? entry.paid_at ?? entry.dateIsoForEdit ?? entry.date);
   if (!cash) return null;
   return cash <= anchor.ymd ? anchor : null;
@@ -95,17 +104,26 @@ export function anchorCovering(entry, anchorsByAccount) {
  * Alimenta o aviso do modal: aplicar um acerto em data retroativa silencia tudo que
  * veio antes, e o usuário merece ver o tamanho disso ANTES de confirmar.
  */
-export function entriesCoveredBy(entries, { accountId, ymd }) {
-  if (!accountId || !ymd) return { count: 0, total: 0 };
+export function entriesCoveredBy(entries, { accountId, ymd, sinceYmd = "" }) {
+  if (!accountId || !ymd) return { count: 0, total: 0, net: 0 };
   let count = 0;
-  let total = 0;
+  let net = 0;
   for (const entry of entries ?? []) {
     const entryAccount = entry?.accountId ?? entry?.account_id;
     if (entryAccount !== accountId) continue;
+    // Pendente não é coberto por âncora nenhuma: o saldo só soma liquidado.
+    if (entry.settled === false) continue;
     const cash = toYmd(entry.paidAt ?? entry.paid_at ?? entry.dateIsoForEdit ?? entry.date);
     if (!cash || cash > ymd) continue;
+    // Limite inferior na âncora que JÁ existe: o que ela cobre não passa a ser
+    // coberto por nada — já estava. Sem isto o aviso anunciava "203 lançamentos"
+    // onde só 3 mudam de situação, e assusta o usuário para longe de uma
+    // reconciliação correta.
+    if (sinceYmd && cash <= sinceYmd) continue;
     count += 1;
-    total += Math.abs(Number(entry.val ?? entry.value ?? 0));
+    net += Number(entry.val ?? entry.value ?? 0);
   }
-  return { count, total };
+  // `net` (com sinal), não a soma de valores absolutos: misturar receita e despesa em
+  // módulo produzia um número que não bate com nada que o usuário possa conferir.
+  return { count, total: Math.abs(net), net };
 }
