@@ -80,7 +80,7 @@ describe("latestAnchorByAccount", () => {
 
   it("não vaza a chave interna de ordenação", () => {
     const anchors = latestAnchorByAccount([adj()]);
-    expect(Object.keys(anchors["acc-1"]).sort()).toEqual(["assertedBalance", "reason", "ymd"]);
+    expect(Object.keys(anchors["acc-1"]).sort()).toEqual(["assertedBalance", "kind", "reason", "ymd"]);
   });
 });
 
@@ -155,5 +155,108 @@ describe("entriesCoveredBy", () => {
   it("devolve zero sem conta ou sem data", () => {
     expect(entriesCoveredBy(entries, { accountId: null, ymd: "2026-08-13" }).count).toBe(0);
     expect(entriesCoveredBy(entries, { accountId: "acc-1", ymd: "" }).count).toBe(0);
+  });
+});
+
+
+describe("âncora implícita do saldo de abertura (achado 10 / #72)", () => {
+  const conta = (over = {}) => ({
+    id: "acc-1",
+    initial_balance: 1000,
+    initial_date: "2026-06-01",
+    ...over,
+  });
+
+  it("conta com saldo de abertura declarado vira âncora, mesmo sem ajuste nenhum", () => {
+    // O backend põe piso em `initial_date` sempre que `initial_balance <> 0`, SEM
+    // linha em balance_adjustments. Enxergar só o feed deixava essas contas sem
+    // explicação: o lançamento anterior sumia do saldo em silêncio.
+    const anchors = latestAnchorByAccount([], [conta()]);
+    expect(anchors["acc-1"]).toMatchObject({ ymd: "2026-06-01", kind: "opening", assertedBalance: 1000 });
+  });
+
+  it("saldo de abertura ZERO não é afirmação nenhuma — sem âncora", () => {
+    // Caso 3 do backend: sem piso. `Account.create` carimba initial_date com a data
+    // de criação, então pôr piso aqui apagaria histórico retroativo legítimo.
+    expect(latestAnchorByAccount([], [conta({ initial_balance: 0 })])).toEqual({});
+  });
+
+  it("o ajuste tem precedência sobre o saldo de abertura", () => {
+    // Espelha o `COALESCE(anchor.boundary, CASE ...)` do backend.
+    const anchors = latestAnchorByAccount([adj({ date: "2026-08-13T12:00:00" })], [conta()]);
+    expect(anchors["acc-1"].kind).toBe("adjustment");
+    expect(anchors["acc-1"].ymd).toBe("2026-08-13");
+  });
+
+  it("abertura NÃO cobre o próprio dia; ajuste cobre — e confundir mente ao contrário", () => {
+    const abertura = latestAnchorByAccount([], [conta({ initial_date: "2026-06-01" })]);
+    const noDia = { accountId: "acc-1", settled: true, paidAt: "2026-06-01T10:00:00" };
+    const antes = { accountId: "acc-1", settled: true, paidAt: "2026-05-31T10:00:00" };
+
+    // Saldo de abertura descreve o que havia ANTES de qualquer movimento registrado,
+    // então o movimento do próprio dia ainda conta no saldo — marcar como coberto
+    // seria dizer que não altera, quando altera.
+    expect(anchorCovering(noDia, abertura)).toBeNull();
+    expect(anchorCovering(antes, abertura)).toBeTruthy();
+
+    // Já o ajuste é conciliação contra o FECHAMENTO do extrato daquele dia.
+    const ajuste = latestAnchorByAccount([adj({ date: "2026-06-01T12:00:00" })]);
+    expect(anchorCovering(noDia, ajuste)).toBeTruthy();
+  });
+
+  it("entriesCoveredBy respeita a fronteira do tipo da âncora atual", () => {
+    const entries = [
+      { accountId: "acc-1", settled: true, date: "01/06/2026", val: -10 },
+      { accountId: "acc-1", settled: true, date: "05/06/2026", val: -20 },
+    ];
+    // Com abertura em 01/06, o lançamento DO DIA 01/06 ainda não estava coberto —
+    // então ele passa a ser coberto por um acerto em 05/06.
+    expect(
+      entriesCoveredBy(entries, {
+        accountId: "acc-1", ymd: "2026-06-05", sinceYmd: "2026-06-01", sinceKind: "opening",
+      }).count,
+    ).toBe(2);
+    // Com ajuste em 01/06, o do dia 01/06 já estava coberto.
+    expect(
+      entriesCoveredBy(entries, {
+        accountId: "acc-1", ymd: "2026-06-05", sinceYmd: "2026-06-01", sinceKind: "adjustment",
+      }).count,
+    ).toBe(1);
+  });
+
+  it("ignora conta sem id ou sem initial_date em vez de quebrar", () => {
+    expect(latestAnchorByAccount([], [{ initial_balance: 500 }])).toEqual({});
+    expect(latestAnchorByAccount([], [conta({ initial_date: null })])).toEqual({});
+    expect(latestAnchorByAccount([], null)).toEqual({});
+  });
+});
+
+
+describe("a fronteira vem da RESPOSTA do ajuste, não de uma constante", () => {
+  const feed = (includes) => [
+    adj({ date: "2026-08-13T12:00:00", includes_same_day: includes }),
+  ];
+  const noDia = { accountId: "acc-1", settled: true, paidAt: "2026-08-13T15:00:00" };
+  const antes = { accountId: "acc-1", settled: true, paidAt: "2026-08-12T15:00:00" };
+
+  it("ajuste 'depois' cobre o próprio dia", () => {
+    const anchors = latestAnchorByAccount(feed(true));
+    expect(anchors["acc-1"].kind).toBe("adjustment");
+    expect(anchorCovering(noDia, anchors)).toBeTruthy();
+  });
+
+  it("ajuste 'antes' NÃO cobre o próprio dia", () => {
+    // O backend põe piso no início do dia para esses. Tratá-los como "depois" faria
+    // a UI dizer "não altera o saldo" sobre um lançamento que altera — mentira sobre
+    // dinheiro, no exato campo que esta PR introduz.
+    const anchors = latestAnchorByAccount(feed(false));
+    expect(anchors["acc-1"].kind).toBe("opening");
+    expect(anchorCovering(noDia, anchors)).toBeNull();
+    expect(anchorCovering(antes, anchors)).toBeTruthy();
+  });
+
+  it("ajuste sem o campo (cliente/linha antiga) segue como 'depois'", () => {
+    const semCampo = latestAnchorByAccount([adj({ date: "2026-08-13T12:00:00" })]);
+    expect(semCampo["acc-1"].kind).toBe("adjustment");
   });
 });

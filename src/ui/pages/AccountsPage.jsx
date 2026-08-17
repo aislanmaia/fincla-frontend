@@ -81,6 +81,18 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
     [entriesForCoverage],
   );
 
+  /** Corrige uma âncora existente e recarrega os saldos — a correção muda o número
+   *  que a tela está mostrando, então esperar o reload seria mostrar valor velho. */
+  const handleEditAdjustment = React.useCallback(
+    async (adj, changes) => {
+      // `run` relança; sem propagar, o modal não sabe que falhou e mostraria a tela
+      // como se tivesse dado certo. O chamador trata e o erro já vai para `data.error`.
+      await data.editAdjustment(adj.id, changes);
+      data.reload();
+    },
+    [data],
+  );
+
   /** Saldo da conta NAQUELA data — é contra ele que o acerto tem de ser calculado. */
   const loadBalanceAt = React.useCallback(
     (accountId, ymd) =>
@@ -298,6 +310,7 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
           onDeleteAdjustment={data.deleteAdjustment}
           countCoveredEntries={countCoveredEntries}
           loadBalanceAt={loadBalanceAt}
+          onEditAdjustment={handleEditAdjustment}
         />
       ) : null}
 

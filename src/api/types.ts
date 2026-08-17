@@ -1886,6 +1886,23 @@ export interface CreateBalanceAdjustmentRequest {
    * saldo daquela data.
    */
   asserted_balance?: number;
+  /**
+   * O saldo afirmado inclui os lançamentos do PRÓPRIO dia?
+   * `true`  = saldo DEPOIS de tudo que aconteceu naquela data (fechamento de extrato)
+   * `false` = saldo ANTES dos lançamentos do dia (saldo anterior, ou início de período)
+   *
+   * NÃO assuma um padrão: os dois casos são frequentes em qualquer data e nada no dado
+   * os distingue — transação não guarda hora. Pergunte ao usuário.
+   */
+  includes_same_day?: boolean;
+}
+
+/** Correção de uma âncora. Só os campos enviados mudam; body vazio → 400. */
+export interface UpdateBalanceAdjustmentRequest {
+  asserted_balance?: number;
+  includes_same_day?: boolean;
+  reason?: string;
+  date?: string; // "YYYY-MM-DD"
 }
 
 /** Ajuste de saldo retornado pela API. NÃO é transação (fora de receita/despesa). */
@@ -1896,10 +1913,14 @@ export interface BalanceAdjustment {
   amount: number;
   /** O saldo afirmado nessa data; é ele que ancora o cálculo daí para frente. */
   asserted_balance: number;
+  /** Ver `CreateBalanceAdjustmentRequest.includes_same_day`. */
+  includes_same_day: boolean;
   date: string; // datetime
   reason: string;
   created_by: string | null;
   created_at: string;
+  /** Diferente de `created_at` => foi editado; a UI mostra "editado em ...". */
+  updated_at: string | null;
 }
 
 // ===== SAÚDE FINANCEIRA · CAPACIDADE DE ECONOMIA (M3) =====
