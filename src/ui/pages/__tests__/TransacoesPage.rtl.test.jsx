@@ -89,6 +89,11 @@ vi.mock("../../../api/balanceAdjustments", () => ({
   listOrgBalanceAdjustments: (...args) => listOrgBalanceAdjustmentsMock(...args),
 }));
 
+const listAccountsMock = vi.fn().mockResolvedValue([]);
+vi.mock("../../../api/accounts", () => ({
+  listAccounts: (...args) => listAccountsMock(...args),
+}));
+
 import { TransacoesPage } from "../TransacoesPage.jsx";
 
 beforeEach(() => {
@@ -513,8 +518,9 @@ describe("<TransacoesPage> — desambiguação de nomes (S2)", { timeout: 15000 
 });
 
 describe("<TransacoesPage> — lançamentos cobertos por âncora (S4)", { timeout: 15000 }, () => {
-  function seed(anchors) {
+  function seed(anchors, accounts = []) {
     listOrgBalanceAdjustmentsMock.mockResolvedValue(anchors);
+    if (accounts.length) listAccountsMock.mockResolvedValue(accounts);
     transactionsDataMock.mockReturnValue({
       isLoading: false, error: "",
       summary: { total_income: 0, total_expenses: 150, total_refunds: 0, balance: -150 },
@@ -548,6 +554,32 @@ describe("<TransacoesPage> — lançamentos cobertos por âncora (S4)", { timeou
 
     expect(await screen.findByText("Compra antiga")).toBeInTheDocument();
     expect(screen.queryByText("⚓ Já no acerto")).not.toBeInTheDocument();
+  });
+
+  it("marca lançamento anterior ao saldo de ABERTURA declarado da conta", async () => {
+    // Achado 10 (#72): essas contas não têm linha em balance_adjustments — a âncora
+    // mora na própria conta. Sem isto, o lançamento anterior sumia do saldo em
+    // silêncio, que é o que esta feature existe para impedir.
+    listAccountsMock.mockResolvedValue([
+      { id: "acc-1", initial_balance: 1000, initial_date: "2026-08-13" },
+    ]);
+    seed([]);
+    renderPage();
+
+    // 10/08 é anterior à abertura em 13/08 -> marcado; 20/08 é posterior -> não.
+    expect(await screen.findByText("⚓ Antes da abertura")).toBeInTheDocument();
+    expect(screen.getAllByText("⚓ Antes da abertura").length).toBe(1);
+  });
+
+  it("saldo de abertura ZERO não marca nada — não é afirmação nenhuma", async () => {
+    listAccountsMock.mockResolvedValue([
+      { id: "acc-1", initial_balance: 0, initial_date: "2026-08-13" },
+    ]);
+    seed([]);
+    renderPage();
+
+    expect(await screen.findByText("Compra antiga")).toBeInTheDocument();
+    expect(screen.queryByText(/⚓/)).not.toBeInTheDocument();
   });
 
   it("não marca nada quando o feed de âncoras falha — avisar no escuro seria pior", async () => {

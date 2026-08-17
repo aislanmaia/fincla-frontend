@@ -34,16 +34,23 @@ export function toYmd(value) {
 }
 
 /**
- * Âncora vigente por conta: a mais recente de cada uma.
+ * Âncora vigente por conta, considerando os DOIS tipos que o backend reconhece.
  *
- * Empate de data é resolvido por `created_at` e, por fim, por `id` — a MESMA ordem
- * do `DISTINCT ON` do backend. Se divergisse, a UI diria que um lançamento está
- * coberto por uma âncora que o backend não usou.
+ * `_account_base_stmt` põe piso de três formas, em ordem de precedência:
+ *
+ *   1. ajuste de saldo  -> piso no FIM do dia do ajuste  (`kind: "adjustment"`)
+ *   2. `initial_balance <> 0` -> piso no INÍCIO de `initial_date` (`kind: "opening"`)
+ *   3. `initial_balance = 0`  -> sem piso                (nenhuma âncora)
+ *
+ * O caso 2 **não tem linha em `balance_adjustments`** — a afirmação mora na própria
+ * conta. Enxergar só o caso 1 deixava a conta com saldo de abertura declarado sem
+ * explicação nenhuma: o lançamento anterior a `initial_date` sumia do saldo em
+ * silêncio, que é exatamente o que esta feature existe para impedir.
  *
  * @param {Array} adjustments feed de `GET /v1/balance-adjustments`
- * @returns {Record<string, {ymd: string, assertedBalance: number, reason: string}>}
+ * @param {Array} accounts    `GET /v1/accounts` (para a âncora implícita)
  */
-export function latestAnchorByAccount(adjustments) {
+export function latestAnchorByAccount(adjustments, accounts = []) {
   const byAccount = {};
   for (const adj of adjustments ?? []) {
     const accountId = adj?.account_id;
@@ -67,7 +74,19 @@ export function latestAnchorByAccount(adjustments) {
   const out = {};
   for (const [accountId, value] of Object.entries(byAccount)) {
     const { _key, ...rest } = value;
-    out[accountId] = rest;
+    out[accountId] = { ...rest, kind: "adjustment" };
+  }
+
+  // Âncora implícita do saldo de abertura — só onde NÃO há ajuste, que tem
+  // precedência (o `COALESCE(anchor.boundary, CASE ...)` do backend).
+  for (const account of accounts ?? []) {
+    const accountId = account?.id;
+    if (!accountId || out[accountId]) continue;
+    const initial = Number(account.initial_balance ?? 0);
+    if (!initial) continue; // caso 3: sem afirmação, sem piso
+    const ymd = toYmd(account.initial_date);
+    if (!ymd) continue;
+    out[accountId] = { ymd, assertedBalance: initial, reason: "", kind: "opening" };
   }
   return out;
 }
@@ -95,7 +114,15 @@ export function anchorCovering(entry, anchorsByAccount) {
   if (!entry?.settled) return null;
   const cash = toYmd(entry.paidAt ?? entry.paid_at ?? entry.dateIsoForEdit ?? entry.date);
   if (!cash) return null;
-  return cash <= anchor.ymd ? anchor : null;
+  // As duas fronteiras NÃO são iguais, e confundi-las mente na direção oposta:
+  //
+  //  - ajuste  -> piso no FIM do dia: o movimento daquele dia já está no valor
+  //               conferido contra o fechamento do extrato. `<=`.
+  //  - abertura -> piso no INÍCIO do dia: um saldo de abertura descreve o que havia
+  //               ANTES de qualquer movimento registrado, então o movimento do
+  //               próprio dia ainda conta. `<`.
+  const covered = anchor.kind === "opening" ? cash < anchor.ymd : cash <= anchor.ymd;
+  return covered ? anchor : null;
 }
 
 /**
@@ -104,7 +131,7 @@ export function anchorCovering(entry, anchorsByAccount) {
  * Alimenta o aviso do modal: aplicar um acerto em data retroativa silencia tudo que
  * veio antes, e o usuário merece ver o tamanho disso ANTES de confirmar.
  */
-export function entriesCoveredBy(entries, { accountId, ymd, sinceYmd = "" }) {
+export function entriesCoveredBy(entries, { accountId, ymd, sinceYmd = "", sinceKind = "adjustment" }) {
   if (!accountId || !ymd) return { count: 0, total: 0, net: 0 };
   let count = 0;
   let net = 0;
@@ -119,7 +146,9 @@ export function entriesCoveredBy(entries, { accountId, ymd, sinceYmd = "" }) {
     // coberto por nada — já estava. Sem isto o aviso anunciava "203 lançamentos"
     // onde só 3 mudam de situação, e assusta o usuário para longe de uma
     // reconciliação correta.
-    if (sinceYmd && cash <= sinceYmd) continue;
+    // Fronteira da âncora ATUAL, com a semântica dela: abertura não cobre o próprio
+    // dia, ajuste cobre. Usar a errada aqui erra a contagem em um dia inteiro.
+    if (sinceYmd && (sinceKind === "opening" ? cash < sinceYmd : cash <= sinceYmd)) continue;
     count += 1;
     net += Number(entry.val ?? entry.value ?? 0);
   }

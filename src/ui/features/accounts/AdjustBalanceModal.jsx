@@ -120,22 +120,34 @@ export function AdjustBalanceModal({
   // Quantos lançamentos este acerto passaria a cobrir. Calculado sob demanda: o
   // usuário merece ver o tamanho do efeito ANTES de confirmar, não descobrir depois
   // que o saldo parou de responder aos lançamentos antigos.
-  /** Âncora que já existe nesta conta — o que ela cobre não "passa" a ser coberto. */
-  const currentAnchorYmd = React.useMemo(() => {
-    if (!Array.isArray(history) || history.length === 0) return "";
-    return history
-      .map((adj) => String(adj.date ?? "").slice(0, 10))
-      .filter(Boolean)
-      .sort()
-      .at(-1) ?? "";
-  }, [history]);
+  /** Âncora que já existe nesta conta — o que ela cobre não "passa" a ser coberto.
+   *
+   *  Pode ser um ajuste anterior OU o saldo de abertura declarado da conta, e as duas
+   *  fronteiras diferem: ajuste cobre o dia inteiro, abertura não cobre o próprio dia.
+   *  Usar a semântica errada aqui erra a contagem em um dia inteiro de lançamentos. */
+  const currentAnchor = React.useMemo(() => {
+    const lastAdjustment = Array.isArray(history) && history.length > 0
+      ? (history.map((adj) => String(adj.date ?? "").slice(0, 10)).filter(Boolean).sort().at(-1) ?? "")
+      : "";
+    if (lastAdjustment) return { ymd: lastAdjustment, kind: "adjustment" };
+    const opening = Number(account?.initial_balance ?? 0);
+    if (opening && account?.initial_date) {
+      return { ymd: String(account.initial_date).slice(0, 10), kind: "opening" };
+    }
+    return { ymd: "", kind: "adjustment" };
+  }, [history, account?.initial_balance, account?.initial_date]);
 
   const coverage = React.useMemo(
     () =>
       typeof countCoveredEntries === "function" && account?.id && date
-        ? countCoveredEntries({ accountId: account.id, ymd: date, sinceYmd: currentAnchorYmd })
+        ? countCoveredEntries({
+            accountId: account.id,
+            ymd: date,
+            sinceYmd: currentAnchor.ymd,
+            sinceKind: currentAnchor.kind,
+          })
         : null,
-    [countCoveredEntries, account?.id, date, currentAnchorYmd],
+    [countCoveredEntries, account?.id, date, currentAnchor],
   );
 
   return (

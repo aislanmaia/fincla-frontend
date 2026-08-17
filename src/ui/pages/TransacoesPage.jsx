@@ -42,6 +42,7 @@ import {
 } from "../features/transactions/filters/index.js";
 import { SavedViewsCards } from "../features/transactions/filters/savedViews/SavedViewsCards.jsx";
 import { shouldShowSavedViewsSection, viewSnapshotsEqual } from "../features/transactions/filters/savedViews/savedViewsModel.js";
+import { listAccounts } from "../../api/accounts";
 import { listOrgBalanceAdjustments } from "../../api/balanceAdjustments";
 import { anchorCovering, latestAnchorByAccount } from "../features/accounts/balanceAnchors.js";
 import {
@@ -248,9 +249,17 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor }) => {
               tem como saber por quê — o modelo de âncora trocaria um erro silencioso
               por outro. É esta marca que fecha o ciclo. */}
           {coveringAnchor && (
-            <Tip label={`Você acertou o saldo desta conta em ${coveringAnchor.ymd.split("-").reverse().join("/")}. O acerto cobre esse dia inteiro, então este lançamento já está contemplado nele e não altera o saldo.`}>
+            <Tip
+              label={
+                coveringAnchor.kind === "opening"
+                  ? `Esta conta foi cadastrada com saldo de abertura em ${coveringAnchor.ymd.split("-").reverse().join("/")}. Este lançamento é anterior a essa data, então já está contemplado no saldo informado e não o altera.`
+                  : `Você acertou o saldo desta conta em ${coveringAnchor.ymd.split("-").reverse().join("/")}. O acerto cobre esse dia inteiro, então este lançamento já está contemplado nele e não altera o saldo.`
+              }
+            >
               <span style={{ ...G, fontSize:11, color:T.inkMid, background:T.grayLight,
-                borderRadius:99, padding:"1px 6px", fontWeight:600 }}>⚓ Já no acerto</span>
+                borderRadius:99, padding:"1px 6px", fontWeight:600 }}>
+                {coveringAnchor.kind === "opening" ? "⚓ Antes da abertura" : "⚓ Já no acerto"}
+              </span>
             </Tip>
           )}
 
@@ -734,9 +743,14 @@ function TransacoesPageBody({
       return undefined;
     }
     let cancelled = false;
-    listOrgBalanceAdjustments(organizationId)
-      .then((rows) => {
-        if (!cancelled) setBalanceAnchors(latestAnchorByAccount(rows));
+    // As duas fontes: o feed de ajustes e as contas (para a âncora implícita do saldo
+    // de abertura, que não tem linha em `balance_adjustments`).
+    Promise.all([
+      listOrgBalanceAdjustments(organizationId),
+      listAccounts(organizationId).catch(() => []),
+    ])
+      .then(([rows, accounts]) => {
+        if (!cancelled) setBalanceAnchors(latestAnchorByAccount(rows, accounts));
       })
       .catch(() => {
         if (!cancelled) setBalanceAnchors({});
