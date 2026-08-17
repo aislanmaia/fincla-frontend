@@ -20,6 +20,7 @@ import { DEFAULT_SORT, sortItems as sortItemsFn } from "./search/sortModel.js";
  *   tags:        string[]
  *   cardSel:     string[] (ids de cartões)
  *   rec:         "any" | "yes" | "no"
+ *   settlement:  "todas" | "pagas" | "a-pagar"  (eixo de liquidação -> ?settled=)
  *   valueMin:    string (BRL parseável, vazio = sem mínimo)
  *   valueMax:    string
  *   sort:        Array<{ field, dir }>
@@ -41,6 +42,7 @@ export const DEFAULT_FILTER_STATE = Object.freeze({
   rec: "any",
   valueMin: "",
   valueMax: "",
+  settlement: "todas",
 });
 
 function normalizeInitial(partial) {
@@ -198,6 +200,13 @@ export function useTransactionsFilterState({
           icon: "repeat",
           active: state.rec !== "any",
         },
+        {
+          key: "situacao",
+          label: "Situação",
+          value: { todas: "Todas", pagas: "Pagas", "a-pagar": "A pagar" }[state.settlement],
+          icon: "check",
+          active: state.settlement !== "todas",
+        },
       ];
     },
     [state],
@@ -214,6 +223,7 @@ export function useTransactionsFilterState({
     if (state.tags.length) return true;
     if (state.cardSel.length) return true;
     if (state.rec !== DEFAULT_FILTER_STATE.rec) return true;
+    if (state.settlement !== DEFAULT_FILTER_STATE.settlement) return true;
     if (state.valueMin || state.valueMax) return true;
     if (state.search) return true;
     return false;
@@ -235,6 +245,7 @@ export function useTransactionsFilterState({
     setTags: (v) => setField("tags", v),
     setCardSel: (v) => setField("cardSel", v),
     setRec: (v) => setField("rec", v),
+    setSettlement: (v) => setField("settlement", v),
     setValueMin: (v) => setField("valueMin", v),
     setValueMax: (v) => setField("valueMax", v),
     setSort,

@@ -46,6 +46,7 @@ export function normalizeViewSnapshot(snapshot) {
       rec: "any",
       valueMin: "",
       valueMax: "",
+      settlement: "todas",
       search: "",
       sort: JSON.stringify(DEFAULT_SORT),
     };
@@ -65,6 +66,10 @@ export function normalizeViewSnapshot(snapshot) {
     rec: snapshot.rec ?? "any",
     valueMin: snapshot.valueMin ?? "",
     valueMax: snapshot.valueMax ?? "",
+    // Sem isto `viewSnapshotsEqual` ignora a Situação: com uma view ativa, trocar
+    // para "A pagar" não marcaria a view como suja, o CTA "Salvar alterações" nunca
+    // apareceria e a mudança seria descartada em silêncio ao desaplicar a view.
+    settlement: snapshot.settlement ?? "todas",
     search,
     sort: JSON.stringify(
       Array.isArray(snapshot.sort) && snapshot.sort.length ? snapshot.sort : DEFAULT_SORT,
@@ -137,6 +142,7 @@ export function countActiveFiltersInSnapshot(snapshot) {
   if (Array.isArray(snapshot.cardSel) && snapshot.cardSel.length) n += 1;
   if (snapshot.rec && snapshot.rec !== "any") n += 1;
   if (snapshot.valueMin || snapshot.valueMax) n += 1;
+  if (snapshot.settlement && snapshot.settlement !== "todas") n += 1;
   return n;
 }
 

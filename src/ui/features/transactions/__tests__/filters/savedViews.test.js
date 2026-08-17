@@ -76,6 +76,24 @@ describe("savedViewsModel", () => {
     expect(typeof v.createdAt).toBe("number");
   });
 
+  it("enxerga a Situação como diferença — senão a view nunca fica suja", () => {
+    // Com uma view ativa, trocar a Situação precisa marcar a view como modificada.
+    // Se `viewSnapshotsEqual` ignorasse o campo, o CTA "Salvar alterações" não
+    // apareceria e a mudança seria descartada em silêncio ao desaplicar a view.
+    expect(
+      viewSnapshotsEqual({ period: "mes", settlement: "todas" }, { period: "mes", settlement: "a-pagar" }),
+    ).toBe(false);
+    expect(
+      viewSnapshotsEqual({ period: "mes", settlement: "todas" }, { period: "mes" }),
+    ).toBe(true);
+  });
+
+  it("conta a Situação como filtro ativo", () => {
+    // Sem isto, uma view salva só com Situação seria descrita como "Sem filtros".
+    expect(countActiveFiltersInSnapshot({ settlement: "a-pagar" })).toBe(1);
+    expect(countActiveFiltersInSnapshot({ settlement: "todas" })).toBe(0);
+  });
+
   it("countActiveFiltersInSnapshot ignora defaults", () => {
     expect(countActiveFiltersInSnapshot({ period: "mes", type: "todos" })).toBe(0);
     expect(countActiveFiltersInSnapshot({ searchInput: "mercado" })).toBe(1);

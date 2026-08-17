@@ -512,7 +512,17 @@ export interface Transaction {
   value: number;
   payment_method: string;
   date: string;
-  status: 'pending' | 'completed' | 'cancelled';
+  /**
+   * Eixo de liquidação. `'paid'` = já entrou no saldo da conta; `'confirmed'` =
+   * compromisso pendente. (`'pending'`/`'cancelled'` existem no enum do domínio
+   * mas não são produzidos pelos fluxos atuais.) Antes este tipo dizia
+   * `'pending' | 'completed' | 'cancelled'`, que nunca correspondeu à resposta real.
+   */
+  status: 'paid' | 'confirmed' | 'pending' | 'cancelled';
+  /** Momento do caixa. `null` = não pago — e então fora do saldo da conta. */
+  paid_at?: string | null;
+  /** Conta de liquidação (Fase 0). */
+  account_id?: string | null;
   recurring: boolean;
   /** Presente quando a transação foi materializada a partir de uma série (`/v1/recurring-series`). */
   series_id?: string | null;
@@ -552,7 +562,13 @@ export interface ListTransactionsQuery {
   /** Um valor, ou vários (casa com qualquer um) — serializado como param repetido. */
   payment_method?: string | string[];
   description?: string;
-  status?: 'pending' | 'completed' | 'cancelled';
+  /**
+   * Eixo de liquidação: `true` = só as que já entraram no saldo da conta
+   * (`status='paid'`), `false` = só os compromissos pendentes. Omita para as duas.
+   * `/transactions/summary` aceita o mesmo param — passe os dois juntos, senão o card
+   * de totais soma um conjunto de linhas e a lista mostra outro.
+   */
+  settled?: boolean;
   tag_id?: string;
   date_start?: string;
   date_end?: string;
@@ -594,6 +610,8 @@ export interface TransactionsSummaryQuery {
   value_max?: number;
   /** `true` = só transações recorrentes; `false` = só não recorrentes */
   recurring?: boolean;
+  /** Mesmo eixo de `ListTransactionsQuery.settled` — mande junto com o da lista. */
+  settled?: boolean;
 }
 
 export interface PeriodInfo {

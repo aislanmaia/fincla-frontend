@@ -4,6 +4,7 @@ import { CategoryPanel } from "./panels/CategoryPanel.jsx";
 import { PaymentMethodPanel } from "./panels/PaymentMethodPanel.jsx";
 import { PeriodPanel } from "./panels/PeriodPanel.jsx";
 import { RecPanel } from "./panels/RecPanel.jsx";
+import { SettlementPanel } from "./panels/SettlementPanel.jsx";
 import { TagPanel } from "./panels/TagPanel.jsx";
 import { TypePanel } from "./panels/TypePanel.jsx";
 import { ValuePanel } from "./panels/ValuePanel.jsx";
@@ -46,6 +47,8 @@ export function FacetPanelContent({
   // recurrence
   rec,
   setRec,
+  settlement,
+  setSettlement,
   // chrome
   onClose,
   onApply,
@@ -117,6 +120,16 @@ export function FacetPanelContent({
     case "recorrencia":
       return (
         <RecPanel rec={rec} setRec={setRec} onClose={onClose} onApply={onApply} compact={compact} />
+      );
+    case "situacao":
+      return (
+        <SettlementPanel
+          settlement={settlement}
+          setSettlement={setSettlement}
+          onClose={onClose}
+          onApply={onApply}
+          compact={compact}
+        />
       );
     default:
       return null;

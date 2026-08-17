@@ -102,3 +102,38 @@ export const deleteTransaction = async (
     params: { organization_id: organizationId },
   });
 };
+
+/**
+ * Marca uma transação como paga (liquidada).
+ *
+ * Liquidar é o que faz a transação entrar no saldo da conta: o backend só soma
+ * `status='paid'`. Sem `paidAt` o backend usa "agora".
+ */
+export const settleTransaction = async (
+  transactionId: string | number,
+  organizationId: string,
+  paidAt?: string
+): Promise<Transaction> => {
+  const response = await apiClient.patch<Transaction>(
+    `/transactions/${transactionId}/settle`,
+    paidAt ? { paid_at: paidAt } : {},
+    { params: { organization_id: organizationId } }
+  );
+  return response.data;
+};
+
+/**
+ * Volta uma transação para pendente (`status='confirmed'`, `paid_at=null`),
+ * tirando-a do saldo da conta.
+ */
+export const unsettleTransaction = async (
+  transactionId: string | number,
+  organizationId: string
+): Promise<Transaction> => {
+  const response = await apiClient.patch<Transaction>(
+    `/transactions/${transactionId}/unsettle`,
+    {},
+    { params: { organization_id: organizationId } }
+  );
+  return response.data;
+};

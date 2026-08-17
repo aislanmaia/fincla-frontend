@@ -271,6 +271,41 @@ describe("<RecPanel>", () => {
   });
 });
 
+describe("<SettlementPanel>", () => {
+  function Harness({ onApply }) {
+    const [settlement, setSettlement] = useState("todas");
+    return (
+      <FacetPanelContent
+        facetKey="situacao"
+        settlement={settlement}
+        setSettlement={setSettlement}
+        onClose={() => {}}
+        onApply={onApply}
+      />
+    );
+  }
+
+  it("seleciona 'A pagar' — o filtro que revela o que não entrou no saldo", async () => {
+    render(<Harness />);
+    await userEvent.click(screen.getByRole("button", { name: /^A pagar$/i }));
+    expect(screen.getByRole("button", { name: /^A pagar$/i })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: /^Todas$/i })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("seleciona 'Pagas'", async () => {
+    render(<Harness />);
+    await userEvent.click(screen.getByRole("button", { name: /^Pagas$/i }));
+    expect(screen.getByRole("button", { name: /^Pagas$/i })).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("aplica ao escolher (não exige um segundo clique em 'aplicar')", async () => {
+    const onApply = vi.fn();
+    render(<Harness onApply={onApply} />);
+    await userEvent.click(screen.getByRole("button", { name: /^Pagas$/i }));
+    expect(onApply).toHaveBeenCalled();
+  });
+});
+
 describe("PanelHeader (close button)", () => {
   it("Fechar chama onClose", async () => {
     const onClose = vi.fn();

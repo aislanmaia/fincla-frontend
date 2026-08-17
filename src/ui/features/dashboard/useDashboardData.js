@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getBalanceSummary } from "../../../api/balances";
 import {
   fetchAllTransactionsPages,
   formatDashboardApiError,
@@ -35,6 +36,7 @@ const EMPTY_STATE = {
   isLoading: false,
   error: "",
   summary: null,
+  balanceSummary: null,
   transactions: [],
   categories: [],
   rhythmChart: [],
@@ -633,6 +635,10 @@ export function useDashboardData({
           dateEnd: end,
         }),
       ),
+      // Saldo REAL em conta — não depende do período escolhido, é o caixa de hoje.
+      // Entra no `allSettled` justamente para poder falhar sozinho: se o endpoint
+      // cair, o resto do painel continua de pé e só o KPI de saldo fica indisponível.
+      fetchWithRetry(() => getBalanceSummary(organizationId)),
     ]).then((results) => {
       if (cancelled) return;
 
@@ -642,6 +648,7 @@ export function useDashboardData({
         categoriesRes,
         prevCategoriesRes,
         recurringRes,
+        balanceRes,
       ] = results;
 
       // Se a `summary` falhou MESMO COM retry, é erro real — UI mostra
@@ -654,6 +661,7 @@ export function useDashboardData({
           isLoading: false,
           error: formatDashboardApiError(summaryRes.reason),
           summary: null,
+          balanceSummary: null,
           transactions: [],
           categories: [],
           rhythmChart: [],
@@ -687,6 +695,10 @@ export function useDashboardData({
           : { categories: [] };
       const recurring =
         recurringRes.status === "fulfilled" ? recurringRes.value : null;
+      // `null` (não zero) quando falha: zero é um saldo legítimo, e mostrar
+      // "R$ 0,00" para quem tem dinheiro na conta seria pior que mostrar "—".
+      const balanceSummary =
+        balanceRes.status === "fulfilled" ? balanceRes.value : null;
 
       const rawTx = transactionsResponse.data ?? [];
       const recent = rawTx.slice(0, 5).map(mapTransaction);
@@ -723,6 +735,7 @@ export function useDashboardData({
         },
         upcomingDebits: recurring ? mapUpcomingDebits(recurring) : [],
         recurringSummary: recurring?.summary ?? null,
+        balanceSummary,
         recurringInPeriod: summary?.recurring_in_period ?? null,
       });
     });

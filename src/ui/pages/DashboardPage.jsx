@@ -51,6 +51,13 @@ import {
 } from "../features/dashboard/dashboardPeriodStorage.js";
 import { CardEmptyWithCta } from "../features/shellExtras.jsx";
 
+/** Os dois "saldos" da tela respondem perguntas diferentes; o tooltip é o que
+ *  impede o usuário de ler um pelo outro. */
+const SALDO_EM_CONTA_TOOLTIP =
+  "Dinheiro que você tem hoje, somando suas contas. Conta só o que já foi pago " +
+  "de fato — compromissos a pagar ainda não entram aqui. Diferente do 'Saldo do " +
+  "período', que é só receitas menos despesas do ciclo escolhido.";
+
 export function DashboardPage({
   onNav,
   stateCtrl,
@@ -306,12 +313,53 @@ export function DashboardPage({
     alert: "Evite novas despesas e avalie pausar recorrências não essenciais esta semana.",
   }[moodKey];
 
+  /** KPI "Saldo em conta" — dinheiro real nas contas, independente do período.
+   *
+   *  Existe porque "Saldo do período" responde outra pergunta: quanto sobrou NESTE
+   *  ciclo. Um usuário que abre a Visão Geral para saber "quanto eu tenho hoje"
+   *  não encontrava esse número em lugar nenhum — o app só o mostrava na tela de
+   *  Contas. `null` (não zero) quando o endpoint falha: zero é um saldo legítimo.
+   */
+  const balanceSummary = dashboardData.balanceSummary;
+  const accountBalanceKpi = useMemo(() => {
+    const unavailable = {
+      key: "acct",
+      label: "Saldo em conta",
+      value: "—",
+      delta: "Dados indisponíveis",
+      up: null,
+      emptyCta: false,
+      tooltip: SALDO_EM_CONTA_TOOLTIP,
+    };
+    if (!balanceSummary) return unavailable;
+    const n = balanceSummary.account_count ?? 0;
+    const total = balanceSummary.total_available ?? 0;
+    const negative = total < 0;
+    return {
+      key: "acct",
+      label: "Saldo em conta",
+      // `fmtAbs` já aplica Math.abs, então um saldo negativo renderizava idêntico
+      // a um positivo — a única pista seria a cor da seta. Conta no vermelho é
+      // exatamente o caso em que o número não pode mentir.
+      value: negative ? fmtSgn(total) : fmtAbs(total),
+      delta: negative
+        ? `conta negativa · ${n === 1 ? "1 conta" : `${n} contas`}`
+        : n === 1
+          ? "em 1 conta"
+          : `em ${n} contas`,
+      up: !negative,
+      emptyCta: false,
+      tooltip: SALDO_EM_CONTA_TOOLTIP,
+    };
+  }, [balanceSummary]);
+
   const kpiItems = useMemo(() => {
     if (apiFailedNoSummary) {
       return [
         { key: "inc", label: `Receitas · ${kpiPeriodPhrase}`, value: "—", delta: "Dados indisponíveis", up: null, emptyCta: false },
         { key: "exp", label: `Despesas · ${kpiPeriodPhrase}`, value: "—", delta: "Dados indisponíveis", up: null, emptyCta: false },
         { key: "bal", label: "Saldo do período", value: "—", delta: "Dados indisponíveis", up: null, emptyCta: false },
+        accountBalanceKpi,
       ];
     }
     if (isPeriodWithoutActivity) {
@@ -320,6 +368,7 @@ export function DashboardPage({
         { key: "inc", label: `Receitas · ${kpiPeriodPhrase}`, value: fmtAbs(0), delta: `${n} lançamentos no período`, up: null, emptyCta: true },
         { key: "exp", label: `Despesas · ${kpiPeriodPhrase}`, value: fmtAbs(0), delta: "registre para acompanhar o ritmo", up: null, emptyCta: true },
         { key: "bal", label: "Saldo do período", value: fmtAbs(0), delta: "sem movimento ainda", up: null, emptyCta: true },
+        accountBalanceKpi,
       ];
     }
     const s = dashboardData.summary;
@@ -328,6 +377,7 @@ export function DashboardPage({
         { key: "inc", label: `Receitas · ${kpiPeriodPhrase}`, value: fmtAbs(0), delta: "Carregando resumo…", up: null, emptyCta: false },
         { key: "exp", label: `Despesas · ${kpiPeriodPhrase}`, value: fmtAbs(0), delta: "Carregando resumo…", up: null, emptyCta: false },
         { key: "bal", label: "Saldo do período", value: fmtAbs(0), delta: "Carregando resumo…", up: null, emptyCta: false },
+        accountBalanceKpi,
       ];
     }
     return [
@@ -358,12 +408,14 @@ export function DashboardPage({
         up: s ? s.balance >= 0 : null,
         emptyCta: false,
       },
+      accountBalanceKpi,
     ];
   }, [
     apiFailedNoSummary,
     isPeriodWithoutActivity,
     kpiPeriodPhrase,
     dashboardData.summary,
+    accountBalanceKpi,
     spendPct,
     timePct,
     txCount,
@@ -1065,8 +1117,8 @@ export function DashboardPage({
         )}
       </div>
 
-      <div style={{ ...anim(0.1), display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(3,1fr)", gap: 12, position: "relative", zIndex: 1 }}>
-        {kpiItems.map(({ key, label, value, delta, up, emptyCta }) => (
+      <div style={{ ...anim(0.1), display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: 12, position: "relative", zIndex: 1 }}>
+        {kpiItems.map(({ key, label, value, delta, up, emptyCta, tooltip }) => (
           <Card
             key={key}
             data-testid={
@@ -1074,7 +1126,9 @@ export function DashboardPage({
                 ? "dashboard-kpi-receitas"
                 : key === "exp"
                   ? "dashboard-kpi-despesas"
-                  : "dashboard-kpi-saldo"
+                  : key === "acct"
+                    ? "dashboard-kpi-saldo-em-conta"
+                    : "dashboard-kpi-saldo"
             }
             style={{ padding: "16px 18px" }}
           >
@@ -1086,6 +1140,7 @@ export function DashboardPage({
                   text={"Saldo deste ciclo apenas: receitas menos despesas dentro do período escolhido. Não inclui saldo de meses anteriores — o Fincla trata cada período como um ciclo fechado, para incentivar a revisão regular das suas finanças."}
                 />
               )}
+              {tooltip && <InfoTip width={280} text={tooltip} />}
             </div>
             <div style={{ ...G, ...NUM, fontSize: 20, fontWeight: 700, color: T.ink, marginBottom: 4 }}>{value}</div>
             <div style={{ ...G, display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: up == null ? T.inkLight : up ? T.green : T.red }}>

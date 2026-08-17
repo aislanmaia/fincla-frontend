@@ -61,6 +61,472 @@ const DEFAULT_RESTORE_SNAPSHOT = Object.freeze({
 /** Viewport ≥ breakpoint: filtros desktop sempre visíveis. Abaixo: colapsados por padrão. */
 const DESKTOP_FILTERS_EXPAND_BREAKPOINT = 1280;
 
+/* ── Helpers puros e componentes de linha ──────────────────────────────────
+   Estes três blocos moravam DENTRO do corpo de `TransacoesPageBody`. Como o
+   corpo roda a cada render, `Tip` e `TxRow` viravam TIPOS novos toda vez — e o
+   React, ao ver um tipo diferente na mesma posição, descarta a subárvore e
+   monta outra em vez de atualizar a existente.
+
+   O efeito: a cada mudança de estado da página (selecionar uma linha, abrir um
+   filtro), TODA linha da lista era desmontada e remontada, com nós de DOM novos.
+   Isso queima CPU numa lista parada e é o que impedia um clique automatizado de
+   considerar a linha "stable" — a caixa medida num frame pertence a um nó que
+   já não existe no seguinte (fincla-frontend#66).
+
+   Içar para o escopo do módulo é mudança estrutural pura: mesmo markup, mesmos
+   estilos, mesma saída visual. */
+
+const CAT_COLORS = {
+  Alimentação: "#059669",
+  Transporte: "#2563EB",
+  Moradia: "#6B7280",
+  Saúde: "#DC2626",
+  Receita: "#059669",
+  Assinaturas: "#7C3AED",
+  "Assinaturas & Software": "#0891B2",
+  Streaming: "#7C3AED",
+  Lazer: "#D97706",
+  "Lazer & Entretenimento": "#D97706",
+  Compras: "#0891B2",
+  "Compras Pessoais": "#DC2626",
+  Educação: "#7C3AED",
+  Outros: "#374151",
+  Serviços: "#6B7280",
+  "Impostos & Taxas": "#D97706",
+  Vestuário: "#BE185D",
+};
+const catColor = (label) => CAT_COLORS[label] || T.inkMid;
+const catBg = (label) => `${catColor(label)}18`;
+
+const fmtBRL = v => "R$\u00a0" + Math.abs(v).toLocaleString("pt-BR",{minimumFractionDigits:2});
+
+const Tip = ({ label, children, pos = "top" }) => {
+  const [rect, setRect] = useState(null);
+  const ref = useRef(null);
+  if (!label) return <>{children}</>;
+
+  const show = (e) => {
+    if (ref.current) setRect(ref.current.getBoundingClientRect());
+  };
+  const hide = () => setRect(null);
+
+  // Compute fixed position from measured rect
+  const tipStyle = rect ? (pos === "top"
+    ? { top: rect.top - 6, left: rect.left + rect.width / 2,
+        transform: "translate(-50%, -100%)" }
+    : { top: rect.bottom + 6, left: rect.left + rect.width / 2,
+        transform: "translateX(-50%)" }
+  ) : null;
+
+  return (
+    <span ref={ref} style={{ position:"relative", display:"inline-flex", alignItems:"center" }}
+      onMouseEnter={show} onMouseLeave={hide}
+      onTouchStart={e => { e.stopPropagation(); rect ? hide() : show(e); }}>
+      {children}
+      {rect && tipStyle && (
+        <span style={{
+          position:"fixed",
+          top: tipStyle.top, left: tipStyle.left,
+          transform: tipStyle.transform,
+          background:"#1A1A2E", color:"#fff",
+          fontSize:11, fontWeight:600, borderRadius:7, padding:"5px 9px",
+          whiteSpace:"nowrap", zIndex:9999, pointerEvents:"none",
+          boxShadow:"0 4px 14px rgba(0,0,0,0.28)", lineHeight:1.4,
+        }}>
+          {label}
+        </span>
+      )}
+    </span>
+  );
+};
+
+const TxRow = ({ tx, isMobile, isSelected, onSelect }) => {
+  const isRefund   = tx.type === "refund";
+  const isReceita  = tx.type === "income" || isRefund;
+  const hasParcela = !!tx.parcela && !isRefund;
+  const isCredito  = tx.paymentMethodKey === "credito" || tx.method === "Crédito";
+  const hasRefundsLinked = tx.refundsSummary && tx.refundsSummary.count > 0;
+  const tags       = tx.tags || [];
+  const visibleTags = tags.slice(0,2);
+  const hiddenTags  = tags.slice(2);
+
+  // Avatar: estorno usa fundo verde claro com ícone ↺. Demais mantêm a cor da categoria.
+  const avatarBg = isRefund ? T.greenLight : catBg(tx.cat);
+
+  return (
+    <div
+      onClick={() => onSelect(tx)}
+      className="fincla-row"
+      style={{ display:"flex", alignItems:"flex-start", gap:12,
+        padding: isMobile ? "13px 16px" : "12px 18px",
+        background: isSelected ? `${catColor(tx.cat)}08` : "transparent",
+        borderLeft: isSelected ? `3px solid ${catColor(tx.cat)}` : "3px solid transparent",
+        cursor:"pointer", transition:"background 0.12s, border-color 0.12s" }}>
+
+      {/* Icon */}
+      <div style={{ width:38, height:38, borderRadius:11, background:avatarBg,
+        display:"flex", alignItems:"center", justifyContent:"center",
+        fontSize:18, color: isRefund ? T.green : undefined,
+        fontWeight: isRefund ? 700 : undefined,
+        flexShrink:0, marginTop:1 }}>
+        {tx.icon}
+      </div>
+
+      {/* Main info */}
+      <div style={{ flex:1, minWidth:0 }}>
+
+        {/* Row 1: description — estorno ganha ícone ↺ inline + badge "Há estorno" quando aplicável */}
+        <div style={{ ...G, fontSize:13, fontWeight:600, color:T.ink,
+          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:3,
+          display:"flex", alignItems:"center", gap:6 }}>
+          <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+            {tx.desc}
+          </span>
+          {hasRefundsLinked && !isRefund && (
+            <Tip label={`${tx.refundsSummary.count} estorno${tx.refundsSummary.count !== 1 ? "s" : ""} relacionado${tx.refundsSummary.count !== 1 ? "s" : ""} · ${fmtBRL(tx.refundsSummary.totalValue)} abatido${tx.refundsSummary.totalValue !== 1 ? "s" : ""}`}>
+              <span style={{ ...G, fontSize:10, color:T.green, background:T.greenLight,
+                borderRadius:99, padding:"1px 6px", fontWeight:700, cursor:"default", whiteSpace:"nowrap" }}>
+                ↺ Estorno
+              </span>
+            </Tip>
+          )}
+        </div>
+
+        {/* Row 2: categoria · método · card digits · status chips */}
+        <div style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap",
+          marginBottom: (hasParcela || visibleTags.length > 0) ? 4 : 0 }}>
+          <Tip label={`Categoria: ${tx.cat}`}>
+            <span style={{ ...G, fontSize:11, color:catColor(tx.cat), fontWeight:600 }}>{tx.cat}</span>
+          </Tip>
+          <span style={{ ...G, fontSize:11, color:T.inkGhost }}>·</span>
+
+          {/* Para Crédito: mostra "Crédito ●● 1177" inline se tiver cartão, senão só "Crédito" */}
+          {isCredito ? (
+            <Tip label={tx.parcela?.cartao || "Cartão de crédito"}>
+              <span style={{ ...G, fontSize:11, color:T.inkMid }}>
+                Crédito
+                {tx.parcela?.cartao && (
+                  <span style={{ color:T.inkGhost, fontFamily:"'Geist Mono',monospace", letterSpacing:"0.04em" }}>
+                    {" ●● "}{tx.parcela.cartao.split("••")[1]?.trim()}
+                  </span>
+                )}
+              </span>
+            </Tip>
+          ) : (
+            <Tip label={`Método: ${tx.method}`}>
+              <span style={{ ...G, fontSize:11, color:T.inkMid }}>{tx.method}</span>
+            </Tip>
+          )}
+
+          {tx.rec && (
+            <Tip label="Transação recorrente — repete todo mês">
+              <span style={{ ...G, fontSize:11, color:T.blue, background:T.blueLight,
+                borderRadius:99, padding:"1px 6px", fontWeight:700, cursor:"default" }}>↻</span>
+            </Tip>
+          )}
+
+          {tx.status === "pendente" && (
+            <Tip label="Aguardando confirmação do lançamento">
+              <span style={{ ...G, fontSize:11, color:T.amber, background:T.amberLight,
+                borderRadius:99, padding:"1px 6px", fontWeight:700 }}>⏳ Pendente</span>
+            </Tip>
+          )}
+
+          {/* Liquidação: sem este badge, um compromisso pendente é visualmente idêntico
+              a um pago — e some do saldo da conta sem o usuário ter como perceber.
+              Cartão fica de fora: ele liquida quando a FATURA é paga, não por lançamento. */}
+          {tx.settleable && !tx.settled && (
+            <Tip label="Ainda não entrou no saldo da conta — marque como pago quando o dinheiro sair">
+              <span style={{ ...G, fontSize:11, color:T.amber, background:T.amberLight,
+                borderRadius:99, padding:"1px 6px", fontWeight:700 }}>⏳ A pagar</span>
+            </Tip>
+          )}
+
+          {isRefund && (
+            <>
+              <span style={{ ...G, fontSize:11, color:T.inkGhost }}>·</span>
+              <span style={{ ...G, fontSize:11, color:T.green, fontWeight:600 }}>↺ Estorno</span>
+            </>
+          )}
+        </div>
+
+        {/* Row 3: parcela — compacta, sem redundância com row 2 */}
+        {hasParcela && (
+          <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom: visibleTags.length > 0 ? 4 : 0 }}>
+            <Tip label={`${tx.parcela.atual}ª de ${tx.parcela.total} parcelas · ${tx.parcela.cartao}`}>
+              <span style={{ ...G, fontSize:11, color:T.blue, fontWeight:600,
+                fontFamily:"'Geist Mono',monospace" }}>
+                {tx.parcela.atual}/{tx.parcela.total}×
+              </span>
+            </Tip>
+            <span style={{ ...G, fontSize:10, color:T.inkGhost }}>·</span>
+            <Tip label={`Parcela: ${fmtBRL(tx.parcela.valParcela)}/mês · Vence ${tx.parcela.vencimento}`}>
+              <span style={{ ...G, fontSize:11, color:T.inkMid,
+                fontFamily:"'Geist Mono',monospace" }}>
+                {fmtBRL(tx.parcela.valParcela)}/mês
+              </span>
+            </Tip>
+            <span style={{ ...G, fontSize:10, color:T.inkGhost }}>·</span>
+            <Tip label={`Já pago: ${fmtBRL(tx.parcela.valorPago)} · Residual: ${fmtBRL(tx.parcela.valorResidual)}`}>
+              <span style={{ ...G, fontSize:11, color:T.inkLight }}>
+                {tx.parcela.total - tx.parcela.atual} restantes
+              </span>
+            </Tip>
+          </div>
+        )}
+
+        {/* Row 4: tags */}
+        {visibleTags.length > 0 && (
+          <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap" }}>
+            {visibleTags.map(tag => (
+              <span key={tag} style={{ ...G, fontSize:10, color:T.inkMid, background:T.grayLight,
+                borderRadius:99, padding:"2px 8px", fontWeight:500 }}>#{tag}</span>
+            ))}
+            {hiddenTags.length > 0 && (
+              <Tip label={`Todas: ${tags.map(t=>"#"+t).join(", ")}`} pos="top">
+                <span style={{ ...G, fontSize:10, color:T.blue, background:T.blueLight,
+                  borderRadius:99, padding:"2px 8px", fontWeight:700, cursor:"default" }}>
+                  +{hiddenTags.length}
+                </span>
+              </Tip>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Amount column — total da compra + parcela/mês abaixo */}
+      <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", flexShrink:0, gap:2, marginTop:1 }}>
+        <Tip label={hasParcela ? `Total da compra: ${fmtBRL(tx.val)}` : isRefund ? "Estorno · dinheiro voltando" : ""} pos="top">
+          <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:14, fontWeight:700,
+            color: isRefund ? T.green : (isReceita ? T.green : T.ink) }}>
+            {isReceita ? "+" : "−"}{fmtBRL(tx.val)}
+          </div>
+        </Tip>
+        {!isMobile && (
+          <ChevronRight size={12} color={isSelected ? catColor(tx.cat) : T.inkGhost}
+            style={{ marginTop:2, transition:"color 0.12s" }}/>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* Mesmo motivo do `TxRow` acima (fincla-frontend#66): definido dentro do corpo,
+   o drawer inteiro era desmontado e remontado a cada render da página — inclusive
+   a cada transição de `settlingId`, disparada pelo próprio botão de liquidar. */
+const DetailPanel = ({
+  tx,
+  onClose,
+  onEditTx,
+  setSelected,
+  shouldUseRealData,
+  transactionsData,
+  setMockTxList,
+  onTransactionsInvalidate,
+  deletingId,
+  setDeletingId,
+  settlingId,
+  setSettlingId,
+  settleError,
+  setSettleError,
+}) => {
+  if (!tx) return null;
+  const isReceita = tx.val > 0;
+  return (
+    <div style={{ display:"flex", flexDirection:"column", flex:1, minHeight:0 }}>
+      {/* Header */}
+      <div style={{ padding:"18px 20px", borderBottom:`1px solid ${T.border}`,
+        display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        <div style={{ ...G, fontSize:14, fontWeight:800, color:T.ink }}>Detalhes</div>
+        <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer",
+          padding:6, borderRadius:7, display:"flex" }}
+          onMouseEnter={e=>e.currentTarget.style.background=T.bg}
+          onMouseLeave={e=>e.currentTarget.style.background="none"}>
+          <X size={15} color={T.inkMid}/>
+        </button>
+      </div>
+      {/* Amount hero */}
+      <div style={{ padding:"24px 20px 16px", background: isReceita ? T.greenLight : T.redLight,
+        borderBottom:`1px solid ${T.border}`, textAlign:"center" }}>
+        <div style={{ fontSize:32, marginBottom:6 }}>{tx.icon}</div>
+        <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:26, fontWeight:800,
+          color: isReceita ? T.green : T.red, letterSpacing:"-0.02em" }}>
+          {isReceita ? "+" : "−"}{fmtBRL(tx.val)}
+        </div>
+        <div style={{ ...G, fontSize:13, color:T.inkMid, marginTop:4 }}>{tx.desc}</div>
+      </div>
+      {/* Fields */}
+      <div style={{ flex:1, overflowY:"auto", overflowX:"hidden", padding:"16px 20px", display:"flex", flexDirection:"column", gap:0, minHeight:0 }}>
+        {[
+          { label:"Categoria", val: <span style={{ ...G, display:"flex", alignItems:"center", gap:6 }}>
+              <div style={{ width:8, height:8, borderRadius:"50%", background:catColor(tx.cat), flexShrink:0 }}/>
+              {tx.cat}
+            </span>},
+          { label:"Data",      val: tx.date },
+          { label:"Método",    val: tx.method + (tx.parcela?.cartao ? ` · ${tx.parcela.cartao}` : "") },
+          { label:"Status",    val: <span style={{ ...G, fontSize:12, fontWeight:700, padding:"2px 8px", borderRadius:99,
+              background: tx.status==="confirmado" ? T.greenLight : T.amberLight,
+              color:       tx.status==="confirmado" ? T.green       : T.amber }}>
+              {tx.status === "confirmado" ? "✓ Confirmado" : "⏳ Pendente"}
+            </span>},
+          { label:"Recorrente",val: tx.rec ? "Sim" : "Não" },
+          ...(tx.parcela ? [
+            { label:"Parcela",      val: `${tx.parcela.atual}ª de ${tx.parcela.total}` },
+            { label:"Vencimento",   val: tx.parcela.vencimento },
+            { label:"Valor parcela",val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:700, color:T.blue }}>{fmtBRL(tx.parcela.valParcela)}/mês</span> },
+            { label:"Valor total",  val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:600 }}>{fmtBRL(tx.parcela.valorTotal)}</span> },
+            { label:"Já pago",      val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:600, color:T.green }}>{fmtBRL(tx.parcela.valorPago)}</span> },
+            { label:"Valor residual",val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:700, color:T.red }}>{fmtBRL(tx.parcela.valorResidual)}</span> },
+          ] : []),
+        ].map(({label,val})=>(
+          <div key={label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
+            padding:"11px 0", borderBottom:`1px solid ${T.border}` }}>
+            <div style={{ ...G, fontSize:12, color:T.inkMid }}>{label}</div>
+            <div style={{ ...G, fontSize:13, color:T.ink, fontWeight:500 }}>{val}</div>
+          </div>
+        ))}
+        {tx.parcela && (
+          <div style={{ padding:"11px 0", borderBottom:`1px solid ${T.border}` }}>
+            <div style={{ ...G, fontSize:12, color:T.inkMid, marginBottom:8 }}>Progresso das parcelas</div>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
+              <span style={{ ...G, fontSize:11, color:T.green, fontWeight:600 }}>{fmtBRL(tx.parcela.valorPago)} pago</span>
+              <span style={{ ...G, fontSize:11, color:T.red, fontWeight:600 }}>{fmtBRL(tx.parcela.valorResidual)} restante</span>
+            </div>
+            <div style={{ height:6, background:T.grayLight, borderRadius:99, overflow:"hidden" }}>
+              <div style={{ height:"100%", width:`${Math.round(tx.parcela.valorPago/tx.parcela.valorTotal*100)}%`,
+                background:`linear-gradient(to right, ${T.green}, ${T.blue})`, borderRadius:99,
+                animation:"progressFill 0.8s cubic-bezier(0.16,1,0.3,1) both" }}/>
+            </div>
+            <div style={{ ...G, fontSize:11, color:T.inkMid, textAlign:"center", marginTop:5 }}>
+              {Math.round(tx.parcela.valorPago/tx.parcela.valorTotal*100)}% pago · {tx.parcela.total - tx.parcela.atual} parcelas restantes
+            </div>
+          </div>
+        )}
+        {(tx.tags||[]).length > 0 && (
+          <div style={{ padding:"11px 0" }}>
+            <div style={{ ...G, fontSize:12, color:T.inkMid, marginBottom:8 }}>Tags</div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+              {tx.tags.map(tag => (
+                <span key={tag} style={{ ...G, fontSize:11, background:T.grayLight,
+                  color:T.inkMid, padding:"3px 9px", borderRadius:99 }}>#{tag}</span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+      {/* Liquidação — só para métodos que o usuário liquida por lançamento.
+          Cartão liquida pela fatura, então a ação aqui mentiria sobre o que ele controla. */}
+      {tx.settleable && (
+        <div style={{ padding:"12px 20px 0", display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ ...G, fontSize:12.5, fontWeight:700, color: tx.settled ? T.green : T.amber }}>
+              {tx.settled ? "Pago" : "A pagar"}
+            </div>
+            <div style={{ ...G, fontSize:11, color:T.inkLight, marginTop:1 }}>
+              {tx.settled ? "Já entrou no saldo da conta" : "Ainda não entrou no saldo da conta"}
+            </div>
+          </div>
+          <button
+            type="button"
+            disabled={settlingId === tx.id}
+            onClick={async (e) => {
+              e.stopPropagation();
+              const next = !tx.settled;
+              // Demo/mock não tem backend: sem este ramo o botão fica clicável e
+              // não faz nada, que é pior que não existir.
+              if (!shouldUseRealData) {
+                setMockTxList((prev) =>
+                  prev.map((item) => (item.id === tx.id ? { ...item, settled: next } : item)),
+                );
+                setSelected((cur) => (cur && cur.id === tx.id ? { ...cur, settled: next } : cur));
+                return;
+              }
+              setSettlingId(tx.id);
+              setSettleError("");
+              try {
+                const updated = await transactionsData.setTransactionSettled(tx.id, next);
+                // O drawer renderiza a partir de `selected`, que é um snapshot — sem
+                // isto o painel continuaria mostrando o estado antigo até fechar.
+                if (updated) setSelected((cur) => (cur && cur.id === tx.id ? { ...cur, ...updated } : cur));
+                // A linha já foi trocada em memória (sem piscar), mas o summary e o
+                // recorte do filtro continuariam velhos: com Situação = "A pagar",
+                // a linha recém-paga ficaria visível sob um filtro que a exclui, e o
+                // card "Resultado" somaria um conjunto que a lista não mostra.
+                onTransactionsInvalidate?.();
+              } catch (err) {
+                // `transactionsData.error` renderiza no topo da página; no mobile o
+                // botão vive dentro do bottom sheet e a faixa fica coberta, então a
+                // falha pareceria "não aconteceu nada". Mensagem local, ao lado da ação.
+                setSettleError(err?.message || "Não foi possível atualizar o pagamento.");
+              } finally {
+                setSettlingId(null);
+              }
+            }}
+            style={{ ...G, flexShrink:0, background: tx.settled ? "none" : T.green,
+              color: tx.settled ? T.inkMid : "#fff",
+              border: tx.settled ? `1px solid ${T.border}` : "none",
+              borderRadius:10, padding:"9px 14px", fontSize:12.5, fontWeight:700,
+              cursor: settlingId === tx.id ? "default" : "pointer",
+              opacity: settlingId === tx.id ? 0.6 : 1 }}>
+            {settlingId === tx.id ? "…" : tx.settled ? "Desfazer pagamento" : "Marcar como pago"}
+          </button>
+        </div>
+      )}
+      {tx.settleable && settleError && (
+        <div style={{ ...G, margin:"8px 20px 0", fontSize:11.5, color:T.red,
+          background:T.redLight, borderRadius:9, padding:"7px 10px" }}>
+          {settleError}
+        </div>
+      )}
+      {/* Actions */}
+      <div style={{ padding:"14px 20px", borderTop:`1px solid ${T.border}`, display:"flex", gap:10 }}>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onEditTx) onEditTx(tx);
+            // Fecha o painel no próximo tick para o pai aplicar `flushSync` + `navigate`
+            // antes do unmount do detalhe (evita corridas com o estado do modal).
+            queueMicrotask(() => onClose());
+          }}
+          style={{ ...G, flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+            background:T.ink, color:"#fff", border:"none", borderRadius:10,
+            padding:"10px", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+          <Pencil size={13}/> Editar
+        </button>
+        {deletingId === tx.id ? (
+          <button onClick={async () => {
+            if (shouldUseRealData) {
+              try {
+                await transactionsData.removeTransaction(tx.id);
+                onTransactionsInvalidate?.();
+              } catch (_) {
+                return;
+              }
+            } else {
+              setMockTxList((prev) => prev.filter((item) => item.id !== tx.id));
+            }
+            setSelected(null);
+            setDeletingId(null);
+          }}
+            style={{ ...G, flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+              background:T.red, color:"#fff", border:"none", borderRadius:10,
+              padding:"10px", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+            <Trash2 size={13}/> Confirmar exclusão
+          </button>
+        ) : (
+          <button onClick={() => setDeletingId(tx.id)}
+            style={{ ...G, display:"flex", alignItems:"center", justifyContent:"center",
+              background:"none", color:T.red, border:`1px solid ${T.red}44`,
+              borderRadius:10, padding:"10px 14px", fontSize:13, cursor:"pointer" }}>
+            <Trash2 size={13}/>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export function TransacoesPage(props) {
   if (props.dataMode === "empty") {
     return <TransactionsEmptyState extraTx={props.extraTx ?? []} onNewTx={props.onNewTx} />;
@@ -82,29 +548,6 @@ function TransacoesPageBody({
   const navigate = useNavigate();
   const PAGE_SIZE = 10;
 
-  const CAT_COLORS = {
-    Alimentação: "#059669",
-    Transporte: "#2563EB",
-    Moradia: "#6B7280",
-    Saúde: "#DC2626",
-    Receita: "#059669",
-    Assinaturas: "#7C3AED",
-    "Assinaturas & Software": "#0891B2",
-    Streaming: "#7C3AED",
-    Lazer: "#D97706",
-    "Lazer & Entretenimento": "#D97706",
-    Compras: "#0891B2",
-    "Compras Pessoais": "#DC2626",
-    Educação: "#7C3AED",
-    Outros: "#374151",
-    Serviços: "#6B7280",
-    "Impostos & Taxas": "#D97706",
-    Vestuário: "#BE185D",
-  };
-  const catColor = (label) => CAT_COLORS[label] || T.inkMid;
-  const catBg = (label) => `${catColor(label)}18`;
-
-  const fmtBRL = v => "R$\u00a0" + Math.abs(v).toLocaleString("pt-BR",{minimumFractionDigits:2});
   const parseDate = d => {
     if (!d) return new Date(0);
     const parts = d.split("/");
@@ -173,6 +616,11 @@ function TransacoesPageBody({
   const [snapFull,    setSnapFull]    = useState(false);  // false=72dvh, true=92dvh
   const [sheetClosing,setSheetClosing]= useState(false);  // drives exit animation
   const [selected,    setSelected]    = useState(null);
+  /** Estável entre renders: se a identidade mudasse, `TxRow` re-renderizaria à toa
+      e o ganho de içar o componente para o módulo iria embora. */
+  const handleSelectTx = useCallback((tx) => {
+    setSelected((cur) => (cur?.id === tx.id ? null : tx));
+  }, []);
   const [visible,     setVisible]     = useState(PAGE_SIZE);
   const listScrollRef = useRef(null);
   const savedViewsSectionRef = useRef(null);
@@ -181,6 +629,11 @@ function TransacoesPageBody({
   const loadMoreSentinelRef = useRef(null);
   const loadMoreCooldownRef = useRef(false);
   const [deletingId,  setDeletingId]  = useState(null);
+  // Id em liquidação — trava o botão para o clique duplo não disparar settle + unsettle.
+  const [settlingId,  setSettlingId]  = useState(null);
+  /** Erro da liquidação, mostrado ao lado do botão (a faixa global fica coberta
+      pelo bottom sheet no mobile, onde essa ação vive). */
+  const [settleError, setSettleError] = useState("");
   const [mockTxList,  setMockTxList]  = useState(TRANSACTIONS);
 
   /** Saved views (Variação C) persistidas em localStorage por org. */
@@ -280,6 +733,7 @@ function TransacoesPageBody({
           sort: filter.sort,
           valueMin: filter.valueMin,
           valueMax: filter.valueMax,
+          settlement: filter.settlement,
         },
         {
           limit: visible,
@@ -298,6 +752,7 @@ function TransacoesPageBody({
       filter.sort,
       filter.valueMin,
       filter.valueMax,
+      filter.settlement,
       visible,
       totalCategoriesForBackend,
     ],
@@ -456,6 +911,9 @@ function TransacoesPageBody({
       if (filter.tags.length > 0 && !(t.tags || []).some((tg) => filter.tags.includes(tg))) return false;
       if (filter.rec === "yes" && !t.rec) return false;
       if (filter.rec === "no" && t.rec) return false;
+      // Sem isto o chip "Situação" acende no modo demo e a lista fica idêntica.
+      if (filter.settlement === "pagas" && !t.settled) return false;
+      if (filter.settlement === "a-pagar" && t.settled) return false;
       if (!matchesValueRange(Math.abs(t.val), filter.valueMin, filter.valueMax)) return false;
       if (debouncedSearch) {
         const needle = debouncedSearch.toLowerCase();
@@ -474,6 +932,7 @@ function TransacoesPageBody({
     filter.cats,
     filter.tags,
     filter.rec,
+    filter.settlement,
     filter.valueMin,
     filter.valueMax,
     filter.period,
@@ -788,344 +1247,11 @@ function TransacoesPageBody({
   };
 
   // ── Detail panel content ──────────────────────────────────────────────────
-  const DetailPanel = ({ tx, onClose }) => {
-    if (!tx) return null;
-    const isReceita = tx.val > 0;
-    return (
-      <div style={{ display:"flex", flexDirection:"column", flex:1, minHeight:0 }}>
-        {/* Header */}
-        <div style={{ padding:"18px 20px", borderBottom:`1px solid ${T.border}`,
-          display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <div style={{ ...G, fontSize:14, fontWeight:800, color:T.ink }}>Detalhes</div>
-          <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer",
-            padding:6, borderRadius:7, display:"flex" }}
-            onMouseEnter={e=>e.currentTarget.style.background=T.bg}
-            onMouseLeave={e=>e.currentTarget.style.background="none"}>
-            <X size={15} color={T.inkMid}/>
-          </button>
-        </div>
-        {/* Amount hero */}
-        <div style={{ padding:"24px 20px 16px", background: isReceita ? T.greenLight : T.redLight,
-          borderBottom:`1px solid ${T.border}`, textAlign:"center" }}>
-          <div style={{ fontSize:32, marginBottom:6 }}>{tx.icon}</div>
-          <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:26, fontWeight:800,
-            color: isReceita ? T.green : T.red, letterSpacing:"-0.02em" }}>
-            {isReceita ? "+" : "−"}{fmtBRL(tx.val)}
-          </div>
-          <div style={{ ...G, fontSize:13, color:T.inkMid, marginTop:4 }}>{tx.desc}</div>
-        </div>
-        {/* Fields */}
-        <div style={{ flex:1, overflowY:"auto", overflowX:"hidden", padding:"16px 20px", display:"flex", flexDirection:"column", gap:0, minHeight:0 }}>
-          {[
-            { label:"Categoria", val: <span style={{ ...G, display:"flex", alignItems:"center", gap:6 }}>
-                <div style={{ width:8, height:8, borderRadius:"50%", background:catColor(tx.cat), flexShrink:0 }}/>
-                {tx.cat}
-              </span>},
-            { label:"Data",      val: tx.date },
-            { label:"Método",    val: tx.method + (tx.parcela?.cartao ? ` · ${tx.parcela.cartao}` : "") },
-            { label:"Status",    val: <span style={{ ...G, fontSize:12, fontWeight:700, padding:"2px 8px", borderRadius:99,
-                background: tx.status==="confirmado" ? T.greenLight : T.amberLight,
-                color:       tx.status==="confirmado" ? T.green       : T.amber }}>
-                {tx.status === "confirmado" ? "✓ Confirmado" : "⏳ Pendente"}
-              </span>},
-            { label:"Recorrente",val: tx.rec ? "Sim" : "Não" },
-            ...(tx.parcela ? [
-              { label:"Parcela",      val: `${tx.parcela.atual}ª de ${tx.parcela.total}` },
-              { label:"Vencimento",   val: tx.parcela.vencimento },
-              { label:"Valor parcela",val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:700, color:T.blue }}>{fmtBRL(tx.parcela.valParcela)}/mês</span> },
-              { label:"Valor total",  val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:600 }}>{fmtBRL(tx.parcela.valorTotal)}</span> },
-              { label:"Já pago",      val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:600, color:T.green }}>{fmtBRL(tx.parcela.valorPago)}</span> },
-              { label:"Valor residual",val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:700, color:T.red }}>{fmtBRL(tx.parcela.valorResidual)}</span> },
-            ] : []),
-          ].map(({label,val})=>(
-            <div key={label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
-              padding:"11px 0", borderBottom:`1px solid ${T.border}` }}>
-              <div style={{ ...G, fontSize:12, color:T.inkMid }}>{label}</div>
-              <div style={{ ...G, fontSize:13, color:T.ink, fontWeight:500 }}>{val}</div>
-            </div>
-          ))}
-          {tx.parcela && (
-            <div style={{ padding:"11px 0", borderBottom:`1px solid ${T.border}` }}>
-              <div style={{ ...G, fontSize:12, color:T.inkMid, marginBottom:8 }}>Progresso das parcelas</div>
-              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
-                <span style={{ ...G, fontSize:11, color:T.green, fontWeight:600 }}>{fmtBRL(tx.parcela.valorPago)} pago</span>
-                <span style={{ ...G, fontSize:11, color:T.red, fontWeight:600 }}>{fmtBRL(tx.parcela.valorResidual)} restante</span>
-              </div>
-              <div style={{ height:6, background:T.grayLight, borderRadius:99, overflow:"hidden" }}>
-                <div style={{ height:"100%", width:`${Math.round(tx.parcela.valorPago/tx.parcela.valorTotal*100)}%`,
-                  background:`linear-gradient(to right, ${T.green}, ${T.blue})`, borderRadius:99,
-                  animation:"progressFill 0.8s cubic-bezier(0.16,1,0.3,1) both" }}/>
-              </div>
-              <div style={{ ...G, fontSize:11, color:T.inkMid, textAlign:"center", marginTop:5 }}>
-                {Math.round(tx.parcela.valorPago/tx.parcela.valorTotal*100)}% pago · {tx.parcela.total - tx.parcela.atual} parcelas restantes
-              </div>
-            </div>
-          )}
-          {(tx.tags||[]).length > 0 && (
-            <div style={{ padding:"11px 0" }}>
-              <div style={{ ...G, fontSize:12, color:T.inkMid, marginBottom:8 }}>Tags</div>
-              <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
-                {tx.tags.map(tag => (
-                  <span key={tag} style={{ ...G, fontSize:11, background:T.grayLight,
-                    color:T.inkMid, padding:"3px 9px", borderRadius:99 }}>#{tag}</span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-        {/* Actions */}
-        <div style={{ padding:"14px 20px", borderTop:`1px solid ${T.border}`, display:"flex", gap:10 }}>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onEditTx) onEditTx(tx);
-              // Fecha o painel no próximo tick para o pai aplicar `flushSync` + `navigate`
-              // antes do unmount do detalhe (evita corridas com o estado do modal).
-              queueMicrotask(() => onClose());
-            }}
-            style={{ ...G, flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
-              background:T.ink, color:"#fff", border:"none", borderRadius:10,
-              padding:"10px", fontSize:13, fontWeight:700, cursor:"pointer" }}>
-            <Pencil size={13}/> Editar
-          </button>
-          {deletingId === tx.id ? (
-            <button onClick={async () => {
-              if (shouldUseRealData) {
-                try {
-                  await transactionsData.removeTransaction(tx.id);
-                  onTransactionsInvalidate?.();
-                } catch (_) {
-                  return;
-                }
-              } else {
-                setMockTxList((prev) => prev.filter((item) => item.id !== tx.id));
-              }
-              setSelected(null);
-              setDeletingId(null);
-            }}
-              style={{ ...G, flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
-                background:T.red, color:"#fff", border:"none", borderRadius:10,
-                padding:"10px", fontSize:13, fontWeight:700, cursor:"pointer" }}>
-              <Trash2 size={13}/> Confirmar exclusão
-            </button>
-          ) : (
-            <button onClick={() => setDeletingId(tx.id)}
-              style={{ ...G, display:"flex", alignItems:"center", justifyContent:"center",
-                background:"none", color:T.red, border:`1px solid ${T.red}44`,
-                borderRadius:10, padding:"10px 14px", fontSize:13, cursor:"pointer" }}>
-              <Trash2 size={13}/>
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  };
 
   // ── Transaction row ───────────────────────────────────────────────────────
   // ── Tooltip helper ─────────────────────────────────────────────────────────
-  const Tip = ({ label, children, pos = "top" }) => {
-    const [rect, setRect] = useState(null);
-    const ref = useRef(null);
-    if (!label) return <>{children}</>;
-
-    const show = (e) => {
-      if (ref.current) setRect(ref.current.getBoundingClientRect());
-    };
-    const hide = () => setRect(null);
-
-    // Compute fixed position from measured rect
-    const tipStyle = rect ? (pos === "top"
-      ? { top: rect.top - 6, left: rect.left + rect.width / 2,
-          transform: "translate(-50%, -100%)" }
-      : { top: rect.bottom + 6, left: rect.left + rect.width / 2,
-          transform: "translateX(-50%)" }
-    ) : null;
-
-    return (
-      <span ref={ref} style={{ position:"relative", display:"inline-flex", alignItems:"center" }}
-        onMouseEnter={show} onMouseLeave={hide}
-        onTouchStart={e => { e.stopPropagation(); rect ? hide() : show(e); }}>
-        {children}
-        {rect && tipStyle && (
-          <span style={{
-            position:"fixed",
-            top: tipStyle.top, left: tipStyle.left,
-            transform: tipStyle.transform,
-            background:"#1A1A2E", color:"#fff",
-            fontSize:11, fontWeight:600, borderRadius:7, padding:"5px 9px",
-            whiteSpace:"nowrap", zIndex:9999, pointerEvents:"none",
-            boxShadow:"0 4px 14px rgba(0,0,0,0.28)", lineHeight:1.4,
-          }}>
-            {label}
-          </span>
-        )}
-      </span>
-    );
-  };
 
 
-  const TxRow = ({ tx }) => {
-    const isSelected = selected?.id === tx.id;
-    const isRefund   = tx.type === "refund";
-    const isReceita  = tx.type === "income" || isRefund;
-    const hasParcela = !!tx.parcela && !isRefund;
-    const isCredito  = tx.paymentMethodKey === "credito" || tx.method === "Crédito";
-    const hasRefundsLinked = tx.refundsSummary && tx.refundsSummary.count > 0;
-    const tags       = tx.tags || [];
-    const visibleTags = tags.slice(0,2);
-    const hiddenTags  = tags.slice(2);
-
-    // Avatar: estorno usa fundo verde claro com ícone ↺. Demais mantêm a cor da categoria.
-    const avatarBg = isRefund ? T.greenLight : catBg(tx.cat);
-
-    return (
-      <div
-        onClick={() => setSelected(isSelected ? null : tx)}
-        className="fincla-row"
-        style={{ display:"flex", alignItems:"flex-start", gap:12,
-          padding: isMobile ? "13px 16px" : "12px 18px",
-          background: isSelected ? `${catColor(tx.cat)}08` : "transparent",
-          borderLeft: isSelected ? `3px solid ${catColor(tx.cat)}` : "3px solid transparent",
-          cursor:"pointer", transition:"background 0.12s, border-color 0.12s" }}>
-
-        {/* Icon */}
-        <div style={{ width:38, height:38, borderRadius:11, background:avatarBg,
-          display:"flex", alignItems:"center", justifyContent:"center",
-          fontSize:18, color: isRefund ? T.green : undefined,
-          fontWeight: isRefund ? 700 : undefined,
-          flexShrink:0, marginTop:1 }}>
-          {tx.icon}
-        </div>
-
-        {/* Main info */}
-        <div style={{ flex:1, minWidth:0 }}>
-
-          {/* Row 1: description — estorno ganha ícone ↺ inline + badge "Há estorno" quando aplicável */}
-          <div style={{ ...G, fontSize:13, fontWeight:600, color:T.ink,
-            overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:3,
-            display:"flex", alignItems:"center", gap:6 }}>
-            <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-              {tx.desc}
-            </span>
-            {hasRefundsLinked && !isRefund && (
-              <Tip label={`${tx.refundsSummary.count} estorno${tx.refundsSummary.count !== 1 ? "s" : ""} relacionado${tx.refundsSummary.count !== 1 ? "s" : ""} · ${fmtBRL(tx.refundsSummary.totalValue)} abatido${tx.refundsSummary.totalValue !== 1 ? "s" : ""}`}>
-                <span style={{ ...G, fontSize:10, color:T.green, background:T.greenLight,
-                  borderRadius:99, padding:"1px 6px", fontWeight:700, cursor:"default", whiteSpace:"nowrap" }}>
-                  ↺ Estorno
-                </span>
-              </Tip>
-            )}
-          </div>
-
-          {/* Row 2: categoria · método · card digits · status chips */}
-          <div style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap",
-            marginBottom: (hasParcela || visibleTags.length > 0) ? 4 : 0 }}>
-            <Tip label={`Categoria: ${tx.cat}`}>
-              <span style={{ ...G, fontSize:11, color:catColor(tx.cat), fontWeight:600 }}>{tx.cat}</span>
-            </Tip>
-            <span style={{ ...G, fontSize:11, color:T.inkGhost }}>·</span>
-
-            {/* Para Crédito: mostra "Crédito ●● 1177" inline se tiver cartão, senão só "Crédito" */}
-            {isCredito ? (
-              <Tip label={tx.parcela?.cartao || "Cartão de crédito"}>
-                <span style={{ ...G, fontSize:11, color:T.inkMid }}>
-                  Crédito
-                  {tx.parcela?.cartao && (
-                    <span style={{ color:T.inkGhost, fontFamily:"'Geist Mono',monospace", letterSpacing:"0.04em" }}>
-                      {" ●● "}{tx.parcela.cartao.split("••")[1]?.trim()}
-                    </span>
-                  )}
-                </span>
-              </Tip>
-            ) : (
-              <Tip label={`Método: ${tx.method}`}>
-                <span style={{ ...G, fontSize:11, color:T.inkMid }}>{tx.method}</span>
-              </Tip>
-            )}
-
-            {tx.rec && (
-              <Tip label="Transação recorrente — repete todo mês">
-                <span style={{ ...G, fontSize:11, color:T.blue, background:T.blueLight,
-                  borderRadius:99, padding:"1px 6px", fontWeight:700, cursor:"default" }}>↻</span>
-              </Tip>
-            )}
-
-            {tx.status === "pendente" && (
-              <Tip label="Aguardando confirmação do lançamento">
-                <span style={{ ...G, fontSize:11, color:T.amber, background:T.amberLight,
-                  borderRadius:99, padding:"1px 6px", fontWeight:700 }}>⏳ Pendente</span>
-              </Tip>
-            )}
-
-            {isRefund && (
-              <>
-                <span style={{ ...G, fontSize:11, color:T.inkGhost }}>·</span>
-                <span style={{ ...G, fontSize:11, color:T.green, fontWeight:600 }}>↺ Estorno</span>
-              </>
-            )}
-          </div>
-
-          {/* Row 3: parcela — compacta, sem redundância com row 2 */}
-          {hasParcela && (
-            <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom: visibleTags.length > 0 ? 4 : 0 }}>
-              <Tip label={`${tx.parcela.atual}ª de ${tx.parcela.total} parcelas · ${tx.parcela.cartao}`}>
-                <span style={{ ...G, fontSize:11, color:T.blue, fontWeight:600,
-                  fontFamily:"'Geist Mono',monospace" }}>
-                  {tx.parcela.atual}/{tx.parcela.total}×
-                </span>
-              </Tip>
-              <span style={{ ...G, fontSize:10, color:T.inkGhost }}>·</span>
-              <Tip label={`Parcela: ${fmtBRL(tx.parcela.valParcela)}/mês · Vence ${tx.parcela.vencimento}`}>
-                <span style={{ ...G, fontSize:11, color:T.inkMid,
-                  fontFamily:"'Geist Mono',monospace" }}>
-                  {fmtBRL(tx.parcela.valParcela)}/mês
-                </span>
-              </Tip>
-              <span style={{ ...G, fontSize:10, color:T.inkGhost }}>·</span>
-              <Tip label={`Já pago: ${fmtBRL(tx.parcela.valorPago)} · Residual: ${fmtBRL(tx.parcela.valorResidual)}`}>
-                <span style={{ ...G, fontSize:11, color:T.inkLight }}>
-                  {tx.parcela.total - tx.parcela.atual} restantes
-                </span>
-              </Tip>
-            </div>
-          )}
-
-          {/* Row 4: tags */}
-          {visibleTags.length > 0 && (
-            <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap" }}>
-              {visibleTags.map(tag => (
-                <span key={tag} style={{ ...G, fontSize:10, color:T.inkMid, background:T.grayLight,
-                  borderRadius:99, padding:"2px 8px", fontWeight:500 }}>#{tag}</span>
-              ))}
-              {hiddenTags.length > 0 && (
-                <Tip label={`Todas: ${tags.map(t=>"#"+t).join(", ")}`} pos="top">
-                  <span style={{ ...G, fontSize:10, color:T.blue, background:T.blueLight,
-                    borderRadius:99, padding:"2px 8px", fontWeight:700, cursor:"default" }}>
-                    +{hiddenTags.length}
-                  </span>
-                </Tip>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Amount column — total da compra + parcela/mês abaixo */}
-        <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", flexShrink:0, gap:2, marginTop:1 }}>
-          <Tip label={hasParcela ? `Total da compra: ${fmtBRL(tx.val)}` : isRefund ? "Estorno · dinheiro voltando" : ""} pos="top">
-            <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:14, fontWeight:700,
-              color: isRefund ? T.green : (isReceita ? T.green : T.ink) }}>
-              {isReceita ? "+" : "−"}{fmtBRL(tx.val)}
-            </div>
-          </Tip>
-          {!isMobile && (
-            <ChevronRight size={12} color={isSelected ? catColor(tx.cat) : T.inkGhost}
-              style={{ marginTop:2, transition:"color 0.12s" }}/>
-          )}
-        </div>
-      </div>
-    );
-  };
 
 
   // ── Filter UI: extraído para `<TransactionsFilterBar>` (Variação C) ──────
@@ -1211,7 +1337,12 @@ function TransacoesPageBody({
               border:`1px solid ${T.border}`, margin: isMobile ? "0 0 10px" : "0 0 8px" }}>
               {txs.map((tx, i) => (
                 <div key={tx.id} style={{ borderBottom: i<txs.length-1?`1px solid ${T.border}`:"none" }}>
-                  <TxRow tx={tx}/>
+                  <TxRow
+                    tx={tx}
+                    isMobile={isMobile}
+                    isSelected={selected?.id === tx.id}
+                    onSelect={handleSelectTx}
+                  />
                 </div>
               ))}
             </div>
@@ -1523,12 +1654,16 @@ function TransacoesPageBody({
               tooltip: !despesaPositiva ? "Saldo positivo de estornos no período" : undefined,
             },
             {
-              label: "Saldo",
+              // "Resultado", não "Saldo": este número é receitas − despesas DO FILTRO
+              // atual, não o dinheiro que existe na conta. Chamá-lo de "Saldo" fazia o
+              // usuário procurar aqui o saldo da conta e concluir que ele estava errado.
+              label: "Resultado",
               val: Math.abs(saldo),
               sign: saldo >= 0 ? "+" : "−",
               color: saldo >= 0 ? T.green : T.red,
               bg: saldo >= 0 ? T.greenLight : T.redLight,
-              countLine: `${filteredCount} transaç${filteredCount !== 1 ? "ões" : "ão"}`,
+              countLine: `${filteredCount} transaç${filteredCount !== 1 ? "ões" : "ão"} no filtro`,
+              tooltip: "Receitas menos despesas dos lançamentos filtrados. Não é o saldo da conta — esse fica em Contas e na Visão Geral.",
             },
           ].map((k) => (
             <div
@@ -1539,7 +1674,7 @@ function TransacoesPageBody({
                 border: `1px solid ${T.border}`,
                 borderRadius: 12,
                 padding: isMobile ? "12px 14px" : "14px 18px",
-                gridColumn: isMobile && k.label === "Saldo" ? "1 / -1" : "auto",
+                gridColumn: isMobile && k.label === "Resultado" ? "1 / -1" : "auto",
               }}
             >
               <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>
@@ -1560,6 +1695,24 @@ function TransacoesPageBody({
           ));
         })()}
       </div>
+
+      {/* Ponte entre os dois números: o "Resultado" acima conta tudo que está no
+          filtro, mas o saldo da conta só conta o que foi pago. Sem esta linha o
+          usuário não tem como descobrir que existe essa diferença — nem o facet. */}
+      {filter.settlement === "todas" && txList.some((t) => t.settleable && !t.settled) && (
+        <div style={{ ...G, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap",
+          fontSize:12, color:T.inkLight, marginTop:-4 }}>
+          <span style={{ color:T.amber, fontWeight:700 }}>⏳</span>
+          Há lançamentos a pagar aqui — eles ainda não entraram no saldo da conta.
+          <button
+            type="button"
+            onClick={() => filter.setSettlement("a-pagar")}
+            style={{ ...G, background:"none", border:"none", padding:0, fontSize:12,
+              fontWeight:700, color:T.blue, cursor:"pointer", textDecoration:"underline" }}>
+            Ver só os a pagar
+          </button>
+        </div>
+      )}
 
             {/* List + Detail panel */}
       {isMobile ? (
@@ -1614,7 +1767,22 @@ function TransacoesPageBody({
                     touchAction:"none", display:"flex", justifyContent:"center" }}>
                   <div style={{ width:36, height:4, borderRadius:99, background:"rgba(0,0,0,0.15)" }}/>
                 </div>
-                <DetailPanel tx={selected} onClose={()=>setSelected(null)}/>
+                <DetailPanel
+                  tx={selected}
+                  onClose={() => setSelected(null)}
+                  onEditTx={onEditTx}
+                  setSelected={setSelected}
+                  shouldUseRealData={shouldUseRealData}
+                  transactionsData={transactionsData}
+                  setMockTxList={setMockTxList}
+                  onTransactionsInvalidate={onTransactionsInvalidate}
+                  deletingId={deletingId}
+                  setDeletingId={setDeletingId}
+                  settlingId={settlingId}
+                  setSettlingId={setSettlingId}
+                  settleError={settleError}
+                  setSettleError={setSettleError}
+                />
               </div>
             </div>
           )}
@@ -1635,7 +1803,22 @@ function TransacoesPageBody({
               background:T.surface, border:`1px solid ${T.border}`, borderRadius:16,
               overflow:"hidden", boxShadow:"0 4px 24px rgba(0,0,0,0.08)",
               animation:"fadeIn 0.15s ease" }}>
-              <DetailPanel tx={selected} onClose={()=>setSelected(null)}/>
+              <DetailPanel
+                  tx={selected}
+                  onClose={() => setSelected(null)}
+                  onEditTx={onEditTx}
+                  setSelected={setSelected}
+                  shouldUseRealData={shouldUseRealData}
+                  transactionsData={transactionsData}
+                  setMockTxList={setMockTxList}
+                  onTransactionsInvalidate={onTransactionsInvalidate}
+                  deletingId={deletingId}
+                  setDeletingId={setDeletingId}
+                  settlingId={settlingId}
+                  setSettlingId={setSettlingId}
+                  settleError={settleError}
+                  setSettleError={setSettleError}
+                />
             </div>
           )}
         </div>

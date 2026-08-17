@@ -274,6 +274,9 @@ export function TransactionsFilterBar({
                 // rec
                 rec={filter.rec}
                 setRec={filter.setRec}
+                // situação (liquidação)
+                settlement={filter.settlement}
+                setSettlement={filter.setSettlement}
                 // chrome
                 onClose={dismissPanel}
                 onApply={dismissPanel}

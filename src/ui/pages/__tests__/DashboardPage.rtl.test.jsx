@@ -1,8 +1,8 @@
 /** @vitest-environment jsdom */
 
 import React from "react";
-import { beforeEach, describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
 import { DashboardPage } from "../DashboardPage.jsx";
 
 let mockDashboardData;
@@ -21,6 +21,9 @@ vi.mock("recharts", () => ({
   XAxis: () => null,
   YAxis: () => null,
 }));
+
+// Sem isto os renders se acumulam no mesmo DOM e um mesmo testid aparece N vezes.
+afterEach(cleanup);
 
 describe("DashboardPage (RTL)", () => {
   beforeEach(() => {
@@ -102,5 +105,86 @@ describe("DashboardPage (RTL)", () => {
     expect(screen.getByText("Alimentação")).toBeInTheDocument();
     expect(screen.queryByText(/\+22%/)).not.toBeInTheDocument();
     expect(screen.queryByText("referência")).not.toBeInTheDocument();
+  });
+});
+
+describe('DashboardPage — KPI "Saldo em conta" (S2)', () => {
+  function renderDash() {
+    return render(
+      <DashboardPage
+        onNav={vi.fn()}
+        stateCtrl={{ mounted: true, isMobile: false }}
+        dataMode="live"
+        organizationId="org-rtl"
+        onNewTx={vi.fn()}
+      />,
+    );
+  }
+
+  beforeEach(() => {
+    mockDashboardData = {
+      ...mockDashboardData,
+      balanceSummary: {
+        as_of: "2026-08-16T12:00:00",
+        total_available: 329.91,
+        total_all: 329.91,
+        account_count: 1,
+        by_type: [],
+      },
+    };
+  });
+
+  it("mostra o saldo REAL das contas, não o resultado do período", () => {
+    renderDash();
+    const card = screen.getByTestId("dashboard-kpi-saldo-em-conta");
+    expect(card).toHaveTextContent("Saldo em conta");
+    expect(card).toHaveTextContent(/329,91/);
+    // O KPI do período continua existindo e com o SEU número (600), separado.
+    expect(screen.getByTestId("dashboard-kpi-saldo")).toHaveTextContent(/600/);
+  });
+
+  it("pluraliza a contagem de contas", () => {
+    renderDash();
+    expect(screen.getByTestId("dashboard-kpi-saldo-em-conta")).toHaveTextContent("em 1 conta");
+
+    cleanup();
+    mockDashboardData = {
+      ...mockDashboardData,
+      balanceSummary: { ...mockDashboardData.balanceSummary, account_count: 3 },
+    };
+    renderDash();
+    expect(screen.getByTestId("dashboard-kpi-saldo-em-conta")).toHaveTextContent("em 3 contas");
+  });
+
+  it("saldo negativo mostra o sinal — não pode parecer positivo", () => {
+    mockDashboardData = {
+      ...mockDashboardData,
+      balanceSummary: { ...mockDashboardData.balanceSummary, total_available: -1500 },
+    };
+    renderDash();
+    const card = screen.getByTestId("dashboard-kpi-saldo-em-conta");
+    // fmtAbs sozinho renderizaria "R$ 1.500,00", idêntico a um saldo positivo,
+    // com a cor da seta como única pista. Conta no vermelho não pode mentir.
+    expect(card).toHaveTextContent("−R$ 1.500,00");
+    expect(card).toHaveTextContent(/negativa/);
+  });
+
+  it("degrada para '—' quando o saldo não vem — zero seria uma mentira plausível", () => {
+    mockDashboardData = { ...mockDashboardData, balanceSummary: null };
+    renderDash();
+    const card = screen.getByTestId("dashboard-kpi-saldo-em-conta");
+    expect(card).toHaveTextContent("—");
+    expect(card).toHaveTextContent("Dados indisponíveis");
+  });
+
+  it("aparece mesmo quando o resumo do período falhou (fontes independentes)", () => {
+    mockDashboardData = {
+      ...mockDashboardData,
+      summary: null,
+      error: "backend fora",
+      hasRealData: false,
+    };
+    renderDash();
+    expect(screen.getByTestId("dashboard-kpi-saldo-em-conta")).toHaveTextContent(/329,91/);
   });
 });
