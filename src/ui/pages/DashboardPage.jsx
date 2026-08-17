@@ -32,6 +32,8 @@ import {
   getMoodActions,
   M_MONO,
   MOODS,
+  moodGreeting,
+  moodInsightBody,
   RhythmTooltipV4,
   calcMood,
 } from "../features/moodV4";
@@ -241,6 +243,11 @@ export function DashboardPage({
   const timePct = Math.round((day / Math.max(dim, 1)) * 100);
   const spendPct =
     envelope > 0 ? Math.min(250, (exp / envelope) * 100) : 0;
+  // Fonte única do "está à frente?": a saudação, o conselho do insight e o número
+  // "R$ X à frente/acima" saem todos daqui. Recalcular em cada lugar reabre a
+  // contradição da #67 numa faixa estreita — `timePct` é arredondado e um ratio
+  // cru não é, e 37 combinações de (dia, dias-no-período) caem nessa fresta.
+  const aheadOfPace = spendPct <= timePct;
   const freePctMood =
     inc > 0
       ? Math.min(100, Math.max(0, (bal / inc) * 100))
@@ -253,6 +260,9 @@ export function DashboardPage({
     [day, spendPct, freePctMood, dim],
   );
   const mood = MOODS[moodKey];
+  // A saudação depende do ritmo, não só da faixa: dentro de `watchful`, ratio <= 1
+  // é gasto ABAIXO do esperado e não pode ser anunciado como aceleração (#67).
+  const moodGreetingText = moodGreeting(moodKey, aheadOfPace);
   const moodActions = getMoodActions(moodKey);
   const kpiPeriodPhrase = useMemo(
     () =>
@@ -299,19 +309,18 @@ export function DashboardPage({
 
   const { Icon: MoodIcon, InsightIcon } = mood;
   const insightStat =
-    spendPct <= timePct
+    aheadOfPace
       ? `R$ ${Math.abs(Math.round((envelope * (timePct - spendPct)) / 100))} à frente`
       : `R$ ${Math.abs(Math.round((envelope * (spendPct - timePct)) / 100))} acima`;
 
   const rhythmVsProj = Math.round((envelope * (timePct - spendPct)) / 100);
 
-  const insightBody = {
-    serene: `Com ${daysLeftInRange} dias restantes no período, você pode gastar até ${fmtAbs(dailyBudget)}/dia com folga.`,
-    healthy: `Ritmo equilibrado — tente manter ${fmtAbs(dailyBudget)}/dia pelos próximos ${daysLeftInRange} dias.`,
-    watchful: "Reduza cerca de R$ 80/dia para fechar o mês no zero. Revise categorias variáveis.",
-    tense: `Limite gastos a ${fmtAbs(dailyBudget)}/dia para não estourar o orçamento no período (${kpiPeriodPhrase}).`,
-    alert: "Evite novas despesas e avalie pausar recorrências não essenciais esta semana.",
-  }[moodKey];
+  const insightBody = moodInsightBody(moodKey, {
+    aheadOfPace,
+    dailyBudgetLabel: fmtAbs(dailyBudget),
+    daysLeft: daysLeftInRange,
+    periodPhrase: kpiPeriodPhrase,
+  });
 
   /** KPI "Saldo em conta" — dinheiro real nas contas, independente do período.
    *
@@ -624,7 +633,7 @@ export function DashboardPage({
               </Card>
               <Card style={{ padding: "13px 14px", background: "#FAFAF9" }}>
                 <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
-                  Saldo livre
+                  Sobra do período
                 </div>
                 <div style={{ ...G, ...NUM, fontSize: 18, fontWeight: 800, color: T.inkGhost, marginBottom: 3 }}>
                   —
@@ -1005,7 +1014,7 @@ export function DashboardPage({
                   <MoodIcon size={10} /> {mood.label}
                 </div>
                 <span style={{ ...S, fontSize: 13, fontWeight: 600, color: moodKey === "serene" || moodKey === "healthy" ? T.inkMid : moodKey === "watchful" ? T.amber : T.red, transition: "color 0.18s" }}>
-                  {mood.greeting}
+                  {moodGreetingText}
                 </span>
               </div>
 
@@ -1065,7 +1074,13 @@ export function DashboardPage({
                   {[
                     { label: "Gasto", color: T.inkGhost, value: fmtAbs(usedAmt), opacity: 1 },
                     { label: "Comprometido", color: mood.bar, value: fmtAbs(committed), opacity: 0.5 },
-                    { label: "Livre", color: mood.bar, value: fmtAbs(freeAmt), opacity: 1 },
+                    // "Livre" sugeria dinheiro disponível para gastar, mas o número é
+                    // `summary.balance` — receitas menos despesas do período. Medido em
+                    // produção: "Livre R$ 9.992,73" com R$ 315,57 de saldo real, porque
+                    // o caixa já tinha ido no pagamento da fatura. Uma ordem de grandeza,
+                    // e nada na tela contradizia (#68). O dinheiro que dá para gastar
+                    // agora é o KPI "Saldo em conta"; aqui é sobra contábil do ciclo.
+                    { label: "Sobra do período", color: mood.bar, value: fmtAbs(freeAmt), opacity: 1 },
                   ].map(({ label, color, value, opacity }) => (
                     <div key={label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
                       <div style={{ width: 7, height: 7, borderRadius: 2, background: color, opacity, transition: "background 0.18s", flexShrink: 0 }} />
