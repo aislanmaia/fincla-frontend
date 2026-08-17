@@ -230,3 +230,33 @@ describe("âncora implícita do saldo de abertura (achado 10 / #72)", () => {
     expect(latestAnchorByAccount([], null)).toEqual({});
   });
 });
+
+
+describe("a fronteira vem da RESPOSTA do ajuste, não de uma constante", () => {
+  const feed = (includes) => [
+    adj({ date: "2026-08-13T12:00:00", includes_same_day: includes }),
+  ];
+  const noDia = { accountId: "acc-1", settled: true, paidAt: "2026-08-13T15:00:00" };
+  const antes = { accountId: "acc-1", settled: true, paidAt: "2026-08-12T15:00:00" };
+
+  it("ajuste 'depois' cobre o próprio dia", () => {
+    const anchors = latestAnchorByAccount(feed(true));
+    expect(anchors["acc-1"].kind).toBe("adjustment");
+    expect(anchorCovering(noDia, anchors)).toBeTruthy();
+  });
+
+  it("ajuste 'antes' NÃO cobre o próprio dia", () => {
+    // O backend põe piso no início do dia para esses. Tratá-los como "depois" faria
+    // a UI dizer "não altera o saldo" sobre um lançamento que altera — mentira sobre
+    // dinheiro, no exato campo que esta PR introduz.
+    const anchors = latestAnchorByAccount(feed(false));
+    expect(anchors["acc-1"].kind).toBe("opening");
+    expect(anchorCovering(noDia, anchors)).toBeNull();
+    expect(anchorCovering(antes, anchors)).toBeTruthy();
+  });
+
+  it("ajuste sem o campo (cliente/linha antiga) segue como 'depois'", () => {
+    const semCampo = latestAnchorByAccount([adj({ date: "2026-08-13T12:00:00" })]);
+    expect(semCampo["acc-1"].kind).toBe("adjustment");
+  });
+});

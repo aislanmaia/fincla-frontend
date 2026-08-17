@@ -23,6 +23,14 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
+/** "2026-08-13" -> "2026-08-12". Em UTC de propósito: é aritmética de calendário. */
+function previousDayYmd(ymd) {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return ymd;
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
 function cents(n) {
   return Math.round(Number(n || 0) * 100);
 }
@@ -81,7 +89,11 @@ export function AdjustBalanceModal({
     if (typeof loadBalanceAt !== "function" || !account?.id || !date) return undefined;
     let cancelled = false;
     setBalanceAtDate(null);
-    loadBalanceAt(account.id, date)
+    // "Antes" significa saldo no INÍCIO do dia, que é o fechamento do dia anterior.
+    // Sem isso o "Ajuste a aplicar" — e o `amount` que fica gravado como auditoria —
+    // erram pelo movimento daquele dia.
+    const ymdForBalance = includesSameDay === false ? previousDayYmd(date) : date;
+    loadBalanceAt(account.id, ymdForBalance)
       .then((value) => {
         if (!cancelled && Number.isFinite(Number(value))) setBalanceAtDate(Number(value));
       })
@@ -93,7 +105,7 @@ export function AdjustBalanceModal({
     return () => {
       cancelled = true;
     };
-  }, [loadBalanceAt, account?.id, date]);
+  }, [loadBalanceAt, account?.id, date, includesSameDay]);
 
   const desiredNum = parseBRL(desired);
   const delta = (cents(desiredNum) - cents(current)) / 100;
@@ -141,9 +153,19 @@ export function AdjustBalanceModal({
    *  Usar a semântica errada aqui erra a contagem em um dia inteiro de lançamentos. */
   const currentAnchor = React.useMemo(() => {
     const lastAdjustment = Array.isArray(history) && history.length > 0
-      ? (history.map((adj) => String(adj.date ?? "").slice(0, 10)).filter(Boolean).sort().at(-1) ?? "")
-      : "";
-    if (lastAdjustment) return { ymd: lastAdjustment, kind: "adjustment" };
+      ? [...history]
+          .filter((adj) => String(adj.date ?? "").slice(0, 10))
+          .sort((a, b) => String(a.date).localeCompare(String(b.date)))
+          .at(-1)
+      : null;
+    if (lastAdjustment) {
+      return {
+        ymd: String(lastAdjustment.date).slice(0, 10),
+        // A fronteira da âncora atual é a RESPOSTA dela, não uma constante — usar a
+        // errada erra a contagem do aviso por um dia inteiro de lançamentos.
+        kind: lastAdjustment.includes_same_day === false ? "opening" : "adjustment",
+      };
+    }
     const opening = Number(account?.initial_balance ?? 0);
     if (opening && account?.initial_date) {
       return { ymd: String(account.initial_date).slice(0, 10), kind: "opening" };
@@ -176,7 +198,7 @@ export function AdjustBalanceModal({
       footer={
         <>
           <Btn variant="outGray" onClick={onClose}>Cancelar</Btn>
-          <Btn variant="dark" onClick={handleSubmit}>
+          <Btn variant="dark" onClick={handleSubmit} disabled={!canSave}>
             {isSaving ? "Aplicando…" : "Aplicar ajuste"}
           </Btn>
         </>
@@ -194,9 +216,13 @@ export function AdjustBalanceModal({
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 10 }}>
         <span style={{ ...G, fontSize: 12, color: T.inkMid }}>
-          {balanceAtDate != null && date !== todayISO()
-            ? `Saldo em ${String(date).split("-").reverse().join("/")}`
-            : "Saldo atual"}
+          {balanceAtDate == null
+            ? "Saldo atual"
+            : includesSameDay === false
+              ? `Saldo antes de ${String(date).split("-").reverse().join("/")}`
+              : date !== todayISO()
+                ? `Saldo em ${String(date).split("-").reverse().join("/")}`
+                : "Saldo atual"}
         </span>
         <span style={{ ...G, ...NUM, fontSize: 15, fontWeight: 700, color: T.ink }}>{formatBRL(current)}</span>
       </div>
@@ -364,7 +390,20 @@ export function AdjustBalanceModal({
               </div>
               {typeof onEditAdjustment === "function" ? (
                 <button
-                  onClick={() => onEditAdjustment(adj, { includes_same_day: !(adj.includes_same_day !== false) })}
+                  onClick={async () => {
+                    try {
+                      await onEditAdjustment(adj, {
+                        includes_same_day: !(adj.includes_same_day !== false),
+                      });
+                      // Sem isto o histórico, o "editado em", a âncora vigente, a
+                      // cobertura e o "Saldo em DD/MM" continuam mostrando o estado
+                      // anterior — o usuário troca a cobertura e a tela não muda.
+                      refreshHistory();
+                      setBalanceAtDate(null);
+                    } catch (_) {
+                      /* mensagem vai para `error` (prop) */
+                    }
+                  }}
                   aria-label={`Trocar para ${adj.includes_same_day === false ? "depois do dia" : "antes do dia"}`}
                   title="Trocar a cobertura deste acerto"
                   style={{ border: "none", background: "none", cursor: "pointer", color: T.blue, fontSize: 12, padding: 4, flex: "0 0 auto", fontWeight: 700 }}

@@ -38,7 +38,8 @@ export function toYmd(value) {
  *
  * `_account_base_stmt` põe piso de três formas, em ordem de precedência:
  *
- *   1. ajuste de saldo  -> piso no FIM do dia do ajuste  (`kind: "adjustment"`)
+ *   1. ajuste de saldo  -> piso no fim OU no início do dia, conforme a resposta do
+ *                          usuário (`includes_same_day`); vira `kind` "adjustment"/"opening"
  *   2. `initial_balance <> 0` -> piso no INÍCIO de `initial_date` (`kind: "opening"`)
  *   3. `initial_balance = 0`  -> sem piso                (nenhuma âncora)
  *
@@ -68,13 +69,18 @@ export function latestAnchorByAccount(adjustments, accounts = []) {
       ymd,
       assertedBalance: Number(adj.asserted_balance ?? 0),
       reason: String(adj.reason ?? ""),
+      // A fronteira é a RESPOSTA do próprio ajuste, não uma constante. Um ajuste
+      // salvo como "antes" tem piso no início do dia no backend; tratá-lo como
+      // "depois" aqui faria a UI dizer "não altera o saldo" sobre um lançamento que
+      // altera — mentira sobre dinheiro, no exato campo que esta PR introduz.
+      kind: adj.includes_same_day === false ? "opening" : "adjustment",
     };
   }
   // `_key` é detalhe de ordenação; não vaza para quem consome.
   const out = {};
   for (const [accountId, value] of Object.entries(byAccount)) {
     const { _key, ...rest } = value;
-    out[accountId] = { ...rest, kind: "adjustment" };
+    out[accountId] = rest;
   }
 
   // Âncora implícita do saldo de abertura — só onde NÃO há ajuste, que tem

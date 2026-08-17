@@ -85,8 +85,10 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
    *  que a tela está mostrando, então esperar o reload seria mostrar valor velho. */
   const handleEditAdjustment = React.useCallback(
     async (adj, changes) => {
+      // `run` relança; sem propagar, o modal não sabe que falhou e mostraria a tela
+      // como se tivesse dado certo. O chamador trata e o erro já vai para `data.error`.
       await data.editAdjustment(adj.id, changes);
-      await data.reload();
+      data.reload();
     },
     [data],
   );
