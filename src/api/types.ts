@@ -512,7 +512,17 @@ export interface Transaction {
   value: number;
   payment_method: string;
   date: string;
-  status: 'pending' | 'completed' | 'cancelled';
+  /**
+   * Eixo de liquidação. `'paid'` = já entrou no saldo da conta; `'confirmed'` =
+   * compromisso pendente. (`'pending'`/`'cancelled'` existem no enum do domínio
+   * mas não são produzidos pelos fluxos atuais.) Antes este tipo dizia
+   * `'pending' | 'completed' | 'cancelled'`, que nunca correspondeu à resposta real.
+   */
+  status: 'paid' | 'confirmed' | 'pending' | 'cancelled';
+  /** Momento do caixa. `null` = não pago — e então fora do saldo da conta. */
+  paid_at?: string | null;
+  /** Conta de liquidação (Fase 0). */
+  account_id?: string | null;
   recurring: boolean;
   /** Presente quando a transação foi materializada a partir de uma série (`/v1/recurring-series`). */
   series_id?: string | null;

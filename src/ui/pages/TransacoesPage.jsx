@@ -311,6 +311,222 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect }) => {
   );
 };
 
+/* Mesmo motivo do `TxRow` acima (fincla-frontend#66): definido dentro do corpo,
+   o drawer inteiro era desmontado e remontado a cada render da página — inclusive
+   a cada transição de `settlingId`, disparada pelo próprio botão de liquidar. */
+const DetailPanel = ({
+  tx,
+  onClose,
+  onEditTx,
+  setSelected,
+  shouldUseRealData,
+  transactionsData,
+  setMockTxList,
+  onTransactionsInvalidate,
+  deletingId,
+  setDeletingId,
+  settlingId,
+  setSettlingId,
+  settleError,
+  setSettleError,
+}) => {
+  if (!tx) return null;
+  const isReceita = tx.val > 0;
+  return (
+    <div style={{ display:"flex", flexDirection:"column", flex:1, minHeight:0 }}>
+      {/* Header */}
+      <div style={{ padding:"18px 20px", borderBottom:`1px solid ${T.border}`,
+        display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+        <div style={{ ...G, fontSize:14, fontWeight:800, color:T.ink }}>Detalhes</div>
+        <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer",
+          padding:6, borderRadius:7, display:"flex" }}
+          onMouseEnter={e=>e.currentTarget.style.background=T.bg}
+          onMouseLeave={e=>e.currentTarget.style.background="none"}>
+          <X size={15} color={T.inkMid}/>
+        </button>
+      </div>
+      {/* Amount hero */}
+      <div style={{ padding:"24px 20px 16px", background: isReceita ? T.greenLight : T.redLight,
+        borderBottom:`1px solid ${T.border}`, textAlign:"center" }}>
+        <div style={{ fontSize:32, marginBottom:6 }}>{tx.icon}</div>
+        <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:26, fontWeight:800,
+          color: isReceita ? T.green : T.red, letterSpacing:"-0.02em" }}>
+          {isReceita ? "+" : "−"}{fmtBRL(tx.val)}
+        </div>
+        <div style={{ ...G, fontSize:13, color:T.inkMid, marginTop:4 }}>{tx.desc}</div>
+      </div>
+      {/* Fields */}
+      <div style={{ flex:1, overflowY:"auto", overflowX:"hidden", padding:"16px 20px", display:"flex", flexDirection:"column", gap:0, minHeight:0 }}>
+        {[
+          { label:"Categoria", val: <span style={{ ...G, display:"flex", alignItems:"center", gap:6 }}>
+              <div style={{ width:8, height:8, borderRadius:"50%", background:catColor(tx.cat), flexShrink:0 }}/>
+              {tx.cat}
+            </span>},
+          { label:"Data",      val: tx.date },
+          { label:"Método",    val: tx.method + (tx.parcela?.cartao ? ` · ${tx.parcela.cartao}` : "") },
+          { label:"Status",    val: <span style={{ ...G, fontSize:12, fontWeight:700, padding:"2px 8px", borderRadius:99,
+              background: tx.status==="confirmado" ? T.greenLight : T.amberLight,
+              color:       tx.status==="confirmado" ? T.green       : T.amber }}>
+              {tx.status === "confirmado" ? "✓ Confirmado" : "⏳ Pendente"}
+            </span>},
+          { label:"Recorrente",val: tx.rec ? "Sim" : "Não" },
+          ...(tx.parcela ? [
+            { label:"Parcela",      val: `${tx.parcela.atual}ª de ${tx.parcela.total}` },
+            { label:"Vencimento",   val: tx.parcela.vencimento },
+            { label:"Valor parcela",val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:700, color:T.blue }}>{fmtBRL(tx.parcela.valParcela)}/mês</span> },
+            { label:"Valor total",  val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:600 }}>{fmtBRL(tx.parcela.valorTotal)}</span> },
+            { label:"Já pago",      val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:600, color:T.green }}>{fmtBRL(tx.parcela.valorPago)}</span> },
+            { label:"Valor residual",val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:700, color:T.red }}>{fmtBRL(tx.parcela.valorResidual)}</span> },
+          ] : []),
+        ].map(({label,val})=>(
+          <div key={label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
+            padding:"11px 0", borderBottom:`1px solid ${T.border}` }}>
+            <div style={{ ...G, fontSize:12, color:T.inkMid }}>{label}</div>
+            <div style={{ ...G, fontSize:13, color:T.ink, fontWeight:500 }}>{val}</div>
+          </div>
+        ))}
+        {tx.parcela && (
+          <div style={{ padding:"11px 0", borderBottom:`1px solid ${T.border}` }}>
+            <div style={{ ...G, fontSize:12, color:T.inkMid, marginBottom:8 }}>Progresso das parcelas</div>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
+              <span style={{ ...G, fontSize:11, color:T.green, fontWeight:600 }}>{fmtBRL(tx.parcela.valorPago)} pago</span>
+              <span style={{ ...G, fontSize:11, color:T.red, fontWeight:600 }}>{fmtBRL(tx.parcela.valorResidual)} restante</span>
+            </div>
+            <div style={{ height:6, background:T.grayLight, borderRadius:99, overflow:"hidden" }}>
+              <div style={{ height:"100%", width:`${Math.round(tx.parcela.valorPago/tx.parcela.valorTotal*100)}%`,
+                background:`linear-gradient(to right, ${T.green}, ${T.blue})`, borderRadius:99,
+                animation:"progressFill 0.8s cubic-bezier(0.16,1,0.3,1) both" }}/>
+            </div>
+            <div style={{ ...G, fontSize:11, color:T.inkMid, textAlign:"center", marginTop:5 }}>
+              {Math.round(tx.parcela.valorPago/tx.parcela.valorTotal*100)}% pago · {tx.parcela.total - tx.parcela.atual} parcelas restantes
+            </div>
+          </div>
+        )}
+        {(tx.tags||[]).length > 0 && (
+          <div style={{ padding:"11px 0" }}>
+            <div style={{ ...G, fontSize:12, color:T.inkMid, marginBottom:8 }}>Tags</div>
+            <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
+              {tx.tags.map(tag => (
+                <span key={tag} style={{ ...G, fontSize:11, background:T.grayLight,
+                  color:T.inkMid, padding:"3px 9px", borderRadius:99 }}>#{tag}</span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+      {/* Liquidação — só para métodos que o usuário liquida por lançamento.
+          Cartão liquida pela fatura, então a ação aqui mentiria sobre o que ele controla. */}
+      {tx.settleable && (
+        <div style={{ padding:"12px 20px 0", display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ ...G, fontSize:12.5, fontWeight:700, color: tx.settled ? T.green : T.amber }}>
+              {tx.settled ? "Pago" : "A pagar"}
+            </div>
+            <div style={{ ...G, fontSize:11, color:T.inkLight, marginTop:1 }}>
+              {tx.settled ? "Já entrou no saldo da conta" : "Ainda não entrou no saldo da conta"}
+            </div>
+          </div>
+          <button
+            type="button"
+            disabled={settlingId === tx.id}
+            onClick={async (e) => {
+              e.stopPropagation();
+              const next = !tx.settled;
+              // Demo/mock não tem backend: sem este ramo o botão fica clicável e
+              // não faz nada, que é pior que não existir.
+              if (!shouldUseRealData) {
+                setMockTxList((prev) =>
+                  prev.map((item) => (item.id === tx.id ? { ...item, settled: next } : item)),
+                );
+                setSelected((cur) => (cur && cur.id === tx.id ? { ...cur, settled: next } : cur));
+                return;
+              }
+              setSettlingId(tx.id);
+              setSettleError("");
+              try {
+                const updated = await transactionsData.setTransactionSettled(tx.id, next);
+                // O drawer renderiza a partir de `selected`, que é um snapshot — sem
+                // isto o painel continuaria mostrando o estado antigo até fechar.
+                if (updated) setSelected((cur) => (cur && cur.id === tx.id ? { ...cur, ...updated } : cur));
+                // A linha já foi trocada em memória (sem piscar), mas o summary e o
+                // recorte do filtro continuariam velhos: com Situação = "A pagar",
+                // a linha recém-paga ficaria visível sob um filtro que a exclui, e o
+                // card "Resultado" somaria um conjunto que a lista não mostra.
+                onTransactionsInvalidate?.();
+              } catch (err) {
+                // `transactionsData.error` renderiza no topo da página; no mobile o
+                // botão vive dentro do bottom sheet e a faixa fica coberta, então a
+                // falha pareceria "não aconteceu nada". Mensagem local, ao lado da ação.
+                setSettleError(err?.message || "Não foi possível atualizar o pagamento.");
+              } finally {
+                setSettlingId(null);
+              }
+            }}
+            style={{ ...G, flexShrink:0, background: tx.settled ? "none" : T.green,
+              color: tx.settled ? T.inkMid : "#fff",
+              border: tx.settled ? `1px solid ${T.border}` : "none",
+              borderRadius:10, padding:"9px 14px", fontSize:12.5, fontWeight:700,
+              cursor: settlingId === tx.id ? "default" : "pointer",
+              opacity: settlingId === tx.id ? 0.6 : 1 }}>
+            {settlingId === tx.id ? "…" : tx.settled ? "Desfazer pagamento" : "Marcar como pago"}
+          </button>
+        </div>
+      )}
+      {tx.settleable && settleError && (
+        <div style={{ ...G, margin:"8px 20px 0", fontSize:11.5, color:T.red,
+          background:T.redLight, borderRadius:9, padding:"7px 10px" }}>
+          {settleError}
+        </div>
+      )}
+      {/* Actions */}
+      <div style={{ padding:"14px 20px", borderTop:`1px solid ${T.border}`, display:"flex", gap:10 }}>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onEditTx) onEditTx(tx);
+            // Fecha o painel no próximo tick para o pai aplicar `flushSync` + `navigate`
+            // antes do unmount do detalhe (evita corridas com o estado do modal).
+            queueMicrotask(() => onClose());
+          }}
+          style={{ ...G, flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+            background:T.ink, color:"#fff", border:"none", borderRadius:10,
+            padding:"10px", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+          <Pencil size={13}/> Editar
+        </button>
+        {deletingId === tx.id ? (
+          <button onClick={async () => {
+            if (shouldUseRealData) {
+              try {
+                await transactionsData.removeTransaction(tx.id);
+                onTransactionsInvalidate?.();
+              } catch (_) {
+                return;
+              }
+            } else {
+              setMockTxList((prev) => prev.filter((item) => item.id !== tx.id));
+            }
+            setSelected(null);
+            setDeletingId(null);
+          }}
+            style={{ ...G, flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
+              background:T.red, color:"#fff", border:"none", borderRadius:10,
+              padding:"10px", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+            <Trash2 size={13}/> Confirmar exclusão
+          </button>
+        ) : (
+          <button onClick={() => setDeletingId(tx.id)}
+            style={{ ...G, display:"flex", alignItems:"center", justifyContent:"center",
+              background:"none", color:T.red, border:`1px solid ${T.red}44`,
+              borderRadius:10, padding:"10px 14px", fontSize:13, cursor:"pointer" }}>
+            <Trash2 size={13}/>
+          </button>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export function TransacoesPage(props) {
   if (props.dataMode === "empty") {
     return <TransactionsEmptyState extraTx={props.extraTx ?? []} onNewTx={props.onNewTx} />;
@@ -415,6 +631,9 @@ function TransacoesPageBody({
   const [deletingId,  setDeletingId]  = useState(null);
   // Id em liquidação — trava o botão para o clique duplo não disparar settle + unsettle.
   const [settlingId,  setSettlingId]  = useState(null);
+  /** Erro da liquidação, mostrado ao lado do botão (a faixa global fica coberta
+      pelo bottom sheet no mobile, onde essa ação vive). */
+  const [settleError, setSettleError] = useState("");
   const [mockTxList,  setMockTxList]  = useState(TRANSACTIONS);
 
   /** Saved views (Variação C) persistidas em localStorage por org. */
@@ -692,6 +911,9 @@ function TransacoesPageBody({
       if (filter.tags.length > 0 && !(t.tags || []).some((tg) => filter.tags.includes(tg))) return false;
       if (filter.rec === "yes" && !t.rec) return false;
       if (filter.rec === "no" && t.rec) return false;
+      // Sem isto o chip "Situação" acende no modo demo e a lista fica idêntica.
+      if (filter.settlement === "pagas" && !t.settled) return false;
+      if (filter.settlement === "a-pagar" && t.settled) return false;
       if (!matchesValueRange(Math.abs(t.val), filter.valueMin, filter.valueMax)) return false;
       if (debouncedSearch) {
         const needle = debouncedSearch.toLowerCase();
@@ -710,6 +932,7 @@ function TransacoesPageBody({
     filter.cats,
     filter.tags,
     filter.rec,
+    filter.settlement,
     filter.valueMin,
     filter.valueMax,
     filter.period,
@@ -1024,179 +1247,6 @@ function TransacoesPageBody({
   };
 
   // ── Detail panel content ──────────────────────────────────────────────────
-  const DetailPanel = ({ tx, onClose }) => {
-    if (!tx) return null;
-    const isReceita = tx.val > 0;
-    return (
-      <div style={{ display:"flex", flexDirection:"column", flex:1, minHeight:0 }}>
-        {/* Header */}
-        <div style={{ padding:"18px 20px", borderBottom:`1px solid ${T.border}`,
-          display:"flex", alignItems:"center", justifyContent:"space-between" }}>
-          <div style={{ ...G, fontSize:14, fontWeight:800, color:T.ink }}>Detalhes</div>
-          <button onClick={onClose} style={{ background:"none", border:"none", cursor:"pointer",
-            padding:6, borderRadius:7, display:"flex" }}
-            onMouseEnter={e=>e.currentTarget.style.background=T.bg}
-            onMouseLeave={e=>e.currentTarget.style.background="none"}>
-            <X size={15} color={T.inkMid}/>
-          </button>
-        </div>
-        {/* Amount hero */}
-        <div style={{ padding:"24px 20px 16px", background: isReceita ? T.greenLight : T.redLight,
-          borderBottom:`1px solid ${T.border}`, textAlign:"center" }}>
-          <div style={{ fontSize:32, marginBottom:6 }}>{tx.icon}</div>
-          <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:26, fontWeight:800,
-            color: isReceita ? T.green : T.red, letterSpacing:"-0.02em" }}>
-            {isReceita ? "+" : "−"}{fmtBRL(tx.val)}
-          </div>
-          <div style={{ ...G, fontSize:13, color:T.inkMid, marginTop:4 }}>{tx.desc}</div>
-        </div>
-        {/* Fields */}
-        <div style={{ flex:1, overflowY:"auto", overflowX:"hidden", padding:"16px 20px", display:"flex", flexDirection:"column", gap:0, minHeight:0 }}>
-          {[
-            { label:"Categoria", val: <span style={{ ...G, display:"flex", alignItems:"center", gap:6 }}>
-                <div style={{ width:8, height:8, borderRadius:"50%", background:catColor(tx.cat), flexShrink:0 }}/>
-                {tx.cat}
-              </span>},
-            { label:"Data",      val: tx.date },
-            { label:"Método",    val: tx.method + (tx.parcela?.cartao ? ` · ${tx.parcela.cartao}` : "") },
-            { label:"Status",    val: <span style={{ ...G, fontSize:12, fontWeight:700, padding:"2px 8px", borderRadius:99,
-                background: tx.status==="confirmado" ? T.greenLight : T.amberLight,
-                color:       tx.status==="confirmado" ? T.green       : T.amber }}>
-                {tx.status === "confirmado" ? "✓ Confirmado" : "⏳ Pendente"}
-              </span>},
-            { label:"Recorrente",val: tx.rec ? "Sim" : "Não" },
-            ...(tx.parcela ? [
-              { label:"Parcela",      val: `${tx.parcela.atual}ª de ${tx.parcela.total}` },
-              { label:"Vencimento",   val: tx.parcela.vencimento },
-              { label:"Valor parcela",val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:700, color:T.blue }}>{fmtBRL(tx.parcela.valParcela)}/mês</span> },
-              { label:"Valor total",  val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:600 }}>{fmtBRL(tx.parcela.valorTotal)}</span> },
-              { label:"Já pago",      val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:600, color:T.green }}>{fmtBRL(tx.parcela.valorPago)}</span> },
-              { label:"Valor residual",val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:700, color:T.red }}>{fmtBRL(tx.parcela.valorResidual)}</span> },
-            ] : []),
-          ].map(({label,val})=>(
-            <div key={label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
-              padding:"11px 0", borderBottom:`1px solid ${T.border}` }}>
-              <div style={{ ...G, fontSize:12, color:T.inkMid }}>{label}</div>
-              <div style={{ ...G, fontSize:13, color:T.ink, fontWeight:500 }}>{val}</div>
-            </div>
-          ))}
-          {tx.parcela && (
-            <div style={{ padding:"11px 0", borderBottom:`1px solid ${T.border}` }}>
-              <div style={{ ...G, fontSize:12, color:T.inkMid, marginBottom:8 }}>Progresso das parcelas</div>
-              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
-                <span style={{ ...G, fontSize:11, color:T.green, fontWeight:600 }}>{fmtBRL(tx.parcela.valorPago)} pago</span>
-                <span style={{ ...G, fontSize:11, color:T.red, fontWeight:600 }}>{fmtBRL(tx.parcela.valorResidual)} restante</span>
-              </div>
-              <div style={{ height:6, background:T.grayLight, borderRadius:99, overflow:"hidden" }}>
-                <div style={{ height:"100%", width:`${Math.round(tx.parcela.valorPago/tx.parcela.valorTotal*100)}%`,
-                  background:`linear-gradient(to right, ${T.green}, ${T.blue})`, borderRadius:99,
-                  animation:"progressFill 0.8s cubic-bezier(0.16,1,0.3,1) both" }}/>
-              </div>
-              <div style={{ ...G, fontSize:11, color:T.inkMid, textAlign:"center", marginTop:5 }}>
-                {Math.round(tx.parcela.valorPago/tx.parcela.valorTotal*100)}% pago · {tx.parcela.total - tx.parcela.atual} parcelas restantes
-              </div>
-            </div>
-          )}
-          {(tx.tags||[]).length > 0 && (
-            <div style={{ padding:"11px 0" }}>
-              <div style={{ ...G, fontSize:12, color:T.inkMid, marginBottom:8 }}>Tags</div>
-              <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
-                {tx.tags.map(tag => (
-                  <span key={tag} style={{ ...G, fontSize:11, background:T.grayLight,
-                    color:T.inkMid, padding:"3px 9px", borderRadius:99 }}>#{tag}</span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-        {/* Liquidação — só para métodos que o usuário liquida por lançamento.
-            Cartão liquida pela fatura, então a ação aqui mentiria sobre o que ele controla. */}
-        {tx.settleable && (
-          <div style={{ padding:"12px 20px 0", display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ ...G, fontSize:12.5, fontWeight:700, color: tx.settled ? T.green : T.amber }}>
-                {tx.settled ? "Pago" : "A pagar"}
-              </div>
-              <div style={{ ...G, fontSize:11, color:T.inkLight, marginTop:1 }}>
-                {tx.settled ? "Já entrou no saldo da conta" : "Ainda não entrou no saldo da conta"}
-              </div>
-            </div>
-            <button
-              type="button"
-              disabled={settlingId === tx.id}
-              onClick={async (e) => {
-                e.stopPropagation();
-                if (!shouldUseRealData) return;
-                setSettlingId(tx.id);
-                try {
-                  const updated = await transactionsData.setTransactionSettled(tx.id, !tx.settled);
-                  // O drawer renderiza a partir de `selected`, que é um snapshot — sem
-                  // isto o painel continuaria mostrando o estado antigo até fechar.
-                  if (updated) setSelected((cur) => (cur && cur.id === tx.id ? { ...cur, ...updated } : cur));
-                } catch (_) {
-                  /* mensagem já vai para transactionsData.error */
-                } finally {
-                  setSettlingId(null);
-                }
-              }}
-              style={{ ...G, flexShrink:0, background: tx.settled ? "none" : T.green,
-                color: tx.settled ? T.inkMid : "#fff",
-                border: tx.settled ? `1px solid ${T.border}` : "none",
-                borderRadius:10, padding:"9px 14px", fontSize:12.5, fontWeight:700,
-                cursor: settlingId === tx.id ? "default" : "pointer",
-                opacity: settlingId === tx.id ? 0.6 : 1 }}>
-              {settlingId === tx.id ? "…" : tx.settled ? "Desfazer pagamento" : "Marcar como pago"}
-            </button>
-          </div>
-        )}
-        {/* Actions */}
-        <div style={{ padding:"14px 20px", borderTop:`1px solid ${T.border}`, display:"flex", gap:10 }}>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onEditTx) onEditTx(tx);
-              // Fecha o painel no próximo tick para o pai aplicar `flushSync` + `navigate`
-              // antes do unmount do detalhe (evita corridas com o estado do modal).
-              queueMicrotask(() => onClose());
-            }}
-            style={{ ...G, flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
-              background:T.ink, color:"#fff", border:"none", borderRadius:10,
-              padding:"10px", fontSize:13, fontWeight:700, cursor:"pointer" }}>
-            <Pencil size={13}/> Editar
-          </button>
-          {deletingId === tx.id ? (
-            <button onClick={async () => {
-              if (shouldUseRealData) {
-                try {
-                  await transactionsData.removeTransaction(tx.id);
-                  onTransactionsInvalidate?.();
-                } catch (_) {
-                  return;
-                }
-              } else {
-                setMockTxList((prev) => prev.filter((item) => item.id !== tx.id));
-              }
-              setSelected(null);
-              setDeletingId(null);
-            }}
-              style={{ ...G, flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
-                background:T.red, color:"#fff", border:"none", borderRadius:10,
-                padding:"10px", fontSize:13, fontWeight:700, cursor:"pointer" }}>
-              <Trash2 size={13}/> Confirmar exclusão
-            </button>
-          ) : (
-            <button onClick={() => setDeletingId(tx.id)}
-              style={{ ...G, display:"flex", alignItems:"center", justifyContent:"center",
-                background:"none", color:T.red, border:`1px solid ${T.red}44`,
-                borderRadius:10, padding:"10px 14px", fontSize:13, cursor:"pointer" }}>
-              <Trash2 size={13}/>
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  };
 
   // ── Transaction row ───────────────────────────────────────────────────────
   // ── Tooltip helper ─────────────────────────────────────────────────────────
@@ -1717,7 +1767,22 @@ function TransacoesPageBody({
                     touchAction:"none", display:"flex", justifyContent:"center" }}>
                   <div style={{ width:36, height:4, borderRadius:99, background:"rgba(0,0,0,0.15)" }}/>
                 </div>
-                <DetailPanel tx={selected} onClose={()=>setSelected(null)}/>
+                <DetailPanel
+                  tx={selected}
+                  onClose={() => setSelected(null)}
+                  onEditTx={onEditTx}
+                  setSelected={setSelected}
+                  shouldUseRealData={shouldUseRealData}
+                  transactionsData={transactionsData}
+                  setMockTxList={setMockTxList}
+                  onTransactionsInvalidate={onTransactionsInvalidate}
+                  deletingId={deletingId}
+                  setDeletingId={setDeletingId}
+                  settlingId={settlingId}
+                  setSettlingId={setSettlingId}
+                  settleError={settleError}
+                  setSettleError={setSettleError}
+                />
               </div>
             </div>
           )}
@@ -1738,7 +1803,22 @@ function TransacoesPageBody({
               background:T.surface, border:`1px solid ${T.border}`, borderRadius:16,
               overflow:"hidden", boxShadow:"0 4px 24px rgba(0,0,0,0.08)",
               animation:"fadeIn 0.15s ease" }}>
-              <DetailPanel tx={selected} onClose={()=>setSelected(null)}/>
+              <DetailPanel
+                  tx={selected}
+                  onClose={() => setSelected(null)}
+                  onEditTx={onEditTx}
+                  setSelected={setSelected}
+                  shouldUseRealData={shouldUseRealData}
+                  transactionsData={transactionsData}
+                  setMockTxList={setMockTxList}
+                  onTransactionsInvalidate={onTransactionsInvalidate}
+                  deletingId={deletingId}
+                  setDeletingId={setDeletingId}
+                  settlingId={settlingId}
+                  setSettlingId={setSettlingId}
+                  settleError={settleError}
+                  setSettleError={setSettleError}
+                />
             </div>
           )}
         </div>

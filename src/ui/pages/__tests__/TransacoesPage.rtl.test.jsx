@@ -390,6 +390,34 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     expect(setTransactionSettled).toHaveBeenCalledWith("tx-pend", true);
   });
 
+  it("reconcilia lista e summary depois de liquidar", async () => {
+    const onTransactionsInvalidate = vi.fn();
+    const setTransactionSettled = vi.fn().mockResolvedValue({ settled: true });
+    seedSettlement(setTransactionSettled);
+    renderPage({ onTransactionsInvalidate });
+
+    await userEvent.click(screen.getAllByText("Boleto luz")[0]);
+    await userEvent.click(await screen.findByRole("button", { name: /Marcar como pago/i }));
+
+    // Sem isto, com Situação = "A pagar" a linha recém-paga continuaria visível sob
+    // um filtro que a exclui, e o card "Resultado" somaria um conjunto que a lista
+    // não mostra — a divergência que esta própria fatia existe para evitar.
+    expect(onTransactionsInvalidate).toHaveBeenCalled();
+  });
+
+  it("mostra o erro ao lado da ação, não só na faixa do topo", async () => {
+    const setTransactionSettled = vi.fn().mockRejectedValue(new Error("Servidor recusou"));
+    seedSettlement(setTransactionSettled);
+    renderPage();
+
+    await userEvent.click(screen.getAllByText("Boleto luz")[0]);
+    await userEvent.click(await screen.findByRole("button", { name: /Marcar como pago/i }));
+
+    // No mobile o botão vive dentro do bottom sheet e a faixa global fica coberta:
+    // uma falha pareceria "não aconteceu nada".
+    expect(await screen.findByText("Servidor recusou")).toBeInTheDocument();
+  });
+
   it("numa transação já paga a ação é desfazer, com settled=false", async () => {
     const setTransactionSettled = vi.fn().mockResolvedValue({ settled: false });
     seedSettlement(setTransactionSettled);
@@ -516,6 +544,32 @@ describe("<TransacoesPage> — estabilidade das linhas (issue #66)", { timeout: 
     // o nó do DOM é outro objeto. Além do desperdício de CPU numa lista parada, é o
     // que faz o elemento nunca ficar "stable" para um clique automatizado — a caixa
     // que se mede num frame pertence a um nó que já não existe no seguinte.
+    expect(after).toBe(before);
+  });
+
+  it("o drawer de detalhe também não é remontado", async () => {
+    transactionsDataMock.mockReturnValue({
+      isLoading: false, error: "",
+      summary: { total_income: 0, total_expenses: 40, total_refunds: 0, balance: -40 },
+      transactions: [
+        { id: "row-a", date: "21/05", desc: "Almoço", cat: "Alimentação", val: -40, method: "Pix",
+          type: "expense", icon: "🍽", status: "confirmado", rec: false, tags: [],
+          settled: false, settleable: true, paidAt: null },
+      ],
+      total: 1, hasMore: false, removeTransaction: vi.fn(),
+      setTransactionSettled: vi.fn().mockResolvedValue({ settled: true }),
+    });
+    renderPage();
+
+    await userEvent.click(screen.getAllByText("Almoço")[0]);
+    const before = screen.getByRole("button", { name: /Marcar como pago/i }).closest("div");
+
+    // Abrir um facet re-renderiza a página com o drawer aberto. Se `DetailPanel`
+    // fosse redefinido a cada render, todo o subárvore do drawer seria remontada —
+    // inclusive a cada transição de `settlingId`, que o próprio botão dispara.
+    await userEvent.click(screen.getByRole("button", { name: /Recorrência: Todas/i }));
+
+    const after = screen.getByRole("button", { name: /Marcar como pago/i }).closest("div");
     expect(after).toBe(before);
   });
 });

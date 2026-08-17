@@ -156,6 +156,19 @@ describe('DashboardPage — KPI "Saldo em conta" (S2)', () => {
     expect(screen.getByTestId("dashboard-kpi-saldo-em-conta")).toHaveTextContent("em 3 contas");
   });
 
+  it("saldo negativo mostra o sinal — não pode parecer positivo", () => {
+    mockDashboardData = {
+      ...mockDashboardData,
+      balanceSummary: { ...mockDashboardData.balanceSummary, total_available: -1500 },
+    };
+    renderDash();
+    const card = screen.getByTestId("dashboard-kpi-saldo-em-conta");
+    // fmtAbs sozinho renderizaria "R$ 1.500,00", idêntico a um saldo positivo,
+    // com a cor da seta como única pista. Conta no vermelho não pode mentir.
+    expect(card).toHaveTextContent("−R$ 1.500,00");
+    expect(card).toHaveTextContent(/negativa/);
+  });
+
   it("degrada para '—' quando o saldo não vem — zero seria uma mentira plausível", () => {
     mockDashboardData = { ...mockDashboardData, balanceSummary: null };
     renderDash();

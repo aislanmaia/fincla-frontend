@@ -333,12 +333,21 @@ export function DashboardPage({
     };
     if (!balanceSummary) return unavailable;
     const n = balanceSummary.account_count ?? 0;
+    const total = balanceSummary.total_available ?? 0;
+    const negative = total < 0;
     return {
       key: "acct",
       label: "Saldo em conta",
-      value: fmtAbs(Math.abs(balanceSummary.total_available ?? 0)),
-      delta: n === 1 ? "em 1 conta" : `em ${n} contas`,
-      up: (balanceSummary.total_available ?? 0) >= 0,
+      // `fmtAbs` já aplica Math.abs, então um saldo negativo renderizava idêntico
+      // a um positivo — a única pista seria a cor da seta. Conta no vermelho é
+      // exatamente o caso em que o número não pode mentir.
+      value: negative ? fmtSgn(total) : fmtAbs(total),
+      delta: negative
+        ? `conta negativa · ${n === 1 ? "1 conta" : `${n} contas`}`
+        : n === 1
+          ? "em 1 conta"
+          : `em ${n} contas`,
+      up: !negative,
       emptyCta: false,
       tooltip: SALDO_EM_CONTA_TOOLTIP,
     };

@@ -72,6 +72,28 @@ describe("mapApiTransactionToUi — eixo de liquidação", () => {
     expect(mapApiTransactionToUi(apiTx({ payment_method: "cash" })).settleable).toBe(true);
   });
 
+  it.each(["Cartão de Crédito", "crédito", "CREDIT_CARD", "cartao de credito"])(
+    "método legado %s também não é liquidável",
+    (method) => {
+      // O backend devolve `payment_method` cru do banco e ainda existem linhas
+      // legadas assim. Classificá-las como não-cartão ofereceria "marcar como pago"
+      // numa parcela: ela entraria no saldo agora E de novo quando a fatura fosse
+      // paga — o endpoint de settle não tem trava de cartão no servidor.
+      expect(mapApiTransactionToUi(apiTx({ payment_method: method })).settleable).toBe(false);
+    },
+  );
+
+  it("o FK da fatura manda, mesmo se o método vier estranho", () => {
+    expect(
+      mapApiTransactionToUi(apiTx({ payment_method: "???", credit_card_id: 7 })).settleable,
+    ).toBe(false);
+  });
+
+  it("débito continua liquidável — 'cartão' sozinho não pode arrastar o débito junto", () => {
+    expect(mapApiTransactionToUi(apiTx({ payment_method: "debit_card" })).settleable).toBe(true);
+    expect(mapApiTransactionToUi(apiTx({ payment_method: "Cartão de Débito" })).settleable).toBe(true);
+  });
+
   it("expõe paid_at para a UI mostrar quando o dinheiro saiu", () => {
     expect(mapApiTransactionToUi(apiTx({ status: "paid", paid_at: "2026-06-20T12:00:00" })).paidAt)
       .toBe("2026-06-20T12:00:00");

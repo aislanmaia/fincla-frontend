@@ -350,6 +350,25 @@ export function expandExpenseTxToAttributedParts(transaction) {
   return ymd ? [{ date: ymd, amount }] : [];
 }
 
+/**
+ * A transação é uma compra no cartão?
+ *
+ * NÃO usa `mapApiPaymentMethodToModalKey`: aquele helper cai em `"pix"` para
+ * qualquer string que não seja uma das 6 canônicas, e o backend devolve
+ * `payment_method` cru do banco — onde ainda existem linhas legadas com
+ * "Cartão de Crédito" / "crédito". Uma dessas classificada como não-cartão
+ * ganharia o botão "Marcar como pago"; o endpoint de settle não tem trava de
+ * cartão no servidor, então a parcela entraria no saldo agora e de novo quando
+ * a fatura fosse paga — contagem dupla silenciosa.
+ *
+ * Dois sinais, ambos conservadores: o FK da fatura (o que o backend de fato usa)
+ * e a raiz "credit" no método normalizado, que cobre os legados sem pegar débito.
+ */
+function isCreditCardApiTransaction(transaction) {
+  if (transaction?.credit_card_id != null) return true;
+  return normalizeText(transaction?.payment_method).includes("credit");
+}
+
 export function mapApiTransactionToUi(transaction) {
   const catTag = pickCategoryTag(transaction);
   const categoryName = catTag ? categoryLabelPtForTag(catTag) : "Sem categoria";
@@ -397,7 +416,7 @@ export function mapApiTransactionToUi(transaction) {
     settled,
     // Cartão liquida quando a FATURA é paga, nunca por lançamento — a UI de liquidar
     // não se aplica a ele, e o badge "A pagar" mentiria sobre o que o usuário controla.
-    settleable: mapApiPaymentMethodToModalKey(transaction.payment_method) !== "credito",
+    settleable: !isCreditCardApiTransaction(transaction),
     paidAt: transaction.paid_at ?? null,
     method: formatMethodLabel(transaction.payment_method),
     tags: pickTagNames(transaction, categoryName),
