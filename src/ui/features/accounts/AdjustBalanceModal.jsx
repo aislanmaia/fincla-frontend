@@ -43,6 +43,8 @@ export function AdjustBalanceModal({
   countCoveredEntries,
   /** `(accountId, ymd) => Promise<number>` — saldo da conta NAQUELA data. */
   loadBalanceAt,
+  /** `(adj, changes) => Promise<void>` — corrige uma âncora existente. */
+  onEditAdjustment,
 }) {
   const balanceToday = Number(account?.balance || 0);
   // Saldo da DATA escolhida. Sem isto, o delta era calculado contra o saldo de HOJE
@@ -55,6 +57,12 @@ export function AdjustBalanceModal({
   const [desired, setDesired] = useState("");
   const [date, setDate] = useState(todayISO());
   const [reason, setReason] = useState("");
+  /** null = ainda não respondeu. SEM pré-seleção de propósito: os dois casos são
+   *  frequentes em qualquer data e nada no dado os distingue (transação não guarda
+   *  hora, porque o usuário não lembra o minuto da compra). Um palpite errado aqui
+   *  produz saldo errado sem nada na tela denunciando — o erro que as âncoras vieram
+   *  consertar. Melhor um clique a mais numa ação rara. */
+  const [includesSameDay, setIncludesSameDay] = useState(null);
   const [history, setHistory] = useState(null); // null = loading
   const [deletingId, setDeletingId] = useState(null);
 
@@ -92,7 +100,7 @@ export function AdjustBalanceModal({
   const hasDesired = desired.trim() !== "";
   // Sem exigir delta != 0: reafirmar o saldo que a tela já mostra é a forma natural
   // de fixar uma âncora numa data, e o backend passou a aceitar isso.
-  const canSave = hasDesired && reason.trim() !== "" && !isSaving;
+  const canSave = hasDesired && reason.trim() !== "" && includesSameDay !== null && !isSaving;
 
   function handleSubmit() {
     if (!canSave) return;
@@ -100,7 +108,13 @@ export function AdjustBalanceModal({
     // auditoria. Antes mandávamos só o delta e o backend derivava a afirmação a
     // partir dele — mas o delta foi calculado contra o saldo que ESTA tela exibia
     // (corte "agora"), que não é necessariamente o saldo da data escolhida.
-    onSubmit({ amount: delta, asserted_balance: desiredNum, reason: reason.trim(), date });
+    onSubmit({
+      amount: delta,
+      asserted_balance: desiredNum,
+      includes_same_day: includesSameDay,
+      reason: reason.trim(),
+      date,
+    });
   }
 
   async function handleDelete(id) {
@@ -143,11 +157,15 @@ export function AdjustBalanceModal({
         ? countCoveredEntries({
             accountId: account.id,
             ymd: date,
+            // A resposta muda o que este acerto passa a cobrir: "Antes" não engole o
+            // movimento do próprio dia, "Depois" engole. Contar sem isso erraria o
+            // aviso por um dia inteiro de lançamentos.
+            kind: includesSameDay === false ? "opening" : "adjustment",
             sinceYmd: currentAnchor.ymd,
             sinceKind: currentAnchor.kind,
           })
         : null,
-    [countCoveredEntries, account?.id, date, currentAnchor],
+    [countCoveredEntries, account?.id, date, currentAnchor, includesSameDay],
   );
 
   return (
@@ -215,6 +233,59 @@ export function AdjustBalanceModal({
         />
       </div>
 
+      {/* A pergunta que o dado não responde. Escolha em vez de sim/não: negar frase
+          composta ("não inclui os lançamentos até essa data") confunde, e sim/não
+          convida resposta automática — aqui a gente QUER que a pessoa pare e pense. */}
+      <div style={{ marginTop: 14 }}>
+        <label style={labelStyle}>
+          Esse saldo é de antes ou depois dos lançamentos de{" "}
+          {String(date).split("-").reverse().join("/")}?
+        </label>
+        <div role="radiogroup" aria-label="Cobertura do acerto" style={{ display: "grid", gap: 8 }}>
+          {[
+            {
+              value: true,
+              titulo: "Depois",
+              hint: "Inclui tudo que aconteceu nesse dia",
+            },
+            {
+              value: false,
+              titulo: "Antes",
+              hint: "Os lançamentos desse dia ainda não estão nele",
+            },
+          ].map((opcao) => {
+            const active = includesSameDay === opcao.value;
+            return (
+              <button
+                type="button"
+                key={String(opcao.value)}
+                role="radio"
+                aria-checked={active}
+                onClick={() => setIncludesSameDay(opcao.value)}
+                style={{
+                  ...G,
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-start",
+                  gap: 2,
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: `1.5px solid ${active ? T.ink : T.border}`,
+                  background: active ? T.grayLight : T.surface,
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+              >
+                <span style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink }}>
+                  {opcao.titulo}
+                </span>
+                <span style={{ ...G, fontSize: 11, color: T.inkLight }}>{opcao.hint}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <div style={{ marginTop: 12 }}>
         <label style={labelStyle}>Justificativa</label>
         <textarea
@@ -230,10 +301,12 @@ export function AdjustBalanceModal({
         <span style={{ width: 7, height: 7, borderRadius: 9999, background: T.inkGhost, flex: "0 0 7px", marginTop: 4 }} />
         <span>
           Não conta como receita ou despesa. <strong>Deste dia em diante o saldo passa a
-          ser calculado a partir deste valor</strong> — lançamentos de{" "}
-          {String(date).split("-").reverse().join("/")} (inclusive) para trás deixam de
-          alterá-lo, porque já estão contemplados no que você está afirmando. O acerto
-          cobre o dia inteiro, como o fechamento de um extrato.
+          ser calculado a partir deste valor</strong>
+          {includesSameDay === null
+            ? " — lançamentos anteriores deixam de alterá-lo, porque já estão contemplados no que você está afirmando."
+            : includesSameDay
+              ? ` — lançamentos de ${String(date).split("-").reverse().join("/")} (inclusive) para trás deixam de alterá-lo.`
+              : ` — lançamentos anteriores a ${String(date).split("-").reverse().join("/")} deixam de alterá-lo; os desse mesmo dia continuam contando.`}
         </span>
       </div>
       {coverage && coverage.count > 0 ? (
@@ -274,8 +347,31 @@ export function AdjustBalanceModal({
                     {String(adj.date).slice(0, 10).split("-").reverse().join("/")}
                   </span>
                 </div>
+                <div style={{ ...G, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 2 }}>
+                  {/* A resposta é o que mais se erra no automático, e é o que muda o
+                      saldo — então ela fica visível na lista, não escondida na edição. */}
+                  <span style={{ ...G, fontSize: 10.5, color: T.inkMid, background: T.grayLight,
+                    borderRadius: 99, padding: "1px 6px", fontWeight: 600 }}>
+                    {adj.includes_same_day === false ? "antes do dia" : "depois do dia"}
+                  </span>
+                  {adj.updated_at && adj.updated_at !== adj.created_at ? (
+                    <span style={{ ...G, fontSize: 10.5, color: T.inkGhost }}>
+                      editado em {String(adj.updated_at).slice(0, 10).split("-").reverse().join("/")}
+                    </span>
+                  ) : null}
+                </div>
                 <div style={{ ...G, fontSize: 11.5, color: T.inkLight, marginTop: 2, wordBreak: "break-word" }}>{adj.reason}</div>
               </div>
+              {typeof onEditAdjustment === "function" ? (
+                <button
+                  onClick={() => onEditAdjustment(adj, { includes_same_day: !(adj.includes_same_day !== false) })}
+                  aria-label={`Trocar para ${adj.includes_same_day === false ? "depois do dia" : "antes do dia"}`}
+                  title="Trocar a cobertura deste acerto"
+                  style={{ border: "none", background: "none", cursor: "pointer", color: T.blue, fontSize: 12, padding: 4, flex: "0 0 auto", fontWeight: 700 }}
+                >
+                  ⇄
+                </button>
+              ) : null}
               <button
                 onClick={() => handleDelete(adj.id)}
                 disabled={deletingId === adj.id}

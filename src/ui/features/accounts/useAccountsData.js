@@ -10,6 +10,7 @@ import { createTransfer as apiCreateTransfer } from "../../../api/transfers";
 import {
   createBalanceAdjustment as apiCreateBalanceAdjustment,
   listBalanceAdjustments as apiListBalanceAdjustments,
+  updateBalanceAdjustment as apiUpdateBalanceAdjustment,
   deleteBalanceAdjustment as apiDeleteBalanceAdjustment,
 } from "../../../api/balanceAdjustments";
 
@@ -99,6 +100,10 @@ export function useAccountsData({ organizationId, enabled = true }) {
     [run, organizationId],
   );
   const transfer = useCallback((body) => run(() => apiCreateTransfer(organizationId, body)), [run, organizationId]);
+  const editAdjustment = useCallback(
+    (adjustmentId, changes) => run(() => apiUpdateBalanceAdjustment(adjustmentId, organizationId, changes)),
+    [run, organizationId],
+  );
   const adjustBalance = useCallback(
     (accountId, body) => run(() => apiCreateBalanceAdjustment(accountId, organizationId, body)),
     [run, organizationId],
@@ -129,6 +134,7 @@ export function useAccountsData({ organizationId, enabled = true }) {
       adjustBalance,
       listAdjustments,
       deleteAdjustment,
+      editAdjustment,
       reload,
     }),
     [
@@ -141,6 +147,7 @@ export function useAccountsData({ organizationId, enabled = true }) {
       adjustBalance,
       listAdjustments,
       deleteAdjustment,
+      editAdjustment,
       reload,
     ],
   );

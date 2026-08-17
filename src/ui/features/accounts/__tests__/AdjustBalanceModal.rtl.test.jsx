@@ -57,6 +57,7 @@ describe("<AdjustBalanceModal>", () => {
     const { getByPlaceholderText, getByText, onSubmit } = setup();
     fireEvent.change(getByPlaceholderText("R$ 0,00"), { target: { value: "150" } });
     fireEvent.change(getByPlaceholderText(/conciliação/i), { target: { value: "reconc extrato" } });
+    fireEvent.click(getByText("Depois"));
     fireEvent.click(getByText("Aplicar ajuste"));
     expect(onSubmit).toHaveBeenCalledTimes(1);
     const arg = onSubmit.mock.calls[0][0];
@@ -79,6 +80,7 @@ describe("<AdjustBalanceModal>", () => {
     const { getByPlaceholderText, getByText, onSubmit } = setup();
     fireEvent.change(getByPlaceholderText("R$ 0,00"), { target: { value: "200" } }); // = saldo atual
     fireEvent.change(getByPlaceholderText(/conciliação/i), { target: { value: "bate com o extrato" } });
+    fireEvent.click(getByText("Depois"));
     fireEvent.click(getByText("Aplicar ajuste"));
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onSubmit.mock.calls[0][0].asserted_balance).toBe(200);
@@ -89,6 +91,7 @@ describe("<AdjustBalanceModal>", () => {
     const { getByPlaceholderText, getByText, onSubmit } = setup();
     fireEvent.change(getByPlaceholderText("R$ 0,00"), { target: { value: "150" } });
     fireEvent.change(getByPlaceholderText(/conciliação/i), { target: { value: "reconc" } });
+    fireEvent.click(getByText("Depois"));
     fireEvent.click(getByText("Aplicar ajuste"));
     // O delta foi calculado contra o saldo que ESTA tela exibia (corte "agora"), que
     // não é o saldo da data escolhida — por isso a afirmação vai explícita.
@@ -114,5 +117,79 @@ describe("<AdjustBalanceModal>", () => {
     expect(await findByText("reconc maio")).toBeTruthy();
     fireEvent.click(getByLabelText("Excluir ajuste"));
     await waitFor(() => expect(onDeleteAdjustment).toHaveBeenCalledWith("adj-1"));
+  });
+});
+
+describe("<AdjustBalanceModal> — antes ou depois dos lançamentos do dia", () => {
+  it("NÃO pré-seleciona nada e bloqueia o salvar até responder", () => {
+    // Sem default de propósito: os dois casos são frequentes em qualquer data e nada
+    // no dado os distingue. Chutar produz saldo errado sem nada denunciando.
+    const { getByPlaceholderText, getByText, onSubmit } = setup();
+    fireEvent.change(getByPlaceholderText("R$ 0,00"), { target: { value: "150" } });
+    fireEvent.change(getByPlaceholderText(/conciliação/i), { target: { value: "x" } });
+
+    // `getByText` devolve o <span> interno; o estado está no botão.
+    expect(getByText("Depois").closest("button").getAttribute("aria-checked")).toBe("false");
+    expect(getByText("Antes").closest("button").getAttribute("aria-checked")).toBe("false");
+
+    fireEvent.click(getByText("Aplicar ajuste"));
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("manda a resposta escolhida no payload", () => {
+    const { getByPlaceholderText, getByText, onSubmit } = setup();
+    fireEvent.change(getByPlaceholderText("R$ 0,00"), { target: { value: "150" } });
+    fireEvent.change(getByPlaceholderText(/conciliação/i), { target: { value: "x" } });
+    fireEvent.click(getByText("Antes"));
+    fireEvent.click(getByText("Aplicar ajuste"));
+
+    expect(onSubmit.mock.calls[0][0].includes_same_day).toBe(false);
+  });
+
+  it("a explicação do rodapé muda conforme a resposta", () => {
+    const { getByPlaceholderText, getByText, container } = setup();
+    fireEvent.change(getByPlaceholderText("R$ 0,00"), { target: { value: "150" } });
+
+    fireEvent.click(getByText("Depois"));
+    expect(container.textContent).toMatch(/\(inclusive\) para trás/);
+
+    fireEvent.click(getByText("Antes"));
+    expect(container.textContent).toMatch(/desse mesmo dia continuam contando/);
+  });
+
+  it("mostra a cobertura de cada ajuste na lista e permite trocá-la", async () => {
+    const onEditAdjustment = vi.fn().mockResolvedValue(undefined);
+    const history = [
+      { id: "adj-1", amount: 100, asserted_balance: 100, includes_same_day: true,
+        date: "2026-08-13T12:00:00", reason: "conciliação",
+        created_at: "2026-08-13T12:00:00", updated_at: "2026-08-13T12:00:00" },
+    ];
+    const { container, findByLabelText } = renderModal({
+      loadAdjustments: vi.fn().mockResolvedValue(history),
+      onEditAdjustment,
+    });
+
+    // A resposta fica visível na lista: é o que mais se erra e o que muda o saldo.
+    expect(await findByLabelText(/Trocar para antes do dia/i)).toBeInTheDocument();
+    expect(container.textContent).toMatch(/depois do dia/);
+
+    fireEvent.click(await findByLabelText(/Trocar para antes do dia/i));
+    expect(onEditAdjustment).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "adj-1" }),
+      { includes_same_day: false },
+    );
+  });
+
+  it("marca ajuste editado, para a mudança não ser invisível", async () => {
+    const history = [
+      { id: "adj-1", amount: 100, asserted_balance: 100, includes_same_day: false,
+        date: "2026-08-13T12:00:00", reason: "conciliação",
+        created_at: "2026-08-13T12:00:00", updated_at: "2026-08-15T09:00:00" },
+    ];
+    const { findByText } = renderModal({
+      loadAdjustments: vi.fn().mockResolvedValue(history),
+      onEditAdjustment: vi.fn(),
+    });
+    expect(await findByText(/editado em 15\/08\/2026/)).toBeInTheDocument();
   });
 });

@@ -131,7 +131,10 @@ export function anchorCovering(entry, anchorsByAccount) {
  * Alimenta o aviso do modal: aplicar um acerto em data retroativa silencia tudo que
  * veio antes, e o usuário merece ver o tamanho disso ANTES de confirmar.
  */
-export function entriesCoveredBy(entries, { accountId, ymd, sinceYmd = "", sinceKind = "adjustment" }) {
+export function entriesCoveredBy(
+  entries,
+  { accountId, ymd, kind = "adjustment", sinceYmd = "", sinceKind = "adjustment" },
+) {
   if (!accountId || !ymd) return { count: 0, total: 0, net: 0 };
   let count = 0;
   let net = 0;
@@ -141,7 +144,10 @@ export function entriesCoveredBy(entries, { accountId, ymd, sinceYmd = "", since
     // Pendente não é coberto por âncora nenhuma: o saldo só soma liquidado.
     if (entry.settled === false) continue;
     const cash = toYmd(entry.paidAt ?? entry.paid_at ?? entry.dateIsoForEdit ?? entry.date);
-    if (!cash || cash > ymd) continue;
+    // Fronteira do acerto que está sendo criado: "antes" (opening) não engole o
+    // movimento do próprio dia; "depois" (adjustment) engole.
+    if (!cash) continue;
+    if (kind === "opening" ? cash >= ymd : cash > ymd) continue;
     // Limite inferior na âncora que JÁ existe: o que ela cobre não passa a ser
     // coberto por nada — já estava. Sem isto o aviso anunciava "203 lançamentos"
     // onde só 3 mudam de situação, e assusta o usuário para longe de uma

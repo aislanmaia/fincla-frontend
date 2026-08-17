@@ -1,6 +1,10 @@
 // api/balanceAdjustments.ts
 import apiClient from './client';
-import type { BalanceAdjustment, CreateBalanceAdjustmentRequest } from './types';
+import type {
+  BalanceAdjustment,
+  CreateBalanceAdjustmentRequest,
+  UpdateBalanceAdjustmentRequest,
+} from './types';
 
 /** Cria um ajuste de saldo (reconciliação) numa conta. */
 export const createBalanceAdjustment = async (
@@ -40,6 +44,26 @@ export const listOrgBalanceAdjustments = async (
   const response = await apiClient.get<BalanceAdjustment[]>('/balance-adjustments', {
     params: { organization_id: organizationId, from, to },
   });
+  return response.data;
+};
+
+/**
+ * Corrige uma âncora existente. Só os campos enviados mudam.
+ *
+ * Existe porque a pergunta "antes ou depois dos lançamentos do dia?" é obrigatória e
+ * fácil de errar no automático — e errar nela produz saldo errado sem nada na tela
+ * denunciando. Sem edição, a saída seria excluir e refazer, redigitando tudo.
+ */
+export const updateBalanceAdjustment = async (
+  adjustmentId: string,
+  organizationId: string,
+  body: UpdateBalanceAdjustmentRequest,
+): Promise<BalanceAdjustment> => {
+  const response = await apiClient.patch<BalanceAdjustment>(
+    `/balance-adjustments/${adjustmentId}`,
+    body,
+    { params: { organization_id: organizationId } },
+  );
   return response.data;
 };
 
