@@ -84,6 +84,11 @@ vi.mock("../../features/tags/useCategoryTagsData.js", () => ({
   useCategoryTagsData: (...args) => categoryTagsDataMock(...args),
 }));
 
+const listOrgBalanceAdjustmentsMock = vi.fn().mockResolvedValue([]);
+vi.mock("../../../api/balanceAdjustments", () => ({
+  listOrgBalanceAdjustments: (...args) => listOrgBalanceAdjustmentsMock(...args),
+}));
+
 import { TransacoesPage } from "../TransacoesPage.jsx";
 
 beforeEach(() => {
@@ -504,6 +509,55 @@ describe("<TransacoesPage> — desambiguação de nomes (S2)", { timeout: 15000 
     renderPage();
 
     expect(screen.queryByRole("button", { name: /Ver só os a pagar/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("<TransacoesPage> — lançamentos cobertos por âncora (S4)", { timeout: 15000 }, () => {
+  function seed(anchors) {
+    listOrgBalanceAdjustmentsMock.mockResolvedValue(anchors);
+    transactionsDataMock.mockReturnValue({
+      isLoading: false, error: "",
+      summary: { total_income: 0, total_expenses: 150, total_refunds: 0, balance: -150 },
+      transactions: [
+        { id: "t-antigo", date: "10/08/2026", desc: "Compra antiga", cat: "Casa", val: -100,
+          method: "Pix", type: "expense", icon: "🏠", status: "confirmado", rec: false, tags: [],
+          settled: true, settleable: true, paidAt: "2026-08-10T12:00:00", accountId: "acc-1" },
+        { id: "t-novo", date: "20/08/2026", desc: "Compra nova", cat: "Casa", val: -50,
+          method: "Pix", type: "expense", icon: "🏠", status: "confirmado", rec: false, tags: [],
+          settled: true, settleable: true, paidAt: "2026-08-20T12:00:00", accountId: "acc-1" },
+      ],
+      total: 2, hasMore: false, removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
+    });
+  }
+
+  it("marca só o que é anterior ao acerto de saldo", async () => {
+    seed([
+      { id: "a1", account_id: "acc-1", amount: 0, asserted_balance: 300,
+        date: "2026-08-13T12:00:00", reason: "conciliação", created_at: "2026-08-13T12:00:00" },
+    ]);
+    renderPage();
+
+    // "Já no acerto" só na linha de 10/08; a de 20/08 é posterior e conta normalmente.
+    expect(await screen.findByText("⚓ Já no acerto")).toBeInTheDocument();
+    expect(screen.getAllByText("⚓ Já no acerto").length).toBe(1);
+  });
+
+  it("não marca nada quando a conta não tem acerto", async () => {
+    seed([]);
+    renderPage();
+
+    expect(await screen.findByText("Compra antiga")).toBeInTheDocument();
+    expect(screen.queryByText("⚓ Já no acerto")).not.toBeInTheDocument();
+  });
+
+  it("não marca nada quando o feed de âncoras falha — avisar no escuro seria pior", async () => {
+    listOrgBalanceAdjustmentsMock.mockRejectedValue(new Error("backend fora"));
+    seed([]);
+    listOrgBalanceAdjustmentsMock.mockRejectedValue(new Error("backend fora"));
+    renderPage();
+
+    expect(await screen.findByText("Compra antiga")).toBeInTheDocument();
+    expect(screen.queryByText("⚓ Já no acerto")).not.toBeInTheDocument();
   });
 });
 

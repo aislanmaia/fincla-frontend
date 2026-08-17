@@ -26,6 +26,22 @@ function setup(overrides = {}) {
   return { ...utils, onSubmit, onDeleteAdjustment, loadAdjustments };
 }
 
+/** Render com props extras (ex.: `countCoveredEntries`), sem os espiões do setup. */
+function renderModal(props = {}) {
+  return render(
+    <AdjustBalanceModal
+      account={account}
+      onClose={() => {}}
+      onSubmit={vi.fn()}
+      isSaving={false}
+      error=""
+      loadAdjustments={vi.fn().mockResolvedValue([])}
+      onDeleteAdjustment={vi.fn()}
+      {...props}
+    />,
+  );
+}
+
 describe("<AdjustBalanceModal>", () => {
   it("mostra saldo atual e calcula o delta a partir do saldo desejado", () => {
     const { getByPlaceholderText, container } = setup();
@@ -49,13 +65,47 @@ describe("<AdjustBalanceModal>", () => {
     expect(arg.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
-  it("não submete sem justificativa ou sem delta", () => {
+  it("não submete sem justificativa", () => {
     const { getByPlaceholderText, getByText, onSubmit } = setup();
-    // desired = current -> delta 0
-    fireEvent.change(getByPlaceholderText("R$ 0,00"), { target: { value: "200" } });
-    fireEvent.change(getByPlaceholderText(/conciliação/i), { target: { value: "x" } });
+    fireEvent.change(getByPlaceholderText("R$ 0,00"), { target: { value: "150" } });
     fireEvent.click(getByText("Aplicar ajuste"));
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("aceita reafirmar o MESMO saldo — é como se fixa uma âncora numa data", () => {
+    // Antes o delta 0 era rejeitado. No modelo de âncora, "meu saldo neste dia era
+    // exatamente este" é uma afirmação legítima e útil: ela passa a cobrir tudo que
+    // veio antes, mesmo sem mudar o número.
+    const { getByPlaceholderText, getByText, onSubmit } = setup();
+    fireEvent.change(getByPlaceholderText("R$ 0,00"), { target: { value: "200" } }); // = saldo atual
+    fireEvent.change(getByPlaceholderText(/conciliação/i), { target: { value: "bate com o extrato" } });
+    fireEvent.click(getByText("Aplicar ajuste"));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0][0].asserted_balance).toBe(200);
+    expect(onSubmit.mock.calls[0][0].amount).toBe(0);
+  });
+
+  it("manda o saldo AFIRMADO, não só o delta", () => {
+    const { getByPlaceholderText, getByText, onSubmit } = setup();
+    fireEvent.change(getByPlaceholderText("R$ 0,00"), { target: { value: "150" } });
+    fireEvent.change(getByPlaceholderText(/conciliação/i), { target: { value: "reconc" } });
+    fireEvent.click(getByText("Aplicar ajuste"));
+    // O delta foi calculado contra o saldo que ESTA tela exibia (corte "agora"), que
+    // não é o saldo da data escolhida — por isso a afirmação vai explícita.
+    expect(onSubmit.mock.calls[0][0].asserted_balance).toBe(150);
+  });
+
+  it("avisa quantos lançamentos o acerto passa a cobrir", () => {
+    const countCoveredEntries = vi.fn(() => ({ count: 3, total: 420 }));
+    const { container } = renderModal({ countCoveredEntries });
+    expect(container.textContent).toMatch(/3 lançamentos desta conta/);
+    expect(container.textContent).toMatch(/não alteram mais o saldo/);
+  });
+
+  it("não avisa nada quando o acerto não cobre lançamento nenhum", () => {
+    const countCoveredEntries = vi.fn(() => ({ count: 0, total: 0 }));
+    const { container } = renderModal({ countCoveredEntries });
+    expect(container.textContent).not.toMatch(/passam? a ser cobert/);
   });
 
   it("carrega e exclui ajustes do histórico", async () => {

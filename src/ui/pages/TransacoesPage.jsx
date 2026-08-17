@@ -42,6 +42,8 @@ import {
 } from "../features/transactions/filters/index.js";
 import { SavedViewsCards } from "../features/transactions/filters/savedViews/SavedViewsCards.jsx";
 import { shouldShowSavedViewsSection, viewSnapshotsEqual } from "../features/transactions/filters/savedViews/savedViewsModel.js";
+import { listOrgBalanceAdjustments } from "../../api/balanceAdjustments";
+import { anchorCovering, latestAnchorByAccount } from "../features/accounts/balanceAnchors.js";
 import {
   filtersToLegacyParams,
   filtersToCsvOptions,
@@ -140,7 +142,7 @@ const Tip = ({ label, children, pos = "top" }) => {
   );
 };
 
-const TxRow = ({ tx, isMobile, isSelected, onSelect }) => {
+const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor }) => {
   const isRefund   = tx.type === "refund";
   const isReceita  = tx.type === "income" || isRefund;
   const hasParcela = !!tx.parcela && !isRefund;
@@ -239,6 +241,16 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect }) => {
             <Tip label="Ainda não entrou no saldo da conta — marque como pago quando o dinheiro sair">
               <span style={{ ...G, fontSize:11, color:T.amber, background:T.amberLight,
                 borderRadius:99, padding:"1px 6px", fontWeight:700 }}>⏳ A pagar</span>
+            </Tip>
+          )}
+
+          {/* Sem isto, o usuário lança algo retroativo, vê o saldo não se mexer e não
+              tem como saber por quê — o modelo de âncora trocaria um erro silencioso
+              por outro. É esta marca que fecha o ciclo. */}
+          {coveringAnchor && (
+            <Tip label={`Você acertou o saldo desta conta em ${coveringAnchor.ymd.split("-").reverse().join("/")}. O acerto cobre esse dia inteiro, então este lançamento já está contemplado nele e não altera o saldo.`}>
+              <span style={{ ...G, fontSize:11, color:T.inkMid, background:T.grayLight,
+                borderRadius:99, padding:"1px 6px", fontWeight:600 }}>⚓ Já no acerto</span>
             </Tip>
           )}
 
@@ -711,6 +723,29 @@ function TransacoesPageBody({
   const searchAwaitingCommit = searchInput.trim() !== debouncedSearch;
 
   const shouldUseRealData = shouldUseRealDataForMode(organizationId, dataMode);
+
+  /** Âncoras de saldo por conta — dizem quais lançamentos já estão contemplados num
+      acerto e por isso não mexem no saldo. Falha silenciosa de propósito: sem elas a
+      lista só deixa de mostrar a marca, o que é melhor do que não carregar a tela. */
+  const [balanceAnchors, setBalanceAnchors] = useState({});
+  useEffect(() => {
+    if (!shouldUseRealData || !organizationId) {
+      setBalanceAnchors({});
+      return undefined;
+    }
+    let cancelled = false;
+    listOrgBalanceAdjustments(organizationId)
+      .then((rows) => {
+        if (!cancelled) setBalanceAnchors(latestAnchorByAccount(rows));
+      })
+      .catch(() => {
+        if (!cancelled) setBalanceAnchors({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [shouldUseRealData, organizationId, transactionsRefreshToken]);
+
   const categoryTagsData = useCategoryTagsData({
     organizationId,
     enabled: shouldUseRealData,
@@ -1342,6 +1377,7 @@ function TransacoesPageBody({
                     isMobile={isMobile}
                     isSelected={selected?.id === tx.id}
                     onSelect={handleSelectTx}
+                    coveringAnchor={anchorCovering(tx, balanceAnchors)}
                   />
                 </div>
               ))}
