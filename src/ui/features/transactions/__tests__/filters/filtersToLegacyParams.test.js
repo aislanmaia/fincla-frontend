@@ -146,8 +146,23 @@ describe("filtersToLegacyParams", () => {
       customFrom: "",
       customTo: "",
       sortBy: "date-desc",
+      settlement: "todas",
       limit: 30,
     });
+  });
+
+  it("mapeia a situação (eixo de liquidação) e assume 'todas' quando ausente", () => {
+    expect(
+      filtersToLegacyParams({ ...base, settlement: "a-pagar" }, { limit: 30 }).settlement,
+    ).toBe("a-pagar");
+    expect(
+      filtersToLegacyParams({ ...base, settlement: "pagas" }, { limit: 30 }).settlement,
+    ).toBe("pagas");
+    // Estado antigo persistido (saved view salva antes do facet existir) não pode
+    // virar `undefined` e cair como `settled=undefined` na querystring.
+    const legacyState = { ...base };
+    delete legacyState.settlement;
+    expect(filtersToLegacyParams(legacyState, { limit: 30 }).settlement).toBe("todas");
   });
 
   it("usa totalCategories para mapear 'Todas selecionadas' → 'todas'", () => {

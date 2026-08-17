@@ -7,6 +7,7 @@
  *  - O backend aceita UMA categoria (`filterCat`); enviamos a primeira da seleção.
  *  - O sort do backend é único; enviamos o primeiro critério da lista multi-nível.
  *  - Recorrência (`rec`) ainda não tem filtro correspondente no backend.
+ *  - Situação (`settlement`) tem: vira `?settled=` na lista e no summary.
  *
  * Forma de pagamento é multi-seleção: o backend casa com qualquer um dos valores
  * enviados (param `payment_method` repetido), então mandamos todos os métodos
@@ -107,6 +108,10 @@ export function filtersToLegacyParams(
     customTo: state.customTo,
     sortBy: mapSortToLegacy(state.sort),
     ...mapValueRangeToLegacy(state.valueMin, state.valueMax),
+    // Vai para a lista E para o summary: `buildTransactionsSummaryQuery` recebe o
+    // mesmo objeto, então o card de totais e a lista não podem descrever conjuntos
+    // diferentes de linhas.
+    settlement: state.settlement ?? "todas",
     limit,
   };
 }

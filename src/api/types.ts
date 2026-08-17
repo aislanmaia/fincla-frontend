@@ -552,7 +552,13 @@ export interface ListTransactionsQuery {
   /** Um valor, ou vários (casa com qualquer um) — serializado como param repetido. */
   payment_method?: string | string[];
   description?: string;
-  status?: 'pending' | 'completed' | 'cancelled';
+  /**
+   * Eixo de liquidação: `true` = só as que já entraram no saldo da conta
+   * (`status='paid'`), `false` = só os compromissos pendentes. Omita para as duas.
+   * `/transactions/summary` aceita o mesmo param — passe os dois juntos, senão o card
+   * de totais soma um conjunto de linhas e a lista mostra outro.
+   */
+  settled?: boolean;
   tag_id?: string;
   date_start?: string;
   date_end?: string;
@@ -594,6 +600,8 @@ export interface TransactionsSummaryQuery {
   value_max?: number;
   /** `true` = só transações recorrentes; `false` = só não recorrentes */
   recurring?: boolean;
+  /** Mesmo eixo de `ListTransactionsQuery.settled` — mande junto com o da lista. */
+  settled?: boolean;
 }
 
 export interface PeriodInfo {

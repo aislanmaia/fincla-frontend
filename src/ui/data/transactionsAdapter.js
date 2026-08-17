@@ -3,6 +3,8 @@ import {
   getTransactionsSummary,
   deleteTransaction,
   listTransactions,
+  settleTransaction,
+  unsettleTransaction,
   updateTransaction,
 } from "../../api/transactions";
 import { downloadTransactionsCsv } from "../../api/analytics";
@@ -361,6 +363,13 @@ export function mapApiTransactionToUi(transaction) {
   if (transaction.status === "pending") statusLabel = "pendente";
   else if (transaction.status === "cancelled") statusLabel = "cancelada";
 
+  // Eixo de liquidação, separado do `status` acima de propósito. O backend só soma
+  // `status='paid'` no saldo da conta, mas a UI achatava 'paid' e 'confirmed' no mesmo
+  // rótulo "confirmado" — então o usuário não tinha como perceber que um lançamento
+  // não entrou no saldo. `statusLabel` continua como está para não quebrar os dois
+  // lugares que já leem `status === "pendente"` (TransacoesPage, DashboardPage).
+  const settled = transaction.status === "paid";
+
   const listDateRaw = pickTransactionListDateRawForDisplay(transaction);
   const dateLabel = formatDate(listDateRaw);
 
@@ -385,6 +394,11 @@ export function mapApiTransactionToUi(transaction) {
     rec: transaction.recurring,
     seriesId: transaction.series_id ?? null,
     status: statusLabel,
+    settled,
+    // Cartão liquida quando a FATURA é paga, nunca por lançamento — a UI de liquidar
+    // não se aplica a ele, e o badge "A pagar" mentiria sobre o que o usuário controla.
+    settleable: mapApiPaymentMethodToModalKey(transaction.payment_method) !== "credito",
+    paidAt: transaction.paid_at ?? null,
     method: formatMethodLabel(transaction.payment_method),
     tags: pickTagNames(transaction, categoryName),
     detailTagIds: pickNonCategoryTagIdsFromApiTransaction(transaction),
@@ -490,6 +504,17 @@ function resolvePaymentMethodParam(filterMethod) {
   return cleaned.length ? cleaned : null;
 }
 
+/**
+ * Facet "Situação" -> query param `settled` (bool). "todas" omite o param, que é o
+ * que o backend lê como "as duas". Um `settled: undefined` no objeto viraria
+ * `settled=undefined` na querystring em alguns serializadores, então é omissão mesmo.
+ */
+function resolveSettlement(settlement) {
+  if (settlement === "pagas") return { settled: true };
+  if (settlement === "a-pagar") return { settled: false };
+  return {};
+}
+
 export function buildTransactionsQuery({
   organizationId,
   search = "",
@@ -502,6 +527,7 @@ export function buildTransactionsQuery({
   sortBy = "date-desc",
   valueMin,
   valueMax,
+  settlement = "todas",
   limit = 10,
 }) {
   const categoryFilter =
@@ -523,6 +549,7 @@ export function buildTransactionsQuery({
     ...resolveDateRange(period, customFrom, customTo),
     ...(valueMin != null ? { value_min: valueMin } : {}),
     ...(valueMax != null ? { value_max: valueMax } : {}),
+    ...resolveSettlement(settlement),
     page: 1,
     limit,
     ...resolveSort(sortBy),
@@ -609,6 +636,7 @@ export function buildTransactionsSummaryQuery({
   customTo = "",
   valueMin,
   valueMax,
+  settlement = "todas",
 }) {
   const categoryFilter =
     filterCat !== "todas"
@@ -629,6 +657,10 @@ export function buildTransactionsSummaryQuery({
     ...resolveDateRange(period, customFrom, customTo),
     ...(valueMin != null ? { value_min: valueMin } : {}),
     ...(valueMax != null ? { value_max: valueMax } : {}),
+    // Mesmo eixo da lista, de propósito: sem isso o card de totais somaria todas as
+    // linhas enquanto a lista abaixo mostra só o subconjunto filtrado, e o usuário
+    // ficaria olhando um total que nenhuma linha visível fecha.
+    ...resolveSettlement(settlement),
   };
 }
 
@@ -706,6 +738,19 @@ export async function getTransactionsSummaryForUi(query) {
 
 export async function deleteTransactionForUi(transactionId, organizationId) {
   return deleteTransaction(transactionId, organizationId);
+}
+
+/**
+ * Liquida (ou desfaz a liquidação de) uma transação e devolve a linha já no formato da UI.
+ *
+ * Devolver a linha mapeada — em vez de só o status — deixa o chamador substituir o item
+ * na lista sem refetch, o que evita a lista piscar a cada clique.
+ */
+export async function setTransactionSettledForUi(transactionId, organizationId, settled) {
+  const updated = settled
+    ? await settleTransaction(transactionId, organizationId)
+    : await unsettleTransaction(transactionId, organizationId);
+  return mapApiTransactionToUi(updated);
 }
 
 export async function downloadTransactionsCsvForUi(organizationId, options) {

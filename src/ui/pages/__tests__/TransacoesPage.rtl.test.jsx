@@ -212,11 +212,12 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     expect(screen.getByRole("button", { name: /Tipo: Todos/i })).toBeInTheDocument();
   });
 
-  it("renderiza KPIs (Receitas/Despesas/Saldo) a partir do summary", () => {
+  it("renderiza KPIs (Receitas/Despesas/Resultado) a partir do summary", () => {
     renderPage();
     expect(screen.getByText("Receitas")).toBeInTheDocument();
     expect(screen.getByText("Despesas")).toBeInTheDocument();
-    expect(screen.getByText("Saldo")).toBeInTheDocument();
+    // Era "Saldo"; renomeado na S2 porque colidia com o saldo da conta.
+    expect(screen.getByText("Resultado")).toBeInTheDocument();
   });
 
   // Também é o teste de regressão do modo live: a API já aplicou período, tipo,
@@ -333,5 +334,188 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     // E o hook recebeu as duas formas mapeadas para os valores da API.
     const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
     expect(lastCall.filters.filterMethod).toEqual(["pix", "credit_card"]);
+  });
+});
+
+describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
+  /** Uma pendente (pix), uma paga (pix) e uma de cartão. */
+  function seedSettlement(setTransactionSettled = vi.fn()) {
+    transactionsDataMock.mockReturnValue({
+      isLoading: false,
+      error: "",
+      summary: { total_income: 0, total_expenses: 100, total_refunds: 0, balance: -100 },
+      transactions: [
+        { id: "tx-pend", date: "21/05", desc: "Boleto luz", cat: "Casa", val: -100, method: "Pix",
+          type: "expense", icon: "💡", status: "confirmado", rec: false, tags: [],
+          settled: false, settleable: true, paidAt: null },
+        { id: "tx-paga", date: "22/05", desc: "Mercado", cat: "Alimentação", val: -50, method: "Pix",
+          type: "expense", icon: "🍽", status: "confirmado", rec: false, tags: [],
+          settled: true, settleable: true, paidAt: "2026-05-22T12:00:00" },
+        { id: "tx-cartao", date: "23/05", desc: "Notebook", cat: "Compras", val: -4299,
+          method: "Cartão de crédito", paymentMethodKey: "credito", type: "expense", icon: "💳",
+          status: "confirmado", rec: false, tags: [], settled: false, settleable: false, paidAt: null },
+      ],
+      total: 3,
+      hasMore: false,
+      removeTransaction: vi.fn(),
+      setTransactionSettled,
+    });
+  }
+
+  it("marca com badge 'A pagar' só o que está pendente", () => {
+    seedSettlement();
+    renderPage();
+    // Texto exato do badge: /A pagar/i casaria também com a linha-ponte e com o
+    // botão "Ver só os a pagar", que não são badges de linha.
+    expect(screen.getAllByText("⏳ A pagar").length).toBe(1);
+  });
+
+  it("cartão NÃO ganha badge 'A pagar' — ele liquida pela fatura, não por lançamento", () => {
+    seedSettlement();
+    renderPage();
+    const badges = screen.getAllByText("⏳ A pagar");
+    // Se o cartão entrasse, seriam dois. O badge mentiria sobre o que o usuário controla.
+    expect(badges.length).toBe(1);
+    expect(screen.getAllByText("Notebook").length).toBeGreaterThan(0);
+  });
+
+  it("'Marcar como pago' chama o hook com settled=true", async () => {
+    const setTransactionSettled = vi.fn().mockResolvedValue({ settled: true });
+    seedSettlement(setTransactionSettled);
+    renderPage();
+
+    await userEvent.click(screen.getAllByText("Boleto luz")[0]);
+    await userEvent.click(await screen.findByRole("button", { name: /Marcar como pago/i }));
+
+    expect(setTransactionSettled).toHaveBeenCalledWith("tx-pend", true);
+  });
+
+  it("numa transação já paga a ação é desfazer, com settled=false", async () => {
+    const setTransactionSettled = vi.fn().mockResolvedValue({ settled: false });
+    seedSettlement(setTransactionSettled);
+    renderPage();
+
+    await userEvent.click(screen.getAllByText("Mercado")[0]);
+    await userEvent.click(await screen.findByRole("button", { name: /Desfazer pagamento/i }));
+
+    expect(setTransactionSettled).toHaveBeenCalledWith("tx-paga", false);
+  });
+
+  it("transação de cartão não oferece a ação de liquidar no detalhe", async () => {
+    seedSettlement();
+    renderPage();
+
+    await userEvent.click(screen.getAllByText("Notebook")[0]);
+
+    expect(screen.queryByRole("button", { name: /Marcar como pago/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Desfazer pagamento/i })).not.toBeInTheDocument();
+  });
+
+  it("o facet Situação chega ao hook de dados como settlement", async () => {
+    seedSettlement();
+    renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: /Situação: Todas/i }));
+    const panel = screen.getByRole("region", { name: /Filtro: situa/i });
+    await userEvent.click(within(panel).getByRole("button", { name: /^A pagar$/i }));
+
+    const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
+    expect(lastCall.filters.settlement).toBe("a-pagar");
+  });
+});
+
+describe("<TransacoesPage> — desambiguação de nomes (S2)", { timeout: 15000 }, () => {
+  it('o card chama-se "Resultado", não "Saldo" — o nome antigo colidia com o saldo da conta', () => {
+    transactionsDataMock.mockReturnValue({
+      isLoading: false, error: "",
+      summary: { total_income: 100, total_expenses: 40, total_refunds: 0, balance: 60 },
+      transactions: [
+        { id: "t1", date: "21/05", desc: "Almoço", cat: "Alimentação", val: -40, method: "Pix",
+          type: "expense", icon: "🍽", status: "confirmado", rec: false, tags: [],
+          settled: true, settleable: true, paidAt: "2026-05-21T12:00:00" },
+      ],
+      total: 1, hasMore: false, removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
+    });
+    renderPage();
+
+    expect(screen.getByText("Resultado")).toBeInTheDocument();
+    // "Saldo" sozinho não pode mais aparecer como rótulo de card nessa tela.
+    expect(screen.queryByText(/^Saldo$/)).not.toBeInTheDocument();
+  });
+
+  it("oferece o caminho para os pendentes quando há algum fora do saldo", async () => {
+    transactionsDataMock.mockReturnValue({
+      isLoading: false, error: "",
+      summary: { total_income: 0, total_expenses: 100, total_refunds: 0, balance: -100 },
+      transactions: [
+        { id: "t-pend", date: "21/05", desc: "Boleto luz", cat: "Casa", val: -100, method: "Pix",
+          type: "expense", icon: "💡", status: "confirmado", rec: false, tags: [],
+          settled: false, settleable: true, paidAt: null },
+      ],
+      total: 1, hasMore: false, removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
+    });
+    renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: /Ver só os a pagar/i }));
+
+    const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
+    expect(lastCall.filters.settlement).toBe("a-pagar");
+  });
+
+  it("não polui a tela quando está tudo pago", () => {
+    transactionsDataMock.mockReturnValue({
+      isLoading: false, error: "",
+      summary: { total_income: 0, total_expenses: 40, total_refunds: 0, balance: -40 },
+      transactions: [
+        { id: "t-ok", date: "21/05", desc: "Almoço", cat: "Alimentação", val: -40, method: "Pix",
+          type: "expense", icon: "🍽", status: "confirmado", rec: false, tags: [],
+          settled: true, settleable: true, paidAt: "2026-05-21T12:00:00" },
+      ],
+      total: 1, hasMore: false, removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
+    });
+    renderPage();
+
+    expect(screen.queryByRole("button", { name: /Ver só os a pagar/i })).not.toBeInTheDocument();
+  });
+});
+
+describe("<TransacoesPage> — estabilidade das linhas (issue #66)", { timeout: 15000 }, () => {
+  it("a linha NÃO é remontada quando a página re-renderiza", async () => {
+    // Semeia o próprio conjunto: `mockReturnValue` de outro describe sobrevive ao
+    // clearAllMocks (ele zera chamadas, não implementações).
+    transactionsDataMock.mockReturnValue({
+      isLoading: false,
+      error: "",
+      summary: { total_income: 0, total_expenses: 90, total_refunds: 0, balance: -90 },
+      transactions: [
+        { id: "row-a", date: "21/05", desc: "Almoço", cat: "Alimentação", val: -40, method: "Pix",
+          type: "expense", icon: "🍽", status: "confirmado", rec: false, tags: [],
+          settled: true, settleable: true, paidAt: "2026-05-21T12:00:00" },
+        { id: "row-b", date: "22/05", desc: "Salário", cat: "Receita", val: 5000,
+          method: "Transferência", type: "income", icon: "💸", status: "confirmado", rec: false,
+          tags: [], settled: true, settleable: true, paidAt: "2026-05-22T12:00:00" },
+      ],
+      total: 2,
+      hasMore: false,
+      removeTransaction: vi.fn(),
+      setTransactionSettled: vi.fn(),
+    });
+    renderPage();
+
+    const before = screen.getAllByText("Almoço")[0].closest(".fincla-row");
+    expect(before).toBeTruthy();
+
+    // Re-render do corpo da página sem mexer na lista: selecionar OUTRA linha muda
+    // `selected` (estado da página) e as transações continuam exatamente as mesmas.
+    await userEvent.click(screen.getAllByText("Salário")[0]);
+
+    const after = screen.getAllByText("Almoço")[0].closest(".fincla-row");
+
+    // Se `TxRow`/`Tip` forem definidos dentro do corpo do componente, cada render
+    // cria um TIPO novo e o React descarta a subárvore inteira em vez de atualizá-la:
+    // o nó do DOM é outro objeto. Além do desperdício de CPU numa lista parada, é o
+    // que faz o elemento nunca ficar "stable" para um clique automatizado — a caixa
+    // que se mede num frame pertence a um nó que já não existe no seguinte.
+    expect(after).toBe(before);
   });
 });

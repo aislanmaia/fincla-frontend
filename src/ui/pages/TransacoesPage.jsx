@@ -61,6 +61,256 @@ const DEFAULT_RESTORE_SNAPSHOT = Object.freeze({
 /** Viewport ≥ breakpoint: filtros desktop sempre visíveis. Abaixo: colapsados por padrão. */
 const DESKTOP_FILTERS_EXPAND_BREAKPOINT = 1280;
 
+/* ── Helpers puros e componentes de linha ──────────────────────────────────
+   Estes três blocos moravam DENTRO do corpo de `TransacoesPageBody`. Como o
+   corpo roda a cada render, `Tip` e `TxRow` viravam TIPOS novos toda vez — e o
+   React, ao ver um tipo diferente na mesma posição, descarta a subárvore e
+   monta outra em vez de atualizar a existente.
+
+   O efeito: a cada mudança de estado da página (selecionar uma linha, abrir um
+   filtro), TODA linha da lista era desmontada e remontada, com nós de DOM novos.
+   Isso queima CPU numa lista parada e é o que impedia um clique automatizado de
+   considerar a linha "stable" — a caixa medida num frame pertence a um nó que
+   já não existe no seguinte (fincla-frontend#66).
+
+   Içar para o escopo do módulo é mudança estrutural pura: mesmo markup, mesmos
+   estilos, mesma saída visual. */
+
+const CAT_COLORS = {
+  Alimentação: "#059669",
+  Transporte: "#2563EB",
+  Moradia: "#6B7280",
+  Saúde: "#DC2626",
+  Receita: "#059669",
+  Assinaturas: "#7C3AED",
+  "Assinaturas & Software": "#0891B2",
+  Streaming: "#7C3AED",
+  Lazer: "#D97706",
+  "Lazer & Entretenimento": "#D97706",
+  Compras: "#0891B2",
+  "Compras Pessoais": "#DC2626",
+  Educação: "#7C3AED",
+  Outros: "#374151",
+  Serviços: "#6B7280",
+  "Impostos & Taxas": "#D97706",
+  Vestuário: "#BE185D",
+};
+const catColor = (label) => CAT_COLORS[label] || T.inkMid;
+const catBg = (label) => `${catColor(label)}18`;
+
+const fmtBRL = v => "R$\u00a0" + Math.abs(v).toLocaleString("pt-BR",{minimumFractionDigits:2});
+
+const Tip = ({ label, children, pos = "top" }) => {
+  const [rect, setRect] = useState(null);
+  const ref = useRef(null);
+  if (!label) return <>{children}</>;
+
+  const show = (e) => {
+    if (ref.current) setRect(ref.current.getBoundingClientRect());
+  };
+  const hide = () => setRect(null);
+
+  // Compute fixed position from measured rect
+  const tipStyle = rect ? (pos === "top"
+    ? { top: rect.top - 6, left: rect.left + rect.width / 2,
+        transform: "translate(-50%, -100%)" }
+    : { top: rect.bottom + 6, left: rect.left + rect.width / 2,
+        transform: "translateX(-50%)" }
+  ) : null;
+
+  return (
+    <span ref={ref} style={{ position:"relative", display:"inline-flex", alignItems:"center" }}
+      onMouseEnter={show} onMouseLeave={hide}
+      onTouchStart={e => { e.stopPropagation(); rect ? hide() : show(e); }}>
+      {children}
+      {rect && tipStyle && (
+        <span style={{
+          position:"fixed",
+          top: tipStyle.top, left: tipStyle.left,
+          transform: tipStyle.transform,
+          background:"#1A1A2E", color:"#fff",
+          fontSize:11, fontWeight:600, borderRadius:7, padding:"5px 9px",
+          whiteSpace:"nowrap", zIndex:9999, pointerEvents:"none",
+          boxShadow:"0 4px 14px rgba(0,0,0,0.28)", lineHeight:1.4,
+        }}>
+          {label}
+        </span>
+      )}
+    </span>
+  );
+};
+
+const TxRow = ({ tx, isMobile, isSelected, onSelect }) => {
+  const isRefund   = tx.type === "refund";
+  const isReceita  = tx.type === "income" || isRefund;
+  const hasParcela = !!tx.parcela && !isRefund;
+  const isCredito  = tx.paymentMethodKey === "credito" || tx.method === "Crédito";
+  const hasRefundsLinked = tx.refundsSummary && tx.refundsSummary.count > 0;
+  const tags       = tx.tags || [];
+  const visibleTags = tags.slice(0,2);
+  const hiddenTags  = tags.slice(2);
+
+  // Avatar: estorno usa fundo verde claro com ícone ↺. Demais mantêm a cor da categoria.
+  const avatarBg = isRefund ? T.greenLight : catBg(tx.cat);
+
+  return (
+    <div
+      onClick={() => onSelect(tx)}
+      className="fincla-row"
+      style={{ display:"flex", alignItems:"flex-start", gap:12,
+        padding: isMobile ? "13px 16px" : "12px 18px",
+        background: isSelected ? `${catColor(tx.cat)}08` : "transparent",
+        borderLeft: isSelected ? `3px solid ${catColor(tx.cat)}` : "3px solid transparent",
+        cursor:"pointer", transition:"background 0.12s, border-color 0.12s" }}>
+
+      {/* Icon */}
+      <div style={{ width:38, height:38, borderRadius:11, background:avatarBg,
+        display:"flex", alignItems:"center", justifyContent:"center",
+        fontSize:18, color: isRefund ? T.green : undefined,
+        fontWeight: isRefund ? 700 : undefined,
+        flexShrink:0, marginTop:1 }}>
+        {tx.icon}
+      </div>
+
+      {/* Main info */}
+      <div style={{ flex:1, minWidth:0 }}>
+
+        {/* Row 1: description — estorno ganha ícone ↺ inline + badge "Há estorno" quando aplicável */}
+        <div style={{ ...G, fontSize:13, fontWeight:600, color:T.ink,
+          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:3,
+          display:"flex", alignItems:"center", gap:6 }}>
+          <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+            {tx.desc}
+          </span>
+          {hasRefundsLinked && !isRefund && (
+            <Tip label={`${tx.refundsSummary.count} estorno${tx.refundsSummary.count !== 1 ? "s" : ""} relacionado${tx.refundsSummary.count !== 1 ? "s" : ""} · ${fmtBRL(tx.refundsSummary.totalValue)} abatido${tx.refundsSummary.totalValue !== 1 ? "s" : ""}`}>
+              <span style={{ ...G, fontSize:10, color:T.green, background:T.greenLight,
+                borderRadius:99, padding:"1px 6px", fontWeight:700, cursor:"default", whiteSpace:"nowrap" }}>
+                ↺ Estorno
+              </span>
+            </Tip>
+          )}
+        </div>
+
+        {/* Row 2: categoria · método · card digits · status chips */}
+        <div style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap",
+          marginBottom: (hasParcela || visibleTags.length > 0) ? 4 : 0 }}>
+          <Tip label={`Categoria: ${tx.cat}`}>
+            <span style={{ ...G, fontSize:11, color:catColor(tx.cat), fontWeight:600 }}>{tx.cat}</span>
+          </Tip>
+          <span style={{ ...G, fontSize:11, color:T.inkGhost }}>·</span>
+
+          {/* Para Crédito: mostra "Crédito ●● 1177" inline se tiver cartão, senão só "Crédito" */}
+          {isCredito ? (
+            <Tip label={tx.parcela?.cartao || "Cartão de crédito"}>
+              <span style={{ ...G, fontSize:11, color:T.inkMid }}>
+                Crédito
+                {tx.parcela?.cartao && (
+                  <span style={{ color:T.inkGhost, fontFamily:"'Geist Mono',monospace", letterSpacing:"0.04em" }}>
+                    {" ●● "}{tx.parcela.cartao.split("••")[1]?.trim()}
+                  </span>
+                )}
+              </span>
+            </Tip>
+          ) : (
+            <Tip label={`Método: ${tx.method}`}>
+              <span style={{ ...G, fontSize:11, color:T.inkMid }}>{tx.method}</span>
+            </Tip>
+          )}
+
+          {tx.rec && (
+            <Tip label="Transação recorrente — repete todo mês">
+              <span style={{ ...G, fontSize:11, color:T.blue, background:T.blueLight,
+                borderRadius:99, padding:"1px 6px", fontWeight:700, cursor:"default" }}>↻</span>
+            </Tip>
+          )}
+
+          {tx.status === "pendente" && (
+            <Tip label="Aguardando confirmação do lançamento">
+              <span style={{ ...G, fontSize:11, color:T.amber, background:T.amberLight,
+                borderRadius:99, padding:"1px 6px", fontWeight:700 }}>⏳ Pendente</span>
+            </Tip>
+          )}
+
+          {/* Liquidação: sem este badge, um compromisso pendente é visualmente idêntico
+              a um pago — e some do saldo da conta sem o usuário ter como perceber.
+              Cartão fica de fora: ele liquida quando a FATURA é paga, não por lançamento. */}
+          {tx.settleable && !tx.settled && (
+            <Tip label="Ainda não entrou no saldo da conta — marque como pago quando o dinheiro sair">
+              <span style={{ ...G, fontSize:11, color:T.amber, background:T.amberLight,
+                borderRadius:99, padding:"1px 6px", fontWeight:700 }}>⏳ A pagar</span>
+            </Tip>
+          )}
+
+          {isRefund && (
+            <>
+              <span style={{ ...G, fontSize:11, color:T.inkGhost }}>·</span>
+              <span style={{ ...G, fontSize:11, color:T.green, fontWeight:600 }}>↺ Estorno</span>
+            </>
+          )}
+        </div>
+
+        {/* Row 3: parcela — compacta, sem redundância com row 2 */}
+        {hasParcela && (
+          <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom: visibleTags.length > 0 ? 4 : 0 }}>
+            <Tip label={`${tx.parcela.atual}ª de ${tx.parcela.total} parcelas · ${tx.parcela.cartao}`}>
+              <span style={{ ...G, fontSize:11, color:T.blue, fontWeight:600,
+                fontFamily:"'Geist Mono',monospace" }}>
+                {tx.parcela.atual}/{tx.parcela.total}×
+              </span>
+            </Tip>
+            <span style={{ ...G, fontSize:10, color:T.inkGhost }}>·</span>
+            <Tip label={`Parcela: ${fmtBRL(tx.parcela.valParcela)}/mês · Vence ${tx.parcela.vencimento}`}>
+              <span style={{ ...G, fontSize:11, color:T.inkMid,
+                fontFamily:"'Geist Mono',monospace" }}>
+                {fmtBRL(tx.parcela.valParcela)}/mês
+              </span>
+            </Tip>
+            <span style={{ ...G, fontSize:10, color:T.inkGhost }}>·</span>
+            <Tip label={`Já pago: ${fmtBRL(tx.parcela.valorPago)} · Residual: ${fmtBRL(tx.parcela.valorResidual)}`}>
+              <span style={{ ...G, fontSize:11, color:T.inkLight }}>
+                {tx.parcela.total - tx.parcela.atual} restantes
+              </span>
+            </Tip>
+          </div>
+        )}
+
+        {/* Row 4: tags */}
+        {visibleTags.length > 0 && (
+          <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap" }}>
+            {visibleTags.map(tag => (
+              <span key={tag} style={{ ...G, fontSize:10, color:T.inkMid, background:T.grayLight,
+                borderRadius:99, padding:"2px 8px", fontWeight:500 }}>#{tag}</span>
+            ))}
+            {hiddenTags.length > 0 && (
+              <Tip label={`Todas: ${tags.map(t=>"#"+t).join(", ")}`} pos="top">
+                <span style={{ ...G, fontSize:10, color:T.blue, background:T.blueLight,
+                  borderRadius:99, padding:"2px 8px", fontWeight:700, cursor:"default" }}>
+                  +{hiddenTags.length}
+                </span>
+              </Tip>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Amount column — total da compra + parcela/mês abaixo */}
+      <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", flexShrink:0, gap:2, marginTop:1 }}>
+        <Tip label={hasParcela ? `Total da compra: ${fmtBRL(tx.val)}` : isRefund ? "Estorno · dinheiro voltando" : ""} pos="top">
+          <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:14, fontWeight:700,
+            color: isRefund ? T.green : (isReceita ? T.green : T.ink) }}>
+            {isReceita ? "+" : "−"}{fmtBRL(tx.val)}
+          </div>
+        </Tip>
+        {!isMobile && (
+          <ChevronRight size={12} color={isSelected ? catColor(tx.cat) : T.inkGhost}
+            style={{ marginTop:2, transition:"color 0.12s" }}/>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export function TransacoesPage(props) {
   if (props.dataMode === "empty") {
     return <TransactionsEmptyState extraTx={props.extraTx ?? []} onNewTx={props.onNewTx} />;
@@ -82,29 +332,6 @@ function TransacoesPageBody({
   const navigate = useNavigate();
   const PAGE_SIZE = 10;
 
-  const CAT_COLORS = {
-    Alimentação: "#059669",
-    Transporte: "#2563EB",
-    Moradia: "#6B7280",
-    Saúde: "#DC2626",
-    Receita: "#059669",
-    Assinaturas: "#7C3AED",
-    "Assinaturas & Software": "#0891B2",
-    Streaming: "#7C3AED",
-    Lazer: "#D97706",
-    "Lazer & Entretenimento": "#D97706",
-    Compras: "#0891B2",
-    "Compras Pessoais": "#DC2626",
-    Educação: "#7C3AED",
-    Outros: "#374151",
-    Serviços: "#6B7280",
-    "Impostos & Taxas": "#D97706",
-    Vestuário: "#BE185D",
-  };
-  const catColor = (label) => CAT_COLORS[label] || T.inkMid;
-  const catBg = (label) => `${catColor(label)}18`;
-
-  const fmtBRL = v => "R$\u00a0" + Math.abs(v).toLocaleString("pt-BR",{minimumFractionDigits:2});
   const parseDate = d => {
     if (!d) return new Date(0);
     const parts = d.split("/");
@@ -173,6 +400,11 @@ function TransacoesPageBody({
   const [snapFull,    setSnapFull]    = useState(false);  // false=72dvh, true=92dvh
   const [sheetClosing,setSheetClosing]= useState(false);  // drives exit animation
   const [selected,    setSelected]    = useState(null);
+  /** Estável entre renders: se a identidade mudasse, `TxRow` re-renderizaria à toa
+      e o ganho de içar o componente para o módulo iria embora. */
+  const handleSelectTx = useCallback((tx) => {
+    setSelected((cur) => (cur?.id === tx.id ? null : tx));
+  }, []);
   const [visible,     setVisible]     = useState(PAGE_SIZE);
   const listScrollRef = useRef(null);
   const savedViewsSectionRef = useRef(null);
@@ -181,6 +413,8 @@ function TransacoesPageBody({
   const loadMoreSentinelRef = useRef(null);
   const loadMoreCooldownRef = useRef(false);
   const [deletingId,  setDeletingId]  = useState(null);
+  // Id em liquidação — trava o botão para o clique duplo não disparar settle + unsettle.
+  const [settlingId,  setSettlingId]  = useState(null);
   const [mockTxList,  setMockTxList]  = useState(TRANSACTIONS);
 
   /** Saved views (Variação C) persistidas em localStorage por org. */
@@ -280,6 +514,7 @@ function TransacoesPageBody({
           sort: filter.sort,
           valueMin: filter.valueMin,
           valueMax: filter.valueMax,
+          settlement: filter.settlement,
         },
         {
           limit: visible,
@@ -298,6 +533,7 @@ function TransacoesPageBody({
       filter.sort,
       filter.valueMin,
       filter.valueMax,
+      filter.settlement,
       visible,
       totalCategoriesForBackend,
     ],
@@ -873,6 +1109,46 @@ function TransacoesPageBody({
             </div>
           )}
         </div>
+        {/* Liquidação — só para métodos que o usuário liquida por lançamento.
+            Cartão liquida pela fatura, então a ação aqui mentiria sobre o que ele controla. */}
+        {tx.settleable && (
+          <div style={{ padding:"12px 20px 0", display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ ...G, fontSize:12.5, fontWeight:700, color: tx.settled ? T.green : T.amber }}>
+                {tx.settled ? "Pago" : "A pagar"}
+              </div>
+              <div style={{ ...G, fontSize:11, color:T.inkLight, marginTop:1 }}>
+                {tx.settled ? "Já entrou no saldo da conta" : "Ainda não entrou no saldo da conta"}
+              </div>
+            </div>
+            <button
+              type="button"
+              disabled={settlingId === tx.id}
+              onClick={async (e) => {
+                e.stopPropagation();
+                if (!shouldUseRealData) return;
+                setSettlingId(tx.id);
+                try {
+                  const updated = await transactionsData.setTransactionSettled(tx.id, !tx.settled);
+                  // O drawer renderiza a partir de `selected`, que é um snapshot — sem
+                  // isto o painel continuaria mostrando o estado antigo até fechar.
+                  if (updated) setSelected((cur) => (cur && cur.id === tx.id ? { ...cur, ...updated } : cur));
+                } catch (_) {
+                  /* mensagem já vai para transactionsData.error */
+                } finally {
+                  setSettlingId(null);
+                }
+              }}
+              style={{ ...G, flexShrink:0, background: tx.settled ? "none" : T.green,
+                color: tx.settled ? T.inkMid : "#fff",
+                border: tx.settled ? `1px solid ${T.border}` : "none",
+                borderRadius:10, padding:"9px 14px", fontSize:12.5, fontWeight:700,
+                cursor: settlingId === tx.id ? "default" : "pointer",
+                opacity: settlingId === tx.id ? 0.6 : 1 }}>
+              {settlingId === tx.id ? "…" : tx.settled ? "Desfazer pagamento" : "Marcar como pago"}
+            </button>
+          </div>
+        )}
         {/* Actions */}
         <div style={{ padding:"14px 20px", borderTop:`1px solid ${T.border}`, display:"flex", gap:10 }}>
           <button
@@ -924,208 +1200,8 @@ function TransacoesPageBody({
 
   // ── Transaction row ───────────────────────────────────────────────────────
   // ── Tooltip helper ─────────────────────────────────────────────────────────
-  const Tip = ({ label, children, pos = "top" }) => {
-    const [rect, setRect] = useState(null);
-    const ref = useRef(null);
-    if (!label) return <>{children}</>;
-
-    const show = (e) => {
-      if (ref.current) setRect(ref.current.getBoundingClientRect());
-    };
-    const hide = () => setRect(null);
-
-    // Compute fixed position from measured rect
-    const tipStyle = rect ? (pos === "top"
-      ? { top: rect.top - 6, left: rect.left + rect.width / 2,
-          transform: "translate(-50%, -100%)" }
-      : { top: rect.bottom + 6, left: rect.left + rect.width / 2,
-          transform: "translateX(-50%)" }
-    ) : null;
-
-    return (
-      <span ref={ref} style={{ position:"relative", display:"inline-flex", alignItems:"center" }}
-        onMouseEnter={show} onMouseLeave={hide}
-        onTouchStart={e => { e.stopPropagation(); rect ? hide() : show(e); }}>
-        {children}
-        {rect && tipStyle && (
-          <span style={{
-            position:"fixed",
-            top: tipStyle.top, left: tipStyle.left,
-            transform: tipStyle.transform,
-            background:"#1A1A2E", color:"#fff",
-            fontSize:11, fontWeight:600, borderRadius:7, padding:"5px 9px",
-            whiteSpace:"nowrap", zIndex:9999, pointerEvents:"none",
-            boxShadow:"0 4px 14px rgba(0,0,0,0.28)", lineHeight:1.4,
-          }}>
-            {label}
-          </span>
-        )}
-      </span>
-    );
-  };
 
 
-  const TxRow = ({ tx }) => {
-    const isSelected = selected?.id === tx.id;
-    const isRefund   = tx.type === "refund";
-    const isReceita  = tx.type === "income" || isRefund;
-    const hasParcela = !!tx.parcela && !isRefund;
-    const isCredito  = tx.paymentMethodKey === "credito" || tx.method === "Crédito";
-    const hasRefundsLinked = tx.refundsSummary && tx.refundsSummary.count > 0;
-    const tags       = tx.tags || [];
-    const visibleTags = tags.slice(0,2);
-    const hiddenTags  = tags.slice(2);
-
-    // Avatar: estorno usa fundo verde claro com ícone ↺. Demais mantêm a cor da categoria.
-    const avatarBg = isRefund ? T.greenLight : catBg(tx.cat);
-
-    return (
-      <div
-        onClick={() => setSelected(isSelected ? null : tx)}
-        className="fincla-row"
-        style={{ display:"flex", alignItems:"flex-start", gap:12,
-          padding: isMobile ? "13px 16px" : "12px 18px",
-          background: isSelected ? `${catColor(tx.cat)}08` : "transparent",
-          borderLeft: isSelected ? `3px solid ${catColor(tx.cat)}` : "3px solid transparent",
-          cursor:"pointer", transition:"background 0.12s, border-color 0.12s" }}>
-
-        {/* Icon */}
-        <div style={{ width:38, height:38, borderRadius:11, background:avatarBg,
-          display:"flex", alignItems:"center", justifyContent:"center",
-          fontSize:18, color: isRefund ? T.green : undefined,
-          fontWeight: isRefund ? 700 : undefined,
-          flexShrink:0, marginTop:1 }}>
-          {tx.icon}
-        </div>
-
-        {/* Main info */}
-        <div style={{ flex:1, minWidth:0 }}>
-
-          {/* Row 1: description — estorno ganha ícone ↺ inline + badge "Há estorno" quando aplicável */}
-          <div style={{ ...G, fontSize:13, fontWeight:600, color:T.ink,
-            overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:3,
-            display:"flex", alignItems:"center", gap:6 }}>
-            <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-              {tx.desc}
-            </span>
-            {hasRefundsLinked && !isRefund && (
-              <Tip label={`${tx.refundsSummary.count} estorno${tx.refundsSummary.count !== 1 ? "s" : ""} relacionado${tx.refundsSummary.count !== 1 ? "s" : ""} · ${fmtBRL(tx.refundsSummary.totalValue)} abatido${tx.refundsSummary.totalValue !== 1 ? "s" : ""}`}>
-                <span style={{ ...G, fontSize:10, color:T.green, background:T.greenLight,
-                  borderRadius:99, padding:"1px 6px", fontWeight:700, cursor:"default", whiteSpace:"nowrap" }}>
-                  ↺ Estorno
-                </span>
-              </Tip>
-            )}
-          </div>
-
-          {/* Row 2: categoria · método · card digits · status chips */}
-          <div style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap",
-            marginBottom: (hasParcela || visibleTags.length > 0) ? 4 : 0 }}>
-            <Tip label={`Categoria: ${tx.cat}`}>
-              <span style={{ ...G, fontSize:11, color:catColor(tx.cat), fontWeight:600 }}>{tx.cat}</span>
-            </Tip>
-            <span style={{ ...G, fontSize:11, color:T.inkGhost }}>·</span>
-
-            {/* Para Crédito: mostra "Crédito ●● 1177" inline se tiver cartão, senão só "Crédito" */}
-            {isCredito ? (
-              <Tip label={tx.parcela?.cartao || "Cartão de crédito"}>
-                <span style={{ ...G, fontSize:11, color:T.inkMid }}>
-                  Crédito
-                  {tx.parcela?.cartao && (
-                    <span style={{ color:T.inkGhost, fontFamily:"'Geist Mono',monospace", letterSpacing:"0.04em" }}>
-                      {" ●● "}{tx.parcela.cartao.split("••")[1]?.trim()}
-                    </span>
-                  )}
-                </span>
-              </Tip>
-            ) : (
-              <Tip label={`Método: ${tx.method}`}>
-                <span style={{ ...G, fontSize:11, color:T.inkMid }}>{tx.method}</span>
-              </Tip>
-            )}
-
-            {tx.rec && (
-              <Tip label="Transação recorrente — repete todo mês">
-                <span style={{ ...G, fontSize:11, color:T.blue, background:T.blueLight,
-                  borderRadius:99, padding:"1px 6px", fontWeight:700, cursor:"default" }}>↻</span>
-              </Tip>
-            )}
-
-            {tx.status === "pendente" && (
-              <Tip label="Aguardando confirmação do lançamento">
-                <span style={{ ...G, fontSize:11, color:T.amber, background:T.amberLight,
-                  borderRadius:99, padding:"1px 6px", fontWeight:700 }}>⏳ Pendente</span>
-              </Tip>
-            )}
-
-            {isRefund && (
-              <>
-                <span style={{ ...G, fontSize:11, color:T.inkGhost }}>·</span>
-                <span style={{ ...G, fontSize:11, color:T.green, fontWeight:600 }}>↺ Estorno</span>
-              </>
-            )}
-          </div>
-
-          {/* Row 3: parcela — compacta, sem redundância com row 2 */}
-          {hasParcela && (
-            <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom: visibleTags.length > 0 ? 4 : 0 }}>
-              <Tip label={`${tx.parcela.atual}ª de ${tx.parcela.total} parcelas · ${tx.parcela.cartao}`}>
-                <span style={{ ...G, fontSize:11, color:T.blue, fontWeight:600,
-                  fontFamily:"'Geist Mono',monospace" }}>
-                  {tx.parcela.atual}/{tx.parcela.total}×
-                </span>
-              </Tip>
-              <span style={{ ...G, fontSize:10, color:T.inkGhost }}>·</span>
-              <Tip label={`Parcela: ${fmtBRL(tx.parcela.valParcela)}/mês · Vence ${tx.parcela.vencimento}`}>
-                <span style={{ ...G, fontSize:11, color:T.inkMid,
-                  fontFamily:"'Geist Mono',monospace" }}>
-                  {fmtBRL(tx.parcela.valParcela)}/mês
-                </span>
-              </Tip>
-              <span style={{ ...G, fontSize:10, color:T.inkGhost }}>·</span>
-              <Tip label={`Já pago: ${fmtBRL(tx.parcela.valorPago)} · Residual: ${fmtBRL(tx.parcela.valorResidual)}`}>
-                <span style={{ ...G, fontSize:11, color:T.inkLight }}>
-                  {tx.parcela.total - tx.parcela.atual} restantes
-                </span>
-              </Tip>
-            </div>
-          )}
-
-          {/* Row 4: tags */}
-          {visibleTags.length > 0 && (
-            <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap" }}>
-              {visibleTags.map(tag => (
-                <span key={tag} style={{ ...G, fontSize:10, color:T.inkMid, background:T.grayLight,
-                  borderRadius:99, padding:"2px 8px", fontWeight:500 }}>#{tag}</span>
-              ))}
-              {hiddenTags.length > 0 && (
-                <Tip label={`Todas: ${tags.map(t=>"#"+t).join(", ")}`} pos="top">
-                  <span style={{ ...G, fontSize:10, color:T.blue, background:T.blueLight,
-                    borderRadius:99, padding:"2px 8px", fontWeight:700, cursor:"default" }}>
-                    +{hiddenTags.length}
-                  </span>
-                </Tip>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Amount column — total da compra + parcela/mês abaixo */}
-        <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", flexShrink:0, gap:2, marginTop:1 }}>
-          <Tip label={hasParcela ? `Total da compra: ${fmtBRL(tx.val)}` : isRefund ? "Estorno · dinheiro voltando" : ""} pos="top">
-            <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:14, fontWeight:700,
-              color: isRefund ? T.green : (isReceita ? T.green : T.ink) }}>
-              {isReceita ? "+" : "−"}{fmtBRL(tx.val)}
-            </div>
-          </Tip>
-          {!isMobile && (
-            <ChevronRight size={12} color={isSelected ? catColor(tx.cat) : T.inkGhost}
-              style={{ marginTop:2, transition:"color 0.12s" }}/>
-          )}
-        </div>
-      </div>
-    );
-  };
 
 
   // ── Filter UI: extraído para `<TransactionsFilterBar>` (Variação C) ──────
@@ -1211,7 +1287,12 @@ function TransacoesPageBody({
               border:`1px solid ${T.border}`, margin: isMobile ? "0 0 10px" : "0 0 8px" }}>
               {txs.map((tx, i) => (
                 <div key={tx.id} style={{ borderBottom: i<txs.length-1?`1px solid ${T.border}`:"none" }}>
-                  <TxRow tx={tx}/>
+                  <TxRow
+                    tx={tx}
+                    isMobile={isMobile}
+                    isSelected={selected?.id === tx.id}
+                    onSelect={handleSelectTx}
+                  />
                 </div>
               ))}
             </div>
@@ -1523,12 +1604,16 @@ function TransacoesPageBody({
               tooltip: !despesaPositiva ? "Saldo positivo de estornos no período" : undefined,
             },
             {
-              label: "Saldo",
+              // "Resultado", não "Saldo": este número é receitas − despesas DO FILTRO
+              // atual, não o dinheiro que existe na conta. Chamá-lo de "Saldo" fazia o
+              // usuário procurar aqui o saldo da conta e concluir que ele estava errado.
+              label: "Resultado",
               val: Math.abs(saldo),
               sign: saldo >= 0 ? "+" : "−",
               color: saldo >= 0 ? T.green : T.red,
               bg: saldo >= 0 ? T.greenLight : T.redLight,
-              countLine: `${filteredCount} transaç${filteredCount !== 1 ? "ões" : "ão"}`,
+              countLine: `${filteredCount} transaç${filteredCount !== 1 ? "ões" : "ão"} no filtro`,
+              tooltip: "Receitas menos despesas dos lançamentos filtrados. Não é o saldo da conta — esse fica em Contas e na Visão Geral.",
             },
           ].map((k) => (
             <div
@@ -1539,7 +1624,7 @@ function TransacoesPageBody({
                 border: `1px solid ${T.border}`,
                 borderRadius: 12,
                 padding: isMobile ? "12px 14px" : "14px 18px",
-                gridColumn: isMobile && k.label === "Saldo" ? "1 / -1" : "auto",
+                gridColumn: isMobile && k.label === "Resultado" ? "1 / -1" : "auto",
               }}
             >
               <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>
@@ -1560,6 +1645,24 @@ function TransacoesPageBody({
           ));
         })()}
       </div>
+
+      {/* Ponte entre os dois números: o "Resultado" acima conta tudo que está no
+          filtro, mas o saldo da conta só conta o que foi pago. Sem esta linha o
+          usuário não tem como descobrir que existe essa diferença — nem o facet. */}
+      {filter.settlement === "todas" && txList.some((t) => t.settleable && !t.settled) && (
+        <div style={{ ...G, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap",
+          fontSize:12, color:T.inkLight, marginTop:-4 }}>
+          <span style={{ color:T.amber, fontWeight:700 }}>⏳</span>
+          Há lançamentos a pagar aqui — eles ainda não entraram no saldo da conta.
+          <button
+            type="button"
+            onClick={() => filter.setSettlement("a-pagar")}
+            style={{ ...G, background:"none", border:"none", padding:0, fontSize:12,
+              fontWeight:700, color:T.blue, cursor:"pointer", textDecoration:"underline" }}>
+            Ver só os a pagar
+          </button>
+        </div>
+      )}
 
             {/* List + Detail panel */}
       {isMobile ? (

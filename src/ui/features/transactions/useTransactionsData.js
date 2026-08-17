@@ -7,6 +7,7 @@ import {
   getTransactionsSummaryForUi,
   listTransactionsForUi,
   mapApiTransactionToUi,
+  setTransactionSettledForUi,
 } from "../../data/transactionsAdapter.js";
 
 const EMPTY_STATE = {
@@ -137,6 +138,30 @@ export function useTransactionsData({
     }
   }, [organizationId]);
 
+  /**
+   * Liquida ou desfaz a liquidação, substituindo a linha em memória pela que o backend
+   * devolveu. Sem refetch de propósito: a lista não pisca e o usuário vê o badge sumir
+   * no mesmo frame. Se o servidor recusar, nada muda na tela — só o erro aparece.
+   */
+  const setTransactionSettled = useCallback(async (transactionId, settled) => {
+    if (!organizationId) return;
+
+    try {
+      const updated = await setTransactionSettledForUi(transactionId, organizationId, settled);
+      setState((current) => ({
+        ...current,
+        transactions: current.transactions.map((item) =>
+          item.id === transactionId ? { ...item, ...updated } : item,
+        ),
+      }));
+      return updated;
+    } catch (error) {
+      const message = formatTransactionsApiError(error);
+      setState((current) => ({ ...current, error: message }));
+      throw new Error(message);
+    }
+  }, [organizationId]);
+
   const hasMore = useMemo(() => {
     if (!query || state.error) return false;
 
@@ -166,5 +191,6 @@ export function useTransactionsData({
     total: state.total,
     hasMore,
     removeTransaction,
+    setTransactionSettled,
   };
 }
