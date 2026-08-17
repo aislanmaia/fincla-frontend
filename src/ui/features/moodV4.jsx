@@ -110,14 +110,38 @@ export const MOODS = {
   },
 };
 
-export function calcMood(day, budgetPct, freePct, daysInMonth = 31) {
+export function moodRatio(day, budgetPct, daysInMonth = 31) {
   const dim = Math.max(daysInMonth, 1);
-  const ratio = budgetPct / ((day / dim) * 100);
+  return budgetPct / ((day / dim) * 100);
+}
+
+export function calcMood(day, budgetPct, freePct, daysInMonth = 31) {
+  const ratio = moodRatio(day, budgetPct, daysInMonth);
   if (freePct < 10 || ratio > 1.3) return "alert";
   if (ratio > 1.1) return "tense";
   if (ratio > 0.95 || freePct < 20) return "watchful";
   if (ratio > 0.8) return "healthy";
   return "serene";
+}
+
+/**
+ * Saudação do humor, corrigida pelo ritmo real (issue #67).
+ *
+ * A faixa `watchful` vai de 0,95 a 1,10, ou seja de *ligeiramente abaixo* do ritmo
+ * até 10% acima. Na metade de baixo, `ratio < 1` significa gastar mais devagar do
+ * que o mês passa — e a tela dizia "você está acelerando" ao lado de um
+ * "R$ X à frente do ritmo esperado ✓". Os dois liam o mesmo número e discordavam.
+ *
+ * Aqui a copy para de afirmar aceleração quando ela não existe. O LIMIAR fica como
+ * está de propósito: movê-lo de 0,95 para 1,0 muda a régua de humor de todos os
+ * usuários, e o 0,95 pode ter sido escolhido para avisar cedo — é decisão de
+ * produto, registrada na #67, e vira uma linha quando for tomada.
+ */
+export function moodGreeting(moodKey, ratio) {
+  if (moodKey === "watchful" && Number.isFinite(ratio) && ratio <= 1) {
+    return "Ritmo apertado — perto do limite do mês.";
+  }
+  return MOODS[moodKey]?.greeting ?? "";
 }
 
 export function getMoodActions(moodKey) {
