@@ -87,7 +87,11 @@ export function expectedKpisBillingCycleFiveToFour(anchor: Date): {
   const m = anchor.getMonth();
   const d = anchor.getDate();
   const endCurr = new Date(y, m, 4);
-  const primary = endCurr.getTime() <= new Date(y, m, d).getTime();
+  // ESTRITO, não inclusivo: `periodEnded` na página é `end < hoje`. Com `<=`, no dia
+  // 4 do mês — que é exatamente o primeiro dia em que este spec roda (`getDate() < 4`
+  // é o guard) — o helper esperaria o ramo "período encerrado" enquanto a UI ainda
+  // está em período aberto. Falharia uma vez por mês.
+  const primary = endCurr.getTime() < new Date(y, m, d).getTime();
 
   if (primary) {
     const manualThisMonthDay = Math.min(10, d);
@@ -105,7 +109,7 @@ export function expectedKpisBillingCycleFiveToFour(anchor: Date): {
     return {
       receitas: fmtAbsPt(receitas),
       despesas: fmtAbsPt(despesas),
-      // Ciclo 5→4 no ramo `primary`: ele já ENCERROU (endCurr <= hoje), então o KPI
+      // Ciclo 5→4 no ramo `primary`: ele já ENCERROU (endCurr < hoje), então o KPI
       // cai em "Comprometido no período" = `recurring_in_period` do intervalo, que
       // cobre as ocorrências dos dias 2 e 3. Semântica inalterada por esta PR.
       comprometido: fmtAbsPt(VAL.eLong + VAL.eFuture),

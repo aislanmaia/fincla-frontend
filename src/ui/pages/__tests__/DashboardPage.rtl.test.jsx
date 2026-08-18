@@ -296,23 +296,56 @@ describe("DashboardPage — valor/dia é limitado pelo caixa", () => {
     );
   }
 
+  /** Mesma regra de `daysLeftInRange` na página: do dia de hoje até o fim do mês. */
+  function diasRestantes() {
+    const hoje = new Date();
+    const fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+    const t = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate()).getTime();
+    const e = new Date(fim.getFullYear(), fim.getMonth(), fim.getDate()).getTime();
+    if (e < t) return 1;
+    return Math.max(1, Math.floor((e - t) / 86400000) + 1);
+  }
+  const brl = (v) =>
+    `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
   it("usa o caixa quando ele é menor que a sobra do ciclo", () => {
-    // Sobra do ciclo = 600. Caixa = 30. O conselho tem de sair do caixa.
+    // Sobra do ciclo = 600, caixa = 30 → o teto tem de sair do caixa.
+    // Afirmar o VALOR, não uma negativa: `not.toMatch(/R$ 600/)` passaria igual se o
+    // teto por caixa fosse removido, porque a fórmula antiga (600/dias) também nunca
+    // imprime "600" fora do último dia do período.
     mockDashboardData = {
-      ...mockDashboardData,
+      ...baseData(),
       balanceSummary: { as_of: "2026-04-15T12:00:00", total_available: 30, total_all: 30, account_count: 1, by_type: [] },
     };
     renderDash();
     const insight = screen.getByTestId("dashboard-insight-quantias").parentElement;
-    expect(insight.textContent).not.toMatch(/R\$ 600/);
+    const esperado = brl(Math.round(30 / diasRestantes()));
+    expect(insight.textContent).toContain(`${esperado}/dia`);
   });
 
-  it("sem saber o caixa, não inventa um teto — zero seria pior que o comportamento antigo", () => {
-    mockDashboardData = { ...mockDashboardData, balanceSummary: null };
+  it("sem saber o caixa, não inventa um teto — cai no ciclo, não em zero", () => {
+    mockDashboardData = { ...baseData(), balanceSummary: null };
     renderDash();
-    // Não pode virar "R$ 0/dia" só porque o endpoint de saldo caiu.
     const insight = screen.getByTestId("dashboard-insight-quantias").parentElement;
-    expect(insight.textContent).not.toMatch(/R\$ 0\/dia/);
+    // A asserção anterior era `not.toMatch(/R$ 0\/dia/)`, que NUNCA casa: `fmtAbs`
+    // sempre emite duas casas ("R$ 0,00/dia"). Passava com qualquer implementação.
+    const esperado = brl(Math.round(600 / diasRestantes()));
+    expect(insight.textContent).toContain(`${esperado}/dia`);
+    expect(insight.textContent).not.toMatch(/Sem caixa disponível/i);
+  });
+
+  it("resultado negativo com caixa cheio NÃO diz 'sem caixa'", () => {
+    // A guarda amarrada a `dailyBudget <= 0` fazia qualquer período negativo afirmar
+    // falta de caixa — inclusive com R$ 50.000 na conta, e inclusive com o endpoint
+    // de saldo fora do ar, contradizendo o próprio invariante da página.
+    mockDashboardData = {
+      ...baseData(),
+      summary: { ...baseData().summary, total_expenses: 2200, balance: -1200 },
+      balanceSummary: { as_of: "2026-04-15T12:00:00", total_available: 50000, total_all: 50000, account_count: 1, by_type: [] },
+    };
+    renderDash();
+    const insight = screen.getByTestId("dashboard-insight-quantias").parentElement;
+    expect(insight.textContent).not.toMatch(/Sem caixa disponível/i);
   });
 });
 

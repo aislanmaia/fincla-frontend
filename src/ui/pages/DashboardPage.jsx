@@ -184,12 +184,17 @@ export function DashboardPage({
    * fechados" que ainda não viraram transação real (materialização lazy).
    */
   /**
-   * `null` = não sabemos (endpoint fora do ar, sem org, mocks ligados).
-   * `[]` = sabemos que não há recorrência a vencer. A distinção existe porque dois
-   * KPIs passaram a exibir esses valores: mostrar R$ 0,00 quando a chamada falhou
-   * afirmaria "você não tem nada comprometido", que é a informação oposta.
+   * Três estados, não dois:
+   *   `undefined` = carregando (primeiro paint e toda troca de período)
+   *   `null`      = indisponível (endpoint fora do ar, sem org, mocks ligados)
+   *   `[]`/itens  = sabemos, e pode não haver nenhuma
+   *
+   * Dois KPIs exibem esses valores. Mostrar R$ 0,00 durante a falha afirmaria "você
+   * não tem nada comprometido" — a informação oposta. E colapsar carregando em `null`
+   * afirma "Projeção indisponível" sobre um endpoint que está respondendo: o usuário
+   * lê uma falha que não aconteceu, a cada troca de período.
    */
-  const [recurringProjection, setRecurringProjection] = useState(null);
+  const [recurringProjection, setRecurringProjection] = useState(undefined);
   useEffect(() => {
     if (!apiDataEnabled || !organizationId || !appliedRange.start || !appliedRange.end) {
       setRecurringProjection(null);
@@ -197,9 +202,8 @@ export function DashboardPage({
     }
     let cancelled = false;
     // Sem isto, trocar de período deixa os itens do período ANTERIOR na tela até a
-    // nova resposta chegar — e dois KPIs passam a exibir números de outro intervalo
-    // sem nenhum sinal de carregamento. `null` degrada para "Projeção indisponível".
-    setRecurringProjection(null);
+    // nova resposta chegar — dois KPIs exibiriam números de outro intervalo.
+    setRecurringProjection(undefined);
     getRecurringProjection(organizationId, appliedRange.start, appliedRange.end)
       .then((res) => { if (!cancelled) setRecurringProjection(res.items || []); })
       .catch(() => { if (!cancelled) setRecurringProjection(null); });
@@ -306,7 +310,12 @@ export function DashboardPage({
    */
   const projectedToCome = useMemo(() => {
     if (!Array.isArray(recurringProjection)) {
-      return { expense: 0, income: 0, known: false };
+      return {
+        expense: 0,
+        income: 0,
+        known: false,
+        loading: recurringProjection === undefined,
+      };
     }
     let expense = 0;
     let income = 0;
@@ -315,7 +324,7 @@ export function DashboardPage({
       if (item.type === "expense") expense += value;
       else if (item.type === "income") income += value;
     }
-    return { expense, income, known: true };
+    return { expense, income, known: true, loading: false };
   }, [recurringProjection]);
 
   const balance = bal;
@@ -343,8 +352,7 @@ export function DashboardPage({
    * vencer" tendo uma lista cheia. Exatamente o falso-negativo que o `null ≠ []`
    * acima existe para impedir.
    */
-  const committedInBar = Math.min(committedToCome, Math.max(0, bal));
-  const freeAmt = Math.max(0, bal - committedInBar);
+
   /**
    * A barra só é partição das receitas enquanto sobra dinheiro. Com resultado
    * negativo não existe "sobra", as três fatias colapsam em `Gasto` e o total passa
@@ -369,15 +377,25 @@ export function DashboardPage({
   /**
    * Sobra REAL depois dos compromissos — pode ser negativa, e precisa poder.
    *
-   * `freeAmt` nasce do commitment CLAMPADO porque é largura de fatia. Usá-lo no KPI
-   * repetiria o falso-negativo que o clamp do irmão já causou: com sobra R$ 100 e
-   * recorrências R$ 3.000 o card leria "R$ 0,00" quando a verdade é −R$ 2.900 — e
-   * −R$ 2.900 é justamente a informação que importa.
+   * Com sobra R$ 100 e recorrências R$ 3.000 o número é −R$ 2.900, e é essa a
+   * informação que importa. Qualquer clamp aqui vira "R$ 0,00" e esconde o que o
+   * usuário precisa ver.
    */
   const freeAfterCommitments = bal - committedToCome;
 
-  const barIsIncomeSplit = bal >= 0;
-  const barTotal = Math.max(barIsIncomeSplit ? inc : usedAmt + committedInBar, 1);
+  /**
+   * A barra só é PARTIÇÃO das receitas quando de fato particiona: resultado não
+   * negativo E compromissos que cabem dentro da sobra. Fora disso não existe fatia
+   * de sobra, e insistir na moldura obrigaria a clampar um número — foi assim que
+   * legenda e KPI passaram a imprimir valores diferentes sob o mesmo rótulo, com a
+   * legenda deixando de somar o total anunciado ao lado.
+   */
+  const barIsIncomeSplit =
+    bal >= 0 && (!projectedToCome.known || committedToCome <= bal);
+  const barTotal = Math.max(
+    barIsIncomeSplit ? inc : usedAmt + committedToCome,
+    1,
+  );
 
   /**
    * Fatias da barra. Sem a projeção (endpoint fora do ar, mocks, sem org) a fatia do
@@ -407,16 +425,26 @@ export function DashboardPage({
         opacity: 0.5,
       });
     }
-    slices.push({
-      label: projectedToCome.known && !periodEnded
-        ? "Sobra depois das recorrências"
-        : "Sobra do período",
-      color: mood.bar,
-      value: fmtAbs(freeAmt),
-      opacity: 1,
-    });
+    if (barIsIncomeSplit) {
+      slices.push({
+        label: projectedToCome.known && !periodEnded
+          ? "Sobra depois das recorrências"
+          : "Sobra do período",
+        color: mood.bar,
+        value: fmtAbs(freeAfterCommitments),
+        opacity: 1,
+      });
+    }
     return slices;
-  }, [usedAmt, committedToCome, freeAmt, mood.bar, projectedToCome.known, periodEnded]);
+  }, [
+    usedAmt,
+    committedToCome,
+    freeAfterCommitments,
+    barIsIncomeSplit,
+    mood.bar,
+    projectedToCome.known,
+    periodEnded,
+  ]);
 
   const daysLeftInRange = useMemo(() => {
     const e = parseLocalYmd(appliedRange.end);
@@ -454,7 +482,7 @@ export function DashboardPage({
     const byCycle = Math.max(0, bal);
     const cash = dashboardData.balanceSummary?.total_available;
     if (typeof cash !== "number") {
-      return Math.round(byCycle / daysLeftInRange);
+      return { value: Math.round(byCycle / daysLeftInRange), noCash: false };
     }
     // Sem a projeção, entradas e compromissos futuros são DESCONHECIDOS — somá-los
     // como zero produziria o teto otimista que este cálculo existe para eliminar.
@@ -463,7 +491,15 @@ export function DashboardPage({
     const byCash = projectedToCome.known
       ? Math.max(0, cash + projectedToCome.income - projectedToCome.expense)
       : Math.max(0, cash);
-    return Math.round(Math.min(byCycle, byCash) / daysLeftInRange);
+    return {
+      value: Math.round(Math.min(byCycle, byCash) / daysLeftInRange),
+      // `noCash` é sobre o CAIXA, não sobre o teto. Amarrar a frase a
+      // `dailyBudget <= 0` fazia qualquer período de resultado negativo dizer "sem
+      // caixa disponível" — inclusive com R$ 50.000 na conta, e inclusive com o
+      // endpoint de saldo fora do ar, contradizendo as três notas desta página que
+      // dizem que `total_available` ausente não vira zero.
+      noCash: byCash <= 0,
+    };
   }, [bal, daysLeftInRange, dashboardData.balanceSummary, projectedToCome]);
 
   /**
@@ -529,11 +565,11 @@ export function DashboardPage({
    * recomendar dinheiro que não existe; o que não dá é fingir que há folga.
    */
   const insightBody =
-    dailyBudget <= 0
+    dailyBudget.noCash
       ? "Sem caixa disponível hoje — o que der para gastar depende do que ainda entrar no período."
       : moodInsightBody(moodKey, {
           aheadOfPace,
-                dailyBudgetLabel: fmtAbs(dailyBudget),
+                dailyBudgetLabel: fmtAbs(dailyBudget.value),
           daysLeft: daysLeftInRange,
           periodPhrase: kpiPeriodPhrase,
         });
@@ -562,7 +598,9 @@ export function DashboardPage({
           value: projectedToCome.known ? fmtAbs(committedToCome) : "—",
           delta: projectedToCome.known
             ? (committedToCome > 0 ? "recorrências até o fim do período" : "nenhuma recorrência a vencer")
-            : "Projeção indisponível",
+            : projectedToCome.loading
+              ? "Carregando recorrências…"
+              : "Projeção indisponível",
           up: null,
           emptyCta: true,
         },
@@ -613,7 +651,9 @@ export function DashboardPage({
           ? "recorrências projetadas no período"
           : projectedToCome.known
             ? (committedToCome > 0 ? "recorrências até o fim do período" : "nenhuma recorrência a vencer")
-            : "Projeção indisponível",
+            : projectedToCome.loading
+              ? "Carregando recorrências…"
+              : "Projeção indisponível",
         up: null,
         emptyCta: false,
       },
@@ -625,7 +665,7 @@ export function DashboardPage({
             ? "Sobra depois das recorrências"
             : "Sobra do período",
         value: periodEnded
-          ? fmtAbs(Math.abs(s?.balance ?? 0))
+          ? ((s?.balance ?? 0) < 0 ? fmtSgn(s.balance) : fmtAbs(s?.balance ?? 0))
           : projectedToCome.known
             ? (freeAfterCommitments < 0 ? fmtSgn(freeAfterCommitments) : fmtAbs(freeAfterCommitments))
             : fmtAbs(Math.max(0, bal)),
@@ -633,12 +673,19 @@ export function DashboardPage({
           ? (s && s.balance >= 0 ? "resultado acumulado" : "resultado negativo")
           : projectedToCome.known
             ? "do que já entrou, menos o que ainda vence"
-            : "sem a projeção das recorrências",
+            : projectedToCome.loading
+              ? "Carregando recorrências…"
+              : "sem a projeção das recorrências",
         // Sem seta no período aberto. Esta sobra sai só das receitas JÁ recebidas —
         // é partição do que entrou — enquanto o valor/dia do Insight conta também as
         // entradas previstas. Uma seta vermelha aqui contradiz o conselho ali com um
         // sinal visual, e as duas contas estão certas: respondem perguntas diferentes.
         up: periodEnded ? (s ? s.balance >= 0 : null) : null,
+        // O texto ficou órfão quando a chave "bal" saiu: ele explicava justamente
+        // este número, que no período encerrado volta a se chamar "Saldo do período".
+        tooltip: periodEnded
+          ? "Saldo deste ciclo apenas: receitas menos despesas dentro do período escolhido. Não inclui saldo de meses anteriores — o Fincla trata cada período como um ciclo fechado, para incentivar a revisão regular das suas finanças."
+          : undefined,
         emptyCta: false,
       },
     ];
@@ -1362,15 +1409,15 @@ export function DashboardPage({
 
               <div data-testid="dashboard-composicao">
                 <div style={{ ...G, display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                  <span style={{ fontSize: 11, color: T.inkMid }}>{barIsIncomeSplit ? "Para onde foram as receitas do período" : "Despesas do período"}</span>
+                  <span style={{ fontSize: 11, color: T.inkMid }}>{barIsIncomeSplit ? "Para onde foram as receitas do período" : "Gastos e compromissos do período"}</span>
                   <span data-testid="dashboard-composicao-total" style={{ ...M_MONO, ...NUM, fontSize: 12, fontWeight: 700, color: T.ink }}>
                     {fmtAbs(barTotal)}
                   </span>
                 </div>
                 <div style={{ height: 7, background: T.grayLight, borderRadius: 99, overflow: "hidden", display: "flex" }}>
                   <div style={{ width: `${(usedAmt / barTotal) * 100}%`, background: T.inkGhost, transition: "width 0.6s" }} />
-                  <div style={{ width: `${(committedInBar / barTotal) * 100}%`, background: mood.bar, opacity: 0.4, transition: "width 0.6s, background 0.8s" }} />
-                  <div style={{ flex: 1, background: mood.bar, transition: "background 0.18s" }} />
+                  <div style={{ width: `${(committedToCome / barTotal) * 100}%`, background: mood.bar, opacity: 0.4, transition: "width 0.6s, background 0.8s" }} />
+                  {barIsIncomeSplit ? <div style={{ flex: 1, background: mood.bar, transition: "background 0.18s" }} /> : null}
                 </div>
                 <div style={{ ...G, display: "flex", gap: 14, marginTop: 7 }}>
                   {compositionSlices.map(({ label, color, value, opacity }) => (
@@ -1445,18 +1492,12 @@ export function DashboardPage({
                     ? "dashboard-kpi-comprometido"
                     : key === "left"
                       ? "dashboard-kpi-sobra"
-                      : "dashboard-kpi-saldo"
+                      : `dashboard-kpi-${key}`
             }
             style={{ padding: "16px 18px" }}
           >
             <div style={{ ...G, fontSize: 11, fontWeight: 500, color: T.inkMid, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
               {label}
-              {key === "bal" && (
-                <InfoTip
-                  width={260}
-                  text={"Saldo deste ciclo apenas: receitas menos despesas dentro do período escolhido. Não inclui saldo de meses anteriores — o Fincla trata cada período como um ciclo fechado, para incentivar a revisão regular das suas finanças."}
-                />
-              )}
               {tooltip && <InfoTip width={280} text={tooltip} />}
             </div>
             <div style={{ ...G, ...NUM, fontSize: 20, fontWeight: 700, color: T.ink, marginBottom: 4 }}>{value}</div>
