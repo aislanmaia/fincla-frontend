@@ -196,6 +196,10 @@ export function DashboardPage({
       return undefined;
     }
     let cancelled = false;
+    // Sem isto, trocar de período deixa os itens do período ANTERIOR na tela até a
+    // nova resposta chegar — e dois KPIs passam a exibir números de outro intervalo
+    // sem nenhum sinal de carregamento. `null` degrada para "Projeção indisponível".
+    setRecurringProjection(null);
     getRecurringProjection(organizationId, appliedRange.start, appliedRange.end)
       .then((res) => { if (!cancelled) setRecurringProjection(res.items || []); })
       .catch(() => { if (!cancelled) setRecurringProjection(null); });
@@ -362,6 +366,16 @@ export function DashboardPage({
     );
   }, [appliedRange.end]);
 
+  /**
+   * Sobra REAL depois dos compromissos — pode ser negativa, e precisa poder.
+   *
+   * `freeAmt` nasce do commitment CLAMPADO porque é largura de fatia. Usá-lo no KPI
+   * repetiria o falso-negativo que o clamp do irmão já causou: com sobra R$ 100 e
+   * recorrências R$ 3.000 o card leria "R$ 0,00" quando a verdade é −R$ 2.900 — e
+   * −R$ 2.900 é justamente a informação que importa.
+   */
+  const freeAfterCommitments = bal - committedToCome;
+
   const barIsIncomeSplit = bal >= 0;
   const barTotal = Math.max(barIsIncomeSplit ? inc : usedAmt + committedInBar, 1);
 
@@ -505,12 +519,24 @@ export function DashboardPage({
   const spentOfIncomePct = inc > 0 ? Math.round((exp / inc) * 100) : null;
 
 
-  const insightBody = moodInsightBody(moodKey, {
-    aheadOfPace,
-    dailyBudgetLabel: fmtAbs(dailyBudget),
-    daysLeft: daysLeftInRange,
-    periodPhrase: kpiPeriodPhrase,
-  });
+  /**
+   * Sem caixa não há conselho de quanto gastar por dia.
+   *
+   * Com `total_available <= 0` — conta zerada, conta negativa, ou caixa preso numa
+   * fatura aberta, que é condição documentada aqui — o teto dá zero, e a frase da
+   * faixa `serene` fica "você pode gastar até R$ 0,00/dia com folga" logo abaixo de
+   * "Suas finanças respiram bem hoje". Trocar o valor por outro seria voltar a
+   * recomendar dinheiro que não existe; o que não dá é fingir que há folga.
+   */
+  const insightBody =
+    dailyBudget <= 0
+      ? "Sem caixa disponível hoje — o que der para gastar depende do que ainda entrar no período."
+      : moodInsightBody(moodKey, {
+          aheadOfPace,
+                dailyBudgetLabel: fmtAbs(dailyBudget),
+          daysLeft: daysLeftInRange,
+          periodPhrase: kpiPeriodPhrase,
+        });
 
 
   const kpiItems = useMemo(() => {
@@ -601,7 +627,7 @@ export function DashboardPage({
         value: periodEnded
           ? fmtAbs(Math.abs(s?.balance ?? 0))
           : projectedToCome.known
-            ? fmtAbs(freeAmt)
+            ? (freeAfterCommitments < 0 ? fmtSgn(freeAfterCommitments) : fmtAbs(freeAfterCommitments))
             : fmtAbs(Math.max(0, bal)),
         delta: periodEnded
           ? (s && s.balance >= 0 ? "resultado acumulado" : "resultado negativo")
@@ -623,7 +649,7 @@ export function DashboardPage({
     dashboardData.summary,
     committedToCome,
     committed,
-    freeAmt,
+    freeAfterCommitments,
     bal,
     periodEnded,
     projectedToCome.known,

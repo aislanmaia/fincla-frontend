@@ -6,8 +6,8 @@ Descreve o comportamento dos botões de ação do card de insights do dashboard,
 
 - Os rótulos, ícones e **destinos** vêm de `getMoodActions(moodKey)` em `src/ui/features/moodV4.jsx` — cada ação carrega um campo `nav`.
 - O card renderiza os botões em `src/ui/pages/DashboardPage.jsx` (bloco «INSIGHT»; o título perdeu o «DO DIA», que prometia uma variação diária que o conteúdo não tem).
-- **Os botões navegam** via `onNav?.(nav)`. Ficaram sem `onClick` do protótipo até agosto/2026 — `cursor: pointer` sem efeito, que é pior que botão ausente: o usuário clica, nada acontece e conclui que o app quebrou.
-- `simulation` e `reports` são rotas Pro. Para um usuário Essential o clique cai no `<UpgradeWall>` — mesmo comportamento dos itens marcados na sidebar, e por isso os botões não são escondidos.
+- **Os botões navegam** via `onNav?.(nav, navOpts)`. O segundo argumento é o que leva a sub-área do hub (`{ area: "simulator" }`) — sem ele o clique cairia sempre na área default do Planejamento. Ficaram sem `onClick` do protótipo até agosto/2026 — `cursor: pointer` sem efeito, que é pior que botão ausente: o usuário clica, nada acontece e conclui que o app quebrou.
+- `reports` é rota Pro. Para um usuário Essential o clique cai no `<UpgradeWall>` — mesmo comportamento dos itens marcados na sidebar, e por isso o botão não é escondido. O Simulador vive dentro do hub `planning`, que não é gated na rota.
 
 Referências no código:
 

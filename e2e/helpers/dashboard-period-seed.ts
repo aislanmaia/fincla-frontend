@@ -105,9 +105,10 @@ export function expectedKpisBillingCycleFiveToFour(anchor: Date): {
     return {
       receitas: fmtAbsPt(receitas),
       despesas: fmtAbsPt(despesas),
-      // Período em curso: o KPI mostra só o que ainda VAI vencer. As ocorrências
-      // dos dias 1–3 (`eLong`) já viraram transação e estão em `despesas`.
-      comprometido: fmtAbsPt(VAL.eFuture),
+      // Ciclo 5→4 no ramo `primary`: ele já ENCERROU (endCurr <= hoje), então o KPI
+      // cai em "Comprometido no período" = `recurring_in_period` do intervalo, que
+      // cobre as ocorrências dos dias 2 e 3. Semântica inalterada por esta PR.
+      comprometido: fmtAbsPt(VAL.eLong + VAL.eFuture),
     };
   }
   return {
@@ -119,9 +120,13 @@ export function expectedKpisBillingCycleFiveToFour(anchor: Date): {
 
 export function buildDashboardPeriodExpectations(): DashboardPeriodExpectations {
   const committedPrev = VAL.eLong;
-  // Idem: aberto = a vencer (`eFuture`). Fechado (`prev`) segue sendo o
-  // comprometido do período inteiro, que não mudou de semântica.
-  const committedThis = VAL.eFuture;
+  // "Este mês" é período ABERTO: o KPI mostra o que ainda vai vencer, e isso vem de
+  // `getRecurringProjection`, que só devolve ocorrências DEPOIS de hoje. Como as
+  // séries semeadas caem nos dias 1–3 e o spec só roda com hoje >= 4, a projeção é
+  // sempre vazia aqui. Não é `eFuture`: aquelas ocorrências já viraram transação e
+  // estão contadas em `despesas`.
+  const committedThis = 0;
+  // `prev` é período encerrado — segue no comprometido do intervalo, sem mudança.
 
   const receitasPrev = VAL.iLong;
   const despesasPrev = VAL.eLong + VAL.manualExpPrev;

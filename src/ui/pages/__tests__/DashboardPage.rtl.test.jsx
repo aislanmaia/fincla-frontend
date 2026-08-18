@@ -384,3 +384,46 @@ describe("DashboardPage — Insight mostra as duas quantias", () => {
     if (alvo === "planning") expect(opts?.area).toBeTruthy();
   });
 });
+
+/**
+ * Dois falsos-negativos que sobreviveram à primeira correção do clamp: o número que
+ * o KPI imprime e a frase que o Insight escreve quando não há caixa.
+ */
+describe("DashboardPage — o que sobra pode ser negativo, e sem caixa não há folga", () => {
+  function renderDash(orgId) {
+    return render(
+      <DashboardPage
+        onNav={vi.fn()}
+        stateCtrl={{ mounted: true, isMobile: false }}
+        dataMode="live"
+        organizationId={orgId}
+        onNewTx={vi.fn()}
+      />,
+    );
+  }
+
+  it("compromissos maiores que a sobra dão número negativo, não zero", async () => {
+    // Sobra do ciclo 600, recorrências a vencer 3.000 → a verdade é −2.400.
+    // O clamp existe para a largura da fatia; imprimi-lo aqui diria "R$ 0,00" e
+    // esconderia exatamente o que o usuário precisa saber.
+    projectionItems = [
+      { series_id: "s1", date: "2026-04-25", value: 3000, type: "expense", description: "Fatura", category: "cartao" },
+    ];
+    renderDash("org-neg-sobra");
+    const kpi = await screen.findByTestId("dashboard-kpi-sobra");
+    expect(kpi).toHaveTextContent("−R$ 2.400,00");
+  });
+
+  it("sem caixa, o Insight não promete folga", () => {
+    mockDashboardData = {
+      ...baseData(),
+      balanceSummary: { as_of: "2026-04-15T12:00:00", total_available: 0, total_all: 0, account_count: 1, by_type: [] },
+    };
+    renderDash("org-sem-caixa");
+    // A frase da faixa `serene` diria "você pode gastar até R$ 0,00/dia com folga"
+    // logo abaixo de "Suas finanças respiram bem hoje".
+    const insight = screen.getByTestId("dashboard-insight-quantias").parentElement;
+    expect(insight.textContent).not.toMatch(/com folga/i);
+    expect(insight.textContent).toMatch(/Sem caixa disponível/i);
+  });
+});
