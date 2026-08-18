@@ -1,12 +1,13 @@
 # Visão Geral — CTAs do card «Insight do dia»
 
-Documento de especificação para implementação futura. Descreve o comportamento **pretendido** dos botões de ação do card de insights do dashboard, que variam conforme o **humor financeiro** (`mood`).
+Descreve o comportamento dos botões de ação do card de insights do dashboard, que variam conforme o **humor financeiro** (`mood`).
 
 ## Estado atual (implementação)
 
-- Os rótulos e ícones vêm de `getMoodActions(moodKey)` em `src/ui/features/moodV4.jsx`.
-- O card renderiza os botões em `src/ui/pages/DashboardPage.jsx` (bloco «INSIGHT DO DIA»).
-- **Os botões não possuem `onClick` nem navegação:** são apenas CTAs visuais (`cursor: pointer` sem efeito).
+- Os rótulos, ícones e **destinos** vêm de `getMoodActions(moodKey)` em `src/ui/features/moodV4.jsx` — cada ação carrega um campo `nav`.
+- O card renderiza os botões em `src/ui/pages/DashboardPage.jsx` (bloco «INSIGHT»; o título perdeu o «DO DIA», que prometia uma variação diária que o conteúdo não tem).
+- **Os botões navegam** via `onNav?.(nav)`. Ficaram sem `onClick` do protótipo até agosto/2026 — `cursor: pointer` sem efeito, que é pior que botão ausente: o usuário clica, nada acontece e conclui que o app quebrou.
+- `simulation` e `reports` são rotas Pro. Para um usuário Essential o clique cai no `<UpgradeWall>` — mesmo comportamento dos itens marcados na sidebar, e por isso os botões não são escondidos.
 
 Referências no código:
 
@@ -20,17 +21,20 @@ O humor (`mood`) é derivado da relação entre **% do tempo decorrido no perío
 Rotas úteis no shell atual (nomes usados em `onNav` / `page` no `App.jsx`):
 
 
-| Destino provável | Id de página (exemplo) |
-| ---------------- | ---------------------- |
-| Metas            | `metas`                |
-| Simulação        | `simulacao`            |
-| Recorrências     | `recorrencias`         |
-| Relatórios       | `relatorios`           |
-| Transações       | `transacoes`           |
-| Orçamentos       | `orcamentos`           |
+| Destino      | Id de página   |
+| ------------ | -------------- |
+| Metas        | `goals`        |
+| Simulação    | `simulation`   |
+| Recorrências | `recurring`    |
+| Relatórios   | `reports`      |
+| Transações   | `transactions` |
+| Orçamentos   | `budgets`      |
+| Cartões      | `cards`        |
 
 
-(Ajustar ids se o app evoluir; manter esta tabela alinhada ao roteamento real.)
+Ids verificados contra `onNav` em `src/ui/App.jsx`. A versão anterior desta tabela
+listava ids em português (`metas`, `simulacao`) que o roteamento nunca aceitou —
+se esta tabela divergir de novo, o código é a verdade.
 
 ## Matriz: humor → ações → resultado esperado
 
