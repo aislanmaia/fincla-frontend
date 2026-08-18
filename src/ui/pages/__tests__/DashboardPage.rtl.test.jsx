@@ -334,11 +334,32 @@ describe("DashboardPage — Insight mostra as duas quantias", () => {
     );
     const quantias = screen.getByTestId("dashboard-insight-quantias");
     expect(quantias).toHaveTextContent("R$ 400,00"); // despesas reais
-    expect(quantias).toHaveTextContent("gastos até hoje");
+    expect(quantias).toHaveTextContent("gastos no período");
     expect(quantias).toHaveTextContent("seria o ritmo linear da receita");
     // A frase antiga prometia uma régua que a tela nunca definia.
     expect(quantias).not.toHaveTextContent(/ritmo esperado/i);
     expect(quantias).not.toHaveTextContent(/à frente/i);
+  });
+
+  it("resultado negativo mostra o sinal — a cor do humor mede ritmo, não sinal", () => {
+    // Na `main` o sinal sobrevivia no KPI "Saldo do período" (seta vermelha). Ao subir
+    // o número para o headline esta PR removeu aquele KPI, e `fmtAbs` aplica Math.abs:
+    // −1.200 renderizava idêntico a +1.200.
+    mockDashboardData = {
+      ...baseData(),
+      summary: { ...baseData().summary, total_expenses: 2200, balance: -1200 },
+    };
+    render(
+      <DashboardPage
+        onNav={vi.fn()}
+        stateCtrl={{ mounted: true, isMobile: false }}
+        dataMode="live"
+        organizationId="org-neg"
+        onNewTx={vi.fn()}
+      />,
+    );
+    const resultado = screen.getByTestId("dashboard-headline-resultado");
+    expect(resultado).toHaveTextContent("−R$ 1.200,00");
   });
 
   it("os botões navegam — antes eram cursor:pointer sem onClick", () => {
