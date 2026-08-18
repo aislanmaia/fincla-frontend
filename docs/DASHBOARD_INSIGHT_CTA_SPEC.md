@@ -21,20 +21,26 @@ O humor (`mood`) é derivado da relação entre **% do tempo decorrido no perío
 Rotas úteis no shell atual (nomes usados em `onNav` / `page` no `App.jsx`):
 
 
-| Destino      | Id de página   |
-| ------------ | -------------- |
-| Metas        | `goals`        |
-| Simulação    | `simulation`   |
-| Recorrências | `recurring`    |
-| Relatórios   | `reports`      |
-| Transações   | `transactions` |
-| Orçamentos   | `budgets`      |
-| Cartões      | `cards`        |
+| Destino      | Alvo de `navTo`                              |
+| ------------ | -------------------------------------------- |
+| Metas        | `planning` + `{ area: "goals" }`             |
+| Simulador    | `planning` + `{ area: "simulator" }`         |
+| Orçamentos   | `planning` + `{ area: "budgets" }`           |
+| Recorrências | `recurring`                                  |
+| Relatórios   | `reports`                                    |
+| Transações   | `transactions`                               |
+| Cartões      | `cards`                                      |
 
 
-Ids verificados contra `onNav` em `src/ui/App.jsx`. A versão anterior desta tabela
-listava ids em português (`metas`, `simulacao`) que o roteamento nunca aceitou —
-se esta tabela divergir de novo, o código é a verdade.
+**A fonte de verdade é `AUTH_ROUTE_SEGMENTS` em `src/ui/routing/appSegments.js`**, não
+os call sites de `onNav`. `navTo` ignora em silêncio qualquer alvo fora daquela lista.
+
+Esta tabela já errou duas vezes: primeiro com ids em português (`metas`, `simulacao`)
+que o roteamento nunca aceitou; depois com `goals`/`simulation`, que existem como
+chamadas espalhadas pelo código mas saíram da lista quando as três áreas migraram para
+o hub Planejamento — restaram só como rotas de redirect. Nos dois casos o botão ficava
+mudo. `src/ui/features/__tests__/moodActions.test.js` agora valida cada destino contra
+os mesmos predicados que o despachante usa, para que a terceira vez não aconteça.
 
 ## Matriz: humor → ações → resultado esperado
 

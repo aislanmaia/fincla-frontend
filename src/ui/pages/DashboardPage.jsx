@@ -330,9 +330,24 @@ export function DashboardPage({
    * Agora as três fatias somam exatamente as receitas, e sobra um número que a tela
    * não tinha: o que resta DEPOIS das recorrências que ainda vão vencer.
    */
-  const committedToCome = Math.min(projectedToCome.expense, Math.max(0, bal));
-  const freeAmt = Math.max(0, bal - committedToCome);
-  const barTotal = Math.max(usedAmt + committedToCome + freeAmt, 1);
+  const committedToCome = projectedToCome.expense;
+  /**
+   * O clamp existe só para a GEOMETRIA da barra: uma fatia não pode ser maior que a
+   * sobra que ela ocupa. Usar o valor limitado no KPI faria o card relatar um
+   * compromisso que não é o compromisso — com sobra R$ 100 e recorrências R$ 3.000
+   * ele leria "R$ 100,00", e com resultado negativo leria "nenhuma recorrência a
+   * vencer" tendo uma lista cheia. Exatamente o falso-negativo que o `null ≠ []`
+   * acima existe para impedir.
+   */
+  const committedInBar = Math.min(committedToCome, Math.max(0, bal));
+  const freeAmt = Math.max(0, bal - committedInBar);
+  /**
+   * A barra só é partição das receitas enquanto sobra dinheiro. Com resultado
+   * negativo não existe "sobra", as três fatias colapsam em `Gasto` e o total passa
+   * a ser a despesa — então o cabeçalho não pode continuar dizendo "receitas".
+   */
+  const barIsIncomeSplit = bal >= 0;
+  const barTotal = Math.max(barIsIncomeSplit ? inc : usedAmt + committedInBar, 1);
 
   /**
    * Fatias da barra. Sem a projeção (endpoint fora do ar, mocks, sem org) a fatia do
@@ -352,7 +367,7 @@ export function DashboardPage({
       slices.push({
         label: "Comprometido a vencer",
         color: mood.bar,
-        value: fmtAbs(committedToCome),
+        value: fmtAbs(committedInBar),
         opacity: 0.5,
       });
     }
@@ -365,7 +380,7 @@ export function DashboardPage({
       opacity: 1,
     });
     return slices;
-  }, [usedAmt, committedToCome, freeAmt, mood.bar, projectedToCome.known]);
+  }, [usedAmt, committedInBar, freeAmt, mood.bar, projectedToCome.known]);
 
   const daysLeftInRange = useMemo(() => {
     const e = parseLocalYmd(appliedRange.end);
@@ -398,16 +413,35 @@ export function DashboardPage({
    * zero — sem saber o caixa, cair no comportamento antigo é melhor que inventar
    * um teto.
    */
+  /**
+   * Período inteiramente no passado. `getRecurringProjection` só devolve ocorrências
+   * DEPOIS de hoje, então num mês fechado ela é sempre vazia — e dois KPIs passariam
+   * a dizer "nenhuma recorrência a vencer" para um mês que já acabou, onde "a vencer"
+   * não quer dizer nada. Nesse caso vale o comprometido DO período (`recurring_in_period`).
+   */
+  const periodEnded = useMemo(() => {
+    const e = parseLocalYmd(appliedRange.end);
+    if (!e) return false;
+    const now = new Date();
+    return (
+      new Date(e.getFullYear(), e.getMonth(), e.getDate()).getTime() <
+      new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+    );
+  }, [appliedRange.end]);
+
   const dailyBudget = useMemo(() => {
     const byCycle = Math.max(0, bal);
     const cash = dashboardData.balanceSummary?.total_available;
     if (typeof cash !== "number") {
       return Math.round(byCycle / daysLeftInRange);
     }
-    const byCash = Math.max(
-      0,
-      cash + projectedToCome.income - projectedToCome.expense,
-    );
+    // Sem a projeção, entradas e compromissos futuros são DESCONHECIDOS — somá-los
+    // como zero produziria o teto otimista que este cálculo existe para eliminar.
+    // O caixa sozinho continua sendo um fato e um limite superior legítimo: o que
+    // falta só pode baixá-lo.
+    const byCash = projectedToCome.known
+      ? Math.max(0, cash + projectedToCome.income - projectedToCome.expense)
+      : Math.max(0, cash);
     return Math.round(Math.min(byCycle, byCash) / daysLeftInRange);
   }, [bal, daysLeftInRange, dashboardData.balanceSummary, projectedToCome]);
 
@@ -449,7 +483,19 @@ export function DashboardPage({
    * medidas. Mostrar as duas quantias deixa a diferença evidente sozinha, ancorada
    * em valores que existem, e o nome único fica com o card de Ritmo.
    */
-  const expectedByNow = Math.round((envelope * timePct) / 100);
+  const expectedByNow = Math.round((inc * timePct) / 100);
+  /**
+   * Percentual da RECEITA gasta — dividido por `inc`, não pelo `envelope`.
+   *
+   * `envelope` é `max(inc, exp)`, então quem gasta mais do que recebe teria o
+   * numerador travado em 100%: com receita 1.000 e despesa 2.000 o chip diria
+   * "100% da receita gasta" (verdade: 200%). Justo o caso mais grave seria o que a
+   * tela leria mais errado. Passar de 100 aqui é informação, não bug.
+   *
+   * Sem receita no período a fração não existe e o chip não aparece — o humor
+   * continua saindo do `envelope`, que é outra conta e não muda nesta PR.
+   */
+  const spentOfIncomePct = inc > 0 ? Math.round((exp / inc) * 100) : null;
 
 
   const insightBody = moodInsightBody(moodKey, {
@@ -474,8 +520,20 @@ export function DashboardPage({
       return [
         { key: "inc", label: `Receitas · ${kpiPeriodPhrase}`, value: fmtAbs(0), delta: `${n} lançamentos no período`, up: null, emptyCta: true },
         { key: "exp", label: `Despesas · ${kpiPeriodPhrase}`, value: fmtAbs(0), delta: "registre para acompanhar o ritmo", up: null, emptyCta: true },
-        { key: "cmt", label: "Comprometido a vencer", value: fmtAbs(0), delta: "nenhuma recorrência no período", up: null, emptyCta: true },
-        { key: "left", label: "Sobra depois das recorrências", value: fmtAbs(0), delta: "sem movimento ainda", up: null, emptyCta: true },
+        // Uma org que configurou recorrências mas ainda não lançou nada cai aqui com
+        // total_income e total_expenses zerados — e a projeção pode estar cheia. Não
+        // dá para afirmar "nenhuma recorrência" só porque não houve transação.
+        {
+          key: "cmt",
+          label: "Comprometido a vencer",
+          value: projectedToCome.known ? fmtAbs(committedToCome) : "—",
+          delta: projectedToCome.known
+            ? (committedToCome > 0 ? "recorrências até o fim do período" : "nenhuma recorrência a vencer")
+            : "Projeção indisponível",
+          up: null,
+          emptyCta: true,
+        },
+        { key: "left", label: "Sobra do período", value: fmtAbs(0), delta: "sem movimento ainda", up: null, emptyCta: true },
       ];
     }
     const s = dashboardData.summary;
@@ -512,24 +570,42 @@ export function DashboardPage({
       // número duas vezes na mesma dobra da tela.
       {
         key: "cmt",
-        label: "Comprometido a vencer",
-        value: projectedToCome.known ? fmtAbs(committedToCome) : "—",
-        delta: projectedToCome.known
-          ? (committedToCome > 0 ? "recorrências até o fim do período" : "nenhuma recorrência a vencer")
-          : "Projeção indisponível",
+        label: periodEnded ? "Comprometido no período" : "Comprometido a vencer",
+        value: periodEnded
+          ? fmtAbs(committed)
+          : projectedToCome.known
+            ? fmtAbs(committedToCome)
+            : "—",
+        delta: periodEnded
+          ? "recorrências projetadas no período"
+          : projectedToCome.known
+            ? (committedToCome > 0 ? "recorrências até o fim do período" : "nenhuma recorrência a vencer")
+            : "Projeção indisponível",
         up: null,
         emptyCta: false,
       },
       {
         key: "left",
-        label: projectedToCome.known
-          ? "Sobra depois das recorrências"
-          : "Sobra do período",
-        value: projectedToCome.known ? fmtAbs(freeAmt) : "—",
-        delta: projectedToCome.known
-          ? "resultado do período menos o que ainda vence"
-          : "Projeção indisponível",
-        up: projectedToCome.known ? freeAmt > 0 : null,
+        label: periodEnded
+          ? "Saldo do período"
+          : projectedToCome.known
+            ? "Sobra depois das recorrências"
+            : "Sobra do período",
+        value: periodEnded
+          ? fmtAbs(Math.abs(s?.balance ?? 0))
+          : projectedToCome.known
+            ? fmtAbs(freeAmt)
+            : fmtAbs(Math.max(0, bal)),
+        delta: periodEnded
+          ? (s && s.balance >= 0 ? "resultado acumulado" : "resultado negativo")
+          : projectedToCome.known
+            ? "resultado do período menos o que ainda vence"
+            : "sem a projeção das recorrências",
+        up: periodEnded
+          ? (s ? s.balance >= 0 : null)
+          : projectedToCome.known
+            ? freeAmt > 0
+            : null,
         emptyCta: false,
       },
     ];
@@ -539,7 +615,10 @@ export function DashboardPage({
     kpiPeriodPhrase,
     dashboardData.summary,
     committedToCome,
+    committed,
     freeAmt,
+    bal,
+    periodEnded,
     projectedToCome.known,
     spendPct,
     timePct,
@@ -1164,16 +1243,18 @@ export function DashboardPage({
                     compara estes dois números e a tela não mostrava nem um deles
                     (o do período só aparecia no rodapé do card de Ritmo). Sem o par,
                     não há como reconstruir por que a tela está na cor que está. */}
+                {spentOfIncomePct === null ? null : (
                 <span
                   data-testid="dashboard-regua-ritmo"
                   style={{ ...G, display: "inline-flex", alignItems: "center", gap: 6, background: T.grayLight, borderRadius: 9999, padding: "3px 11px" }}
                 >
-                  <span style={{ ...M_MONO, ...NUM, fontSize: 11, fontWeight: 700, color: T.ink }}>{Math.round(spendPct)}%</span>
+                  <span style={{ ...M_MONO, ...NUM, fontSize: 11, fontWeight: 700, color: spentOfIncomePct > 100 ? T.red : T.ink }}>{spentOfIncomePct}%</span>
                   <span style={{ fontSize: 10, color: T.inkLight }}>da receita gasta</span>
                   <span style={{ color: T.border }}>·</span>
                   <span style={{ ...M_MONO, ...NUM, fontSize: 11, fontWeight: 700, color: T.ink }}>{timePct}%</span>
                   <span style={{ fontSize: 10, color: T.inkLight }}>do período</span>
                 </span>
+                )}
               </div>
 
               {/* Opção D: o saldo em conta assume o corpo principal e o resultado do
@@ -1236,14 +1317,14 @@ export function DashboardPage({
 
               <div data-testid="dashboard-composicao">
                 <div style={{ ...G, display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                  <span style={{ fontSize: 11, color: T.inkMid }}>Para onde foram as receitas do período</span>
+                  <span style={{ fontSize: 11, color: T.inkMid }}>{barIsIncomeSplit ? "Para onde foram as receitas do período" : "Despesas do período"}</span>
                   <span data-testid="dashboard-composicao-total" style={{ ...M_MONO, ...NUM, fontSize: 12, fontWeight: 700, color: T.ink }}>
                     {fmtAbs(barTotal)}
                   </span>
                 </div>
                 <div style={{ height: 7, background: T.grayLight, borderRadius: 99, overflow: "hidden", display: "flex" }}>
                   <div style={{ width: `${(usedAmt / barTotal) * 100}%`, background: T.inkGhost, transition: "width 0.6s" }} />
-                  <div style={{ width: `${(committedToCome / barTotal) * 100}%`, background: mood.bar, opacity: 0.4, transition: "width 0.6s, background 0.8s" }} />
+                  <div style={{ width: `${(committedInBar / barTotal) * 100}%`, background: mood.bar, opacity: 0.4, transition: "width 0.6s, background 0.8s" }} />
                   <div style={{ flex: 1, background: mood.bar, transition: "background 0.18s" }} />
                 </div>
                 <div style={{ ...G, display: "flex", gap: 14, marginTop: 7 }}>
@@ -1294,8 +1375,8 @@ export function DashboardPage({
               </p>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                {moodActions.map(({ label, Icon: ActionIcon, nav }) => (
-                  <button key={label} type="button" onClick={() => onNav?.(nav)} style={{ ...G, display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.7)", border: `1px solid ${mood.insightBorder}`, borderRadius: 9, padding: "7px 11px", fontSize: 12, color: mood.kicker, fontWeight: 600, cursor: "pointer", textAlign: "left" }}>
+                {moodActions.map(({ label, Icon: ActionIcon, nav, navOpts }) => (
+                  <button key={label} type="button" onClick={() => onNav?.(nav, navOpts)} style={{ ...G, display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.7)", border: `1px solid ${mood.insightBorder}`, borderRadius: 9, padding: "7px 11px", fontSize: 12, color: mood.kicker, fontWeight: 600, cursor: "pointer", textAlign: "left" }}>
                     <ActionIcon size={12} color={mood.kicker} /> {label}
                     <ChevronRight size={11} style={{ marginLeft: "auto" }} />
                   </button>
@@ -1315,9 +1396,11 @@ export function DashboardPage({
                 ? "dashboard-kpi-receitas"
                 : key === "exp"
                   ? "dashboard-kpi-despesas"
-                  : key === "acct"
-                    ? "dashboard-kpi-saldo-em-conta"
-                    : "dashboard-kpi-saldo"
+                  : key === "cmt"
+                    ? "dashboard-kpi-comprometido"
+                    : key === "left"
+                      ? "dashboard-kpi-sobra"
+                      : "dashboard-kpi-saldo"
             }
             style={{ padding: "16px 18px" }}
           >

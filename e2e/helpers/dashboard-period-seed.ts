@@ -105,7 +105,9 @@ export function expectedKpisBillingCycleFiveToFour(anchor: Date): {
     return {
       receitas: fmtAbsPt(receitas),
       despesas: fmtAbsPt(despesas),
-      comprometido: fmtAbsPt(VAL.eLong + VAL.eFuture),
+      // Período em curso: o KPI mostra só o que ainda VAI vencer. As ocorrências
+      // dos dias 1–3 (`eLong`) já viraram transação e estão em `despesas`.
+      comprometido: fmtAbsPt(VAL.eFuture),
     };
   }
   return {
@@ -117,7 +119,9 @@ export function expectedKpisBillingCycleFiveToFour(anchor: Date): {
 
 export function buildDashboardPeriodExpectations(): DashboardPeriodExpectations {
   const committedPrev = VAL.eLong;
-  const committedThis = VAL.eLong + VAL.eFuture;
+  // Idem: aberto = a vencer (`eFuture`). Fechado (`prev`) segue sendo o
+  // comprometido do período inteiro, que não mudou de semântica.
+  const committedThis = VAL.eFuture;
 
   const receitasPrev = VAL.iLong;
   const despesasPrev = VAL.eLong + VAL.manualExpPrev;

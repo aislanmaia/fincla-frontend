@@ -179,25 +179,28 @@ export function moodInsightBody(moodKey, { aheadOfPace, dailyBudgetLabel, daysLe
  * clicável e não responde é pior que botão ausente: o usuário clica, nada acontece,
  * e conclui que o app está quebrado.
  *
- * Os ids são os que `onNav` de fato aceita em `src/ui/App.jsx` — a tabela da spec
- * listava ids em português (`metas`, `simulacao`) que o roteamento nunca usou.
+ * Os ids são os que `navTo` de fato despacha: só o que está em `AUTH_ROUTE_SEGMENTS`
+ * navega. `goals`, `budgets` e `simulation` NÃO estão lá — migraram para o hub
+ * `planning` e sobrevivem apenas como rotas de redirect. Mandar esses ids reproduz
+ * exatamente o bug que este código existe para corrigir: clique sem efeito. O destino
+ * certo é `planning` com a sub-área em `opts.area`.
  *
- * `simulation` e `reports` são rotas Pro: para um usuário Essential o clique cai no
- * `<UpgradeWall>`, que é o mesmo comportamento dos itens marcados na sidebar.
+ * `reports` é rota Pro: para um usuário Essential o clique cai no `<UpgradeWall>`,
+ * mesmo comportamento dos itens marcados na sidebar.
  */
 export function getMoodActions(moodKey) {
   return (
     {
       serene: [
-        { label: "Definir meta extra", Icon: Target, nav: "goals" },
-        { label: "Ver projeção", Icon: TrendingUp, nav: "simulation" },
+        { label: "Definir meta extra", Icon: Target, nav: "planning", navOpts: { area: "goals" } },
+        { label: "Ver projeção", Icon: TrendingUp, nav: "planning", navOpts: { area: "simulator" } },
       ],
       healthy: [
-        { label: "Simular uma compra", Icon: FlaskConical, nav: "simulation" },
+        { label: "Simular uma compra", Icon: FlaskConical, nav: "planning", navOpts: { area: "simulator" } },
         { label: "Ver categorias", Icon: Activity, nav: "reports" },
       ],
       watchful: [
-        { label: "Simular impacto", Icon: FlaskConical, nav: "simulation" },
+        { label: "Simular impacto", Icon: FlaskConical, nav: "planning", navOpts: { area: "simulator" } },
         { label: "Revisar recorrências", Icon: Repeat, nav: "recurring" },
       ],
       tense: [

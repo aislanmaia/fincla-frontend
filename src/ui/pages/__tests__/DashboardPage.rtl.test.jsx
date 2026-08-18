@@ -354,6 +354,12 @@ describe("DashboardPage — Insight mostra as duas quantias", () => {
     );
     const botao = screen.getByRole("button", { name: /Simular uma compra|Simular impacto|Ver projeção|O que posso cortar|Revisão urgente/ });
     botao.click();
-    expect(onNav).toHaveBeenCalledWith(expect.stringMatching(/simulation|reports|goals|transactions/));
+    // A validade do destino é garantida em `moodActions.test.js`, contra os mesmos
+    // predicados que `navTo` usa — aqui basta provar que o clique chega ao despachante
+    // com a sub-área junto, que é o que o mock desta suíte consegue observar.
+    expect(onNav).toHaveBeenCalledTimes(1);
+    const [alvo, opts] = onNav.mock.calls[0];
+    expect(typeof alvo).toBe("string");
+    if (alvo === "planning") expect(opts?.area).toBeTruthy();
   });
 });
