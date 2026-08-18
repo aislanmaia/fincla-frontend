@@ -183,23 +183,37 @@ export function DashboardPage({
    * Carregada em paralelo aos dados do dashboard; representa "compromissos
    * fechados" que ainda não viraram transação real (materialização lazy).
    */
-  const [recurringProjection, setRecurringProjection] = useState([]);
+  /**
+   * Três estados, não dois:
+   *   `undefined` = carregando (primeiro paint e toda troca de período)
+   *   `null`      = indisponível (endpoint fora do ar, sem org, mocks ligados)
+   *   `[]`/itens  = sabemos, e pode não haver nenhuma
+   *
+   * Dois KPIs exibem esses valores. Mostrar R$ 0,00 durante a falha afirmaria "você
+   * não tem nada comprometido" — a informação oposta. E colapsar carregando em `null`
+   * afirma "Projeção indisponível" sobre um endpoint que está respondendo: o usuário
+   * lê uma falha que não aconteceu, a cada troca de período.
+   */
+  const [recurringProjection, setRecurringProjection] = useState(undefined);
   useEffect(() => {
     if (!apiDataEnabled || !organizationId || !appliedRange.start || !appliedRange.end) {
-      setRecurringProjection([]);
+      setRecurringProjection(null);
       return undefined;
     }
     let cancelled = false;
+    // Sem isto, trocar de período deixa os itens do período ANTERIOR na tela até a
+    // nova resposta chegar — dois KPIs exibiriam números de outro intervalo.
+    setRecurringProjection(undefined);
     getRecurringProjection(organizationId, appliedRange.start, appliedRange.end)
       .then((res) => { if (!cancelled) setRecurringProjection(res.items || []); })
-      .catch(() => { if (!cancelled) setRecurringProjection([]); });
+      .catch(() => { if (!cancelled) setRecurringProjection(null); });
     return () => { cancelled = true; };
   }, [apiDataEnabled, organizationId, appliedRange.start, appliedRange.end]);
 
   /** Mapa dia-do-período (1..dim) → soma de projeções de despesa naquele dia. */
   const projectedExpenseByDay = useMemo(() => {
     const map = new Map();
-    if (!appliedRange.start || !recurringProjection.length) return map;
+    if (!appliedRange.start || !recurringProjection?.length) return map;
     const baseMs = new Date(`${appliedRange.start}T00:00:00`).getTime();
     if (!Number.isFinite(baseMs)) return map;
     const ONE_DAY = 86400000;
@@ -285,9 +299,153 @@ export function DashboardPage({
     dashboardData.summary,
     dashboardData.recurringSummary,
   );
-  const freeAmt = Math.max(0, bal);
+  /**
+   * Recorrências que ainda VÃO cair no período, por tipo.
+   *
+   * Diferente de `committed` acima: aquele é `recurring_in_period.total_expense`,
+   * que o backend descreve como projeção do intervalo INTEIRO ("valor × ocorrências
+   * esperadas no calendário", não soma de linhas em `transactions`). Ou seja, ele
+   * inclui recorrências que já caíram e portanto já estão dentro de `exp`.
+   * `getRecurringProjection` devolve só o que ainda não virou transação.
+   */
+  const projectedToCome = useMemo(() => {
+    if (!Array.isArray(recurringProjection)) {
+      return {
+        expense: 0,
+        income: 0,
+        known: false,
+        loading: recurringProjection === undefined,
+      };
+    }
+    let expense = 0;
+    let income = 0;
+    for (const item of recurringProjection) {
+      const value = Number(item.value) || 0;
+      if (item.type === "expense") expense += value;
+      else if (item.type === "income") income += value;
+    }
+    return { expense, income, known: true, loading: false };
+  }, [recurringProjection]);
+
   const balance = bal;
-  const barTotal = Math.max(usedAmt + committed + freeAmt, 1);
+  /**
+   * Composição do período — uma PARTIÇÃO das receitas, não uma soma de grandezas
+   * soltas.
+   *
+   * A versão anterior desenhava `Gasto + Comprometido + Sobra` e imprimia o total.
+   * Mas `Sobra` é `receitas − Gasto` por definição, então aquele total era sempre
+   * `receitas + Comprometido` — 19.685,42 + 4.127,64 = 23.813,06 numa org medida em
+   * produção, um número que não representava nada. Pior: o `Comprometido` cobria o
+   * mês inteiro, então parte dele já estava dentro do `Gasto` e o resto dentro da
+   * `Sobra` — contado duas vezes e desenhado como terceira fatia. Todas as larguras
+   * saíam comprimidas pelo mesmo fator.
+   *
+   * Agora as três fatias somam exatamente as receitas, e sobra um número que a tela
+   * não tinha: o que resta DEPOIS das recorrências que ainda vão vencer.
+   */
+  const committedToCome = projectedToCome.expense;
+  /**
+   * O clamp existe só para a GEOMETRIA da barra: uma fatia não pode ser maior que a
+   * sobra que ela ocupa. Usar o valor limitado no KPI faria o card relatar um
+   * compromisso que não é o compromisso — com sobra R$ 100 e recorrências R$ 3.000
+   * ele leria "R$ 100,00", e com resultado negativo leria "nenhuma recorrência a
+   * vencer" tendo uma lista cheia. Exatamente o falso-negativo que o `null ≠ []`
+   * acima existe para impedir.
+   */
+
+  /**
+   * A barra só é partição das receitas enquanto sobra dinheiro. Com resultado
+   * negativo não existe "sobra", as três fatias colapsam em `Gasto` e o total passa
+   * a ser a despesa — então o cabeçalho não pode continuar dizendo "receitas".
+   */
+  /**
+   * Período inteiramente no passado. `getRecurringProjection` só devolve ocorrências
+   * DEPOIS de hoje, então num mês fechado ela é sempre vazia — e dois KPIs passariam
+   * a dizer "nenhuma recorrência a vencer" para um mês que já acabou, onde "a vencer"
+   * não quer dizer nada. Nesse caso vale o comprometido DO período (`recurring_in_period`).
+   */
+  const periodEnded = useMemo(() => {
+    const e = parseLocalYmd(appliedRange.end);
+    if (!e) return false;
+    const now = new Date();
+    return (
+      new Date(e.getFullYear(), e.getMonth(), e.getDate()).getTime() <
+      new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+    );
+  }, [appliedRange.end]);
+
+  /**
+   * Sobra REAL depois dos compromissos — pode ser negativa, e precisa poder.
+   *
+   * Com sobra R$ 100 e recorrências R$ 3.000 o número é −R$ 2.900, e é essa a
+   * informação que importa. Qualquer clamp aqui vira "R$ 0,00" e esconde o que o
+   * usuário precisa ver.
+   */
+  const freeAfterCommitments = bal - committedToCome;
+
+  /**
+   * A barra só é PARTIÇÃO das receitas quando de fato particiona: resultado não
+   * negativo E compromissos que cabem dentro da sobra. Fora disso não existe fatia
+   * de sobra, e insistir na moldura obrigaria a clampar um número — foi assim que
+   * legenda e KPI passaram a imprimir valores diferentes sob o mesmo rótulo, com a
+   * legenda deixando de somar o total anunciado ao lado.
+   */
+  const barIsIncomeSplit =
+    bal >= 0 && (!projectedToCome.known || committedToCome <= bal);
+  const barTotal = Math.max(
+    barIsIncomeSplit ? inc : usedAmt + committedToCome,
+    1,
+  );
+
+  /**
+   * Fatias da barra. Sem a projeção (endpoint fora do ar, mocks, sem org) a fatia do
+   * meio simplesmente não existe e o rótulo da última volta a ser "Sobra do período":
+   * prometer "depois das recorrências" sem saber quais são seria afirmar o que não
+   * foi verificado. `mood.bar` some do meio junto com a fatia.
+   *
+   * "Livre" continua fora de cogitação como rótulo — a #68 tirou esse nome porque
+   * sugeria dinheiro disponível para gastar, e este número é competência, não caixa.
+   * O dinheiro que dá para gastar agora é o headline "Saldo em conta".
+   */
+  const compositionSlices = useMemo(() => {
+    const slices = [
+      { label: "Gasto", color: T.inkGhost, value: fmtAbs(usedAmt), opacity: 1 },
+    ];
+    // Num período encerrado não existe "a vencer": a projeção é vazia por construção
+    // e o comprometido do período já está inteiro dentro do `Gasto`. Desenhá-lo como
+    // fatia própria seria a contagem dupla que esta barra existe para eliminar.
+    if (projectedToCome.known && !periodEnded) {
+      slices.push({
+        label: "Comprometido a vencer",
+        color: mood.bar,
+        // O valor é o ÍNTEGRO, não o clampado: a largura da fatia é geometria (não
+        // pode passar da sobra que ocupa), mas o número tem de bater com o KPI que
+        // leva o mesmo rótulo dois blocos abaixo.
+        value: fmtAbs(committedToCome),
+        opacity: 0.5,
+      });
+    }
+    if (barIsIncomeSplit) {
+      slices.push({
+        label: projectedToCome.known && !periodEnded
+          ? "Sobra depois das recorrências"
+          : "Sobra do período",
+        color: mood.bar,
+        value: fmtAbs(freeAfterCommitments),
+        opacity: 1,
+      });
+    }
+    return slices;
+  }, [
+    usedAmt,
+    committedToCome,
+    freeAfterCommitments,
+    barIsIncomeSplit,
+    mood.bar,
+    projectedToCome.known,
+    periodEnded,
+  ]);
+
   const daysLeftInRange = useMemo(() => {
     const e = parseLocalYmd(appliedRange.end);
     if (!e) return 1;
@@ -305,70 +463,125 @@ export function DashboardPage({
     if (eMs < tMs) return 1;
     return Math.max(1, Math.floor((eMs - tMs) / 86400000) + 1);
   }, [appliedRange.end]);
-  const dailyBudget = Math.round(Math.max(0, bal) / daysLeftInRange);
+  /**
+   * Quanto dá para gastar por dia — limitado pelo CAIXA, não só pelo ciclo.
+   *
+   * Antes era `bal / diasRestantes`, e `bal` é receitas − despesas do período: uma
+   * grandeza de competência. Numa org medida em produção isso rendia "mantenha
+   * R$ 625/dia pelos próximos 16 dias" — R$ 10.000 — com R$ 315,57 na conta, porque
+   * o caixa já tinha ido no pagamento da fatura. O conselho não era conservador
+   * demais nem otimista demais: era impossível de seguir.
+   *
+   * O teto real é o dinheiro que existe hoje, mais o que ainda entra, menos o que
+   * já está comprometido. `total_available` ausente (endpoint fora do ar) NÃO vira
+   * zero — sem saber o caixa, cair no comportamento antigo é melhor que inventar
+   * um teto.
+   */
+
+  const dailyBudget = useMemo(() => {
+    const byCycle = Math.max(0, bal);
+    const cash = dashboardData.balanceSummary?.total_available;
+    if (typeof cash !== "number") {
+      return { value: Math.round(byCycle / daysLeftInRange), noCash: false };
+    }
+    // Sem a projeção, entradas e compromissos futuros são DESCONHECIDOS — somá-los
+    // como zero produziria o teto otimista que este cálculo existe para eliminar.
+    // O caixa sozinho continua sendo um fato e um limite superior legítimo: o que
+    // falta só pode baixá-lo.
+    const byCash = projectedToCome.known
+      ? Math.max(0, cash + projectedToCome.income - projectedToCome.expense)
+      : Math.max(0, cash);
+    return {
+      value: Math.round(Math.min(byCycle, byCash) / daysLeftInRange),
+      // `noCash` é sobre o CAIXA, não sobre o teto. Amarrar a frase a
+      // `dailyBudget <= 0` fazia qualquer período de resultado negativo dizer "sem
+      // caixa disponível" — inclusive com R$ 50.000 na conta, e inclusive com o
+      // endpoint de saldo fora do ar, contradizendo as três notas desta página que
+      // dizem que `total_available` ausente não vira zero.
+      noCash: byCash <= 0,
+    };
+  }, [bal, daysLeftInRange, dashboardData.balanceSummary, projectedToCome]);
+
+  /**
+   * Saldo em conta no HEADLINE (opção D).
+   *
+   * Deixou de ser o quarto KPI e virou o número principal: a pergunta que traz o
+   * usuário para a Visão Geral é "quanto eu tenho", e a resposta estava em corpo 20
+   * enquanto o resultado do período ocupava 3,3rem. `total_available` ausente NÃO
+   * vira zero — zero é um saldo legítimo e a diferença importa aqui mais que em
+   * qualquer outro lugar da tela.
+   */
+  const accountHeadline = useMemo(() => {
+    const summaryBalance = dashboardData.balanceSummary;
+    const total = summaryBalance?.total_available;
+    if (typeof total !== "number") {
+      return { available: false, value: "—", note: "Dados indisponíveis" };
+    }
+    const n = summaryBalance.account_count ?? 0;
+    const contas = n === 1 ? "1 conta" : `${n} contas`;
+    return {
+      available: true,
+      negative: total < 0,
+      value: total < 0 ? fmtSgn(total) : fmtAbs(total),
+      note: total < 0
+        ? `conta negativa · ${contas}`
+        : `dinheiro disponível hoje · em ${contas}`,
+    };
+  }, [dashboardData.balanceSummary]);
 
   const { Icon: MoodIcon, InsightIcon } = mood;
-  const insightStat =
-    aheadOfPace
-      ? `R$ ${Math.abs(Math.round((envelope * (timePct - spendPct)) / 100))} à frente`
-      : `R$ ${Math.abs(Math.round((envelope * (spendPct - timePct)) / 100))} acima`;
-
-  const rhythmVsProj = Math.round((envelope * (timePct - spendPct)) / 100);
-
-  const insightBody = moodInsightBody(moodKey, {
-    aheadOfPace,
-    dailyBudgetLabel: fmtAbs(dailyBudget),
-    daysLeft: daysLeftInRange,
-    periodPhrase: kpiPeriodPhrase,
-  });
-
-  /** KPI "Saldo em conta" — dinheiro real nas contas, independente do período.
+  /**
+   * Despesa que o ritmo linear preveria para hoje.
    *
-   *  Existe porque "Saldo do período" responde outra pergunta: quanto sobrou NESTE
-   *  ciclo. Um usuário que abre a Visão Geral para saber "quanto eu tenho hoje"
-   *  não encontrava esse número em lugar nenhum — o app só o mostrava na tela de
-   *  Contas. `null` (não zero) quando o endpoint falha: zero é um saldo legítimo.
+   * O card mostrava a DIFERENÇA ("R$ 544 à frente") em corpo 26 — uma grandeza que
+   * não está em conta nenhuma, não é orçamento e não é economia. Pior: o mesmo
+   * número aparecia três vezes na tela com três nomes diferentes ("vs ritmo",
+   * "à frente / do ritmo esperado ✓", "à frente do ritmo"), como se fossem três
+   * medidas. Mostrar as duas quantias deixa a diferença evidente sozinha, ancorada
+   * em valores que existem, e o nome único fica com o card de Ritmo.
    */
-  const balanceSummary = dashboardData.balanceSummary;
-  const accountBalanceKpi = useMemo(() => {
-    const unavailable = {
-      key: "acct",
-      label: "Saldo em conta",
-      value: "—",
-      delta: "Dados indisponíveis",
-      up: null,
-      emptyCta: false,
-      tooltip: SALDO_EM_CONTA_TOOLTIP,
-    };
-    if (!balanceSummary) return unavailable;
-    const n = balanceSummary.account_count ?? 0;
-    const total = balanceSummary.total_available ?? 0;
-    const negative = total < 0;
-    return {
-      key: "acct",
-      label: "Saldo em conta",
-      // `fmtAbs` já aplica Math.abs, então um saldo negativo renderizava idêntico
-      // a um positivo — a única pista seria a cor da seta. Conta no vermelho é
-      // exatamente o caso em que o número não pode mentir.
-      value: negative ? fmtSgn(total) : fmtAbs(total),
-      delta: negative
-        ? `conta negativa · ${n === 1 ? "1 conta" : `${n} contas`}`
-        : n === 1
-          ? "em 1 conta"
-          : `em ${n} contas`,
-      up: !negative,
-      emptyCta: false,
-      tooltip: SALDO_EM_CONTA_TOOLTIP,
-    };
-  }, [balanceSummary]);
+  const expectedByNow = Math.round((inc * timePct) / 100);
+  /**
+   * Percentual da RECEITA gasta — dividido por `inc`, não pelo `envelope`.
+   *
+   * `envelope` é `max(inc, exp)`, então quem gasta mais do que recebe teria o
+   * numerador travado em 100%: com receita 1.000 e despesa 2.000 o chip diria
+   * "100% da receita gasta" (verdade: 200%). Justo o caso mais grave seria o que a
+   * tela leria mais errado. Passar de 100 aqui é informação, não bug.
+   *
+   * Sem receita no período a fração não existe e o chip não aparece — o humor
+   * continua saindo do `envelope`, que é outra conta e não muda nesta PR.
+   */
+  const spentOfIncomePct = inc > 0 ? Math.round((exp / inc) * 100) : null;
+
+
+  /**
+   * Sem caixa não há conselho de quanto gastar por dia.
+   *
+   * Com `total_available <= 0` — conta zerada, conta negativa, ou caixa preso numa
+   * fatura aberta, que é condição documentada aqui — o teto dá zero, e a frase da
+   * faixa `serene` fica "você pode gastar até R$ 0,00/dia com folga" logo abaixo de
+   * "Suas finanças respiram bem hoje". Trocar o valor por outro seria voltar a
+   * recomendar dinheiro que não existe; o que não dá é fingir que há folga.
+   */
+  const insightBody =
+    dailyBudget.noCash
+      ? "Sem caixa disponível hoje — o que der para gastar depende do que ainda entrar no período."
+      : moodInsightBody(moodKey, {
+          aheadOfPace,
+                dailyBudgetLabel: fmtAbs(dailyBudget.value),
+          daysLeft: daysLeftInRange,
+          periodPhrase: kpiPeriodPhrase,
+        });
+
 
   const kpiItems = useMemo(() => {
     if (apiFailedNoSummary) {
       return [
         { key: "inc", label: `Receitas · ${kpiPeriodPhrase}`, value: "—", delta: "Dados indisponíveis", up: null, emptyCta: false },
         { key: "exp", label: `Despesas · ${kpiPeriodPhrase}`, value: "—", delta: "Dados indisponíveis", up: null, emptyCta: false },
-        { key: "bal", label: "Saldo do período", value: "—", delta: "Dados indisponíveis", up: null, emptyCta: false },
-        accountBalanceKpi,
+        { key: "cmt", label: "Comprometido a vencer", value: "—", delta: "Dados indisponíveis", up: null, emptyCta: false },
+        { key: "left", label: "Sobra depois das recorrências", value: "—", delta: "Dados indisponíveis", up: null, emptyCta: false },
       ];
     }
     if (isPeriodWithoutActivity) {
@@ -376,8 +589,22 @@ export function DashboardPage({
       return [
         { key: "inc", label: `Receitas · ${kpiPeriodPhrase}`, value: fmtAbs(0), delta: `${n} lançamentos no período`, up: null, emptyCta: true },
         { key: "exp", label: `Despesas · ${kpiPeriodPhrase}`, value: fmtAbs(0), delta: "registre para acompanhar o ritmo", up: null, emptyCta: true },
-        { key: "bal", label: "Saldo do período", value: fmtAbs(0), delta: "sem movimento ainda", up: null, emptyCta: true },
-        accountBalanceKpi,
+        // Uma org que configurou recorrências mas ainda não lançou nada cai aqui com
+        // total_income e total_expenses zerados — e a projeção pode estar cheia. Não
+        // dá para afirmar "nenhuma recorrência" só porque não houve transação.
+        {
+          key: "cmt",
+          label: "Comprometido a vencer",
+          value: projectedToCome.known ? fmtAbs(committedToCome) : "—",
+          delta: projectedToCome.known
+            ? (committedToCome > 0 ? "recorrências até o fim do período" : "nenhuma recorrência a vencer")
+            : projectedToCome.loading
+              ? "Carregando recorrências…"
+              : "Projeção indisponível",
+          up: null,
+          emptyCta: true,
+        },
+        { key: "left", label: "Sobra do período", value: fmtAbs(0), delta: "sem movimento ainda", up: null, emptyCta: true },
       ];
     }
     const s = dashboardData.summary;
@@ -385,8 +612,8 @@ export function DashboardPage({
       return [
         { key: "inc", label: `Receitas · ${kpiPeriodPhrase}`, value: fmtAbs(0), delta: "Carregando resumo…", up: null, emptyCta: false },
         { key: "exp", label: `Despesas · ${kpiPeriodPhrase}`, value: fmtAbs(0), delta: "Carregando resumo…", up: null, emptyCta: false },
-        { key: "bal", label: "Saldo do período", value: fmtAbs(0), delta: "Carregando resumo…", up: null, emptyCta: false },
-        accountBalanceKpi,
+        { key: "cmt", label: "Comprometido a vencer", value: fmtAbs(0), delta: "Carregando resumo…", up: null, emptyCta: false },
+        { key: "left", label: "Sobra depois das recorrências", value: fmtAbs(0), delta: "Carregando resumo…", up: null, emptyCta: false },
       ];
     }
     return [
@@ -409,22 +636,70 @@ export function DashboardPage({
         up: s ? spendPct <= timePct : null,
         emptyCta: false,
       },
+      // "Saldo do período" e "Saldo em conta" saíram daqui: os dois subiram para o
+      // headline (opção D). Repeti-los em corpo 20 logo abaixo seria dizer o mesmo
+      // número duas vezes na mesma dobra da tela.
       {
-        key: "bal",
-        label: "Saldo do período",
-        value: fmtAbs(Math.abs(s?.balance ?? 0)),
-        delta: s ? (s.balance >= 0 ? "resultado acumulado" : "resultado negativo") : "sem saldo consolidado",
-        up: s ? s.balance >= 0 : null,
+        key: "cmt",
+        label: periodEnded ? "Comprometido no período" : "Comprometido a vencer",
+        value: periodEnded
+          ? fmtAbs(committed)
+          : projectedToCome.known
+            ? fmtAbs(committedToCome)
+            : "—",
+        delta: periodEnded
+          ? "recorrências projetadas no período"
+          : projectedToCome.known
+            ? (committedToCome > 0 ? "recorrências até o fim do período" : "nenhuma recorrência a vencer")
+            : projectedToCome.loading
+              ? "Carregando recorrências…"
+              : "Projeção indisponível",
+        up: null,
         emptyCta: false,
       },
-      accountBalanceKpi,
+      {
+        key: "left",
+        label: periodEnded
+          ? "Saldo do período"
+          : projectedToCome.known
+            ? "Sobra depois das recorrências"
+            : "Sobra do período",
+        value: periodEnded
+          ? ((s?.balance ?? 0) < 0 ? fmtSgn(s.balance) : fmtAbs(s?.balance ?? 0))
+          : projectedToCome.known
+            ? (freeAfterCommitments < 0 ? fmtSgn(freeAfterCommitments) : fmtAbs(freeAfterCommitments))
+            : fmtAbs(Math.max(0, bal)),
+        delta: periodEnded
+          ? (s && s.balance >= 0 ? "resultado acumulado" : "resultado negativo")
+          : projectedToCome.known
+            ? "do que já entrou, menos o que ainda vence"
+            : projectedToCome.loading
+              ? "Carregando recorrências…"
+              : "sem a projeção das recorrências",
+        // Sem seta no período aberto. Esta sobra sai só das receitas JÁ recebidas —
+        // é partição do que entrou — enquanto o valor/dia do Insight conta também as
+        // entradas previstas. Uma seta vermelha aqui contradiz o conselho ali com um
+        // sinal visual, e as duas contas estão certas: respondem perguntas diferentes.
+        up: periodEnded ? (s ? s.balance >= 0 : null) : null,
+        // O texto ficou órfão quando a chave "bal" saiu: ele explicava justamente
+        // este número, que no período encerrado volta a se chamar "Saldo do período".
+        tooltip: periodEnded
+          ? "Saldo deste ciclo apenas: receitas menos despesas dentro do período escolhido. Não inclui saldo de meses anteriores — o Fincla trata cada período como um ciclo fechado, para incentivar a revisão regular das suas finanças."
+          : undefined,
+        emptyCta: false,
+      },
     ];
   }, [
     apiFailedNoSummary,
     isPeriodWithoutActivity,
     kpiPeriodPhrase,
     dashboardData.summary,
-    accountBalanceKpi,
+    committedToCome,
+    committed,
+    freeAfterCommitments,
+    bal,
+    periodEnded,
+    projectedToCome.known,
     spendPct,
     timePct,
     txCount,
@@ -684,10 +959,10 @@ export function DashboardPage({
                   </div>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                  <button onClick={() => onNav("budgets")} style={{ ...G, width: "100%", background: T.blueLight, color: T.blue, border: "none", borderRadius: 9, padding: "8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                  <button onClick={() => onNav("planning", { area: "budgets" })} style={{ ...G, width: "100%", background: T.blueLight, color: T.blue, border: "none", borderRadius: 9, padding: "8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
                     📋 Criar orçamento
                   </button>
-                  <button onClick={() => onNav("goals")} style={{ ...G, width: "100%", background: T.purpleLight, color: T.purple, border: "none", borderRadius: 9, padding: "8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                  <button onClick={() => onNav("planning", { area: "goals" })} style={{ ...G, width: "100%", background: T.purpleLight, color: T.purple, border: "none", borderRadius: 9, padding: "8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
                     🎯 Definir meta
                   </button>
                 </div>
@@ -882,6 +1157,20 @@ export function DashboardPage({
                   <div style={{ ...G, fontSize: 13, color: T.inkMid, lineHeight: 1.6, marginBottom: 18 }}>
                     Não foi possível buscar o resumo na API. Verifique a conexão ou tente de novo em instantes.
                   </div>
+                  {/* O saldo em conta vem de outro endpoint. Se ELE respondeu, é o único
+                      número confiável da tela neste estado — esconder seria desperdiçar
+                      a independência das fontes que a #S2 introduziu de propósito. */}
+                  {accountHeadline.available ? (
+                    <div data-testid="dashboard-headline-saldo-conta" style={{ borderTop: `1px solid ${T.border}`, paddingTop: 14, marginBottom: 18 }}>
+                      <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
+                        Saldo em conta
+                      </div>
+                      <div style={{ ...S, ...NUM, fontSize: isMobile ? "2rem" : "2.35rem", lineHeight: 1.05, color: accountHeadline.negative ? T.red : T.ink, letterSpacing: "-1px", marginBottom: 4 }}>
+                        {accountHeadline.value}
+                      </div>
+                      <div style={{ ...G, fontSize: 12, color: T.inkMid }}>{accountHeadline.note}</div>
+                    </div>
+                  ) : null}
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                     <button
                       type="button"
@@ -921,8 +1210,22 @@ export function DashboardPage({
                 </>
               ) : (
                 <>
-                  <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>{kpiPeriodPhrase}</div>
-                  <div style={{ ...S, ...NUM, fontSize: isMobile ? "2rem" : "2.35rem", lineHeight: 1.05, color: T.ink, letterSpacing: "-1px", marginBottom: 8 }}>{fmtAbs(balance)}</div>
+                  {/* Mesmo sem resumo do período (backend fora) ou sem lançamento
+                      algum, "quanto eu tenho" continua tendo resposta: o saldo em
+                      conta vem de outro endpoint. Antes da opção D esse número vivia
+                      num KPI que sobrevivia à queda do resumo; ao subir para o
+                      headline ele precisa sobreviver aqui também, senão a tela mais
+                      degradada é justamente a que esconde o único dado que ela tem. */}
+                  <div data-testid="dashboard-headline-saldo-conta" style={{ marginBottom: 18 }}>
+                    <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
+                      Saldo em conta
+                    </div>
+                    <div style={{ ...S, ...NUM, fontSize: isMobile ? "2rem" : "2.35rem", lineHeight: 1.05, color: accountHeadline.negative ? T.red : T.ink, letterSpacing: "-1px", marginBottom: 4 }}>
+                      {accountHeadline.value}
+                    </div>
+                    <div style={{ ...G, fontSize: 12, color: T.inkMid }}>{accountHeadline.note}</div>
+                  </div>
+                  <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{kpiPeriodPhrase}</div>
                   <div style={{ ...G, fontSize: 13, color: T.inkMid, marginBottom: 18, lineHeight: 1.55 }}>
                     Nenhum lançamento neste mês. Sem receitas nem despesas no período — registre uma transação ou configure recorrências para ver saldo e ritmo aqui.
                   </div>
@@ -996,10 +1299,10 @@ export function DashboardPage({
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                  <button type="button" onClick={() => onNav("budgets")} style={{ ...G, width: "100%", background: T.blueLight, color: T.blue, border: "none", borderRadius: 9, padding: "8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                  <button type="button" onClick={() => onNav("planning", { area: "budgets" })} style={{ ...G, width: "100%", background: T.blueLight, color: T.blue, border: "none", borderRadius: 9, padding: "8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
                     📋 Criar orçamento
                   </button>
-                  <button type="button" onClick={() => onNav("goals")} style={{ ...G, width: "100%", background: T.purpleLight, color: T.purple, border: "none", borderRadius: 9, padding: "8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+                  <button type="button" onClick={() => onNav("planning", { area: "goals" })} style={{ ...G, width: "100%", background: T.purpleLight, color: T.purple, border: "none", borderRadius: 9, padding: "8px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
                     🎯 Definir meta
                   </button>
                 </div>
@@ -1013,81 +1316,117 @@ export function DashboardPage({
                 <div style={{ display: "flex", alignItems: "center", gap: 5, background: mood.badgeBg, color: mood.badgeColor, borderRadius: 9999, padding: "3px 10px", fontSize: 11, fontWeight: 700, border: `1px solid ${mood.insightBorder}`, transition: "all 0.8s" }}>
                   <MoodIcon size={10} /> {mood.label}
                 </div>
-                <span style={{ ...S, fontSize: 13, fontWeight: 600, color: moodKey === "serene" || moodKey === "healthy" ? T.inkMid : moodKey === "watchful" ? T.amber : T.red, transition: "color 0.18s" }}>
+                <span style={{ ...S, fontSize: 13, fontWeight: 600, color: mood.kicker, transition: "color 0.18s" }}>
                   {moodGreetingText}
                 </span>
-              </div>
+                {/* A régua do ritmo, que a tela não mostrava: o percentual do período
+                    só aparecia no rodapé do card de Ritmo e o de gasto, em lugar
+                    nenhum. Sem o par não há como reconstruir por que a tela está na
+                    cor que está.
 
-              <div style={{ ...S, ...NUM, fontSize: isMobile ? "2.2rem" : mood.headlineSize, lineHeight: 1.05, color: mood.headlineColor, transition: "font-size 0.6s, color 0.8s", letterSpacing: "-1px", marginBottom: 8 }}>
-                {fmtAbs(balance)}
-              </div>
-              <div style={{ ...G, display: "flex", alignItems: "center", gap: 8, marginBottom: 18 }}>
-                <span style={{ fontSize: 12, color: T.inkMid }}>resultado do período (receitas − despesas)</span>
-                <InfoTip
-                  width={280}
-                  text={
-                    "Receitas no mês: " +
-                    fmtAbs(inc) +
-                    "\nDespesas no mês: " +
-                    fmtAbs(exp) +
-                    "\nSaldo do período: " +
-                    fmtAbs(balance) +
-                    (committed > 0 ? "\nComprometido (recorrências): " + fmtAbs(committed) : "")
-                  }
-                />
-                <span style={{ fontSize: 12, fontWeight: 700, color: moodKey === "serene" || moodKey === "healthy" ? T.green : T.red, display: "flex", alignItems: "center", gap: 3 }}>
-                  {spendPct <= timePct ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                  <span>
-                    {fmtSgn(rhythmVsProj)}{" "}
-                    <span style={{ fontWeight: 400, color: T.inkMid }}>vs ritmo</span>
-                  </span>
-                  <InfoTip
-                    width={260}
-                    text={
-                      "Projeção linear no mês (dia " +
-                      day +
-                      "/" +
-                      dim +
-                      "): despesas esperadas ~ " +
-                      fmtAbs(Math.round((envelope * timePct) / 100)) +
-                      ". Despesas reais: " +
-                      fmtAbs(exp) +
-                      "."
-                    }
-                  />
+                    Enquanto receitas ≥ despesas — o caso normal — este par é
+                    exatamente o que `calcMood` compara, porque aí `envelope === inc`.
+                    Quando a despesa passa a receita os dois divergem: o humor satura
+                    (envelope vira `exp`, o ratio trava) e o chip continua contando a
+                    verdade, acima de 100%. Preferi o chip honesto ao chip fiel ao
+                    cálculo — trocar a régua do humor é decisão de produto à parte. */}
+                {spentOfIncomePct === null ? null : (
+                <span
+                  data-testid="dashboard-regua-ritmo"
+                  style={{ ...G, display: "inline-flex", alignItems: "center", gap: 6, background: T.grayLight, borderRadius: 9999, padding: "3px 11px" }}
+                >
+                  <span style={{ ...M_MONO, ...NUM, fontSize: 11, fontWeight: 700, color: spentOfIncomePct > 100 ? T.red : T.ink }}>{spentOfIncomePct}%</span>
+                  <span style={{ fontSize: 10, color: T.inkLight }}>da receita gasta</span>
+                  <span style={{ color: T.border }}>·</span>
+                  <span style={{ ...M_MONO, ...NUM, fontSize: 11, fontWeight: 700, color: T.ink }}>{timePct}%</span>
+                  <span style={{ fontSize: 10, color: T.inkLight }}>do período</span>
                 </span>
+                )}
               </div>
 
-              <div>
+              {/* Opção D: o saldo em conta assume o corpo principal e o resultado do
+                  período fica ao lado, menor. Os dois são corretos, mas respondem a
+                  perguntas diferentes — e quem abre a Visão Geral está perguntando
+                  "quanto eu tenho". Medido em produção: R$ 9.992,73 em 3,3rem ao lado
+                  de R$ 315,57 de saldo real, num KPI de corpo 20.
+
+                  O saldo em conta fica em `T.ink`, NÃO na cor do humor: a cor da faixa
+                  descreve o ritmo do período, e pintar com ela um número que não é do
+                  período é o que fazia o laranja parecer um veredito sobre o caixa. */}
+              <div style={{ display: "flex", alignItems: "flex-end", gap: isMobile ? 16 : 30, flexWrap: "wrap", marginBottom: 18 }}>
+                <div data-testid="dashboard-headline-saldo-conta" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  <div style={{ ...G, display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                      Saldo em conta
+                    </span>
+                    <InfoTip width={280} text={SALDO_EM_CONTA_TOOLTIP} />
+                  </div>
+                  <div
+                    style={{ ...S, ...NUM, fontSize: isMobile ? "2.2rem" : "3.3rem", lineHeight: 1.02, color: accountHeadline.negative ? T.red : T.ink, letterSpacing: "-1px" }}
+                  >
+                    {accountHeadline.value}
+                  </div>
+                  <span style={{ ...G, fontSize: 12, color: T.inkMid }}>{accountHeadline.note}</span>
+                </div>
+
+                {isMobile ? null : (
+                  <div style={{ width: 1, alignSelf: "stretch", background: T.border, marginBottom: 4 }} />
+                )}
+
+                <div data-testid="dashboard-headline-resultado" style={{ display: "flex", flexDirection: "column", gap: 4, paddingBottom: 4 }}>
+                  <span style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                    Resultado do período
+                  </span>
+                  {/* `fmtAbs` aplica Math.abs, então um resultado negativo renderizava
+                      idêntico a um positivo. Na `main` o sinal sobrevivia no KPI
+                      "Saldo do período" (seta vermelha, "resultado negativo") — que
+                      esta PR removeu ao subir o número para cá. A cor não salva: ela
+                      é do humor, que mede ritmo, não sinal. */}
+                  <div
+                    style={{ ...S, ...NUM, fontSize: isMobile ? "1.6rem" : "2rem", lineHeight: 1.05, color: balance < 0 ? T.red : mood.headlineColor, transition: "color 0.8s", letterSpacing: "-0.5px" }}
+                  >
+                    {balance < 0 ? fmtSgn(balance) : fmtAbs(balance)}
+                  </div>
+                  <div style={{ ...G, display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 12, color: T.inkMid }}>receitas − despesas</span>
+                    <InfoTip
+                      width={280}
+                      text={
+                        "Receitas no período: " +
+                        fmtAbs(inc) +
+                        "\nDespesas no período: " +
+                        fmtAbs(exp) +
+                        "\nResultado: " +
+                        fmtAbs(balance) +
+                        (committedToCome > 0
+                          ? "\nComprometido a vencer: " + fmtAbs(committedToCome)
+                          : "")
+                      }
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div data-testid="dashboard-composicao">
                 <div style={{ ...G, display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                  <span style={{ fontSize: 11, color: T.inkMid }}>Composição do saldo</span>
-                  <span style={{ ...M_MONO, ...NUM, fontSize: 12, fontWeight: 700, color: T.ink }}>
+                  <span style={{ fontSize: 11, color: T.inkMid }}>{barIsIncomeSplit ? "Para onde foram as receitas do período" : "Gastos e compromissos do período"}</span>
+                  <span data-testid="dashboard-composicao-total" style={{ ...M_MONO, ...NUM, fontSize: 12, fontWeight: 700, color: T.ink }}>
                     {fmtAbs(barTotal)}
                   </span>
                 </div>
                 <div style={{ height: 7, background: T.grayLight, borderRadius: 99, overflow: "hidden", display: "flex" }}>
                   <div style={{ width: `${(usedAmt / barTotal) * 100}%`, background: T.inkGhost, transition: "width 0.6s" }} />
-                  <div style={{ width: `${(committed / barTotal) * 100}%`, background: mood.bar, opacity: 0.4, transition: "width 0.6s, background 0.8s" }} />
-                  <div style={{ flex: 1, background: mood.bar, transition: "background 0.18s" }} />
+                  <div style={{ width: `${(committedToCome / barTotal) * 100}%`, background: mood.bar, opacity: 0.4, transition: "width 0.6s, background 0.8s" }} />
+                  {barIsIncomeSplit ? <div style={{ flex: 1, background: mood.bar, transition: "background 0.18s" }} /> : null}
                 </div>
                 <div style={{ ...G, display: "flex", gap: 14, marginTop: 7 }}>
-                  {[
-                    { label: "Gasto", color: T.inkGhost, value: fmtAbs(usedAmt), opacity: 1 },
-                    { label: "Comprometido", color: mood.bar, value: fmtAbs(committed), opacity: 0.5 },
-                    // "Livre" sugeria dinheiro disponível para gastar, mas o número é
-                    // `summary.balance` — receitas menos despesas do período. Medido em
-                    // produção: "Livre R$ 9.992,73" com R$ 315,57 de saldo real, porque
-                    // o caixa já tinha ido no pagamento da fatura. Uma ordem de grandeza,
-                    // e nada na tela contradizia (#68). O dinheiro que dá para gastar
-                    // agora é o KPI "Saldo em conta"; aqui é sobra contábil do ciclo.
-                    { label: "Sobra do período", color: mood.bar, value: fmtAbs(freeAmt), opacity: 1 },
-                  ].map(({ label, color, value, opacity }) => (
+                  {compositionSlices.map(({ label, color, value, opacity }) => (
                     <div key={label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
                       <div style={{ width: 7, height: 7, borderRadius: 2, background: color, opacity, transition: "background 0.18s", flexShrink: 0 }} />
                       <span style={{ fontSize: 10, color: T.inkMid }}>{label}</span>
                       <span
                         style={{ ...M_MONO, ...NUM, fontSize: 10, color: T.inkMid, fontWeight: 600 }}
-                        data-testid={label === "Comprometido" ? "dashboard-composicao-comprometido" : undefined}
+                        data-testid={label === "Comprometido a vencer" ? "dashboard-composicao-comprometido" : undefined}
                       >
                         {value}
                       </span>
@@ -1102,17 +1441,25 @@ export function DashboardPage({
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <InsightIcon size={13} color={mood.kicker} />
                   <span style={{ ...G, fontSize: 10, fontWeight: 700, color: mood.kicker, letterSpacing: "0.08em" }}>
-                    INSIGHT DO DIA
+                    INSIGHT
                   </span>
                 </div>
                 <Sparkles size={12} color={mood.kicker} style={{ opacity: 0.5 }} />
               </div>
 
-              <div style={{ ...M_MONO, ...NUM, fontSize: 26, fontWeight: 700, color: mood.headlineColor, lineHeight: 1, marginBottom: 4, transition: "color 0.18s" }}>
-                {insightStat}
-              </div>
-              <div style={{ ...G, fontSize: 11, color: mood.kicker, fontWeight: 600, marginBottom: 12, transition: "color 0.18s" }}>
-                {spendPct <= timePct ? "do ritmo esperado ✓" : "do ritmo esperado ↑"}
+              <div data-testid="dashboard-insight-quantias">
+                <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 3 }}>
+                  <span style={{ ...M_MONO, ...NUM, fontSize: 23, fontWeight: 700, color: mood.headlineColor, lineHeight: 1, transition: "color 0.18s" }}>
+                    {fmtAbs(exp)}
+                  </span>
+                  <span style={{ ...G, fontSize: 12, color: T.inkMid }}>gastos no período</span>
+                </div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 12 }}>
+                  <span style={{ ...M_MONO, ...NUM, fontSize: 23, fontWeight: 700, color: T.inkGhost, lineHeight: 1 }}>
+                    {fmtAbs(expectedByNow)}
+                  </span>
+                  <span style={{ ...G, fontSize: 12, color: T.inkMid }}>seria o ritmo linear da receita</span>
+                </div>
               </div>
 
               <p style={{ ...G, fontSize: 13, lineHeight: 1.6, color: T.inkMid, marginBottom: 16 }}>
@@ -1120,8 +1467,8 @@ export function DashboardPage({
               </p>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                {moodActions.map(({ label, Icon: ActionIcon }) => (
-                  <button key={label} type="button" style={{ ...G, display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.7)", border: `1px solid ${mood.insightBorder}`, borderRadius: 9, padding: "7px 11px", fontSize: 12, color: mood.kicker, fontWeight: 600, cursor: "pointer", textAlign: "left" }}>
+                {moodActions.map(({ label, Icon: ActionIcon, nav, navOpts }) => (
+                  <button key={label} type="button" onClick={() => onNav?.(nav, navOpts)} style={{ ...G, display: "flex", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.7)", border: `1px solid ${mood.insightBorder}`, borderRadius: 9, padding: "7px 11px", fontSize: 12, color: mood.kicker, fontWeight: 600, cursor: "pointer", textAlign: "left" }}>
                     <ActionIcon size={12} color={mood.kicker} /> {label}
                     <ChevronRight size={11} style={{ marginLeft: "auto" }} />
                   </button>
@@ -1141,20 +1488,16 @@ export function DashboardPage({
                 ? "dashboard-kpi-receitas"
                 : key === "exp"
                   ? "dashboard-kpi-despesas"
-                  : key === "acct"
-                    ? "dashboard-kpi-saldo-em-conta"
-                    : "dashboard-kpi-saldo"
+                  : key === "cmt"
+                    ? "dashboard-kpi-comprometido"
+                    : key === "left"
+                      ? "dashboard-kpi-sobra"
+                      : `dashboard-kpi-${key}`
             }
             style={{ padding: "16px 18px" }}
           >
             <div style={{ ...G, fontSize: 11, fontWeight: 500, color: T.inkMid, marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
               {label}
-              {key === "bal" && (
-                <InfoTip
-                  width={260}
-                  text={"Saldo deste ciclo apenas: receitas menos despesas dentro do período escolhido. Não inclui saldo de meses anteriores — o Fincla trata cada período como um ciclo fechado, para incentivar a revisão regular das suas finanças."}
-                />
-              )}
               {tooltip && <InfoTip width={280} text={tooltip} />}
             </div>
             <div style={{ ...G, ...NUM, fontSize: 20, fontWeight: 700, color: T.ink, marginBottom: 4 }}>{value}</div>

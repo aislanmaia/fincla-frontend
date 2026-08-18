@@ -87,7 +87,11 @@ export function expectedKpisBillingCycleFiveToFour(anchor: Date): {
   const m = anchor.getMonth();
   const d = anchor.getDate();
   const endCurr = new Date(y, m, 4);
-  const primary = endCurr.getTime() <= new Date(y, m, d).getTime();
+  // ESTRITO, não inclusivo: `periodEnded` na página é `end < hoje`. Com `<=`, no dia
+  // 4 do mês — que é exatamente o primeiro dia em que este spec roda (`getDate() < 4`
+  // é o guard) — o helper esperaria o ramo "período encerrado" enquanto a UI ainda
+  // está em período aberto. Falharia uma vez por mês.
+  const primary = endCurr.getTime() < new Date(y, m, d).getTime();
 
   if (primary) {
     const manualThisMonthDay = Math.min(10, d);
@@ -105,6 +109,9 @@ export function expectedKpisBillingCycleFiveToFour(anchor: Date): {
     return {
       receitas: fmtAbsPt(receitas),
       despesas: fmtAbsPt(despesas),
+      // Ciclo 5→4 no ramo `primary`: ele já ENCERROU (endCurr < hoje), então o KPI
+      // cai em "Comprometido no período" = `recurring_in_period` do intervalo, que
+      // cobre as ocorrências dos dias 2 e 3. Semântica inalterada por esta PR.
       comprometido: fmtAbsPt(VAL.eLong + VAL.eFuture),
     };
   }
@@ -117,7 +124,13 @@ export function expectedKpisBillingCycleFiveToFour(anchor: Date): {
 
 export function buildDashboardPeriodExpectations(): DashboardPeriodExpectations {
   const committedPrev = VAL.eLong;
-  const committedThis = VAL.eLong + VAL.eFuture;
+  // "Este mês" é período ABERTO: o KPI mostra o que ainda vai vencer, e isso vem de
+  // `getRecurringProjection`, que só devolve ocorrências DEPOIS de hoje. Como as
+  // séries semeadas caem nos dias 1–3 e o spec só roda com hoje >= 4, a projeção é
+  // sempre vazia aqui. Não é `eFuture`: aquelas ocorrências já viraram transação e
+  // estão contadas em `despesas`.
+  const committedThis = 0;
+  // `prev` é período encerrado — segue no comprometido do intervalo, sem mudança.
 
   const receitasPrev = VAL.iLong;
   const despesasPrev = VAL.eLong + VAL.manualExpPrev;

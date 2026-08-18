@@ -56,8 +56,19 @@ export async function expectKpiCard(page: Page, titleRx: RegExp, value: string):
   await expect(title.locator("..").getByText(value, { exact: true })).toBeVisible();
 }
 
+/**
+ * O "comprometido" passou a ser lido no KPI, não na legenda da barra.
+ *
+ * A legenda só renderiza quando o endpoint de projeção respondeu e desaparece em
+ * período encerrado; o número nela é o íntegro (só a LARGURA da fatia é clampada).
+ * O KPI existe nos dois regimes: período aberto mostra o que ainda vai vencer;
+ * período fechado mostra o comprometido DO período (`recurring_in_period`), porque
+ * num mês encerrado "a vencer" não quer dizer nada. Por isso as asserções vão nele.
+ */
 export async function expectComprometido(page: Page, value: string): Promise<void> {
-  await expect(page.getByTestId("dashboard-composicao-comprometido")).toHaveText(value);
+  await expect(
+    page.getByTestId("dashboard-kpi-comprometido").locator("> div").nth(1),
+  ).toHaveText(value);
 }
 
 function pad2(n: number): string {

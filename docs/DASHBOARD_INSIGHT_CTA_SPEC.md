@@ -1,12 +1,13 @@
 # Visão Geral — CTAs do card «Insight do dia»
 
-Documento de especificação para implementação futura. Descreve o comportamento **pretendido** dos botões de ação do card de insights do dashboard, que variam conforme o **humor financeiro** (`mood`).
+Descreve o comportamento dos botões de ação do card de insights do dashboard, que variam conforme o **humor financeiro** (`mood`).
 
 ## Estado atual (implementação)
 
-- Os rótulos e ícones vêm de `getMoodActions(moodKey)` em `src/ui/features/moodV4.jsx`.
-- O card renderiza os botões em `src/ui/pages/DashboardPage.jsx` (bloco «INSIGHT DO DIA»).
-- **Os botões não possuem `onClick` nem navegação:** são apenas CTAs visuais (`cursor: pointer` sem efeito).
+- Os rótulos, ícones e **destinos** vêm de `getMoodActions(moodKey)` em `src/ui/features/moodV4.jsx` — cada ação carrega um campo `nav`.
+- O card renderiza os botões em `src/ui/pages/DashboardPage.jsx` (bloco «INSIGHT»; o título perdeu o «DO DIA», que prometia uma variação diária que o conteúdo não tem).
+- **Os botões navegam** via `onNav?.(nav, navOpts)`. O segundo argumento é o que leva a sub-área do hub (`{ area: "simulator" }`) — sem ele o clique cairia sempre na área default do Planejamento. Ficaram sem `onClick` do protótipo até agosto/2026 — `cursor: pointer` sem efeito, que é pior que botão ausente: o usuário clica, nada acontece e conclui que o app quebrou.
+- `reports` é rota Pro. Para um usuário Essential o clique cai no `<UpgradeWall>` — mesmo comportamento dos itens marcados na sidebar, e por isso o botão não é escondido. O Simulador vive dentro do hub `planning`, que não é gated na rota.
 
 Referências no código:
 
@@ -20,17 +21,26 @@ O humor (`mood`) é derivado da relação entre **% do tempo decorrido no perío
 Rotas úteis no shell atual (nomes usados em `onNav` / `page` no `App.jsx`):
 
 
-| Destino provável | Id de página (exemplo) |
-| ---------------- | ---------------------- |
-| Metas            | `metas`                |
-| Simulação        | `simulacao`            |
-| Recorrências     | `recorrencias`         |
-| Relatórios       | `relatorios`           |
-| Transações       | `transacoes`           |
-| Orçamentos       | `orcamentos`           |
+| Destino      | Alvo de `navTo`                              |
+| ------------ | -------------------------------------------- |
+| Metas        | `planning` + `{ area: "goals" }`             |
+| Simulador    | `planning` + `{ area: "simulator" }`         |
+| Orçamentos   | `planning` + `{ area: "budgets" }`           |
+| Recorrências | `recurring`                                  |
+| Relatórios   | `reports`                                    |
+| Transações   | `transactions`                               |
+| Cartões      | `cards`                                      |
 
 
-(Ajustar ids se o app evoluir; manter esta tabela alinhada ao roteamento real.)
+**A fonte de verdade é `AUTH_ROUTE_SEGMENTS` em `src/ui/routing/appSegments.js`**, não
+os call sites de `onNav`. `navTo` ignora em silêncio qualquer alvo fora daquela lista.
+
+Esta tabela já errou duas vezes: primeiro com ids em português (`metas`, `simulacao`)
+que o roteamento nunca aceitou; depois com `goals`/`simulation`, que existem como
+chamadas espalhadas pelo código mas saíram da lista quando as três áreas migraram para
+o hub Planejamento — restaram só como rotas de redirect. Nos dois casos o botão ficava
+mudo. `src/ui/features/__tests__/moodActions.test.js` agora valida cada destino contra
+os mesmos predicados que o despachante usa, para que a terceira vez não aconteça.
 
 ## Matriz: humor → ações → resultado esperado
 

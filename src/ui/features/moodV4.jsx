@@ -21,17 +21,17 @@ export const MOODS = {
   serene: {
     label: "Sereno",
     Icon: Leaf,
-    accent: T.green,
-    accentLight: T.greenLight,
-    bar: T.greenBar,
+    accent: "#047857",
+    accentLight: "#ECFDF5",
+    bar: "#059669",
     insightBorder: "#6EE7B7",
-    insightBg: "#F0FDF6",
-    kicker: "#059669",
-    headlineColor: "#1A5C3A",
+    insightBg: "#ECFDF5",
+    kicker: "#065F46",
+    headlineColor: "#064E3B",
     topBorder: "transparent",
-    badgeBg: "#D1FAE5",
-    badgeColor: "#065F46",
-    bgFx: "radial-gradient(ellipse at 85% 0%,rgba(52,211,153,0.06) 0%,transparent 55%)",
+    badgeBg: "#A7F3D0",
+    badgeColor: "#064E3B",
+    bgFx: "radial-gradient(ellipse at 85% 0%,rgba(5,150,105,0.06) 0%,transparent 55%)",
     greeting: "Suas finanças respiram bem hoje.",
     InsightIcon: ShieldCheck,
     headlineSize: "3.8rem",
@@ -39,17 +39,17 @@ export const MOODS = {
   healthy: {
     label: "Saudável",
     Icon: Activity,
-    accent: T.amber,
-    accentLight: T.amberLight,
-    bar: "#F59E0B",
-    insightBorder: "#FCD34D",
-    insightBg: "#FFFBEB",
-    kicker: T.amber,
-    headlineColor: "#92400E",
+    accent: "#22C55E",
+    accentLight: "#F0FDF4",
+    bar: "#4ADE80",
+    insightBorder: "#86EFAC",
+    insightBg: "#F0FDF4",
+    kicker: "#166534",
+    headlineColor: "#15803D",
     topBorder: "transparent",
-    badgeBg: "#FDE68A",
-    badgeColor: "#78350F",
-    bgFx: "radial-gradient(ellipse at 85% 0%,rgba(245,158,11,0.06) 0%,transparent 55%)",
+    badgeBg: "#DCFCE7",
+    badgeColor: "#166534",
+    bgFx: "radial-gradient(ellipse at 85% 0%,rgba(34,197,94,0.06) 0%,transparent 55%)",
     greeting: "Ritmo equilibrado. Continue assim.",
     InsightIcon: Gauge,
     headlineSize: "3.5rem",
@@ -57,17 +57,17 @@ export const MOODS = {
   watchful: {
     label: "Atenção",
     Icon: Gauge,
-    accent: "#D97706",
-    accentLight: "#FFF7ED",
-    bar: "#F97316",
-    insightBorder: "#FDBA74",
-    insightBg: "#FFF7ED",
-    kicker: "#C2410C",
-    headlineColor: "#9A3412",
-    topBorder: "#FDBA74",
-    badgeBg: "#FED7AA",
-    badgeColor: "#9A3412",
-    bgFx: "radial-gradient(ellipse at 85% 0%,rgba(249,115,22,0.07) 0%,transparent 55%)",
+    accent: "#EAB308",
+    accentLight: "#FEFCE8",
+    bar: "#FACC15",
+    insightBorder: "#FDE047",
+    insightBg: "#FEFCE8",
+    kicker: "#713F12",
+    headlineColor: "#854D0E",
+    topBorder: "#FDE047",
+    badgeBg: "#FEF9C3",
+    badgeColor: "#713F12",
+    bgFx: "radial-gradient(ellipse at 85% 0%,rgba(234,179,8,0.07) 0%,transparent 55%)",
     greeting: "Olho no ritmo — você está acelerando.",
     InsightIcon: Flame,
     headlineSize: "3.3rem",
@@ -75,17 +75,17 @@ export const MOODS = {
   tense: {
     label: "Tenso",
     Icon: TrendingUp,
-    accent: T.red,
-    accentLight: T.redLight,
-    bar: "#EF4444",
-    insightBorder: "#FCA5A5",
-    insightBg: "#FEF2F2",
-    kicker: T.red,
-    headlineColor: "#991B1B",
-    topBorder: "#FCA5A5",
-    badgeBg: "#FEE2E2",
-    badgeColor: "#7F1D1D",
-    bgFx: "radial-gradient(ellipse at 85% 0%,rgba(239,68,68,0.07) 0%,transparent 55%)",
+    accent: "#D97706",
+    accentLight: "#FFFBEB",
+    bar: "#F59E0B",
+    insightBorder: "#FCD34D",
+    insightBg: "#FFFBEB",
+    kicker: "#78350F",
+    headlineColor: "#92400E",
+    topBorder: "#FCD34D",
+    badgeBg: "#FDE68A",
+    badgeColor: "#78350F",
+    bgFx: "radial-gradient(ellipse at 85% 0%,rgba(217,119,6,0.07) 0%,transparent 55%)",
     greeting: "Atenção: seu orçamento está pressionado.",
     InsightIcon: AlertTriangle,
     headlineSize: "3rem",
@@ -93,17 +93,17 @@ export const MOODS = {
   alert: {
     label: "Crítico",
     Icon: AlertTriangle,
-    accent: "#B91C1C",
-    accentLight: "#FFF1F2",
-    bar: "#BE123C",
-    insightBorder: "#FB7185",
-    insightBg: "#FFF1F2",
-    kicker: "#9F1239",
-    headlineColor: "#7F1D1D",
-    topBorder: "#FB7185",
-    badgeBg: "#FFE4E6",
-    badgeColor: "#881337",
-    bgFx: "radial-gradient(ellipse at 85% 0%,rgba(190,18,60,0.09) 0%,transparent 55%)",
+    accent: "#DC2626",
+    accentLight: "#FEF2F2",
+    bar: "#EF4444",
+    insightBorder: "#FCA5A5",
+    insightBg: "#FEF2F2",
+    kicker: "#7F1D1D",
+    headlineColor: "#991B1B",
+    topBorder: "#FCA5A5",
+    badgeBg: "#FEE2E2",
+    badgeColor: "#7F1D1D",
+    bgFx: "radial-gradient(ellipse at 85% 0%,rgba(220,38,38,0.09) 0%,transparent 55%)",
     greeting: "Situação crítica. Revise seus gastos agora.",
     InsightIcon: AlertTriangle,
     headlineSize: "2.8rem",
@@ -119,7 +119,7 @@ export function calcMood(day, budgetPct, freePct, daysInMonth = 31) {
   const ratio = moodRatio(day, budgetPct, daysInMonth);
   if (freePct < 10 || ratio > 1.3) return "alert";
   if (ratio > 1.1) return "tense";
-  if (ratio > 0.95 || freePct < 20) return "watchful";
+  if (ratio > 1.0 || freePct < 20) return "watchful";
   if (ratio > 0.8) return "healthy";
   return "serene";
 }
@@ -127,10 +127,10 @@ export function calcMood(day, budgetPct, freePct, daysInMonth = 31) {
 /**
  * Saudação do humor, corrigida pelo ritmo real (issue #67).
  *
- * A faixa `watchful` vai de 0,95 a 1,10, ou seja de *ligeiramente abaixo* do ritmo
- * até 10% acima. Na metade de baixo o usuário gasta mais devagar do que o período
- * passa — e a tela dizia "você está acelerando" ao lado de um "R$ X à frente do
- * ritmo esperado ✓". Os dois liam o mesmo número e discordavam.
+ * A faixa `watchful` começa em 1,00 (o corte saiu de 0,95 — ver abaixo) e vai até
+ * 1,10. Mesmo assim a saudação continua condicionada: `timePct` é arredondado e o
+ * ratio não, então sobra uma fresta em que o ratio passa de 1 enquanto o gasto
+ * ainda está abaixo do ritmo pela conta arredondada.
  *
  * `aheadOfPace` é passado pelo chamador com EXATAMENTE a mesma expressão que decide
  * o "à frente / acima" (`spendPct <= timePct`), e não um ratio recalculado. Não é
@@ -139,9 +139,10 @@ export function calcMood(day, budgetPct, freePct, daysInMonth = 31) {
  * combinações de (dia, dias-no-período) fazem isso. Compartilhando a expressão, a
  * contradição fica impossível por construção, não por coincidência numérica.
  *
- * O LIMIAR fica como está de propósito: movê-lo de 0,95 para 1,0 muda a régua de
- * humor de todos os usuários, e o 0,95 pode ter sido escolhido para avisar cedo —
- * é decisão de produto, registrada na #67, e vira uma linha quando for tomada.
+ * O LIMIAR foi movido de 0,95 para 1,00 (decisão do Owner). Com 0,95, gastar
+ * *exatamente* no ritmo do mês já caía em "Atenção", e uma org media 0,954 — entrava
+ * na faixa laranja por 0,004 gastando 49,2% da receita com 51,6% do mês decorrido.
+ * Agora "Atenção" significa o que o nome diz: você passou do ritmo.
  */
 export function moodGreeting(moodKey, aheadOfPace) {
   if (moodKey === "watchful" && aheadOfPace) {
@@ -170,28 +171,45 @@ export function moodInsightBody(moodKey, { aheadOfPace, dailyBudgetLabel, daysLe
   }[moodKey];
 }
 
+/**
+ * Ações do card de Insight, agora com DESTINO.
+ *
+ * Os botões existiam desde o protótipo sem `onClick` — `cursor: pointer` sem efeito,
+ * pendência registrada em `docs/DASHBOARD_INSIGHT_CTA_SPEC.md`. Botão que parece
+ * clicável e não responde é pior que botão ausente: o usuário clica, nada acontece,
+ * e conclui que o app está quebrado.
+ *
+ * Os ids são os que `navTo` de fato despacha: só o que está em `AUTH_ROUTE_SEGMENTS`
+ * navega. `goals`, `budgets` e `simulation` NÃO estão lá — migraram para o hub
+ * `planning` e sobrevivem apenas como rotas de redirect. Mandar esses ids reproduz
+ * exatamente o bug que este código existe para corrigir: clique sem efeito. O destino
+ * certo é `planning` com a sub-área em `opts.area`.
+ *
+ * `reports` é rota Pro: para um usuário Essential o clique cai no `<UpgradeWall>`,
+ * mesmo comportamento dos itens marcados na sidebar.
+ */
 export function getMoodActions(moodKey) {
   return (
     {
       serene: [
-        { label: "Definir meta extra", Icon: Target },
-        { label: "Ver projeção", Icon: TrendingUp },
+        { label: "Definir meta extra", Icon: Target, nav: "planning", navOpts: { area: "goals" } },
+        { label: "Ver projeção", Icon: TrendingUp, nav: "planning", navOpts: { area: "simulator" } },
       ],
       healthy: [
-        { label: "Simular uma compra", Icon: FlaskConical },
-        { label: "Ver categorias", Icon: Activity },
+        { label: "Simular uma compra", Icon: FlaskConical, nav: "planning", navOpts: { area: "simulator" } },
+        { label: "Ver categorias", Icon: Activity, nav: "reports" },
       ],
       watchful: [
-        { label: "Simular impacto", Icon: FlaskConical },
-        { label: "Revisar recorrências", Icon: Repeat },
+        { label: "Simular impacto", Icon: FlaskConical, nav: "planning", navOpts: { area: "simulator" } },
+        { label: "Revisar recorrências", Icon: Repeat, nav: "recurring" },
       ],
       tense: [
-        { label: "O que posso cortar?", Icon: AlertTriangle },
-        { label: "Recorrências caras", Icon: Repeat },
+        { label: "O que posso cortar?", Icon: AlertTriangle, nav: "reports" },
+        { label: "Recorrências caras", Icon: Repeat, nav: "recurring" },
       ],
       alert: [
-        { label: "Revisão urgente", Icon: AlertTriangle },
-        { label: "Pausar recorrências", Icon: Repeat },
+        { label: "Revisão urgente", Icon: AlertTriangle, nav: "transactions" },
+        { label: "Pausar recorrências", Icon: Repeat, nav: "recurring" },
       ],
     }[moodKey] || []
   );
