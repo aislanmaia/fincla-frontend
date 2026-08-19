@@ -1824,26 +1824,33 @@ export interface AccountBalance {
   type: AccountType;
   currency: string;
   initial_balance: number;
-  balance: number;
+  balance: number | null; // ver nota em OrgBalances
   include_in_total: boolean;
 }
 
+/**
+ * Campos de dinheiro chegam do backend como STRING (`Decimal` no Pydantic v2 vira
+ * `"315.57"` em JSON). `src/api/balances.ts` converte para número na fronteira, e
+ * `null` quando o valor não é um número finito — por isso o tipo aqui é `number | null`:
+ * ele descreve o que o CHAMADOR recebe, já normalizado. Nunca assuma que o JSON cru
+ * traz número.
+ */
 export interface OrgBalances {
   as_of: string;
-  total: number; // soma das contas include_in_total
+  total: number | null; // soma das contas include_in_total
   accounts: AccountBalance[];
 }
 
 export interface TypeBalance {
   type: AccountType;
-  balance: number;
+  balance: number | null; // ver nota em OrgBalances
   account_count: number;
 }
 
 export interface BalanceSummary {
   as_of: string;
-  total_available: number; // contas include_in_total
-  total_all: number;       // todas as contas ativas
+  total_available: number | null; // contas include_in_total — ver nota em OrgBalances
+  total_all: number | null;       // todas as contas ativas
   account_count: number;
   by_type: TypeBalance[];
 }

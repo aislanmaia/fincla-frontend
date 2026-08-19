@@ -2,6 +2,43 @@
 import apiClient from './client';
 import type { OrgBalances, AccountBalance, BalanceSummary } from './types';
 
+/**
+ * O backend serializa dinheiro como STRING, não número.
+ *
+ * Os campos são `Decimal` no Pydantic v2, que em JSON vira `"315.57"`. O tipo
+ * `number` declarado em `types.ts` estava errado desde sempre; o dashboard só não
+ * quebrava porque lia o valor com coerção implícita do JS (`Math.abs("315.57")`
+ * funciona). Quando a Visão Geral passou a checar `typeof === "number"` para
+ * distinguir "sem saldo" de "saldo zero", o check passou a reprovar TODA resposta
+ * válida e a tela exibiu "Dados indisponíveis" com a API respondendo 200.
+ *
+ * A coerção fica aqui, na fronteira: quem consome recebe número e o `typeof` volta
+ * a significar o que promete. `null` para o que não é número finito — inclusive
+ * `null` do backend — porque zero é um saldo legítimo e não pode ser inventado.
+ */
+const toFiniteNumber = (value: unknown): number | null => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+};
+
+const normalizeBalanceSummary = (raw: BalanceSummary): BalanceSummary => ({
+  ...raw,
+  total_available: toFiniteNumber(raw?.total_available),
+  total_all: toFiniteNumber(raw?.total_all),
+  by_type: Array.isArray(raw?.by_type)
+    ? raw.by_type.map((t) => ({ ...t, balance: toFiniteNumber(t?.balance) }))
+    : [],
+});
+
+const normalizeAccountBalance = (raw: AccountBalance): AccountBalance => ({
+  ...raw,
+  balance: toFiniteNumber(raw?.balance),
+});
+
 /** Saldo realizado por conta + total da org (só contas include_in_total). */
 export const getOrgBalances = async (
   organizationId: string,
@@ -10,7 +47,13 @@ export const getOrgBalances = async (
   const response = await apiClient.get<OrgBalances>('/balances', {
     params: { organization_id: organizationId, at_date: atDate },
   });
-  return response.data;
+  return {
+    ...response.data,
+    total: toFiniteNumber(response.data?.total),
+    accounts: Array.isArray(response.data?.accounts)
+      ? response.data.accounts.map(normalizeAccountBalance)
+      : [],
+  };
 };
 
 /** Rollup da org: total disponível, total geral e breakdown por tipo. */
@@ -21,7 +64,7 @@ export const getBalanceSummary = async (
   const response = await apiClient.get<BalanceSummary>('/balances/summary', {
     params: { organization_id: organizationId, at_date: atDate },
   });
-  return response.data;
+  return normalizeBalanceSummary(response.data);
 };
 
 /** Saldo realizado de uma conta específica. */
