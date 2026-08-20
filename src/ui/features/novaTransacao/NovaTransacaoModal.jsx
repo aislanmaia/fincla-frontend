@@ -77,6 +77,7 @@ import { listCreditCards } from "../../../api/creditCards";
 import { getOrgBalances } from "../../../api/balances";
 import {
   buildCreateCreditCardPayload,
+  CARD_BRAND_OPTIONS,
   createCreditCardForUi,
   formatCreditCardsApiError,
   mapCreditCardToModalPickerRow,
@@ -239,6 +240,20 @@ export const NovaTransacaoModal = ({
   const [quickAddCardName, setQuickAddCardName] = useState("");
   const [quickAddCardLast4, setQuickAddCardLast4] = useState("");
   /**
+   * Bandeira e dia de vencimento — pedidos no próprio mini-form (não só nome
+   * + 4 dígitos). Defaults inventados (brand "Visa" fixo, due_day 1) foram
+   * revisados e reprovados: o backend deriva `closing_day = due_day - 7`
+   * quando due_day falta, então um due_day errado põe a compra na fatura
+   * errada (bug financeiro silencioso); e "VISA" cravado no picker de um
+   * cartão que na verdade é Nubank fica errado pra sempre até o usuário
+   * lembrar de editar em Cartões. Limite (`credit_limit`) continua com
+   * default 0 — não afeta em qual fatura a compra cai, só o "disponível"
+   * exibido, então mantemos o mini-form curto e sinalizamos que é
+   * provisório (ver nota abaixo do form) em vez de adicionar mais um campo.
+   */
+  const [quickAddCardBrand, setQuickAddCardBrand] = useState(CARD_BRAND_OPTIONS[0]);
+  const [quickAddCardDueDay, setQuickAddCardDueDay] = useState("");
+  /**
    * CAUSA DO BUG (issue #79): o botão "Adicionar" do quick-add de cartão só
    * limpava o formulário — nunca chamava a API. Cartão "criado" nunca existia
    * no backend, então não aparecia na lista nem ficava selecionável. Falha
@@ -246,6 +261,17 @@ export const NovaTransacaoModal = ({
    */
   const [quickAddCardSaving, setQuickAddCardSaving] = useState(false);
   const [quickAddCardError, setQuickAddCardError] = useState("");
+  /**
+   * Sobe a cada fechamento do drawer — invalida um `handleQuickAddCard` em
+   * voo. O componente não desmonta ao fechar (`return null`), então sem
+   * isso um POST/reload que resolve depois que o usuário fechou e reabriu
+   * (outra transação) aplicaria `setCardId`/`setAddingCartao` por cima do
+   * estado já resetado do drawer novo.
+   */
+  const drawerSessionRef = useRef(0);
+  useEffect(() => {
+    if (!open) drawerSessionRef.current += 1;
+  }, [open]);
 
   const [categoryTagId, setCategoryTagId] = useState(null);
   const [categoryTagIsActive, setCategoryTagIsActive] = useState(true);
@@ -255,6 +281,24 @@ export const NovaTransacaoModal = ({
   const [modalCardsLoading, setModalityChoicealCardsLoading] = useState(false);
   const [modalCardsError, setModalityChoicealCardsError] = useState("");
   const appliedModalInitStampRef = useRef(null);
+  /**
+   * Marca se o `preConfig.cartaoId` já foi reconciliado com a lista
+   * carregada nesta sessão do drawer. Sem isso, o efeito de auto-seleção
+   * (abaixo) reforça `preConfig.cartaoId` toda vez que `modalCardsRows`
+   * muda — inclusive depois que o quick-add cria e seleciona um cartão
+   * novo, que a reconciliação desfazia silenciosamente.
+   */
+  const preConfigCardWantAppliedRef = useRef(false);
+  /**
+   * Id (string) do cartão que o quick-add acabou de criar e selecionar,
+   * enquanto a recarga da lista ainda não confirmou que ele existe em
+   * `modalCardsRows`. `setCardId` roda ANTES da recarga (pra fechar o
+   * form mesmo se a recarga falhar — achado #2), então por um instante
+   * `cardId` aponta pra um id que `realIds` ainda não contém; sem esta
+   * trava, o efeito de auto-seleção lia isso como "cardId inválido" e
+   * revertia pro primeiro cartão da lista antes da recarga terminar.
+   */
+  const pendingQuickAddCardIdRef = useRef(null);
 
   const useLiveCategoryTags = Boolean(organizationId && dataMode === "live");
   const categoryTagsData = useCategoryTagsData({
@@ -439,6 +483,9 @@ export const NovaTransacaoModal = ({
     const stamp = novaTxModalInitStamp(organizationId, novaRecorrencia, preConfig);
     if (appliedModalInitStampRef.current === stamp) return;
     appliedModalInitStampRef.current = stamp;
+    // Novo stamp = nova intenção de preConfig.cartaoId (ou nenhuma) — ainda
+    // não reconciliada com a lista de cartões carregada.
+    preConfigCardWantAppliedRef.current = false;
 
     const pc = preConfig;
     const nr = novaRecorrencia;
@@ -459,6 +506,8 @@ export const NovaTransacaoModal = ({
     setAddingCartao(false);
     setQuickAddCardName("");
     setQuickAddCardLast4("");
+    setQuickAddCardBrand(CARD_BRAND_OPTIONS[0]);
+    setQuickAddCardDueDay("");
     setQuickAddCardError("");
     setQuickAddCardSaving(false);
     setNewTag("");
@@ -683,44 +732,99 @@ export const NovaTransacaoModal = ({
     };
   }, [open, organizationId, dataMode, fetchModalCardRows]);
 
+  /** Só existe cartão pra persistir em modo live com organização conhecida — sem isso o quick-add é indisponível (ver JSX). */
+  const quickAddCardAvailable = Boolean(organizationId && dataMode === "live");
+  const quickAddCardDueDayNum = Number(quickAddCardDueDay);
+  const quickAddCardDueDayValid =
+    quickAddCardDueDay !== "" &&
+    Number.isInteger(quickAddCardDueDayNum) &&
+    quickAddCardDueDayNum >= 1 &&
+    quickAddCardDueDayNum <= 31;
+  const quickAddCardCanSubmit =
+    quickAddCardAvailable &&
+    Boolean(quickAddCardName) &&
+    quickAddCardLast4.length === 4 &&
+    quickAddCardDueDayValid &&
+    !quickAddCardSaving;
+
   /**
    * Cria o cartão via API (era o passo que faltava — ver comentário no
    * estado `quickAddCardSaving` acima). Só existe no modo live com
    * organização conhecida; sem isso não há onde persistir o cartão.
-   * Em caso de sucesso: recarrega a lista, seleciona o cartão novo e
-   * fecha o mini-formulário. Em erro: mostra a mensagem em PT-BR e
-   * mantém o formulário aberto para o usuário tentar de novo.
+   * Em caso de sucesso: seleciona o cartão novo e fecha o mini-formulário
+   * — isso é garantido assim que o POST volta, mesmo que a recarga da
+   * lista falhe em seguida (ver comentário no catch da recarga: uma falha
+   * ali não é falha de criação, e não pode se disfarçar de uma).
    */
   const handleQuickAddCard = useCallback(async () => {
-    if (!organizationId || dataMode !== "live") return;
-    if (quickAddCardSaving) return;
-    if (!quickAddCardName || quickAddCardLast4.length < 4) return;
+    if (!quickAddCardCanSubmit) return;
+    const session = drawerSessionRef.current;
+    const isStale = () => drawerSessionRef.current !== session;
     setQuickAddCardSaving(true);
     setQuickAddCardError("");
+    let created;
     try {
       const payload = buildCreateCreditCardPayload({
         organizationId,
         displayName: quickAddCardName,
         last4Digits: quickAddCardLast4,
+        brand: quickAddCardBrand,
+        dueDay: quickAddCardDueDay,
       });
-      const created = await createCreditCardForUi(payload);
-      const rows = await fetchModalCardRows();
-      setModalityChoicealCardsRows(rows);
-      setCardId(String(created.id));
-      setAddingCartao(false);
-      setQuickAddCardName("");
-      setQuickAddCardLast4("");
+      created = await createCreditCardForUi(payload);
     } catch (e) {
-      setQuickAddCardError(formatCreditCardsApiError(e));
+      // Drawer fechou/reabriu (outra transação) enquanto o POST estava em
+      // voo — não mexe no estado do drawer novo.
+      if (!isStale()) {
+        setQuickAddCardError(formatCreditCardsApiError(e));
+        setQuickAddCardSaving(false);
+      }
+      return;
+    }
+    if (isStale()) return;
+
+    // Cartão já existe no backend a partir daqui — isso não pode mais virar
+    // "erro de criação" na tela, então fecha o form e seleciona o cartão já.
+    setAddingCartao(false);
+    setQuickAddCardName("");
+    setQuickAddCardLast4("");
+    setQuickAddCardBrand(CARD_BRAND_OPTIONS[0]);
+    setQuickAddCardDueDay("");
+    setCardId(String(created.id));
+    // Marca reconciliado: se havia preConfig.cartaoId pendente, o cartão
+    // recém-criado (escolha explícita do usuário) já venceu essa disputa —
+    // não deixa o efeito de auto-seleção reverter para o cartão do preConfig.
+    preConfigCardWantAppliedRef.current = true;
+    // `cardId` acima aponta pra um id que `modalCardsRows` ainda não tem
+    // (a recarga só termina abaixo) — sem isto, o efeito de auto-seleção
+    // lê esse instante como "cardId inválido" e volta pro primeiro cartão
+    // da lista antes da recarga confirmar o cartão novo.
+    pendingQuickAddCardIdRef.current = String(created.id);
+
+    try {
+      const rows = await fetchModalCardRows();
+      if (!isStale()) setModalityChoicealCardsRows(rows);
+    } catch (e) {
+      // Falha aqui é só de RECARGA — o cartão foi criado e já está
+      // selecionado. Não usa o slot de erro do quick-add (que diria
+      // "criação falhou", convidando o usuário a criar um duplicado);
+      // usa o slot de erro da lista de cartões, que é sobre outra coisa.
+      if (!isStale()) {
+        setModalityChoicealCardsError(
+          `Cartão criado, mas não foi possível atualizar a lista agora: ${formatCreditCardsApiError(e)}`,
+        );
+      }
     } finally {
-      setQuickAddCardSaving(false);
+      pendingQuickAddCardIdRef.current = null;
+      if (!isStale()) setQuickAddCardSaving(false);
     }
   }, [
+    quickAddCardCanSubmit,
     organizationId,
-    dataMode,
-    quickAddCardSaving,
     quickAddCardName,
     quickAddCardLast4,
+    quickAddCardBrand,
+    quickAddCardDueDay,
     fetchModalCardRows,
   ]);
 
@@ -745,13 +849,23 @@ export const NovaTransacaoModal = ({
     if (!(organizationId && dataMode === "live")) return;
     if (modalCardsLoading) return;
     if (method !== "credito") return;
+    // Seleção do quick-add ainda não confirmada na lista recarregada — não
+    // mexe (ver comentário no `pendingQuickAddCardIdRef`).
+    if (pendingQuickAddCardIdRef.current && cardId === pendingQuickAddCardIdRef.current) return;
     const realIds = modalCardsRows.map((r) => String(r.id));
     if (realIds.length === 0) return;
     const want =
       preConfig?.cartaoId != null && String(preConfig.cartaoId)
         ? String(preConfig.cartaoId)
         : null;
-    if (want && realIds.includes(want)) {
+    // Só força `want` (preConfig.cartaoId) UMA vez por sessão do drawer —
+    // na primeira vez que a lista carrega. Depois disso, uma escolha nova
+    // do usuário (clique manual ou cartão recém-criado pelo quick-add) tem
+    // prioridade; sem essa trava, toda recarga da lista (ex.: depois de
+    // criar um cartão Y) reaplicava o cartão X do preConfig por cima da
+    // seleção que o usuário acabou de fazer, sem aviso nenhum.
+    if (want && realIds.includes(want) && !preConfigCardWantAppliedRef.current) {
+      preConfigCardWantAppliedRef.current = true;
       if (cardId !== want) setCardId(want);
       return;
     }
@@ -1587,6 +1701,7 @@ export const NovaTransacaoModal = ({
     setTxSubmitError(""); setTxSubmitting(false); setDescError(false);
     setMobileReviewImpactOpen(false); resetAi();
     setDescFocused(false); setAddingCartao(false); setQuickAddCardName(""); setQuickAddCardLast4("");
+    setQuickAddCardBrand(CARD_BRAND_OPTIONS[0]); setQuickAddCardDueDay("");
     setQuickAddCardError(""); setQuickAddCardSaving(false);
     setNewTag(""); setAddingTag(false); resetInstallmentCalc(); setShowImpact(false);
     setEditBaselineDropped(true);
@@ -2452,6 +2567,21 @@ export const NovaTransacaoModal = ({
                   <div style={{ ...G, fontSize:11, fontWeight:700, color:T.blue, marginBottom:10 }}>
                     Adicionar cartão
                   </div>
+                  {!quickAddCardAvailable ? (
+                    // Sem organização/modo live não há onde persistir o cartão — o form
+                    // ficava visível e o botão "Adicionar" clicava sem fazer nada (achado
+                    // #4 da revisão). Em vez de abrir um formulário morto, avisa e fecha.
+                    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                      <div style={{ ...G, fontSize:11, color:T.inkMid, lineHeight:1.5 }}>
+                        Cadastro de cartão indisponível no modo demonstração.
+                      </div>
+                      <button onClick={()=>setAddingCartao(false)}
+                        style={{ ...G, padding:"7px", borderRadius:8, border:`1px solid ${T.border}`,
+                          background:T.surface, fontSize:11, fontWeight:600, color:T.inkMid, cursor:"pointer" }}>
+                        Fechar
+                      </button>
+                    </div>
+                  ) : (
                   <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                     <input value={quickAddCardName} onChange={e=>setQuickAddCardName(e.target.value)}
                       placeholder="Nome (ex: Nubank Roxinho)" disabled={quickAddCardSaving}
@@ -2460,19 +2590,49 @@ export const NovaTransacaoModal = ({
                         transition:"border-color 0.15s" }}
                       onFocus={e=>e.target.style.borderColor=T.blue}
                       onBlur={e=>e.target.style.borderColor=T.border}/>
-                    <input value={quickAddCardLast4}
-                      onChange={e=>setQuickAddCardLast4(e.target.value.replace(/\D/g, "").slice(0,4))}
-                      placeholder="4 últimos dígitos" maxLength={4} disabled={quickAddCardSaving}
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                      <input value={quickAddCardLast4}
+                        onChange={e=>setQuickAddCardLast4(e.target.value.replace(/\D/g, "").slice(0,4))}
+                        placeholder="4 últimos dígitos" maxLength={4} disabled={quickAddCardSaving}
+                        style={{ ...G, ...NUM, padding:"8px 10px", borderRadius:8, border:`1px solid ${T.border}`,
+                          fontSize:12, color:T.ink, outline:"none", background:T.surface,
+                          transition:"border-color 0.15s" }}
+                        onFocus={e=>e.target.style.borderColor=T.blue}
+                        onBlur={e=>e.target.style.borderColor=T.border}/>
+                      <select value={quickAddCardBrand} onChange={e=>setQuickAddCardBrand(e.target.value)}
+                        disabled={quickAddCardSaving}
+                        style={{ ...G, padding:"8px 10px", borderRadius:8, border:`1px solid ${T.border}`,
+                          fontSize:12, color:T.ink, outline:"none", background:T.surface, cursor:"pointer" }}>
+                        {CARD_BRAND_OPTIONS.map((b) => <option key={b} value={b}>{b}</option>)}
+                      </select>
+                    </div>
+                    {/* Dia de vencimento — obrigatório aqui (não tem default seguro): o
+                        backend deriva `closing_day` dele quando ausente, e um due_day
+                        errado bota a compra na fatura errada. Bandeira também é pedida
+                        agora — ficava fixa em "Visa" pra sempre no picker senão. */}
+                    <input value={quickAddCardDueDay}
+                      onChange={e=>setQuickAddCardDueDay(e.target.value.replace(/\D/g, "").slice(0,2))}
+                      placeholder="Dia do vencimento (1-31)" inputMode="numeric" disabled={quickAddCardSaving}
                       style={{ ...G, ...NUM, padding:"8px 10px", borderRadius:8, border:`1px solid ${T.border}`,
                         fontSize:12, color:T.ink, outline:"none", background:T.surface,
                         transition:"border-color 0.15s" }}
                       onFocus={e=>e.target.style.borderColor=T.blue}
                       onBlur={e=>e.target.style.borderColor=T.border}/>
+                    <div style={{ ...G, fontSize:10, color:T.inkLight, lineHeight:1.5 }}>
+                      Limite fica em R$ 0,00 por enquanto — edite em Cartões quando quiser definir o valor.
+                    </div>
                     {quickAddCardError && (
                       <div style={{ ...G, fontSize:11, fontWeight:600, color:T.red }}>{quickAddCardError}</div>
                     )}
                     <div style={{ display:"flex", gap:6 }}>
-                      <button onClick={()=>{setAddingCartao(false);setQuickAddCardName("");setQuickAddCardLast4("");setQuickAddCardError("");}}
+                      <button onClick={()=>{
+                          setAddingCartao(false);
+                          setQuickAddCardName("");
+                          setQuickAddCardLast4("");
+                          setQuickAddCardBrand(CARD_BRAND_OPTIONS[0]);
+                          setQuickAddCardDueDay("");
+                          setQuickAddCardError("");
+                        }}
                         disabled={quickAddCardSaving}
                         style={{ ...G, flex:1, padding:"7px", borderRadius:8, border:`1px solid ${T.border}`,
                           background:T.surface, fontSize:11, fontWeight:600, color:T.inkMid,
@@ -2480,16 +2640,17 @@ export const NovaTransacaoModal = ({
                         Cancelar
                       </button>
                       <button
-                        disabled={!quickAddCardName||quickAddCardLast4.length<4||quickAddCardSaving}
+                        disabled={!quickAddCardCanSubmit}
                         onClick={handleQuickAddCard}
                         style={{ ...G, flex:1, padding:"7px", borderRadius:8, border:"none",
-                          background:quickAddCardName&&quickAddCardLast4.length===4&&!quickAddCardSaving?T.blue:T.inkGhost,
+                          background:quickAddCardCanSubmit?T.blue:T.inkGhost,
                           fontSize:11, fontWeight:700, color:"#fff",
-                          cursor:quickAddCardName&&quickAddCardLast4.length===4&&!quickAddCardSaving?"pointer":"not-allowed", transition:"background 0.15s" }}>
+                          cursor:quickAddCardCanSubmit?"pointer":"not-allowed", transition:"background 0.15s" }}>
                         {quickAddCardSaving ? "Adicionando…" : "Adicionar"}
                       </button>
                     </div>
                   </div>
+                  )}
                 </div>
               )}
               {!isRefund && (

@@ -10,6 +10,19 @@
  * Mock único no limite de rede (`apiClient`): tudo que fica entre o clique
  * e o POST — `buildCreateCreditCardPayload`, `createCreditCardForUi`,
  * `listCreditCards`, `handleApiError` — roda de verdade.
+ *
+ * Achados da revisão adversarial (PR #95) endereçados aqui:
+ * - #1/#5: o cenário "cria e seleciona" agora sempre parte de uma lista com
+ *   um cartão PRÉ-EXISTENTE — se a seleção explícita do cartão novo for
+ *   removida do componente, o fallback da auto-seleção escolhe o cartão
+ *   antigo (primeiro da lista), e a asserção reprova. Um teste dedicado
+ *   também cobre `preConfig.cartaoId`, que é onde o achado 1 mora de fato
+ *   (o efeito de auto-seleção forçava esse id de volta a cada recarga da
+ *   lista, desfazendo a seleção do quick-add).
+ * - #2: teste dedicado para POST ok + GET de recarga falho — a mensagem não
+ *   pode aparecer como falha de criação.
+ * - #4: teste dedicado para modo não-live — o quick-add avisa em vez de
+ *   ficar com um formulário morto.
  */
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -37,9 +50,27 @@ afterEach(() => {
 });
 
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
+const SELECTED_BG = "rgb(15, 15, 13)"; // T.ink
 
 /** Cartões já cadastrados na "API" (mutável por teste, começa vazia). */
 let cardsInApi;
+
+function apiCard(overrides) {
+  return {
+    id: 1,
+    organization_id: ORG_ID,
+    last4: "0000",
+    brand: "Mastercard",
+    description: "Cartão Antigo",
+    credit_limit: 1000,
+    due_day: 5,
+    closing_day: null,
+    available_limit: 1000,
+    used_limit: 0,
+    limit_usage_percent: 0,
+    ...overrides,
+  };
+}
 
 beforeEach(() => {
   cardsInApi = [];
@@ -80,7 +111,7 @@ beforeEach(() => {
   apiClient.delete.mockResolvedValue({ data: {} });
 });
 
-function renderDrawer() {
+function renderDrawer(props = {}) {
   return render(
     <NovaTransacaoModal
       open
@@ -89,6 +120,7 @@ function renderDrawer() {
       isMobile={false}
       organizationId={ORG_ID}
       dataMode="live"
+      {...props}
     />,
   );
 }
@@ -98,22 +130,40 @@ async function openCardPanel(user) {
   const creditoBtn = await screen.findByRole("button", { name: "Crédito" });
   await user.click(creditoBtn);
   // Só aparece depois que o GET inicial (mesmo que vazio) resolve.
-  return screen.findByText(/Novo cart\u00e3o/i);
+  return screen.findByText(/Novo cartão/i);
+}
+
+/** Preenche os 3 campos hoje obrigatórios do mini-form (nome, 4 dígitos, vencimento). */
+async function fillQuickAddForm(user, { name, last4, dueDay }) {
+  await user.type(
+    screen.getByPlaceholderText("Nome (ex: Nubank Roxinho)"),
+    name,
+  );
+  await user.type(screen.getByPlaceholderText("4 últimos dígitos"), last4);
+  await user.type(
+    screen.getByPlaceholderText("Dia do vencimento (1-31)"),
+    dueDay,
+  );
 }
 
 describe("NovaTransacaoModal — quick-add de cartão no drawer (issue #79)", () => {
-  it("cria o cartão via API, recarrega a lista e seleciona o cartão novo", async () => {
+  it("cria o cartão via API, recarrega a lista e seleciona o cartão novo (não o mais antigo)", async () => {
     const user = userEvent.setup();
+    // Lista começa com UM cartão já existente: se a seleção explícita do
+    // cartão recém-criado for removida, o fallback da auto-seleção
+    // (`realIds[0]`) escolhe ESTE cartão antigo, não o novo — é assim que
+    // este teste reprova a regressão que a revisão apontou (achado #5).
+    cardsInApi = [apiCard({ id: 1, description: "Cartão Antigo" })];
+
     renderDrawer();
 
     await openCardPanel(user);
-    await user.click(screen.getByText(/Novo cart\u00e3o/i));
-
-    await user.type(
-      screen.getByPlaceholderText("Nome (ex: Nubank Roxinho)"),
-      "Nubank Roxinho",
-    );
-    await user.type(screen.getByPlaceholderText("4 últimos dígitos"), "4321");
+    await user.click(screen.getByText(/Novo cartão/i));
+    await fillQuickAddForm(user, {
+      name: "Nubank Roxinho",
+      last4: "4321",
+      dueDay: "10",
+    });
 
     await user.click(screen.getByRole("button", { name: "Adicionar" }));
 
@@ -126,14 +176,14 @@ describe("NovaTransacaoModal — quick-add de cartão no drawer (issue #79)", ()
           organization_id: ORG_ID,
           last4: "4321",
           brand: "Visa",
-          due_day: 1,
+          due_day: 10,
           description: "Nubank Roxinho",
         }),
       );
     });
 
     // Efeito 2: a lista de cartões foi recarregada (2º GET /credit-cards)
-    // e o cartão novo aparece no picker.
+    // e o cartão novo aparece no picker, ao lado do antigo.
     await screen.findByText("Nubank Roxinho");
     const creditCardGets = apiClient.get.mock.calls.filter(
       ([url]) => url === "/credit-cards",
@@ -145,12 +195,58 @@ describe("NovaTransacaoModal — quick-add de cartão no drawer (issue #79)", ()
       screen.queryByPlaceholderText("Nome (ex: Nubank Roxinho)"),
     ).not.toBeInTheDocument();
 
-    // Efeito 4: o cartão novo fica selecionado (mesmo destaque visual dos
-    // demais cartões — fundo T.ink, ver NovaTransacaoModal.jsx).
-    const cardTile = screen.getByText("Nubank Roxinho").parentElement;
-    expect(cardTile.style.background).toBe("rgb(15, 15, 13)");
-    // Drawer inteiro + vários hooks de dados: renderiza mais devagar que um
-    // componente isolado, por isso o timeout maior (ver ConsultantAddClientWizard).
+    // Efeito 4: o cartão NOVO fica selecionado — e o antigo não.
+    await waitFor(() => {
+      expect(screen.getByText("Nubank Roxinho").parentElement.style.background).toBe(
+        SELECTED_BG,
+      );
+    });
+    expect(screen.getByText("Cartão Antigo").parentElement.style.background).not.toBe(
+      SELECTED_BG,
+    );
+  }, 15000);
+
+  it("preConfig.cartaoId não rouba a seleção de volta depois que o quick-add cria outro cartão (achado 1)", async () => {
+    const user = userEvent.setup();
+    cardsInApi = [apiCard({ id: 1, description: "Cartão Antigo" })];
+
+    renderDrawer({ preConfig: { method: "credito", cartaoId: 1 } });
+
+    // O painel de cartão já abre sozinho (preConfig.method === "credito"),
+    // com o cartão do preConfig pré-selecionado.
+    const oldTile = await screen.findByText("Cartão Antigo");
+    await waitFor(() => {
+      expect(oldTile.parentElement.style.background).toBe(SELECTED_BG);
+    });
+
+    await user.click(screen.getByText(/Novo cartão/i));
+    await fillQuickAddForm(user, {
+      name: "Nubank Roxinho",
+      last4: "4321",
+      dueDay: "10",
+    });
+    await user.click(screen.getByRole("button", { name: "Adicionar" }));
+
+    await waitFor(() => {
+      expect(apiClient.post).toHaveBeenCalledWith(
+        "/credit-cards",
+        expect.objectContaining({ description: "Nubank Roxinho" }),
+      );
+    });
+
+    // O cartão recém-criado fica selecionado...
+    await waitFor(() => {
+      expect(
+        screen.getByText("Nubank Roxinho").parentElement.style.background,
+      ).toBe(SELECTED_BG);
+    });
+    // ...e o efeito de auto-seleção do preConfig.cartaoId NÃO reverte a
+    // escolha de volta pro cartão antigo (era exatamente esse o bug: a
+    // recarga da lista após o quick-add reacionava `want` e forçava o
+    // cartão do preConfig de volta, sem aviso nenhum).
+    expect(
+      screen.getByText("Cartão Antigo").parentElement.style.background,
+    ).not.toBe(SELECTED_BG);
   }, 15000);
 
   it("mostra o erro em PT-BR quando a API rejeita e mantém o formulário aberto", async () => {
@@ -168,13 +264,12 @@ describe("NovaTransacaoModal — quick-add de cartão no drawer (issue #79)", ()
     renderDrawer();
 
     await openCardPanel(user);
-    await user.click(screen.getByText(/Novo cart\u00e3o/i));
-
-    await user.type(
-      screen.getByPlaceholderText("Nome (ex: Nubank Roxinho)"),
-      "Cartão Duplicado",
-    );
-    await user.type(screen.getByPlaceholderText("4 últimos dígitos"), "9999");
+    await user.click(screen.getByText(/Novo cartão/i));
+    await fillQuickAddForm(user, {
+      name: "Cartão Duplicado",
+      last4: "9999",
+      dueDay: "12",
+    });
 
     await user.click(screen.getByRole("button", { name: "Adicionar" }));
 
@@ -189,5 +284,80 @@ describe("NovaTransacaoModal — quick-add de cartão no drawer (issue #79)", ()
       screen.getByPlaceholderText("Nome (ex: Nubank Roxinho)"),
     ).toBeInTheDocument();
     expect(screen.queryByText("Cartão Duplicado")).not.toBeInTheDocument();
+  }, 15000);
+
+  it("POST cria o cartão mas a recarga da lista falha — não vira erro de criação nem convite a duplicar (achado 2)", async () => {
+    const user = userEvent.setup();
+    let creditCardGetCalls = 0;
+    apiClient.get.mockImplementation((url) => {
+      if (url === "/credit-cards") {
+        creditCardGetCalls += 1;
+        // 1ª chamada (fetch inicial) funciona; a recarga pós-criação falha.
+        if (creditCardGetCalls === 1) {
+          return Promise.resolve({ data: cardsInApi });
+        }
+        return Promise.reject({
+          isAxiosError: true,
+          response: { status: 500, data: {} },
+        });
+      }
+      return Promise.resolve({ data: {} });
+    });
+
+    renderDrawer();
+
+    await openCardPanel(user);
+    await user.click(screen.getByText(/Novo cartão/i));
+    await fillQuickAddForm(user, {
+      name: "Nubank Roxinho",
+      last4: "4321",
+      dueDay: "10",
+    });
+    await user.click(screen.getByRole("button", { name: "Adicionar" }));
+
+    // O cartão FOI criado — o POST saiu.
+    await waitFor(() => {
+      expect(apiClient.post).toHaveBeenCalledWith(
+        "/credit-cards",
+        expect.objectContaining({ description: "Nubank Roxinho" }),
+      );
+    });
+
+    // A falha é só de RECARGA: o formulário fecha normalmente (não fica
+    // preso mostrando "criação falhou", o que convidaria o usuário a
+    // clicar "Adicionar" de novo e criar um cartão duplicado).
+    await waitFor(() => {
+      expect(
+        screen.queryByPlaceholderText("Nome (ex: Nubank Roxinho)"),
+      ).not.toBeInTheDocument();
+    });
+
+    // A mensagem de erro aparece no slot da LISTA de cartões — distinta do
+    // erro de criação — e deixa claro que o cartão já existe.
+    await screen.findByText(/Cartão criado, mas não foi possível atualizar a lista/);
+  }, 15000);
+
+  it("modo não-live: quick-add avisa que está indisponível em vez de um formulário morto (achado 4)", async () => {
+    const user = userEvent.setup();
+    renderDrawer({ dataMode: "mock" });
+
+    await openCardPanel(user);
+    await user.click(screen.getByText(/Novo cartão/i));
+
+    await screen.findByText(
+      "Cadastro de cartão indisponível no modo demonstração.",
+    );
+    // Sem formulário morto: nem os campos aparecem, nem dá pra clicar
+    // "Adicionar" sem fazer nada.
+    expect(
+      screen.queryByPlaceholderText("Nome (ex: Nubank Roxinho)"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Adicionar" }),
+    ).not.toBeInTheDocument();
+    expect(apiClient.post).not.toHaveBeenCalledWith(
+      "/credit-cards",
+      expect.anything(),
+    );
   }, 15000);
 });
