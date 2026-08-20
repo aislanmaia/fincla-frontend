@@ -46,6 +46,7 @@ import {
   buildCreateTransactionPayload,
   buildUpdateTransactionPayload,
   createErrorReleasedIdempotencyKey,
+  createResendIsProtected,
   createTransactionForUi,
   createTransactionPayloadFingerprint,
   formatTransactionsApiError,
@@ -332,12 +333,31 @@ export const NovaTransacaoModal = ({
   // `true` sobrevivente pularia o aviso num salvamento posterior já com
   // dados diferentes.
   const retryConfirmedRef = useRef(false);
-  // Impressão digital do payload da última criação que FALHOU. Comparar com o
-  // payload do clique atual é o que distingue "reenviar o mesmo lançamento"
-  // (protegido pela chave de idempotência, reenvia direto) de "mandar um
-  // lançamento diferente depois de um erro ambíguo" (chave nova; o anterior
-  // pode existir no servidor, então vale avisar).
-  const failedCreateFingerprintRef = useRef(null);
+  // Impressões digitais de TODAS as criações que falharam nesta sessão do
+  // drawer. Quando o modal descarta o estado de falha (reabrir, resetar,
+  // salvar com sucesso), ele solta TODAS elas no adapter. Guardar só a última
+  // deixava chave órfã para trás: falha em A, sucesso em B, e a chave de A
+  // seguia retida — reentrar A dentro do TTL voltava como replay e a tela
+  // dizia "Registrado!" sem nada ter sido criado.
+  const failedCreateFingerprintsRef = useRef(new Set());
+  // Mensagem de erro da última falha SEM o "pode tentar sem medo". Ao armar a
+  // faixa de confirmação, é ela que volta para a tela: a versão tranquilizadora
+  // contradiz a faixa logo abaixo ("este envio é um lançamento novo") e,
+  // naquele ponto, já é falsa.
+  const lastCreateErrorBaseMessageRef = useRef("");
+
+  /**
+   * Solta no adapter todas as chaves das tentativas que este drawer abandonou.
+   * Chamado sempre que o estado de falha é descartado — a partir daí, um
+   * lançamento com os mesmos dados é intenção NOVA, não reenvio, e reusar a
+   * chave antiga faria o backend replayar em vez de criar.
+   */
+  const releaseFailedCreateKeys = () => {
+    for (const fingerprint of failedCreateFingerprintsRef.current) {
+      releaseCreateIdempotencyKey(fingerprint);
+    }
+    failedCreateFingerprintsRef.current.clear();
+  };
   const [modalCardsRows, setModalityChoicealCardsRows] = useState([]);
   const [modalCardsLoading, setModalityChoicealCardsLoading] = useState(false);
   const [modalCardsError, setModalityChoicealCardsError] = useState("");
@@ -1083,8 +1103,7 @@ export const NovaTransacaoModal = ({
     // mesmos dados horas depois (café de manhã, café de tarde: mesmo valor,
     // mesma descrição, mesma data normalizada) reusaria a chave e voltaria
     // como replay — a tela diria "Registrado!" para algo que não foi criado.
-    releaseCreateIdempotencyKey(failedCreateFingerprintRef.current);
-    failedCreateFingerprintRef.current = null;
+    releaseFailedCreateKeys();
     if (!useLiveCategoryTags) {
       setCategoryTagId(null);
       setCategoryTagIsActive(true);
@@ -1837,26 +1856,20 @@ export const NovaTransacaoModal = ({
             accountId: settleAccountId || null,
             paidAt: method !== "credito" && settled ? transactionDateIsoFromYmd(txDateYmd) : null,
           });
-          // Portão da confirmação inline. `createTransactionForUi` reaproveita
-          // a `Idempotency-Key` da tentativa que falhou enquanto o payload não
-          // muda — nesse caso reenviar devolve a transação original em vez de
-          // criar outra, e pedir confirmação seria só atrito. O aviso volta a
-          // fazer sentido no caso oposto: erro AMBÍGUO (pode ter gravado) e
-          // dados alterados desde então, porque aí vai uma chave nova e o
-          // lançamento anterior pode estar lá.
-          // "Protegido" = existe chave retida da tentativa que falhou E o
-          // payload é o mesmo dela. Só nesse caso o reenvio é replay. Se a
-          // chave foi liberada (mismatch, in-flight órfão) ou os dados
-          // mudaram, vai chave nova — e o lançamento anterior pode existir.
-          const resendIsProtected =
-            failedCreateFingerprintRef.current != null &&
-            failedCreateFingerprintRef.current ===
-              createTransactionPayloadFingerprint(createPayload);
+          // Portão da confirmação inline. Pergunta ao ADAPTER se este reenvio
+          // é garantidamente um replay. O modal já teve a própria conta (comparar fingerprints num `ref`),
+          // e ela divergia sempre que a proteção caía por fora da mudança de
+          // payload: TTL vencido, backend sem suporte, chave liberada. Nessas
+          // divergências a UI escolhia o lado inseguro — prometia "não
+          // duplica" e pulava a confirmação que a `main` sempre armava.
+          const resendIsProtected = createResendIsProtected(createPayload);
           if (txCreateFailed && txCreateErrorAmbiguous && !retryConfirmed && !resendIsProtected) {
             // Este clique não chegou a enviar nada: desfaz o "limpou o estado
             // de falha" feito no início desta função (tudo no mesmo tick
-            // síncrono, então o React agrupa e a tela não pisca).
-            setTxSubmitError(txSubmitError);
+            // síncrono, então o React agrupa e a tela não pisca). Volta a
+            // mensagem BASE, sem o "pode tentar sem medo": ele contradiria a
+            // faixa logo abaixo e já não é verdade neste ponto.
+            setTxSubmitError(lastCreateErrorBaseMessageRef.current || txSubmitError);
             setTxCreateFailed(true);
             setTxCreateErrorAmbiguous(true);
             setTxRetryConfirmPending(true);
@@ -1865,8 +1878,12 @@ export const NovaTransacaoModal = ({
           }
           attemptedCreatePayload = createPayload;
           await createTransactionForUi(createPayload);
-          // Sucesso: a tentativa acabou, nada mais a comparar.
-          failedCreateFingerprintRef.current = null;
+          // Sucesso: esta tentativa acabou e qualquer outra que tenha falhado
+          // nesta sessão foi abandonada junto — soltar as chaves delas evita
+          // que um lançamento igual, reentrado dentro do TTL, volte como
+          // replay e "suma" do extrato.
+          releaseFailedCreateKeys();
+          lastCreateErrorBaseMessageRef.current = "";
         }
       } catch (err) {
         // Erro na ESCRITA principal (create/update em si): a operação que a
@@ -1879,8 +1896,12 @@ export const NovaTransacaoModal = ({
         // in-flight órfão), o próximo envio é lançamento NOVO e a promessa de
         // "não duplica" deixaria de ser verdade — a mensagem específica desses
         // erros já manda conferir o extrato.
-        const keyStillProtects = attemptedCreatePayload != null && !createErrorReleasedIdempotencyKey(err);
+        const keyStillProtects =
+          attemptedCreatePayload != null &&
+          !createErrorReleasedIdempotencyKey(err) &&
+          createResendIsProtected(attemptedCreatePayload);
         const baseMessage = formatTransactionsApiError(err);
+        lastCreateErrorBaseMessageRef.current = baseMessage;
         setTxSubmitError(
           ambiguous && keyStillProtects
             ? `${baseMessage} Pode tentar de novo sem medo: o reenvio reaproveita a mesma chave e não duplica o lançamento.`
@@ -1889,13 +1910,14 @@ export const NovaTransacaoModal = ({
         if (!isEditingExisting) {
           setTxCreateFailed(true);
           setTxCreateErrorAmbiguous(ambiguous);
-          // `null` quando o erro estourou ANTES de montar o payload (ex.:
-          // `TypeError` em `buildCreateTransactionPayload`), e também quando a
-          // chave foi liberada: nos dois casos não há reenvio protegido com
-          // que comparar, e o portão passa a avisar.
-          failedCreateFingerprintRef.current = keyStillProtects
-            ? createTransactionPayloadFingerprint(attemptedCreatePayload)
-            : null;
+          // Registra a tentativa para soltar a chave dela quando este drawer
+          // descartar a falha. Só quando houve payload E a chave sobreviveu —
+          // liberar o que o adapter já liberou não teria efeito.
+          if (attemptedCreatePayload != null && !createErrorReleasedIdempotencyKey(err)) {
+            failedCreateFingerprintsRef.current.add(
+              createTransactionPayloadFingerprint(attemptedCreatePayload),
+            );
+          }
         }
         setTxSubmitting(false);
         return;
@@ -1998,8 +2020,7 @@ export const NovaTransacaoModal = ({
     setReview(false); resetMobileStep(); setSuccess(false); setSuccessOverlay(false);
     setTxSubmitError(""); setTxSubmitting(false); setTxCreateFailed(false); setTxCreateErrorAmbiguous(false); setTxRetryConfirmPending(false); setDescError(false);
     retryConfirmedRef.current = false;
-    releaseCreateIdempotencyKey(failedCreateFingerprintRef.current);
-    failedCreateFingerprintRef.current = null;
+    releaseFailedCreateKeys();
     setMobileReviewImpactOpen(false); resetAi();
     setDescFocused(false); setAddingCartao(false); setQuickAddCardName(""); setQuickAddCardLast4("");
     setQuickAddCardBrand(CARD_BRAND_OPTIONS[0]); setQuickAddCardDueDay("");

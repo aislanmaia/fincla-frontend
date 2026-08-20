@@ -113,17 +113,23 @@ apiClient.interceptors.response.use(
 );
 
 // Mapeamento de mensagens da API para português (idioma da aplicação)
-const API_MESSAGE_TRANSLATIONS: Record<string, string> = {
-  'Phone already linked': 'Este número já está vinculado para esta ou outra conta.',
-  'phone already linked': 'Este número já está vinculado para esta ou outra conta.',
-  PHONE_ALREADY_LINKED: 'Este número já está vinculado para esta ou outra conta.',
-};
+// `Map`, não objeto literal: as chaves de busca abaixo (`message` e
+// `detail.error`) vêm da REDE, e indexar um objeto com string arbitrária
+// alcança o `Object.prototype`. Um `detail.error === "__proto__"` fazia esta
+// tradução devolver um OBJETO e o React derrubava a tela com "Objects are not
+// valid as a React child"; `"hasOwnProperty"` devolvia uma função. `Map.get`
+// só enxerga o que foi posto nele.
+const API_MESSAGE_TRANSLATIONS = new Map<string, string>([
+  ['Phone already linked', 'Este número já está vinculado para esta ou outra conta.'],
+  ['phone already linked', 'Este número já está vinculado para esta ou outra conta.'],
+  ['PHONE_ALREADY_LINKED', 'Este número já está vinculado para esta ou outra conta.'],
+]);
 
 function translateApiMessage(message: string, errorCode?: string): string {
   const trimmed = message.trim();
   return (
-    API_MESSAGE_TRANSLATIONS[trimmed] ??
-    (errorCode ? API_MESSAGE_TRANSLATIONS[errorCode] : null) ??
+    API_MESSAGE_TRANSLATIONS.get(trimmed) ??
+    (errorCode ? API_MESSAGE_TRANSLATIONS.get(errorCode) : undefined) ??
     trimmed
   );
 }

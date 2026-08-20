@@ -14,14 +14,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import apiClient from "../../../api/client";
 import {
   hasObservedIdempotencySupport,
+  noteIdempotencySupport,
   resetIdempotencySupportObservation,
 } from "../../../api/idempotency";
 import {
   createErrorReleasedIdempotencyKey,
+  createResendIsProtected,
   createRetryDelayMs,
-  createRetryIsProtectedFor,
   createTransactionForUi,
   createTransactionPayloadFingerprint,
+  hasRetainedCreateIdempotencyKey,
   formatTransactionsApiError,
   isCreateTransactionErrorMaybePersisted,
   isCreateTransactionErrorRetryable,
@@ -261,7 +263,7 @@ describe("createTransactionForUi — retry das classes que a chave tornou segura
     // prenderia a pessoa num beco sem saída. A liberação faz o próximo
     // "Tentar novamente" sair com chave NOVA — e a UI avisa sobre o extrato.
     expect(createErrorReleasedIdempotencyKey(err)).toBe(true);
-    expect(createRetryIsProtectedFor(PAYLOAD)).toBe(false);
+    expect(hasRetainedCreateIdempotencyKey(PAYLOAD)).toBe(false);
     expect(isCreateTransactionErrorMaybePersisted(err)).toBe(true);
 
     const next = scriptAdapter([(config) => respondWithStatus(config, 201, { id: 12 }, REPLAY_HEADERS)]);
@@ -378,7 +380,7 @@ describe("createTransactionForUi — classes que continuam SEM retry", () => {
       // Chave solta: sem isso a tentativa seguinte reusaria a chave rejeitada
       // e ficaria presa no mesmo erro até a janela de 24h vencer.
       expect(createErrorReleasedIdempotencyKey(err)).toBe(true);
-      expect(createRetryIsProtectedFor(PAYLOAD)).toBe(false);
+      expect(hasRetainedCreateIdempotencyKey(PAYLOAD)).toBe(false);
       const next = scriptAdapter([(config) => respondWithStatus(config, 201, { id: 11 }, REPLAY_HEADERS)]);
       apiClient.defaults.adapter = next;
       await createTransactionForUi(PAYLOAD);
@@ -422,12 +424,12 @@ describe("retenção da chave — o que a UI usa para decidir se ainda avisa", (
     apiClient.defaults.adapter = adapter;
     await settling(createTransactionForUi(PAYLOAD)).catch(() => {});
 
-    expect(createRetryIsProtectedFor(PAYLOAD)).toBe(true);
-    expect(createRetryIsProtectedFor({ ...PAYLOAD, value: 43 })).toBe(false);
+    expect(hasRetainedCreateIdempotencyKey(PAYLOAD)).toBe(true);
+    expect(hasRetainedCreateIdempotencyKey({ ...PAYLOAD, value: 43 })).toBe(false);
   });
 
   it("sem falha pendente, nada está protegido", () => {
-    expect(createRetryIsProtectedFor(PAYLOAD)).toBe(false);
+    expect(hasRetainedCreateIdempotencyKey(PAYLOAD)).toBe(false);
   });
 });
 
@@ -586,8 +588,8 @@ describe("armazenamento das chaves — mapa por tentativa, com TTL e liberação
     await settling(createTransactionForUi(OTHER)).catch(() => {});
 
     expect(failingA.keys[0]).not.toBe(failingB.keys[0]);
-    expect(createRetryIsProtectedFor(PAYLOAD)).toBe(true);
-    expect(createRetryIsProtectedFor(OTHER)).toBe(true);
+    expect(hasRetainedCreateIdempotencyKey(PAYLOAD)).toBe(true);
+    expect(hasRetainedCreateIdempotencyKey(OTHER)).toBe(true);
   });
 
   it("a chave retida EXPIRA: café de manhã que falhou não engole o café da tarde com os mesmos dados", async () => {
@@ -600,10 +602,10 @@ describe("armazenamento das chaves — mapa por tentativa, com TTL e liberação
     const morning = scriptAdapter([(config) => respondWithStatus(config, 503, {})]);
     apiClient.defaults.adapter = morning;
     await settling(createTransactionForUi(PAYLOAD)).catch(() => {});
-    expect(createRetryIsProtectedFor(PAYLOAD)).toBe(true);
+    expect(hasRetainedCreateIdempotencyKey(PAYLOAD)).toBe(true);
 
     nowSpy.mockReturnValue(t0 + 6 * 60 * 60 * 1000); // 15:00
-    expect(createRetryIsProtectedFor(PAYLOAD)).toBe(false);
+    expect(hasRetainedCreateIdempotencyKey(PAYLOAD)).toBe(false);
 
     const afternoon = scriptAdapter([(config) => respondWithStatus(config, 201, { id: 30 }, REPLAY_HEADERS)]);
     apiClient.defaults.adapter = afternoon;
@@ -615,10 +617,10 @@ describe("armazenamento das chaves — mapa por tentativa, com TTL e liberação
     const failing = scriptAdapter([(config) => respondWithStatus(config, 503, {})]);
     apiClient.defaults.adapter = failing;
     await settling(createTransactionForUi(PAYLOAD)).catch(() => {});
-    expect(createRetryIsProtectedFor(PAYLOAD)).toBe(true);
+    expect(hasRetainedCreateIdempotencyKey(PAYLOAD)).toBe(true);
 
     releaseCreateIdempotencyKey(createTransactionPayloadFingerprint(PAYLOAD));
-    expect(createRetryIsProtectedFor(PAYLOAD)).toBe(false);
+    expect(hasRetainedCreateIdempotencyKey(PAYLOAD)).toBe(false);
 
     const next = scriptAdapter([(config) => respondWithStatus(config, 201, { id: 31 }, REPLAY_HEADERS)]);
     apiClient.defaults.adapter = next;
@@ -675,10 +677,30 @@ describe("createRetryDelayMs — `Retry-After` honrado nas duas formas da RFC", 
 
   const NOW = Date.parse("2026-08-20T12:00:00Z");
 
-  it("segundos: respeitados como vieram, inclusive `0` (repetir já) e valores acima do backoff", () => {
+  it("segundos viram a BASE do backoff: `Retry-After: 2` reproduz o 2s/4s/8s publicado", () => {
+    // Antes o header SUBSTITUÍA o backoff. Como a API manda sempre
+    // `Retry-After: 2`, o 2s/4s/8s documentado nos dois repositórios virava
+    // 2s/2s/2s — quatro POSTs em seis segundos contra uma reserva órfã.
     expect(createRetryDelayMs(errorWithRetryAfter("2"), 1, { inFlight: true, nowMs: NOW })).toBe(2000);
+    expect(createRetryDelayMs(errorWithRetryAfter("2"), 2, { inFlight: true, nowMs: NOW })).toBe(4000);
+    expect(createRetryDelayMs(errorWithRetryAfter("2"), 3, { inFlight: true, nowMs: NOW })).toBe(8000);
+    // `0` continua sendo espera válida (repetir já), em qualquer tentativa.
     expect(createRetryDelayMs(errorWithRetryAfter("0"), 1, { inFlight: true, nowMs: NOW })).toBe(0);
-    expect(createRetryDelayMs(errorWithRetryAfter("12"), 1, { inFlight: true, nowMs: NOW })).toBe(12_000);
+    expect(createRetryDelayMs(errorWithRetryAfter("0"), 3, { inFlight: true, nowMs: NOW })).toBe(0);
+  });
+
+  it("`Retry-After` é ignorado FORA do 409: em 502/503/504 o ritmo é nosso", () => {
+    // Honrá-lo ali entregava o ritmo do drawer a qualquer proxy no caminho:
+    // um `Retry-After: 3600` num 503 congelava a tela com o botão desabilitado.
+    const gateway = new AxiosError("bad gateway", undefined, {}, {}, {
+      status: 503,
+      data: {},
+      statusText: "",
+      headers: { "retry-after": "3600" },
+      config: {},
+    });
+    expect(createRetryDelayMs(gateway, 1, { nowMs: NOW })).toBe(400);
+    expect(createRetryDelayMs(gateway, 2, { nowMs: NOW })).toBe(800);
   });
 
   it("HTTP-date: convertido para a espera real em vez de virar NaN e cair no backoff curto", () => {
@@ -691,8 +713,8 @@ describe("createRetryDelayMs — `Retry-After` honrado nas duas formas da RFC", 
     expect(createRetryDelayMs(errorWithRetryAfter(past), 1, { inFlight: true, nowMs: NOW })).toBe(0);
   });
 
-  it("valor absurdo é limitado ao teto, não ignorado", () => {
-    expect(createRetryDelayMs(errorWithRetryAfter("86400"), 1, { inFlight: true, nowMs: NOW })).toBe(30_000);
+  it("valor absurdo é limitado ao teto por espera, não ignorado", () => {
+    expect(createRetryDelayMs(errorWithRetryAfter("86400"), 1, { inFlight: true, nowMs: NOW })).toBe(10_000);
   });
 
   it("sem header: backoff 2s/4s/8s no in-flight (contrato publicado) e curto no transiente", () => {
@@ -702,4 +724,142 @@ describe("createRetryDelayMs — `Retry-After` honrado nas duas formas da RFC", 
     expect(createRetryDelayMs(errorWithRetryAfter(null), 1, { nowMs: NOW })).toBe(400);
     expect(createRetryDelayMs(errorWithRetryAfter(null), 2, { nowMs: NOW })).toBe(800);
   });
+});
+
+describe("createResendIsProtected — a única pergunta que a UI faz", () => {
+  it("com chave retida MAS sem suporte observado: NÃO protegido (o header vira enfeite num backend antigo)", async () => {
+    apiClient.defaults.adapter = scriptAdapter([(config) => respondWithStatus(config, 503, {})]);
+    await settling(createTransactionForUi(PAYLOAD)).catch(() => {});
+
+    // A retenção existe...
+    expect(hasRetainedCreateIdempotencyKey(PAYLOAD)).toBe(true);
+    // ...mas sem prova de que o servidor honra a chave, reenviar duplica como
+    // sempre duplicou. A UI precisa voltar a pedir confirmação.
+    expect(hasObservedIdempotencySupport()).toBe(false);
+    expect(createResendIsProtected(PAYLOAD)).toBe(false);
+  });
+
+  it("com suporte observado e chave retida: protegido; payload diferente: não", async () => {
+    await observeIdempotencySupport();
+    apiClient.defaults.adapter = scriptAdapter([(config) => respondWithStatus(config, 503, {})]);
+    await settling(createTransactionForUi(PAYLOAD)).catch(() => {});
+
+    expect(createResendIsProtected(PAYLOAD)).toBe(true);
+    expect(createResendIsProtected({ ...PAYLOAD, value: 43 })).toBe(false);
+  });
+
+  it("respeita o TTL: aos 11 minutos deixa de proteger, e o adapter concorda emitindo chave NOVA", async () => {
+    // O modal comparava fingerprints por conta própria e era CEGO ao TTL:
+    // aos 11 min ele ainda dizia "é replay" enquanto `createTransactionForUi`
+    // já emitia outra chave — reenvio sem aviso, duplicata possível.
+    noteIdempotencySupport();
+    const t0 = Date.parse("2026-08-20T09:00:00Z");
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(t0);
+
+    const failing = scriptAdapter([(config) => respondWithStatus(config, 503, {})]);
+    apiClient.defaults.adapter = failing;
+    await settling(createTransactionForUi(PAYLOAD)).catch(() => {});
+    expect(createResendIsProtected(PAYLOAD)).toBe(true);
+
+    nowSpy.mockReturnValue(t0 + 11 * 60 * 1000);
+    expect(createResendIsProtected(PAYLOAD)).toBe(false);
+
+    const later = scriptAdapter([(config) => respondWithStatus(config, 201, { id: 40 }, REPLAY_HEADERS)]);
+    apiClient.defaults.adapter = later;
+    await createTransactionForUi(PAYLOAD);
+    expect(later.keys[0]).not.toBe(failing.keys[0]);
+  });
+
+  it("liberação externa da chave derruba a proteção na mesma hora", async () => {
+    await observeIdempotencySupport();
+    apiClient.defaults.adapter = scriptAdapter([(config) => respondWithStatus(config, 503, {})]);
+    await settling(createTransactionForUi(PAYLOAD)).catch(() => {});
+    expect(createResendIsProtected(PAYLOAD)).toBe(true);
+
+    releaseCreateIdempotencyKey(createTransactionPayloadFingerprint(PAYLOAD));
+    expect(createResendIsProtected(PAYLOAD)).toBe(false);
+  });
+});
+
+describe("createRetryDelayMs — orçamento do TOTAL dormido", () => {
+  function inFlightError(retryAfter) {
+    return new AxiosError("in flight", undefined, {}, {}, {
+      status: 409,
+      data: {},
+      statusText: "",
+      headers: { "retry-after": retryAfter },
+      config: {},
+    });
+  }
+
+  it("`null` quando a próxima espera estouraria o orçamento — é o sinal de desistir", () => {
+    // Antes só a espera INDIVIDUAL era limitada: um `Retry-After: 3600` dava
+    // 30s + 30s, ou seja ~1 min de drawer congelado com o botão desabilitado.
+    const err = inFlightError("3600");
+    expect(createRetryDelayMs(err, 1, { inFlight: true, spentMs: 0 })).toBe(10_000);
+    expect(createRetryDelayMs(err, 2, { inFlight: true, spentMs: 10_000 })).toBe(10_000);
+    expect(createRetryDelayMs(err, 3, { inFlight: true, spentMs: 20_000 })).toBeNull();
+  });
+
+  it("o 2s/4s/8s do contrato cabe inteiro no orçamento (14s < 20s)", () => {
+    const err = inFlightError("2");
+    expect(createRetryDelayMs(err, 1, { inFlight: true, spentMs: 0 })).toBe(2000);
+    expect(createRetryDelayMs(err, 2, { inFlight: true, spentMs: 2000 })).toBe(4000);
+    expect(createRetryDelayMs(err, 3, { inFlight: true, spentMs: 6000 })).toBe(8000);
+  });
+});
+
+describe("impressão digital — classes de equivalência alinhadas ao hash canônico do backend", () => {
+  it("campo ausente ≡ `null` ≡ `undefined` (o backend afrouxou; alinhar AUMENTA a proteção)", () => {
+    // O modal ora omite `card_id`, ora manda `null`. Antes essa diferença de
+    // FORMA gerava chave nova — lançamento novo onde deveria haver replay.
+    const base = createTransactionPayloadFingerprint(PAYLOAD);
+    expect(createTransactionPayloadFingerprint({ ...PAYLOAD, card_id: null })).toBe(base);
+    expect(createTransactionPayloadFingerprint({ ...PAYLOAD, card_id: undefined })).toBe(base);
+  });
+
+  it("data-hora ISO equivalente é o mesmo payload, mesmo reformatada no reenvio", () => {
+    const noon = createTransactionPayloadFingerprint({ ...PAYLOAD, transaction_date: "2026-08-20T12:00:00Z" });
+    expect(createTransactionPayloadFingerprint({ ...PAYLOAD, transaction_date: "2026-08-20T12:00:00.000Z" })).toBe(noon);
+    expect(createTransactionPayloadFingerprint({ ...PAYLOAD, transaction_date: "2026-08-20T09:00:00-03:00" })).toBe(noon);
+    // Instantes diferentes seguem diferentes.
+    expect(createTransactionPayloadFingerprint({ ...PAYLOAD, transaction_date: "2026-08-21T12:00:00Z" })).not.toBe(noon);
+    // Date-only não é o mesmo instante que uma data-hora: fica de fora.
+    expect(createTransactionPayloadFingerprint({ ...PAYLOAD, transaction_date: "2026-08-20" })).not.toBe(noon);
+  });
+
+  it("tipos diferentes continuam diferentes: `100` não é `\"100\"`", () => {
+    expect(createTransactionPayloadFingerprint({ value: 100 })).not.toBe(
+      createTransactionPayloadFingerprint({ value: "100" }),
+    );
+  });
+});
+
+describe("formatTransactionsApiError — código do servidor não indexa protótipo", () => {
+  it("`detail.error === \"__proto__\"` devolve STRING, não objeto (senão o React derruba o drawer)", () => {
+    // "Objects are not valid as a React child" com o drawer inteiro caindo:
+    // indexar objeto literal com string vinda da rede alcança a herança.
+    const err = new AxiosError("boom", undefined, {}, {}, {
+      status: 422,
+      data: { detail: { error: "__proto__", message: "x", type: "y" } },
+      statusText: "",
+      headers: {},
+      config: {},
+    });
+    expect(typeof formatTransactionsApiError(err)).toBe("string");
+  });
+
+  it.each(["constructor", "toString", "valueOf", "hasOwnProperty"])(
+    "`detail.error === \"%s\"` também devolve string",
+    (code) => {
+      const err = new AxiosError("boom", undefined, {}, {}, {
+        status: 422,
+        data: { detail: { error: code, message: "x", type: "y" } },
+        statusText: "",
+        headers: {},
+        config: {},
+      });
+      expect(typeof formatTransactionsApiError(err)).toBe("string");
+    },
+  );
 });

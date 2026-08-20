@@ -933,29 +933,39 @@ export async function downloadTransactionsCsvForUi(organizationId, options) {
  * dois deles não são culpa de quem está usando o app: são bug nosso, no
  * cliente. A mensagem diz o que fazer sem jogar jargão de HTTP na tela.
  */
-const IDEMPOTENCY_ERROR_MESSAGES = {
+const IDEMPOTENCY_ERROR_MESSAGES = new Map([
   // Mismatch = o servidor TEM registro dessa chave e considera o corpo
   // diferente. Como só reusamos chave quando a nossa impressão digital
   // garantiu payload idêntico, isso significa que a requisição anterior
   // chegou a ser processada — mandar "registre de novo" sem mais nada
   // empurraria a pessoa direto para a duplicata.
-  IDEMPOTENCY_KEY_PAYLOAD_MISMATCH:
+  [
+    "IDEMPOTENCY_KEY_PAYLOAD_MISMATCH",
     "Falha interna do aplicativo ao reenviar esta transação. O envio anterior chegou a ser processado — confira seu extrato antes de registrar de novo.",
+  ],
   // Chave malformada é recusada ANTES de qualquer gravação: nada foi criado.
-  INVALID_IDEMPOTENCY_KEY:
+  [
+    "INVALID_IDEMPOTENCY_KEY",
     "Falha interna do aplicativo ao registrar esta transação. Nada foi salvo. Atualize a página e registre de novo.",
+  ],
   // Só chega aqui depois de esgotadas as tentativas com espera crescente: é
   // reserva órfã, que responderia 409 pelas 24h inteiras. "Aguarde alguns
   // segundos" seria mentira — esperar não resolve.
-  IDEMPOTENCY_KEY_IN_FLIGHT:
+  [
+    "IDEMPOTENCY_KEY_IN_FLIGHT",
     "Outro envio deste mesmo lançamento ficou preso no servidor. Confira seu extrato: se a transação não estiver lá, registre de novo.",
-};
+  ],
+]);
 
 export function formatTransactionsApiError(error) {
+  // `Map` de propósito: `detail.error` é string vinda do servidor, e indexar um
+  // objeto literal com ela devolvia a herança do `Object.prototype` — um
+  // `detail.error === "__proto__"` fazia esta função retornar um OBJETO, e o
+  // React derrubava o drawer inteiro com "Objects are not valid as a React
+  // child". `Map.get` só enxerga o que foi posto nele.
   const idempotencyError = idempotencyErrorCodeOf(error);
-  if (idempotencyError && IDEMPOTENCY_ERROR_MESSAGES[idempotencyError]) {
-    return IDEMPOTENCY_ERROR_MESSAGES[idempotencyError];
-  }
+  const known = idempotencyError != null ? IDEMPOTENCY_ERROR_MESSAGES.get(idempotencyError) : undefined;
+  if (typeof known === "string") return known;
   return handleApiError(error);
 }
 
@@ -1514,9 +1524,14 @@ const CREATE_RETRY_BASE_DELAY_MS = 400;
 // chave que está prestes a virar resposta pronta.
 const CREATE_IN_FLIGHT_MAX_ATTEMPTS = 4;
 const CREATE_IN_FLIGHT_BASE_DELAY_MS = 2000;
-// Teto do respeito ao `Retry-After`: alto o suficiente para o 8s publicado
-// (e alguma folga), baixo o suficiente para não congelar a UI por minutos.
-const CREATE_RETRY_MAX_DELAY_MS = 30_000;
+// Teto POR ESPERA: acomoda o 8s publicado com folga sem deixar um
+// `Retry-After` absurdo (já vimos `3600`) congelar o drawer.
+const CREATE_RETRY_MAX_DELAY_MS = 10_000;
+// Teto do TOTAL dormido numa criação. Sem ele, "cada espera cabe no teto"
+// ainda somava minuto: dois `Retry-After: 3600` viravam 30s + 30s de botão
+// desabilitado. O orçamento é o que a pessoa efetivamente aguenta esperar
+// olhando "Enviando…", e cobre o 2s+4s+8s do contrato de in-flight.
+const CREATE_RETRY_TOTAL_BUDGET_MS = 20_000;
 
 /** Lê `detail.error` da resposta de erro; `null` quando não é esse formato. */
 export function idempotencyErrorCodeOf(error) {
@@ -1552,6 +1567,7 @@ export function isCreateTransactionErrorRetryable(error) {
  * `Retry-After` conforme a RFC: ou um número de SEGUNDOS, ou um HTTP-date.
  * As duas formas são aceitas — tratar a data como `NaN` e cair no backoff
  * curto martelaria justamente quem pediu pausa. `0` é válido (repetir já).
+ * Devolve a BASE do backoff, não a espera final (ver `createRetryDelayMs`).
  */
 function retryAfterMs(error, nowMs) {
   const raw = readResponseHeader(error?.response?.headers, "Retry-After");
@@ -1559,25 +1575,50 @@ function retryAfterMs(error, nowMs) {
   const trimmed = raw.trim();
   if (trimmed === "") return null;
 
-  if (/^\d+$/.test(trimmed)) {
-    return Math.min(Number(trimmed) * 1000, CREATE_RETRY_MAX_DELAY_MS);
-  }
+  if (/^\d+$/.test(trimmed)) return Number(trimmed) * 1000;
   const at = Date.parse(trimmed);
   if (Number.isNaN(at)) return null;
-  return Math.min(Math.max(at - nowMs, 0), CREATE_RETRY_MAX_DELAY_MS);
+  return Math.max(at - nowMs, 0);
 }
 
 /**
  * Espera antes da próxima tentativa. Pura (o `nowMs` entra por parâmetro) para
  * poder ser testada sem cronômetro: uma asserção de tempo real sobre 2s/4s/8s
  * estouraria o timeout do Vitest e ainda seria flaky sob carga.
+ *
+ * Duas decisões que já deram errado antes:
+ *
+ *  - `Retry-After` só é honrado no 409 in-flight, que é onde ele é
+ *    CONTRATUAL. Honrá-lo em 502/503/504 entregava o ritmo do drawer a um
+ *    header que qualquer proxy no caminho pode mandar: um `Retry-After: 3600`
+ *    num 503 travava a tela com o botão desabilitado.
+ *  - Com header presente, a tentativa CONTINUA contando. Antes o header
+ *    substituía o backoff inteiro e, como a API manda sempre `Retry-After: 2`,
+ *    o 2s/4s/8s publicado nos dois repositórios virava 2s/2s/2s — quatro POSTs
+ *    em seis segundos contra uma reserva órfã. O header passou a ser a BASE
+ *    do backoff exponencial, o que reproduz exatamente 2s/4s/8s.
  */
-export function createRetryDelayMs(error, attempt, { inFlight = false, nowMs = Date.now() } = {}) {
-  const fromHeader = retryAfterMs(error, nowMs);
-  if (fromHeader != null) return fromHeader;
-  const base = inFlight ? CREATE_IN_FLIGHT_BASE_DELAY_MS : CREATE_RETRY_BASE_DELAY_MS;
-  return Math.min(base * 2 ** (attempt - 1), CREATE_RETRY_MAX_DELAY_MS);
+export function createRetryDelayMs(
+  error,
+  attempt,
+  { inFlight = false, nowMs = Date.now(), spentMs = 0 } = {},
+) {
+  const fromHeader = inFlight ? retryAfterMs(error, nowMs) : null;
+  const base =
+    fromHeader ?? (inFlight ? CREATE_IN_FLIGHT_BASE_DELAY_MS : CREATE_RETRY_BASE_DELAY_MS);
+  const delay = Math.min(base * 2 ** (attempt - 1), CREATE_RETRY_MAX_DELAY_MS);
+  // `null` = desista. Limitar só a espera INDIVIDUAL ainda somava um minuto de
+  // drawer congelado quando o servidor (ou um proxy no caminho) pedia pausas
+  // longas; o orçamento é sobre o TOTAL dormido nesta criação.
+  if (spentMs + delay > CREATE_RETRY_TOTAL_BUDGET_MS) return null;
+  return delay;
 }
+
+/**
+ * Data-hora ISO-8601 COMPLETA (com `T` e hora). Date-only fica de fora de
+ * propósito: `2026-08-20` e `2026-08-20T12:00:00` não são o mesmo instante.
+ */
+const ISO_DATETIME_RE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})?$/;
 
 /**
  * Serializa estável (chaves ordenadas) para comparar payloads por conteúdo.
@@ -1586,13 +1627,32 @@ export function createRetryDelayMs(error, attempt, { inFlight = false, nowMs = D
  * representa. `Object.keys` num `Date` devolve `[]`, então sem esta guarda
  * todo `Date` viraria `{}` e duas transações de DIAS DIFERENTES dividiriam a
  * mesma impressão digital — a segunda seria engolida como replay da primeira.
- * `undefined` como VALOR de campo segue a regra do `JSON.stringify` (campo
- * omitido), porque é exatamente isso que vai no corpo da requisição.
+ *
+ * As classes de equivalência seguem as do hash canônico do backend, para as
+ * duas pontas concordarem sobre "é o mesmo payload":
+ *
+ *  - campo AUSENTE ≡ campo `null` ≡ campo `undefined`. O backend afrouxou
+ *    isso, e alinhar aumenta a proteção: o modal ora omite `card_id`, ora
+ *    manda `null`, e antes essa diferença de forma gerava chave NOVA — ou
+ *    seja, um lançamento novo onde deveria haver replay.
+ *  - data-hora ISO equivalente ≡ mesma data-hora. `T12:00:00`, `Z`, `.000Z`
+ *    e offset equivalente batem no mesmo hash lá; canonizamos para o instante
+ *    para não gerar chave nova só porque o reenvio reformatou a data.
+ *  - tipos DIFERENTES continuam diferentes: `100` não é `"100"`.
  */
 function stableStringify(value) {
   if (value === null) return "null";
   const type = typeof value;
-  if (type === "string" || type === "boolean") return JSON.stringify(value);
+  if (type === "boolean") return JSON.stringify(value);
+  if (type === "string") {
+    if (ISO_DATETIME_RE.test(value)) {
+      const at = Date.parse(value);
+      // Canoniza para o instante — mas só quando ele é interpretável. Uma
+      // string com cara de data e valor impossível segue comparada como texto.
+      if (!Number.isNaN(at)) return `"@${at}"`;
+    }
+    return JSON.stringify(value);
+  }
   if (type === "number") {
     if (!Number.isFinite(value)) {
       throw new TypeError(`Payload de transação com número não-JSON: ${value}`);
@@ -1617,7 +1677,9 @@ function stableStringify(value) {
   const parts = [];
   for (const key of Object.keys(value).sort()) {
     const entry = value[key];
-    if (entry === undefined) continue; // omitido do corpo, como no JSON.stringify
+    // `undefined` some do corpo (regra do `JSON.stringify`) e `null` é
+    // idêntico a omitir para o backend — as três formas colapsam aqui.
+    if (entry === undefined || entry === null) continue;
     parts.push(`${JSON.stringify(key)}:${stableStringify(entry)}`);
   }
   return `{${parts.join(",")}}`;
@@ -1669,29 +1731,47 @@ export function releaseCreateIdempotencyKey(fingerprint) {
 }
 
 /**
- * Impressão digital do payload de criação, por CONTEÚDO (a ordem das chaves
- * do objeto não conta — o modal remonta o payload do zero a cada clique).
+ * Impressão digital do payload de criação, por CONTEÚDO. Exportada para o
+ * modal poder LIBERAR a chave de uma tentativa que ele abandonou
+ * (`releaseCreateIdempotencyKey`) — e só para isso.
  *
- * Exportada porque o modal precisa da MESMA noção de "ainda é a mesma
- * tentativa" que usamos aqui para decidir a chave: enquanto a impressão
- * digital não muda, o reenvio reaproveita a chave e não pode duplicar; quando
- * muda, é lançamento novo e a UI volta a avisar sobre o extrato. Sendo a
- * mesma função pura dos dois lados, as duas decisões não têm como divergir —
- * e o modal não fica acoplado ao estado de módulo daqui.
+ * Para responder "reenviar isto duplica?", use `createResendIsProtected`. O
+ * modal já teve a própria noção de proteção, comparando fingerprints com um
+ * `ref`; ela divergia deste módulo toda vez que a proteção caía por FORA da
+ * mudança de payload (TTL vencido, suporte do servidor ausente, liberação
+ * externa) — e em toda divergência a UI escolhia o lado inseguro.
  */
 export function createTransactionPayloadFingerprint(payload) {
   return stableStringify(payload);
 }
 
 /**
- * `true` quando reenviar EXATAMENTE este payload reaproveita a chave retida
- * da tentativa que falhou (o backend responderia com replay em vez de criar
- * um segundo lançamento). Usada nos testes para inspecionar a retenção.
+ * Existe chave retida (e ainda dentro do TTL) para este payload? Fato cru
+ * sobre o mapa, sem opinião sobre o servidor — os testes usam para inspecionar
+ * a retenção. A UI deve perguntar a `createResendIsProtected`.
  */
-export function createRetryIsProtectedFor(payload) {
+export function hasRetainedCreateIdempotencyKey(payload) {
   const now = Date.now();
   pruneRetainedCreateKeys(now);
   return retainedCreateKeys.has(stableStringify(payload));
+}
+
+/**
+ * A ÚNICA pergunta que a UI deve fazer: reenviar exatamente este payload é
+ * garantidamente um replay, ou pode criar um segundo lançamento?
+ *
+ * Três condições, e todas moram aqui de propósito:
+ *  1. o servidor precisa ter provado que implementa idempotência — sem isso a
+ *     chave é um header ignorado e reenviar duplica como sempre duplicou;
+ *  2. precisa haver chave retida para este payload;
+ *  3. ela precisa estar dentro do TTL (a poda roda na consulta).
+ *
+ * Qualquer resposta `false` faz a UI voltar a pedir confirmação — que é o
+ * comportamento que já está em produção hoje, e o lado seguro do erro.
+ */
+export function createResendIsProtected(payload) {
+  if (!hasObservedIdempotencySupport()) return false;
+  return hasRetainedCreateIdempotencyKey(payload);
 }
 
 function idempotencyKeyForAttempt(fingerprint) {
@@ -1760,6 +1840,7 @@ function releasingKey(error, fingerprint) {
 export async function createTransactionForUi(payload) {
   const fingerprint = stableStringify(payload);
   const idempotencyKey = idempotencyKeyForAttempt(fingerprint);
+  let spentDelayMs = 0;
 
   for (let attempt = 1; ; attempt += 1) {
     try {
@@ -1790,23 +1871,25 @@ export async function createTransactionForUi(payload) {
 
       const inFlight = idempotencyError === IDEMPOTENCY_IN_FLIGHT;
       const maxAttempts = inFlight ? CREATE_IN_FLIGHT_MAX_ATTEMPTS : CREATE_MAX_ATTEMPTS;
-      if (attempt >= maxAttempts) {
-        // In-flight que não sai do lugar é reserva órfã: ela responde 409
-        // pelas 24h inteiras, então manter a chave retida deixaria a pessoa
-        // presa num "aguarde alguns segundos" que nunca resolve. Liberar aqui
-        // faz o próximo "Tentar novamente" sair com chave nova — e a UI
-        // avisa sobre o extrato, porque aí pode mesmo duplicar.
-        throw inFlight ? releasingKey(err, fingerprint) : err;
-      }
+      // Desistir de um in-flight LIBERA a chave: reserva órfã responde 409
+      // pelas 24h inteiras, então mantê-la retida prenderia a pessoa num
+      // "aguarde alguns segundos" que nunca resolve. Liberando, o próximo
+      // "Tentar novamente" sai com chave nova — e a UI avisa sobre o extrato,
+      // porque aí pode mesmo duplicar.
+      const giveUpError = () => (inFlight ? releasingKey(err, fingerprint) : err);
+
+      if (attempt >= maxAttempts) throw giveUpError();
       if (!isCreateTransactionErrorRetryable(err)) throw err;
       // Retry só depois que o servidor provou que implementa idempotência.
       // Sem essa prova (frontend no ar antes da API), repetir volta a ser o
       // risco de duplicata da issue #102.
       if (!inFlight && !hasObservedIdempotencySupport()) throw err;
 
-      await new Promise((resolve) =>
-        setTimeout(resolve, createRetryDelayMs(err, attempt, { inFlight })),
-      );
+      const delay = createRetryDelayMs(err, attempt, { inFlight, spentMs: spentDelayMs });
+      if (delay == null) throw giveUpError(); // orçamento total esgotado
+      spentDelayMs += delay;
+
+      await new Promise((resolve) => setTimeout(resolve, delay));
     }
   }
 }
