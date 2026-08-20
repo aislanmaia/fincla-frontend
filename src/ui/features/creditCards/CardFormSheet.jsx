@@ -6,6 +6,34 @@ import { M_MONO } from "../moodV4";
 import { CARD_BRAND_OPTIONS } from "../../data/creditCardsAdapter.js";
 
 /**
+ * Campo de texto do sheet.
+ *
+ * Definido no escopo do MÓDULO de propósito: enquanto morava dentro de
+ * `CardFormSheet`, cada tecla criava um tipo de componente novo, o React
+ * desmontava o `<input>` e remontava outro — o campo perdia o foco a cada
+ * caractere e só o primeiro era aceito. Ver `CardFormSheet.rtl.test.jsx`.
+ */
+function FI({ val, set, ph, type = "text", inputMode, maxLength }) {
+  return (
+    <div
+      style={{ display: "flex", alignItems: "center", padding: "9px 12px", border: `1px solid ${T.border}`, borderRadius: 9, background: T.surface, transition: "border-color 0.15s" }}
+      onFocusCapture={(e) => (e.currentTarget.style.borderColor = T.blue)}
+      onBlurCapture={(e) => (e.currentTarget.style.borderColor = T.border)}
+    >
+      <input
+        value={val}
+        onChange={(e) => set(e.target.value)}
+        placeholder={ph}
+        type={type}
+        inputMode={inputMode}
+        maxLength={maxLength}
+        style={{ ...G, flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: 13, color: T.ink }}
+      />
+    </div>
+  );
+}
+
+/**
  * Sheet "Adicionar / Editar cartão" usado pela `CartoesPage`.
  *
  * Permanece "stateless": todo o estado de rascunho (`draft*`), os handlers
@@ -38,24 +66,10 @@ export function CardFormSheet({
   onCancel,
 }) {
   if (!open) return null;
+  // `last4` precisa estar completo: o backend exige exatamente 4 dígitos e
+  // salvar com 1..3 só devolveria erro de validação.
   const canSave =
-    draftIssuer && draftName && draftLast4 && draftLimit && draftDueDay;
-
-  const FI = ({ val, set, ph, type = "text" }) => (
-    <div
-      style={{ display: "flex", alignItems: "center", padding: "9px 12px", border: `1px solid ${T.border}`, borderRadius: 9, background: T.surface, transition: "border-color 0.15s" }}
-      onFocusCapture={(e) => (e.currentTarget.style.borderColor = T.blue)}
-      onBlurCapture={(e) => (e.currentTarget.style.borderColor = T.border)}
-    >
-      <input
-        value={val}
-        onChange={(e) => set(e.target.value)}
-        placeholder={ph}
-        type={type}
-        style={{ ...G, flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontSize: 13, color: T.ink }}
-      />
-    </div>
-  );
+    draftIssuer && draftName && String(draftLast4).length === 4 && draftLimit && draftDueDay;
 
   const inner = (
     <>
@@ -100,7 +114,15 @@ export function CardFormSheet({
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div>
             <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>4 últimos dígitos</div>
-            <FI val={draftLast4} set={setDraftLast4} ph="1234" type="number" />
+            {/* Só dígitos e no máximo 4: o backend exige exatamente 4 e
+                devolveria 422 para qualquer outra coisa. */}
+            <FI
+              val={draftLast4}
+              set={(v) => setDraftLast4(String(v).replace(/\D/g, "").slice(0, 4))}
+              ph="1234"
+              inputMode="numeric"
+              maxLength={4}
+            />
           </div>
           <div>
             <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Bandeira</div>

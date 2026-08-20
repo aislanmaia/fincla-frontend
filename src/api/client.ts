@@ -2,7 +2,9 @@
 import axios, { AxiosError } from 'axios';
 import {
   ApiErrorBody,
+  GENERIC_VALIDATION_PT,
   humanizeDetailString,
+  humanizePydanticDetailEntry,
   isLegacyError,
   isSafeError,
   sanitizeUnknownErrorMessage,
@@ -111,26 +113,26 @@ function translateApiMessage(message: string, errorCode?: string): string {
   );
 }
 
+/**
+ * `detail` em array é a forma de validação do FastAPI, e o texto vem sempre
+ * em inglês. Traduzimos aqui (ver `humanizePydanticDetailEntry`) em vez de
+ * repassar cru — foi um "String should have at least 4 characters" que
+ * apareceu para um usuário real no onboarding.
+ */
 function messagesFromPydanticDetailArray(
   detail: unknown[],
-  httpStatus: number | undefined,
+  _httpStatus: number | undefined,
 ): string {
-  const msgs = detail
-    .map((d) => {
-      if (typeof d === 'object' && d !== null && 'msg' in d) {
-        const raw = String((d as { msg?: unknown }).msg ?? '');
-        return humanizeDetailString(raw, httpStatus);
-      }
-      if (typeof d === 'object' && d !== null && 'message' in d) {
-        const raw = String((d as { message?: unknown }).message ?? '');
-        return humanizeDetailString(raw, httpStatus);
-      }
-      return humanizeDetailString(String(d), httpStatus);
-    })
-    .filter((s): s is string => Boolean(s && s.length > 0));
-  return msgs.length > 0
-    ? msgs.join('. ')
-    : 'Verifique os dados informados e tente novamente.';
+  const seen = new Set<string>();
+  const msgs: string[] = [];
+  for (const entry of detail) {
+    const msg = humanizePydanticDetailEntry(entry);
+    if (msg && !seen.has(msg)) {
+      seen.add(msg);
+      msgs.push(msg);
+    }
+  }
+  return msgs.length > 0 ? msgs.join(' ') : GENERIC_VALIDATION_PT;
 }
 
 /**

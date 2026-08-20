@@ -5,8 +5,10 @@ import {
   createRecurringSeries,
   formatOnboardingApiError,
   getMyOrganizations,
+  listRecurringSeries,
   listTags,
   updateMyProfile,
+  updateOrganization,
   updateTag,
 } from "../../data/onboardingAdapter";
 import { buildCreateCreditCardPayload } from "../../data/creditCardsAdapter.js";
@@ -113,18 +115,104 @@ function buildOnboardingRecurringPayload(data) {
   };
 }
 
+/**
+ * Últimos 4 dígitos informados no passo de cartão, normalizados.
+ *
+ * O backend exige EXATAMENTE 4 dígitos (`CreateCreditCardRequest.last4`,
+ * `min_length=4`). Enquanto este builder mandava `""` fixo, todo onboarding
+ * com cartão morria em 422 e derrubava o fluxo inteiro.
+ */
+function onboardingCardLast4(data) {
+  return String(data?.card4 ?? "").replace(/\D/g, "").slice(-4);
+}
+
 function buildOnboardingCreditCardPayload(data, organizationId) {
   if (data?.temCartao !== "sim" || !data?.cardNome?.trim()) return null;
+
+  const last4 = onboardingCardLast4(data);
+  // Sem os 4 dígitos não dá para criar o cartão. Preferimos não criar (o
+  // usuário cadastra depois em Cartões) a inventar "0000" no banco dele.
+  if (last4.length !== 4) return null;
 
   return buildCreateCreditCardPayload({
     organizationId,
     brand: data.cardNome.trim(),
     displayName: data.cardNome.trim(),
-    last4Digits: "",
+    last4Digits: last4,
     limitInput: data.cardLim || "",
     dueDay: data.cardVenc || "",
     closingDay: "",
   });
+}
+
+/**
+ * Organização a usar nesta submissão.
+ *
+ * O onboarding é uma sequência de chamadas independentes (org → receita →
+ * cartão → categorias → convites → perfil) e não existe transação que
+ * abranja todas. Quando um passo do meio falhava, o usuário clicava de novo
+ * e a org anterior virava lixo: um usuário chegou a acumular 4 orgs
+ * idênticas em produção. Enquanto `onboarding_completed` é falso, qualquer
+ * org da qual ele já é owner só pode ter vindo de uma tentativa anterior —
+ * então reusamos a mais recente em vez de criar outra.
+ */
+async function resolveOnboardingOrganization(createPayload) {
+  let existing = null;
+  try {
+    const response = await getMyOrganizations();
+    const owned = (response?.organizations ?? [])
+      .filter((entry) => entry?.membership?.role === "owner" && entry?.organization?.id);
+    if (owned.length) {
+      existing = owned
+        .slice()
+        .sort((a, b) =>
+          String(a.organization.created_at ?? "").localeCompare(
+            String(b.organization.created_at ?? ""),
+          ),
+        )
+        .at(-1).organization;
+    }
+  } catch {
+    // Não conseguir listar não pode impedir o onboarding — segue criando.
+    existing = null;
+  }
+
+  if (!existing) {
+    const created = await createOrganization(createPayload);
+    return { organization: created.organization, reused: false };
+  }
+
+  // Reaproveita, mas com as respostas desta tentativa (ele pode ter mudado
+  // o nome ou o tipo antes de tentar de novo).
+  const patch = {
+    name: createPayload.name,
+    description: createPayload.description,
+  };
+  if (createPayload.org_type) patch.org_type = createPayload.org_type;
+  if (createPayload.monthly_income != null) {
+    patch.monthly_income = createPayload.monthly_income;
+  }
+  try {
+    const updated = await updateOrganization(existing.id, patch);
+    return { organization: updated?.id ? updated : { ...existing, ...patch }, reused: true };
+  } catch {
+    return { organization: existing, reused: true };
+  }
+}
+
+/** Já existe uma receita recorrente equivalente? Evita duplicar em retry. */
+async function hasEquivalentRecurringSeries(organizationId, payload) {
+  try {
+    const response = await listRecurringSeries(organizationId);
+    return (response?.series ?? []).some(
+      (serie) =>
+        serie?.type === payload.type &&
+        String(serie?.description ?? "").trim().toLowerCase() ===
+          payload.description.trim().toLowerCase(),
+    );
+  } catch {
+    return false;
+  }
 }
 
 export async function submitOnboarding(data) {
@@ -134,61 +222,93 @@ export async function submitOnboarding(data) {
     throw new Error("Informe o nome da organizacao para concluir o onboarding.");
   }
 
+  const monthlyIncome =
+    data.temRec === "sim" ? parseMoneyInput(data.recVal) : null;
+
+  const createPayload = {
+    name: orgName,
+    description: buildOrganizationDescription(data.orgTipo),
+  };
+  if (data.orgTipo) {
+    createPayload.org_type = data.orgTipo;
+  }
+  if (monthlyIncome != null) {
+    createPayload.monthly_income = monthlyIncome;
+  }
+
+  let organization;
+  let reused;
   try {
-    const monthlyIncome =
-      data.temRec === "sim" ? parseMoneyInput(data.recVal) : null;
-
-    const createPayload = {
-      name: orgName,
-      description: buildOrganizationDescription(data.orgTipo),
-    };
-    if (data.orgTipo) {
-      createPayload.org_type = data.orgTipo;
-    }
-    if (monthlyIncome != null) {
-      createPayload.monthly_income = monthlyIncome;
-    }
-
-    const created = await createOrganization(createPayload);
-
-    const operations = [];
-
-    const recurringPayload = buildOnboardingRecurringPayload(data);
-    if (recurringPayload) {
-      operations.push(
-        createRecurringSeries(created.organization.id, recurringPayload),
-      );
-    }
-
-    const creditCardPayload = buildOnboardingCreditCardPayload(
-      data,
-      created.organization.id,
-    );
-    if (creditCardPayload) {
-      operations.push(createCreditCard(creditCardPayload));
-    }
-
-    await Promise.all(operations);
-    await persistOnboardingCategories(created.organization.id, data?.cats);
-
-    const inviteEmails = collectInvitationEmails(data);
-    if (inviteEmails.length) {
-      await createOrganizationInvitations(created.organization.id, inviteEmails);
-    }
-
-    await updateMyProfile({ onboarding_completed: true });
-
-    const organizationsResponse = await getMyOrganizations().catch(() => ({
-      organizations: [],
-      total: 0,
-    }));
-
-    return {
-      organization: created.organization,
-      activeOrgId: created.organization.id,
-      organizations: organizationsResponse.organizations ?? [],
-    };
+    ({ organization, reused } = await resolveOnboardingOrganization(createPayload));
   } catch (error) {
+    // A organização é o único passo obrigatório: sem ela não há onboarding.
     throw new Error(formatOnboardingApiError(error));
   }
+
+  if (!organization?.id) {
+    // Resposta fora do contrato: parar aqui é melhor do que seguir gravando
+    // receita e cartão em `undefined`.
+    throw new Error("Nao foi possivel criar sua organizacao. Tente novamente.");
+  }
+
+  // Daqui em diante nada pode derrubar o onboarding. Cada etapa é opcional e
+  // refazível dentro do app; falhar uma delas não pode prender o usuário na
+  // tela de configuração nem deixar organização órfã para trás.
+  const warnings = [];
+  const runOptionalStep = async (warning, step) => {
+    try {
+      await step();
+    } catch {
+      warnings.push(warning);
+    }
+  };
+
+  const recurringPayload = buildOnboardingRecurringPayload(data);
+  if (recurringPayload) {
+    await runOptionalStep("Não foi possível salvar a receita recorrente.", async () => {
+      if (reused && (await hasEquivalentRecurringSeries(organization.id, recurringPayload))) {
+        return;
+      }
+      await createRecurringSeries(organization.id, recurringPayload);
+    });
+  }
+
+  const creditCardPayload = buildOnboardingCreditCardPayload(data, organization.id);
+  if (creditCardPayload) {
+    await runOptionalStep("Não foi possível salvar o cartão.", () =>
+      createCreditCard(creditCardPayload),
+    );
+  }
+
+  await runOptionalStep("Não foi possível destacar as categorias escolhidas.", () =>
+    persistOnboardingCategories(organization.id, data?.cats),
+  );
+
+  const inviteEmails = collectInvitationEmails(data);
+  if (inviteEmails.length) {
+    await runOptionalStep("Não foi possível enviar os convites.", () =>
+      createOrganizationInvitations(organization.id, inviteEmails),
+    );
+  }
+
+  try {
+    await updateMyProfile({ onboarding_completed: true });
+  } catch (error) {
+    // Sem esta marca o app devolve o usuário ao onboarding no próximo login,
+    // e aí sim vale interromper para ele tentar de novo (agora sem duplicar
+    // organização, porque a próxima tentativa reusa a que acabou de criar).
+    throw new Error(formatOnboardingApiError(error));
+  }
+
+  const organizationsResponse = await getMyOrganizations().catch(() => ({
+    organizations: [],
+    total: 0,
+  }));
+
+  return {
+    organization,
+    activeOrgId: organization.id,
+    organizations: organizationsResponse.organizations ?? [],
+    warnings,
+  };
 }

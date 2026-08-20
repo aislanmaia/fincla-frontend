@@ -78,6 +78,7 @@ export const OnboardingFlow = ({
   const [cats,setCats]         = useState(["moradia","alimentacao","transporte"]);
   const [temCartao,setTem]     = useState(null);
   const [cardNome,setCardNome] = useState("");
+  const [card4,setCard4]       = useState("");
   const [cardLim,setCardLim]   = useState("");
   const [cardVenc,setCardVenc] = useState("");
   const [temRec,setTemRec]     = useState(null);
@@ -96,7 +97,9 @@ export const OnboardingFlow = ({
     welcome:    true,
     org:        orgNome.trim().length>=2,
     categorias: cats.length>=1,
-    cartoes:    temCartao!==null,
+    // Cartão só é criado com os 4 dígitos — o backend exige exatamente 4.
+    // Quem não quer informar agora deixa o nome vazio ("Preencher depois").
+    cartoes:    temCartao!==null && (temCartao!=="sim" || !cardNome.trim() || card4.length===4),
     receita:    temRec!==null,
     membros:    true,
     pronto:     true,
@@ -317,12 +320,21 @@ export const OnboardingFlow = ({
                       textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:12}}>Primeiro cartão</div>
                     <div style={{display:"flex",flexDirection:"column",gap:9}}>
                       <SI value={cardNome} onChange={e=>setCardNome(e.target.value)} placeholder="Nome do cartão (ex: Nubank Roxinho)"accent={cfg.accent} accentBg={cfg.accentBg}/>
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
+                      <div style={{display:"grid",gridTemplateColumns:mobile?"1fr":"0.85fr 1fr 1fr",gap:9}}>
+                        <SI value={card4} onChange={e=>setCard4(e.target.value.replace(/\D/g,"").slice(0,4))} placeholder="4 últimos dígitos" accent={cfg.accent} accentBg={cfg.accentBg}/>
                         <SI value={cardLim} onChange={e=>setCardLim(e.target.value)} placeholder="Limite" pre="R$"accent={cfg.accent} accentBg={cfg.accentBg}/>
                         <SI value={cardVenc} onChange={e=>setCardVenc(e.target.value)} placeholder="Dia do vencimento"accent={cfg.accent} accentBg={cfg.accentBg}/>
                       </div>
                     </div>
-                    <button onClick={next} style={{...G,fontSize:11,color:T.inkLight,background:"none",border:"none",cursor:"pointer",marginTop:10,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:3}}>
+                    {cardNome.trim()&&card4.length!==4&&(
+                      <div className="fin" style={{...G,fontSize:11,color:T.amber,marginTop:9,lineHeight:1.5}}>
+                        Informe os 4 últimos dígitos do cartão — é assim que o Fincla reconhece as compras dele.
+                      </div>
+                    )}
+                    {/* Limpa o rascunho de propósito: meio cartão preenchido
+                        não vira cartão nenhum, e deixar o nome ali daria a
+                        impressão de que algo foi salvo. */}
+                    <button onClick={()=>{setCardNome("");setCard4("");setCardLim("");setCardVenc("");next();}} style={{...G,fontSize:11,color:T.inkLight,background:"none",border:"none",cursor:"pointer",marginTop:10,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:3}}>
                       Preencher depois →
                     </button>
                   </div>
@@ -548,7 +560,7 @@ export const OnboardingFlow = ({
                       {errorMessage}
                     </div>
                   )}
-                  <button onClick={()=>onComplete({ orgNome, orgTipo, cats, temCartao, cardNome, cardLim, cardVenc, temRec, recDesc, recVal, recDia, recTipo, membros: membros.filter(m=>m.trim()) })} disabled={isSubmitting} style={{
+                  <button onClick={()=>onComplete({ orgNome, orgTipo, cats, temCartao, cardNome, card4, cardLim, cardVenc, temRec, recDesc, recVal, recDia, recTipo, membros: membros.filter(m=>m.trim()) })} disabled={isSubmitting} style={{
                     ...G,flex:1,padding:"14px 22px",borderRadius:11,border:"none",
                     fontSize:14,fontWeight:800,cursor:isSubmitting?"not-allowed":"pointer",
                     background:isSubmitting?T.inkGhost:T.ink,color:"#fff",

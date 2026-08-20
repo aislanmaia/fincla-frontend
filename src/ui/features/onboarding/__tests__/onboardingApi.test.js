@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   listTags: vi.fn(),
   updateTag: vi.fn(),
   createOrganizationInvitations: vi.fn(),
+  updateOrganization: vi.fn(),
+  listRecurringSeries: vi.fn(),
   formatOnboardingApiError: vi.fn((error) => String(error)),
 }));
 
@@ -21,6 +23,8 @@ vi.mock("../../../data/onboardingAdapter", () => ({
   listTags: mocks.listTags,
   updateTag: mocks.updateTag,
   createOrganizationInvitations: mocks.createOrganizationInvitations,
+  updateOrganization: mocks.updateOrganization,
+  listRecurringSeries: mocks.listRecurringSeries,
   formatOnboardingApiError: mocks.formatOnboardingApiError,
 }));
 
@@ -77,6 +81,8 @@ describe("submitOnboarding", () => {
     });
     mocks.updateTag.mockResolvedValue({ id: "t-x" });
     mocks.createOrganizationInvitations.mockResolvedValue({ invitations: [] });
+    mocks.updateOrganization.mockResolvedValue({ id: "org-1", name: "Casa" });
+    mocks.listRecurringSeries.mockResolvedValue({ series: [] });
   });
 
   it("persiste a receita recorrente configurada no onboarding", async () => {
@@ -112,6 +118,7 @@ describe("submitOnboarding", () => {
       orgTipo: "couple",
       temCartao: "sim",
       cardNome: "Nubank Roxinho",
+      card4: "1234",
       cardLim: "5.000,00",
       cardVenc: "10",
       temRec: "nao",
@@ -119,7 +126,7 @@ describe("submitOnboarding", () => {
 
     expect(mocks.createCreditCard).toHaveBeenCalledWith({
       organization_id: "org-1",
-      last4: "",
+      last4: "1234",
       brand: "Nubank Roxinho",
       due_day: 10,
       description: "Nubank Roxinho",
@@ -180,6 +187,7 @@ describe("submitOnboarding", () => {
       recDia: "10",
       temCartao: "sim",
       cardNome: "Nubank Roxinho",
+      card4: "1234",
       cardLim: "5.000,00",
       cardVenc: "10",
     });
@@ -220,5 +228,146 @@ describe("submitOnboarding", () => {
     const profileOrder = mocks.updateMyProfile.mock.invocationCallOrder[0];
     const inviteOrder = mocks.createOrganizationInvitations.mock.invocationCallOrder[0];
     expect(profileOrder).toBeGreaterThan(inviteOrder);
+  });
+
+  it("nao cria cartao quando os 4 digitos nao foram informados", async () => {
+    await submitOnboarding({
+      orgNome: "Casa",
+      orgTipo: "couple",
+      temCartao: "sim",
+      cardNome: "Nubank Roxinho",
+      card4: "12",
+      cardLim: "5.000,00",
+      cardVenc: "10",
+      temRec: "nao",
+    });
+
+    expect(mocks.createCreditCard).not.toHaveBeenCalled();
+    expect(mocks.updateMyProfile).toHaveBeenCalledWith({ onboarding_completed: true });
+  });
+
+  it("reusa a organizacao de uma tentativa anterior em vez de criar outra", async () => {
+    mocks.getMyOrganizations.mockResolvedValue({
+      organizations: [
+        {
+          organization: { id: "org-antiga", name: "Casa", created_at: "2026-08-20T01:11:41" },
+          membership: { id: "m-1", role: "owner", created_at: "2026-08-20T01:11:41" },
+        },
+      ],
+      total: 1,
+    });
+    mocks.updateOrganization.mockResolvedValue({ id: "org-antiga", name: "Casa Nova" });
+
+    const result = await submitOnboarding({
+      orgNome: "Casa Nova",
+      orgTipo: "couple",
+      temRec: "nao",
+      temCartao: "nao",
+    });
+
+    expect(mocks.createOrganization).not.toHaveBeenCalled();
+    expect(mocks.updateOrganization).toHaveBeenCalledWith(
+      "org-antiga",
+      expect.objectContaining({ name: "Casa Nova", org_type: "couple" }),
+    );
+    expect(result.activeOrgId).toBe("org-antiga");
+  });
+
+  it("reusa a organizacao mais recente quando ha varias de tentativas anteriores", async () => {
+    mocks.getMyOrganizations.mockResolvedValue({
+      organizations: [
+        {
+          organization: { id: "org-1a", name: "Casa", created_at: "2026-08-20T01:11:41" },
+          membership: { id: "m-1", role: "owner", created_at: "2026-08-20T01:11:41" },
+        },
+        {
+          organization: { id: "org-2a", name: "Casa", created_at: "2026-08-20T01:15:33" },
+          membership: { id: "m-2", role: "owner", created_at: "2026-08-20T01:15:33" },
+        },
+      ],
+      total: 2,
+    });
+
+    await submitOnboarding({ orgNome: "Casa", orgTipo: "couple", temRec: "nao", temCartao: "nao" });
+
+    expect(mocks.createOrganization).not.toHaveBeenCalled();
+    expect(mocks.updateOrganization).toHaveBeenCalledWith("org-2a", expect.anything());
+  });
+
+  it("ignora organizacao em que o usuario nao e owner", async () => {
+    mocks.getMyOrganizations.mockResolvedValue({
+      organizations: [
+        {
+          organization: { id: "org-de-terceiro", name: "Time", created_at: "2026-08-01T10:00:00" },
+          membership: { id: "m-9", role: "member", created_at: "2026-08-01T10:00:00" },
+        },
+      ],
+      total: 1,
+    });
+
+    await submitOnboarding({ orgNome: "Casa", orgTipo: "couple", temRec: "nao", temCartao: "nao" });
+
+    expect(mocks.createOrganization).toHaveBeenCalled();
+    expect(mocks.updateOrganization).not.toHaveBeenCalled();
+  });
+
+  it("conclui o onboarding mesmo quando o cartao falha, e devolve o aviso", async () => {
+    mocks.createCreditCard.mockRejectedValue(new Error("422"));
+
+    const result = await submitOnboarding({
+      orgNome: "Casa",
+      orgTipo: "couple",
+      temCartao: "sim",
+      cardNome: "Nubank Roxinho",
+      card4: "1234",
+      cardLim: "5.000,00",
+      cardVenc: "10",
+      temRec: "nao",
+    });
+
+    expect(mocks.updateMyProfile).toHaveBeenCalledWith({ onboarding_completed: true });
+    expect(result.warnings).toEqual(["Não foi possível salvar o cartão."]);
+  });
+
+  it("conclui o onboarding mesmo quando as categorias falham", async () => {
+    mocks.listTags.mockRejectedValue(new Error("500"));
+
+    const result = await submitOnboarding({
+      orgNome: "Casa",
+      orgTipo: "couple",
+      cats: ["moradia"],
+      temRec: "nao",
+      temCartao: "nao",
+    });
+
+    expect(mocks.updateMyProfile).toHaveBeenCalledWith({ onboarding_completed: true });
+    expect(result.warnings).toEqual(["Não foi possível destacar as categorias escolhidas."]);
+  });
+
+  it("nao duplica a receita recorrente ao reusar organizacao", async () => {
+    mocks.getMyOrganizations.mockResolvedValue({
+      organizations: [
+        {
+          organization: { id: "org-antiga", name: "Casa", created_at: "2026-08-20T01:11:41" },
+          membership: { id: "m-1", role: "owner", created_at: "2026-08-20T01:11:41" },
+        },
+      ],
+      total: 1,
+    });
+    mocks.listRecurringSeries.mockResolvedValue({
+      series: [{ id: "rs-1", type: "income", description: "Salário" }],
+    });
+
+    await submitOnboarding({
+      orgNome: "Casa",
+      orgTipo: "couple",
+      temRec: "sim",
+      recDesc: "Salário",
+      recVal: "12.000,00",
+      recDia: "5",
+      temCartao: "nao",
+    });
+
+    expect(mocks.createRecurringSeries).not.toHaveBeenCalled();
   });
 });

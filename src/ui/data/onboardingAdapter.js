@@ -7,7 +7,7 @@ import {
   getMyOrganizations,
   updateOrganization,
 } from "../../api/organizations";
-import { createRecurringSeries } from "../../api/recurringSeries";
+import { createRecurringSeries, listRecurringSeries } from "../../api/recurringSeries";
 import { createTag, listTags, listTagTypes, updateTag } from "../../api/tags";
 
 export {
@@ -17,6 +17,7 @@ export {
   createRecurringSeries,
   createTag,
   getMyOrganizations,
+  listRecurringSeries,
   listTags,
   listTagTypes,
   updateMyProfile,
