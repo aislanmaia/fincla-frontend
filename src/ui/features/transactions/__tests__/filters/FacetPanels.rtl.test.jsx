@@ -152,11 +152,17 @@ describe("<CategoryPanel>", () => {
     await userEvent.click(screen.getByRole("button", { name: /Limpar/i }));
     expect(screen.getByRole("button", { name: "Alimentação" })).toHaveAttribute("aria-pressed", "false");
   });
-  it("Todas seleciona todas", async () => {
-    render(<Harness />);
-    await userEvent.click(screen.getByRole("button", { name: /Todas/i }));
+  // fincla-frontend#96 (revisão adversarial da PR #96, prioridade 1): "Todas"
+  // costumava marcar `cats` com TODOS os ids (array não-vazio) — com a
+  // exclusão mútua Categoria/Tags, isso apagava qualquer tag ativa em troca
+  // de um filtro que já dava no mesmo de "sem categoria" (mapCatsToLegacy
+  // trata "todas selecionadas" = "todas"). "Todas" agora se comporta como
+  // "Limpar": nenhum chip fica marcado, e o resultado da query é idêntico.
+  it("Todas limpa a seleção (mesmo efeito de 'sem filtro' que Limpar, sem apagar outra facet)", async () => {
+    render(<Harness initial={["alim"]} />);
+    await userEvent.click(screen.getByRole("button", { name: /^Todas$/i }));
     for (const c of CATEGORIES) {
-      expect(screen.getByRole("button", { name: c.label })).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByRole("button", { name: c.label })).toHaveAttribute("aria-pressed", "false");
     }
   });
   it("busca filtra a grade", async () => {

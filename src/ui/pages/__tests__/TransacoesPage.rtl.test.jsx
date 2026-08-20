@@ -526,6 +526,91 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
     expect(lastCall.filters.filterCat).toBe("cat-alim");
   });
+
+  // fincla-frontend#96 — segunda rodada da revisão adversarial, prioridade 1:
+  // "Todas" no painel de Categoria chamava `setCats(todosOsIds)` — um array
+  // NÃO VAZIO. Com a exclusão mútua do achado 2, isso apagava qualquer tag
+  // ativa (o usuário perdia o filtro de tag clicando num botão que lê como
+  // "não filtrar por categoria"), e o resultado da query continuava sem
+  // filtro de categoria mesmo assim (`mapCatsToLegacy` já trata "todas
+  // selecionadas" como "todas"). "Todas" tem que se comportar como "Limpar".
+  it("fincla-frontend#96 prioridade 1: 'Todas' na Categoria NÃO apaga uma tag ativa", async () => {
+    seedSettlement();
+    renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: /Tags: —/i }));
+    await userEvent.click(
+      within(screen.getByRole("region", { name: /Filtro: tag/i })).getByRole("button", {
+        name: "Tag trabalho",
+      }),
+    );
+    expect(screen.getByRole("button", { name: /Tags: #trabalho/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /Categoria: Todas/i }));
+    await userEvent.click(
+      within(screen.getByRole("region", { name: /Filtro: categoria/i })).getByRole("button", {
+        name: "Todas",
+      }),
+    );
+
+    // A implementação anterior (`setCats(categories.map(c => c.id))`) teria
+    // apagado a tag aqui — este chip precisa continuar aceso.
+    expect(screen.getByRole("button", { name: /Tags: #trabalho/i })).toBeInTheDocument();
+    const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
+    expect(lastCall.filters.filterCat).toBe("tag-uuid-trabalho");
+  });
+
+  // Prioridade 5: a revisão provou que revertendo
+  // `enabled: shouldUseRealData && !tagFilterBlocked` para
+  // `enabled: shouldUseRealData` (e desligando o banner) a suíte inteira desta
+  // página continuava 37/37 verde — a tese central da correção (fail closed)
+  // não tinha rede nenhuma. Este teste força um estado "unresolved" de verdade
+  // (a tag some do catálogo DEPOIS de selecionada — visão salva antiga, tag
+  // renomeada/apagada) e prova as duas pontas: o hook de dados recebe
+  // `enabled:false` (nunca dispara com um filtro "esquecido") e o aviso
+  // visível aparece.
+  it("fincla-frontend#96 prioridade 2/4/5: tag que deixou de existir no catálogo trava a busca (fail closed) e avisa", async () => {
+    seedSettlement();
+    renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: /Tags: —/i }));
+    await userEvent.click(
+      within(screen.getByRole("region", { name: /Filtro: tag/i })).getByRole("button", {
+        name: "Tag trabalho",
+      }),
+    );
+    // Resolveu normalmente enquanto a tag existe no catálogo.
+    expect(transactionsDataMock.mock.calls.at(-1)[0].enabled).toBe(true);
+
+    // Simula a tag sumindo do catálogo (renomeada/apagada) — próxima chamada
+    // ao hook (qualquer re-render) já não a encontra mais.
+    tagCatalogMock.mockImplementation(() => ({
+      rows: [{ id: "tag-uuid-casa", name: "casa", parent_category_tag_id: "cat-alim" }],
+      loading: false,
+      error: "",
+    }));
+    // Dispara um novo render de `TransacoesPageBody` sem mexer na seleção de
+    // tag (troca de Situação é um state setter qualquer, só pra empurrar).
+    await userEvent.click(screen.getByRole("button", { name: /Situação: Todas/i }));
+    const situacaoPanel = screen.getByRole("region", { name: /Filtro: situa/i });
+    await userEvent.click(within(situacaoPanel).getByRole("button", { name: /^Pagas$/i }));
+
+    const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
+    // Nunca "esquece" o filtro e busca tudo — a implementação antiga faria
+    // isso (`filterCat: "todas"`); a correta trava a busca.
+    expect(lastCall.enabled).toBe(false);
+    expect(screen.getByText(/não foi encontrada/i)).toBeInTheDocument();
+
+    // Restaura o mock pro estado default, pra não vazar pros testes seguintes.
+    tagCatalogMock.mockImplementation(() => ({
+      rows: [
+        { id: "tag-uuid-trabalho", name: "trabalho", parent_category_tag_id: "cat-trans" },
+        { id: "tag-uuid-casa", name: "casa", parent_category_tag_id: "cat-alim" },
+      ],
+      loading: false,
+      error: "",
+    }));
+  });
 });
 
 describe("<TransacoesPage> — desambiguação de nomes (S2)", { timeout: 15000 }, () => {

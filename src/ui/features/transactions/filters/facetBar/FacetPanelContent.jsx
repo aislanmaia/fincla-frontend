@@ -36,6 +36,7 @@ export function FacetPanelContent({
   setTags,
   allTags,
   allTagsLoading,
+  allTagsError,
   // card
   cardSel,
   setCardSel,
@@ -102,6 +103,7 @@ export function FacetPanelContent({
           setTags={setTags}
           allTags={allTags}
           loading={allTagsLoading}
+          error={allTagsError}
           onClose={onClose}
         />
       );

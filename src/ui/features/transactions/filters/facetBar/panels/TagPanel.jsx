@@ -14,7 +14,7 @@ import { PanelHeader } from "./PanelHeader.jsx";
  * verdade: clicar numa tag troca a seleção em vez de somar, e a promessa da
  * UI passa a bater com o que a API entrega.
  */
-export function TagPanel({ tags, setTags, allTags = [], loading = false, onClose }) {
+export function TagPanel({ tags, setTags, allTags = [], loading = false, error = false, onClose }) {
   const [search, setSearch] = useState("");
   const term = search.trim().toLowerCase();
   const visible = allTags.filter((tg) => tg.toLowerCase().includes(term));
@@ -57,12 +57,19 @@ export function TagPanel({ tags, setTags, allTags = [], loading = false, onClose
           }}
         >
           {/* Achado 5: "carregando" precisa de mensagem própria — senão o
-              catálogo ainda a caminho lê como "você não tem tags nenhuma". */}
+              catálogo ainda a caminho lê como "você não tem tags nenhuma".
+              Prioridade 3: erro TAMBÉM precisa de mensagem própria — em erro
+              o chamador manda `allTags=[]` de propósito (não oferece opções
+              que sempre travariam a página ao serem clicadas), então sem este
+              ramo cairíamos em "Nenhuma tag cadastrada." de novo — o mesmo
+              falso "você não tem tags" que o achado 5 corrigiu. */}
           {loading
             ? "Carregando tags…"
-            : allTags.length === 0
-              ? "Nenhuma tag cadastrada."
-              : "Nenhuma tag encontrada."}
+            : error
+              ? "Não foi possível carregar suas tags agora. Tente novamente em instantes."
+              : allTags.length === 0
+                ? "Nenhuma tag cadastrada."
+                : "Nenhuma tag encontrada."}
         </div>
       ) : (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>

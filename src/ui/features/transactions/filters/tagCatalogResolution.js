@@ -28,7 +28,23 @@ function normalizeForCompare(value) {
  *
  * Aqui cada linha do catálogo vira uma opção com um `displayLabel` único: só
  * qualificamos com a categoria pai quando o nome colide (a maioria das tags
- * não precisa do sufixo). O `displayLabel` é 1:1 com o `id" — nunca colapsa.
+ * não precisa do sufixo). O `displayLabel` é 1:1 com o `id` — nunca colapsa.
+ *
+ * Revisão adversarial da PR #96, prioridade 4a: qualificar pela categoria pai
+ * não bastava — duas tags com o MESMO nome e `parent_category_tag_id: null`
+ * (ou cujo pai ainda não está em `categoryLabelById`, ex.: catálogo de
+ * categorias ainda carregando) produziam o MESMO `"nome · sem categoria"`,
+ * colidindo de novo: o `Map` final ficava com um id só, o React recebia key
+ * duplicada, e os dois chips acendiam juntos. Por isso há uma segunda
+ * passada: se o rótulo qualificado AINDA colidir dentro do grupo, appendamos
+ * o id INTEIRO (estável, garantidamente único) como desempate final — feio,
+ * mas o `displayLabel` nunca deixa de ser 1:1 com um id.
+ *
+ * Prioridade 4b: o nome da tag é `.trim()`ado ANTES de virar rótulo/chave de
+ * agrupamento, para casar com o `trim()` que `resolveTagFilterStatus` aplica
+ * ao rótulo selecionado — sem isso, uma tag chamada "casa " (espaço à direita)
+ * nunca resolvia (a seleção comparava trimada contra uma chave crua) e
+ * travava a página pra sempre (achado 4/5: filtro bloqueado sem saída).
  *
  * @param {Array<{id: string, name: string, parent_category_tag_id?: string|null}>} rows
  * @param {Map<string, string>} categoryLabelById - id de categoria → rótulo PT
@@ -36,23 +52,38 @@ function normalizeForCompare(value) {
  */
 export function buildTagOptions(rows, categoryLabelById = new Map()) {
   const byName = new Map();
-  for (const t of Array.isArray(rows) ? rows : []) {
-    if (!t?.id || !t?.name) continue;
-    const list = byName.get(t.name) ?? [];
-    list.push(t);
-    byName.set(t.name, list);
+  for (const raw of Array.isArray(rows) ? rows : []) {
+    const name = String(raw?.name ?? "").trim();
+    if (!raw?.id || !name) continue;
+    const list = byName.get(name) ?? [];
+    list.push(raw);
+    byName.set(name, list);
   }
 
   const options = [];
   for (const [name, group] of byName) {
-    const needsDisambiguation = group.length > 1;
-    for (const t of group) {
-      let displayLabel = name;
-      if (needsDisambiguation) {
-        const parentId = t.parent_category_tag_id ? String(t.parent_category_tag_id) : null;
-        const parentLabel = parentId ? categoryLabelById.get(parentId) : null;
-        displayLabel = `${name} · ${parentLabel || "sem categoria"}`;
-      }
+    if (group.length === 1) {
+      options.push({ id: String(group[0].id), name, displayLabel: name });
+      continue;
+    }
+
+    // Colisão de nome: primeira tentativa de desambiguação, pela categoria pai.
+    const withParentLabel = group.map((t) => {
+      const parentId = t.parent_category_tag_id ? String(t.parent_category_tag_id) : null;
+      const parentLabel = parentId ? categoryLabelById.get(parentId) : null;
+      return { t, candidate: `${name} · ${parentLabel || "sem categoria"}` };
+    });
+
+    const candidateCounts = new Map();
+    for (const { candidate } of withParentLabel) {
+      candidateCounts.set(candidate, (candidateCounts.get(candidate) ?? 0) + 1);
+    }
+
+    for (const { t, candidate } of withParentLabel) {
+      // Ainda colide (achado 4a) — desempata pelo id INTEIRO, nunca truncado:
+      // um prefixo curto (ex.: 8 chars) pode colidir de novo entre ids que
+      // começam iguais, e aí voltaríamos pro mesmo bug com uma casca a mais.
+      const displayLabel = candidateCounts.get(candidate) > 1 ? `${candidate} (${t.id})` : candidate;
       options.push({ id: String(t.id), name, displayLabel });
     }
   }

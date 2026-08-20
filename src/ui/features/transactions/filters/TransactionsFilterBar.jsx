@@ -32,6 +32,7 @@ import { Icon } from "./shared/Icon.jsx";
  *  - cards:         [{ id, label, last4, color }]
  *  - allTags:       string[]
  *  - allTagsLoading: catálogo de tags ainda carregando (mostra "Carregando…" em vez de "Nenhuma tag cadastrada")
+ *  - allTagsError:   catálogo falhou ao carregar (mensagem de erro própria; painel não oferece opções nesse estado)
  *  - savedViews:    { items, active, onActivate, onCreate, onDelete }
  *  - searchInput / setSearchInput: opcional, para quando a página debounce a busca fora.
  *  - hideSearch: oculta a SearchBar (útil quando o consumidor já mostra o input fora).
@@ -47,6 +48,7 @@ export function TransactionsFilterBar({
   cards = [],
   allTags = [],
   allTagsLoading = false,
+  allTagsError = false,
   savedViews,
   searchInput,
   setSearchInput,
@@ -265,6 +267,7 @@ export function TransactionsFilterBar({
                 setTags={filter.setTags}
                 allTags={allTags}
                 allTagsLoading={allTagsLoading}
+                allTagsError={allTagsError}
                 // card
                 cardSel={filter.cardSel}
                 setCardSel={filter.setCardSel}

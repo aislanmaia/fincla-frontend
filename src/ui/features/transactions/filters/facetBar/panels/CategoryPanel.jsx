@@ -52,9 +52,20 @@ export function CategoryPanel({
         >
           Limpar
         </button>
+        {/* fincla-frontend#96 (revisão adversarial da PR #96, prioridade 1):
+            "Todas" chamava `setCats(categories.map(c => c.id))` — array CHEIO,
+            não vazio. Duas consequências ruins: (1) com a exclusão mútua
+            Categoria/Tags, um array não-vazio apaga qualquer tag ativa (o
+            usuário perdia o filtro de tag ao clicar num botão que lê como
+            "não filtrar por categoria"); (2) `mapCatsToLegacy` já traduz
+            "todas selecionadas" de volta para "todas" (sem filtro) — ou seja,
+            o resultado da query sempre foi idêntico ao de `setCats([])`. Só
+            que o chip da facet mostrava "N categorias" (parece filtro ativo)
+            em vez de "Todas". `setCats([])` entrega o mesmo resultado sem
+            nenhum dos dois efeitos colaterais. */}
         <button
           type="button"
-          onClick={() => setCats(categories.map((c) => c.id))}
+          onClick={() => setCats([])}
           style={{ ...textBtnStyle(T.ink), fontWeight: 700 }}
         >
           Todas
