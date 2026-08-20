@@ -133,7 +133,25 @@ export function HealthPanelPage({ organizationId = null, dataMode = "live", isMo
           <div style={{ display: "flex", gap: 12, marginTop: 14, flexWrap: "wrap" }}>
             <Metric label="Comprometimento da renda" value={pct(data.income_commitment)} sub="despesa ÷ renda média" color={commitColor(data.income_commitment)} />
             <Metric label="Sobra média mensal" value={fmt(data.avg_surplus)} sub={`taxa de poupança ${pct(data.savings_rate)}`} color={Number(data.avg_surplus) >= 0 ? T.green : T.red} />
-            <Metric label="Meses de reserva" value={Number(data.emergency_fund_months).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} sub="reserva ÷ despesa média" />
+            {/* `emergency_fund_months` vem `null` quando não houve despesa no período:
+                a razão reserva ÷ despesa é INDEFINIDA, não zero. O backend devolvia
+                99 como sentinela e a tela imprimia "99 meses", um número sem
+                significado (fincla-api#114). Trocar por `Number(null)` seria trocar
+                um absurdo por outro — zero afirma "sem reserva nenhuma", o oposto do
+                que aconteceu. */}
+            <Metric
+              label="Meses de reserva"
+              value={
+                typeof data.emergency_fund_months === "number"
+                  ? data.emergency_fund_months.toLocaleString("pt-BR", { maximumFractionDigits: 1 })
+                  : "—"
+              }
+              sub={
+                typeof data.emergency_fund_months === "number"
+                  ? "reserva ÷ despesa média"
+                  : "sem despesas no período"
+              }
+            />
             <Metric label="Metas no prazo" value={`${data.goals_on_track} de ${data.goals_total}`} sub={`progresso médio ${Math.round(data.goal_progress_avg)}%`} />
           </div>
 

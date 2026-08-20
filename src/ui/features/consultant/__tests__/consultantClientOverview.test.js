@@ -110,3 +110,38 @@ describe("selectClientEvolutionSeries", () => {
     expect(selectClientEvolutionSeries(null)).toEqual([]);
   });
 });
+
+/**
+ * `emergency_fund_months` passa a vir `null` quando não houve despesa no período
+ * (fincla-api#114): a razão reserva ÷ despesa é INDEFINIDA. Antes o backend mandava
+ * 99 como sentinela e a tela imprimia "99 meses". Trocar por `Number(null) || 0`
+ * seria trocar um absurdo por outro — zero afirma "sem reserva nenhuma", que é o
+ * oposto do que aconteceu, e rebaixaria o diagnóstico de quem só não gastou.
+ */
+describe("diagnosisFactors — reserva indefinida", () => {
+  const base = { income_commitment: 0.4, savings_rate: 0.3, score: 70 };
+
+  it("reserva null vira fator sem valor, não fator zerado", () => {
+    const f = diagnosisFactors({ ...base, emergency_fund_months: null }).find((x) => x.key === "reserve");
+    expect(f.v).toBeNull();
+    expect(f.hint).toMatch(/sem despesas/i);
+    expect(f.hint).not.toMatch(/abaixo do ideal/i);
+  });
+
+  it("reserva ausente do payload também é indefinida", () => {
+    const f = diagnosisFactors(base).find((x) => x.key === "reserve");
+    expect(f.v).toBeNull();
+  });
+
+  it("com número, continua calculando como antes", () => {
+    const f = diagnosisFactors({ ...base, emergency_fund_months: 3 }).find((x) => x.key === "reserve");
+    expect(f.v).toBe(50);
+    expect(f.hint).toBe("saudável");
+  });
+
+  it("reserva muito alta não é mais truncada — o teto de 99 saiu do backend", () => {
+    const f = diagnosisFactors({ ...base, emergency_fund_months: 120 }).find((x) => x.key === "reserve");
+    expect(f.v).toBe(100);
+    expect(f.hint).toBe("saudável");
+  });
+});

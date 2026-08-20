@@ -188,14 +188,22 @@ function DiagnosisCard({ health }) {
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
           {factors.map((f) => {
-            const col = toneColor(factorTone(f.v));
+            // `v: null` = fator sem base de cálculo (ex.: reserva quando não houve
+            // despesa no período). Colorir e desenhar barra zerada faria o fator
+            // parecer o PIOR possível, quando o certo é dizer que não dá para medir.
+            const indefinido = f.v === null || f.v === undefined;
+            const col = indefinido ? T.inkGhost : toneColor(factorTone(f.v));
             return (
               <div key={f.key}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5, gap: 8 }}>
                   <span style={{ ...G, fontSize: 12, fontWeight: 600, color: T.ink }}>{f.label}</span>
                   <span style={{ ...G, fontSize: 10.5, color: col, fontWeight: 700 }}>{f.hint}</span>
                 </div>
-                <ProgBar pct={f.v} color={col} h={6} />
+                {indefinido ? (
+                  <div style={{ height: 6, borderRadius: 999, background: T.grayLight }} />
+                ) : (
+                  <ProgBar pct={f.v} color={col} h={6} />
+                )}
               </div>
             );
           })}

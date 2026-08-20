@@ -54,16 +54,21 @@ export function diagnosisFactors(health) {
   if (!health) return [];
   const commitmentRatio = Number(health.income_commitment) || 0;
   const savingsRatio = Number(health.savings_rate) || 0;
-  const months = Number(health.emergency_fund_months) || 0;
+  // `null` = indefinido (sem despesa no período), não zero. `Number(null) || 0`
+  // daria 0 e a barra diria "abaixo do ideal" para quem simplesmente não gastou.
+  const monthsRaw = health.emergency_fund_months;
+  const months = typeof monthsRaw === "number" && Number.isFinite(monthsRaw) ? monthsRaw : null;
   const score = Number(health.score) || 0;
 
-  const reserve = clamp((months / 6) * 100);
+  const reserve = months === null ? null : clamp((months / 6) * 100);
   const commitment = clamp(100 - commitmentRatio * 100);
   const savings = clamp(savingsRatio * 100 * 3 + 18);
   const consistency = clamp(score);
 
   return [
-    { key: "reserve", label: "Reserva de emergência", v: Math.round(reserve), hint: reserve < 40 ? "abaixo do ideal" : "saudável" },
+    // Sem base de cálculo o fator não tem valor: `v: null` para a UI mostrar o
+    // estado próprio em vez de uma barra vazia que se lê como "péssimo".
+    { key: "reserve", label: "Reserva de emergência", v: reserve === null ? null : Math.round(reserve), hint: reserve === null ? "sem despesas no período" : reserve < 40 ? "abaixo do ideal" : "saudável" },
     { key: "commitment", label: "Comprometimento de renda", v: Math.round(commitment), hint: commitmentRatio > 0.5 ? "renda muito comprometida" : "sob controle" },
     { key: "savings", label: "Taxa de poupança", v: Math.round(savings), hint: savingsRatio * 100 < 10 ? "poupa pouco" : "bom ritmo" },
     { key: "consistency", label: "Consistência mensal", v: Math.round(consistency), hint: consistency >= 60 ? "estável" : "requer atenção" },
