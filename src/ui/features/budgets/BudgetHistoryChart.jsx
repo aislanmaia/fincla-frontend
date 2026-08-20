@@ -14,6 +14,7 @@ import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { fmtAbs, fmtK } from "../../formatters";
 import { M_MONO } from "../moodV4";
+import { toAmount, toFiniteNumber } from "../../../api/money";
 
 /**
  * Gráfico "Gasto mensal dos últimos 6 meses" do card de Orçamentos.
@@ -32,11 +33,23 @@ export function BudgetHistoryChart({ historyData, isMobile, shouldUseRealData })
     );
   }
 
-  const hasBudgetData = historyData.some((h) => h.budget != null);
-  const currentEntry = historyData.find((h) => h.current) || historyData[historyData.length - 1];
-  const maxEntry = historyData.reduce((max, h) => (h.spent > max.spent ? h : max), historyData[0]);
-  const avgSpent = historyData.reduce((s, h) => s + h.spent, 0) / historyData.length;
-  const anyOver = historyData.some((h) => h.budget && h.spent > h.budget);
+  // Segunda linha de defesa: `mapBudgetHistoryToUi` (src/ui/data/budgetsAdapter.js)
+  // já converte `total_expenses` na fronteira, mas normalizamos de novo aqui —
+  // mesmo padrão de DashboardPage.jsx — porque `historyData` também pode vir do
+  // modo mock. `spent` nunca deve virar NaN/string (vira soma/comparação errada
+  // silenciosamente); `budget` usa `toFiniteNumber` para preservar `null` quando
+  // ausente, já que a UI distingue "sem orçamento histórico" de "orçamento zero".
+  const safeHistory = historyData.map((h) => ({
+    ...h,
+    spent: toAmount(h.spent),
+    budget: toFiniteNumber(h.budget),
+  }));
+
+  const hasBudgetData = safeHistory.some((h) => h.budget != null);
+  const currentEntry = safeHistory.find((h) => h.current) || safeHistory[safeHistory.length - 1];
+  const maxEntry = safeHistory.reduce((max, h) => (h.spent > max.spent ? h : max), safeHistory[0]);
+  const avgSpent = safeHistory.reduce((s, h) => s + h.spent, 0) / safeHistory.length;
+  const anyOver = safeHistory.some((h) => h.budget && h.spent > h.budget);
   const maxOver = Boolean(maxEntry.budget) && maxEntry.spent > maxEntry.budget;
 
   return (
@@ -50,8 +63,8 @@ export function BudgetHistoryChart({ historyData, isMobile, shouldUseRealData })
       <div style={{ height: isMobile ? 190 : 232 }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
-            data={historyData}
-            margin={{ top: 8, right: 8, left: isMobile ? -14 : -20, bottom: 0 }}
+            data={safeHistory}
+            margin={{ top: 8, right: isMobile ? 8 : 54, left: isMobile ? -14 : -20, bottom: 0 }}
             barCategoryGap={isMobile ? "22%" : "30%"}
             barGap={4}
           >
@@ -88,7 +101,7 @@ export function BudgetHistoryChart({ historyData, isMobile, shouldUseRealData })
             />
             {hasBudgetData && <Bar dataKey="budget" fill={T.grayLight} radius={[5, 5, 0, 0]} maxBarSize={26} />}
             <Bar dataKey="spent" radius={[5, 5, 0, 0]} maxBarSize={hasBudgetData ? 26 : 34}>
-              {historyData.map((h, i) => {
+              {safeHistory.map((h, i) => {
                 const over = h.budget ? h.spent > h.budget : false;
                 const fill = over ? T.red : h.current ? T.blue : T.ink;
                 return <Cell key={h.m ?? i} fill={fill} fillOpacity={h.current || over ? 1 : 0.55} />;
