@@ -1,6 +1,14 @@
 // api/balances.ts
 import apiClient from './client';
-import type { OrgBalances, AccountBalance, BalanceSummary } from './types';
+import type {
+  OrgBalances,
+  AccountBalance,
+  BalanceSummary,
+  RawOrgBalances,
+  RawAccountBalance,
+  RawBalanceSummary,
+  WireMoney,
+} from './types';
 
 /**
  * O backend serializa dinheiro como STRING, não número.
@@ -16,7 +24,7 @@ import type { OrgBalances, AccountBalance, BalanceSummary } from './types';
  * a significar o que promete. `null` para o que não é número finito — inclusive
  * `null` do backend — porque zero é um saldo legítimo e não pode ser inventado.
  */
-const toFiniteNumber = (value: unknown): number | null => {
+const toFiniteNumber = (value: WireMoney | unknown): number | null => {
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
   if (typeof value === 'string' && value.trim() !== '') {
     const n = Number(value);
@@ -25,7 +33,16 @@ const toFiniteNumber = (value: unknown): number | null => {
   return null;
 };
 
-const normalizeBalanceSummary = (raw: BalanceSummary): BalanceSummary => ({
+/**
+ * Os tipos `Raw*` existem para o compilador cobrar a normalização.
+ *
+ * Sem eles, `apiClient.get<BalanceSummary>` já declarava número na entrada e um
+ * `return response.data` cru compilava sem erro — foi assim que `getAccountBalance`
+ * passou pela primeira rodada com o tipo corrigido e o corpo intacto: o tipo virou
+ * mentira em silêncio. Com `Raw*` na entrada e o tipo normalizado na saída, esquecer
+ * a conversão passa a ser erro de compilação, não bug de produção.
+ */
+const normalizeBalanceSummary = (raw: RawBalanceSummary): BalanceSummary => ({
   ...raw,
   total_available: toFiniteNumber(raw?.total_available),
   total_all: toFiniteNumber(raw?.total_all),
@@ -34,8 +51,9 @@ const normalizeBalanceSummary = (raw: BalanceSummary): BalanceSummary => ({
     : [],
 });
 
-const normalizeAccountBalance = (raw: AccountBalance): AccountBalance => ({
+const normalizeAccountBalance = (raw: RawAccountBalance): AccountBalance => ({
   ...raw,
+  initial_balance: toFiniteNumber(raw?.initial_balance),
   balance: toFiniteNumber(raw?.balance),
 });
 
@@ -44,7 +62,7 @@ export const getOrgBalances = async (
   organizationId: string,
   atDate?: string,
 ): Promise<OrgBalances> => {
-  const response = await apiClient.get<OrgBalances>('/balances', {
+  const response = await apiClient.get<RawOrgBalances>('/balances', {
     params: { organization_id: organizationId, at_date: atDate },
   });
   return {
@@ -61,7 +79,7 @@ export const getBalanceSummary = async (
   organizationId: string,
   atDate?: string,
 ): Promise<BalanceSummary> => {
-  const response = await apiClient.get<BalanceSummary>('/balances/summary', {
+  const response = await apiClient.get<RawBalanceSummary>('/balances/summary', {
     params: { organization_id: organizationId, at_date: atDate },
   });
   return normalizeBalanceSummary(response.data);
@@ -73,8 +91,8 @@ export const getAccountBalance = async (
   organizationId: string,
   atDate?: string,
 ): Promise<AccountBalance> => {
-  const response = await apiClient.get<AccountBalance>(`/balances/${accountId}`, {
+  const response = await apiClient.get<RawAccountBalance>(`/balances/${accountId}`, {
     params: { organization_id: organizationId, at_date: atDate },
   });
-  return response.data;
+  return normalizeAccountBalance(response.data);
 };

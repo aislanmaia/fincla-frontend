@@ -108,11 +108,71 @@ describe('balances API client — dinheiro chega como string', () => {
       data: {
         as_of: 'x',
         total: '1000.50',
-        accounts: [{ account_id: 'a1', name: 'Conta', type: 'checking', currency: 'BRL', initial_balance: 0, balance: '1000.50', include_in_total: true }],
+        // `initial_balance` também é Decimal no mesmo schema: mandar número aqui
+        // encodava justamente a premissa que esta PR desmente.
+        accounts: [{ account_id: 'a1', name: 'Conta', type: 'checking', currency: 'BRL', initial_balance: '250.00', balance: '1000.50', include_in_total: true }],
       },
     });
     const out = await getOrgBalances('org-1');
     expect(out.total).toBe(1000.5);
     expect(out.accounts[0].balance).toBe(1000.5);
+    expect(out.accounts[0].initial_balance).toBe(250);
+  });
+
+  it('getAccountBalance também converte — o tipo prometia número e o corpo devolvia string', async () => {
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      data: { account_id: 'a1', name: 'Conta', type: 'checking', currency: 'BRL', initial_balance: '250.00', balance: '315.57', include_in_total: true },
+    });
+    const out = await getAccountBalance('a1', 'org-1');
+    expect(out.balance).toBe(315.57);
+    expect(out.initial_balance).toBe(250);
+    expect(typeof out.balance).toBe('number');
+  });
+
+  /**
+   * Estes casos existem porque a suíte anterior passava com uma implementação
+   * ERRADA: a versão ingênua (`Number(value)` direto, sem guardas) converte `''`,
+   * `false` e `[]` em zero — o "zero inventado" que a docstring proíbe — e nenhum
+   * teste reprovava. Num saldo, zero inventado é pior que "—": afirma que a pessoa
+   * não tem dinheiro.
+   */
+  it('string vazia e espaços viram null, não zero', async () => {
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      data: { as_of: 'x', total_available: '', total_all: '   ', account_count: 0, by_type: [] },
+    });
+    const out = await getBalanceSummary('org-1');
+    expect(out.total_available).toBeNull();
+    expect(out.total_all).toBeNull();
+  });
+
+  it('valores que não são string nem número viram null', async () => {
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      data: { as_of: 'x', total_available: false, total_all: [], account_count: 0, by_type: [] },
+    });
+    const out = await getBalanceSummary('org-1');
+    expect(out.total_available).toBeNull();
+    expect(out.total_all).toBeNull();
+  });
+
+  it('NaN e Infinity viram null', async () => {
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      data: { as_of: 'x', total_available: Number.NaN, total_all: Number.POSITIVE_INFINITY, account_count: 0, by_type: [] },
+    });
+    const out = await getBalanceSummary('org-1');
+    expect(out.total_available).toBeNull();
+    expect(out.total_all).toBeNull();
+  });
+
+  it('não explode quando by_type ou accounts não vêm — isso derrubaria o dashboard inteiro', async () => {
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      data: { as_of: 'x', total_available: '10.00', total_all: '10.00', account_count: 1 },
+    });
+    const resumo = await getBalanceSummary('org-1');
+    expect(resumo.by_type).toEqual([]);
+
+    vi.mocked(apiClient.get).mockResolvedValueOnce({ data: { as_of: 'x', total: null } });
+    const org = await getOrgBalances('org-1');
+    expect(org.accounts).toEqual([]);
+    expect(org.total).toBeNull();
   });
 });

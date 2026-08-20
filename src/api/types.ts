@@ -1823,9 +1823,41 @@ export interface AccountBalance {
   name: string;
   type: AccountType;
   currency: string;
-  initial_balance: number;
-  balance: number | null; // ver nota em OrgBalances
+  initial_balance: number | null; // ver nota em OrgBalances
+  balance: number | null;
   include_in_total: boolean;
+}
+
+/**
+ * Valor monetário COMO CHEGA NO FIO, antes da normalização.
+ *
+ * O backend serializa `Decimal` como string, mas nem todos os schemas usam
+ * `Decimal` — alguns usam `float` e mandam número (ver fincla-api#112). Este alias
+ * descreve as duas formas, mais os buracos possíveis.
+ */
+export type WireMoney = string | number | null | undefined;
+
+/** Resposta crua de `/balances/{id}` — use `getAccountBalance`, que normaliza. */
+export interface RawAccountBalance extends Omit<AccountBalance, "balance" | "initial_balance"> {
+  initial_balance: WireMoney;
+  balance: WireMoney;
+}
+
+/** Resposta crua de `/balances/summary` — use `getBalanceSummary`. */
+export interface RawBalanceSummary extends Omit<BalanceSummary, "total_available" | "total_all" | "by_type"> {
+  total_available: WireMoney;
+  total_all: WireMoney;
+  by_type: RawTypeBalance[];
+}
+
+export interface RawTypeBalance extends Omit<TypeBalance, "balance"> {
+  balance: WireMoney;
+}
+
+/** Resposta crua de `/balances` — use `getOrgBalances`. */
+export interface RawOrgBalances extends Omit<OrgBalances, "total" | "accounts"> {
+  total: WireMoney;
+  accounts: RawAccountBalance[];
 }
 
 /**
