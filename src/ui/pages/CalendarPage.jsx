@@ -228,9 +228,15 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
     [view, selected, cursor],
   );
   const selectedEvents = byDay[selected] || [];
-  // Enquanto busca, `byDay` já está vazio (o hook zera o estado antes do fetch) — sem
-  // este flag, o DayList do dia selecionado renderizaria "vazio" idêntico ao carregando.
-  const dayListLoading = live && liveData.loading;
+  // Convenção do repo (ver AccountsPage): "carregando" só cobre o 1º carregamento
+  // do período (`!hasLoaded`) — uma revalidação em segundo plano (token bumpado
+  // com o mesmo mês) já tem dados válidos pra mostrar via stale-while-revalidate,
+  // então não deve regredir a lista pro estado de loading.
+  const dayListLoading = live && liveData.loading && !liveData.hasLoaded;
+  // Erro nunca pode cair no mesmo ramo do "vazio de verdade": sem isto, uma falha
+  // de rede (byDay ainda {}) renderizava "Nenhum lançamento neste dia" + CTA de
+  // registrar — lendo como "você não tem nada" quando na real a busca falhou.
+  const dayListError = live && !liveData.loading && Boolean(liveData.error);
 
   const navBtn = { ...G, width: 32, height: 32, borderRadius: 9, border: `1px solid ${T.border}`, background: T.surface, cursor: "pointer", fontSize: 15, color: T.inkMid, display: "inline-grid", placeItems: "center" };
 
@@ -265,7 +271,7 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <MiniCalendar year={cursor.year} month={cursor.month} todayYmd={today.ymd} selected={selected} onPick={pick} onShift={shiftMonth} />
             <Filters filters={filters} hiddenTypes={hiddenTypes} onToggleType={toggleType} onToggleMethod={toggleMethod} payMethods={payMethods} />
-            <DayList selected={selected} events={selectedEvents} onEdit={openEdit} onNew={onNewTransaction} onSeeExtrato={seeExtrato} isLoading={dayListLoading} />
+            <DayList selected={selected} events={selectedEvents} onEdit={openEdit} onNew={onNewTransaction} onSeeExtrato={seeExtrato} isLoading={dayListLoading} hasError={dayListError} />
           </div>
           <div>
             <Grid grid={grid} byDay={byDay} todayYmd={today.ymd} selected={selected} onPick={pick} onPickCell={pickCell} onEdit={openEdit} week={view === "week"} />
@@ -280,6 +286,7 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
                 onSeeExtrato={() => { setPopover(null); seeExtrato(); }}
                 onClose={() => setPopover(null)}
                 isLoading={dayListLoading}
+                hasError={dayListError}
               />
             </DayPopover>
           ) : null}
@@ -290,7 +297,7 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
             <Grid grid={grid} byDay={byDay} todayYmd={today.ymd} selected={selected} onPick={pick} onEdit={openEdit} week={view === "week"} compact />
           </div>
           <div style={{ marginTop: 14 }}>
-            <DayList selected={selected} events={selectedEvents} onEdit={openEdit} onNew={onNewTransaction} onSeeExtrato={seeExtrato} isLoading={dayListLoading} />
+            <DayList selected={selected} events={selectedEvents} onEdit={openEdit} onNew={onNewTransaction} onSeeExtrato={seeExtrato} isLoading={dayListLoading} hasError={dayListError} />
           </div>
         </>
       )}
@@ -410,7 +417,7 @@ function MoreRow({ n, onSeeExtrato }) {
   );
 }
 
-function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose, isLoading = false }) {
+function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose, isLoading = false, hasError = false }) {
   const [mode, setMode] = useState("category"); // category | list
   const [open, setOpen] = useState({});
   // Ajustes de saldo entram no SALDO, fora de Receitas/Despesas.
@@ -507,6 +514,11 @@ function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose, isLoa
         // Enquanto busca, NÃO usar o mesmo componente do "vazio de verdade" — senão
         // o usuário lê "nenhum lançamento" antes da resposta da API chegar.
         <div style={{ ...G, fontSize: 12.5, color: T.inkLight, marginTop: 8 }}>Carregando lançamentos…</div>
+      ) : hasError ? (
+        // Idem para erro: falha de rede não é "você não tem nada" — no mobile a
+        // faixa vermelha do topo pode estar fora da tela, então este aviso local
+        // (sempre visível junto do dia selecionado) não pode depender dela.
+        <div style={{ ...G, fontSize: 12.5, color: T.red, marginTop: 8 }}>Não foi possível carregar os lançamentos deste dia.</div>
       ) : (
         <CardEmptyWithCta icon="📅" iconSize={22} title="Nenhum lançamento neste dia" sub="Use os botões abaixo para registrar uma transação ou ver o extrato completo." />
       )}
