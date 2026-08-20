@@ -39,9 +39,21 @@ async function postExpense(
   return JSON.parse(text) as { id: number };
 }
 
+// A descrição da compra candidata leva um sufixo único: a busca continua pelo
+// prefixo estável (o picker não casa a string inteira), mas o locator aponta o
+// texto único. A org de teste é compartilhada, e uma linha residual de execução
+// anterior fazia o locator casar 2 elementos e estourar o strict mode.
+//
+// O sufixo é atribuído DENTRO do `beforeAll`, não no escopo do módulo: em nova
+// tentativa o Playwright sobe outro worker e reavalia o módulo, então um
+// `Date.now()` no topo gera um valor para a linha criada e outro para o locator
+// -- que foi como esta correção falhou na primeira versão.
+let compraDesc = "";
+
 test.describe("UI refund — drawer + picker", () => {
   test.beforeAll(async () => {
     if (!e2eReady) return;
+    compraDesc = `Compra UI test - mercado ${Date.now()}`;
     const orgId = await resetAndSeedOrganization("empty");
     // Cria uma expense para o picker ter o que listar.
     const bearer = await loginOwnerBearer();
@@ -52,7 +64,7 @@ test.describe("UI refund — drawer + picker", () => {
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     await postExpense(bearer, {
       type: "expense",
-      description: "Compra UI test - mercado",
+      description: compraDesc,
       value: 250,
       payment_method: "pix",
       date: today,
@@ -109,7 +121,7 @@ test.describe("UI refund — drawer + picker", () => {
     // Deve aparecer a candidata criada no beforeAll.
     // CSS locator pega o <button> que contém o texto (mais robusto que getByRole+name
     // quando o button tem múltiplos filhos compondo o nome acessível).
-    const candidate = page.locator('button:has-text("Compra UI test - mercado")');
+    const candidate = page.locator(`button:has-text("${compraDesc}")`);
     await expect(candidate).toBeVisible({ timeout: 5_000 });
     await page.screenshot({
       path: "e2e/screenshots/refund-ui-picker-results.png",
@@ -156,7 +168,7 @@ test.describe("UI refund — drawer + picker", () => {
       headers: { Authorization: `Bearer ${bearer}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         type: "expense",
-        description: "Compra UI test - mercado",
+        description: compraDesc,
         value: 250,
         payment_method: "pix",
         date: today,
@@ -182,7 +194,7 @@ test.describe("UI refund — drawer + picker", () => {
     // Abre picker, busca, seleciona
     await page.getByRole("button", { name: /Qual a compra estornada\?/i }).click();
     await page.getByPlaceholder(/Buscar compra original/i).fill("Compra UI test");
-    const candidate = page.locator('button:has-text("Compra UI test - mercado")');
+    const candidate = page.locator(`button:has-text("${compraDesc}")`);
     await expect(candidate).toBeVisible({ timeout: 5_000 });
     await candidate.click();
 
@@ -200,8 +212,11 @@ test.describe("UI refund — drawer + picker", () => {
     await valorInput.click();
     await page.keyboard.type("3000");
 
-    // Vai pra review
-    await page.getByRole("button", { name: /Revisar despesa/i }).click();
+    // Vai pra review. Com o toggle ligado o CTA é deterministicamente "Revisar
+    // estorno" (`NovaTransacaoModal`), então casar só /Revisar despesa/ nunca acha o
+    // botão -- e aceitar as duas formas jogaria fora a única asserção de que a flag
+    // de estorno chegou até o rodapé do modal.
+    await page.getByRole("button", { name: /Revisar estorno/i }).click();
 
     // Confirma estorno
     const confirmBtn = page.getByRole("button", { name: /Confirmar estorno/i });
