@@ -1,5 +1,10 @@
 // api/transactions.ts
 import apiClient from './client';
+import {
+  IDEMPOTENCY_KEY_HEADER,
+  noteIdempotencySupportFromHeaders,
+  readIdempotentReplay,
+} from './idempotency';
 import { repeatArrayParams } from './paramsSerializer';
 import type {
   CreateTransactionRequest,
@@ -12,15 +17,41 @@ import type {
 } from './types';
 
 /**
- * Cria uma nova transação
+ * Cria uma nova transação.
+ *
+ * `options.idempotencyKey` vai no header `Idempotency-Key` (ver
+ * `src/api/idempotency.ts`). É o que torna o reenvio deste POST seguro: com a
+ * MESMA chave, o backend devolve a resposta original em vez de criar uma
+ * segunda transação. O header é OPCIONAL no contrato — omitir mantém o
+ * comportamento antigo, e um backend que ainda não conhece o header
+ * simplesmente o ignora.
  */
 export const createTransaction = async (
-  transaction: CreateTransactionRequest
+  transaction: CreateTransactionRequest,
+  options?: {
+    idempotencyKey?: string;
+    /**
+     * Recebe o VALOR de `Idempotent-Replay` quando o backend o manda. `true`
+     * significa "esta é a resposta original de uma chave já vista, nada foi
+     * criado agora" — a única forma determinística de saber que um
+     * "Registrado!" na tela seria mentira.
+     */
+    onIdempotentReplay?: (replayed: boolean) => void;
+  }
 ): Promise<Transaction> => {
+  const key = options?.idempotencyKey;
   const response = await apiClient.post<Transaction>(
     '/transactions',
-    transaction
+    transaction,
+    key ? { headers: { [IDEMPOTENCY_KEY_HEADER]: key } } : undefined
   );
+  if (key) {
+    // A PRESENÇA do header prova que este backend implementa a feature — é
+    // essa observação que libera o retry automático da criação.
+    noteIdempotencySupportFromHeaders(response.headers);
+    const replayed = readIdempotentReplay(response.headers);
+    if (replayed != null) options?.onIdempotentReplay?.(replayed);
+  }
   return response.data;
 };
 

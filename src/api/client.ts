@@ -57,8 +57,14 @@ apiClient.interceptors.request.use((config) => {
 // "recusou antes de enviar" quanto para "caiu depois do 201, antes dos
 // headers chegarem" — não dá pra distinguir do lado do cliente. Sem uma
 // forma de provar que o servidor não processou, repetir um write arrisca
-// duplicar (ver issue #102, que documentou essa lacuna, e #103, sobre
-// `Idempotency-Key` como o caminho que reabilitaria isso com segurança).
+// duplicar (ver issue #102, que documentou essa lacuna).
+//
+// `Idempotency-Key` (issue #103) já existe no produto, mas NÃO relaxa esta
+// regra: quem manda a chave é o cliente de cada operação, e hoje só
+// `createTransactionForUi` (`src/ui/data/transactionsAdapter.js`) manda. Um
+// retry genérico aqui repetiria também os writes SEM chave — justamente os
+// que ainda podem duplicar. Este interceptor segue recusando todo write; o
+// retry seguro mora junto de quem gera a chave.
 const RETRYABLE_NETWORK_CODES = new Set([
   'ERR_NETWORK',
   'ECONNRESET',
@@ -107,17 +113,23 @@ apiClient.interceptors.response.use(
 );
 
 // Mapeamento de mensagens da API para português (idioma da aplicação)
-const API_MESSAGE_TRANSLATIONS: Record<string, string> = {
-  'Phone already linked': 'Este número já está vinculado para esta ou outra conta.',
-  'phone already linked': 'Este número já está vinculado para esta ou outra conta.',
-  PHONE_ALREADY_LINKED: 'Este número já está vinculado para esta ou outra conta.',
-};
+// `Map`, não objeto literal: as chaves de busca abaixo (`message` e
+// `detail.error`) vêm da REDE, e indexar um objeto com string arbitrária
+// alcança o `Object.prototype`. Um `detail.error === "__proto__"` fazia esta
+// tradução devolver um OBJETO e o React derrubava a tela com "Objects are not
+// valid as a React child"; `"hasOwnProperty"` devolvia uma função. `Map.get`
+// só enxerga o que foi posto nele.
+const API_MESSAGE_TRANSLATIONS = new Map<string, string>([
+  ['Phone already linked', 'Este número já está vinculado para esta ou outra conta.'],
+  ['phone already linked', 'Este número já está vinculado para esta ou outra conta.'],
+  ['PHONE_ALREADY_LINKED', 'Este número já está vinculado para esta ou outra conta.'],
+]);
 
 function translateApiMessage(message: string, errorCode?: string): string {
   const trimmed = message.trim();
   return (
-    API_MESSAGE_TRANSLATIONS[trimmed] ??
-    (errorCode ? API_MESSAGE_TRANSLATIONS[errorCode] : null) ??
+    API_MESSAGE_TRANSLATIONS.get(trimmed) ??
+    (errorCode ? API_MESSAGE_TRANSLATIONS.get(errorCode) : undefined) ??
     trimmed
   );
 }

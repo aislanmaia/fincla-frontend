@@ -5,15 +5,21 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Cobre o comportamento VISÍVEL prometido pela política de retry manual de
- * `transactionsAdapter.js` (issue #82 / PR #98): sem esse teste, apagar
- * `setTxCreateFailed(true)` ou os dois rótulos "Tentar novamente" deixava a
- * suíte inteira verde — a entrega real (o que a pessoa vê no formulário)
- * nunca era exercitada, só a contagem de POSTs no adapter.
+ * Cobre o comportamento VISÍVEL prometido pela política de reenvio de
+ * `transactionsAdapter.js` (issues #82/#102/#103): sem esse teste, apagar
+ * `setTxCreateFailed(true)` ou os rótulos "Tentar novamente" deixava a suíte
+ * inteira verde — a entrega real (o que a pessoa vê no formulário) nunca era
+ * exercitada, só a contagem de POSTs no adapter.
  *
- * Só `createTransactionForUi` é mockada (o limite de rede) — `formatTransactionsApiError`
- * e `isCreateTransactionErrorMaybePersisted` rodam de verdade, então a
- * classificação segura/ambíguo é testada de ponta a ponta, não simulada.
+ * Com `Idempotency-Key`, reenviar o MESMO lançamento não pode duplicar, então
+ * a confirmação inline saiu do caminho comum. Ela sobrou só onde ainda
+ * protege: erro AMBÍGUO seguido de EDIÇÃO dos dados — aí vai chave nova, e o
+ * lançamento anterior pode existir no servidor.
+ *
+ * Só `createTransactionForUi` é mockada (o limite de rede). `formatTransactionsApiError`,
+ * `isCreateTransactionErrorMaybePersisted` e `createTransactionPayloadFingerprint`
+ * rodam de verdade, então a classificação segura/ambíguo e a comparação de
+ * payload são testadas de ponta a ponta, não simuladas.
  */
 
 // Referências ESTÁVEIS entre renders — de propósito. O componente tem um
@@ -80,10 +86,23 @@ vi.mock("../../../data/transactionsAdapter.js", async (importOriginal) => {
   return {
     ...actual,
     createTransactionForUi: vi.fn(),
+    // O modal NÃO decide sozinho se um reenvio é replay — ele pergunta ao
+    // adapter, que pesa impressão digital, TTL e suporte observado do
+    // servidor. Aqui a resposta é controlada por cenário: é justamente essa
+    // costura (UI reagindo ao veredito do adapter) que se quer testar.
+    createResendIsProtected: vi.fn(() => false),
+    // Embrulha a implementação real: o efeito continua acontecendo e ainda dá
+    // para afirmar QUANDO o modal solta a chave retida.
+    releaseCreateIdempotencyKey: vi.fn(actual.releaseCreateIdempotencyKey),
   };
 });
 
-import { createTransactionForUi } from "../../../data/transactionsAdapter.js";
+import {
+  createResendIsProtected,
+  createTransactionForUi,
+  createTransactionPayloadFingerprint,
+  releaseCreateIdempotencyKey,
+} from "../../../data/transactionsAdapter.js";
 import { NovaTransacaoModal } from "../NovaTransacaoModal.jsx";
 
 // `request: {}` (truthy) simula que a requisição de fato saiu do navegador —
@@ -114,7 +133,7 @@ async function fillAndReachReview(user) {
   await waitFor(() => expect(screen.getByRole("button", { name: /Confirmar despesa/i })).toBeInTheDocument());
 }
 
-describe("NovaTransacaoModal — criação que falha (reenvio manual, sem retry automático)", () => {
+describe("NovaTransacaoModal — criação que falha (reenvio manual protegido por Idempotency-Key)", () => {
   const baseProps = {
     open: true,
     onClose: vi.fn(),
@@ -126,6 +145,10 @@ describe("NovaTransacaoModal — criação que falha (reenvio manual, sem retry 
 
   beforeEach(() => {
     createTransactionForUi.mockReset();
+    releaseCreateIdempotencyKey.mockClear();
+    // Padrão SEGURO: sem prova de proteção, a UI pede confirmação.
+    createResendIsProtected.mockReset();
+    createResendIsProtected.mockReturnValue(false);
   });
 
   afterEach(() => {
@@ -158,12 +181,48 @@ describe("NovaTransacaoModal — criação que falha (reenvio manual, sem retry 
 
     // Reenvio direto: SEM faixa de confirmação inline (erro seguro).
     await user.click(retryBtn);
-    expect(screen.queryByText(/Sim, tentar mesmo assim/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Confira seu extrato/i)).not.toBeInTheDocument();
 
     await waitFor(() => expect(createTransactionForUi).toHaveBeenCalledTimes(2));
   });
 
-  it("erro de REDE (AMBÍGUO — pode já ter gravado): mensagem avisa para conferir o extrato, botão pede confirmação NA PRÓPRIA UI antes de reenviar", async () => {
+  it("erro de REDE (AMBÍGUO) com reenvio PROTEGIDO: vai DIRETO — a chave de idempotência já garante que não duplica", async () => {
+    const user = userEvent.setup();
+    createResendIsProtected.mockReturnValue(true);
+    createTransactionForUi.mockRejectedValueOnce(networkError());
+
+    render(<NovaTransacaoModal {...baseProps} />);
+    await fillAndReachReview(user);
+
+    await user.click(screen.getByRole("button", { name: /Confirmar despesa/i }));
+
+    // A mensagem passou a explicar a garantia, em vez de mandar conferir o
+    // extrato antes de qualquer reenvio.
+    await waitFor(() =>
+      expect(screen.getByText(/não duplica o lançamento/i)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/Confira seu extrato/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Uber")).toBeInTheDocument();
+
+    // Rótulo único: acabou o "mesmo assim" cheio de dedos.
+    const retryBtn = await screen.findByRole("button", { name: "Tentar novamente" });
+    createTransactionForUi.mockResolvedValueOnce({ id: 2 });
+    await user.click(retryBtn);
+
+    // Um clique, um POST — sem faixa de confirmação no meio.
+    await waitFor(() => expect(createTransactionForUi).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText(/Confira seu extrato/i)).not.toBeInTheDocument();
+    // E o payload reenviado é IDÊNTICO ao que falhou: é isso que faz o
+    // adapter reaproveitar a chave em vez de gerar uma nova.
+    expect(createTransactionForUi.mock.calls[1][0]).toEqual(createTransactionForUi.mock.calls[0][0]);
+  });
+
+  it("erro AMBÍGUO + dados EDITADOS: aí sim volta a confirmação inline, porque a chave muda e o lançamento anterior pode existir", async () => {
+    // Enquanto os dados são os mesmos, o adapter diz "protegido"; depois da
+    // edição ele passa a dizer "não" — e é isso que arma a faixa.
+    createResendIsProtected.mockImplementation(
+      (payload) => !String(payload?.description ?? "").includes("aeroporto"),
+    );
     // Confirmação inline, não `window.confirm`: o Playwright descarta
     // diálogos por padrão, o Chrome trava diálogos repetidos, e em jsdom a
     // chamada nem existe — um teste que dependesse de `window.confirm`
@@ -173,48 +232,189 @@ describe("NovaTransacaoModal — criação que falha (reenvio manual, sem retry 
 
     render(<NovaTransacaoModal {...baseProps} />);
     await fillAndReachReview(user);
-
     await user.click(screen.getByRole("button", { name: /Confirmar despesa/i }));
+    await screen.findByRole("button", { name: "Tentar novamente" });
 
-    await waitFor(() =>
-      expect(screen.getByText(/confira seu extrato antes de tentar de novo/i)).toBeInTheDocument(),
-    );
-    expect(screen.getByText("Uber")).toBeInTheDocument();
+    // Volta, muda a descrição e revisa de novo: outro lançamento.
+    await user.click(screen.getByRole("button", { name: /Editar/i }));
+    await user.type(document.querySelector("textarea"), " para o aeroporto");
+    await user.click(screen.getByRole("button", { name: /Revisar despesa/i }));
 
-    const retryBtn = await screen.findByRole("button", { name: "Tentar novamente mesmo assim" });
-    expect(retryBtn).toBeInTheDocument();
+    // Enquanto estava protegido, a mensagem prometia "não duplica".
+    expect(screen.getByText(/não duplica o lançamento/i)).toBeInTheDocument();
 
     // 1º clique arma a confirmação inline — NÃO reenvia ainda.
-    await user.click(retryBtn);
-    const confirmRow = await screen.findByText(/Sim, tentar mesmo assim/i);
-    expect(confirmRow).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Tentar novamente" }));
+    expect(await screen.findByText(/Confira seu extrato antes de continuar/i)).toBeInTheDocument();
     expect(createTransactionForUi).toHaveBeenCalledTimes(1);
+    // E a promessa SOME: ela contradiria a faixa e, aqui, já é falsa —
+    // restaurar a mensagem inteira deixava as duas frases juntas na tela.
+    expect(screen.queryByText(/não duplica o lançamento/i)).not.toBeInTheDocument();
 
     // Cancelar: volta ao normal, sem reenviar.
     await user.click(screen.getByRole("button", { name: "Cancelar" }));
     expect(createTransactionForUi).toHaveBeenCalledTimes(1);
-    await screen.findByRole("button", { name: "Tentar novamente mesmo assim" });
+    await screen.findByRole("button", { name: "Tentar novamente" });
 
-    // Arma de novo e confirma: reenvia.
+    // Arma de novo e confirma: reenvia (com o texto editado).
     createTransactionForUi.mockResolvedValueOnce({ id: 2 });
-    await user.click(screen.getByRole("button", { name: "Tentar novamente mesmo assim" }));
-    await user.click(await screen.findByRole("button", { name: "Sim, tentar mesmo assim" }));
+    await user.click(screen.getByRole("button", { name: "Tentar novamente" }));
+    await user.click(await screen.findByRole("button", { name: "Registrar assim mesmo" }));
     await waitFor(() => expect(createTransactionForUi).toHaveBeenCalledTimes(2));
+    expect(createTransactionForUi.mock.calls[1][0].description).toMatch(/aeroporto/);
   });
 
-  it("500 (AMBÍGUO): também exige confirmação inline — não é só a família de rede", async () => {
+  it("500 (AMBÍGUO) com reenvio protegido: também vai direto — a garantia não é só da família de rede", async () => {
     const user = userEvent.setup();
+    createResendIsProtected.mockReturnValue(true);
     createTransactionForUi.mockRejectedValueOnce(httpError(500));
 
     render(<NovaTransacaoModal {...baseProps} />);
     await fillAndReachReview(user);
     await user.click(screen.getByRole("button", { name: /Confirmar despesa/i }));
 
-    const retryBtn = await screen.findByRole("button", { name: "Tentar novamente mesmo assim" });
-    expect(retryBtn).toBeInTheDocument();
-
+    const retryBtn = await screen.findByRole("button", { name: "Tentar novamente" });
+    createTransactionForUi.mockResolvedValueOnce({ id: 3 });
     await user.click(retryBtn);
-    expect(await screen.findByText(/Sim, tentar mesmo assim/i)).toBeInTheDocument();
+
+    await waitFor(() => expect(createTransactionForUi).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText(/Confira seu extrato/i)).not.toBeInTheDocument();
+  });
+
+
+  it("backend SEM idempotência (adapter diz \"não protegido\"): dados idênticos, e ainda assim a confirmação é exigida", async () => {
+    // Regressão que a `main` não tem: com a promessa de replay valendo por
+    // conta própria, a UI pulava a faixa e um clique bastava para duplicar
+    // contra um servidor que ignora a chave. Quem decide é o adapter, e sem
+    // suporte observado ele responde `false`.
+    const user = userEvent.setup();
+    createResendIsProtected.mockReturnValue(false);
+    createTransactionForUi.mockRejectedValueOnce(networkError());
+
+    render(<NovaTransacaoModal {...baseProps} />);
+    await fillAndReachReview(user);
+    await user.click(screen.getByRole("button", { name: /Confirmar despesa/i }));
+
+    // Sem proteção não há promessa: a mensagem não pode dizer "sem medo".
+    await waitFor(() =>
+      expect(screen.getByText(/Não foi possível conectar ao servidor/i)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/não duplica o lançamento/i)).not.toBeInTheDocument();
+
+    // Um clique NÃO envia: a faixa de confirmação aparece antes.
+    await user.click(await screen.findByRole("button", { name: "Tentar novamente" }));
+    expect(await screen.findByText(/Confira seu extrato antes de continuar/i)).toBeInTheDocument();
+    expect(createTransactionForUi).toHaveBeenCalledTimes(1);
+    // E a frase tranquilizadora não pode reaparecer junto com a faixa.
+    expect(screen.queryByText(/não duplica o lançamento/i)).not.toBeInTheDocument();
+  });
+
+  it("erro que LIBEROU a chave (422 PAYLOAD_MISMATCH): sem a promessa de \"não duplica\" e com confirmação antes de reenviar", async () => {
+    // Mismatch prova que o envio anterior foi processado, e o adapter solta a
+    // chave — o reenvio deixa de ser replay. Prometer "pode tentar sem medo"
+    // aqui empurraria a pessoa direto para a duplicata.
+    const user = userEvent.setup();
+    const err = httpError(422, {
+      detail: { error: "IDEMPOTENCY_KEY_PAYLOAD_MISMATCH", message: "mismatch", type: "idempotency" },
+    });
+    err.__finclaIdempotencyKeyReleased = true;
+    createTransactionForUi.mockRejectedValueOnce(err);
+
+    render(<NovaTransacaoModal {...baseProps} />);
+    await fillAndReachReview(user);
+    await user.click(screen.getByRole("button", { name: /Confirmar despesa/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/confira seu extrato antes de registrar de novo/i)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/não duplica o lançamento/i)).not.toBeInTheDocument();
+
+    // Sem chave retida, reenviar é lançamento novo: a confirmação volta mesmo
+    // com os dados intactos.
+    await user.click(await screen.findByRole("button", { name: "Tentar novamente" }));
+    expect(await screen.findByText(/Confira seu extrato antes de continuar/i)).toBeInTheDocument();
+    expect(createTransactionForUi).toHaveBeenCalledTimes(1);
+  });
+
+  it("reabrir o drawer SOLTA a chave retida da falha descartada (senão um lançamento igual horas depois volta como replay)", async () => {
+    const user = userEvent.setup();
+    createTransactionForUi.mockRejectedValueOnce(networkError());
+
+    const { rerender } = render(<NovaTransacaoModal {...baseProps} />);
+    await fillAndReachReview(user);
+    await user.click(screen.getByRole("button", { name: /Confirmar despesa/i }));
+    await screen.findByRole("button", { name: "Tentar novamente" });
+
+    const failedFingerprint = createTransactionPayloadFingerprint(
+      createTransactionForUi.mock.calls[0][0],
+    );
+    releaseCreateIdempotencyKey.mockClear();
+
+    rerender(<NovaTransacaoModal {...baseProps} open={false} />);
+    rerender(<NovaTransacaoModal {...baseProps} open={true} />);
+
+    await waitFor(() =>
+      expect(releaseCreateIdempotencyKey).toHaveBeenCalledWith(failedFingerprint),
+    );
+  });
+
+  it("reabrir solta TODAS as tentativas abandonadas, não só a última", async () => {
+    // Guardar só a última fingerprint deixava chave órfã: falha em A, falha
+    // em B, e a chave de A seguia retida — reentrar A dentro do TTL voltava
+    // como replay e a tela dizia "Registrado!" sem nada ter sido criado.
+    const user = userEvent.setup();
+    createResendIsProtected.mockReturnValue(true);
+    createTransactionForUi.mockRejectedValue(networkError());
+
+    const { rerender } = render(<NovaTransacaoModal {...baseProps} />);
+    await fillAndReachReview(user);
+    await user.click(screen.getByRole("button", { name: /Confirmar despesa/i }));
+    await screen.findByRole("button", { name: "Tentar novamente" });
+
+    // Segunda tentativa, com dados diferentes: outra fingerprint, outra chave.
+    await user.click(screen.getByRole("button", { name: /Editar/i }));
+    await user.type(document.querySelector("textarea"), " ida");
+    await user.click(screen.getByRole("button", { name: /Revisar despesa/i }));
+    await user.click(await screen.findByRole("button", { name: "Tentar novamente" }));
+    await waitFor(() => expect(createTransactionForUi).toHaveBeenCalledTimes(2));
+
+    const fingerprints = createTransactionForUi.mock.calls.map((call) =>
+      createTransactionPayloadFingerprint(call[0]),
+    );
+    expect(new Set(fingerprints).size).toBe(2);
+    releaseCreateIdempotencyKey.mockClear();
+
+    rerender(<NovaTransacaoModal {...baseProps} open={false} />);
+    rerender(<NovaTransacaoModal {...baseProps} open={true} />);
+
+    for (const fingerprint of fingerprints) {
+      await waitFor(() => expect(releaseCreateIdempotencyKey).toHaveBeenCalledWith(fingerprint));
+    }
+  });
+
+  it("se a consulta de proteção LANÇAR, o drawer mostra o erro e volta a funcionar — nunca trava em \"Enviando…\"", async () => {
+    // `createResendIsProtected` passa por `stableStringify`, que lança de
+    // propósito em payload não-JSON. Como ela é chamada no caminho de ERRO,
+    // um throw ali escapava do `handleSave`: `setTxSubmitting(false)` nunca
+    // rodava e o drawer ficava preso em "Enviando…" sem nem exibir a mensagem.
+    const user = userEvent.setup();
+    createResendIsProtected.mockImplementation(() => {
+      throw new TypeError("Payload de transação com objeto não-simples (Date)");
+    });
+    createTransactionForUi.mockRejectedValueOnce(networkError());
+
+    render(<NovaTransacaoModal {...baseProps} />);
+    await fillAndReachReview(user);
+    await user.click(screen.getByRole("button", { name: /Confirmar despesa/i }));
+
+    // A mensagem de erro aparece...
+    await waitFor(() =>
+      expect(screen.getByText(/Não foi possível conectar ao servidor/i)).toBeInTheDocument(),
+    );
+    // ...e o botão sai de "Enviando…", utilizável de novo.
+    const retryBtn = await screen.findByRole("button", { name: "Tentar novamente" });
+    expect(retryBtn).toBeEnabled();
+    expect(screen.queryByRole("button", { name: /Enviando/i })).not.toBeInTheDocument();
   });
 
   it("fechar e reabrir o drawer limpa o \"Tentar novamente\" de uma falha anterior (reabrir pra EDITAR não pode herdar a ação de CRIAR)", async () => {
