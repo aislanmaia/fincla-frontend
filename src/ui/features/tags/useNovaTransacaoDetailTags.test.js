@@ -80,9 +80,12 @@ describe("useNovaTransacaoDetailTags", () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    // `status: "all"` (achado 2, rodada 4 de review #100) — sem isso,
-    // `ensureDetailTag` nunca acha uma tag arquivada pelo nome.
-    expect(tagsApi.listTags).toHaveBeenCalledWith(ORG, "detalhe", { status: "all" });
+    // Sem `status` (só ativas) — de propósito (achado 1, rodada 5 de
+    // review #100): o backend REATIVA uma tag arquivada em `POST /tags`
+    // pro mesmo nome; se este fetch trouxesse arquivadas, `ensureDetailTag`
+    // devolveria o id da linha inativa sem reativar (ver
+    // useNovaTransacaoDetailTags.js).
+    expect(tagsApi.listTags).toHaveBeenCalledWith(ORG, "detalhe");
     const row = result.current.findByLabel("família");
     expect(row?.id).toBe(DET_EXISTING);
     expect(result.current.labelForDetailId(DET_EXISTING)).toBe("família");
@@ -201,38 +204,11 @@ describe("useNovaTransacaoDetailTags", () => {
     expect(tagsApi.createTag).not.toHaveBeenCalled();
   });
 
-  // Regressão #100 (rodada 4 de review, achado 2): sem `status: "all"` em
-  // `listTags`, uma tag ARQUIVADA (`is_active: false`) nunca aparecia em
-  // `allDetail` — `ensureDetailTag` não achava, chamava `createTag`, e o
-  // backend (que checa duplicata incluindo linhas inativas) devolvia "Tag
-  // '...' already exists for this organization" em inglês, sem chip
-  // nenhum. Com a tag inativa no retorno de `listTags`, `ensureDetailTag`
-  // acha pelo nome e devolve o id — nunca chama `createTag`.
-  it("ensureDetailTag acha tag ARQUIVADA pelo nome (não tenta recriar, não bate no erro de duplicata do backend)", async () => {
-    const ARCHIVED = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
-    vi.mocked(tagsApi.listTags).mockResolvedValue({
-      tags: [
-        { ...detailRow(ARCHIVED, "assinatura antiga", CAT), is_active: false },
-      ],
-    });
-
-    const { result } = renderHook(() =>
-      useNovaTransacaoDetailTags({
-        organizationId: ORG,
-        categoryTagId: CAT,
-        enabled: true,
-      }),
-    );
-
-    await waitFor(() => expect(result.current.loading).toBe(false));
-
-    const id = await result.current.ensureDetailTag("assinatura antiga");
-    expect(id).toBe(ARCHIVED);
-    expect(tagsApi.createTag).not.toHaveBeenCalled();
-    expect(
-      result.current.detailTagRowsForCategory.find((r) => r.id === ARCHIVED)?.is_active,
-    ).toBe(false);
-  });
+  // Regressão #100 (rodada 5 de review): a versão anterior deste teste
+  // simulava `listTags` devolvendo uma tag ARQUIVADA — cenário que o hook
+  // real NUNCA produz (sem `status`, a API só devolve ativas). Removido
+  // junto com o revert de `status: "all"` (achado 1, rodada 5): o teste
+  // provava um estado fabricado, não o comportamento real do app.
 
   it("aceita parent explícito (ex.: sugestão IA antes do setState da categoria)", async () => {
     const { result } = renderHook(() =>

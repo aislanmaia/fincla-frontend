@@ -182,6 +182,32 @@ describe("pickDetailTagMetaMapFromApiTransaction", () => {
       [DET2]: { name: "semanal", isActive: true },
     });
   });
+
+  // Regressão #100 (rodada 5 de review, achado 7): `pickTagNames` (linha) e
+  // `pickDetailTagMetaMapFromApiTransaction` (modal) filtravam conjuntos
+  // DIFERENTES — o meta map exigia `id` e deixava passar sem nome (com
+  // placeholder); `pickTagNames` fazia o inverso (exigia nome, deixava
+  // passar sem id). Agora os dois exigem `id` e usam o MESMO placeholder
+  // pra nome vazio — uma tag sem nome (mas com id) aparece nos dois com
+  // "Tag {id}…"; uma tag sem id (mas com nome) some dos dois.
+  it("mesmo conjunto de tags nos dois call sites: sem nome ganha placeholder nos dois, sem id some dos dois", () => {
+    const SEM_NOME = "12345678-90ab-4cde-8f01-234567890abc";
+    const tx = minimalTransaction({
+      tags: {
+        categoria: [tagStub(CAT_ID, "Alimentação", "categoria", null)],
+        detalhe: [
+          { ...tagStub(SEM_NOME, "", "detalhe", CAT_ID), name: "" },
+          { ...tagStub(DET1, "tem nome mas sem id", "detalhe", CAT_ID), id: null },
+        ],
+      },
+    });
+
+    const mapped = mapApiTransactionToUi(tx);
+    const placeholder = `Tag ${SEM_NOME.slice(0, 8)}…`;
+    expect(mapped.tags).toEqual([placeholder]);
+    expect(mapped.detailTagMetaById[SEM_NOME]?.name).toBe(placeholder);
+    expect(mapped.tags).not.toContain("tem nome mas sem id");
+  });
 });
 
 // Regressão #100 (rodada 3 de review, achado 4): a desambiguação por nome
@@ -193,12 +219,19 @@ describe("pickDetailTagMetaMapFromApiTransaction", () => {
 // garantidamente único, senão os chips leem igual E o React recebe key
 // duplicada (`TransacoesPage.jsx`, `key={tag}`).
 //
-// Rodada 4: o desempate final NÃO usa o id inteiro (era ilegível — um pill
-// de 11px sem largura garantida e a mesma string vazando pro CSV, achado
-// 4). Usa um índice de ocorrência curto ("mensal (1)", "mensal (2)"),
-// garantidamente único dentro do grupo por construção.
-describe("desambiguação de tags detalhe com nome cru idêntico (achado 4, rodadas 3 e 4)", () => {
-  it('duas tags do usuário chamadas "mensal" (sem hierarquia de categoria) desambiguam por índice de ocorrência', () => {
+// Rodada 4: o desempate final NÃO usava o id inteiro (era ilegível — um
+// pill de 11px sem largura garantida e a mesma string vazando pro CSV,
+// achado 4), passou a usar índice de ocorrência.
+//
+// Rodada 5: o índice de ocorrência é POSICIONAL — `TransactionModel.tags`
+// é uma relação `secondary` sem `order_by` no backend, então a MESMA tag
+// podia ler "(1)" numa carga e "(2)" na seguinte (CSV grava strings
+// diferentes pra mesma tag entre exportações; `novaTxModalInitStamp`, que
+// hasheia `detailTagDisplayById`, muda e redispara o reset do modal).
+// Agora usa um PREFIXO CURTO do id (8 chars) — estável em qualquer ordem,
+// só depende da própria tag (achado 3, rodada 5 de review #100).
+describe("desambiguação de tags detalhe com nome cru idêntico (achados 3/4/6, rodadas 3/4/5)", () => {
+  it('duas tags do usuário chamadas "mensal" (sem hierarquia de categoria) desambiguam por prefixo curto e ESTÁVEL do id', () => {
     const tx = minimalTransaction({
       tags: {
         categoria: [tagStub(CAT_ID, "Alimentação", "categoria", null)],
@@ -210,14 +243,47 @@ describe("desambiguação de tags detalhe com nome cru idêntico (achado 4, roda
     });
 
     const mapped = mapApiTransactionToUi(tx);
-    expect(mapped.tags).toEqual(["mensal (1)", "mensal (2)"]);
+    expect(mapped.tags).toEqual([
+      `mensal (${DET1.slice(0, 8)})`,
+      `mensal (${DET2.slice(0, 8)})`,
+    ]);
     // Sem colisão de key no React: os dois rótulos são únicos entre si.
     expect(new Set(mapped.tags).size).toBe(2);
 
     // `detailTagMetaById`/`detailTagDisplayById` usam a mesma desambiguação
-    // (achado 5) — não podem voltar a mostrar "mensal"/"mensal" ao editar.
-    expect(mapped.detailTagMetaById[DET1].name).toBe("mensal (1)");
-    expect(mapped.detailTagMetaById[DET2].name).toBe("mensal (2)");
+    // (achado 5, rodada 3) — não podem voltar a mostrar "mensal"/"mensal"
+    // ao editar.
+    expect(mapped.detailTagMetaById[DET1].name).toBe(`mensal (${DET1.slice(0, 8)})`);
+    expect(mapped.detailTagMetaById[DET2].name).toBe(`mensal (${DET2.slice(0, 8)})`);
+  });
+
+  // Regressão #100 (rodada 5, achado 3): a ordem em que o backend devolve
+  // as tags no payload NÃO É garantida (sem `order_by`) — o mesmo par de
+  // tags "mensal" precisa desambiguar pro MESMO texto independente da
+  // ordem de chegada.
+  it("o rótulo desambiguado não depende da ordem das tags no payload", () => {
+    const txOrderAB = minimalTransaction({
+      tags: {
+        categoria: [tagStub(CAT_ID, "Alimentação", "categoria", null)],
+        detalhe: [
+          tagStub(DET1, "mensal", "detalhe", null),
+          tagStub(DET2, "mensal", "detalhe", null),
+        ],
+      },
+    });
+    const txOrderBA = minimalTransaction({
+      tags: {
+        categoria: [tagStub(CAT_ID, "Alimentação", "categoria", null)],
+        detalhe: [
+          tagStub(DET2, "mensal", "detalhe", null),
+          tagStub(DET1, "mensal", "detalhe", null),
+        ],
+      },
+    });
+
+    const labelForDet1InOrderAB = mapApiTransactionToUi(txOrderAB).detailTagMetaById[DET1].name;
+    const labelForDet1InOrderBA = mapApiTransactionToUi(txOrderBA).detailTagMetaById[DET1].name;
+    expect(labelForDet1InOrderAB).toBe(labelForDet1InOrderBA);
   });
 
   // Regressão #100 (rodada 4 de review, achado 3): `pickTagNames` (linha)
@@ -250,6 +316,33 @@ describe("desambiguação de tags detalhe com nome cru idêntico (achado 4, roda
     // modal de edição.
     expect(mapped.detailTagMetaById[GROCERY].name).toBe("mercado (grocery)");
     expect(mapped.detailTagDisplayById[GROCERY]).toBe("mercado (grocery)");
+  });
+
+  // Regressão #100 (rodada 5 de review, achado 6): a passada do prefixo
+  // curto do id pode, em teoria, colidir com uma tag de verdade cujo nome
+  // JÁ É literalmente "rótulo (prefixo)" — duas "mensal" viram "mensal
+  // (bbbbbbbb)"/"mensal (cccccccc)", e se existir uma terceira tag chamada
+  // ao pé da letra "mensal (bbbbbbbb)", ela ficaria idêntica à primeira.
+  // Uma rechecagem final troca pelo id INTEIRO só nas entradas que ainda
+  // colidem depois do prefixo curto.
+  it('residual: tag literal "mensal (prefixo)" colidindo com o prefixo curto de outra "mensal" ainda desambigua (rechecagem final)', () => {
+    const LITERAL_COLLISION = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+    const tx = minimalTransaction({
+      tags: {
+        categoria: [tagStub(CAT_ID, "Alimentação", "categoria", null)],
+        detalhe: [
+          tagStub(DET1, "mensal", "detalhe", null),
+          tagStub(DET2, "mensal", "detalhe", null),
+          tagStub(LITERAL_COLLISION, `mensal (${DET1.slice(0, 8)})`, "detalhe", null),
+        ],
+      },
+    });
+
+    const mapped = mapApiTransactionToUi(tx);
+    expect(mapped.tags).toHaveLength(3);
+    // Nenhum dos três rótulos pode colidir entre si — key React única e
+    // nenhuma tag "some" atrás de outra com o mesmo texto.
+    expect(new Set(mapped.tags).size).toBe(3);
   });
 });
 

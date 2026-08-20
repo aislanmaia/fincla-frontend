@@ -219,27 +219,25 @@ export function buildDashboardCategoryRows(
       .filter((c) => c.tag_id != null && c.tag_id !== "")
       .map((c) => [String(c.tag_id), c.tag_color]),
   );
+  // Achado 4, rodada 5 de review #100: `apiList` vem de `/analytics/by-category`
+  // (o endpoint de agregação do consultor), que NUNCA manda `is_default`
+  // (ver doc de `categoryLabelPtForTag`) — essa chave de junção com `row`
+  // (abaixo) só pode levar em conta o que os DOIS lados têm em comum. Uma
+  // função ÚNICA (`apiJoinKey`) evita que os dois lados divirjam nas
+  // próximas edições — antes desta correção, `rowNameKey` passou a levar
+  // `is_default` enquanto este mapa não, e pra uma categoria do usuário
+  // "Health" (`is_default:false`, que bloqueia a tradução) a chave da linha
+  // virava "health" mas a chave da API (sem `is_default`, que NÃO bloqueia)
+  // virava "saude" — nunca casavam, e a cor caía no fallback hasheado em
+  // vez da cor de verdade da API.
+  const apiJoinKey = (name, iconKey) =>
+    normalizeTagNameKey(categoryLabelPtForTag({ name, icon_key: iconKey ?? null }));
+
   const apiColorByName = new Map(
-    apiList.map((c) => [
-      normalizeTagNameKey(
-        categoryLabelPtForTag({
-          name: c.tag_name,
-          icon_key: c.tag_icon_key ?? null,
-        }),
-      ),
-      c.tag_color,
-    ]),
+    apiList.map((c) => [apiJoinKey(c.tag_name, c.tag_icon_key), c.tag_color]),
   );
   const apiMetaByName = new Map(
-    apiList.map((c) => {
-      const normalizedName = normalizeTagNameKey(
-        categoryLabelPtForTag({
-          name: c.tag_name,
-          icon_key: c.tag_icon_key ?? null,
-        }),
-      );
-      return [normalizedName, c];
-    }),
+    apiList.map((c) => [apiJoinKey(c.tag_name, c.tag_icon_key), c]),
   );
 
   const sourceRows =
@@ -262,13 +260,12 @@ export function buildDashboardCategoryRows(
     .sort((a, b) => b.total - a.total)
     .slice(0, DASHBOARD_CATEGORY_CARD_LIMIT)
     .map((row) => {
-      const rowNameKey = normalizeTagNameKey(
-        categoryLabelPtForTag({
-          name: row.tagName,
-          icon_key: row.icon_key ?? null,
-          is_default: row.isDefault ?? null,
-        }),
-      );
+      // Mesma chamada de `apiJoinKey` acima — de propósito SEM `is_default`
+      // (só serve pra casar com `apiColorByName`/`apiMetaByName`, que nunca
+      // têm esse campo). O nome FINAL exibido no card (correto,
+      // `is_default`-aware) é computado separadamente por `mapCategory`
+      // logo abaixo — este `rowNameKey` é só a chave de junção interna.
+      const rowNameKey = apiJoinKey(row.tagName, row.icon_key);
       const apiMeta = apiMetaByName.get(rowNameKey);
       const tagId = row.tagId || apiMeta?.tag_id || undefined;
       const iconKey = row.icon_key || apiMeta?.tag_icon_key || null;

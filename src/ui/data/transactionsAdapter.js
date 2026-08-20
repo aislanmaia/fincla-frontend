@@ -197,7 +197,13 @@ function pickTagNames(transaction, categoryDisplayName) {
     .filter(({ groupKey, tag }) => {
       if (isCategoryTagGroupKey(groupKey)) return false;
       if (isApiTagTypeCategory(tag)) return false;
-      if (!tag?.name) return false;
+      // Mesmo gate de `pickDetailTagMetaMapFromApiTransaction` (achado 7,
+      // rodada 5 de review #100) — exige `id` (sem id não dá pra editar/
+      // selecionar a tag depois; os dois call sites viam conjuntos
+      // diferentes: este exigia nome e deixava passar sem id, o outro o
+      // inverso) e NÃO exige nome (nome vazio ganha o mesmo placeholder
+      // abaixo, em vez de sumir da linha mas continuar no modal).
+      if (!tag?.id) return false;
       if (
         primaryCatId &&
         tag.parent_category_tag_id != null &&
@@ -209,19 +215,22 @@ function pickTagNames(transaction, categoryDisplayName) {
       // Dedupe pelo ID real da tag, não pelo texto já traduzido: a tag seed
       // "grocery" (→ "mercado") e uma tag do usuário literalmente chamada
       // "mercado" são duas tags diferentes e não podem virar um chip só.
-      const id = tag?.id != null ? String(tag.id) : null;
-      if (id) {
-        if (seenIds.has(id)) return false;
-        seenIds.add(id);
-      }
+      const id = String(tag.id);
+      if (seenIds.has(id)) return false;
+      seenIds.add(id);
       return true;
     })
-    // `tag.name` pode vir cru do seed (`grocery`, `health_plan`...) — traduz pro chip.
-    .map(({ tag }) => ({
-      id: tag?.id != null ? String(tag.id) : null,
-      tag,
-      label: detailLabelPtForTag(tag) || tag.name,
-    }));
+    // `tag.name` pode vir cru do seed (`grocery`, `health_plan`...) — traduz
+    // pro chip. Sem nome, mesmo placeholder de `pickDetailTagMetaMapFromApiTransaction`.
+    .map(({ tag }) => {
+      const id = String(tag.id);
+      const rawName = tag.name != null ? String(tag.name).trim() : "";
+      return {
+        id,
+        tag,
+        label: rawName ? detailLabelPtForTag(tag) || rawName : `Tag ${id.slice(0, 8)}…`,
+      };
+    });
   // Desambigua sobre o conjunto COMPLETO (achado 3, rodada 4 de review
   // #100) — inclusive a tag cujo nome cru bate com o nome cru da categoria,
   // que só é excluída da LINHA embaixo. `pickDetailTagMetaMapFromApiTransaction`
@@ -245,48 +254,79 @@ function pickTagNames(transaction, categoryDisplayName) {
  * "#mercado" idênticos, que se leem como bug de duplicação embora sejam tags
  * de verdade diferentes.
  *
- * Duas passadas, mesmo padrão de `buildTagOptions`
+ * Três passadas, mesmo padrão de `buildTagOptions`
  * (`filters/tagCatalogResolution.js`, achado 4a da revisão da PR #96), com
- * um ajuste no desempate final (achado 4, rodada 4 de review #100 —
- * `buildTagOptions` apenda o id INTEIRO, mas ali é um dropdown de filtro
- * com largura de sobra; aqui é um pill de 11px numa linha de transação e a
- * mesma string vai pro CSV — um UUID inteiro fica ilegível nos dois):
+ * um ajuste no desempate final:
  * 1) quando o rótulo traduzido colide, tenta desempatar anexando o nome cru
  *    original entre parênteses (só nas entradas cujo nome cru difere do
  *    rótulo — a tag do usuário, cujo nome já É o rótulo, fica limpa);
  * 2) se AINDA colidir (duas tags de verdade com o MESMO nome cru, ex. duas
  *    tags "mensal" criadas pelo usuário — `rawName` e `label` são
- *    idênticos pras duas, a passada 1 não desempata nada), anexa um índice
- *    de ocorrência curto ("mensal (1)", "mensal (2)") — garantidamente
- *    único dentro do grupo por construção (não depende do tamanho de um
- *    prefixo de id) e legível no chip e no CSV.
+ *    idênticos pras duas, a passada 1 não desempata nada), anexa um
+ *    PREFIXO CURTO do id (8 chars, mesma convenção de
+ *    `pickDetailTagMetaMapFromApiTransaction`'s "Tag {id}…"). Não usa
+ *    índice de ocorrência posicional (rodada 4) nem o id INTEIRO (rodada 3
+ *    — `buildTagOptions` faz isso, mas ali é um dropdown de filtro com
+ *    largura de sobra; aqui é um pill de 11px numa linha de transação e a
+ *    mesma string vai pro CSV): um índice depende da ORDEM em que o
+ *    backend devolve as tags — `TransactionModel.tags` é uma relação
+ *    `secondary` sem `order_by` — então a MESMA tag podia ler "(1)" numa
+ *    carga e "(2)" na seguinte (CSV grava strings diferentes pra mesma
+ *    tag; `novaTxModalInitStamp`, que hasheia `detailTagDisplayById`, muda
+ *    e redispara o reset do modal). O prefixo do id é estável por
+ *    construção — o mesmo em qualquer ordem — e mais legível que o id
+ *    inteiro (achado 3, rodada 5 de review #100).
+ * 3) rechecagem final: o prefixo curto, embora praticamente sempre único,
+ *    não é garantido (dois ids podem coincidir nos 8 primeiros chars, ou
+ *    uma tag de verdade pode já se chamar literalmente "rótulo (idcurto)")
+ *    — se ainda colidir depois da passada 2, troca pelo id INTEIRO nessas
+ *    entradas específicas, que é garantidamente único (achado 6, rodada 5).
  * @param {Array<{ id?: string | null; tag: Record<string, unknown>; label: string }>} entries
  * @returns {Array<{ id?: string | null; tag: Record<string, unknown>; label: string }>}
  */
 function disambiguateTagLabelEntries(entries) {
-  const counts = new Map();
-  for (const { label } of entries) counts.set(label, (counts.get(label) ?? 0) + 1);
+  const idOf = (entry) =>
+    entry.id ?? (entry.tag?.id != null ? String(entry.tag.id) : "");
 
+  const countsOf = (list) => {
+    const c = new Map();
+    for (const { label } of list) c.set(label, (c.get(label) ?? 0) + 1);
+    return c;
+  };
+
+  // Passada 1: nome cru como desempate.
+  const counts = countsOf(entries);
   const withRawNameCandidate = entries.map((entry) => {
     if ((counts.get(entry.label) ?? 0) <= 1) return entry;
     const rawName = entry.tag?.name != null ? String(entry.tag.name).trim() : "";
     if (rawName && rawName.toLowerCase() !== entry.label.toLowerCase()) {
-      return { ...entry, label: `${entry.label} (${rawName})` };
+      return { ...entry, label: `${entry.label} (${rawName})`, preIdLabel: entry.label };
     }
     return entry;
   });
 
-  const finalCounts = new Map();
-  for (const { label } of withRawNameCandidate) {
-    finalCounts.set(label, (finalCounts.get(label) ?? 0) + 1);
-  }
-
-  const occurrenceByLabel = new Map();
-  return withRawNameCandidate.map((entry) => {
+  // Passada 2: prefixo curto e ESTÁVEL do id (não depende de ordem).
+  const finalCounts = countsOf(withRawNameCandidate);
+  const withShortId = withRawNameCandidate.map((entry) => {
     if ((finalCounts.get(entry.label) ?? 0) <= 1) return entry;
-    const n = (occurrenceByLabel.get(entry.label) ?? 0) + 1;
-    occurrenceByLabel.set(entry.label, n);
-    return { ...entry, label: `${entry.label} (${n})` };
+    const id = idOf(entry);
+    if (!id) return entry;
+    return {
+      ...entry,
+      preIdLabel: entry.preIdLabel ?? entry.label,
+      label: `${entry.label} (${id.slice(0, 8)})`,
+    };
+  });
+
+  // Passada 3: rechecagem — residual raríssimo ainda colidindo cai no id
+  // inteiro, garantidamente único.
+  const shortIdCounts = countsOf(withShortId);
+  return withShortId.map((entry) => {
+    if ((shortIdCounts.get(entry.label) ?? 0) <= 1) return entry;
+    const id = idOf(entry);
+    if (!id) return entry;
+    const base = entry.preIdLabel ?? entry.label;
+    return { ...entry, label: `${base} (${id})` };
   });
 }
 

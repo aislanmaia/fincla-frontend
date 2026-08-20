@@ -260,4 +260,50 @@ describe("buildDashboardCategoryRows", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].name).toBe("Health");
   });
+
+  // Regressão #100 (rodada 5 de review, achado 4): `rowNameKey` passou a
+  // levar `is_default` (achado 1, rodada 5), mas `apiColorByName`/
+  // `apiMetaByName` (derivados de `/analytics/by-category`, que NUNCA manda
+  // `is_default`) continuavam chaveando sem ele — pra "Health"
+  // (`is_default:false`, bloqueia tradução) a chave da linha virava
+  // "health" mas a da API (sem `is_default`, traduz) virava "saude": nunca
+  // casavam, e a cor caía no fallback hasheado em vez da cor de verdade da
+  // API. `rowNameKey` voltou a NUNCA levar `is_default` (só serve de chave
+  // de junção com um lado que nunca tem esse campo); o nome FINAL exibido
+  // continua correto via `mapCategory`, testado acima.
+  it('categoria do usuário "Health" (is_default:false) ainda acha a cor da API pelo NOME (chave de junção não diverge, sem tag_id em comum)', () => {
+    const tx = {
+      type: "expense",
+      value: 150,
+      tags: {
+        categoria: [{ id: "cat-health", name: "Health", is_default: false }],
+      },
+    };
+    // `tag_id` DIFERENTE do id da tag na transação — de propósito, pra
+    // forçar o bridge passar pela chave de NOME (`apiColorByName`), não
+    // pelo id (`apiColorByTagId`). É exatamente esse caminho que quebrava:
+    // sem ele, o teste passaria mesmo com a chave assimétrica, porque o
+    // bridge por id "salvava" o resultado antes de chegar na chave de nome.
+    const apiCategories = [
+      {
+        tag_id: "outro-id-qualquer",
+        tag_name: "Health",
+        tag_icon_key: null,
+        tag_color: "#ABCDEF",
+        total: 150,
+      },
+    ];
+
+    const rows = buildDashboardCategoryRows(
+      [tx],
+      "2026-06-01",
+      "2026-06-30",
+      apiCategories,
+      new Map(),
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe("Health");
+    expect(rows[0].color).toBe("#ABCDEF");
+  });
 });
