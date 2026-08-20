@@ -19,7 +19,7 @@
  *     `/v1/users/me`. Nenhuma mudança no banco é necessária.
  */
 import { expect, test, type Page } from "@playwright/test";
-import { loginAsE2EOwner, navViaSidebar } from "./helpers/auth";
+import { loginAsE2EOwner } from "./helpers/auth";
 
 const e2eReady = Boolean(
   process.env.TEST_RESET_SECRET &&
@@ -69,6 +69,15 @@ function buildMockSimulateResponse(months = 12) {
     },
   };
 }
+
+// O handler de `page.route` abaixo faz `route.fetch()`, que é assíncrono. Se o
+// teste termina com uma requisição ainda em voo, o callback estoura
+// "Target page, context or browser has been closed" e derruba um teste que já
+// tinha passado. Soltar as rotas no fim de cada teste — com `ignoreErrors`, como
+// a própria mensagem do Playwright recomenda — fecha essa janela.
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+});
 
 async function ensureSimulationFeature(page: Page): Promise<void> {
   await page.route("**/v1/users/me", async (route) => {
@@ -171,9 +180,13 @@ async function setBudgetOverride(page: Page, value: string): Promise<void> {
 async function openCleanSimulationPage(page: Page): Promise<void> {
   await ensureSimulationFeature(page);
   await loginAsE2EOwner(page);
-  await navViaSidebar(page, "Simulação");
+  // A Simulação deixou de ser item de sidebar: migrou para o hub Planejamento
+  // como a sub-área `simulator` (`PLANNING_NAV`), que é deep-linkável. Navegar
+  // pela URL em vez de caçar um botão de nav também tira a dependência do
+  // rótulo, que já mudou de "Simulação" para "Simulador".
+  await page.goto("/planning/simulator");
   await expect(
-    page.getByRole("heading", { name: /Simulação/i }).first(),
+    page.getByRole("heading", { name: /Simula(ção|dor)/i }).first(),
   ).toBeVisible({ timeout: 10_000 });
 }
 

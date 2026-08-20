@@ -19,9 +19,19 @@ export async function loginAsE2EOwner(page: Page): Promise<void> {
   });
 }
 
-export async function navViaSidebar(
-  page: Page,
-  label: "Visão Geral" | "Recorrências",
-): Promise<void> {
+/** Rótulos que existem hoje na sidebar. `Simulação` saiu daqui: virou a sub-área
+ *  `simulator` do hub Planejamento, alcançada por `page.goto("/planning/simulator")`. */
+export type SidebarLabel =
+  | "Visão Geral"
+  | "Transações"
+  | "Recorrências"
+  | "Ritmo de Gastos"
+  | "Planejamento"
+  | "Contas & Saldo"
+  | "Cartões"
+  | "Relatórios"
+  | "Perfil";
+
+export async function navViaSidebar(page: Page, label: SidebarLabel): Promise<void> {
   await page.getByRole("navigation").getByRole("button", { name: label }).click();
 }

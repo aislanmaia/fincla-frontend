@@ -42,7 +42,9 @@ test.describe("Pro feature gating", () => {
       .catch(() => false);
     expect(reportsHasWall || reportsHasContent).toBeTruthy();
 
-    await navViaSidebar(page, "Simulação");
+    // A Simulação saiu da sidebar: virou a sub-área `simulator` do hub
+    // Planejamento, deep-linkável por URL.
+    await page.goto("/planning/simulator");
     const simHasWall = await page
       .getByRole("button", { name: /ver planos/i })
       .isVisible()
