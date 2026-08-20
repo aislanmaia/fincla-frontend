@@ -83,14 +83,22 @@ export function useAiSuggestion({
     if (useLiveDetailTags && catIdForDetailTags) {
       const nextIds = [];
       const nextLabels = {};
-      // fincla-frontend#109 achado 4: `ensureDetailTag` agora pode rejeitar de
-      // propósito (catálogo de tags ainda carregando — fail-closed do
-      // fincla-frontend#101), e a sugestão de IA é heurística local e
-      // síncrona: nada impede clicar "Aplicar" antes do catálogo terminar de
-      // carregar. Uma tag que falhou não pode simplesmente desaparecer — cai
-      // como tag de TEXTO LIVRE (mesmo caminho do `else` abaixo) em vez de
-      // ser descartada em silêncio enquanto a tela afirma que aplicou tudo.
-      const fallbackFreeTags = [];
+      // fincla-frontend#109 achado 4 (rodada 1) — `ensureDetailTag` pode
+      // rejeitar de propósito (catálogo de tags ainda carregando — fail-
+      // closed do fincla-frontend#101), e a sugestão de IA é heurística
+      // local e síncrona: nada impede clicar "Aplicar" antes do catálogo
+      // terminar de carregar.
+      //
+      // Rodada 2, achado 2: a 1ª correção fazia a tag que falhasse cair em
+      // `setTags` (texto livre) — mas em modo live `tags` é ESTADO MORTO: os
+      // chips da seção "Tags" só leem `detailTagIds` (a seção some se ele
+      // estiver vazio) e o payload da transação só manda `detailTagIds`. A
+      // tag continuava sumindo, só que em silêncio ainda mais fundo, com
+      // `aiApplied(true)` afirmando "Categoria e tags aplicadas". Marca a
+      // falha e NÃO fecha como aplicado — o botão "Aplicar" continua
+      // disponível pra tentar de novo (as tags que já resolveram ficam;
+      // `ensureDetailTag` é idempotente pra elas, não duplica num retry).
+      let hasFailedTag = false;
       for (const t of aiSuggestion.tags || []) {
         try {
           const id = await ensureDetailTag(String(t), catIdForDetailTags);
@@ -99,12 +107,12 @@ export function useAiSuggestion({
             nextLabels[String(id)] = String(t);
           }
         } catch {
-          fallbackFreeTags.push(String(t));
+          hasFailedTag = true;
         }
       }
       setDetailTagIds(nextIds);
       setDetailTagLabelById(nextLabels);
-      setTags(fallbackFreeTags);
+      if (hasFailedTag) return;
     } else {
       setTags(aiSuggestion.tags || []);
       setDetailTagIds([]);

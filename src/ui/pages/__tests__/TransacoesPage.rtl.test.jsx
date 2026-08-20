@@ -815,6 +815,57 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     expect(screen.getByText(/Carregando transações/i)).toBeInTheDocument();
     expect(screen.queryByText(/Nenhuma transação encontrada/i)).not.toBeInTheDocument();
   });
+
+  // fincla-frontend#109 rodada 2, achado 4: a faixa de KPI (Receitas/
+  // Despesas/Resultado) só tratava `tagFilterBlocked` como "ainda não sei
+  // responder" — em `listLoading`/`listLoadFailed` ela continuava afirmando
+  // "+R$ 0,00" e "0 lançamentos"/"0 transações no filtro", contradizendo o
+  // card da lista logo abaixo. É o mesmo "zero confiante" que o #106 corrigiu
+  // na lista, só que no componente vizinho.
+  it("KPI: em listLoading mostra '—' e 'Carregando…', nunca 'R$' nem contagem de lançamentos", () => {
+    transactionsDataMock.mockReturnValue({
+      isLoading: true, error: "", hasLoaded: false,
+      summary: null, transactions: [], total: 0, hasMore: false,
+      removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
+    });
+    renderPage();
+
+    // 3 cards de KPI + o chip "Tags: —" da facet (sem seleção, sempre "—"
+    // independente de loading — não é o que este teste cobre).
+    expect(screen.getAllByText("—").length).toBe(4);
+    expect(screen.getAllByText("Carregando…").length).toBe(3);
+    expect(screen.queryByText(/R\$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/lançamento/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/transaç.*no filtro/i)).not.toBeInTheDocument();
+  });
+
+  it("KPI: em listLoadFailed mostra '—' e 'Não foi possível carregar', nunca 'R$'", () => {
+    transactionsDataMock.mockReturnValue({
+      isLoading: false, error: "Falha ao carregar transações.", hasLoaded: false,
+      summary: null, transactions: [], total: 0, hasMore: false,
+      removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
+    });
+    renderPage();
+
+    expect(screen.getAllByText("—").length).toBe(4);
+    expect(screen.getAllByText("Não foi possível carregar").length).toBe(3);
+    expect(screen.queryByText(/R\$/)).not.toBeInTheDocument();
+  });
+
+  it("KPI: vazio de verdade (hasLoaded=true) volta a mostrar valores e contagem normais", () => {
+    transactionsDataMock.mockReturnValue({
+      isLoading: false, error: "", hasLoaded: true,
+      summary: { total_income: 0, total_expenses: 0, total_refunds: 0, balance: 0 },
+      transactions: [], total: 0, hasMore: false,
+      removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
+    });
+    renderPage();
+
+    // Só sobra o chip "Tags: —" (facet sem seleção) — nenhum "—" extra
+    // vindo da faixa de KPI.
+    expect(screen.getAllByText("—").length).toBe(1);
+    expect(screen.getAllByText(/R\$/).length).toBeGreaterThan(0);
+  });
 });
 
 describe("<TransacoesPage> — lançamentos cobertos por âncora (S4)", { timeout: 15000 }, () => {

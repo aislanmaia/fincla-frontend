@@ -174,4 +174,44 @@ describe("<Tip> — issue #105", () => {
     ).not.toThrow();
     expect(screen.getByText("alvo")).toBeInTheDocument();
   });
+
+  // fincla-frontend#109 rodada 2, achado 5: com o early return agora DEPOIS
+  // dos hooks (achado 1), a instância sobrevive ao intervalo em que `label`
+  // fica vazio — mas `rect` (medido enquanto o label ANTERIOR estava
+  // visível) não era limpo nesse intervalo. Quando o label volta (ex.:
+  // `hasParcela ? … : isRefund ? … : ""` alternando por uma atualização
+  // in-place), o tooltip reaparecia sozinho na posição antiga, sem nenhum
+  // toque/hover novo.
+  it("achado 5: tooltip aberto some quando o label esvazia e NÃO reaparece sozinho quando o label volta", () => {
+    const { rerender } = render(
+      <Tip label="dica">
+        <button type="button">alvo</button>
+      </Tip>,
+    );
+
+    fireEvent.mouseEnter(screen.getByRole("button", { name: "alvo" }));
+    expect(screen.getByText("dica")).toBeInTheDocument();
+
+    // Label esvazia (instância sobrevive, mesma posição no JSX) — o
+    // tooltip precisa sumir, mesmo sem mouseLeave/toque.
+    rerender(
+      <Tip label="">
+        <button type="button">alvo</button>
+      </Tip>,
+    );
+    expect(screen.queryByText("dica")).not.toBeInTheDocument();
+
+    // Label volta — sem NENHUM hover/toque novo, o tooltip não pode
+    // reaparecer sozinho na posição antiga.
+    rerender(
+      <Tip label="dica">
+        <button type="button">alvo</button>
+      </Tip>,
+    );
+    expect(screen.queryByText("dica")).not.toBeInTheDocument();
+
+    // Confirma que o gatilho ainda funciona normalmente depois disso.
+    fireEvent.mouseEnter(screen.getByRole("button", { name: "alvo" }));
+    expect(screen.getByText("dica")).toBeInTheDocument();
+  });
 });

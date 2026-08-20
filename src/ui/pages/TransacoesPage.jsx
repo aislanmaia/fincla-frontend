@@ -133,6 +133,17 @@ export const Tip = ({ label, children, pos = "top" }) => {
   };
   const hide = () => setRect(null);
 
+  // fincla-frontend#109 rodada 2, achado 5: com o early return agora DEPOIS
+  // dos hooks (achado 1, crítico), a instância sobrevive ao intervalo em que
+  // `label` fica vazio — mas `rect` (medido enquanto o label ANTERIOR estava
+  // visível) não era limpo nesse intervalo. Quando o label volta (ex.: linha
+  // 390, `hasParcela ? … : isRefund ? … : ""` alternando por causa de uma
+  // atualização in-place), o tooltip REAPARECIA sozinho na posição antiga,
+  // sem nenhum toque/hover novo. `label` vazio precisa fechar o tooltip.
+  useEffect(() => {
+    if (!label) setRect(null);
+  }, [label]);
+
   // Fecha em QUALQUER interação seguinte enquanto está aberto: toque/clique
   // fora do próprio gatilho — inclusive o que abre o bottom sheet de
   // Detalhes, que antes deixava o tooltip flutuando por cima dele (prints do
@@ -1961,8 +1972,15 @@ function TransacoesPageBody({
       )}
 
       {/* ── Row 5: KPI strip ─────────────────────────────────────── */}
+      {/* fincla-frontend#109 rodada 2, achado 4: a faixa só tratava
+          `tagFilterBlocked` como "ainda não sei responder" — em `listLoading`/
+          `listLoadFailed` (a MESMA lacuna de informação que fez a lista
+          ganhar `hasLoaded`/#106) ela continuava afirmando "+R$ 0,00" e
+          "0 transações no filtro", contradizendo o card logo abaixo (que já
+          mostra "Carregando…"/erro). `kpiUnknown` cobre as três causas. */}
       <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: isMobile ? 8 : 12 }}>
         {(() => {
+          const kpiUnknown = tagFilterBlocked || listNeverLoaded;
           // Despesa líquida pode ser negativa quando estornos > despesas no período.
           // Quando líquida < 0, cor vira verde mas o sinal `−` é preservado (matemática honesta).
           const despesaPositiva = totalDespesaLiquido >= 0;
@@ -2018,19 +2036,26 @@ function TransacoesPageBody({
               <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>
                 {k.label}
               </div>
-              <div style={{ ...G, fontFamily: "'Geist Mono',monospace", fontSize: isMobile ? 14 : 16, fontWeight: 800, color: tagFilterBlocked ? T.inkLight : k.color, letterSpacing: "-0.01em" }}>
-                {/* Prioridade 2: com a busca em espera, `k.val` é sempre 0 (a
-                    API nem respondeu) — "R$ 0,00" afirmaria um resultado que
-                    não existe. "—" é honesto: não sabemos ainda. */}
-                {tagFilterBlocked ? "—" : <>{k.sign}{fmtBRL(k.val)}</>}
+              <div style={{ ...G, fontFamily: "'Geist Mono',monospace", fontSize: isMobile ? 14 : 16, fontWeight: 800, color: kpiUnknown ? T.inkLight : k.color, letterSpacing: "-0.01em" }}>
+                {/* Prioridade 2: com a busca em espera (ou em voo, ou
+                    falha) `k.val` é sempre 0 (a API nem respondeu de
+                    verdade) — "R$ 0,00" afirmaria um resultado que não
+                    existe. "—" é honesto: não sabemos ainda. */}
+                {kpiUnknown ? "—" : <>{k.sign}{fmtBRL(k.val)}</>}
               </div>
-              {k.subLine && !tagFilterBlocked && (
+              {k.subLine && !kpiUnknown && (
                 <div style={{ ...G, fontSize: 11, color: T.green, marginTop: 3, fontWeight: 600 }}>
                   {k.subLine}
                 </div>
               )}
               <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 3 }}>
-                {tagFilterBlocked ? "Aguardando filtro de tag" : k.countLine}
+                {tagFilterBlocked
+                  ? "Aguardando filtro de tag"
+                  : listLoadFailed
+                    ? "Não foi possível carregar"
+                    : listLoading
+                      ? "Carregando…"
+                      : k.countLine}
               </div>
             </div>
           ));

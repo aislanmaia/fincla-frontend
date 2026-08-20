@@ -351,3 +351,89 @@ describe("fincla-frontend#109 achado 3 — falha ao trocar de contexto não herd
   });
 });
 
+// fincla-frontend#109 rodada 2, achado 3 — o scroll infinito
+// (`hasMore`/`tryLoadMore` em TransacoesPage.jsx) só aumenta `filters.limit`
+// pra pedir mais páginas da MESMA pergunta; a página recalcula `filters` como
+// objeto NOVO a cada bump, então `query`/`summaryQuery` também trocam de
+// referência — indistinguível, pela checagem referencial de `sameFilters`,
+// de uma troca de verdade de organização/filtro. Uma falha ao "carregar
+// mais" não pode zerar as linhas já lidas.
+describe("fincla-frontend#109 rodada 2, achado 3 — paginação (limit crescente) não é 'contexto novo'", () => {
+  it("falha ao aumentar `limit` (scroll infinito): preserva as linhas/hasLoaded já carregados", async () => {
+    const ROW = {
+      id: "tx-pagina-1",
+      description: "Café página 1",
+      amount: -10,
+      type: "expense",
+      date: "2026-08-01",
+      tags: {},
+    };
+    listTransactions.mockResolvedValueOnce({
+      data: [ROW],
+      pagination: { total: 30, has_next: true },
+    });
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+
+    const filtersPage1 = filtersToLegacyParams(BASE_STATE, { limit: 10 });
+    const filtersPage2 = filtersToLegacyParams(BASE_STATE, { limit: 20 });
+
+    const { result, rerender } = renderHook(
+      ({ filters }) => useTransactionsData({ organizationId: ORG, enabled: true, filters }),
+      { initialProps: { filters: filtersPage1 } },
+    );
+
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    expect(result.current.transactions).toHaveLength(1);
+
+    // "Carregar mais" (limit 10 -> 20) falha.
+    listTransactions.mockRejectedValueOnce(new Error("network down"));
+    rerender({ filters: filtersPage2 });
+
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+
+    // A implementação ANTERIOR (achado 3 da rodada 1, sem distinguir
+    // paginação) trocaria a linha já lida pelo card de erro e derrubaria os
+    // KPIs a zero. Paginação é a MESMA consulta, só mais páginas — conta
+    // como revalidação suave.
+    expect(result.current.hasLoaded).toBe(true);
+    expect(result.current.transactions).toHaveLength(1);
+    expect(result.current.transactions[0].id).toBe("tx-pagina-1");
+  });
+
+  it("falha ao trocar de FILTRO com `limit` também diferente: ainda reseta (não é só paginação)", async () => {
+    const ROW = {
+      id: "tx-filtro-limit",
+      description: "Café filtro",
+      amount: -10,
+      type: "expense",
+      date: "2026-08-01",
+      tags: {},
+    };
+    listTransactions.mockResolvedValueOnce({
+      data: [ROW],
+      pagination: { total: 1, has_next: false },
+    });
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+
+    const filtersA = filtersToLegacyParams(BASE_STATE, { limit: 10 });
+    // MESMO limit que a 1ª chamada de "load more" acima usaria, mas o
+    // FILTRO de verdade também mudou (type) — não pode contar como paginação.
+    const filtersB = filtersToLegacyParams({ ...BASE_STATE, type: "despesa" }, { limit: 20 });
+
+    const { result, rerender } = renderHook(
+      ({ filters }) => useTransactionsData({ organizationId: ORG, enabled: true, filters }),
+      { initialProps: { filters: filtersA } },
+    );
+
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+
+    listTransactions.mockRejectedValueOnce(new Error("network down"));
+    rerender({ filters: filtersB });
+
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+
+    expect(result.current.transactions).toEqual([]);
+    expect(result.current.hasLoaded).toBe(false);
+  });
+});
+

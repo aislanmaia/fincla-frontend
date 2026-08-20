@@ -76,11 +76,31 @@ export function useTransactionsData({
       prev.refreshToken != null &&
       prev.refreshToken !== refreshToken;
 
+    // fincla-frontend#109 rodada 2, achado 3: o scroll infinito (`hasMore`/
+    // `tryLoadMore` em TransacoesPage.jsx) só aumenta `filters.limit` — a
+    // MESMA pergunta, só mais páginas. Mas `filters` é um objeto NOVO a cada
+    // bump (a página recalcula com `visible` maior), então `query`/
+    // `summaryQuery` também viram referências novas e `sameFilters` acima dá
+    // `false` — indistinguível, por comparação referencial, de uma troca de
+    // verdade de organização/filtro. Sem isto, uma falha ao "carregar mais"
+    // cairia no ramo "contexto novo" abaixo e trocaria as linhas JÁ LIDAS
+    // pelo card de erro, derrubando os KPIs a zero. Comparar por CONTEÚDO,
+    // ignorando `limit`/`page`, captura exatamente essa continuação.
+    const { limit: _limit, page: _page, ...queryWithoutPagination } = query;
+    const browsingContextKey = JSON.stringify({
+      organizationId,
+      queryWithoutPagination,
+      summaryQuery,
+    });
+    const samePaginationContext =
+      prev != null && prev.browsingContextKey === browsingContextKey;
+
     prevFetchSig.current = {
       organizationId,
       query,
       summaryQuery,
       refreshToken,
+      browsingContextKey,
     };
 
     let cancelled = false;
@@ -120,19 +140,20 @@ export function useTransactionsData({
 
         const message = formatTransactionsApiError(error);
         setState((current) =>
-          softRefreshOnly
+          softRefreshOnly || samePaginationContext
             ? // Stale-while-revalidate de verdade (mesmo padrão do
-              // `useCalendarData`): MESMA organização e MESMOS filtros, só o
-              // `refreshToken` mudou (ex.: transação salva em outra tela) —
+              // `useCalendarData`): MESMA organização e MESMOS filtros — só o
+              // `refreshToken` mudou (ex.: transação salva em outra tela) OU
+              // só `limit` cresceu (scroll infinito, achado 3 da rodada 2) —
               // os dados na tela continuam válidos pra ESTE contexto, então
               // preserva (`...current`) e só o aviso de erro liga.
               { ...current, isLoading: false, error: message }
-            : // Organização OU filtros mudaram (fincla-frontend#109 achado 3):
-              // `current` é de OUTRO contexto — preservar aqui mostraria a
-              // lista/KPIs da organização ou do filtro ANTERIOR sob os chips
-              // já trocados na tela, uma mentira silenciosa por trás de um
-              // banner de erro. `hasLoaded` volta a `false`: este contexto
-              // nunca carregou com sucesso.
+            : // Organização OU filtros de verdade mudaram (fincla-frontend#109
+              // achado 3): `current` é de OUTRO contexto — preservar aqui
+              // mostraria a lista/KPIs da organização ou do filtro ANTERIOR
+              // sob os chips já trocados na tela, uma mentira silenciosa por
+              // trás de um banner de erro. `hasLoaded` volta a `false`: este
+              // contexto nunca carregou com sucesso.
               {
                 isLoading: false,
                 error: message,

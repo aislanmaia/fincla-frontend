@@ -10,7 +10,7 @@
  * Só `ensureDetailTag` (via `useNovaTransacaoDetailTags` mockado) controla o
  * sucesso/falha aqui — o resto do drawer roda de verdade.
  */
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -137,5 +137,42 @@ describe("NovaTransacaoModal — campo \"+ nova\" tag (fincla-frontend#109 achad
     await waitFor(() => expect(screen.getByText("+ nova")).toBeInTheDocument());
     expect(screen.queryByDisplayValue("mensal")).not.toBeInTheDocument();
     expect(screen.getByText(/mensal/i)).toBeInTheDocument();
+  });
+
+  // fincla-frontend#109 rodada 2, achado 1: a correção do achado 5 (manter o
+  // campo montado com o texto DURANTE o `await`) abriu uma corrida nova —
+  // Enter seguido de blur (ou dois Enters) antes da 1ª chamada resolver
+  // disparava `ensureDetailTag` DUAS vezes; as duas leituras de `allDetail`
+  // não achavam a tag ainda (só entra depois que a 1ª chamada termina) e as
+  // duas criavam a MESMA tag — a duplicata que o fincla-frontend#101
+  // corrigiu do outro lado (guarda de `loading`). Precisa de uma trava de
+  // envio em voo.
+  it("Enter seguido de blur antes de resolver: chama ensureDetailTag só UMA vez (não duplica)", async () => {
+    let resolveEnsure;
+    const pending = new Promise((resolve) => {
+      resolveEnsure = resolve;
+    });
+    ensureDetailTagMock.mockReturnValue(pending);
+    const user = userEvent.setup();
+    render(<NovaTransacaoModal {...baseProps} />);
+
+    const input = await openQuickTagField(user);
+    await user.type(input, "mensal");
+
+    // 1º Enter: dispara `commitNewDetailTag`, ainda NÃO resolvido.
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(ensureDetailTagMock).toHaveBeenCalledTimes(1);
+
+    // Perde o foco (ou um 2º Enter) ANTES da 1ª chamada resolver — o campo
+    // continua montado com "mensal" (correção do achado 5), então a
+    // implementação antiga disparava uma 2ª chamada aqui.
+    input.blur();
+
+    resolveEnsure("tag-mensal-id");
+    await waitFor(() => expect(screen.getByText("+ nova")).toBeInTheDocument());
+
+    // Só UMA chamada real à API, mesmo com duas tentativas de confirmar.
+    expect(ensureDetailTagMock).toHaveBeenCalledTimes(1);
+    expect(ensureDetailTagMock).toHaveBeenCalledWith("mensal");
   });
 });

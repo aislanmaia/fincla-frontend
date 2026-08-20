@@ -537,6 +537,18 @@ export const NovaTransacaoModal = ({
     [useLiveDetailTags, ensureDetailTag, detailTagRowsForCategory],
   );
 
+  // Trava de envio em voo (fincla-frontend#109 rodada 2, achado 1): manter o
+  // campo "+ nova" montado com o texto DURANTE o `await` (achado 5 da rodada
+  // 1) abriu uma nova janela de corrida — Enter seguido de blur (ou dois
+  // Enters em sequência) chama `commitNewDetailTag` DUAS vezes antes da 1ª
+  // resolver; as duas leituras de `allDetail` (ainda sem a tag, que só entra
+  // depois que a 1ª chamada termina) não acham nada e as duas criam a MESMA
+  // tag — a exata duplicata que a guarda de `loading` do fincla-frontend#101
+  // foi corrigida para evitar, só que por outra porta. Um `ref` (não state:
+  // precisa valer no MESMO tick da 2ª chamada, antes de qualquer re-render)
+  // ignora qualquer chamada enquanto uma já está em voo.
+  const committingNewTagRef = useRef(false);
+
   /**
    * Confirma o campo "+ nova" (Enter ou perder o foco). `addQuickDetailTag`
    * é assíncrono e pode rejeitar de propósito agora (catálogo de tags ainda
@@ -549,10 +561,16 @@ export const NovaTransacaoModal = ({
    */
   const commitNewDetailTag = useCallback(
     async (rawValue) => {
-      const ok = await addQuickDetailTag(rawValue);
-      if (ok) {
-        setNewTag("");
-        setAddingTag(false);
+      if (committingNewTagRef.current) return;
+      committingNewTagRef.current = true;
+      try {
+        const ok = await addQuickDetailTag(rawValue);
+        if (ok) {
+          setNewTag("");
+          setAddingTag(false);
+        }
+      } finally {
+        committingNewTagRef.current = false;
       }
     },
     [addQuickDetailTag],
