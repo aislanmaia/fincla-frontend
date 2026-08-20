@@ -17,6 +17,12 @@ import {
 function NotificationsBell() {
   return (
     <button
+      // `type` e `aria-label` ficam AQUI e não em quem religar: sem `type`, o
+      // default do React é `submit`, e sem nome acessível o ponto vermelho de
+      // "há algo novo" é invisível para leitor de tela. Estacionado sem esses
+      // dois, o componente devolveria os defeitos junto quando voltasse.
+      type="button"
+      aria-label="Notificações"
       style={{
         background: T.bg,
         border: `1px solid ${T.border}`,

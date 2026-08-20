@@ -11,6 +11,28 @@ const MONO = { fontFamily: "'Geist Mono', ui-monospace, monospace" };
  * Apresentacional. Itens de IA aparecem como "em breve" (Trilha B); a busca (⌘K)
  * e "Adicionar cliente" são stubs cujo comportamento real chega em fatias futuras.
  */
+/** Estacionado com a #84: religar é renderizar isto de volta na barra. */
+function ConsultantNotificationsBell() {
+  return (
+          <button
+            type="button"
+            aria-label="Notificações"
+            style={{
+              background: T.bg,
+              border: `1px solid ${T.border}`,
+              borderRadius: 8,
+              padding: 8,
+              cursor: "pointer",
+              display: "flex",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = T.grayLight)}
+            onMouseLeave={(e) => (e.currentTarget.style.background = T.bg)}
+          >
+            <Bell size={15} color={T.ink} />
+          </button>
+  );
+}
+
 export function ConsultantTopbar({ isMobile, onOpenMenu, onNav, onAddClient, user }) {
   return (
     <div
@@ -142,22 +164,11 @@ export function ConsultantTopbar({ isMobile, onOpenMenu, onNav, onAddClient, use
           </button>
         )}
 
-        <button
-          type="button"
-          aria-label="Notificações"
-          style={{
-            background: T.bg,
-            border: `1px solid ${T.border}`,
-            borderRadius: 8,
-            padding: 8,
-            cursor: "pointer",
-            display: "flex",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = T.grayLight)}
-          onMouseLeave={(e) => (e.currentTarget.style.background = T.bg)}
-        >
-          <Bell size={15} color={T.ink} />
-        </button>
+        {/* Sino inerte também aqui — mesmo sintoma da #84, outra superfície.
+            Não abre nada e não tem `onClick`; botão que parece clicável e não
+            responde é pior que botão ausente. Preservado como referência para
+            quando alertas existirem, mas não renderizado. */}
+
 
         <button
           type="button"
