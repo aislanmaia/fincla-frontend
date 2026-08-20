@@ -293,6 +293,8 @@ describe('interceptor de retry — só GET/HEAD, nunca writes', () => {
     await vi.runAllTimersAsync();
     await promise;
     expect(adapter.callCount).toBe(2);
+  });
+});
 
 describe('handleApiError — formato legado {error,message,type} humanizado (revisão da PR #95, 3ª rodada)', () => {
   const legacyError = (
