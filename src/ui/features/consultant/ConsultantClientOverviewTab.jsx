@@ -200,7 +200,14 @@ function DiagnosisCard({ health }) {
                   <span style={{ ...G, fontSize: 10.5, color: col, fontWeight: 700 }}>{f.hint}</span>
                 </div>
                 {indefinido ? (
-                  <div style={{ height: 6, borderRadius: 999, background: T.grayLight }} />
+                  // Trilho liso é pixel-idêntico a uma barra em 0% — o fator
+                  // continuaria se lendo como o pior valor possível, que é o
+                  // contrário do que "não dá para medir" quer dizer. O tracejado
+                  // marca ausência de medida sem sugerir grandeza nenhuma.
+                  <div
+                    data-testid="fator-indefinido"
+                    style={{ height: 6, borderRadius: 999, border: `1px dashed ${T.border}`, background: "transparent" }}
+                  />
                 ) : (
                   <ProgBar pct={f.v} color={col} h={6} />
                 )}

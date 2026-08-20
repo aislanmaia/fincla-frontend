@@ -139,9 +139,11 @@ describe("diagnosisFactors — reserva indefinida", () => {
     expect(f.hint).toBe("saudável");
   });
 
-  it("reserva muito alta não é mais truncada — o teto de 99 saiu do backend", () => {
-    const f = diagnosisFactors({ ...base, emergency_fund_months: 120 }).find((x) => x.key === "reserve");
-    expect(f.v).toBe(100);
+  it("aceita o número serializado como string, sem chamar de indefinido", () => {
+    // Dinheiro nesta API às vezes chega como `"1.9"` (fincla-api#112). Um gate por
+    // tipo diria "sem despesas no período" para quem tem reserva.
+    const f = diagnosisFactors({ ...base, emergency_fund_months: "3" }).find((x) => x.key === "reserve");
+    expect(f.v).toBe(50);
     expect(f.hint).toBe("saudável");
   });
 });

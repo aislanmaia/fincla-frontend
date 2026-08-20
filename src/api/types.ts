@@ -2031,7 +2031,8 @@ export interface FinancialHealth {
   avg_surplus: number;
   income_commitment: number; // despesa/renda (0..1+)
   savings_rate: number; // sobra/renda (0..1)
-  emergency_fund_months: number;
+  /** `null` quando não houve despesa no período: a razão é indefinida, não zero. */
+  emergency_fund_months: number | null;
   goals_on_track: number;
   goals_total: number;
   goal_progress_avg: number;
