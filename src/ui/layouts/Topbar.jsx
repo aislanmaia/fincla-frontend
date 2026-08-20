@@ -152,7 +152,10 @@ export function Topbar({ onNew, isMobile, onMenuOpen, onNav, page: _page, user }
               <span
                 style={{
                   ...G,
-                  fontSize: 10,
+                  // Piso de 11px (issue #104/#86): botão sem altura fixa nem
+                  // overflow:hidden, então subir o tamanho do badge "⌘K" só
+                  // deixa a pílula um pouco mais alta — sem corte de texto.
+                  fontSize: 11,
                   color: T.inkGhost,
                   background: T.grayLight,
                   borderRadius: 5,
@@ -299,7 +302,11 @@ export function Topbar({ onNew, isMobile, onMenuOpen, onNav, page: _page, user }
                   <div
                     style={{
                       ...G,
-                      fontSize: 10,
+                      // Piso de 11px: rótulo de grupo ("Navegar"/"Ação") do
+                      // command palette, dentro de um <div> sem altura fixa
+                      // nem overflow:hidden — subir o tamanho só aumenta o
+                      // padding vertical percebido, não corta nada.
+                      fontSize: 11,
                       fontWeight: 700,
                       color: T.inkMid,
                       textTransform: "uppercase",

@@ -44,25 +44,11 @@ const PERMANENT_EXCEPTIONS = new Map(
   ].map(([k, v]) => [toRel(k), v]),
 );
 
-const SECOND_PASS_EXCEPTIONS = new Map(
-  [
-    [
-      "ui/layouts/Topbar.jsx",
-      "Não verificado nesta rodada se a colisão relatada (outro trabalho em " +
-        "voo) já mergeou — DashboardPage.jsx/CalendarPage.jsx/" +
-        "NovaTransacaoModal.jsx/TransacoesPage.jsx/OrcamentosPage.jsx, que " +
-        "tinham a mesma justificativa original, já tinham mergeado e foram " +
-        "corrigidos nesta PR após rebase; reavaliar Topbar.jsx do mesmo jeito. " +
-        "Acompanhamento: issue #104.",
-    ],
-    [
-      "ui/features/consultant/ConsultantClientOverviewTab.jsx",
-      "Mesma ressalva de Topbar.jsx: sem confirmação de que o trabalho " +
-        "concorrente relatado já mergeou. Reavaliar via `git log origin/main " +
-        "-- <arquivo>` antes de excluir de novo. Acompanhamento: issue #104.",
-    ],
-  ].map(([k, v]) => [toRel(k), v]),
-);
+// issue #104: Topbar.jsx e ConsultantClientOverviewTab.jsx saíram daqui —
+// a colisão relatada na PR #99 não se confirmou (nenhum commit novo nos
+// dois arquivos desde a divergência de fix/wcag-font-sizes) e as violações
+// reais foram corrigidas nos próprios arquivos.
+const SECOND_PASS_EXCEPTIONS = new Map();
 
 /** Arquivos de código sob `src/ui`, exceto testes. */
 function collect(dir, re, out = []) {
