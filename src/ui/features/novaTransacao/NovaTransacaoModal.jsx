@@ -507,11 +507,20 @@ export const NovaTransacaoModal = ({
       setTxSubmitError("");
       try {
         const id = await ensureDetailTag(trimmed);
+        // Mesma linha resolvida serve pro rótulo E pro `isActive` — uma tag
+        // arquivada que `ensureDetailTag` resolve de volta (achado 1) não
+        // pode entrar marcada como ativa por engano (achado 7, rodada 3):
+        // o chip pareceria normal e a trava de submit de tag inativa nunca
+        // dispararia.
+        const row = (detailTagRowsForCategory ?? []).find(
+          (r) => r?.id != null && String(r.id) === String(id),
+        );
         const name = resolveQuickAddDetailTagLabel(id, detailTagRowsForCategory, trimmed);
+        const isActive = row ? row.is_active !== false : true;
         setDetailTagLabelById((prev) => ({ ...prev, [String(id)]: name }));
         setDetailTagMetaById((prev) => ({
           ...prev,
-          [String(id)]: { name, isActive: true },
+          [String(id)]: { name, isActive },
         }));
         setDetailTagIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
       } catch (err) {

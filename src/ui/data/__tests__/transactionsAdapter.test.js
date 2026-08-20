@@ -110,10 +110,14 @@ describe("transactionsAdapter", () => {
     // dois chips "#mercado" idênticos se leem como bug de duplicação
     // (regressão #100, achado 3). A tag seed leva o nome cru entre
     // parênteses; a tag do usuário (cujo nome cru já É o rótulo) fica limpa.
+    // `detailTagMetaById`/`detailTagDisplayById` (pré-preenchimento do modal
+    // de edição) usam a MESMA desambiguação de `tags` (achado 5, rodada 3):
+    // sem isso, a linha da transação mostrava "mercado (grocery)" enquanto
+    // reabrir pra editar voltava a mostrar dois chips "mercado" idênticos.
     expect(mapped.tags).toEqual(["mercado (grocery)", "mercado"]);
-    expect(mapped.detailTagMetaById["det-grocery"].name).toBe("mercado");
+    expect(mapped.detailTagMetaById["det-grocery"].name).toBe("mercado (grocery)");
     expect(mapped.detailTagMetaById["det-mercado-custom"].name).toBe("mercado");
-    expect(mapped.detailTagDisplayById["det-grocery"]).toBe("mercado");
+    expect(mapped.detailTagDisplayById["det-grocery"]).toBe("mercado (grocery)");
     expect(mapped.detailTagDisplayById["det-mercado-custom"]).toBe("mercado");
   });
 

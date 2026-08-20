@@ -101,14 +101,22 @@ function pickCategoryTag(transaction) {
     };
   }
 
-  const firstTag = entries.flatMap(([, tags]) => tags ?? [])[0];
-  return firstTag ?? null;
+  // Sem grupo "categoria" confirmado e sem `transaction.category`: NÃO existe
+  // categoria de verdade pra devolver. Pegar o primeiro tag de QUALQUER outro
+  // grupo (ex.: "detalhe") e tratá-lo como se fosse a categoria é o mesmo
+  // defeito que a issue #100 corrigiu em outros call sites — aqui na raiz
+  // compartilhada por todos eles (achado 1 da rodada 3 de review).
+  return null;
 }
 
 /**
- * Tag de categoria da transação (API), para agregações na UI.
+ * Tag de categoria da transação (API), para agregações na UI. Repassa
+ * `is_default` (achado 2, rodada 3 de review #100): sem ele,
+ * `categoryLabelPtForTag` não consegue distinguir uma categoria do USUÁRIO
+ * que coincide de texto com um nome canônico do seed (ex. "Health") de uma
+ * linha do seed de verdade — sequestra o nome pela tradução por engano.
  * @param {import("../../api/types").Transaction} transaction
- * @returns {{ id: string | null; name: string | null; icon_key: string | null; color: string | null } | null}
+ * @returns {{ id: string | null; name: string | null; icon_key: string | null; color: string | null; is_default: boolean | null } | null}
  */
 export function pickCategoryTagFromApiTransaction(transaction) {
   const t = pickCategoryTag(transaction);
@@ -120,6 +128,7 @@ export function pickCategoryTagFromApiTransaction(transaction) {
     is_active: t.is_active !== false,
     color:
       typeof t.color === "string" && t.color.trim() ? t.color : null,
+    is_default: typeof t.is_default === "boolean" ? t.is_default : null,
   };
 }
 
@@ -129,7 +138,7 @@ export function pickDetailTagMetaMapFromApiTransaction(transaction) {
     catTag && catTag.id != null && String(catTag.id) !== ""
       ? String(catTag.id)
       : null;
-  const map = {};
+  const byId = new Map();
   for (const [groupKey, tags] of Object.entries(transaction.tags ?? {})) {
     if (isCategoryTagGroupKey(groupKey)) continue;
     for (const t of tags ?? []) {
@@ -146,12 +155,23 @@ export function pickDetailTagMetaMapFromApiTransaction(transaction) {
         continue;
       }
       const rawName = t.name != null ? String(t.name).trim() : "";
-      map[id] = {
+      byId.set(id, {
+        id,
+        tag: t,
         // `t.name` pode vir cru do seed (`grocery`, `health_plan`...) — traduz.
-        name: rawName ? detailLabelPtForTag(t) || rawName : `Tag ${id.slice(0, 8)}…`,
+        label: rawName ? detailLabelPtForTag(t) || rawName : `Tag ${id.slice(0, 8)}…`,
         isActive: t.is_active !== false,
-      };
+      });
     }
+  }
+  // Mesma desambiguação de `pickTagNames` (achado 5, rodada 3 de review
+  // #100): sem isso, a MESMA tag lia diferente na linha da transação e no
+  // pré-preenchimento do modal de edição — a linha mostrava "mercado
+  // (grocery)" enquanto o modal, ao reabrir pra editar, voltava a mostrar
+  // dois chips "mercado" idênticos.
+  const map = {};
+  for (const entry of disambiguateTagLabelEntries(Array.from(byId.values()))) {
+    map[entry.id] = { name: entry.label, isActive: entry.isActive };
   }
   return map;
 }
@@ -198,8 +218,12 @@ function pickTagNames(transaction, categoryDisplayName) {
       return true;
     })
     // `tag.name` pode vir cru do seed (`grocery`, `health_plan`...) — traduz pro chip.
-    .map(({ tag }) => ({ tag, label: detailLabelPtForTag(tag) || tag.name }));
-  return disambiguateTagLabelEntries(entries);
+    .map(({ tag }) => ({
+      id: tag?.id != null ? String(tag.id) : null,
+      tag,
+      label: detailLabelPtForTag(tag) || tag.name,
+    }));
+  return disambiguateTagLabelEntries(entries).map((e) => e.label);
 }
 
 /**
@@ -208,23 +232,44 @@ function pickTagNames(transaction, categoryDisplayName) {
  * "mercado") e uma tag do usuário literalmente chamada "mercado" são
  * IDs diferentes, sobrevivem ambas ao dedupe e — sem isto — viram dois chips
  * "#mercado" idênticos, que se leem como bug de duplicação embora sejam tags
- * de verdade diferentes. Quando o rótulo traduzido colide com outro da MESMA
- * transação, anexa o nome cru original entre parênteses só nas entradas cujo
- * nome cru difere do rótulo (a tag do usuário, cujo nome já É o rótulo,
- * fica limpa).
- * @param {Array<{ tag: Record<string, unknown>; label: string }>} entries
- * @returns {string[]}
+ * de verdade diferentes.
+ *
+ * Duas passadas, mesmo padrão de `buildTagOptions`
+ * (`filters/tagCatalogResolution.js`, achado 4a da revisão da PR #96):
+ * 1) quando o rótulo traduzido colide, tenta desempatar anexando o nome cru
+ *    original entre parênteses (só nas entradas cujo nome cru difere do
+ *    rótulo — a tag do usuário, cujo nome já É o rótulo, fica limpa);
+ * 2) se AINDA colidir (achado 4, rodada 3: duas tags de verdade com o MESMO
+ *    nome cru, ex. duas tags "mensal" criadas pelo usuário — `rawName` e
+ *    `label` são idênticos pras duas, a passada 1 não desempata nada),
+ *    anexa o id inteiro como desempate final garantidamente único — feio,
+ *    mas nunca deixa dois chips reais lerem igual nem gera key duplicada
+ *    no React (`TransacoesPage.jsx`).
+ * @param {Array<{ id?: string | null; tag: Record<string, unknown>; label: string }>} entries
+ * @returns {Array<{ id?: string | null; tag: Record<string, unknown>; label: string }>}
  */
 function disambiguateTagLabelEntries(entries) {
   const counts = new Map();
   for (const { label } of entries) counts.set(label, (counts.get(label) ?? 0) + 1);
-  return entries.map(({ tag, label }) => {
-    if ((counts.get(label) ?? 0) <= 1) return label;
-    const rawName = tag?.name != null ? String(tag.name).trim() : "";
-    if (rawName && rawName.toLowerCase() !== label.toLowerCase()) {
-      return `${label} (${rawName})`;
+
+  const withRawNameCandidate = entries.map((entry) => {
+    if ((counts.get(entry.label) ?? 0) <= 1) return entry;
+    const rawName = entry.tag?.name != null ? String(entry.tag.name).trim() : "";
+    if (rawName && rawName.toLowerCase() !== entry.label.toLowerCase()) {
+      return { ...entry, label: `${entry.label} (${rawName})` };
     }
-    return label;
+    return entry;
+  });
+
+  const finalCounts = new Map();
+  for (const { label } of withRawNameCandidate) {
+    finalCounts.set(label, (finalCounts.get(label) ?? 0) + 1);
+  }
+
+  return withRawNameCandidate.map((entry) => {
+    if ((finalCounts.get(entry.label) ?? 0) <= 1) return entry;
+    const id = entry.id ?? (entry.tag?.id != null ? String(entry.tag.id) : "");
+    return id ? { ...entry, label: `${entry.label} (${id})` } : entry;
   });
 }
 

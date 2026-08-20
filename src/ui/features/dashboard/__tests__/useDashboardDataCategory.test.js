@@ -37,6 +37,52 @@ describe("pickCategoryName", () => {
   it("sem tag e sem `transaction.category`, cai em 'Sem categoria'", () => {
     expect(pickCategoryName({ category: null, tags: {} })).toBe("Sem categoria");
   });
+
+  // Regressão #100 (rodada 3, achado 1): o achado 4 original ficou pela
+  // metade — `pickCategoryTagFromApiTransaction` → `pickCategoryTag`
+  // terminava em `entries.flatMap(([, tags]) => tags ?? [])[0]` quando não
+  // havia grupo "categoria" nem `transaction.category`, devolvendo a
+  // primeira tag de QUALQUER grupo (ex.: "detalhe") como se fosse a
+  // categoria — exatamente o slug cru que o docblock novo dizia impedir.
+  // Corrigido na raiz compartilhada (`pickCategoryTag` em
+  // transactionsAdapter.js): sem categoria confirmada, devolve `null`.
+  it("sem grupo categoria e sem `transaction.category`, NUNCA usa uma tag de outro grupo como categoria", () => {
+    const name = pickCategoryName({
+      category: null,
+      tags: { detalhe: [{ id: "det-1", name: "grocery", is_default: true }] },
+    });
+    expect(name).toBe("Sem categoria");
+  });
+
+  // Regressão #100 (rodada 3, achado 2a): remontar a tag como `{name,
+  // icon_key}` sem `is_default` descartava o sinal que impede o sequestro
+  // de uma categoria do USUÁRIO cujo texto coincide com um nome canônico do
+  // seed — "Health" virava "Saúde" por engano.
+  it("NÃO traduz categoria do usuário só porque o texto coincide com um nome canônico (is_default: false)", () => {
+    const name = pickCategoryName({
+      category: null,
+      tags: { categoria: [{ id: "cat-1", name: "Health", is_default: false }] },
+    });
+    expect(name).toBe("Health");
+  });
+
+  // Regressão #100 (rodada 3, achado 2b): sem `is_default`, a rede de
+  // segurança do `icon_key` (categoria sem nome, só ícone, de uma linha do
+  // seed legada) nunca disparava — devolvia o genérico "Categoria".
+  it("categoria sem nome mas com icon_key ainda cai na rede de segurança quando is_default é true", () => {
+    const name = pickCategoryName({
+      category: null,
+      tags: { categoria: [{ id: "cat-1", name: "", icon_key: "pill", is_default: true }] },
+    });
+    expect(name).toBe("Saúde");
+  });
+
+  // Regressão #100 (rodada 3, achado 2c): `??` deixava passar string vazia
+  // como nome "válido" — `transaction.category` vazio virava o literal ""
+  // e o tradutor devolvia o genérico "Categoria" em vez de "Sem categoria".
+  it('`transaction.category` vazio ("") cai em "Sem categoria", não no genérico "Categoria"', () => {
+    expect(pickCategoryName({ category: "", tags: {} })).toBe("Sem categoria");
+  });
 });
 
 describe("mapCategory", () => {

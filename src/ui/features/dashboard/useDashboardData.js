@@ -91,13 +91,28 @@ function dayIndexInRange(isoDate, rangeStart, dayCount) {
  * categoria no dashboard). Mesmo defeito já corrigido em `mapUpcomingDebits`
  * via `firstCategoryTagFromSeries` (achado 4, issue #100) — aqui reaproveita
  * `pickCategoryTagFromApiTransaction`, que já resolve a tag de categoria de
- * verdade (por grupo/`tag_type`), com o mesmo fallback pra `transaction.category`
- * usado em `aggregateExpenseCategoriesFromTransactions` neste arquivo.
+ * verdade (por grupo/`tag_type`, sem fallback pra tag arbitrária de outro
+ * grupo — achado 1 da rodada 3 de review), com o mesmo fallback pra
+ * `transaction.category` usado em `aggregateExpenseCategoriesFromTransactions`
+ * neste arquivo.
+ *
+ * Repassa `is_default` (achado 2, rodada 3): sem ele, `categoryLabelPtForTag`
+ * não distingue uma categoria do USUÁRIO que coincide de texto com um nome
+ * canônico (ex. "Health") de uma linha do seed de verdade — sequestraria o
+ * nome pela tradução — e a rede de segurança do `icon_key` (categoria sem
+ * nome, só ícone, de uma linha do seed legada) nunca dispara. `||` em vez de
+ * `??`: string vazia precisa cair no próximo fallback igual a `null`/
+ * `undefined`, senão "Sem categoria" vira o nome literal "" e o tradutor
+ * devolve o genérico "Categoria" em vez do "Sem categoria" esperado.
  */
 export function pickCategoryName(transaction) {
   const tag = pickCategoryTagFromApiTransaction(transaction);
-  const rawName = tag?.name ?? transaction.category ?? "Sem categoria";
-  return categoryLabelPtForTag({ name: rawName, icon_key: tag?.icon_key ?? null });
+  const rawName = tag?.name || transaction.category || "Sem categoria";
+  return categoryLabelPtForTag({
+    name: rawName,
+    icon_key: tag?.icon_key ?? null,
+    is_default: tag?.is_default ?? null,
+  });
 }
 
 function pickCategoryColor(category) {

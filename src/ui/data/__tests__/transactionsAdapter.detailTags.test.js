@@ -184,6 +184,38 @@ describe("pickDetailTagMetaMapFromApiTransaction", () => {
   });
 });
 
+// Regressão #100 (rodada 3 de review, achado 4): a desambiguação por nome
+// cru ("mercado (grocery)" vs "mercado") não cobre DUAS tags de verdade com
+// o MESMO nome cru — ex.: duas tags "mensal" criadas pelo usuário (mesmo
+// caso citado em `tagCatalogResolution.js`, "'mensal' sob Casa e sob
+// Trabalho"). `rawName` e `label` são idênticos pras duas, a passada por
+// nome cru não desempata nada — precisa cair no id inteiro como desempate
+// final garantidamente único, senão os chips leem igual E o React recebe
+// key duplicada (`TransacoesPage.jsx`, `key={tag}`).
+describe("desambiguação de tags detalhe com nome cru idêntico (achado 4, rodada 3)", () => {
+  it('duas tags do usuário chamadas "mensal" (sem hierarquia de categoria) desambiguam pelo id', () => {
+    const tx = minimalTransaction({
+      tags: {
+        categoria: [tagStub(CAT_ID, "Alimentação", "categoria", null)],
+        detalhe: [
+          tagStub(DET1, "mensal", "detalhe", null),
+          tagStub(DET2, "mensal", "detalhe", null),
+        ],
+      },
+    });
+
+    const mapped = mapApiTransactionToUi(tx);
+    expect(mapped.tags).toEqual([`mensal (${DET1})`, `mensal (${DET2})`]);
+    // Sem colisão de key no React: os dois rótulos são únicos entre si.
+    expect(new Set(mapped.tags).size).toBe(2);
+
+    // `detailTagMetaById`/`detailTagDisplayById` usam a mesma desambiguação
+    // (achado 5) — não podem voltar a mostrar "mensal"/"mensal" ao editar.
+    expect(mapped.detailTagMetaById[DET1].name).toBe(`mensal (${DET1})`);
+    expect(mapped.detailTagMetaById[DET2].name).toBe(`mensal (${DET2})`);
+  });
+});
+
 describe("buildCreateTransactionPayload — detailTagIds", () => {
   it("inclui categoria e detalhes sem duplicar a categoria", () => {
     const payload = buildCreateTransactionPayload({

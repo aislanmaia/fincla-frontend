@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   categoryLabelPtForTag,
+  DETAIL_LABEL_PT_BY_EN_NAME,
   detailLabelPtForTag,
   resolveCategoryColorForTag,
   resolveCategoryIconKey,
@@ -209,5 +210,49 @@ describe("resolveCategoryColorForTag", () => {
 
   it("nunca cai no cinza neutro para nomes conhecidos e sem cor", () => {
     expect(resolveCategoryColorForTag({ name: "Transporte" })).not.toBe("#6B7280");
+  });
+});
+
+// Regressão #100 (rodada 3, achado 6): tirar o `console.warn` (achados 2/5)
+// zerou qualquer sinal de drift entre `DETAIL_LABEL_PT_BY_EN_NAME` e o seed
+// do backend (`fincla-api/.../seeds/seed_default_tags.py`,
+// `CANONICAL_CATEGORY_SEED`) — os dois repositórios são independentes (ver
+// CLAUDE.md), então nada cruza automaticamente. Este teste fixa a lista
+// ATUAL (25 filhos, conferida na PR #97/#100) como uma cópia versionada
+// explícita: editar o mapa sem atualizar esta lista quebra a suíte,
+// forçando uma revisão deliberada em vez de deixar passar batido — não
+// substitui uma comparação cruzada de verdade contra o backend, mas
+// transforma o conhecimento tribal "são exatamente estes 25 slugs" numa
+// asserção.
+describe("DETAIL_LABEL_PT_BY_EN_NAME — cópia versionada do seed canônico", () => {
+  it("mantém a lista de slugs do seed do backend estável e explícita", () => {
+    const expectedSeedSlugs = [
+      "app",
+      "bar",
+      "book",
+      "bus",
+      "cinema",
+      "clothing",
+      "course",
+      "delivery",
+      "doctor",
+      "electronics",
+      "energy",
+      "fee",
+      "freelance",
+      "fuel",
+      "grocery",
+      "health_plan",
+      "pharmacy",
+      "rent",
+      "restaurant",
+      "salary",
+      "streaming",
+      "tax",
+      "travel",
+      "uber",
+      "water",
+    ];
+    expect(Object.keys(DETAIL_LABEL_PT_BY_EN_NAME).sort()).toEqual(expectedSeedSlugs);
   });
 });
