@@ -84,6 +84,22 @@ vi.mock("../../features/tags/useCategoryTagsData.js", () => ({
   useCategoryTagsData: (...args) => categoryTagsDataMock(...args),
 }));
 
+// fincla-frontend#78/#96 — catálogo de tags que TransacoesPage usa para
+// resolver o RÓTULO que a facet Tags guarda em um `tag_id` de verdade (o
+// backend só filtra por id, nunca por nome). Sem mockar, o hook dispara um
+// fetch real (`GET /tags`) em todo teste que renderiza a página em modo live.
+const tagCatalogMock = vi.fn(() => ({
+  rows: [
+    { id: "tag-uuid-trabalho", name: "trabalho", parent_category_tag_id: "cat-trans" },
+    { id: "tag-uuid-casa", name: "casa", parent_category_tag_id: "cat-alim" },
+  ],
+  loading: false,
+  error: "",
+}));
+vi.mock("../../features/transactions/filters/useTransactionsTagCatalog.js", () => ({
+  useTransactionsTagCatalog: (...args) => tagCatalogMock(...args),
+}));
+
 const listOrgBalanceAdjustmentsMock = vi.fn().mockResolvedValue([]);
 vi.mock("../../../api/balanceAdjustments", () => ({
   listOrgBalanceAdjustments: (...args) => listOrgBalanceAdjustmentsMock(...args),
@@ -459,6 +475,141 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
 
     const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
     expect(lastCall.filters.settlement).toBe("a-pagar");
+  });
+
+  it("fincla-frontend#78: marcar uma tag chega ao hook de dados como filterCat (tag_id)", async () => {
+    seedSettlement();
+    renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: /Tags: —/i }));
+    const panel = screen.getByRole("region", { name: /Filtro: tag/i });
+    await userEvent.click(within(panel).getByRole("button", { name: "Tag trabalho" }));
+
+    // Antes da correção `filter.tags` nunca chegava a `filtersToLegacyParams`:
+    // o `filterCat` continuava "todas" mesmo com a tag marcada, e por isso a
+    // listagem não mudava. Com a correção, o nome marcado é resolvido para o
+    // id real (via `useTransactionsTagCatalog`, mockado acima) e mandado no
+    // MESMO slot que a categoria usa — é o `tag_id` que o backend entende.
+    const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
+    expect(lastCall.filters.filterCat).toBe("tag-uuid-trabalho");
+  });
+
+  // fincla-frontend#96 — revisão adversarial da PR #96, achado 2: Categoria e
+  // Tags disputam o mesmo slot de filtro no backend. Decisão: IMPEDIR as duas
+  // ativas ao mesmo tempo (não só avisar) — provado aqui no nível da UI real,
+  // não só no hook de estado isolado.
+  it("fincla-frontend#96 achado 2: marcar uma categoria com tag ativa apaga o chip da tag (e vice-versa)", async () => {
+    seedSettlement();
+    renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: /Tags: —/i }));
+    await userEvent.click(
+      within(screen.getByRole("region", { name: /Filtro: tag/i })).getByRole("button", {
+        name: "Tag trabalho",
+      }),
+    );
+    expect(screen.getByRole("button", { name: /Tags: #trabalho/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /Categoria: Todas/i }));
+    await userEvent.click(
+      within(screen.getByRole("region", { name: /Filtro: categoria/i })).getByRole("button", {
+        name: "Alimentação",
+      }),
+    );
+
+    // A categoria ganhou o slot compartilhado — o chip da tag não pode
+    // continuar aceso fingindo que ainda está filtrando (era exatamente o
+    // achado 2: antes, os dois ficavam acesos e a tag era descartada em
+    // silêncio no backend).
+    expect(screen.getByRole("button", { name: /Categoria: Alimentação/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Tags: —/i })).toBeInTheDocument();
+    const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
+    expect(lastCall.filters.filterCat).toBe("cat-alim");
+  });
+
+  // fincla-frontend#96 — segunda rodada da revisão adversarial, prioridade 1:
+  // "Todas" no painel de Categoria chamava `setCats(todosOsIds)` — um array
+  // NÃO VAZIO. Com a exclusão mútua do achado 2, isso apagava qualquer tag
+  // ativa (o usuário perdia o filtro de tag clicando num botão que lê como
+  // "não filtrar por categoria"), e o resultado da query continuava sem
+  // filtro de categoria mesmo assim (`mapCatsToLegacy` já trata "todas
+  // selecionadas" como "todas"). "Todas" tem que se comportar como "Limpar".
+  it("fincla-frontend#96 prioridade 1: 'Todas' na Categoria NÃO apaga uma tag ativa", async () => {
+    seedSettlement();
+    renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: /Tags: —/i }));
+    await userEvent.click(
+      within(screen.getByRole("region", { name: /Filtro: tag/i })).getByRole("button", {
+        name: "Tag trabalho",
+      }),
+    );
+    expect(screen.getByRole("button", { name: /Tags: #trabalho/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /Categoria: Todas/i }));
+    await userEvent.click(
+      within(screen.getByRole("region", { name: /Filtro: categoria/i })).getByRole("button", {
+        name: "Todas",
+      }),
+    );
+
+    // A implementação anterior (`setCats(categories.map(c => c.id))`) teria
+    // apagado a tag aqui — este chip precisa continuar aceso.
+    expect(screen.getByRole("button", { name: /Tags: #trabalho/i })).toBeInTheDocument();
+    const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
+    expect(lastCall.filters.filterCat).toBe("tag-uuid-trabalho");
+  });
+
+  // Prioridade 5: a revisão provou que revertendo
+  // `enabled: shouldUseRealData && !tagFilterBlocked` para
+  // `enabled: shouldUseRealData` (e desligando o banner) a suíte inteira desta
+  // página continuava 37/37 verde — a tese central da correção (fail closed)
+  // não tinha rede nenhuma. Este teste força um estado "unresolved" de verdade
+  // (a tag some do catálogo DEPOIS de selecionada — visão salva antiga, tag
+  // renomeada/apagada) e prova as duas pontas: o hook de dados recebe
+  // `enabled:false` (nunca dispara com um filtro "esquecido") e o aviso
+  // visível aparece.
+  it("fincla-frontend#96 prioridade 2/4/5: tag que deixou de existir no catálogo trava a busca (fail closed) e avisa", async () => {
+    seedSettlement();
+    renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: /Tags: —/i }));
+    await userEvent.click(
+      within(screen.getByRole("region", { name: /Filtro: tag/i })).getByRole("button", {
+        name: "Tag trabalho",
+      }),
+    );
+    // Resolveu normalmente enquanto a tag existe no catálogo.
+    expect(transactionsDataMock.mock.calls.at(-1)[0].enabled).toBe(true);
+
+    // Simula a tag sumindo do catálogo (renomeada/apagada) — próxima chamada
+    // ao hook (qualquer re-render) já não a encontra mais.
+    tagCatalogMock.mockImplementation(() => ({
+      rows: [{ id: "tag-uuid-casa", name: "casa", parent_category_tag_id: "cat-alim" }],
+      loading: false,
+      error: "",
+    }));
+    // Dispara um novo render de `TransacoesPageBody` sem mexer na seleção de
+    // tag (troca de Situação é um state setter qualquer, só pra empurrar).
+    await userEvent.click(screen.getByRole("button", { name: /Situação: Todas/i }));
+    const situacaoPanel = screen.getByRole("region", { name: /Filtro: situa/i });
+    await userEvent.click(within(situacaoPanel).getByRole("button", { name: /^Pagas$/i }));
+
+    const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
+    // Nunca "esquece" o filtro e busca tudo — a implementação antiga faria
+    // isso (`filterCat: "todas"`); a correta trava a busca.
+    expect(lastCall.enabled).toBe(false);
+    expect(screen.getByText(/não foi encontrada/i)).toBeInTheDocument();
+
+    // Restaura o mock pro estado default, pra não vazar pros testes seguintes.
+    tagCatalogMock.mockImplementation(() => ({
+      rows: [
+        { id: "tag-uuid-trabalho", name: "trabalho", parent_category_tag_id: "cat-trans" },
+        { id: "tag-uuid-casa", name: "casa", parent_category_tag_id: "cat-alim" },
+      ],
+      loading: false,
+      error: "",
+    }));
   });
 });
 

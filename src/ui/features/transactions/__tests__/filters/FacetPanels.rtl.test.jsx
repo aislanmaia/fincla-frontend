@@ -152,11 +152,17 @@ describe("<CategoryPanel>", () => {
     await userEvent.click(screen.getByRole("button", { name: /Limpar/i }));
     expect(screen.getByRole("button", { name: "Alimentação" })).toHaveAttribute("aria-pressed", "false");
   });
-  it("Todas seleciona todas", async () => {
-    render(<Harness />);
-    await userEvent.click(screen.getByRole("button", { name: /Todas/i }));
+  // fincla-frontend#96 (revisão adversarial da PR #96, prioridade 1): "Todas"
+  // costumava marcar `cats` com TODOS os ids (array não-vazio) — com a
+  // exclusão mútua Categoria/Tags, isso apagava qualquer tag ativa em troca
+  // de um filtro que já dava no mesmo de "sem categoria" (mapCatsToLegacy
+  // trata "todas selecionadas" = "todas"). "Todas" agora se comporta como
+  // "Limpar": nenhum chip fica marcado, e o resultado da query é idêntico.
+  it("Todas limpa a seleção (mesmo efeito de 'sem filtro' que Limpar, sem apagar outra facet)", async () => {
+    render(<Harness initial={["alim"]} />);
+    await userEvent.click(screen.getByRole("button", { name: /^Todas$/i }));
     for (const c of CATEGORIES) {
-      expect(screen.getByRole("button", { name: c.label })).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByRole("button", { name: c.label })).toHaveAttribute("aria-pressed", "false");
     }
   });
   it("busca filtra a grade", async () => {
@@ -180,7 +186,7 @@ describe("<CategoryPanel>", () => {
 });
 
 describe("<TagPanel>", () => {
-  function Harness({ initial = [] }) {
+  function Harness({ initial = [], loading = false }) {
     const [tags, setTags] = useState(initial);
     return (
       <FacetPanelContent
@@ -188,6 +194,7 @@ describe("<TagPanel>", () => {
         tags={tags}
         setTags={setTags}
         allTags={["trabalho", "casa", "viagem"]}
+        allTagsLoading={loading}
         onClose={() => {}}
       />
     );
@@ -202,6 +209,47 @@ describe("<TagPanel>", () => {
     await userEvent.type(screen.getByLabelText(/Buscar tag/i), "via");
     expect(screen.getByRole("button", { name: /Tag viagem/i })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Tag casa/i })).not.toBeInTheDocument();
+  });
+
+  // fincla-frontend#96 achado 3: o painel prometia "todas as tags marcadas"
+  // (AND multi-select), mas só a primeira ia pro backend. Virou single-select
+  // de verdade — estas provas reprovam a implementação anterior (que somava
+  // ao array em vez de substituir).
+  it("marcar uma segunda tag SUBSTITUI a primeira, nunca soma (single-select)", async () => {
+    render(<Harness />);
+    await userEvent.click(screen.getByRole("button", { name: /Tag trabalho/i }));
+    await userEvent.click(screen.getByRole("button", { name: /Tag casa/i }));
+
+    expect(screen.getByRole("button", { name: /Tag casa/i })).toHaveAttribute("aria-pressed", "true");
+    // A implementação antiga (`[...tags, tg]`) deixaria as DUAS marcadas.
+    expect(screen.getByRole("button", { name: /Tag trabalho/i })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
+  it("clicar na tag já marcada limpa a seleção", async () => {
+    render(<Harness initial={["trabalho"]} />);
+    expect(screen.getByRole("button", { name: /Tag trabalho/i })).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(screen.getByRole("button", { name: /Tag trabalho/i }));
+    expect(screen.getByRole("button", { name: /Tag trabalho/i })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  // fincla-frontend#96 achado 5: sem o estado de loading, um catálogo ainda
+  // carregando (allTags=[]) lia como "Nenhuma tag cadastrada" — falso.
+  it("catálogo carregando mostra 'Carregando tags…', não 'Nenhuma tag cadastrada'", () => {
+    render(
+      <FacetPanelContent
+        facetKey="tag"
+        tags={[]}
+        setTags={() => {}}
+        allTags={[]}
+        allTagsLoading
+        onClose={() => {}}
+      />,
+    );
+    expect(screen.getByText(/Carregando tags…/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Nenhuma tag cadastrada/i)).not.toBeInTheDocument();
   });
 });
 

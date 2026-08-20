@@ -23,6 +23,14 @@ import { PageTitle } from "../components/primitives";
 import { TRANSACTIONS } from "../data/mockFinance";
 import { downloadTransactionsCsvForUi } from "../data/transactionsAdapter.js";
 import { useCategoryTagsData } from "../features/tags/useCategoryTagsData.js";
+import { useTransactionsTagCatalog } from "../features/transactions/filters/useTransactionsTagCatalog.js";
+import {
+  buildTagOptions,
+  isTagFilterBlocked,
+  resolveTagFilterStatus,
+  tagFilterStatusMessage,
+  tagOptionsToDisplayMap,
+} from "../features/transactions/filters/tagCatalogResolution.js";
 import { useTransactionsData } from "../features/transactions/useTransactionsData.js";
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { TransactionsEmptyState } from "../features/transactions/TransactionsEmptyState.jsx";
@@ -769,6 +777,60 @@ function TransacoesPageBody({
   const totalCategoriesForBackend = shouldUseRealData
     ? categoryTagsData.categories?.length || 0
     : 0;
+  // Catálogo de tags não-categoria (`detalhe`, `contexto`, `local`, `pessoa`...)
+  // da organização inteira — não só as que aparecem na página atual. Precisamos
+  // dele para resolver o RÓTULO que a facet "Tags" guarda (`filter.tags`) em um
+  // UUID de verdade: o backend só filtra por `tag_id`, nunca por nome
+  // (fincla-frontend#78; ver nota em filtersToLegacyParams.js). Ver
+  // useTransactionsTagCatalog.js para o porquê de NÃO reaproveitar
+  // `useNovaTransacaoDetailTags` (achado 6 da revisão da PR #96: aquele hook
+  // só traz `tag_type=detalhe`, mas a linha da transação mostra qualquer tag
+  // não-categoria).
+  const tagCatalog = useTransactionsTagCatalog({
+    organizationId,
+    enabled: shouldUseRealData,
+  });
+  const categoryLabelById = useMemo(() => {
+    const map = new Map();
+    for (const c of categoryTagsData.categories || []) {
+      if (c?.id != null) map.set(String(c.id), c.labelPt);
+    }
+    return map;
+  }, [categoryTagsData.categories]);
+  // Achado 1: tags não-categoria podem repetir o NOME sob categorias-pai
+  // diferentes (ex.: "mensal" em Casa e em Trabalho) — `buildTagOptions`
+  // desambigua o rótulo exibido quando isso acontece, então cada opção do
+  // painel resolve para um único id, nunca colapsa duas tags num chip só.
+  const tagOptions = useMemo(
+    () => buildTagOptions(tagCatalog.rows, categoryLabelById),
+    [tagCatalog.rows, categoryLabelById],
+  );
+  const tagDisplayToId = useMemo(() => tagOptionsToDisplayMap(tagOptions), [tagOptions]);
+  // A facet virou single-select (achado 3: "todas as tags marcadas" não é
+  // entregável — o backend só aceita um `tag_id` — então só existe UM rótulo
+  // selecionado para resolver, sem a ambiguidade de "qual dos N tentar").
+  const tagFilterStatus = useMemo(
+    () =>
+      shouldUseRealData
+        ? resolveTagFilterStatus({
+            selectedLabel: filter.tags[0] ?? null,
+            loading: tagCatalog.loading,
+            error: tagCatalog.error,
+            displayToId: tagDisplayToId,
+          })
+        : { kind: "none" },
+    [shouldUseRealData, filter.tags, tagCatalog.loading, tagCatalog.error, tagDisplayToId],
+  );
+  const resolvedTagIds = useMemo(
+    () => (tagFilterStatus.kind === "resolved" ? [tagFilterStatus.id] : []),
+    [tagFilterStatus],
+  );
+  // Achado 4: um rótulo selecionado que não resolve para id NUNCA pode virar
+  // "sem filtro" por baixo do capô — isso mostraria a lista inteira parecendo
+  // filtrada. Enquanto o catálogo carrega, falhou, ou o rótulo não existe mais
+  // (view salva com tag renomeada/apagada), a busca fica em espera (fail
+  // closed, ver `enabled` abaixo) e um aviso visível explica o motivo.
+  const tagFilterBlocked = shouldUseRealData && isTagFilterBlocked(tagFilterStatus);
   const transactionsFilters = useMemo(
     () =>
       filtersToLegacyParams(
@@ -788,6 +850,7 @@ function TransacoesPageBody({
           limit: visible,
           debouncedSearch,
           totalCategories: totalCategoriesForBackend,
+          tagIds: resolvedTagIds,
         },
       ),
     [
@@ -804,11 +867,16 @@ function TransacoesPageBody({
       filter.settlement,
       visible,
       totalCategoriesForBackend,
+      resolvedTagIds,
     ],
   );
   const transactionsData = useTransactionsData({
     organizationId,
-    enabled: shouldUseRealData,
+    // Achado 4 (fail-closed): com uma tag selecionada que ainda não resolveu
+    // para um id, NÃO disparamos a busca com o filtro "esquecido" — melhor
+    // mostrar nada por um instante (com aviso, ver `tagFilterStatus` abaixo)
+    // do que mostrar a lista inteira se passando por filtrada.
+    enabled: shouldUseRealData && !tagFilterBlocked,
     filters: transactionsFilters,
     refreshToken: transactionsRefreshToken,
   });
@@ -836,12 +904,38 @@ function TransacoesPageBody({
       }));
   }, [shouldUseRealData, categoryTagsData.categories, txList]);
 
-  /** Tags disponíveis para o painel de Tags. */
+  /**
+   * Rótulos disponíveis para o painel de Tags. Em modo live usa o catálogo da
+   * organização inteira já desambiguado (`tagOptions`) — não só as tags que
+   * aparecem na página atual — senão um período/filtro sem resultados
+   * esvaziaria a lista de opções e o painel diria "nenhuma tag cadastrada"
+   * mesmo com tags existindo. Modo demo/mock (sem catálogo real) cai para a
+   * derivação a partir de `txList` (nomes das transações já carregadas).
+   *
+   * Falha ao carregar o catálogo (`tagCatalog.error`) é tratada à parte
+   * (achado 5 x prioridade 3 da revisão da PR #96 — as duas mexem na mesma
+   * decisão em direções opostas):
+   *  - achado 5: sem opção nenhuma, o painel caía em "Nenhuma tag cadastrada."
+   *    — falso, é erro de rede, não ausência de tags.
+   *  - prioridade 3: a correção do achado 5 tinha oferecido as tags vistas em
+   *    `txList` como opções "de fallback" — mas ISSO era uma armadilha:
+   *    `useTransactionsTagCatalog` não tem retry (efeito só depende de
+   *    `[enabled, organizationId]`), então QUALQUER seleção nesse estado cai
+   *    em `tagFilterStatus.kind === "error"` pra sempre — a página trava com
+   *    "Tente novamente em instantes" sendo mentira pela sessão inteira.
+   * Solução: em erro, NÃO oferece opções (evita a armadilha) — o painel
+   * mostra uma mensagem de erro própria (não "nenhuma tag cadastrada"),
+   * atendendo os dois achados sem reabrir nenhum dos dois.
+   */
   const allTagsForFilter = useMemo(() => {
+    if (shouldUseRealData) {
+      if (tagCatalog.error) return [];
+      return tagOptions.map((o) => o.displayLabel);
+    }
     const set = new Set();
     txList.forEach((t) => (t.tags || []).forEach((tg) => set.add(tg)));
     return Array.from(set).sort();
-  }, [txList]);
+  }, [shouldUseRealData, tagCatalog.error, tagOptions, txList]);
 
   /** Cartões cadastrados — placeholder até integração com `useCreditCardsData`. */
   const cardsForFilter = useMemo(() => {
@@ -939,9 +1033,13 @@ function TransacoesPageBody({
 
   // ── Filter + sort ────────────────────────────────────────────────────────
   //
-  // Em modo **live** a API já aplicou período, tipo, categorias, tags,
-  // recorrência, faixa de valor, busca, ordenação e forma(s) de pagamento
-  // (`payment_method` repetido casa com qualquer uma das selecionadas).
+  // Em modo **live** a API já aplicou período, tipo, categorias, faixa de
+  // valor, busca, ordenação, situação e forma(s) de pagamento (`payment_method`
+  // repetido casa com qualquer uma das selecionadas). Tags: só a PRIMEIRA
+  // selecionada vira `tag_id` de verdade (mesma limitação de "um valor só" que
+  // categoria já tinha) e perde a prioridade se uma categoria também estiver
+  // selecionada — o backend só entende um `tag_id` por vez (fincla-frontend#78,
+  // ver filtersToLegacyParams.js). Recorrência ainda não tem filtro no backend.
   // Refiltrar aqui quebraria a lista: `txList` carrega linhas de *apresentação*
   // (ex.: `date` é "21/05", sem ano), e o recorte por página descartaria linhas
   // que na verdade casam nas demais páginas — era exatamente o bug da lista
@@ -1310,6 +1408,14 @@ function TransacoesPageBody({
     categories: categoriesForFilter,
     cards: cardsForFilter,
     allTags: allTagsForFilter,
+    // Achado 5: sem isto o painel mostra "Nenhuma tag cadastrada" enquanto o
+    // catálogo ainda está a caminho — parece "você não tem tags" quando é só
+    // um instante de carregamento.
+    allTagsLoading: shouldUseRealData && tagCatalog.loading,
+    // Prioridade 3: erro tem mensagem própria — nunca "nenhuma tag cadastrada"
+    // (achado 5) nem uma lista de opções que sempre trava ao ser clicada
+    // (a armadilha que motivou tirar as opções em `allTagsForFilter`).
+    allTagsError: shouldUseRealData && Boolean(tagCatalog.error),
     hideSavedViews: true,
     searchInput,
     setSearchInput: (v) => {
@@ -1356,16 +1462,35 @@ function TransacoesPageBody({
   const listContent = (
     <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
       {groups.length === 0 ? (
-        <CardEmptyWithCta
-          icon="🔍"
-          iconSize={28}
-          title="Nenhuma transação encontrada"
-          sub="Tente ajustar os filtros ou a busca — ou registre um lançamento novo."
-          primaryLabel={listFiltersActive ? "Limpar filtros" : onNewTx ? "+ Nova transação" : undefined}
-          onPrimary={listFiltersActive ? clearAll : onNewTx || undefined}
-          secondaryLabel={listFiltersActive && onNewTx ? "+ Nova transação" : undefined}
-          onSecondary={listFiltersActive && onNewTx ? onNewTx : undefined}
-        />
+        // Prioridade 2 (revisão adversarial da PR #96): com a busca em espera
+        // (`tagFilterBlocked`), `groups` também dá 0 — mas "Nenhuma transação
+        // encontrada" é uma afirmação categórica sobre uma pergunta que a API
+        // nem chegou a responder. Mostrar isso (mais "0 resultados" e KPIs em
+        // R$ 0,00, ver a faixa de KPI abaixo) é a mesma confusão que a issue
+        // original queria eliminar, só que invertida: parece resposta, é
+        // pendência. O banner âmbar ao lado não é suficiente — o card
+        // principal da lista precisa dizer a verdade também.
+        tagFilterBlocked ? (
+          <CardEmptyWithCta
+            icon="⏳"
+            iconSize={28}
+            title="Filtro de tag pendente"
+            sub={tagFilterStatusMessage(tagFilterStatus)}
+            primaryLabel="Limpar filtro de tag"
+            onPrimary={() => filter.setTags([])}
+          />
+        ) : (
+          <CardEmptyWithCta
+            icon="🔍"
+            iconSize={28}
+            title="Nenhuma transação encontrada"
+            sub="Tente ajustar os filtros ou a busca — ou registre um lançamento novo."
+            primaryLabel={listFiltersActive ? "Limpar filtros" : onNewTx ? "+ Nova transação" : undefined}
+            onPrimary={listFiltersActive ? clearAll : onNewTx || undefined}
+            secondaryLabel={listFiltersActive && onNewTx ? "+ Nova transação" : undefined}
+            onSecondary={listFiltersActive && onNewTx ? onNewTx : undefined}
+          />
+        )
       ) : (
         groups.map(([date, txs]) => (
           <div key={date}>
@@ -1507,6 +1632,19 @@ function TransacoesPageBody({
       {shouldUseRealData && transactionsData.error && (
         <div style={{ ...G, fontSize:13, color:T.red, background:T.redLight, border:`1px solid ${T.red}22`, borderRadius:12, padding:"12px 14px" }}>
           {transactionsData.error}
+        </div>
+      )}
+
+      {/* Achado 4 (revisão PR #96): tag selecionada que ainda não resolveu para
+          um id — a busca fica em espera (ver `tagFilterBlocked`) e este aviso
+          explica o motivo, para nunca parecer que a lista abaixo está filtrada
+          quando na verdade está travada. */}
+      {tagFilterBlocked && (
+        <div
+          role="status"
+          style={{ ...G, fontSize:13, color:T.amber, background:T.amberLight, border:`1px solid ${T.amberBorder}`, borderRadius:12, padding:"12px 14px" }}
+        >
+          {tagFilterStatusMessage(tagFilterStatus)}
         </div>
       )}
 
@@ -1730,16 +1868,19 @@ function TransacoesPageBody({
               <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>
                 {k.label}
               </div>
-              <div style={{ ...G, fontFamily: "'Geist Mono',monospace", fontSize: isMobile ? 14 : 16, fontWeight: 800, color: k.color, letterSpacing: "-0.01em" }}>
-                {k.sign}{fmtBRL(k.val)}
+              <div style={{ ...G, fontFamily: "'Geist Mono',monospace", fontSize: isMobile ? 14 : 16, fontWeight: 800, color: tagFilterBlocked ? T.inkLight : k.color, letterSpacing: "-0.01em" }}>
+                {/* Prioridade 2: com a busca em espera, `k.val` é sempre 0 (a
+                    API nem respondeu) — "R$ 0,00" afirmaria um resultado que
+                    não existe. "—" é honesto: não sabemos ainda. */}
+                {tagFilterBlocked ? "—" : <>{k.sign}{fmtBRL(k.val)}</>}
               </div>
-              {k.subLine && (
+              {k.subLine && !tagFilterBlocked && (
                 <div style={{ ...G, fontSize: 10, color: T.green, marginTop: 3, fontWeight: 600 }}>
                   {k.subLine}
                 </div>
               )}
               <div style={{ ...G, fontSize: 10, color: T.inkLight, marginTop: 3 }}>
-                {k.countLine}
+                {tagFilterBlocked ? "Aguardando filtro de tag" : k.countLine}
               </div>
             </div>
           ));
