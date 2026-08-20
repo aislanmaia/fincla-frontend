@@ -1,3 +1,5 @@
+import axios from "axios";
+
 import {
   createTransaction,
   getTransactionsSummary,
@@ -1275,47 +1277,40 @@ function sameUpdateField(a, b) {
   return a === b;
 }
 
-// `POST /transactions` NÃO tem retry automático. As candidatas óbvias foram
-// investigadas uma a uma (ver `isCreateTransactionErrorRetryable`) e NENHUMA
-// classe de erro prova hoje que o servidor não processou o request — inclusive
-// 503, que parecia a mais segura até a própria API ser lida: o backend do
-// Fincla devolve `SERVICE_UNAVAILABLE` (`ServiceTemporarilyUnavailableError`,
-// `transaction_service.py:514`/`:567`) DEPOIS de já ter gravado a linha em
-// alguns caminhos — não é hipótese de proxy, é o nosso código. Repetir viraria
-// duplicar lançamento de compra parcelada.
-//
-// Duplicar um lançamento no extrato de alguém é pior do que mostrar um erro.
-// Sem uma `Idempotency-Key` que o backend possa usar para detectar reenvio do
-// MESMO request (ver issue de acompanhamento), não existe erro seguro para
-// repetir uma escrita não idempotente — então o reenvio fica com a pessoa: o
-// formulário permanece preenchido e utilizável, e o botão "Tentar novamente"
-// reenvia só quando ela decide clicar.
-const CREATE_TRANSACTION_MAX_ATTEMPTS = 1;
-
 /**
- * Documenta, classe a classe, por que cada erro que PARECIA repetível não é —
- * e por isso retorna sempre `false`. Mantido (em vez de removido) porque essa
- * investigação é o que justifica a ausência de retry automático, e porque é o
- * ponto de extensão natural no dia em que `POST /transactions` aceitar
- * `Idempotency-Key` (aí sim um subconjunto destes vira `true` com segurança).
+ * `POST /transactions` NÃO tem retry automático — nunca teve um `for` pra
+ * configurar mal. As candidatas óbvias foram investigadas uma a uma e NENHUMA
+ * classe de erro prova hoje que o servidor não processou o request. Mantida
+ * como documentação pura (sempre `false`, nunca chamada por
+ * `createTransactionForUi`) porque essa investigação é o que justifica a
+ * ausência de retry, e é o ponto de extensão natural no dia em que
+ * `POST /transactions` aceitar `Idempotency-Key` (issue de acompanhamento) —
+ * aí sim um subconjunto destes vira `true` com segurança.
  *
  *  - 503 (Service Unavailable): PARECIA a mais segura ("LB recusando antes de
- *    rotear"), mas o próprio backend do Fincla devolve 503 depois de gravar
- *    em alguns fluxos (`ServiceTemporarilyUnavailableError` em
- *    `transaction_service.py`) — não dá pra distinguir do lado do cliente.
+ *    rotear"), mas não dá pra afirmar isso do lado do cliente. O backend
+ *    empacota QUALQUER exceção de infra (erro do SQLAlchemy/psycopg, erro de
+ *    rede outbound via httpx) em `SERVICE_UNAVAILABLE` — ver o classificador
+ *    de infra em `safe_errors/translator.py` (fincla-api). Isso inclui o
+ *    caso clássico de "commit ambíguo": se a conexão com o Postgres cair
+ *    bem na hora do `COMMIT`, o cliente HTTP não tem como saber se o commit
+ *    chegou a aplicar no banco antes do erro — o mesmo problema de fundo do
+ *    ERR_NETWORK/ECONNRESET abaixo, só que um andar mais embaixo na pilha.
  *  - `ERR_NETWORK` / `ECONNRESET` (sem resposta): a suposição óbvia seria "a
  *    conexão caiu antes de qualquer byte trafegar, logo é seguro". Isso é
  *    FALSO em geral. `ECONNRESET` é um RST de TCP — exige conexão já
- *    estabelecida e tipicamente chega DEPOIS de bytes trocados (ex.: o app
- *    grava a transação e o proxy recicla a conexão logo em seguida, por
- *    idle-reap ou restart do worker). `ERR_NETWORK` no adapter XHR do axios
- *    vem do mesmo `onerror` tanto para "recusou antes de enviar" quanto para
+ *    estabelecida e tipicamente chega DEPOIS de bytes trocados (ex.: o
+ *    servidor termina de escrever o `201` e a conexão cai antes do cliente
+ *    terminar de ler a resposta). `ERR_NETWORK` no adapter XHR do axios vem
+ *    do mesmo `onerror` tanto para "recusou antes de enviar" quanto para
  *    "caiu depois do 201, antes dos headers chegarem" — o cliente não
  *    consegue distinguir os dois casos. (O interceptor global de
- *    `src/api/client.ts` já repete esses códigos para writes por conta
- *    própria, com o mesmo problema — rastreado à parte, não é corrigido aqui.)
+ *    `src/api/client.ts` NÃO repete mais nenhum write por causa disso — só
+ *    GET/HEAD, que são seguros por definição.)
  *  - qualquer 4xx (validação, auth, conflito): erro definitivo do pedido;
  *    repetir não muda o resultado e some com o feedback real do problema.
+ *    (Estes SÃO seguros para reenvio manual — ver `isCreateTransactionErrorMaybePersisted`,
+ *    que existe pra UI diferenciar isso do resto, não pra retry automático.)
  *  - 500 genérico: o servidor pode ter GRAVADO a transação e só quebrado
  *    depois (ex.: ao materializar uma recorrência associada) — repetir
  *    arriscaria justamente o cenário mais caro, que é duplicar.
@@ -1336,29 +1331,29 @@ export function isCreateTransactionErrorRetryable(_error) {
 }
 
 /**
- * Cria a transação — sem retry automático (ver `isCreateTransactionErrorRetryable`
- * para o porquê). `maxAttempts` é um parâmetro só de teste: existe unicamente
- * para exercitar o guard defensivo abaixo com uma configuração inválida
- * (`0`); o uso real do produto nunca o passa e sempre roda com o padrão (1).
+ * Classifica se um erro de CRIAÇÃO pode ter persistido mesmo tendo retornado
+ * erro ao cliente — usado só para adaptar a MENSAGEM e o botão de reenvio
+ * MANUAL no modal (`NovaTransacaoModal.jsx`), nunca para decidir retry
+ * automático (que está sempre desligado, ver `isCreateTransactionErrorRetryable`
+ * acima).
+ *
+ *  - Sem resposta (erro de rede/timeout) ou 5xx (500/502/503/504): AMBÍGUO.
+ *    Nenhum desses prova que a escrita não aconteceu (ver o raciocínio acima)
+ *    — a UI deve avisar para conferir o extrato antes de reenviar.
+ *  - 4xx: SEGURO. A API valida antes de gravar — uma rejeição por validação,
+ *    autenticação ou conflito significa que nada foi criado ainda. Reenviar
+ *    depois de corrigir o campo apontado no erro é seguro.
  */
-export async function createTransactionForUi(payload, { maxAttempts = CREATE_TRANSACTION_MAX_ATTEMPTS } = {}) {
-  let lastError;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      return await createTransaction(payload);
-    } catch (error) {
-      lastError = error;
-      const isLastAttempt = attempt >= maxAttempts;
-      if (isLastAttempt || !isCreateTransactionErrorRetryable(error)) {
-        throw error;
-      }
-    }
-  }
-  // Defensivo: se `maxAttempts` for 0 (configuração inválida), o laço acima
-  // nunca roda — sem isso a função retornaria `undefined` silenciosamente, e
-  // o modal mostraria "Registrado!" para uma transação que nunca foi
-  // enviada. Lança em vez de fingir sucesso.
-  throw lastError ?? new Error("createTransactionForUi: nenhuma tentativa foi executada.");
+export function isCreateTransactionErrorMaybePersisted(error) {
+  if (!axios.isAxiosError(error)) return true; // não dá pra classificar: trata como ambíguo, por segurança.
+  const status = error.response?.status;
+  if (status == null) return true; // sem resposta: rede ou timeout.
+  return status >= 500;
+}
+
+/** Cria a transação. Sem retry — ver `isCreateTransactionErrorRetryable`. */
+export async function createTransactionForUi(payload) {
+  return createTransaction(payload);
 }
 
 export async function updateTransactionForUi(transactionId, organizationId, payload) {

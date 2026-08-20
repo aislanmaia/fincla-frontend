@@ -47,6 +47,7 @@ import {
   createTransactionForUi,
   formatTransactionsApiError,
   formatYmdToLocaleDisplay,
+  isCreateTransactionErrorMaybePersisted,
   clampNovaTxPrefsParcelas,
   initialNovaTransacaoDateYmd,
   isUuidString,
@@ -216,6 +217,11 @@ export const NovaTransacaoModal = ({
   // Quando a última tentativa de CRIAR (não editar) falhou, o botão vira
   // "Tentar novamente": o reenvio é decisão explícita da pessoa, não automático.
   const [txCreateFailed, setTxCreateFailed] = useState(false);
+  // `true` quando o erro da última criação NÃO prova que nada foi gravado
+  // (ver `isCreateTransactionErrorMaybePersisted`) — rede/timeout/5xx. Nesses
+  // casos o botão de reenvio fica secundário e pede confirmação: um clique
+  // ali pode duplicar um lançamento que o servidor já criou.
+  const [txCreateErrorAmbiguous, setTxCreateErrorAmbiguous] = useState(false);
   const [modalCardsRows, setModalityChoicealCardsRows] = useState([]);
   const [modalCardsLoading, setModalityChoicealCardsLoading] = useState(false);
   const [modalCardsError, setModalityChoicealCardsError] = useState("");
@@ -707,6 +713,12 @@ export const NovaTransacaoModal = ({
   useEffect(() => {
     if (!open) return;
     setTxSubmitError("");
+    // Reabrir o drawer (nova transação OU editar outra) nunca deve herdar o
+    // "Tentar novamente" de uma falha anterior — senão um clique aqui dispara
+    // a ação da transação ERRADA (ex.: PATCH numa edição depois de uma
+    // criação que falhou). Ver issue de acompanhamento sobre estado do modal.
+    setTxCreateFailed(false);
+    setTxCreateErrorAmbiguous(false);
     if (!useLiveCategoryTags) {
       setCategoryTagId(null);
       setCategoryTagIsActive(true);
@@ -1379,6 +1391,7 @@ export const NovaTransacaoModal = ({
       setTxSubmitting(true);
       setTxSubmitError("");
       setTxCreateFailed(false);
+      setTxCreateErrorAmbiguous(false);
       const isEditingExisting = editingTransactionIdStr != null || editingTransactionId != null;
       try {
         if (method === "credito") {
@@ -1450,18 +1463,63 @@ export const NovaTransacaoModal = ({
             }),
           );
         }
+      } catch (err) {
+        // Erro na ESCRITA principal (create/update em si): a operação que a
+        // pessoa pediu não foi confirmada. Para criação, decide se o reenvio
+        // pode ser oferecido direto (4xx: API valida antes de gravar, nada
+        // foi criado) ou se precisa de aviso + confirmação (5xx/rede: pode
+        // já ter gravado — ver `isCreateTransactionErrorMaybePersisted`).
+        const ambiguous = !isEditingExisting && isCreateTransactionErrorMaybePersisted(err);
+        const baseMessage = formatTransactionsApiError(err);
+        setTxSubmitError(
+          ambiguous
+            ? `${baseMessage} A transação pode já ter sido registrada mesmo com esse erro — confira seu extrato antes de tentar de novo.`
+            : baseMessage,
+        );
+        if (!isEditingExisting) {
+          setTxCreateFailed(true);
+          setTxCreateErrorAmbiguous(ambiguous);
+        }
+        setTxSubmitting(false);
+        return;
+      }
+      // A escrita principal teve sucesso confirmado pelo servidor a partir
+      // daqui. `clearNovaTransacaoSummaryCache`/`onTransactionSaved` são
+      // side-effects locais (cache, refetch da lista do pai) — um throw
+      // deles NUNCA deve fazer a tela dizer "Tentar novamente": a transação
+      // já existe no servidor, reenviar duplicaria.
+      try {
         clearNovaTransacaoSummaryCache();
         onTransactionSaved?.();
       } catch (err) {
-        if (!isEditingExisting) setTxCreateFailed(true);
-        setTxSubmitError(formatTransactionsApiError(err));
-        setTxSubmitting(false);
-        return;
+        // eslint-disable-next-line no-console
+        console.error(
+          "Falha em efeito pós-salvamento (cache/callback) — a transação já foi salva no servidor:",
+          err,
+        );
       }
       setTxSubmitting(false);
     }
 
     setSuccessOverlay(true);
+  };
+
+  // Rótulo/estilo/ação do botão principal quando a última criação falhou.
+  // Erro AMBÍGUO (rede/timeout/5xx — pode já ter gravado): botão secundário
+  // e pede confirmação explícita antes de reenviar, porque um clique
+  // impensado ali pode duplicar um lançamento que o servidor já criou.
+  // Erro SEGURO (4xx — API valida antes de gravar, nada foi criado): reenvia
+  // direto, como qualquer outro "tentar de novo".
+  const retryLabel = txCreateErrorAmbiguous ? "Tentar novamente mesmo assim" : "Tentar novamente";
+  const handleSaveOrConfirmRetry = () => {
+    if (txCreateFailed && txCreateErrorAmbiguous) {
+      const confirmed = window.confirm(
+        "Essa transação pode já ter sido registrada mesmo com o erro anterior. " +
+          "Confira seu extrato antes de continuar. Deseja tentar salvar de novo mesmo assim?",
+      );
+      if (!confirmed) return;
+    }
+    handleSave();
   };
 
   // Desktop-only helpers
@@ -1509,7 +1567,7 @@ export const NovaTransacaoModal = ({
     }
     setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, null));
     setReview(false); resetMobileStep(); setSuccess(false); setSuccessOverlay(false);
-    setTxSubmitError(""); setTxSubmitting(false); setTxCreateFailed(false); setDescError(false);
+    setTxSubmitError(""); setTxSubmitting(false); setTxCreateFailed(false); setTxCreateErrorAmbiguous(false); setDescError(false);
     setMobileReviewImpactOpen(false); resetAi();
     setDescFocused(false); setAddingCartao(false); setQuickAddCardName(""); setQuickAddCardLast4("");
     setNewTag(""); setAddingTag(false); resetInstallmentCalc(); setShowImpact(false);
@@ -2180,9 +2238,9 @@ export const NovaTransacaoModal = ({
                 <button onClick={goPrev} style={{ ...G, display:"flex", alignItems:"center", gap:5, padding:"13px 16px", borderRadius:12, border:`1px solid ${T.border}`, background:T.surface, fontSize:14, fontWeight:600, color:T.inkMid, cursor:"pointer" }}>
                   <ChevronLeft size={16} /> Editar
                 </button>
-                <button onClick={handleSave} disabled={txSubmitting || !desc.trim()}
-                  style={{ ...G, flex:1, padding:"13px", borderRadius:12, border:"none", background:success ? T.green : (!desc.trim() ? T.inkGhost : typeColor), fontSize:14, fontWeight:800, color:"#fff", cursor:(txSubmitting || !desc.trim()) ? "not-allowed" : "pointer", opacity:(txSubmitting || !desc.trim()) ? 0.75 : 1, display:"flex", alignItems:"center", justifyContent:"center", gap:7, transition:"background 0.25s" }}>
-                  {success ? <><Check size={16} /> {isRecurring || novaRecorrencia ? "Recorrência salva!" : "Registrado!"}</> : (isRecurring || novaRecorrencia ? "Confirmar recorrência" : (txSubmitting ? "Enviando…" : txCreateFailed ? "Tentar novamente" : `Confirmar ${tipo === "despesa" ? (isRefund ? "estorno" : "despesa") : "receita"}`))}
+                <button onClick={handleSaveOrConfirmRetry} disabled={txSubmitting || !desc.trim()}
+                  style={{ ...G, flex:1, padding:"13px", borderRadius:12, border:(txCreateFailed && txCreateErrorAmbiguous) ? `1px solid ${T.amberBorder}` : "none", background:success ? T.green : (!desc.trim() ? T.inkGhost : (txCreateFailed && txCreateErrorAmbiguous) ? T.amberLight : typeColor), fontSize:14, fontWeight:800, color:(txCreateFailed && txCreateErrorAmbiguous) ? T.amber : "#fff", cursor:(txSubmitting || !desc.trim()) ? "not-allowed" : "pointer", opacity:(txSubmitting || !desc.trim()) ? 0.75 : 1, display:"flex", alignItems:"center", justifyContent:"center", gap:7, transition:"background 0.25s" }}>
+                  {success ? <><Check size={16} /> {isRecurring || novaRecorrencia ? "Recorrência salva!" : "Registrado!"}</> : (isRecurring || novaRecorrencia ? "Confirmar recorrência" : (txSubmitting ? "Enviando…" : txCreateFailed ? retryLabel : `Confirmar ${tipo === "despesa" ? (isRefund ? "estorno" : "despesa") : "receita"}`))}
                 </button>
               </div>
               </div>
@@ -3073,11 +3131,11 @@ export const NovaTransacaoModal = ({
                   onMouseLeave={e => e.currentTarget.style.background = T.surface}>
                   <ChevronLeft size={14} /> Editar
                 </button>
-                <button onClick={handleSave} disabled={txSubmitting}
-                  style={{ ...G, flex:1, padding:"11px", borderRadius:10, border:"none", background:success ? T.green : typeColor, fontSize:13, fontWeight:700, color:"#fff", cursor:txSubmitting ? "not-allowed" : "pointer", opacity:txSubmitting ? 0.75 : 1, display:"flex", alignItems:"center", justifyContent:"center", gap:6, transition:"background 0.25s", animation:success?"successPop 0.35s ease-out":"none" }}>
+                <button onClick={handleSaveOrConfirmRetry} disabled={txSubmitting}
+                  style={{ ...G, flex:1, padding:"11px", borderRadius:10, border:(txCreateFailed && txCreateErrorAmbiguous) ? `1px solid ${T.amberBorder}` : "none", background:success ? T.green : (txCreateFailed && txCreateErrorAmbiguous) ? T.amberLight : typeColor, fontSize:13, fontWeight:700, color:(txCreateFailed && txCreateErrorAmbiguous) ? T.amber : "#fff", cursor:txSubmitting ? "not-allowed" : "pointer", opacity:txSubmitting ? 0.75 : 1, display:"flex", alignItems:"center", justifyContent:"center", gap:6, transition:"background 0.25s", animation:success?"successPop 0.35s ease-out":"none" }}>
                   {success
                     ? <><Check size={14} /> {novaRecorrencia || isRecurring ? "Recorrência salva!" : "Registrado!"}</>
-                    : novaRecorrencia || isRecurring ? "Confirmar recorrência" : (txSubmitting ? "Enviando…" : txCreateFailed ? "Tentar novamente" : `Confirmar ${tipo === "despesa" ? (isRefund ? "estorno" : "despesa") : "receita"}`)
+                    : novaRecorrencia || isRecurring ? "Confirmar recorrência" : (txSubmitting ? "Enviando…" : txCreateFailed ? retryLabel : `Confirmar ${tipo === "despesa" ? (isRefund ? "estorno" : "despesa") : "receita"}`)
                   }
                 </button>
               </div>

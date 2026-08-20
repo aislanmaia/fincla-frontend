@@ -1,5 +1,5 @@
-import axios from 'axios';
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import axios, { AxiosError } from 'axios';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import apiClient, { errorCode, handleApiError } from '../client';
 
 describe('API Client Configuration', () => {
@@ -165,5 +165,134 @@ describe('handleApiError — validação 422 do FastAPI vira português', () => 
       { type: 'missing', loc: ['body', 'y'], msg: 'Another unknown wording' },
     ]);
     expect(handleApiError(err)).toBe('Verifique os dados informados e tente novamente.');
+  });
+});
+
+
+describe('interceptor de retry — só GET/HEAD, nunca writes', () => {
+  // Writes (POST/PUT/PATCH/DELETE) NÃO são idempotentes: repetir cegamente
+  // pode duplicar o que a chamada original já tiver feito no servidor.
+  // ERR_NETWORK/ECONNRESET não provam que o servidor não recebeu o request —
+  // ver o raciocínio completo no comentário acima de `isSafeToRetry` em
+  // `../client.ts`. Por isso só GET/HEAD (idempotentes por definição, nunca
+  // escrevem) são repetidos aqui.
+  //
+  // Mede requisições HTTP REAIS via `apiClient.defaults.adapter` — os
+  // interceptores de verdade rodam por cima. Mockar `apiClient.get/post`
+  // diretamente removeria o próprio interceptor sendo testado da equação.
+
+  vi.stubGlobal('localStorage', {
+    getItem: () => null,
+    setItem: () => {},
+    removeItem: () => {},
+  });
+
+  const originalAdapter = apiClient.defaults.adapter;
+
+  function respondWithStatus(config: any, status: number, data: unknown = {}) {
+    const response = { status, statusText: '', data, headers: {}, config };
+    if (status >= 200 && status < 300) return response;
+    throw new AxiosError(`Request failed with status code ${status}`, undefined, config, undefined, response as any);
+  }
+
+  function networkFailure(config: any, code = 'ERR_NETWORK') {
+    throw new AxiosError('Network Error', code, config);
+  }
+
+  function scriptAdapter(steps: Array<(config: any) => any>) {
+    let calls = 0;
+    const fn = vi.fn(async (config: any) => {
+      calls += 1;
+      const step = steps[Math.min(calls, steps.length) - 1];
+      return step(config);
+    });
+    // `Object.assign` avaliaria o getter UMA VEZ e copiaria o valor (0) —
+    // precisa de `defineProperty` pra manter o acessor vivo entre chamadas.
+    Object.defineProperty(fn, 'callCount', { get: () => calls });
+    return fn;
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    apiClient.defaults.adapter = originalAdapter;
+  });
+
+  it('GET com ERR_NETWORK transiente: repete e conclui com sucesso (idempotente, seguro)', async () => {
+    const adapter = scriptAdapter([
+      (config) => networkFailure(config),
+      (config) => respondWithStatus(config, 200, { ok: true }),
+    ]);
+    apiClient.defaults.adapter = adapter as any;
+
+    const promise = apiClient.get('/ping');
+    await vi.runAllTimersAsync();
+    const res = await promise;
+
+    expect(res.data).toEqual({ ok: true });
+    expect(adapter.callCount).toBe(2);
+  });
+
+  it('GET com ERR_NETWORK persistente: para em 3 tentativas (1 inicial + 2 retries)', async () => {
+    const adapter = scriptAdapter([
+      (config) => networkFailure(config),
+      (config) => networkFailure(config),
+      (config) => networkFailure(config),
+      (config) => networkFailure(config),
+    ]);
+    apiClient.defaults.adapter = adapter as any;
+
+    const promise = apiClient.get('/ping');
+    promise.catch(() => {});
+    await vi.runAllTimersAsync();
+    await expect(promise).rejects.toMatchObject({ code: 'ERR_NETWORK' });
+    expect(adapter.callCount).toBe(3);
+  });
+
+  it.each(['post', 'put', 'patch', 'delete'] as const)(
+    '%s com ERR_NETWORK: NUNCA repete — exatamente 1 requisição física',
+    async (method) => {
+      const adapter = scriptAdapter([
+        (config) => networkFailure(config),
+        (config) => respondWithStatus(config, 200, { ok: true }),
+      ]);
+      apiClient.defaults.adapter = adapter as any;
+
+      const promise = (apiClient as any)[method]('/transactions', method === 'delete' ? undefined : {});
+      promise.catch(() => {});
+      await vi.runAllTimersAsync();
+      await expect(promise).rejects.toMatchObject({ code: 'ERR_NETWORK' });
+      expect(adapter.callCount).toBe(1);
+    },
+  );
+
+  it('POST com ECONNRESET: NUNCA repete — exatamente 1 requisição física', async () => {
+    const adapter = scriptAdapter([
+      (config) => networkFailure(config, 'ECONNRESET'),
+      (config) => respondWithStatus(config, 200, { ok: true }),
+    ]);
+    apiClient.defaults.adapter = adapter as any;
+
+    const promise = apiClient.post('/transactions', {});
+    promise.catch(() => {});
+    await vi.runAllTimersAsync();
+    await expect(promise).rejects.toMatchObject({ code: 'ECONNRESET' });
+    expect(adapter.callCount).toBe(1);
+  });
+
+  it('HEAD com ERR_NETWORK transiente: repete como GET (idempotente, seguro)', async () => {
+    const adapter = scriptAdapter([
+      (config) => networkFailure(config),
+      (config) => respondWithStatus(config, 200, {}),
+    ]);
+    apiClient.defaults.adapter = adapter as any;
+
+    const promise = apiClient.head('/ping');
+    await vi.runAllTimersAsync();
+    await promise;
+    expect(adapter.callCount).toBe(2);
   });
 });
