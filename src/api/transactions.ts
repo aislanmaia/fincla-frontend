@@ -3,6 +3,7 @@ import apiClient from './client';
 import {
   IDEMPOTENCY_KEY_HEADER,
   noteIdempotencySupportFromHeaders,
+  readIdempotentReplay,
 } from './idempotency';
 import { repeatArrayParams } from './paramsSerializer';
 import type {
@@ -27,7 +28,16 @@ import type {
  */
 export const createTransaction = async (
   transaction: CreateTransactionRequest,
-  options?: { idempotencyKey?: string }
+  options?: {
+    idempotencyKey?: string;
+    /**
+     * Recebe o VALOR de `Idempotent-Replay` quando o backend o manda. `true`
+     * significa "esta é a resposta original de uma chave já vista, nada foi
+     * criado agora" — a única forma determinística de saber que um
+     * "Registrado!" na tela seria mentira.
+     */
+    onIdempotentReplay?: (replayed: boolean) => void;
+  }
 ): Promise<Transaction> => {
   const key = options?.idempotencyKey;
   const response = await apiClient.post<Transaction>(
@@ -35,10 +45,13 @@ export const createTransaction = async (
     transaction,
     key ? { headers: { [IDEMPOTENCY_KEY_HEADER]: key } } : undefined
   );
-  // `Idempotent-Replay` presente = este backend implementa a feature. É essa
-  // observação que libera o retry automático da criação; sem ela o cliente
-  // não repete nada (ver `src/api/idempotency.ts`).
-  if (key) noteIdempotencySupportFromHeaders(response.headers);
+  if (key) {
+    // A PRESENÇA do header prova que este backend implementa a feature — é
+    // essa observação que libera o retry automático da criação.
+    noteIdempotencySupportFromHeaders(response.headers);
+    const replayed = readIdempotentReplay(response.headers);
+    if (replayed != null) options?.onIdempotentReplay?.(replayed);
+  }
   return response.data;
 };
 

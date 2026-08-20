@@ -349,3 +349,43 @@ describe('handleApiError — formato legado {error,message,type} humanizado (rev
     expect(message).not.toContain('psycopg2');
   });
 });
+
+describe('handleApiError — código de erro vindo da rede não pode indexar o protótipo', () => {
+  // `detail.error` chega da API e era usado para indexar um objeto literal de
+  // traduções. Com `"__proto__"` isso devolvia `Object.prototype`, e o React
+  // derrubava a tela inteira com "Objects are not valid as a React child";
+  // `"hasOwnProperty"` devolvia uma função. A tabela virou `Map` por isso.
+  const legacyError = (
+    status: number,
+    detail: { error: string; message: string; type: string },
+  ) =>
+    Object.assign(new Error('Request failed'), {
+      isAxiosError: true,
+      response: { status, data: { detail } },
+    });
+
+  it.each(['__proto__', 'constructor', 'toString', 'valueOf', 'hasOwnProperty'])(
+    'detail.error = "%s" continua devolvendo string exibível',
+    (code) => {
+      const err = legacyError(422, {
+        error: code,
+        message: 'At least one tag is required',
+        type: 'business_logic',
+      });
+      const message = handleApiError(err);
+      expect(typeof message).toBe('string');
+      expect(message.length).toBeGreaterThan(0);
+    },
+  );
+
+  it('a tradução legítima por código segue funcionando', () => {
+    const err = legacyError(409, {
+      error: 'PHONE_ALREADY_LINKED',
+      message: 'Phone already linked',
+      type: 'business_logic',
+    });
+    expect(handleApiError(err)).toBe(
+      'Este número já está vinculado para esta ou outra conta.',
+    );
+  });
+});

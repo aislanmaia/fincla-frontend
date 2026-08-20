@@ -55,6 +55,17 @@ export function readResponseHeader(headers: unknown, name: string): string | nul
 // automático — preço barato por nunca duplicar por otimismo.
 let supportObserved = false;
 
+/**
+ * Valor de `Idempotent-Replay`: `true` quando a resposta é a ORIGINAL de uma
+ * chave já vista (nada foi criado agora), `false` quando a criação aconteceu,
+ * `null` quando o backend não mandou o header.
+ */
+export function readIdempotentReplay(headers: unknown): boolean | null {
+  const raw = readResponseHeader(headers, IDEMPOTENT_REPLAY_HEADER);
+  if (raw == null) return null;
+  return raw.trim().toLowerCase() === 'true';
+}
+
 /** Marca suporte a partir dos headers de uma resposta de criação. */
 export function noteIdempotencySupportFromHeaders(headers: unknown): void {
   if (readResponseHeader(headers, IDEMPOTENT_REPLAY_HEADER) != null) {

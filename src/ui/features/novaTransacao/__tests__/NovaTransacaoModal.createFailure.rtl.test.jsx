@@ -392,6 +392,31 @@ describe("NovaTransacaoModal — criação que falha (reenvio manual protegido p
     }
   });
 
+  it("se a consulta de proteção LANÇAR, o drawer mostra o erro e volta a funcionar — nunca trava em \"Enviando…\"", async () => {
+    // `createResendIsProtected` passa por `stableStringify`, que lança de
+    // propósito em payload não-JSON. Como ela é chamada no caminho de ERRO,
+    // um throw ali escapava do `handleSave`: `setTxSubmitting(false)` nunca
+    // rodava e o drawer ficava preso em "Enviando…" sem nem exibir a mensagem.
+    const user = userEvent.setup();
+    createResendIsProtected.mockImplementation(() => {
+      throw new TypeError("Payload de transação com objeto não-simples (Date)");
+    });
+    createTransactionForUi.mockRejectedValueOnce(networkError());
+
+    render(<NovaTransacaoModal {...baseProps} />);
+    await fillAndReachReview(user);
+    await user.click(screen.getByRole("button", { name: /Confirmar despesa/i }));
+
+    // A mensagem de erro aparece...
+    await waitFor(() =>
+      expect(screen.getByText(/Não foi possível conectar ao servidor/i)).toBeInTheDocument(),
+    );
+    // ...e o botão sai de "Enviando…", utilizável de novo.
+    const retryBtn = await screen.findByRole("button", { name: "Tentar novamente" });
+    expect(retryBtn).toBeEnabled();
+    expect(screen.queryByRole("button", { name: /Enviando/i })).not.toBeInTheDocument();
+  });
+
   it("fechar e reabrir o drawer limpa o \"Tentar novamente\" de uma falha anterior (reabrir pra EDITAR não pode herdar a ação de CRIAR)", async () => {
     const user = userEvent.setup();
     createTransactionForUi.mockRejectedValueOnce(httpError(422, {}));

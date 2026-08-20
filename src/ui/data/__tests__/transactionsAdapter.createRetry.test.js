@@ -19,6 +19,7 @@ import {
 } from "../../../api/idempotency";
 import {
   createErrorReleasedIdempotencyKey,
+  createErrorWasSwallowedByReplay,
   createResendIsProtected,
   createRetryDelayMs,
   createTransactionForUi,
@@ -123,6 +124,25 @@ async function observeIdempotencySupport() {
   ]);
   await createTransactionForUi({ organization_id: "org-1", description: "prova", value: 1 });
   resetCreateIdempotencyKey();
+}
+
+/**
+ * Roda o laço com timers falsos. As esperas do 409 in-flight seguem o contrato
+ * (2s/4s/8s) e dormi-las de verdade custaria 14s por teste; `runAllTimersAsync`
+ * avança o relógio E dá vazão aos microtasks entre um timer e o próximo, então
+ * o laço progride igual, só que instantâneo. `Date.now` também é falso, o que
+ * mantém o orçamento de parede coerente com as esperas.
+ */
+async function withFakeTimers(start) {
+  vi.useFakeTimers();
+  try {
+    const promise = start();
+    promise.catch(() => {});
+    await vi.runAllTimersAsync();
+    return await promise;
+  } finally {
+    vi.useRealTimers();
+  }
 }
 
 beforeEach(() => {
@@ -234,25 +254,23 @@ describe("createTransactionForUi — retry das classes que a chave tornou segura
   });
 
   it("409 IDEMPOTENCY_KEY_IN_FLIGHT: repete com a MESMA chave (chave nova aqui criaria a duplicata que o 409 impede)", async () => {
-    // `retry-after: 0` mantém o teste instantâneo E prova que o zero é
-    // honrado como espera válida em vez de cair no backoff interno.
     const adapter = scriptAdapter([
-      (config) => idempotencyFailure(config, 409, "IDEMPOTENCY_KEY_IN_FLIGHT", { "retry-after": "0" }),
+      (config) => idempotencyFailure(config, 409, "IDEMPOTENCY_KEY_IN_FLIGHT", { "retry-after": "2" }),
       (config) => respondWithStatus(config, 201, { id: 8 }, REPLAY_HEADERS),
     ]);
     apiClient.defaults.adapter = adapter;
 
-    await expect(createTransactionForUi(PAYLOAD)).resolves.toEqual({ id: 8 });
+    await expect(withFakeTimers(() => createTransactionForUi(PAYLOAD))).resolves.toEqual({ id: 8 });
     expect(adapter.callCount).toBe(2);
     expect(new Set(adapter.keys).size).toBe(1);
   });
 
   it("409 IN_FLIGHT persistente: 4 tentativas (contrato do backend), LIBERA a chave e diz que esperar não resolve", async () => {
-    const step = (config) => idempotencyFailure(config, 409, "IDEMPOTENCY_KEY_IN_FLIGHT", { "retry-after": "0" });
+    const step = (config) => idempotencyFailure(config, 409, "IDEMPOTENCY_KEY_IN_FLIGHT", { "retry-after": "2" });
     const adapter = scriptAdapter([step, step, step, step, step, step]);
     apiClient.defaults.adapter = adapter;
 
-    const err = await settling(createTransactionForUi(PAYLOAD)).catch((e) => e);
+    const err = await withFakeTimers(() => createTransactionForUi(PAYLOAD)).catch((e) => e);
     expect(adapter.callCount).toBe(4);
     expect(new Set(adapter.keys).size).toBe(1);
     expect(formatTransactionsApiError(err)).toBe(
@@ -313,11 +331,13 @@ describe("createTransactionForUi — retry SÓ depois que o servidor prova que i
     expect(hasObservedIdempotencySupport()).toBe(true);
   });
 
-  it("`Idempotent-Replay: true` (o próprio replay) também arma — o que prova suporte é a PRESENÇA do header", async () => {
+  it("`Idempotent-Replay: true` também arma o suporte — o que prova é a PRESENÇA do header, não o valor", async () => {
     apiClient.defaults.adapter = scriptAdapter([
       (config) => respondWithStatus(config, 201, { id: 1 }, { "idempotent-replay": "true" }),
     ]);
-    await createTransactionForUi(PAYLOAD);
+    // O replay em chave nova é tratado como falha (ver a suíte de "criação
+    // engolida"); aqui só interessa que a observação de suporte aconteceu.
+    await settling(createTransactionForUi(PAYLOAD)).catch(() => {});
     expect(hasObservedIdempotencySupport()).toBe(true);
   });
 
@@ -339,12 +359,12 @@ describe("createTransactionForUi — retry SÓ depois que o servidor prova que i
 
   it("um 409 IN_FLIGHT prova suporte por si só: só existe em backend que implementa a feature", async () => {
     const adapter = scriptAdapter([
-      (config) => idempotencyFailure(config, 409, "IDEMPOTENCY_KEY_IN_FLIGHT", { "retry-after": "0" }),
+      (config) => idempotencyFailure(config, 409, "IDEMPOTENCY_KEY_IN_FLIGHT", { "retry-after": "2" }),
       (config) => respondWithStatus(config, 201, { id: 3 }, REPLAY_HEADERS),
     ]);
     apiClient.defaults.adapter = adapter;
 
-    await expect(createTransactionForUi(PAYLOAD)).resolves.toEqual({ id: 3 });
+    await expect(withFakeTimers(() => createTransactionForUi(PAYLOAD))).resolves.toEqual({ id: 3 });
     expect(adapter.callCount).toBe(2);
   });
 });
@@ -684,9 +704,20 @@ describe("createRetryDelayMs — `Retry-After` honrado nas duas formas da RFC", 
     expect(createRetryDelayMs(errorWithRetryAfter("2"), 1, { inFlight: true, nowMs: NOW })).toBe(2000);
     expect(createRetryDelayMs(errorWithRetryAfter("2"), 2, { inFlight: true, nowMs: NOW })).toBe(4000);
     expect(createRetryDelayMs(errorWithRetryAfter("2"), 3, { inFlight: true, nowMs: NOW })).toBe(8000);
-    // `0` continua sendo espera válida (repetir já), em qualquer tentativa.
-    expect(createRetryDelayMs(errorWithRetryAfter("0"), 1, { inFlight: true, nowMs: NOW })).toBe(0);
-    expect(createRetryDelayMs(errorWithRetryAfter("0"), 3, { inFlight: true, nowMs: NOW })).toBe(0);
+  });
+
+  it("`Retry-After: 0` NÃO zera o backoff: o piso é a base, senão as 4 tentativas saem coladas", () => {
+    // `0 * 2**n` é `0` em toda tentativa: o orçamento nunca era atingido e os
+    // quatro POSTs iam sem espaçamento nenhum contra a reserva órfã — pior do
+    // que o 2s/2s/2s que a base-vinda-do-header veio corrigir.
+    expect(createRetryDelayMs(errorWithRetryAfter("0"), 1, { inFlight: true, nowMs: NOW })).toBe(2000);
+    expect(createRetryDelayMs(errorWithRetryAfter("0"), 2, { inFlight: true, nowMs: NOW })).toBe(4000);
+    expect(createRetryDelayMs(errorWithRetryAfter("0"), 3, { inFlight: true, nowMs: NOW })).toBe(8000);
+    // Mesma armadilha por outra porta: HTTP-date já vencido também vale zero.
+    const past = new Date(NOW - 5000).toUTCString();
+    expect(createRetryDelayMs(errorWithRetryAfter(past), 1, { inFlight: true, nowMs: NOW })).toBe(2000);
+    // E um header MENOR que a base também é elevado ao piso.
+    expect(createRetryDelayMs(errorWithRetryAfter("1"), 1, { inFlight: true, nowMs: NOW })).toBe(2000);
   });
 
   it("`Retry-After` é ignorado FORA do 409: em 502/503/504 o ritmo é nosso", () => {
@@ -708,9 +739,7 @@ describe("createRetryDelayMs — `Retry-After` honrado nas duas formas da RFC", 
     // martelava com 400ms justamente quem pediu pausa.
     const at = new Date(NOW + 5000).toUTCString();
     expect(createRetryDelayMs(errorWithRetryAfter(at), 1, { inFlight: true, nowMs: NOW })).toBe(5000);
-    // Data no passado: repetir já, nunca espera negativa.
-    const past = new Date(NOW - 5000).toUTCString();
-    expect(createRetryDelayMs(errorWithRetryAfter(past), 1, { inFlight: true, nowMs: NOW })).toBe(0);
+    expect(createRetryDelayMs(errorWithRetryAfter(at), 2, { inFlight: true, nowMs: NOW })).toBe(10_000);
   });
 
   it("valor absurdo é limitado ao teto por espera, não ignorado", () => {
@@ -862,4 +891,126 @@ describe("formatTransactionsApiError — código do servidor não indexa protót
       expect(typeof formatTransactionsApiError(err)).toBe("string");
     },
   );
+});
+
+describe("criação engolida — `Idempotent-Replay: true` em chave RECÉM-GERADA", () => {
+  it("não devolve 'sucesso': é prova determinística de que nada foi criado agora", async () => {
+    // O guia do backend pede exatamente isto: usar o valor do header para não
+    // mostrar "transação criada" duas vezes. Sem olhar o valor, a tela dizia
+    // "Registrado!" para um lançamento que já existia — a falha que o TTL de
+    // 10 min só consegue chutar.
+    const adapter = scriptAdapter([
+      (config) => respondWithStatus(config, 201, { id: 99 }, { "idempotent-replay": "true" }),
+    ]);
+    apiClient.defaults.adapter = adapter;
+
+    const err = await settling(createTransactionForUi(PAYLOAD)).catch((e) => e);
+    expect(adapter.callCount).toBe(1);
+    expect(createErrorWasSwallowedByReplay(err)).toBe(true);
+    expect(formatTransactionsApiError(err)).toBe(
+      "Este lançamento já tinha sido registrado antes, então nada de novo foi criado agora. Confira seu extrato antes de registrar de novo.",
+    );
+    // O lançamento anterior EXISTE: é o caso mais forte de "confira o extrato".
+    expect(isCreateTransactionErrorMaybePersisted(err)).toBe(true);
+  });
+
+  it("solta a chave, senão o próximo 'Tentar novamente' cairia no mesmo replay para sempre", async () => {
+    const first = scriptAdapter([
+      (config) => respondWithStatus(config, 201, { id: 99 }, { "idempotent-replay": "true" }),
+    ]);
+    apiClient.defaults.adapter = first;
+    const err = await settling(createTransactionForUi(PAYLOAD)).catch((e) => e);
+    expect(createErrorReleasedIdempotencyKey(err)).toBe(true);
+    expect(hasRetainedCreateIdempotencyKey(PAYLOAD)).toBe(false);
+
+    const next = scriptAdapter([(config) => respondWithStatus(config, 201, { id: 100 }, REPLAY_HEADERS)]);
+    apiClient.defaults.adapter = next;
+    await expect(createTransactionForUi(PAYLOAD)).resolves.toEqual({ id: 100 });
+    expect(next.keys[0]).not.toBe(first.keys[0]);
+  });
+
+  it("replay numa chave REUSADA é o caminho FELIZ do reenvio: resolve normalmente", async () => {
+    // Falhou com a rede depois do servidor ter gravado; o reenvio manual usa a
+    // mesma chave e recebe a resposta original. Aquele lançamento existe mesmo,
+    // e é dele que a tela está falando — nada a alarmar aqui.
+    const failing = scriptAdapter([(config) => respondWithStatus(config, 503, {})]);
+    apiClient.defaults.adapter = failing;
+    await settling(createTransactionForUi(PAYLOAD)).catch(() => {});
+    expect(hasRetainedCreateIdempotencyKey(PAYLOAD)).toBe(true);
+
+    const resend = scriptAdapter([
+      (config) => respondWithStatus(config, 201, { id: 7 }, { "idempotent-replay": "true" }),
+    ]);
+    apiClient.defaults.adapter = resend;
+    await expect(createTransactionForUi(PAYLOAD)).resolves.toEqual({ id: 7 });
+    expect(resend.keys[0]).toBe(failing.keys[0]);
+  });
+
+  it("replay numa TENTATIVA seguinte da mesma chamada também é normal: é o retry funcionando", async () => {
+    // Chave nova, mas a 1ª tentativa caiu na rede DEPOIS do servidor gravar; a
+    // 2ª recebe replay. Marcar isso como "engolido" transformaria o sucesso do
+    // retry — o coração da feature — num erro na cara da pessoa.
+    await observeIdempotencySupport();
+    const adapter = scriptAdapter([
+      (config) => networkFailure(config, "ECONNRESET"),
+      (config) => respondWithStatus(config, 201, { id: 6 }, { "idempotent-replay": "true" }),
+    ]);
+    apiClient.defaults.adapter = adapter;
+
+    await expect(createTransactionForUi(PAYLOAD)).resolves.toEqual({ id: 6 });
+    expect(adapter.callCount).toBe(2);
+  });
+
+  it("`Idempotent-Replay: false` (criação de verdade) resolve sem drama", async () => {
+    apiClient.defaults.adapter = scriptAdapter([
+      (config) => respondWithStatus(config, 201, { id: 5 }, { "idempotent-replay": "false" }),
+    ]);
+    await expect(createTransactionForUi(PAYLOAD)).resolves.toEqual({ id: 5 });
+  });
+
+  it("backend sem o header: nada muda, o 201 é sucesso como sempre foi", async () => {
+    apiClient.defaults.adapter = scriptAdapter([(config) => respondWithStatus(config, 201, { id: 4 })]);
+    await expect(createTransactionForUi(PAYLOAD)).resolves.toEqual({ id: 4 });
+  });
+});
+
+describe("orçamento de PAREDE — o que prende o drawer não é só o sono", () => {
+  it("requisição lenta (timeout de leitura) consome o orçamento e corta o retry", async () => {
+    // `ECONNABORTED`/`ETIMEDOUT` são repetíveis e o timeout de write é 30s.
+    // Contando só o tempo DORMINDO, três tentativas seguravam o botão em
+    // "Enviando…" por ~90s com o "orçamento" marcando quase zero.
+    await observeIdempotencySupport();
+
+    // Cada requisição gasta 15s de relógio antes de falhar por timeout.
+    const adapter = scriptAdapter([
+      async (config) => {
+        await new Promise((resolve) => setTimeout(resolve, 15_000));
+        return networkFailure(config, "ECONNABORTED");
+      },
+      async (config) => {
+        await new Promise((resolve) => setTimeout(resolve, 15_000));
+        return networkFailure(config, "ECONNABORTED");
+      },
+      async (config) => {
+        await new Promise((resolve) => setTimeout(resolve, 15_000));
+        return networkFailure(config, "ECONNABORTED");
+      },
+    ]);
+    apiClient.defaults.adapter = adapter;
+
+    await expect(withFakeTimers(() => createTransactionForUi(PAYLOAD))).rejects.toBeTruthy();
+    // Duas tentativas: a 1ª gasta 15s, a espera de 400ms ainda cabe; depois da
+    // 2ª o relógio passou de 30s e não há orçamento para uma terceira.
+    expect(adapter.callCount).toBe(2);
+  });
+
+  it("falha rápida NÃO é penalizada: o retry transiente completa as 3 tentativas", async () => {
+    await observeIdempotencySupport();
+    const step = (config) => respondWithStatus(config, 503, {});
+    const adapter = scriptAdapter([step, step, step, step]);
+    apiClient.defaults.adapter = adapter;
+
+    await expect(withFakeTimers(() => createTransactionForUi(PAYLOAD))).rejects.toBeTruthy();
+    expect(adapter.callCount).toBe(3);
+  });
 });

@@ -958,6 +958,9 @@ const IDEMPOTENCY_ERROR_MESSAGES = new Map([
 ]);
 
 export function formatTransactionsApiError(error) {
+  // Erro sintético nosso: já nasce com a frase pronta em PT-BR, e passar por
+  // `handleApiError` (que sanitiza `Error` genérico) só a descaracterizaria.
+  if (createErrorWasSwallowedByReplay(error)) return error.message;
   // `Map` de propósito: `detail.error` é string vinda do servidor, e indexar um
   // objeto literal com ela devolvia a herança do `Object.prototype` — um
   // `detail.error === "__proto__"` fazia esta função retornar um OBJETO, e o
@@ -1527,11 +1530,14 @@ const CREATE_IN_FLIGHT_BASE_DELAY_MS = 2000;
 // Teto POR ESPERA: acomoda o 8s publicado com folga sem deixar um
 // `Retry-After` absurdo (já vimos `3600`) congelar o drawer.
 const CREATE_RETRY_MAX_DELAY_MS = 10_000;
-// Teto do TOTAL dormido numa criação. Sem ele, "cada espera cabe no teto"
-// ainda somava minuto: dois `Retry-After: 3600` viravam 30s + 30s de botão
-// desabilitado. O orçamento é o que a pessoa efetivamente aguenta esperar
-// olhando "Enviando…", e cobre o 2s+4s+8s do contrato de in-flight.
-const CREATE_RETRY_TOTAL_BUDGET_MS = 20_000;
+// Teto do tempo de PAREDE de uma criação, medido do primeiro POST em diante:
+// espera dormida MAIS tempo travado dentro das requisições. Contar só o sono
+// media a coisa errada — `ECONNABORTED`/`ETIMEDOUT` são repetíveis e o
+// timeout de write é 30s, então três tentativas seguravam o drawer por ~90s
+// em "Enviando…", desabilitado e sem cancelar, com "orçamento" zerado.
+// 20s é o que a pessoa aguenta olhando a tela, e cobre o 2s+4s+8s do
+// contrato de in-flight.
+const CREATE_RETRY_ELAPSED_BUDGET_MS = 20_000;
 
 /** Lê `detail.error` da resposta de erro; `null` quando não é esse formato. */
 export function idempotencyErrorCodeOf(error) {
@@ -1551,6 +1557,20 @@ const KEY_RELEASED_FLAG = "__finclaIdempotencyKeyReleased";
 
 export function createErrorReleasedIdempotencyKey(error) {
   return Boolean(error?.[KEY_RELEASED_FLAG]);
+}
+
+/**
+ * Marca o erro sintético de "criação engolida": o servidor respondeu
+ * `Idempotent-Replay: true` para uma chave que ACABOU de nascer, ou seja, a
+ * resposta é de um lançamento anterior e nada foi criado agora.
+ */
+const SWALLOWED_FLAG = "__finclaCreateSwallowedByReplay";
+
+const SWALLOWED_MESSAGE =
+  "Este lançamento já tinha sido registrado antes, então nada de novo foi criado agora. Confira seu extrato antes de registrar de novo.";
+
+export function createErrorWasSwallowedByReplay(error) {
+  return Boolean(error?.[SWALLOWED_FLAG]);
 }
 
 export function isCreateTransactionErrorRetryable(error) {
@@ -1603,14 +1623,20 @@ export function createRetryDelayMs(
   attempt,
   { inFlight = false, nowMs = Date.now(), spentMs = 0 } = {},
 ) {
+  const floor = inFlight ? CREATE_IN_FLIGHT_BASE_DELAY_MS : CREATE_RETRY_BASE_DELAY_MS;
   const fromHeader = inFlight ? retryAfterMs(error, nowMs) : null;
-  const base =
-    fromHeader ?? (inFlight ? CREATE_IN_FLIGHT_BASE_DELAY_MS : CREATE_RETRY_BASE_DELAY_MS);
+  // PISO no valor do header. `Retry-After: 0` (ou um HTTP-date já vencido) é
+  // legítimo e quer dizer "pode repetir agora", mas usar isso como base do
+  // backoff zerava a progressão inteira — `0 * 2**n` é `0` em toda tentativa,
+  // o orçamento nunca era atingido, e as 4 tentativas do in-flight saíam
+  // COLADAS, sem espaçamento nenhum, contra a reserva órfã. Pior do que o
+  // problema que a base-vinda-do-header veio resolver.
+  const base = Math.max(fromHeader ?? floor, floor);
   const delay = Math.min(base * 2 ** (attempt - 1), CREATE_RETRY_MAX_DELAY_MS);
   // `null` = desista. Limitar só a espera INDIVIDUAL ainda somava um minuto de
   // drawer congelado quando o servidor (ou um proxy no caminho) pedia pausas
   // longas; o orçamento é sobre o TOTAL dormido nesta criação.
-  if (spentMs + delay > CREATE_RETRY_TOTAL_BUDGET_MS) return null;
+  if (spentMs + delay > CREATE_RETRY_ELAPSED_BUDGET_MS) return null;
   return delay;
 }
 
@@ -1774,14 +1800,20 @@ export function createResendIsProtected(payload) {
   return hasRetainedCreateIdempotencyKey(payload);
 }
 
+/**
+ * Chave desta tentativa mais `reused`: `true` quando veio do mapa (reenvio de
+ * uma tentativa que falhou), `false` quando nasceu agora. A distinção importa
+ * porque só uma chave RECÉM-GERADA torna um `Idempotent-Replay: true`
+ * impossível de ser legítimo (ver `createTransactionForUi`).
+ */
 function idempotencyKeyForAttempt(fingerprint) {
   const now = Date.now();
   pruneRetainedCreateKeys(now);
   const retained = retainedCreateKeys.get(fingerprint);
-  if (retained) return retained.key;
+  if (retained) return { key: retained.key, reused: true };
   const key = newIdempotencyKey();
   retainedCreateKeys.set(fingerprint, { key, createdAt: now });
-  return key;
+  return { key, reused: false };
 }
 
 /**
@@ -1807,6 +1839,9 @@ function idempotencyKeyForAttempt(fingerprint) {
  *  - demais 4xx: SEGURO. A API valida antes de gravar.
  */
 export function isCreateTransactionErrorMaybePersisted(error) {
+  // Replay em chave nova: o lançamento anterior EXISTE, com certeza. É o caso
+  // mais forte de "confira seu extrato" que temos.
+  if (createErrorWasSwallowedByReplay(error)) return true;
   if (!axios.isAxiosError(error)) return false;
   // ANTES da guarda de `error.request`: um corpo com código de idempotência é
   // resposta do servidor, logo prova por si só que a requisição foi
@@ -1839,12 +1874,35 @@ function releasingKey(error, fingerprint) {
  */
 export async function createTransactionForUi(payload) {
   const fingerprint = stableStringify(payload);
-  const idempotencyKey = idempotencyKeyForAttempt(fingerprint);
-  let spentDelayMs = 0;
+  const { key: idempotencyKey, reused: keyWasReused } = idempotencyKeyForAttempt(fingerprint);
+  // Relógio de PAREDE, não soma de esperas: o que prende o drawer em
+  // "Enviando…" é o tempo total, e boa parte dele pode estar dentro de uma
+  // requisição travada até o timeout de 30s, sem nenhum sono envolvido.
+  const startedAtMs = Date.now();
 
   for (let attempt = 1; ; attempt += 1) {
+    let replayed = null;
     try {
-      const created = await createTransaction(payload, { idempotencyKey });
+      const created = await createTransaction(payload, {
+        idempotencyKey,
+        onIdempotentReplay: (value) => {
+          replayed = value;
+        },
+      });
+      // `Idempotent-Replay: true` numa chave que NASCEU nesta chamada, na
+      // primeira tentativa, é prova determinística de que a criação foi
+      // engolida: o servidor devolveu a resposta de um lançamento anterior e
+      // nada foi criado agora. Dizer "Registrado!" aqui seria mentira — a
+      // mesma que o TTL de 10 min só consegue chutar. (Replay em chave
+      // REUSADA, ou numa tentativa seguinte, é o caminho feliz do reenvio:
+      // aquele lançamento existe mesmo, e é dele que a tela está falando.)
+      if (replayed === true && !keyWasReused && attempt === 1) {
+        const swallowed = new Error(SWALLOWED_MESSAGE);
+        swallowed[SWALLOWED_FLAG] = true;
+        // Solta a chave: o próximo "Tentar novamente" precisa sair com chave
+        // NOVA, senão cai no mesmo replay para sempre.
+        throw releasingKey(swallowed, fingerprint);
+      }
       // Sucesso confirmado: a chave DESTA tentativa cumpriu o papel e sai do
       // mapa. Se ficasse retida, registrar de novo um lançamento idêntico
       // (mesmo valor, mesma descrição, mesmo dia — café duas vezes no mesmo
@@ -1852,6 +1910,7 @@ export async function createTransactionForUi(payload) {
       releaseCreateIdempotencyKey(fingerprint);
       return created;
     } catch (err) {
+      if (createErrorWasSwallowedByReplay(err)) throw err;
       const idempotencyError = idempotencyErrorCodeOf(err);
       if (IDEMPOTENCY_ERROR_CODES.has(idempotencyError)) {
         // Um erro DE IDEMPOTÊNCIA só existe em backend que implementa a
@@ -1885,9 +1944,11 @@ export async function createTransactionForUi(payload) {
       // risco de duplicata da issue #102.
       if (!inFlight && !hasObservedIdempotencySupport()) throw err;
 
-      const delay = createRetryDelayMs(err, attempt, { inFlight, spentMs: spentDelayMs });
-      if (delay == null) throw giveUpError(); // orçamento total esgotado
-      spentDelayMs += delay;
+      const delay = createRetryDelayMs(err, attempt, {
+        inFlight,
+        spentMs: Date.now() - startedAtMs,
+      });
+      if (delay == null) throw giveUpError(); // orçamento de parede esgotado
 
       await new Promise((resolve) => setTimeout(resolve, delay));
     }

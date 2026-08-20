@@ -352,6 +352,30 @@ export const NovaTransacaoModal = ({
    * lançamento com os mesmos dados é intenção NOVA, não reenvio, e reusar a
    * chave antiga faria o backend replayar em vez de criar.
    */
+  /**
+   * `createResendIsProtected`/`createTransactionPayloadFingerprint` passam por
+   * `stableStringify`, que LANÇA de propósito em payload não-JSON (número não
+   * finito, `Date`, objeto de classe). O caminho de ERRO do `handleSave` não
+   * pode depender disso: um throw ali escapa da função, `setTxSubmitting(false)`
+   * nunca roda e o drawer trava em "Enviando…" sem nem mostrar a mensagem —
+   * pior do que o problema original. Degradar para "não protegido"/`null` é o
+   * lado seguro: no máximo pede uma confirmação a mais.
+   */
+  const resendIsProtectedSafe = (payload) => {
+    try {
+      return createResendIsProtected(payload);
+    } catch {
+      return false;
+    }
+  };
+  const payloadFingerprintSafe = (payload) => {
+    try {
+      return createTransactionPayloadFingerprint(payload);
+    } catch {
+      return null;
+    }
+  };
+
   const releaseFailedCreateKeys = () => {
     for (const fingerprint of failedCreateFingerprintsRef.current) {
       releaseCreateIdempotencyKey(fingerprint);
@@ -1862,7 +1886,7 @@ export const NovaTransacaoModal = ({
           // payload: TTL vencido, backend sem suporte, chave liberada. Nessas
           // divergências a UI escolhia o lado inseguro — prometia "não
           // duplica" e pulava a confirmação que a `main` sempre armava.
-          const resendIsProtected = createResendIsProtected(createPayload);
+          const resendIsProtected = resendIsProtectedSafe(createPayload);
           if (txCreateFailed && txCreateErrorAmbiguous && !retryConfirmed && !resendIsProtected) {
             // Este clique não chegou a enviar nada: desfaz o "limpou o estado
             // de falha" feito no início desta função (tudo no mesmo tick
@@ -1899,7 +1923,7 @@ export const NovaTransacaoModal = ({
         const keyStillProtects =
           attemptedCreatePayload != null &&
           !createErrorReleasedIdempotencyKey(err) &&
-          createResendIsProtected(attemptedCreatePayload);
+          resendIsProtectedSafe(attemptedCreatePayload);
         const baseMessage = formatTransactionsApiError(err);
         lastCreateErrorBaseMessageRef.current = baseMessage;
         setTxSubmitError(
@@ -1914,9 +1938,8 @@ export const NovaTransacaoModal = ({
           // descartar a falha. Só quando houve payload E a chave sobreviveu —
           // liberar o que o adapter já liberou não teria efeito.
           if (attemptedCreatePayload != null && !createErrorReleasedIdempotencyKey(err)) {
-            failedCreateFingerprintsRef.current.add(
-              createTransactionPayloadFingerprint(attemptedCreatePayload),
-            );
+            const fingerprint = payloadFingerprintSafe(attemptedCreatePayload);
+            if (fingerprint != null) failedCreateFingerprintsRef.current.add(fingerprint);
           }
         }
         setTxSubmitting(false);
