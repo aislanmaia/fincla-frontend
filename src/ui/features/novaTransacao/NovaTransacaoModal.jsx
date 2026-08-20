@@ -12,6 +12,7 @@ import { CategoryLucideIcon } from "../../components/CategoryLucideIcon.jsx";
 import { LocaleDatePicker } from "../../components/LocaleDatePicker.jsx";
 import { NovaTransacaoImpactPanel } from "../../components/NovaTransacaoImpactPanel.jsx";
 import { APP_UI_LOCALE } from "../../appLocale.js";
+import { detailLabelPtForTag } from "../../data/categoryLabels.js";
 
 import { useCategoryTagsData } from "../tags/useCategoryTagsData.js";
 import { useNovaTransacaoDetailTags } from "../tags/useNovaTransacaoDetailTags.js";
@@ -343,7 +344,9 @@ export const NovaTransacaoModal = ({
   const addDetailTagByRow = useCallback((row) => {
     if (!row?.id) return;
     const id = String(row.id);
-    const name = row.name != null && String(row.name).trim() ? String(row.name).trim() : "";
+    // `row.name` pode vir cru do seed (ex. "health_plan") — guarda o rótulo já
+    // traduzido pro chip, não o nome cru da API.
+    const name = detailLabelPtForTag(row) || (row.name != null ? String(row.name).trim() : "");
     setDetailTagIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
     if (name) setDetailTagLabelById((prev) => ({ ...prev, [id]: name }));
     setDetailTagMetaById((prev) => ({
@@ -2028,7 +2031,7 @@ export const NovaTransacaoModal = ({
                         }}
                         style={{ ...G, fontSize:12, color:T.inkMid, background:T.grayLight, padding:"5px 11px", borderRadius:9999, cursor:"pointer" }}
                       >
-                        {row.name}
+                        {detailLabelPtForTag(row) || row.name}
                       </span>
                     ))}
                     {NOVA_TX_QUICK_DETAIL_LABELS.filter((t) => {
@@ -2909,7 +2912,7 @@ export const NovaTransacaoModal = ({
                         }}
                         style={{ ...G, fontSize:11, color:T.inkMid, background:T.grayLight, padding:"4px 9px", borderRadius:9999, cursor:"pointer" }}
                       >
-                        {row.name}
+                        {detailLabelPtForTag(row) || row.name}
                       </span>
                     ))}
                     {NOVA_TX_QUICK_DETAIL_LABELS.filter((t) => {

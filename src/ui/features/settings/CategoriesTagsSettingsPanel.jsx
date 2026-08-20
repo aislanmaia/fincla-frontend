@@ -3,7 +3,11 @@ import { Hash, Pencil, Plus, Search, Tag, Trash2 } from "lucide-react";
 
 import { createTag, deleteTag, listTags, listTagTypes, updateTag as apiUpdateTag } from "../../../api/tags";
 import { handleApiError } from "../../../api/client";
-import { resolveCategoryColorForTag } from "../../data/categoryLabels.js";
+import {
+  categoryLabelPtForTag,
+  detailLabelPtForTag,
+  resolveCategoryColorForTag,
+} from "../../data/categoryLabels.js";
 import { CardEmptyWithCta } from "../shellExtras.jsx";
 import { T } from "../../tokens";
 import { G } from "../../typography";
@@ -28,6 +32,16 @@ function resolveTagTypeId(rows, names) {
 
 function getTagName(tag) {
   return typeof tag === "string" ? tag : tag?.name ?? "";
+}
+
+/**
+ * Rótulo PT-BR de exibição de uma tag "detalhe". O seed cria filhas em inglês
+ * (`grocery`, `health_plan`...) pra toda organização nova — sem isso, a lista
+ * de tags da categoria mostra o nome cru da API.
+ */
+function getTagLabelPt(tag) {
+  if (typeof tag === "string") return tag;
+  return detailLabelPtForTag(tag) || tag?.name || "";
 }
 
 function getTagId(tag, fallback) {
@@ -85,7 +99,12 @@ export function CategoriesTagsSettingsPanel({
   const [catsLoading, setCatsLoading] = useState(false);
   const [catsError, setCatsError] = useState("");
 
-  const filteredCats = cats.filter(c => c.name.toLowerCase().includes(catSearch.toLowerCase()));
+  const filteredCats = cats.filter((c) => {
+    const q = catSearch.toLowerCase();
+    // Busca tanto pelo nome cru (API) quanto pelo rótulo PT exibido, senão o
+    // usuário não acha "Alimentação" digitando o que vê na tela.
+    return c.name.toLowerCase().includes(q) || (c.labelPt || "").toLowerCase().includes(q);
+  });
 
   const refreshCats = useCallback(async () => {
     if (!liveEnabled) return;
@@ -101,7 +120,11 @@ export function CategoriesTagsSettingsPanel({
       setCats(
         rawCategories.map((tag) => ({
           id: tag.id,
+          // `name` fica cru (usado pra editar/salvar); `labelPt` é só exibição —
+          // o seed cria categorias em inglês (`Food & Groceries`...) pra toda
+          // organização nova, e o backend não muda (fora do escopo do frontend).
           name: tag.name,
+          labelPt: categoryLabelPtForTag(tag),
           color: resolveCategoryColorForTag(tag),
           tags: detailTags.filter(
             (detailTag) => String(detailTag.parent_category_tag_id ?? "") === String(tag.id),
@@ -280,24 +303,24 @@ export function CategoriesTagsSettingsPanel({
               {editCat === cat.id ? (
                 <div style={{ flex:1, display:"flex", flexDirection: isMobile ? "column" : "row",
                   gap:8, alignItems: isMobile ? "stretch" : "center", minWidth:0 }}>
-                  <input value={newCatName} onChange={e => setNewCatName(e.target.value)} aria-label={`Editar categoria ${cat.name}`} autoFocus
+                  <input value={newCatName} onChange={e => setNewCatName(e.target.value)} aria-label={`Editar categoria ${cat.labelPt || cat.name}`} autoFocus
                     style={{ ...G, flex:1, minWidth:0, padding:"6px 10px", border:`1.5px solid ${T.blue}`,
                       borderRadius:8, fontSize:13, color:T.ink, background:T.surface, outline:"none" }}/>
                   <div style={{ display:"flex", gap:6, alignItems:"center", flexShrink:0 }}>
-                    <input type="color" value={newCatColor} onChange={e => setNewCatColor(e.target.value)} aria-label={`Cor da categoria ${cat.name}`}
+                    <input type="color" value={newCatColor} onChange={e => setNewCatColor(e.target.value)} aria-label={`Cor da categoria ${cat.labelPt || cat.name}`}
                       style={{ width:30, height:30, borderRadius:7, border:`1px solid ${T.border}`, cursor:"pointer", padding:2 }}/>
                     <button onClick={() => handleUpdateCat(cat.id)}
                       style={{ ...G, background:T.ink, color:"#fff", border:"none", borderRadius:8,
                         padding:"6px 12px", fontSize:12, fontWeight:700, cursor:"pointer" }}>OK</button>
-                    <button onClick={() => setEditCat(null)} aria-label={`Cancelar edição de ${cat.name}`}
+                    <button onClick={() => setEditCat(null)} aria-label={`Cancelar edição de ${cat.labelPt || cat.name}`}
                       style={{ ...G, background:"none", color:T.inkMid, border:`1px solid ${T.border}`,
                         borderRadius:8, padding:"6px 10px", fontSize:12, cursor:"pointer" }}>×</button>
                   </div>
                 </div>
               ) : (
                 <>
-                  <span style={{ ...G, fontSize:13, color:T.ink, flex:1, minWidth:0 }}>{cat.name}</span>
-                  <button onClick={() => setExpandedCat(expandedCat === cat.id ? null : cat.id)} aria-label={`Expandir tags de ${cat.name}`}
+                  <span style={{ ...G, fontSize:13, color:T.ink, flex:1, minWidth:0 }}>{cat.labelPt || cat.name}</span>
+                  <button onClick={() => setExpandedCat(expandedCat === cat.id ? null : cat.id)} aria-label={`Expandir tags de ${cat.labelPt || cat.name}`}
                     style={{ ...G, display:"flex", alignItems:"center", gap:4, padding:"3px 8px", borderRadius:99,
                       background: expandedCat===cat.id ? `${cat.color}18` : T.grayLight,
                       border:`1px solid ${expandedCat===cat.id ? cat.color+"44" : T.border}`,
@@ -307,13 +330,13 @@ export function CategoriesTagsSettingsPanel({
                     <Hash size={10}/>
                     {(cat.tags||[]).length}
                   </button>
-                  <button onClick={() => { setEditCat(cat.id); setNewCatName(cat.name); setNewCatColor(cat.color); }} aria-label={`Editar categoria ${cat.name}`}
+                  <button onClick={() => { setEditCat(cat.id); setNewCatName(cat.name); setNewCatColor(cat.color); }} aria-label={`Editar categoria ${cat.labelPt || cat.name}`}
                     style={{ background:"none", border:"none", cursor:"pointer", padding:5, borderRadius:7, display:"flex", flexShrink:0 }}
                     onMouseEnter={e=>e.currentTarget.style.background=T.grayLight}
                     onMouseLeave={e=>e.currentTarget.style.background="none"}>
                     <Pencil size={13} color={T.inkLight}/>
                   </button>
-                  <button onClick={() => handleDeleteCat(cat.id)} aria-label={`Excluir categoria ${cat.name}`}
+                  <button onClick={() => handleDeleteCat(cat.id)} aria-label={`Excluir categoria ${cat.labelPt || cat.name}`}
                     style={{ background:"none", border:"none", cursor:"pointer", padding:5, borderRadius:7, display:"flex", flexShrink:0 }}
                     onMouseEnter={e=>e.currentTarget.style.color=T.red}
                     onMouseLeave={e=>e.currentTarget.style.color=T.red+"66"}>
@@ -328,16 +351,16 @@ export function CategoriesTagsSettingsPanel({
                 background:`${cat.color}08`, borderTop:`1px solid ${cat.color}22` }}>
                 <div style={{ ...G, fontSize:10, fontWeight:700, color:cat.color,
                   textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:8 }}>
-                  Tags de {cat.name}
+                  Tags de {cat.labelPt || cat.name}
                 </div>
                 <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:10 }}>
                   {(cat.tags||[]).map((tag, ti) => (
                     <span key={getTagId(tag, ti)} style={{ ...G, display:"flex", alignItems:"center", gap:5, fontSize:12,
                       background:T.surface, border:`1px solid ${T.border}`, borderRadius:99,
                       padding:"4px 10px", color:T.inkMid }}>
-                      #{getTagName(tag)}
+                      #{getTagLabelPt(tag)}
                       <button onClick={() => void removeTag(cat, ti)}
-                        aria-label={`Remover tag ${getTagName(tag)}`}
+                        aria-label={`Remover tag ${getTagLabelPt(tag)}`}
                         style={{ background:"none", border:"none", cursor:"pointer", padding:0, lineHeight:1,
                           color:T.inkGhost, fontSize:14, display:"flex", alignItems:"center" }}>×</button>
                     </span>
@@ -361,7 +384,7 @@ export function CategoriesTagsSettingsPanel({
                          void addTag(cat);
                        }}
                       placeholder="nova tag (Enter)"
-                      aria-label={`Nova tag de ${cat.name}`}
+                      aria-label={`Nova tag de ${cat.labelPt || cat.name}`}
                       style={{ ...G, flex:1, minWidth:0, border:"none", outline:"none",
                         background:"transparent", fontSize:12, color:T.ink }}/>
                   </div>

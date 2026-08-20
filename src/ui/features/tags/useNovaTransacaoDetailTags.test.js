@@ -86,6 +86,28 @@ describe("useNovaTransacaoDetailTags", () => {
     expect(result.current.labelForDetailId(DET_EXISTING)).toBe("família");
   });
 
+  it("labelForDetailId traduz nome cru do seed em inglês (regressão #77)", async () => {
+    vi.mocked(tagsApi.listTags).mockResolvedValue({
+      tags: [
+        detailRow(DET_EXISTING, "família", CAT),
+        detailRow("dddddddd-dddd-4ddd-8ddd-dddddddddddd", "health_plan", CAT),
+      ],
+    });
+    const { result } = renderHook(() =>
+      useNovaTransacaoDetailTags({
+        organizationId: ORG,
+        categoryTagId: CAT,
+        enabled: true,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.labelForDetailId("dddddddd-dddd-4ddd-8ddd-dddddddddddd")).toBe(
+      "plano de saúde",
+    );
+  });
+
   it("ensureDetailTag cria tag quando não existe para o pai", async () => {
     const { result } = renderHook(() =>
       useNovaTransacaoDetailTags({

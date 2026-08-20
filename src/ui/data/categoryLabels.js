@@ -243,6 +243,73 @@ const LABEL_PT_ICON_KEY_ALIASES = {
 };
 
 /**
+ * Nomes canônicos em inglês das tags "detalhe" (subcategorias filhas, seed
+ * `CANONICAL_CATEGORY_SEED` em fincla-api/src/infrastructure/database/seeds/
+ * seed_default_tags.py) → rótulo PT. Toda organização nova recebe essas ~25 tags
+ * automaticamente (`create_organization` chama `seed_default_tags`), então elas
+ * aparecem em qualquer conta nova — não é só dado de demo/teste.
+ */
+export const DETAIL_LABEL_PT_BY_EN_NAME = {
+  grocery: "mercado",
+  restaurant: "restaurante",
+  delivery: "delivery",
+  fuel: "combustível",
+  uber: "uber",
+  bus: "ônibus",
+  pharmacy: "farmácia",
+  doctor: "médico",
+  health_plan: "plano de saúde",
+  course: "curso",
+  book: "livro",
+  cinema: "cinema",
+  travel: "viagem",
+  bar: "bar",
+  clothing: "roupas",
+  electronics: "eletrônicos",
+  streaming: "streaming",
+  app: "aplicativo",
+  tax: "imposto",
+  fee: "taxa",
+  rent: "aluguel",
+  energy: "energia",
+  water: "água",
+  salary: "salário",
+  freelance: "freelance",
+};
+
+const DETAIL_LABEL_PT_BY_EN_NAME_NORMALIZED = Object.fromEntries(
+  Object.entries(DETAIL_LABEL_PT_BY_EN_NAME).map(([en, pt]) => [
+    normalizeCategoryLookupKey(en),
+    pt,
+  ]),
+);
+
+/**
+ * Rótulo PT para uma tag "detalhe" (subcategoria). Cobre o seed canônico acima;
+ * tags criadas pelo usuário (já digitadas em PT, ex. "pix solidário") passam
+ * direto, sem alteração.
+ *
+ * Fallback: nunca devolve um slug cru com `_` (só o seed usa `_`, nenhuma tag
+ * criada pela UI usa — `formatTagName` em CategoriesTagsSettingsPanel gera
+ * hífen, não underscore). Se aparecer um nome com `_` fora do mapa, humaniza
+ * (`_` → espaço) e registra no console para alguém completar o mapa.
+ * @param {{ name?: string | null } | Record<string, unknown> | null | undefined} tag
+ * @returns {string}
+ */
+export function detailLabelPtForTag(tag) {
+  const { name } = coerceCategoryTagShape(/** @type {Record<string, unknown>} */ (tag));
+  if (!name) return "";
+  const normalized = normalizeCategoryLookupKey(name);
+  const known = DETAIL_LABEL_PT_BY_EN_NAME_NORMALIZED[normalized];
+  if (known) return known;
+  if (!name.includes("_")) return name;
+  console.warn(
+    `[categoryLabels] tag "detalhe" sem tradução PT no mapa (mostrando fallback legível): "${name}"`,
+  );
+  return name.replace(/_/g, " ").trim();
+}
+
+/**
  * Ícone Lucide para a linha da UI: prioriza `icon_key` da API; no mock, deriva do rótulo PT.
  * @param {string | null | undefined} iconKeyFromApi
  * @param {string | null | undefined} labelPt

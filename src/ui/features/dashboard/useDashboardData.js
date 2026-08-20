@@ -532,7 +532,8 @@ function mapUpcomingDebits(recurringResponse, horizonDays = 14) {
         monthShort: occ
           .toLocaleDateString("pt-BR", { month: "short" })
           .replace(".", ""),
-        cat: tag?.name ?? r.category ?? "Recorrente",
+        // `tag.name` vem cru do seed (`Food & Groceries`...); traduz antes de exibir.
+        cat: tag ? categoryLabelPtForTag(tag) : (r.category ?? "Recorrente"),
         daysLeft,
         dateLabel: occ.toLocaleDateString("pt-BR", {
           day: "2-digit",

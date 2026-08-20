@@ -24,6 +24,13 @@ describe("toCategoryRow", () => {
     expect(r.value).toBe(0);
     expect(r.count).toBe(0);
   });
+
+  it("traduz tag_name cru do seed vindo de GET /analytics/by-category (regressão #77)", () => {
+    // `tag_name` real do endpoint costuma vir em inglês (seed canônico), não já
+    // traduzido como nos outros fixtures deste arquivo.
+    const r = toCategoryRow({ tag_name: "Health", tag_icon_key: "pill", total: 100, percentage: 10 });
+    expect(r.label).toBe("Saúde");
+  });
 });
 
 describe("selectClientCategories", () => {

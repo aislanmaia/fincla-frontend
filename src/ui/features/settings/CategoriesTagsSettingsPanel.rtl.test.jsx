@@ -2,7 +2,7 @@
 
 import React from "react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { CategoriesTagsSettingsPanel } from "./CategoriesTagsSettingsPanel.jsx";
@@ -19,7 +19,7 @@ vi.mock("../../../api/tags", () => ({
 const ORG = "org-1";
 const CATEGORY_ID = "cat-1";
 
-function categoryRow() {
+function categoryRow(over = {}) {
   return {
     id: CATEGORY_ID,
     name: "Doações e Presentes",
@@ -38,6 +38,7 @@ function categoryRow() {
       is_required: false,
       max_per_transaction: null,
     },
+    ...over,
   };
 }
 
@@ -158,5 +159,68 @@ describe("CategoriesTagsSettingsPanel", () => {
     });
 
     expect(await screen.findByText("#pix-solidário")).toBeInTheDocument();
+  });
+});
+
+describe("CategoriesTagsSettingsPanel — categoria/tag do seed em inglês (regressão #77)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+
+    // Payload real de `GET /tags?tag_type=categoria|detalhe`: o seed
+    // (fincla-api/seed_default_tags.py) cria essas linhas em inglês pra toda
+    // organização nova — não é um fixture PT já traduzido como nos testes acima.
+    vi.mocked(tagsApi.listTags).mockImplementation(async (_orgId, tagType) => ({
+      tags:
+        tagType === "categoria"
+          ? [categoryRow({ name: "Food & Groceries", icon_key: "shopping-cart" })]
+          : [detailRow("det-grocery", "grocery")],
+    }));
+
+    vi.mocked(tagsApi.listTagTypes).mockResolvedValue({
+      tag_types: [
+        { id: "tt-cat", name: "categoria", description: null, is_required: false, max_per_transaction: null },
+        { id: "tt-det", name: "detalhe", description: null, is_required: false, max_per_transaction: null },
+      ],
+    });
+  });
+
+  /**
+   * O estado inicial (`DEFAULT_CATEGORIES`, mock) já tem uma categoria chamada
+   * "Alimentação" — mesmo nome PT que o seed traduzido também produz. Um
+   * `findByRole` ingênuo pode pegar o botão do mock antes do fetch (`GET
+   * /tags?tag_type=categoria`) substituir `cats` pela linha real, clicando
+   * numa categoria que já não existe mais na lista → o painel nunca expande.
+   * Espera a lista assentar em exatamente 1 categoria (a fetchada) primeiro.
+   */
+  async function waitForSingleFetchedCategory() {
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: /Expandir tags de/i })).toHaveLength(1);
+    });
+    return screen.getByRole("button", { name: /Expandir tags de Alimentação/i });
+  }
+
+  it("mostra a categoria traduzida em PT-BR, nunca o nome cru do seed", async () => {
+    renderPanel();
+
+    await waitForSingleFetchedCategory();
+    expect(screen.getByText("Alimentação")).toBeInTheDocument();
+    expect(screen.queryByText("Food & Groceries")).not.toBeInTheDocument();
+  });
+
+  it("mostra a tag detalhe traduzida ao expandir a categoria, nunca o slug cru do seed", async () => {
+    renderPanel();
+
+    const expandBtn = await waitForSingleFetchedCategory();
+    // `fireEvent` (não `userEvent`) aqui: é um clique simples num botão sem
+    // teclado/hover envolvidos, e evita o mesmo tipo de flake de timers reais
+    // já conhecido neste arquivo sob carga (ver testes "cria uma tag detalhe").
+    fireEvent.click(expandBtn);
+
+    expect(await screen.findByText("#mercado")).toBeInTheDocument();
+    expect(screen.queryByText("#grocery")).not.toBeInTheDocument();
   });
 });

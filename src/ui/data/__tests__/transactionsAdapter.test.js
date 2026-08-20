@@ -66,6 +66,41 @@ describe("transactionsAdapter", () => {
     });
   });
 
+  it("traduz categoria e tag detalhe cruas do seed vindas de GET /transactions (regressão #77)", () => {
+    // Payload real: `categoria` e `detalhe` chegam com os nomes do seed em inglês
+    // (fincla-api/seed_default_tags.py), não já traduzidos.
+    const mapped = mapApiTransactionToUi({
+      id: 99,
+      organization_id: "org-1",
+      type: "expense",
+      description: "Compras da semana",
+      category: null,
+      tags: {
+        categoria: [{ id: "cat-food", name: "Food & Groceries", icon_key: "shopping-cart" }],
+        detalhe: [
+          {
+            id: "det-grocery",
+            name: "grocery",
+            parent_category_tag_id: "cat-food",
+            is_active: true,
+          },
+        ],
+      },
+      value: 120,
+      payment_method: "pix",
+      date: "2026-04-10T00:00:00",
+      status: "paid",
+      recurring: false,
+      created_at: "2026-04-10T10:00:00",
+      updated_at: "2026-04-10T10:00:00",
+    });
+
+    expect(mapped.cat).toBe("Alimentação");
+    expect(mapped.tags).toEqual(["mercado"]);
+    expect(mapped.detailTagMetaById["det-grocery"].name).toBe("mercado");
+    expect(mapped.detailTagDisplayById["det-grocery"]).toBe("mercado");
+  });
+
   it("crédito à vista 1/1x: coluna de data usa a data da compra (não o vencimento da fatura)", () => {
     const mapped = mapApiTransactionToUi({
       id: 493,

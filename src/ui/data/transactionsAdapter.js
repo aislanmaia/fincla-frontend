@@ -9,7 +9,7 @@ import {
 } from "../../api/transactions";
 import { downloadTransactionsCsv } from "../../api/analytics";
 import { handleApiError } from "../../api/client";
-import { categoryLabelPtForTag } from "./categoryLabels.js";
+import { categoryLabelPtForTag, detailLabelPtForTag } from "./categoryLabels.js";
 
 /** Máximo por página na API `GET /transactions` (validação backend). */
 export const TRANSACTIONS_API_MAX_LIMIT = 100;
@@ -143,11 +143,10 @@ export function pickDetailTagMetaMapFromApiTransaction(transaction) {
       ) {
         continue;
       }
+      const rawName = t.name != null ? String(t.name).trim() : "";
       map[id] = {
-        name:
-          t.name != null && String(t.name).trim() !== ""
-            ? String(t.name).trim()
-            : `Tag ${id.slice(0, 8)}…`,
+        // `t.name` pode vir cru do seed (`grocery`, `health_plan`...) — traduz.
+        name: rawName ? detailLabelPtForTag(t) || rawName : `Tag ${id.slice(0, 8)}…`,
         isActive: t.is_active !== false,
       };
     }
@@ -187,7 +186,8 @@ function pickTagNames(transaction, categoryDisplayName) {
       }
       return true;
     })
-    .map(({ tag }) => tag.name)
+    // `tag.name` pode vir cru do seed (`grocery`, `health_plan`...) — traduz pro chip.
+    .map(({ tag }) => detailLabelPtForTag(tag) || tag.name)
     .filter((tagName, index, all) => tagName && all.indexOf(tagName) === index);
 }
 

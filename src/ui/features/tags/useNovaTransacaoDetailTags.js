@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createTag, listTags, listTagTypes } from "../../../api/tags";
+import { detailLabelPtForTag } from "../../data/categoryLabels.js";
 
 function normalizeLabel(value) {
   return String(value || "")
@@ -148,7 +149,9 @@ export function useNovaTransacaoDetailTags({
   const labelForDetailId = useCallback(
     (id) => {
       const row = allDetail.find((t) => String(t.id) === String(id));
-      return row?.name ?? String(id);
+      if (!row) return String(id);
+      // `row.name` pode vir cru do seed (ex. "health_plan") — traduz pro chip.
+      return detailLabelPtForTag(row) || row.name || String(id);
     },
     [allDetail],
   );
