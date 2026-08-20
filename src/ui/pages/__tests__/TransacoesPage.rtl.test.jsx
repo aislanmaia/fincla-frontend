@@ -919,6 +919,206 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     expect(screen.getByText(/Ver 0 transaç/i)).toBeInTheDocument();
     expect(screen.queryByText("Atualizando…")).not.toBeInTheDocument();
   });
+
+  // fincla-frontend#109 rodada 4, achado 5: a correção da rodada 3 (achado
+  // 4) trocou `transactionsData.isLoading` cru por `listNeverLoaded` — mas
+  // `listNeverLoaded` continua `true` PRA SEMPRE em dois casos que não são
+  // "carregando": a 1ª carga FALHOU (`hasLoaded` só liga num sucesso) e o
+  // filtro de tag está BLOQUEADO (`enabled:false` trava o hook em
+  // `EMPTY_STATE` pra sempre). O CTA ficava "Atualizando…" desabilitado
+  // pra sempre — uma afirmação falsa, já que nada estava em andamento.
+  it("1ª carga FALHOU (hasLoaded=false, error setado): CTA mostra a contagem real, nunca fica 'Atualizando…' pra sempre", async () => {
+    transactionsDataMock.mockReturnValue({
+      isLoading: false, error: "Falha ao carregar transações.", hasLoaded: false,
+      summary: null, transactions: [], total: 0, hasMore: false,
+      removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
+    });
+    renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
+
+    expect(screen.getByText(/Ver 0 transaç/i)).toBeInTheDocument();
+    expect(screen.queryByText("Atualizando…")).not.toBeInTheDocument();
+  });
+
+  it("filtro de tag BLOQUEADO (tag salva não existe mais): CTA mostra a contagem real, nunca fica 'Atualizando…' pra sempre", async () => {
+    localStorage.setItem(
+      "fincla.transactions.savedViews.v1",
+      JSON.stringify({
+        version: 1,
+        orgs: {
+          "org-test": [
+            {
+              id: "v-tag-sumida",
+              label: "Tag sumida",
+              icon: "bookmark",
+              color: "#2563EB",
+              filters: { tags: ["tag-que-nao-existe-mais"] },
+              createdAt: 1,
+            },
+          ],
+        },
+      }),
+    );
+    transactionsDataMock.mockReturnValue({
+      isLoading: false, error: "", hasLoaded: false,
+      summary: null, transactions: [], total: 0, hasMore: false,
+      removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
+    });
+    renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: "Tag sumida" }));
+    expect(screen.getAllByText(/não foi encontrada/i).length).toBeGreaterThan(0);
+
+    await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
+    expect(screen.getByText(/Ver 0 transaç/i)).toBeInTheDocument();
+    expect(screen.queryByText("Atualizando…")).not.toBeInTheDocument();
+  });
+
+  // fincla-frontend#109 rodada 4, achado 6: o CTA do sheet mobile é o
+  // controle de FECHAR o sheet em tela cheia — o mais óbvio pra sair. Não
+  // pode ficar desabilitado (mesmo achando que é transitório): o X e o
+  // backdrop já fecham de qualquer jeito, mas travar o botão MAIOR é uma
+  // saída a menos se o estado "carregando" persistir de verdade (falha,
+  // bloqueio).
+  it("CTA mobile: NUNCA fica desabilitado (só o rótulo muda) — é o controle de fechar o sheet", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 375 });
+    window.dispatchEvent(new Event("resize"));
+    transactionsDataMock.mockReturnValue({
+      isLoading: false, error: "", hasLoaded: false,
+      summary: null, transactions: [], total: 0, hasMore: false,
+      removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
+    });
+    renderPage({ isMobile: true });
+
+    await userEvent.click(screen.getByRole("button", { name: /Abrir filtros/i }));
+
+    const closeBtn = screen.getByRole("button", { name: "Atualizando…" });
+    expect(closeBtn).not.toBeDisabled();
+  });
+});
+
+// fincla-frontend#109 rodada 4, achado 1 (CRÍTICO) — mecanismo real do bug:
+// uma falha ao "carregar mais" não setava mais `error` (achado 2 da rodada
+// 3), então `hasMore` continuava `true`, a sentinela seguia montada, e
+// `tryLoadMore` (`useCallback` chaveado em `isLoading`, que alterna a cada
+// tentativa) recriava o `IntersectionObserver` — cuja entrega inicial (MDN)
+// dispara o callback assim que `observe()` roda de novo, redisparando
+// `tryLoadMore` sozinho. Isso virava uma tempestade de requisições sem fim,
+// com `limit` crescendo, sem NENHUMA ação da pessoa. A garantia central da
+// correção é estrutural: a sentinela precisa SUMIR do DOM assim que
+// `pageError` liga — sem o nó observado, o efeito que cria o
+// `IntersectionObserver` nem roda (`if (!sentinel || !hasMore) return;`), o
+// que interrompe o mecanismo na raiz, sem depender de simular tempo real
+// nem o `IntersectionObserver` de verdade (indisponível em jsdom).
+describe("<TransacoesPage> — scroll infinito não vira tempestade de requisições (fincla-frontend#109 rodada 4, achado 1)", { timeout: 15000 }, () => {
+  // jsdom não implementa `IntersectionObserver` — os outros testes deste
+  // arquivo nunca esbarram nisso porque sempre mockam `hasMore:false`. Aqui
+  // `hasMore:true` é o cenário que importa, então um stub NO-OP (nunca
+  // dispara o callback) evita o `ReferenceError` sem arriscar nenhum loop —
+  // este describe testa a PRESENÇA da sentinela no DOM, não o
+  // comportamento dinâmico do observer.
+  class NoopIntersectionObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  beforeEach(() => {
+    vi.stubGlobal("IntersectionObserver", NoopIntersectionObserver);
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function transactionsMockValue({ pageError = "", hasMore = true } = {}) {
+    return {
+      isLoading: false,
+      error: "",
+      pageError,
+      hasLoaded: true,
+      summary: { total_income: 0, total_expenses: 300, total_refunds: 0, balance: 300 },
+      transactions: Array.from({ length: 10 }, (_, i) => ({
+        id: `tx-${i}`,
+        date: "21/05",
+        desc: `Item ${i}`,
+        cat: "Alimentação",
+        val: -30,
+        method: "Pix",
+        type: "expense",
+        icon: "🍽",
+        status: "confirmado",
+        rec: false,
+        tags: [],
+      })),
+      total: 30,
+      hasMore,
+      removeTransaction: vi.fn(),
+      setTransactionSettled: vi.fn(),
+    };
+  }
+
+  it("sem pageError: sentinela presente (scroll infinito ativo, sem aviso de falha)", () => {
+    transactionsDataMock.mockReturnValue(transactionsMockValue());
+    renderPage();
+
+    expect(screen.getByTestId("load-more-sentinel")).toBeInTheDocument();
+    expect(screen.queryByText("Tentar novamente")).not.toBeInTheDocument();
+  });
+
+  it("pageError liga (falha ao 'carregar mais'): sentinela SOME do DOM — nada re-dispara sozinho — e mostra 'Tentar novamente'", () => {
+    transactionsDataMock.mockReturnValue(transactionsMockValue());
+    const { rerender } = render(
+      <TransacoesPage
+        onNav={vi.fn()}
+        onNewTx={vi.fn()}
+        onEditTx={vi.fn()}
+        isMobile={false}
+        dataMode="live"
+        organizationId="org-test"
+        transactionsRefreshToken={0}
+        onTransactionsInvalidate={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId("load-more-sentinel")).toBeInTheDocument();
+
+    // O hook ainda reporta `hasMore: true` (há mais páginas no backend) —
+    // é exatamente o cenário do bug: só o `pageError` liga.
+    transactionsDataMock.mockReturnValue(
+      transactionsMockValue({ pageError: "network down", hasMore: true }),
+    );
+    rerender(
+      <TransacoesPage
+        onNav={vi.fn()}
+        onNewTx={vi.fn()}
+        onEditTx={vi.fn()}
+        isMobile={false}
+        dataMode="live"
+        organizationId="org-test"
+        transactionsRefreshToken={0}
+        onTransactionsInvalidate={vi.fn()}
+      />,
+    );
+
+    // A garantia central: a sentinela some — sem ela, o `IntersectionObserver`
+    // nunca é recriado/observado de novo, o que interrompe o mecanismo da
+    // tempestade na raiz.
+    expect(screen.queryByTestId("load-more-sentinel")).not.toBeInTheDocument();
+    expect(screen.getByText("Tentar novamente")).toBeInTheDocument();
+  });
+
+  it("clicar 'Tentar novamente' não derruba a lista já carregada", async () => {
+    transactionsDataMock.mockReturnValue(
+      transactionsMockValue({ pageError: "network down", hasMore: true }),
+    );
+    renderPage();
+
+    expect(screen.getByText("Tentar novamente")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
+
+    // As 10 linhas já carregadas continuam na tela — clicar não some com
+    // nada (o retry é uma revalidação suave da MESMA consulta).
+    expect(screen.getAllByText(/Item 0/i).length).toBeGreaterThan(0);
+  });
 });
 
 describe("<TransacoesPage> — lançamentos cobertos por âncora (S4)", { timeout: 15000 }, () => {

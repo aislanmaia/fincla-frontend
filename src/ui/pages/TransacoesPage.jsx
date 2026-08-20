@@ -747,6 +747,13 @@ function TransacoesPageBody({
   const snapshotBeforeViewRef = useRef(null);
   const loadMoreSentinelRef = useRef(null);
   const loadMoreCooldownRef = useRef(false);
+  // fincla-frontend#109 rodada 4, achado 2: uma falha ao "carregar mais" não
+  // tem NENHUM gatilho de retentativa hoje — `refreshToken` (prop, global)
+  // não muda por causa disso. Este token LOCAL, só combinado no
+  // `refreshToken` composto abaixo, dá à pessoa uma ação explícita
+  // ("Tentar novamente") sem reusar o token global (que também dispara
+  // outros efeitos da página, ex.: âncoras de saldo).
+  const [loadMoreRetryToken, setLoadMoreRetryToken] = useState(0);
   const [deletingId,  setDeletingId]  = useState(null);
   // Id em liquidação — trava o botão para o clique duplo não disparar settle + unsettle.
   const [settlingId,  setSettlingId]  = useState(null);
@@ -988,7 +995,11 @@ function TransacoesPageBody({
     // do que mostrar a lista inteira se passando por filtrada.
     enabled: shouldUseRealData && !tagFilterBlocked,
     filters: transactionsFilters,
-    refreshToken: transactionsRefreshToken,
+    // Composto com `loadMoreRetryToken`: o hook só compara por `!==`
+    // (nunca faz aritmética), então uma chave composta funciona igual a um
+    // número — e mantém o retry de paginação isolado do token GLOBAL (que
+    // também dispara outros efeitos da página).
+    refreshToken: `${transactionsRefreshToken}:${loadMoreRetryToken}`,
   });
   const txList = shouldUseRealData
     ? transactionsData.transactions
@@ -1260,11 +1271,30 @@ function TransacoesPageBody({
       : entries.sort((a,b) => parseDate(b[0]) - parseDate(a[0]));
   }, [shouldUseRealData, filtered, visible]);
 
+  // fincla-frontend#109 rodada 4, achado 1 (CRÍTICO): uma falha ao "carregar
+  // mais" não seta mais o `error` geral (achado 2 da rodada 3) — sem esta
+  // exclusão explícita de `pageError`, `hasMore` continuava `true`, a
+  // sentinela seguia montada, e `tryLoadMore` (chaveado em `isLoading`, que
+  // alterna a cada tentativa) recriava o `IntersectionObserver` a cada
+  // falha — cuja entrega inicial já dispara `tryLoadMore` de novo. Isso virou
+  // uma tempestade de requisições sem fim, com `limit` crescendo pra sempre,
+  // sem nenhuma ação da pessoa. Enquanto houver `pageError`, exige uma ação
+  // EXPLÍCITA ("Tentar novamente" abaixo) — a sentinela some, o observer não
+  // é recriado, e nada re-dispara sozinho.
   const hasMore =
     !searchAwaitingCommit &&
     (shouldUseRealData
-      ? transactionsData.hasMore
+      ? transactionsData.hasMore && !transactionsData.pageError
       : visible < filtered.length);
+
+  // fincla-frontend#109 rodada 4, achado 2: bumpa o token LOCAL de retry
+  // (definido acima, perto de `loadMoreSentinelRef`) — é a ÚNICA forma de
+  // re-disparar a MESMA consulta que falhou (organização/filtros/limit
+  // idênticos, então só um `refreshToken` novo força o efeito a rodar de
+  // novo).
+  const retryLoadMore = useCallback(() => {
+    setLoadMoreRetryToken((t) => t + 1);
+  }, []);
 
   const tryLoadMore = useCallback(() => {
     if (searchAwaitingCommit) return;
@@ -1475,22 +1505,27 @@ function TransacoesPageBody({
 
   // fincla-frontend#109 rodada 3, achado 4: `resultsLoading` usava
   // `transactionsData.isLoading` cru — o MESMO booleano que não é confiável
-  // no 1º quadro (ver comentário de `listNeverLoaded`/`listLoading` acima).
-  // Sem isto, o CTA "Ver N transações" (bottom sheet mobile e
-  // `FacetApplyFooter` no desktop) mostrava "Ver 0 transações" — a mesma
-  // afirmação falsa que a lista e a faixa de KPI já foram corrigidas pra não
-  // fazer. `listNeverLoaded` cobre carregando/falhou/o quadro intermediário
-  // igual às outras duas correções.
+  // no 1º quadro. Trocado por `listNeverLoaded` — mas isso trocou um bug por
+  // outro (rodada 4, achado 5): `listNeverLoaded` continua `true` PRA SEMPRE
+  // em dois casos que não são "carregando" de jeito nenhum — a 1ª carga
+  // FALHOU (`hasLoaded` só liga num sucesso) e o filtro de tag está
+  // BLOQUEADO (`enabled:false` trava o hook em `EMPTY_STATE` pra sempre). O
+  // CTA "Ver N transações" ficava desabilitado dizendo "Atualizando…" — uma
+  // afirmação falsa, já que nada estava de fato em andamento.
+  //
+  // `listLoading` (definido acima) já exclui o caso de FALHA
+  // (`listNeverLoaded && !listLoadFailed`); falta só excluir o BLOQUEIO.
+  const resultsStillLoading = listLoading && !tagFilterBlocked;
   const filterBarApplyProps = useMemo(
     () => ({
       filteredCount,
-      resultsLoading: searchAwaitingCommit || listNeverLoaded,
+      resultsLoading: searchAwaitingCommit || resultsStillLoading,
       onAfterApply: isMobile ? undefined : scrollListToTop,
     }),
     [
       filteredCount,
       searchAwaitingCommit,
-      listNeverLoaded,
+      resultsStillLoading,
       isMobile,
       scrollListToTop,
     ],
@@ -1690,10 +1725,16 @@ function TransacoesPageBody({
           </div>
         ))
       )}
-      {/* Paginação infinita: sentinel + feedback (carregamento ao chegar ao fim da lista) */}
+      {/* Paginação infinita: sentinel + feedback (carregamento ao chegar ao fim da lista).
+          `data-testid` só pra prova de teste (fincla-frontend#109 rodada 4,
+          achado 1, CRÍTICO): a garantia central da correção é que este nó
+          SOME do DOM assim que `pageError` liga — é isso que impede o
+          `IntersectionObserver` de ser recriado/observado de novo e alimentar
+          a tempestade de requisições. */}
       {hasMore && (
         <div
           ref={loadMoreSentinelRef}
+          data-testid="load-more-sentinel"
           style={{ height:1, marginTop:8, flexShrink:0 }}
           aria-hidden
         />
@@ -1701,6 +1742,22 @@ function TransacoesPageBody({
       {hasMore && shouldUseRealData && transactionsData.isLoading && (
         <div style={{ ...G, textAlign:"center", fontSize:12, color:T.inkLight, padding:"10px 0 4px" }}>
           Carregando mais…
+        </div>
+      )}
+      {/* fincla-frontend#109 rodada 4, achado 2: `pageError` nunca era
+          consumido em lugar nenhum — a falha ficava muda, a lista truncada
+          com CARA de completa (sem sentinela, sem "Carregando mais…", sem
+          nada). Fora de `hasMore` de propósito: precisa aparecer mesmo com
+          a sentinela escondida (achado 1). */}
+      {shouldUseRealData && transactionsData.pageError && (
+        <div style={{ ...G, display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+          textAlign:"center", fontSize:12, color:T.inkLight, padding:"10px 0 4px" }}>
+          <span>Não foi possível carregar mais transações.</span>
+          <button type="button" onClick={retryLoadMore}
+            style={{ ...G, background:"none", border:"none", padding:0, fontSize:12,
+              fontWeight:700, color:T.blue, cursor:"pointer", textDecoration:"underline" }}>
+            Tentar novamente
+          </button>
         </div>
       )}
     </div>
@@ -1962,19 +2019,24 @@ function TransacoesPageBody({
               />
             </div>
             {/* Footer CTA — safe area aware. fincla-frontend#109 rodada 3,
-                achado 4: espelha o `FacetApplyFooter` do desktop — enquanto
-                `listNeverLoaded`, "Ver 0 transações" seria uma afirmação
-                falsa (a busca ainda não respondeu de verdade). */}
+                achado 4 + rodada 4, achado 6: espelha o `FacetApplyFooter`
+                do desktop no RÓTULO (enquanto `resultsLoading`, "Ver 0
+                transações" seria uma afirmação falsa), mas — diferente do
+                desktop — NUNCA desabilita. Este é o controle de FECHAR o
+                sheet em tela cheia, o mais óbvio pra sair; travá-lo (mesmo
+                achando que é transitório) deixa a pessoa sem saída óbvia se
+                o estado "carregando" persistir (1ª carga falhou, filtro de
+                tag bloqueado). O X e o backdrop já fecham de qualquer jeito
+                — só o texto/opacidade avisam que a contagem pode mudar. */}
             <div style={{ padding:"12px 20px", paddingBottom:"calc(12px + env(safe-area-inset-bottom, 0px))",
               borderTop:`1px solid ${T.border}`, background:T.surface, flexShrink:0 }}>
               <button onClick={onSheetClose}
-                disabled={listNeverLoaded}
                 style={{ ...G, width:"100%", background:T.ink, color:"#fff",
                   border:"none", borderRadius:12, padding:"15px",
-                  fontSize:15, fontWeight:800, cursor: listNeverLoaded ? "wait" : "pointer",
-                  opacity: listNeverLoaded ? 0.7 : 1,
+                  fontSize:15, fontWeight:800, cursor:"pointer",
+                  opacity: filterBarApplyProps.resultsLoading ? 0.7 : 1,
                   display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
-                {listNeverLoaded ? "Atualizando…" : <>Ver {filteredCount} transaç{filteredCount!==1?"ões":"ão"}</>}
+                {filterBarApplyProps.resultsLoading ? "Atualizando…" : <>Ver {filteredCount} transaç{filteredCount!==1?"ões":"ão"}</>}
               </button>
             </div>
           </div>

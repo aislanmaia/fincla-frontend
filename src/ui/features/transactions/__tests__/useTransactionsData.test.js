@@ -531,3 +531,54 @@ describe("fincla-frontend#109 rodada 3, achado 2 — pageError não contamina er
     expect(result.current.pageError).toBe("");
   });
 });
+
+// fincla-frontend#109 rodada 4, achado 7 — o `setState` de pré-fetch limpava
+// `error` mas não `pageError`. Uma vez setado, só uma resposta bem-sucedida
+// (achado 2 da rodada 3) limpava — e ele influencia a guarda de `hasMore`
+// (achado 1 da rodada 4), então vivia mais que a requisição que o criou:
+// mesmo no INÍCIO de uma nova tentativa (antes dela resolver), `pageError`
+// tinha que continuar aceso indevidamente.
+describe("fincla-frontend#109 rodada 4, achado 7 — pageError é limpo no INÍCIO de qualquer nova tentativa", () => {
+  it("pageError zera assim que uma nova tentativa começa, antes mesmo dela resolver", async () => {
+    listTransactions.mockResolvedValueOnce({
+      data: [{ id: "tx-0", description: "Item 0", amount: -10, type: "expense", date: "2026-08-01", tags: {} }],
+      pagination: { total: 2, has_next: true },
+    });
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+
+    const filtersPage1 = filtersToLegacyParams(BASE_STATE, { limit: 1 });
+    const filtersPage2 = filtersToLegacyParams(BASE_STATE, { limit: 2 });
+
+    const { result, rerender } = renderHook(
+      ({ filters, refreshToken }) =>
+        useTransactionsData({ organizationId: ORG, enabled: true, filters, refreshToken }),
+      { initialProps: { filters: filtersPage1, refreshToken: 0 } },
+    );
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+
+    listTransactions.mockRejectedValueOnce(new Error("network down"));
+    rerender({ filters: filtersPage2, refreshToken: 0 });
+    await waitFor(() => expect(result.current.pageError).toBeTruthy());
+
+    // Nova tentativa (retry) — a promise fica PENDENTE de propósito, pra
+    // provar que a limpeza acontece no INÍCIO do efeito, não só quando (e
+    // se) a resposta chegar.
+    let resolveRetry;
+    const pending = new Promise((resolve) => {
+      resolveRetry = resolve;
+    });
+    listTransactions.mockReturnValueOnce(pending);
+    rerender({ filters: filtersPage2, refreshToken: 1 });
+
+    await waitFor(() => expect(result.current.pageError).toBe(""));
+
+    resolveRetry({
+      data: [
+        { id: "tx-0", description: "Item 0", amount: -10, type: "expense", date: "2026-08-01", tags: {} },
+        { id: "tx-1", description: "Item 1", amount: -20, type: "expense", date: "2026-08-01", tags: {} },
+      ],
+      pagination: { total: 2, has_next: false },
+    });
+    await waitFor(() => expect(result.current.transactions).toHaveLength(2));
+  });
+});

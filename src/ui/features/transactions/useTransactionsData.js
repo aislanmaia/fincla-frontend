@@ -108,16 +108,24 @@ export function useTransactionsData({
     };
 
     let cancelled = false;
+    // fincla-frontend#109 rodada 4, achado 7: limpa `pageError` aqui também
+    // (não só no sucesso) — sem isto, um `pageError` de uma tentativa
+    // anterior sobrevive durante TODA a janela de uma nova tentativa (retry
+    // ou uma consulta nova qualquer que passe pelo ramo `softRefreshOnly`),
+    // e ele influencia a guarda de `hasMore` na página — teria vida mais
+    // longa que a requisição que o criou.
     if (!softRefreshOnly) {
       setState((current) => ({
         ...current,
         isLoading: true,
         error: "",
+        pageError: "",
       }));
     } else {
       setState((current) => ({
         ...current,
         error: "",
+        pageError: "",
       }));
     }
 

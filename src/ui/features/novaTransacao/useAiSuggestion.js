@@ -51,6 +51,7 @@ export function useAiSuggestion({
   useLiveCategoryTags,
   useLiveDetailTags,
   categoryTagsData,
+  categoryTagId,
   ensureDetailTag,
   setCat,
   setCategoryTagId,
@@ -77,10 +78,30 @@ export function useAiSuggestion({
         : null;
     const byLabel = rows.find((c) => c.labelPt === aiSuggestion.cat);
     const row = byKey || byLabel;
+    const catIdForDetailTags = row?.id ?? null;
+
+    // fincla-frontend#109 rodada 4, achado 4: em modo live, `useLiveDetailTags`
+    // é sempre `true` — o único jeito de cair aqui é a categoria sugerida
+    // pela IA não bater com NENHUMA categoria real da organização
+    // (`catIdForDetailTags` nulo). O código anterior seguia em frente,
+    // trocava a categoria por um texto sem id válido E fazia
+    // `setDetailTagIds([])` — apagando tags escolhidas à mão — com
+    // `aiApplied(true)` afirmando sucesso por cima do apagão. Falha fechado:
+    // nada muda (nem categoria, nem tags) antes de garantir que há uma
+    // categoria de verdade pra aplicar.
+    if (useLiveDetailTags && !catIdForDetailTags) {
+      if (typeof setTxSubmitError === "function") {
+        setTxSubmitError(
+          "Não foi possível encontrar uma categoria correspondente para aplicar a sugestão.",
+        );
+      }
+      return;
+    }
+
     if (row?.labelPt) setCat(row.labelPt);
     else setCat(aiSuggestion.cat);
-    const catIdForDetailTags = row?.id ?? null;
     if (row?.id) setCategoryTagId(row.id);
+
     if (useLiveDetailTags && catIdForDetailTags) {
       const nextIds = [];
       const nextLabels = {};
@@ -108,17 +129,33 @@ export function useAiSuggestion({
             typeof err?.message === "string" ? err.message : "Não foi possível adicionar a tag";
         }
       }
-      // Rodada 3, achado 1 (regra dura do projeto: nenhuma ação de IA pode
-      // destruir o que a pessoa já tem na tela) — `setDetailTagIds(nextIds)`
-      // SUBSTITUÍA a lista inteira. Se a pessoa já tinha escolhido tags à
-      // mão (quick-add, chips sugeridos) antes de clicar "Aplicar", elas
-      // desapareciam. MESCLA em vez de substituir.
-      setDetailTagIds((prev) => {
-        const merged = [...prev];
-        for (const id of nextIds) if (!merged.includes(id)) merged.push(id);
-        return merged;
-      });
-      setDetailTagLabelById((prev) => ({ ...prev, ...nextLabels }));
+      // fincla-frontend#109 rodada 4, achado 3: mesclar (rodada 3, achado 1)
+      // quebrou outra regra do projeto — tags de detalhe são ESCOPADAS por
+      // `parent_category_tag_id` (ver os outros dois lugares que trocam
+      // categoria: NovaTransacaoModal.jsx ~2318/3298, que SEMPRE zeram as
+      // tags de detalhe ao trocar de categoria, exatamente por causa disso).
+      // Se `applyAi` troca a categoria (de "Transporte" pra "Alimentação",
+      // por exemplo) e MESCLA as tags antigas ("combustível", escopada em
+      // Transporte) com as novas, o resultado fica com um vínculo pai↔filho
+      // inconsistente — e como a tag antiga nem aparece em
+      // `detailTagRowsForCategory` da categoria NOVA, nenhum aviso de "tag
+      // indisponível" dispara; ela só é enviada errada em silêncio. Só
+      // mescla quando a categoria PERMANECE a mesma (a pessoa já tinha essa
+      // categoria selecionada, ou a IA só confirma o que já estava lá) —
+      // trocando de categoria, segue a MESMA convenção das outras duas
+      // trocas: substitui.
+      const categoryChanged = catIdForDetailTags !== categoryTagId;
+      if (categoryChanged) {
+        setDetailTagIds(nextIds);
+        setDetailTagLabelById(nextLabels);
+      } else {
+        setDetailTagIds((prev) => {
+          const merged = [...prev];
+          for (const id of nextIds) if (!merged.includes(id)) merged.push(id);
+          return merged;
+        });
+        setDetailTagLabelById((prev) => ({ ...prev, ...nextLabels }));
+      }
       if (failMessage) {
         if (typeof setTxSubmitError === "function") setTxSubmitError(failMessage);
         return;
@@ -134,6 +171,7 @@ export function useAiSuggestion({
     useLiveCategoryTags,
     useLiveDetailTags,
     categoryTagsData,
+    categoryTagId,
     ensureDetailTag,
     setCat,
     setCategoryTagId,

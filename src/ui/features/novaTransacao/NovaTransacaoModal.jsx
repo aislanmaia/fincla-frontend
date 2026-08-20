@@ -453,6 +453,11 @@ export const NovaTransacaoModal = ({
     useLiveCategoryTags,
     useLiveDetailTags,
     categoryTagsData,
+    // fincla-frontend#109 rodada 4, achado 3: `applyAi` precisa saber a
+    // categoria ATUAL pra decidir se mescla (mesma categoria) ou substitui
+    // (categoria mudando — mesma convenção de qualquer outra troca manual
+    // de categoria neste componente) as tags de detalhe.
+    categoryTagId,
     ensureDetailTag,
     setCat,
     setCategoryTagId,
