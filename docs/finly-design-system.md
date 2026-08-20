@@ -1,5 +1,7 @@
 # Finly v4 — Design System & Reference Document
 
+> **Nota (2026-08): o arquivo `finly-v4-full.jsx` foi removido do repositório.** Ele era o transporte do protótipo feito no chat; a Fincla passou a ter design próprio. As referências a linhas dele abaixo são históricas — a fonte da verdade hoje é `DESIGN.md` + o código em `src/ui/`.
+
 > **Versão:** 4.x — Março 2026  
 > **Arquivo fonte:** `finly-v4-full.jsx` (~11.300 linhas, ~680 KB)  
 > **Arquitetura:** Single-file React JSX, zero bundler, CDN-only dependencies

@@ -1,11 +1,13 @@
 # DESIGN.md — Fincla Frontend (guia prático)
 
-> Porta de entrada concisa do design. A **referência canônica completa** é
-> [`docs/finly-design-system.md`](docs/finly-design-system.md) (2047 linhas) + a spec visual
-> [`docs/finly-v4-full (13).jsx`](docs/finly-v4-full%20(13).jsx). O código-fonte da verdade são
+> Porta de entrada concisa do design. A **fonte da verdade é o código**:
 > `src/ui/tokens.js`, `src/ui/typography.js`, `src/ui/components/primitives.jsx` e
-> `src/ui/features/moodV4.jsx`. **Este arquivo distila o essencial e define como construir telas
-> novas (Fase 2).** Em conflito, vencem tokens.js/primitives.jsx.
+> `src/ui/features/moodV4.jsx`. [`docs/finly-design-system.md`](docs/finly-design-system.md)
+> traz o detalhamento longo. **Este arquivo distila o essencial e define como construir telas
+> novas.** Em conflito, vencem tokens.js/primitives.jsx.
+>
+> O design da Fincla tem vida própria: os antigos `finly-v4-full (13|14).jsx` eram só o
+> transporte do protótipo feito no chat e foram removidos.
 
 ## Princípios
 - **Inline styles + objeto `T`** (de `tokens.js`). **Sem Tailwind** por enquanto.
@@ -38,7 +40,7 @@
 - `Breadcrumb`, `InfoTip`, `CollapsibleSection`, `PageEnter`.
 
 ## Layout
-- Sidebar (desktop) 195px, `surface`, borda à direita; grupos **PRINCIPAL/PLANEJAR/GESTÃO/CONTA**.
+- Sidebar (desktop) 195px, `surface`, borda à direita; grupos **PRINCIPAL/GESTÃO/CONFIGURAÇÕES** (Planejamento é item de PRINCIPAL, não grupo).
 - Mobile: sidebar vira drawer; conteúdo em coluna única; ações em barra/sheet.
 - Radius: cards 14 · botões 9 · pills 9999 · inputs ~9–10.
 - Espaçamento recorrente: gaps 6–8–10–20; padding de card ~14–16.
@@ -47,7 +49,7 @@
 Estados `Sereno → Saudável → Atenção → Tenso → Crítico` (verde→amber→vermelho), via
 `calcMood(...)`. Usar para tom de alertas/insights (ex.: alerta de capacidade em M3, saúde em M7).
 
-## Como construir uma tela nova (Fase 2)
+## Como construir uma tela nova
 1. Reusar `primitives.jsx` (Card/Btn/Badge/SectionDiv/ProgBar) — não recriar.
 2. Título com `PageTitle` dual-font.
 3. Cores só do `T`; status com a cor semântica + `*Light` de fundo.

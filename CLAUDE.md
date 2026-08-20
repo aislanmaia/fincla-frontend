@@ -1,6 +1,6 @@
 # Fincla Frontend
 
-SaaS de finanças pessoais BR. A **UI** replica o protótipo de referência em `docs/` (objeto `T` + estilos inline), **sem Tailwind** por enquanto. Cliente REST em `src/api/` (TypeScript).
+SaaS de finanças pessoais BR. A **UI** tem design próprio (objeto `T` + estilos inline), **sem Tailwind** por enquanto — ver `DESIGN.md`. Cliente REST em `src/api/` (TypeScript).
 
 
 ## Layout do shell — experiência de app nativo (regra dura)
@@ -49,7 +49,7 @@ A aba `/profile/billing` consome dados reais via `getCurrentSubscription()` e `l
 - **Catálogo é dinâmico**: planos são `GET /v1/plans` — nunca hardcoded no frontend.
 
 ## Próximos passos
-1. Continuar **fatiando** `App.jsx` → `layouts/`, `components/`, `pages/` (marcadores `/* ─── … ─── */` no arquivo de referência em `docs/`).
+1. Continuar **fatiando** `App.jsx` → `layouts/`, `components/`, `pages/`.
 2. **Evoluir integração e hardening**: lacunas por tela, alinhar com [`fincla-api/docs/FRONTEND_API_GUIDE.md`](../fincla-api/docs/FRONTEND_API_GUIDE.md); implementar CTAs do insight (`docs/DASHBOARD_INSIGHT_CTA_SPEC.md`).
 3. **Tailwind v4** (`@theme` espelhando `T`).
 
@@ -63,5 +63,4 @@ npm run test:e2e       # Playwright (precisa de TEST_RESET_SECRET, E2E_TEST_OWNE
 ```
 
 ## Referências
-- `docs/finly-v4-full (13).jsx` — especificação visual canônica (nomes de produto na UI do repo: **Fincla**)
 - `docs/finly-design-system.md`, `docs/fincla-v2-frontend-guide.md`
