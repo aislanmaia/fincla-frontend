@@ -820,7 +820,14 @@ export const NovaTransacaoModal = ({
 
     try {
       const rows = await fetchModalCardRows();
-      if (!isStale()) setModalityChoicealCardsRows(rows);
+      if (!isStale()) {
+        setModalityChoicealCardsRows(rows);
+        // Só limpa a trava quando a lista REALMENTE confirma o cartão —
+        // se a recarga falhar (catch abaixo), `modalCardsRows` continua sem
+        // ele e a trava tem de continuar de pé (ver comentário no `if`
+        // logo abaixo do catch).
+        pendingQuickAddCardIdRef.current = null;
+      }
     } catch (e) {
       // Falha aqui é só de RECARGA — o cartão foi criado e já está
       // selecionado. Não usa o slot de erro do quick-add (que diria
@@ -828,13 +835,21 @@ export const NovaTransacaoModal = ({
       // `modalCardsError` (que substitui a lista inteira — derrubaria o
       // cartão recém-selecionado da tela). Usa um aviso que convive com a
       // lista renderizada normalmente.
+      //
+      // NÃO limpa `pendingQuickAddCardIdRef` aqui: `modalCardsRows` ainda
+      // não tem o cartão criado, então limpar a trava liberaria o efeito de
+      // auto-seleção pra rodar de novo (troca Débito→Crédito, preConfig
+      // mudando, etc.) achando `cardId` "inválido" — e trocaria o cartão em
+      // silêncio pro primeiro da lista velha, sem pista visual nenhuma
+      // (o cartão novo nem aparece no picker ainda). A trava só é liberada
+      // quando uma recarga (desta função ou de qualquer outra, ver efeito
+      // de auto-seleção) finalmente confirmar o cartão na lista.
       if (!isStale()) {
         setModalCardsReloadNotice(
           `Cartão criado, mas não foi possível atualizar a lista agora: ${formatCreditCardsApiError(e)}`,
         );
       }
     } finally {
-      pendingQuickAddCardIdRef.current = null;
       if (!isStale()) setQuickAddCardSaving(false);
     }
   }, [
@@ -868,10 +883,20 @@ export const NovaTransacaoModal = ({
     if (!(organizationId && dataMode === "live")) return;
     if (modalCardsLoading) return;
     if (method !== "credito") return;
-    // Seleção do quick-add ainda não confirmada na lista recarregada — não
-    // mexe (ver comentário no `pendingQuickAddCardIdRef`).
-    if (pendingQuickAddCardIdRef.current && cardId === pendingQuickAddCardIdRef.current) return;
     const realIds = modalCardsRows.map((r) => String(r.id));
+    if (pendingQuickAddCardIdRef.current) {
+      if (realIds.includes(pendingQuickAddCardIdRef.current)) {
+        // A lista finalmente confirmou o cartão pendente — por QUALQUER
+        // recarga, não só a do próprio quick-add (ex.: o usuário reabriu o
+        // drawer e o fetch inicial trouxe o cartão que uma recarga anterior
+        // não confirmou). Libera a trava; segue para a lógica normal abaixo.
+        pendingQuickAddCardIdRef.current = null;
+      } else if (cardId === pendingQuickAddCardIdRef.current) {
+        // Ainda não confirmado — não mexe (ver comentário no
+        // `pendingQuickAddCardIdRef` dentro de `handleQuickAddCard`).
+        return;
+      }
+    }
     if (realIds.length === 0) return;
     const want =
       preConfig?.cartaoId != null && String(preConfig.cartaoId)

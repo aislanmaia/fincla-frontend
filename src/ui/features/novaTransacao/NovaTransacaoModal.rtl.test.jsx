@@ -572,4 +572,63 @@ describe("NovaTransacaoModal — quick-add de cartão no drawer (issue #79)", ()
       screen.queryByPlaceholderText("Nome (ex: Nubank Roxinho)"),
     ).not.toBeInTheDocument();
   }, 15000);
+
+  it("recarga da lista falha PERSISTENTEMENTE após criar: a seleção do cartão novo continua protegida mesmo depois de outro gatilho do efeito de auto-seleção (achado 1 da 3ª rodada)", async () => {
+    const user = userEvent.setup();
+    // Cartão pré-existente: é pra ELE que a seleção reverteria em silêncio
+    // se a trava (`pendingQuickAddCardIdRef`) fosse liberada cedo demais.
+    cardsInApi = [apiCard({ id: 1, description: "Cartão Antigo" })];
+    let creditCardGetCalls = 0;
+    apiClient.get.mockImplementation((url) => {
+      if (url === "/credit-cards") {
+        creditCardGetCalls += 1;
+        // 1ª chamada (fetch inicial) funciona; TODAS as recargas seguintes
+        // falham — diferente do teste do achado 2 da 2ª rodada (que só
+        // falha uma vez), aqui a lista nunca chega a confirmar o cartão
+        // novo, então a trava tem de segurar indefinidamente.
+        if (creditCardGetCalls === 1) {
+          return Promise.resolve({ data: cardsInApi });
+        }
+        return Promise.reject({
+          isAxiosError: true,
+          response: { status: 500, data: {} },
+        });
+      }
+      return Promise.resolve({ data: {} });
+    });
+
+    renderDrawer();
+    await openCardPanel(user);
+    await user.click(screen.getByText(/Novo cartão/i));
+    await fillQuickAddForm(user, {
+      name: "Nubank Roxinho",
+      last4: "4321",
+      dueDay: "10",
+    });
+    await user.click(screen.getByRole("button", { name: "Adicionar" }));
+
+    await waitFor(() => {
+      expect(apiClient.post).toHaveBeenCalledWith(
+        "/credit-cards",
+        expect.objectContaining({ description: "Nubank Roxinho" }),
+      );
+    });
+    await screen.findByText(/Cartão criado, mas não foi possível atualizar a lista/);
+
+    // Troca de forma de pagamento e volta pra "Crédito" — dispara o efeito
+    // de auto-seleção de novo (é exatamente o tipo de gatilho que o achado
+    // citou: "trocar Débito→Crédito, ou o pai mudar preConfig.cartaoId").
+    // A lista continua sem o cartão novo (a recarga segue falhando).
+    await user.click(screen.getByRole("button", { name: "Débito" }));
+    await user.click(screen.getByRole("button", { name: "Crédito" }));
+
+    // Se a trava tivesse sido liberada cedo demais, o efeito de
+    // auto-seleção acharia `cardId` "inválido" (não está em `realIds`,
+    // que só tem o cartão antigo) e cairia pro fallback `realIds[0]` —
+    // selecionando "Cartão Antigo" em silêncio, mesmo a transação real
+    // devendo ir pro cartão recém-criado.
+    expect(screen.getByText("Cartão Antigo").parentElement.style.background).not.toBe(
+      SELECTED_BG,
+    );
+  }, 15000);
 });
