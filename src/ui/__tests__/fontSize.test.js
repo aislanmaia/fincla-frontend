@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest";
  * Piso adotado: 11px para texto de interface (rótulos, legendas, chips,
  * valores). Abaixo disso, ou aumenta o tamanho, ou — quando o tamanho já
  * está correto e o problema é cor — escurece o token (ver `T.inkGhost` em
- * `tokens.js`, corrigido de #9CA3AF/~2.5:1 para #646E7C/~4.7:1+ na mesma PR;
+ * `tokens.js`, #646E7C — 4.7:1+ nas 3 superfícies onde aparece como texto;
  * uso decorativo/inativo — não-texto — foi para `T.inkFaint`, que mantém o
  * tom claro original porque WCAG 1.4.3 não cobre não-texto e 1.4.11 isenta
  * componentes inativos).
@@ -78,24 +78,114 @@ function collect(dir, re, out = []) {
 }
 
 /**
+ * Remove comentários sem destruir código (mesmo princípio de
+ * appShell.test.js). Sem isso, "fontSize:9" dentro de um COMENTÁRIO —
+ * aconteceu neste próprio arquivo, numa explicação em prosa sobre o piso —
+ * virava um falso match: o texto capturado seguia até a próxima `,`/`}` do
+ * CÓDIGO real, atravessando linhas de comentário no meio do caminho.
+ */
+const stripComments = (code) =>
+  code.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:\w"'`])\/\/[^\n]*$/gm, "$1");
+
+/**
+ * A partir de `src[startIndex]` (logo após "fontSize:" ou o `{` de abertura
+ * de "fontSize={"), devolve o texto do valor respeitando profundidade de
+ * `()`, `[]` e `{}` — não só um nível, como uma regex simples faria (que
+ * truncava `Math.max(11, Math.round(x))` em "Math.max(11" no primeiro `,`
+ * dentro dos parênteses internos).
+ *
+ * `stopChars`: caracteres (fora de `stopChars`, um `}` de profundidade 0
+ * SEMPRE fecha — é o que fecha o objeto de estilo ou o atributo JSX que
+ * envolve o valor). No objeto de estilo o valor termina em `,` ou `}`
+ * (`stopChars = ","`); no atributo JSX só o `}` fecha (`stopChars = ""`);
+ * numa declaração `const X = <rhs>;` o `<rhs>` termina em `;`
+ * (`stopChars = ";"`) — usar vírgula ali cortaria `Math.max(11, x)` de novo.
+ */
+function captureBalanced(src, startIndex, stopChars) {
+  let depth = 0;
+  let i = startIndex;
+  while (i < src.length) {
+    const c = src[i];
+    if (c === "(" || c === "[" || c === "{") {
+      depth++;
+    } else if (c === ")" || c === "]") {
+      depth--;
+    } else if (c === "}") {
+      if (depth === 0) break;
+      depth--;
+    } else if (depth === 0 && stopChars.includes(c)) {
+      break;
+    }
+    i++;
+  }
+  return src.slice(startIndex, i);
+}
+
+/** Separa os argumentos de uma chamada tipo `Math.max(a, b, c)` respeitando parênteses aninhados. */
+function splitTopLevelArgs(argsStr) {
+  const parts = [];
+  let depth = 0;
+  let current = "";
+  for (const c of argsStr) {
+    if (c === "(" || c === "[" || c === "{") depth++;
+    else if (c === ")" || c === "]" || c === "}") depth--;
+    if (c === "," && depth === 0) {
+      parts.push(current);
+      current = "";
+    } else {
+      current += c;
+    }
+  }
+  if (current.trim() !== "") parts.push(current);
+  return parts;
+}
+
+/**
  * A partir do valor bruto de um `fontSize` (ex.: `isMobile?i===3?13:17:...`,
  * `Math.max(11, categoryNumSize - 1)`, `"9px"`), devolve só os números que
  * são efetivamente um TAMANHO — ou `null` quando o valor não é verificável
- * estaticamente (identificador puro, fórmula aritmética não coberta por
- * Math.max).
- *
- * Ponto central: números dentro da CONDIÇÃO de um ternário (o `3` em
- * `i===3?`) nunca ficam colados a um `?`/`:` À ESQUERDA — só valores em
- * posição de resultado ficam. `i===3?13:17` só captura `13` e `17`.
+ * estaticamente (identificador puro não resolvido, fórmula aritmética,
+ * indexação de array).
  */
 function leafSizes(rawExpr) {
   const expr = rawExpr.trim();
+  if (expr === "") return null;
 
-  // Math.max(N, ...) garante o piso em runtime — normaliza para o primeiro
-  // argumento. Cobre `Math.max(11, size * 0.36)` sem precisar entender a
-  // fórmula do segundo argumento, e reprova `Math.max(8, x)` porque 8 < 11.
-  const mathMax = expr.match(/Math\.max\(\s*(\d+(?:\.\d+)?)/);
-  if (mathMax) return [Number(mathMax[1])];
+  // Indexação de array (`dims[isMobile ? 0 : 1]`): o `?`/`:` ali seleciona
+  // um ÍNDICE, não um tamanho — viraria falso-positivo `fontSize: 0` se
+  // caísse no scan de ternário abaixo. Não verificável por regex; audita
+  // à mão.
+  if (expr.includes("[")) return null;
+
+  // Math.max(a, b, …) garante o piso em runtime: o resultado é sempre >= a
+  // CADA argumento literal presente, não só o primeiro — por isso o piso
+  // real é o MAIOR literal entre os argumentos, e `Math.max(size * 0.3, 8)`
+  // (piso no 2º argumento) é pego do mesmo jeito que `Math.max(8, size*0.3)`.
+  const mathMax = expr.match(/^Math\.max\((.*)\)$/s);
+  if (mathMax) {
+    const literals = splitTopLevelArgs(mathMax[1])
+      .map((a) => a.trim())
+      .filter((a) => /^\d+(?:\.\d+)?$/.test(a))
+      .map(Number);
+    return literals.length > 0 ? [Math.max(...literals)] : null;
+  }
+
+  // Math.min(a, b, …) é o padrão ERRADO para impor um piso — nunca GARANTE
+  // um mínimo (o resultado pode ser menor que qualquer literal presente).
+  // Só conseguimos PROVAR violação quando o menor literal já reprova (o
+  // resultado real não pode superá-lo); se todos os literais passam, o
+  // argumento desconhecido ainda pode puxar para baixo — não verificável,
+  // não reprova por engano.
+  const mathMin = expr.match(/^Math\.min\((.*)\)$/s);
+  if (mathMin) {
+    const literals = splitTopLevelArgs(mathMin[1])
+      .map((a) => a.trim())
+      .filter((a) => /^\d+(?:\.\d+)?$/.test(a))
+      .map(Number);
+    if (literals.length === 0) return null;
+    const smallest = Math.min(...literals);
+    return smallest < FLOOR ? [smallest] : null;
+  }
 
   // String com número + unidade px: `"9px"` (style object) ou, sem unidade,
   // `"9"` (comum em atributo SVG `fontSize="9"`).
@@ -106,57 +196,88 @@ function leafSizes(rawExpr) {
   // fora do escopo deste piso em px; documentado, não verificado aqui.
   if (/^["'`].*["'`]$/.test(expr)) return null;
 
-  // Fórmula aritmética não coberta por Math.max — mesma limitação de regex
-  // (não-parser) do scan de `vh` em appShell.test.js. Auditar à mão.
+  // Fórmula aritmética não coberta por Math.max/Math.min — mesma limitação
+  // de regex (não-parser) do scan de `vh` em appShell.test.js. Auditar à mão.
   if (expr.includes("*") || expr.includes("/")) return null;
 
   // Número puro.
   if (/^\d+(?:\.\d+)?$/.test(expr)) return [Number(expr)];
 
   // Ternário, possivelmente aninhado: só valores em posição de resultado
-  // (imediatamente após `?` ou `:`) contam.
+  // (imediatamente após `?` ou `:`) contam — números dentro da CONDIÇÃO
+  // (`i===3?`) nunca ficam colados a um `?`/`:` À ESQUERDA.
   const leaves = [...expr.matchAll(/[?:]\s*(\d+(?:\.\d+)?)\b/g)].map((m) => Number(m[1]));
   if (leaves.length > 0) return leaves;
 
-  // Identificador puro (`dims.fontSize`, `fsLg`, `kpiValSize`) — não
-  // verificável estaticamente; auditado manualmente nesta PR.
-  return null;
+  return null; // identificador puro não resolvido (ver resolveSizes)
 }
 
 /**
- * Varre duas formas de declarar fontSize:
- *  - objeto de estilo: `fontSize: <expr>` (inclui `Math.max(...)`, que tem
- *    vírgula interna — por isso o valor é capturado respeitando um nível de
- *    parênteses balanceado, não só "até a próxima vírgula");
- *  - atributo JSX/SVG: `fontSize={<expr>}` (ex.: `<text fontSize={valSize}>`).
+ * Como `leafSizes`, mas quando o valor é um identificador simples
+ * (`fontSize={valSize}`), procura `const/let/var valSize = <expr>;` no
+ * mesmo arquivo e resolve recursivamente — inclusive quando o RHS é, por
+ * sua vez, outro identificador. Limitação consciente: só identificador
+ * simples; `dims.fontSize` (caminho com ponto) exigiria achar a definição
+ * de `dims` e navegar a chave — fora do escopo desta heurística por regex.
+ */
+function resolveSizes(expr, src, seen = new Set()) {
+  const direct = leafSizes(expr);
+  if (direct) return direct;
+
+  const ident = expr.trim();
+  if (!/^[A-Za-z_$][\w$]*$/.test(ident) || seen.has(ident)) return null;
+  seen.add(ident);
+
+  const declRe = new RegExp(`\\b(?:const|let|var)\\s+${ident}\\s*=\\s*`, "g");
+  const collected = [];
+  let m;
+  while ((m = declRe.exec(src))) {
+    const rhs = captureBalanced(src, declRe.lastIndex, ";");
+    const sizes = resolveSizes(rhs.trim(), src, seen);
+    if (sizes) collected.push(...sizes);
+  }
+  return collected.length > 0 ? collected : null;
+}
+
+/**
+ * Varre três formas de declarar fontSize:
+ *  - objeto de estilo: `fontSize: <expr>`, valor capturado com profundidade
+ *    balanceada (cobre `Math.max(11, x)`, que tem vírgula interna);
+ *  - atributo JSX/SVG com chaves: `fontSize={<expr>}`;
+ *  - atributo JSX/SVG com string simples: `fontSize="9"`.
  */
 function findOffenders(file) {
-  const src = fs.readFileSync(file, "utf8");
+  const rawSrc = fs.readFileSync(file, "utf8");
+  const src = stripComments(rawSrc);
   const offenders = [];
 
-  const patterns = [
-    /fontSize:\s*((?:\([^()]*\)|[^,}])+)/g,
-    /fontSize=\{((?:\([^()]*\)|[^{}])+)\}/g,
-  ];
-
-  for (const re of patterns) {
-    let m;
-    while ((m = re.exec(src))) {
-      const value = m[1];
-      const sizes = leafSizes(value);
-      if (!sizes) continue;
-      const bad = sizes.filter((n) => n < FLOOR);
-      if (bad.length > 0) {
-        const line = src.slice(0, m.index).split("\n").length;
-        offenders.push(`${path.relative(SRC, file)}:${line} fontSize: ${value.trim()}`);
-      }
+  const report = (matchIndex, value) => {
+    const sizes = resolveSizes(value, src);
+    if (!sizes) return;
+    const bad = sizes.filter((n) => n < FLOOR);
+    if (bad.length > 0) {
+      const line = src.slice(0, matchIndex).split("\n").length;
+      offenders.push(`${path.relative(SRC, file)}:${line} fontSize: ${value.trim()}`);
     }
+  };
+
+  for (const m of src.matchAll(/fontSize:\s*/g)) {
+    const start = m.index + m[0].length;
+    report(m.index, captureBalanced(src, start, ","));
   }
+  for (const m of src.matchAll(/fontSize=\{/g)) {
+    const start = m.index + m[0].length;
+    report(m.index, captureBalanced(src, start, ""));
+  }
+  for (const m of src.matchAll(/fontSize=(["'])([^"']*)\1/g)) {
+    report(m.index, `"${m[2]}"`);
+  }
+
   return offenders;
 }
 
 describe("piso de fontSize da UI (WCAG — issue #86)", () => {
-  it("nenhum arquivo fora das exceções tem fontSize abaixo de 11px (estilo ou atributo SVG)", () => {
+  it("nenhum arquivo fora das exceções tem fontSize abaixo de 11px (estilo, atributo JSX/SVG ou identificador local resolvível)", () => {
     const files = collect(UI, /\.jsx?$/);
     const offenders = [];
     for (const file of files) {
@@ -191,6 +312,55 @@ describe("piso de fontSize da UI (WCAG — issue #86)", () => {
     for (const [rel, reason] of [...PERMANENT_EXCEPTIONS, ...SECOND_PASS_EXCEPTIONS]) {
       expect(reason, rel).toBeTruthy();
       expect(reason.length, rel).toBeGreaterThan(20);
+    }
+  });
+
+  describe("provas por mutação (o scanner tem que reprovar cada uma destas)", () => {
+    const mutationCases = [
+      ["objeto de estilo, número puro", "fontSize: 8,", true],
+      ["objeto de estilo, número no piso", "fontSize: 11,", false],
+      ["ternário simples", "fontSize: compact ? 9 : 10,", true],
+      ["ternário aninhado com condição numérica — não é falso-positivo", "fontSize: isMobile?i===3?13:17:i===3?15:20,", false],
+      ["Math.max com piso no 1º argumento, abaixo do piso", "fontSize: Math.max(8, size * 0.3),", true],
+      ["Math.max com piso no 2º argumento, abaixo do piso", "fontSize: Math.max(size * 0.3, 8),", true],
+      ["Math.max garantindo o piso", "fontSize: Math.max(11, size * 0.3),", false],
+      ["Math.min com literal abaixo do piso", "fontSize: Math.min(9, size),", true],
+      ["Math.min sem literal abaixo do piso — não verificável, não reprova à toa", "fontSize: Math.min(20, size),", false],
+      ["string com px", 'fontSize: "9px",', true],
+      ["indexação de array não vira falso-positivo pelo índice", "fontSize: dims[isMobile ? 0 : 1],", false],
+      ["atributo JSX com chaves, número puro", "<text fontSize={8} />", true],
+      ["atributo JSX com chaves, ternário", "<text fontSize={compact ? 9 : 10} />", true],
+      ["atributo JSX com string simples", '<text fontSize="9" />', true],
+      // A regressão que motivou a reescrita: identificador local resolvido
+      // até a declaração `const`, não só o padrão `fontSize={9}` literal.
+      ["identificador JSX resolvido até `const valSize = 8`", "const valSize = 8;\n<text fontSize={valSize} />", true],
+      ["identificador JSX resolvido, no piso", "const valSize = 11;\n<text fontSize={valSize} />", false],
+      [
+        "comentário mencionando 'fontSize:N' não é confundido com código",
+        "// nota: era fontSize:9 antes\nfontSize: 11,",
+        false,
+      ],
+    ];
+
+    for (const [label, snippet, shouldFlag] of mutationCases) {
+      it(`${shouldFlag ? "REPROVA" : "aprova"}: ${label}`, () => {
+        const src = stripComments(snippet);
+        const offenders = [];
+        const report = (idx, value) => {
+          const sizes = resolveSizes(value, src);
+          if (sizes?.some((n) => n < FLOOR)) offenders.push(value);
+        };
+        for (const m of src.matchAll(/fontSize:\s*/g)) {
+          report(m.index, captureBalanced(src, m.index + m[0].length, ","));
+        }
+        for (const m of src.matchAll(/fontSize=\{/g)) {
+          report(m.index, captureBalanced(src, m.index + m[0].length, ""));
+        }
+        for (const m of src.matchAll(/fontSize=(["'])([^"']*)\1/g)) {
+          report(m.index, `"${m[2]}"`);
+        }
+        expect(offenders.length > 0).toBe(shouldFlag);
+      });
     }
   });
 });

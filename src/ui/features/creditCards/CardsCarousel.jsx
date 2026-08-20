@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { T } from "../../tokens";
 import { G } from "../../typography";
 import { DragScrollTabs } from "../../layouts/DragScrollTabs.jsx";
-import { CardVisual } from "./cartoesPanels.jsx";
+import { CARD_VISUAL_WIDTH, CardVisual } from "./cartoesPanels.jsx";
 
 /**
  * Carrossel de cartões da `CartoesPage`: lista os cartões do usuário e
@@ -25,7 +25,7 @@ export function CardsCarousel({
       wrapStyle: { marginBottom: 2 },
       cardSize: "sm",
       cardItemStyle: { paddingTop: 8, paddingBottom: 0 },
-      addWidth: 130,
+      addWidth: CARD_VISUAL_WIDTH.sm,
       addHeight: 94, // acompanha o H de CardVisual size="sm" (cartoesPanels.jsx)
       addBorderRadius: 12,
       addPlusSize: 18,
@@ -36,8 +36,8 @@ export function CardsCarousel({
     : {
       wrapStyle: { marginBottom: 16 },
       cardSize: "md",
-      addWidth: 200,
-      addHeight: Math.round(200 / 1.586), // desktop mantém a razão clássica (cardSize "md")
+      addWidth: CARD_VISUAL_WIDTH.md,
+      addHeight: Math.round(CARD_VISUAL_WIDTH.md / 1.586), // desktop mantém a razão clássica (cardSize "md")
       addBorderRadius: 16,
       addPlusSize: 22,
       addGap: 6,

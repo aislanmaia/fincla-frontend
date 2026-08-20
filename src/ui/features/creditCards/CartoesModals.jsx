@@ -84,7 +84,7 @@ export function ReallocateInstallmentModal({
       </div>
       <div style={{ padding: "14px 20px", borderTop: `1px solid ${T.border}`, flexShrink: 0 }}>
         <button onClick={onConfirm} disabled={!installmentTarget}
-          style={{ ...G, width: "100%", padding: "12px", borderRadius: 10, border: "none", background: installmentSaved ? T.green : !installmentTarget ? T.inkGhost : T.blue, color: "#fff", fontSize: 13, fontWeight: 700, cursor: installmentTarget ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, transition: "background 0.2s" }}>
+          style={{ ...G, width: "100%", padding: "12px", borderRadius: 10, border: "none", background: installmentSaved ? T.green : !installmentTarget ? T.inkFaint : T.blue, color: "#fff", fontSize: 13, fontWeight: 700, cursor: installmentTarget ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, transition: "background 0.2s" }}>
           {installmentSaved ? <><Check size={14} /> Realocado!</> : "Confirmar"}
         </button>
       </div>

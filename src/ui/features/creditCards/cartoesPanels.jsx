@@ -6,8 +6,13 @@ import { M_MONO } from "../moodV4";
 import { safePctOrFallback as safe } from "../../data/creditCardsAdapter.js";
 
 /* ── CardVisual ─────────────────────────────────────────────── */
+// Exportado para CardsCarousel.jsx dimensionar a tile "+ Cartão" com o MESMO
+// número — dois literais 200 independentes já divergiram um do outro nesta
+// própria PR (revisão adversarial, nit).
+export const CARD_VISUAL_WIDTH = { sm: 130, md: 200, lg: 260 };
+
 export function CardVisual({ c, selected, size = "md", onClick }) {
-  const W = size === "sm" ? 130 : size === "md" ? 200 : 260;
+  const W = CARD_VISUAL_WIDTH[size] ?? CARD_VISUAL_WIDTH.md;
   // "sm" foge da razão 1.586 (cartão físico) de propósito: com o piso de 11px
   // (WCAG #86) a pilha de texto (banco + número + vence/nome + bandeira/%)
   // passa de ~52px para ~64px de conteúdo — 82px de altura (130/1.586) cortava
@@ -56,7 +61,10 @@ export function CardVisual({ c, selected, size = "md", onClick }) {
           {pct >= 70 && (
             <div style={{ ...G, fontSize: 11, fontWeight: 800, color: pct >= 90 ? "#7F1D1D" : "#78350F", background: pct >= 90 ? "#FCA5A5" : "#FCD34D", borderRadius: 5, padding: "2px 6px" }}>{pct}%</div>
           )}
-          <div style={{ ...G, fontSize: 11, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.1em" }}>{c.bandeira}</div>
+          {/* maxWidth só no "sm": sem ele, "MASTERCARD" a 11px (~79px com o
+              letterSpacing) tomava quase toda a largura útil (104px) e sobrava
+              menos que o necessário para a coluna esquerda (nome/vencimento). */}
+          <div style={{ ...G, fontSize: 11, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.1em", maxWidth: size === "sm" ? 50 : undefined, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.bandeira}</div>
         </div>
       </div>
     </div>

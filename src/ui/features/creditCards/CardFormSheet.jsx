@@ -169,7 +169,7 @@ export function CardFormSheet({
           </div>
         )}
         <button type="button" onClick={isEdit ? onUpdate : onSave} disabled={!canSave || saving}
-          style={{ ...G, width: "100%", padding: "13px", borderRadius: 10, border: "none", background: draftSuccess ? T.green : (!canSave || saving) ? T.inkGhost : T.ink, color: "#fff", fontSize: 13, fontWeight: 700, cursor: canSave ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, transition: "background 0.2s" }}>
+          style={{ ...G, width: "100%", padding: "13px", borderRadius: 10, border: "none", background: draftSuccess ? T.green : (!canSave || saving) ? T.inkFaint : T.ink, color: "#fff", fontSize: 13, fontWeight: 700, cursor: canSave ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: 7, transition: "background 0.2s" }}>
           {draftSuccess
             ? <><Check size={14} /> {isEdit ? "Alterações salvas!" : "Cartão adicionado!"}</>
             : (isEdit ? "Salvar alterações" : "Adicionar cartão")}
