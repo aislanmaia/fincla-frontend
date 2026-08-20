@@ -52,13 +52,14 @@ const SECOND_PASS_EXCEPTIONS = new Map(
         "voo) já mergeou — DashboardPage.jsx/CalendarPage.jsx/" +
         "NovaTransacaoModal.jsx/TransacoesPage.jsx/OrcamentosPage.jsx, que " +
         "tinham a mesma justificativa original, já tinham mergeado e foram " +
-        "corrigidos nesta PR após rebase; reavaliar Topbar.jsx do mesmo jeito.",
+        "corrigidos nesta PR após rebase; reavaliar Topbar.jsx do mesmo jeito. " +
+        "Acompanhamento: issue #104.",
     ],
     [
       "ui/features/consultant/ConsultantClientOverviewTab.jsx",
       "Mesma ressalva de Topbar.jsx: sem confirmação de que o trabalho " +
         "concorrente relatado já mergeou. Reavaliar via `git log origin/main " +
-        "-- <arquivo>` antes de excluir de novo.",
+        "-- <arquivo>` antes de excluir de novo. Acompanhamento: issue #104.",
     ],
   ].map(([k, v]) => [toRel(k), v]),
 );
