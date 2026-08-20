@@ -82,12 +82,21 @@ export function useNovaTransacaoDetailTags({
     );
   }, [allDetail, categoryTagId]);
 
+  // Casa pelo nome cru OU pelo rótulo PT exibido: a tag seed "grocery" aparece
+  // na tela como "mercado", e é isso que o usuário digita de volta (PR #96
+  // resolve a tag por este mesmo caminho). Comparar só com o nome cru nunca
+  // acha a tag seed e cria duplicata a cada vez.
+  const matchesLabel = useCallback(
+    (t, n) => normalizeLabel(t.name) === n || normalizeLabel(detailLabelPtForTag(t)) === n,
+    [],
+  );
+
   const findByLabel = useCallback(
     (label) => {
       const n = normalizeLabel(label);
-      return rowsForCategory.find((t) => normalizeLabel(t.name) === n) ?? null;
+      return rowsForCategory.find((t) => matchesLabel(t, n)) ?? null;
     },
-    [rowsForCategory],
+    [rowsForCategory, matchesLabel],
   );
 
   const findDetailForParentAndLabel = useCallback((parentId, label) => {
@@ -99,10 +108,10 @@ export function useNovaTransacaoDetailTags({
         (t) =>
           t.parent_category_tag_id != null &&
           String(t.parent_category_tag_id) === pid &&
-          normalizeLabel(t.name) === n,
+          matchesLabel(t, n),
       ) ?? null
     );
-  }, [allDetail]);
+  }, [allDetail, matchesLabel]);
 
   const ensureDetailTag = useCallback(
     async (label, parentCategoryOverride = null) => {

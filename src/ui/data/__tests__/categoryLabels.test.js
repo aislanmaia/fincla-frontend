@@ -7,7 +7,7 @@ import {
 } from "../categoryLabels.js";
 
 describe("categoryLabels", () => {
-  it("prioriza icon_key para rótulo PT", () => {
+  it("traduz pelo nome canônico do seed mesmo com icon_key presente", () => {
     expect(
       categoryLabelPtForTag({ name: "Food & Groceries", icon_key: "shopping-cart" }),
     ).toBe("Alimentação");
@@ -24,45 +24,107 @@ describe("categoryLabels", () => {
   it("normaliza nomes PT sem acento/caixa baixa", () => {
     expect(categoryLabelPtForTag({ name: "alimentacao", icon_key: null })).toBe("Alimentação");
   });
+
+  // Regressão do review adversarial da PR #97: nome é a chave primária;
+  // icon_key nunca sobrepõe um nome que já não bate mais com o canônico.
+  it("categoria renomeada pelo usuário NÃO volta a mostrar a tradução antiga (nome é a chave primária)", () => {
+    expect(
+      categoryLabelPtForTag({ name: "Mercado do Zé", icon_key: "shopping-cart" }),
+    ).toBe("Mercado do Zé");
+  });
+
+  it("renomear pra um nome PT canônico continua idempotente (não quebra ao salvar de volta)", () => {
+    expect(categoryLabelPtForTag({ name: "Alimentação", icon_key: "shopping-cart" })).toBe(
+      "Alimentação",
+    );
+  });
+
+  it("icon_key só resolve quando não há nome nenhum (desempate, não chave alternativa)", () => {
+    expect(categoryLabelPtForTag({ name: null, icon_key: "shopping-cart" })).toBe("Alimentação");
+    expect(categoryLabelPtForTag({ name: "", icon_key: "car" })).toBe("Transporte");
+  });
 });
 
 describe("detailLabelPtForTag", () => {
   // Nomes reais do seed `CANONICAL_CATEGORY_SEED` (fincla-api/seed_default_tags.py) —
-  // toda organização nova recebe essas ~25 tags "detalhe" automaticamente.
-  it("traduz os nomes das tags-filha do seed (categoria = detalhe)", () => {
-    expect(detailLabelPtForTag({ name: "grocery" })).toBe("mercado");
-    expect(detailLabelPtForTag({ name: "restaurant" })).toBe("restaurante");
-    expect(detailLabelPtForTag({ name: "fuel" })).toBe("combustível");
-    expect(detailLabelPtForTag({ name: "health_plan" })).toBe("plano de saúde");
-    expect(detailLabelPtForTag({ name: "salary" })).toBe("salário");
+  // toda organização nova recebe essas ~25 tags "detalhe" automaticamente, sempre
+  // com `is_default: true`. Só traduzimos quando a tag É de fato essa linha do seed.
+  it("traduz os nomes das tags-filha do seed quando is_default é true", () => {
+    expect(detailLabelPtForTag({ name: "grocery", is_default: true })).toBe("mercado");
+    expect(detailLabelPtForTag({ name: "restaurant", is_default: true })).toBe("restaurante");
+    expect(detailLabelPtForTag({ name: "fuel", is_default: true })).toBe("combustível");
+    expect(detailLabelPtForTag({ name: "health_plan", is_default: true })).toBe("plano de saúde");
+    expect(detailLabelPtForTag({ name: "salary", is_default: true })).toBe("salário");
   });
 
   it("é case/acento-insensível e tolera variações de grafia", () => {
-    expect(detailLabelPtForTag({ name: "Health_Plan" })).toBe("plano de saúde");
-    expect(detailLabelPtForTag({ name: "Health Plan" })).toBe("plano de saúde");
+    expect(detailLabelPtForTag({ name: "Health_Plan", is_default: true })).toBe("plano de saúde");
+    expect(detailLabelPtForTag({ name: "Health Plan", is_default: true })).toBe("plano de saúde");
   });
 
-  it("deixa passar tag já em PT criada pelo usuário", () => {
-    expect(detailLabelPtForTag({ name: "pix-solidário" })).toBe("pix-solidário");
-    expect(detailLabelPtForTag({ name: "presente especial" })).toBe("presente especial");
+  it("deixa passar tag já em PT criada pelo usuário (is_default: false)", () => {
+    expect(detailLabelPtForTag({ name: "pix-solidário", is_default: false })).toBe(
+      "pix-solidário",
+    );
+    expect(detailLabelPtForTag({ name: "presente especial", is_default: false })).toBe(
+      "presente especial",
+    );
   });
 
-  it("nunca mostra slug cru com underscore fora do mapa: humaniza e registra", () => {
+  // Regressão do review adversarial da PR #97: tag do usuário com o MESMO texto
+  // de um nome do seed não pode ser sequestrada pelo mapa — ela não é a linha
+  // do seed, só coincide o nome, e o usuário precisa continuar achando a própria tag.
+  it("NÃO traduz tag do usuário só porque o texto coincide com um nome do seed (is_default: false)", () => {
+    expect(detailLabelPtForTag({ name: "App", is_default: false })).toBe("App");
+    expect(detailLabelPtForTag({ name: "Book", is_default: false })).toBe("Book");
+    expect(detailLabelPtForTag({ name: "Bar", is_default: false })).toBe("Bar");
+  });
+
+  it("sem is_default no payload (shape antigo/desconhecido) não traduz — mais seguro que sequestrar", () => {
+    expect(detailLabelPtForTag({ name: "grocery" })).toBe("grocery");
+  });
+
+  it("nunca mostra slug cru com underscore fora do mapa: humaniza e registra (is_default: true)", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    expect(detailLabelPtForTag({ name: "some_unmapped_tag" })).toBe("some unmapped tag");
+    expect(detailLabelPtForTag({ name: "some_unmapped_tag", is_default: true })).toBe(
+      "some unmapped tag",
+    );
     expect(warn).toHaveBeenCalledTimes(1);
     warn.mockRestore();
   });
 
-  it("aceita o shape de tag do endpoint de transações (name puro)", () => {
-    expect(detailLabelPtForTag({ id: "t1", name: "uber", parent_category_tag_id: "c1" })).toBe(
-      "uber",
-    );
+  // Regressão: slug de uma palavra só (sem "_") também precisa avisar quando
+  // is_default é true e não está no mapa — antes vazava cru e calado.
+  it("slug de palavra única sem tradução também avisa quando is_default é true", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(detailLabelPtForTag({ name: "gym", is_default: true })).toBe("gym");
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  it("avisa só uma vez por nome não mapeado, não a cada chamada", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    detailLabelPtForTag({ name: "totally_unmapped_xyz", is_default: true });
+    detailLabelPtForTag({ name: "totally_unmapped_xyz", is_default: true });
+    detailLabelPtForTag({ name: "totally_unmapped_xyz", is_default: true });
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  it("aceita o shape de tag do endpoint de transações (name + is_default)", () => {
+    expect(
+      detailLabelPtForTag({
+        id: "t1",
+        name: "uber",
+        parent_category_tag_id: "c1",
+        is_default: true,
+      }),
+    ).toBe("uber");
   });
 
   it("string vazia/tag nula não quebra", () => {
     expect(detailLabelPtForTag(null)).toBe("");
-    expect(detailLabelPtForTag({ name: "" })).toBe("");
+    expect(detailLabelPtForTag({ name: "", is_default: true })).toBe("");
   });
 });
 

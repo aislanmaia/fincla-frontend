@@ -1,6 +1,9 @@
 /**
  * Categorias seed na API em inglês + `icon_key` estável.
- * UI em PT: prioridade icon_key → nome EN/PT canônico → fallback `name` da tag.
+ * UI em PT: nome é a chave primária (só traduz quando bate com um nome
+ * canônico do seed); `icon_key` só entra como desempate quando não há nome
+ * nenhum. Categoria renomeada pelo usuário deixa de bater no nome canônico e
+ * mostra o nome como está — nunca mais "volta" pra tradução antiga.
  */
 
 import { normalizeCategoryIconKey } from "./categoryLucideIcons.js";
@@ -17,10 +20,10 @@ function normalizeCategoryLookupKey(value) {
 /**
  * Unifica campos da tag (ou fragmento) vindos da API.
  * @param {Record<string, unknown> | null | undefined} raw
- * @returns {{ name: string | null; icon_key: string | null }}
+ * @returns {{ name: string | null; icon_key: string | null; is_default: boolean | null }}
  */
 export function coerceCategoryTagShape(raw) {
-  if (!raw || typeof raw !== "object") return { name: null, icon_key: null };
+  if (!raw || typeof raw !== "object") return { name: null, icon_key: null, is_default: null };
   const o = raw;
   const name =
     (typeof o.name === "string" && o.name.trim()) ||
@@ -38,7 +41,13 @@ export function coerceCategoryTagShape(raw) {
     (typeof o.tagIconKey === "string" && o.tagIconKey.trim()) ||
     (typeof o.categoryIconKey === "string" && o.categoryIconKey.trim()) ||
     null;
-  return { name, icon_key };
+  const is_default =
+    typeof o.is_default === "boolean"
+      ? o.is_default
+      : typeof o.isDefault === "boolean"
+        ? o.isDefault
+        : null;
+  return { name, icon_key, is_default };
 }
 
 export const CATEGORY_LABEL_PT_BY_ICON_KEY = {
@@ -141,6 +150,13 @@ function labelPtFromPortugueseCategoryName(name) {
 }
 
 /**
+ * Nome é a chave primária: só traduz quando o nome cru bater com um nome
+ * canônico do seed (EN ou PT). `icon_key` NUNCA sobrepõe um nome que já não
+ * bate mais com o canônico — senão renomear uma categoria vira um no-op
+ * silencioso na tela (a linha "Food & Groceries" → "Mercado do Zé" continuava
+ * mostrando "Alimentação" porque o icon_key "shopping-cart" resolvia antes do
+ * nome custom ser sequer olhado). `icon_key` só é consultado quando não há
+ * nome nenhum — aí sim é um desempate de verdade, não uma chave alternativa.
  * @param {{ name?: string | null; icon_key?: string | null } | Record<string, unknown> | null | undefined} tag
  * @returns {string}
  */
@@ -149,15 +165,18 @@ export function categoryLabelPtForTag(tag) {
   const { name, icon_key: rawIk } = coerceCategoryTagShape(
     /** @type {Record<string, unknown>} */ (tag),
   );
-  const ikNorm = normalizeCategoryIconKey(rawIk);
-  if (ikNorm && CATEGORY_LABEL_PT_BY_ICON_KEY[ikNorm]) {
-    return CATEGORY_LABEL_PT_BY_ICON_KEY[ikNorm];
+  if (!name) {
+    const ikNorm = normalizeCategoryIconKey(rawIk);
+    if (ikNorm && CATEGORY_LABEL_PT_BY_ICON_KEY[ikNorm]) {
+      return CATEGORY_LABEL_PT_BY_ICON_KEY[ikNorm];
+    }
+    return "Categoria";
   }
   const fromEn = labelPtFromEnglishCategoryName(name);
   if (fromEn) return fromEn;
   const fromPt = labelPtFromPortugueseCategoryName(name);
   if (fromPt) return fromPt;
-  return name || "Categoria";
+  return name;
 }
 
 const CATEGORY_COLOR_BY_LABEL_PT = {
@@ -284,28 +303,39 @@ const DETAIL_LABEL_PT_BY_EN_NAME_NORMALIZED = Object.fromEntries(
   ]),
 );
 
+/** Nomes de tags "detalhe" já avisados no console (evita spam a cada render/tecla). */
+const WARNED_UNMAPPED_DETAIL_NAMES = new Set();
+
 /**
- * Rótulo PT para uma tag "detalhe" (subcategoria). Cobre o seed canônico acima;
- * tags criadas pelo usuário (já digitadas em PT, ex. "pix solidário") passam
- * direto, sem alteração.
+ * Rótulo PT para uma tag "detalhe" (subcategoria). Cobre o seed canônico acima
+ * — mas só quando a tag É de fato a linha do seed: `is_default !== true`
+ * (tag criada pelo usuário, sempre `is_default: false` no backend) passa
+ * direto, sem tradução. Sem essa checagem, um usuário que cria sua própria
+ * tag chamada "App" ou "Bar" tem o nome sequestrado pelo mapa (ela não é a
+ * linha do seed, só coincide o texto) e não acha mais a própria tag.
  *
- * Fallback: nunca devolve um slug cru com `_` (só o seed usa `_`, nenhuma tag
- * criada pela UI usa — `formatTagName` em CategoriesTagsSettingsPanel gera
- * hífen, não underscore). Se aparecer um nome com `_` fora do mapa, humaniza
- * (`_` → espaço) e registra no console para alguém completar o mapa.
- * @param {{ name?: string | null } | Record<string, unknown> | null | undefined} tag
+ * Fallback quando `is_default === true` mas o nome não está no mapa (ex.:
+ * tags legadas da migração de categoria com nome PT que não é do
+ * `CANONICAL_CATEGORY_SEED`): nunca devolve o slug cru — humaniza (`_` →
+ * espaço) e registra no console (uma vez por nome) para completar o mapa.
+ * @param {{ name?: string | null; is_default?: boolean | null } | Record<string, unknown> | null | undefined} tag
  * @returns {string}
  */
 export function detailLabelPtForTag(tag) {
-  const { name } = coerceCategoryTagShape(/** @type {Record<string, unknown>} */ (tag));
+  const { name, is_default } = coerceCategoryTagShape(
+    /** @type {Record<string, unknown>} */ (tag),
+  );
   if (!name) return "";
+  if (is_default !== true) return name;
   const normalized = normalizeCategoryLookupKey(name);
   const known = DETAIL_LABEL_PT_BY_EN_NAME_NORMALIZED[normalized];
   if (known) return known;
-  if (!name.includes("_")) return name;
-  console.warn(
-    `[categoryLabels] tag "detalhe" sem tradução PT no mapa (mostrando fallback legível): "${name}"`,
-  );
+  if (!WARNED_UNMAPPED_DETAIL_NAMES.has(normalized)) {
+    WARNED_UNMAPPED_DETAIL_NAMES.add(normalized);
+    console.warn(
+      `[categoryLabels] tag "detalhe" (is_default) sem tradução PT no mapa (mostrando fallback legível): "${name}"`,
+    );
+  }
   return name.replace(/_/g, " ").trim();
 }
 

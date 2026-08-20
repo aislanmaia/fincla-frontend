@@ -183,7 +183,14 @@ export function CategoriesTagsSettingsPanel({
 
   const addTag = useCallback(async (cat) => {
     const tagName = formatTagName(newTagInputs[cat.id] || "");
-    const hasTag = (cat.tags || []).some((tag) => formatTagName(getTagName(tag)) === tagName);
+    // Compara com o nome cru E com o rótulo PT exibido: o usuário só vê
+    // "#mercado" na tela (tradução da tag seed "grocery") — comparar só com
+    // o nome cru deixa passar e cria uma tag "mercado" duplicada.
+    const hasTag = (cat.tags || []).some(
+      (tag) =>
+        formatTagName(getTagName(tag)) === tagName ||
+        formatTagName(getTagLabelPt(tag)) === tagName,
+    );
     if (!tagName || hasTag) return;
     if (liveEnabled) {
       try {
@@ -330,7 +337,7 @@ export function CategoriesTagsSettingsPanel({
                     <Hash size={10}/>
                     {(cat.tags||[]).length}
                   </button>
-                  <button onClick={() => { setEditCat(cat.id); setNewCatName(cat.name); setNewCatColor(cat.color); }} aria-label={`Editar categoria ${cat.labelPt || cat.name}`}
+                  <button onClick={() => { setEditCat(cat.id); setNewCatName(cat.labelPt || cat.name); setNewCatColor(cat.color); }} aria-label={`Editar categoria ${cat.labelPt || cat.name}`}
                     style={{ background:"none", border:"none", cursor:"pointer", padding:5, borderRadius:7, display:"flex", flexShrink:0 }}
                     onMouseEnter={e=>e.currentTarget.style.background=T.grayLight}
                     onMouseLeave={e=>e.currentTarget.style.background="none"}>

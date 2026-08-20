@@ -4,6 +4,7 @@ import { G, NUM } from "../typography";
 import { PageTitle, Card, Btn, PageEnter } from "../components/primitives";
 import { useMonthlyPlanData } from "../features/monthlyPlan/useMonthlyPlanData.js";
 import { shouldUseRealData } from "../dataMode.js";
+import { categoryLabelPtForTag } from "../data/categoryLabels.js";
 
 const MONTHS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -192,7 +193,8 @@ function Section({ title, items, editing, form, setForm, inputStyle }) {
         return (
           <div key={k} style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 96px 1fr", gap: 10, alignItems: "center", padding: "11px 0", borderTop: `1px solid ${T.border}` }}>
             <span style={{ ...G, fontSize: 14.5, fontWeight: 600, display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
-              {i.tag_name || "—"}
+              {/* `tag_name` vem cru do seed (`Food & Groceries`...); traduz antes de exibir. */}
+              {i.tag_name ? categoryLabelPtForTag({ name: i.tag_name }) : "—"}
               {!i.in_plan ? <span style={{ ...G, fontSize: 9, fontWeight: 700, borderRadius: 9999, padding: "1px 7px", background: T.grayLight, color: T.inkMid }}>fora do plano</span> : null}
             </span>
             {editing ? (

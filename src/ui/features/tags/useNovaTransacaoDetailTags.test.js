@@ -14,12 +14,12 @@ const ORG = "11111111-1111-4111-8111-111111111111";
 const CAT = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const DET_EXISTING = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
-function detailRow(id, name, parentId) {
+function detailRow(id, name, parentId, isDefault = false) {
   return {
     id,
     name,
     color: null,
-    is_default: false,
+    is_default: isDefault,
     is_active: true,
     organization_id: ORG,
     sort_order: 0,
@@ -90,7 +90,7 @@ describe("useNovaTransacaoDetailTags", () => {
     vi.mocked(tagsApi.listTags).mockResolvedValue({
       tags: [
         detailRow(DET_EXISTING, "família", CAT),
-        detailRow("dddddddd-dddd-4ddd-8ddd-dddddddddddd", "health_plan", CAT),
+        detailRow("dddddddd-dddd-4ddd-8ddd-dddddddddddd", "health_plan", CAT, true),
       ],
     });
     const { result } = renderHook(() =>
@@ -105,6 +105,31 @@ describe("useNovaTransacaoDetailTags", () => {
 
     expect(result.current.labelForDetailId("dddddddd-dddd-4ddd-8ddd-dddddddddddd")).toBe(
       "plano de saúde",
+    );
+  });
+
+  // Regressão do review adversarial da PR #97: o usuário só vê o rótulo PT
+  // ("mercado") na tela — se ele digitar exatamente isso de volta, o app
+  // precisa achar a tag seed "grocery" já existente, não criar uma duplicata.
+  it("ensureDetailTag acha a tag seed pelo rótulo PT exibido, não só pelo nome cru (regressão #77)", async () => {
+    vi.mocked(tagsApi.listTags).mockResolvedValue({
+      tags: [detailRow("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", "grocery", CAT, true)],
+    });
+    const { result } = renderHook(() =>
+      useNovaTransacaoDetailTags({
+        organizationId: ORG,
+        categoryTagId: CAT,
+        enabled: true,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const id = await result.current.ensureDetailTag("mercado");
+    expect(id).toBe("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee");
+    expect(tagsApi.createTag).not.toHaveBeenCalled();
+    expect(result.current.findByLabel("mercado")?.id).toBe(
+      "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
     );
   });
 

@@ -167,6 +167,7 @@ function pickTagNames(transaction, categoryDisplayName) {
     catTag && catTag.id != null && String(catTag.id) !== ""
       ? String(catTag.id)
       : null;
+  const seenIds = new Set();
   return Object.entries(transaction.tags ?? {})
     .flatMap(([groupKey, tags]) =>
       (tags ?? []).map((tag) => ({ groupKey, tag })),
@@ -184,11 +185,18 @@ function pickTagNames(transaction, categoryDisplayName) {
       ) {
         return false;
       }
+      // Dedupe pelo ID real da tag, não pelo texto já traduzido: a tag seed
+      // "grocery" (→ "mercado") e uma tag do usuário literalmente chamada
+      // "mercado" são duas tags diferentes e não podem virar um chip só.
+      const id = tag?.id != null ? String(tag.id) : null;
+      if (id) {
+        if (seenIds.has(id)) return false;
+        seenIds.add(id);
+      }
       return true;
     })
     // `tag.name` pode vir cru do seed (`grocery`, `health_plan`...) — traduz pro chip.
-    .map(({ tag }) => detailLabelPtForTag(tag) || tag.name)
-    .filter((tagName, index, all) => tagName && all.indexOf(tagName) === index);
+    .map(({ tag }) => detailLabelPtForTag(tag) || tag.name);
 }
 
 /**

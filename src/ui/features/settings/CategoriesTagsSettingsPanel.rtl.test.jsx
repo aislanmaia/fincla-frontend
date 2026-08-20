@@ -42,12 +42,12 @@ function categoryRow(over = {}) {
   };
 }
 
-function detailRow(id, name) {
+function detailRow(id, name, isDefault = false) {
   return {
     id,
     name,
     color: null,
-    is_default: false,
+    is_default: isDefault,
     is_active: true,
     organization_id: ORG,
     sort_order: 0,
@@ -177,7 +177,7 @@ describe("CategoriesTagsSettingsPanel — categoria/tag do seed em inglês (regr
       tags:
         tagType === "categoria"
           ? [categoryRow({ name: "Food & Groceries", icon_key: "shopping-cart" })]
-          : [detailRow("det-grocery", "grocery")],
+          : [detailRow("det-grocery", "grocery", true)],
     }));
 
     vi.mocked(tagsApi.listTagTypes).mockResolvedValue({
@@ -222,5 +222,36 @@ describe("CategoriesTagsSettingsPanel — categoria/tag do seed em inglês (regr
 
     expect(await screen.findByText("#mercado")).toBeInTheDocument();
     expect(screen.queryByText("#grocery")).not.toBeInTheDocument();
+  });
+
+  // Regressão do review adversarial da PR #97: o usuário só vê "#mercado" na
+  // tela (tradução da tag seed "grocery") — digitar "mercado" de volta não
+  // pode criar uma tag duplicada.
+  it("não cria tag duplicada ao digitar o rótulo PT que já é a tradução da tag seed", async () => {
+    renderPanel();
+
+    const expandBtn = await waitForSingleFetchedCategory();
+    fireEvent.click(expandBtn);
+    await screen.findByText("#mercado");
+
+    const input = screen.getByLabelText(/Nova tag de Alimentação/i);
+    fireEvent.change(input, { target: { value: "mercado" } });
+    fireEvent.keyDown(input, { key: "Enter" });
+
+    expect(tagsApi.createTag).not.toHaveBeenCalled();
+    // Continua só um chip "#mercado" — não vira dois.
+    expect(screen.getAllByText("#mercado")).toHaveLength(1);
+  });
+
+  // Regressão do review adversarial da PR #97: o lápis pré-preenchia o input
+  // com o nome cru em inglês, mismatch ao lado da linha que mostra "Alimentação".
+  it("o lápis pré-preenche o input de edição com o rótulo PT exibido, não o nome cru", async () => {
+    renderPanel();
+
+    await waitForSingleFetchedCategory();
+    const editBtn = screen.getByRole("button", { name: /Editar categoria Alimentação/i });
+    fireEvent.click(editBtn);
+
+    expect(screen.getByLabelText(/Editar categoria Alimentação/i)).toHaveValue("Alimentação");
   });
 });

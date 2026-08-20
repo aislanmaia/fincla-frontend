@@ -83,6 +83,14 @@ describe("transactionsAdapter", () => {
             name: "grocery",
             parent_category_tag_id: "cat-food",
             is_active: true,
+            is_default: true,
+          },
+          {
+            id: "det-mercado-custom",
+            name: "mercado",
+            parent_category_tag_id: "cat-food",
+            is_active: true,
+            is_default: false,
           },
         ],
       },
@@ -96,9 +104,14 @@ describe("transactionsAdapter", () => {
     });
 
     expect(mapped.cat).toBe("Alimentação");
-    expect(mapped.tags).toEqual(["mercado"]);
+    // Duas tags diferentes (seed "grocery" traduzida + tag do usuário já
+    // chamada "mercado") mostram o mesmo texto — ambas continuam na lista,
+    // dedupe é por ID, não pelo rótulo já traduzido (regressão apontada em review).
+    expect(mapped.tags).toEqual(["mercado", "mercado"]);
     expect(mapped.detailTagMetaById["det-grocery"].name).toBe("mercado");
+    expect(mapped.detailTagMetaById["det-mercado-custom"].name).toBe("mercado");
     expect(mapped.detailTagDisplayById["det-grocery"]).toBe("mercado");
+    expect(mapped.detailTagDisplayById["det-mercado-custom"]).toBe("mercado");
   });
 
   it("crédito à vista 1/1x: coluna de data usa a data da compra (não o vencimento da fatura)", () => {
