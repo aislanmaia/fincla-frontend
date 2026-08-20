@@ -87,4 +87,21 @@ describe("CardFormSheet — foco nos campos", () => {
 
     expect(screen.getByPlaceholderText("1234").value).toBe("1234");
   });
+
+  it("so libera salvar com os 4 digitos completos", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.type(screen.getByPlaceholderText(/Nubank, Itaú/i), "Nubank");
+    await user.type(screen.getByPlaceholderText(/Nubank Roxinho/i), "Roxinho");
+    await user.type(screen.getByPlaceholderText("0,00"), "5000");
+    await user.type(screen.getByPlaceholderText("ex: 10"), "10");
+
+    const salvar = screen.getByRole("button", { name: /Salvar|Adicionar cartão/i });
+    await user.type(screen.getByPlaceholderText("1234"), "123");
+    expect(salvar.disabled).toBe(true);
+
+    await user.type(screen.getByPlaceholderText("1234"), "4");
+    expect(screen.getByRole("button", { name: /Salvar|Adicionar cartão/i }).disabled).toBe(false);
+  });
 });

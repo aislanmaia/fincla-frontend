@@ -209,6 +209,11 @@ function fieldLabelFromLoc(loc: unknown): string | null {
  * a mensagem genérica.
  */
 export function humanizePydanticDetailEntry(entry: unknown): string {
+  // Entrada em texto puro não é validação do Pydantic (que sempre manda
+  // objeto com `msg`/`loc`): trata como `detail` string comum.
+  if (typeof entry === 'string') {
+    return humanizeDetailString(entry, 422) || GENERIC_VALIDATION_PT;
+  }
   if (typeof entry !== 'object' || entry === null) {
     return GENERIC_VALIDATION_PT;
   }

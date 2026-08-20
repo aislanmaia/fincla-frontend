@@ -245,6 +245,12 @@ export async function submitOnboarding(data) {
     throw new Error(formatOnboardingApiError(error));
   }
 
+  if (!organization?.id) {
+    // Resposta fora do contrato: parar aqui é melhor do que seguir gravando
+    // receita e cartão em `undefined`.
+    throw new Error("Nao foi possivel criar sua organizacao. Tente novamente.");
+  }
+
   // Daqui em diante nada pode derrubar o onboarding. Cada etapa é opcional e
   // refazível dentro do app; falhar uma delas não pode prender o usuário na
   // tela de configuração nem deixar organização órfã para trás.

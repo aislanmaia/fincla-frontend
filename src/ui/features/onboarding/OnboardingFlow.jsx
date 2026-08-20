@@ -331,7 +331,10 @@ export const OnboardingFlow = ({
                         Informe os 4 últimos dígitos do cartão — é assim que o Fincla reconhece as compras dele.
                       </div>
                     )}
-                    <button onClick={next} style={{...G,fontSize:11,color:T.inkLight,background:"none",border:"none",cursor:"pointer",marginTop:10,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:3}}>
+                    {/* Limpa o rascunho de propósito: meio cartão preenchido
+                        não vira cartão nenhum, e deixar o nome ali daria a
+                        impressão de que algo foi salvo. */}
+                    <button onClick={()=>{setCardNome("");setCard4("");setCardLim("");setCardVenc("");next();}} style={{...G,fontSize:11,color:T.inkLight,background:"none",border:"none",cursor:"pointer",marginTop:10,textDecoration:"underline",textDecorationStyle:"dotted",textUnderlineOffset:3}}>
                       Preencher depois →
                     </button>
                   </div>

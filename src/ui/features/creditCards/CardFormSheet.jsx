@@ -66,8 +66,10 @@ export function CardFormSheet({
   onCancel,
 }) {
   if (!open) return null;
+  // `last4` precisa estar completo: o backend exige exatamente 4 dígitos e
+  // salvar com 1..3 só devolveria erro de validação.
   const canSave =
-    draftIssuer && draftName && draftLast4 && draftLimit && draftDueDay;
+    draftIssuer && draftName && String(draftLast4).length === 4 && draftLimit && draftDueDay;
 
   const inner = (
     <>

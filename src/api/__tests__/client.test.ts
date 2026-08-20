@@ -154,6 +154,11 @@ describe('handleApiError — validação 422 do FastAPI vira português', () => 
     );
   });
 
+  it('preserva detail em array de strings (nao e validacao do pydantic)', () => {
+    const err = validationError(['Organização já possui um cartão com esses dígitos']);
+    expect(handleApiError(err)).toBe('Organização já possui um cartão com esses dígitos');
+  });
+
   it('nao repete a mesma frase quando varios campos falham igual', () => {
     const err = validationError([
       { type: 'missing', loc: ['body', 'x'], msg: 'Some brand new pydantic wording' },
