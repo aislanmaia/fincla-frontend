@@ -1278,49 +1278,58 @@ function sameUpdateField(a, b) {
 }
 
 // `POST /transactions` no máximo 1 retry (2 tentativas no total): o objetivo é
-// absorver um blip curto de rede/gateway, não esconder um backend fora do ar
-// atrás de uma espera longa — se persistir depois disso, é melhor mostrar o
-// erro e deixar o usuário decidir.
+// absorver um blip curto do gateway, não esconder um backend fora do ar atrás
+// de uma espera longa — se persistir depois disso, é melhor mostrar o erro e
+// deixar o usuário decidir.
 const CREATE_TRANSACTION_MAX_ATTEMPTS = 2;
 const CREATE_TRANSACTION_RETRY_BASE_DELAY_MS = 500;
 
 /**
  * `POST /transactions` NÃO é idempotente: reexecutar às cegas pode duplicar o
  * lançamento no extrato do usuário — um resultado bem pior do que mostrar um
- * erro. Só é seguro repetir quando dá para PROVAR que o servidor não chegou a
- * processar o request:
+ * erro. Este classificador só marca como repetível o que dá pra PROVAR que o
+ * servidor não processou:
  *
- *  - erro de REDE sem NENHUMA resposta (`ERR_NETWORK` / `ECONNRESET`): a
- *    conexão caiu antes de qualquer byte trafegar, então o POST nunca chegou
- *    a sair para o backend.
- *  - 502/503/504: o gateway/servidor estava indisponível e devolveu erro
- *    ANTES de rotear a chamada para a aplicação — a transação não chegou a
- *    ser processada.
+ *  - 503 (Service Unavailable): sinal explícito de "não estou aceitando
+ *    tráfego agora" — tipicamente um LB/health-check recusando a conexão
+ *    ANTES de rotear para a aplicação. É o único status com evidência forte
+ *    o bastante para justificar repetir uma escrita não idempotente.
  *
- * NUNCA repete:
+ * Deliberadamente NÃO repete (mesmo parecendo "transiente" à primeira vista):
+ *
+ *  - `ERR_NETWORK` / `ECONNRESET` (sem resposta): a suposição óbvia seria "a
+ *    conexão caiu antes de qualquer byte trafegar, logo é seguro". Isso é
+ *    FALSO em geral. `ECONNRESET` é um RST de TCP — exige conexão já
+ *    estabelecida e tipicamente chega DEPOIS de bytes trocados (ex.: o app
+ *    grava a transação e o proxy recicla a conexão logo em seguida, por
+ *    idle-reap ou restart do worker). `ERR_NETWORK` no adapter XHR do axios
+ *    vem do mesmo `onerror` tanto para "recusou antes de enviar" quanto para
+ *    "caiu depois do 201, antes dos headers chegarem" — o cliente não
+ *    consegue distinguir os dois casos. Além disso, o interceptor global de
+ *    `src/api/client.ts` já repete esses códigos para writes por conta
+ *    própria — dobrar o retry aqui explode em até 6 POSTs físicos por
+ *    chamada (medido em revisão). Esse retry do interceptor sendo inseguro
+ *    para writes é rastreado à parte, não é corrigido aqui.
  *  - qualquer 4xx (validação, auth, conflito): erro definitivo do pedido;
  *    repetir não muda o resultado e some com o feedback real do problema.
  *  - 500 genérico: o servidor pode ter GRAVADO a transação e só quebrado
  *    depois (ex.: ao materializar uma recorrência associada) — repetir
  *    arriscaria justamente o cenário mais caro, que é duplicar.
- *  - timeout de LEITURA após o envio (`ECONNABORTED` / `ETIMEDOUT`): o axios
- *    desistiu esperando a resposta, mas o POST pode já ter chegado e sido
- *    processado no servidor; sem uma resposta que prove o contrário, repetir
- *    é arriscado.
+ *  - 502/504: parecem "gateway antes da aplicação", mas não são. 502 pode
+ *    ocorrer com o upstream fechando a conexão DEPOIS de já ter processado
+ *    (ex.: worker morto por OOM logo após o commit no banco). 504 é
+ *    literalmente o mesmo evento que recusamos em `ECONNABORTED` — "o cliente
+ *    desistiu esperando a resposta" —, só que um salto de rede acima: o
+ *    gateway encaminhou a chamada normalmente e foi o LADO DELE que cansou de
+ *    esperar o app responder. Repetir 504 duplicaria exatamente o cenário de
+ *    "compra parcelada materializou 12 linhas, o app estourou o timeout do
+ *    proxy, e a resposta nunca voltou".
+ *  - timeout de LEITURA após o envio (`ECONNABORTED` / `ETIMEDOUT`): mesmo
+ *    raciocínio do 504 acima, do lado do cliente.
  */
 export function isCreateTransactionErrorRetryable(error) {
   if (!axios.isAxiosError(error)) return false;
-
-  // Resposta HTTP chegou: o servidor recebeu e processou o request (mesmo
-  // que o resultado tenha sido um erro). Só o trio 502/503/504 é seguro.
-  if (error.response) {
-    const status = error.response.status;
-    return status === 502 || status === 503 || status === 504;
-  }
-
-  // Sem resposta: só repete os códigos que significam "a conexão nunca foi
-  // estabelecida" — nunca os que significam "desisti esperando resposta".
-  return error.code === "ERR_NETWORK" || error.code === "ECONNRESET";
+  return error.response?.status === 503;
 }
 
 function wait(ms) {
@@ -1329,27 +1338,34 @@ function wait(ms) {
 
 /**
  * Cria a transação com retry curto e seguro (ver `isCreateTransactionErrorRetryable`
- * para a política de quais erros são repetíveis).
+ * para a política de quais erros são repetíveis — hoje, só 503).
  *
  * `onRetryAttempt(attemptNumber)`, se passado, é chamado antes de CADA nova
  * tentativa — a UI usa isso para trocar o rótulo do botão de "Enviando…" para
  * "Tentando novamente…", pra não parecer travado enquanto espera.
  */
 export async function createTransactionForUi(payload, { onRetryAttempt } = {}) {
+  let lastError;
   for (let attempt = 1; attempt <= CREATE_TRANSACTION_MAX_ATTEMPTS; attempt++) {
     try {
       return await createTransaction(payload);
     } catch (error) {
+      lastError = error;
       const isLastAttempt = attempt >= CREATE_TRANSACTION_MAX_ATTEMPTS;
       if (isLastAttempt || !isCreateTransactionErrorRetryable(error)) {
         throw error;
       }
       onRetryAttempt?.(attempt + 1);
       // Espera curta e crescente (500ms na 1ª repetição) — o bastante para um
-      // blip de rede/gateway se recuperar, sem prender o usuário no formulário.
+      // blip curto do gateway se recuperar, sem prender o usuário no formulário.
       await wait(CREATE_TRANSACTION_RETRY_BASE_DELAY_MS * attempt);
     }
   }
+  // Defensivo: se `CREATE_TRANSACTION_MAX_ATTEMPTS` algum dia virar 0 por
+  // engano, o laço acima nunca roda — sem isso a função retornaria
+  // `undefined` silenciosamente, e o modal mostraria "Registrado!" para uma
+  // transação que nunca foi enviada. Lança em vez de fingir sucesso.
+  throw lastError ?? new Error("createTransactionForUi: nenhuma tentativa foi executada.");
 }
 
 export async function updateTransactionForUi(transactionId, organizationId, payload) {

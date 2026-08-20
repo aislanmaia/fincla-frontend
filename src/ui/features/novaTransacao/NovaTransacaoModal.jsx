@@ -1442,8 +1442,8 @@ export const NovaTransacaoModal = ({
               accountId: settleAccountId || null,
               paidAt: method !== "credito" && settled ? transactionDateIsoFromYmd(txDateYmd) : null,
             }),
-            // Repetição só acontece em erro de rede/gateway comprovadamente
-            // não processado — ver `isCreateTransactionErrorRetryable`.
+            // Repetição só acontece em 503 comprovadamente não processado —
+            // ver `isCreateTransactionErrorRetryable`.
             { onRetryAttempt: () => setTxRetrying(true) },
           );
         }
