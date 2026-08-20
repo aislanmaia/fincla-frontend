@@ -1823,27 +1823,66 @@ export interface AccountBalance {
   name: string;
   type: AccountType;
   currency: string;
-  initial_balance: number;
-  balance: number;
+  initial_balance: number | null; // ver nota em OrgBalances
+  balance: number | null;
   include_in_total: boolean;
 }
 
+/**
+ * Valor monetário COMO CHEGA NO FIO, antes da normalização.
+ *
+ * O backend serializa `Decimal` como string, mas nem todos os schemas usam
+ * `Decimal` — alguns usam `float` e mandam número (ver fincla-api#112). Este alias
+ * descreve as duas formas, mais os buracos possíveis.
+ */
+export type WireMoney = string | number | null | undefined;
+
+/** Resposta crua de `/balances/{id}` — use `getAccountBalance`, que normaliza. */
+export interface RawAccountBalance extends Omit<AccountBalance, "balance" | "initial_balance"> {
+  initial_balance: WireMoney;
+  balance: WireMoney;
+}
+
+/** Resposta crua de `/balances/summary` — use `getBalanceSummary`. */
+export interface RawBalanceSummary extends Omit<BalanceSummary, "total_available" | "total_all" | "by_type"> {
+  total_available: WireMoney;
+  total_all: WireMoney;
+  by_type: RawTypeBalance[];
+}
+
+export interface RawTypeBalance extends Omit<TypeBalance, "balance"> {
+  balance: WireMoney;
+}
+
+/** Resposta crua de `/balances` — use `getOrgBalances`. */
+export interface RawOrgBalances extends Omit<OrgBalances, "total" | "accounts"> {
+  total: WireMoney;
+  accounts: RawAccountBalance[];
+}
+
+/**
+ * Campos de dinheiro chegam do backend como STRING (`Decimal` no Pydantic v2 vira
+ * `"315.57"` em JSON). `src/api/balances.ts` converte para número na fronteira, e
+ * `null` quando o valor não é um número finito — por isso o tipo aqui é `number | null`:
+ * ele descreve o que o CHAMADOR recebe, já normalizado. Nunca assuma que o JSON cru
+ * traz número.
+ */
 export interface OrgBalances {
   as_of: string;
-  total: number; // soma das contas include_in_total
+  total: number | null; // soma das contas include_in_total
   accounts: AccountBalance[];
 }
 
 export interface TypeBalance {
   type: AccountType;
-  balance: number;
+  balance: number | null; // ver nota em OrgBalances
   account_count: number;
 }
 
 export interface BalanceSummary {
   as_of: string;
-  total_available: number; // contas include_in_total
-  total_all: number;       // todas as contas ativas
+  total_available: number | null; // contas include_in_total — ver nota em OrgBalances
+  total_all: number | null;       // todas as contas ativas
   account_count: number;
   by_type: TypeBalance[];
 }

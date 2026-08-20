@@ -1,16 +1,77 @@
 // api/balances.ts
 import apiClient from './client';
-import type { OrgBalances, AccountBalance, BalanceSummary } from './types';
+import type {
+  OrgBalances,
+  AccountBalance,
+  BalanceSummary,
+  RawOrgBalances,
+  RawAccountBalance,
+  RawBalanceSummary,
+  WireMoney,
+} from './types';
+
+/**
+ * O backend serializa dinheiro como STRING, não número.
+ *
+ * Os campos são `Decimal` no Pydantic v2, que em JSON vira `"315.57"`. O tipo
+ * `number` declarado em `types.ts` estava errado desde sempre; o dashboard só não
+ * quebrava porque lia o valor com coerção implícita do JS (`Math.abs("315.57")`
+ * funciona). Quando a Visão Geral passou a checar `typeof === "number"` para
+ * distinguir "sem saldo" de "saldo zero", o check passou a reprovar TODA resposta
+ * válida e a tela exibiu "Dados indisponíveis" com a API respondendo 200.
+ *
+ * A coerção fica aqui, na fronteira: quem consome recebe número e o `typeof` volta
+ * a significar o que promete. `null` para o que não é número finito — inclusive
+ * `null` do backend — porque zero é um saldo legítimo e não pode ser inventado.
+ */
+const toFiniteNumber = (value: WireMoney | unknown): number | null => {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+};
+
+/**
+ * Os tipos `Raw*` existem para o compilador cobrar a normalização.
+ *
+ * Sem eles, `apiClient.get<BalanceSummary>` já declarava número na entrada e um
+ * `return response.data` cru compilava sem erro — foi assim que `getAccountBalance`
+ * passou pela primeira rodada com o tipo corrigido e o corpo intacto: o tipo virou
+ * mentira em silêncio. Com `Raw*` na entrada e o tipo normalizado na saída, esquecer
+ * a conversão passa a ser erro de compilação, não bug de produção.
+ */
+const normalizeBalanceSummary = (raw: RawBalanceSummary): BalanceSummary => ({
+  ...raw,
+  total_available: toFiniteNumber(raw?.total_available),
+  total_all: toFiniteNumber(raw?.total_all),
+  by_type: Array.isArray(raw?.by_type)
+    ? raw.by_type.map((t) => ({ ...t, balance: toFiniteNumber(t?.balance) }))
+    : [],
+});
+
+const normalizeAccountBalance = (raw: RawAccountBalance): AccountBalance => ({
+  ...raw,
+  initial_balance: toFiniteNumber(raw?.initial_balance),
+  balance: toFiniteNumber(raw?.balance),
+});
 
 /** Saldo realizado por conta + total da org (só contas include_in_total). */
 export const getOrgBalances = async (
   organizationId: string,
   atDate?: string,
 ): Promise<OrgBalances> => {
-  const response = await apiClient.get<OrgBalances>('/balances', {
+  const response = await apiClient.get<RawOrgBalances>('/balances', {
     params: { organization_id: organizationId, at_date: atDate },
   });
-  return response.data;
+  return {
+    ...response.data,
+    total: toFiniteNumber(response.data?.total),
+    accounts: Array.isArray(response.data?.accounts)
+      ? response.data.accounts.map(normalizeAccountBalance)
+      : [],
+  };
 };
 
 /** Rollup da org: total disponível, total geral e breakdown por tipo. */
@@ -18,10 +79,10 @@ export const getBalanceSummary = async (
   organizationId: string,
   atDate?: string,
 ): Promise<BalanceSummary> => {
-  const response = await apiClient.get<BalanceSummary>('/balances/summary', {
+  const response = await apiClient.get<RawBalanceSummary>('/balances/summary', {
     params: { organization_id: organizationId, at_date: atDate },
   });
-  return response.data;
+  return normalizeBalanceSummary(response.data);
 };
 
 /** Saldo realizado de uma conta específica. */
@@ -30,8 +91,8 @@ export const getAccountBalance = async (
   organizationId: string,
   atDate?: string,
 ): Promise<AccountBalance> => {
-  const response = await apiClient.get<AccountBalance>(`/balances/${accountId}`, {
+  const response = await apiClient.get<RawAccountBalance>(`/balances/${accountId}`, {
     params: { organization_id: organizationId, at_date: atDate },
   });
-  return response.data;
+  return normalizeAccountBalance(response.data);
 };
