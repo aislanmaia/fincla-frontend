@@ -5,8 +5,30 @@ import { buildCalendarEvents, monthSummary, ymd } from "./calendarModel.js";
 
 const EMPTY = { loading: false, error: "", byDay: {}, hasLoaded: false };
 
-export function useCalendarData({ organizationId, year, month, enabled = true }) {
-  const [state, setState] = useState(EMPTY);
+// Evita o quadro em que a tela mostra "vazio"/R$ 0,00 antes do efeito marcar
+// loading=true — a organização já é conhecida no 1º render (mesmo padrão do
+// useCreditCardsData: `isLoading: Boolean(enabled && organizationId)`).
+function initialState(enabled, organizationId) {
+  return { ...EMPTY, loading: Boolean(enabled && organizationId) };
+}
+
+export function useCalendarData({ organizationId, year, month, enabled = true, transactionsRefreshToken = 0 }) {
+  const [state, setState] = useState(() => initialState(enabled, organizationId));
+
+  // Chave do período (organização + mês) que os dados em `state` representam.
+  // Quando ela muda — troca de mês/ano ou de organização —, os dados atuais são
+  // de OUTRO período e precisam sumir AGORA, durante o render, e não só depois
+  // que o efeito abaixo rodar. Sem isto, o React chega a pintar (por um quadro)
+  // o total do mês antigo sob o rótulo do mês novo, porque o efeito só reseta o
+  // estado depois do commit. `transactionsRefreshToken` fica de fora da chave de
+  // propósito: revalidar o MESMO período (ex.: transação nova salva com o
+  // calendário aberto) não deve apagar a grade — ver o efeito abaixo.
+  const periodKey = `${organizationId || ""}|${year}|${month}`;
+  const [trackedPeriodKey, setTrackedPeriodKey] = useState(periodKey);
+  if (periodKey !== trackedPeriodKey) {
+    setTrackedPeriodKey(periodKey);
+    setState(initialState(enabled, organizationId));
+  }
 
   useEffect(() => {
     if (!enabled || !organizationId) {
@@ -14,7 +36,12 @@ export function useCalendarData({ organizationId, year, month, enabled = true })
       return undefined;
     }
     let cancelled = false;
-    setState({ ...EMPTY, loading: true });
+    // Stale-while-revalidate: sinaliza loading SEM apagar os dados já carregados.
+    // A troca de período (mês/organização) já foi zerada de forma síncrona acima;
+    // o que sobra aqui é ou o primeiro carregamento (byDay já está vazio) ou uma
+    // revalidação do mesmo período (ex.: transactionsRefreshToken mudou) — nesse
+    // caso os chips do mês não podem sumir enquanto o request está em voo.
+    setState((current) => ({ ...current, loading: true, error: "" }));
     const last = new Date(year, month, 0).getDate();
     const start = ymd(year, month, 1);
     const end = ymd(year, month, last);
@@ -43,12 +70,26 @@ export function useCalendarData({ organizationId, year, month, enabled = true })
       .catch((err) => {
         if (cancelled) return;
         const detail = err?.response?.data?.detail;
-        setState({ ...EMPTY, error: (typeof detail === "string" && detail) || err?.message || "Erro ao carregar o calendário.", hasLoaded: true });
+        // Mantém os dados anteriores na tela (`...current`) — uma revalidação que
+        // falha não pode apagar o que já estava correto; só liga o aviso de erro.
+        // `hasLoaded` NÃO é forçado aqui: ele só vira true no `.then` (sucesso).
+        // Se este for o 1º carregamento e ele falhar, `hasLoaded` continua false —
+        // "já carregou com sucesso ao menos uma vez" é o único significado válido,
+        // senão o gate `!hasLoaded` (achado #1 da 1ª rodada) morre depois da
+        // primeira falha e o "vazio confiante" volta por trás de um retry.
+        setState((current) => ({
+          ...current,
+          loading: false,
+          error: (typeof detail === "string" && detail) || err?.message || "Erro ao carregar o calendário.",
+        }));
       });
     return () => {
       cancelled = true;
     };
-  }, [enabled, organizationId, year, month]);
+    // `transactionsRefreshToken` sobe de App.jsx (mesmo padrão de Cartões/Recorrências):
+    // muda toda vez que uma transação é criada/editada/excluída em qualquer tela,
+    // forçando este efeito a rebuscar mesmo com organização/mês inalterados.
+  }, [enabled, organizationId, year, month, transactionsRefreshToken]);
 
   const summary = useMemo(() => monthSummary(state.byDay), [state.byDay]);
   return { ...state, summary };
