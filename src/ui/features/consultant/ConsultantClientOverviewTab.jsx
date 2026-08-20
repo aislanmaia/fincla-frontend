@@ -23,9 +23,22 @@ const toneColor = (t) => TONE[t] || T.ink;
 function RptKpi({ label, value, color = T.ink, sub }) {
   return (
     <Card style={{ padding: "14px 16px" }}>
-      <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 7 }}>{label}</div>
+      {/* Piso de 11px (issue #104/#86): Card sem altura fixa nem overflow
+          hidden — rótulo e sub sobem sem risco de corte. Mas a 11px uma
+          palavra única e longa ("Comprometimento") pode ficar mais larga
+          que o card útil na faixa logo acima do breakpoint useIsNarrow(900)
+          (grid de 4 colunas com pouca sobra) — sem overflowWrap ela vazava
+          pra fora do card em vez de quebrar. `overflowWrap: anywhere`
+          resolve na raiz, independente de viewport/fonte: se não couber
+          numa linha, quebra dentro da palavra em vez de vazar. */}
+      <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 7, overflowWrap: "anywhere" }}>{label}</div>
       <div style={{ ...G, ...NUM, fontSize: 20, fontWeight: 800, color, letterSpacing: "-0.01em", lineHeight: 1 }}>{value}</div>
-      {sub && <div style={{ ...G, fontSize: 10.5, color: T.inkLight, marginTop: 6 }}>{sub}</div>}
+      {/* Mesma geometria do rótulo acima: se o sub quebrar em 2 linhas, o
+          grid (align-items:stretch por padrão) estica os 4 cards da linha
+          para igualar a altura — só deixa o card mais alto, não vaza; ainda
+          assim, overflowWrap evita que a quebra fique feia no meio de uma
+          palavra maior que o necessário. */}
+      {sub && <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 6, overflowWrap: "anywhere" }}>{sub}</div>}
     </Card>
   );
 }
@@ -40,8 +53,10 @@ function CardHead({ title, right }) {
   );
 }
 
+// Piso de 11px: chip sem largura/altura fixa e sem lineHeight travado em px
+// (padding "2px 6px" absorve o texto maior) — só cresce a pílula, não corta.
 const SoonChip = () => (
-  <span style={{ ...G, fontSize: 8.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: T.inkLight, background: T.grayLight, borderRadius: 5, padding: "2px 6px" }}>em breve</span>
+  <span style={{ ...G, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: T.inkLight, background: T.grayLight, borderRadius: 5, padding: "2px 6px" }}>em breve</span>
 );
 
 /** Card "em breve" (Trilha B) — preserva o bloco no layout com um placeholder. */
@@ -75,7 +90,7 @@ function NotesCard({ profile }) {
         <Icon name="pencil" size={15} color={T.inkGhost} />
         <span style={{ ...G, fontSize: 13.5, fontWeight: 800, color: T.ink }}>Notas do consultor</span>
         {hasProfile && p?.priority && (
-          <span style={{ marginLeft: "auto", ...G, fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: T.amber, background: T.amberLight, borderRadius: 99, padding: "2px 8px" }}>prioridade</span>
+          <span style={{ marginLeft: "auto", ...G, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: T.amber, background: T.amberLight, borderRadius: 99, padding: "2px 8px" }}>prioridade</span>
         )}
       </div>
       {loading ? (
@@ -99,10 +114,10 @@ function NotesCard({ profile }) {
           {(goal || level) && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 16, borderTop: `1px solid ${T.border}`, paddingTop: 10 }}>
               {goal && (
-                <div><div style={{ ...G, fontSize: 9, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.06em" }}>Objetivo</div><div style={{ ...G, fontSize: 12, fontWeight: 600, color: T.ink, marginTop: 2 }}>{goal}</div></div>
+                <div><div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.06em" }}>Objetivo</div><div style={{ ...G, fontSize: 12, fontWeight: 600, color: T.ink, marginTop: 2 }}>{goal}</div></div>
               )}
               {level && (
-                <div><div style={{ ...G, fontSize: 9, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.06em" }}>Experiência</div><div style={{ ...G, fontSize: 12, fontWeight: 600, color: T.ink, marginTop: 2 }}>{level}</div></div>
+                <div><div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.06em" }}>Experiência</div><div style={{ ...G, fontSize: 12, fontWeight: 600, color: T.ink, marginTop: 2 }}>{level}</div></div>
               )}
             </div>
           )}
@@ -121,15 +136,20 @@ function SpendingDonutCard({ categories }) {
     if (!segments.length) return <div style={{ ...G, fontSize: 12.5, color: T.inkLight, padding: "8px 0" }}>Sem despesas categorizadas no período.</div>;
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 22, flexWrap: "wrap" }}>
+        {/* Centro do donut é `position:absolute; inset:0` sem overflow:hidden
+            (ver Donut em consultantUi.jsx) — subir a legenda "gasto/mês" não
+            corta, só reduz um pouco a folga visual dentro do círculo. */}
         <Donut segments={segments} size={140} stroke={20}
-          center={<><span style={{ ...G, ...NUM, fontSize: 18, fontWeight: 800, color: T.ink, lineHeight: 1 }}>{fmtK(total)}</span><span style={{ ...G, fontSize: 9, fontWeight: 700, color: T.inkLight, textTransform: "uppercase" }}>gasto/mês</span></>} />
+          center={<><span style={{ ...G, ...NUM, fontSize: 18, fontWeight: 800, color: T.ink, lineHeight: 1 }}>{fmtK(total)}</span><span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase" }}>gasto/mês</span></>} />
         <div style={{ flex: 1, minWidth: 180, display: "flex", flexDirection: "column", gap: 10 }}>
           {segments.slice(0, 6).map((x) => (
             <div key={x.label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <span style={{ width: 9, height: 9, borderRadius: 3, background: x.color, flexShrink: 0 }} />
               <span style={{ ...G, fontSize: 12.5, color: T.inkMid, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{x.label}</span>
               <span style={{ ...G, ...NUM, fontSize: 12.5, fontWeight: 700, color: T.ink }}>{fmtBRL0(x.value)}</span>
-              <span style={{ ...G, ...NUM, fontSize: 10.5, color: T.inkGhost, width: 34, textAlign: "right" }}>{x.pct}%</span>
+              {/* width:34 é folga, não corte: "100%" em 11px tabular-nums
+                  cabe com sobra (sem overflow:hidden no span). */}
+              <span style={{ ...G, ...NUM, fontSize: 11, color: T.inkGhost, width: 34, textAlign: "right" }}>{x.pct}%</span>
             </div>
           ))}
         </div>
@@ -195,9 +215,18 @@ function DiagnosisCard({ health }) {
             const col = indefinido ? T.inkGhost : toneColor(factorTone(f.v));
             return (
               <div key={f.key}>
+                {/* Rótulo + hint precisam caber numa linha só: se os dois
+                    quebrarem, o par sai de rente com a ProgBar logo abaixo
+                    e esse fator fica mais alto que os irmãos na coluna
+                    (achado da revisão da PR #107, ex.: "Comprometimento de
+                    renda" + "renda muito comprometida" em fontes largas).
+                    Mesmo padrão já usado no donut acima (rótulo trunca com
+                    reticências, o valor à direita nunca encolhe) — o hint é
+                    a peça com o sinal de cor (verde/âmbar/vermelho), então é
+                    ele que fica inteiro; o rótulo cede primeiro. */}
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5, gap: 8 }}>
-                  <span style={{ ...G, fontSize: 12, fontWeight: 600, color: T.ink }}>{f.label}</span>
-                  <span style={{ ...G, fontSize: 10.5, color: col, fontWeight: 700 }}>{f.hint}</span>
+                  <span style={{ ...G, fontSize: 12, fontWeight: 600, color: T.ink, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.label}</span>
+                  <span style={{ ...G, fontSize: 11, color: col, fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0 }}>{f.hint}</span>
                 </div>
                 {indefinido ? (
                   // Trilho liso é pixel-idêntico a uma barra em 0% — o fator
