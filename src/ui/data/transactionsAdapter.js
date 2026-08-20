@@ -1337,17 +1337,28 @@ export function isCreateTransactionErrorRetryable(_error) {
  * automático (que está sempre desligado, ver `isCreateTransactionErrorRetryable`
  * acima).
  *
- *  - Sem resposta (erro de rede/timeout) ou 5xx (500/502/503/504): AMBÍGUO.
- *    Nenhum desses prova que a escrita não aconteceu (ver o raciocínio acima)
- *    — a UI deve avisar para conferir o extrato antes de reenviar.
+ *  - Sem NENHUMA requisição ter saído do navegador: NUNCA ambíguo, sempre
+ *    SEGURO. Cobre dois casos: (1) erro que não é nem do axios — no modal,
+ *    `buildCreateTransactionPayload(...)`/`transactionDateIsoFromYmd(...)`
+ *    rodam dentro do MESMO try, ANTES da chamada de rede; um `TypeError` ali
+ *    (payload malformado, data inválida) nunca chegou a virar um request, e
+ *    tratar isso como "pode ter gravado" mandaria a pessoa conferir o
+ *    extrato por um bug local, sem um byte ter saído. (2) erro do axios sem
+ *    `error.request` — o axios falhou montando o request (ex.: erro no
+ *    `transformRequest`) antes de despachar; mesma conclusão.
+ *  - Requisição saiu, sem resposta (erro de rede/timeout) ou 5xx
+ *    (500/502/503/504): AMBÍGUO. Nenhum desses prova que a escrita não
+ *    aconteceu (ver o raciocínio acima) — a UI deve avisar para conferir o
+ *    extrato antes de reenviar.
  *  - 4xx: SEGURO. A API valida antes de gravar — uma rejeição por validação,
  *    autenticação ou conflito significa que nada foi criado ainda. Reenviar
  *    depois de corrigir o campo apontado no erro é seguro.
  */
 export function isCreateTransactionErrorMaybePersisted(error) {
-  if (!axios.isAxiosError(error)) return true; // não dá pra classificar: trata como ambíguo, por segurança.
+  if (!axios.isAxiosError(error)) return false;
+  if (!error.request) return false;
   const status = error.response?.status;
-  if (status == null) return true; // sem resposta: rede ou timeout.
+  if (status == null) return true; // requisição saiu, sem resposta: rede ou timeout.
   return status >= 500;
 }
 

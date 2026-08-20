@@ -222,6 +222,14 @@ export const NovaTransacaoModal = ({
   // casos o botão de reenvio fica secundário e pede confirmação: um clique
   // ali pode duplicar um lançamento que o servidor já criou.
   const [txCreateErrorAmbiguous, setTxCreateErrorAmbiguous] = useState(false);
+  // `true` entre o primeiro clique em "Tentar novamente mesmo assim" e a
+  // pessoa confirmar/cancelar na própria UI. NÃO usa `window.confirm`: o
+  // Playwright descarta diálogos por padrão, o Chrome trava diálogos
+  // repetidos, WebView sem `onJsConfirm` devolve `false` sempre, e em jsdom
+  // a chamada nem existe (undefined) — em qualquer um desses ambientes a
+  // pessoa veria um botão que não faz nada. A confirmação inline funciona
+  // igual em todo lugar.
+  const [txRetryConfirmPending, setTxRetryConfirmPending] = useState(false);
   const [modalCardsRows, setModalityChoicealCardsRows] = useState([]);
   const [modalCardsLoading, setModalityChoicealCardsLoading] = useState(false);
   const [modalCardsError, setModalityChoicealCardsError] = useState("");
@@ -719,6 +727,7 @@ export const NovaTransacaoModal = ({
     // criação que falhou). Ver issue de acompanhamento sobre estado do modal.
     setTxCreateFailed(false);
     setTxCreateErrorAmbiguous(false);
+    setTxRetryConfirmPending(false);
     if (!useLiveCategoryTags) {
       setCategoryTagId(null);
       setCategoryTagIsActive(true);
@@ -1392,6 +1401,7 @@ export const NovaTransacaoModal = ({
       setTxSubmitError("");
       setTxCreateFailed(false);
       setTxCreateErrorAmbiguous(false);
+      setTxRetryConfirmPending(false);
       const isEditingExisting = editingTransactionIdStr != null || editingTransactionId != null;
       try {
         if (method === "credito") {
@@ -1490,7 +1500,12 @@ export const NovaTransacaoModal = ({
       // já existe no servidor, reenviar duplicaria.
       try {
         clearNovaTransacaoSummaryCache();
-        onTransactionSaved?.();
+        // `await`: mesmo sendo síncrono hoje (`bumpTransactionsList`), a prop
+        // é uma costura pública — sem `await`, um callback do pai que
+        // devolvesse uma promise rejeitada escaparia como unhandled
+        // rejection em vez de cair neste catch. `await` num valor não-promise
+        // é um no-op, então não muda o comportamento atual.
+        await onTransactionSaved?.();
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error(
@@ -1511,14 +1526,20 @@ export const NovaTransacaoModal = ({
   // Erro SEGURO (4xx — API valida antes de gravar, nada foi criado): reenvia
   // direto, como qualquer outro "tentar de novo".
   const retryLabel = txCreateErrorAmbiguous ? "Tentar novamente mesmo assim" : "Tentar novamente";
+  // Clique no botão principal quando a última criação falhou. Erro AMBÍGUO
+  // não dispara `handleSave` direto — só arma a confirmação inline (ver
+  // `txRetryConfirmPending` e a faixa renderizada logo abaixo do botão em
+  // cada footer). Erro SEGURO reenvia direto.
   const handleSaveOrConfirmRetry = () => {
     if (txCreateFailed && txCreateErrorAmbiguous) {
-      const confirmed = window.confirm(
-        "Essa transação pode já ter sido registrada mesmo com o erro anterior. " +
-          "Confira seu extrato antes de continuar. Deseja tentar salvar de novo mesmo assim?",
-      );
-      if (!confirmed) return;
+      setTxRetryConfirmPending(true);
+      return;
     }
+    handleSave();
+  };
+  const cancelAmbiguousRetry = () => setTxRetryConfirmPending(false);
+  const confirmAmbiguousRetry = () => {
+    setTxRetryConfirmPending(false);
     handleSave();
   };
 
@@ -1567,7 +1588,7 @@ export const NovaTransacaoModal = ({
     }
     setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, null));
     setReview(false); resetMobileStep(); setSuccess(false); setSuccessOverlay(false);
-    setTxSubmitError(""); setTxSubmitting(false); setTxCreateFailed(false); setTxCreateErrorAmbiguous(false); setDescError(false);
+    setTxSubmitError(""); setTxSubmitting(false); setTxCreateFailed(false); setTxCreateErrorAmbiguous(false); setTxRetryConfirmPending(false); setDescError(false);
     setMobileReviewImpactOpen(false); resetAi();
     setDescFocused(false); setAddingCartao(false); setQuickAddCardName(""); setQuickAddCardLast4("");
     setNewTag(""); setAddingTag(false); resetInstallmentCalc(); setShowImpact(false);
@@ -2234,15 +2255,38 @@ export const NovaTransacaoModal = ({
                     <AlertTriangle size={13} color={T.red} /> Volte e adicione uma descrição para confirmar.
                   </div>
                 )}
+                {txRetryConfirmPending ? (
+                  <div style={{ display:"flex", flexDirection:"column", gap:8, padding:"10px 12px", background:T.amberLight, border:`1px solid ${T.amberBorder}`, borderRadius:10 }}>
+                    <span style={{ ...G, fontSize:12, fontWeight:600, color:T.ink, lineHeight:1.4 }}>
+                      Essa transação pode já ter sido registrada mesmo com o erro anterior. Confira seu extrato antes de continuar.
+                    </span>
+                    <div style={{ display:"flex", gap:8 }}>
+                      <button onClick={cancelAmbiguousRetry}
+                        style={{ ...G, flex:1, padding:"11px", borderRadius:10, border:`1px solid ${T.border}`, background:T.surface, fontSize:13, fontWeight:600, color:T.inkMid, cursor:"pointer" }}>
+                        Cancelar
+                      </button>
+                      <button onClick={confirmAmbiguousRetry}
+                        style={{ ...G, flex:1, padding:"11px", borderRadius:10, border:"none", background:T.amber, fontSize:13, fontWeight:700, color:T.ink, cursor:"pointer" }}>
+                        Sim, tentar mesmo assim
+                      </button>
+                    </div>
+                  </div>
+                ) : (
                 <div style={{ display:"flex", gap:10 }}>
                 <button onClick={goPrev} style={{ ...G, display:"flex", alignItems:"center", gap:5, padding:"13px 16px", borderRadius:12, border:`1px solid ${T.border}`, background:T.surface, fontSize:14, fontWeight:600, color:T.inkMid, cursor:"pointer" }}>
                   <ChevronLeft size={16} /> Editar
                 </button>
                 <button onClick={handleSaveOrConfirmRetry} disabled={txSubmitting || !desc.trim()}
-                  style={{ ...G, flex:1, padding:"13px", borderRadius:12, border:(txCreateFailed && txCreateErrorAmbiguous) ? `1px solid ${T.amberBorder}` : "none", background:success ? T.green : (!desc.trim() ? T.inkGhost : (txCreateFailed && txCreateErrorAmbiguous) ? T.amberLight : typeColor), fontSize:14, fontWeight:800, color:(txCreateFailed && txCreateErrorAmbiguous) ? T.amber : "#fff", cursor:(txSubmitting || !desc.trim()) ? "not-allowed" : "pointer", opacity:(txSubmitting || !desc.trim()) ? 0.75 : 1, display:"flex", alignItems:"center", justifyContent:"center", gap:7, transition:"background 0.25s" }}>
+                  style={{ ...G, flex:1, padding:"13px", borderRadius:12,
+                    border:(!success && !(txSubmitting || !desc.trim()) && txCreateFailed && txCreateErrorAmbiguous) ? `1px solid ${T.amberBorder}` : "none",
+                    background:success ? T.green : (txSubmitting || !desc.trim()) ? T.inkGhost : (txCreateFailed && txCreateErrorAmbiguous) ? T.amberLight : typeColor,
+                    fontSize:14, fontWeight:800,
+                    color:(!success && !(txSubmitting || !desc.trim()) && txCreateFailed && txCreateErrorAmbiguous) ? T.ink : "#fff",
+                    cursor:(txSubmitting || !desc.trim()) ? "not-allowed" : "pointer", opacity:(txSubmitting || !desc.trim()) ? 0.75 : 1, display:"flex", alignItems:"center", justifyContent:"center", gap:7, transition:"background 0.25s" }}>
                   {success ? <><Check size={16} /> {isRecurring || novaRecorrencia ? "Recorrência salva!" : "Registrado!"}</> : (isRecurring || novaRecorrencia ? "Confirmar recorrência" : (txSubmitting ? "Enviando…" : txCreateFailed ? retryLabel : `Confirmar ${tipo === "despesa" ? (isRefund ? "estorno" : "despesa") : "receita"}`))}
                 </button>
               </div>
+              )}
               </div>
             ) : (
               <div style={{ display:"flex", gap:10 }}>
@@ -3124,6 +3168,23 @@ export const NovaTransacaoModal = ({
               <div style={{ ...G, fontSize:12, fontWeight:600, color:T.red, marginBottom:10, textAlign:"center" }}>{txSubmitError}</div>
             )}
             {review ? (
+              txRetryConfirmPending ? (
+                <div style={{ display:"flex", flexDirection:"column", gap:8, padding:"10px 12px", background:T.amberLight, border:`1px solid ${T.amberBorder}`, borderRadius:10 }}>
+                  <span style={{ ...G, fontSize:12, fontWeight:600, color:T.ink, lineHeight:1.4 }}>
+                    Essa transação pode já ter sido registrada mesmo com o erro anterior. Confira seu extrato antes de continuar.
+                  </span>
+                  <div style={{ display:"flex", gap:8 }}>
+                    <button onClick={cancelAmbiguousRetry}
+                      style={{ ...G, flex:1, padding:"9px", borderRadius:8, border:`1px solid ${T.border}`, background:T.surface, fontSize:12, fontWeight:600, color:T.inkMid, cursor:"pointer" }}>
+                      Cancelar
+                    </button>
+                    <button onClick={confirmAmbiguousRetry}
+                      style={{ ...G, flex:1, padding:"9px", borderRadius:8, border:"none", background:T.amber, fontSize:12, fontWeight:700, color:T.ink, cursor:"pointer" }}>
+                      Sim, tentar mesmo assim
+                    </button>
+                  </div>
+                </div>
+              ) : (
               <div style={{ display:"flex", gap:8 }}>
                 <button onClick={goBack}
                   style={{ ...G, display:"flex", alignItems:"center", gap:6, padding:"11px 16px", borderRadius:10, border:`1px solid ${T.border}`, background:T.surface, fontSize:13, fontWeight:600, color:T.inkMid, cursor:"pointer" }}
@@ -3132,13 +3193,19 @@ export const NovaTransacaoModal = ({
                   <ChevronLeft size={14} /> Editar
                 </button>
                 <button onClick={handleSaveOrConfirmRetry} disabled={txSubmitting}
-                  style={{ ...G, flex:1, padding:"11px", borderRadius:10, border:(txCreateFailed && txCreateErrorAmbiguous) ? `1px solid ${T.amberBorder}` : "none", background:success ? T.green : (txCreateFailed && txCreateErrorAmbiguous) ? T.amberLight : typeColor, fontSize:13, fontWeight:700, color:(txCreateFailed && txCreateErrorAmbiguous) ? T.amber : "#fff", cursor:txSubmitting ? "not-allowed" : "pointer", opacity:txSubmitting ? 0.75 : 1, display:"flex", alignItems:"center", justifyContent:"center", gap:6, transition:"background 0.25s", animation:success?"successPop 0.35s ease-out":"none" }}>
+                  style={{ ...G, flex:1, padding:"11px", borderRadius:10,
+                    border:(!success && !txSubmitting && txCreateFailed && txCreateErrorAmbiguous) ? `1px solid ${T.amberBorder}` : "none",
+                    background:success ? T.green : (txCreateFailed && txCreateErrorAmbiguous) ? T.amberLight : typeColor,
+                    fontSize:13, fontWeight:700,
+                    color:(!success && !txSubmitting && txCreateFailed && txCreateErrorAmbiguous) ? T.ink : "#fff",
+                    cursor:txSubmitting ? "not-allowed" : "pointer", opacity:txSubmitting ? 0.75 : 1, display:"flex", alignItems:"center", justifyContent:"center", gap:6, transition:"background 0.25s", animation:success?"successPop 0.35s ease-out":"none" }}>
                   {success
                     ? <><Check size={14} /> {novaRecorrencia || isRecurring ? "Recorrência salva!" : "Registrado!"}</>
                     : novaRecorrencia || isRecurring ? "Confirmar recorrência" : (txSubmitting ? "Enviando…" : txCreateFailed ? retryLabel : `Confirmar ${tipo === "despesa" ? (isRefund ? "estorno" : "despesa") : "receita"}`)
                   }
                 </button>
               </div>
+              )
             ) : (
               <div style={{ display:"flex", gap:8 }}>
                 <Btn variant="outGray" onClick={beginClose}>Cancelar</Btn>

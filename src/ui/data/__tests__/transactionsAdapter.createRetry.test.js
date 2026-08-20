@@ -147,8 +147,12 @@ describe("isCreateTransactionErrorRetryable — sempre false (documentação; nu
 });
 
 describe("isCreateTransactionErrorMaybePersisted — separa erro SEGURO de reenviar de erro AMBÍGUO (UI, não retry)", () => {
+  // `request: {}` (truthy) simula que uma requisição de verdade saiu do
+  // navegador — é o que faz sentido para erros de status HTTP e códigos de
+  // rede reais. Os casos "sem `.request`" abaixo testam exatamente o oposto:
+  // nada saiu, então nunca é ambíguo, não importa o resto do shape do erro.
   function httpError(status) {
-    return new AxiosError(`Request failed with status code ${status}`, undefined, {}, undefined, {
+    return new AxiosError(`Request failed with status code ${status}`, undefined, {}, {}, {
       status,
       data: {},
       statusText: "",
@@ -158,7 +162,7 @@ describe("isCreateTransactionErrorMaybePersisted — separa erro SEGURO de reenv
   }
 
   function networkError(code) {
-    return new AxiosError("Network Error", code);
+    return new AxiosError("Network Error", code, {}, {});
   }
 
   it.each([400, 401, 403, 404, 409, 422])(
@@ -176,13 +180,19 @@ describe("isCreateTransactionErrorMaybePersisted — separa erro SEGURO de reenv
   );
 
   it.each(["ERR_NETWORK", "ECONNRESET", "ECONNABORTED", "ETIMEDOUT"])(
-    "sem resposta (%s): AMBÍGUO",
+    "sem resposta, mas com requisição comprovadamente despachada (%s): AMBÍGUO",
     (code) => {
       expect(isCreateTransactionErrorMaybePersisted(networkError(code))).toBe(true);
     },
   );
 
-  it("erro que não é do axios: trata como AMBÍGUO por segurança (não dá pra classificar)", () => {
-    expect(isCreateTransactionErrorMaybePersisted(new Error("boom"))).toBe(true);
+  it("erro que não é do axios (ex.: TypeError local em buildCreateTransactionPayload, antes de qualquer request): SEGURO — nada saiu do navegador", () => {
+    expect(isCreateTransactionErrorMaybePersisted(new TypeError("Cannot read properties of undefined"))).toBe(false);
+  });
+
+  it("erro do axios sem `.request` (falhou montando o request, nunca despachou): SEGURO", () => {
+    const err = new AxiosError("Transform failed", undefined, {}, undefined, undefined);
+    expect(err.request).toBeUndefined();
+    expect(isCreateTransactionErrorMaybePersisted(err)).toBe(false);
   });
 });
