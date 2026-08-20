@@ -22,12 +22,21 @@ describe("<CalendarPage> v2 (URL-driven)", () => {
     const t = container.textContent;
     expect(t).toContain("Calendário");
     expect(t).toContain("Financeiro");
-    expect(t).toContain("Entradas");
-    expect(t).toContain("Saídas");
+    expect(t).toContain("Receitas");
+    expect(t).toContain("Despesas");
     expect(t).toContain("Saldo do mês");
     expect(t).toContain("Semana");
     expect(t).toContain("Exibir");
     expect(t).toContain("Salário");
+  });
+
+  it("card Exibir usa o vocabulário Receitas/Despesas, não Entradas/Saídas (issue #83)", () => {
+    const { container } = render(<CalendarPage dataMode="mock" organizationId={null} />);
+    const t = container.textContent;
+    expect(t).not.toContain("Entradas");
+    expect(t).not.toContain("Saídas");
+    expect(t).toContain("Receitas");
+    expect(t).toContain("Despesas");
   });
 
   it("clicar numa transação navega para abrir o Painel (fc_tx + fc_modal)", () => {

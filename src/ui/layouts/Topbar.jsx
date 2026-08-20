@@ -7,6 +7,47 @@ import {
   getInitials,
 } from "../features/auth/userDisplay.js";
 
+// Sino de notificações: mantido como componente à parte para reativar quando
+// existir um sistema de alertas de verdade. Hoje ele não abria nada (issue #84)
+// — um botão que não responde é pior que a ausência do botão — então ficou
+// fora da árvore renderizada. Para religar: implementar a fonte de dados de
+// notificações (endpoint + contagem de não lidas) e um dropdown/painel que o
+// clique abra, então voltar a renderizar <NotificationsBell /> no lugar de
+// onde ele foi retirado no JSX do Topbar.
+function NotificationsBell() {
+  return (
+    <button
+      style={{
+        background: T.bg,
+        border: `1px solid ${T.border}`,
+        borderRadius: 8,
+        padding: "8px",
+        cursor: "pointer",
+        position: "relative",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.background = T.grayLight)}
+      onMouseLeave={(e) => (e.currentTarget.style.background = T.bg)}
+    >
+      <Bell size={14} color={T.ink} />
+      <div
+        style={{
+          position: "absolute",
+          top: 5,
+          right: 5,
+          width: 6,
+          height: 6,
+          borderRadius: "50%",
+          background: T.red,
+          border: `1.5px solid ${T.surface}`,
+        }}
+      />
+    </button>
+  );
+}
+
 export function Topbar({ onNew, isMobile, onMenuOpen, onNav, page: _page, user }) {
   const [cmdOpen, setCmdOpen] = useState(false);
   const [cmdQ, setCmdQ] = useState("");
@@ -140,35 +181,7 @@ export function Topbar({ onNew, isMobile, onMenuOpen, onNav, page: _page, user }
           >
             <Plus size={13} strokeWidth={2.5} /> {isMobile ? "Transação" : "Nova transação"}
           </button>
-          <button
-            style={{
-              background: T.bg,
-              border: `1px solid ${T.border}`,
-              borderRadius: 8,
-              padding: "8px",
-              cursor: "pointer",
-              position: "relative",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = T.grayLight)}
-            onMouseLeave={(e) => (e.currentTarget.style.background = T.bg)}
-          >
-            <Bell size={14} color={T.ink} />
-            <div
-              style={{
-                position: "absolute",
-                top: 5,
-                right: 5,
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: T.red,
-                border: `1.5px solid ${T.surface}`,
-              }}
-            />
-          </button>
+          {/* NotificationsBell fica fora daqui de propósito — ver comentário na definição do componente acima. */}
           <button
             onClick={() => onNav && onNav("profile")}
             title={getDisplayName(user)}
