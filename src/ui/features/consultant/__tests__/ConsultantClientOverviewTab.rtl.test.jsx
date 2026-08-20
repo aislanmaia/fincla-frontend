@@ -82,3 +82,39 @@ describe("ConsultantClientOverviewTab", () => {
     expect(screen.getByText("Sem notas registradas para este cliente.")).toBeInTheDocument();
   });
 });
+
+/**
+ * Uma revisão provou por mutação que as mudanças de RENDERIZAÇÃO desta correção não
+ * tinham cobertura nenhuma: revertendo os dois trechos de JSX, a suíte continuava
+ * verde. O texto do hint estava testado; o que o usuário VÊ, não.
+ */
+describe("<ConsultantClientOverviewTab> — fator sem base de cálculo", () => {
+  const semDespesa = { ...HEALTH, emergency_fund_months: null };
+
+  it("não desenha barra colorida quando a reserva é indefinida", () => {
+    render(
+      <ConsultantClientOverviewTab
+        client={client}
+        health={state({ data: semDespesa })}
+        categories={categoriesState}
+        goals={goalsState}
+      />,
+    );
+    // Trilho tracejado, não barra em 0% — que se leria como o pior valor possível.
+    expect(screen.getByTestId("fator-indefinido")).toBeInTheDocument();
+    expect(screen.getByText(/sem despesas no período/i)).toBeInTheDocument();
+    expect(screen.queryByText(/abaixo do ideal/i)).not.toBeInTheDocument();
+  });
+
+  it("com reserva conhecida, volta a desenhar a barra normal", () => {
+    render(
+      <ConsultantClientOverviewTab
+        client={client}
+        health={healthState}
+        categories={categoriesState}
+        goals={goalsState}
+      />,
+    );
+    expect(screen.queryByTestId("fator-indefinido")).not.toBeInTheDocument();
+  });
+});

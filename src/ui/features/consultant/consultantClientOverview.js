@@ -50,20 +50,45 @@ export function factorTone(v) {
  * Os 4 fatores do "Diagnóstico de saúde" (barras 0..100 + hint), derivados do
  * payload de saúde. Maior = melhor em todos.
  */
+/**
+ * Meses de reserva, ou `null` quando a conta não existe.
+ *
+ * `emergency_fund_months` vem `null` do backend quando não houve despesa no período:
+ * a razão reserva ÷ despesa é INDEFINIDA (fincla-api#114). Antes vinha 99 como
+ * sentinela e a tela imprimia "99 meses". `Number(null) || 0` seria trocar um
+ * absurdo por outro — zero afirma "sem reserva nenhuma", o oposto do que aconteceu.
+ *
+ * Aceita string além de número de propósito: dinheiro nesta API às vezes chega
+ * serializado como `"1.9"` (`Decimal` no Pydantic), e a inconsistência está aberta
+ * em fincla-api#112. Um gate por tipo classificaria `"1.9"` como "sem despesas",
+ * que é justamente o erro que este código existe para não cometer.
+ */
+export function mesesDeReserva(health) {
+  const bruto = health?.emergency_fund_months;
+  if (typeof bruto === "number") return Number.isFinite(bruto) ? bruto : null;
+  if (typeof bruto === "string" && bruto.trim() !== "") {
+    const n = Number(bruto);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
 export function diagnosisFactors(health) {
   if (!health) return [];
   const commitmentRatio = Number(health.income_commitment) || 0;
   const savingsRatio = Number(health.savings_rate) || 0;
-  const months = Number(health.emergency_fund_months) || 0;
+  const months = mesesDeReserva(health);
   const score = Number(health.score) || 0;
 
-  const reserve = clamp((months / 6) * 100);
+  const reserve = months === null ? null : clamp((months / 6) * 100);
   const commitment = clamp(100 - commitmentRatio * 100);
   const savings = clamp(savingsRatio * 100 * 3 + 18);
   const consistency = clamp(score);
 
   return [
-    { key: "reserve", label: "Reserva de emergência", v: Math.round(reserve), hint: reserve < 40 ? "abaixo do ideal" : "saudável" },
+    // Sem base de cálculo o fator não tem valor: `v: null` para a UI mostrar o
+    // estado próprio em vez de uma barra vazia que se lê como "péssimo".
+    { key: "reserve", label: "Reserva de emergência", v: reserve === null ? null : Math.round(reserve), hint: reserve === null ? "sem despesas no período" : reserve < 40 ? "abaixo do ideal" : "saudável" },
     { key: "commitment", label: "Comprometimento de renda", v: Math.round(commitment), hint: commitmentRatio > 0.5 ? "renda muito comprometida" : "sob controle" },
     { key: "savings", label: "Taxa de poupança", v: Math.round(savings), hint: savingsRatio * 100 < 10 ? "poupa pouco" : "bom ritmo" },
     { key: "consistency", label: "Consistência mensal", v: Math.round(consistency), hint: consistency >= 60 ? "estável" : "requer atenção" },
