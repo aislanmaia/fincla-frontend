@@ -60,6 +60,17 @@ const SNAKE_FIELD_REQUIRED_EN =
 /** "card_id is required for …" e variações. */
 const FIELD_REQUIRED_LOOSE_EN = /\b[a-z][a-z0-9_]* is required\b/i;
 
+/**
+ * `RegisterCreditCardUseCase._check_uniqueness` (fincla-api) formata essa
+ * mensagem em inglês e ela chega crua no `detail.message` — status 400,
+ * corpo `{error, message, type}` (não o envelope "safe error" com
+ * `message_key` traduzido). É o erro mais provável do quick-add de cartão
+ * (mesmos 4 dígitos), então merece tradução própria em vez de cair na
+ * mensagem genérica de "dados inválidos".
+ */
+const DUPLICATE_CREDIT_CARD_EN =
+  /^Card with brand '[^']*' and last4 '[^']*' already exists in this organization\.?$/i;
+
 function looksLikeInternalLeak(text: string): boolean {
   const lower = text.toLowerCase();
   return (
@@ -109,6 +120,9 @@ export function humanizeDetailString(
       return 'Verifique os dados informados e tente novamente.';
     }
     return 'Não foi possível concluir a operação. Tente novamente.';
+  }
+  if (DUPLICATE_CREDIT_CARD_EN.test(trimmed)) {
+    return 'Já existe um cartão com essa bandeira e esses 4 últimos dígitos nesta organização.';
   }
   return trimmed;
 }

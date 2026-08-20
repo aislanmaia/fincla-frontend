@@ -156,7 +156,16 @@ export const handleApiError = (error: unknown): string => {
         return translateApiMessage(detail.message);
       }
       if (isLegacyError(detail)) {
-        return translateApiMessage(detail.message, detail.error);
+        // `humanizeDetailString` cobre padrões em inglês por REGEX (ex.: o
+        // "Card with brand '…' … already exists" do cadastro de cartão
+        // duplicado) — sem isso, esse formato {error,message,type} só batia
+        // no dicionário de tradução exata (`translateApiMessage`), que não
+        // tem entrada pra mensagem com valores interpolados, e a frase em
+        // inglês vazava pra tela. `|| detail.message` preserva o
+        // comportamento anterior quando `humanizeDetailString` não altera
+        // nada (mensagem passa direto, dicionário ainda tenta traduzir).
+        const human = humanizeDetailString(detail.message, status);
+        return translateApiMessage(human || detail.message, detail.error);
       }
       if (typeof detail === 'string') {
         const human = humanizeDetailString(detail, status);

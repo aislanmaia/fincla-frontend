@@ -286,8 +286,14 @@ describe("NovaTransacaoModal — quick-add de cartão no drawer (issue #79)", ()
     expect(screen.queryByText("Cartão Duplicado")).not.toBeInTheDocument();
   }, 15000);
 
-  it("POST cria o cartão mas a recarga da lista falha — não vira erro de criação nem convite a duplicar (achado 2)", async () => {
+  it("POST cria o cartão mas a recarga da lista falha — não vira erro de criação, não convida a duplicar, e NÃO derruba a lista (achado 2, e achado 1 da 2ª rodada)", async () => {
     const user = userEvent.setup();
+    // Cartão pré-existente: prova que a lista continua visível depois do
+    // aviso de recarga falha — na 1ª correção, o aviso ia pra
+    // `modalCardsError`, que no JSX é a ALTERNATIVA à lista (loading ? … :
+    // erro ? … : cards.map(…)). Preencher esse slot apagava a lista
+    // inteira (cartões existentes + "+ Novo cartão") pelo resto da sessão.
+    cardsInApi = [apiCard({ id: 1, description: "Cartão Antigo" })];
     let creditCardGetCalls = 0;
     apiClient.get.mockImplementation((url) => {
       if (url === "/credit-cards") {
@@ -332,9 +338,10 @@ describe("NovaTransacaoModal — quick-add de cartão no drawer (issue #79)", ()
       ).not.toBeInTheDocument();
     });
 
-    // A mensagem de erro aparece no slot da LISTA de cartões — distinta do
-    // erro de criação — e deixa claro que o cartão já existe.
+    // O aviso aparece — mas convivendo com a lista, não no lugar dela.
     await screen.findByText(/Cartão criado, mas não foi possível atualizar a lista/);
+    expect(screen.getByText("Cartão Antigo")).toBeInTheDocument();
+    expect(screen.getByText(/Novo cartão/i)).toBeInTheDocument();
   }, 15000);
 
   it("modo não-live: quick-add avisa que está indisponível em vez de um formulário morto (achado 4)", async () => {
@@ -359,5 +366,210 @@ describe("NovaTransacaoModal — quick-add de cartão no drawer (issue #79)", ()
       "/credit-cards",
       expect.anything(),
     );
+  }, 15000);
+
+  it("erro de cartão duplicado (400, corpo real {error,message,type} do backend) aparece em PT-BR (achado 3 da 2ª rodada)", async () => {
+    const user = userEvent.setup();
+    apiClient.post.mockImplementation((url) => {
+      if (url === "/credit-cards") {
+        // Forma real: RegisterCreditCardUseCase._check_uniqueness (fincla-api)
+        // levanta InvalidCreditCardError com mensagem em inglês interpolada;
+        // map_domain_error_to_http devolve 400 via DomainErrorHTTPException,
+        // que o FastAPI serializa como `{"detail": {error, message, type}}`
+        // (o `HTTPException(detail=...)` sempre vai dentro de "detail" no
+        // corpo JSON) — NÃO o envelope "safe error" traduzido, e NÃO 422 (a
+        // doc está desatualizada nisso). Sem tradução própria, essa frase em
+        // inglês vazava pra tela através do caminho `isLegacyError`.
+        return Promise.reject({
+          isAxiosError: true,
+          response: {
+            status: 400,
+            data: {
+              detail: {
+                error: "DOMAIN_VALIDATION_ERROR",
+                message:
+                  "Card with brand 'Visa' and last4 '4321' already exists in this organization",
+                type: "domain_validation",
+              },
+            },
+          },
+        });
+      }
+      return Promise.resolve({ data: {} });
+    });
+
+    renderDrawer();
+    await openCardPanel(user);
+    await user.click(screen.getByText(/Novo cartão/i));
+    await fillQuickAddForm(user, {
+      name: "Nubank Roxinho",
+      last4: "4321",
+      dueDay: "10",
+    });
+    await user.click(screen.getByRole("button", { name: "Adicionar" }));
+
+    await screen.findByText(
+      "Já existe um cartão com essa bandeira e esses 4 últimos dígitos nesta organização.",
+    );
+    expect(screen.queryByText(/Card with brand/i)).not.toBeInTheDocument();
+  }, 15000);
+
+  it("fechar e reabrir o drawer com um POST de criação em voo não deixa a sessão antiga vazar pra sessão nova (drawerSessionRef, achado 2 da 2ª rodada)", async () => {
+    const user = userEvent.setup();
+    let resolvePost;
+    const pendingPost = new Promise((resolve) => {
+      resolvePost = resolve;
+    });
+    apiClient.post.mockImplementation((url, body) => {
+      if (url === "/credit-cards") {
+        return pendingPost.then(() => {
+          const created = {
+            id: 999,
+            organization_id: body.organization_id,
+            last4: body.last4,
+            brand: body.brand,
+            due_day: body.due_day,
+            description: body.description,
+            credit_limit: body.credit_limit,
+            closing_day: body.closing_day,
+            color: body.color,
+            available_limit: null,
+            used_limit: 0,
+            limit_usage_percent: null,
+          };
+          cardsInApi = [...cardsInApi, created];
+          return { data: created, status: 201 };
+        });
+      }
+      return Promise.resolve({ data: {} });
+    });
+
+    const { rerender } = renderDrawer();
+    await openCardPanel(user);
+    await user.click(screen.getByText(/Novo cartão/i));
+    await fillQuickAddForm(user, {
+      name: "Sessão Velha",
+      last4: "1111",
+      dueDay: "10",
+    });
+    await user.click(screen.getByRole("button", { name: "Adicionar" }));
+    // Confirma que ficou em voo antes de fechar.
+    await screen.findByRole("button", { name: "Adicionando…" });
+
+    // Fecha o drawer (o pai zera `open`) com o POST ainda pendente.
+    rerender(
+      <NovaTransacaoModal
+        open={false}
+        onClose={vi.fn()}
+        onTransactionSaved={vi.fn()}
+        isMobile={false}
+        organizationId={ORG_ID}
+        dataMode="live"
+      />,
+    );
+    // Sessão nova sem preferências herdadas — determinístico (método
+    // "credito" persistido na sessão anterior não deve vazar pra cá).
+    localStorage.clear();
+    rerender(
+      <NovaTransacaoModal
+        open
+        onClose={vi.fn()}
+        onTransactionSaved={vi.fn()}
+        isMobile={false}
+        organizationId={ORG_ID}
+        dataMode="live"
+      />,
+    );
+    await openCardPanel(user); // painel próprio da sessão nova
+
+    // Só agora o POST da sessão antiga resolve.
+    resolvePost();
+    await waitFor(() => {
+      expect(cardsInApi.some((c) => c.description === "Sessão Velha")).toBe(true);
+    });
+    // Dá tempo pro then/await do handleQuickAddCard antigo processar, caso
+    // a guarda de sessão não funcione.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // A sessão nova não viu nada da sessão antiga.
+    expect(screen.queryByText("Sessão Velha")).not.toBeInTheDocument();
+  }, 15000);
+
+  it("trocar de preConfig com o drawer ABERTO e um POST em voo não deixa o setCardId tardio sobrescrever o formulário já resetado (achado 4 da 2ª rodada)", async () => {
+    const user = userEvent.setup();
+    cardsInApi = [apiCard({ id: 1, description: "Cartão Antigo" })];
+    let resolvePost;
+    const pendingPost = new Promise((resolve) => {
+      resolvePost = resolve;
+    });
+    apiClient.post.mockImplementation((url, body) => {
+      if (url === "/credit-cards") {
+        return pendingPost.then(() => {
+          const created = {
+            id: 998,
+            organization_id: body.organization_id,
+            last4: body.last4,
+            brand: body.brand,
+            due_day: body.due_day,
+            description: body.description,
+            credit_limit: body.credit_limit,
+            closing_day: body.closing_day,
+            color: body.color,
+            available_limit: null,
+            used_limit: 0,
+            limit_usage_percent: null,
+          };
+          cardsInApi = [...cardsInApi, created];
+          return { data: created, status: 201 };
+        });
+      }
+      return Promise.resolve({ data: {} });
+    });
+
+    const { rerender } = renderDrawer({
+      preConfig: { method: "credito", cartaoId: null },
+    });
+    // Painel já abre sozinho — preConfig.method === "credito".
+    await screen.findByText(/Novo cartão/i);
+    await user.click(screen.getByText(/Novo cartão/i));
+    await fillQuickAddForm(user, {
+      name: "Formulário Velho",
+      last4: "2222",
+      dueDay: "10",
+    });
+    await user.click(screen.getByRole("button", { name: "Adicionar" }));
+    await screen.findByRole("button", { name: "Adicionando…" });
+
+    // Troca de preConfig com o drawer ainda ABERTO (`open` nunca vira
+    // false) — dispara o reset do efeito de init-stamp por um caminho
+    // diferente do fechar/reabrir. `cartaoId` muda de null pra 1, então o
+    // stamp muda de verdade (senão o efeito nem re-executaria) e o painel
+    // continua aberto (novo preConfig também é method: "credito"), então
+    // se a guarda de sessão falhar, o `setModalityChoicealCardsRows`
+    // tardio aparece na tela ainda aberta.
+    rerender(
+      <NovaTransacaoModal
+        open
+        onClose={vi.fn()}
+        onTransactionSaved={vi.fn()}
+        isMobile={false}
+        organizationId={ORG_ID}
+        dataMode="live"
+        preConfig={{ method: "credito", cartaoId: 1 }}
+      />,
+    );
+
+    resolvePost();
+    await waitFor(() => {
+      expect(cardsInApi.some((c) => c.description === "Formulário Velho")).toBe(true);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // O formulário resetado (novo preConfig) não foi reaberto/sobrescrito
+    // pelo POST tardio da intenção anterior.
+    expect(screen.queryByText("Formulário Velho")).not.toBeInTheDocument();
+    expect(
+      screen.queryByPlaceholderText("Nome (ex: Nubank Roxinho)"),
+    ).not.toBeInTheDocument();
   }, 15000);
 });

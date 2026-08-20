@@ -280,6 +280,15 @@ export const NovaTransacaoModal = ({
   const [modalCardsRows, setModalityChoicealCardsRows] = useState([]);
   const [modalCardsLoading, setModalityChoicealCardsLoading] = useState(false);
   const [modalCardsError, setModalityChoicealCardsError] = useState("");
+  /**
+   * Aviso de "cartão criado, mas a lista não recarregou" — SEPARADO de
+   * `modalCardsError`. `modalCardsError` é a ALTERNATIVA à lista no JSX
+   * (loading ? … : erro ? … : cards.map(…)): usá-lo aqui derrubava a lista
+   * inteira (cartões existentes + "+ Novo cartão") pelo resto da sessão do
+   * drawer, incluindo o cartão que acabara de ser selecionado — pior que a
+   * falha de recarga que devia só avisar. Este aviso convive com a lista.
+   */
+  const [modalCardsReloadNotice, setModalCardsReloadNotice] = useState("");
   const appliedModalInitStampRef = useRef(null);
   /**
    * Marca se o `preConfig.cartaoId` já foi reconciliado com a lista
@@ -486,6 +495,13 @@ export const NovaTransacaoModal = ({
     // Novo stamp = nova intenção de preConfig.cartaoId (ou nenhuma) — ainda
     // não reconciliada com a lista de cartões carregada.
     preConfigCardWantAppliedRef.current = false;
+    // Reset roda com o drawer ainda ABERTO quando só o preConfig troca (ex.:
+    // "novo lançamento" disparado de novo enquanto o drawer já estava
+    // montado) — o efeito que zera `drawerSessionRef` só olha `open`, então
+    // sem isto um handleQuickAddCard em voo da intenção anterior aplicaria
+    // setCardId/setAddingCartao por cima deste formulário recém-resetado.
+    drawerSessionRef.current += 1;
+    setModalCardsReloadNotice("");
 
     const pc = preConfig;
     const nr = novaRecorrencia;
@@ -762,6 +778,7 @@ export const NovaTransacaoModal = ({
     const isStale = () => drawerSessionRef.current !== session;
     setQuickAddCardSaving(true);
     setQuickAddCardError("");
+    setModalCardsReloadNotice("");
     let created;
     try {
       const payload = buildCreateCreditCardPayload({
@@ -807,10 +824,12 @@ export const NovaTransacaoModal = ({
     } catch (e) {
       // Falha aqui é só de RECARGA — o cartão foi criado e já está
       // selecionado. Não usa o slot de erro do quick-add (que diria
-      // "criação falhou", convidando o usuário a criar um duplicado);
-      // usa o slot de erro da lista de cartões, que é sobre outra coisa.
+      // "criação falhou", convidando o usuário a criar um duplicado) NEM
+      // `modalCardsError` (que substitui a lista inteira — derrubaria o
+      // cartão recém-selecionado da tela). Usa um aviso que convive com a
+      // lista renderizada normalmente.
       if (!isStale()) {
-        setModalityChoicealCardsError(
+        setModalCardsReloadNotice(
           `Cartão criado, mas não foi possível atualizar a lista agora: ${formatCreditCardsApiError(e)}`,
         );
       }
@@ -1658,6 +1677,12 @@ export const NovaTransacaoModal = ({
   const goBack   = () => { setReviewDir("back");    setReview(false); };
 
   const handleNewTransaction = () => {
+    // Reset roda com o drawer ainda ABERTO (sucesso → "Nova transação",
+    // sem passar por `open` virar false) — mesmo motivo do bump em cima:
+    // invalida qualquer handleQuickAddCard em voo da transação anterior
+    // antes de zerar o formulário.
+    drawerSessionRef.current += 1;
+    setModalCardsReloadNotice("");
     const prefs = readStoredNovaTransacaoPrefs(organizationId);
     const prefTipo = prefs.tipo === "receita" ? "receita" : "despesa";
     const prefMethod = normalizeStoredNovaTxPaymentMethod(prefs.method, prefTipo) ?? "pix";
@@ -2262,6 +2287,11 @@ export const NovaTransacaoModal = ({
               <div style={{ padding:"18px 20px", display:"flex", flexDirection:"column", gap:16, ...mobileStepInStyle }}>
                 <div>
                   <div style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid, marginBottom:10 }}>Selecionar cartão</div>
+                  {modalCardsReloadNotice && (
+                    <div style={{ ...G, fontSize:11, color:T.amber, background:T.amberLight, border:`1px solid ${T.amber}33`, borderRadius:9, padding:"8px 10px", marginBottom:8, lineHeight:1.5 }}>
+                      {modalCardsReloadNotice}
+                    </div>
+                  )}
                   <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                     {organizationId && dataMode === "live" && modalCardsLoading && modalCardsRows.length === 0 ? (
                       <div style={{ ...G, fontSize:12, color:T.inkLight, padding:"12px 0" }}>Carregando cartões…</div>
@@ -2533,6 +2563,11 @@ export const NovaTransacaoModal = ({
             <div style={{ flex:1, overflowY:"auto", padding:"16px 18px", display:"flex", flexDirection:"column", gap:16 }}>
               <div>
                 <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:10 }}>Selecionar Cartão</div>
+                {modalCardsReloadNotice && (
+                  <div style={{ ...G, fontSize:11, color:T.amber, background:T.amberLight, border:`1px solid ${T.amber}33`, borderRadius:9, padding:"8px 10px", marginBottom:8, lineHeight:1.5 }}>
+                    {modalCardsReloadNotice}
+                  </div>
+                )}
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                   {organizationId && dataMode === "live" && modalCardsLoading && modalCardsRows.length === 0 ? (
                     <div style={{ ...G, gridColumn:"1 / -1", fontSize:12, color:T.inkLight, padding:"16px 8px" }}>Carregando cartões…</div>
