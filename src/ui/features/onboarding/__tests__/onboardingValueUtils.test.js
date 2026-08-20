@@ -39,15 +39,27 @@ describe("onboardingValueUtils", () => {
     expect(buildImmediateCreditCardPreview({
       temCartao: "sim",
       cardNome: "Nubank Roxinho",
+      card4: "1234",
       cardLim: "5.000,00",
       cardVenc: "10",
     })).toMatchObject({
       banco: "Nubank Roxinho",
+      dig: "1234",
       limite: 5000,
       disponivel: 5000,
       vencimento: 10,
       fechamento: 3,
     });
+  });
+
+  it("nao gera preview de cartao sem os 4 digitos — nenhum cartao foi criado", () => {
+    expect(buildImmediateCreditCardPreview({
+      temCartao: "sim",
+      cardNome: "Nubank Roxinho",
+      card4: "12",
+      cardLim: "5.000,00",
+      cardVenc: "10",
+    })).toBeNull();
   });
 
   it("gera descrição coerente para o tipo de organização selecionado", () => {

@@ -105,3 +105,60 @@ describe('handleApiError — envelope seguro e UX', () => {
   });
 });
 
+describe('handleApiError — validação 422 do FastAPI vira português', () => {
+  const validationError = (detail: unknown) =>
+    Object.assign(new Error('Request failed'), {
+      isAxiosError: true,
+      response: { status: 422, data: { detail } },
+    });
+
+  it('traduz a restrição de tamanho e nomeia o campo', () => {
+    const err = validationError([
+      {
+        type: 'string_too_short',
+        loc: ['body', 'last4'],
+        msg: 'String should have at least 4 characters',
+        input: '',
+        ctx: { min_length: 4 },
+      },
+    ]);
+    expect(handleApiError(err)).toBe(
+      'Últimos 4 dígitos: informe pelo menos 4 caracteres',
+    );
+  });
+
+  it('traduz campo obrigatório', () => {
+    const err = validationError([
+      { type: 'missing', loc: ['body', 'email'], msg: 'Field required' },
+    ]);
+    expect(handleApiError(err)).toBe('E-mail: campo obrigatório');
+  });
+
+  it('nunca vaza texto em inglês que não sabemos traduzir', () => {
+    const err = validationError([
+      { type: 'whatever', loc: ['body', 'mystery'], msg: 'Some brand new pydantic wording' },
+    ]);
+    expect(handleApiError(err)).toBe('Verifique os dados informados e tente novamente.');
+  });
+
+  it('preserva a mensagem de validador customizado do domínio', () => {
+    const err = validationError([
+      {
+        type: 'value_error',
+        loc: ['body', 'due_day'],
+        msg: 'Value error, Dia do vencimento deve estar entre 1 e 31',
+      },
+    ]);
+    expect(handleApiError(err)).toBe(
+      'Dia do vencimento: Dia do vencimento deve estar entre 1 e 31',
+    );
+  });
+
+  it('nao repete a mesma frase quando varios campos falham igual', () => {
+    const err = validationError([
+      { type: 'missing', loc: ['body', 'x'], msg: 'Some brand new pydantic wording' },
+      { type: 'missing', loc: ['body', 'y'], msg: 'Another unknown wording' },
+    ]);
+    expect(handleApiError(err)).toBe('Verifique os dados informados e tente novamente.');
+  });
+});

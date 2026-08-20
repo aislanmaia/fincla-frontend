@@ -114,6 +114,10 @@ export default function App() {
     valorTipo: r.valorTipo,
   }));
   const [checklistDismissed, setChecklistDismissed]  = useState(false);
+  // Etapas opcionais do onboarding que não gravaram (cartão, categorias,
+  // convites). O onboarding não trava mais por causa delas — mas o usuário
+  // precisa saber o que ficou de fora para refazer dentro do app.
+  const [onboardingWarnings, setOnboardingWarnings]  = useState([]);
   const [checklistProbeVersion, setChecklistProbeVersion] = useState(0);
   const [mounted, setMounted]     = useState(false);
   const [day, setDay]             = useState(11);
@@ -408,6 +412,7 @@ export default function App() {
         try {
           const onboardingResult = await submitOnboarding(data);
           session.completeOnboarding(onboardingResult);
+          setOnboardingWarnings(onboardingResult.warnings ?? []);
           setShowOnboarding(false);
           setChecklistDismissed(false);
           setRequestedDataMode("live");
@@ -521,6 +526,22 @@ export default function App() {
         {!isMobile && <StatePanelV4 open={panelOpen} day={day} setDay={setDay} budgetPct={budgetPct} setBudgetPct={setBudgetPct} freePct={freePct} setFreePct={setFreePct} moodKey={moodKey} onStartOnboarding={() => { setPanelOpen(false); setShowOnboarding(true); }} dataMode={dataMode} allowDataModeToggle={mockDataEnabled} onSetDataMode={(mode) => { setRequestedDataMode(mode); if (mode === 'empty') { setCenarios([]); setCenarioId(null); } else { setCenarios(SIM_CENARIOS_INIT); setCenarioId(SIM_CENARIOS_INIT[0].id); } }} />}
 
         <div data-fincla-main-scroll className="fincla-scroll" style={{ flex:1, minHeight:0, overflowY:"auto", overflowX:"hidden", padding:isMobile?"14px 14px 40px":"20px 28px 40px" }}>
+          {activeSegment === "dashboard" && onboardingWarnings.length > 0 && (
+            <div style={{ display:"flex", alignItems:"flex-start", gap:10, background:T.amberLight, border:`1px solid ${T.amberBorder}`, borderRadius:11, padding:"12px 14px", marginBottom:14 }}>
+              <span style={{ color:T.amber, flexShrink:0, lineHeight:1.5 }}>⚠</span>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ ...G, fontSize:13, fontWeight:700, color:T.ink, marginBottom:3 }}>
+                  Sua conta está pronta, mas nem tudo foi salvo
+                </div>
+                <div style={{ ...G, fontSize:12, color:T.inkMid, lineHeight:1.6 }}>
+                  {onboardingWarnings.join(" ")} Você pode cadastrar isso agora pelo menu lateral.
+                </div>
+              </div>
+              <button onClick={() => setOnboardingWarnings([])}
+                style={{ ...G, background:"none", border:"none", cursor:"pointer", color:T.inkLight, fontSize:16, lineHeight:1, padding:2, flexShrink:0 }}
+                aria-label="Dispensar aviso">✕</button>
+            </div>
+          )}
           {activeSegment === "dashboard" && onboardingData && !checklistDismissed && (
             <MiniChecklist
               onboardingData={onboardingData}

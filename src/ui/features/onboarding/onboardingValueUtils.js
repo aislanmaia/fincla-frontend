@@ -103,6 +103,11 @@ export function buildImmediateRecurringPreview(data, now = new Date()) {
 export function buildImmediateCreditCardPreview(data) {
   if (data?.temCartao !== "sim" || !data?.cardNome?.trim()) return null;
 
+  // Espelha a regra de `buildOnboardingCreditCardPayload`: sem os 4 dígitos
+  // nenhum cartão é criado, então nada de mostrar um card fantasma na tela.
+  const last4 = String(data?.card4 ?? "").replace(/\D/g, "").slice(-4);
+  if (last4.length !== 4) return null;
+
   const limit = parseMoneyInput(data?.cardLim) || 0;
   const dueDay = Number.parseInt(data?.cardVenc, 10) || 10;
 
@@ -110,7 +115,7 @@ export function buildImmediateCreditCardPreview(data) {
     id: "onb-card-1",
     banco: data.cardNome,
     nome: data.cardNome,
-    dig: "••••",
+    dig: last4,
     bandeira: "Mastercard",
     vencimento: dueDay,
     fechamento: Math.max(1, dueDay - 7),
