@@ -5,6 +5,7 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import { T } from "../tokens";
 import { G, NUM } from "../typography";
 import { PageTitle, PageEnter, Card } from "../components/primitives";
+import { CardEmptyWithCta } from "../features/shellExtras.jsx";
 import { useCalendarData } from "../features/calendar/useCalendarData.js";
 import {
   monthMatrix,
@@ -117,7 +118,7 @@ function groupByCategory(events) {
 }
 
 /** Calendário Financeiro v2 — workspace, estado no URL (deep-linkável). */
-export function CalendarPage({ organizationId = null, dataMode = "live", isMobile = false, onNewTransaction }) {
+export function CalendarPage({ organizationId = null, dataMode = "live", isMobile = false, onNewTransaction, transactionsRefreshToken = 0 }) {
   const live = shouldUseRealData(organizationId, dataMode);
   const navigate = useNavigate();
   const search = useSearch({ strict: false });
@@ -201,7 +202,15 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { setPopover(null); }, [view, cursor.year, cursor.month]);
 
-  const liveData = useCalendarData({ organizationId, year: cursor.year, month: cursor.month, enabled: live });
+  const liveData = useCalendarData({
+    organizationId,
+    year: cursor.year,
+    month: cursor.month,
+    enabled: live,
+    // Mesmo token de invalidação usado por Cartões/Recorrências (App.jsx): sem ele
+    // o calendário nunca soube que uma transação nova tinha sido criada em outra tela.
+    transactionsRefreshToken,
+  });
   const mock = useMemo(() => (dataMode === "mock" ? mockByDay() : {}), [dataMode]);
   const rawByDay = live ? liveData.byDay : mock;
 
@@ -219,6 +228,9 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
     [view, selected, cursor],
   );
   const selectedEvents = byDay[selected] || [];
+  // Enquanto busca, `byDay` já está vazio (o hook zera o estado antes do fetch) — sem
+  // este flag, o DayList do dia selecionado renderizaria "vazio" idêntico ao carregando.
+  const dayListLoading = live && liveData.loading;
 
   const navBtn = { ...G, width: 32, height: 32, borderRadius: 9, border: `1px solid ${T.border}`, background: T.surface, cursor: "pointer", fontSize: 15, color: T.inkMid, display: "inline-grid", placeItems: "center" };
 
@@ -236,6 +248,12 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
         </div>
       </div>
 
+      {/* Feedback de busca: carregando e erro são mutuamente exclusivos (o hook nunca
+          liga os dois ao mesmo tempo) e distintos do estado "vazio" — evita a ambiguidade
+          que já mordeu o app antes de confundir ausência de dados com falha/espera. */}
+      {live && liveData.loading ? (
+        <div style={{ ...G, fontSize: 12, color: T.blue, background: T.blueLight, borderRadius: 9, padding: "9px 12px", marginBottom: 12 }}>Carregando lançamentos do mês…</div>
+      ) : null}
       {live && liveData.error ? (
         <div style={{ ...G, fontSize: 12, color: T.red, background: T.redLight, borderRadius: 9, padding: "9px 12px", marginBottom: 12 }}>{liveData.error}</div>
       ) : null}
@@ -247,7 +265,7 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <MiniCalendar year={cursor.year} month={cursor.month} todayYmd={today.ymd} selected={selected} onPick={pick} onShift={shiftMonth} />
             <Filters filters={filters} hiddenTypes={hiddenTypes} onToggleType={toggleType} onToggleMethod={toggleMethod} payMethods={payMethods} />
-            <DayList selected={selected} events={selectedEvents} onEdit={openEdit} onNew={onNewTransaction} onSeeExtrato={seeExtrato} />
+            <DayList selected={selected} events={selectedEvents} onEdit={openEdit} onNew={onNewTransaction} onSeeExtrato={seeExtrato} isLoading={dayListLoading} />
           </div>
           <div>
             <Grid grid={grid} byDay={byDay} todayYmd={today.ymd} selected={selected} onPick={pick} onPickCell={pickCell} onEdit={openEdit} week={view === "week"} />
@@ -261,6 +279,7 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
                 onNew={onNewTransaction}
                 onSeeExtrato={() => { setPopover(null); seeExtrato(); }}
                 onClose={() => setPopover(null)}
+                isLoading={dayListLoading}
               />
             </DayPopover>
           ) : null}
@@ -271,7 +290,7 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
             <Grid grid={grid} byDay={byDay} todayYmd={today.ymd} selected={selected} onPick={pick} onEdit={openEdit} week={view === "week"} compact />
           </div>
           <div style={{ marginTop: 14 }}>
-            <DayList selected={selected} events={selectedEvents} onEdit={openEdit} onNew={onNewTransaction} onSeeExtrato={seeExtrato} />
+            <DayList selected={selected} events={selectedEvents} onEdit={openEdit} onNew={onNewTransaction} onSeeExtrato={seeExtrato} isLoading={dayListLoading} />
           </div>
         </>
       )}
@@ -391,7 +410,7 @@ function MoreRow({ n, onSeeExtrato }) {
   );
 }
 
-function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose }) {
+function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose, isLoading = false }) {
   const [mode, setMode] = useState("category"); // category | list
   const [open, setOpen] = useState({});
   // Ajustes de saldo entram no SALDO, fora de Receitas/Despesas.
@@ -484,8 +503,12 @@ function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose }) {
               )}
           </div>
         </>
+      ) : isLoading ? (
+        // Enquanto busca, NÃO usar o mesmo componente do "vazio de verdade" — senão
+        // o usuário lê "nenhum lançamento" antes da resposta da API chegar.
+        <div style={{ ...G, fontSize: 12.5, color: T.inkLight, marginTop: 8 }}>Carregando lançamentos…</div>
       ) : (
-        <div style={{ ...G, fontSize: 12.5, color: T.inkLight, marginTop: 8 }}>Nenhum lançamento neste dia.</div>
+        <CardEmptyWithCta icon="📅" iconSize={22} title="Nenhum lançamento neste dia" sub="Use os botões abaixo para registrar uma transação ou ver o extrato completo." />
       )}
       <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
         {onNew ? (

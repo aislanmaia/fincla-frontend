@@ -5,7 +5,7 @@ import { buildCalendarEvents, monthSummary, ymd } from "./calendarModel.js";
 
 const EMPTY = { loading: false, error: "", byDay: {}, hasLoaded: false };
 
-export function useCalendarData({ organizationId, year, month, enabled = true }) {
+export function useCalendarData({ organizationId, year, month, enabled = true, transactionsRefreshToken = 0 }) {
   const [state, setState] = useState(EMPTY);
 
   useEffect(() => {
@@ -48,7 +48,10 @@ export function useCalendarData({ organizationId, year, month, enabled = true })
     return () => {
       cancelled = true;
     };
-  }, [enabled, organizationId, year, month]);
+    // `transactionsRefreshToken` sobe de App.jsx (mesmo padrão de Cartões/Recorrências):
+    // muda toda vez que uma transação é criada/editada/excluída em qualquer tela,
+    // forçando este efeito a rebuscar mesmo com organização/mês inalterados.
+  }, [enabled, organizationId, year, month, transactionsRefreshToken]);
 
   const summary = useMemo(() => monthSummary(state.byDay), [state.byDay]);
   return { ...state, summary };
