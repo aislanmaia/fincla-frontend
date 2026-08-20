@@ -100,6 +100,33 @@ describe("useCalendarData (RTL)", () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.error).toBe("Não foi possível carregar as transações.");
+    // Achado #1 da 2ª rodada de revisão: `hasLoaded` significa "carregou com
+    // sucesso ao menos uma vez" — uma falha no 1º carregamento NÃO conta, senão
+    // o gate `!hasLoaded` (que decide "vazio real" vs. "lacuna de informação")
+    // fica morto pra sempre depois da primeira falha.
+    expect(result.current.hasLoaded).toBe(false);
+  });
+
+  it("mantém hasLoaded=true quando uma REVALIDAÇÃO (após sucesso) falha", async () => {
+    vi.mocked(transactionsApi.listTransactions).mockResolvedValueOnce({ data: [] });
+
+    const { result, rerender } = renderHook(
+      ({ token }) => useCalendarData({ organizationId: "org-1", year: 2026, month: 8, enabled: true, transactionsRefreshToken: token }),
+      { initialProps: { token: 0 } },
+    );
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    expect(result.current.error).toBe("");
+
+    // Transação nova salva com o calendário aberto: token sobe, mas desta vez a
+    // revalidação falha (ex.: instabilidade momentânea de rede).
+    vi.mocked(transactionsApi.listTransactions).mockRejectedValueOnce({
+      response: { data: { detail: "Falha ao revalidar." } },
+    });
+    rerender({ token: 1 });
+
+    await waitFor(() => expect(result.current.error).toBe("Falha ao revalidar."));
+    // hasLoaded continua true: já tivemos um carregamento válido antes, e os
+    // dados dessa carga (byDay) permanecem na tela — só a revalidação falhou.
     expect(result.current.hasLoaded).toBe(true);
   });
 });

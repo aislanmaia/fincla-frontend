@@ -5,7 +5,7 @@
 // CalendarPage de verdade em modo live, mockando só a costura de API (não o hook),
 // para provar que os três estados renderizam coisas diferentes e que o token de
 // invalidação (mesmo padrão de Cartões/Recorrências) realmente refaz a busca.
-import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const { navigateMock, searchMock } = vi.hoisted(() => ({ navigateMock: vi.fn(), searchMock: { value: {} } }));
@@ -36,16 +36,10 @@ function todayYmd() {
 // não separável (NNBSP) que o Intl usa entre "R$" e o valor.
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
-// "R$ 500,00" e o rótulo "Entradas" aparecem em vários lugares (chip da grade,
-// item do dia, filtro lateral) — para checar o total do MÊS de forma inequívoca,
-// acha o card KPI específico (o único "Entradas" cujo irmão começa com "R$").
+// "R$ 500,00"/"Entradas" aparecem em vários lugares (chip da grade, item do dia,
+// filtro lateral) — o card KPI tem um data-testid próprio pra checagem inequívoca.
 function entradasKpiText() {
-  const candidates = screen.getAllByText("Entradas");
-  for (const label of candidates) {
-    const value = within(label.parentElement).queryByText(/^R\$/);
-    if (value) return value.textContent;
-  }
-  throw new Error("Card KPI 'Entradas' não encontrado");
+  return screen.getByTestId("kpi-value-entradas").textContent;
 }
 
 afterEach(() => {
@@ -151,9 +145,10 @@ describe("<CalendarPage> v2 — feedback de busca (live)", () => {
     // ...e os R$ 500,00 de agosto NÃO podem aparecer sob o rótulo de setembro: o
     // período mudou, então os dados do período anterior somem já no mesmo render
     // em que o cursor muda — não só depois que o fetch (que nem respondeu ainda)
-    // resolver. Sem isto, o KPI mostraria "R$ 500,00" (o total de agosto) com
-    // "Setembro 2026" escrito ao lado.
-    expect(entradasKpiText()).toBe(brl.format(0));
+    // resolver. Setembro ainda não carregou nem uma vez, então o KPI mostra "—"
+    // (achado #3 da 2ª rodada: "R$ 0,00" seria uma afirmação, não uma lacuna) —
+    // nunca "R$ 500,00" (o total de agosto) sob o rótulo "Setembro 2026".
+    expect(entradasKpiText()).toBe("—");
     expect(screen.getByText("Carregando lançamentos do mês…")).toBeTruthy();
   });
 
@@ -181,5 +176,117 @@ describe("<CalendarPage> v2 — feedback de busca (live)", () => {
     // Sem isto, o request em voo apagaria a grade inteira até a resposta chegar.
     expect(screen.queryAllByText("Salário").length).toBeGreaterThan(0);
     expect(screen.queryByText("Nenhum lançamento neste dia")).toBeFalsy();
+  });
+
+  // ─── 2ª rodada de revisão adversarial da PR #94 ──────────────────────────
+
+  it("achado #1 (2ª rodada): retry pendurado após falha na 1ª carga continua 'carregando', nunca 'vazio confiante'", async () => {
+    vi.mocked(transactionsApi.listTransactions).mockRejectedValueOnce({
+      response: { data: { detail: "Falhou." } },
+    });
+    vi.mocked(balanceAdjustmentsApi.listOrgBalanceAdjustments).mockResolvedValue([]);
+
+    const { rerender } = render(<CalendarPage organizationId="org-1" dataMode="live" transactionsRefreshToken={0} />);
+    expect(await screen.findByText("Não foi possível carregar os lançamentos deste dia.")).toBeTruthy();
+
+    // Usuário tenta de novo (ex.: salvou uma transação pelo CTA) — o token sobe,
+    // mas a nova busca fica pendurada (nunca resolve): trava a tela exatamente
+    // no meio do retry.
+    vi.mocked(transactionsApi.listTransactions).mockReturnValue(new Promise(() => {}));
+    act(() => {
+      rerender(<CalendarPage organizationId="org-1" dataMode="live" transactionsRefreshToken={1} />);
+    });
+
+    // byDay continua {} e o período NUNCA carregou com sucesso — se `hasLoaded`
+    // tivesse virado true na falha anterior (bug), este quadro cairia no
+    // CardEmptyWithCta "Nenhum lançamento" por baixo do banner azul.
+    expect(screen.getByText("Carregando lançamentos do mês…")).toBeTruthy();
+    expect(screen.getByText("Carregando lançamentos…")).toBeTruthy();
+    expect(screen.queryByText("Nenhum lançamento neste dia")).toBeFalsy();
+  });
+
+  it("achado #2 (2ª rodada): falha de revalidação avisa localmente sem esconder dado válido nem confundir dia vazio com falha", async () => {
+    vi.mocked(transactionsApi.listTransactions).mockResolvedValueOnce({
+      data: [{ id: "tx-1", description: "Salário", value: 500, type: "income", date: "2026-08-15", payment_method: "pix" }],
+    });
+    vi.mocked(balanceAdjustmentsApi.listOrgBalanceAdjustments).mockResolvedValue([]);
+
+    searchMock.value = { fc_cal_m: "2026-08", fc_cal_d: "2026-08-15" };
+    const { rerender } = render(<CalendarPage organizationId="org-1" dataMode="live" transactionsRefreshToken={0} />);
+    await waitFor(() => expect(transactionsApi.listTransactions).toHaveBeenCalledTimes(1));
+    expect((await screen.findAllByText("Salário")).length).toBeGreaterThan(0);
+
+    // Revalidação (token bump, ex.: outra transação salva) falha desta vez.
+    vi.mocked(transactionsApi.listTransactions).mockRejectedValueOnce({
+      response: { data: { detail: "Falha ao revalidar." } },
+    });
+    act(() => {
+      rerender(<CalendarPage organizationId="org-1" dataMode="live" transactionsRefreshToken={1} />);
+    });
+    await screen.findByText("Falha ao revalidar.");
+
+    // O dia 15 TEM dado válido (stale) — continua visível, com uma pista local
+    // (não só a faixa do topo, que no mobile pode estar fora da tela).
+    expect(screen.queryAllByText("Salário").length).toBeGreaterThan(0);
+    expect(
+      screen.getByText("Não foi possível atualizar agora — mostrando os últimos lançamentos carregados."),
+    ).toBeTruthy();
+    // E não é lido como "a busca deste dia falhou" — ele tem dados de verdade.
+    expect(screen.queryByText("Não foi possível carregar os lançamentos deste dia.")).toBeFalsy();
+
+    // Um dia SEM lançamentos nos dados válidos que já temos continua "vazio de
+    // verdade" (CTA), não "falhou" — a falha foi só na revalidação, o dado do
+    // dia 20 (ausência de eventos) é um fato real, não uma lacuna.
+    searchMock.value = { fc_cal_m: "2026-08", fc_cal_d: "2026-08-20" };
+    act(() => {
+      rerender(<CalendarPage organizationId="org-1" dataMode="live" transactionsRefreshToken={1} />);
+    });
+    expect(screen.getByText("Nenhum lançamento neste dia")).toBeTruthy();
+    expect(screen.queryByText("Não foi possível carregar os lançamentos deste dia.")).toBeFalsy();
+  });
+
+  it("achado #3 (2ª rodada): KPIs e cabeçalho do dia não afirmam 'R$ 0,00 / 0 lançamentos' sem saber", async () => {
+    vi.mocked(transactionsApi.listTransactions).mockReturnValue(new Promise(() => {})); // 1ª carga nunca resolve
+    vi.mocked(balanceAdjustmentsApi.listOrgBalanceAdjustments).mockReturnValue(new Promise(() => {}));
+
+    render(<CalendarPage organizationId="org-1" dataMode="live" />);
+
+    expect(await screen.findByTestId("kpi-value-entradas")).toHaveTextContent("—");
+    expect(screen.getByTestId("kpi-value-saidas")).toHaveTextContent("—");
+    expect(screen.getByTestId("kpi-value-saldo")).toHaveTextContent("—");
+    // "R$ 0,00" (uma afirmação sobre o mês) não pode aparecer enquanto ainda não
+    // sabemos — nem no card, nem no cabeçalho da lista do dia.
+    expect(screen.queryByText("R$ 0,00")).toBeFalsy();
+    expect(screen.queryByText("0 lançamentos")).toBeFalsy();
+    expect(screen.getAllByText("carregando…").length).toBeGreaterThan(0);
+  });
+
+  it("achado #4 (2ª rodada): selecionar um dia do mês vizinho na visão Semana move o cursor de mês junto", async () => {
+    vi.mocked(transactionsApi.listTransactions).mockResolvedValue({ data: [] });
+    vi.mocked(balanceAdjustmentsApi.listOrgBalanceAdjustments).mockResolvedValue([]);
+
+    // Semana de 30/ago a 05/set/2026 — atravessa a virada do mês.
+    searchMock.value = { fc_cal_v: "week", fc_cal_m: "2026-08", fc_cal_d: "2026-08-31" };
+    const { container } = render(<CalendarPage organizationId="org-1" dataMode="live" />);
+    await waitFor(() => expect(transactionsApi.listTransactions).toHaveBeenCalledTimes(1));
+
+    // Célula de um dia de setembro (mês vizinho): esmaecida (opacity 0.55), mas
+    // continua clicável na visão Semana — ao contrário da visão Mês.
+    const adjacentCell = [...container.querySelectorAll("div")].find(
+      (d) => d.style.minHeight === "300px" && d.style.cursor === "pointer" && d.style.opacity === "0.55",
+    );
+    expect(adjacentCell).toBeTruthy();
+
+    navigateMock.mockClear();
+    fireEvent.click(adjacentCell);
+
+    expect(navigateMock).toHaveBeenCalled();
+    const call = navigateMock.mock.calls.find((c) => typeof c[0]?.search === "function");
+    expect(call).toBeTruthy();
+    const next = call[0].search({});
+    // O dia virou setembro E o mês do cursor foi junto — sem isto o hook segue
+    // buscando agosto, e o dia (que é real) renderiza como "vazio confiante".
+    expect(next.fc_cal_d.slice(0, 7)).toBe("2026-09");
+    expect(next.fc_cal_m).toBe("2026-09");
   });
 });

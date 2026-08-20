@@ -72,11 +72,15 @@ export function useCalendarData({ organizationId, year, month, enabled = true, t
         const detail = err?.response?.data?.detail;
         // Mantém os dados anteriores na tela (`...current`) — uma revalidação que
         // falha não pode apagar o que já estava correto; só liga o aviso de erro.
+        // `hasLoaded` NÃO é forçado aqui: ele só vira true no `.then` (sucesso).
+        // Se este for o 1º carregamento e ele falhar, `hasLoaded` continua false —
+        // "já carregou com sucesso ao menos uma vez" é o único significado válido,
+        // senão o gate `!hasLoaded` (achado #1 da 1ª rodada) morre depois da
+        // primeira falha e o "vazio confiante" volta por trás de um retry.
         setState((current) => ({
           ...current,
           loading: false,
           error: (typeof detail === "string" && detail) || err?.message || "Erro ao carregar o calendário.",
-          hasLoaded: true,
         }));
       });
     return () => {
