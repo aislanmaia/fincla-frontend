@@ -43,11 +43,22 @@ apiClient.interceptors.request.use((config) => {
 
 // Retry leve em erros de rede transientes (conexão derrubada antes do
 // servidor responder). Cobre dropouts do tunnel residencial / proxy sob
-// carga sem mascarar erros de produto. GETs são sempre seguros para
-// retry; writes (POST/PATCH/PUT/DELETE) só retentam se `error.response`
-// estiver ausente — o servidor garantidamente não recebeu o request,
-// então não há risco de duplicação. Timeout de servidor (ETIMEDOUT após
-// envio bem-sucedido) NÃO retenta para writes — pode duplicar.
+// carga sem mascarar erros de produto. Só GET/HEAD são repetidos — são
+// seguros por DEFINIÇÃO (não alteram estado; repetir nunca duplica nada),
+// então qualquer um dos códigos abaixo é repetível para eles.
+//
+// Writes (POST/PUT/PATCH/DELETE) NUNCA são repetidos aqui, nem em
+// ERR_NETWORK/ECONNRESET. A ideia antiga era "esses códigos provam que a
+// conexão caiu antes de qualquer byte trafegar, logo é seguro" — isso é
+// FALSO em geral. `ECONNRESET` é um RST de TCP, que tipicamente chega
+// DEPOIS de bytes trocados (ex.: o servidor terminou de escrever o `201`
+// e a conexão caiu antes do cliente terminar de ler a resposta).
+// `ERR_NETWORK` no adapter XHR do axios vem do mesmo `onerror` tanto para
+// "recusou antes de enviar" quanto para "caiu depois do 201, antes dos
+// headers chegarem" — não dá pra distinguir do lado do cliente. Sem uma
+// forma de provar que o servidor não processou, repetir um write arrisca
+// duplicar (ver issue #102, que documentou essa lacuna, e #103, sobre
+// `Idempotency-Key` como o caminho que reabilitaria isso com segurança).
 const RETRYABLE_NETWORK_CODES = new Set([
   'ERR_NETWORK',
   'ECONNRESET',
@@ -66,11 +77,9 @@ function isSafeToRetry(error: AxiosError): boolean {
   const cfg = error.config as RetryableConfig | undefined;
   if (!cfg) return false;
   const method = (cfg.method || 'get').toLowerCase();
-  if (method === 'get') return true;
-  // Para writes: só ERR_NETWORK / ECONNRESET (conexão derrubada antes
-  // de qualquer byte ser enviado) é seguro. ECONNABORTED / ETIMEDOUT
-  // significa que o cliente desistiu, mas o servidor pode ter processado.
-  return error.code === 'ERR_NETWORK' || error.code === 'ECONNRESET';
+  // Só GET/HEAD: idempotentes por definição, nunca escrevem. Qualquer write
+  // (POST/PUT/PATCH/DELETE) fica de fora, sempre — ver comentário acima.
+  return method === 'get' || method === 'head';
 }
 
 // Interceptor para tratar erros de autenticação + retry transiente.
