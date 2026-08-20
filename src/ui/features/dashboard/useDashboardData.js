@@ -83,14 +83,36 @@ function dayIndexInRange(isoDate, rangeStart, dayCount) {
   return diff;
 }
 
-function pickCategoryName(transaction) {
-  if (transaction.category) {
-    return categoryLabelPtForTag({ name: transaction.category });
-  }
-
-  const tagGroups = Object.values(transaction.tags ?? {});
-  const firstTag = tagGroups.flat()[0];
-  return categoryLabelPtForTag(firstTag ?? { name: "Sem categoria" });
+/**
+ * `transaction.tags` traz VÁRIOS grupos (categoria/detalhe/contexto...), não
+ * só o de categoria — pegar o primeiro tag de `Object.values(tags).flat()[0]`
+ * cegamente e aplicar o tradutor de CATEGORIA nele traduz o que não é
+ * categoria (ex.: primeiro grupo é "detalhe", mostra o slug cru como
+ * categoria no dashboard). Mesmo defeito já corrigido em `mapUpcomingDebits`
+ * via `firstCategoryTagFromSeries` (achado 4, issue #100) — aqui reaproveita
+ * `pickCategoryTagFromApiTransaction`, que já resolve a tag de categoria de
+ * verdade (por grupo/`tag_type`, sem fallback pra tag arbitrária de outro
+ * grupo — achado 1 da rodada 3 de review), com o mesmo fallback pra
+ * `transaction.category` usado em `aggregateExpenseCategoriesFromTransactions`
+ * neste arquivo.
+ *
+ * Repassa `is_default` (achado 2, rodada 3): sem ele, `categoryLabelPtForTag`
+ * não distingue uma categoria do USUÁRIO que coincide de texto com um nome
+ * canônico (ex. "Health") de uma linha do seed de verdade — sequestraria o
+ * nome pela tradução — e a rede de segurança do `icon_key` (categoria sem
+ * nome, só ícone, de uma linha do seed legada) nunca dispara. `||` em vez de
+ * `??`: string vazia precisa cair no próximo fallback igual a `null`/
+ * `undefined`, senão "Sem categoria" vira o nome literal "" e o tradutor
+ * devolve o genérico "Categoria" em vez do "Sem categoria" esperado.
+ */
+export function pickCategoryName(transaction) {
+  const tag = pickCategoryTagFromApiTransaction(transaction);
+  const rawName = tag?.name || transaction.category || "Sem categoria";
+  return categoryLabelPtForTag({
+    name: rawName,
+    icon_key: tag?.icon_key ?? null,
+    is_default: tag?.is_default ?? null,
+  });
 }
 
 function pickCategoryColor(category) {
@@ -143,10 +165,17 @@ function aggregateExpenseCategoriesFromTransactions(rawTx) {
     if (tx.type !== "expense") continue;
 
     const tag = pickCategoryTagFromApiTransaction(tx);
-    const rawName = tag?.name ?? tx.category ?? "Sem categoria";
+    // `||` (não `??`) e `is_default` repassado: mesma correção de
+    // `pickCategoryName` acima, aplicada aqui (achado 1, rodada 4 de review
+    // #100) — sem isso, a MESMA transação com categoria do usuário "Health"
+    // (`is_default:false`) lia "Health" em Últimas transações e "Saúde" no
+    // card Gastos por Categoria, na mesma tela.
+    const rawName = tag?.name || tx.category || "Sem categoria";
+    const isDefault = tag?.is_default ?? null;
     const normalizedName = categoryLabelPtForTag({
       name: rawName,
       icon_key: tag?.icon_key ?? null,
+      is_default: isDefault,
     });
     const mapKey =
       tag?.id != null && tag.id !== ""
@@ -166,6 +195,7 @@ function aggregateExpenseCategoriesFromTransactions(rawTx) {
         tagName: rawName,
         icon_key: tag?.icon_key ?? null,
         color: tag?.color ?? null,
+        isDefault,
         total: add,
       });
     }
@@ -189,27 +219,25 @@ export function buildDashboardCategoryRows(
       .filter((c) => c.tag_id != null && c.tag_id !== "")
       .map((c) => [String(c.tag_id), c.tag_color]),
   );
+  // Achado 4, rodada 5 de review #100: `apiList` vem de `/analytics/by-category`
+  // (o endpoint de agregação do consultor), que NUNCA manda `is_default`
+  // (ver doc de `categoryLabelPtForTag`) — essa chave de junção com `row`
+  // (abaixo) só pode levar em conta o que os DOIS lados têm em comum. Uma
+  // função ÚNICA (`apiJoinKey`) evita que os dois lados divirjam nas
+  // próximas edições — antes desta correção, `rowNameKey` passou a levar
+  // `is_default` enquanto este mapa não, e pra uma categoria do usuário
+  // "Health" (`is_default:false`, que bloqueia a tradução) a chave da linha
+  // virava "health" mas a chave da API (sem `is_default`, que NÃO bloqueia)
+  // virava "saude" — nunca casavam, e a cor caía no fallback hasheado em
+  // vez da cor de verdade da API.
+  const apiJoinKey = (name, iconKey) =>
+    normalizeTagNameKey(categoryLabelPtForTag({ name, icon_key: iconKey ?? null }));
+
   const apiColorByName = new Map(
-    apiList.map((c) => [
-      normalizeTagNameKey(
-        categoryLabelPtForTag({
-          name: c.tag_name,
-          icon_key: c.tag_icon_key ?? null,
-        }),
-      ),
-      c.tag_color,
-    ]),
+    apiList.map((c) => [apiJoinKey(c.tag_name, c.tag_icon_key), c.tag_color]),
   );
   const apiMetaByName = new Map(
-    apiList.map((c) => {
-      const normalizedName = normalizeTagNameKey(
-        categoryLabelPtForTag({
-          name: c.tag_name,
-          icon_key: c.tag_icon_key ?? null,
-        }),
-      );
-      return [normalizedName, c];
-    }),
+    apiList.map((c) => [apiJoinKey(c.tag_name, c.tag_icon_key), c]),
   );
 
   const sourceRows =
@@ -220,6 +248,10 @@ export function buildDashboardCategoryRows(
           tagName: c.tag_name,
           icon_key: c.tag_icon_key ?? null,
           color: c.tag_color,
+          // Endpoint de agregação do consultor NUNCA manda `is_default`
+          // (ver doc de `categoryLabelPtForTag` em categoryLabels.js) — fica
+          // `null`, mesmo shape que os outros call sites desse endpoint.
+          isDefault: null,
           total: c.total,
         }));
 
@@ -228,12 +260,12 @@ export function buildDashboardCategoryRows(
     .sort((a, b) => b.total - a.total)
     .slice(0, DASHBOARD_CATEGORY_CARD_LIMIT)
     .map((row) => {
-      const rowNameKey = normalizeTagNameKey(
-        categoryLabelPtForTag({
-          name: row.tagName,
-          icon_key: row.icon_key ?? null,
-        }),
-      );
+      // Mesma chamada de `apiJoinKey` acima — de propósito SEM `is_default`
+      // (só serve pra casar com `apiColorByName`/`apiMetaByName`, que nunca
+      // têm esse campo). O nome FINAL exibido no card (correto,
+      // `is_default`-aware) é computado separadamente por `mapCategory`
+      // logo abaixo — este `rowNameKey` é só a chave de junção interna.
+      const rowNameKey = apiJoinKey(row.tagName, row.icon_key);
       const apiMeta = apiMetaByName.get(rowNameKey);
       const tagId = row.tagId || apiMeta?.tag_id || undefined;
       const iconKey = row.icon_key || apiMeta?.tag_icon_key || null;
@@ -248,8 +280,9 @@ export function buildDashboardCategoryRows(
           tag_id: tagId,
           tag_name: row.tagName,
           tag_icon_key: iconKey,
-          total: row.total,
           tag_color: color,
+          is_default: row.isDefault ?? null,
+          total: row.total,
         },
         prevTotalByTagId,
       );
@@ -262,9 +295,14 @@ export function mapCategory(category, prevTotalByTagId) {
 
   return {
     tagId: category.tag_id,
+    // Repassa `is_default` (achado 1, rodada 4 de review #100) — sem ele, a
+    // linha final do card sequestrava categorias do usuário que coincidem
+    // de texto com um nome canônico do seed (ex. "Health" → "Saúde"), o
+    // mesmo defeito que `pickCategoryName` já corrige pra Últimas transações.
     name: categoryLabelPtForTag({
       name: category.tag_name,
       icon_key: category.tag_icon_key ?? null,
+      is_default: category.is_default ?? null,
     }),
     value: category.total,
     avg,

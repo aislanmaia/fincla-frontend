@@ -1,5 +1,89 @@
 import { describe, expect, it } from "vitest";
-import { buildDashboardCategoryRows, mapCategory, mapUpcomingDebits } from "../useDashboardData.js";
+import {
+  buildDashboardCategoryRows,
+  mapCategory,
+  mapUpcomingDebits,
+  pickCategoryName,
+} from "../useDashboardData.js";
+
+// Regressão #100 (achado 4): `pickCategoryName` fazia
+// `Object.values(transaction.tags).flat()[0]` — pega o primeiro tag de
+// QUALQUER grupo, não só o de categoria — e passava pelo tradutor de
+// CATEGORIA. Mesmo defeito que `mapUpcomingDebits` já corrigiu (abaixo)
+// via `firstCategoryTagFromSeries`, aplicado aqui no segundo call site.
+describe("pickCategoryName", () => {
+  it("acha a tag de categoria mesmo quando o primeiro grupo do payload é 'detalhe'", () => {
+    // Object.entries preserva a ordem de inserção: "detalhe" chega ANTES de
+    // "categoria" no payload — pegar tags[0] cego pegaria "grocery" (a tag
+    // detalhe), não a categoria.
+    const name = pickCategoryName({
+      category: null,
+      tags: {
+        detalhe: [{ id: "det-1", name: "grocery", is_default: true }],
+        categoria: [{ id: "cat-1", name: "Food & Groceries", icon_key: "shopping-cart" }],
+      },
+    });
+    expect(name).toBe("Alimentação");
+  });
+
+  it("sem tag de categoria, cai no fallback `transaction.category`", () => {
+    const name = pickCategoryName({
+      category: "Housing",
+      tags: { detalhe: [{ id: "det-1", name: "rent", is_default: true }] },
+    });
+    expect(name).toBe("Moradia");
+  });
+
+  it("sem tag e sem `transaction.category`, cai em 'Sem categoria'", () => {
+    expect(pickCategoryName({ category: null, tags: {} })).toBe("Sem categoria");
+  });
+
+  // Regressão #100 (rodada 3, achado 1): o achado 4 original ficou pela
+  // metade — `pickCategoryTagFromApiTransaction` → `pickCategoryTag`
+  // terminava em `entries.flatMap(([, tags]) => tags ?? [])[0]` quando não
+  // havia grupo "categoria" nem `transaction.category`, devolvendo a
+  // primeira tag de QUALQUER grupo (ex.: "detalhe") como se fosse a
+  // categoria — exatamente o slug cru que o docblock novo dizia impedir.
+  // Corrigido na raiz compartilhada (`pickCategoryTag` em
+  // transactionsAdapter.js): sem categoria confirmada, devolve `null`.
+  it("sem grupo categoria e sem `transaction.category`, NUNCA usa uma tag de outro grupo como categoria", () => {
+    const name = pickCategoryName({
+      category: null,
+      tags: { detalhe: [{ id: "det-1", name: "grocery", is_default: true }] },
+    });
+    expect(name).toBe("Sem categoria");
+  });
+
+  // Regressão #100 (rodada 3, achado 2a): remontar a tag como `{name,
+  // icon_key}` sem `is_default` descartava o sinal que impede o sequestro
+  // de uma categoria do USUÁRIO cujo texto coincide com um nome canônico do
+  // seed — "Health" virava "Saúde" por engano.
+  it("NÃO traduz categoria do usuário só porque o texto coincide com um nome canônico (is_default: false)", () => {
+    const name = pickCategoryName({
+      category: null,
+      tags: { categoria: [{ id: "cat-1", name: "Health", is_default: false }] },
+    });
+    expect(name).toBe("Health");
+  });
+
+  // Regressão #100 (rodada 3, achado 2b): sem `is_default`, a rede de
+  // segurança do `icon_key` (categoria sem nome, só ícone, de uma linha do
+  // seed legada) nunca disparava — devolvia o genérico "Categoria".
+  it("categoria sem nome mas com icon_key ainda cai na rede de segurança quando is_default é true", () => {
+    const name = pickCategoryName({
+      category: null,
+      tags: { categoria: [{ id: "cat-1", name: "", icon_key: "pill", is_default: true }] },
+    });
+    expect(name).toBe("Saúde");
+  });
+
+  // Regressão #100 (rodada 3, achado 2c): `??` deixava passar string vazia
+  // como nome "válido" — `transaction.category` vazio virava o literal ""
+  // e o tradutor devolvia o genérico "Categoria" em vez de "Sem categoria".
+  it('`transaction.category` vazio ("") cai em "Sem categoria", não no genérico "Categoria"', () => {
+    expect(pickCategoryName({ category: "", tags: {} })).toBe("Sem categoria");
+  });
+});
 
 describe("mapCategory", () => {
   it("não inventa comparação quando o período anterior não existe", () => {
@@ -150,5 +234,76 @@ describe("buildDashboardCategoryRows", () => {
         color: "#059669",
       }),
     );
+  });
+
+  // Regressão #100 (rodada 4 de review, achado 1): o achado 2 (rodada 3)
+  // corrigiu `pickCategoryName` (usado em Últimas transações) pra repassar
+  // `is_default`, mas `aggregateExpenseCategoriesFromTransactions` — usado
+  // por ESTA função, pro card Gastos por Categoria — continuava remontando
+  // a tag sem `is_default` e com `??`. Comprovado por execução: a MESMA
+  // transação com categoria do usuário "Health" (`is_default:false`) lia
+  // "Health" em Últimas transações e "Saúde" no card, na mesma tela.
+  it('categoria do usuário "Health" (is_default:false) NÃO é sequestrada pela tradução no card (mesmo texto de Últimas transações)', () => {
+    const tx = {
+      type: "expense",
+      value: 150,
+      tags: {
+        categoria: [{ id: "cat-health", name: "Health", is_default: false }],
+      },
+    };
+
+    // Últimas transações (já corrigido na rodada 3).
+    expect(pickCategoryName(tx)).toBe("Health");
+
+    // Card Gastos por Categoria — mesma transação, mesma tela.
+    const rows = buildDashboardCategoryRows([tx], "2026-06-01", "2026-06-30", [], new Map());
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe("Health");
+  });
+
+  // Regressão #100 (rodada 5 de review, achado 4): `rowNameKey` passou a
+  // levar `is_default` (achado 1, rodada 5), mas `apiColorByName`/
+  // `apiMetaByName` (derivados de `/analytics/by-category`, que NUNCA manda
+  // `is_default`) continuavam chaveando sem ele — pra "Health"
+  // (`is_default:false`, bloqueia tradução) a chave da linha virava
+  // "health" mas a da API (sem `is_default`, traduz) virava "saude": nunca
+  // casavam, e a cor caía no fallback hasheado em vez da cor de verdade da
+  // API. `rowNameKey` voltou a NUNCA levar `is_default` (só serve de chave
+  // de junção com um lado que nunca tem esse campo); o nome FINAL exibido
+  // continua correto via `mapCategory`, testado acima.
+  it('categoria do usuário "Health" (is_default:false) ainda acha a cor da API pelo NOME (chave de junção não diverge, sem tag_id em comum)', () => {
+    const tx = {
+      type: "expense",
+      value: 150,
+      tags: {
+        categoria: [{ id: "cat-health", name: "Health", is_default: false }],
+      },
+    };
+    // `tag_id` DIFERENTE do id da tag na transação — de propósito, pra
+    // forçar o bridge passar pela chave de NOME (`apiColorByName`), não
+    // pelo id (`apiColorByTagId`). É exatamente esse caminho que quebrava:
+    // sem ele, o teste passaria mesmo com a chave assimétrica, porque o
+    // bridge por id "salvava" o resultado antes de chegar na chave de nome.
+    const apiCategories = [
+      {
+        tag_id: "outro-id-qualquer",
+        tag_name: "Health",
+        tag_icon_key: null,
+        tag_color: "#ABCDEF",
+        total: 150,
+      },
+    ];
+
+    const rows = buildDashboardCategoryRows(
+      [tx],
+      "2026-06-01",
+      "2026-06-30",
+      apiCategories,
+      new Map(),
+    );
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe("Health");
+    expect(rows[0].color).toBe("#ABCDEF");
   });
 });

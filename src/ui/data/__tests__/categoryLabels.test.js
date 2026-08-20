@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   categoryLabelPtForTag,
+  DETAIL_LABEL_PT_BY_EN_NAME,
   detailLabelPtForTag,
   resolveCategoryColorForTag,
   resolveCategoryIconKey,
@@ -133,30 +134,58 @@ describe("detailLabelPtForTag", () => {
     expect(detailLabelPtForTag({ name: "grocery" })).toBe("grocery");
   });
 
-  it("nunca mostra slug cru com underscore fora do mapa: humaniza e registra (is_default: true)", () => {
+  it("nunca mostra slug cru com underscore fora do mapa: humaniza (is_default: true)", () => {
+    expect(detailLabelPtForTag({ name: "some_unmapped_tag", is_default: true })).toBe(
+      "some unmapped tag",
+    );
+  });
+
+  // Regressão #100 (achado 2): o backend nunca reseta `is_default` ao
+  // renomear uma tag semeada, então "is_default: true + nome fora do mapa"
+  // cobre tanto dado legado quanto uma tag semeada renomeada de propósito
+  // (o caso comum, ex.: "restaurant" → "chopp"). O fallback continua
+  // silencioso pro USUÁRIO FINAL (produção) — nunca acusa no console um
+  // nome legítimo escolhido pela pessoa.
+  it('renomear a tag semeada pra fora do mapa não dispara console.warn EM PRODUÇÃO (import.meta.env.DEV: false)', () => {
+    vi.stubEnv("DEV", false);
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     expect(detailLabelPtForTag({ name: "some_unmapped_tag", is_default: true })).toBe(
       "some unmapped tag",
     );
-    expect(warn).toHaveBeenCalledTimes(1);
-    warn.mockRestore();
-  });
-
-  // Regressão: slug de uma palavra só (sem "_") também precisa avisar quando
-  // is_default é true e não está no mapa — antes vazava cru e calado.
-  it("slug de palavra única sem tradução também avisa quando is_default é true", () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // Slug de palavra única (sem "_") também precisa cair no mesmo fallback
+    // silencioso — antes só esse caso específico avisava.
     expect(detailLabelPtForTag({ name: "gym", is_default: true })).toBe("gym");
-    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
+    vi.unstubAllEnvs();
   });
 
-  it("avisa só uma vez por nome não mapeado, não a cada chamada", () => {
+  // Regressão #100 (rodada 4, achado 5): tirar o warn zerou a detecção de
+  // drift entre `DETAIL_LABEL_PT_BY_EN_NAME` e o seed do backend — o teste
+  // estático de "cópia versionada" (abaixo) só pega EDIÇÃO ACIDENTAL do
+  // mapa, nunca um slug NOVO que o backend passou a semear (a direção real
+  // do drift). Restaura o sinal só em DEV (nunca alcança um usuário real em
+  // produção) pra quem roda a app localmente contra um backend com seed
+  // atualizado.
+  it("EM DEV (import.meta.env.DEV: true), avisa quando o nome não bate com o mapa — sinal de drift do seed", () => {
+    vi.stubEnv("DEV", true);
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    detailLabelPtForTag({ name: "totally_unmapped_xyz", is_default: true });
-    detailLabelPtForTag({ name: "totally_unmapped_xyz", is_default: true });
-    detailLabelPtForTag({ name: "totally_unmapped_xyz", is_default: true });
+    expect(detailLabelPtForTag({ name: "novo_slug_do_seed", is_default: true })).toBe(
+      "novo slug do seed",
+    );
     expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+    vi.unstubAllEnvs();
+  });
+
+  it("mesmo nome não mapeado repetido continua consistente entre chamadas (sem estado de módulo)", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    expect(detailLabelPtForTag({ name: "totally_unmapped_xyz", is_default: true })).toBe(
+      "totally unmapped xyz",
+    );
+    expect(detailLabelPtForTag({ name: "totally_unmapped_xyz", is_default: true })).toBe(
+      "totally unmapped xyz",
+    );
     warn.mockRestore();
   });
 
@@ -203,5 +232,52 @@ describe("resolveCategoryColorForTag", () => {
 
   it("nunca cai no cinza neutro para nomes conhecidos e sem cor", () => {
     expect(resolveCategoryColorForTag({ name: "Transporte" })).not.toBe("#6B7280");
+  });
+});
+
+// Regressão #100 (rodada 3, achado 6 / rodada 4, achado 5): tirar o
+// `console.warn` de produção (achados 2/5) zerou a detecção de drift entre
+// `DETAIL_LABEL_PT_BY_EN_NAME` e o seed do backend
+// (`fincla-api/.../seeds/seed_default_tags.py`, `CANONICAL_CATEGORY_SEED`).
+// O sinal de VERDADE pra isso foi restaurado como `console.warn` só em
+// `import.meta.env.DEV` (ver `detailLabelPtForTag`, teste "EM DEV" acima).
+//
+// Este teste aqui NÃO detecta drift — é change-detector puro: fixa a lista
+// ATUAL (25 filhos, conferida na PR #97/#100) e só quebra quando ALGUÉM
+// EDITA o mapa neste arquivo. Não pega o backend semeando um slug novo (a
+// direção real do drift) — quem editar o mapa vai colar a chave nova aqui
+// sem pensar, e a suíte segue verde. Serve só pra tornar a lista explícita
+// e forçar UMA revisão a mais no diff da PR; a detecção de verdade é o warn
+// de DEV.
+describe("DETAIL_LABEL_PT_BY_EN_NAME — lista fixada (change-detector, não detecta drift do backend)", () => {
+  it("mantém a lista de slugs do seed do backend estável e explícita", () => {
+    const expectedSeedSlugs = [
+      "app",
+      "bar",
+      "book",
+      "bus",
+      "cinema",
+      "clothing",
+      "course",
+      "delivery",
+      "doctor",
+      "electronics",
+      "energy",
+      "fee",
+      "freelance",
+      "fuel",
+      "grocery",
+      "health_plan",
+      "pharmacy",
+      "rent",
+      "restaurant",
+      "salary",
+      "streaming",
+      "tax",
+      "travel",
+      "uber",
+      "water",
+    ];
+    expect(Object.keys(DETAIL_LABEL_PT_BY_EN_NAME).sort()).toEqual(expectedSeedSlugs);
   });
 });

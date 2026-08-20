@@ -132,6 +132,27 @@ export function sortDetailTagRowsByLabelPt(rows) {
   );
 }
 
+/**
+ * Rótulo do chip de quick-add ("adicionar tag" digitando texto livre).
+ * `ensureDetailTag` pode RESOLVER pra uma linha já existente (ex.: digitar
+ * "grocery" ou "Mercado" casa com a tag semeada "mercado" via
+ * `findByRawNameThenLabel`) em vez de criar uma nova — nesse caso o chip
+ * precisa mostrar o rótulo canônico da linha resolvida (o mesmo texto das
+ * sugestões, da linha de transações e de Configurações), não o texto cru que
+ * a pessoa digitou. `rows` é o snapshot ANTES da chamada: uma linha
+ * genuinamente nova ainda não aparece nele, então o fallback pro texto
+ * digitado só vale pra criação de fato (nunca mostra um id cru).
+ * @param {string | number} id
+ * @param {Array<{ id?: string | number, name?: string | null }>} rows
+ * @param {string} typedLabel
+ * @returns {string}
+ */
+export function resolveQuickAddDetailTagLabel(id, rows, typedLabel) {
+  const row = (rows ?? []).find((r) => r?.id != null && String(r.id) === String(id));
+  if (!row) return typedLabel;
+  return resolveDetailTagRowLabel(row) || typedLabel;
+}
+
 export const NovaTransacaoModal = ({
   open,
   onClose,
@@ -486,10 +507,18 @@ export const NovaTransacaoModal = ({
       setTxSubmitError("");
       try {
         const id = await ensureDetailTag(trimmed);
-        setDetailTagLabelById((prev) => ({ ...prev, [String(id)]: trimmed }));
+        // Achado 1, rodada 5 de review #100: `ensureDetailTag` NUNCA
+        // resolve pra uma linha arquivada (o hook só busca tags ativas —
+        // ver useNovaTransacaoDetailTags.js) — o backend reativa em
+        // `createTag` quando bate o mesmo nome de uma tag inativa. Todo id
+        // que volta daqui é de uma tag ativa de verdade; não há ramo
+        // `isActive` a computar (o que existiu nas rodadas 3/4 provava um
+        // estado que o app não consegue produzir).
+        const name = resolveQuickAddDetailTagLabel(id, detailTagRowsForCategory, trimmed);
+        setDetailTagLabelById((prev) => ({ ...prev, [String(id)]: name }));
         setDetailTagMetaById((prev) => ({
           ...prev,
-          [String(id)]: { name: trimmed, isActive: true },
+          [String(id)]: { name, isActive: true },
         }));
         setDetailTagIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
       } catch (err) {
@@ -500,7 +529,7 @@ export const NovaTransacaoModal = ({
         );
       }
     },
-    [useLiveDetailTags, ensureDetailTag],
+    [useLiveDetailTags, ensureDetailTag, detailTagRowsForCategory],
   );
 
   useEffect(() => {

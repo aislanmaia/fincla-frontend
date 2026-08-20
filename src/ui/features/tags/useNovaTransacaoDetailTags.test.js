@@ -80,6 +80,11 @@ describe("useNovaTransacaoDetailTags", () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
+    // Sem `status` (só ativas) — de propósito (achado 1, rodada 5 de
+    // review #100): o backend REATIVA uma tag arquivada em `POST /tags`
+    // pro mesmo nome; se este fetch trouxesse arquivadas, `ensureDetailTag`
+    // devolveria o id da linha inativa sem reativar (ver
+    // useNovaTransacaoDetailTags.js).
     expect(tagsApi.listTags).toHaveBeenCalledWith(ORG, "detalhe");
     const row = result.current.findByLabel("família");
     expect(row?.id).toBe(DET_EXISTING);
@@ -198,6 +203,12 @@ describe("useNovaTransacaoDetailTags", () => {
     expect(id).toBe(DET_EXISTING);
     expect(tagsApi.createTag).not.toHaveBeenCalled();
   });
+
+  // Regressão #100 (rodada 5 de review): a versão anterior deste teste
+  // simulava `listTags` devolvendo uma tag ARQUIVADA — cenário que o hook
+  // real NUNCA produz (sem `status`, a API só devolve ativas). Removido
+  // junto com o revert de `status: "all"` (achado 1, rodada 5): o teste
+  // provava um estado fabricado, não o comportamento real do app.
 
   it("aceita parent explícito (ex.: sugestão IA antes do setState da categoria)", async () => {
     const { result } = renderHook(() =>

@@ -810,3 +810,35 @@ describe("<TransacoesPage> — estabilidade das linhas (issue #66)", { timeout: 
     expect(after).toBe(before);
   });
 });
+
+// Regressão #100 (rodada 4 de review, achado 4): a desambiguação por índice
+// de ocorrência pode alongar o rótulo da tag (ex.: "mensal (1)") — o pill de
+// 11px na linha da transação não tem largura garantida, então precisa
+// truncar com reticências (`title` dá o texto completo no hover/a11y) em
+// vez de estourar o layout.
+describe("chip de tag na linha — truncagem (achado 4, rodada 4)", () => {
+  it("o pill de tag tem title e estilo de truncagem (maxWidth/ellipsis)", async () => {
+    // Não depende do mock default do topo do arquivo (outros testes deste
+    // arquivo reconfiguram `transactionsDataMock.mockReturnValue` e
+    // `vi.clearAllMocks()` não restaura o valor de retorno) — define a
+    // própria transação com tag pra não ficar dependente de ordem.
+    transactionsDataMock.mockReturnValue({
+      isLoading: false, error: "",
+      summary: { total_income: 0, total_expenses: 42.5, total_refunds: 0, balance: -42.5 },
+      transactions: [
+        { id: "tx-truncagem", date: "21/05", desc: "Almoço", cat: "Alimentação", val: -42.5,
+          method: "Pix", type: "expense", icon: "🍽", status: "confirmado", rec: false,
+          tags: ["trabalho"] },
+      ],
+      total: 1, hasMore: false, removeTransaction: vi.fn(),
+      setTransactionSettled: vi.fn(),
+    });
+    renderPage();
+
+    const chip = await screen.findByText("#trabalho");
+    expect(chip).toHaveAttribute("title", "trabalho");
+    expect(chip.style.textOverflow).toBe("ellipsis");
+    expect(chip.style.whiteSpace).toBe("nowrap");
+    expect(chip.style.maxWidth).not.toBe("");
+  });
+});

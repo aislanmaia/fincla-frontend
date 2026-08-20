@@ -101,14 +101,22 @@ function pickCategoryTag(transaction) {
     };
   }
 
-  const firstTag = entries.flatMap(([, tags]) => tags ?? [])[0];
-  return firstTag ?? null;
+  // Sem grupo "categoria" confirmado e sem `transaction.category`: NÃO existe
+  // categoria de verdade pra devolver. Pegar o primeiro tag de QUALQUER outro
+  // grupo (ex.: "detalhe") e tratá-lo como se fosse a categoria é o mesmo
+  // defeito que a issue #100 corrigiu em outros call sites — aqui na raiz
+  // compartilhada por todos eles (achado 1 da rodada 3 de review).
+  return null;
 }
 
 /**
- * Tag de categoria da transação (API), para agregações na UI.
+ * Tag de categoria da transação (API), para agregações na UI. Repassa
+ * `is_default` (achado 2, rodada 3 de review #100): sem ele,
+ * `categoryLabelPtForTag` não consegue distinguir uma categoria do USUÁRIO
+ * que coincide de texto com um nome canônico do seed (ex. "Health") de uma
+ * linha do seed de verdade — sequestra o nome pela tradução por engano.
  * @param {import("../../api/types").Transaction} transaction
- * @returns {{ id: string | null; name: string | null; icon_key: string | null; color: string | null } | null}
+ * @returns {{ id: string | null; name: string | null; icon_key: string | null; color: string | null; is_default: boolean | null } | null}
  */
 export function pickCategoryTagFromApiTransaction(transaction) {
   const t = pickCategoryTag(transaction);
@@ -120,6 +128,7 @@ export function pickCategoryTagFromApiTransaction(transaction) {
     is_active: t.is_active !== false,
     color:
       typeof t.color === "string" && t.color.trim() ? t.color : null,
+    is_default: typeof t.is_default === "boolean" ? t.is_default : null,
   };
 }
 
@@ -129,7 +138,7 @@ export function pickDetailTagMetaMapFromApiTransaction(transaction) {
     catTag && catTag.id != null && String(catTag.id) !== ""
       ? String(catTag.id)
       : null;
-  const map = {};
+  const byId = new Map();
   for (const [groupKey, tags] of Object.entries(transaction.tags ?? {})) {
     if (isCategoryTagGroupKey(groupKey)) continue;
     for (const t of tags ?? []) {
@@ -146,12 +155,23 @@ export function pickDetailTagMetaMapFromApiTransaction(transaction) {
         continue;
       }
       const rawName = t.name != null ? String(t.name).trim() : "";
-      map[id] = {
+      byId.set(id, {
+        id,
+        tag: t,
         // `t.name` pode vir cru do seed (`grocery`, `health_plan`...) — traduz.
-        name: rawName ? detailLabelPtForTag(t) || rawName : `Tag ${id.slice(0, 8)}…`,
+        label: rawName ? detailLabelPtForTag(t) || rawName : `Tag ${id.slice(0, 8)}…`,
         isActive: t.is_active !== false,
-      };
+      });
     }
+  }
+  // Mesma desambiguação de `pickTagNames` (achado 5, rodada 3 de review
+  // #100): sem isso, a MESMA tag lia diferente na linha da transação e no
+  // pré-preenchimento do modal de edição — a linha mostrava "mercado
+  // (grocery)" enquanto o modal, ao reabrir pra editar, voltava a mostrar
+  // dois chips "mercado" idênticos.
+  const map = {};
+  for (const entry of disambiguateTagLabelEntries(Array.from(byId.values()))) {
+    map[entry.id] = { name: entry.label, isActive: entry.isActive };
   }
   return map;
 }
@@ -170,15 +190,20 @@ function pickTagNames(transaction, categoryDisplayName) {
       ? String(catTag.id)
       : null;
   const seenIds = new Set();
-  return Object.entries(transaction.tags ?? {})
+  const entries = Object.entries(transaction.tags ?? {})
     .flatMap(([groupKey, tags]) =>
       (tags ?? []).map((tag) => ({ groupKey, tag })),
     )
     .filter(({ groupKey, tag }) => {
       if (isCategoryTagGroupKey(groupKey)) return false;
       if (isApiTagTypeCategory(tag)) return false;
-      const name = tag?.name;
-      if (!name || name === catApiName) return false;
+      // Mesmo gate de `pickDetailTagMetaMapFromApiTransaction` (achado 7,
+      // rodada 5 de review #100) — exige `id` (sem id não dá pra editar/
+      // selecionar a tag depois; os dois call sites viam conjuntos
+      // diferentes: este exigia nome e deixava passar sem id, o outro o
+      // inverso) e NÃO exige nome (nome vazio ganha o mesmo placeholder
+      // abaixo, em vez de sumir da linha mas continuar no modal).
+      if (!tag?.id) return false;
       if (
         primaryCatId &&
         tag.parent_category_tag_id != null &&
@@ -190,15 +215,119 @@ function pickTagNames(transaction, categoryDisplayName) {
       // Dedupe pelo ID real da tag, não pelo texto já traduzido: a tag seed
       // "grocery" (→ "mercado") e uma tag do usuário literalmente chamada
       // "mercado" são duas tags diferentes e não podem virar um chip só.
-      const id = tag?.id != null ? String(tag.id) : null;
-      if (id) {
-        if (seenIds.has(id)) return false;
-        seenIds.add(id);
-      }
+      const id = String(tag.id);
+      if (seenIds.has(id)) return false;
+      seenIds.add(id);
       return true;
     })
-    // `tag.name` pode vir cru do seed (`grocery`, `health_plan`...) — traduz pro chip.
-    .map(({ tag }) => detailLabelPtForTag(tag) || tag.name);
+    // `tag.name` pode vir cru do seed (`grocery`, `health_plan`...) — traduz
+    // pro chip. Sem nome, mesmo placeholder de `pickDetailTagMetaMapFromApiTransaction`.
+    .map(({ tag }) => {
+      const id = String(tag.id);
+      const rawName = tag.name != null ? String(tag.name).trim() : "";
+      return {
+        id,
+        tag,
+        label: rawName ? detailLabelPtForTag(tag) || rawName : `Tag ${id.slice(0, 8)}…`,
+      };
+    });
+  // Desambigua sobre o conjunto COMPLETO (achado 3, rodada 4 de review
+  // #100) — inclusive a tag cujo nome cru bate com o nome cru da categoria,
+  // que só é excluída da LINHA embaixo. `pickDetailTagMetaMapFromApiTransaction`
+  // não filtra por nome de categoria (o pré-preenchimento do modal precisa
+  // de TODAS as tags anexadas, redundantes ou não); rodar a desambiguação
+  // ANTES de excluir mantém as duas listas contando a MESMA colisão — senão
+  // a tag "grocery" (que sobrevive aqui) desambiguava sozinha (sem colisão
+  // visível) enquanto o modal, vendo as duas, desambiguava "mercado
+  // (grocery)" — a mesma tag lendo diferente na linha e no modal, de novo.
+  const disambiguated = disambiguateTagLabelEntries(entries);
+  return disambiguated
+    .filter((entry) => entry.tag?.name !== catApiName)
+    .map((e) => e.label);
+}
+
+/**
+ * Desambigua rótulos de tags "detalhe" iguais após tradução. O dedupe acima
+ * já é por ID real (achado 3, issue #100): a tag seed "grocery" (→
+ * "mercado") e uma tag do usuário literalmente chamada "mercado" são
+ * IDs diferentes, sobrevivem ambas ao dedupe e — sem isto — viram dois chips
+ * "#mercado" idênticos, que se leem como bug de duplicação embora sejam tags
+ * de verdade diferentes.
+ *
+ * Três passadas, mesmo padrão de `buildTagOptions`
+ * (`filters/tagCatalogResolution.js`, achado 4a da revisão da PR #96), com
+ * um ajuste no desempate final:
+ * 1) quando o rótulo traduzido colide, tenta desempatar anexando o nome cru
+ *    original entre parênteses (só nas entradas cujo nome cru difere do
+ *    rótulo — a tag do usuário, cujo nome já É o rótulo, fica limpa);
+ * 2) se AINDA colidir (duas tags de verdade com o MESMO nome cru, ex. duas
+ *    tags "mensal" criadas pelo usuário — `rawName` e `label` são
+ *    idênticos pras duas, a passada 1 não desempata nada), anexa um
+ *    PREFIXO CURTO do id (8 chars, mesma convenção de
+ *    `pickDetailTagMetaMapFromApiTransaction`'s "Tag {id}…"). Não usa
+ *    índice de ocorrência posicional (rodada 4) nem o id INTEIRO (rodada 3
+ *    — `buildTagOptions` faz isso, mas ali é um dropdown de filtro com
+ *    largura de sobra; aqui é um pill de 11px numa linha de transação e a
+ *    mesma string vai pro CSV): um índice depende da ORDEM em que o
+ *    backend devolve as tags — `TransactionModel.tags` é uma relação
+ *    `secondary` sem `order_by` — então a MESMA tag podia ler "(1)" numa
+ *    carga e "(2)" na seguinte (CSV grava strings diferentes pra mesma
+ *    tag; `novaTxModalInitStamp`, que hasheia `detailTagDisplayById`, muda
+ *    e redispara o reset do modal). O prefixo do id é estável por
+ *    construção — o mesmo em qualquer ordem — e mais legível que o id
+ *    inteiro (achado 3, rodada 5 de review #100).
+ * 3) rechecagem final: o prefixo curto, embora praticamente sempre único,
+ *    não é garantido (dois ids podem coincidir nos 8 primeiros chars, ou
+ *    uma tag de verdade pode já se chamar literalmente "rótulo (idcurto)")
+ *    — se ainda colidir depois da passada 2, troca pelo id INTEIRO nessas
+ *    entradas específicas, que é garantidamente único (achado 6, rodada 5).
+ * @param {Array<{ id?: string | null; tag: Record<string, unknown>; label: string }>} entries
+ * @returns {Array<{ id?: string | null; tag: Record<string, unknown>; label: string }>}
+ */
+function disambiguateTagLabelEntries(entries) {
+  const idOf = (entry) =>
+    entry.id ?? (entry.tag?.id != null ? String(entry.tag.id) : "");
+
+  const countsOf = (list) => {
+    const c = new Map();
+    for (const { label } of list) c.set(label, (c.get(label) ?? 0) + 1);
+    return c;
+  };
+
+  // Passada 1: nome cru como desempate.
+  const counts = countsOf(entries);
+  const withRawNameCandidate = entries.map((entry) => {
+    if ((counts.get(entry.label) ?? 0) <= 1) return entry;
+    const rawName = entry.tag?.name != null ? String(entry.tag.name).trim() : "";
+    if (rawName && rawName.toLowerCase() !== entry.label.toLowerCase()) {
+      return { ...entry, label: `${entry.label} (${rawName})`, preIdLabel: entry.label };
+    }
+    return entry;
+  });
+
+  // Passada 2: prefixo curto e ESTÁVEL do id (não depende de ordem).
+  const finalCounts = countsOf(withRawNameCandidate);
+  const withShortId = withRawNameCandidate.map((entry) => {
+    if ((finalCounts.get(entry.label) ?? 0) <= 1) return entry;
+    const id = idOf(entry);
+    if (!id) return entry;
+    return {
+      ...entry,
+      preIdLabel: entry.preIdLabel ?? entry.label,
+      label: `${entry.label} (${id.slice(0, 8)})`,
+    };
+  });
+
+  // Passada 3: rechecagem — residual raríssimo ainda colidindo cai no id
+  // inteiro, garantidamente único.
+  const shortIdCounts = countsOf(withShortId);
+  return withShortId.map((entry) => {
+    if ((shortIdCounts.get(entry.label) ?? 0) <= 1) return entry;
+    const id = idOf(entry);
+    if (!id) return entry;
+    const base = entry.preIdLabel ?? entry.label;
+    return { ...entry, label: `${base} (${id})` };
+  });
 }
 
 /**
