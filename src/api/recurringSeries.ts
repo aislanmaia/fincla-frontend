@@ -1,5 +1,6 @@
 // api/recurringSeries.ts — modelo novo (guia: materialização lazy via GET /transactions)
 import apiClient from './client';
+import { toFiniteNumber } from './money';
 import type {
   RecurringSeries,
   RecurringSeriesListResponse,
@@ -34,7 +35,27 @@ export const listRecurringSeries = async (
         : {}),
     },
   });
-  return response.data;
+  // `value` é `Decimal` no schema e chega como string. Sem converter aqui, o card
+  // "Próximos Débitos" somava com `reduce((s, d) => s + d.value, 0)` e concatenava:
+  // `0 + "120.00"` → `"0120.00"`, e o total virava NaN. Ver fincla-frontend#88.
+  const raw = response.data as unknown as RecurringSeriesListResponse & {
+    series?: Array<Record<string, unknown>>;
+  };
+  // Os SOMATÓRIOS também são Decimal — e alimentam o KPI "Comprometido" do
+  // dashboard, que faz aritmética com eles.
+  const money = (o: Record<string, unknown> | undefined, campos: string[]) =>
+    o ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, campos.includes(k) ? toFiniteNumber(v) : v])) : o;
+
+  return {
+    ...raw,
+    series: Array.isArray(raw?.series)
+      ? raw.series.map((s) => ({ ...s, value: toFiniteNumber(s?.value) }))
+      : [],
+    summary: money(raw?.summary as unknown as Record<string, unknown> | undefined,
+      ['total_monthly_expense', 'total_monthly_income', 'total_expense', 'total_income']),
+    summary_for_period: money(raw?.summary_for_period as unknown as Record<string, unknown> | undefined,
+      ['total_expense', 'total_income']),
+  } as unknown as RecurringSeriesListResponse;
 };
 
 export interface RecurringProjectionItem {
@@ -63,7 +84,13 @@ export const getRecurringProjection = async (
   const response = await apiClient.get<RecurringProjectionResponse>('/recurring-series/projection', {
     params: { organization_id: organizationId, date_start: dateStart, date_end: dateEnd },
   });
-  return response.data;
+  // Mesma razão: `value` da projeção também é `Decimal` no backend.
+  const raw = response.data as unknown as { items?: Array<Record<string, unknown>> };
+  return {
+    items: Array.isArray(raw?.items)
+      ? raw.items.map((i) => ({ ...i, value: toFiniteNumber(i?.value) }))
+      : [],
+  } as RecurringProjectionResponse;
 };
 
 export const getRecurringSeries = async (
