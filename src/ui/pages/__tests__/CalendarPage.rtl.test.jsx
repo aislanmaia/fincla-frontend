@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -22,12 +24,45 @@ describe("<CalendarPage> v2 (URL-driven)", () => {
     const t = container.textContent;
     expect(t).toContain("Calendário");
     expect(t).toContain("Financeiro");
-    expect(t).toContain("Entradas");
-    expect(t).toContain("Saídas");
+    expect(t).toContain("Receitas");
+    expect(t).toContain("Despesas");
     expect(t).toContain("Saldo do mês");
     expect(t).toContain("Semana");
     expect(t).toContain("Exibir");
     expect(t).toContain("Salário");
+  });
+
+  it("card Exibir usa o vocabulário Receitas/Despesas, não Entradas/Saídas (issue #83)", () => {
+    const { container } = render(<CalendarPage dataMode="mock" organizationId={null} />);
+    const t = container.textContent;
+    expect(t).not.toContain("Entradas");
+    expect(t).not.toContain("Saídas");
+    expect(t).toContain("Receitas");
+    expect(t).toContain("Despesas");
+  });
+
+  /**
+   * Varredura de fonte, no padrão que `appShell.test.js` já usa para caçar `vh`.
+   *
+   * A asserção de DOM acima não cobre o painel do dia: os mini-cards dele só montam
+   * quando o dia selecionado tem lançamento, e no desktop o painel vive dentro de um
+   * popover ancorado por `getBoundingClientRect`, que o jsdom não posiciona. Uma
+   * revisão provou o buraco revertendo só aquela linha do componente: o arquivo de
+   * teste inteiro continuava verde. Como o que se quer garantir é vocabulário — não
+   * comportamento — varrer a fonte guarda o que o DOM aqui não alcança, inclusive nas
+   * telas que ainda não têm teste de render.
+   */
+  it("nenhum rótulo de UI usa mais Entradas/Saídas no calendário (issue #83)", () => {
+    const fonte = readFileSync(
+      resolve(process.cwd(), "src/ui/pages/CalendarPage.jsx"),
+      "utf8",
+    );
+    // Só strings de JSX/objeto — comentários em prosa podem citar os termos antigos.
+    const semComentarios = fonte
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/^\s*\/\/.*$/gm, "");
+    const ofensores = [...semComentarios.matchAll(/["'>]\s*(Entradas|Saídas)\s*["'<]/g)].map((m) => m[1]);
+    expect(ofensores).toEqual([]);
   });
 
   it("clicar numa transação navega para abrir o Painel (fc_tx + fc_modal)", () => {

@@ -298,8 +298,8 @@ function Segmented({ value, onChange }) {
 
 function KpiCards({ totals }) {
   const cards = [
-    { l: "Entradas", v: totals.income, sub: `${totals.incomeCount} ${totals.incomeCount === 1 ? "lançamento" : "lançamentos"}`, grad: "linear-gradient(135deg,#059669,#10B981)", ic: "↑" },
-    { l: "Saídas", v: totals.expense, sub: `${totals.expenseCount} ${totals.expenseCount === 1 ? "lançamento" : "lançamentos"}`, grad: "linear-gradient(135deg,#DC2626,#EF4444)", ic: "↓" },
+    { l: "Receitas", v: totals.income, sub: `${totals.incomeCount} ${totals.incomeCount === 1 ? "lançamento" : "lançamentos"}`, grad: "linear-gradient(135deg,#059669,#10B981)", ic: "↑" },
+    { l: "Despesas", v: totals.expense, sub: `${totals.expenseCount} ${totals.expenseCount === 1 ? "lançamento" : "lançamentos"}`, grad: "linear-gradient(135deg,#DC2626,#EF4444)", ic: "↓" },
     { l: "Saldo do mês", v: totals.net, sub: totals.net >= 0 ? "superávit" : "déficit", grad: "linear-gradient(135deg,#0F0F0D,#374151)", ic: "≈" },
   ];
   return (
@@ -364,8 +364,8 @@ function Filters({ filters, onToggleType, onToggleMethod, payMethods }) {
   return (
     <Card style={{ padding: 14 }}>
       <div style={flt}>Exibir</div>
-      <label style={row} onClick={() => onToggleType("income")}><Box on={filters.income} /><Leg c={T.greenBar} />Entradas</label>
-      <label style={row} onClick={() => onToggleType("expense")}><Box on={filters.expense} /><Leg c={T.redBar} />Saídas</label>
+      <label style={row} onClick={() => onToggleType("income")}><Box on={filters.income} /><Leg c={T.greenBar} />Receitas</label>
+      <label style={row} onClick={() => onToggleType("expense")}><Box on={filters.expense} /><Leg c={T.redBar} />Despesas</label>
       {payMethods.length ? (
         <>
           <div style={{ ...flt, marginTop: 12 }}>Forma de pagamento</div>
@@ -394,7 +394,7 @@ function MoreRow({ n, onSeeExtrato }) {
 function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose }) {
   const [mode, setMode] = useState("category"); // category | list
   const [open, setOpen] = useState({});
-  // Ajustes de saldo entram no SALDO, fora de Entradas/Saídas.
+  // Ajustes de saldo entram no SALDO, fora de Receitas/Despesas.
   const income = events.filter((e) => e.kind !== "adjustment" && e.value >= 0).reduce((s, e) => s + e.value, 0);
   const expense = events.filter((e) => e.kind !== "adjustment" && e.value < 0).reduce((s, e) => s + -e.value, 0);
   const adjust = events.filter((e) => e.kind === "adjustment").reduce((s, e) => s + e.value, 0);
@@ -440,7 +440,7 @@ function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose }) {
       {events.length ? (
         <>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, margin: "11px 0 8px" }}>
-            {[{ l: "Entradas", v: income, c: T.green }, { l: "Saídas", v: expense, c: T.red }].map((s) => (
+            {[{ l: "Receitas", v: income, c: T.green }, { l: "Despesas", v: expense, c: T.red }].map((s) => (
               <div key={s.l} style={{ minWidth: 0, border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px" }}>
                 <div style={{ ...G, fontSize: 9, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.inkLight }}>{s.l}</div>
                 <div style={{ ...G, ...NUM, fontSize: 13, fontWeight: 800, color: s.c, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmt(s.v)}</div>

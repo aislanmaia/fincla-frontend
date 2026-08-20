@@ -75,4 +75,21 @@ describe("<Topbar>", () => {
     );
     expect(screen.getByText("?")).toBeInTheDocument();
   });
+
+  it("does not render the notifications bell (issue #84: dead button removed from the tree)", () => {
+    render(
+      <Topbar
+        onNew={vi.fn()}
+        isMobile={false}
+        onMenuOpen={vi.fn()}
+        onNav={vi.fn()}
+        page="dashboard"
+        user={{ first_name: "Maria", last_name: "Silva" }}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: /notifica/i }),
+    ).not.toBeInTheDocument();
+    expect(document.querySelector("svg.lucide-bell")).not.toBeInTheDocument();
+  });
 });
