@@ -1,5 +1,7 @@
 # Fincla v2 — Guia Completo de Implementação do Frontend
 
+> **Nota (2026-08): o arquivo `finly-v4-full.jsx` foi removido do repositório.** Ele era o transporte do protótipo feito no chat; a Fincla passou a ter design próprio. As referências a linhas dele abaixo são históricas — a fonte da verdade hoje é `DESIGN.md` + o código em `src/ui/`.
+
 > **Objetivo:** Transformar o frontend atual do Fincla (React + Tailwind v3) no Fincla v2, replicando fielmente o design, comportamento, telas e features do **Finly v4** (`finly-v4-full.jsx`, 11.341 linhas).  
 > **Referência de código:** Todos os números de linha neste documento referem-se ao arquivo `finly-v4-full.jsx`.  
 > **Screenshots:** Não incluídos nesta versão — renderize o arquivo localmente com Vite + React para referência visual.

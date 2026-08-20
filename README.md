@@ -7,7 +7,7 @@ Uma aplicação frontend moderna para gestão financeira pessoal com assistente 
 - **React 18** - Framework principal
 - **TypeScript** - Tipagem estática
 - **Vite** - Build tool e dev server
-- **Tailwind CSS** - Estilização
+- **Estilos inline + tokens** (`src/ui/tokens.js`) — sem Tailwind por enquanto; ver `DESIGN.md`
 - **Shadcn/ui** - Componentes UI
 - **Chart.js** - Gráficos e visualizações
 - **TanStack Query** - Gerenciamento de estado

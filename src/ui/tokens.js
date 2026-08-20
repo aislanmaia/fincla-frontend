@@ -1,4 +1,4 @@
-/** Tokens hex da UI (espelho do `docs/finly-v4-full (13).jsx`) */
+/** Tokens hex da UI da Fincla. Fonte da verdade — nada espelha isto aqui. */
 export const T = {
   bg: "#F8F7F5",
   surface: "#FFFFFF",
