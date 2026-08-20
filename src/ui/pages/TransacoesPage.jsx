@@ -23,7 +23,14 @@ import { PageTitle } from "../components/primitives";
 import { TRANSACTIONS } from "../data/mockFinance";
 import { downloadTransactionsCsvForUi } from "../data/transactionsAdapter.js";
 import { useCategoryTagsData } from "../features/tags/useCategoryTagsData.js";
-import { useNovaTransacaoDetailTags } from "../features/tags/useNovaTransacaoDetailTags.js";
+import { useTransactionsTagCatalog } from "../features/transactions/filters/useTransactionsTagCatalog.js";
+import {
+  buildTagOptions,
+  isTagFilterBlocked,
+  resolveTagFilterStatus,
+  tagFilterStatusMessage,
+  tagOptionsToDisplayMap,
+} from "../features/transactions/filters/tagCatalogResolution.js";
 import { useTransactionsData } from "../features/transactions/useTransactionsData.js";
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { TransactionsEmptyState } from "../features/transactions/TransactionsEmptyState.jsx";
@@ -770,32 +777,60 @@ function TransacoesPageBody({
   const totalCategoriesForBackend = shouldUseRealData
     ? categoryTagsData.categories?.length || 0
     : 0;
-  // Catálogo de tags "detalhe" da organização inteira (não só as que aparecem na
-  // página atual) — mesma fonte que o modal Nova transação já usa. Precisamos
-  // dele para resolver o NOME que a facet "Tags" guarda (`filter.tags`) em um
+  // Catálogo de tags não-categoria (`detalhe`, `contexto`, `local`, `pessoa`...)
+  // da organização inteira — não só as que aparecem na página atual. Precisamos
+  // dele para resolver o RÓTULO que a facet "Tags" guarda (`filter.tags`) em um
   // UUID de verdade: o backend só filtra por `tag_id`, nunca por nome
-  // (fincla-frontend#78; ver nota em filtersToLegacyParams.js). `categoryTagId:
-  // null` devolve o catálogo inteiro sem recorte por categoria pai.
-  const detailTagsCatalog = useNovaTransacaoDetailTags({
+  // (fincla-frontend#78; ver nota em filtersToLegacyParams.js). Ver
+  // useTransactionsTagCatalog.js para o porquê de NÃO reaproveitar
+  // `useNovaTransacaoDetailTags` (achado 6 da revisão da PR #96: aquele hook
+  // só traz `tag_type=detalhe`, mas a linha da transação mostra qualquer tag
+  // não-categoria).
+  const tagCatalog = useTransactionsTagCatalog({
     organizationId,
-    categoryTagId: null,
     enabled: shouldUseRealData,
   });
-  const tagNameToIdForFilter = useMemo(() => {
+  const categoryLabelById = useMemo(() => {
     const map = new Map();
-    for (const t of detailTagsCatalog.allDetailTags) {
-      if (t?.name && t?.id != null && !map.has(t.name)) map.set(t.name, t.id);
+    for (const c of categoryTagsData.categories || []) {
+      if (c?.id != null) map.set(String(c.id), c.labelPt);
     }
     return map;
-  }, [detailTagsCatalog.allDetailTags]);
-  // Só o primeiro nome selecionado vira um id de verdade — mesma limitação de
-  // "um valor só" que a categoria já tem (mapCatsOrTagToLegacy prioriza
-  // categoria quando as duas facets estão preenchidas).
-  const resolvedTagIds = useMemo(() => {
-    if (!filter.tags.length) return [];
-    const id = tagNameToIdForFilter.get(filter.tags[0]);
-    return id != null ? [id] : [];
-  }, [filter.tags, tagNameToIdForFilter]);
+  }, [categoryTagsData.categories]);
+  // Achado 1: tags não-categoria podem repetir o NOME sob categorias-pai
+  // diferentes (ex.: "mensal" em Casa e em Trabalho) — `buildTagOptions`
+  // desambigua o rótulo exibido quando isso acontece, então cada opção do
+  // painel resolve para um único id, nunca colapsa duas tags num chip só.
+  const tagOptions = useMemo(
+    () => buildTagOptions(tagCatalog.rows, categoryLabelById),
+    [tagCatalog.rows, categoryLabelById],
+  );
+  const tagDisplayToId = useMemo(() => tagOptionsToDisplayMap(tagOptions), [tagOptions]);
+  // A facet virou single-select (achado 3: "todas as tags marcadas" não é
+  // entregável — o backend só aceita um `tag_id` — então só existe UM rótulo
+  // selecionado para resolver, sem a ambiguidade de "qual dos N tentar").
+  const tagFilterStatus = useMemo(
+    () =>
+      shouldUseRealData
+        ? resolveTagFilterStatus({
+            selectedLabel: filter.tags[0] ?? null,
+            loading: tagCatalog.loading,
+            error: tagCatalog.error,
+            displayToId: tagDisplayToId,
+          })
+        : { kind: "none" },
+    [shouldUseRealData, filter.tags, tagCatalog.loading, tagCatalog.error, tagDisplayToId],
+  );
+  const resolvedTagIds = useMemo(
+    () => (tagFilterStatus.kind === "resolved" ? [tagFilterStatus.id] : []),
+    [tagFilterStatus],
+  );
+  // Achado 4: um rótulo selecionado que não resolve para id NUNCA pode virar
+  // "sem filtro" por baixo do capô — isso mostraria a lista inteira parecendo
+  // filtrada. Enquanto o catálogo carrega, falhou, ou o rótulo não existe mais
+  // (view salva com tag renomeada/apagada), a busca fica em espera (fail
+  // closed, ver `enabled` abaixo) e um aviso visível explica o motivo.
+  const tagFilterBlocked = shouldUseRealData && isTagFilterBlocked(tagFilterStatus);
   const transactionsFilters = useMemo(
     () =>
       filtersToLegacyParams(
@@ -837,7 +872,11 @@ function TransacoesPageBody({
   );
   const transactionsData = useTransactionsData({
     organizationId,
-    enabled: shouldUseRealData,
+    // Achado 4 (fail-closed): com uma tag selecionada que ainda não resolveu
+    // para um id, NÃO disparamos a busca com o filtro "esquecido" — melhor
+    // mostrar nada por um instante (com aviso, ver `tagFilterStatus` abaixo)
+    // do que mostrar a lista inteira se passando por filtrada.
+    enabled: shouldUseRealData && !tagFilterBlocked,
     filters: transactionsFilters,
     refreshToken: transactionsRefreshToken,
   });
@@ -866,20 +905,26 @@ function TransacoesPageBody({
   }, [shouldUseRealData, categoryTagsData.categories, txList]);
 
   /**
-   * Tags disponíveis para o painel de Tags. Em modo live usa o catálogo da
-   * organização inteira (`detailTagsCatalog`) — não só as tags que aparecem na
-   * página atual — senão um período/filtro sem resultados esvaziaria a lista de
-   * opções e o painel diria "nenhuma tag cadastrada" mesmo com tags existindo.
-   * Modo demo/mock não tem catálogo real: mantém a derivação a partir de `txList`.
+   * Rótulos disponíveis para o painel de Tags. Em modo live usa o catálogo da
+   * organização inteira já desambiguado (`tagOptions`) — não só as tags que
+   * aparecem na página atual — senão um período/filtro sem resultados
+   * esvaziaria a lista de opções e o painel diria "nenhuma tag cadastrada"
+   * mesmo com tags existindo. Cai para a derivação a partir de `txList` (nomes
+   * das transações já carregadas) em dois casos: modo demo/mock (sem catálogo
+   * real) e falha ao carregar o catálogo — achado 5 da revisão da PR #96:
+   * antes deste arquivo existir, as opções já vinham de `txList` e sobreviviam
+   * a uma falha de `/tags`; ignorar `tagCatalog.error` aqui seria uma
+   * regressão (o painel diria "nenhuma tag cadastrada" quando na verdade é um
+   * erro de rede).
    */
   const allTagsForFilter = useMemo(() => {
-    if (shouldUseRealData) {
-      return Array.from(new Set(detailTagsCatalog.allDetailTags.map((t) => t.name).filter(Boolean))).sort();
+    if (shouldUseRealData && !tagCatalog.error) {
+      return tagOptions.map((o) => o.displayLabel);
     }
     const set = new Set();
     txList.forEach((t) => (t.tags || []).forEach((tg) => set.add(tg)));
     return Array.from(set).sort();
-  }, [shouldUseRealData, detailTagsCatalog.allDetailTags, txList]);
+  }, [shouldUseRealData, tagCatalog.error, tagOptions, txList]);
 
   /** Cartões cadastrados — placeholder até integração com `useCreditCardsData`. */
   const cardsForFilter = useMemo(() => {
@@ -1352,6 +1397,10 @@ function TransacoesPageBody({
     categories: categoriesForFilter,
     cards: cardsForFilter,
     allTags: allTagsForFilter,
+    // Achado 5: sem isto o painel mostra "Nenhuma tag cadastrada" enquanto o
+    // catálogo ainda está a caminho — parece "você não tem tags" quando é só
+    // um instante de carregamento.
+    allTagsLoading: shouldUseRealData && tagCatalog.loading,
     hideSavedViews: true,
     searchInput,
     setSearchInput: (v) => {
@@ -1549,6 +1598,19 @@ function TransacoesPageBody({
       {shouldUseRealData && transactionsData.error && (
         <div style={{ ...G, fontSize:13, color:T.red, background:T.redLight, border:`1px solid ${T.red}22`, borderRadius:12, padding:"12px 14px" }}>
           {transactionsData.error}
+        </div>
+      )}
+
+      {/* Achado 4 (revisão PR #96): tag selecionada que ainda não resolveu para
+          um id — a busca fica em espera (ver `tagFilterBlocked`) e este aviso
+          explica o motivo, para nunca parecer que a lista abaixo está filtrada
+          quando na verdade está travada. */}
+      {tagFilterBlocked && (
+        <div
+          role="status"
+          style={{ ...G, fontSize:13, color:T.amber, background:T.amberLight, border:`1px solid ${T.amberBorder}`, borderRadius:12, padding:"12px 14px" }}
+        >
+          {tagFilterStatusMessage(tagFilterStatus)}
         </div>
       )}
 

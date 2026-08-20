@@ -84,21 +84,20 @@ vi.mock("../../features/tags/useCategoryTagsData.js", () => ({
   useCategoryTagsData: (...args) => categoryTagsDataMock(...args),
 }));
 
-// fincla-frontend#78 — catálogo de tags "detalhe" que TransacoesPage usa para
-// resolver o NOME que a facet Tags guarda em um `tag_id` de verdade (o backend
-// só filtra por id, nunca por nome). Sem mockar, o hook dispara um fetch real
-// (`GET /tags`) em todo teste que renderiza a página em modo live.
-const detailTagsMock = vi.fn(() => ({
-  allDetailTags: [
-    { id: "tag-uuid-trabalho", name: "trabalho" },
-    { id: "tag-uuid-casa", name: "casa" },
+// fincla-frontend#78/#96 — catálogo de tags que TransacoesPage usa para
+// resolver o RÓTULO que a facet Tags guarda em um `tag_id` de verdade (o
+// backend só filtra por id, nunca por nome). Sem mockar, o hook dispara um
+// fetch real (`GET /tags`) em todo teste que renderiza a página em modo live.
+const tagCatalogMock = vi.fn(() => ({
+  rows: [
+    { id: "tag-uuid-trabalho", name: "trabalho", parent_category_tag_id: "cat-trans" },
+    { id: "tag-uuid-casa", name: "casa", parent_category_tag_id: "cat-alim" },
   ],
-  detailTagRowsForCategory: [],
   loading: false,
   error: "",
 }));
-vi.mock("../../features/tags/useNovaTransacaoDetailTags.js", () => ({
-  useNovaTransacaoDetailTags: (...args) => detailTagsMock(...args),
+vi.mock("../../features/transactions/filters/useTransactionsTagCatalog.js", () => ({
+  useTransactionsTagCatalog: (...args) => tagCatalogMock(...args),
 }));
 
 const listOrgBalanceAdjustmentsMock = vi.fn().mockResolvedValue([]);
@@ -489,10 +488,43 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     // Antes da correção `filter.tags` nunca chegava a `filtersToLegacyParams`:
     // o `filterCat` continuava "todas" mesmo com a tag marcada, e por isso a
     // listagem não mudava. Com a correção, o nome marcado é resolvido para o
-    // id real (via `useNovaTransacaoDetailTags`, mockado acima) e mandado no
+    // id real (via `useTransactionsTagCatalog`, mockado acima) e mandado no
     // MESMO slot que a categoria usa — é o `tag_id` que o backend entende.
     const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
     expect(lastCall.filters.filterCat).toBe("tag-uuid-trabalho");
+  });
+
+  // fincla-frontend#96 — revisão adversarial da PR #96, achado 2: Categoria e
+  // Tags disputam o mesmo slot de filtro no backend. Decisão: IMPEDIR as duas
+  // ativas ao mesmo tempo (não só avisar) — provado aqui no nível da UI real,
+  // não só no hook de estado isolado.
+  it("fincla-frontend#96 achado 2: marcar uma categoria com tag ativa apaga o chip da tag (e vice-versa)", async () => {
+    seedSettlement();
+    renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: /Tags: —/i }));
+    await userEvent.click(
+      within(screen.getByRole("region", { name: /Filtro: tag/i })).getByRole("button", {
+        name: "Tag trabalho",
+      }),
+    );
+    expect(screen.getByRole("button", { name: /Tags: #trabalho/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /Categoria: Todas/i }));
+    await userEvent.click(
+      within(screen.getByRole("region", { name: /Filtro: categoria/i })).getByRole("button", {
+        name: "Alimentação",
+      }),
+    );
+
+    // A categoria ganhou o slot compartilhado — o chip da tag não pode
+    // continuar aceso fingindo que ainda está filtrando (era exatamente o
+    // achado 2: antes, os dois ficavam acesos e a tag era descartada em
+    // silêncio no backend).
+    expect(screen.getByRole("button", { name: /Categoria: Alimentação/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Tags: —/i })).toBeInTheDocument();
+    const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
+    expect(lastCall.filters.filterCat).toBe("cat-alim");
   });
 });
 

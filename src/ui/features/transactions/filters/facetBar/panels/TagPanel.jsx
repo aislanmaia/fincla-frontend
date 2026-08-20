@@ -4,7 +4,17 @@ import { G } from "../../../../../typography";
 import { Icon } from "../../shared/Icon.jsx";
 import { PanelHeader } from "./PanelHeader.jsx";
 
-export function TagPanel({ tags, setTags, allTags = [], onClose }) {
+/**
+ * fincla-frontend#96 (revisão adversarial da PR #96, achado 3): o painel
+ * prometia "todas as tags marcadas" (AND entre várias), mas o backend só
+ * aceita UM `tag_id` por chamada — o filtro real sempre foi limitado a uma
+ * tag. Antes só a primeira selecionada ia pra query, então marcar uma
+ * segunda tag ou não mudava nada (superconjunto silencioso) ou, se a
+ * primeira não resolvesse, apagava o filtro inteiro. Virou single-select de
+ * verdade: clicar numa tag troca a seleção em vez de somar, e a promessa da
+ * UI passa a bater com o que a API entrega.
+ */
+export function TagPanel({ tags, setTags, allTags = [], loading = false, onClose }) {
   const [search, setSearch] = useState("");
   const term = search.trim().toLowerCase();
   const visible = allTags.filter((tg) => tg.toLowerCase().includes(term));
@@ -13,7 +23,7 @@ export function TagPanel({ tags, setTags, allTags = [], onClose }) {
     <div>
       <PanelHeader
         title="Tags"
-        hint="Filtra transações que tenham todas as tags marcadas"
+        hint="Filtra transações que tenham esta tag (uma por vez)"
         onClose={onClose}
       />
       <input
@@ -46,7 +56,13 @@ export function TagPanel({ tags, setTags, allTags = [], onClose }) {
             textAlign: "center",
           }}
         >
-          {allTags.length === 0 ? "Nenhuma tag cadastrada." : "Nenhuma tag encontrada."}
+          {/* Achado 5: "carregando" precisa de mensagem própria — senão o
+              catálogo ainda a caminho lê como "você não tem tags nenhuma". */}
+          {loading
+            ? "Carregando tags…"
+            : allTags.length === 0
+              ? "Nenhuma tag cadastrada."
+              : "Nenhuma tag encontrada."}
         </div>
       ) : (
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -56,9 +72,9 @@ export function TagPanel({ tags, setTags, allTags = [], onClose }) {
               <button
                 type="button"
                 key={tg}
-                onClick={() =>
-                  setTags(active ? tags.filter((x) => x !== tg) : [...tags, tg])
-                }
+                // Single-select: marcar uma tag substitui a seleção anterior
+                // (nunca soma); clicar na já marcada limpa o filtro.
+                onClick={() => setTags(active ? [] : [tg])}
                 aria-pressed={active}
                 aria-label={`Tag ${tg}`}
                 style={{

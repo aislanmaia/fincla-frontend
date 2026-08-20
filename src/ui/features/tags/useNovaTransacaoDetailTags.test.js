@@ -137,4 +137,40 @@ describe("useNovaTransacaoDetailTags", () => {
     expect(tagsApi.createTag).toHaveBeenCalled();
     expect(id).toBeTruthy();
   });
+
+  // fincla-frontend#96 — revisão adversarial da PR #96, achado 4 (mesma classe
+  // de bug aplicada por simetria a este hook, ainda usado pelo modal Nova
+  // transação): trocar de organização não pode deixar `allDetailTags` com as
+  // tags da organização ANTERIOR enquanto o novo fetch está a caminho — um
+  // `ensureDetailTag`/`findByLabel` chamado nessa janela resolveria contra a
+  // org errada, silenciosamente.
+  it("troca de organização limpa allDetailTags ANTES do novo fetch resolver", async () => {
+    const ORG_B = "22222222-2222-4222-8222-222222222222";
+    let resolveOrgB;
+    const orgBPromise = new Promise((resolve) => {
+      resolveOrgB = resolve;
+    });
+
+    const { result, rerender } = renderHook(
+      ({ organizationId }) =>
+        useNovaTransacaoDetailTags({ organizationId, categoryTagId: CAT, enabled: true }),
+      { initialProps: { organizationId: ORG } },
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.allDetailTags).toHaveLength(1);
+
+    // A próxima chamada (para ORG_B) fica pendente de propósito, para provar
+    // que a limpeza acontece ANTES da resposta chegar.
+    vi.mocked(tagsApi.listTags).mockReturnValueOnce(orgBPromise);
+    rerender({ organizationId: ORG_B });
+
+    // Implementação anterior: `allDetailTags` continuaria com a tag "família"
+    // (da org A) até a promise de ORG_B resolver — janela de dado errado.
+    expect(result.current.allDetailTags).toEqual([]);
+
+    resolveOrgB({ tags: [] });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.allDetailTags).toEqual([]);
+  });
 });

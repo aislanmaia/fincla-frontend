@@ -45,6 +45,12 @@ export function useNovaTransacaoDetailTags({
       return;
     }
     let cancelled = false;
+    // Limpa ANTES de disparar o fetch: sem isso, trocar de organização deixa
+    // uma janela em que `allDetail` ainda tem as tags da org ANTERIOR — um
+    // `ensureDetailTag`/`findByLabel` chamado nessa janela resolveria (ou
+    // criaria) contra a organização errada, silenciosamente (mesma classe de
+    // bug do achado 4 na revisão da PR #96, aplicada aqui por simetria).
+    setAllDetail([]);
     (async () => {
       setLoading(true);
       setError("");

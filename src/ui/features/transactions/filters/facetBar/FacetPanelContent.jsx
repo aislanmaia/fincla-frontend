@@ -35,6 +35,7 @@ export function FacetPanelContent({
   tags,
   setTags,
   allTags,
+  allTagsLoading,
   // card
   cardSel,
   setCardSel,
@@ -95,7 +96,15 @@ export function FacetPanelContent({
         />
       );
     case "tag":
-      return <TagPanel tags={tags} setTags={setTags} allTags={allTags} onClose={onClose} />;
+      return (
+        <TagPanel
+          tags={tags}
+          setTags={setTags}
+          allTags={allTags}
+          loading={allTagsLoading}
+          onClose={onClose}
+        />
+      );
     case "cartao":
       return (
         <CardPanel
