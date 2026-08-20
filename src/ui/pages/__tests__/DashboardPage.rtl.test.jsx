@@ -494,3 +494,54 @@ describe("DashboardPage — Total dos Próximos Débitos", () => {
     expect(total.textContent).not.toMatch(/NaN/);
   });
 });
+
+/**
+ * Issue #87 — no Poco X7 Pro (e telas estreitas em geral) o card de saldo/resultado
+ * e o card de Insight estouravam a largura da tela, forçando scroll horizontal na
+ * página — proibido pelo shell (CLAUDE.md). As linhas flex culpadas tinham vários
+ * elementos (badge + saudação + chip da régua; número + rótulo comprido) sem
+ * `flexWrap`, então cresciam além do container em vez de quebrar linha.
+ */
+describe("DashboardPage — issue #87: sem estouro horizontal no mobile", () => {
+  function renderMobile(overrides) {
+    if (overrides) mockDashboardData = { ...baseData(), ...overrides };
+    return render(
+      <DashboardPage
+        onNav={vi.fn()}
+        stateCtrl={{ mounted: true, isMobile: true }}
+        dataMode="live"
+        organizationId="org-mobile-87"
+        onNewTx={vi.fn()}
+      />,
+    );
+  }
+
+  it("a linha do selo de humor + chip da régua pode quebrar no mobile", () => {
+    renderMobile();
+    const regua = screen.getByTestId("dashboard-regua-ritmo");
+    // O pai imediato é a linha flex que junta badge de humor + saudação + régua.
+    const linha = regua.parentElement;
+    expect(getComputedStyle(linha).flexWrap).toBe("wrap");
+  });
+
+  it("as duas linhas de quantia do Insight (número + rótulo) podem quebrar no mobile", () => {
+    renderMobile();
+    const quantias = screen.getByTestId("dashboard-insight-quantias");
+    const linhas = quantias.children;
+    expect(linhas.length).toBeGreaterThanOrEqual(2);
+    for (const linha of linhas) {
+      expect(getComputedStyle(linha).flexWrap).toBe("wrap");
+    }
+  });
+
+  it("o filete vertical entre saldo e resultado não sobra sozinho quando as colunas quebram", () => {
+    renderMobile();
+    const saldo = screen.getByTestId("dashboard-headline-saldo-conta");
+    const resultado = screen.getByTestId("dashboard-headline-resultado");
+    // No mobile as duas colunas ficam lado a lado do filete: se ele sobrevivesse,
+    // apareceria como um terceiro irmão entre elas.
+    expect(saldo.parentElement).toBe(resultado.parentElement);
+    const irmaos = Array.from(saldo.parentElement.children);
+    expect(irmaos.indexOf(saldo) + 1).toBe(irmaos.indexOf(resultado));
+  });
+});

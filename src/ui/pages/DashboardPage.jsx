@@ -1336,8 +1336,13 @@ export function DashboardPage({
           </>
         ) : (
           <>
-            <Card style={{ padding: 22 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <Card style={{ padding: isMobile ? 14 : 22 }}>
+              {/* Estouro #1 (issue #87): esta linha junta selo de humor + saudação +
+                  chip da régua (que sozinho já tem 5 elementos). Sem `flexWrap`, num
+                  Poco X7 Pro esses itens somados passam da largura do card e a página
+                  ganha scroll horizontal — proibido pelo shell. `flexWrap: "wrap"`
+                  deixa a régua cair pra linha de baixo em vez de estourar. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 5, background: mood.badgeBg, color: mood.badgeColor, borderRadius: 9999, padding: "3px 10px", fontSize: 11, fontWeight: 700, border: `1px solid ${mood.insightBorder}`, transition: "all 0.8s" }}>
                   <MoodIcon size={10} /> {mood.label}
                 </div>
@@ -1472,14 +1477,20 @@ export function DashboardPage({
                 <Sparkles size={12} color={mood.kicker} style={{ opacity: 0.5 }} />
               </div>
 
+              {/* Estouro #2 (issue #87): número em corpo 23 + rótulo ao lado na mesma
+                  linha, sem `flexWrap`. O segundo rótulo ("seria o ritmo linear da
+                  receita") é comprido — número + rótulo somados não cabem numa tela
+                  estreita. `flexWrap: "wrap"` deixa o rótulo cair pra linha de baixo
+                  em vez de estourar o card (container já tem largura de sobra; o
+                  ajuste é na quebra da linha, não em aumentar o container). */}
               <div data-testid="dashboard-insight-quantias">
-                <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 3 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 3, flexWrap: "wrap" }}>
                   <span style={{ ...M_MONO, ...NUM, fontSize: 23, fontWeight: 700, color: mood.headlineColor, lineHeight: 1, transition: "color 0.18s" }}>
                     {fmtAbs(exp)}
                   </span>
                   <span style={{ ...G, fontSize: 12, color: T.inkMid }}>gastos no período</span>
                 </div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 12, flexWrap: "wrap" }}>
                   <span style={{ ...M_MONO, ...NUM, fontSize: 23, fontWeight: 700, color: T.inkGhost, lineHeight: 1 }}>
                     {fmtAbs(expectedByNow)}
                   </span>
