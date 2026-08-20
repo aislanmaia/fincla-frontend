@@ -76,6 +76,8 @@ import {
 import { listCreditCards } from "../../../api/creditCards";
 import { getOrgBalances } from "../../../api/balances";
 import {
+  buildCreateCreditCardPayload,
+  createCreditCardForUi,
   formatCreditCardsApiError,
   mapCreditCardToModalPickerRow,
 } from "../../data/creditCardsAdapter.js";
@@ -236,6 +238,14 @@ export const NovaTransacaoModal = ({
   const [addingCartao,  setAddingCartao] = useState(false);
   const [quickAddCardName, setQuickAddCardName] = useState("");
   const [quickAddCardLast4, setQuickAddCardLast4] = useState("");
+  /**
+   * CAUSA DO BUG (issue #79): o botão "Adicionar" do quick-add de cartão só
+   * limpava o formulário — nunca chamava a API. Cartão "criado" nunca existia
+   * no backend, então não aparecia na lista nem ficava selecionável. Falha
+   * silenciosa: sem erro, sem loading, sem POST algum.
+   */
+  const [quickAddCardSaving, setQuickAddCardSaving] = useState(false);
+  const [quickAddCardError, setQuickAddCardError] = useState("");
 
   const [categoryTagId, setCategoryTagId] = useState(null);
   const [categoryTagIsActive, setCategoryTagIsActive] = useState(true);
@@ -449,6 +459,8 @@ export const NovaTransacaoModal = ({
     setAddingCartao(false);
     setQuickAddCardName("");
     setQuickAddCardLast4("");
+    setQuickAddCardError("");
+    setQuickAddCardSaving(false);
     setNewTag("");
     setAddingTag(false);
     setDetailTagIds([]);
@@ -636,6 +648,12 @@ export const NovaTransacaoModal = ({
     setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, null));
   }, [open, novaRecorrencia, preConfig, organizationId]);
 
+  /** Busca a lista de cartões (linhas do picker do drawer). Reusada pelo fetch inicial e pelo quick-add. */
+  const fetchModalCardRows = useCallback(async () => {
+    const cardRows = await listCreditCards(organizationId);
+    return cardRows.map(mapCreditCardToModalPickerRow);
+  }, [organizationId]);
+
   useEffect(() => {
     if (!open) {
       setModalityChoicealCardsRows([]);
@@ -648,10 +666,10 @@ export const NovaTransacaoModal = ({
     let cancelled = false;
     setModalityChoicealCardsLoading(true);
     setModalityChoicealCardsError("");
-    listCreditCards(organizationId)
-      .then((cardRows) => {
+    fetchModalCardRows()
+      .then((rows) => {
         if (cancelled) return;
-        setModalityChoicealCardsRows(cardRows.map(mapCreditCardToModalPickerRow));
+        setModalityChoicealCardsRows(rows);
         setModalityChoicealCardsLoading(false);
       })
       .catch((e) => {
@@ -663,7 +681,48 @@ export const NovaTransacaoModal = ({
     return () => {
       cancelled = true;
     };
-  }, [open, organizationId, dataMode]);
+  }, [open, organizationId, dataMode, fetchModalCardRows]);
+
+  /**
+   * Cria o cartão via API (era o passo que faltava — ver comentário no
+   * estado `quickAddCardSaving` acima). Só existe no modo live com
+   * organização conhecida; sem isso não há onde persistir o cartão.
+   * Em caso de sucesso: recarrega a lista, seleciona o cartão novo e
+   * fecha o mini-formulário. Em erro: mostra a mensagem em PT-BR e
+   * mantém o formulário aberto para o usuário tentar de novo.
+   */
+  const handleQuickAddCard = useCallback(async () => {
+    if (!organizationId || dataMode !== "live") return;
+    if (quickAddCardSaving) return;
+    if (!quickAddCardName || quickAddCardLast4.length < 4) return;
+    setQuickAddCardSaving(true);
+    setQuickAddCardError("");
+    try {
+      const payload = buildCreateCreditCardPayload({
+        organizationId,
+        displayName: quickAddCardName,
+        last4Digits: quickAddCardLast4,
+      });
+      const created = await createCreditCardForUi(payload);
+      const rows = await fetchModalCardRows();
+      setModalityChoicealCardsRows(rows);
+      setCardId(String(created.id));
+      setAddingCartao(false);
+      setQuickAddCardName("");
+      setQuickAddCardLast4("");
+    } catch (e) {
+      setQuickAddCardError(formatCreditCardsApiError(e));
+    } finally {
+      setQuickAddCardSaving(false);
+    }
+  }, [
+    organizationId,
+    dataMode,
+    quickAddCardSaving,
+    quickAddCardName,
+    quickAddCardLast4,
+    fetchModalCardRows,
+  ]);
 
   const cards = useMemo(() => {
     if (organizationId && dataMode === "live") {
@@ -1528,6 +1587,7 @@ export const NovaTransacaoModal = ({
     setTxSubmitError(""); setTxSubmitting(false); setDescError(false);
     setMobileReviewImpactOpen(false); resetAi();
     setDescFocused(false); setAddingCartao(false); setQuickAddCardName(""); setQuickAddCardLast4("");
+    setQuickAddCardError(""); setQuickAddCardSaving(false);
     setNewTag(""); setAddingTag(false); resetInstallmentCalc(); setShowImpact(false);
     setEditBaselineDropped(true);
   };
@@ -2394,35 +2454,39 @@ export const NovaTransacaoModal = ({
                   </div>
                   <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                     <input value={quickAddCardName} onChange={e=>setQuickAddCardName(e.target.value)}
-                      placeholder="Nome (ex: Nubank Roxinho)"
+                      placeholder="Nome (ex: Nubank Roxinho)" disabled={quickAddCardSaving}
                       style={{ ...G, padding:"8px 10px", borderRadius:8, border:`1px solid ${T.border}`,
                         fontSize:12, color:T.ink, outline:"none", background:T.surface,
                         transition:"border-color 0.15s" }}
                       onFocus={e=>e.target.style.borderColor=T.blue}
                       onBlur={e=>e.target.style.borderColor=T.border}/>
-                    <input value={quickAddCardLast4} onChange={e=>setQuickAddCardLast4(e.target.value.slice(0,4))}
-                      placeholder="4 últimos dígitos" maxLength={4}
+                    <input value={quickAddCardLast4}
+                      onChange={e=>setQuickAddCardLast4(e.target.value.replace(/\D/g, "").slice(0,4))}
+                      placeholder="4 últimos dígitos" maxLength={4} disabled={quickAddCardSaving}
                       style={{ ...G, ...NUM, padding:"8px 10px", borderRadius:8, border:`1px solid ${T.border}`,
                         fontSize:12, color:T.ink, outline:"none", background:T.surface,
                         transition:"border-color 0.15s" }}
                       onFocus={e=>e.target.style.borderColor=T.blue}
                       onBlur={e=>e.target.style.borderColor=T.border}/>
+                    {quickAddCardError && (
+                      <div style={{ ...G, fontSize:11, fontWeight:600, color:T.red }}>{quickAddCardError}</div>
+                    )}
                     <div style={{ display:"flex", gap:6 }}>
-                      <button onClick={()=>{setAddingCartao(false);setQuickAddCardName("");setQuickAddCardLast4("");}}
+                      <button onClick={()=>{setAddingCartao(false);setQuickAddCardName("");setQuickAddCardLast4("");setQuickAddCardError("");}}
+                        disabled={quickAddCardSaving}
                         style={{ ...G, flex:1, padding:"7px", borderRadius:8, border:`1px solid ${T.border}`,
-                          background:T.surface, fontSize:11, fontWeight:600, color:T.inkMid, cursor:"pointer" }}>
+                          background:T.surface, fontSize:11, fontWeight:600, color:T.inkMid,
+                          cursor:quickAddCardSaving?"not-allowed":"pointer" }}>
                         Cancelar
                       </button>
                       <button
-                        disabled={!quickAddCardName||quickAddCardLast4.length<4}
-                        onClick={()=>{
-                          setAddingCartao(false); setQuickAddCardName(""); setQuickAddCardLast4("");
-                        }}
+                        disabled={!quickAddCardName||quickAddCardLast4.length<4||quickAddCardSaving}
+                        onClick={handleQuickAddCard}
                         style={{ ...G, flex:1, padding:"7px", borderRadius:8, border:"none",
-                          background:quickAddCardName&&quickAddCardLast4.length===4?T.blue:T.inkGhost,
+                          background:quickAddCardName&&quickAddCardLast4.length===4&&!quickAddCardSaving?T.blue:T.inkGhost,
                           fontSize:11, fontWeight:700, color:"#fff",
-                          cursor:quickAddCardName&&quickAddCardLast4.length===4?"pointer":"not-allowed", transition:"background 0.15s" }}>
-                        Adicionar
+                          cursor:quickAddCardName&&quickAddCardLast4.length===4&&!quickAddCardSaving?"pointer":"not-allowed", transition:"background 0.15s" }}>
+                        {quickAddCardSaving ? "Adicionando…" : "Adicionar"}
                       </button>
                     </div>
                   </div>
