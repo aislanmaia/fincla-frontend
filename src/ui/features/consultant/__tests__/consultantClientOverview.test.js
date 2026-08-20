@@ -89,6 +89,11 @@ describe("categorySegments", () => {
   it("é seguro com entrada inválida", () => {
     expect(categorySegments(null)).toEqual({ segments: [], total: 0 });
   });
+
+  it("traduz tag_name cru do seed vindo de GET /analytics/by-category (regressão #77)", () => {
+    const { segments } = categorySegments([{ tag_name: "Housing", total: 300, tag_color: null }]);
+    expect(segments[0].label).toBe("Moradia");
+  });
 });
 
 describe("overviewGoalsSummary", () => {

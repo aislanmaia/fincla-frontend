@@ -24,6 +24,16 @@ describe("selectExpenseRows", () => {
   it("tolera entrada ausente", () => {
     expect(selectExpenseRows(null)).toEqual({ rows: [], max: 0 });
   });
+
+  it("traduz o nome cru do seed vindo de GET /consultant/expenses-by-category (regressão #77)", () => {
+    // Payload como a API realmente entrega: `name` em inglês (seed canônico,
+    // fincla-api/seed_default_tags.py), não "Alimentação" já traduzido.
+    const { rows } = selectExpenseRows([
+      { name: "Food & Groceries", total: 500, percentage: 50 },
+      { name: "Transport", total: 300, percentage: 30 },
+    ]);
+    expect(rows.map((r) => r.label)).toEqual(["Alimentação", "Transporte"]);
+  });
 });
 
 describe("selectMovers", () => {

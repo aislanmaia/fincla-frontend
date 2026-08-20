@@ -12,6 +12,7 @@ import { CategoryLucideIcon } from "../../components/CategoryLucideIcon.jsx";
 import { LocaleDatePicker } from "../../components/LocaleDatePicker.jsx";
 import { NovaTransacaoImpactPanel } from "../../components/NovaTransacaoImpactPanel.jsx";
 import { APP_UI_LOCALE } from "../../appLocale.js";
+import { detailLabelPtForTag } from "../../data/categoryLabels.js";
 
 import { useCategoryTagsData } from "../tags/useCategoryTagsData.js";
 import { useNovaTransacaoDetailTags } from "../tags/useNovaTransacaoDetailTags.js";
@@ -97,6 +98,35 @@ import {
 } from "./novaTransacaoConstants.js";
 
 /* ─── NOVA TRANSAÇÃO DRAWER ─────────────────────────────── */
+
+/**
+ * Rótulo PT de exibição de uma tag "detalhe" da API (linha crua de
+ * `useNovaTransacaoDetailTags`). `row.name` pode vir cru do seed (ex.
+ * "health_plan") — usa o mesmo rótulo tanto pro chip quanto pra ordenação,
+ * senão a lista ordena por um nome que o usuário nunca vê na tela.
+ * @param {{ name?: string | null } | null | undefined} row
+ * @returns {string}
+ */
+export function resolveDetailTagRowLabel(row) {
+  if (!row) return "";
+  return detailLabelPtForTag(row) || (row.name != null ? String(row.name).trim() : "");
+}
+
+/**
+ * Ordena as sugestões de tag "detalhe" pelo rótulo PT exibido (não pelo nome
+ * cru da API) — senão a lista aparece fora de ordem alfabética em PT-BR
+ * (ex.: "grocery" antes de "uber" ordena errado quando a tela mostra
+ * "mercado" e "uber").
+ * @param {Array<{ name?: string | null }>} rows
+ * @returns {Array<{ name?: string | null }>}
+ */
+export function sortDetailTagRowsByLabelPt(rows) {
+  return [...(rows ?? [])].sort((a, b) =>
+    resolveDetailTagRowLabel(a).localeCompare(resolveDetailTagRowLabel(b), "pt-BR", {
+      sensitivity: "base",
+    }),
+  );
+}
 
 export const NovaTransacaoModal = ({
   open,
@@ -331,19 +361,17 @@ export const NovaTransacaoModal = ({
   const detailTagRowsAvailable = useMemo(() => {
     if (!useLiveDetailTags || !categoryTagId) return [];
     const sel = new Set(detailTagIds.map((id) => String(id)));
-    return [...detailTagRowsForCategory]
-      .filter((row) => row?.id && !sel.has(String(row.id)))
-      .sort((a, b) =>
-        String(a.name || "").localeCompare(String(b.name || ""), "pt-BR", {
-          sensitivity: "base",
-        }),
-      );
+    return sortDetailTagRowsByLabelPt(
+      detailTagRowsForCategory.filter((row) => row?.id && !sel.has(String(row.id))),
+    );
   }, [useLiveDetailTags, categoryTagId, detailTagRowsForCategory, detailTagIds]);
 
   const addDetailTagByRow = useCallback((row) => {
     if (!row?.id) return;
     const id = String(row.id);
-    const name = row.name != null && String(row.name).trim() ? String(row.name).trim() : "";
+    // `row.name` pode vir cru do seed (ex. "health_plan") — guarda o rótulo já
+    // traduzido pro chip, não o nome cru da API.
+    const name = resolveDetailTagRowLabel(row);
     setDetailTagIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
     if (name) setDetailTagLabelById((prev) => ({ ...prev, [id]: name }));
     setDetailTagMetaById((prev) => ({
@@ -2028,7 +2056,7 @@ export const NovaTransacaoModal = ({
                         }}
                         style={{ ...G, fontSize:12, color:T.inkMid, background:T.grayLight, padding:"5px 11px", borderRadius:9999, cursor:"pointer" }}
                       >
-                        {row.name}
+                        {resolveDetailTagRowLabel(row)}
                       </span>
                     ))}
                     {NOVA_TX_QUICK_DETAIL_LABELS.filter((t) => {
@@ -2909,7 +2937,7 @@ export const NovaTransacaoModal = ({
                         }}
                         style={{ ...G, fontSize:11, color:T.inkMid, background:T.grayLight, padding:"4px 9px", borderRadius:9999, cursor:"pointer" }}
                       >
-                        {row.name}
+                        {resolveDetailTagRowLabel(row)}
                       </span>
                     ))}
                     {NOVA_TX_QUICK_DETAIL_LABELS.filter((t) => {

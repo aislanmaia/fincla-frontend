@@ -9,7 +9,7 @@ import {
 } from "../../api/transactions";
 import { downloadTransactionsCsv } from "../../api/analytics";
 import { handleApiError } from "../../api/client";
-import { categoryLabelPtForTag } from "./categoryLabels.js";
+import { categoryLabelPtForTag, detailLabelPtForTag } from "./categoryLabels.js";
 
 /** Máximo por página na API `GET /transactions` (validação backend). */
 export const TRANSACTIONS_API_MAX_LIMIT = 100;
@@ -143,11 +143,10 @@ export function pickDetailTagMetaMapFromApiTransaction(transaction) {
       ) {
         continue;
       }
+      const rawName = t.name != null ? String(t.name).trim() : "";
       map[id] = {
-        name:
-          t.name != null && String(t.name).trim() !== ""
-            ? String(t.name).trim()
-            : `Tag ${id.slice(0, 8)}…`,
+        // `t.name` pode vir cru do seed (`grocery`, `health_plan`...) — traduz.
+        name: rawName ? detailLabelPtForTag(t) || rawName : `Tag ${id.slice(0, 8)}…`,
         isActive: t.is_active !== false,
       };
     }
@@ -168,6 +167,7 @@ function pickTagNames(transaction, categoryDisplayName) {
     catTag && catTag.id != null && String(catTag.id) !== ""
       ? String(catTag.id)
       : null;
+  const seenIds = new Set();
   return Object.entries(transaction.tags ?? {})
     .flatMap(([groupKey, tags]) =>
       (tags ?? []).map((tag) => ({ groupKey, tag })),
@@ -185,10 +185,18 @@ function pickTagNames(transaction, categoryDisplayName) {
       ) {
         return false;
       }
+      // Dedupe pelo ID real da tag, não pelo texto já traduzido: a tag seed
+      // "grocery" (→ "mercado") e uma tag do usuário literalmente chamada
+      // "mercado" são duas tags diferentes e não podem virar um chip só.
+      const id = tag?.id != null ? String(tag.id) : null;
+      if (id) {
+        if (seenIds.has(id)) return false;
+        seenIds.add(id);
+      }
       return true;
     })
-    .map(({ tag }) => tag.name)
-    .filter((tagName, index, all) => tagName && all.indexOf(tagName) === index);
+    // `tag.name` pode vir cru do seed (`grocery`, `health_plan`...) — traduz pro chip.
+    .map(({ tag }) => detailLabelPtForTag(tag) || tag.name);
 }
 
 /**
