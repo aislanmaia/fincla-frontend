@@ -80,7 +80,9 @@ describe("useNovaTransacaoDetailTags", () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    expect(tagsApi.listTags).toHaveBeenCalledWith(ORG, "detalhe");
+    // `status: "all"` (achado 2, rodada 4 de review #100) — sem isso,
+    // `ensureDetailTag` nunca acha uma tag arquivada pelo nome.
+    expect(tagsApi.listTags).toHaveBeenCalledWith(ORG, "detalhe", { status: "all" });
     const row = result.current.findByLabel("família");
     expect(row?.id).toBe(DET_EXISTING);
     expect(result.current.labelForDetailId(DET_EXISTING)).toBe("família");
@@ -197,6 +199,39 @@ describe("useNovaTransacaoDetailTags", () => {
     const id = await result.current.ensureDetailTag("família");
     expect(id).toBe(DET_EXISTING);
     expect(tagsApi.createTag).not.toHaveBeenCalled();
+  });
+
+  // Regressão #100 (rodada 4 de review, achado 2): sem `status: "all"` em
+  // `listTags`, uma tag ARQUIVADA (`is_active: false`) nunca aparecia em
+  // `allDetail` — `ensureDetailTag` não achava, chamava `createTag`, e o
+  // backend (que checa duplicata incluindo linhas inativas) devolvia "Tag
+  // '...' already exists for this organization" em inglês, sem chip
+  // nenhum. Com a tag inativa no retorno de `listTags`, `ensureDetailTag`
+  // acha pelo nome e devolve o id — nunca chama `createTag`.
+  it("ensureDetailTag acha tag ARQUIVADA pelo nome (não tenta recriar, não bate no erro de duplicata do backend)", async () => {
+    const ARCHIVED = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+    vi.mocked(tagsApi.listTags).mockResolvedValue({
+      tags: [
+        { ...detailRow(ARCHIVED, "assinatura antiga", CAT), is_active: false },
+      ],
+    });
+
+    const { result } = renderHook(() =>
+      useNovaTransacaoDetailTags({
+        organizationId: ORG,
+        categoryTagId: CAT,
+        enabled: true,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const id = await result.current.ensureDetailTag("assinatura antiga");
+    expect(id).toBe(ARCHIVED);
+    expect(tagsApi.createTag).not.toHaveBeenCalled();
+    expect(
+      result.current.detailTagRowsForCategory.find((r) => r.id === ARCHIVED)?.is_active,
+    ).toBe(false);
   });
 
   it("aceita parent explícito (ex.: sugestão IA antes do setState da categoria)", async () => {

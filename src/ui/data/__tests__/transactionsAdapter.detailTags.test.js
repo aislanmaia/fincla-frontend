@@ -189,11 +189,16 @@ describe("pickDetailTagMetaMapFromApiTransaction", () => {
 // o MESMO nome cru — ex.: duas tags "mensal" criadas pelo usuário (mesmo
 // caso citado em `tagCatalogResolution.js`, "'mensal' sob Casa e sob
 // Trabalho"). `rawName` e `label` são idênticos pras duas, a passada por
-// nome cru não desempata nada — precisa cair no id inteiro como desempate
-// final garantidamente único, senão os chips leem igual E o React recebe
-// key duplicada (`TransacoesPage.jsx`, `key={tag}`).
-describe("desambiguação de tags detalhe com nome cru idêntico (achado 4, rodada 3)", () => {
-  it('duas tags do usuário chamadas "mensal" (sem hierarquia de categoria) desambiguam pelo id', () => {
+// nome cru não desempata nada — precisa de um desempate final
+// garantidamente único, senão os chips leem igual E o React recebe key
+// duplicada (`TransacoesPage.jsx`, `key={tag}`).
+//
+// Rodada 4: o desempate final NÃO usa o id inteiro (era ilegível — um pill
+// de 11px sem largura garantida e a mesma string vazando pro CSV, achado
+// 4). Usa um índice de ocorrência curto ("mensal (1)", "mensal (2)"),
+// garantidamente único dentro do grupo por construção.
+describe("desambiguação de tags detalhe com nome cru idêntico (achado 4, rodadas 3 e 4)", () => {
+  it('duas tags do usuário chamadas "mensal" (sem hierarquia de categoria) desambiguam por índice de ocorrência', () => {
     const tx = minimalTransaction({
       tags: {
         categoria: [tagStub(CAT_ID, "Alimentação", "categoria", null)],
@@ -205,14 +210,46 @@ describe("desambiguação de tags detalhe com nome cru idêntico (achado 4, roda
     });
 
     const mapped = mapApiTransactionToUi(tx);
-    expect(mapped.tags).toEqual([`mensal (${DET1})`, `mensal (${DET2})`]);
+    expect(mapped.tags).toEqual(["mensal (1)", "mensal (2)"]);
     // Sem colisão de key no React: os dois rótulos são únicos entre si.
     expect(new Set(mapped.tags).size).toBe(2);
 
     // `detailTagMetaById`/`detailTagDisplayById` usam a mesma desambiguação
     // (achado 5) — não podem voltar a mostrar "mensal"/"mensal" ao editar.
-    expect(mapped.detailTagMetaById[DET1].name).toBe(`mensal (${DET1})`);
-    expect(mapped.detailTagMetaById[DET2].name).toBe(`mensal (${DET2})`);
+    expect(mapped.detailTagMetaById[DET1].name).toBe("mensal (1)");
+    expect(mapped.detailTagMetaById[DET2].name).toBe("mensal (2)");
+  });
+
+  // Regressão #100 (rodada 4 de review, achado 3): `pickTagNames` (linha)
+  // exclui ANTES a tag cujo nome cru bate com o nome cru da categoria;
+  // `pickDetailTagMetaMapFromApiTransaction` (modal) não tem esse filtro.
+  // Categoria custom "mercado" + tags "grocery" (→ "mercado") e "mercado"
+  // (do usuário, raw igual à categoria): a tag "mercado" do usuário some da
+  // LINHA por design (redundante com a categoria), mas "grocery" precisa
+  // ler EXATAMENTE igual nos dois lugares — antes a linha via só "grocery"
+  // sozinha (sem colisão pra desambiguar) e ficava "mercado", enquanto o
+  // modal via as duas e desambiguava pra "mercado (grocery)".
+  it('categoria custom "mercado" + detalhe "grocery"/"mercado": a tag "grocery" lê igual na linha e no modal', () => {
+    const GROCERY = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+    const USER_MERCADO = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+    const tx = minimalTransaction({
+      tags: {
+        categoria: [tagStub(CAT_ID, "mercado", "categoria", null)],
+        detalhe: [
+          { ...tagStub(GROCERY, "grocery", "detalhe", CAT_ID), is_default: true },
+          tagStub(USER_MERCADO, "mercado", "detalhe", CAT_ID),
+        ],
+      },
+    });
+
+    const mapped = mapApiTransactionToUi(tx);
+    // "mercado" do usuário some da linha (redundante com a categoria) —
+    // comportamento intencional, não é o que este teste cobre.
+    expect(mapped.tags).toEqual(["mercado (grocery)"]);
+    // A tag "grocery" precisa ler O MESMO texto no pré-preenchimento do
+    // modal de edição.
+    expect(mapped.detailTagMetaById[GROCERY].name).toBe("mercado (grocery)");
+    expect(mapped.detailTagDisplayById[GROCERY]).toBe("mercado (grocery)");
   });
 });
 

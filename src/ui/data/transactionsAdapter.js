@@ -197,8 +197,7 @@ function pickTagNames(transaction, categoryDisplayName) {
     .filter(({ groupKey, tag }) => {
       if (isCategoryTagGroupKey(groupKey)) return false;
       if (isApiTagTypeCategory(tag)) return false;
-      const name = tag?.name;
-      if (!name || name === catApiName) return false;
+      if (!tag?.name) return false;
       if (
         primaryCatId &&
         tag.parent_category_tag_id != null &&
@@ -223,7 +222,19 @@ function pickTagNames(transaction, categoryDisplayName) {
       tag,
       label: detailLabelPtForTag(tag) || tag.name,
     }));
-  return disambiguateTagLabelEntries(entries).map((e) => e.label);
+  // Desambigua sobre o conjunto COMPLETO (achado 3, rodada 4 de review
+  // #100) — inclusive a tag cujo nome cru bate com o nome cru da categoria,
+  // que só é excluída da LINHA embaixo. `pickDetailTagMetaMapFromApiTransaction`
+  // não filtra por nome de categoria (o pré-preenchimento do modal precisa
+  // de TODAS as tags anexadas, redundantes ou não); rodar a desambiguação
+  // ANTES de excluir mantém as duas listas contando a MESMA colisão — senão
+  // a tag "grocery" (que sobrevive aqui) desambiguava sozinha (sem colisão
+  // visível) enquanto o modal, vendo as duas, desambiguava "mercado
+  // (grocery)" — a mesma tag lendo diferente na linha e no modal, de novo.
+  const disambiguated = disambiguateTagLabelEntries(entries);
+  return disambiguated
+    .filter((entry) => entry.tag?.name !== catApiName)
+    .map((e) => e.label);
 }
 
 /**
@@ -235,16 +246,20 @@ function pickTagNames(transaction, categoryDisplayName) {
  * de verdade diferentes.
  *
  * Duas passadas, mesmo padrão de `buildTagOptions`
- * (`filters/tagCatalogResolution.js`, achado 4a da revisão da PR #96):
+ * (`filters/tagCatalogResolution.js`, achado 4a da revisão da PR #96), com
+ * um ajuste no desempate final (achado 4, rodada 4 de review #100 —
+ * `buildTagOptions` apenda o id INTEIRO, mas ali é um dropdown de filtro
+ * com largura de sobra; aqui é um pill de 11px numa linha de transação e a
+ * mesma string vai pro CSV — um UUID inteiro fica ilegível nos dois):
  * 1) quando o rótulo traduzido colide, tenta desempatar anexando o nome cru
  *    original entre parênteses (só nas entradas cujo nome cru difere do
  *    rótulo — a tag do usuário, cujo nome já É o rótulo, fica limpa);
- * 2) se AINDA colidir (achado 4, rodada 3: duas tags de verdade com o MESMO
- *    nome cru, ex. duas tags "mensal" criadas pelo usuário — `rawName` e
- *    `label` são idênticos pras duas, a passada 1 não desempata nada),
- *    anexa o id inteiro como desempate final garantidamente único — feio,
- *    mas nunca deixa dois chips reais lerem igual nem gera key duplicada
- *    no React (`TransacoesPage.jsx`).
+ * 2) se AINDA colidir (duas tags de verdade com o MESMO nome cru, ex. duas
+ *    tags "mensal" criadas pelo usuário — `rawName` e `label` são
+ *    idênticos pras duas, a passada 1 não desempata nada), anexa um índice
+ *    de ocorrência curto ("mensal (1)", "mensal (2)") — garantidamente
+ *    único dentro do grupo por construção (não depende do tamanho de um
+ *    prefixo de id) e legível no chip e no CSV.
  * @param {Array<{ id?: string | null; tag: Record<string, unknown>; label: string }>} entries
  * @returns {Array<{ id?: string | null; tag: Record<string, unknown>; label: string }>}
  */
@@ -266,10 +281,12 @@ function disambiguateTagLabelEntries(entries) {
     finalCounts.set(label, (finalCounts.get(label) ?? 0) + 1);
   }
 
+  const occurrenceByLabel = new Map();
   return withRawNameCandidate.map((entry) => {
     if ((finalCounts.get(entry.label) ?? 0) <= 1) return entry;
-    const id = entry.id ?? (entry.tag?.id != null ? String(entry.tag.id) : "");
-    return id ? { ...entry, label: `${entry.label} (${id})` } : entry;
+    const n = (occurrenceByLabel.get(entry.label) ?? 0) + 1;
+    occurrenceByLabel.set(entry.label, n);
+    return { ...entry, label: `${entry.label} (${n})` };
   });
 }
 

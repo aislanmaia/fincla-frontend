@@ -308,8 +308,14 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor }) => {
         {visibleTags.length > 0 && (
           <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap" }}>
             {visibleTags.map(tag => (
-              <span key={tag} style={{ ...G, fontSize: 11, color:T.inkMid, background:T.grayLight,
-                borderRadius:99, padding:"2px 8px", fontWeight:500 }}>#{tag}</span>
+              // `title` + truncagem (achado 4, rodada 4 de review #100): a
+              // desambiguação por índice de ocorrência pode alongar o
+              // rótulo ("mensal (1)") e este pill não tem largura garantida
+              // na linha.
+              <span key={tag} title={tag} style={{ ...G, fontSize: 11, color:T.inkMid, background:T.grayLight,
+                borderRadius:99, padding:"2px 8px", fontWeight:500, maxWidth:140,
+                overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                display:"inline-block" }}>#{tag}</span>
             ))}
             {hiddenTags.length > 0 && (
               <Tip label={`Todas: ${tags.map(t=>"#"+t).join(", ")}`} pos="top">
@@ -436,8 +442,15 @@ const DetailPanel = ({
             <div style={{ ...G, fontSize:12, color:T.inkMid, marginBottom:8 }}>Tags</div>
             <div style={{ display:"flex", flexWrap:"wrap", gap:5 }}>
               {tx.tags.map(tag => (
-                <span key={tag} style={{ ...G, fontSize:11, background:T.grayLight,
-                  color:T.inkMid, padding:"3px 9px", borderRadius:99 }}>#{tag}</span>
+                // `title` mostra o texto completo no hover — a desambiguação
+                // por id (achado 4, rodada 4 de review #100) pode produzir
+                // um rótulo longo ("mensal (a1b2c3d4)"); o pill não tem
+                // largura garantida na linha, então trunca com reticências
+                // em vez de estourar o layout.
+                <span key={tag} title={tag} style={{ ...G, fontSize:11, background:T.grayLight,
+                  color:T.inkMid, padding:"3px 9px", borderRadius:99, maxWidth:180,
+                  overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                  display:"inline-block" }}>#{tag}</span>
               ))}
             </div>
           </div>

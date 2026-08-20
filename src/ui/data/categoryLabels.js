@@ -339,16 +339,26 @@ const DETAIL_LABEL_PT_BY_EN_NAME_NORMALIZED = Object.fromEntries(
  * linha do seed, só coincide o texto) e não acha mais a própria tag.
  *
  * Fallback quando `is_default === true` mas o nome não está no mapa: nunca
- * devolve o slug cru — humaniza (`_` → espaço) e devolve, SEM avisar no
- * console. Por quê: o backend nunca reseta `is_default` ao renomear uma tag
- * semeada (confirmado por investigação no backend, issue #100), então esse
- * shape (`is_default: true`, nome fora do mapa) é indistinguível entre "dado
- * legado de uma migração antiga" e "tag do seed renomeada de propósito pra
- * um nome de escolha da pessoa" — o caso comum. Sem um sinal do backend que
- * diferencie os dois (ex. `renamed_at`), avisar aqui vira ruído em toda
- * renomeação legítima. Mesmo trade-off já aceito em `categoryLabelPtForTag`
- * (rede de segurança do `icon_key`, teste "[trade-off conhecido]") — alinha
- * as duas metades da correção pra não acusar um nome legítimo.
+ * devolve o slug cru — humaniza (`_` → espaço) e devolve. Não avisa no
+ * console de PRODUÇÃO. Por quê: o backend nunca reseta `is_default` ao
+ * renomear uma tag semeada (confirmado por investigação no backend, issue
+ * #100), então esse shape (`is_default: true`, nome fora do mapa) é
+ * indistinguível entre "dado legado de uma migração antiga / slug novo do
+ * seed" e "tag do seed renomeada de propósito pra um nome de escolha da
+ * pessoa" — o caso comum. Sem um sinal do backend que diferencie os dois
+ * (ex. `renamed_at`), avisar pra todo mundo vira ruído em toda renomeação
+ * legítima. Mesmo trade-off já aceito em `categoryLabelPtForTag` (rede de
+ * segurança do `icon_key`, teste "[trade-off conhecido]") — alinha as duas
+ * metades da correção pra não acusar um nome legítimo.
+ *
+ * MAS o aviso ainda tem valor pra quem PODE agir (o time de dev rodando
+ * localmente, não o usuário final): só em `import.meta.env.DEV` (nunca em
+ * build de produção), avisa quando o nome não bate com o mapa — sinal de
+ * drift entre `DETAIL_LABEL_PT_BY_EN_NAME` e o seed do backend
+ * (`CANONICAL_CATEGORY_SEED`) que o teste estático de
+ * `categoryLabels.test.js` não cobre (ele só pega edição acidental do
+ * mapa, nunca um slug novo que o backend passou a semear — achado 6 da
+ * rodada 3, restaurado no achado 5 da rodada 4 de review #100).
  * @param {{ name?: string | null; is_default?: boolean | null } | Record<string, unknown> | null | undefined} tag
  * @returns {string}
  */
@@ -361,6 +371,11 @@ export function detailLabelPtForTag(tag) {
   const normalized = normalizeCategoryLookupKey(name);
   const known = DETAIL_LABEL_PT_BY_EN_NAME_NORMALIZED[normalized];
   if (known) return known;
+  if (import.meta.env?.DEV) {
+    console.warn(
+      `[categoryLabels] tag "detalhe" sem tradução PT no mapa (só em DEV — nunca aparece pra usuário em produção): "${name}". Pode ser um slug novo do seed do backend (confira DETAIL_LABEL_PT_BY_EN_NAME) ou uma renomeação legítima — não é necessariamente um bug.`,
+    );
+  }
   return name.replace(/_/g, " ").trim();
 }
 

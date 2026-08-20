@@ -165,10 +165,17 @@ function aggregateExpenseCategoriesFromTransactions(rawTx) {
     if (tx.type !== "expense") continue;
 
     const tag = pickCategoryTagFromApiTransaction(tx);
-    const rawName = tag?.name ?? tx.category ?? "Sem categoria";
+    // `||` (não `??`) e `is_default` repassado: mesma correção de
+    // `pickCategoryName` acima, aplicada aqui (achado 1, rodada 4 de review
+    // #100) — sem isso, a MESMA transação com categoria do usuário "Health"
+    // (`is_default:false`) lia "Health" em Últimas transações e "Saúde" no
+    // card Gastos por Categoria, na mesma tela.
+    const rawName = tag?.name || tx.category || "Sem categoria";
+    const isDefault = tag?.is_default ?? null;
     const normalizedName = categoryLabelPtForTag({
       name: rawName,
       icon_key: tag?.icon_key ?? null,
+      is_default: isDefault,
     });
     const mapKey =
       tag?.id != null && tag.id !== ""
@@ -188,6 +195,7 @@ function aggregateExpenseCategoriesFromTransactions(rawTx) {
         tagName: rawName,
         icon_key: tag?.icon_key ?? null,
         color: tag?.color ?? null,
+        isDefault,
         total: add,
       });
     }
@@ -242,6 +250,10 @@ export function buildDashboardCategoryRows(
           tagName: c.tag_name,
           icon_key: c.tag_icon_key ?? null,
           color: c.tag_color,
+          // Endpoint de agregação do consultor NUNCA manda `is_default`
+          // (ver doc de `categoryLabelPtForTag` em categoryLabels.js) — fica
+          // `null`, mesmo shape que os outros call sites desse endpoint.
+          isDefault: null,
           total: c.total,
         }));
 
@@ -254,6 +266,7 @@ export function buildDashboardCategoryRows(
         categoryLabelPtForTag({
           name: row.tagName,
           icon_key: row.icon_key ?? null,
+          is_default: row.isDefault ?? null,
         }),
       );
       const apiMeta = apiMetaByName.get(rowNameKey);
@@ -270,8 +283,9 @@ export function buildDashboardCategoryRows(
           tag_id: tagId,
           tag_name: row.tagName,
           tag_icon_key: iconKey,
-          total: row.total,
           tag_color: color,
+          is_default: row.isDefault ?? null,
+          total: row.total,
         },
         prevTotalByTagId,
       );
@@ -284,9 +298,14 @@ export function mapCategory(category, prevTotalByTagId) {
 
   return {
     tagId: category.tag_id,
+    // Repassa `is_default` (achado 1, rodada 4 de review #100) — sem ele, a
+    // linha final do card sequestrava categorias do usuário que coincidem
+    // de texto com um nome canônico do seed (ex. "Health" → "Saúde"), o
+    // mesmo defeito que `pickCategoryName` já corrige pra Últimas transações.
     name: categoryLabelPtForTag({
       name: category.tag_name,
       icon_key: category.tag_icon_key ?? null,
+      is_default: category.is_default ?? null,
     }),
     value: category.total,
     avg,

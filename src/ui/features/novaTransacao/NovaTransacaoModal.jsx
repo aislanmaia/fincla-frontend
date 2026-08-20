@@ -464,8 +464,16 @@ export const NovaTransacaoModal = ({
   const detailTagRowsAvailable = useMemo(() => {
     if (!useLiveDetailTags || !categoryTagId) return [];
     const sel = new Set(detailTagIds.map((id) => String(id)));
+    // `detailTagRowsForCategory` agora inclui tags ARQUIVADAS (achado 2,
+    // rodada 4 de review #100 — `listTags` passou a pedir `status: "all"`
+    // pra `ensureDetailTag` achar uma tag inativa pelo nome no quick-add em
+    // vez de bater no erro de duplicata do backend). Aqui, na lista de
+    // SUGESTÕES clicáveis, uma tag arquivada não pode aparecer como se
+    // estivesse disponível — só entra pra resolução por nome.
     return sortDetailTagRowsByLabelPt(
-      detailTagRowsForCategory.filter((row) => row?.id && !sel.has(String(row.id))),
+      detailTagRowsForCategory.filter(
+        (row) => row?.id && row.is_active !== false && !sel.has(String(row.id)),
+      ),
     );
   }, [useLiveDetailTags, categoryTagId, detailTagRowsForCategory, detailTagIds]);
 
@@ -479,7 +487,10 @@ export const NovaTransacaoModal = ({
     if (name) setDetailTagLabelById((prev) => ({ ...prev, [id]: name }));
     setDetailTagMetaById((prev) => ({
       ...prev,
-      [id]: { name: name || prev[id]?.name || id, isActive: true },
+      // `detailTagRowsAvailable` (a lista clicável) já exclui inativas, mas
+      // `addDetailTagByRow` é chamável com qualquer `row` — mesma correção
+      // de `is_active` do quick-add (achado 7, rodada 3), por consistência.
+      [id]: { name: name || prev[id]?.name || id, isActive: row.is_active !== false },
     }));
   }, []);
 

@@ -6,6 +6,17 @@
  * Sem repassar o `is_active` da linha resolvida, o chip aparece ativo na
  * tela e a trava de submit de tag inativa nunca dispara pra essa tag.
  *
+ * Rodada 4 de review: esse estado só é alcançável em produção DEPOIS do
+ * achado 2 (mesma rodada) — `useNovaTransacaoDetailTags.js` passou a pedir
+ * `listTags(..., { status: "all" })`, então `detailTagRowsForCategory`
+ * (o retorno cru do hook, usado por `addQuickDetailTag` pra resolver a
+ * linha) agora PODE conter uma tag arquivada de verdade. Antes desse fix, o
+ * mock aqui simulava um shape que o hook nunca produzia (`listTags` sem
+ * `status` só devolve ativas) — o teste passava, mas não provava nada sobre
+ * o app real. `detailTagRowsAvailable` (a lista de SUGESTÕES clicáveis,
+ * dentro do componente) exclui inativas à parte — este teste passa pelo
+ * quick-add digitando o nome, não clicando numa sugestão.
+ *
  * Arquivo separado do resto do quick-add (não `vi.doMock`/`resetModules` no
  * meio do arquivo): cada arquivo de teste tem seu próprio grafo de módulos,
  * então o mock estático de `useNovaTransacaoDetailTags.js` pode ir direto

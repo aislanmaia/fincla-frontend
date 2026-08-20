@@ -235,4 +235,29 @@ describe("buildDashboardCategoryRows", () => {
       }),
     );
   });
+
+  // Regressão #100 (rodada 4 de review, achado 1): o achado 2 (rodada 3)
+  // corrigiu `pickCategoryName` (usado em Últimas transações) pra repassar
+  // `is_default`, mas `aggregateExpenseCategoriesFromTransactions` — usado
+  // por ESTA função, pro card Gastos por Categoria — continuava remontando
+  // a tag sem `is_default` e com `??`. Comprovado por execução: a MESMA
+  // transação com categoria do usuário "Health" (`is_default:false`) lia
+  // "Health" em Últimas transações e "Saúde" no card, na mesma tela.
+  it('categoria do usuário "Health" (is_default:false) NÃO é sequestrada pela tradução no card (mesmo texto de Últimas transações)', () => {
+    const tx = {
+      type: "expense",
+      value: 150,
+      tags: {
+        categoria: [{ id: "cat-health", name: "Health", is_default: false }],
+      },
+    };
+
+    // Últimas transações (já corrigido na rodada 3).
+    expect(pickCategoryName(tx)).toBe("Health");
+
+    // Card Gastos por Categoria — mesma transação, mesma tela.
+    const rows = buildDashboardCategoryRows([tx], "2026-06-01", "2026-06-30", [], new Map());
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe("Health");
+  });
 });

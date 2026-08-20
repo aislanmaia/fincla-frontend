@@ -59,7 +59,15 @@ export function useNovaTransacaoDetailTags({
         const typeId = await resolveDetailTagTypeId();
         if (cancelled) return;
         setDetailTypeId(typeId);
-        const { tags } = await listTags(organizationId, "detalhe");
+        // `status: "all"` (não só ativas): sem isso, `ensureDetailTag` nunca
+        // encontra uma tag ARQUIVADA pelo nome — o quick-add tenta criar de
+        // novo, e o backend (que checa duplicata incluindo linhas inativas)
+        // devolve "Tag '...' already exists for this organization", uma
+        // string em inglês direto no erro de envio, sem chip nenhum (achado
+        // 2, rodada 4 de review #100). Linhas inativas ficam de fora da
+        // lista de SUGESTÕES clicáveis (NovaTransacaoModal.jsx,
+        // `detailTagRowsAvailable`) — só entram aqui pra resolução por nome.
+        const { tags } = await listTags(organizationId, "detalhe", { status: "all" });
         if (cancelled) return;
         setAllDetail(tags ?? []);
       } catch (e) {
