@@ -151,31 +151,58 @@ function labelPtFromPortugueseCategoryName(name) {
 
 /**
  * Nome é a chave primária: só traduz quando o nome cru bater com um nome
- * canônico do seed (EN ou PT). `icon_key` NUNCA sobrepõe um nome que já não
- * bate mais com o canônico — senão renomear uma categoria vira um no-op
- * silencioso na tela (a linha "Food & Groceries" → "Mercado do Zé" continuava
- * mostrando "Alimentação" porque o icon_key "shopping-cart" resolvia antes do
- * nome custom ser sequer olhado). `icon_key` só é consultado quando não há
- * nome nenhum — aí sim é um desempate de verdade, não uma chave alternativa.
- * @param {{ name?: string | null; icon_key?: string | null } | Record<string, unknown> | null | undefined} tag
+ * canônico do seed (EN ou PT) — e quando a tag não for confirmadamente do
+ * usuário. `is_default === false` é o único sinal confiável de "não é a
+ * linha do seed": uma categoria do usuário chamada literalmente "Health" ou
+ * "Renda" não pode ser reescrita só porque o texto coincide com o mapa
+ * canônico.
+ *
+ * Por que o nome usa `!== false` (não `=== true`) como portão, diferente do
+ * `icon_key` abaixo: os endpoints de agregação do consultor
+ * (`/analytics/by-category`, `/consultant/expenses-by-category`) NUNCA
+ * trazem `is_default` no payload — um deles nem passa pela tabela de tags,
+ * agrega direto pela string livre `transaction.category`. Exigir
+ * `=== true` pro NOME apagaria a tradução dessas telas por completo. Como só
+ * sabemos que uma tag é do usuário quando o backend manda
+ * `is_default: false` explicitamente, é esse o único caso que bloqueia a
+ * tradução pelo nome; `true` ou "campo ausente" seguem o mapa EN/PT normal.
+ *
+ * `icon_key` é mais perigoso que o nome (uma categoria renomeada mantém o
+ * `icon_key` do seed, então ele nunca deixa de "parecer" a categoria
+ * original) — por isso o portão dele é estrito, `=== true`: só entra como
+ * rede de segurança para uma linha CONFIRMADAMENTE do seed cujo nome não
+ * bateu com o mapa (nunca pros dois endpoints de agregação acima, que
+ * também não mandam `icon_key`, então isso não os afeta de qualquer forma).
+ * @param {{ name?: string | null; icon_key?: string | null; is_default?: boolean | null } | Record<string, unknown> | null | undefined} tag
  * @returns {string}
  */
 export function categoryLabelPtForTag(tag) {
   if (!tag) return "Categoria";
-  const { name, icon_key: rawIk } = coerceCategoryTagShape(
+  const { name, icon_key: rawIk, is_default } = coerceCategoryTagShape(
     /** @type {Record<string, unknown>} */ (tag),
   );
+  const isConfirmedSeedRow = is_default === true;
+  const isConfirmedUserTag = is_default === false;
   if (!name) {
-    const ikNorm = normalizeCategoryIconKey(rawIk);
-    if (ikNorm && CATEGORY_LABEL_PT_BY_ICON_KEY[ikNorm]) {
-      return CATEGORY_LABEL_PT_BY_ICON_KEY[ikNorm];
+    if (isConfirmedSeedRow) {
+      const ikNorm = normalizeCategoryIconKey(rawIk);
+      if (ikNorm && CATEGORY_LABEL_PT_BY_ICON_KEY[ikNorm]) {
+        return CATEGORY_LABEL_PT_BY_ICON_KEY[ikNorm];
+      }
     }
     return "Categoria";
   }
+  if (isConfirmedUserTag) return name;
   const fromEn = labelPtFromEnglishCategoryName(name);
   if (fromEn) return fromEn;
   const fromPt = labelPtFromPortugueseCategoryName(name);
   if (fromPt) return fromPt;
+  if (isConfirmedSeedRow) {
+    const ikNorm = normalizeCategoryIconKey(rawIk);
+    if (ikNorm && CATEGORY_LABEL_PT_BY_ICON_KEY[ikNorm]) {
+      return CATEGORY_LABEL_PT_BY_ICON_KEY[ikNorm];
+    }
+  }
   return name;
 }
 
@@ -238,8 +265,8 @@ export function resolveCategoryColorForTag(tag) {
     null;
   if (explicitColor) return explicitColor;
 
-  const { name, icon_key: rawIk } = coerceCategoryTagShape(o);
-  const labelPt = categoryLabelPtForTag({ name, icon_key: rawIk });
+  const { name, icon_key: rawIk, is_default } = coerceCategoryTagShape(o);
+  const labelPt = categoryLabelPtForTag({ name, icon_key: rawIk, is_default });
   if (labelPt && CATEGORY_COLOR_BY_LABEL_PT[labelPt]) {
     return CATEGORY_COLOR_BY_LABEL_PT[labelPt];
   }

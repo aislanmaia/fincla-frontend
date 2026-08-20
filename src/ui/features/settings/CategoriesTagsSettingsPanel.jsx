@@ -98,6 +98,8 @@ export function CategoriesTagsSettingsPanel({
   const [newCatColor, setNewCatColor] = useState("#2563EB");
   const [catsLoading, setCatsLoading] = useState(false);
   const [catsError, setCatsError] = useState("");
+  /** Id da tag existente destacada por ~1.5s quando `addTag` acha duplicata. */
+  const [highlightedTagId, setHighlightedTagId] = useState(null);
 
   const filteredCats = cats.filter((c) => {
     const q = catSearch.toLowerCase();
@@ -158,14 +160,22 @@ export function CategoriesTagsSettingsPanel({
   }, [liveEnabled, organizationId, newCatName, newCatColor, refreshCats]);
 
   const handleUpdateCat = useCallback(async (catId) => {
+    const cat = cats.find(c => c.id === catId);
+    const trimmed = newCatName.trim();
+    const displayedBefore = (cat?.labelPt || cat?.name || "").trim();
+    // Input pré-preenche com o rótulo PT (ex. "Alimentação"), não o nome cru
+    // ("Food & Groceries"). Só manda `name` novo quando o usuário de fato
+    // mudou o que via na tela — senão salvar só a cor (sem tocar o nome)
+    // reenviaria o rótulo traduzido como se fosse o nome real e destruiria o
+    // nome canônico do seed (ou um nome custom do usuário, ex. "Renda").
+    const nameForPayload = trimmed && trimmed !== displayedBefore ? trimmed : cat?.name;
     if (liveEnabled) {
       try {
-        const cat = cats.find(c => c.id === catId);
-        await apiUpdateTag(catId, { name: newCatName, color: newCatColor, tag_type_id: cat?._tagTypeId });
+        await apiUpdateTag(catId, { name: nameForPayload, color: newCatColor, tag_type_id: cat?._tagTypeId });
         await refreshCats();
       } catch (e) { setCatsError(handleApiError(e)); }
     } else {
-      setCats(prev => prev.map(c => c.id === catId ? {...c, name: newCatName, color: newCatColor} : c));
+      setCats(prev => prev.map(c => c.id === catId ? {...c, name: nameForPayload, color: newCatColor} : c));
     }
     setEditCat(null);
   }, [liveEnabled, cats, newCatName, newCatColor, refreshCats]);
@@ -181,17 +191,33 @@ export function CategoriesTagsSettingsPanel({
     }
   }, [liveEnabled, refreshCats]);
 
-  const addTag = useCallback(async (cat) => {
+  const addTag = useCallback((cat) => {
     const tagName = formatTagName(newTagInputs[cat.id] || "");
+    if (!tagName) return;
     // Compara com o nome cru E com o rótulo PT exibido: o usuário só vê
     // "#mercado" na tela (tradução da tag seed "grocery") — comparar só com
     // o nome cru deixa passar e cria uma tag "mercado" duplicada.
-    const hasTag = (cat.tags || []).some(
+    const existingTag = (cat.tags || []).find(
       (tag) =>
         formatTagName(getTagName(tag)) === tagName ||
         formatTagName(getTagLabelPt(tag)) === tagName,
     );
-    if (!tagName || hasTag) return;
+    if (existingTag) {
+      // Já existe (seed ou não) — não duplica, mas também não pode virar um
+      // beco sem saída: limpa o campo e pisca o chip existente pra deixar
+      // claro que a tag que o usuário procurava já está ali.
+      const existingId = String(getTagId(existingTag, 0));
+      setNewTagInputs((prev) => ({ ...prev, [cat.id]: "" }));
+      setHighlightedTagId(existingId);
+      setTimeout(() => {
+        setHighlightedTagId((cur) => (cur === existingId ? null : cur));
+      }, 1500);
+      return;
+    }
+    void createDetailTag(cat, tagName);
+  }, [newTagInputs]);
+
+  const createDetailTag = useCallback(async (cat, tagName) => {
     if (liveEnabled) {
       try {
         const typesResp = await listTagTypes();
@@ -215,7 +241,7 @@ export function CategoriesTagsSettingsPanel({
     }
     setCats((prev) => prev.map((c) => (c.id === cat.id ? { ...c, tags: [...(c.tags || []), tagName] } : c)));
     setNewTagInputs((prev) => ({ ...prev, [cat.id]: "" }));
-  }, [liveEnabled, newTagInputs, organizationId, refreshCats]);
+  }, [liveEnabled, organizationId]);
 
   const removeTag = useCallback(async (cat, tagIndex) => {
     const tag = (cat.tags || [])[tagIndex];
@@ -361,17 +387,23 @@ export function CategoriesTagsSettingsPanel({
                   Tags de {cat.labelPt || cat.name}
                 </div>
                 <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:10 }}>
-                  {(cat.tags||[]).map((tag, ti) => (
-                    <span key={getTagId(tag, ti)} style={{ ...G, display:"flex", alignItems:"center", gap:5, fontSize:12,
-                      background:T.surface, border:`1px solid ${T.border}`, borderRadius:99,
-                      padding:"4px 10px", color:T.inkMid }}>
-                      #{getTagLabelPt(tag)}
-                      <button onClick={() => void removeTag(cat, ti)}
-                        aria-label={`Remover tag ${getTagLabelPt(tag)}`}
-                        style={{ background:"none", border:"none", cursor:"pointer", padding:0, lineHeight:1,
-                          color:T.inkGhost, fontSize:14, display:"flex", alignItems:"center" }}>×</button>
-                    </span>
-                  ))}
+                  {(cat.tags||[]).map((tag, ti) => {
+                    // Tenta criar uma tag que já existe (seed ou não): não duplica, mas
+                    // pisca o chip existente por ~1.5s pra dar feedback visual de "já está aqui".
+                    const isHighlighted = highlightedTagId === String(getTagId(tag, ti));
+                    return (
+                      <span key={getTagId(tag, ti)} style={{ ...G, display:"flex", alignItems:"center", gap:5, fontSize:12,
+                        background: isHighlighted ? `${cat.color}18` : T.surface,
+                        border:`1px solid ${isHighlighted ? cat.color : T.border}`, borderRadius:99,
+                        padding:"4px 10px", color:T.inkMid, transition:"all 0.15s" }}>
+                        #{getTagLabelPt(tag)}
+                        <button onClick={() => void removeTag(cat, ti)}
+                          aria-label={`Remover tag ${getTagLabelPt(tag)}`}
+                          style={{ background:"none", border:"none", cursor:"pointer", padding:0, lineHeight:1,
+                            color:T.inkGhost, fontSize:14, display:"flex", alignItems:"center" }}>×</button>
+                      </span>
+                    );
+                  })}
                   {(cat.tags||[]).length === 0 && (
                     <span style={{ ...G, fontSize:12, color:T.inkLight, fontStyle:"italic" }}>
                       Nenhuma tag ainda

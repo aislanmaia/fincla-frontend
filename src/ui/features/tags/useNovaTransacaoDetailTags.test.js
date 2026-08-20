@@ -133,6 +133,36 @@ describe("useNovaTransacaoDetailTags", () => {
     );
   });
 
+  // Regressão GRAVE do review adversarial da PR #97 (rodada 2, prioridade 4):
+  // com "grocery" (seed) e "mercado" (tag própria do usuário) na MESMA
+  // categoria, os dois exibem "mercado" na tela. `findByLabel("mercado")`
+  // tinha que devolver a tag do usuário (nome cru bate exato), não a do seed
+  // (só bate pelo rótulo traduzido) — senão a transação salva com o id
+  // errado, e o erro é invisível porque os dois chips mostram o mesmo texto.
+  it("rótulo ambíguo resolve pro nome cru exato antes do rótulo PT traduzido", async () => {
+    vi.mocked(tagsApi.listTags).mockResolvedValue({
+      tags: [
+        detailRow("seed-grocery-id", "grocery", CAT, true), // seed → exibe "mercado"
+        detailRow("user-mercado-id", "mercado", CAT, false), // tag própria do usuário
+      ],
+    });
+    const { result } = renderHook(() =>
+      useNovaTransacaoDetailTags({
+        organizationId: ORG,
+        categoryTagId: CAT,
+        enabled: true,
+      }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    expect(result.current.findByLabel("mercado")?.id).toBe("user-mercado-id");
+
+    const id = await result.current.ensureDetailTag("mercado");
+    expect(id).toBe("user-mercado-id");
+    expect(tagsApi.createTag).not.toHaveBeenCalled();
+  });
+
   it("ensureDetailTag cria tag quando não existe para o pai", async () => {
     const { result } = renderHook(() =>
       useNovaTransacaoDetailTags({

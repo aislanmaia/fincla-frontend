@@ -176,7 +176,7 @@ describe("CategoriesTagsSettingsPanel — categoria/tag do seed em inglês (regr
     vi.mocked(tagsApi.listTags).mockImplementation(async (_orgId, tagType) => ({
       tags:
         tagType === "categoria"
-          ? [categoryRow({ name: "Food & Groceries", icon_key: "shopping-cart" })]
+          ? [categoryRow({ name: "Food & Groceries", icon_key: "shopping-cart", is_default: true })]
           : [detailRow("det-grocery", "grocery", true)],
     }));
 
@@ -224,10 +224,11 @@ describe("CategoriesTagsSettingsPanel — categoria/tag do seed em inglês (regr
     expect(screen.queryByText("#grocery")).not.toBeInTheDocument();
   });
 
-  // Regressão do review adversarial da PR #97: o usuário só vê "#mercado" na
-  // tela (tradução da tag seed "grocery") — digitar "mercado" de volta não
-  // pode criar uma tag duplicada.
-  it("não cria tag duplicada ao digitar o rótulo PT que já é a tradução da tag seed", async () => {
+  // Regressão do review adversarial da PR #97 (rodada 2, prioridade 5): antes
+  // digitar o rótulo PT que já é a tradução da tag seed virava um beco sem
+  // saída (sem request, sem erro, sem limpar o input). Agora não duplica MAS
+  // também limpa o campo — não pode ficar sem feedback nenhum.
+  it("não cria tag duplicada ao digitar o rótulo PT que já é a tradução da tag seed, e limpa o input", async () => {
     renderPanel();
 
     const expandBtn = await waitForSingleFetchedCategory();
@@ -241,6 +242,8 @@ describe("CategoriesTagsSettingsPanel — categoria/tag do seed em inglês (regr
     expect(tagsApi.createTag).not.toHaveBeenCalled();
     // Continua só um chip "#mercado" — não vira dois.
     expect(screen.getAllByText("#mercado")).toHaveLength(1);
+    // Não é beco sem saída: o campo limpa mesmo sem criar nada.
+    expect(input).toHaveValue("");
   });
 
   // Regressão do review adversarial da PR #97: o lápis pré-preenchia o input
@@ -253,5 +256,78 @@ describe("CategoriesTagsSettingsPanel — categoria/tag do seed em inglês (regr
     fireEvent.click(editBtn);
 
     expect(screen.getByLabelText(/Editar categoria Alimentação/i)).toHaveValue("Alimentação");
+  });
+
+  // Regressão GRAVE do review adversarial da PR #97 (rodada 2, prioridade 1):
+  // editar só a COR (sem tocar no nome) não pode reescrever o nome canônico
+  // do seed pro rótulo PT traduzido no banco. Comprovado por sonda: abrir o
+  // lápis e clicar OK sem digitar nada mandava PATCH {"name":"Alimentação"}.
+  it("editar só a cor NÃO reescreve o nome canônico do seed no PATCH", async () => {
+    renderPanel();
+
+    await waitForSingleFetchedCategory();
+    fireEvent.click(screen.getByRole("button", { name: /Editar categoria Alimentação/i }));
+    // Não mexe no nome — só clica em OK (fluxo "só quero trocar a cor").
+    fireEvent.click(screen.getByRole("button", { name: /^OK$/i }));
+
+    await waitFor(() => {
+      expect(tagsApi.updateTag).toHaveBeenCalledWith(
+        CATEGORY_ID,
+        expect.objectContaining({ name: "Food & Groceries" }),
+      );
+    });
+  });
+
+  // Mesma prioridade 1: se o usuário digitar um nome novo de verdade, isso
+  // precisa ser respeitado e mandado como está (não voltar pro nome cru).
+  it("renomear de propósito manda o texto digitado, não o nome cru", async () => {
+    renderPanel();
+
+    await waitForSingleFetchedCategory();
+    fireEvent.click(screen.getByRole("button", { name: /Editar categoria Alimentação/i }));
+    const nameInput = screen.getByLabelText(/Editar categoria Alimentação/i);
+    fireEvent.change(nameInput, { target: { value: "Mercado do Zé" } });
+    fireEvent.click(screen.getByRole("button", { name: /^OK$/i }));
+
+    await waitFor(() => {
+      expect(tagsApi.updateTag).toHaveBeenCalledWith(
+        CATEGORY_ID,
+        expect.objectContaining({ name: "Mercado do Zé" }),
+      );
+    });
+  });
+});
+
+describe("CategoriesTagsSettingsPanel — categoria do usuário com nome igual a um canônico do seed (regressão review rodada 2, prioridade 2)", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  const USER_RENDA_ID = "cat-renda-user";
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // Categoria criada pelo usuário, `is_default: false`, com o mesmo nome de
+    // um canônico do seed ("Renda" → mapa PT tem "renda": "Receita").
+    vi.mocked(tagsApi.listTags).mockImplementation(async (_orgId, tagType) => ({
+      tags:
+        tagType === "categoria"
+          ? [categoryRow({ id: USER_RENDA_ID, name: "Renda", is_default: false, icon_key: null })]
+          : [],
+    }));
+    vi.mocked(tagsApi.listTagTypes).mockResolvedValue({
+      tag_types: [
+        { id: "tt-cat", name: "categoria", description: null, is_required: false, max_per_transaction: null },
+        { id: "tt-det", name: "detalhe", description: null, is_required: false, max_per_transaction: null },
+      ],
+    });
+  });
+
+  it("mostra 'Renda' como o usuário escreveu, não 'Receita' (mapa PT não sequestra tag do usuário)", async () => {
+    renderPanel();
+
+    await screen.findByRole("button", { name: /Expandir tags de Renda/i });
+    expect(screen.getByText("Renda")).toBeInTheDocument();
+    expect(screen.queryByText("Receita")).not.toBeInTheDocument();
   });
 });

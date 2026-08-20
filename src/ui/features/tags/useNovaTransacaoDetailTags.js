@@ -82,36 +82,33 @@ export function useNovaTransacaoDetailTags({
     );
   }, [allDetail, categoryTagId]);
 
-  // Casa pelo nome cru OU pelo rótulo PT exibido: a tag seed "grocery" aparece
-  // na tela como "mercado", e é isso que o usuário digita de volta (PR #96
-  // resolve a tag por este mesmo caminho). Comparar só com o nome cru nunca
-  // acha a tag seed e cria duplicata a cada vez.
-  const matchesLabel = useCallback(
-    (t, n) => normalizeLabel(t.name) === n || normalizeLabel(detailLabelPtForTag(t)) === n,
-    [],
-  );
+  /**
+   * Duas passadas, nunca uma condição "ou" única: nome cru exato em TODOS os
+   * candidatos primeiro, só then rótulo PT traduzido. Com "grocery" (seed) e
+   * "mercado" (do usuário) na mesma categoria, uma única passada com `||`
+   * podia bater no rótulo traduzido de "grocery" antes de olhar o nome cru
+   * de "mercado" — o clique no chip "mercado" salvava o id do seed, e como
+   * os dois exibem o mesmo texto, o erro é invisível pro usuário.
+   */
+  function findByRawNameThenLabel(candidates, n) {
+    const byRawName = candidates.find((t) => normalizeLabel(t.name) === n);
+    if (byRawName) return byRawName;
+    return candidates.find((t) => normalizeLabel(detailLabelPtForTag(t)) === n) ?? null;
+  }
 
   const findByLabel = useCallback(
-    (label) => {
-      const n = normalizeLabel(label);
-      return rowsForCategory.find((t) => matchesLabel(t, n)) ?? null;
-    },
-    [rowsForCategory, matchesLabel],
+    (label) => findByRawNameThenLabel(rowsForCategory, normalizeLabel(label)),
+    [rowsForCategory],
   );
 
   const findDetailForParentAndLabel = useCallback((parentId, label) => {
     if (!parentId) return null;
-    const n = normalizeLabel(label);
     const pid = String(parentId);
-    return (
-      allDetail.find(
-        (t) =>
-          t.parent_category_tag_id != null &&
-          String(t.parent_category_tag_id) === pid &&
-          matchesLabel(t, n),
-      ) ?? null
+    const candidates = allDetail.filter(
+      (t) => t.parent_category_tag_id != null && String(t.parent_category_tag_id) === pid,
     );
-  }, [allDetail, matchesLabel]);
+    return findByRawNameThenLabel(candidates, normalizeLabel(label));
+  }, [allDetail]);
 
   const ensureDetailTag = useCallback(
     async (label, parentCategoryOverride = null) => {

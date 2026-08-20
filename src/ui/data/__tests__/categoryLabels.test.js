@@ -25,9 +25,11 @@ describe("categoryLabels", () => {
     expect(categoryLabelPtForTag({ name: "alimentacao", icon_key: null })).toBe("Alimentação");
   });
 
-  // Regressão do review adversarial da PR #97: nome é a chave primária;
-  // icon_key nunca sobrepõe um nome que já não bate mais com o canônico.
-  it("categoria renomeada pelo usuário NÃO volta a mostrar a tradução antiga (nome é a chave primária)", () => {
+  // Regressão do review adversarial da PR #97 (rodada 1): nome é a chave
+  // primária; sem `is_default` no payload (shape do endpoint de agregação do
+  // consultor, que nunca manda esse campo), icon_key nunca sobrepõe um nome
+  // que não bate com o canônico.
+  it("categoria renomeada pelo usuário NÃO volta a mostrar a tradução antiga (sem is_default no payload)", () => {
     expect(
       categoryLabelPtForTag({ name: "Mercado do Zé", icon_key: "shopping-cart" }),
     ).toBe("Mercado do Zé");
@@ -39,9 +41,56 @@ describe("categoryLabels", () => {
     );
   });
 
-  it("icon_key só resolve quando não há nome nenhum (desempate, não chave alternativa)", () => {
-    expect(categoryLabelPtForTag({ name: null, icon_key: "shopping-cart" })).toBe("Alimentação");
-    expect(categoryLabelPtForTag({ name: "", icon_key: "car" })).toBe("Transporte");
+  // Regressão do review adversarial da PR #97 (rodada 2, prioridade 2): o
+  // primeiro gate ignorava `is_default` por completo — uma categoria CRIADA
+  // PELO USUÁRIO com o mesmo texto de um nome canônico do seed
+  // ("Health", "Services", "Transport", "Renda", "Outros"...) era sequestrada
+  // pelo mapa. `is_default: false` é o único sinal confiável de "isto não é
+  // a linha do seed" e bloqueia a tradução pelo nome.
+  it("NÃO traduz categoria do usuário só porque o texto coincide com um nome canônico (is_default: false)", () => {
+    expect(categoryLabelPtForTag({ name: "Health", is_default: false })).toBe("Health");
+    expect(categoryLabelPtForTag({ name: "Services", is_default: false })).toBe("Services");
+    expect(categoryLabelPtForTag({ name: "Transport", is_default: false })).toBe("Transport");
+    expect(categoryLabelPtForTag({ name: "Renda", is_default: false })).toBe("Renda");
+    expect(categoryLabelPtForTag({ name: "Outros", is_default: false })).toBe("Outros");
+  });
+
+  // Prioridade 3 do review (rodada 2): a rede de segurança do icon_key volta
+  // a existir, mas só para uma linha CONFIRMADAMENTE do seed (`is_default:
+  // true`) cujo nome não bate com o mapa (ex.: dado legado de uma migração
+  // de categoria antiga). Sem `icon_key` nem `tag_id` nos dois endpoints de
+  // agregação do consultor, essa rede nunca entra em jogo lá.
+  it("icon_key é rede de segurança só quando is_default é true e o nome não bate com o mapa", () => {
+    expect(
+      categoryLabelPtForTag({ name: "Categoria Legada X", icon_key: "home", is_default: true }),
+    ).toBe("Moradia");
+  });
+
+  it("icon_key sem nome nenhum também exige is_default true (payload de agregação nunca manda icon_key)", () => {
+    expect(categoryLabelPtForTag({ name: null, icon_key: "shopping-cart", is_default: true })).toBe(
+      "Alimentação",
+    );
+    expect(categoryLabelPtForTag({ name: "", icon_key: "car" })).toBe("Categoria");
+  });
+
+  // Trade-off conhecido e intencional da prioridade 3 (documentado, não é
+  // bug): como o backend nunca reseta `is_default` ao renomear uma
+  // categoria do seed, uma categoria renomeada que ainda tem `is_default:
+  // true` volta a cair na rede de segurança do icon_key. A prioridade 1
+  // (handleUpdateCat) garante que o PATCH em si nunca reescreve o nome sem
+  // necessidade — este é só o caso em que o usuário renomeia de propósito
+  // para um texto que não é nenhum nome canônico.
+  it("[trade-off conhecido] categoria com is_default:true renomeada pro usuário ainda cai no icon_key", () => {
+    expect(
+      categoryLabelPtForTag({ name: "Mercado do Zé", icon_key: "shopping-cart", is_default: true }),
+    ).toBe("Alimentação");
+  });
+
+  // Shape real dos endpoints de agregação do consultor (`tag_name` sem
+  // `is_default` nem `icon_key`) — precisa continuar traduzindo.
+  it("traduz normalmente o shape do endpoint de agregação do consultor (sem is_default/icon_key)", () => {
+    expect(categoryLabelPtForTag({ tag_name: "Housing" })).toBe("Moradia");
+    expect(categoryLabelPtForTag({ name: "Health" })).toBe("Saúde");
   });
 });
 
