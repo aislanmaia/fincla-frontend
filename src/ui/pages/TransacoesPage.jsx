@@ -125,7 +125,6 @@ export const Tip = ({ label, children, pos = "top" }) => {
   const [rect, setRect] = useState(null);
   const ref = useRef(null);
   const id = useId();
-  if (!label) return <>{children}</>;
 
   const show = (e) => {
     if (!ref.current) return;
@@ -171,6 +170,18 @@ export const Tip = ({ label, children, pos = "top" }) => {
       window.removeEventListener(TIP_OPEN_EVENT, onOtherTipOpen);
     };
   }, [rect, id]);
+
+  // fincla-frontend#109 achado 1 (crítico): este early return morava ANTES
+  // dos hooks acima. `TxRow` chaveia linhas por `tx.id`, então a MESMA
+  // instância de `<Tip>` sobrevive a uma atualização in-place (ex.: marcar
+  // como estorno no drawer troca `label` de "" pra um texto, ou
+  // `setTransactionSettled` zera `parcela` e troca `hasParcela` de true pra
+  // false) — o número de hooks chamados variava conforme `label` estar vazio
+  // ou não, e o React derruba a árvore inteira ("Rendered more/fewer hooks
+  // than during the previous render"), sem error boundary = tela branca.
+  // TODOS os hooks (`useState`/`useRef`/`useId`/`useEffect`) agora rodam
+  // incondicionalmente; só a SAÍDA (early return) depende de `label`.
+  if (!label) return <>{children}</>;
 
   // Compute fixed position from measured rect
   const tipStyle = rect ? (pos === "top"
@@ -980,9 +991,20 @@ function TransacoesPageBody({
   // bem-sucedida, uma falha de revalidação (troca de filtro, refresh) já tem
   // dados válidos pra mostrar via stale-while-revalidate (ver
   // useTransactionsData) e não deve regredir a lista pro estado de loading.
+  //
+  // fincla-frontend#109 achado 2 (revisão da PR #109): `listLoading` usava
+  // `transactionsData.isLoading` — mas esse booleano só liga DEPOIS que o
+  // `useEffect` do hook roda; no 1º quadro (e em qualquer transição de
+  // `enabled` false→true, ex.: logo que `tagFilterBlocked` desbloqueia a
+  // busca) ele ainda está `false`, e a tela caía no "vazio de verdade" antes
+  // da API responder — a MESMA falha que o `hasLoaded` acima existe pra
+  // evitar. Dentro de `listNeverLoaded`, "carregando" e "falhou" são
+  // complementares por definição (`!hasLoaded` só sai desse estado num
+  // sucesso ou numa falha visível): sem erro ainda visível, só pode ser
+  // "em voo" — não depende de `isLoading` ter tido tempo de ligar.
   const listNeverLoaded = shouldUseRealData && !transactionsData.hasLoaded;
-  const listLoading = listNeverLoaded && transactionsData.isLoading;
   const listLoadFailed = listNeverLoaded && Boolean(transactionsData.error);
+  const listLoading = listNeverLoaded && !listLoadFailed;
 
   /** Categorias normalizadas para a FacetBar (id + label + color + icon). */
   const categoriesForFilter = useMemo(() => {

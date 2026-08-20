@@ -137,4 +137,41 @@ describe("<Tip> — issue #105", () => {
     fireEvent.mouseLeave(trigger);
     expect(screen.queryByText("dica")).not.toBeInTheDocument();
   });
+
+  // fincla-frontend#109 achado 1 (CRÍTICO, revisão da PR #109): o early
+  // return `if (!label) return <>{children}</>` morava ANTES do `useEffect`
+  // — o número de hooks chamados variava conforme `label` estar vazio ou
+  // não. `TxRow` chaveia linhas por `tx.id`, então a MESMA instância de
+  // `<Tip>` sobrevive a uma atualização in-place (ex.: marcar como estorno
+  // no drawer troca o `label` do tooltip do valor de "" pra um texto) — e o
+  // React derruba a árvore ("Rendered more/fewer hooks than during the
+  // previous render"), sem error boundary = tela branca. Comprovado nos DOIS
+  // sentidos, com `rerender` na MESMA posição (mesma instância).
+  it("crash real (#109): label alternando entre vazio e preenchido não muda a quantidade de hooks", () => {
+    const { rerender } = render(
+      <Tip label="">
+        <button type="button">alvo</button>
+      </Tip>,
+    );
+
+    // "" -> "x": no código com bug, isso chamava um hook A MAIS.
+    expect(() =>
+      rerender(
+        <Tip label="dica">
+          <button type="button">alvo</button>
+        </Tip>,
+      ),
+    ).not.toThrow();
+    expect(screen.getByText("alvo")).toBeInTheDocument();
+
+    // "x" -> "": no código com bug, isso chamava um hook A MENOS.
+    expect(() =>
+      rerender(
+        <Tip label="">
+          <button type="button">alvo</button>
+        </Tip>,
+      ),
+    ).not.toThrow();
+    expect(screen.getByText("alvo")).toBeInTheDocument();
+  });
 });

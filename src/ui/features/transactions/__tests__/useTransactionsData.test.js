@@ -9,8 +9,10 @@
 // rodam de VERDADE aqui — só o limite de rede (`listTransactions` /
 // `getTransactionsSummary`, que chamam `apiClient.get`) é dublado, para
 // inspecionar os params exatos que sairiam na querystring.
+import { createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 import { useTransactionsData } from "../useTransactionsData.js";
 import { filtersToLegacyParams } from "../filters/filtersToLegacyParams.js";
@@ -217,3 +219,135 @@ describe("fincla-frontend#106 — hasLoaded distingue carregando/erro de vazio d
     expect(result.current.transactions[0].id).toBe("tx-1");
   });
 });
+
+// fincla-frontend#109 achado 2 (revisão da PR #109) — a correção acima do
+// #106 não valia no 1º quadro: `EMPTY_STATE.isLoading` era `false`, e só o
+// `useEffect` ligava. `renderHook`/`render` do RTL flusham efeitos dentro do
+// MESMO `act()` da montagem — não dá pra observar o estado ANTES do efeito
+// por esse caminho (mesma limitação já documentada no teste equivalente de
+// `useTransactionsTagCatalog.test.js`). `renderToStaticMarkup` (SSR) nunca
+// roda `useEffect`, então captura exatamente o 1º quadro que importa.
+describe("fincla-frontend#109 achado 2 — isLoading já começa true no 1º quadro (SSR)", () => {
+  it("enabled+organizationId: isLoading true, hasLoaded false, sem rodar o efeito", () => {
+    function Probe() {
+      const { isLoading, hasLoaded } = useTransactionsData({
+        organizationId: ORG,
+        enabled: true,
+        filters: filtersToLegacyParams(BASE_STATE, { limit: 10 }),
+      });
+      return `${isLoading}|${hasLoaded}`;
+    }
+    expect(renderToStaticMarkup(createElement(Probe))).toBe("true|false");
+  });
+
+  it("sem organizationId: isLoading fica false (não há nada pra carregar)", () => {
+    function Probe() {
+      const { isLoading } = useTransactionsData({
+        organizationId: null,
+        enabled: true,
+        filters: filtersToLegacyParams(BASE_STATE, { limit: 10 }),
+      });
+      return String(isLoading);
+    }
+    expect(renderToStaticMarkup(createElement(Probe))).toBe("false");
+  });
+
+  it("enabled=false: isLoading fica false", () => {
+    function Probe() {
+      const { isLoading } = useTransactionsData({
+        organizationId: ORG,
+        enabled: false,
+        filters: filtersToLegacyParams(BASE_STATE, { limit: 10 }),
+      });
+      return String(isLoading);
+    }
+    expect(renderToStaticMarkup(createElement(Probe))).toBe("false");
+  });
+});
+
+// fincla-frontend#109 achado 3 — o `.catch` mesclava `...current`
+// INCONDICIONALMENTE, mesmo quando organização OU filtros mudaram (não só
+// numa revalidação de verdade do MESMO contexto). Uma falha ao trocar de
+// organização deixava a lista/summary da organização ANTERIOR na tela, com
+// `hasLoaded:true`, como se fossem dados válidos da organização NOVA.
+describe("fincla-frontend#109 achado 3 — falha ao trocar de contexto não herda dados do contexto anterior", () => {
+  it("falha ao trocar de ORGANIZAÇÃO: não preserva transactions/summary/hasLoaded da organização anterior", async () => {
+    const ORG_B = "22222222-2222-4222-8222-222222222222";
+    const ROW = {
+      id: "tx-org-a",
+      description: "Café org A",
+      amount: -10,
+      type: "expense",
+      date: "2026-08-01",
+      tags: {},
+    };
+    listTransactions.mockResolvedValueOnce({
+      data: [ROW],
+      pagination: { total: 1, has_next: false },
+    });
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+
+    const filters = filtersToLegacyParams(BASE_STATE, { limit: 10 });
+    const { result, rerender } = renderHook(
+      ({ organizationId }) => useTransactionsData({ organizationId, enabled: true, filters }),
+      { initialProps: { organizationId: ORG } },
+    );
+
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    expect(result.current.transactions).toHaveLength(1);
+
+    // Troca de organização — a busca da nova organização falha.
+    listTransactions.mockRejectedValueOnce(new Error("network down"));
+    rerender({ organizationId: ORG_B });
+
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+
+    // Não pode mostrar as linhas da organização A sob o contexto da B — isso
+    // é uma mentira silenciosa por trás de um banner de erro.
+    expect(result.current.transactions).toEqual([]);
+    expect(result.current.total).toBe(0);
+    expect(result.current.summary).toBeNull();
+    expect(result.current.hasLoaded).toBe(false);
+  });
+
+  it("falha ao trocar de FILTRO (mesma organização): não preserva a lista do filtro anterior", async () => {
+    const ROW = {
+      id: "tx-filtro-a",
+      description: "Café filtro A",
+      amount: -10,
+      type: "expense",
+      date: "2026-08-01",
+      tags: {},
+    };
+    listTransactions.mockResolvedValueOnce({
+      data: [ROW],
+      pagination: { total: 1, has_next: false },
+    });
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+
+    // `filters` precisa ser uma referência ESTÁVEL entre renders (calculada
+    // FORA do callback do `renderHook`) — computá-la de novo a cada chamada
+    // recria `query`/`summaryQuery` (via `useMemo`) a cada render, o efeito
+    // vê a dependência "mudar" pra sempre e entra num loop infinito de
+    // fetch/render (não é o hook: é um erro de autoria do teste).
+    const filtersA = filtersToLegacyParams(BASE_STATE, { limit: 10 });
+    const filtersB = filtersToLegacyParams({ ...BASE_STATE, type: "despesa" }, { limit: 10 });
+
+    const { result, rerender } = renderHook(
+      ({ filters }) => useTransactionsData({ organizationId: ORG, enabled: true, filters }),
+      { initialProps: { filters: filtersA } },
+    );
+
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    expect(result.current.transactions).toHaveLength(1);
+
+    listTransactions.mockRejectedValueOnce(new Error("network down"));
+    rerender({ filters: filtersB });
+
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+
+    expect(result.current.transactions).toEqual([]);
+    expect(result.current.hasLoaded).toBe(false);
+  });
+});
+

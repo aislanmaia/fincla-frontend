@@ -23,13 +23,23 @@ const EMPTY_STATE = {
   hasLoaded: false,
 };
 
+// fincla-frontend#109 achado 2 — `EMPTY_STATE.isLoading` é `false`; sem isto,
+// o 1º quadro (antes do `useEffect` abaixo rodar) lia `isLoading:false,
+// hasLoaded:false, transactions:[]` e a página confundia "a busca nem
+// começou" com "vazio de verdade" (issue #106 reaberta pelo mesmo motivo que
+// motivou a correção do catálogo de tags: `useState` estático não reflete o
+// que o efeito está prestes a fazer).
+function initialState(enabled, organizationId) {
+  return { ...EMPTY_STATE, isLoading: Boolean(enabled && organizationId) };
+}
+
 export function useTransactionsData({
   organizationId,
   enabled = true,
   filters,
   refreshToken = 0,
 }) {
-  const [state, setState] = useState(EMPTY_STATE);
+  const [state, setState] = useState(() => initialState(enabled, organizationId));
   const prevFetchSig = useRef(null);
 
   const query = useMemo(() => {
@@ -108,19 +118,31 @@ export function useTransactionsData({
       .catch((error) => {
         if (cancelled) return;
 
-        // Stale-while-revalidate (mesmo padrão do `useCalendarData`): NÃO apaga
-        // os dados já carregados. Se esta é a 1ª carga, `transactions` já está
-        // vazio (nada a preservar); se é uma revalidação (troca de filtro ou
-        // `refreshToken`), a lista anterior continua válida na tela — só o
-        // aviso de erro liga. `hasLoaded` não é tocado aqui: só o `.then`
-        // acima pode ligá-lo, senão "nunca carregou com sucesso" morre depois
-        // da primeira falha e o "vazio confiante" (issue #106) volta por trás
-        // de um retry.
-        setState((current) => ({
-          ...current,
-          isLoading: false,
-          error: formatTransactionsApiError(error),
-        }));
+        const message = formatTransactionsApiError(error);
+        setState((current) =>
+          softRefreshOnly
+            ? // Stale-while-revalidate de verdade (mesmo padrão do
+              // `useCalendarData`): MESMA organização e MESMOS filtros, só o
+              // `refreshToken` mudou (ex.: transação salva em outra tela) —
+              // os dados na tela continuam válidos pra ESTE contexto, então
+              // preserva (`...current`) e só o aviso de erro liga.
+              { ...current, isLoading: false, error: message }
+            : // Organização OU filtros mudaram (fincla-frontend#109 achado 3):
+              // `current` é de OUTRO contexto — preservar aqui mostraria a
+              // lista/KPIs da organização ou do filtro ANTERIOR sob os chips
+              // já trocados na tela, uma mentira silenciosa por trás de um
+              // banner de erro. `hasLoaded` volta a `false`: este contexto
+              // nunca carregou com sucesso.
+              {
+                isLoading: false,
+                error: message,
+                summary: null,
+                transactions: [],
+                total: 0,
+                pagination: null,
+                hasLoaded: false,
+              },
+        );
       });
 
     return () => {

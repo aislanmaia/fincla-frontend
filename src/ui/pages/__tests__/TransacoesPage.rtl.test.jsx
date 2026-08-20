@@ -798,6 +798,23 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
 
     expect(screen.getByText(/Nenhuma transação encontrada/i)).toBeInTheDocument();
   });
+
+  // fincla-frontend#109 achado 2 (revisão da PR #109): o quadro EXATO em que
+  // `enabled` acabou de virar `true` (1ª montagem, ou logo que o filtro de
+  // tag desbloqueia a busca) — o efeito do hook ainda não teve chance de
+  // ligar `isLoading`. Nunca carregou (`hasLoaded:false`) e ainda não há
+  // erro (`error:""`) — só pode ser "em voo".
+  it("hasLoaded=false, error='', isLoading AINDA false (quadro entre habilitar e o efeito ligar isLoading): mostra 'Carregando…', nunca 'Nenhuma transação encontrada'", () => {
+    transactionsDataMock.mockReturnValue({
+      isLoading: false, error: "", hasLoaded: false,
+      summary: null, transactions: [], total: 0, hasMore: false,
+      removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
+    });
+    renderPage();
+
+    expect(screen.getByText(/Carregando transações/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Nenhuma transação encontrada/i)).not.toBeInTheDocument();
+  });
 });
 
 describe("<TransacoesPage> — lançamentos cobertos por âncora (S4)", { timeout: 15000 }, () => {

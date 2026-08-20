@@ -83,6 +83,14 @@ export function useAiSuggestion({
     if (useLiveDetailTags && catIdForDetailTags) {
       const nextIds = [];
       const nextLabels = {};
+      // fincla-frontend#109 achado 4: `ensureDetailTag` agora pode rejeitar de
+      // propósito (catálogo de tags ainda carregando — fail-closed do
+      // fincla-frontend#101), e a sugestão de IA é heurística local e
+      // síncrona: nada impede clicar "Aplicar" antes do catálogo terminar de
+      // carregar. Uma tag que falhou não pode simplesmente desaparecer — cai
+      // como tag de TEXTO LIVRE (mesmo caminho do `else` abaixo) em vez de
+      // ser descartada em silêncio enquanto a tela afirma que aplicou tudo.
+      const fallbackFreeTags = [];
       for (const t of aiSuggestion.tags || []) {
         try {
           const id = await ensureDetailTag(String(t), catIdForDetailTags);
@@ -91,12 +99,12 @@ export function useAiSuggestion({
             nextLabels[String(id)] = String(t);
           }
         } catch {
-          /* ignora tag individual */
+          fallbackFreeTags.push(String(t));
         }
       }
       setDetailTagIds(nextIds);
       setDetailTagLabelById(nextLabels);
-      setTags([]);
+      setTags(fallbackFreeTags);
     } else {
       setTags(aiSuggestion.tags || []);
       setDetailTagIds([]);
