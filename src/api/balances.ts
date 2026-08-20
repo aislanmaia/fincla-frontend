@@ -1,5 +1,6 @@
 // api/balances.ts
 import apiClient from './client';
+import { toFiniteNumber } from './money';
 import type {
   OrgBalances,
   AccountBalance,
@@ -7,31 +8,8 @@ import type {
   RawOrgBalances,
   RawAccountBalance,
   RawBalanceSummary,
-  WireMoney,
 } from './types';
 
-/**
- * O backend serializa dinheiro como STRING, não número.
- *
- * Os campos são `Decimal` no Pydantic v2, que em JSON vira `"315.57"`. O tipo
- * `number` declarado em `types.ts` estava errado desde sempre; o dashboard só não
- * quebrava porque lia o valor com coerção implícita do JS (`Math.abs("315.57")`
- * funciona). Quando a Visão Geral passou a checar `typeof === "number"` para
- * distinguir "sem saldo" de "saldo zero", o check passou a reprovar TODA resposta
- * válida e a tela exibiu "Dados indisponíveis" com a API respondendo 200.
- *
- * A coerção fica aqui, na fronteira: quem consome recebe número e o `typeof` volta
- * a significar o que promete. `null` para o que não é número finito — inclusive
- * `null` do backend — porque zero é um saldo legítimo e não pode ser inventado.
- */
-const toFiniteNumber = (value: WireMoney | unknown): number | null => {
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-  if (typeof value === 'string' && value.trim() !== '') {
-    const n = Number(value);
-    return Number.isFinite(n) ? n : null;
-  }
-  return null;
-};
 
 /**
  * Os tipos `Raw*` existem para o compilador cobrar a normalização.

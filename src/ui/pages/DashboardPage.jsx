@@ -39,6 +39,7 @@ import {
 } from "../features/moodV4";
 import { useDashboardData } from "../features/dashboard/useDashboardData.js";
 import { pickCommittedExpenseForDashboard } from "../features/dashboard/dashboardRecurringKpi.js";
+import { toAmount } from "../../api/money";
 import { getRecurringProjection } from "../../api/recurringSeries";
 import { DashboardPeriodSelector } from "../features/dashboard/DashboardPeriodSelector.jsx";
 import {
@@ -149,6 +150,30 @@ export function DashboardPage({
   const hasComparison = categoryData.some((c) => typeof c.avg === "number" && c.avg > 0);
   const rhythmData = dashboardData.rhythmChart;
   const upcomingDebits = dashboardData.upcomingDebits;
+  /**
+   * Total dos próximos débitos, somado com guarda explícita.
+   *
+   * A versão anterior era `reduce((s, d) => s + d.value, 0)` direto no JSX. Com
+   * `value` chegando como string do backend (`Decimal` → `"120.00"`), a soma
+   * CONCATENAVA: `0 + "120.00"` → `"0120.00"`, o item seguinte virava
+   * `"0120.00310.00"`, e `fmtAbs` devolvia NaN na tela. Os itens da lista
+   * continuavam certos, porque `Math.abs("120.00")` funciona por coerção — só o
+   * total denunciava (#88).
+   *
+   * A conversão de verdade acontece na fronteira da API (`src/api/money.ts`).
+   * `toAmount` aqui é segunda linha de defesa — e é o MESMO `toAmount` da fronteira,
+   * de propósito: uma regra de coerção só. Hand-rollar `Number(x) || 0` criava duas
+   * regras para o mesmo conceito, que divergem em casos como `true`.
+   *
+   * Vale registrar a assimetria: `toFiniteNumber` devolve `null` para nunca inventar
+   * zero, e aqui o zero volta. É deliberado — num SOMATÓRIO, ausência que vira NaN
+   * apaga o total inteiro, enquanto ausência que vira zero erra só a própria parcela.
+   * O contrário do que vale num saldo, onde zero é afirmação e ausência não é.
+   */
+  const upcomingDebitsTotal = useMemo(
+    () => upcomingDebits.reduce((acc, d) => acc + toAmount(d?.value), 0),
+    [upcomingDebits],
+  );
   const {
     dim,
     today: calendarDay,
@@ -1833,7 +1858,7 @@ export function DashboardPage({
 
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, paddingTop: 10, borderTop: `1px solid ${T.border}` }}>
             <span style={{ ...G, fontSize: 11, color: T.inkMid }}>Total · próx. 14 dias</span>
-            <span style={{ ...M_MONO, ...NUM, fontSize: 13, fontWeight: 700, color: T.ink }}>{fmtAbs(upcomingDebits.reduce((s, d) => s + d.value, 0))}</span>
+            <span style={{ ...M_MONO, ...NUM, fontSize: 13, fontWeight: 700, color: T.ink }}>{fmtAbs(upcomingDebitsTotal)}</span>
           </div>
         </Card>
       </div>

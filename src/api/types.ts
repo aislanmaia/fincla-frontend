@@ -1159,8 +1159,8 @@ export interface RecurringTransaction {
 }
 
 export interface RecurringTransactionsSummary {
-  total_monthly_income: number;
-  total_monthly_expense: number;
+  total_monthly_income: number | null; // `null` quando o valor não é número finito — ver src/api/money.ts
+  total_monthly_expense: number | null;
   active_count: number;
   paused_count: number;
 }
@@ -1204,7 +1204,7 @@ export interface RecurringSeries {
   organization_id: string;
   type: 'income' | 'expense';
   description: string;
-  value: number;
+  value: number | null; // `null` quando o valor não é número finito — ver src/api/money.ts
   value_kind: RecurringSeriesValueKind;
   category: string;
   payment_method: string;
@@ -1232,8 +1232,8 @@ export type RecurringSeriesListSummary = RecurringTransactionsSummary;
 
 /** Mesma semântica que `TransactionsSummaryResponse.recurring_in_period`. */
 export interface RecurringSeriesSummaryForPeriod {
-  total_expense: number;
-  total_income: number;
+  total_expense: number | null; // `null` quando o valor não é número finito — ver src/api/money.ts
+  total_income: number | null;
   period: { start_date: string; end_date: string };
   series_count_expense?: number;
   series_count_income?: number;
@@ -1828,14 +1828,25 @@ export interface AccountBalance {
   include_in_total: boolean;
 }
 
-/**
- * Valor monetário COMO CHEGA NO FIO, antes da normalização.
- *
- * O backend serializa `Decimal` como string, mas nem todos os schemas usam
- * `Decimal` — alguns usam `float` e mandam número (ver fincla-api#112). Este alias
- * descreve as duas formas, mais os buracos possíveis.
- */
-export type WireMoney = string | number | null | undefined;
+// Declarado uma vez só, em `money.ts`, junto do conversor que o estreita. Duas
+// declarações independentes dessincronizam em silêncio: acrescentar uma variante
+// numa e não na outra type-checka igual.
+export type { WireMoney } from './money';
+import type { WireMoney } from './money';
+
+/** Resposta crua de `/recurring-series` — use `listRecurringSeries`, que normaliza. */
+export interface RawRecurringSeriesListResponse
+  extends Omit<RecurringSeriesListResponse, 'series' | 'summary' | 'summary_for_period'> {
+  series?: Array<Omit<RecurringSeries, 'value'> & { value: import('./money').WireMoney }>;
+  summary?: Partial<Omit<RecurringSeriesListSummary, 'total_monthly_income' | 'total_monthly_expense'>> & {
+    total_monthly_income: import('./money').WireMoney;
+    total_monthly_expense: import('./money').WireMoney;
+  };
+  summary_for_period?: Omit<RecurringSeriesSummaryForPeriod, 'total_expense' | 'total_income'> & {
+    total_expense: import('./money').WireMoney;
+    total_income: import('./money').WireMoney;
+  };
+}
 
 /** Resposta crua de `/balances/{id}` — use `getAccountBalance`, que normaliza. */
 export interface RawAccountBalance extends Omit<AccountBalance, "balance" | "initial_balance"> {
