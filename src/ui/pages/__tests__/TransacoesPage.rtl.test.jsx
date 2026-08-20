@@ -84,6 +84,23 @@ vi.mock("../../features/tags/useCategoryTagsData.js", () => ({
   useCategoryTagsData: (...args) => categoryTagsDataMock(...args),
 }));
 
+// fincla-frontend#78 — catálogo de tags "detalhe" que TransacoesPage usa para
+// resolver o NOME que a facet Tags guarda em um `tag_id` de verdade (o backend
+// só filtra por id, nunca por nome). Sem mockar, o hook dispara um fetch real
+// (`GET /tags`) em todo teste que renderiza a página em modo live.
+const detailTagsMock = vi.fn(() => ({
+  allDetailTags: [
+    { id: "tag-uuid-trabalho", name: "trabalho" },
+    { id: "tag-uuid-casa", name: "casa" },
+  ],
+  detailTagRowsForCategory: [],
+  loading: false,
+  error: "",
+}));
+vi.mock("../../features/tags/useNovaTransacaoDetailTags.js", () => ({
+  useNovaTransacaoDetailTags: (...args) => detailTagsMock(...args),
+}));
+
 const listOrgBalanceAdjustmentsMock = vi.fn().mockResolvedValue([]);
 vi.mock("../../../api/balanceAdjustments", () => ({
   listOrgBalanceAdjustments: (...args) => listOrgBalanceAdjustmentsMock(...args),
@@ -459,6 +476,23 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
 
     const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
     expect(lastCall.filters.settlement).toBe("a-pagar");
+  });
+
+  it("fincla-frontend#78: marcar uma tag chega ao hook de dados como filterCat (tag_id)", async () => {
+    seedSettlement();
+    renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: /Tags: —/i }));
+    const panel = screen.getByRole("region", { name: /Filtro: tag/i });
+    await userEvent.click(within(panel).getByRole("button", { name: "Tag trabalho" }));
+
+    // Antes da correção `filter.tags` nunca chegava a `filtersToLegacyParams`:
+    // o `filterCat` continuava "todas" mesmo com a tag marcada, e por isso a
+    // listagem não mudava. Com a correção, o nome marcado é resolvido para o
+    // id real (via `useNovaTransacaoDetailTags`, mockado acima) e mandado no
+    // MESMO slot que a categoria usa — é o `tag_id` que o backend entende.
+    const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
+    expect(lastCall.filters.filterCat).toBe("tag-uuid-trabalho");
   });
 });
 

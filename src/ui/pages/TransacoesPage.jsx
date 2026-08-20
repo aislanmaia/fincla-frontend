@@ -23,6 +23,7 @@ import { PageTitle } from "../components/primitives";
 import { TRANSACTIONS } from "../data/mockFinance";
 import { downloadTransactionsCsvForUi } from "../data/transactionsAdapter.js";
 import { useCategoryTagsData } from "../features/tags/useCategoryTagsData.js";
+import { useNovaTransacaoDetailTags } from "../features/tags/useNovaTransacaoDetailTags.js";
 import { useTransactionsData } from "../features/transactions/useTransactionsData.js";
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { TransactionsEmptyState } from "../features/transactions/TransactionsEmptyState.jsx";
@@ -769,6 +770,32 @@ function TransacoesPageBody({
   const totalCategoriesForBackend = shouldUseRealData
     ? categoryTagsData.categories?.length || 0
     : 0;
+  // Catálogo de tags "detalhe" da organização inteira (não só as que aparecem na
+  // página atual) — mesma fonte que o modal Nova transação já usa. Precisamos
+  // dele para resolver o NOME que a facet "Tags" guarda (`filter.tags`) em um
+  // UUID de verdade: o backend só filtra por `tag_id`, nunca por nome
+  // (fincla-frontend#78; ver nota em filtersToLegacyParams.js). `categoryTagId:
+  // null` devolve o catálogo inteiro sem recorte por categoria pai.
+  const detailTagsCatalog = useNovaTransacaoDetailTags({
+    organizationId,
+    categoryTagId: null,
+    enabled: shouldUseRealData,
+  });
+  const tagNameToIdForFilter = useMemo(() => {
+    const map = new Map();
+    for (const t of detailTagsCatalog.allDetailTags) {
+      if (t?.name && t?.id != null && !map.has(t.name)) map.set(t.name, t.id);
+    }
+    return map;
+  }, [detailTagsCatalog.allDetailTags]);
+  // Só o primeiro nome selecionado vira um id de verdade — mesma limitação de
+  // "um valor só" que a categoria já tem (mapCatsOrTagToLegacy prioriza
+  // categoria quando as duas facets estão preenchidas).
+  const resolvedTagIds = useMemo(() => {
+    if (!filter.tags.length) return [];
+    const id = tagNameToIdForFilter.get(filter.tags[0]);
+    return id != null ? [id] : [];
+  }, [filter.tags, tagNameToIdForFilter]);
   const transactionsFilters = useMemo(
     () =>
       filtersToLegacyParams(
@@ -788,6 +815,7 @@ function TransacoesPageBody({
           limit: visible,
           debouncedSearch,
           totalCategories: totalCategoriesForBackend,
+          tagIds: resolvedTagIds,
         },
       ),
     [
@@ -804,6 +832,7 @@ function TransacoesPageBody({
       filter.settlement,
       visible,
       totalCategoriesForBackend,
+      resolvedTagIds,
     ],
   );
   const transactionsData = useTransactionsData({
@@ -836,12 +865,21 @@ function TransacoesPageBody({
       }));
   }, [shouldUseRealData, categoryTagsData.categories, txList]);
 
-  /** Tags disponíveis para o painel de Tags. */
+  /**
+   * Tags disponíveis para o painel de Tags. Em modo live usa o catálogo da
+   * organização inteira (`detailTagsCatalog`) — não só as tags que aparecem na
+   * página atual — senão um período/filtro sem resultados esvaziaria a lista de
+   * opções e o painel diria "nenhuma tag cadastrada" mesmo com tags existindo.
+   * Modo demo/mock não tem catálogo real: mantém a derivação a partir de `txList`.
+   */
   const allTagsForFilter = useMemo(() => {
+    if (shouldUseRealData) {
+      return Array.from(new Set(detailTagsCatalog.allDetailTags.map((t) => t.name).filter(Boolean))).sort();
+    }
     const set = new Set();
     txList.forEach((t) => (t.tags || []).forEach((tg) => set.add(tg)));
     return Array.from(set).sort();
-  }, [txList]);
+  }, [shouldUseRealData, detailTagsCatalog.allDetailTags, txList]);
 
   /** Cartões cadastrados — placeholder até integração com `useCreditCardsData`. */
   const cardsForFilter = useMemo(() => {
@@ -939,9 +977,13 @@ function TransacoesPageBody({
 
   // ── Filter + sort ────────────────────────────────────────────────────────
   //
-  // Em modo **live** a API já aplicou período, tipo, categorias, tags,
-  // recorrência, faixa de valor, busca, ordenação e forma(s) de pagamento
-  // (`payment_method` repetido casa com qualquer uma das selecionadas).
+  // Em modo **live** a API já aplicou período, tipo, categorias, faixa de
+  // valor, busca, ordenação, situação e forma(s) de pagamento (`payment_method`
+  // repetido casa com qualquer uma das selecionadas). Tags: só a PRIMEIRA
+  // selecionada vira `tag_id` de verdade (mesma limitação de "um valor só" que
+  // categoria já tinha) e perde a prioridade se uma categoria também estiver
+  // selecionada — o backend só entende um `tag_id` por vez (fincla-frontend#78,
+  // ver filtersToLegacyParams.js). Recorrência ainda não tem filtro no backend.
   // Refiltrar aqui quebraria a lista: `txList` carrega linhas de *apresentação*
   // (ex.: `date` é "21/05", sem ano), e o recorte por página descartaria linhas
   // que na verdade casam nas demais páginas — era exatamente o bug da lista
