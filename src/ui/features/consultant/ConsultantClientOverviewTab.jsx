@@ -24,10 +24,21 @@ function RptKpi({ label, value, color = T.ink, sub }) {
   return (
     <Card style={{ padding: "14px 16px" }}>
       {/* Piso de 11px (issue #104/#86): Card sem altura fixa nem overflow
-          hidden — rótulo e sub sobem sem risco de corte. */}
-      <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 7 }}>{label}</div>
+          hidden — rótulo e sub sobem sem risco de corte. Mas a 11px uma
+          palavra única e longa ("Comprometimento") pode ficar mais larga
+          que o card útil na faixa logo acima do breakpoint useIsNarrow(900)
+          (grid de 4 colunas com pouca sobra) — sem overflowWrap ela vazava
+          pra fora do card em vez de quebrar. `overflowWrap: anywhere`
+          resolve na raiz, independente de viewport/fonte: se não couber
+          numa linha, quebra dentro da palavra em vez de vazar. */}
+      <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 7, overflowWrap: "anywhere" }}>{label}</div>
       <div style={{ ...G, ...NUM, fontSize: 20, fontWeight: 800, color, letterSpacing: "-0.01em", lineHeight: 1 }}>{value}</div>
-      {sub && <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 6 }}>{sub}</div>}
+      {/* Mesma geometria do rótulo acima: se o sub quebrar em 2 linhas, o
+          grid (align-items:stretch por padrão) estica os 4 cards da linha
+          para igualar a altura — só deixa o card mais alto, não vaza; ainda
+          assim, overflowWrap evita que a quebra fique feia no meio de uma
+          palavra maior que o necessário. */}
+      {sub && <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 6, overflowWrap: "anywhere" }}>{sub}</div>}
     </Card>
   );
 }
@@ -204,9 +215,18 @@ function DiagnosisCard({ health }) {
             const col = indefinido ? T.inkGhost : toneColor(factorTone(f.v));
             return (
               <div key={f.key}>
+                {/* Rótulo + hint precisam caber numa linha só: se os dois
+                    quebrarem, o par sai de rente com a ProgBar logo abaixo
+                    e esse fator fica mais alto que os irmãos na coluna
+                    (achado da revisão da PR #107, ex.: "Comprometimento de
+                    renda" + "renda muito comprometida" em fontes largas).
+                    Mesmo padrão já usado no donut acima (rótulo trunca com
+                    reticências, o valor à direita nunca encolhe) — o hint é
+                    a peça com o sinal de cor (verde/âmbar/vermelho), então é
+                    ele que fica inteiro; o rótulo cede primeiro. */}
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5, gap: 8 }}>
-                  <span style={{ ...G, fontSize: 12, fontWeight: 600, color: T.ink }}>{f.label}</span>
-                  <span style={{ ...G, fontSize: 11, color: col, fontWeight: 700 }}>{f.hint}</span>
+                  <span style={{ ...G, fontSize: 12, fontWeight: 600, color: T.ink, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.label}</span>
+                  <span style={{ ...G, fontSize: 11, color: col, fontWeight: 700, whiteSpace: "nowrap", flexShrink: 0 }}>{f.hint}</span>
                 </div>
                 {indefinido ? (
                   // Trilho liso é pixel-idêntico a uma barra em 0% — o fator

@@ -118,3 +118,38 @@ describe("<ConsultantClientOverviewTab> — fator sem base de cálculo", () => {
     expect(screen.queryByTestId("fator-indefinido")).not.toBeInTheDocument();
   });
 });
+/**
+ * Revisão da PR #107: medição em Chromium headless com 4 famílias de fonte
+ * achou 3 casos onde o CSS puro (sem lógica de breakpoint) evita overflow/
+ * desalinhamento — em vez de confiar em "o texto de exemplo cabe", a
+ * asserção trava a PROPRIEDADE CSS que garante isso para qualquer palavra
+ * mais longa que caiba no domínio dos dados (rótulos vêm de código, não de
+ * input livre do usuário, mas "Comprometimento" já é hoje o mais longo).
+ */
+describe("<ConsultantClientOverviewTab> — geometria de texto (revisão PR #107)", () => {
+  it("rótulo do KPI 'Comprometimento' quebra dentro da palavra em vez de vazar do card", () => {
+    render(<ConsultantClientOverviewTab client={client} health={healthState} categories={categoriesState} goals={goalsState} />);
+    // Palavra única e maiúscula: sem overflowWrap, a ~901–940px de viewport
+    // ela é mais larga que o card e vaza para o gap do grid (achado 1).
+    expect(screen.getByText("Comprometimento").style.overflowWrap).toBe("anywhere");
+  });
+
+  it("sub do KPI 'Comprometimento' também quebra em vez de forçar o card a ficar mais alto de forma feia", () => {
+    render(<ConsultantClientOverviewTab client={client} health={healthState} categories={categoriesState} goals={goalsState} />);
+    expect(screen.getByText("da renda com dívidas").style.overflowWrap).toBe("anywhere");
+  });
+
+  it("linha rótulo+hint do Diagnóstico fica numa linha só: rótulo trunca, hint (com a cor do sinal) nunca quebra", () => {
+    render(<ConsultantClientOverviewTab client={client} health={healthState} categories={categoriesState} goals={goalsState} />);
+    // Com income_commitment=0.64 (>0.5), o fator "Comprometimento de renda"
+    // mostra o hint "renda muito comprometida" — o par mais largo do card
+    // (achado 2 da revisão: juntos, quebravam em duas linhas em fontes largas).
+    const label = screen.getByText("Comprometimento de renda");
+    const hint = screen.getByText("renda muito comprometida");
+    expect(label.style.whiteSpace).toBe("nowrap");
+    expect(label.style.textOverflow).toBe("ellipsis");
+    expect(label.style.overflow).toBe("hidden");
+    expect(hint.style.whiteSpace).toBe("nowrap");
+    expect(hint.style.flexShrink).toBe("0");
+  });
+});
