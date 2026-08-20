@@ -1410,7 +1410,7 @@ export const NovaTransacaoModal = ({
               {settled ? "Entra no saldo da conta agora." : "Fica como compromisso pendente."}
             </div>
           </div>
-          <div style={{ width: 42, height: 24, borderRadius: 12, background: settled ? T.green : T.inkGhost, position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+          <div style={{ width: 42, height: 24, borderRadius: 12, background: settled ? T.green : T.inkFaint, position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
             <div style={{ position: "absolute", top: 3, left: settled ? 21 : 3, width: 18, height: 18, borderRadius: 9999, background: "#fff", transition: "left 0.2s", boxShadow: T.sm }} />
           </div>
         </div>
@@ -1811,7 +1811,7 @@ export const NovaTransacaoModal = ({
           <div style={{ width:18, height:18, borderRadius:9999, background:typeColor, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
             <Check size={10} color="#fff" strokeWidth={3} />
           </div>
-          <span style={{ ...G, fontSize:10, fontWeight:700, color:typeColor, textTransform:"uppercase", letterSpacing:"0.09em" }}>
+          <span style={{ ...G, fontSize: 11, fontWeight:700, color:typeColor, textTransform:"uppercase", letterSpacing:"0.09em" }}>
             {novaRecorrencia || isRecurring ? "Recorrência pronta para confirmar" : "Pronto para registrar"}
           </span>
         </div>
@@ -1849,14 +1849,14 @@ export const NovaTransacaoModal = ({
             ]),
           ].map((f,i) => (
             <div key={i} style={{ background:T.surface, padding:"10px 14px" }}>
-              <div style={{ ...G, fontSize:8, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:3 }}>{f.label}</div>
+              <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:3 }}>{f.label}</div>
               <div style={{ ...G, fontSize:12, fontWeight:600, color:f.valColor || T.ink }}>{f.val}</div>
             </div>
           ))}
         </div>
         {((useLiveDetailTags && detailTagIds.length > 0) || (!useLiveDetailTags && tags.length > 0)) && (
           <div>
-            <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Tags</div>
+            <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Tags</div>
             <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
               {useLiveDetailTags
                 ? detailTagIds.map((id) => (
@@ -1968,7 +1968,7 @@ export const NovaTransacaoModal = ({
           {!successOverlay && <>
           {/* Handle */}
           <div style={{ display:"flex", justifyContent:"center", padding:"10px 0 4px" }}>
-            <div style={{ width:36, height:4, borderRadius:99, background:T.inkGhost }} />
+            <div style={{ width:36, height:4, borderRadius:99, background:T.inkFaint }} />
           </div>
 
           {/* Step dots + header */}
@@ -1976,12 +1976,12 @@ export const NovaTransacaoModal = ({
             {/* Progress dots */}
             <div style={{ display:"flex", justifyContent:"center", gap:5, marginBottom:10 }}>
               {mStepsFlow.map((s, i) => (
-                <div key={s} style={{ width: s === mStep ? 18 : 6, height:6, borderRadius:99, background: i < mCurrentIdx ? T.inkGhost : s === mStep ? T.ink : T.border, transition:"all 0.25s" }} />
+                <div key={s} style={{ width: s === mStep ? 18 : 6, height:6, borderRadius:99, background: i < mCurrentIdx ? T.inkFaint : s === mStep ? T.ink : T.border, transition:"all 0.25s" }} />
               ))}
             </div>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
               <div>
-                <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em" }}>
+                <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em" }}>
                   Step {mCurrentIdx + 1} de {mTotalSteps}
                 </div>
                 <div style={{ ...G, fontSize:16, fontWeight:800, color:T.ink, marginTop:1 }}>{stepLabel[mStep]}</div>
@@ -2134,7 +2134,7 @@ export const NovaTransacaoModal = ({
                 <div>
                   <div style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid, marginBottom:8, display:"flex", alignItems:"center", gap:6 }}>
                     Descrição
-                    <span style={{ ...G, fontSize:10, fontWeight:700, color:T.purple, background:T.purpleLight, padding:"1px 7px", borderRadius:99, display:"flex", alignItems:"center", gap:3 }}>
+                    <span style={{ ...G, fontSize: 11, fontWeight:700, color:T.purple, background:T.purpleLight, padding:"1px 7px", borderRadius:99, display:"flex", alignItems:"center", gap:3 }}>
                       <Star size={8} fill={T.purple} /> IA
                     </span>
                   </div>
@@ -2153,7 +2153,7 @@ export const NovaTransacaoModal = ({
                         <span style={{ ...G, fontSize:11, color:T.ink }}>{aiSuggestion.cat}</span>
                         <span style={{ ...G, fontSize:11, color:T.inkMid }}> · {aiSuggestion.tags.map(t => `#${t}`).join(" ")}</span>
                       </div>
-                      <span style={{ ...G, fontSize:10, fontWeight:700, color:T.purple }}>Aplicar →</span>
+                      <span style={{ ...G, fontSize: 11, fontWeight:700, color:T.purple }}>Aplicar →</span>
                     </button>
                   )}
                   {aiApplied && (
@@ -2225,7 +2225,7 @@ export const NovaTransacaoModal = ({
                         <div style={{ ...G, fontSize:11, color:T.inkLight, marginTop:1 }}>Repetir automaticamente</div>
                       </div>
                     </div>
-                    <div style={{ width:42, height:24, borderRadius:12, background:isRecurring ? T.blue : T.inkGhost, position:"relative", transition:"background 0.2s", flexShrink:0 }}>
+                    <div style={{ width:42, height:24, borderRadius:12, background:isRecurring ? T.blue : T.inkFaint, position:"relative", transition:"background 0.2s", flexShrink:0 }}>
                       <div style={{ position:"absolute", top:3, left:isRecurring ? 21 : 3, width:18, height:18, borderRadius:9999, background:"#fff", transition:"left 0.2s", boxShadow:T.sm }} />
                     </div>
                   </div>
@@ -2255,13 +2255,13 @@ export const NovaTransacaoModal = ({
                             });
                           }}
                             style={{ ...G, fontSize:12, fontWeight:600, color:"#fff", background:isDetailTagInactive(id) ? T.amber : T.purple, padding:"5px 11px", borderRadius:9999, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}>
-                            + {detailChipLabel(id)}{isDetailTagInactive(id) ? " (indisponível)" : ""} <span style={{ opacity:0.7, fontSize:10 }}>✕</span>
+                            + {detailChipLabel(id)}{isDetailTagInactive(id) ? " (indisponível)" : ""} <span style={{ opacity:0.7, fontSize: 11 }}>✕</span>
                           </span>
                         ))
                       : tags.map((tag) => (
                           <span key={tag} onClick={() => setTags((ts) => ts.filter((t) => t !== tag))}
                             style={{ ...G, fontSize:12, fontWeight:600, color:"#fff", background:T.purple, padding:"5px 11px", borderRadius:9999, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}>
-                            + {tag} <span style={{ opacity:0.7, fontSize:10 }}>✕</span>
+                            + {tag} <span style={{ opacity:0.7, fontSize: 11 }}>✕</span>
                           </span>
                         ))}
                     {detailTagRowsAvailable.map((row) => (
@@ -2333,13 +2333,13 @@ export const NovaTransacaoModal = ({
                       <div key={c.id} onClick={() => setCardId(c.id)}
                         style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", borderRadius:14, border:`2px solid ${cardId === c.id ? T.ink : T.border}`, background:cardId === c.id ? T.ink : T.surface, cursor:"pointer", transition:"all 0.15s" }}>
                         <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ ...G, fontSize:8, fontWeight:700, color:cardId===c.id?"rgba(255,255,255,0.5)":T.inkLight, letterSpacing:"0.08em", marginBottom:2 }}>{c.banco}</div>
+                          <div style={{ ...G, fontSize: 11, fontWeight:700, color:cardId===c.id?"rgba(255,255,255,0.5)":T.inkLight, letterSpacing:"0.08em", marginBottom:2 }}>{c.banco}</div>
                           <div style={{ ...G, fontSize:14, fontWeight:700, color:cardId===c.id?"#fff":T.ink }}>{c.nome}</div>
-                          <div style={{ ...G, ...NUM, fontSize:10, color:cardId===c.id?"rgba(255,255,255,0.5)":T.inkLight, marginTop:1 }}>···· {c.dig}</div>
+                          <div style={{ ...G, ...NUM, fontSize: 11, color:cardId===c.id?"rgba(255,255,255,0.5)":T.inkLight, marginTop:1 }}>···· {c.dig}</div>
                         </div>
                         <div style={{ textAlign:"right" }}>
                           <div style={{ ...G, ...NUM, fontSize:13, fontWeight:700, color:cardId===c.id?"#86efac":T.green }}>R$ {c.disp.toLocaleString("pt-BR")}</div>
-                          <div style={{ ...G, fontSize:10, color:cardId===c.id?"rgba(255,255,255,0.4)":T.inkLight }}>disponível</div>
+                          <div style={{ ...G, fontSize: 11, color:cardId===c.id?"rgba(255,255,255,0.4)":T.inkLight }}>disponível</div>
                         </div>
                         {cardId===c.id && <div style={{ width:16, height:16, borderRadius:9999, background:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Check size={10} color={T.ink} /></div>}
                       </div>
@@ -2360,8 +2360,8 @@ export const NovaTransacaoModal = ({
                               background: disabled ? T.grayLight : selected ? T.ink : T.surface,
                               cursor: disabled ? "not-allowed" : "pointer",
                               textAlign:"left", transition:"all 0.15s", opacity: disabled ? 0.5 : 1 }}>
-                            <div style={{ ...G, fontSize:13, fontWeight:700, color: disabled ? T.inkGhost : selected?"#fff":T.ink }}>{label}</div>
-                            <div style={{ ...G, fontSize:10, color: disabled ? T.inkGhost : selected?"rgba(255,255,255,0.5)":T.inkLight, marginTop:2 }}>
+                            <div style={{ ...G, fontSize:13, fontWeight:700, color: disabled ? T.inkFaint : selected?"#fff":T.ink }}>{label}</div>
+                            <div style={{ ...G, fontSize: 11, color: disabled ? T.inkFaint : selected?"rgba(255,255,255,0.5)":T.inkLight, marginTop:2 }}>
                               {disabled ? "Indisponível com recorrência" : sub}
                             </div>
                           </button>
@@ -2382,7 +2382,7 @@ export const NovaTransacaoModal = ({
                       {PARCELA_PRESETS.map(p => (
                         <button key={p} onClick={() => setInstallments(p)} style={{ padding:"10px 4px", borderRadius:10, border:`1.5px solid ${installments===p ? T.ink : T.border}`, background:installments===p ? T.ink : T.surface, cursor:"pointer", textAlign:"center", transition:"all 0.15s" }}>
                           <div style={{ ...G, fontSize:13, fontWeight:700, color:installments===p?"#fff":T.ink }}>{p}×</div>
-                          <div style={{ ...G, ...NUM, fontSize:10, color:installments===p?"rgba(255,255,255,0.5)":T.inkLight, marginTop:1 }}>{amountNum > 0 ? `R$${(amountNum/p).toFixed(0)}` : "—"}</div>
+                          <div style={{ ...G, ...NUM, fontSize: 11, color:installments===p?"rgba(255,255,255,0.5)":T.inkLight, marginTop:1 }}>{amountNum > 0 ? `R$${(amountNum/p).toFixed(0)}` : "—"}</div>
                         </button>
                       ))}
                     </div>
@@ -2427,7 +2427,7 @@ export const NovaTransacaoModal = ({
                   <ChevronLeft size={16} /> Editar
                 </button>
                 <button onClick={handleSave} disabled={txSubmitting || !desc.trim()}
-                  style={{ ...G, flex:1, padding:"13px", borderRadius:12, border:"none", background:success ? T.green : (!desc.trim() ? T.inkGhost : typeColor), fontSize:14, fontWeight:800, color:"#fff", cursor:(txSubmitting || !desc.trim()) ? "not-allowed" : "pointer", opacity:(txSubmitting || !desc.trim()) ? 0.75 : 1, display:"flex", alignItems:"center", justifyContent:"center", gap:7, transition:"background 0.25s" }}>
+                  style={{ ...G, flex:1, padding:"13px", borderRadius:12, border:"none", background:success ? T.green : (!desc.trim() ? T.inkFaint : typeColor), fontSize:14, fontWeight:800, color:"#fff", cursor:(txSubmitting || !desc.trim()) ? "not-allowed" : "pointer", opacity:(txSubmitting || !desc.trim()) ? 0.75 : 1, display:"flex", alignItems:"center", justifyContent:"center", gap:7, transition:"background 0.25s" }}>
                   {success ? <><Check size={16} /> {isRecurring || novaRecorrencia ? "Recorrência salva!" : "Registrado!"}</> : (isRecurring || novaRecorrencia ? "Confirmar recorrência" : (txSubmitting ? "Enviando…" : `Confirmar ${tipo === "despesa" ? (isRefund ? "estorno" : "despesa") : "receita"}`))}
                 </button>
               </div>
@@ -2440,7 +2440,7 @@ export const NovaTransacaoModal = ({
                   </button>
                 )}
                 <button onClick={goNext} disabled={mStep === 1 && !amountNum}
-                  style={{ ...G, flex:1, padding:"13px", borderRadius:12, border:"none", background: (mStep === 1 && !amountNum) ? T.inkGhost : T.ink, fontSize:14, fontWeight:800, color:"#fff", cursor:(mStep===1&&!amountNum)?"not-allowed":"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:7, transition:"background 0.2s" }}>
+                  style={{ ...G, flex:1, padding:"13px", borderRadius:12, border:"none", background: (mStep === 1 && !amountNum) ? T.inkFaint : T.ink, fontSize:14, fontWeight:800, color:"#fff", cursor:(mStep===1&&!amountNum)?"not-allowed":"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:7, transition:"background 0.2s" }}>
                   {mNextLabel()}
                 </button>
               </div>
@@ -2515,7 +2515,7 @@ export const NovaTransacaoModal = ({
               {renderRecurrenceConfigBody(false)}
               {/* Tipo de valor */}
               <div>
-                <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Tipo de valor</div>
+                <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Tipo de valor</div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
                   {[
                     { id:"fixo",     label:"Valor fixo",      sub:"Mesmo valor todo mês",             icon:"🔒" },
@@ -2528,7 +2528,7 @@ export const NovaTransacaoModal = ({
                         transition:"all 0.15s" }}>
                       <div style={{ ...G, fontSize:13, marginBottom:2 }}>{opt.icon}</div>
                       <div style={{ ...G, fontSize:12, fontWeight:700, color:recurrenceValueKind===opt.id?"#fff":T.ink }}>{opt.label}</div>
-                      <div style={{ ...G, fontSize:10, color:recurrenceValueKind===opt.id?"rgba(255,255,255,0.55)":T.inkLight, marginTop:2, lineHeight:1.4 }}>{opt.sub}</div>
+                      <div style={{ ...G, fontSize: 11, color:recurrenceValueKind===opt.id?"rgba(255,255,255,0.55)":T.inkLight, marginTop:2, lineHeight:1.4 }}>{opt.sub}</div>
                     </button>
                   ))}
                 </div>
@@ -2587,7 +2587,7 @@ export const NovaTransacaoModal = ({
             <PanelHeader icon={CreditCard} title="Cartão de crédito" onCollapse={beginCloseCardPanel} />
             <div style={{ flex:1, overflowY:"auto", padding:"16px 18px", display:"flex", flexDirection:"column", gap:16 }}>
               <div>
-                <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:10 }}>Selecionar Cartão</div>
+                <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:10 }}>Selecionar Cartão</div>
                 {modalCardsReloadNotice && (
                   <div style={{ ...G, fontSize:11, color:T.amber, background:T.amberLight, border:`1px solid ${T.amber}33`, borderRadius:9, padding:"8px 10px", marginBottom:8, lineHeight:1.5 }}>
                     {modalCardsReloadNotice}
@@ -2610,10 +2610,10 @@ export const NovaTransacaoModal = ({
                         </div>
                       ) : (
                         <>
-                          <div style={{ ...G, fontSize:8, fontWeight:700, color:cardId===c.id?"rgba(255,255,255,0.6)":T.inkLight, letterSpacing:"0.08em" }}>{c.banco}</div>
+                          <div style={{ ...G, fontSize: 11, fontWeight:700, color:cardId===c.id?"rgba(255,255,255,0.6)":T.inkLight, letterSpacing:"0.08em" }}>{c.banco}</div>
                           <div style={{ ...G, fontSize:12, fontWeight:700, color:cardId===c.id?"#fff":T.ink }}>{c.nome}</div>
-                          <div style={{ ...G, ...NUM, fontSize:10, color:cardId===c.id?"rgba(255,255,255,0.5)":T.inkLight }}>···· {c.dig}</div>
-                          <div style={{ ...G, ...NUM, fontSize:10, fontWeight:700, color:cardId===c.id?"#86efac":T.green, marginTop:2 }}>R$ {c.disp.toLocaleString("pt-BR")} disp.</div>
+                          <div style={{ ...G, ...NUM, fontSize: 11, color:cardId===c.id?"rgba(255,255,255,0.5)":T.inkLight }}>···· {c.dig}</div>
+                          <div style={{ ...G, ...NUM, fontSize: 11, fontWeight:700, color:cardId===c.id?"#86efac":T.green, marginTop:2 }}>R$ {c.disp.toLocaleString("pt-BR")} disp.</div>
                           {cardId===c.id && <div style={{ position:"absolute", top:7, right:7, width:14, height:14, borderRadius:9999, background:"#fff", display:"flex", alignItems:"center", justifyContent:"center" }}><Check size={9} color={T.ink} /></div>}
                         </>
                       )}
@@ -2678,7 +2678,7 @@ export const NovaTransacaoModal = ({
                         transition:"border-color 0.15s" }}
                       onFocus={e=>e.target.style.borderColor=T.blue}
                       onBlur={e=>e.target.style.borderColor=T.border}/>
-                    <div style={{ ...G, fontSize:10, color:T.inkLight, lineHeight:1.5 }}>
+                    <div style={{ ...G, fontSize: 11, color:T.inkLight, lineHeight:1.5 }}>
                       Limite fica em R$ 0,00 por enquanto — edite em Cartões quando quiser definir o valor.
                     </div>
                     {quickAddCardError && (
@@ -2703,7 +2703,7 @@ export const NovaTransacaoModal = ({
                         disabled={!quickAddCardCanSubmit}
                         onClick={handleQuickAddCard}
                         style={{ ...G, flex:1, padding:"7px", borderRadius:8, border:"none",
-                          background:quickAddCardCanSubmit?T.blue:T.inkGhost,
+                          background:quickAddCardCanSubmit?T.blue:T.inkFaint,
                           fontSize:11, fontWeight:700, color:"#fff",
                           cursor:quickAddCardCanSubmit?"pointer":"not-allowed", transition:"background 0.15s" }}>
                         {quickAddCardSaving ? "Adicionando…" : "Adicionar"}
@@ -2715,7 +2715,7 @@ export const NovaTransacaoModal = ({
               )}
               {!isRefund && (
                 <div>
-                  <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Modalidade</div>
+                  <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Modalidade</div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
                     {[["avista","À vista","1× sem juros"],["parcelado","Parcelado","Dividir em installments"]].map(([id,label,sub]) => {
                       const disabled = id === "parcelado" && isRecurring;
@@ -2727,8 +2727,8 @@ export const NovaTransacaoModal = ({
                             background: disabled ? T.grayLight : selected ? T.ink : T.surface,
                             cursor: disabled ? "not-allowed" : "pointer",
                             textAlign:"left", opacity: disabled ? 0.5 : 1, transition:"all 0.15s" }}>
-                          <div style={{ ...G, fontSize:12, fontWeight:700, color: disabled ? T.inkGhost : selected?"#fff":T.ink }}>{label}</div>
-                          <div style={{ ...G, fontSize:10, color: disabled ? T.inkGhost : selected?"rgba(255,255,255,0.6)":T.inkLight, marginTop:2 }}>
+                          <div style={{ ...G, fontSize:12, fontWeight:700, color: disabled ? T.inkFaint : selected?"#fff":T.ink }}>{label}</div>
+                          <div style={{ ...G, fontSize: 11, color: disabled ? T.inkFaint : selected?"rgba(255,255,255,0.6)":T.inkLight, marginTop:2 }}>
                             {disabled ? "Indisponível com recorrência" : sub}
                           </div>
                         </button>
@@ -2745,14 +2745,14 @@ export const NovaTransacaoModal = ({
               {!isRefund && modalityChoice==="parcelado" && (
                 <div>
                   <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-                    <span style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em" }}>Parcelas</span>
+                    <span style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em" }}>Parcelas</span>
                     <span style={{ ...G, ...NUM, fontSize:11, color:T.inkLight }}>R$ {amountNum.toFixed(2)} total</span>
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6 }}>
                     {PARCELA_PRESETS.map(p => (
                       <button key={p} onClick={() => setInstallments(p)} style={{ padding:"8px 4px", borderRadius:8, border:`1.5px solid ${installments===p ? T.ink : T.border}`, background:installments===p ? T.ink : T.surface, cursor:"pointer", textAlign:"center" }}>
                         <div style={{ ...G, fontSize:12, fontWeight:700, color:installments===p?"#fff":T.ink }}>{p}×</div>
-                        <div style={{ ...G, ...NUM, fontSize:10, color:installments===p?"rgba(255,255,255,0.6)":T.inkLight, marginTop:2 }}>{(amountNum/p).toFixed(2)}</div>
+                        <div style={{ ...G, ...NUM, fontSize: 11, color:installments===p?"rgba(255,255,255,0.6)":T.inkLight, marginTop:2 }}>{(amountNum/p).toFixed(2)}</div>
                       </button>
                     ))}
                     {installmentsCustom ? (
@@ -2779,7 +2779,7 @@ export const NovaTransacaoModal = ({
                           style={{ ...G, ...NUM, width:"100%", background:"transparent", border:"none",
                             outline:"none", textAlign:"center", fontSize:12, fontWeight:700,
                             color:"#fff" }} />
-                        <div style={{ ...G, ...NUM, fontSize:10, color:"rgba(255,255,255,0.55)" }}>
+                        <div style={{ ...G, ...NUM, fontSize: 11, color:"rgba(255,255,255,0.55)" }}>
                           {installmentsInput && amountNum > 0
                             ? (amountNum/parseInt(installmentsInput||1)).toFixed(2)
                             : "R$/parc"}
@@ -2796,7 +2796,7 @@ export const NovaTransacaoModal = ({
                           {!PARCELA_PRESETS.includes(installments) ? `${installments}×` : "outro"}
                         </div>
                         {!PARCELA_PRESETS.includes(installments) && amountNum > 0 && (
-                          <div style={{ ...G, ...NUM, fontSize:10, color:"rgba(255,255,255,0.55)", marginTop:2 }}>
+                          <div style={{ ...G, ...NUM, fontSize: 11, color:"rgba(255,255,255,0.55)", marginTop:2 }}>
                             {(amountNum/installments).toFixed(2)}
                           </div>
                         )}
@@ -2859,9 +2859,9 @@ export const NovaTransacaoModal = ({
               <div style={{ padding:"18px 20px", display:"flex", flexDirection:"column", gap:16, animation:"revSlideBack 0.26s ease-out", minWidth:0, width:"100%" }}>
                 <div>
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
-                    <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em" }}>Valor</div>
+                    <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em" }}>Valor</div>
                     {!isRefund && <button onClick={() => { setCalcOpen(m=>!m); if(calcOpen){ setCalcCents(0); } }}
-                      style={{ ...G, fontSize:10, fontWeight:700, color:calcOpen?T.purple:T.inkMid,
+                      style={{ ...G, fontSize: 11, fontWeight:700, color:calcOpen?T.purple:T.inkMid,
                         background:calcOpen?T.purpleLight:"none", border:`1px dashed ${calcOpen?T.purple:T.border}`,
                         borderRadius:7, padding:"3px 9px", cursor:"pointer", display:"flex", alignItems:"center", gap:5,
                         transition:"all 0.15s" }}>
@@ -2899,7 +2899,7 @@ export const NovaTransacaoModal = ({
                       borderRadius:10, padding:"12px 14px", marginBottom:8,
                       animation:"successPop 0.18s ease-out",
                       display:"flex", flexDirection:"column", gap:10 }}>
-                      <div style={{ ...G, fontSize:10, fontWeight:700, color:T.purple,
+                      <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.purple,
                         textTransform:"uppercase", letterSpacing:"0.09em" }}>
                         Calculadora de parcela
                       </div>
@@ -2985,7 +2985,7 @@ export const NovaTransacaoModal = ({
                         <button onClick={applyInstallmentCalc} disabled={calcCents===0}
                           style={{ ...G, fontSize:12, fontWeight:700,
                             color:"#fff",
-                            background: calcCents>0 ? T.purple : T.inkGhost,
+                            background: calcCents>0 ? T.purple : T.inkFaint,
                             border:"none", borderRadius:8, padding:"8px 16px",
                             cursor: calcCents>0 ? "pointer" : "not-allowed",
                             transition:"all 0.15s", flexShrink:0 }}>
@@ -3075,8 +3075,8 @@ export const NovaTransacaoModal = ({
                 {renderRefundLinkBlock("desktop")}
                 <div>
                   <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:8 }}>
-                    <span style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em" }}>Descrição</span>
-                    <span style={{ ...G, fontSize:10, fontWeight:600, color:T.purple, background:T.purpleLight, padding:"1px 7px", borderRadius:99, display:"flex", alignItems:"center", gap:3 }}>
+                    <span style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em" }}>Descrição</span>
+                    <span style={{ ...G, fontSize: 11, fontWeight:600, color:T.purple, background:T.purpleLight, padding:"1px 7px", borderRadius:99, display:"flex", alignItems:"center", gap:3 }}>
                       <Star size={8} fill={T.purple} /> IA
                     </span>
                   </div>
@@ -3085,7 +3085,7 @@ export const NovaTransacaoModal = ({
                       onFocus={() => setDescFocused(true)}
                       onBlur={() => setDescFocused(false)}
                       style={{ ...G, width:"100%", boxSizing:"border-box", padding:"10px 12px 30px", borderRadius:10, border:`1px solid ${descError ? T.red : T.border}`, fontSize:13, color:T.ink, resize:"none", outline:"none", background:T.surface, lineHeight:1.5, transition:"border-color 0.15s" }} />
-                    <button style={{ ...G, position:"absolute", bottom:8, right:8, display:"flex", alignItems:"center", gap:4, background:T.purpleLight, border:`1px solid ${T.purple}33`, borderRadius:7, padding:"4px 9px", fontSize:10, fontWeight:600, color:T.purple, cursor:"pointer" }}>
+                    <button style={{ ...G, position:"absolute", bottom:8, right:8, display:"flex", alignItems:"center", gap:4, background:T.purpleLight, border:`1px solid ${T.purple}33`, borderRadius:7, padding:"4px 9px", fontSize: 11, fontWeight:600, color:T.purple, cursor:"pointer" }}>
                       <Star size={9} fill={T.purple} /> Sugerir com IA
                     </button>
                   </div>
@@ -3110,7 +3110,7 @@ export const NovaTransacaoModal = ({
                         ) : null}
                         {" "}— toque para aplicar.
                       </span>
-                      <span style={{ ...G, fontSize:10, fontWeight:700, color:T.purple, flexShrink:0 }}>Aplicar →</span>
+                      <span style={{ ...G, fontSize: 11, fontWeight:700, color:T.purple, flexShrink:0 }}>Aplicar →</span>
                     </button>
                   )}
                   {aiSuggestion && aiApplied && (
@@ -3122,7 +3122,7 @@ export const NovaTransacaoModal = ({
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
                   <div>
-                    <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Categoria</div>
+                    <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Categoria</div>
                     {useLiveCategoryTags && modalCategoryChoices.some((r) => r.id) ? (
                       <select
                         value={categoryTagId || ""}
@@ -3160,7 +3160,7 @@ export const NovaTransacaoModal = ({
                     ) : null}
                   </div>
                   <div>
-                    <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Data</div>
+                    <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Data</div>
                     <LocaleDatePicker
                       id="nova-tx-date-desktop"
                       variant="desktop"
@@ -3174,7 +3174,7 @@ export const NovaTransacaoModal = ({
                   </div>
                 </div>
                 <div>
-                  <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Tags</div>
+                  <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Tags</div>
                   {detailTagsError ? (
                     <div style={{ ...G, fontSize:11, color:T.red, marginBottom:8 }}>{detailTagsError}</div>
                   ) : null}
@@ -3196,13 +3196,13 @@ export const NovaTransacaoModal = ({
                             });
                           }}
                             style={{ ...G, fontSize:11, fontWeight:600, color:"#fff", background:isDetailTagInactive(id) ? T.amber : T.purple, padding:"4px 9px", borderRadius:9999, cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
-                            + {detailChipLabel(id)}{isDetailTagInactive(id) ? " (indisponível)" : ""} <span style={{ opacity:0.7, fontSize:10 }}>✕</span>
+                            + {detailChipLabel(id)}{isDetailTagInactive(id) ? " (indisponível)" : ""} <span style={{ opacity:0.7, fontSize: 11 }}>✕</span>
                           </span>
                         ))
                       : tags.map((tag) => (
                           <span key={tag} onClick={() => setTags((tg) => tg.filter((t) => t !== tag))}
                             style={{ ...G, fontSize:11, fontWeight:600, color:"#fff", background:T.purple, padding:"4px 9px", borderRadius:9999, cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
-                            + {tag} <span style={{ opacity:0.7, fontSize:10 }}>✕</span>
+                            + {tag} <span style={{ opacity:0.7, fontSize: 11 }}>✕</span>
                           </span>
                         ))}
                     {detailTagRowsAvailable.map((row) => (
@@ -3246,7 +3246,7 @@ export const NovaTransacaoModal = ({
                   </div>
                 </div>
                 <div>
-                  <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Forma de Pagamento</div>
+                  <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Forma de Pagamento</div>
                   <div style={{ display:"flex", gap:6, flexWrap:"wrap", width:"100%", minWidth:0 }}>
                     {methodsList.map(([id, label]) => (
                       <button key={id} onClick={() => {
@@ -3318,10 +3318,10 @@ export const NovaTransacaoModal = ({
                       <Repeat size={14} color={isRecurring ? T.blue : T.inkLight} />
                       <div>
                         <div style={{ ...G, fontSize:12, fontWeight:600, color:T.ink }}>Transação recorrente</div>
-                        <div style={{ ...G, fontSize:10, color:T.inkLight }}>Repetir automaticamente</div>
+                        <div style={{ ...G, fontSize: 11, color:T.inkLight }}>Repetir automaticamente</div>
                       </div>
                     </div>
-                    <div style={{ width:38, height:22, borderRadius:11, background:isRecurring ? T.blue : T.inkGhost, position:"relative", transition:"background 0.2s", flexShrink:0 }}>
+                    <div style={{ width:38, height:22, borderRadius:11, background:isRecurring ? T.blue : T.inkFaint, position:"relative", transition:"background 0.2s", flexShrink:0 }}>
                       <div style={{ position:"absolute", top:3, left:isRecurring?18:3, width:16, height:16, borderRadius:9999, background:"#fff", transition:"left 0.2s", boxShadow:T.sm }} />
                     </div>
                   </div>
@@ -3392,7 +3392,7 @@ export const NovaTransacaoModal = ({
                   </button>
                 ) : (
                   <button onClick={() => { if (!desc.trim()) { setDescError(true); descRef.current?.focus(); return; } goReview(); }} disabled={!amountNum}
-                    style={{ ...G, flex:1, padding:"11px", borderRadius:10, border:"none", background:!amountNum ? T.inkGhost : typeColor, fontSize:13, fontWeight:700, color:"#fff", cursor:!amountNum ? "not-allowed" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, transition:"background 0.2s" }}>
+                    style={{ ...G, flex:1, padding:"11px", borderRadius:10, border:"none", background:!amountNum ? T.inkFaint : typeColor, fontSize:13, fontWeight:700, color:"#fff", cursor:!amountNum ? "not-allowed" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, transition:"background 0.2s" }}>
                       Revisar {tipo==="despesa" ? (isRefund ? "estorno" : "despesa") : "receita"} <ChevronRight size={14} />
                   </button>
                 )}

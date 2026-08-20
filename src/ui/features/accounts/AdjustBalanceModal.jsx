@@ -324,7 +324,7 @@ export function AdjustBalanceModal({
       </div>
 
       <div style={{ ...G, display: "flex", alignItems: "flex-start", gap: 7, fontSize: 11, color: T.inkGhost, marginTop: 12 }}>
-        <span style={{ width: 7, height: 7, borderRadius: 9999, background: T.inkGhost, flex: "0 0 7px", marginTop: 4 }} />
+        <span style={{ width: 7, height: 7, borderRadius: 9999, background: T.inkFaint, flex: "0 0 7px", marginTop: 4 }} />
         <span>
           Não conta como receita ou despesa. <strong>Deste dia em diante o saldo passa a
           ser calculado a partir deste valor</strong>
@@ -376,12 +376,12 @@ export function AdjustBalanceModal({
                 <div style={{ ...G, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 2 }}>
                   {/* A resposta é o que mais se erra no automático, e é o que muda o
                       saldo — então ela fica visível na lista, não escondida na edição. */}
-                  <span style={{ ...G, fontSize: 10.5, color: T.inkMid, background: T.grayLight,
+                  <span style={{ ...G, fontSize: 11, color: T.inkMid, background: T.grayLight,
                     borderRadius: 99, padding: "1px 6px", fontWeight: 600 }}>
                     {adj.includes_same_day === false ? "antes do dia" : "depois do dia"}
                   </span>
                   {adj.updated_at && adj.updated_at !== adj.created_at ? (
-                    <span style={{ ...G, fontSize: 10.5, color: T.inkGhost }}>
+                    <span style={{ ...G, fontSize: 11, color: T.inkGhost }}>
                       editado em {String(adj.updated_at).slice(0, 10).split("-").reverse().join("/")}
                     </span>
                   ) : null}

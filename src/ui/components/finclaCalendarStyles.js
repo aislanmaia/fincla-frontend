@@ -16,7 +16,7 @@ export const FINCLA_CAL_DAY_PX = 28;
 
 /** Legenda dos dias da semana: mesma leitura que o LocaleDatePicker (Visão Geral). */
 export const finclaCalendarWeekdayCellStyle = {
-  fontSize: 10,
+  fontSize: 11,
   fontWeight: 700,
   color: T.inkLight,
   textAlign: "center",

@@ -7,7 +7,7 @@ import { fmtBRL0 } from "./consultantFormat";
 import { Icon, useIsNarrow } from "./consultantUi";
 import { selectClientCards } from "./consultantClientCards";
 
-const LIMIT_LABEL = { ...G, fontSize: 9.5, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.05em" };
+const LIMIT_LABEL = { ...G, fontSize: 11, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.05em" };
 
 // Botão "Adicionar cartão" — stub Trilha B (escrita cross-org). Espelha o estilo
 // desabilitado de "Nova transação" da aba Transações (RF.2).
@@ -17,7 +17,7 @@ const ADD_CARD_STUB = {
   cursor: "default", opacity: 0.55, whiteSpace: "nowrap",
 };
 const SOON_PILL = {
-  ...G, fontSize: 8.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em",
+  ...G, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em",
   background: "rgba(255,255,255,0.2)", borderRadius: 5, padding: "1px 5px",
 };
 
@@ -28,16 +28,16 @@ function CreditCardVisual({ card }) {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ ...G, fontSize: 14, fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{card.name}</div>
-          <div style={{ ...G, fontSize: 10, opacity: 0.8, marginTop: 2 }}>•••• {card.last4}</div>
+          <div style={{ ...G, fontSize: 11, opacity: 0.8, marginTop: 2 }}>•••• {card.last4}</div>
         </div>
         <div style={{ width: 30, height: 22, borderRadius: 4, background: "rgba(255,255,255,0.25)", flexShrink: 0 }} />
       </div>
       <div>
-        <div style={{ ...G, fontSize: 10, opacity: 0.85, marginBottom: 2 }}>Fatura atual</div>
+        <div style={{ ...G, fontSize: 11, opacity: 0.85, marginBottom: 2 }}>Fatura atual</div>
         <div style={{ ...G, ...NUM, fontSize: 21, fontWeight: 800 }}>{fmtBRL0(card.invoiceTotal)}</div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 9, gap: 8 }}>
-          <span style={{ ...G, fontSize: 10, opacity: 0.85 }}>{card.brand}</span>
-          <span style={{ ...G, fontSize: 10, opacity: 0.85 }}>vence dia {card.dueDay}</span>
+          <span style={{ ...G, fontSize: 11, opacity: 0.85 }}>{card.brand}</span>
+          <span style={{ ...G, fontSize: 11, opacity: 0.85 }}>vence dia {card.dueDay}</span>
         </div>
       </div>
     </div>
@@ -77,7 +77,7 @@ function InvoiceItemRow({ item }) {
       <div style={{ width: 30, height: 30, borderRadius: 8, background: iconTint(color), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 15 }}>{item.icon}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ ...G, fontSize: 12.5, fontWeight: 600, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.desc}</div>
-        <div style={{ ...G, fontSize: 10.5, color: T.inkLight }}>{item.dateLabel}{item.installments}</div>
+        <div style={{ ...G, fontSize: 11, color: T.inkLight }}>{item.dateLabel}{item.installments}</div>
       </div>
       <span style={{ ...G, ...NUM, fontSize: 13, fontWeight: 700, color: T.ink, whiteSpace: "nowrap" }}>{fmtBRL0(item.value)}</span>
     </div>

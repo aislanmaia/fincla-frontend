@@ -36,7 +36,7 @@ export function PasswordResetPage({ token, onResetPassword, onComplete, onValida
 
   const BtnPrimary = ({ onClick, children, disabled }) => (
     <button type="button" onClick={onClick} disabled={disabled}
-      style={{ ...G, width:"100%", padding:"14px", background: disabled ? T.inkGhost : T.ink, color:"#fff", border:"none", borderRadius:11, fontSize:14, fontWeight:700, cursor: disabled ? "not-allowed" : "pointer", transition:"opacity 0.15s, transform 0.12s", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}
+      style={{ ...G, width:"100%", padding:"14px", background: disabled ? T.inkFaint : T.ink, color:"#fff", border:"none", borderRadius:11, fontSize:14, fontWeight:700, cursor: disabled ? "not-allowed" : "pointer", transition:"opacity 0.15s, transform 0.12s", display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}
       onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.opacity = "0.88"; }}
       onMouseLeave={(e) => { e.currentTarget.style.opacity = "1"; }}>
       {children}

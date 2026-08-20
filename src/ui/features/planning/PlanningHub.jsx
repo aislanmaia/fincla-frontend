@@ -33,7 +33,7 @@ function Placeholder({ label }) {
   );
 }
 
-const groupLabelStyle = { ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.1em", padding: "12px 10px 5px" };
+const groupLabelStyle = { ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.1em", padding: "12px 10px 5px" };
 
 /**
  * Hub "Planejamento" — sub-nav lateral no desktop (≥1024, estilo Perfil) e dropdown
@@ -137,7 +137,7 @@ export function PlanningHub({ organizationId, dataMode = "live", isMobile = fals
                       }}
                     >
                       {it.label}
-                      {it.soon ? <span style={{ marginLeft: "auto", fontSize: 9, color: T.inkGhost }}>em breve</span> : null}
+                      {it.soon ? <span style={{ marginLeft: "auto", fontSize: 11, color: T.inkGhost }}>em breve</span> : null}
                     </button>
                   );
                 })}

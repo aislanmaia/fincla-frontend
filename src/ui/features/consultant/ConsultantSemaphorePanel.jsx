@@ -27,7 +27,7 @@ export function ConsultantSemaphorePanel({ clients = [], hasLoaded, healthIndex,
   const center = (
     <>
       <span style={{ ...G, ...NUM, fontSize: 24, fontWeight: 800, color: T.ink, lineHeight: 1 }}>{centerValue}</span>
-      <span style={{ ...G, fontSize: 9, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.06em" }}>saúde média</span>
+      <span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.06em" }}>saúde média</span>
     </>
   );
 

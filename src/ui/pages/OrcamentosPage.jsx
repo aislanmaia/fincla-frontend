@@ -138,9 +138,9 @@ export function OrcamentosPage({
     const isExp  = !!expanded[cat.id];
     const hasEnv = cat.envelopes.length > 0;
     const AlertBadge = () => {
-      if (p >= 100) return <span style={{ ...G, fontSize:10, fontWeight:700, background:T.redLight, color:T.red, padding:"3px 8px", borderRadius:99 }}>🔴 +{fmtBRL(cat.gasto - cat.limite)}</span>;
-      if (p >= 85)  return <span style={{ ...G, fontSize:10, fontWeight:700, background:T.amberLight, color:T.amber, padding:"3px 8px", borderRadius:99 }}>⚠ {p}% usado</span>;
-      return <span style={{ ...G, fontSize:10, fontWeight:600, background:T.greenLight, color:T.green, padding:"3px 8px", borderRadius:99 }}>{p}% usado</span>;
+      if (p >= 100) return <span style={{ ...G, fontSize: 11, fontWeight:700, background:T.redLight, color:T.red, padding:"3px 8px", borderRadius:99 }}>🔴 +{fmtBRL(cat.gasto - cat.limite)}</span>;
+      if (p >= 85)  return <span style={{ ...G, fontSize: 11, fontWeight:700, background:T.amberLight, color:T.amber, padding:"3px 8px", borderRadius:99 }}>⚠ {p}% usado</span>;
+      return <span style={{ ...G, fontSize: 11, fontWeight:600, background:T.greenLight, color:T.green, padding:"3px 8px", borderRadius:99 }}>{p}% usado</span>;
     };
     return (
       <div style={{ background:T.surface, border:`1px solid ${p>=100?T.red+"44":p>=85?T.amber+"44":T.border}`, borderRadius:14, overflow:"hidden", transition:"box-shadow 0.15s" }}
@@ -157,7 +157,7 @@ export function OrcamentosPage({
                 <div style={{ ...G, fontSize:isMobile?12:13, fontWeight:700, color:T.ink, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{cat.nome}</div>
                 {isMobile
                   ? <AlertBadge />
-                  : <div style={{ ...G, fontSize:10, color:T.inkLight, marginTop:1 }}>{hasEnv ? `${cat.envelopes.length} envelopes` : "Sem envelopes"}</div>}
+                  : <div style={{ ...G, fontSize: 11, color:T.inkLight, marginTop:1 }}>{hasEnv ? `${cat.envelopes.length} envelopes` : "Sem envelopes"}</div>}
               </div>
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:isMobile?4:6, flexShrink:0, marginLeft:6 }}>
@@ -171,17 +171,17 @@ export function OrcamentosPage({
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <div style={{ display:"flex", alignItems:"baseline", gap:4 }}>
               <span style={{ ...G, ...NUM, fontSize:isMobile?13:14, fontWeight:800, color:bColor }}>{fmtBRL(cat.gasto)}</span>
-              <span style={{ ...G, ...NUM, fontSize:isMobile?10:11, color:T.inkLight }}>/ {fmtBRL(cat.limite)}</span>
+              <span style={{ ...G, ...NUM, fontSize: 11, color:T.inkLight }}>/ {fmtBRL(cat.limite)}</span>
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:isMobile?6:8, marginLeft:isMobile?0:"auto" }}>
               <div style={{ display:"flex" }}>
                 {cat.membros.map((m, i) => (
-                  <div key={m} style={{ width:20, height:20, borderRadius:"50%", background:AVATAR_COLORS_ORC[m]||T.inkMid, border:`2px solid ${T.surface}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:8, fontWeight:700, color:"#fff", marginLeft:i===0?0:-5 }}>{m}</div>
+                  <div key={m} style={{ width:20, height:20, borderRadius:"50%", background:AVATAR_COLORS_ORC[m]||T.inkMid, border:`2px solid ${T.surface}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize: 11, fontWeight:700, color:"#fff", marginLeft:i===0?0:-5 }}>{m}</div>
                 ))}
               </div>
               <button type="button" onClick={e => { e.stopPropagation(); onEditBudget(cat); }}
                 aria-label={`Editar limite de ${cat.nome}`}
-                style={{ ...G, fontSize:10, fontWeight:600, color:T.inkMid, background:"none", border:"none", cursor:"pointer", padding:0, display:"flex", alignItems:"center", gap:3 }}
+                style={{ ...G, fontSize: 11, fontWeight:600, color:T.inkMid, background:"none", border:"none", cursor:"pointer", padding:0, display:"flex", alignItems:"center", gap:3 }}
                 onMouseEnter={e => e.currentTarget.style.textDecoration="underline"}
                 onMouseLeave={e => e.currentTarget.style.textDecoration="none"}>
                 <Pencil size={11} color={T.inkMid} /> {!isMobile && "Editar"}
@@ -189,7 +189,7 @@ export function OrcamentosPage({
               <button type="button" onClick={e => { e.stopPropagation(); onNav && onNav("transactions", { filterCat: cat.navFilter || cat.nome }); }}
                 aria-label={`Ver transações da categoria ${cat.nome}`}
                 title={isMobile ? undefined : "Lista de transações filtrada por esta categoria"}
-                style={{ ...G, fontSize:10, fontWeight:600, color:T.blue, background:"none", border:"none", cursor:"pointer", padding:0, display:"flex", alignItems:"center", gap:3 }}
+                style={{ ...G, fontSize: 11, fontWeight:600, color:T.blue, background:"none", border:"none", cursor:"pointer", padding:0, display:"flex", alignItems:"center", gap:3 }}
                 onMouseEnter={e => e.currentTarget.style.textDecoration="underline"}
                 onMouseLeave={e => e.currentTarget.style.textDecoration="none"}>
                 Transações <ArrowRight size={9} color={T.blue} />
@@ -200,18 +200,18 @@ export function OrcamentosPage({
         {hasEnv && (
           <CollapsibleSection open={isExp}>
             <div style={{ borderTop:`1px solid ${T.border}`, padding:"10px 16px 12px" }}>
-              <div style={{ ...G, fontSize:8, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Envelopes</div>
+              <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Envelopes</div>
               {cat.envelopes.map((env, i) => {
                 const ep = pct(env.gasto, env.limite);
                 return (
                   <div key={env.id} style={{ display:"flex", alignItems:"center", gap:8, paddingBottom:8, marginBottom:i<cat.envelopes.length-1?8:0, borderBottom:i<cat.envelopes.length-1?`1px solid ${T.border}`:"none" }}>
-                    <div style={{ ...G, fontSize:isMobile?10:11, color:T.ink, flex:"0 0 90px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{env.nome}</div>
+                    <div style={{ ...G, fontSize: 11, color:T.ink, flex:"0 0 90px", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{env.nome}</div>
                     <div style={{ flex:1 }}>
                       <div style={{ height:4, background:T.grayLight, borderRadius:99, overflow:"hidden" }}>
                         <div style={{ height:"100%", width:`${ep}%`, background:barColor(ep), borderRadius:99, transition:"width 0.5s" }} />
                       </div>
                     </div>
-                    <div style={{ ...G, ...NUM, fontSize:isMobile?9:10, textAlign:"right", minWidth:isMobile?80:100 }}>
+                    <div style={{ ...G, ...NUM, fontSize: 11, textAlign:"right", minWidth:isMobile?80:100 }}>
                       <span style={{ fontWeight:700, color:T.ink }}>{isMobile?`R$${env.gasto}`:fmtBRL(env.gasto)}</span>
                       <span style={{ color:T.inkLight }}> / {isMobile?`R$${env.limite}`:fmtBRL(env.limite)}</span>
                     </div>
@@ -234,12 +234,12 @@ export function OrcamentosPage({
             Distribuição — <span style={{ ...NUM, color:T.blue }}>{fmtBRL(budget)}</span>
           </div>
           {shouldUseRealData ? (
-            <span style={{ ...G, fontSize:10, fontWeight:600, color:T.inkLight, background:T.bg, border:`1px solid ${T.border}`, borderRadius:7, padding:"4px 10px" }}
+            <span style={{ ...G, fontSize: 11, fontWeight:600, color:T.inkLight, background:T.bg, border:`1px solid ${T.border}`, borderRadius:7, padding:"4px 10px" }}
               title="Valor igual à soma dos limites que você definiu em cada categoria.">
               Soma dos orçamentos
             </span>
           ) : (
-            <button style={{ ...G, fontSize:10, fontWeight:600, color:T.blue, background:"none", border:`1px solid ${T.border}`, borderRadius:7, padding:"4px 10px", cursor:"pointer" }}>Editar total</button>
+            <button style={{ ...G, fontSize: 11, fontWeight:600, color:T.blue, background:"none", border:`1px solid ${T.border}`, borderRadius:7, padding:"4px 10px", cursor:"pointer" }}>Editar total</button>
           )}
         </div>
         <div style={{ height:10, background:T.grayLight, borderRadius:99, overflow:"hidden", position:"relative", marginBottom:12 }}>
@@ -254,8 +254,8 @@ export function OrcamentosPage({
           {cats.map((c, i) => (
             <div key={c.id} style={{ display:"flex", alignItems:"center", gap:5 }}>
               <div style={{ width:8, height:8, borderRadius:2, background:c.color || CAT_COLORS[i], flexShrink:0 }} />
-              <span style={{ ...G, fontSize:isMobile?9:10, color:T.inkMid }}>{c.nome}</span>
-              {!isMobile && <span style={{ ...G, ...NUM, fontSize:10, fontWeight:700, color:T.ink }}>{fmtBRL(c.limite)}</span>}
+              <span style={{ ...G, fontSize: 11, color:T.inkMid }}>{c.nome}</span>
+              {!isMobile && <span style={{ ...G, ...NUM, fontSize: 11, fontWeight:700, color:T.ink }}>{fmtBRL(c.limite)}</span>}
             </div>
           ))}
         </div>
@@ -341,12 +341,12 @@ export function OrcamentosPage({
           { label:"Saúde geral",    val:healthLabel,        sub:`${alertCount} no limite`,    color:healthColor },
         ].map((k, i) => (
           <div key={i} style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:12, padding:isMobile?"12px 14px":"14px 16px" }}>
-            <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:5 }}>{k.label}</div>
-            <div style={{ ...G, ...NUM, fontSize:isMobile?i===3?13:17:i===3?15:20, fontWeight:800, color:k.color, letterSpacing:"-0.01em", display:"flex", alignItems:"center", gap:6 }}>
+            <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:5 }}>{k.label}</div>
+            <div style={{ ...G, ...NUM, fontSize: isMobile?i===3?13:17:i===3?15:20, fontWeight:800, color:k.color, letterSpacing:"-0.01em", display:"flex", alignItems:"center", gap:6 }}>
               {i===3 && <span style={{ width:8, height:8, borderRadius:"50%", background:k.color, display:"inline-block", flexShrink:0 }} />}
               {k.val}
             </div>
-            <div style={{ ...G, fontSize:10, color:T.inkMid, marginTop:3 }}>{k.sub}</div>
+            <div style={{ ...G, fontSize: 11, color:T.inkMid, marginTop:3 }}>{k.sub}</div>
           </div>
         ))}
       </div>}
@@ -394,7 +394,7 @@ export function OrcamentosPage({
                 {sugs.map(s=>(
                   <div key={s.id} style={{ display:"flex", alignItems:"center", gap:10, background:T.surface, border:`1px solid ${T.border}`, borderRadius:10, padding:"10px 13px" }}>
                     <CategoryLucideIcon iconKey={s.categoryIconKey} labelPt={s.nome} size={20} color={T.ink} />
-                    <div style={{ flex:1 }}><div style={{ ...G, fontSize:12, fontWeight:700, color:T.ink }}>{s.nome}</div><div style={{ ...G, fontSize:10, color:T.inkLight }}>{s.hint}</div></div>
+                    <div style={{ flex:1 }}><div style={{ ...G, fontSize:12, fontWeight:700, color:T.ink }}>{s.nome}</div><div style={{ ...G, fontSize: 11, color:T.inkLight }}>{s.hint}</div></div>
                     <div style={{ ...G, ...NUM, fontSize:12, fontWeight:700, color:T.inkMid, marginRight:8 }}>{fmtRec(Math.round(recVal*s.pct))}</div>
                     <button onClick={()=>{ const f=CATS_ORC_INIT.find(c=>c.id===s.id); if(f) setMockCats(prev=>[...prev,{...f,gasto:0,limite:Math.round(recVal*s.pct)}]); }} style={{ ...G, background:T.ink, color:"#fff", border:"none", borderRadius:7, padding:"5px 12px", fontSize:11, fontWeight:700, cursor:"pointer" }}>Usar</button>
                   </div>
@@ -459,7 +459,7 @@ export function OrcamentosPage({
                 )}
               </div>
               <div style={{ marginBottom:16, flex:1, minHeight:0, display:"flex", flexDirection:"column" }}>
-                <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10, flexShrink:0 }}>
+                <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:10, flexShrink:0 }}>
                   Selecione a categoria
                 </div>
                 {available.length === 0 ? (
@@ -494,7 +494,7 @@ export function OrcamentosPage({
               </div>
               {selCat && (
                 <div style={{ marginBottom:20, flexShrink:0 }}>
-                  <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>
+                  <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>
                     Limite mensal — {selCat.nome}
                   </div>
                   <div style={{ position:"relative", display:"flex", alignItems:"center" }}>
@@ -517,7 +517,7 @@ export function OrcamentosPage({
                 {available.length > 0 && (
                   <button onClick={() => { void handleSave(); }} disabled={!canSave || budgetsData.isSaving}
                     style={{ ...G, flex:2, padding:"11px", borderRadius:11, border:"none",
-                      background: canSave ? T.ink : T.inkGhost, color:"#fff",
+                      background: canSave ? T.ink : T.inkFaint, color:"#fff",
                       fontSize:13, fontWeight:700, cursor: canSave ? "pointer" : "not-allowed",
                       opacity: canSave ? 1 : 0.5, transition:"all 0.15s" }}>
                     {budgetsData.isSaving ? "Criando..." : "Criar orçamento"}
@@ -583,13 +583,13 @@ export function OrcamentosPage({
                   <CategoryLucideIcon iconKey={editCat.categoryIconKey} labelPt={editCat.nome} size={22} color={T.ink} />
                 </div>
                 <div style={{ minWidth:0 }}>
-                  <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:4 }}>Categoria</div>
+                  <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:4 }}>Categoria</div>
                   <div style={{ ...G, fontSize:14, fontWeight:700, color:T.ink, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{editCat.nome}</div>
                   <div style={{ ...G, fontSize:11, color:T.inkMid, marginTop:4 }}>{shouldUseRealData ? `Gasto até hoje ${fmtBRL(editCat.gasto)}` : "Ajuste o limite neste cenário demo."}</div>
                 </div>
               </div>
               <div style={{ marginBottom:20, flexShrink:0 }}>
-                <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>
+                <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>
                   Limite mensal
                 </div>
                 <div style={{ position:"relative", display:"flex", alignItems:"center" }}>
@@ -612,7 +612,7 @@ export function OrcamentosPage({
                 <button type="button" onClick={() => { void handleEditSave(); }}
                   disabled={!canSaveEdit || budgetsData.isSaving}
                   style={{ ...G, flex:2, padding:"11px", borderRadius:11, border:"none",
-                    background: canSaveEdit ? T.ink : T.inkGhost, color:"#fff",
+                    background: canSaveEdit ? T.ink : T.inkFaint, color:"#fff",
                     fontSize:13, fontWeight:700, cursor: canSaveEdit ? "pointer" : "not-allowed",
                     opacity: canSaveEdit ? 1 : 0.5, transition:"all 0.15s" }}>
                   {budgetsData.isSaving ? "Salvando..." : "Salvar"}

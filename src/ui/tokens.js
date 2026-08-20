@@ -8,7 +8,18 @@ export const T = {
   ink: "#0F0F0D",
   inkMid: "#374151",
   inkLight: "#4B5563",
-  inkGhost: "#9CA3AF",
+  // WCAG 1.4.3 (texto): #9CA3AF (era) dava ~2.5:1 sobre branco/bg — reprova o
+  // mínimo de 4.5:1. #646E7C passa com folga nas 3 superfícies onde aparece
+  // como TEXTO: 5.17:1 sobre surface (#FFFFFF), 4.83:1 sobre bg (#F8F7F5),
+  // 4.70:1 sobre grayLight (#F3F4F6) — a revisão adversarial pegou #6B7280
+  // (tentativa anterior) reprovando 4.39:1 nessa terceira combinação.
+  inkGhost: "#646E7C",
+  // Uso DECORATIVO/inativo (WCAG 1.4.3 não se aplica a não-texto; 1.4.11
+  // isenta componentes inativos): fundo de CTA desabilitado, alça de sheet,
+  // preenchimento de barra, ponto de status. Mantém o tom original claro —
+  // escurecer aqui fazia um botão desabilitado ler como "quase habilitado".
+  // Nunca use para texto: reprova 1.4.3 (é o #9CA3AF original).
+  inkFaint: "#9CA3AF",
   blue: "#2563EB",
   blueLight: "#EFF6FF",
   blueBar: "#60A5FA",

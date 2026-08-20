@@ -115,11 +115,11 @@ export function KebabMenu({ ariaLabel = "Ações", items = [], width = 190 }) {
                       role="menuitem"
                       disabled={item.disabled}
                       onClick={() => select(item)}
-                      style={{ ...itemStyle, color: item.disabled ? T.inkGhost : T.inkMid, cursor: item.disabled ? "default" : "pointer" }}
+                      style={{ ...itemStyle, color: item.disabled ? T.inkFaint : T.inkMid, cursor: item.disabled ? "default" : "pointer" }}
                     >
                       <span>{item.label}</span>
                       {item.badge && (
-                        <span style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                        <span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.03em" }}>
                           {item.badge}
                         </span>
                       )}

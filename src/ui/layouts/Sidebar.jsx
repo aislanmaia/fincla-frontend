@@ -111,7 +111,7 @@ function SidebarInner({ page, onNav, onClose, user }) {
                 key={i}
                 style={{
                   ...G,
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: 500,
                   color: T.inkGhost,
                   textTransform: "uppercase",
@@ -167,7 +167,7 @@ function SidebarInner({ page, onNav, onClose, user }) {
                 <span
                   style={{
                     ...G,
-                    fontSize: 10,
+                    fontSize: 11,
                     fontWeight: 700,
                     color: active ? "rgba(255,255,255,0.8)" : T.blue,
                     background: active ? "rgba(255,255,255,0.15)" : T.blueLight,
@@ -226,7 +226,7 @@ function SidebarInner({ page, onNav, onClose, user }) {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: 800,
                 color: "#fff",
                 flexShrink: 0,
@@ -258,7 +258,7 @@ function SidebarInner({ page, onNav, onClose, user }) {
                   data-testid="sidebar-plan-badge"
                   style={{
                     ...G,
-                    fontSize: 10,
+                    fontSize: 11,
                     fontWeight: 700,
                     color: badge.color,
                     background: badge.bg,

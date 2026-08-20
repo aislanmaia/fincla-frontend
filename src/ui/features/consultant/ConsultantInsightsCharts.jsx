@@ -63,8 +63,8 @@ export function CashFlowChart({ data, loading, title = "Fluxo da base", subtitle
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={data} margin={{ top: 6, right: 6, left: -8, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
-              <XAxis dataKey="month" tick={{ ...G, fontSize: 10, fill: T.inkLight }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ ...G, fontSize: 10, fill: T.inkLight }} axisLine={false} tickLine={false} width={54} tickFormatter={(v) => fmtBRL0(v)} />
+              <XAxis dataKey="month" tick={{ ...G, fontSize: 11, fill: T.inkLight }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ ...G, fontSize: 11, fill: T.inkLight }} axisLine={false} tickLine={false} width={54} tickFormatter={(v) => fmtBRL0(v)} />
               <Tooltip content={<CashFlowTooltip />} cursor={{ fill: `${T.ink}08` }} />
               <Bar dataKey="income" name="Receita" fill={T.green} radius={[3, 3, 0, 0]} maxBarSize={22} />
               <Bar dataKey="expenses" name="Despesa" fill={T.red} radius={[3, 3, 0, 0]} maxBarSize={22} />
@@ -103,8 +103,8 @@ export function IncomeCommitmentChart({ data, loading }) {
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data} margin={{ top: 6, right: 6, left: -18, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
-              <XAxis dataKey="month" tick={{ ...G, fontSize: 10, fill: T.inkLight }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ ...G, fontSize: 10, fill: T.inkLight }} axisLine={false} tickLine={false} width={38} domain={[0, (dataMax) => Math.max(100, Math.ceil(dataMax))]} tickFormatter={(v) => `${v}%`} />
+              <XAxis dataKey="month" tick={{ ...G, fontSize: 11, fill: T.inkLight }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ ...G, fontSize: 11, fill: T.inkLight }} axisLine={false} tickLine={false} width={38} domain={[0, (dataMax) => Math.max(100, Math.ceil(dataMax))]} tickFormatter={(v) => `${v}%`} />
               <Tooltip content={<CommitmentTooltip />} cursor={{ stroke: T.border }} />
               <Line dataKey="pct" name="Comprometimento" type="monotone" stroke={T.purple} strokeWidth={2.5} dot={{ r: 2.5, fill: T.purple }} />
             </LineChart>

@@ -40,7 +40,7 @@ const SECTION_LABEL = {
 function ReadStat({ label, value, tone }) {
   return (
     <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 9, padding: "9px 12px" }}>
-      <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
+      <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
       <div style={{ ...G, ...NUM, fontSize: 16, fontWeight: 800, color: tone || T.ink, marginTop: 2 }}>{value}</div>
     </div>
   );
@@ -97,7 +97,7 @@ function EvidenceChips({ evidence }) {
     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
       {evidence.map((e, j) => (
         <span key={j} title={`Fonte: ${e.source_tool}`}
-          style={{ ...G, ...NUM, fontSize: 10, fontWeight: 700, color: T.purple, background: T.purpleLight, borderRadius: 6, padding: "3px 7px" }}>
+          style={{ ...G, ...NUM, fontSize: 11, fontWeight: 700, color: T.purple, background: T.purpleLight, borderRadius: 6, padding: "3px 7px" }}>
           {e.metric}: {formatEvidenceValue(e.value)}
         </span>
       ))}
@@ -347,13 +347,13 @@ export function ConsultantBaseSummaryDrawer({ open, onClose, onOpenClient, onAdd
               <OpportunityList items={result.opportunities} />
 
               {result.disclaimers?.length > 0 && (
-                <div style={{ ...G, fontSize: 10, color: T.inkGhost, lineHeight: 1.5, borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
+                <div style={{ ...G, fontSize: 11, color: T.inkGhost, lineHeight: 1.5, borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
                   {result.disclaimers.join(" · ")}
                 </div>
               )}
 
               {correlationId && (
-                <div style={{ ...G, fontSize: 9.5, color: T.inkGhost }}>
+                <div style={{ ...G, fontSize: 11, color: T.inkGhost }}>
                   ID da análise: <span style={{ ...NUM }}>{correlationId}</span>
                 </div>
               )}

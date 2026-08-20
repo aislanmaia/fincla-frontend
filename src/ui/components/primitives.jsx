@@ -71,7 +71,7 @@ export function InfoTip({ text, width = 220 }) {
           borderRadius: 9999,
           background: T.grayLight,
           color: T.inkMid,
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: 700,
           cursor: "default",
           userSelect: "none",
@@ -158,7 +158,7 @@ export function Badge({ children, color, bg }) {
       style={{
         ...G,
         ...NUM,
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: 600,
         color: color || T.inkMid,
         background: bg || T.grayLight,
@@ -194,10 +194,10 @@ export function SectionDiv({ label, count, total, color = T.inkMid }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "20px 0 10px" }}>
       <div style={{ width: 18, height: 2, background: color, borderRadius: 99, flexShrink: 0 }} />
-      <span style={{ ...G, fontSize: 10, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.09em" }}>
+      <span style={{ ...G, fontSize: 11, fontWeight: 700, color, textTransform: "uppercase", letterSpacing: "0.09em" }}>
         {label}
       </span>
-      {count && <span style={{ ...G, fontSize: 10, color: T.inkLight, fontWeight: 400 }}>{count}</span>}
+      {count && <span style={{ ...G, fontSize: 11, color: T.inkLight, fontWeight: 400 }}>{count}</span>}
       {total && (
         <span style={{ ...G, ...NUM, fontSize: 12, fontWeight: 700, color, marginLeft: "auto" }}>{total}</span>
       )}

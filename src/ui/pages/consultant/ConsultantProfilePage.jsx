@@ -27,7 +27,7 @@ function StatCard({ label, value, icon, soon }) {
       <div style={{ ...G, ...NUM, fontSize: 20, fontWeight: 800, color: soon ? T.inkGhost : T.ink, marginTop: 10 }}>{value}</div>
       <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 2, display: "flex", alignItems: "center", gap: 6 }}>
         {label}
-        {soon && <span style={{ ...G, fontSize: 8, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: T.inkLight, background: T.grayLight, borderRadius: 4, padding: "1px 4px" }}>em breve</span>}
+        {soon && <span style={{ ...G, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: T.inkLight, background: T.grayLight, borderRadius: 4, padding: "1px 4px" }}>em breve</span>}
       </div>
     </Card>
   );
@@ -43,7 +43,7 @@ function InfoRow({ icon, label, value, soon, last }) {
         <div style={{ ...G, fontSize: 11, color: T.inkLight }}>{label}</div>
         <div style={{ ...G, fontSize: 13.5, fontWeight: 600, color: soon ? T.inkGhost : T.ink, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</div>
       </div>
-      {soon && <span style={{ ...G, fontSize: 8.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: T.inkLight, background: T.grayLight, borderRadius: 5, padding: "2px 6px" }}>em breve</span>}
+      {soon && <span style={{ ...G, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: T.inkLight, background: T.grayLight, borderRadius: 5, padding: "2px 6px" }}>em breve</span>}
     </div>
   );
 }
@@ -91,7 +91,7 @@ export function ConsultantProfilePage() {
           <button type="button" disabled title="Em breve"
             style={{ ...G, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", borderRadius: 9, border: `1.5px solid ${T.border}`, background: T.surface, color: T.inkLight, fontSize: 12, fontWeight: 600, cursor: "default", opacity: 0.6 }}>
             <Icon name="pencil" size={14} color={T.inkLight} /> Editar
-            <span style={{ ...G, fontSize: 8.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: T.inkLight, background: T.grayLight, borderRadius: 5, padding: "1px 5px" }}>em breve</span>
+            <span style={{ ...G, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: T.inkLight, background: T.grayLight, borderRadius: 5, padding: "1px 5px" }}>em breve</span>
           </button>
         </div>
       </Card>

@@ -68,7 +68,7 @@ export function SavedViewsCards({
       <div
         style={{
           ...G,
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: 700,
           color: T.inkMid,
           textTransform: "uppercase",
@@ -174,7 +174,7 @@ export function SavedViewsCards({
                     <div
                       style={{
                         ...G,
-                        fontSize: 10.5,
+                        fontSize: 11,
                         fontStyle: "italic",
                         color: isActive ? "rgba(255,255,255,0.75)" : T.amber,
                         marginTop: 2,
@@ -186,7 +186,7 @@ export function SavedViewsCards({
                     <div
                       style={{
                         ...G,
-                        fontSize: 10.5,
+                        fontSize: 11,
                         color: isActive ? "rgba(255,255,255,0.65)" : T.inkLight,
                         marginTop: 2,
                       }}

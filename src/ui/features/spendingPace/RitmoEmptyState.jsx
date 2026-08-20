@@ -30,7 +30,7 @@ export function RitmoEmptyState({ onNewTx }) {
             { n:"3", text:<><strong>Receba alertas</strong> quando o ritmo sair do ideal.</> },
           ].map((s,i)=>(
             <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:9 }}>
-              <div style={{ width:20, height:20, borderRadius:"50%", background:T.ink, color:"#fff", fontSize:10, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>{s.n}</div>
+              <div style={{ width:20, height:20, borderRadius:"50%", background:T.ink, color:"#fff", fontSize: 11, fontWeight:800, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0, marginTop:1 }}>{s.n}</div>
               <div style={{ ...G, fontSize:12, color:T.inkMid, lineHeight:1.6 }}>{s.text}</div>
             </div>
           ))}

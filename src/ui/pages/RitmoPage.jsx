@@ -144,14 +144,14 @@ function RitmoPageMock({ onNav, isMobile = false }) {
           <PageTitle sans="Ritmo" serif="de Gastos" />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 2, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: "4px 6px", boxShadow: T.sm }}>
-          <button onClick={() => setPeriodoKey((k) => (k === "mar26" ? "fev26" : "mar26"))} style={{ background: "none", border: "none", cursor: periodoKey === "mar26" ? "default" : "pointer", color: periodoKey === "mar26" ? T.inkGhost : T.inkMid, padding: "4px 8px", borderRadius: 7, display: "flex", alignItems: "center" }}>
+          <button onClick={() => setPeriodoKey((k) => (k === "mar26" ? "fev26" : "mar26"))} style={{ background: "none", border: "none", cursor: periodoKey === "mar26" ? "default" : "pointer", color: periodoKey === "mar26" ? T.inkFaint : T.inkMid, padding: "4px 8px", borderRadius: 7, display: "flex", alignItems: "center" }}>
             <ChevronLeft size={14} />
           </button>
           <span style={{ ...G, fontSize: 12, fontWeight: 700, color: T.ink, padding: "0 6px", minWidth: 60, textAlign: "center" }}>
             {periodo.label}
-            {isClosed && <span style={{ ...G, fontSize: 10, fontWeight: 600, color: T.inkMid, marginLeft: 4 }}>fechado</span>}
+            {isClosed && <span style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid, marginLeft: 4 }}>fechado</span>}
           </span>
-          <button onClick={() => setPeriodoKey((k) => (k === "fev26" ? "mar26" : "fev26"))} style={{ background: "none", border: "none", cursor: periodoKey === "mar26" ? "default" : "pointer", color: periodoKey === "mar26" ? T.inkGhost : T.inkMid, padding: "4px 8px", borderRadius: 7, display: "flex", alignItems: "center" }}>
+          <button onClick={() => setPeriodoKey((k) => (k === "fev26" ? "mar26" : "fev26"))} style={{ background: "none", border: "none", cursor: periodoKey === "mar26" ? "default" : "pointer", color: periodoKey === "mar26" ? T.inkFaint : T.inkMid, padding: "4px 8px", borderRadius: 7, display: "flex", alignItems: "center" }}>
             <ChevronRight size={14} />
           </button>
         </div>
@@ -197,9 +197,9 @@ function RitmoPageMock({ onNav, isMobile = false }) {
               { label: "Diferença", val: fmtAbs(Math.abs(diff)), color: diffColor, sub: isOk ? "abaixo do esperado ✓" : "acima do esperado ↑" },
             ]).map((k, i) => (
           <Card key={i} style={{ padding: isMobile ? "12px 14px" : "14px 18px", gridColumn: isMobile && i === 2 ? "1 / -1" : undefined }}>
-            <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{k.label}</div>
+            <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{k.label}</div>
             <div style={{ ...M_MONO, ...NUM, fontSize: isMobile ? 16 : 18, fontWeight: 700, color: k.color, marginBottom: 3 }}>{k.val}</div>
-            <div style={{ ...G, fontSize: isMobile ? 9 : 10, color: T.inkMid }}>{k.sub}</div>
+            <div style={{ ...G, fontSize: 11, color: T.inkMid }}>{k.sub}</div>
           </Card>
         ))}
       </div>
@@ -218,7 +218,7 @@ function RitmoPageMock({ onNav, isMobile = false }) {
               ].map(([c, dash, l]) => (
                 <div key={l} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                   <svg width="14" height="6"><line x1="0" y1="3" x2="14" y2="3" stroke={c} strokeWidth="2" strokeDasharray={dash ? "4 3" : ""} /></svg>
-                  <span style={{ ...G, fontSize: isMobile ? 9 : 10, color: T.inkMid }}>{l}</span>
+                  <span style={{ ...G, fontSize: 11, color: T.inkMid }}>{l}</span>
                 </div>
               ))}
             </div>
@@ -230,15 +230,15 @@ function RitmoPageMock({ onNav, isMobile = false }) {
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: -10, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
-                <XAxis dataKey="day" tick={{ ...G, fontSize: 10, fill: T.inkLight }} axisLine={false} tickLine={false} tickFormatter={(v) => (v % 5 === 0 || v === 1 ? `${v}` : "")} />
-                <YAxis tick={{ ...G, ...NUM, fontSize: 10, fill: T.inkLight }} axisLine={false} tickLine={false} tickFormatter={fmtK} />
+                <XAxis dataKey="day" tick={{ ...G, fontSize: 11, fill: T.inkLight }} axisLine={false} tickLine={false} tickFormatter={(v) => (v % 5 === 0 || v === 1 ? `${v}` : "")} />
+                <YAxis tick={{ ...G, ...NUM, fontSize: 11, fill: T.inkLight }} axisLine={false} tickLine={false} tickFormatter={fmtK} />
                 <Tooltip content={<RitmoTooltip />} />
                 {!isClosed && (
-                  <ReferenceLine x={todayDay} stroke={T.amber} strokeWidth={1.5} strokeDasharray="4 3" label={{ value: "Hoje", position: "top", fill: T.amber, fontSize: 10, fontFamily: "Geist,sans-serif" }} />
+                  <ReferenceLine x={todayDay} stroke={T.amber} strokeWidth={1.5} strokeDasharray="4 3" label={{ value: "Hoje", position: "top", fill: T.amber, fontSize: 11, fontFamily: "Geist,sans-serif" }} />
                 )}
-                <ReferenceLine y={budgetVal} stroke={`${T.blue}44`} strokeDasharray="5 4" label={isMobile ? undefined : { value: "Orçamento", position: "right", fill: T.blue, fontSize: 10, fontFamily: "Geist,sans-serif" }} />
+                <ReferenceLine y={budgetVal} stroke={`${T.blue}44`} strokeDasharray="5 4" label={isMobile ? undefined : { value: "Orçamento", position: "right", fill: T.blue, fontSize: 11, fontFamily: "Geist,sans-serif" }} />
                 {!isClosed && estouroDia && estouroDia <= 31 && estouroDia > TODAY_RIT && (
-                  <ReferenceLine x={estouroDia} stroke={`${T.red}88`} strokeWidth={1.5} strokeDasharray="3 3" label={{ value: `estouro dia ${estouroDia}`, position: "insideTopLeft", fill: T.red, fontSize: 10, fontFamily: "Geist,sans-serif" }} />
+                  <ReferenceLine x={estouroDia} stroke={`${T.red}88`} strokeWidth={1.5} strokeDasharray="3 3" label={{ value: `estouro dia ${estouroDia}`, position: "insideTopLeft", fill: T.red, fontSize: 11, fontFamily: "Geist,sans-serif" }} />
                 )}
                 <Area dataKey="proj" name="proj" type="monotone" fill={`${T.blue}06`} stroke="#D1D5DB" strokeWidth={1.5} strokeDasharray="6 4" dot={false} />
                 <Line dataKey="real" name="real" type="monotone" stroke={isOk ? T.green : T.red} strokeWidth={2.5} dot={false} connectNulls={false} />
@@ -259,30 +259,30 @@ function RitmoPageMock({ onNav, isMobile = false }) {
               { label: isClosed ? "Média diária" : "Ritmo necessário", val: `${fmtAbs(isClosed ? dailyAvg : dailyLeft)}/dia`, color: T.ink, sub: isClosed ? `${totalDays} dias` : `${daysLeft} dias restantes` },
             ].map((k, i) => (
               <Card key={i} style={{ padding: "12px 14px" }}>
-                <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{k.label}</div>
+                <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{k.label}</div>
                 <div style={{ ...M_MONO, ...NUM, fontSize: 15, fontWeight: 800, color: k.color, marginBottom: 2 }}>{k.val}</div>
-                <div style={{ ...G, fontSize: 10, color: k.color === T.ink ? T.inkMid : k.color, fontWeight: 500 }}>{k.sub}</div>
+                <div style={{ ...G, fontSize: 11, color: k.color === T.ink ? T.inkMid : k.color, fontWeight: 500 }}>{k.sub}</div>
               </Card>
             ))}
             <Card style={{ padding: "12px 14px", gridColumn: "1 / -1" }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                <span style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em" }}>{isClosed ? "Execução" : "Progresso"}</span>
-                <span style={{ ...G, ...NUM, fontSize: 10, fontWeight: 700, color: spentPct > timePct ? T.red : T.green }}>{spentPct}% consumido</span>
+                <span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em" }}>{isClosed ? "Execução" : "Progresso"}</span>
+                <span style={{ ...G, ...NUM, fontSize: 11, fontWeight: 700, color: spentPct > timePct ? T.red : T.green }}>{spentPct}% consumido</span>
               </div>
               {!isClosed && (
                 <div style={{ marginBottom: 6 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                    <span style={{ ...G, fontSize: 10, color: T.inkMid }}>Tempo</span>
-                    <span style={{ ...G, ...NUM, fontSize: 10, color: T.inkMid }}>{timePct}%</span>
+                    <span style={{ ...G, fontSize: 11, color: T.inkMid }}>Tempo</span>
+                    <span style={{ ...G, ...NUM, fontSize: 11, color: T.inkMid }}>{timePct}%</span>
                   </div>
                   <div style={{ height: 4, background: T.grayLight, borderRadius: 99, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${timePct}%`, background: T.inkGhost, borderRadius: 99 }} />
+                    <div style={{ height: "100%", width: `${timePct}%`, background: T.inkFaint, borderRadius: 99 }} />
                   </div>
                 </div>
               )}
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                <span style={{ ...G, fontSize: 10, color: T.inkMid }}>Gasto</span>
-                <span style={{ ...G, ...NUM, fontSize: 10, color: spentPct > timePct ? T.red : T.green }}>{spentPct}%</span>
+                <span style={{ ...G, fontSize: 11, color: T.inkMid }}>Gasto</span>
+                <span style={{ ...G, ...NUM, fontSize: 11, color: spentPct > timePct ? T.red : T.green }}>{spentPct}%</span>
               </div>
               <div style={{ height: 5, background: T.grayLight, borderRadius: 99, overflow: "hidden" }}>
                 <div style={{ height: "100%", width: `${Math.min(spentPct, 100)}%`, background: spentPct > timePct ? T.red : T.green, borderRadius: 99, transition: "width 0.6s" }} />
@@ -298,27 +298,27 @@ function RitmoPageMock({ onNav, isMobile = false }) {
               {isClosed ? `Mês encerrado · ${periodo.label}` : "Baseado no ritmo atual"}
             </div>
             <div style={{ marginBottom: 18, paddingBottom: 18, borderBottom: `1px solid ${T.border}` }}>
-              <div style={{ ...G, fontSize: 10, fontWeight: 600, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
+              <div style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
                 {isClosed ? "Total realizado" : "Projeção atual"}
               </div>
               <div style={{ ...M_MONO, ...NUM, fontSize: 22, fontWeight: 800, color: projColor, letterSpacing: "-0.02em" }}>{fmtAbs(projFim)}</div>
-              <div style={{ ...G, fontSize: 10, color: projColor, marginTop: 3, fontWeight: 600 }}>
+              <div style={{ ...G, fontSize: 11, color: projColor, marginTop: 3, fontWeight: 600 }}>
                 {projOver ? `+${fmtAbs(projFim - budgetVal)} acima do orçamento` : `${fmtAbs(budgetVal - projFim)} ${isClosed ? "de economia" : "de margem"}`}
               </div>
             </div>
             <div style={{ marginBottom: 18, paddingBottom: 18, borderBottom: `1px solid ${T.border}` }}>
-              <div style={{ ...G, fontSize: 10, fontWeight: 600, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Orçamento do período</div>
+              <div style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Orçamento do período</div>
               <div style={{ ...M_MONO, ...NUM, fontSize: 18, fontWeight: 700, color: T.ink }}>{fmtAbs(budgetVal)}</div>
             </div>
             <div style={{ marginBottom: 20, paddingBottom: 18, borderBottom: `1px solid ${T.border}` }}>
-              <div style={{ ...G, fontSize: 10, fontWeight: 600, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Diferença {isClosed ? "final" : "estimada"}</div>
+              <div style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Diferença {isClosed ? "final" : "estimada"}</div>
               <div style={{ ...M_MONO, ...NUM, fontSize: 18, fontWeight: 700, color: projOver ? T.red : T.green }}>
                 {projOver ? "+" : "−"}{fmtAbs(Math.abs(projFim - budgetVal))}
               </div>
             </div>
             <div style={{ marginBottom: 20 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                <div style={{ ...G, fontSize: 10, fontWeight: 600, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+                <div style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em" }}>
                   {isClosed ? "Execução do período" : "Progresso do período"}
                 </div>
                 <span style={{ ...G, ...NUM, fontSize: 11, fontWeight: 700, color: spentPct > timePct ? T.red : T.green }}>{spentPct}%</span>
@@ -326,29 +326,29 @@ function RitmoPageMock({ onNav, isMobile = false }) {
               {isClosed ? (
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                    <span style={{ ...G, fontSize: 10, color: T.inkMid }}>Realizado vs. orçamento</span>
-                    <span style={{ ...G, ...NUM, fontSize: 10, color: projOver ? T.red : T.green }}>{spentPct}%</span>
+                    <span style={{ ...G, fontSize: 11, color: T.inkMid }}>Realizado vs. orçamento</span>
+                    <span style={{ ...G, ...NUM, fontSize: 11, color: projOver ? T.red : T.green }}>{spentPct}%</span>
                   </div>
                   <div style={{ height: 7, background: T.grayLight, borderRadius: 99, overflow: "hidden" }}>
                     <div style={{ height: "100%", width: `${Math.min(spentPct, 100)}%`, background: projOver ? T.red : T.green, borderRadius: 99 }} />
                   </div>
-                  {spentPct > 100 && <div style={{ ...G, fontSize: 10, color: T.red, marginTop: 4, fontWeight: 600 }}>+{spentPct - 100}% além do orçamento</div>}
+                  {spentPct > 100 && <div style={{ ...G, fontSize: 11, color: T.red, marginTop: 4, fontWeight: 600 }}>+{spentPct - 100}% além do orçamento</div>}
                 </div>
               ) : (
                 <>
                   <div style={{ marginBottom: 5 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                      <span style={{ ...G, fontSize: 10, color: T.inkMid }}>Tempo decorrido</span>
-                      <span style={{ ...G, ...NUM, fontSize: 10, color: T.inkMid }}>{timePct}%</span>
+                      <span style={{ ...G, fontSize: 11, color: T.inkMid }}>Tempo decorrido</span>
+                      <span style={{ ...G, ...NUM, fontSize: 11, color: T.inkMid }}>{timePct}%</span>
                     </div>
                     <div style={{ height: 5, background: T.grayLight, borderRadius: 99, overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${timePct}%`, background: T.inkGhost, borderRadius: 99 }} />
+                      <div style={{ height: "100%", width: `${timePct}%`, background: T.inkFaint, borderRadius: 99 }} />
                     </div>
                   </div>
                   <div>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                      <span style={{ ...G, fontSize: 10, color: T.inkMid }}>Orçamento consumido</span>
-                      <span style={{ ...G, ...NUM, fontSize: 10, color: spentPct > timePct ? T.red : T.green }}>{spentPct}%</span>
+                      <span style={{ ...G, fontSize: 11, color: T.inkMid }}>Orçamento consumido</span>
+                      <span style={{ ...G, ...NUM, fontSize: 11, color: spentPct > timePct ? T.red : T.green }}>{spentPct}%</span>
                     </div>
                     <div style={{ height: 5, background: T.grayLight, borderRadius: 99, overflow: "hidden" }}>
                       <div style={{ height: "100%", width: `${Math.min(spentPct, 100)}%`, background: spentPct > timePct ? T.red : T.green, borderRadius: 99, transition: "width 0.6s" }} />
@@ -358,14 +358,14 @@ function RitmoPageMock({ onNav, isMobile = false }) {
               )}
             </div>
             <div style={{ background: T.grayLight, borderRadius: 10, padding: "12px 14px" }}>
-              <div style={{ ...G, fontSize: 10, fontWeight: 600, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>
+              <div style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>
                 {isClosed ? "Média diária realizada" : "Ritmo necessário"}
               </div>
               <div style={{ ...M_MONO, ...NUM, fontSize: 17, fontWeight: 800, color: T.ink }}>
                 {fmtAbs(isClosed ? dailyAvg : dailyLeft)}
-                <span style={{ ...G, fontSize: 10, fontWeight: 500, color: T.inkMid }}>/dia</span>
+                <span style={{ ...G, fontSize: 11, fontWeight: 500, color: T.inkMid }}>/dia</span>
               </div>
-              <div style={{ ...G, fontSize: 10, color: T.inkMid, marginTop: 3 }}>
+              <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 3 }}>
                 {isClosed ? `média ao longo de ${totalDays} dias` : `para fechar dentro do orçamento · ${daysLeft} dias restantes`}
               </div>
             </div>
@@ -386,20 +386,20 @@ function RitmoPageMock({ onNav, isMobile = false }) {
             const isWeekend = i === 0 || i === 6;
             const isToday = !isClosed && i === 3;
             const barH = Math.round(pct * 110);
-            const barColor = isToday ? T.blue : pct > 0.75 ? T.red : pct > 0.5 ? T.amber : T.inkGhost;
+            const barColor = isToday ? T.blue : pct > 0.75 ? T.red : pct > 0.5 ? T.amber : T.inkFaint;
             return (
               <div key={d.day} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-                {!isMobile && <span style={{ ...M_MONO, ...NUM, fontSize: 10, fontWeight: 600, color: pct > 0.75 ? T.red : pct > 0.5 ? T.amber : T.inkMid }}>{fmtAbs(d.val)}</span>}
+                {!isMobile && <span style={{ ...M_MONO, ...NUM, fontSize: 11, fontWeight: 600, color: pct > 0.75 ? T.red : pct > 0.5 ? T.amber : T.inkMid }}>{fmtAbs(d.val)}</span>}
                 <div style={{ width: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", height: 110 }}>
                   <div style={{ width: "100%", height: barH, background: barColor, borderRadius: "5px 5px 3px 3px", opacity: isWeekend && !isToday ? 0.5 : 1, transition: "height 0.4s, background 0.3s", position: "relative" }}>
                     {isToday && (
-                      <div style={{ position: "absolute", top: -18, left: "50%", transform: "translateX(-50%)", ...G, fontSize: 8, fontWeight: 700, color: T.blue, whiteSpace: "nowrap", background: T.blueLight, padding: "2px 5px", borderRadius: 4 }}>
+                      <div style={{ position: "absolute", top: -18, left: "50%", transform: "translateX(-50%)", ...G, fontSize: 11, fontWeight: 700, color: T.blue, whiteSpace: "nowrap", background: T.blueLight, padding: "2px 5px", borderRadius: 4 }}>
                         hoje
                       </div>
                     )}
                   </div>
                 </div>
-                <span style={{ ...G, fontSize: isMobile ? 10 : 11, fontWeight: isToday ? 700 : 500, color: isToday ? T.blue : isWeekend ? T.inkMid : T.ink }}>
+                <span style={{ ...G, fontSize: 11, fontWeight: isToday ? 700 : 500, color: isToday ? T.blue : isWeekend ? T.inkMid : T.ink }}>
                   {isMobile ? d.short : d.day}
                 </span>
               </div>
@@ -411,17 +411,17 @@ function RitmoPageMock({ onNav, isMobile = false }) {
             { color: T.blue, label: "Hoje" },
             { color: T.red, label: isMobile ? "Alto >75%" : "Alto (>75%)" },
             { color: T.amber, label: isMobile ? "Moderado 50–75%" : "Moderado (50–75%)" },
-            { color: T.inkGhost, label: isMobile ? "Baixo <50%" : "Baixo (<50%)" },
+            { color: T.inkFaint, label: isMobile ? "Baixo <50%" : "Baixo (<50%)" },
           ].map((l, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <div style={{ width: 9, height: 9, borderRadius: 2, background: l.color, flexShrink: 0 }} />
-              <span style={{ ...G, fontSize: 10, color: T.inkMid }}>{l.label}</span>
+              <span style={{ ...G, fontSize: 11, color: T.inkMid }}>{l.label}</span>
             </div>
           ))}
           {!isMobile && (
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ ...G, fontSize: 10, color: T.inkMid }}>Maior gasto:</span>
-              <span style={{ ...G, fontSize: 10, fontWeight: 700, color: T.ink }}>{dowData.reduce((a, b) => (a.val > b.val ? a : b)).day}</span>
+              <span style={{ ...G, fontSize: 11, color: T.inkMid }}>Maior gasto:</span>
+              <span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.ink }}>{dowData.reduce((a, b) => (a.val > b.val ? a : b)).day}</span>
             </div>
           )}
         </div>

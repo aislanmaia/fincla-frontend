@@ -11,7 +11,7 @@ function ComingSoonPill({ active }) {
     <span
       style={{
         ...G,
-        fontSize: 9.5,
+        fontSize: 11,
         fontWeight: 700,
         letterSpacing: "0.04em",
         textTransform: "uppercase",
@@ -75,7 +75,7 @@ export function ConsultantSidebar({ pathname, onNav, user, onClose }) {
             <span
               style={{
                 ...G,
-                fontSize: 9.5,
+                fontSize: 11,
                 fontWeight: 700,
                 color: T.purple,
                 textTransform: "uppercase",
@@ -115,7 +115,7 @@ export function ConsultantSidebar({ pathname, onNav, user, onClose }) {
                 key={`sec-${i}`}
                 style={{
                   ...G,
-                  fontSize: 9.5,
+                  fontSize: 11,
                   fontWeight: 600,
                   color: T.inkGhost,
                   textTransform: "uppercase",
@@ -245,7 +245,7 @@ export function ConsultantSidebar({ pathname, onNav, user, onClose }) {
             >
               {getDisplayName(user)}
             </div>
-            <div style={{ ...G, fontSize: 9.5, fontWeight: 700, color: T.purple, letterSpacing: "0.04em" }}>
+            <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.purple, letterSpacing: "0.04em" }}>
               CONSULTOR
             </div>
           </div>

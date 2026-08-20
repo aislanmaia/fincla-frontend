@@ -32,12 +32,12 @@ function AttentionItem({ client, health, onOpenClient, onEvaluate, evaluateLocke
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 3 }}>
           {client.main_situation && (
-            <span style={{ ...G, fontSize: 10.5, color: T.red, background: T.redLight, borderRadius: 99, padding: "2px 8px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 }}>
+            <span style={{ ...G, fontSize: 11, color: T.red, background: T.redLight, borderRadius: 99, padding: "2px 8px", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 }}>
               <Icon name="alert" size={10} color={T.red} />{client.main_situation}
             </span>
           )}
           {client.current_balance != null && client.current_balance < 0 && (
-            <span style={{ ...G, fontSize: 10.5, color: T.inkLight }}>{fmtSgn(client.current_balance)}</span>
+            <span style={{ ...G, fontSize: 11, color: T.inkLight }}>{fmtSgn(client.current_balance)}</span>
           )}
         </div>
       </div>

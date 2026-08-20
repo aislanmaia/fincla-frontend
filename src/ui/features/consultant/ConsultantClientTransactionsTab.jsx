@@ -28,7 +28,7 @@ function CatIcon({ tx, color }) {
 function SummaryCard({ label, value, color }) {
   return (
     <Card style={{ padding: "13px 16px" }}>
-      <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
+      <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
       <div style={{ ...G, ...NUM, fontSize: 18, fontWeight: 800, color, marginTop: 5 }}>{value}</div>
     </Card>
   );
@@ -62,7 +62,7 @@ function TxRow({ tx, narrow }) {
         {iconBox}
         <div style={{ minWidth: 0 }}>
           {nameRow}
-          <div style={{ ...G, fontSize: 10.5, color: T.inkLight, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.cat}{parcela} · {tx.method} · {tx.date}</div>
+          <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.cat}{parcela} · {tx.method} · {tx.date}</div>
         </div>
         {value}
       </div>
@@ -75,7 +75,7 @@ function TxRow({ tx, narrow }) {
       {iconBox}
       <div style={{ minWidth: 0 }}>
         {nameRow}
-        <div style={{ ...G, fontSize: 10.5, color: T.inkLight, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.cat}{parcela}</div>
+        <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.cat}{parcela}</div>
       </div>
       <span style={{ ...G, fontSize: 12, color: T.inkMid, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{tx.method}</span>
       <span style={{ ...G, fontSize: 12, color: T.inkLight, whiteSpace: "nowrap" }}>{tx.date}</span>
@@ -138,7 +138,7 @@ export function ConsultantClientTransactionsTab({ transactions }) {
             style={{ ...G, marginLeft: "auto", display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", borderRadius: 9, border: `1px solid ${T.ink}`, background: T.ink, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "default", opacity: 0.55, whiteSpace: "nowrap" }}
           >
             <Icon name="plus" size={13} color="#fff" /> Nova transação
-            <span style={{ ...G, fontSize: 8.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", background: "rgba(255,255,255,0.2)", borderRadius: 5, padding: "1px 5px" }}>em breve</span>
+            <span style={{ ...G, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", background: "rgba(255,255,255,0.2)", borderRadius: 5, padding: "1px 5px" }}>em breve</span>
           </button>
         </div>
         <div>{body()}</div>

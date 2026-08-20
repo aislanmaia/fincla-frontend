@@ -93,7 +93,7 @@ export function BudgetHistoryChart({ historyData, isMobile, shouldUseRealData })
                       value: `Média ${fmtK(avgSpent)}`,
                       position: "right",
                       fill: T.blue,
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: 600,
                       fontFamily: "Geist,sans-serif",
                     }
@@ -154,7 +154,7 @@ function HistoryTooltip({ active, payload, label }) {
     <div style={{ ...G, background: T.ink, borderRadius: 10, padding: "10px 14px", boxShadow: T.dark, minWidth: 150 }}>
       <div
         style={{
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: 700,
           color: "rgba(255,255,255,0.55)",
           marginBottom: 5,
@@ -167,7 +167,7 @@ function HistoryTooltip({ active, payload, label }) {
       </div>
       <div style={{ ...M_MONO, ...NUM, fontSize: 15, fontWeight: 700, color: "#fff" }}>{fmtAbs(d.spent)}</div>
       {d.budget ? (
-        <div style={{ fontSize: 10, color: over ? "#FCA5A5" : "#86efac", marginTop: 4 }}>
+        <div style={{ fontSize: 11, color: over ? "#FCA5A5" : "#86efac", marginTop: 4 }}>
           {over ? `${fmtAbs(d.spent - d.budget)} acima do limite` : `${fmtAbs(d.budget - d.spent)} dentro do limite`}
         </div>
       ) : null}
@@ -178,11 +178,11 @@ function HistoryTooltip({ active, payload, label }) {
 function StatChip({ label, value, sub, color }) {
   return (
     <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "8px 12px", flex: "1 1 140px", minWidth: 120 }}>
-      <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 3 }}>
+      <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 3 }}>
         {label}
       </div>
       <div style={{ ...M_MONO, ...NUM, fontSize: 14, fontWeight: 700, color }}>{value}</div>
-      {sub ? <div style={{ ...G, fontSize: 10, color: T.inkLight, marginTop: 1 }}>{sub}</div> : null}
+      {sub ? <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 1 }}>{sub}</div> : null}
     </div>
   );
 }

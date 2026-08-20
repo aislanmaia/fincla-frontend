@@ -28,7 +28,7 @@ export const ParcelaHybrid = ({ parcelas, valorNum }) => {
     background: past ? T.blue : "#BFDBFE",
   });
   const pill = (label, active) => ({
-    ...G, fontSize:10, fontWeight:600, padding:"2px 8px",
+    ...G, fontSize: 11, fontWeight:600, padding:"2px 8px",
     borderRadius:99, flexShrink:0, whiteSpace:"nowrap",
     background: active ? T.blue : "#BFDBFE",
     color: active ? "#fff" : T.blue,
@@ -41,20 +41,20 @@ export const ParcelaHybrid = ({ parcelas, valorNum }) => {
       {/* B — Split card */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:1, background:"#BFDBFE" }}>
         <div style={{ background:"#fff", padding:"10px 13px" }}>
-          <div style={{ ...G, fontSize:9, fontWeight:700, color:T.blue,
+          <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.blue,
             textTransform:"uppercase", letterSpacing:".07em", opacity:.7, marginBottom:2 }}>Por mês</div>
           <div style={{ ...G, ...NUM, fontSize:16, fontWeight:800, color:T.ink, letterSpacing:"-.02em" }}>
             R$ {parcelaVal.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}
           </div>
-          <div style={{ ...G, fontSize:10, color:T.inkGhost, marginTop:1 }}>{parcelas} parcelas</div>
+          <div style={{ ...G, fontSize: 11, color:T.inkGhost, marginTop:1 }}>{parcelas} parcelas</div>
         </div>
         <div style={{ background:"#EFF6FF", padding:"10px 13px" }}>
-          <div style={{ ...G, fontSize:9, fontWeight:700, color:T.blue,
+          <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.blue,
             textTransform:"uppercase", letterSpacing:".07em", opacity:.7, marginBottom:2 }}>Total</div>
           <div style={{ ...G, ...NUM, fontSize:16, fontWeight:800, color:T.blue, letterSpacing:"-.02em" }}>
             R$ {valorNum.toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2})}
           </div>
-          <div style={{ ...G, fontSize:10, color:T.inkGhost, marginTop:1 }}>
+          <div style={{ ...G, fontSize: 11, color:T.inkGhost, marginTop:1 }}>
             abr/26{parcelas > 1 ? ` → ${endLabel}` : ""}
           </div>
         </div>
@@ -62,7 +62,7 @@ export const ParcelaHybrid = ({ parcelas, valorNum }) => {
 
       {/* A — Timeline */}
       <div style={{ padding:"9px 13px", background:"#fff", borderTop:"1px solid #BFDBFE" }}>
-        <div style={{ ...G, fontSize:9, fontWeight:700, color:T.blue,
+        <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.blue,
           textTransform:"uppercase", letterSpacing:".07em", opacity:.7, marginBottom:5 }}>
           {parcelas} {parcelas===1?"mês":"meses"}
         </div>
@@ -86,8 +86,8 @@ export const ParcelaHybrid = ({ parcelas, valorNum }) => {
           )}
         </div>
         <div style={{ display:"flex", justifyContent:"space-between", marginTop:4 }}>
-          <div style={{ ...G, fontSize:10, color:T.inkLight }}>abr/26</div>
-          {parcelas > 1 && <div style={{ ...G, fontSize:10, color:T.blue, fontWeight:600 }}>→ {endLabel}</div>}
+          <div style={{ ...G, fontSize: 11, color:T.inkLight }}>abr/26</div>
+          {parcelas > 1 && <div style={{ ...G, fontSize: 11, color:T.blue, fontWeight:600 }}>→ {endLabel}</div>}
         </div>
       </div>
 
@@ -100,12 +100,12 @@ export const ParcelaHybrid = ({ parcelas, valorNum }) => {
           <>
             <span style={pill(allMonths[0].m, true)}>{allMonths[0].m}</span>
             <span style={pill(allMonths[1].m, true)}>{allMonths[1].m}</span>
-            <span style={{ ...G, fontSize:10, color:"#BFDBFE", fontWeight:700 }}>→</span>
-            <span style={{ ...G, fontSize:10, fontWeight:700, padding:"2px 8px",
+            <span style={{ ...G, fontSize: 11, color:"#BFDBFE", fontWeight:700 }}>→</span>
+            <span style={{ ...G, fontSize: 11, fontWeight:700, padding:"2px 8px",
               borderRadius:99, background:"#F3F4F6", color:T.inkGhost, flexShrink:0 }}>
               +{parcelas - 3} meses
             </span>
-            <span style={{ ...G, fontSize:10, color:"#BFDBFE", fontWeight:700 }}>→</span>
+            <span style={{ ...G, fontSize: 11, color:"#BFDBFE", fontWeight:700 }}>→</span>
             <span style={pill(endLabel, false)}>{endLabel}</span>
           </>
         )}

@@ -171,7 +171,7 @@ const ModalNovoCenario = ({ open, onClose, onCriar, initialTipo = null }) => {
         {/* Header roxo */}
         <div style={{ background: "linear-gradient(135deg, #4C1D95 0%, #6D28D9 100%)", padding: "20px 24px 18px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexShrink: 0 }}>
           <div>
-            <div style={{ ...G, display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(255,255,255,0.15)", borderRadius: 99, padding: "3px 10px", fontSize: 10, fontWeight: 700, color: "rgba(255,255,255,0.85)", letterSpacing: "0.06em", marginBottom: 8 }}>✦ SIMULAÇÃO</div>
+            <div style={{ ...G, display: "inline-flex", alignItems: "center", gap: 5, background: "rgba(255,255,255,0.15)", borderRadius: 99, padding: "3px 10px", fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.85)", letterSpacing: "0.06em", marginBottom: 8 }}>✦ SIMULAÇÃO</div>
             <div style={{ ...G, fontSize: 18, fontWeight: 800, color: "#fff", letterSpacing: "-0.02em" }}>Novo cenário</div>
           </div>
           <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(255,255,255,0.15)", border: "none", cursor: "pointer", color: "rgba(255,255,255,0.8)", fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
@@ -192,14 +192,14 @@ const ModalNovoCenario = ({ open, onClose, onCriar, initialTipo = null }) => {
           <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <label style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid }}>Orçamento do período</label>
-              <span style={{ ...G, fontSize: 10, color: T.inkLight }}>opcional</span>
+              <span style={{ ...G, fontSize: 11, color: T.inkLight }}>opcional</span>
             </div>
             {!budgetEdit ? (
               <div data-testid="sim-modal-budget-display" style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 13px", background: overridden ? T.purpleLight : T.grayLight, border: `1.5px solid ${overridden ? T.purple + "44" : T.border}`, borderRadius: 10, cursor: "pointer" }}
                 onClick={() => setBudgetEdit(true)}>
                 <span style={{ fontSize: 13 }}>💰</span>
                 <span style={{ ...M_MONO, ...NUM, fontSize: 14, fontWeight: 800, color: overridden ? T.purple : T.ink, flex: 1 }}>{budgetDisplay}</span>
-                <span style={{ ...G, fontSize: 10, color: T.inkLight, display: "flex", alignItems: "center", gap: 4 }}>✏️ {overridden ? "Editar ajuste" : "Ajustar para este cenário"}</span>
+                <span style={{ ...G, fontSize: 11, color: T.inkLight, display: "flex", alignItems: "center", gap: 4 }}>✏️ {overridden ? "Editar ajuste" : "Ajustar para este cenário"}</span>
               </div>
             ) : (
               <div style={{ border: `1.5px solid ${overridden && budgetNum > BUDGET_FALLBACK ? T.purple : T.border}`, borderRadius: 10, overflow: "hidden" }}>
@@ -212,7 +212,7 @@ const ModalNovoCenario = ({ open, onClose, onCriar, initialTipo = null }) => {
                     onChange={e => setBudgetVal(e.target.value)}
                     onKeyDown={e => { if (e.key === "Enter") setBudgetEdit(false); if (e.key === "Escape") { setBudgetVal(String(BUDGET_FALLBACK)); setBudgetEdit(false); } }}
                     autoFocus />
-                  {overridden && <button onClick={() => { setBudgetVal(String(BUDGET_FALLBACK)); setBudgetEdit(false); }} style={{ ...G, background: "none", border: "none", fontSize: 10, color: T.inkLight, cursor: "pointer", textDecoration: "underline" }}>Restaurar</button>}
+                  {overridden && <button onClick={() => { setBudgetVal(String(BUDGET_FALLBACK)); setBudgetEdit(false); }} style={{ ...G, background: "none", border: "none", fontSize: 11, color: T.inkLight, cursor: "pointer", textDecoration: "underline" }}>Restaurar</button>}
                 </div>
                 <div style={{ display: "flex", borderTop: `1px solid ${T.border}` }}>
                   <button onClick={() => setBudgetEdit(false)} style={{ ...G, flex: 1, height: 32, background: T.purple, color: "#fff", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>✓ Confirmar</button>
@@ -220,14 +220,14 @@ const ModalNovoCenario = ({ open, onClose, onCriar, initialTipo = null }) => {
                 </div>
               </div>
             )}
-            <div style={{ ...G, fontSize: 10, color: T.inkLight }}>Deixe como está para usar o orçamento real da conta.</div>
+            <div style={{ ...G, fontSize: 11, color: T.inkLight }}>Deixe como está para usar o orçamento real da conta.</div>
           </div>
 
           {/* Divider itens */}
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.09em", whiteSpace: "nowrap" }}>Itens do cenário</div>
+            <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.09em", whiteSpace: "nowrap" }}>Itens do cenário</div>
             <div style={{ flex: 1, height: 1, background: T.border }} />
-            <span style={{ ...G, fontSize: 10, color: T.inkLight }}>opcional</span>
+            <span style={{ ...G, fontSize: 11, color: T.inkLight }}>opcional</span>
           </div>
 
           {/* Lista de itens já adicionados */}
@@ -236,7 +236,7 @@ const ModalNovoCenario = ({ open, onClose, onCriar, initialTipo = null }) => {
               <span style={{ fontSize: 16 }}>{TIPOS_ITEM.find(t => t.id === item.tipo)?.emoji || "📦"}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ ...G, fontSize: 12, fontWeight: 600, color: T.ink }}>{item.nome}</div>
-                <div style={{ ...G, fontSize: 10, color: T.inkMid }}>{item.cat} · {item.parcelas > 1 ? `${item.parcelas}×` : item.meses ? `${item.meses} meses` : "à vista"}</div>
+                <div style={{ ...G, fontSize: 11, color: T.inkMid }}>{item.cat} · {item.parcelas > 1 ? `${item.parcelas}×` : item.meses ? `${item.meses} meses` : "à vista"}</div>
               </div>
               {item.badge && <Badge color={T.amber} bg={T.amberLight}>{item.badge}</Badge>}
               <span style={{ ...M_MONO, ...NUM, fontSize: 12, fontWeight: 700, color: item.isReceita ? T.green : T.ink }}>{item.isReceita ? "+" : ""}{fmtAbs(Math.abs(item.total))}</span>
@@ -255,7 +255,7 @@ const ModalNovoCenario = ({ open, onClose, onCriar, initialTipo = null }) => {
                   <button key={t.id} onClick={() => setTipo(t.id)}
                     style={{ ...G, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, padding: "8px 4px", border: `1.5px solid ${tipo === t.id ? T.purple : T.border}`, borderRadius: 9, cursor: "pointer", background: tipo === t.id ? T.surface : "rgba(255,255,255,0.5)", transition: "all 0.15s" }}>
                     <span style={{ fontSize: 16 }}>{t.emoji}</span>
-                    <span style={{ fontSize: 10, fontWeight: 600, color: tipo === t.id ? T.purple : T.inkMid, textAlign: "center", lineHeight: 1.3 }}>{t.label}</span>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: tipo === t.id ? T.purple : T.inkMid, textAlign: "center", lineHeight: 1.3 }}>{t.label}</span>
                   </button>
                 ))}
               </div>
@@ -263,11 +263,11 @@ const ModalNovoCenario = ({ open, onClose, onCriar, initialTipo = null }) => {
               {/* Campos comuns: nome + valor */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <label style={{ ...G, fontSize: 10, fontWeight: 600, color: T.inkMid }}>Nome</label>
+                  <label style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid }}>Nome</label>
                   <input style={inputStyle} placeholder="Ex: MacBook Air M3" value={iNome} onChange={e => setINome(e.target.value)} />
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                  <label style={{ ...G, fontSize: 10, fontWeight: 600, color: T.inkMid }}>{tipo.startsWith("ajuste") ? "Valor do ajuste" : "Valor total"}</label>
+                  <label style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid }}>{tipo.startsWith("ajuste") ? "Valor do ajuste" : "Valor total"}</label>
                   <input style={{ ...inputStyle, fontFamily: "'Geist Mono', monospace" }} placeholder="R$ 0,00" value={iValor} onChange={e => setIValor(e.target.value)} />
                 </div>
               </div>
@@ -276,15 +276,15 @@ const ModalNovoCenario = ({ open, onClose, onCriar, initialTipo = null }) => {
               {tipo === "despesa_parcelada" && (
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <label style={{ ...G, fontSize: 10, fontWeight: 600, color: T.inkMid }}>Categoria</label>
+                    <label style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid }}>Categoria</label>
                     <select style={selectStyle} value={iCat} onChange={e => setICat(e.target.value)}>{CATEGORIAS_SIM.map(c => <option key={c}>{c}</option>)}</select>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <label style={{ ...G, fontSize: 10, fontWeight: 600, color: T.inkMid }}>Cartão / banco</label>
+                    <label style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid }}>Cartão / banco</label>
                     <select style={selectStyle} value={iBanco} onChange={e => setIBanco(e.target.value)}>{BANCOS_SIM.map(b => <option key={b}>{b}</option>)}</select>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <label style={{ ...G, fontSize: 10, fontWeight: 600, color: T.inkMid }}>Parcelas</label>
+                    <label style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid }}>Parcelas</label>
                     <select style={selectStyle} value={iParcelas} onChange={e => setIParcelas(e.target.value)}>
                       {[1,2,3,4,5,6,7,8,9,10,11,12,18,24].map(n => <option key={n} value={n}>{n === 1 ? "à vista" : `${n}× (R$ ${iValor ? (parseFloat(iValor.replace(/[^\d.,]/g,"").replace(",","."))/n).toFixed(2) : "—"})`}</option>)}
                     </select>
@@ -294,17 +294,17 @@ const ModalNovoCenario = ({ open, onClose, onCriar, initialTipo = null }) => {
               {(tipo === "despesa_recorrente" || tipo === "receita_recorrente") && (
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <label style={{ ...G, fontSize: 10, fontWeight: 600, color: T.inkMid }}>Categoria</label>
+                    <label style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid }}>Categoria</label>
                     <select style={selectStyle} value={iCat} onChange={e => setICat(e.target.value)}>{CATEGORIAS_SIM.map(c => <option key={c}>{c}</option>)}</select>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <label style={{ ...G, fontSize: 10, fontWeight: 600, color: T.inkMid }}>Duração</label>
+                    <label style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid }}>Duração</label>
                     <select style={selectStyle} value={iMeses} onChange={e => setIMeses(e.target.value)}>
                       {[1,2,3,4,5,6,9,12,24].map(n => <option key={n} value={n}>{n} {n === 1 ? "mês" : "meses"}</option>)}
                     </select>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <label style={{ ...G, fontSize: 10, fontWeight: 600, color: T.inkMid }}>Periodicidade</label>
+                    <label style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid }}>Periodicidade</label>
                     <select style={selectStyle}><option>Mensal</option><option>Semanal</option></select>
                   </div>
                 </div>
@@ -312,11 +312,11 @@ const ModalNovoCenario = ({ open, onClose, onCriar, initialTipo = null }) => {
               {tipo === "receita_pontual" && (
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <label style={{ ...G, fontSize: 10, fontWeight: 600, color: T.inkMid }}>Categoria</label>
+                    <label style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid }}>Categoria</label>
                     <select style={selectStyle} value={iCat} onChange={e => setICat(e.target.value)}>{CATEGORIAS_SIM.map(c => <option key={c}>{c}</option>)}</select>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <label style={{ ...G, fontSize: 10, fontWeight: 600, color: T.inkMid }}>Data prevista</label>
+                    <label style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid }}>Data prevista</label>
                     <input style={inputStyle} type="date" />
                   </div>
                 </div>
@@ -324,15 +324,15 @@ const ModalNovoCenario = ({ open, onClose, onCriar, initialTipo = null }) => {
               {tipo === "ajuste_categoria" && (
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <label style={{ ...G, fontSize: 10, fontWeight: 600, color: T.inkMid }}>Categoria</label>
+                    <label style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid }}>Categoria</label>
                     <select style={selectStyle} value={iCat} onChange={e => setICat(e.target.value)}>{CATEGORIAS_SIM.map(c => <option key={c}>{c}</option>)}</select>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <label style={{ ...G, fontSize: 10, fontWeight: 600, color: T.inkMid }}>Direção</label>
+                    <label style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid }}>Direção</label>
                     <select style={selectStyle}><option>Cortar</option><option>Aumentar</option></select>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                    <label style={{ ...G, fontSize: 10, fontWeight: 600, color: T.inkMid }}>Tipo de valor</label>
+                    <label style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid }}>Tipo de valor</label>
                     <select style={selectStyle}><option>Valor fixo (R$)</option><option>Percentual (%)</option></select>
                   </div>
                 </div>
@@ -354,12 +354,12 @@ const ModalNovoCenario = ({ open, onClose, onCriar, initialTipo = null }) => {
 
         {/* Footer */}
         <div style={{ padding: "14px 24px", borderTop: `1px solid ${T.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", background: T.grayLight, flexShrink: 0 }}>
-          <span style={{ ...G, fontSize: 10, color: T.inkLight }}>
+          <span style={{ ...G, fontSize: 11, color: T.inkLight }}>
             {items.length === 0 ? "Você pode adicionar itens depois de criar o cenário." : `${items.length} ${items.length === 1 ? "item" : "itens"} · ${fmtAbs(totalItems)} total`}
           </span>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={onClose} style={{ ...G, height: 36, padding: "0 14px", border: `1px solid ${T.border}`, borderRadius: 9, background: "none", fontSize: 12, color: T.inkMid, cursor: "pointer" }}>Cancelar</button>
-            <button onClick={criar} disabled={!nome.trim()} style={{ ...G, height: 36, padding: "0 18px", background: nome.trim() ? T.purple : T.inkGhost, border: "none", borderRadius: 9, fontSize: 12, fontWeight: 700, color: "#fff", cursor: nome.trim() ? "pointer" : "default", transition: "background 0.2s" }}>
+            <button onClick={criar} disabled={!nome.trim()} style={{ ...G, height: 36, padding: "0 18px", background: nome.trim() ? T.purple : T.inkFaint, border: "none", borderRadius: 9, fontSize: 12, fontWeight: 700, color: "#fff", cursor: nome.trim() ? "pointer" : "default", transition: "background 0.2s" }}>
               Criar cenário →
             </button>
           </div>
@@ -600,10 +600,10 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
         { label: "Margem",          val: (margem < 0 ? "−" : "+") + fmtAbs(Math.abs(margem)), delta: margem < 0 ? "ultrapassado" : "dentro do limite", sub: "saldo do cenário", deltaColor: margem < 0 ? T.red : T.green, bg: margem < 0 ? T.redLight : T.greenLight },
       ].map((k, i) => (
         <div key={i} style={{ background: k.bg, padding: isMobile ? "12px 11px" : "13px 12px", gridColumn: isMobile && i === 2 ? "1 / -1" : undefined, transition: "background 0.4s" }}>
-          <div style={{ ...G, fontSize: 10, fontWeight: 700, color: i === 2 ? (margem < 0 ? T.red : T.green) : T.inkLight, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 5 }}>{k.label}</div>
+          <div style={{ ...G, fontSize: 11, fontWeight: 700, color: i === 2 ? (margem < 0 ? T.red : T.green) : T.inkLight, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 5 }}>{k.label}</div>
           <div style={{ ...M_MONO, ...NUM, fontSize: isMobile ? 16 : 15, fontWeight: 800, color: i === 1 ? k.deltaColor : (i === 2 ? k.deltaColor : T.red), marginBottom: 3, transition: "color 0.4s" }}>{k.val}</div>
-          <div style={{ ...G, fontSize: 10, fontWeight: 700, color: k.deltaColor, marginBottom: 2 }}>{k.delta}</div>
-          <div style={{ ...G, fontSize: 10, color: T.inkMid }}>{k.sub}</div>
+          <div style={{ ...G, fontSize: 11, fontWeight: 700, color: k.deltaColor, marginBottom: 2 }}>{k.delta}</div>
+          <div style={{ ...G, fontSize: 11, color: T.inkMid }}>{k.sub}</div>
         </div>
       ))}
     </div>
@@ -613,8 +613,8 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
   const BudgetEditor = () => (
     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ ...G, fontSize: 10, fontWeight: 600, color: T.inkMid }}>Orçamento do período</div>
-        <div style={{ ...G, fontSize: 10, color: budgetOverride ? T.purple : T.inkLight, fontWeight: budgetOverride ? 600 : 400 }}>
+        <div style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid }}>Orçamento do período</div>
+        <div style={{ ...G, fontSize: 11, color: budgetOverride ? T.purple : T.inkLight, fontWeight: budgetOverride ? 600 : 400 }}>
           {budgetOverride ? "ajustado para este cenário" : "orçamento real da conta"}
         </div>
       </div>
@@ -633,8 +633,8 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
             <span style={{ fontSize: 11, fontWeight: 700, color: projFimOkPreview ? T.green : T.red }}>
               {projFimOkPreview ? `✓ Projeção: ${fmtAbs(projFim)} · dentro do orçamento` : `✕ Projeção: ${fmtAbs(projFim)} · ainda acima`}
             </span>
-            {projFimOkPreview && <span style={{ ...G, fontSize: 10, color: T.green, marginLeft: "auto", fontWeight: 600 }}>+{fmtAbs(budgetPreview - projFim)} de margem</span>}
-            {!projFimOkPreview && <span style={{ ...G, fontSize: 10, color: T.inkMid, marginLeft: "auto" }}>precisa de {fmtAbs(projFim)}+</span>}
+            {projFimOkPreview && <span style={{ ...G, fontSize: 11, color: T.green, marginLeft: "auto", fontWeight: 600 }}>+{fmtAbs(budgetPreview - projFim)} de margem</span>}
+            {!projFimOkPreview && <span style={{ ...G, fontSize: 11, color: T.inkMid, marginLeft: "auto" }}>precisa de {fmtAbs(projFim)}+</span>}
           </div>
           <div style={{ display: "flex", borderTop: `1px solid ${projFimOkPreview ? T.green : T.purple}22` }}>
             <button onClick={confirmBudget} style={{ ...G, flex: 1, height: 32, background: projFimOkPreview ? T.green : T.purple, color: "#fff", border: "none", cursor: "pointer", fontSize: 11, fontWeight: 700, transition: "background 0.2s" }}>✓ Confirmar</button>
@@ -648,7 +648,7 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
           <span style={{ fontSize: 11, color: T.inkLight }}>→</span>
           <span style={{ ...M_MONO, ...NUM, fontSize: 15, fontWeight: 800, color: T.purple, flex: 1 }}>R$ {budgetOverride.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
           <div style={{ width: 7, height: 7, borderRadius: 99, background: T.purple, flexShrink: 0 }} />
-          <button onClick={e => { e.stopPropagation(); restoreBudget(); }} style={{ ...G, background: "none", border: "none", fontSize: 10, color: T.inkLight, cursor: "pointer", textDecoration: "underline" }}>Restaurar</button>
+          <button onClick={e => { e.stopPropagation(); restoreBudget(); }} style={{ ...G, background: "none", border: "none", fontSize: 11, color: T.inkLight, cursor: "pointer", textDecoration: "underline" }}>Restaurar</button>
         </div>
       ) : (
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 13px", background: T.grayLight, border: `1.5px solid ${T.border}`, borderRadius: 10, cursor: "pointer", transition: "border 0.15s" }}
@@ -657,7 +657,7 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
           onMouseLeave={e => e.currentTarget.style.borderColor = T.border}>
           <span style={{ fontSize: 13 }}>💰</span>
           <span style={{ ...M_MONO, ...NUM, fontSize: 15, fontWeight: 800, color: T.ink, flex: 1 }}>R$ {apiBudgetBase.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
-          <span style={{ ...G, fontSize: 10, color: T.inkLight, display: "flex", alignItems: "center", gap: 4 }}>✏️ Ajustar para este cenário</span>
+          <span style={{ ...G, fontSize: 11, color: T.inkLight, display: "flex", alignItems: "center", gap: 4 }}>✏️ Ajustar para este cenário</span>
         </div>
       )}
     </div>
@@ -677,18 +677,18 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
           <span style={{ ...G, fontSize: isMobile ? 13 : 14, fontWeight: 700, color: T.ink }}>Projeção Mensal</span>
           <div style={{ display: "flex", alignItems: "center", gap: 5, background: T.purpleLight, border: `1px solid ${T.purple}22`, borderRadius: 9999, padding: "3px 9px" }}>
             <div style={{ width: 5, height: 5, borderRadius: 9999, background: T.purple }} />
-            <span style={{ ...G, fontSize: 10, fontWeight: 600, color: T.purple }}>com simulação</span>
+            <span style={{ ...G, fontSize: 11, fontWeight: 600, color: T.purple }}>com simulação</span>
           </div>
         </div>
         {!isMobile && <div style={{ ...G, fontSize: 11, color: T.inkMid, marginBottom: 14 }}>Receita vs despesas mês a mês{budgetOverride ? ` · orçamento ajustado para ${fmtAbs(budgetOverride)}` : ""}</div>}
         <ResponsiveContainer width="100%" height={isMobile ? 180 : 220}>
           <ComposedChart data={apiChart} margin={{ top: 10, right: isMobile ? 8 : 24, left: -10, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
-            <XAxis dataKey="label" tick={{ ...G, fontSize: 10, fill: T.inkLight }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ ...G, ...NUM, fontSize: 10, fill: T.inkLight }} axisLine={false} tickLine={false} tickFormatter={fmtK} />
+            <XAxis dataKey="label" tick={{ ...G, fontSize: 11, fill: T.inkLight }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ ...G, ...NUM, fontSize: 11, fill: T.inkLight }} axisLine={false} tickLine={false} tickFormatter={fmtK} />
             <Tooltip content={<SimTooltip />} />
             <ReferenceLine y={budgetAtivo} stroke={`${T.red}66`} strokeDasharray="5 4"
-              label={isMobile ? undefined : { value: "orçamento", position: "right", fill: T.red, fontSize: 10, fontFamily: "Geist,sans-serif" }} />
+              label={isMobile ? undefined : { value: "orçamento", position: "right", fill: T.red, fontSize: 11, fontFamily: "Geist,sans-serif" }} />
             <Bar dataKey="receita" name="Receita" fill={`${T.green}44`} stroke={T.green} strokeWidth={1} radius={[4, 4, 0, 0]} barSize={isMobile ? 14 : 20} />
             <Bar dataKey="comSim" name="Despesas + simulação" fill={`${T.red}33`} stroke={T.red} strokeWidth={1} radius={[4, 4, 0, 0]} barSize={isMobile ? 14 : 20} />
             <Line dataKey="saldo" name="Saldo" type="monotone" stroke={T.purple} strokeWidth={2.5} dot={{ r: 3, fill: T.purple }} />
@@ -699,7 +699,7 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 5 }}>
               {x.bar ? <div style={{ width: 10, height: 10, borderRadius: 2, background: `${x.c}44`, border: `1px solid ${x.c}` }} /> :
                 <svg width="14" height="6"><line x1="0" y1="3" x2="14" y2="3" stroke={x.c} strokeWidth="2" /></svg>}
-              <span style={{ ...G, fontSize: isMobile ? 9 : 10, color: T.inkMid }}>{x.l}</span>
+              <span style={{ ...G, fontSize: 11, color: T.inkMid }}>{x.l}</span>
             </div>
           ))}
         </div>
@@ -748,7 +748,7 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
               </div>
               <div style={{ textAlign: "right" }}>
                 <div style={{ ...M_MONO, ...NUM, fontSize: 12, fontWeight: 700, color: imp.pct > 100 ? T.red : T.ink }}>{fmtAbs(imp.val)}</div>
-                <div style={{ ...G, fontSize: 10, color: T.inkMid }}>limite {imp.limite > 0 ? fmtAbs(imp.limite) : "sem limite"}</div>
+                <div style={{ ...G, fontSize: 11, color: T.inkMid }}>limite {imp.limite > 0 ? fmtAbs(imp.limite) : "sem limite"}</div>
               </div>
             </div>
             <div style={{ height: 6, background: T.border, borderRadius: 99, overflow: "hidden" }}>
@@ -757,7 +757,7 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
                 <div style={{ flex: 1, background: T.redBar, borderRadius: "0 99px 99px 0" }} />
               </div>
             </div>
-            {imp.pct > 100 && <div style={{ ...G, fontSize: 10, color: T.red, fontWeight: 600, marginTop: 3 }}>+{imp.pct - 100}% acima do limite</div>}
+            {imp.pct > 100 && <div style={{ ...G, fontSize: 11, color: T.red, fontWeight: 600, marginTop: 3 }}>+{imp.pct - 100}% acima do limite</div>}
           </div>
         ))}
       </Card>
@@ -839,7 +839,7 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: T.redLight, borderRadius: 10, marginBottom: 10 }}>
               <AlertTriangle size={13} color={T.red} />
               <span style={{ ...G, fontSize: 11, color: T.red, flex: 1 }}>{simError}</span>
-              <button onClick={runSimulation} style={{ ...G, fontSize: 10, fontWeight: 700, color: T.red, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Tentar</button>
+              <button onClick={runSimulation} style={{ ...G, fontSize: 11, fontWeight: 700, color: T.red, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Tentar</button>
             </div>
           )}
           {/* ── Scenario header card ── */}
@@ -855,7 +855,7 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
             )}
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12 }}>
               <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.darkMuted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>Cenário ativo</div>
+                <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.darkMuted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>Cenário ativo</div>
                 <div style={{ ...S, fontSize: 20, color: T.darkText, lineHeight: 1.2 }}>{cenario.nome}</div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
@@ -887,7 +887,7 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
                             <FlaskConical size={12} color={c.id === cenarioId ? T.purple : T.inkLight} />
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ fontSize: 12, fontWeight: 600, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.nome}</div>
-                              <div style={{ fontSize: 10, color: T.inkMid }}>{c.items.length} itens · {fmtAbs(c.items.reduce((s,i) => s + Math.abs(i.total), 0))}</div>
+                              <div style={{ fontSize: 11, color: T.inkMid }}>{c.items.length} itens · {fmtAbs(c.items.reduce((s,i) => s + Math.abs(i.total), 0))}</div>
                             </div>
                             {c.id === cenarioId && <div style={{ width: 6, height: 6, borderRadius: 9999, background: T.purple, flexShrink: 0 }} />}
                           </div>
@@ -906,15 +906,15 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
             {/* Stats row */}
             <div style={{ display: "flex", gap: 20 }}>
               <div>
-                <div style={{ ...G, fontSize: 8, fontWeight: 700, color: T.darkMuted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>Total simulado</div>
+                <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.darkMuted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>Total simulado</div>
                 <div style={{ ...M_MONO, ...NUM, fontSize: 18, fontWeight: 800, color: projecaoOk ? "#86EFAC" : "#FCA5A5", letterSpacing: "-0.01em" }}>{fmtAbs(total)}</div>
               </div>
               <div>
-                <div style={{ ...G, fontSize: 8, fontWeight: 700, color: T.darkMuted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>Margem</div>
+                <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.darkMuted, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>Margem</div>
                 <div style={{ ...M_MONO, ...NUM, fontSize: 18, fontWeight: 800, color: projecaoOk ? "#86EFAC" : "#FCA5A5" }}>{margem >= 0 ? "+" : "−"}{fmtAbs(Math.abs(margem))}</div>
               </div>
               <div style={{ marginLeft: "auto", display: "flex", alignItems: "flex-end" }}>
-                <div style={{ ...G, fontSize: 10, fontWeight: 700, color: projecaoOk ? "#86EFAC" : "#FCA5A5", background: projecaoOk ? "rgba(134,239,172,0.15)" : "rgba(252,165,165,0.15)", padding: "4px 8px", borderRadius: 8 }}>
+                <div style={{ ...G, fontSize: 11, fontWeight: 700, color: projecaoOk ? "#86EFAC" : "#FCA5A5", background: projecaoOk ? "rgba(134,239,172,0.15)" : "rgba(252,165,165,0.15)", padding: "4px 8px", borderRadius: 8 }}>
                   {projecaoOk ? "✓ ok" : "✕ estouro"}
                 </div>
               </div>
@@ -959,29 +959,29 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                     <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.ink }}>Impacto mensal recorrente</div>
                     <div style={{ ...M_MONO, ...NUM, fontSize: 15, fontWeight: 700, color: T.ink }}>
-                      {fmtAbs(totalMes)}<span style={{ ...G, fontSize: 10, fontWeight: 400, color: T.inkMid }}>/mês</span>
+                      {fmtAbs(totalMes)}<span style={{ ...G, fontSize: 11, fontWeight: 400, color: T.inkMid }}>/mês</span>
                     </div>
                   </div>
                   <div style={{ height: 5, background: T.border, borderRadius: 99, overflow: "hidden", marginBottom: 5 }}>
                     <div style={{ width: "42%", height: "100%", background: T.purpleBar, borderRadius: 99 }} />
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between" }}>
-                    <span style={{ ...G, fontSize: 10, color: T.inkMid }}>por 12 meses · até mar/27</span>
-                    <span style={{ ...G, fontSize: 10, color: T.purple, fontWeight: 700 }}>42% do período restante</span>
+                    <span style={{ ...G, fontSize: 11, color: T.inkMid }}>por 12 meses · até mar/27</span>
+                    <span style={{ ...G, fontSize: 11, color: T.purple, fontWeight: 700 }}>42% do período restante</span>
                   </div>
                 </Card>
                 {/* Ponto de equilíbrio */}
                 <div style={{ background: T.darkBg, borderRadius: 14, padding: "16px 18px", boxShadow: T.dark }}>
-                  <div style={{ ...G, fontSize: 8, fontWeight: 700, color: T.darkMuted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>Ponto de Equilíbrio</div>
+                  <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.darkMuted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 4 }}>Ponto de Equilíbrio</div>
                   <div style={{ ...G, fontSize: 20, fontWeight: 800, color: T.darkText, letterSpacing: "-0.02em", marginBottom: 2 }}>Março de 2027</div>
-                  <div style={{ ...G, fontSize: 10, color: T.darkMuted, marginBottom: 12 }}>quando o impacto das parcelas se encerra</div>
+                  <div style={{ ...G, fontSize: 11, color: T.darkMuted, marginBottom: 12 }}>quando o impacto das parcelas se encerra</div>
                   <div style={{ height: 4, background: "rgba(255,255,255,0.1)", borderRadius: 99, marginBottom: 10, overflow: "hidden" }}>
                     <div style={{ width: "42%", height: "100%", background: T.darkPurple, borderRadius: 99 }} />
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                     {[{ label:"Comprometido", val: fmtAbs(total) }, { label:"Parcelas", val:"12 meses" }, { label:"Equilíbrio", val:"12 meses" }].map((m, i) => (
                       <div key={i}>
-                        <div style={{ ...G, fontSize: 10, color: T.darkMuted, marginBottom: 3 }}>{m.label}</div>
+                        <div style={{ ...G, fontSize: 11, color: T.darkMuted, marginBottom: 3 }}>{m.label}</div>
                         <div style={{ ...G, ...NUM, fontSize: 11, fontWeight: 700, color: T.darkText }}>{m.val}</div>
                       </div>
                     ))}
@@ -1047,7 +1047,7 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
                     <FlaskConical size={12} color={c.id === cenarioId ? T.purple : T.inkLight} />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: 12, fontWeight: 600, color: T.ink }}>{c.nome}</div>
-                      <div style={{ fontSize: 10, color: T.inkMid, marginTop: 1 }}>{c.items.length} itens · {fmtAbs(c.items.reduce((s,i) => s + Math.abs(i.total), 0))}</div>
+                      <div style={{ fontSize: 11, color: T.inkMid, marginTop: 1 }}>{c.items.length} itens · {fmtAbs(c.items.reduce((s,i) => s + Math.abs(i.total), 0))}</div>
                     </div>
                     {c.id === cenarioId && <div style={{ width: 6, height: 6, borderRadius: 9999, background: T.purple }} />}
                   </div>
@@ -1103,13 +1103,13 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
               <Btn variant="outGray" small style={{ marginLeft: "auto" }}>Renomear</Btn>
             </div>
             <div style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid, marginBottom: 2 }}>Itens simulados</div>
-            <div style={{ ...G, fontSize: 10, color: T.inkLight, marginBottom: 12 }}>Hipotéticos — nenhum foi lançado</div>
+            <div style={{ ...G, fontSize: 11, color: T.inkLight, marginBottom: 12 }}>Hipotéticos — nenhum foi lançado</div>
             <ItemsList />
             {items.length < 3 && (
               <div style={{ border: `1.5px dashed ${T.border}`, borderRadius: 10, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 5, padding: "20px 16px", background: T.bg, flex: 1, margin: "12px 0", minHeight: 90 }}>
                 <div style={{ fontSize: 20, color: T.inkGhost }}>＋</div>
                 <div style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkLight }}>Adicione mais itens ao cenário</div>
-                <div style={{ ...G, fontSize: 10, color: T.inkLight, textAlign: "center" }}>Simule despesas, receitas ou ajustes de categoria</div>
+                <div style={{ ...G, fontSize: 11, color: T.inkLight, textAlign: "center" }}>Simule despesas, receitas ou ajustes de categoria</div>
                 <button onClick={() => setShowModal(true)} style={{ ...G, background: "none", border: "none", fontSize: 11, fontWeight: 700, color: T.purple, cursor: "pointer", marginTop: 4 }}>+ Adicionar item</button>
               </div>
             )}
@@ -1127,17 +1127,17 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
             {/* Impacto mensal */}
             <div style={{ padding: "12px 14px", background: T.grayLight, borderRadius: 10, border: `1px solid ${T.border}` }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em" }}>Impacto mensal recorrente</div>
+                <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em" }}>Impacto mensal recorrente</div>
                 <div style={{ ...M_MONO, ...NUM, fontSize: 15, fontWeight: 700, color: T.ink }}>
-                  {fmtAbs(totalMes)}<span style={{ ...G, fontSize: 10, fontWeight: 400, color: T.inkMid }}>/mês</span>
+                  {fmtAbs(totalMes)}<span style={{ ...G, fontSize: 11, fontWeight: 400, color: T.inkMid }}>/mês</span>
                 </div>
               </div>
               <div style={{ height: 5, background: T.border, borderRadius: 99, overflow: "hidden", marginBottom: 5 }}>
                 <div style={{ width: budgetAtivo > 0 ? `${Math.min(100, Math.round((totalMes / budgetAtivo) * 100))}%` : "0%", height: "100%", background: T.purpleBar, borderRadius: 99, transition: "width 0.4s" }} />
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <span style={{ ...G, fontSize: 10, color: T.inkMid }}>{simResult ? `por ${simResult.months.length} meses` : "calculando…"}</span>
-                <span style={{ ...G, fontSize: 10, color: T.purple, fontWeight: 700 }}>{budgetAtivo > 0 ? `${Math.round((totalMes / budgetAtivo) * 100)}% do orçamento mensal` : "—"}</span>
+                <span style={{ ...G, fontSize: 11, color: T.inkMid }}>{simResult ? `por ${simResult.months.length} meses` : "calculando…"}</span>
+                <span style={{ ...G, fontSize: 11, color: T.purple, fontWeight: 700 }}>{budgetAtivo > 0 ? `${Math.round((totalMes / budgetAtivo) * 100)}% do orçamento mensal` : "—"}</span>
               </div>
             </div>
             {/* Ponto de equilíbrio */}
@@ -1148,16 +1148,16 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
               const maxParcelas = Math.max(1, ...items.filter(i => i.parcelas > 1).map(i => i.parcelas));
               return (
                 <div style={{ background: T.darkBg, borderRadius: 12, padding: "14px 16px", flex: 1, display: "flex", flexDirection: "column", justifyContent: "center", boxShadow: T.dark }}>
-                  <div style={{ ...G, fontSize: 8, fontWeight: 700, color: T.darkMuted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 5 }}>Ponto de Equilíbrio</div>
+                  <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.darkMuted, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 5 }}>Ponto de Equilíbrio</div>
                   <div style={{ ...G, fontSize: 22, fontWeight: 800, color: T.darkText, letterSpacing: "-0.02em", marginBottom: 2 }}>{eqLabel || "—"}</div>
-                  <div style={{ ...G, fontSize: 10, color: T.darkMuted, marginBottom: 12 }}>quando o impacto das parcelas se encerra</div>
+                  <div style={{ ...G, fontSize: 11, color: T.darkMuted, marginBottom: 12 }}>quando o impacto das parcelas se encerra</div>
                   <div style={{ height: 4, background: "rgba(255,255,255,0.1)", borderRadius: 99, marginBottom: 12, overflow: "hidden" }}>
                     <div style={{ width: `${progressPct}%`, height: "100%", background: T.darkPurple, borderRadius: 99, transition: "width 0.4s" }} />
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                     {[{ label: "Comprometido", val: fmtAbs(total) }, { label: "Parcelas", val: `${maxParcelas} meses` }, { label: "Meses sim.", val: `${simResult.months.length} meses` }].map((m, i) => (
                       <div key={i}>
-                        <div style={{ ...G, fontSize: 10, color: T.darkMuted, marginBottom: 3 }}>{m.label}</div>
+                        <div style={{ ...G, fontSize: 11, color: T.darkMuted, marginBottom: 3 }}>{m.label}</div>
                         <div style={{ ...G, ...NUM, fontSize: 11, fontWeight: 700, color: T.darkText }}>{m.val}</div>
                       </div>
                     ))}

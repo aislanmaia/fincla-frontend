@@ -28,7 +28,7 @@ function CategoryRow({ row, max, narrow }) {
   const label = (
     <div style={{ minWidth: 0 }}>
       <div style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.label}</div>
-      <div style={{ ...G, fontSize: 10.5, color: T.inkLight }}>{row.pct}% do total</div>
+      <div style={{ ...G, fontSize: 11, color: T.inkLight }}>{row.pct}% do total</div>
     </div>
   );
   const value = (
@@ -42,7 +42,7 @@ function CategoryRow({ row, max, narrow }) {
         <IconBox row={row} />
         <div style={{ minWidth: 0 }}>
           <div style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.label}</div>
-          <div style={{ ...G, fontSize: 10.5, color: T.inkLight, marginBottom: 6 }}>{row.pct}% do total · {row.count} transaç{row.count === 1 ? "ão" : "ões"}</div>
+          <div style={{ ...G, fontSize: 11, color: T.inkLight, marginBottom: 6 }}>{row.pct}% do total · {row.count} transaç{row.count === 1 ? "ão" : "ões"}</div>
           <ProgBar pct={barPct} color={row.color} h={7} />
         </div>
         {value}
@@ -60,7 +60,7 @@ function CategoryRow({ row, max, narrow }) {
       </div>
       <div>
         <ProgBar pct={barPct} color={row.color} h={8} />
-        <div style={{ ...G, fontSize: 10, color: T.inkGhost, marginTop: 5 }}>{row.count} transaç{row.count === 1 ? "ão" : "ões"}</div>
+        <div style={{ ...G, fontSize: 11, color: T.inkGhost, marginTop: 5 }}>{row.count} transaç{row.count === 1 ? "ão" : "ões"}</div>
       </div>
       {value}
     </div>

@@ -72,7 +72,7 @@ function MiniCalendar({ recorrencias = [], selectedDay, onSelectDay }) {
       <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.ink, marginBottom: 10 }}>{monthTitle}</div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", marginBottom: 4 }}>
         {wkLabels.map((d, i) => (
-          <div key={i} style={{ ...G, ...finclaCalendarWeekdayCellStyle, fontSize: 9 }}>
+          <div key={i} style={{ ...G, ...finclaCalendarWeekdayCellStyle, fontSize: 11 }}>
             {d}
           </div>
         ))}
@@ -137,19 +137,19 @@ function MiniCalendar({ recorrencias = [], selectedDay, onSelectDay }) {
       <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <div style={{ width: 8, height: 8, borderRadius: 2, background: T.ink }} />
-          <span style={{ ...G, fontSize: 9, color: T.inkGhost }}>Hoje</span>
+          <span style={{ ...G, fontSize: 11, color: T.inkGhost }}>Hoje</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <div style={{ width: 8, height: 8, borderRadius: 2, background: T.blueLight, border: `1px solid ${T.blue}` }} />
-          <span style={{ ...G, fontSize: 9, color: T.inkGhost }}>Vencimento</span>
+          <span style={{ ...G, fontSize: 11, color: T.inkGhost }}>Vencimento</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
           <div style={{ width: 8, height: 8, borderRadius: 2, background: T.purple }} />
-          <span style={{ ...G, fontSize: 9, color: T.inkGhost }}>Selecionado</span>
+          <span style={{ ...G, fontSize: 11, color: T.inkGhost }}>Selecionado</span>
         </div>
       </div>
       {selectedDay && (
-        <button onClick={() => onSelectDay(null)} style={{ ...G, fontSize: 10, fontWeight: 600, color: T.purple, background: "none", border: "none", cursor: "pointer", marginTop: 8, padding: 0 }}>
+        <button onClick={() => onSelectDay(null)} style={{ ...G, fontSize: 11, fontWeight: 600, color: T.purple, background: "none", border: "none", cursor: "pointer", marginTop: 8, padding: 0 }}>
           ✕ Limpar seleção
         </button>
       )}
@@ -215,7 +215,7 @@ function SimRow({ item, isExp, onToggle, isMuted, onToggleMute, onNav, isMobile 
             <span style={{ ...G, fontSize: 13, fontWeight: 600, color: isMuted ? T.inkGhost : T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {item.nome}
             </span>
-            <span style={{ ...G, fontSize: 9, fontWeight: 700, color: T.purple, background: T.purpleLight, borderRadius: 99, padding: "2px 6px", whiteSpace: "nowrap" }}>
+            <span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.purple, background: T.purpleLight, borderRadius: 99, padding: "2px 6px", whiteSpace: "nowrap" }}>
               Simulada
             </span>
           </div>
@@ -228,7 +228,7 @@ function SimRow({ item, isExp, onToggle, isMuted, onToggleMute, onNav, isMobile 
           <div style={{ ...G, ...NUM, fontSize: 14, fontWeight: 700, color: isMuted ? T.inkGhost : valColor }}>
             {sign} R$ {Math.abs(item.valParcela).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
           </div>
-          <div style={{ ...G, fontSize: 10, color: T.inkGhost, marginTop: 1 }}>por mês</div>
+          <div style={{ ...G, fontSize: 11, color: T.inkGhost, marginTop: 1 }}>por mês</div>
         </div>
 
         <div style={{ marginLeft: 4, transition: "transform 0.2s", transform: isExp ? "rotate(180deg)" : "rotate(0deg)", flexShrink: 0 }}>
@@ -246,7 +246,7 @@ function SimRow({ item, isExp, onToggle, isMuted, onToggleMute, onNav, isMobile 
               { label: "Tipo", val: isReceita ? "Receita" : "Despesa" },
             ].map(({ label, val }) => (
               <div key={label}>
-                <div style={{ ...G, fontSize: 9, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>{label}</div>
+                <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>{label}</div>
                 <div style={{ ...G, fontSize: 12, fontWeight: 600, color: T.inkMid }}>{val}</div>
               </div>
             ))}
@@ -291,12 +291,12 @@ function RecRow({ r, isExp, onToggle, onTogglePause, onExcluir, onNav, onEditar,
               {r.desc}
             </span>
             {!r.ativa && (
-              <span style={{ ...G, fontSize: 9, fontWeight: 700, color: T.inkGhost, background: T.grayLight, borderRadius: 99, padding: "2px 6px" }}>
+              <span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkGhost, background: T.grayLight, borderRadius: 99, padding: "2px 6px" }}>
                 PAUSADA
               </span>
             )}
             {r.urgente && r.ativa && (
-              <span style={{ ...G, fontSize: 9, fontWeight: 700, color: T.amber, background: T.amberLight, borderRadius: 99, padding: "2px 6px" }}>
+              <span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.amber, background: T.amberLight, borderRadius: 99, padding: "2px 6px" }}>
                 {r.diasUrg}d
               </span>
             )}
@@ -310,7 +310,7 @@ function RecRow({ r, isExp, onToggle, onTogglePause, onExcluir, onNav, onEditar,
           <div style={{ ...G, ...NUM, fontSize: 14, fontWeight: 700, color: valColor }}>
             {sign} R$ {Math.abs(r.val).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
           </div>
-          <div style={{ ...G, fontSize: 10, color: r.pago ? T.green : T.inkGhost, marginTop: 1 }}>
+          <div style={{ ...G, fontSize: 11, color: r.pago ? T.green : T.inkGhost, marginTop: 1 }}>
             {r.pago ? "✓ pago" : `dia ${r.dia}`}
           </div>
         </div>
@@ -325,8 +325,8 @@ function RecRow({ r, isExp, onToggle, onTogglePause, onExcluir, onNav, onEditar,
           {r.progPct !== undefined && (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                <span style={{ ...G, fontSize: 10, color: T.inkGhost }}>Progresso do mês</span>
-                <span style={{ ...G, ...NUM, fontSize: 10, fontWeight: 600, color: r.progPct >= 100 ? T.green : T.inkMid }}>{r.progPct}%</span>
+                <span style={{ ...G, fontSize: 11, color: T.inkGhost }}>Progresso do mês</span>
+                <span style={{ ...G, ...NUM, fontSize: 11, fontWeight: 600, color: r.progPct >= 100 ? T.green : T.inkMid }}>{r.progPct}%</span>
               </div>
               <ProgBar pct={r.progPct} color={r.progPct >= 100 ? T.green : isReceita ? T.green : T.blue} h={4} />
             </div>
@@ -340,7 +340,7 @@ function RecRow({ r, isExp, onToggle, onTogglePause, onExcluir, onNav, onEditar,
               { label: "Encerra", val: r.enc },
             ].map(({ label, val }) => (
               <div key={label}>
-                <div style={{ ...G, fontSize: 9, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>{label}</div>
+                <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 2 }}>{label}</div>
                 <div style={{ ...G, fontSize: 12, fontWeight: 600, color: T.inkMid }}>{val}</div>
               </div>
             ))}
@@ -526,7 +526,7 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
     <div onClick={() => toggleSec(secKey)} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 2px", cursor: "pointer", userSelect: "none", marginTop: 6 }}>
       <div style={{ width: 3, height: 16, borderRadius: 99, background: color, flexShrink: 0 }} />
       <span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.ink, textTransform: "uppercase", letterSpacing: "0.07em", flex: 1 }}>{label}</span>
-      <span style={{ ...G, fontSize: 10, color: T.inkMid }}>{count}</span>
+      <span style={{ ...G, fontSize: 11, color: T.inkMid }}>{count}</span>
       <span style={{ ...G, ...NUM, fontSize: 11, fontWeight: 700, color }}>{total}</span>
       <div style={{ width: 18, height: 18, borderRadius: 6, background: T.grayLight, display: "flex", alignItems: "center", justifyContent: "center", transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1)", transform: open ? "rotate(0deg)" : "rotate(-90deg)" }}>
         <ChevronDown size={11} color={T.inkMid} />
@@ -545,7 +545,7 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
     <div style={{ width: isMobile ? "100%" : 260, flexShrink: 0, display: "flex", flexDirection: "column", gap: 14 }}>
       {visibleSim.length > 0 && (
         <div style={{ background: T.darkBg, borderRadius: 14, padding: 16, boxShadow: T.dark }}>
-          <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.darkPurple, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>Recorrências em simulação</div>
+          <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.darkPurple, textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>Recorrências em simulação</div>
           {isMobile ? (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
               {[
@@ -555,7 +555,7 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
                 { label: "Redução", val: saldoFixo > 0 ? `−${((totalSimVal / saldoFixo) * 100).toFixed(1)}%` : "—", color: T.darkRed },
               ].map((m, i) => (
                 <div key={i} style={{ background: "rgba(255,255,255,0.06)", borderRadius: 8, padding: "8px 10px" }}>
-                  <div style={{ ...G, fontSize: 8, fontWeight: 600, color: T.darkMuted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>{m.label}</div>
+                  <div style={{ ...G, fontSize: 11, fontWeight: 600, color: T.darkMuted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>{m.label}</div>
                   <div style={{ ...G, ...NUM, fontSize: 13, fontWeight: 700, color: m.color }}>{m.val}</div>
                 </div>
               ))}
@@ -575,8 +575,8 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
           )}
           <div style={{ marginTop: isMobile ? 0 : 12, marginBottom: 4 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-              <span style={{ ...G, fontSize: 10, color: T.darkMuted, textTransform: "uppercase", letterSpacing: "0.08em" }}>saldo comprometido</span>
-              <span style={{ ...G, ...NUM, fontSize: 10, color: T.darkPurple, fontWeight: 700 }}>{totalRec > 0 ? Math.round((totalDesp / totalRec) * 100) : 0}%</span>
+              <span style={{ ...G, fontSize: 11, color: T.darkMuted, textTransform: "uppercase", letterSpacing: "0.08em" }}>saldo comprometido</span>
+              <span style={{ ...G, ...NUM, fontSize: 11, color: T.darkPurple, fontWeight: 700 }}>{totalRec > 0 ? Math.round((totalDesp / totalRec) * 100) : 0}%</span>
             </div>
             <div style={{ height: 6, background: "rgba(255,255,255,0.12)", borderRadius: 99, overflow: "hidden" }}>
               <div style={{ width: `${Math.min(100, totalRec > 0 ? (totalDesp / totalRec) * 100 : 0)}%`, height: "100%", background: T.darkPurple, borderRadius: 99 }} />
@@ -592,9 +592,9 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
         <div style={{ ...G, ...NUM, fontSize: 14, fontWeight: 700, color: T.green, marginBottom: 12 }}>Saldo comprometido {fmtSgn(saldoFixo)}</div>
         <ResponsiveContainer width="100%" height={80}>
           <ReBarChart data={fluxoMensal} margin={{ top: 0, right: 0, left: -30, bottom: 0 }}>
-            <XAxis dataKey="mes" tick={{ ...G, fontSize: 10, fill: T.inkLight }} axisLine={false} tickLine={false} />
+            <XAxis dataKey="mes" tick={{ ...G, fontSize: 11, fill: T.inkLight }} axisLine={false} tickLine={false} />
             <Tooltip
-              contentStyle={{ ...G, fontSize: 10, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8 }}
+              contentStyle={{ ...G, fontSize: 11, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8 }}
               formatter={(v, n) => [fmtAbs(v), n === "rec" ? "Receitas" : n === "desp" ? "Despesas" : "Simulado"]}
             />
             <Bar dataKey="desp" stackId="a" fill={T.redBar} radius={[0, 0, 0, 0]} />
@@ -610,7 +610,7 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
           ].map((x, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <div style={{ width: 7, height: 7, borderRadius: 9999, background: x.c }} />
-              <span style={{ ...G, fontSize: 10, color: T.inkMid }}>{x.l}</span>
+              <span style={{ ...G, fontSize: 11, color: T.inkMid }}>{x.l}</span>
             </div>
           ))}
         </div>
@@ -634,11 +634,11 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 9 }}>
                   <div style={{ background: bg, borderRadius: 6, padding: "3px 6px", textAlign: "center", flexShrink: 0 }}>
                     <div style={{ ...G, ...NUM, fontSize: 12, fontWeight: 800, color: col }}>{p.dia}</div>
-                    <div style={{ ...G, fontSize: 7, fontWeight: 600, color: col, textTransform: "uppercase", letterSpacing: "0.06em" }}>{p.mes}</div>
+                    <div style={{ ...G, fontSize: 11, fontWeight: 600, color: col, textTransform: "uppercase", letterSpacing: "0.06em" }}>{p.mes}</div>
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ ...G, fontSize: 11, fontWeight: 600, color: T.ink, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p.desc}</div>
-                    <div style={{ ...G, fontSize: 10, color: T.inkMid }}>{p.metodo}</div>
+                    <div style={{ ...G, fontSize: 11, color: T.inkMid }}>{p.metodo}</div>
                   </div>
                   <div style={{ ...G, ...NUM, fontSize: 11, fontWeight: 700, color: p.val > 0 ? T.green : p.tipo === "simulada" ? T.purple : T.ink, flexShrink: 0 }}>
                     {p.val > 0 ? "+" : "−"}R$ {Math.abs(p.val).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
@@ -719,9 +719,9 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
           { label: "Próximos 7 dias", val: fmtAbs(next7Amount), sub: `${upcomingNext7.length} vencimentos chegando`, color: T.amber },
         ].map((k, i) => (
           <Card key={i} style={{ padding: isMobile ? "12px 14px" : "14px 16px" }}>
-            <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{k.label}</div>
+            <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{k.label}</div>
             <div style={{ ...G, ...NUM, fontSize: isMobile ? 17 : 22, fontWeight: 700, color: k.color }}>{k.val}</div>
-            <div style={{ ...G, fontSize: 10, color: T.inkMid, marginTop: 3 }}>{k.sub}</div>
+            <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 3 }}>{k.sub}</div>
           </Card>
         ))}
       </div>

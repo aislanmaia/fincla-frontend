@@ -8,7 +8,7 @@ import { Avatar, Icon, RiskBadge } from "./consultantUi";
 import { HealthScoreControl } from "./HealthScoreControl";
 import { ConsultantClientActions } from "./ConsultantClientActions";
 
-const TH = { ...G, fontSize: 10, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "left", padding: "11px 18px", whiteSpace: "nowrap", background: T.bg };
+const TH = { ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.06em", textAlign: "left", padding: "11px 18px", whiteSpace: "nowrap", background: T.bg };
 const TD = { ...G, fontSize: 13, color: T.ink, padding: "12px 18px", borderTop: `1px solid ${T.border}`, whiteSpace: "nowrap", verticalAlign: "middle" };
 
 const debtColor = (v) => (v <= 30 ? T.green : v <= 50 ? T.amber : T.red);
@@ -28,7 +28,7 @@ function Row({ client, onOpenClient, onRegenerate, onEvaluate, onRecomputeHealth
           <Avatar name={client.client_name} seed={client.organization_id} size={34} />
           <div style={{ minWidth: 0 }}>
             <div style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink, overflow: "hidden", textOverflow: "ellipsis" }}>{client.client_name}</div>
-            <div style={{ ...G, fontSize: 10.5, color: T.inkLight, overflow: "hidden", textOverflow: "ellipsis" }}>{client.organization_name}</div>
+            <div style={{ ...G, fontSize: 11, color: T.inkLight, overflow: "hidden", textOverflow: "ellipsis" }}>{client.organization_name}</div>
           </div>
         </div>
       </td>

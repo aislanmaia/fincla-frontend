@@ -321,7 +321,7 @@ function CopilotoProTeaser() {
             <Icon name="sparkles" size={15} color="#fff" />
           </div>
           <span style={{ ...G, fontSize: 14, fontWeight: 800, color: T.ink }}>Copiloto IA</span>
-          <span style={{ ...G, fontSize: 9, fontWeight: 700, color: T.purple, background: "#fff", border: "1px solid #E6DEFB", borderRadius: 99, padding: "2px 7px", marginLeft: "auto" }}>PRO</span>
+          <span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.purple, background: "#fff", border: "1px solid #E6DEFB", borderRadius: 99, padding: "2px 7px", marginLeft: "auto" }}>PRO</span>
         </div>
         <div style={{ ...G, fontSize: 12.5, color: T.inkMid, lineHeight: 1.6 }}>
           Converse com a IA sobre toda a sua base: quem precisa de atenção e por quê, quem está pronto
@@ -512,7 +512,7 @@ export function ConsultantCopilotoPage() {
               <Icon name="send" size={16} color={input.trim() && !sending ? "#fff" : T.inkGhost} />
             </button>
           </div>
-          <div style={{ ...G, fontSize: 10, color: T.inkGhost, marginTop: 8, textAlign: "center" }}>
+          <div style={{ ...G, fontSize: 11, color: T.inkGhost, marginTop: 8, textAlign: "center" }}>
             A IA acessa somente dados da sua carteira · respostas podem conter imprecisões
           </div>
         </div>

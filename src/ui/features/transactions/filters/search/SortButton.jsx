@@ -67,7 +67,7 @@ export function SortButton({ sort, setSort, compact = false }) {
       <span
         style={{
           ...G,
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: 700,
           color: T.inkLight,
           textTransform: "uppercase",
@@ -117,7 +117,7 @@ export function SortButton({ sort, setSort, compact = false }) {
               borderRadius: 99,
               background: T.ink,
               color: "#fff",
-              fontSize: 9.5,
+              fontSize: 11,
               fontWeight: 700,
             }}
             aria-label={`${sort.length} critérios`}

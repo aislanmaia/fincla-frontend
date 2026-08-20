@@ -298,7 +298,7 @@ export function RhythmTooltipV4({ active, payload, label }) {
           ...NUM,
           color: T.inkLight,
           fontWeight: 500,
-          fontSize: 10,
+          fontSize: 11,
           marginTop: 5,
           paddingTop: 5,
           borderTop: `1px solid ${T.border}`,

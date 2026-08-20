@@ -53,7 +53,7 @@ export function FacetCard({ facet, expanded, onClick, compact = false }) {
         <span
           style={{
             ...G,
-            fontSize: compact ? 10.5 : 10,
+            fontSize: 11,
             fontWeight: 700,
             color: T.inkMid,
             letterSpacing: "0.04em",

@@ -195,7 +195,7 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor }) => {
           </span>
           {hasRefundsLinked && !isRefund && (
             <Tip label={`${tx.refundsSummary.count} estorno${tx.refundsSummary.count !== 1 ? "s" : ""} relacionado${tx.refundsSummary.count !== 1 ? "s" : ""} · ${fmtBRL(tx.refundsSummary.totalValue)} abatido${tx.refundsSummary.totalValue !== 1 ? "s" : ""}`}>
-              <span style={{ ...G, fontSize:10, color:T.green, background:T.greenLight,
+              <span style={{ ...G, fontSize: 11, color:T.green, background:T.greenLight,
                 borderRadius:99, padding:"1px 6px", fontWeight:700, cursor:"default", whiteSpace:"nowrap" }}>
                 ↺ Estorno
               </span>
@@ -288,14 +288,14 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor }) => {
                 {tx.parcela.atual}/{tx.parcela.total}×
               </span>
             </Tip>
-            <span style={{ ...G, fontSize:10, color:T.inkGhost }}>·</span>
+            <span style={{ ...G, fontSize: 11, color:T.inkGhost }}>·</span>
             <Tip label={`Parcela: ${fmtBRL(tx.parcela.valParcela)}/mês · Vence ${tx.parcela.vencimento}`}>
               <span style={{ ...G, fontSize:11, color:T.inkMid,
                 fontFamily:"'Geist Mono',monospace" }}>
                 {fmtBRL(tx.parcela.valParcela)}/mês
               </span>
             </Tip>
-            <span style={{ ...G, fontSize:10, color:T.inkGhost }}>·</span>
+            <span style={{ ...G, fontSize: 11, color:T.inkGhost }}>·</span>
             <Tip label={`Já pago: ${fmtBRL(tx.parcela.valorPago)} · Residual: ${fmtBRL(tx.parcela.valorResidual)}`}>
               <span style={{ ...G, fontSize:11, color:T.inkLight }}>
                 {tx.parcela.total - tx.parcela.atual} restantes
@@ -308,12 +308,12 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor }) => {
         {visibleTags.length > 0 && (
           <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap" }}>
             {visibleTags.map(tag => (
-              <span key={tag} style={{ ...G, fontSize:10, color:T.inkMid, background:T.grayLight,
+              <span key={tag} style={{ ...G, fontSize: 11, color:T.inkMid, background:T.grayLight,
                 borderRadius:99, padding:"2px 8px", fontWeight:500 }}>#{tag}</span>
             ))}
             {hiddenTags.length > 0 && (
               <Tip label={`Todas: ${tags.map(t=>"#"+t).join(", ")}`} pos="top">
-                <span style={{ ...G, fontSize:10, color:T.blue, background:T.blueLight,
+                <span style={{ ...G, fontSize: 11, color:T.blue, background:T.blueLight,
                   borderRadius:99, padding:"2px 8px", fontWeight:700, cursor:"default" }}>
                   +{hiddenTags.length}
                 </span>
@@ -1760,7 +1760,7 @@ function TransacoesPageBody({
                 minHeight:44 }}>
               <div style={{ width:36, height:4, borderRadius:99,
                 background:"rgba(0,0,0,0.18)" }}/>
-              <div style={{ fontSize:7, color:"rgba(0,0,0,0.2)", lineHeight:1,
+              <div style={{ fontSize: 11, color:"rgba(0,0,0,0.2)", lineHeight:1,
                 letterSpacing:1, userSelect:"none" }}>
                 {snapFull ? "▼" : "▲"}
               </div>
@@ -1865,7 +1865,7 @@ function TransacoesPageBody({
                 gridColumn: isMobile && k.label === "Resultado" ? "1 / -1" : "auto",
               }}
             >
-              <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>
+              <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>
                 {k.label}
               </div>
               <div style={{ ...G, fontFamily: "'Geist Mono',monospace", fontSize: isMobile ? 14 : 16, fontWeight: 800, color: tagFilterBlocked ? T.inkLight : k.color, letterSpacing: "-0.01em" }}>
@@ -1875,11 +1875,11 @@ function TransacoesPageBody({
                 {tagFilterBlocked ? "—" : <>{k.sign}{fmtBRL(k.val)}</>}
               </div>
               {k.subLine && !tagFilterBlocked && (
-                <div style={{ ...G, fontSize: 10, color: T.green, marginTop: 3, fontWeight: 600 }}>
+                <div style={{ ...G, fontSize: 11, color: T.green, marginTop: 3, fontWeight: 600 }}>
                   {k.subLine}
                 </div>
               )}
-              <div style={{ ...G, fontSize: 10, color: T.inkLight, marginTop: 3 }}>
+              <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 3 }}>
                 {tagFilterBlocked ? "Aguardando filtro de tag" : k.countLine}
               </div>
             </div>

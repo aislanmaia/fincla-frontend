@@ -33,7 +33,7 @@ function HeaderAction({ variant, icon, label, soon, locked, onClick }) {
       <Icon name={icon} size={14} color={styles.iconColor} />
       {label}
       {soon && (
-        <span style={{ ...G, fontSize: 8.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: variant === "purple" ? "#fff" : T.inkLight, background: variant === "purple" ? "rgba(255,255,255,0.2)" : T.grayLight, borderRadius: 5, padding: "1px 5px" }}>
+        <span style={{ ...G, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: variant === "purple" ? "#fff" : T.inkLight, background: variant === "purple" ? "rgba(255,255,255,0.2)" : T.grayLight, borderRadius: 5, padding: "1px 5px" }}>
           em breve
         </span>
       )}
@@ -78,7 +78,7 @@ export function ConsultantClientReportHeader({ client, onEvaluate, evaluateLocke
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <div style={{ textAlign: "center" }}>
             <HealthRing health={health} size={64} stroke={6} />
-            <div style={{ ...G, fontSize: 9.5, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 5 }}>Saúde</div>
+            <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 5 }}>Saúde</div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <HeaderAction variant="purple" icon="sparkles" label="Avaliar com IA"

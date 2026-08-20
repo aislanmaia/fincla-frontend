@@ -169,7 +169,7 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
 
         {/* Saldo disponível */}
         <Card style={{ marginTop: 16, padding: 18 }}>
-          <div style={{ ...G, fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: T.inkLight }}>
+          <div style={{ ...G, fontSize: 11, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: T.inkLight }}>
             Saldo disponível
           </div>
           <div style={{ ...G, ...NUM, fontSize: 32, fontWeight: 800, letterSpacing: "-0.02em", color: T.ink, marginTop: 6 }}>
@@ -234,7 +234,7 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
         )}
 
         <div style={{ ...G, display: "flex", alignItems: "center", gap: 7, fontSize: 11, color: T.inkGhost, marginTop: 12 }}>
-          <span style={{ width: 7, height: 7, borderRadius: 9999, background: T.inkGhost, flex: "0 0 7px" }} />
+          <span style={{ width: 7, height: 7, borderRadius: 9999, background: T.inkFaint, flex: "0 0 7px" }} />
           Transferências entre contas próprias não contam como receita ou despesa.
         </div>
       </div>

@@ -59,7 +59,7 @@ export function InvoiceTab({
 }) {
   const isMobile = variant === "mobile";
   const gridCols = isMobile ? "1fr" : "minmax(0,1fr) 300px";
-  const kpiLabelSize = isMobile ? 8 : 10;
+  const kpiLabelSize = 11; // piso WCAG de 11px (era 8/10 conforme variant)
   const averageLabelColor = isMobile ? T.inkMid : T.inkLight;
 
   return (
@@ -84,7 +84,7 @@ export function InvoiceTab({
             ))}
             {filterCategory && (
               <button onClick={() => setFilterCategory(null)}
-                style={{ ...G, fontSize: 10, color: T.inkMid, background: T.grayLight, border: "none", borderRadius: 6, padding: "2px 8px", cursor: "pointer" }}>
+                style={{ ...G, fontSize: 11, color: T.inkMid, background: T.grayLight, border: "none", borderRadius: 6, padding: "2px 8px", cursor: "pointer" }}>
                 ✕
               </button>
             )}
@@ -180,7 +180,7 @@ export function InvoiceTab({
         {isMobile && isCurrent && categoryTotals.length > 0 && (
           <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "18px 20px" }}>
             <div style={{ ...G, fontSize: 12, fontWeight: 700, color: T.ink, marginBottom: 4 }}>Análise de gastos</div>
-            <div style={{ ...G, fontSize: 10, color: T.inkLight, marginBottom: 14 }}>Clique para filtrar</div>
+            <div style={{ ...G, fontSize: 11, color: T.inkLight, marginBottom: 14 }}>Clique para filtrar</div>
             <CategoryBars categoryTotals={categoryTotals} filterCategory={filterCategory} setFilterCategory={setFilterCategory} formatBRL={formatBRL} />
             {recurringTotal > 0 && (
               <div style={{ display: "flex", alignItems: "center", gap: 7, background: T.purpleLight, border: `1px solid ${T.purple}22`, borderRadius: 9, padding: "8px 12px", marginTop: 14 }}>
@@ -192,7 +192,7 @@ export function InvoiceTab({
         )}
         {previousInvoice && (
           <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 12, padding: "12px 14px" }}>
-            <div style={{ ...G, fontSize: 10, fontWeight: 700, color: averageLabelColor, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 8 }}>Média mensal</div>
+            <div style={{ ...G, fontSize: 11, fontWeight: 700, color: averageLabelColor, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 8 }}>Média mensal</div>
             <div style={{ ...G, ...NUM, fontSize: 18, fontWeight: 800, color: T.ink }}>{formatBRL(averageValue)}</div>
             <div style={{ ...G, fontSize: 11, fontWeight: 600, marginTop: 4, color: diffPercent > 0 ? T.red : T.green }}>
               {diffPercent > 0 ? "↑" : "↓"} {Math.abs(diffPercent)}% vs {previousInvoice.mes}

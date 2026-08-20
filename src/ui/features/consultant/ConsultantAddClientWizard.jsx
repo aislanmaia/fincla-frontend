@@ -69,7 +69,7 @@ function Field({ label, required, hint, children }) {
         {label}{required && <span style={{ color: T.red }}>*</span>}
       </label>
       {children}
-      {hint && <div style={{ ...G, fontSize: 10.5, color: T.inkGhost, marginTop: 5 }}>{hint}</div>}
+      {hint && <div style={{ ...G, fontSize: 11, color: T.inkGhost, marginTop: 5 }}>{hint}</div>}
     </div>
   );
 }
@@ -194,7 +194,7 @@ export function ConsultantAddClientWizard({ open, onClose, onCreated, quota = nu
               <button key={o.id} type="button" onClick={() => set("orgTipo", o.id)}
                 style={{ ...G, display: "flex", alignItems: "center", gap: 11, padding: "12px 13px", borderRadius: 11, border: `1.5px solid ${active ? T.ink : T.border}`, background: active ? "rgba(15,15,13,0.03)" : "#fff", cursor: "pointer", textAlign: "left" }}>
                 <div style={{ width: 34, height: 34, borderRadius: 9, background: active ? T.ink : T.grayLight, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><Icon name={o.icon} size={16} color={active ? "#fff" : T.inkMid} /></div>
-                <div><div style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink }}>{o.label}</div><div style={{ ...G, fontSize: 10.5, color: T.inkLight }}>{o.sub}</div></div>
+                <div><div style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink }}>{o.label}</div><div style={{ ...G, fontSize: 11, color: T.inkLight }}>{o.sub}</div></div>
               </button>
             );
           })}
@@ -274,7 +274,7 @@ export function ConsultantAddClientWizard({ open, onClose, onCreated, quota = nu
                 <button key={lv.id} type="button" onClick={() => set("nivel", lv.id)}
                   style={{ ...G, display: "flex", alignItems: "center", gap: 9, padding: "9px 11px", borderRadius: 9, border: `1.5px solid ${active ? T.ink : T.border}`, background: active ? "rgba(15,15,13,0.03)" : "#fff", cursor: "pointer", textAlign: "left" }}>
                   <span style={{ width: 14, height: 14, borderRadius: 99, border: `2px solid ${active ? T.ink : T.borderHov}`, background: active ? T.ink : "transparent", flexShrink: 0 }} />
-                  <span><span style={{ ...G, fontSize: 12.5, fontWeight: 700, color: T.ink, display: "block" }}>{lv.l}</span><span style={{ ...G, fontSize: 10, color: T.inkLight }}>{lv.s}</span></span>
+                  <span><span style={{ ...G, fontSize: 12.5, fontWeight: 700, color: T.ink, display: "block" }}>{lv.l}</span><span style={{ ...G, fontSize: 11, color: T.inkLight }}>{lv.s}</span></span>
                 </button>
               );
             })}
@@ -371,7 +371,7 @@ export function ConsultantAddClientWizard({ open, onClose, onCreated, quota = nu
                 {STEPS.map((s, i) => (
                   <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 9, opacity: i === stepIdx ? 1 : 0.5 }}>
                     <span style={{ width: 18, height: 18, borderRadius: 99, background: i < stepIdx ? step.acc : i === stepIdx ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      {i < stepIdx ? <Icon name="check" size={11} color={step.bg} /> : <span style={{ ...G, ...NUM, fontSize: 9, fontWeight: 800, color: "#fff" }}>{i + 1}</span>}
+                      {i < stepIdx ? <Icon name="check" size={11} color={step.bg} /> : <span style={{ ...G, ...NUM, fontSize: 11, fontWeight: 800, color: "#fff" }}>{i + 1}</span>}
                     </span>
                     <span style={{ ...G, fontSize: 11.5, fontWeight: i === stepIdx ? 700 : 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.h}</span>
                   </div>
