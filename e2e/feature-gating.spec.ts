@@ -45,6 +45,13 @@ test.describe("Pro feature gating", () => {
     // A Simulação saiu da sidebar: virou a sub-área `simulator` do hub
     // Planejamento, deep-linkável por URL.
     await page.goto("/planning/simulator");
+    // `goto` resolve no `load`, mas o bootstrap da sessão ainda está buscando
+    // /v1/users/me e as organizações -- até terminar, o app mostra o splash e o
+    // outlet autenticado renderiza nada. Como os dois probes abaixo usam
+    // `isVisible()`, que NÃO espera, sem esta âncora ambos dariam false e a
+    // asserção "infalível" falharia. Mesmo padrão de `subscription.spec.ts`.
+    // `.first()`: o hub Planejamento tem o próprio <nav> além da sidebar.
+    await expect(page.getByRole("navigation").first()).toBeVisible({ timeout: 15_000 });
     const simHasWall = await page
       .getByRole("button", { name: /ver planos/i })
       .isVisible()

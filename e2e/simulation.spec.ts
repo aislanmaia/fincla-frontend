@@ -188,6 +188,11 @@ async function openCleanSimulationPage(page: Page): Promise<void> {
   await expect(
     page.getByRole("heading", { name: /Simula(ção|dor)/i }).first(),
   ).toBeVisible({ timeout: 10_000 });
+  // O heading sozinho não prova que a feature entrou: quando `ensureSimulationFeature`
+  // não pega, o hub renderiza o <UpgradeWall title="Simulador — disponível no plano
+  // Pro">, cujo heading casa o mesmo regex. Sem esta linha o helper daria sucesso na
+  // tela de paywall e os 11 testes seguintes falhariam com erros enganosos.
+  await expect(page.getByRole("button", { name: /ver planos/i })).toHaveCount(0);
 }
 
 test.describe("Simulação — onboarding + criação de cenário", () => {

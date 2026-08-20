@@ -212,9 +212,11 @@ test.describe("UI refund — drawer + picker", () => {
     await valorInput.click();
     await page.keyboard.type("3000");
 
-    // Vai pra review. Com o toggle de estorno ligado o CTA vira "Revisar estorno"
-    // (`NovaTransacaoModal`), então casar só /Revisar despesa/ nunca acha o botão.
-    await page.getByRole("button", { name: /Revisar (estorno|despesa)/i }).click();
+    // Vai pra review. Com o toggle ligado o CTA é deterministicamente "Revisar
+    // estorno" (`NovaTransacaoModal`), então casar só /Revisar despesa/ nunca acha o
+    // botão -- e aceitar as duas formas jogaria fora a única asserção de que a flag
+    // de estorno chegou até o rodapé do modal.
+    await page.getByRole("button", { name: /Revisar estorno/i }).click();
 
     // Confirma estorno
     const confirmBtn = page.getByRole("button", { name: /Confirmar estorno/i });
