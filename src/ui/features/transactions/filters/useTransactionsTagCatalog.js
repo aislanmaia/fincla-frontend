@@ -25,7 +25,12 @@ function normalizeTypeName(name) {
  */
 export function useTransactionsTagCatalog({ organizationId, enabled }) {
   const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(false);
+  // Começa `true` quando já dá pra saber que uma busca vai disparar (mesmo
+  // padrão do `useCalendarData`/`useCreditCardsData`) — do contrário o
+  // PRIMEIRO quadro do componente lê `loading:false` antes do `useEffect`
+  // rodar, `resolveTagFilterStatus` não vê "carregando" e uma tag ainda não
+  // resolvida nesse instante acusa "tag não encontrada" (fincla-frontend#101).
+  const [loading, setLoading] = useState(() => Boolean(enabled && organizationId));
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -47,9 +52,15 @@ export function useTransactionsTagCatalog({ organizationId, enabled }) {
       try {
         const { tags } = await listTags(organizationId);
         if (cancelled) return;
-        const filtered = (tags ?? []).filter(
-          (t) => normalizeTypeName(t?.tag_type?.name) !== "categoria",
-        );
+        // O adapter aceita as duas grafias do tipo categoria ("categoria" e
+        // "category" — ver isApiTagTypeCategory em transactionsAdapter.js);
+        // esta checagem só cobria "categoria" e deixava tag de categoria
+        // vazar pro catálogo de filtro quando o backend mandava "category"
+        // (fincla-frontend#101).
+        const filtered = (tags ?? []).filter((t) => {
+          const typeName = normalizeTypeName(t?.tag_type?.name);
+          return typeName !== "categoria" && typeName !== "category";
+        });
         setRows(filtered);
       } catch (e) {
         if (!cancelled) {

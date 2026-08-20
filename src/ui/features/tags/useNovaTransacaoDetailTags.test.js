@@ -261,4 +261,41 @@ describe("useNovaTransacaoDetailTags", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.allDetailTags).toEqual([]);
   });
+
+  // fincla-frontend#101: a limpeza síncrona acima (`allDetail` zerado ANTES do
+  // fetch responder) alarga a janela em que `ensureDetailTag` — sem guarda de
+  // `loading` — não encontra uma tag que JÁ EXISTE (porque `allDetail` está
+  // vazio de propósito) e cria uma duplicata assim que o usuário clica de
+  // novo durante a troca de organização. A correção falha fechado: chamar
+  // `ensureDetailTag` enquanto `loading` é `true` rejeita com um aviso, em vez
+  // de criar a tag.
+  it("ensureDetailTag falha fechado (não duplica tag) durante a janela de limpeza", async () => {
+    const ORG_B = "22222222-2222-4222-8222-222222222222";
+    let resolveOrgB;
+    const orgBPromise = new Promise((resolve) => {
+      resolveOrgB = resolve;
+    });
+
+    const { result, rerender } = renderHook(
+      ({ organizationId }) =>
+        useNovaTransacaoDetailTags({ organizationId, categoryTagId: CAT, enabled: true }),
+      { initialProps: { organizationId: ORG } },
+    );
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    vi.mocked(tagsApi.listTags).mockReturnValueOnce(orgBPromise);
+    rerender({ organizationId: ORG_B });
+    expect(result.current.loading).toBe(true);
+    expect(result.current.allDetailTags).toEqual([]);
+
+    // "família" já existe (ver seed do beforeEach) — mas nesta janela
+    // `allDetail` está vazio DE PROPÓSITO. Sem a guarda, isto chamaria
+    // `createTag` porque `findDetailForParentAndLabel` não acharia nada no
+    // array vazio.
+    await expect(result.current.ensureDetailTag("família")).rejects.toThrow(/carregando/i);
+    expect(tagsApi.createTag).not.toHaveBeenCalled();
+
+    resolveOrgB({ tags: [detailRow(DET_EXISTING, "família", CAT)] });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+  });
 });

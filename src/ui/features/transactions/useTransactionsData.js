@@ -17,6 +17,10 @@ const EMPTY_STATE = {
   transactions: [],
   total: 0,
   pagination: null,
+  // Só vira `true` num `.then` (sucesso) — mesmo padrão do `useCalendarData`
+  // (issue #106). Enquanto for `false`, uma lista vazia é uma LACUNA de
+  // informação (a busca não terminou ou falhou), não o fato "sem transações".
+  hasLoaded: false,
 };
 
 export function useTransactionsData({
@@ -98,19 +102,25 @@ export function useTransactionsData({
           transactions,
           total: response.pagination?.total ?? transactions.length,
           pagination: response.pagination ?? null,
+          hasLoaded: true,
         });
       })
       .catch((error) => {
         if (cancelled) return;
 
-        setState({
+        // Stale-while-revalidate (mesmo padrão do `useCalendarData`): NÃO apaga
+        // os dados já carregados. Se esta é a 1ª carga, `transactions` já está
+        // vazio (nada a preservar); se é uma revalidação (troca de filtro ou
+        // `refreshToken`), a lista anterior continua válida na tela — só o
+        // aviso de erro liga. `hasLoaded` não é tocado aqui: só o `.then`
+        // acima pode ligá-lo, senão "nunca carregou com sucesso" morre depois
+        // da primeira falha e o "vazio confiante" (issue #106) volta por trás
+        // de um retry.
+        setState((current) => ({
+          ...current,
           isLoading: false,
           error: formatTransactionsApiError(error),
-          summary: null,
-          transactions: [],
-          total: 0,
-          pagination: null,
-        });
+        }));
       });
 
     return () => {
@@ -186,6 +196,7 @@ export function useTransactionsData({
   return {
     isLoading: state.isLoading,
     error: state.error,
+    hasLoaded: state.hasLoaded,
     summary: state.summary,
     transactions: state.transactions,
     total: state.total,

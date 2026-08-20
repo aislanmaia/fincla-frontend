@@ -611,6 +611,94 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
       error: "",
     }));
   });
+
+  // fincla-frontend#101, achado 2: `displayLabel` (o que a facet Tags guarda e
+  // resolve) depende de `categoryLabelById` — enquanto CATEGORIAS ainda
+  // carregam, duas tags com o MESMO nome ("trabalho" em duas categorias
+  // diferentes) caem em "sem categoria" pros dois e colidem DE NOVO, ganhando
+  // o sufixo do id inteiro como desempate (ver tagCatalogResolution.js). Esse
+  // rótulo PROVISÓRIO é diferente do rótulo FINAL, estável ("trabalho ·
+  // Vendas"), que só existe depois que as categorias terminam de carregar.
+  // Uma view salva com o rótulo final, avaliada contra o catálogo ainda
+  // parcial, batia contra o provisório e virava "unresolved" — falso.
+  it("fincla-frontend#101: view salva com tag colidente não trava 'não encontrada' enquanto categorias ainda carregam", async () => {
+    localStorage.setItem(
+      "fincla.transactions.savedViews.v1",
+      JSON.stringify({
+        version: 1,
+        orgs: {
+          "org-test": [
+            {
+              id: "v-tag-view",
+              label: "Trabalho (Vendas)",
+              icon: "bookmark",
+              color: "#2563EB",
+              filters: { tags: ["trabalho · Vendas"] },
+              createdAt: 1,
+            },
+          ],
+        },
+      }),
+    );
+
+    // Duas tags "trabalho" colidentes — categorias AINDA carregando
+    // (`categoryLabelById` chega vazio no 1º render).
+    tagCatalogMock.mockImplementation(() => ({
+      rows: [
+        { id: "tag-trabalho-vendas", name: "trabalho", parent_category_tag_id: "cat-vendas" },
+        { id: "tag-trabalho-rh", name: "trabalho", parent_category_tag_id: "cat-rh" },
+      ],
+      loading: false,
+      error: "",
+    }));
+    categoryTagsDataMock.mockReturnValue({ isLoading: true, categories: [] });
+
+    renderPage();
+    await userEvent.click(screen.getByRole("button", { name: "Trabalho (Vendas)" }));
+
+    // Enquanto as categorias carregam, o filtro fica em "loading" — nunca
+    // "não encontrada" (falso) nem resolvido contra um rótulo provisório.
+    expect(screen.queryByText(/não foi encontrada/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Carregando tags/i)).toBeInTheDocument();
+    expect(transactionsDataMock.mock.calls.at(-1)[0].enabled).toBe(false);
+
+    // Categorias terminam de carregar — o rótulo final bate com o da view salva.
+    categoryTagsDataMock.mockReturnValue({
+      isLoading: false,
+      categories: [
+        { id: "cat-vendas", labelPt: "Vendas", color: "#2563EB" },
+        { id: "cat-rh", labelPt: "RH", color: "#7C3AED" },
+      ],
+    });
+    await userEvent.click(screen.getByRole("button", { name: /Situação: Todas/i }));
+    await userEvent.click(
+      within(screen.getByRole("region", { name: /Filtro: situa/i })).getByRole("button", {
+        name: /^Pagas$/i,
+      }),
+    );
+
+    expect(screen.queryByText(/não foi encontrada/i)).not.toBeInTheDocument();
+    const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
+    expect(lastCall.enabled).toBe(true);
+    expect(lastCall.filters.filterCat).toBe("tag-trabalho-vendas");
+
+    // Restaura os mocks pro estado default, pra não vazar pros testes seguintes.
+    tagCatalogMock.mockImplementation(() => ({
+      rows: [
+        { id: "tag-uuid-trabalho", name: "trabalho", parent_category_tag_id: "cat-trans" },
+        { id: "tag-uuid-casa", name: "casa", parent_category_tag_id: "cat-alim" },
+      ],
+      loading: false,
+      error: "",
+    }));
+    categoryTagsDataMock.mockReturnValue({
+      isLoading: false,
+      categories: [
+        { id: "cat-alim", labelPt: "Alimentação", color: "#059669" },
+        { id: "cat-trans", labelPt: "Transporte", color: "#2563EB" },
+      ],
+    });
+  });
 });
 
 describe("<TransacoesPage> — desambiguação de nomes (S2)", { timeout: 15000 }, () => {
@@ -665,6 +753,50 @@ describe("<TransacoesPage> — desambiguação de nomes (S2)", { timeout: 15000 
     renderPage();
 
     expect(screen.queryByRole("button", { name: /Ver só os a pagar/i })).not.toBeInTheDocument();
+  });
+});
+
+// fincla-frontend#106 — na 1ª carga, `transactions` já é [] antes da resposta
+// chegar: sem distinguir os estados, a lista renderizava
+// `CardEmptyWithCta("Nenhuma transação encontrada")` — uma afirmação sobre
+// uma busca que nem terminou (ou que falhou). `hasLoaded` (ver
+// useTransactionsData) separa "nunca carregou com sucesso" de "carregou e
+// está mesmo vazio".
+describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { timeout: 15000 }, () => {
+  it("1ª carga em voo: mostra 'Carregando…', nunca 'Nenhuma transação encontrada'", () => {
+    transactionsDataMock.mockReturnValue({
+      isLoading: true, error: "", hasLoaded: false,
+      summary: null, transactions: [], total: 0, hasMore: false,
+      removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
+    });
+    renderPage();
+
+    expect(screen.getByText(/Carregando transações/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Nenhuma transação encontrada/i)).not.toBeInTheDocument();
+  });
+
+  it("1ª carga falhou: mostra aviso de erro na lista, nunca 'Nenhuma transação encontrada'", () => {
+    transactionsDataMock.mockReturnValue({
+      isLoading: false, error: "Falha ao carregar transações.", hasLoaded: false,
+      summary: null, transactions: [], total: 0, hasMore: false,
+      removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
+    });
+    renderPage();
+
+    expect(screen.getByText(/Não foi possível carregar as transações/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Nenhuma transação encontrada/i)).not.toBeInTheDocument();
+  });
+
+  it("vazio de verdade (já carregou com sucesso, sem resultados): mostra 'Nenhuma transação encontrada'", () => {
+    transactionsDataMock.mockReturnValue({
+      isLoading: false, error: "", hasLoaded: true,
+      summary: { total_income: 0, total_expenses: 0, total_refunds: 0, balance: 0 },
+      transactions: [], total: 0, hasMore: false,
+      removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
+    });
+    renderPage();
+
+    expect(screen.getByText(/Nenhuma transação encontrada/i)).toBeInTheDocument();
   });
 });
 

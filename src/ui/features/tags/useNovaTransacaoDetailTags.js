@@ -132,6 +132,17 @@ export function useNovaTransacaoDetailTags({
       if (!organizationId) {
         throw new Error("Sem organização ou categoria");
       }
+      // `allDetail` é limpo ANTES do fetch disparar (ver comentário acima, no
+      // efeito) para não resolver contra a organização ANTERIOR — mas isso
+      // alarga a janela em que `allDetail` está vazio de propósito enquanto o
+      // catálogo real ainda está a caminho. Sem esta guarda, `findDetailForParentAndLabel`
+      // nunca encontra a tag que JÁ EXISTE nesse intervalo (lista vazia) e
+      // `ensureDetailTag` cria uma tag duplicada (fincla-frontend#101) — em
+      // vez de aceitar o clique e mentir, falha fechado com aviso visível
+      // (mesmo padrão de fail-closed do achado 4 na revisão da PR #96).
+      if (loading) {
+        throw new Error("Ainda carregando as tags — tente novamente em instantes.");
+      }
       const parent =
         parentCategoryOverride != null && String(parentCategoryOverride) !== ""
           ? String(parentCategoryOverride)
@@ -166,6 +177,7 @@ export function useNovaTransacaoDetailTags({
       categoryTagId,
       detailTypeId,
       findDetailForParentAndLabel,
+      loading,
     ],
   );
 

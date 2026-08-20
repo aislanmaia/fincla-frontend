@@ -142,3 +142,78 @@ describe("fincla-frontend#78 — facet Tags chega como `tag_id` na chamada HTTP"
     );
   });
 });
+
+// fincla-frontend#106 — a LISTA não distinguia "carregando"/"erro" de "vazio
+// de verdade": na 1ª carga, antes da resposta chegar, `transactions` já é []
+// e a tela lia isso como "nenhuma transação encontrada" (falso). `hasLoaded`
+// só vira `true` num sucesso (mesmo padrão do `useCalendarData`), e uma
+// revalidação que falha preserva os dados anteriores (stale-while-revalidate)
+// em vez de apagar a lista.
+describe("fincla-frontend#106 — hasLoaded distingue carregando/erro de vazio de verdade", () => {
+  it("começa false e só vira true depois de um sucesso", async () => {
+    listTransactions.mockResolvedValue(EMPTY_PAGE);
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+
+    const { result } = renderWithFilters(BASE_STATE);
+
+    // Antes do efeito resolver, a 1ª carga nunca teve sucesso.
+    expect(result.current.hasLoaded).toBe(false);
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.hasLoaded).toBe(true);
+  });
+
+  it("falha na 1ª carga: hasLoaded continua false e transactions continua vazio", async () => {
+    listTransactions.mockRejectedValue(new Error("network down"));
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+
+    const { result } = renderWithFilters(BASE_STATE);
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.hasLoaded).toBe(false);
+    expect(result.current.error).toBeTruthy();
+    expect(result.current.transactions).toEqual([]);
+  });
+
+  it("stale-while-revalidate: revalidação que falha preserva os dados da carga anterior", async () => {
+    const ROW = {
+      id: "tx-1",
+      description: "Café",
+      amount: -10,
+      type: "expense",
+      date: "2026-08-01",
+      tags: {},
+    };
+    listTransactions.mockResolvedValueOnce({
+      data: [ROW],
+      pagination: { total: 1, has_next: false },
+    });
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+
+    const filters = filtersToLegacyParams(BASE_STATE, { limit: 10 });
+    const { result, rerender } = renderHook(
+      ({ refreshToken }) =>
+        useTransactionsData({ organizationId: ORG, enabled: true, filters, refreshToken }),
+      { initialProps: { refreshToken: 0 } },
+    );
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.hasLoaded).toBe(true);
+    expect(result.current.transactions).toHaveLength(1);
+
+    // Revalidação (mesmos filtros, `refreshToken` bumpado) falha.
+    listTransactions.mockRejectedValueOnce(new Error("network down"));
+    rerender({ refreshToken: 1 });
+
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+
+    // A implementação ANTERIOR zerava `transactions`/`total` no catch — a
+    // lista sumia da tela sob uma falha de revalidação, mesmo com dados
+    // válidos ainda na mão. `hasLoaded` continua true: já carregamos com
+    // sucesso ao menos uma vez.
+    expect(result.current.hasLoaded).toBe(true);
+    expect(result.current.transactions).toHaveLength(1);
+    expect(result.current.transactions[0].id).toBe("tx-1");
+  });
+});
