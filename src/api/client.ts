@@ -156,7 +156,25 @@ export const handleApiError = (error: unknown): string => {
         return translateApiMessage(detail.message);
       }
       if (isLegacyError(detail)) {
-        return translateApiMessage(detail.message, detail.error);
+        // `humanizeDetailString` cobre padrões em inglês por REGEX (ex.: o
+        // "Card with brand '…' … already exists" do cadastro de cartão
+        // duplicado, "At least one tag … is required") — sem isso, esse
+        // formato {error,message,type} só batia no dicionário de tradução
+        // exata (`translateApiMessage`), que não cobre mensagem com valores
+        // interpolados, e a frase em inglês vazava pra tela.
+        //
+        // Quando `humanizeDetailString` REPROVA (retorna vazio — mensagem
+        // vazia ou parece vazamento interno, ex.: stack trace de driver
+        // dentro de um ConsultantServiceError num 500), NÃO cai pra
+        // `detail.message` cru: isso jogaria fora o próprio veredito do
+        // sanitizador. Sem `return` aqui, a execução cai pro fallback
+        // genérico por status mais abaixo — mesmo padrão que o branch
+        // irmão (mensagem solta em `detail.message` sem `type`/`error`),
+        // logo depois, já usa.
+        const human = humanizeDetailString(detail.message, status);
+        if (human) {
+          return translateApiMessage(human, detail.error);
+        }
       }
       if (typeof detail === 'string') {
         const human = humanizeDetailString(detail, status);
