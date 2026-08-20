@@ -30,7 +30,7 @@ export function RefundLinkPanel({
   onUnlink,
 }) {
   const fsLg = variant === "mobile" ? 13 : 12;
-  const fsSm = variant === "mobile" ? 11 : 10;
+  const fsSm = 11; // piso WCAG de 11px (era 10 no branch desktop)
   const pad = variant === "mobile" ? "12px 14px" : "10px 12px";
 
   if (refundLinkedTx) {

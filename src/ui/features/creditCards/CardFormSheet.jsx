@@ -93,7 +93,7 @@ export function CardFormSheet({
         {/* Preview card stub */}
         <div style={{ height: 96, borderRadius: 14, background: "linear-gradient(135deg,#374151,#6B7280)", display: "flex", flexDirection: "column", justifyContent: "space-between", padding: "14px 18px", position: "relative", overflow: "hidden", marginBottom: 4 }}>
           <div style={{ position: "absolute", top: -20, right: -20, width: 100, height: 100, borderRadius: "50%", background: "rgba(255,255,255,0.06)" }} />
-          <div style={{ ...G, fontSize: 10, fontWeight: 800, color: "rgba(255,255,255,0.7)", textTransform: "uppercase", letterSpacing: "0.14em" }}>
+          <div style={{ ...G, fontSize: 11, fontWeight: 800, color: "rgba(255,255,255,0.7)", textTransform: "uppercase", letterSpacing: "0.14em" }}>
             {draftIssuer || "BANCO"}
           </div>
           <div style={{ ...M_MONO, ...NUM, fontSize: 13, color: "rgba(255,255,255,0.6)", letterSpacing: "0.18em" }}>
@@ -104,16 +104,16 @@ export function CardFormSheet({
           </div>
         </div>
         <div>
-          <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Banco / Emissor</div>
+          <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Banco / Emissor</div>
           <FI val={draftIssuer} set={setDraftIssuer} ph="ex: Nubank, Itaú, Bradesco…" />
         </div>
         <div>
-          <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Nome do cartão</div>
+          <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Nome do cartão</div>
           <FI val={draftName} set={setDraftName} ph="ex: Nubank Roxinho, Personnalité…" />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div>
-            <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>4 últimos dígitos</div>
+            <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>4 últimos dígitos</div>
             {/* Só dígitos e no máximo 4: o backend exige exatamente 4 e
                 devolveria 422 para qualquer outra coisa. */}
             <FI
@@ -125,7 +125,7 @@ export function CardFormSheet({
             />
           </div>
           <div>
-            <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Bandeira</div>
+            <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Bandeira</div>
             <div style={{ display: "flex", flexDirection: "column", position: "relative" }}>
               <select value={draftBrand} onChange={(e) => setDraftBrand(e.target.value)}
                 style={{ ...G, padding: "9px 12px", border: `1px solid ${T.border}`, borderRadius: 9, background: T.surface, fontSize: 13, color: T.ink, cursor: "pointer", appearance: "none" }}>
@@ -137,7 +137,7 @@ export function CardFormSheet({
           </div>
         </div>
         <div>
-          <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Limite total</div>
+          <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Limite total</div>
           <div style={{ display: "flex", alignItems: "center", padding: "9px 12px", border: `1px solid ${T.border}`, borderRadius: 9, background: T.surface }}
             onFocusCapture={(e) => (e.currentTarget.style.borderColor = T.blue)}
             onBlurCapture={(e) => (e.currentTarget.style.borderColor = T.border)}>
@@ -148,11 +148,11 @@ export function CardFormSheet({
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div>
-            <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Dia do vencimento</div>
+            <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Dia do vencimento</div>
             <FI val={draftDueDay} set={setDraftDueDay} ph="ex: 10" type="number" />
           </div>
           <div>
-            <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Dia do fechamento</div>
+            <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Dia do fechamento</div>
             <FI val={draftClosingDay} set={setDraftClosingDay} ph="ex: 3" type="number" />
           </div>
         </div>

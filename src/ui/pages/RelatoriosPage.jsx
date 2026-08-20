@@ -299,9 +299,9 @@ function ComposicaoDonutSection({ compositionData, compact = false, fmtBRL, desk
             style={{ display:"flex", alignItems:"center", gap:7, padding:compact?"4px 6px":"5px 8px",
               borderRadius:8, background:activeIdx===i?T.bg:"transparent", transition:"background 0.12s", cursor:"default" }}>
             <div style={{ width:7, height:7, borderRadius:2, background:c.color, flexShrink:0 }} />
-            <span style={{ ...G, fontSize:compact?10:11, color:T.inkMid, flex:1 }}>{c.name}</span>
-            <span style={{ ...G, ...NUM, fontSize:compact?10:11, fontWeight:700, color:T.ink }}>{fmtBRL(c.value)}</span>
-            <span style={{ ...G, fontSize:10, color:T.inkMid, minWidth:26, textAlign:"right" }}>
+            <span style={{ ...G, fontSize: 11, color:T.inkMid, flex:1 }}>{c.name}</span>
+            <span style={{ ...G, ...NUM, fontSize: 11, fontWeight:700, color:T.ink }}>{fmtBRL(c.value)}</span>
+            <span style={{ ...G, fontSize: 11, color:T.inkMid, minWidth:26, textAlign:"right" }}>
               {totalComp > 0 ? Math.round((Number(c.value) || 0)/totalComp*100) : 0}%
             </span>
           </div>
@@ -561,7 +561,7 @@ export function RelatoriosPage({
     if (!active||!payload?.length) return null;
     return (
       <div style={{ ...G, background:T.ink, borderRadius:10, padding:"8px 12px", boxShadow:T.dark }}>
-        <div style={{ fontSize:10, color:"rgba(255,255,255,0.55)", marginBottom:5 }}>{label}</div>
+        <div style={{ fontSize: 11, color:"rgba(255,255,255,0.55)", marginBottom:5 }}>{label}</div>
         {payload.map((p,i) => (
           <div key={i} style={{ display:"flex", alignItems:"center", gap:6, marginBottom:i<payload.length-1?3:0 }}>
             <div style={{ width:6, height:6, borderRadius:2, background:p.color||p.stroke, flexShrink:0 }} />
@@ -622,8 +622,8 @@ export function RelatoriosPage({
     <ResponsiveContainer width="100%" height={height}>
       <ReBarChart data={activeData} margin={{ top:4, right:4, left:-22, bottom:0 }} barGap={2} barCategoryGap="32%">
         <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
-        <XAxis dataKey="mes" tick={{ ...G, fontSize:10, fill:T.inkLight }} axisLine={false} tickLine={false} />
-        <YAxis tick={{ ...G, fontSize:10, fill:T.inkLight }} axisLine={false} tickLine={false} tickFormatter={v=>fmtK(v)} />
+        <XAxis dataKey="mes" tick={{ ...G, fontSize: 11, fill:T.inkLight }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ ...G, fontSize: 11, fill:T.inkLight }} axisLine={false} tickLine={false} tickFormatter={v=>fmtK(v)} />
         <Tooltip content={<CustomTip />} />
         <Bar dataKey="receita" name="Receita" fill={T.green} fillOpacity={0.85} radius={[3,3,0,0]} maxBarSize={22} />
         <Bar dataKey="gasto"   name="Gasto"   fill={T.red}   fillOpacity={0.85} radius={[3,3,0,0]} maxBarSize={22} />
@@ -644,8 +644,8 @@ export function RelatoriosPage({
       <ResponsiveContainer width="100%" height={height}>
         <ComposedChart data={series} margin={{ top:8, right:4, left:-22, bottom:0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
-          <XAxis dataKey="dia" tick={{ ...G, fontSize:10, fill:T.inkLight }} axisLine={false} tickLine={false} />
-          <YAxis tick={{ ...G, fontSize:10, fill:T.inkLight }} axisLine={false} tickLine={false} tickFormatter={v=>fmtK(v)} />
+          <XAxis dataKey="dia" tick={{ ...G, fontSize: 11, fill:T.inkLight }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ ...G, fontSize: 11, fill:T.inkLight }} axisLine={false} tickLine={false} tickFormatter={v=>fmtK(v)} />
           <Tooltip content={<CustomTip />} />
           <Area dataKey="ideal" name="Ritmo ideal" type="monotone" fill={T.blueLight} stroke={T.blue}
             strokeWidth={1.5} strokeDasharray="5 3" dot={false} fillOpacity={0.35} />
@@ -660,8 +660,8 @@ export function RelatoriosPage({
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart data={activeDrift} margin={{ top:8, right:4, left:-22, bottom:0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
-        <XAxis dataKey="mes" tick={{ ...G, fontSize:10, fill:T.inkLight }} axisLine={false} tickLine={false} />
-        <YAxis tick={{ ...G, fontSize:10, fill:T.inkLight }} axisLine={false} tickLine={false} tickFormatter={v=>fmtK(v)} />
+        <XAxis dataKey="mes" tick={{ ...G, fontSize: 11, fill:T.inkLight }} axisLine={false} tickLine={false} />
+        <YAxis tick={{ ...G, fontSize: 11, fill:T.inkLight }} axisLine={false} tickLine={false} tickFormatter={v=>fmtK(v)} />
         <Tooltip content={<CustomTip />} />
         {Object.entries(driftColors).map(([cat,color]) => (
           <Area key={cat} type="monotone" dataKey={cat} stackId="1"
@@ -678,8 +678,8 @@ export function RelatoriosPage({
     <ResponsiveContainer width="100%" height={height}>
       <ComposedChart data={scoreData} margin={{ top:8, right:4, left:-22, bottom:0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
-        <XAxis dataKey="mes" tick={{ ...G, fontSize:10, fill:T.inkLight }} axisLine={false} tickLine={false} />
-        <YAxis domain={[0,100]} tick={{ ...G, fontSize:10, fill:T.inkLight }} axisLine={false} tickLine={false} tickFormatter={v=>v+"%"} />
+        <XAxis dataKey="mes" tick={{ ...G, fontSize: 11, fill:T.inkLight }} axisLine={false} tickLine={false} />
+        <YAxis domain={[0,100]} tick={{ ...G, fontSize: 11, fill:T.inkLight }} axisLine={false} tickLine={false} tickFormatter={v=>v+"%"} />
         <Tooltip content={<CustomTip fmt={v=>v+"%"} />} />
         <ReferenceLine y={80} stroke={T.green} strokeDasharray="4 3" strokeWidth={1.5} />
         <Bar dataKey="score" name="Score" radius={[4,4,0,0]} maxBarSize={32}
@@ -707,13 +707,13 @@ export function RelatoriosPage({
             cursor:"pointer", transition:"all 0.15s" }}>
           <div style={{ width:7, height:7, borderRadius:2, background:color, flexShrink:0,
             opacity:selectedCat&&selectedCat!==cat ? 0.3 : 1 }} />
-          <span style={{ ...G, fontSize:compact?9:10, fontWeight:selectedCat===cat?700:400,
+          <span style={{ ...G, fontSize: 11, fontWeight:selectedCat===cat?700:400,
             color:selectedCat===cat ? color : T.inkMid }}>{cat}</span>
         </button>
       ))}
       {selectedCat && (
         <button onClick={() => setSelectedCat(null)}
-          style={{ ...G, fontSize:10, color:T.inkMid, background:"none", border:`1px solid ${T.border}`,
+          style={{ ...G, fontSize: 11, color:T.inkMid, background:"none", border:`1px solid ${T.border}`,
             borderRadius:20, padding:"4px 9px", cursor:"pointer" }}>✕ Limpar</button>
       )}
     </div>
@@ -740,7 +740,7 @@ export function RelatoriosPage({
             { label:"Poupança", val:taxa+"%",                     color:T.blue },
           ].map((k,i) => (
             <div key={i}>
-              <div style={{ ...G, fontSize:8, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:3 }}>{k.label}</div>
+              <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:3 }}>{k.label}</div>
               <div style={{ ...G, ...NUM, fontSize:13, fontWeight:800, color:k.color }}>{k.val}</div>
             </div>
           ))}
@@ -754,7 +754,7 @@ export function RelatoriosPage({
       {[["─ ─","Ritmo ideal",T.blue],["───","Gasto real",T.red]].map(([dash,label,color]) => (
         <div key={label} style={{ display:"flex", alignItems:"center", gap:5 }}>
           <span style={{ ...G, fontSize:11, color, fontWeight:700 }}>{dash}</span>
-          <span style={{ ...G, fontSize:10, color:T.inkLight }}>{label}</span>
+          <span style={{ ...G, fontSize: 11, color:T.inkLight }}>{label}</span>
         </div>
       ))}
     </div>
@@ -787,14 +787,14 @@ export function RelatoriosPage({
           {/* Title row */}
           <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:16 }}>
             <div>
-              <div style={{ ...G, fontSize:10, fontWeight:700, color:T.darkMuted, textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:2 }}>Meus</div>
+              <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.darkMuted, textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:2 }}>Meus</div>
               <div style={{ ...S, fontSize:22, fontStyle:"italic", color:"#fff", lineHeight:1.1 }}>Relatórios</div>
             </div>
             <PeriodSelector compact />
           </div>
           {/* Saldo hero */}
           <div style={{ marginBottom:14 }}>
-            <div style={{ ...G, fontSize:10, fontWeight:700, color:T.darkMuted, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:4 }}>
+            <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.darkMuted, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:4 }}>
               Saldo · {kpiRefLabel}
             </div>
             <div style={{ display:"flex", alignItems:"baseline", gap:6, flexWrap:"wrap" }}>
@@ -816,7 +816,7 @@ export function RelatoriosPage({
                 color:kpis.avgScore>=80?"#86EFAC":kpis.avgScore>=65?"#FCD34D":"#FCA5A5" },
             ].map((k,i) => (
               <div key={i} style={{ paddingLeft:i>0?12:0, borderLeft:i>0?"1px solid rgba(255,255,255,0.07)":"none" }}>
-                <div style={{ ...G, fontSize:8, fontWeight:700, color:T.darkMuted, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:2 }}>{k.label}</div>
+                <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.darkMuted, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:2 }}>{k.label}</div>
                 <div style={{ ...G, ...NUM, fontSize:12, fontWeight:700, color:k.color }}>{k.val}</div>
               </div>
             ))}
@@ -853,7 +853,7 @@ export function RelatoriosPage({
                 {[["Receita",T.green],["Gasto",T.red]].map(([label,color]) => (
                   <div key={label} style={{ display:"flex", alignItems:"center", gap:5 }}>
                     <div style={{ width:9, height:9, borderRadius:2, background:color }} />
-                    <span style={{ ...G, fontSize:10, color:T.inkLight }}>{label}</span>
+                    <span style={{ ...G, fontSize: 11, color:T.inkLight }}>{label}</span>
                   </div>
                 ))}
               </div>
@@ -862,7 +862,7 @@ export function RelatoriosPage({
               <div style={{ ...G, fontSize:12, fontWeight:700, color:T.ink, marginBottom:4 }}>
                 Cascata{compositionWindowLabel ? ` · ${compositionWindowLabel}` : ""}
               </div>
-              <div style={{ ...G, fontSize:10, color:T.inkLight, marginBottom:12 }}>Breakdown de onde foi cada real</div>
+              <div style={{ ...G, fontSize: 11, color:T.inkLight, marginBottom:12 }}>Breakdown de onde foi cada real</div>
               <WaterfallChart compact rows={waterfallRows} fmtK={fmtK} />
             </div>
           </>)}
@@ -874,7 +874,7 @@ export function RelatoriosPage({
               <div style={{ ...G, fontSize:12, fontWeight:700, color:T.ink, marginBottom:3 }}>
                 Velocidade de gasto{compositionWindowLabel ? ` · ${compositionWindowLabel}` : ""}
               </div>
-              <div style={{ ...G, fontSize:10, color:T.inkLight, marginBottom:12 }}>Gasto real acumulado vs ritmo ideal diário</div>
+              <div style={{ ...G, fontSize: 11, color:T.inkLight, marginBottom:12 }}>Gasto real acumulado vs ritmo ideal diário</div>
               <VelocidadeChart height={155} data={velocityDaily} />
               <VelocLegend />
             </div>
@@ -903,7 +903,7 @@ export function RelatoriosPage({
             />
             <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:14, padding:"16px 16px 12px" }}>
               <div style={{ ...G, fontSize:12, fontWeight:700, color:T.ink, marginBottom:3 }}>Score de aderência</div>
-              <div style={{ ...G, fontSize:10, color:T.inkLight, marginBottom:12 }}>Linha verde = meta 80%</div>
+              <div style={{ ...G, fontSize: 11, color:T.inkLight, marginBottom:12 }}>Linha verde = meta 80%</div>
               <ScoreChart height={155} />
               {scoreDetail && <div style={{ marginTop:12 }}><ScoreDetailCard /></div>}
             </div>
@@ -916,7 +916,7 @@ export function RelatoriosPage({
                       borderRadius:10, padding:"9px 10px", textAlign:"left",
                       border:`1.5px solid ${scoreDetail?.mes===m.mes ? sC : "transparent"}`,
                       cursor:"pointer", transition:"border-color 0.15s" }}>
-                    <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid }}>{m.mes}</div>
+                    <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid }}>{m.mes}</div>
                     <div style={{ ...G, ...NUM, fontSize:16, fontWeight:800, color:sC }}>{m.score}</div>
                   </button>
                 );
@@ -934,7 +934,7 @@ export function RelatoriosPage({
               <div style={{ ...G, fontSize:12, fontWeight:700, color:T.ink, marginBottom:14 }}>
                 Composição{compositionWindowLabel ? ` · ${compositionWindowLabel}` : ""}
               </div>
-              <div style={{ ...G, fontSize:10, color:T.inkLight, marginBottom:12 }}>{compositionWindowLabel}</div>
+              <div style={{ ...G, fontSize: 11, color:T.inkLight, marginBottom:12 }}>{compositionWindowLabel}</div>
               <ComposicaoDonutSection compact compositionData={compositionData} fmtBRL={fmtBRL} />
             </div>
           </>)}
@@ -987,9 +987,9 @@ export function RelatoriosPage({
             sub:`acum. ${periodo}: ${kpis.periodTaxa}% · score médio ${kpis.avgScore}/100`,                   color:T.purple },
         ].map((k,i) => (
           <div key={i} style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:12, padding:"14px 16px" }}>
-            <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:6 }}>{k.label}</div>
+            <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:6 }}>{k.label}</div>
             <div style={{ ...G, ...NUM, fontSize:20, fontWeight:800, color:k.color, letterSpacing:"-0.01em" }}>{k.val}</div>
-            <div style={{ ...G, fontSize:10, color:T.inkLight, marginTop:3 }}>{k.sub}</div>
+            <div style={{ ...G, fontSize: 11, color:T.inkLight, marginTop:3 }}>{k.sub}</div>
           </div>
         ))}
       </div>
@@ -1008,7 +1008,7 @@ export function RelatoriosPage({
             {[["Receita",T.green],["Gasto",T.red]].map(([l,c]) => (
               <div key={l} style={{ display:"flex", alignItems:"center", gap:5 }}>
                 <div style={{ width:9, height:9, borderRadius:2, background:c }} />
-                <span style={{ ...G, fontSize:10, color:T.inkLight }}>{l}</span>
+                <span style={{ ...G, fontSize: 11, color:T.inkLight }}>{l}</span>
               </div>
             ))}
           </div>
@@ -1041,7 +1041,7 @@ export function RelatoriosPage({
                   style={{ background:m.score>=80?T.greenLight:m.score>=65?T.amberLight:T.redLight,
                     borderRadius:8, padding:"6px 8px", textAlign:"left",
                     border:`1.5px solid ${scoreDetail?.mes===m.mes?sC:"transparent"}`, cursor:"pointer" }}>
-                  <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid }}>{m.mes}</div>
+                  <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid }}>{m.mes}</div>
                   <div style={{ ...G, ...NUM, fontSize:14, fontWeight:800, color:sC }}>{m.score}</div>
                 </button>
               );
@@ -1065,7 +1065,7 @@ export function RelatoriosPage({
           style={desktopCols===3 ? { gridColumn:3, gridRow:2 } : { gridColumn:"1 / -1" }}
           insight={{ color:T.amber, icon:"🔒",
             text:`<strong>R$\u00a03.300 (38% da receita)</strong> comprometidos antes do primeiro gasto — fixo e recorrências. Margem discricionária real em Março: <strong>R$\u00a01.081</strong>.` }}>
-          <div style={{ ...G, fontSize:10, color:T.inkLight, marginBottom:12 }}>{compositionWindowLabel}</div>
+          <div style={{ ...G, fontSize: 11, color:T.inkLight, marginBottom:12 }}>{compositionWindowLabel}</div>
           <ComposicaoDonutSection
             compositionData={compositionData}
             fmtBRL={fmtBRL}
@@ -1095,14 +1095,14 @@ export function RelatoriosPage({
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18, flex: 1 }}>
               <div>
-                <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Total comprometido / mês</div>
+                <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Total comprometido / mês</div>
                 <div style={{ ...G, ...NUM, fontSize: 28, fontWeight: 800, color: T.purple, letterSpacing: "-0.01em", marginBottom: 6 }}>{fmtBRL(compromissosFixos.totalMonthly)}</div>
                 <div style={{ ...G, fontSize: 11, color: T.inkLight }}>
                   {compromissosFixos.activeCount} {compromissosFixos.activeCount === 1 ? "recorrência ativa" : "recorrências ativas"}
                 </div>
               </div>
               <div>
-                <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Por categoria</div>
+                <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Por categoria</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {compromissosFixos.categories.slice(0, 6).map((c) => (
                     <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 8 }}>

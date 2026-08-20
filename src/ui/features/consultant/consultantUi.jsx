@@ -108,7 +108,9 @@ export function Avatar({ name, seed, size = 34, ring, grad }) {
       width: size, height: size, borderRadius: 9999, flexShrink: 0,
       background: `linear-gradient(135deg, ${g[0]}, ${g[1]})`,
       display: "flex", alignItems: "center", justifyContent: "center",
-      color: "#fff", fontWeight: 800, fontSize: size * 0.36, ...G,
+      // Piso de 11px (WCAG 1.4.4): em avatares pequenos (size=20) a proporção
+      // 0.36 gerava iniciais de ~7px, ilegíveis.
+      color: "#fff", fontWeight: 800, fontSize: Math.max(11, size * 0.36), ...G,
       boxShadow: ring ? `0 0 0 3px ${ring}` : "none",
     }}>
       {avatarInitials(name)}
@@ -126,7 +128,7 @@ export function RiskDot({ health, size = 8 }) {
 export function RiskBadge({ health }) {
   const r = healthTone(health);
   return (
-    <span style={{ ...G, ...NUM, fontSize: 10, fontWeight: 700, color: r.color, background: r.bg, padding: "2px 8px", borderRadius: 9999, whiteSpace: "nowrap", letterSpacing: "0.02em", display: "inline-flex", alignItems: "center", gap: 4 }}>
+    <span style={{ ...G, ...NUM, fontSize: 11, fontWeight: 700, color: r.color, background: r.bg, padding: "2px 8px", borderRadius: 9999, whiteSpace: "nowrap", letterSpacing: "0.02em", display: "inline-flex", alignItems: "center", gap: 4 }}>
       <span style={{ width: 6, height: 6, borderRadius: 9999, background: r.color }} />{r.label}
     </span>
   );
@@ -155,7 +157,7 @@ export function HealthRing({ health, size = 56, stroke = 5, showNum = true }) {
       </svg>
       {showNum && (
         <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <span style={{ ...G, ...NUM, fontSize: size * 0.3, fontWeight: 800, color: r.color, lineHeight: 1 }}>
+          <span style={{ ...G, ...NUM, fontSize: Math.max(11, size * 0.3), fontWeight: 800, color: r.color, lineHeight: 1 }}>
             {empty ? "—" : value}
           </span>
         </div>

@@ -37,7 +37,7 @@ export function PlanBadge({ tier = "pro", showLock = true }) {
         borderRadius: 999,
         background: style.bg,
         color: style.color,
-        fontSize: 10,
+        fontSize: 11,
         fontWeight: 700,
         letterSpacing: 0.4,
         textTransform: "uppercase",

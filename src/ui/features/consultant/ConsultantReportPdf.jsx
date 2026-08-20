@@ -23,21 +23,21 @@ const C = {
 };
 
 const st = StyleSheet.create({
-  page: { paddingTop: 36, paddingBottom: 48, paddingHorizontal: 40, fontSize: 10, color: C.ink, fontFamily: "Helvetica" },
-  brand: { fontSize: 9, fontFamily: "Helvetica-Bold", color: C.purple, letterSpacing: 1, textTransform: "uppercase" },
+  page: { paddingTop: 36, paddingBottom: 48, paddingHorizontal: 40, fontSize: 11, color: C.ink, fontFamily: "Helvetica" },
+  brand: { fontSize: 11, fontFamily: "Helvetica-Bold", color: C.purple, letterSpacing: 1, textTransform: "uppercase" },
   title: { fontSize: 20, fontFamily: "Helvetica-Bold", marginTop: 4 },
-  sub: { fontSize: 10, color: C.mid, marginTop: 3 },
+  sub: { fontSize: 11, color: C.mid, marginTop: 3 },
   headerRule: { borderBottomWidth: 1, borderBottomColor: C.border, marginTop: 12, marginBottom: 16 },
   kpiRow: { flexDirection: "row", gap: 10, marginBottom: 18 },
   kpi: { flex: 1, borderWidth: 1, borderColor: C.border, borderRadius: 6, padding: 10 },
-  kpiLabel: { fontSize: 7.5, color: C.light, textTransform: "uppercase", letterSpacing: 0.5 },
+  kpiLabel: { fontSize: 11, color: C.light, textTransform: "uppercase", letterSpacing: 0.5 },
   kpiValue: { fontSize: 14, fontFamily: "Helvetica-Bold", marginTop: 5 },
   sectionTitle: { fontSize: 12, fontFamily: "Helvetica-Bold", marginTop: 10, marginBottom: 8 },
   row: { flexDirection: "row", paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: C.border },
-  th: { fontSize: 8, color: C.light, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: "Helvetica-Bold" },
-  cell: { fontSize: 9.5 },
-  empty: { fontSize: 9.5, color: C.light, paddingVertical: 6 },
-  footer: { position: "absolute", bottom: 24, left: 40, right: 40, fontSize: 8, color: C.light, textAlign: "center", borderTopWidth: 1, borderTopColor: C.border, paddingTop: 8 },
+  th: { fontSize: 11, color: C.light, textTransform: "uppercase", letterSpacing: 0.5, fontFamily: "Helvetica-Bold" },
+  cell: { fontSize: 11 },
+  empty: { fontSize: 11, color: C.light, paddingVertical: 6 },
+  footer: { position: "absolute", bottom: 24, left: 40, right: 40, fontSize: 11, color: C.light, textAlign: "center", borderTopWidth: 1, borderTopColor: C.border, paddingTop: 8 },
 });
 
 function Kpi({ label, value, color }) {

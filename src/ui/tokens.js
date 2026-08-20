@@ -8,7 +8,10 @@ export const T = {
   ink: "#0F0F0D",
   inkMid: "#374151",
   inkLight: "#4B5563",
-  inkGhost: "#9CA3AF",
+  // WCAG 1.4.3: #9CA3AF (era) dava ~2.5:1 sobre branco/bg — reprova texto normal (mínimo 4.5:1).
+  // #6B7280 (Tailwind gray-500) mantém o mesmo tom "apagado" da paleta e passa com folga:
+  // 4.83:1 sobre surface (#FFFFFF), 4.52:1 sobre bg (#F8F7F5).
+  inkGhost: "#6B7280",
   blue: "#2563EB",
   blueLight: "#EFF6FF",
   blueBar: "#60A5FA",

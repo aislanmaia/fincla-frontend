@@ -408,7 +408,7 @@ export function ConfiguracoesPage({
             <div style={{ display:"flex", flexDirection:"column", gap:10, marginTop:16, paddingTop:16, borderTop:`1px solid ${T.border}` }}>
               {[["Senha atual", senhaAtual, setSenhaAtual],["Nova senha", senhaNova, setSenhaNova],["Confirmar nova senha", senhaConf, setSenhaConf]].map(([label, val, set]) => (
                 <div key={label}>
-                  <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:6 }}>{label}</div>
+                  <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:6 }}>{label}</div>
                   <input type="password" value={val} onChange={e => set(e.target.value)} placeholder="••••••••"
                     style={{ ...G, width:"100%", padding:"10px 13px", border:`1.5px solid ${T.border}`, borderRadius:9, fontSize:13, color:T.ink, background:T.bg, outline:"none" }}/>
                 </div>
@@ -445,7 +445,7 @@ export function ConfiguracoesPage({
                 <Smartphone size={16} color={T.inkMid}/>
               </div>
               <div style={{ flex:1 }}>
-                <div style={{ ...G, fontSize:12, fontWeight:600, color:T.ink }}>{s.device} {s.current && <span style={{ ...G, fontSize:10, fontWeight:700, background:T.greenLight, color:T.green, padding:"1px 7px", borderRadius:99, marginLeft:6 }}>atual</span>}</div>
+                <div style={{ ...G, fontSize:12, fontWeight:600, color:T.ink }}>{s.device} {s.current && <span style={{ ...G, fontSize: 11, fontWeight:700, background:T.greenLight, color:T.green, padding:"1px 7px", borderRadius:99, marginLeft:6 }}>atual</span>}</div>
                 <div style={{ ...G, fontSize:11, color:T.inkLight }}>{s.ip} · {s.last}</div>
               </div>
               {!s.current && <BtnGhost danger onClick={()=>{}}>Revogar</BtnGhost>}
@@ -572,7 +572,7 @@ export function ConfiguracoesPage({
                   <div style={{ flex:1, minWidth:0 }}>
                     <div style={{ ...G, fontSize:13, fontWeight:700, color:T.ink, display:"flex", alignItems:"center", gap:7, flexWrap:"wrap" }}>
                       {label}
-                      {self && <span style={{ ...G, fontSize:10, fontWeight:700, background:T.grayLight, color:T.inkLight, padding:"1px 7px", borderRadius:99 }}>você</span>}
+                      {self && <span style={{ ...G, fontSize: 11, fontWeight:700, background:T.grayLight, color:T.inkLight, padding:"1px 7px", borderRadius:99 }}>você</span>}
                     </div>
                     <div style={{ ...G, fontSize:11, color:T.inkLight, wordBreak:"break-all" }}>{sub}</div>
                   </div>
@@ -630,7 +630,7 @@ export function ConfiguracoesPage({
               <div style={{ width:38, height:38, borderRadius:9999, background:`linear-gradient(135deg,${m.color},${m.color}99)`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:800, color:"#fff", flexShrink:0 }}>{m.initials}</div>
               <div style={{ flex:1 }}>
                 <div style={{ ...G, fontSize:13, fontWeight:700, color:T.ink, display:"flex", alignItems:"center", gap:7 }}>
-                  {m.name} {m.self && <span style={{ ...G, fontSize:10, fontWeight:700, background:T.grayLight, color:T.inkLight, padding:"1px 7px", borderRadius:99 }}>você</span>}
+                  {m.name} {m.self && <span style={{ ...G, fontSize: 11, fontWeight:700, background:T.grayLight, color:T.inkLight, padding:"1px 7px", borderRadius:99 }}>você</span>}
                 </div>
                 <div style={{ ...G, fontSize:11, color:T.inkLight }}>{m.email}</div>
               </div>
@@ -820,7 +820,7 @@ export function ConfiguracoesPage({
         <div style={{ width:200, flexShrink:0, display:"flex", flexDirection:"column", gap:4, position:"sticky", top:0 }}>
           {SUB_NAV.map(({ group, items }) => (
             <div key={group}>
-              <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.1em", padding:"10px 10px 4px" }}>{group}</div>
+              <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.1em", padding:"10px 10px 4px" }}>{group}</div>
               {items.map(({ id, label, Icon }) => {
                 const active = subPage === id;
                 return (

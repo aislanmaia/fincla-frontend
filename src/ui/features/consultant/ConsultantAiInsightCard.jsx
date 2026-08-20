@@ -33,7 +33,7 @@ export function ConsultantAiInsightCard({ onOpen }) {
         </div>
         <div style={{ ...G, fontSize: 13, fontWeight: 800, color: T.ink }}>Resumo da base por IA</div>
         {!canSummarize && (
-          <span style={{ ...G, fontSize: 9, fontWeight: 700, color: T.purple, background: "#fff", border: "1px solid #E6DEFB", borderRadius: 99, padding: "2px 7px", marginLeft: "auto" }}>PRO</span>
+          <span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.purple, background: "#fff", border: "1px solid #E6DEFB", borderRadius: 99, padding: "2px 7px", marginLeft: "auto" }}>PRO</span>
         )}
       </div>
       <div style={{ ...G, fontSize: 12.5, color: T.inkMid, lineHeight: 1.65, marginBottom: 14 }}>

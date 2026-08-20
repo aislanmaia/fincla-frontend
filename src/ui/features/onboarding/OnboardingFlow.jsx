@@ -374,7 +374,7 @@ export const OnboardingFlow = ({
                             {Array.from({length:28},(_,i)=>i+1).map(d=><option key={d} value={d}>Dia {d}</option>)}
                           </select>
                           <div style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",
-                            pointerEvents:"none",color:T.inkLight,fontSize:10}}>▾</div>
+                            pointerEvents:"none",color:T.inkLight,fontSize: 11}}>▾</div>
                         </div>
                       </div>
                       {/* Tipo de valor — Geist, not serif */}
@@ -391,7 +391,7 @@ export const OnboardingFlow = ({
                                   background:sel?cfg.accent:T.surface,transition:"all 0.15s"}}>
                                 <div style={{fontSize:16,marginBottom:4}}>{ic}</div>
                                 <div style={{...G,fontSize:12,fontWeight:700,color:sel?"#fff":T.ink,marginBottom:2}}>{t}</div>
-                                <div style={{...G,fontSize:10,color:sel?"rgba(255,255,255,0.55)":T.inkLight,lineHeight:1.4}}>{s}</div>
+                                <div style={{...G,fontSize: 11,color:sel?"rgba(255,255,255,0.55)":T.inkLight,lineHeight:1.4}}>{s}</div>
                               </button>
                             );
                           })}
@@ -435,7 +435,7 @@ export const OnboardingFlow = ({
                     </div>
                     <div style={{...G,fontSize:11,color:T.inkLight}}>Acesso total · não pode ser removido</div>
                   </div>
-                  <span style={{...G,fontSize:10,fontWeight:700,color:"#fff",
+                  <span style={{...G,fontSize: 11,fontWeight:700,color:"#fff",
                     background:cfg.accent,borderRadius:99,padding:"3px 9px",flexShrink:0}}>Owner</span>
                 </div>
                 {/* invite fields */}
@@ -515,7 +515,7 @@ export const OnboardingFlow = ({
                         background:it.done?cfg.accent:T.surface,
                         border:`1.5px solid ${it.done?cfg.accent:T.border}`,
                         display:"flex",alignItems:"center",justifyContent:"center"}}>
-                        {it.done&&<span style={{color:"#fff",fontSize:10}}>✓</span>}
+                        {it.done&&<span style={{color:"#fff",fontSize: 11}}>✓</span>}
                       </div>
                       <span style={{...G,fontSize:12,color:it.done?cfg.accent:T.inkMid,
                         textDecoration:it.done?"line-through":"none",fontWeight:it.done?400:500}}>{it.l}</span>

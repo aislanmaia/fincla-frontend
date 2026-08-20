@@ -11,13 +11,13 @@ function KpiCard({ label, value, sub, accent, soon }) {
       <div style={{ position: "absolute", top: 0, left: 0, width: 3, height: "100%", background: accent }} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 7 }}>
+          <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 7 }}>
             {label}
           </div>
           <div style={{ ...G, ...NUM, fontSize: 22, fontWeight: 800, color: soon ? T.inkGhost : T.ink, letterSpacing: "-0.02em", lineHeight: 1 }}>
             {value}
           </div>
-          <div style={{ ...G, fontSize: 10.5, color: T.inkLight, marginTop: 7 }}>{sub}</div>
+          <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 7 }}>{sub}</div>
         </div>
         {soon && <Badge color={T.inkLight} bg={T.grayLight}>em breve</Badge>}
       </div>

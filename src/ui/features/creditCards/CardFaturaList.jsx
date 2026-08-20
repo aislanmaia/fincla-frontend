@@ -105,16 +105,16 @@ export function TxRow({ item, card, invoice, categoryColor, formatBRL, onLaunchR
               {item.desc}
             </span>
             {isInstallment && (
-              <span style={{ ...G, fontSize: 10, fontWeight: 800, color: T.blue, background: T.blueLight, borderRadius: 6, padding: "1px 6px", flexShrink: 0, letterSpacing: "0.02em" }}>
+              <span style={{ ...G, fontSize: 11, fontWeight: 800, color: T.blue, background: T.blueLight, borderRadius: 6, padding: "1px 6px", flexShrink: 0, letterSpacing: "0.02em" }}>
                 {item.parcela.n}/{item.parcela.t}×
               </span>
             )}
             {item.rec && (
-              <span style={{ ...G, fontSize: 10, fontWeight: 700, color: T.purple, background: T.purpleLight, borderRadius: 6, padding: "1px 6px", flexShrink: 0 }}>↻</span>
+              <span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.purple, background: T.purpleLight, borderRadius: 6, padding: "1px 6px", flexShrink: 0 }}>↻</span>
             )}
             {hasLinkedRefunds && !item.isRefund && (
               <span title={`${item.refundsSummary.count} estorno${item.refundsSummary.count !== 1 ? "s" : ""} relacionado${item.refundsSummary.count !== 1 ? "s" : ""} · ${formatBRL(item.refundsSummary.totalValue)} abatido${item.refundsSummary.count !== 1 ? "s" : ""}`}
-                style={{ ...G, fontSize: 10, fontWeight: 700, color: T.green, background: T.greenLight, borderRadius: 99, padding: "1px 6px", flexShrink: 0, cursor: "help", whiteSpace: "nowrap" }}>
+                style={{ ...G, fontSize: 11, fontWeight: 700, color: T.green, background: T.greenLight, borderRadius: 99, padding: "1px 6px", flexShrink: 0, cursor: "help", whiteSpace: "nowrap" }}>
                 ↺ Estorno
               </span>
             )}
@@ -138,7 +138,7 @@ export function TxRow({ item, card, invoice, categoryColor, formatBRL, onLaunchR
               {formatBRL(item.val)}
             </div>
             {isInstallment && (
-              <div style={{ ...G, fontSize: 10, color: T.blue, fontFamily: "'Geist Mono',monospace" }}>
+              <div style={{ ...G, fontSize: 11, color: T.blue, fontFamily: "'Geist Mono',monospace" }}>
                 total {formatBRL(installmentTotal)}
               </div>
             )}
@@ -162,7 +162,7 @@ export function TxRow({ item, card, invoice, categoryColor, formatBRL, onLaunchR
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                 {detailChips.map((chip, i) => (
                   <div key={i} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, padding: "6px 12px" }}>
-                    <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>
+                    <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>
                       {chip.label}
                     </div>
                     <div style={{ ...G, fontSize: 12, fontWeight: 700, fontFamily: chip.mono ? "'Geist Mono',monospace" : "inherit", color: chip.color || T.ink }}>
@@ -177,7 +177,7 @@ export function TxRow({ item, card, invoice, categoryColor, formatBRL, onLaunchR
                 <div style={{ height: 4, background: T.grayLight, borderRadius: 99, overflow: "hidden" }}>
                   <div style={{ height: "100%", borderRadius: 99, width: `${Math.round((item.parcela.n / item.parcela.t) * 100)}%`, background: `linear-gradient(to right, ${cc}, ${T.blue})`, transition: "width 0.6s cubic-bezier(0.16,1,0.3,1)" }} />
                 </div>
-                <div style={{ ...G, fontSize: 10, color: T.inkLight, marginTop: 4 }}>
+                <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 4 }}>
                   {Math.round((item.parcela.n / item.parcela.t) * 100)}% pago · {item.parcela.t - item.parcela.n} parcelas restantes
                 </div>
               </div>
@@ -189,7 +189,7 @@ export function TxRow({ item, card, invoice, categoryColor, formatBRL, onLaunchR
                   <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.green }}>
                     Esta compra possui estorno relacionado
                   </div>
-                  <div style={{ ...G, fontSize: 10, color: T.inkMid, marginTop: 2 }}>
+                  <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 2 }}>
                     {item.refundsSummary.count} lançamento{item.refundsSummary.count !== 1 ? "s" : ""} de estorno
                     {" · "}
                     <span style={{ fontFamily: "'Geist Mono',monospace", fontWeight: 700 }}>
@@ -298,7 +298,7 @@ export function DateGroup({
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <ChevronRight size={11} color={T.inkLight}
             style={{ transform: isOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.18s" }} />
-          <span style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.07em", minWidth: 28 }}>
+          <span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.07em", minWidth: 28 }}>
             {typeof dayLabel === "string" ? dayLabel : dayLabel.weekday}
           </span>
           <span style={{ ...G, fontSize: 12, fontWeight: 700, color: T.inkMid }}>

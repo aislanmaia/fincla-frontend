@@ -64,7 +64,8 @@ export function RecurrenceConfigPanel({
 }) {
   const f = {
     sectionGap: compact ? 18 : 14,
-    labelSize: compact ? 12 : 10,
+    // Piso WCAG de 11px (labelSize/hintText caíam para 10 no branch não-compacto)
+    labelSize: compact ? 12 : 11,
     labelMargin: compact ? 10 : 8,
     fieldGap: compact ? 8 : 6,
     pillPadding: compact ? "12px 10px" : "8px 10px",
@@ -72,7 +73,7 @@ export function RecurrenceConfigPanel({
     dowSize: compact ? 36 : 28,
     inputPadding: compact ? "10px 12px" : "8px 10px",
     smallText: compact ? 12 : 11,
-    hintText: compact ? 11 : 10,
+    hintText: 11,
   };
   const Label = ({ children }) => (
     <div style={{ ...G, fontSize: f.labelSize, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: f.labelMargin }}>{children}</div>
@@ -107,7 +108,7 @@ export function RecurrenceConfigPanel({
                 <button key={idx} type="button" onClick={() => onSelectDayOfWeek(idx)}
                   aria-label={DOW_LABELS_FULL[idx]}
                   title={DOW_LABELS_FULL[idx]}
-                  style={{ ...G, height: f.dowSize, padding: 0, borderRadius: 8, border: `1.5px solid ${active ? T.ink : T.border}`, background: active ? T.ink : T.surface, color: active ? "#fff" : T.inkMid, fontSize: compact ? 12 : 10, fontWeight: 700, cursor: "pointer", textTransform: "lowercase" }}>
+                  style={{ ...G, height: f.dowSize, padding: 0, borderRadius: 8, border: `1.5px solid ${active ? T.ink : T.border}`, background: active ? T.ink : T.surface, color: active ? "#fff" : T.inkMid, fontSize: compact ? 12 : 11, fontWeight: 700, cursor: "pointer", textTransform: "lowercase" }}>
                   {lbl}
                 </button>
               );

@@ -531,7 +531,7 @@ export function RitmoPageLive({
             <div
               style={{
                 ...G,
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: 700,
                 color: T.inkMid,
                 textTransform: "uppercase",
@@ -553,7 +553,7 @@ export function RitmoPageLive({
             >
               {k.val}
             </div>
-            <div style={{ ...G, fontSize: isMobile ? 9 : 10, color: T.inkMid }}>{k.sub}</div>
+            <div style={{ ...G, fontSize: 11, color: T.inkMid }}>{k.sub}</div>
           </Card>
         ))}
       </div>
@@ -584,7 +584,7 @@ export function RitmoPageLive({
                           strokeDasharray={dash ? "4 3" : ""}
                         />
                       </svg>
-                      <span style={{ ...G, fontSize: isMobile ? 9 : 10, color: T.inkMid }}>{l}</span>
+                      <span style={{ ...G, fontSize: 11, color: T.inkMid }}>{l}</span>
                     </div>
                   ))}
                 </>
@@ -594,7 +594,7 @@ export function RitmoPageLive({
                   <svg width="14" height="6">
                     <line x1="0" y1="3" x2="14" y2="3" stroke={T.green} strokeWidth="2" />
                   </svg>
-                  <span style={{ ...G, fontSize: isMobile ? 9 : 10, color: T.inkMid }}>Real acumulado</span>
+                  <span style={{ ...G, fontSize: 11, color: T.inkMid }}>Real acumulado</span>
                 </div>
               )}
             </div>
@@ -612,13 +612,13 @@ export function RitmoPageLive({
                 <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
                 <XAxis
                   dataKey="day"
-                  tick={{ ...G, fontSize: 10, fill: T.inkLight }}
+                  tick={{ ...G, fontSize: 11, fill: T.inkLight }}
                   axisLine={false}
                   tickLine={false}
                   tickFormatter={(v) => (v % 5 === 0 || v === 1 ? `${v}` : "")}
                 />
                 <YAxis
-                  tick={{ ...G, ...NUM, fontSize: 10, fill: T.inkLight }}
+                  tick={{ ...G, ...NUM, fontSize: 11, fill: T.inkLight }}
                   axisLine={false}
                   tickLine={false}
                   tickFormatter={fmtK}
@@ -634,7 +634,7 @@ export function RitmoPageLive({
                       value: "Hoje",
                       position: "top",
                       fill: T.amber,
-                      fontSize: 10,
+                      fontSize: 11,
                       fontFamily: "Geist,sans-serif",
                     }}
                   />
@@ -651,7 +651,7 @@ export function RitmoPageLive({
                             value: "Orçamento",
                             position: "right",
                             fill: T.blue,
-                            fontSize: 10,
+                            fontSize: 11,
                             fontFamily: "Geist,sans-serif",
                           }
                     }
@@ -671,7 +671,7 @@ export function RitmoPageLive({
                         value: `estouro dia ${estouroDia}`,
                         position: "insideTopLeft",
                         fill: T.red,
-                        fontSize: 10,
+                        fontSize: 11,
                         fontFamily: "Geist,sans-serif",
                       }}
                     />
@@ -744,7 +744,7 @@ export function RitmoPageLive({
                   <div
                     style={{
                       ...G,
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: 700,
                       color: T.inkMid,
                       textTransform: "uppercase",
@@ -769,7 +769,7 @@ export function RitmoPageLive({
                   <div
                     style={{
                       ...G,
-                      fontSize: 10,
+                      fontSize: 11,
                       color: k.color === T.ink ? T.inkMid : k.color,
                       fontWeight: 500,
                     }}
@@ -783,7 +783,7 @@ export function RitmoPageLive({
                   <span
                     style={{
                       ...G,
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: 700,
                       color: T.inkMid,
                       textTransform: "uppercase",
@@ -796,7 +796,7 @@ export function RitmoPageLive({
                     style={{
                       ...G,
                       ...NUM,
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: 700,
                       color: spentPct > timePct ? T.red : T.green,
                     }}
@@ -807,8 +807,8 @@ export function RitmoPageLive({
                 {!isClosed && (
                   <div style={{ marginBottom: 6 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                      <span style={{ ...G, fontSize: 10, color: T.inkMid }}>Tempo</span>
-                      <span style={{ ...G, ...NUM, fontSize: 10, color: T.inkMid }}>{timePct}%</span>
+                      <span style={{ ...G, fontSize: 11, color: T.inkMid }}>Tempo</span>
+                      <span style={{ ...G, ...NUM, fontSize: 11, color: T.inkMid }}>{timePct}%</span>
                     </div>
                     <div style={{ height: 4, background: T.grayLight, borderRadius: 99, overflow: "hidden" }}>
                       <div
@@ -823,12 +823,12 @@ export function RitmoPageLive({
                   </div>
                 )}
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
-                  <span style={{ ...G, fontSize: 10, color: T.inkMid }}>Gasto</span>
+                  <span style={{ ...G, fontSize: 11, color: T.inkMid }}>Gasto</span>
                   <span
                     style={{
                       ...G,
                       ...NUM,
-                      fontSize: 10,
+                      fontSize: 11,
                       color: spentPct > timePct ? T.red : T.green,
                     }}
                   >
@@ -858,7 +858,7 @@ export function RitmoPageLive({
                 <div
                   style={{
                     ...G,
-                    fontSize: 10,
+                    fontSize: 11,
                     fontWeight: 600,
                     color: T.inkMid,
                     textTransform: "uppercase",
@@ -880,7 +880,7 @@ export function RitmoPageLive({
                 >
                   {fmtAbs(projFim)}
                 </div>
-                <div style={{ ...G, fontSize: 10, color: projColor, marginTop: 3, fontWeight: 600 }}>
+                <div style={{ ...G, fontSize: 11, color: projColor, marginTop: 3, fontWeight: 600 }}>
                   {projOver
                     ? `+${fmtAbs(projFim - budgetVal)} acima do orçamento`
                     : `${fmtAbs(budgetVal - projFim)} de margem`}
@@ -890,7 +890,7 @@ export function RitmoPageLive({
                 <div
                   style={{
                     ...G,
-                    fontSize: 10,
+                    fontSize: 11,
                     fontWeight: 600,
                     color: T.inkMid,
                     textTransform: "uppercase",
@@ -908,7 +908,7 @@ export function RitmoPageLive({
                 <div
                   style={{
                     ...G,
-                    fontSize: 10,
+                    fontSize: 11,
                     fontWeight: 600,
                     color: T.inkMid,
                     textTransform: "uppercase",
@@ -936,7 +936,7 @@ export function RitmoPageLive({
                   <div
                     style={{
                       ...G,
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: 600,
                       color: T.inkMid,
                       textTransform: "uppercase",
@@ -959,8 +959,8 @@ export function RitmoPageLive({
                 </div>
                 <div style={{ marginBottom: 5 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                    <span style={{ ...G, fontSize: 10, color: T.inkMid }}>Tempo decorrido</span>
-                    <span style={{ ...G, ...NUM, fontSize: 10, color: T.inkMid }}>{timePct}%</span>
+                    <span style={{ ...G, fontSize: 11, color: T.inkMid }}>Tempo decorrido</span>
+                    <span style={{ ...G, ...NUM, fontSize: 11, color: T.inkMid }}>{timePct}%</span>
                   </div>
                   <div style={{ height: 5, background: T.grayLight, borderRadius: 99, overflow: "hidden" }}>
                     <div
@@ -975,12 +975,12 @@ export function RitmoPageLive({
                 </div>
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3 }}>
-                    <span style={{ ...G, fontSize: 10, color: T.inkMid }}>Orçamento consumido</span>
+                    <span style={{ ...G, fontSize: 11, color: T.inkMid }}>Orçamento consumido</span>
                     <span
                       style={{
                         ...G,
                         ...NUM,
-                        fontSize: 10,
+                        fontSize: 11,
                         color: spentPct > timePct ? T.red : T.green,
                       }}
                     >
@@ -1004,7 +1004,7 @@ export function RitmoPageLive({
                 <div
                   style={{
                     ...G,
-                    fontSize: 10,
+                    fontSize: 11,
                     fontWeight: 600,
                     color: T.inkMid,
                     textTransform: "uppercase",
@@ -1016,9 +1016,9 @@ export function RitmoPageLive({
                 </div>
                 <div style={{ ...M_MONO, ...NUM, fontSize: 17, fontWeight: 800, color: T.ink }}>
                   {fmtAbs(dailyLeft)}
-                  <span style={{ ...G, fontSize: 10, fontWeight: 500, color: T.inkMid }}>/dia</span>
+                  <span style={{ ...G, fontSize: 11, fontWeight: 500, color: T.inkMid }}>/dia</span>
                 </div>
-                <div style={{ ...G, fontSize: 10, color: T.inkMid, marginTop: 3 }}>
+                <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 3 }}>
                   para fechar dentro do orçamento · {daysLeft} dias restantes
                 </div>
               </div>
@@ -1072,7 +1072,7 @@ export function RitmoPageLive({
                     style={{
                       ...M_MONO,
                       ...NUM,
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: 600,
                       color: pct > 0.75 ? T.red : pct > 0.5 ? T.amber : T.inkMid,
                     }}
@@ -1108,7 +1108,7 @@ export function RitmoPageLive({
                           left: "50%",
                           transform: "translateX(-50%)",
                           ...G,
-                          fontSize: 8,
+                          fontSize: 11,
                           fontWeight: 700,
                           color: T.blue,
                           whiteSpace: "nowrap",
@@ -1125,7 +1125,7 @@ export function RitmoPageLive({
                 <span
                   style={{
                     ...G,
-                    fontSize: isMobile ? 10 : 11,
+                    fontSize: 11,
                     fontWeight: isToday ? 700 : 500,
                     color: isToday ? T.blue : isWeekend ? T.inkMid : T.ink,
                   }}
@@ -1154,13 +1154,13 @@ export function RitmoPageLive({
           ].map((l, idx) => (
             <div key={idx} style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <div style={{ width: 9, height: 9, borderRadius: 2, background: l.color, flexShrink: 0 }} />
-              <span style={{ ...G, fontSize: 10, color: T.inkMid }}>{l.label}</span>
+              <span style={{ ...G, fontSize: 11, color: T.inkMid }}>{l.label}</span>
             </div>
           ))}
           {!isMobile && dowData.length > 0 && (
             <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ ...G, fontSize: 10, color: T.inkMid }}>Maior gasto:</span>
-              <span style={{ ...G, fontSize: 10, fontWeight: 700, color: T.ink }}>
+              <span style={{ ...G, fontSize: 11, color: T.inkMid }}>Maior gasto:</span>
+              <span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.ink }}>
                 {dowData.reduce((a, b) => (a.val > b.val ? a : b)).day}
               </span>
             </div>
@@ -1222,7 +1222,7 @@ function MonthChevrons({
       >
         {periodLabel}
         {isClosed && (
-          <span style={{ ...G, fontSize: 10, fontWeight: 600, color: T.inkMid, marginLeft: 4 }}>
+          <span style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid, marginLeft: 4 }}>
             fechado
           </span>
         )}

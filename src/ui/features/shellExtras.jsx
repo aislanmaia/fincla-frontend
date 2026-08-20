@@ -44,7 +44,7 @@ export const MiniChecklist = ({ onboardingData, completedTx, completedBudget, on
               strokeLinecap="round" transform="rotate(-90 14 14)"
               style={{ transition:"stroke-dasharray 0.5s ease" }}/>
           </svg>
-          <span style={{ ...G, fontSize:10, fontWeight:800, color:T.ink, position:"relative" }}>
+          <span style={{ ...G, fontSize: 11, fontWeight:800, color:T.ink, position:"relative" }}>
             {doneCount}/{total}
           </span>
         </div>
@@ -63,7 +63,7 @@ export const MiniChecklist = ({ onboardingData, completedTx, completedBudget, on
               border: `1.5px solid ${it.done ? T.green : T.border}`,
               display:"flex", alignItems:"center", justifyContent:"center",
               transition:"all 0.3s" }}>
-              {it.done && <span style={{ color:"#fff", fontSize:8, lineHeight:1 }}>✓</span>}
+              {it.done && <span style={{ color:"#fff", fontSize: 11, lineHeight:1 }}>✓</span>}
             </div>
             <span style={{ ...G, fontSize:12,
               color: it.done ? T.inkLight : T.ink,
@@ -100,7 +100,7 @@ export const StatePanelV4 = ({ open, day, setDay, budgetPct, setBudgetPct, freeP
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12 }}>
         <div>
           <div style={{ ...G, fontSize:11, fontWeight:700, color:T.ink, letterSpacing:"0.06em" }}>PAINEL DE ESTADOS</div>
-          <div style={{ ...G, fontSize:10, color:T.inkLight, marginTop:2 }}>Simule condições do dashboard</div>
+          <div style={{ ...G, fontSize: 11, color:T.inkLight, marginTop:2 }}>Simule condições do dashboard</div>
         </div>
         <Badge color={mood.badgeColor} bg={mood.badgeBg}><MoodIcon size={9}/> {mood.label}</Badge>
       </div>
@@ -119,7 +119,7 @@ export const StatePanelV4 = ({ open, day, setDay, budgetPct, setBudgetPct, freeP
                 border:`1.5px solid ${dataMode===mode ? T.ink : T.border}`,
                 background: dataMode===mode ? T.ink : T.surface,
                 color: dataMode===mode ? "#fff" : T.inkMid,
-                fontSize:10, fontWeight:700, cursor:"pointer", transition:"all 0.15s" }}>
+                fontSize: 11, fontWeight:700, cursor:"pointer", transition:"all 0.15s" }}>
               {label}
             </button>
           ))}
@@ -139,10 +139,10 @@ export const StatePanelV4 = ({ open, day, setDay, budgetPct, setBudgetPct, freeP
         </div>
       ))}
       <div style={{ marginTop:4, padding:12, background:T.bg, borderRadius:10, border:`1px solid ${T.border}` }}>
-        <div style={{ ...G, fontSize:10, color:T.inkLight, fontWeight:700, letterSpacing:"0.05em", marginBottom:8 }}>MOODS DISPONÍVEIS</div>
+        <div style={{ ...G, fontSize: 11, color:T.inkLight, fontWeight:700, letterSpacing:"0.05em", marginBottom:8 }}>MOODS DISPONÍVEIS</div>
         <div style={{ display:"flex", flexWrap:"wrap", gap:4 }}>
           {Object.entries(MOODS).map(([k, m]) => (
-            <span key={k} style={{ ...G, fontSize:10, fontWeight:600, padding:"3px 8px", borderRadius:99, background:k===moodKey?m.badgeBg:T.grayLight, color:k===moodKey?m.badgeColor:T.inkLight, border:k===moodKey?`1px solid ${m.insightBorder}`:"1px solid transparent", transition:"all 0.3s" }}>{m.label}</span>
+            <span key={k} style={{ ...G, fontSize: 11, fontWeight:600, padding:"3px 8px", borderRadius:99, background:k===moodKey?m.badgeBg:T.grayLight, color:k===moodKey?m.badgeColor:T.inkLight, border:k===moodKey?`1px solid ${m.insightBorder}`:"1px solid transparent", transition:"all 0.3s" }}>{m.label}</span>
           ))}
         </div>
       </div>

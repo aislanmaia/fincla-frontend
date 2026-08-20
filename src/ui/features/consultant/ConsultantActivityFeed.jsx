@@ -16,7 +16,7 @@ export function ConsultantActivityFeed() {
     <Card style={{ padding: 0 }}>
       <div style={{ padding: "14px 17px 10px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ ...G, fontSize: 13, fontWeight: 800, color: T.ink }}>Atividade da base</div>
-        <span style={{ ...G, fontSize: 9, fontWeight: 700, color: T.inkLight, background: T.grayLight, borderRadius: 99, padding: "2px 7px" }}>EM BREVE</span>
+        <span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, background: T.grayLight, borderRadius: 99, padding: "2px 7px" }}>EM BREVE</span>
       </div>
       <div style={{ height: 1, background: T.border }} />
       <div style={{ padding: "28px 20px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 10 }}>

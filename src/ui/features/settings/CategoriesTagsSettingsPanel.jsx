@@ -307,7 +307,7 @@ export function CategoriesTagsSettingsPanel({
         {editCat === "new" && (
           <div style={{ padding: isMobile ? "12px 16px" : "14px 24px",
             borderBottom:`1px solid ${T.border}`, background:T.blueLight }}>
-            <div style={{ ...G, fontSize:10, fontWeight:700, color:T.blue,
+            <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.blue,
               textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:8 }}>Nova categoria</div>
             <div style={{ display:"flex", flexDirection: isMobile ? "column" : "row", gap:8, alignItems: isMobile ? "stretch" : "center" }}>
               <input value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="Nome da categoria" aria-label="Nome da categoria" autoFocus
@@ -382,7 +382,7 @@ export function CategoriesTagsSettingsPanel({
             {expandedCat === cat.id && (
               <div style={{ padding: isMobile ? "10px 16px 14px 36px" : "10px 24px 14px 44px",
                 background:`${cat.color}08`, borderTop:`1px solid ${cat.color}22` }}>
-                <div style={{ ...G, fontSize:10, fontWeight:700, color:cat.color,
+                <div style={{ ...G, fontSize: 11, fontWeight:700, color:cat.color,
                   textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:8 }}>
                   Tags de {cat.labelPt || cat.name}
                 </div>

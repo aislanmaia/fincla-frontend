@@ -21,7 +21,7 @@ function FormatOption({ selected, onSelect, title, subtitle }) {
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink }}>{title}</div>
-        <div style={{ ...G, fontSize: 10, color: T.inkLight }}>{subtitle}</div>
+        <div style={{ ...G, fontSize: 11, color: T.inkLight }}>{subtitle}</div>
       </div>
     </button>
   );

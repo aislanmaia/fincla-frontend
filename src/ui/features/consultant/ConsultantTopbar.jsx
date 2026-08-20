@@ -91,7 +91,7 @@ export function ConsultantTopbar({ isMobile, onOpenMenu, onNav, onAddClient, use
             <span style={{ ...G, fontSize: 12, color: T.inkMid, flex: 1, textAlign: "left" }}>
               Buscar cliente, meta, transação…
             </span>
-            <span style={{ ...MONO, fontSize: 10, color: T.inkGhost, background: T.grayLight, borderRadius: 5, padding: "1px 6px" }}>
+            <span style={{ ...MONO, fontSize: 11, color: T.inkGhost, background: T.grayLight, borderRadius: 5, padding: "1px 6px" }}>
               ⌘K
             </span>
           </button>
@@ -149,7 +149,7 @@ export function ConsultantTopbar({ isMobile, onOpenMenu, onNav, onAddClient, use
             <span
               style={{
                 ...G,
-                fontSize: 9,
+                fontSize: 11,
                 fontWeight: 700,
                 letterSpacing: "0.04em",
                 textTransform: "uppercase",

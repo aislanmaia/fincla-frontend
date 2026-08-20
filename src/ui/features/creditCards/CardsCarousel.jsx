@@ -29,7 +29,7 @@ export function CardsCarousel({
       addBorderRadius: 12,
       addPlusSize: 18,
       addGap: 5,
-      addLabelFontSize: 10,
+      addLabelFontSize: 11, // piso WCAG de 11px (era 10)
       addExtraStyle: { marginTop: 8 },
     }
     : {

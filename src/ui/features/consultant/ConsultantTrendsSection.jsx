@@ -42,7 +42,7 @@ function Header({ computedAt, onRefresh, refreshing }) {
       </div>
       <span style={{ ...G, fontSize: 14, fontWeight: 800, color: T.ink }}>Tendências detectadas pela IA</span>
       <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-        {when && <span style={{ ...G, fontSize: 10.5, color: T.inkLight }}>{when}</span>}
+        {when && <span style={{ ...G, fontSize: 11, color: T.inkLight }}>{when}</span>}
         {onRefresh && (
           <button
             type="button"
@@ -148,7 +148,7 @@ export function ConsultantTrendsProTeaser() {
           <Icon name="sparkles" size={15} color="#fff" />
         </div>
         <span style={{ ...G, fontSize: 14, fontWeight: 800, color: T.ink }}>Tendências detectadas pela IA</span>
-        <span style={{ ...G, fontSize: 9, fontWeight: 700, color: T.purple, background: "#fff", border: "1px solid #E6DEFB", borderRadius: 99, padding: "2px 7px", marginLeft: "auto" }}>PRO</span>
+        <span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.purple, background: "#fff", border: "1px solid #E6DEFB", borderRadius: 99, padding: "2px 7px", marginLeft: "auto" }}>PRO</span>
       </div>
       <div style={{ ...G, fontSize: 12, color: T.inkMid, lineHeight: 1.6 }}>
         A IA cruza os números de toda a carteira e aponta padrões — concentração de risco, janelas
@@ -199,7 +199,7 @@ export function ConsultantTrendsSection({ onAddClient }) {
           )}
           <TrendGrid trends={result.trends} />
           {result.disclaimers?.length > 0 && (
-            <div style={{ ...G, fontSize: 10, color: T.inkGhost, lineHeight: 1.5, marginTop: 14 }}>
+            <div style={{ ...G, fontSize: 11, color: T.inkGhost, lineHeight: 1.5, marginTop: 14 }}>
               {result.disclaimers.join(" · ")}
             </div>
           )}

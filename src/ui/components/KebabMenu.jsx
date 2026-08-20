@@ -119,7 +119,7 @@ export function KebabMenu({ ariaLabel = "Ações", items = [], width = 190 }) {
                     >
                       <span>{item.label}</span>
                       {item.badge && (
-                        <span style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.03em" }}>
+                        <span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.03em" }}>
                           {item.badge}
                         </span>
                       )}

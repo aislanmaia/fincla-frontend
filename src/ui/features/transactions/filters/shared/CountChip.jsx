@@ -11,7 +11,7 @@ export function CountChip({ n, dark = false }) {
         background: dark ? T.ink : "rgba(255,255,255,0.85)",
         color: dark ? "#fff" : T.ink,
         borderRadius: 99,
-        fontSize: 9,
+        fontSize: 11,
         fontWeight: 700,
         padding: "0 5px",
         lineHeight: "13px",

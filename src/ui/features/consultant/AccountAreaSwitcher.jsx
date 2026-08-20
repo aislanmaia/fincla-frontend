@@ -75,7 +75,7 @@ export function AccountAreaSwitcher({ current, user, onNavigate }) {
           <CurIcon size={13} color={cur.accent} strokeWidth={2.1} />
         </span>
         <div style={{ flex: 1, minWidth: 0, textAlign: "left" }}>
-          <div style={{ ...G, fontSize: 8.5, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.08em" }}>
             Você está em
           </div>
           <div style={{ ...G, fontSize: 12, fontWeight: 700, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>

@@ -142,7 +142,7 @@ export function ExportInvoiceModal({
                 style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", borderRadius: 10, border: `1.5px solid ${val ? T.ink : T.border}`, background: val ? T.bg : T.surface, cursor: "pointer", transition: "all 0.15s" }}>
                 <div>
                   <div style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink }}>{label}</div>
-                  <div style={{ ...G, fontSize: 10, color: T.inkLight }}>{sub}</div>
+                  <div style={{ ...G, fontSize: 11, color: T.inkLight }}>{sub}</div>
                 </div>
                 <div style={{ width: 20, height: 20, borderRadius: 6, border: `2px solid ${val ? T.ink : T.border}`, background: val ? T.ink : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   {val && <Check size={11} color="#fff" />}
@@ -155,7 +155,7 @@ export function ExportInvoiceModal({
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
             <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em" }}>Categorias</div>
             <button onClick={() => setExportCategories({})}
-              style={{ ...G, fontSize: 10, color: T.blue, background: "none", border: "none", cursor: "pointer" }}>
+              style={{ ...G, fontSize: 11, color: T.blue, background: "none", border: "none", cursor: "pointer" }}>
               Todas
             </button>
           </div>
@@ -182,7 +182,7 @@ export function ExportInvoiceModal({
             </div>
             <div>
               <div style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink }}>CSV</div>
-              <div style={{ ...G, fontSize: 10, color: T.inkLight }}>Compatível com Excel, Sheets, etc.</div>
+              <div style={{ ...G, fontSize: 11, color: T.inkLight }}>Compatível com Excel, Sheets, etc.</div>
             </div>
           </div>
         </div>
@@ -240,7 +240,7 @@ export function DeleteInvoiceItemModal({
 
         {item.installmentLabel && (
           <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "10px 12px" }}>
-            <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 3 }}>
+            <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 3 }}>
               Parcela selecionada
             </div>
             <div style={{ ...G, fontSize: 12, fontWeight: 700, color: T.ink }}>{item.installmentLabel}</div>
@@ -249,7 +249,7 @@ export function DeleteInvoiceItemModal({
 
         {affectedInvoices.length > 0 && (
           <div>
-            <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
+            <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>
               Faturas afetadas
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>

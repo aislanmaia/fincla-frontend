@@ -81,7 +81,7 @@ export function CardPanel({ cardSel, setCardSel, cards = [], onClose, compact = 
                         right: 6,
                         color: "#fff",
                         ...MONO,
-                        fontSize: 9,
+                        fontSize: 11,
                         fontWeight: 700,
                         opacity: 0.95,
                       }}

@@ -35,7 +35,7 @@ export function ConsultantClientReportTabs({ active, onSelect }) {
             <Icon name={tab.icon} size={14} color={tab.soon ? T.inkGhost : isActive ? T.ink : T.inkLight} strokeWidth={isActive ? 2.2 : 1.8} />
             {tab.label}
             {tab.soon && (
-              <span style={{ ...G, fontSize: 8.5, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: T.inkLight, background: T.grayLight, borderRadius: 5, padding: "1px 5px" }}>
+              <span style={{ ...G, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: T.inkLight, background: T.grayLight, borderRadius: 5, padding: "1px 5px" }}>
                 em breve
               </span>
             )}

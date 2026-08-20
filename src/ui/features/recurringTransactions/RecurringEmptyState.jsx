@@ -32,7 +32,7 @@ export function RecurringEmptyState({ isMobile = false, onNew }) {
           ))}
         </div>
         <div>
-          <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>Comuns para começar</div>
+          <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:8 }}>Comuns para começar</div>
           <div style={{ display:"flex", flexWrap:"wrap", gap:6 }}>
             {["🏠 Aluguel","⚡ Conta de luz","📱 Plano celular","🎵 Spotify","🏋️ Academia","📺 Netflix"].map(p=>(
               <span key={p} style={{ ...G, fontSize:11, fontWeight:600, background:T.grayLight, color:T.inkMid, borderRadius:99, padding:"4px 12px" }}>{p}</span>

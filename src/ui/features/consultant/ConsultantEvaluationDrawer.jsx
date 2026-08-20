@@ -79,7 +79,7 @@ function WatchPointList({ title, items }) {
             <span style={{ ...G, fontSize: 12.5, color: T.inkMid, lineHeight: 1.5 }}>
               {wp.note}
               {wp.metric && (
-                <span style={{ ...G, ...NUM, fontSize: 10, color: T.inkGhost, marginLeft: 6 }}>({wp.metric})</span>
+                <span style={{ ...G, ...NUM, fontSize: 11, color: T.inkGhost, marginLeft: 6 }}>({wp.metric})</span>
               )}
             </span>
           </div>
@@ -106,7 +106,7 @@ function ActionPlan({ items }) {
             <div key={i} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: "11px 13px" }}>
               <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
                 <span style={{ ...G, fontSize: 12.5, fontWeight: 800, color: T.ink, flex: 1, lineHeight: 1.4 }}>{item.title}</span>
-                <span style={{ ...G, fontSize: 9.5, fontWeight: 800, color: p.color, background: p.bg, borderRadius: 6, padding: "3px 7px", whiteSpace: "nowrap", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                <span style={{ ...G, fontSize: 11, fontWeight: 800, color: p.color, background: p.bg, borderRadius: 6, padding: "3px 7px", whiteSpace: "nowrap", textTransform: "uppercase", letterSpacing: "0.04em" }}>
                   {p.label}
                 </span>
               </div>
@@ -117,7 +117,7 @@ function ActionPlan({ items }) {
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 9 }}>
                   {item.evidence.map((e, j) => (
                     <span key={j} title={`Fonte: ${e.source_tool}`}
-                      style={{ ...G, ...NUM, fontSize: 10, fontWeight: 700, color: T.purple, background: T.purpleLight, borderRadius: 6, padding: "3px 7px" }}>
+                      style={{ ...G, ...NUM, fontSize: 11, fontWeight: 700, color: T.purple, background: T.purpleLight, borderRadius: 6, padding: "3px 7px" }}>
                       {e.metric}: {typeof e.value === "number" ? e.value.toLocaleString("pt-BR") : e.value}
                     </span>
                   ))}
@@ -355,13 +355,13 @@ export function ConsultantEvaluationDrawer({ open, organizationId, clientName, o
               <ActionPlan items={result.action_plan} />
 
               {result.disclaimers?.length > 0 && (
-                <div style={{ ...G, fontSize: 10, color: T.inkGhost, lineHeight: 1.5, borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
+                <div style={{ ...G, fontSize: 11, color: T.inkGhost, lineHeight: 1.5, borderTop: `1px solid ${T.border}`, paddingTop: 12 }}>
                   {result.disclaimers.join(" · ")}
                 </div>
               )}
 
               {correlationId && (
-                <div style={{ ...G, fontSize: 9.5, color: T.inkGhost }}>
+                <div style={{ ...G, fontSize: 11, color: T.inkGhost }}>
                   ID da análise: <span style={{ ...NUM }}>{correlationId}</span>
                 </div>
               )}

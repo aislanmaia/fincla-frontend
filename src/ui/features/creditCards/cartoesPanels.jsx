@@ -24,7 +24,7 @@ export function CardVisual({ c, selected, size = "md", onClick }) {
       <div style={{ position: "absolute", top: -W * 0.3, right: -W * 0.2, width: W * 0.8, height: W * 0.8, borderRadius: "50%", background: `${c.corChip}12`, pointerEvents: "none" }} />
       <div style={{ position: "absolute", bottom: -W * 0.2, left: -W * 0.1, width: W * 0.55, height: W * 0.55, borderRadius: "50%", background: "rgba(255,255,255,0.04)", pointerEvents: "none" }} />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", position: "relative" }}>
-        <div style={{ ...G, fontSize: size === "sm" ? 8 : 10, fontWeight: 800, color: c.corChip, textTransform: "uppercase", letterSpacing: "0.16em" }}>{c.banco}</div>
+        <div style={{ ...G, fontSize: 11, fontWeight: 800, color: c.corChip, textTransform: "uppercase", letterSpacing: "0.16em" }}>{c.banco}</div>
         <svg width={size === "sm" ? 14 : 17} height={size === "sm" ? 18 : 22} viewBox="0 0 17 22" fill="none">
           <circle cx="4" cy="11" r="2" fill="rgba(255,255,255,0.7)" />
           <path d="M7 6 Q14 11 7 16" stroke="rgba(255,255,255,0.55)" strokeWidth="1.3" strokeLinecap="round" fill="none" />
@@ -37,19 +37,19 @@ export function CardVisual({ c, selected, size = "md", onClick }) {
           <div style={{ position: "absolute", left: "33%", top: 0, bottom: 0, width: "1px", background: "rgba(0,0,0,0.15)" }} />
         </div>
       )}
-      <div style={{ ...M_MONO, ...NUM, fontSize: size === "sm" ? 9 : 11, color: "rgba(255,255,255,0.65)", letterSpacing: "0.18em" }}>
+      <div style={{ ...M_MONO, ...NUM, fontSize: 11, color: "rgba(255,255,255,0.65)", letterSpacing: "0.18em" }}>
         ···· ···· ···· {c.dig}
       </div>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", position: "relative" }}>
         <div>
-          <div style={{ ...G, fontSize: size === "sm" ? 7.5 : 9, color: "rgba(255,255,255,0.5)", marginBottom: 2 }}>vence dia {c.vencimento}</div>
-          <div style={{ ...G, fontSize: size === "sm" ? 10 : 12, fontWeight: 700, color: "rgba(255,255,255,0.92)" }}>{c.nome}</div>
+          <div style={{ ...G, fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 2 }}>vence dia {c.vencimento}</div>
+          <div style={{ ...G, fontSize: size === "sm" ? 11 : 12, fontWeight: 700, color: "rgba(255,255,255,0.92)" }}>{c.nome}</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
           {pct >= 70 && (
-            <div style={{ ...G, fontSize: 7, fontWeight: 800, color: pct >= 90 ? "#7F1D1D" : "#78350F", background: pct >= 90 ? "#FCA5A5" : "#FCD34D", borderRadius: 5, padding: "2px 6px" }}>{pct}%</div>
+            <div style={{ ...G, fontSize: 11, fontWeight: 800, color: pct >= 90 ? "#7F1D1D" : "#78350F", background: pct >= 90 ? "#FCA5A5" : "#FCD34D", borderRadius: 5, padding: "2px 6px" }}>{pct}%</div>
           )}
-          <div style={{ ...G, fontSize: size === "sm" ? 7 : 8, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.1em" }}>{c.bandeira}</div>
+          <div style={{ ...G, fontSize: 11, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.1em" }}>{c.bandeira}</div>
         </div>
       </div>
     </div>
@@ -66,7 +66,7 @@ export function InvoiceNav({ compact = false, invoice, previousInvoice, nextInvo
       </button>
       <div style={{ textAlign: "center", minWidth: compact ? 80 : 100 }}>
         <div style={{ ...G, ...NUM, fontSize: compact ? 12 : 14, fontWeight: 800, color: T.ink }}>{invoice?.mes}</div>
-        {invoice?.atual && <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.blue, textTransform: "uppercase", letterSpacing: "0.09em" }}>Atual</div>}
+        {invoice?.atual && <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.blue, textTransform: "uppercase", letterSpacing: "0.09em" }}>Atual</div>}
       </div>
       <button onClick={onNext} disabled={!nextInvoice}
         style={{ width: 30, height: 30, borderRadius: 9, border: `1px solid ${T.border}`, background: nextInvoice ? T.surface : T.grayLight, cursor: nextInvoice ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", opacity: nextInvoice ? 1 : 0.3, transition: "all 0.15s" }}>
@@ -101,9 +101,9 @@ export function KpiStrip({
     <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)", gap: isMobile ? 10 : 12 }}>
       {items.map((k, i) => (
         <div key={i} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: isMobile ? "12px 14px" : "14px 16px" }}>
-          <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 5 }}>{k.label}</div>
+          <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 5 }}>{k.label}</div>
           <div style={{ ...G, ...NUM, fontSize: isMobile ? 15 : 18, fontWeight: 800, color: k.color, lineHeight: 1.2 }}>{k.val}</div>
-          <div style={{ ...G, fontSize: 10, color: T.inkMid, marginTop: 4 }}>{k.sub}</div>
+          <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 4 }}>{k.sub}</div>
         </div>
       ))}
     </div>
@@ -122,8 +122,8 @@ export function LimitBar({ card, usagePercent, usageColor, formatBRL }) {
         <div style={{ height: "100%", width: `${usagePercent}%`, background: `linear-gradient(90deg,${usageColor}88,${usageColor})`, borderRadius: 99, transition: "width 0.9s cubic-bezier(0.4,0,0.2,1)" }} />
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5 }}>
-        <span style={{ ...G, ...NUM, fontSize: 10, color: T.inkLight }}>{formatBRL(card.limite - card.disponivel)} usados</span>
-        <span style={{ ...G, ...NUM, fontSize: 10, color: T.inkLight }}>limite {formatBRL(card.limite)}</span>
+        <span style={{ ...G, ...NUM, fontSize: 11, color: T.inkLight }}>{formatBRL(card.limite - card.disponivel)} usados</span>
+        <span style={{ ...G, ...NUM, fontSize: 11, color: T.inkLight }}>limite {formatBRL(card.limite)}</span>
       </div>
     </div>
   );
@@ -143,7 +143,7 @@ export function CategoryBars({ categoryTotals, filterCategory, setFilterCategory
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <span style={{ ...G, ...NUM, fontSize: 12, fontWeight: 700, color: T.ink }}>{formatBRL(c.val)}</span>
-              <span style={{ ...G, fontSize: 10, color: T.inkLight, minWidth: 28, textAlign: "right" }}>{c.pct}%</span>
+              <span style={{ ...G, fontSize: 11, color: T.inkLight, minWidth: 28, textAlign: "right" }}>{c.pct}%</span>
             </div>
           </div>
           <div style={{ height: 4, background: T.grayLight, borderRadius: 99, overflow: "hidden" }}>

@@ -180,7 +180,7 @@ export function HealthScorePopover({ health, computedAt, busy, error, onRecomput
       <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
         <HealthRing health={health} size={44} stroke={4.5} />
         <div style={{ minWidth: 0 }}>
-          <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.05em" }}>
             Saúde financeira
           </div>
           <div style={{ marginTop: 3 }}><RiskBadge health={health} /></div>
@@ -201,13 +201,13 @@ export function HealthScorePopover({ health, computedAt, busy, error, onRecomput
       </div>
 
       {stale && !empty && (
-        <div style={{ ...G, fontSize: 10.5, color: T.amber, background: T.amberLight, borderRadius: 8, padding: "6px 8px", lineHeight: 1.4 }}>
+        <div style={{ ...G, fontSize: 11, color: T.amber, background: T.amberLight, borderRadius: 8, padding: "6px 8px", lineHeight: 1.4 }}>
           Este score é de um mês anterior e pode não refletir a situação atual.
         </div>
       )}
 
       {error && (
-        <div role="alert" style={{ ...G, fontSize: 10.5, color: T.red, background: T.redLight, borderRadius: 8, padding: "6px 8px", lineHeight: 1.4 }}>
+        <div role="alert" style={{ ...G, fontSize: 11, color: T.red, background: T.redLight, borderRadius: 8, padding: "6px 8px", lineHeight: 1.4 }}>
           Não foi possível recalcular agora. Tente novamente.
         </div>
       )}

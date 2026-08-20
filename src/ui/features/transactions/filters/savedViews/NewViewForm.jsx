@@ -127,7 +127,7 @@ export function NewViewForm({
           >
             {name.trim() || "Nome da visualização"}
           </div>
-          <div style={{ ...G, fontSize: 10.5, color: T.inkLight, marginTop: 2 }}>
+          <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 2 }}>
             {activeFacets.length === 0
               ? "Sem filtros"
               : `${activeFacets.length} ${activeFacets.length === 1 ? "filtro" : "filtros"}`}

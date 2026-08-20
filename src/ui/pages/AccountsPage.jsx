@@ -169,7 +169,7 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
 
         {/* Saldo disponível */}
         <Card style={{ marginTop: 16, padding: 18 }}>
-          <div style={{ ...G, fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: T.inkLight }}>
+          <div style={{ ...G, fontSize: 11, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: T.inkLight }}>
             Saldo disponível
           </div>
           <div style={{ ...G, ...NUM, fontSize: 32, fontWeight: 800, letterSpacing: "-0.02em", color: T.ink, marginTop: 6 }}>

@@ -11,7 +11,7 @@ const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" 
 const fmt = (v) => brl.format(Number(v || 0));
 const parseBRL = (s) => Number(String(s ?? "").replace(/\s/g, "").replace(/\./g, "").replace(",", ".")) || 0;
 const ghost = { ...G, fontSize: 11, color: T.inkGhost };
-const cap = { ...G, fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: T.inkLight };
+const cap = { ...G, fontSize: 11, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: T.inkLight };
 const itemKey = (i) => `${i.kind}:${i.tag_id ?? "none"}`;
 
 const MOCK = {
@@ -61,7 +61,7 @@ function CompareCard({ title, planned, actual, kind }) {
       <div style={{ ...G, ...NUM, fontSize: 26, fontWeight: 800, letterSpacing: "-0.02em", color: valColor, marginTop: 5 }}>{fmt(actual)} <span style={{ fontSize: 13, color: T.inkLight, fontWeight: 600 }}>real</span></div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 3 }}>
         <span style={{ ...G, fontSize: 12, color: T.inkLight }}>planejado {fmt(planned)}</span>
-        <span style={{ ...G, fontSize: 10, fontWeight: 700, borderRadius: 9999, padding: "2px 8px", color: vc, background: vc === T.red ? T.redLight : vc === T.amber ? T.amberLight : T.greenLight }}>{label}</span>
+        <span style={{ ...G, fontSize: 11, fontWeight: 700, borderRadius: 9999, padding: "2px 8px", color: vc, background: vc === T.red ? T.redLight : vc === T.amber ? T.amberLight : T.greenLight }}>{label}</span>
       </div>
       <div style={{ height: 8, borderRadius: 99, background: T.grayLight, overflow: "hidden", marginTop: 8 }}>
         <div style={{ width: `${pct}%`, height: "100%", borderRadius: 99, background: barColor(kind, planned, actual) }} />
@@ -183,7 +183,7 @@ function Section({ title, items, editing, form, setForm, inputStyle }) {
   if (!items.length) return null;
   return (
     <Card style={{ marginTop: 14, padding: "4px 16px 12px" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 96px 1fr", gap: 10, alignItems: "center", padding: "10px 0 6px", ...G, fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: T.inkGhost }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr 1fr 96px 1fr", gap: 10, alignItems: "center", padding: "10px 0 6px", ...G, fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: T.inkGhost }}>
         <span>{title}</span><span style={{ textAlign: "right" }}>Planejado</span><span style={{ textAlign: "right" }}>Realizado</span><span>Uso</span><span style={{ textAlign: "right" }}>Variação</span>
       </div>
       {items.map((i) => {
@@ -195,7 +195,7 @@ function Section({ title, items, editing, form, setForm, inputStyle }) {
             <span style={{ ...G, fontSize: 14.5, fontWeight: 600, display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
               {/* `tag_name` vem cru do seed (`Food & Groceries`...); traduz antes de exibir. */}
               {i.tag_name ? categoryLabelPtForTag({ name: i.tag_name }) : "—"}
-              {!i.in_plan ? <span style={{ ...G, fontSize: 9, fontWeight: 700, borderRadius: 9999, padding: "1px 7px", background: T.grayLight, color: T.inkMid }}>fora do plano</span> : null}
+              {!i.in_plan ? <span style={{ ...G, fontSize: 11, fontWeight: 700, borderRadius: 9999, padding: "1px 7px", background: T.grayLight, color: T.inkMid }}>fora do plano</span> : null}
             </span>
             {editing ? (
               <input style={inputStyle} value={form.items[k] ?? ""} onChange={(e) => setForm((f) => ({ ...f, items: { ...f.items, [k]: e.target.value } }))} placeholder={String(Math.round(i.actual))} inputMode="decimal" />
