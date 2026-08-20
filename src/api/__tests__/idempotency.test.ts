@@ -1,9 +1,19 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   IDEMPOTENCY_KEY_HEADER,
+  IDEMPOTENT_REPLAY_HEADER,
+  hasObservedIdempotencySupport,
   isValidIdempotencyKey,
   newIdempotencyKey,
+  noteIdempotencySupport,
+  noteIdempotencySupportFromHeaders,
+  readResponseHeader,
+  resetIdempotencySupportObservation,
 } from '../idempotency';
+
+afterEach(() => {
+  resetIdempotencySupportObservation();
+});
 
 // O backend rejeita com 400 `INVALID_IDEMPOTENCY_KEY` qualquer chave fora de
 // 8–255 chars em [A-Za-z0-9._:-]. Aqui a regra é conferida no formato exato do
@@ -68,5 +78,40 @@ describe('isValidIdempotencyKey', () => {
 describe('IDEMPOTENCY_KEY_HEADER', () => {
   it('é exatamente o nome que o backend lê', () => {
     expect(IDEMPOTENCY_KEY_HEADER).toBe('Idempotency-Key');
+  });
+});
+
+describe('observação de suporte do servidor', () => {
+  it('começa em `false`: sem prova, o cliente não repete nada', () => {
+    expect(hasObservedIdempotencySupport()).toBe(false);
+  });
+
+  it('`Idempotent-Replay` na resposta marca suporte — inclusive quando vale "false"', () => {
+    // O que prova suporte é a PRESENÇA do header, não o valor: `false` só diz
+    // "esta foi a primeira vez que vi essa chave".
+    noteIdempotencySupportFromHeaders({ 'idempotent-replay': 'false' });
+    expect(hasObservedIdempotencySupport()).toBe(true);
+  });
+
+  it('resposta sem o header (backend antigo) NÃO marca suporte', () => {
+    noteIdempotencySupportFromHeaders({ 'content-type': 'application/json' });
+    expect(hasObservedIdempotencySupport()).toBe(false);
+    noteIdempotencySupportFromHeaders(undefined);
+    expect(hasObservedIdempotencySupport()).toBe(false);
+  });
+
+  it('um erro de idempotência também serve de prova (via `noteIdempotencySupport`)', () => {
+    noteIdempotencySupport();
+    expect(hasObservedIdempotencySupport()).toBe(true);
+  });
+});
+
+describe('readResponseHeader', () => {
+  it('lê tanto de objeto cru quanto de `AxiosHeaders` (case-insensitive via `.get`)', () => {
+    expect(readResponseHeader({ 'retry-after': '2' }, 'Retry-After')).toBe('2');
+    expect(readResponseHeader({ 'Retry-After': '2' }, 'Retry-After')).toBe('2');
+    expect(readResponseHeader({ get: (n: string) => (n === 'Retry-After' ? 2 : null) }, 'Retry-After')).toBe('2');
+    expect(readResponseHeader({}, IDEMPOTENT_REPLAY_HEADER)).toBeNull();
+    expect(readResponseHeader(null, 'Retry-After')).toBeNull();
   });
 });

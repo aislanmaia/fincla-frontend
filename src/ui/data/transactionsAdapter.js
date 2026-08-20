@@ -11,7 +11,12 @@ import {
 } from "../../api/transactions";
 import { downloadTransactionsCsv } from "../../api/analytics";
 import { handleApiError } from "../../api/client";
-import { newIdempotencyKey } from "../../api/idempotency";
+import {
+  hasObservedIdempotencySupport,
+  newIdempotencyKey,
+  noteIdempotencySupport,
+  readResponseHeader,
+} from "../../api/idempotency";
 import { categoryLabelPtForTag, detailLabelPtForTag } from "./categoryLabels.js";
 
 /** Máximo por página na API `GET /transactions` (validação backend). */
@@ -929,12 +934,21 @@ export async function downloadTransactionsCsvForUi(organizationId, options) {
  * cliente. A mensagem diz o que fazer sem jogar jargão de HTTP na tela.
  */
 const IDEMPOTENCY_ERROR_MESSAGES = {
+  // Mismatch = o servidor TEM registro dessa chave e considera o corpo
+  // diferente. Como só reusamos chave quando a nossa impressão digital
+  // garantiu payload idêntico, isso significa que a requisição anterior
+  // chegou a ser processada — mandar "registre de novo" sem mais nada
+  // empurraria a pessoa direto para a duplicata.
   IDEMPOTENCY_KEY_PAYLOAD_MISMATCH:
-    "Falha interna do aplicativo ao reenviar esta transação. Atualize a página e registre de novo.",
+    "Falha interna do aplicativo ao reenviar esta transação. O envio anterior chegou a ser processado — confira seu extrato antes de registrar de novo.",
+  // Chave malformada é recusada ANTES de qualquer gravação: nada foi criado.
   INVALID_IDEMPOTENCY_KEY:
-    "Falha interna do aplicativo ao reenviar esta transação. Atualize a página e registre de novo.",
+    "Falha interna do aplicativo ao registrar esta transação. Nada foi salvo. Atualize a página e registre de novo.",
+  // Só chega aqui depois de esgotadas as tentativas com espera crescente: é
+  // reserva órfã, que responderia 409 pelas 24h inteiras. "Aguarde alguns
+  // segundos" seria mentira — esperar não resolve.
   IDEMPOTENCY_KEY_IN_FLIGHT:
-    "Este mesmo lançamento ainda está sendo registrado. Aguarde alguns segundos e confira seu extrato antes de tentar de novo.",
+    "Outro envio deste mesmo lançamento ficou preso no servidor. Confira seu extrato: se a transação não estiver lá, registre de novo.",
 };
 
 export function formatTransactionsApiError(error) {
@@ -1454,19 +1468,24 @@ function sameUpdateField(a, b) {
  * classes AMBÍGUAS acima voltam a ser repetíveis — não porque provamos que
  * nada foi gravado, mas porque agora tanto faz.
  *
+ * O retry só liga depois que o SERVIDOR provou que implementa a feature (ver
+ * `hasObservedIdempotencySupport`). Contra um backend sem idempotência —
+ * frontend no ar antes da API — repetir voltaria a duplicar, então nesse caso
+ * o comportamento continua sendo o de hoje: uma requisição, sem repetição.
+ *
  * O que continua FORA do retry:
  *  - 4xx em geral (validação, auth, conflito de negócio): erro definitivo do
  *    pedido; repetir só some com o feedback real do problema.
  *  - 500 genérico: quase sempre bug determinístico do servidor — repetir
- *    queima tempo e a segunda resposta é a mesma. (Se o 500 veio DEPOIS do
- *    commit, a chave fica presa e a repetição responderia 409 até vencer.)
+ *    queima tempo e a segunda resposta é a mesma.
  *  - 400 `INVALID_IDEMPOTENCY_KEY` e 422 `IDEMPOTENCY_KEY_PAYLOAD_MISMATCH`:
  *    são bug NOSSO, não do servidor nem da pessoa. Ver `createTransactionForUi`.
  *
  * Caso especial: 409 `IDEMPOTENCY_KEY_IN_FLIGHT` significa "outra requisição
  * com essa mesma chave está rodando agora". Repetir com a MESMA chave é o
  * comportamento correto e obrigatório (uma chave nova criaria a duplicata que
- * o 409 está justamente impedindo); o backend manda `Retry-After: 1`.
+ * o 409 está justamente impedindo); o backend manda `Retry-After: 2` e
+ * publica backoff 2s/4s/8s com parada em ~4 tentativas.
  */
 const CREATE_RETRYABLE_NETWORK_CODES = new Set([
   "ERR_NETWORK",
@@ -1480,11 +1499,24 @@ const CREATE_RETRYABLE_STATUSES = new Set([502, 503, 504]);
 const IDEMPOTENCY_IN_FLIGHT = "IDEMPOTENCY_KEY_IN_FLIGHT";
 const IDEMPOTENCY_PAYLOAD_MISMATCH = "IDEMPOTENCY_KEY_PAYLOAD_MISMATCH";
 const IDEMPOTENCY_INVALID_KEY = "INVALID_IDEMPOTENCY_KEY";
+const IDEMPOTENCY_ERROR_CODES = new Set([
+  IDEMPOTENCY_IN_FLIGHT,
+  IDEMPOTENCY_PAYLOAD_MISMATCH,
+  IDEMPOTENCY_INVALID_KEY,
+]);
 
-/** Poucas tentativas, espera curta e crescente — a pessoa está olhando a tela. */
+// Transiente (rede/502/503/504): poucas tentativas e espera curta — a pessoa
+// está olhando a tela esperando o "Registrado!".
 const CREATE_MAX_ATTEMPTS = 3;
 const CREATE_RETRY_BASE_DELAY_MS = 400;
-const CREATE_RETRY_MAX_DELAY_MS = 4000;
+// 409 in-flight: o backend publica 2s/4s/8s com parada em ~4 tentativas.
+// Esperas maiores fazem sentido aqui porque quem responde é uma reserva de
+// chave que está prestes a virar resposta pronta.
+const CREATE_IN_FLIGHT_MAX_ATTEMPTS = 4;
+const CREATE_IN_FLIGHT_BASE_DELAY_MS = 2000;
+// Teto do respeito ao `Retry-After`: alto o suficiente para o 8s publicado
+// (e alguma folga), baixo o suficiente para não congelar a UI por minutos.
+const CREATE_RETRY_MAX_DELAY_MS = 30_000;
 
 /** Lê `detail.error` da resposta de erro; `null` quando não é esse formato. */
 export function idempotencyErrorCodeOf(error) {
@@ -1493,6 +1525,17 @@ export function idempotencyErrorCodeOf(error) {
     return detail.error;
   }
   return null;
+}
+
+/**
+ * Marca no erro que a chave daquela tentativa foi LIBERADA antes do throw.
+ * A UI precisa saber: sem chave retida, o reenvio deixa de ser um replay e
+ * volta a ser um lançamento novo — logo, volta a merecer o aviso do extrato.
+ */
+const KEY_RELEASED_FLAG = "__finclaIdempotencyKeyReleased";
+
+export function createErrorReleasedIdempotencyKey(error) {
+  return Boolean(error?.[KEY_RELEASED_FLAG]);
 }
 
 export function isCreateTransactionErrorRetryable(error) {
@@ -1505,58 +1548,124 @@ export function isCreateTransactionErrorRetryable(error) {
   return CREATE_RETRYABLE_STATUSES.has(status);
 }
 
-/** `Retry-After` (segundos) — headers do axios podem vir como objeto cru. */
-function retryAfterMs(error) {
-  const headers = error?.response?.headers;
-  if (!headers) return null;
-  const raw =
-    typeof headers.get === "function"
-      ? headers.get("retry-after")
-      : (headers["retry-after"] ?? headers["Retry-After"]);
-  const seconds = Number(raw);
-  if (!Number.isFinite(seconds) || seconds <= 0) return null;
-  return Math.min(seconds * 1000, CREATE_RETRY_MAX_DELAY_MS);
-}
+/**
+ * `Retry-After` conforme a RFC: ou um número de SEGUNDOS, ou um HTTP-date.
+ * As duas formas são aceitas — tratar a data como `NaN` e cair no backoff
+ * curto martelaria justamente quem pediu pausa. `0` é válido (repetir já).
+ */
+function retryAfterMs(error, nowMs) {
+  const raw = readResponseHeader(error?.response?.headers, "Retry-After");
+  if (raw == null) return null;
+  const trimmed = raw.trim();
+  if (trimmed === "") return null;
 
-function createRetryDelayMs(error, attempt) {
-  return (
-    retryAfterMs(error) ??
-    Math.min(CREATE_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1), CREATE_RETRY_MAX_DELAY_MS)
-  );
-}
-
-/** Serializa estável (chaves ordenadas) para comparar payloads por conteúdo. */
-function stableStringify(value) {
-  if (value === null || typeof value !== "object") {
-    return JSON.stringify(value) ?? "null";
+  if (/^\d+$/.test(trimmed)) {
+    return Math.min(Number(trimmed) * 1000, CREATE_RETRY_MAX_DELAY_MS);
   }
-  if (Array.isArray(value)) {
-    return `[${value.map(stableStringify).join(",")}]`;
-  }
-  return `{${Object.keys(value)
-    .sort()
-    .map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`)
-    .join(",")}}`;
+  const at = Date.parse(trimmed);
+  if (Number.isNaN(at)) return null;
+  return Math.min(Math.max(at - nowMs, 0), CREATE_RETRY_MAX_DELAY_MS);
 }
 
 /**
- * Chave retida da última TENTATIVA DE SALVAR que ainda não deu certo, junto
- * da impressão digital do payload que a gerou. É o que faz a chave ser "uma
- * por tentativa", não "uma por requisição": todo reenvio daquela tentativa —
- * o retry automático aqui dentro e o clique manual em "Tentar novamente" —
- * reusa a mesma chave e por isso não pode duplicar.
- *
- * A impressão digital é o que separa uma TENTATIVA da seguinte: se a pessoa
- * editou qualquer campo, o payload muda, a chave retida deixa de valer e uma
- * nova é gerada. Sem isso o backend responderia 422
- * `IDEMPOTENCY_KEY_PAYLOAD_MISMATCH` — um erro confuso para quem só corrigiu
- * a descrição.
+ * Espera antes da próxima tentativa. Pura (o `nowMs` entra por parâmetro) para
+ * poder ser testada sem cronômetro: uma asserção de tempo real sobre 2s/4s/8s
+ * estouraria o timeout do Vitest e ainda seria flaky sob carga.
  */
-let retainedCreateKey = null;
+export function createRetryDelayMs(error, attempt, { inFlight = false, nowMs = Date.now() } = {}) {
+  const fromHeader = retryAfterMs(error, nowMs);
+  if (fromHeader != null) return fromHeader;
+  const base = inFlight ? CREATE_IN_FLIGHT_BASE_DELAY_MS : CREATE_RETRY_BASE_DELAY_MS;
+  return Math.min(base * 2 ** (attempt - 1), CREATE_RETRY_MAX_DELAY_MS);
+}
 
-/** Solta a chave retida. Exportado para os testes isolarem cada cenário. */
+/**
+ * Serializa estável (chaves ordenadas) para comparar payloads por conteúdo.
+ *
+ * REJEITA entrada que o JSON não representa fielmente, em vez de fingir que
+ * representa. `Object.keys` num `Date` devolve `[]`, então sem esta guarda
+ * todo `Date` viraria `{}` e duas transações de DIAS DIFERENTES dividiriam a
+ * mesma impressão digital — a segunda seria engolida como replay da primeira.
+ * `undefined` como VALOR de campo segue a regra do `JSON.stringify` (campo
+ * omitido), porque é exatamente isso que vai no corpo da requisição.
+ */
+function stableStringify(value) {
+  if (value === null) return "null";
+  const type = typeof value;
+  if (type === "string" || type === "boolean") return JSON.stringify(value);
+  if (type === "number") {
+    if (!Number.isFinite(value)) {
+      throw new TypeError(`Payload de transação com número não-JSON: ${value}`);
+    }
+    // `100` e `100.0` já são o MESMO number em JS, e o backend normaliza
+    // números do mesmo jeito no hash canônico dele — remontar o payload com
+    // `toFixed(2)` do lado de lá não gera mismatch.
+    return JSON.stringify(value);
+  }
+  if (type !== "object") {
+    throw new TypeError(`Payload de transação com valor não-JSON (${type}).`);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((v) => (v === undefined ? "null" : stableStringify(v))).join(",")}]`;
+  }
+  const proto = Object.getPrototypeOf(value);
+  if (proto !== Object.prototype && proto !== null) {
+    throw new TypeError(
+      `Payload de transação com objeto não-simples (${value.constructor?.name ?? "?"}); use tipos JSON.`,
+    );
+  }
+  const parts = [];
+  for (const key of Object.keys(value).sort()) {
+    const entry = value[key];
+    if (entry === undefined) continue; // omitido do corpo, como no JSON.stringify
+    parts.push(`${JSON.stringify(key)}:${stableStringify(entry)}`);
+  }
+  return `{${parts.join(",")}}`;
+}
+
+/**
+ * Chaves retidas de TENTATIVAS DE SALVAR que ainda não deram certo, indexadas
+ * pela impressão digital do payload que as gerou. É o que faz a chave ser
+ * "uma por tentativa", não "uma por requisição": todo reenvio daquela
+ * tentativa — o retry automático aqui dentro e o clique manual em "Tentar
+ * novamente" — reusa a mesma chave e por isso não pode duplicar.
+ *
+ * MAPA, não um slot único: com um slot só, registrar a transação B (sucesso)
+ * apagava a chave retida da tentativa A que tinha falhado, e o reenvio de A
+ * saía com chave NOVA — duplicando A se o POST original tivesse persistido.
+ *
+ * Com TTL curto porque a retenção também engole: às 09:00 um "Café R$ 7,00"
+ * falha com 503 depois de gravar; às 15:00 a pessoa compra outro café e digita
+ * exatamente os mesmos dados (a data vai sempre como `T12:00:00`, então o
+ * payload é idêntico byte a byte). Sem expirar, a chave da manhã seria reusada
+ * e o backend replayaria o registro antigo: a tela diz "Registrado!" e o
+ * lançamento da tarde NUNCA existe. A janela do backend é de 24h; a nossa é de
+ * minutos, o tempo de uma pessoa insistir no botão.
+ */
+const CREATE_KEY_RETENTION_MS = 10 * 60 * 1000;
+const retainedCreateKeys = new Map();
+
+function pruneRetainedCreateKeys(nowMs) {
+  for (const [fingerprint, entry] of retainedCreateKeys) {
+    if (nowMs - entry.createdAt >= CREATE_KEY_RETENTION_MS) {
+      retainedCreateKeys.delete(fingerprint);
+    }
+  }
+}
+
+/** Solta TODAS as chaves retidas. Usado pelos testes para isolar cenários. */
 export function resetCreateIdempotencyKey() {
-  retainedCreateKey = null;
+  retainedCreateKeys.clear();
+}
+
+/**
+ * Solta a chave de UMA tentativa. O modal chama isto quando descarta o estado
+ * de falha (fechar/reabrir o drawer, resetar o formulário): a partir daí um
+ * lançamento com os mesmos dados é intenção NOVA, não reenvio — e reusar a
+ * chave antiga faria o backend replayar em vez de criar.
+ */
+export function releaseCreateIdempotencyKey(fingerprint) {
+  if (typeof fingerprint === "string") retainedCreateKeys.delete(fingerprint);
 }
 
 /**
@@ -1580,16 +1689,19 @@ export function createTransactionPayloadFingerprint(payload) {
  * um segundo lançamento). Usada nos testes para inspecionar a retenção.
  */
 export function createRetryIsProtectedFor(payload) {
-  return retainedCreateKey?.fingerprint === stableStringify(payload);
+  const now = Date.now();
+  pruneRetainedCreateKeys(now);
+  return retainedCreateKeys.has(stableStringify(payload));
 }
 
-function idempotencyKeyForAttempt(payload) {
-  const fingerprint = stableStringify(payload);
-  if (retainedCreateKey?.fingerprint === fingerprint) {
-    return retainedCreateKey.key;
-  }
-  retainedCreateKey = { key: newIdempotencyKey(), fingerprint };
-  return retainedCreateKey.key;
+function idempotencyKeyForAttempt(fingerprint) {
+  const now = Date.now();
+  pruneRetainedCreateKeys(now);
+  const retained = retainedCreateKeys.get(fingerprint);
+  if (retained) return retained.key;
+  const key = newIdempotencyKey();
+  retainedCreateKeys.set(fingerprint, { key, createdAt: now });
+  return key;
 }
 
 /**
@@ -1597,22 +1709,48 @@ function idempotencyKeyForAttempt(payload) {
  * erro ao cliente. Continua valendo como fato de rede — o que MUDOU é o uso:
  * com `Idempotency-Key`, reenviar o MESMO payload é seguro mesmo aqui, então
  * isto não serve mais para bloquear o reenvio, e sim para avisar quando a
- * pessoa muda os dados depois de um erro ambíguo (aí a tentativa é outra,
- * com chave nova, e o lançamento anterior pode existir no servidor).
+ * chave deixou de proteger o próximo envio.
  *
  *  - Sem NENHUMA requisição ter saído do navegador: NUNCA ambíguo. Cobre erro
  *    que não é do axios (um `TypeError` em `buildCreateTransactionPayload`
  *    roda no MESMO try, antes da rede) e erro do axios sem `error.request`
  *    (falhou montando o request, nunca despachou).
  *  - Requisição saiu, sem resposta (rede/timeout) ou 5xx: AMBÍGUO.
- *  - 4xx: SEGURO. A API valida antes de gravar.
+ *  - 422 `IDEMPOTENCY_KEY_PAYLOAD_MISMATCH`: AMBÍGUO apesar de ser 4xx. Só
+ *    reusamos chave quando a nossa própria impressão digital garantiu payload
+ *    idêntico; se mesmo assim o servidor viu payload DIFERENTE para aquela
+ *    chave, é porque ele tem registro dela — ou seja, a requisição anterior
+ *    chegou a ser processada. Tratar como "seguro" mandaria a pessoa
+ *    registrar de novo por cima de algo que já existe.
+ *  - 409 `IDEMPOTENCY_KEY_IN_FLIGHT` esgotado: AMBÍGUO. A reserva órfã pode
+ *    corresponder a uma transação criada.
+ *  - demais 4xx: SEGURO. A API valida antes de gravar.
  */
 export function isCreateTransactionErrorMaybePersisted(error) {
   if (!axios.isAxiosError(error)) return false;
+  // ANTES da guarda de `error.request`: um corpo com código de idempotência é
+  // resposta do servidor, logo prova por si só que a requisição foi
+  // despachada E processada — mais forte do que a presença do objeto request.
+  const idempotencyError = idempotencyErrorCodeOf(error);
+  if (idempotencyError === IDEMPOTENCY_PAYLOAD_MISMATCH) return true;
+  if (idempotencyError === IDEMPOTENCY_IN_FLIGHT) return true;
   if (!error.request) return false;
   const status = error.response?.status;
   if (status == null) return true; // requisição saiu, sem resposta: rede ou timeout.
   return status >= 500;
+}
+
+/** Marca o erro como "a chave desta tentativa foi liberada" e o devolve. */
+function releasingKey(error, fingerprint) {
+  releaseCreateIdempotencyKey(fingerprint);
+  if (error && typeof error === "object") {
+    try {
+      error[KEY_RELEASED_FLAG] = true;
+    } catch {
+      // Erro congelado (raro): a UI só perde o aviso extra, nada quebra.
+    }
+  }
+  return error;
 }
 
 /**
@@ -1620,34 +1758,55 @@ export function isCreateTransactionErrorMaybePersisted(error) {
  * poucas vezes e com espera crescente, as classes que a chave tornou seguras.
  */
 export async function createTransactionForUi(payload) {
-  const idempotencyKey = idempotencyKeyForAttempt(payload);
+  const fingerprint = stableStringify(payload);
+  const idempotencyKey = idempotencyKeyForAttempt(fingerprint);
 
   for (let attempt = 1; ; attempt += 1) {
     try {
       const created = await createTransaction(payload, { idempotencyKey });
-      // Sucesso confirmado: a chave cumpriu o papel e precisa ser solta. Se
-      // ficasse retida, registrar DE NOVO um lançamento idêntico (mesmo
-      // valor, mesma descrição, mesmo dia — café duas vezes no mesmo dia
-      // existe) cairia no replay e a segunda transação nunca seria criada.
-      resetCreateIdempotencyKey();
+      // Sucesso confirmado: a chave DESTA tentativa cumpriu o papel e sai do
+      // mapa. Se ficasse retida, registrar de novo um lançamento idêntico
+      // (mesmo valor, mesma descrição, mesmo dia — café duas vezes no mesmo
+      // dia existe) cairia no replay e a segunda transação nunca seria criada.
+      releaseCreateIdempotencyKey(fingerprint);
       return created;
     } catch (err) {
       const idempotencyError = idempotencyErrorCodeOf(err);
+      if (IDEMPOTENCY_ERROR_CODES.has(idempotencyError)) {
+        // Um erro DE IDEMPOTÊNCIA só existe em backend que implementa a
+        // feature — vale como prova de suporte igual ao header.
+        noteIdempotencySupport();
+      }
       if (
         idempotencyError === IDEMPOTENCY_PAYLOAD_MISMATCH ||
         idempotencyError === IDEMPOTENCY_INVALID_KEY
       ) {
         // Bug NOSSO: ou geramos uma chave fora do formato, ou reusamos uma
         // chave com payload diferente. Não repete (repetir dá o mesmo erro) e
-        // solta a chave, para que a próxima tentativa nasça limpa em vez de
-        // ficar presa no mesmo 422 para sempre.
-        resetCreateIdempotencyKey();
-        throw err;
+        // libera a chave, para que a próxima tentativa nasça limpa em vez de
+        // ficar presa no mesmo erro até a janela de 24h vencer.
+        throw releasingKey(err, fingerprint);
       }
-      if (attempt >= CREATE_MAX_ATTEMPTS || !isCreateTransactionErrorRetryable(err)) {
-        throw err;
+
+      const inFlight = idempotencyError === IDEMPOTENCY_IN_FLIGHT;
+      const maxAttempts = inFlight ? CREATE_IN_FLIGHT_MAX_ATTEMPTS : CREATE_MAX_ATTEMPTS;
+      if (attempt >= maxAttempts) {
+        // In-flight que não sai do lugar é reserva órfã: ela responde 409
+        // pelas 24h inteiras, então manter a chave retida deixaria a pessoa
+        // presa num "aguarde alguns segundos" que nunca resolve. Liberar aqui
+        // faz o próximo "Tentar novamente" sair com chave nova — e a UI
+        // avisa sobre o extrato, porque aí pode mesmo duplicar.
+        throw inFlight ? releasingKey(err, fingerprint) : err;
       }
-      await new Promise((resolve) => setTimeout(resolve, createRetryDelayMs(err, attempt)));
+      if (!isCreateTransactionErrorRetryable(err)) throw err;
+      // Retry só depois que o servidor provou que implementa idempotência.
+      // Sem essa prova (frontend no ar antes da API), repetir volta a ser o
+      // risco de duplicata da issue #102.
+      if (!inFlight && !hasObservedIdempotencySupport()) throw err;
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, createRetryDelayMs(err, attempt, { inFlight })),
+      );
     }
   }
 }

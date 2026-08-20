@@ -86,10 +86,17 @@ vi.mock("../../../data/transactionsAdapter.js", async (importOriginal) => {
   return {
     ...actual,
     createTransactionForUi: vi.fn(),
+    // Embrulha a implementação real: o efeito continua acontecendo e ainda dá
+    // para afirmar QUANDO o modal solta a chave retida.
+    releaseCreateIdempotencyKey: vi.fn(actual.releaseCreateIdempotencyKey),
   };
 });
 
-import { createTransactionForUi } from "../../../data/transactionsAdapter.js";
+import {
+  createTransactionForUi,
+  createTransactionPayloadFingerprint,
+  releaseCreateIdempotencyKey,
+} from "../../../data/transactionsAdapter.js";
 import { NovaTransacaoModal } from "../NovaTransacaoModal.jsx";
 
 // `request: {}` (truthy) simula que a requisição de fato saiu do navegador —
@@ -132,6 +139,7 @@ describe("NovaTransacaoModal — criação que falha (reenvio manual protegido p
 
   beforeEach(() => {
     createTransactionForUi.mockReset();
+    releaseCreateIdempotencyKey.mockClear();
   });
 
   afterEach(() => {
@@ -249,6 +257,56 @@ describe("NovaTransacaoModal — criação que falha (reenvio manual protegido p
 
     await waitFor(() => expect(createTransactionForUi).toHaveBeenCalledTimes(2));
     expect(screen.queryByText(/Confira seu extrato/i)).not.toBeInTheDocument();
+  });
+
+
+  it("erro que LIBEROU a chave (422 PAYLOAD_MISMATCH): sem a promessa de \"não duplica\" e com confirmação antes de reenviar", async () => {
+    // Mismatch prova que o envio anterior foi processado, e o adapter solta a
+    // chave — o reenvio deixa de ser replay. Prometer "pode tentar sem medo"
+    // aqui empurraria a pessoa direto para a duplicata.
+    const user = userEvent.setup();
+    const err = httpError(422, {
+      detail: { error: "IDEMPOTENCY_KEY_PAYLOAD_MISMATCH", message: "mismatch", type: "idempotency" },
+    });
+    err.__finclaIdempotencyKeyReleased = true;
+    createTransactionForUi.mockRejectedValueOnce(err);
+
+    render(<NovaTransacaoModal {...baseProps} />);
+    await fillAndReachReview(user);
+    await user.click(screen.getByRole("button", { name: /Confirmar despesa/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/confira seu extrato antes de registrar de novo/i)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/não duplica o lançamento/i)).not.toBeInTheDocument();
+
+    // Sem chave retida, reenviar é lançamento novo: a confirmação volta mesmo
+    // com os dados intactos.
+    await user.click(await screen.findByRole("button", { name: "Tentar novamente" }));
+    expect(await screen.findByText(/Confira seu extrato antes de continuar/i)).toBeInTheDocument();
+    expect(createTransactionForUi).toHaveBeenCalledTimes(1);
+  });
+
+  it("reabrir o drawer SOLTA a chave retida da falha descartada (senão um lançamento igual horas depois volta como replay)", async () => {
+    const user = userEvent.setup();
+    createTransactionForUi.mockRejectedValueOnce(networkError());
+
+    const { rerender } = render(<NovaTransacaoModal {...baseProps} />);
+    await fillAndReachReview(user);
+    await user.click(screen.getByRole("button", { name: /Confirmar despesa/i }));
+    await screen.findByRole("button", { name: "Tentar novamente" });
+
+    const failedFingerprint = createTransactionPayloadFingerprint(
+      createTransactionForUi.mock.calls[0][0],
+    );
+    releaseCreateIdempotencyKey.mockClear();
+
+    rerender(<NovaTransacaoModal {...baseProps} open={false} />);
+    rerender(<NovaTransacaoModal {...baseProps} open={true} />);
+
+    await waitFor(() =>
+      expect(releaseCreateIdempotencyKey).toHaveBeenCalledWith(failedFingerprint),
+    );
   });
 
   it("fechar e reabrir o drawer limpa o \"Tentar novamente\" de uma falha anterior (reabrir pra EDITAR não pode herdar a ação de CRIAR)", async () => {

@@ -12,13 +12,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // requisições HTTP de verdade, não chamadas de mock, e deixa inspecionar o
 // header `Idempotency-Key` que saiu em CADA tentativa.
 import apiClient from "../../../api/client";
+import { resetIdempotencySupportObservation } from "../../../api/idempotency";
 import {
+  createErrorReleasedIdempotencyKey,
+  createRetryDelayMs,
   createRetryIsProtectedFor,
   createTransactionForUi,
   createTransactionPayloadFingerprint,
   formatTransactionsApiError,
   isCreateTransactionErrorMaybePersisted,
   isCreateTransactionErrorRetryable,
+  releaseCreateIdempotencyKey,
   resetCreateIdempotencyKey,
 } from "../transactionsAdapter.js";
 
@@ -34,11 +38,17 @@ vi.stubGlobal("localStorage", {
 
 const originalAdapter = apiClient.defaults.adapter;
 
+/** Header que prova, na resposta, que este backend implementa idempotência. */
+const REPLAY_HEADERS = { "idempotent-replay": "false" };
+
 /** Replica o `settle()` interno do axios: só 2xx resolve; o resto rejeita com `.response`. */
 function respondWithStatus(config, status, data = {}, headers = {}) {
   const response = { status, statusText: "", data, headers, config };
   if (status >= 200 && status < 300) return response;
-  throw new AxiosError(`Request failed with status code ${status}`, undefined, config, undefined, response);
+  // `request: {}` (truthy) espelha o axios real: houve resposta, logo houve
+  // requisição despachada. Sem isso o fake seria mais "limpo" que a realidade
+  // e esconderia bugs em quem olha `error.request`.
+  throw new AxiosError(`Request failed with status code ${status}`, undefined, config, {}, response);
 }
 
 /** Erro de rede: adapter nunca recebeu resposta alguma (sem `response`). */
@@ -97,15 +107,31 @@ function settling(promise) {
   return promise;
 }
 
+/**
+ * Faz UMA criação bem-sucedida com `Idempotent-Replay` na resposta — é assim
+ * que o cliente descobre que o backend implementa a feature. Sem isso o retry
+ * fica desligado de propósito (ver o teste do portão de suporte).
+ */
+async function observeIdempotencySupport() {
+  apiClient.defaults.adapter = scriptAdapter([
+    (config) => respondWithStatus(config, 201, { id: 0 }, REPLAY_HEADERS),
+  ]);
+  await createTransactionForUi({ organization_id: "org-1", description: "prova", value: 1 });
+  resetCreateIdempotencyKey();
+}
+
 beforeEach(() => {
   // Cada cenário começa sem chave retida de um cenário anterior — a retenção
   // é estado de módulo por design (ela é o que atravessa os reenvios).
   resetCreateIdempotencyKey();
+  resetIdempotencySupportObservation();
 });
 
 afterEach(() => {
   apiClient.defaults.adapter = originalAdapter;
   resetCreateIdempotencyKey();
+  resetIdempotencySupportObservation();
+  vi.restoreAllMocks();
 });
 
 describe("createTransactionForUi — `Idempotency-Key` no POST", () => {
@@ -161,6 +187,10 @@ describe("createTransactionForUi — `Idempotency-Key` no POST", () => {
 });
 
 describe("createTransactionForUi — retry das classes que a chave tornou seguras", () => {
+  beforeEach(async () => {
+    await observeIdempotencySupport();
+  });
+
   // Estas são exatamente as classes que a issue #102 provou AMBÍGUAS (nenhuma
   // prova que o servidor não gravou) e que por isso não eram repetidas. Com
   // `Idempotency-Key` repetir deixou de arriscar duplicata, então voltam a
@@ -199,9 +229,11 @@ describe("createTransactionForUi — retry das classes que a chave tornou segura
   });
 
   it("409 IDEMPOTENCY_KEY_IN_FLIGHT: repete com a MESMA chave (chave nova aqui criaria a duplicata que o 409 impede)", async () => {
+    // `retry-after: 0` mantém o teste instantâneo E prova que o zero é
+    // honrado como espera válida em vez de cair no backoff interno.
     const adapter = scriptAdapter([
-      (config) => idempotencyFailure(config, 409, "IDEMPOTENCY_KEY_IN_FLIGHT", { "retry-after": "1" }),
-      (config) => respondWithStatus(config, 201, { id: 8 }),
+      (config) => idempotencyFailure(config, 409, "IDEMPOTENCY_KEY_IN_FLIGHT", { "retry-after": "0" }),
+      (config) => respondWithStatus(config, 201, { id: 8 }, REPLAY_HEADERS),
     ]);
     apiClient.defaults.adapter = adapter;
 
@@ -210,17 +242,76 @@ describe("createTransactionForUi — retry das classes que a chave tornou segura
     expect(new Set(adapter.keys).size).toBe(1);
   });
 
-  it("409 IDEMPOTENCY_KEY_IN_FLIGHT persistente: para em 3 tentativas e explica o estado em PT-BR", async () => {
-    const step = (config) => idempotencyFailure(config, 409, "IDEMPOTENCY_KEY_IN_FLIGHT", { "retry-after": "1" });
-    const adapter = scriptAdapter([step, step, step, step]);
+  it("409 IN_FLIGHT persistente: 4 tentativas (contrato do backend), LIBERA a chave e diz que esperar não resolve", async () => {
+    const step = (config) => idempotencyFailure(config, 409, "IDEMPOTENCY_KEY_IN_FLIGHT", { "retry-after": "0" });
+    const adapter = scriptAdapter([step, step, step, step, step, step]);
     apiClient.defaults.adapter = adapter;
 
     const err = await settling(createTransactionForUi(PAYLOAD)).catch((e) => e);
-    expect(adapter.callCount).toBe(3);
+    expect(adapter.callCount).toBe(4);
     expect(new Set(adapter.keys).size).toBe(1);
     expect(formatTransactionsApiError(err)).toBe(
-      "Este mesmo lançamento ainda está sendo registrado. Aguarde alguns segundos e confira seu extrato antes de tentar de novo.",
+      "Outro envio deste mesmo lançamento ficou preso no servidor. Confira seu extrato: se a transação não estiver lá, registre de novo.",
     );
+
+    // Reserva órfã responde 409 pelas 24h inteiras: manter a chave retida
+    // prenderia a pessoa num beco sem saída. A liberação faz o próximo
+    // "Tentar novamente" sair com chave NOVA — e a UI avisa sobre o extrato.
+    expect(createErrorReleasedIdempotencyKey(err)).toBe(true);
+    expect(createRetryIsProtectedFor(PAYLOAD)).toBe(false);
+    expect(isCreateTransactionErrorMaybePersisted(err)).toBe(true);
+
+    const next = scriptAdapter([(config) => respondWithStatus(config, 201, { id: 12 }, REPLAY_HEADERS)]);
+    apiClient.defaults.adapter = next;
+    await createTransactionForUi(PAYLOAD);
+    expect(next.keys[0]).not.toBe(adapter.keys[0]);
+  });
+});
+
+describe("createTransactionForUi — retry SÓ depois que o servidor prova que implementa idempotência", () => {
+  // Este é o portão que torna a ordem de deploy segura sozinha: contra a
+  // `main` do backend (sem idempotência), repetir um ERR_NETWORK criaria N
+  // transações — exatamente a duplicata que a #102 eliminou.
+  it("sem `Idempotent-Replay` nunca observado: ERR_NETWORK dá 1 requisição, como antes desta feature", async () => {
+    const step = (config) => networkFailure(config, "ERR_NETWORK");
+    const adapter = scriptAdapter([step, step, step, step]);
+    apiClient.defaults.adapter = adapter;
+
+    await expect(settling(createTransactionForUi(PAYLOAD))).rejects.toBeTruthy();
+    expect(adapter.callCount).toBe(1);
+  });
+
+  it("resposta SEM o header (backend antigo) não conta como prova: segue sem repetir", async () => {
+    // Um 201 sem `Idempotent-Replay` é exatamente o que a API atual devolve.
+    apiClient.defaults.adapter = scriptAdapter([(config) => respondWithStatus(config, 201, { id: 1 })]);
+    await createTransactionForUi({ ...PAYLOAD, description: "outra" });
+
+    const step = (config) => respondWithStatus(config, 503, {});
+    const adapter = scriptAdapter([step, step, step, step]);
+    apiClient.defaults.adapter = adapter;
+    await expect(settling(createTransactionForUi(PAYLOAD))).rejects.toBeTruthy();
+    expect(adapter.callCount).toBe(1);
+  });
+
+  it("depois de UMA resposta com o header, o retry liga", async () => {
+    await observeIdempotencySupport();
+
+    const step = (config) => respondWithStatus(config, 503, {});
+    const adapter = scriptAdapter([step, step, step, step]);
+    apiClient.defaults.adapter = adapter;
+    await expect(settling(createTransactionForUi(PAYLOAD))).rejects.toBeTruthy();
+    expect(adapter.callCount).toBe(3);
+  });
+
+  it("um 409 IN_FLIGHT prova suporte por si só: só existe em backend que implementa a feature", async () => {
+    const adapter = scriptAdapter([
+      (config) => idempotencyFailure(config, 409, "IDEMPOTENCY_KEY_IN_FLIGHT", { "retry-after": "0" }),
+      (config) => respondWithStatus(config, 201, { id: 3 }, REPLAY_HEADERS),
+    ]);
+    apiClient.defaults.adapter = adapter;
+
+    await expect(createTransactionForUi(PAYLOAD)).resolves.toEqual({ id: 3 });
+    expect(adapter.callCount).toBe(2);
   });
 });
 
@@ -243,7 +334,7 @@ describe("createTransactionForUi — classes que continuam SEM retry", () => {
     ["422 IDEMPOTENCY_KEY_PAYLOAD_MISMATCH", 422, "IDEMPOTENCY_KEY_PAYLOAD_MISMATCH"],
     ["400 INVALID_IDEMPOTENCY_KEY", 400, "INVALID_IDEMPOTENCY_KEY"],
   ])(
-    "%s: bug NOSSO — 1 requisição, mensagem de falha interna e a chave é solta para a próxima tentativa nascer limpa",
+    "%s: bug NOSSO — 1 requisição e a chave é solta para a próxima tentativa nascer limpa",
     async (_label, status, code) => {
       const step = (config) => idempotencyFailure(config, status, code);
       const adapter = scriptAdapter([step, step, step]);
@@ -251,19 +342,46 @@ describe("createTransactionForUi — classes que continuam SEM retry", () => {
 
       const err = await settling(createTransactionForUi(PAYLOAD)).catch((e) => e);
       expect(adapter.callCount).toBe(1);
-      expect(formatTransactionsApiError(err)).toBe(
-        "Falha interna do aplicativo ao reenviar esta transação. Atualize a página e registre de novo.",
-      );
 
       // Chave solta: sem isso a tentativa seguinte reusaria a chave rejeitada
-      // e ficaria presa no mesmo erro para sempre.
+      // e ficaria presa no mesmo erro até a janela de 24h vencer.
+      expect(createErrorReleasedIdempotencyKey(err)).toBe(true);
       expect(createRetryIsProtectedFor(PAYLOAD)).toBe(false);
-      const next = scriptAdapter([(config) => respondWithStatus(config, 201, { id: 11 })]);
+      const next = scriptAdapter([(config) => respondWithStatus(config, 201, { id: 11 }, REPLAY_HEADERS)]);
       apiClient.defaults.adapter = next;
       await createTransactionForUi(PAYLOAD);
       expect(next.keys[0]).not.toBe(adapter.keys[0]);
     },
   );
+
+  it("422 PAYLOAD_MISMATCH: o servidor TEM registro dessa chave, então a mensagem manda conferir o extrato — e o erro conta como possivelmente persistido", async () => {
+    // Só reusamos chave quando a nossa própria impressão digital garantiu
+    // payload idêntico. Um mismatch prova que a requisição anterior chegou a
+    // ser processada; dizer só "registre de novo" empurraria para a duplicata.
+    const adapter = scriptAdapter([
+      (config) => idempotencyFailure(config, 422, "IDEMPOTENCY_KEY_PAYLOAD_MISMATCH"),
+    ]);
+    apiClient.defaults.adapter = adapter;
+
+    const err = await settling(createTransactionForUi(PAYLOAD)).catch((e) => e);
+    expect(formatTransactionsApiError(err)).toBe(
+      "Falha interna do aplicativo ao reenviar esta transação. O envio anterior chegou a ser processado — confira seu extrato antes de registrar de novo.",
+    );
+    expect(isCreateTransactionErrorMaybePersisted(err)).toBe(true);
+  });
+
+  it("400 INVALID_IDEMPOTENCY_KEY: recusa ANTES de gravar, então a mensagem afirma que nada foi salvo", async () => {
+    const adapter = scriptAdapter([
+      (config) => idempotencyFailure(config, 400, "INVALID_IDEMPOTENCY_KEY"),
+    ]);
+    apiClient.defaults.adapter = adapter;
+
+    const err = await settling(createTransactionForUi(PAYLOAD)).catch((e) => e);
+    expect(formatTransactionsApiError(err)).toBe(
+      "Falha interna do aplicativo ao registrar esta transação. Nada foi salvo. Atualize a página e registre de novo.",
+    );
+    expect(isCreateTransactionErrorMaybePersisted(err)).toBe(false);
+  });
 });
 
 describe("retenção da chave — o que a UI usa para decidir se ainda avisa", () => {
@@ -399,5 +517,157 @@ describe("isCreateTransactionErrorMaybePersisted — separa erro SEGURO de erro 
     const err = new AxiosError("Transform failed", undefined, {}, undefined, undefined);
     expect(err.request).toBeUndefined();
     expect(isCreateTransactionErrorMaybePersisted(err)).toBe(false);
+  });
+});
+
+describe("armazenamento das chaves — mapa por tentativa, com TTL e liberação explícita", () => {
+  it("registrar OUTRA transação com sucesso não apaga a chave retida da tentativa que falhou", async () => {
+    // Com um slot global único, o sucesso de B limpava a chave de A e o
+    // reenvio de A saía com chave NOVA — duplicando A se o POST original
+    // tivesse persistido, bem enquanto a UI prometia "não duplica".
+    const OTHER = { organization_id: "org-1", description: "Mercado", value: 90 };
+
+    const failingA = scriptAdapter([(config) => respondWithStatus(config, 503, {})]);
+    apiClient.defaults.adapter = failingA;
+    await settling(createTransactionForUi(PAYLOAD)).catch(() => {});
+
+    apiClient.defaults.adapter = scriptAdapter([
+      (config) => respondWithStatus(config, 201, { id: 20 }, REPLAY_HEADERS),
+    ]);
+    await createTransactionForUi(OTHER);
+
+    const resendA = scriptAdapter([(config) => respondWithStatus(config, 201, { id: 21 }, REPLAY_HEADERS)]);
+    apiClient.defaults.adapter = resendA;
+    await createTransactionForUi(PAYLOAD);
+    expect(resendA.keys[0]).toBe(failingA.keys[0]);
+  });
+
+  it("duas tentativas falhadas coexistem, cada uma com a SUA chave", async () => {
+    const OTHER = { organization_id: "org-1", description: "Mercado", value: 90 };
+
+    const failingA = scriptAdapter([(config) => respondWithStatus(config, 503, {})]);
+    apiClient.defaults.adapter = failingA;
+    await settling(createTransactionForUi(PAYLOAD)).catch(() => {});
+
+    const failingB = scriptAdapter([(config) => respondWithStatus(config, 503, {})]);
+    apiClient.defaults.adapter = failingB;
+    await settling(createTransactionForUi(OTHER)).catch(() => {});
+
+    expect(failingA.keys[0]).not.toBe(failingB.keys[0]);
+    expect(createRetryIsProtectedFor(PAYLOAD)).toBe(true);
+    expect(createRetryIsProtectedFor(OTHER)).toBe(true);
+  });
+
+  it("a chave retida EXPIRA: café de manhã que falhou não engole o café da tarde com os mesmos dados", async () => {
+    // Sem TTL, o payload idêntico (a data vai sempre normalizada) reusaria a
+    // chave da manhã, o backend replayaria o registro antigo dentro das 24h e
+    // a tela diria "Registrado!" para um lançamento que nunca foi criado.
+    const t0 = Date.parse("2026-08-20T09:00:00Z");
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(t0);
+
+    const morning = scriptAdapter([(config) => respondWithStatus(config, 503, {})]);
+    apiClient.defaults.adapter = morning;
+    await settling(createTransactionForUi(PAYLOAD)).catch(() => {});
+    expect(createRetryIsProtectedFor(PAYLOAD)).toBe(true);
+
+    nowSpy.mockReturnValue(t0 + 6 * 60 * 60 * 1000); // 15:00
+    expect(createRetryIsProtectedFor(PAYLOAD)).toBe(false);
+
+    const afternoon = scriptAdapter([(config) => respondWithStatus(config, 201, { id: 30 }, REPLAY_HEADERS)]);
+    apiClient.defaults.adapter = afternoon;
+    await createTransactionForUi(PAYLOAD);
+    expect(afternoon.keys[0]).not.toBe(morning.keys[0]);
+  });
+
+  it("`releaseCreateIdempotencyKey` solta UMA tentativa — é o que o modal chama ao descartar a falha", async () => {
+    const failing = scriptAdapter([(config) => respondWithStatus(config, 503, {})]);
+    apiClient.defaults.adapter = failing;
+    await settling(createTransactionForUi(PAYLOAD)).catch(() => {});
+    expect(createRetryIsProtectedFor(PAYLOAD)).toBe(true);
+
+    releaseCreateIdempotencyKey(createTransactionPayloadFingerprint(PAYLOAD));
+    expect(createRetryIsProtectedFor(PAYLOAD)).toBe(false);
+
+    const next = scriptAdapter([(config) => respondWithStatus(config, 201, { id: 31 }, REPLAY_HEADERS)]);
+    apiClient.defaults.adapter = next;
+    await createTransactionForUi(PAYLOAD);
+    expect(next.keys[0]).not.toBe(failing.keys[0]);
+  });
+});
+
+describe("createTransactionPayloadFingerprint — rejeita o que o JSON não representa", () => {
+  it("`Date` explode em vez de virar `{}` (senão dois DIAS diferentes dividiriam a impressão digital)", () => {
+    // `Object.keys(new Date())` é `[]`. Sem a guarda, transações de 20/08 e
+    // 21/08 teriam a MESMA impressão digital e a segunda viraria replay.
+    expect(() =>
+      createTransactionPayloadFingerprint({ ...PAYLOAD, transaction_date: new Date("2026-08-20") }),
+    ).toThrow(TypeError);
+    expect(() =>
+      createTransactionPayloadFingerprint({ ...PAYLOAD, transaction_date: new Date("2026-08-21") }),
+    ).toThrow(TypeError);
+  });
+
+  it("rejeita função, NaN, Infinity, undefined no topo e instância de classe", () => {
+    class Money {}
+    expect(() => createTransactionPayloadFingerprint({ ...PAYLOAD, cb: () => {} })).toThrow(TypeError);
+    expect(() => createTransactionPayloadFingerprint({ ...PAYLOAD, value: Number.NaN })).toThrow(TypeError);
+    expect(() => createTransactionPayloadFingerprint({ ...PAYLOAD, value: Number.POSITIVE_INFINITY })).toThrow(TypeError);
+    expect(() => createTransactionPayloadFingerprint(undefined)).toThrow(TypeError);
+    expect(() => createTransactionPayloadFingerprint({ ...PAYLOAD, m: new Money() })).toThrow(TypeError);
+    expect(() => createTransactionPayloadFingerprint({ ...PAYLOAD, ids: new Set([1]) })).toThrow(TypeError);
+  });
+
+  it("campo `undefined` é omitido, igual ao corpo que sai na requisição", () => {
+    expect(createTransactionPayloadFingerprint({ ...PAYLOAD, card_id: undefined })).toBe(
+      createTransactionPayloadFingerprint(PAYLOAD),
+    );
+  });
+
+  it("números seguem a mesma normalização do hash canônico do backend: `100` e `100.0` são o mesmo payload", () => {
+    expect(createTransactionPayloadFingerprint({ value: 100 })).toBe(
+      createTransactionPayloadFingerprint({ value: 100.0 }),
+    );
+  });
+});
+
+describe("createRetryDelayMs — `Retry-After` honrado nas duas formas da RFC", () => {
+  function errorWithRetryAfter(raw) {
+    return new AxiosError("in flight", undefined, {}, {}, {
+      status: 409,
+      data: {},
+      statusText: "",
+      headers: raw == null ? {} : { "retry-after": raw },
+      config: {},
+    });
+  }
+
+  const NOW = Date.parse("2026-08-20T12:00:00Z");
+
+  it("segundos: respeitados como vieram, inclusive `0` (repetir já) e valores acima do backoff", () => {
+    expect(createRetryDelayMs(errorWithRetryAfter("2"), 1, { inFlight: true, nowMs: NOW })).toBe(2000);
+    expect(createRetryDelayMs(errorWithRetryAfter("0"), 1, { inFlight: true, nowMs: NOW })).toBe(0);
+    expect(createRetryDelayMs(errorWithRetryAfter("12"), 1, { inFlight: true, nowMs: NOW })).toBe(12_000);
+  });
+
+  it("HTTP-date: convertido para a espera real em vez de virar NaN e cair no backoff curto", () => {
+    // Antes, a forma de data caía em `Number(raw) === NaN` e o cliente
+    // martelava com 400ms justamente quem pediu pausa.
+    const at = new Date(NOW + 5000).toUTCString();
+    expect(createRetryDelayMs(errorWithRetryAfter(at), 1, { inFlight: true, nowMs: NOW })).toBe(5000);
+    // Data no passado: repetir já, nunca espera negativa.
+    const past = new Date(NOW - 5000).toUTCString();
+    expect(createRetryDelayMs(errorWithRetryAfter(past), 1, { inFlight: true, nowMs: NOW })).toBe(0);
+  });
+
+  it("valor absurdo é limitado ao teto, não ignorado", () => {
+    expect(createRetryDelayMs(errorWithRetryAfter("86400"), 1, { inFlight: true, nowMs: NOW })).toBe(30_000);
+  });
+
+  it("sem header: backoff 2s/4s/8s no in-flight (contrato publicado) e curto no transiente", () => {
+    expect(createRetryDelayMs(errorWithRetryAfter(null), 1, { inFlight: true, nowMs: NOW })).toBe(2000);
+    expect(createRetryDelayMs(errorWithRetryAfter(null), 2, { inFlight: true, nowMs: NOW })).toBe(4000);
+    expect(createRetryDelayMs(errorWithRetryAfter(null), 3, { inFlight: true, nowMs: NOW })).toBe(8000);
+    expect(createRetryDelayMs(errorWithRetryAfter(null), 1, { nowMs: NOW })).toBe(400);
+    expect(createRetryDelayMs(errorWithRetryAfter(null), 2, { nowMs: NOW })).toBe(800);
   });
 });

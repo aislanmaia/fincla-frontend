@@ -45,6 +45,7 @@ import {
 import {
   buildCreateTransactionPayload,
   buildUpdateTransactionPayload,
+  createErrorReleasedIdempotencyKey,
   createTransactionForUi,
   createTransactionPayloadFingerprint,
   formatTransactionsApiError,
@@ -55,6 +56,7 @@ import {
   isUuidString,
   normalizeStoredNovaTxPaymentMethod,
   readStoredNovaTransacaoPrefs,
+  releaseCreateIdempotencyKey,
   resolveStoredNovaTxCategorySelection,
   serializeNovaTxFormStateToStoredPrefs,
   shouldApplyStoredNovaTxCategoryPrefs,
@@ -324,7 +326,11 @@ export const NovaTransacaoModal = ({
   // Marca que a pessoa já confirmou a faixa acima, para o próximo `handleSave`
   // passar direto pelo portão. É `ref` (não state) porque `confirmAmbiguousRetry`
   // chama `handleSave` no mesmo tick: um `setState` aqui só valeria no render
-  // seguinte, e o portão leria o valor velho.
+  // seguinte, e o portão leria o valor velho. É CONSUMIDA no topo de
+  // `handleSave` (não no POST): entre os dois há várias guardas que retornam
+  // cedo (categoria inativa, tags indisponíveis, ramo de recorrência), e um
+  // `true` sobrevivente pularia o aviso num salvamento posterior já com
+  // dados diferentes.
   const retryConfirmedRef = useRef(false);
   // Impressão digital do payload da última criação que FALHOU. Comparar com o
   // payload do clique atual é o que distingue "reenviar o mesmo lançamento"
@@ -1072,6 +1078,12 @@ export const NovaTransacaoModal = ({
     setTxCreateErrorAmbiguous(false);
     setTxRetryConfirmPending(false);
     retryConfirmedRef.current = false;
+    // Descartar o estado de falha OBRIGA a soltar a chave retida daquela
+    // tentativa. Sem isso ela sobreviveria no módulo, e um lançamento com os
+    // mesmos dados horas depois (café de manhã, café de tarde: mesmo valor,
+    // mesma descrição, mesma data normalizada) reusaria a chave e voltaria
+    // como replay — a tela diria "Registrado!" para algo que não foi criado.
+    releaseCreateIdempotencyKey(failedCreateFingerprintRef.current);
     failedCreateFingerprintRef.current = null;
     if (!useLiveCategoryTags) {
       setCategoryTagId(null);
@@ -1612,6 +1624,17 @@ export const NovaTransacaoModal = ({
   };
 
   const handleSave = async () => {
+    // Consome a confirmação AQUI, no primeiro instante da função — não junto
+    // do POST. Entre o topo e o POST existem guardas que retornam cedo
+    // (categoria inativa, tags indisponíveis, valor inválido, cartão não
+    // escolhido, o ramo de recorrência inteiro); consumindo lá embaixo, uma
+    // delas deixava a flag `true` até reabrir o drawer, e o portão do aviso
+    // era pulado num salvamento posterior que a pessoa nunca confirmou.
+    // Hoje toda guarda dessas roda ANTES do portão, então o vazamento não é
+    // alcançável pela UI — mas isso é ordem de linhas, não invariante: manter
+    // a leitura e a limpeza colada ao `true` elimina a classe do bug.
+    const retryConfirmed = retryConfirmedRef.current;
+    retryConfirmedRef.current = false;
     const rawEditTxId = preConfig?.editingTransactionId;
     const editingTransactionId =
       rawEditTxId != null && Number.isFinite(Number(rawEditTxId))
@@ -1821,13 +1844,15 @@ export const NovaTransacaoModal = ({
           // fazer sentido no caso oposto: erro AMBÍGUO (pode ter gravado) e
           // dados alterados desde então, porque aí vai uma chave nova e o
           // lançamento anterior pode estar lá.
-          if (
-            txCreateFailed &&
-            txCreateErrorAmbiguous &&
-            !retryConfirmedRef.current &&
+          // "Protegido" = existe chave retida da tentativa que falhou E o
+          // payload é o mesmo dela. Só nesse caso o reenvio é replay. Se a
+          // chave foi liberada (mismatch, in-flight órfão) ou os dados
+          // mudaram, vai chave nova — e o lançamento anterior pode existir.
+          const resendIsProtected =
             failedCreateFingerprintRef.current != null &&
-            failedCreateFingerprintRef.current !== createTransactionPayloadFingerprint(createPayload)
-          ) {
+            failedCreateFingerprintRef.current ===
+              createTransactionPayloadFingerprint(createPayload);
+          if (txCreateFailed && txCreateErrorAmbiguous && !retryConfirmed && !resendIsProtected) {
             // Este clique não chegou a enviar nada: desfaz o "limpou o estado
             // de falha" feito no início desta função (tudo no mesmo tick
             // síncrono, então o React agrupa e a tela não pisca).
@@ -1838,7 +1863,6 @@ export const NovaTransacaoModal = ({
             setTxSubmitting(false);
             return;
           }
-          retryConfirmedRef.current = false;
           attemptedCreatePayload = createPayload;
           await createTransactionForUi(createPayload);
           // Sucesso: a tentativa acabou, nada mais a comparar.
@@ -1851,9 +1875,14 @@ export const NovaTransacaoModal = ({
         // gravado) — não para travar o reenvio, que a chave já protege, mas
         // para o portão acima avisar caso os dados mudem antes dele.
         const ambiguous = !isEditingExisting && isCreateTransactionErrorMaybePersisted(err);
+        // A chave sobrevive ao erro? Se o adapter a liberou (mismatch, ou
+        // in-flight órfão), o próximo envio é lançamento NOVO e a promessa de
+        // "não duplica" deixaria de ser verdade — a mensagem específica desses
+        // erros já manda conferir o extrato.
+        const keyStillProtects = attemptedCreatePayload != null && !createErrorReleasedIdempotencyKey(err);
         const baseMessage = formatTransactionsApiError(err);
         setTxSubmitError(
-          ambiguous
+          ambiguous && keyStillProtects
             ? `${baseMessage} Pode tentar de novo sem medo: o reenvio reaproveita a mesma chave e não duplica o lançamento.`
             : baseMessage,
         );
@@ -1861,9 +1890,10 @@ export const NovaTransacaoModal = ({
           setTxCreateFailed(true);
           setTxCreateErrorAmbiguous(ambiguous);
           // `null` quando o erro estourou ANTES de montar o payload (ex.:
-          // `TypeError` em `buildCreateTransactionPayload`): nada saiu do
-          // navegador, então não há tentativa anterior com que comparar.
-          failedCreateFingerprintRef.current = attemptedCreatePayload
+          // `TypeError` em `buildCreateTransactionPayload`), e também quando a
+          // chave foi liberada: nos dois casos não há reenvio protegido com
+          // que comparar, e o portão passa a avisar.
+          failedCreateFingerprintRef.current = keyStillProtects
             ? createTransactionPayloadFingerprint(attemptedCreatePayload)
             : null;
         }
@@ -1968,6 +1998,7 @@ export const NovaTransacaoModal = ({
     setReview(false); resetMobileStep(); setSuccess(false); setSuccessOverlay(false);
     setTxSubmitError(""); setTxSubmitting(false); setTxCreateFailed(false); setTxCreateErrorAmbiguous(false); setTxRetryConfirmPending(false); setDescError(false);
     retryConfirmedRef.current = false;
+    releaseCreateIdempotencyKey(failedCreateFingerprintRef.current);
     failedCreateFingerprintRef.current = null;
     setMobileReviewImpactOpen(false); resetAi();
     setDescFocused(false); setAddingCartao(false); setQuickAddCardName(""); setQuickAddCardLast4("");
@@ -2645,7 +2676,7 @@ export const NovaTransacaoModal = ({
                 {txRetryConfirmPending ? (
                   <div style={{ display:"flex", flexDirection:"column", gap:8, padding:"10px 12px", background:T.amberLight, border:`1px solid ${T.amberBorder}`, borderRadius:10 }}>
                     <span style={{ ...G, fontSize:12, fontWeight:600, color:T.ink, lineHeight:1.4 }}>
-                      Você mudou os dados desde o erro, então este é um lançamento novo — o anterior pode ter sido registrado. Confira seu extrato antes de continuar.
+                      Este envio é um lançamento novo, e o anterior pode ter sido registrado. Confira seu extrato antes de continuar.
                     </span>
                     <div style={{ display:"flex", gap:8 }}>
                       <button onClick={cancelAmbiguousRetry}
@@ -3612,7 +3643,7 @@ export const NovaTransacaoModal = ({
               txRetryConfirmPending ? (
                 <div style={{ display:"flex", flexDirection:"column", gap:8, padding:"10px 12px", background:T.amberLight, border:`1px solid ${T.amberBorder}`, borderRadius:10 }}>
                   <span style={{ ...G, fontSize:12, fontWeight:600, color:T.ink, lineHeight:1.4 }}>
-                    Você mudou os dados desde o erro, então este é um lançamento novo — o anterior pode ter sido registrado. Confira seu extrato antes de continuar.
+                    Este envio é um lançamento novo, e o anterior pode ter sido registrado. Confira seu extrato antes de continuar.
                   </span>
                   <div style={{ display:"flex", gap:8 }}>
                     <button onClick={cancelAmbiguousRetry}

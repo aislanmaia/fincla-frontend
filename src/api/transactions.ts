@@ -1,6 +1,9 @@
 // api/transactions.ts
 import apiClient from './client';
-import { IDEMPOTENCY_KEY_HEADER } from './idempotency';
+import {
+  IDEMPOTENCY_KEY_HEADER,
+  noteIdempotencySupportFromHeaders,
+} from './idempotency';
 import { repeatArrayParams } from './paramsSerializer';
 import type {
   CreateTransactionRequest,
@@ -32,6 +35,10 @@ export const createTransaction = async (
     transaction,
     key ? { headers: { [IDEMPOTENCY_KEY_HEADER]: key } } : undefined
   );
+  // `Idempotent-Replay` presente = este backend implementa a feature. É essa
+  // observação que libera o retry automático da criação; sem ela o cliente
+  // não repete nada (ver `src/api/idempotency.ts`).
+  if (key) noteIdempotencySupportFromHeaders(response.headers);
   return response.data;
 };
 

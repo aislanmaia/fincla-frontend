@@ -8,9 +8,16 @@
 // janela de 24h. Chave nova responde `201` + `Idempotent-Replay: false`;
 // chave repetida com o MESMO payload responde `201` + `Idempotent-Replay:
 // true` devolvendo a resposta original (mesmo `id`, mesmo `series_id`), sem
-// criar nada. Sem o header, o backend se comporta como sempre se comportou —
-// por isso subir este frontend antes da API é inofensivo: o header extra é
-// simplesmente ignorado por quem não o conhece.
+// criar nada.
+//
+// ORDEM DE DEPLOY. Mandar o header contra um backend que não o conhece é
+// inofensivo — ele ignora o que não entende. O que NÃO é inofensivo é o retry
+// automático que essa chave destrava: contra um backend sem idempotência, três
+// POSTs de um `ERR_NETWORK` viram três transações. Por isso o suporte é
+// OBSERVADO em tempo de execução (`Idempotent-Replay` na resposta, ou um erro
+// de idempotência no corpo) e o retry fica desligado até haver prova. Sem a
+// API no ar, o comportamento é exatamente o de hoje: uma requisição, sem
+// repetição.
 
 /** Nome do header. Constante porque ele aparece no cliente e nos testes. */
 export const IDEMPOTENCY_KEY_HEADER = 'Idempotency-Key';
@@ -23,6 +30,53 @@ const IDEMPOTENCY_KEY_PATTERN = /^[A-Za-z0-9._:-]{8,255}$/;
 
 export function isValidIdempotencyKey(value: unknown): value is string {
   return typeof value === 'string' && IDEMPOTENCY_KEY_PATTERN.test(value);
+}
+
+/**
+ * Lê um header de uma resposta do axios. `response.headers` é um
+ * `AxiosHeaders` (case-insensitive via `.get`) em produção, mas objeto cru em
+ * teste e em adapters customizados — as duas formas passam por aqui.
+ */
+export function readResponseHeader(headers: unknown, name: string): string | null {
+  if (!headers || typeof headers !== 'object') return null;
+  const bag = headers as Record<string, unknown> & { get?: (n: string) => unknown };
+  const raw =
+    typeof bag.get === 'function'
+      ? bag.get(name)
+      : (bag[name] ?? bag[name.toLowerCase()] ?? bag[name.toUpperCase()]);
+  if (raw == null) return null;
+  return String(raw);
+}
+
+// Suporte OBSERVADO do servidor a `Idempotency-Key`. Em memória de propósito:
+// persistir em storage carregaria um "sim" para depois de um rollback do
+// backend, que é justamente quando repetir volta a duplicar. O custo é que a
+// PRIMEIRA criação depois de cada carregamento de página não tem retry
+// automático — preço barato por nunca duplicar por otimismo.
+let supportObserved = false;
+
+/** Marca suporte a partir dos headers de uma resposta de criação. */
+export function noteIdempotencySupportFromHeaders(headers: unknown): void {
+  if (readResponseHeader(headers, IDEMPOTENT_REPLAY_HEADER) != null) {
+    supportObserved = true;
+  }
+}
+
+/**
+ * Marca suporte por evidência que não vem do header — um erro de idempotência
+ * no corpo (409/422/400) só existe num backend que implementa a feature.
+ */
+export function noteIdempotencySupport(): void {
+  supportObserved = true;
+}
+
+export function hasObservedIdempotencySupport(): boolean {
+  return supportObserved;
+}
+
+/** Só para testes: volta ao estado "nunca vi o servidor confirmar suporte". */
+export function resetIdempotencySupportObservation(): void {
+  supportObserved = false;
 }
 
 const HEX = '0123456789abcdef';
