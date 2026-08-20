@@ -15,6 +15,7 @@ import { buildCreateBudgetPayload, parseBudgetAmountInput } from "../data/budget
 import { CategoryLucideIcon } from "../components/CategoryLucideIcon.jsx";
 import { CollapsibleSection, PageTitle } from "../components/primitives";
 import { useBudgetsData } from "../features/budgets/useBudgetsData.js";
+import { BudgetHistoryChart } from "../features/budgets/BudgetHistoryChart.jsx";
 import { shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 
 /* ─── ORÇAMENTOS DATA ────────────────────────────────────── */
@@ -263,7 +264,6 @@ export function OrcamentosPage({
   };
 
   const Historico = () => {
-    const maxVal = Math.max(...historyData.map(h => Math.max(h.spent, h.budget || 0)), 1);
     return (
       <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:14, overflow:"hidden" }}>
         <div onClick={() => setHistOpen(o => !o)}
@@ -281,39 +281,8 @@ export function OrcamentosPage({
           </span>
         </div>
         <CollapsibleSection open={histOpen}>
-          <div style={{ padding:"0 20px 20px", borderTop:`1px solid ${T.border}` }}>
-            <div style={{ display:"flex", alignItems:"flex-end", gap:isMobile?8:16, paddingTop:16 }}>
-              {historyData.map(h => {
-                const sh = Math.round(h.spent  / maxVal * 68);
-                const bh = h.budget ? Math.round(h.budget / maxVal * 68) : 0;
-                const over = h.budget ? h.spent > h.budget : false;
-                return (
-                  <div key={h.m} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:5 }}>
-                    <div style={{ display:"flex", alignItems:"flex-end", gap:3, height:72 }}>
-                      {h.budget ? (
-                        <div style={{ width:isMobile?11:14, height:bh, background:T.grayLight, borderRadius:"4px 4px 0 0", flexShrink:0 }} />
-                      ) : null}
-                      <div style={{ width:isMobile?11:14, height:sh, background:over?T.red:h.current?T.blue:T.ink, borderRadius:"4px 4px 0 0", flexShrink:0 }} />
-                    </div>
-                    <div style={{ ...G, fontSize:isMobile?8:9, fontWeight:600, color:h.current?T.blue:T.inkLight }}>{h.m}</div>
-                    <div style={{ ...G, ...NUM, fontSize:isMobile?8:9, fontWeight:700, color:over?T.red:T.ink }}>{(h.spent/1000).toFixed(1)}k</div>
-                  </div>
-                );
-              })}
-              <div style={{ display:"flex", flexDirection:"column", gap:6, paddingLeft:8, paddingBottom:24 }}>
-                {(shouldUseRealData ? [{bg:T.ink,label:"Gasto"}] : [{bg:T.grayLight,label:"Limite"},{bg:T.ink,label:"Gasto"}]).map((x,i) => (
-                  <div key={i} style={{ display:"flex", alignItems:"center", gap:5 }}>
-                    <div style={{ width:10, height:10, borderRadius:2, background:x.bg, border:i===0?`1px solid ${T.border}`:undefined }} />
-                    <span style={{ ...G, fontSize:10, color:T.inkMid }}>{x.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            {shouldUseRealData && (
-              <div style={{ ...G, fontSize:10, color:T.inkLight, marginTop:8 }}>
-                O backend ainda não expõe o limite histórico por mês. Por isso, aqui mostramos apenas os gastos reais do período.
-              </div>
-            )}
+          <div style={{ padding:"18px 20px 20px", borderTop:`1px solid ${T.border}` }}>
+            <BudgetHistoryChart historyData={historyData} isMobile={isMobile} shouldUseRealData={shouldUseRealData} />
           </div>
         </CollapsibleSection>
       </div>

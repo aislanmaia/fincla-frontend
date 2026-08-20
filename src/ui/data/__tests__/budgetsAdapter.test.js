@@ -103,6 +103,19 @@ describe("budgetsAdapter", () => {
     ]);
   });
 
+  it("converte total_expenses vindo como string (Decimal serializado pelo backend) sem concatenar", () => {
+    // `total_expenses` chega como Decimal → string no JSON real da API; sem a
+    // conversão na fronteira, `spent` viraria string e qualquer soma/comparação
+    // no consumidor (ex.: BudgetHistoryChart) quebraria silenciosamente.
+    expect(mapBudgetHistoryToUi([
+      { year: 2026, month: 2, month_name: "fevereiro", total_income: "8400.00", total_expenses: "5400.00", balance: "3000.00" },
+      { year: 2026, month: 3, month_name: "março", total_income: "8600.00", total_expenses: "4381.00", balance: "4219.00" },
+    ])).toEqual([
+      { m: "Fev", spent: 5400, current: false },
+      { m: "Mar", spent: 4381, current: true },
+    ]);
+  });
+
   it("faz parse de valor digitado no formato brasileiro", () => {
     expect(parseBudgetAmountInput("1.234,56")).toBe(1234.56);
     expect(parseBudgetAmountInput("750")).toBe(750);

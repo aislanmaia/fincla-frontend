@@ -5,6 +5,7 @@ import {
 } from "../../api/budgets";
 import { getMonthlyEvolution } from "../../api/analytics";
 import { handleApiError } from "../../api/client";
+import { toAmount } from "../../api/money";
 import {
   categoryLabelPtForTag,
   resolveCategoryColorForTag,
@@ -203,9 +204,12 @@ export function parseBudgetAmountInput(value) {
 }
 
 export function mapBudgetHistoryToUi(months) {
+  // `total_expenses` chega como Decimal serializado (string) do backend — converte
+  // na fronteira com `toAmount` para que `spent` seja sempre número finito a partir
+  // daqui (evita concatenação de string em somas/comparações no consumidor).
   return (months ?? []).map((item, index, all) => ({
     m: formatShortMonth(item.year, item.month),
-    spent: item.total_expenses,
+    spent: toAmount(item.total_expenses),
     current: index === all.length - 1,
   }));
 }
