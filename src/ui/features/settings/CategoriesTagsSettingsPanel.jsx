@@ -3,7 +3,11 @@ import { Hash, Pencil, Plus, Search, Tag, Trash2 } from "lucide-react";
 
 import { createTag, deleteTag, listTags, listTagTypes, updateTag as apiUpdateTag } from "../../../api/tags";
 import { handleApiError } from "../../../api/client";
-import { resolveCategoryColorForTag } from "../../data/categoryLabels.js";
+import {
+  categoryLabelPtForTag,
+  detailLabelPtForTag,
+  resolveCategoryColorForTag,
+} from "../../data/categoryLabels.js";
 import { CardEmptyWithCta } from "../shellExtras.jsx";
 import { T } from "../../tokens";
 import { G } from "../../typography";
@@ -28,6 +32,16 @@ function resolveTagTypeId(rows, names) {
 
 function getTagName(tag) {
   return typeof tag === "string" ? tag : tag?.name ?? "";
+}
+
+/**
+ * Rótulo PT-BR de exibição de uma tag "detalhe". O seed cria filhas em inglês
+ * (`grocery`, `health_plan`...) pra toda organização nova — sem isso, a lista
+ * de tags da categoria mostra o nome cru da API.
+ */
+function getTagLabelPt(tag) {
+  if (typeof tag === "string") return tag;
+  return detailLabelPtForTag(tag) || tag?.name || "";
 }
 
 function getTagId(tag, fallback) {
@@ -84,8 +98,15 @@ export function CategoriesTagsSettingsPanel({
   const [newCatColor, setNewCatColor] = useState("#2563EB");
   const [catsLoading, setCatsLoading] = useState(false);
   const [catsError, setCatsError] = useState("");
+  /** Id da tag existente destacada por ~1.5s quando `addTag` acha duplicata. */
+  const [highlightedTagId, setHighlightedTagId] = useState(null);
 
-  const filteredCats = cats.filter(c => c.name.toLowerCase().includes(catSearch.toLowerCase()));
+  const filteredCats = cats.filter((c) => {
+    const q = catSearch.toLowerCase();
+    // Busca tanto pelo nome cru (API) quanto pelo rótulo PT exibido, senão o
+    // usuário não acha "Alimentação" digitando o que vê na tela.
+    return c.name.toLowerCase().includes(q) || (c.labelPt || "").toLowerCase().includes(q);
+  });
 
   const refreshCats = useCallback(async () => {
     if (!liveEnabled) return;
@@ -101,7 +122,11 @@ export function CategoriesTagsSettingsPanel({
       setCats(
         rawCategories.map((tag) => ({
           id: tag.id,
+          // `name` fica cru (usado pra editar/salvar); `labelPt` é só exibição —
+          // o seed cria categorias em inglês (`Food & Groceries`...) pra toda
+          // organização nova, e o backend não muda (fora do escopo do frontend).
           name: tag.name,
+          labelPt: categoryLabelPtForTag(tag),
           color: resolveCategoryColorForTag(tag),
           tags: detailTags.filter(
             (detailTag) => String(detailTag.parent_category_tag_id ?? "") === String(tag.id),
@@ -135,14 +160,22 @@ export function CategoriesTagsSettingsPanel({
   }, [liveEnabled, organizationId, newCatName, newCatColor, refreshCats]);
 
   const handleUpdateCat = useCallback(async (catId) => {
+    const cat = cats.find(c => c.id === catId);
+    const trimmed = newCatName.trim();
+    const displayedBefore = (cat?.labelPt || cat?.name || "").trim();
+    // Input pré-preenche com o rótulo PT (ex. "Alimentação"), não o nome cru
+    // ("Food & Groceries"). Só manda `name` novo quando o usuário de fato
+    // mudou o que via na tela — senão salvar só a cor (sem tocar o nome)
+    // reenviaria o rótulo traduzido como se fosse o nome real e destruiria o
+    // nome canônico do seed (ou um nome custom do usuário, ex. "Renda").
+    const nameForPayload = trimmed && trimmed !== displayedBefore ? trimmed : cat?.name;
     if (liveEnabled) {
       try {
-        const cat = cats.find(c => c.id === catId);
-        await apiUpdateTag(catId, { name: newCatName, color: newCatColor, tag_type_id: cat?._tagTypeId });
+        await apiUpdateTag(catId, { name: nameForPayload, color: newCatColor, tag_type_id: cat?._tagTypeId });
         await refreshCats();
       } catch (e) { setCatsError(handleApiError(e)); }
     } else {
-      setCats(prev => prev.map(c => c.id === catId ? {...c, name: newCatName, color: newCatColor} : c));
+      setCats(prev => prev.map(c => c.id === catId ? {...c, name: nameForPayload, color: newCatColor} : c));
     }
     setEditCat(null);
   }, [liveEnabled, cats, newCatName, newCatColor, refreshCats]);
@@ -158,10 +191,33 @@ export function CategoriesTagsSettingsPanel({
     }
   }, [liveEnabled, refreshCats]);
 
-  const addTag = useCallback(async (cat) => {
+  const addTag = useCallback((cat) => {
     const tagName = formatTagName(newTagInputs[cat.id] || "");
-    const hasTag = (cat.tags || []).some((tag) => formatTagName(getTagName(tag)) === tagName);
-    if (!tagName || hasTag) return;
+    if (!tagName) return;
+    // Compara com o nome cru E com o rótulo PT exibido: o usuário só vê
+    // "#mercado" na tela (tradução da tag seed "grocery") — comparar só com
+    // o nome cru deixa passar e cria uma tag "mercado" duplicada.
+    const existingTag = (cat.tags || []).find(
+      (tag) =>
+        formatTagName(getTagName(tag)) === tagName ||
+        formatTagName(getTagLabelPt(tag)) === tagName,
+    );
+    if (existingTag) {
+      // Já existe (seed ou não) — não duplica, mas também não pode virar um
+      // beco sem saída: limpa o campo e pisca o chip existente pra deixar
+      // claro que a tag que o usuário procurava já está ali.
+      const existingId = String(getTagId(existingTag, 0));
+      setNewTagInputs((prev) => ({ ...prev, [cat.id]: "" }));
+      setHighlightedTagId(existingId);
+      setTimeout(() => {
+        setHighlightedTagId((cur) => (cur === existingId ? null : cur));
+      }, 1500);
+      return;
+    }
+    void createDetailTag(cat, tagName);
+  }, [newTagInputs]);
+
+  const createDetailTag = useCallback(async (cat, tagName) => {
     if (liveEnabled) {
       try {
         const typesResp = await listTagTypes();
@@ -185,7 +241,7 @@ export function CategoriesTagsSettingsPanel({
     }
     setCats((prev) => prev.map((c) => (c.id === cat.id ? { ...c, tags: [...(c.tags || []), tagName] } : c)));
     setNewTagInputs((prev) => ({ ...prev, [cat.id]: "" }));
-  }, [liveEnabled, newTagInputs, organizationId, refreshCats]);
+  }, [liveEnabled, organizationId]);
 
   const removeTag = useCallback(async (cat, tagIndex) => {
     const tag = (cat.tags || [])[tagIndex];
@@ -251,7 +307,7 @@ export function CategoriesTagsSettingsPanel({
         {editCat === "new" && (
           <div style={{ padding: isMobile ? "12px 16px" : "14px 24px",
             borderBottom:`1px solid ${T.border}`, background:T.blueLight }}>
-            <div style={{ ...G, fontSize:10, fontWeight:700, color:T.blue,
+            <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.blue,
               textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:8 }}>Nova categoria</div>
             <div style={{ display:"flex", flexDirection: isMobile ? "column" : "row", gap:8, alignItems: isMobile ? "stretch" : "center" }}>
               <input value={newCatName} onChange={e => setNewCatName(e.target.value)} placeholder="Nome da categoria" aria-label="Nome da categoria" autoFocus
@@ -280,24 +336,24 @@ export function CategoriesTagsSettingsPanel({
               {editCat === cat.id ? (
                 <div style={{ flex:1, display:"flex", flexDirection: isMobile ? "column" : "row",
                   gap:8, alignItems: isMobile ? "stretch" : "center", minWidth:0 }}>
-                  <input value={newCatName} onChange={e => setNewCatName(e.target.value)} aria-label={`Editar categoria ${cat.name}`} autoFocus
+                  <input value={newCatName} onChange={e => setNewCatName(e.target.value)} aria-label={`Editar categoria ${cat.labelPt || cat.name}`} autoFocus
                     style={{ ...G, flex:1, minWidth:0, padding:"6px 10px", border:`1.5px solid ${T.blue}`,
                       borderRadius:8, fontSize:13, color:T.ink, background:T.surface, outline:"none" }}/>
                   <div style={{ display:"flex", gap:6, alignItems:"center", flexShrink:0 }}>
-                    <input type="color" value={newCatColor} onChange={e => setNewCatColor(e.target.value)} aria-label={`Cor da categoria ${cat.name}`}
+                    <input type="color" value={newCatColor} onChange={e => setNewCatColor(e.target.value)} aria-label={`Cor da categoria ${cat.labelPt || cat.name}`}
                       style={{ width:30, height:30, borderRadius:7, border:`1px solid ${T.border}`, cursor:"pointer", padding:2 }}/>
                     <button onClick={() => handleUpdateCat(cat.id)}
                       style={{ ...G, background:T.ink, color:"#fff", border:"none", borderRadius:8,
                         padding:"6px 12px", fontSize:12, fontWeight:700, cursor:"pointer" }}>OK</button>
-                    <button onClick={() => setEditCat(null)} aria-label={`Cancelar edição de ${cat.name}`}
+                    <button onClick={() => setEditCat(null)} aria-label={`Cancelar edição de ${cat.labelPt || cat.name}`}
                       style={{ ...G, background:"none", color:T.inkMid, border:`1px solid ${T.border}`,
                         borderRadius:8, padding:"6px 10px", fontSize:12, cursor:"pointer" }}>×</button>
                   </div>
                 </div>
               ) : (
                 <>
-                  <span style={{ ...G, fontSize:13, color:T.ink, flex:1, minWidth:0 }}>{cat.name}</span>
-                  <button onClick={() => setExpandedCat(expandedCat === cat.id ? null : cat.id)} aria-label={`Expandir tags de ${cat.name}`}
+                  <span style={{ ...G, fontSize:13, color:T.ink, flex:1, minWidth:0 }}>{cat.labelPt || cat.name}</span>
+                  <button onClick={() => setExpandedCat(expandedCat === cat.id ? null : cat.id)} aria-label={`Expandir tags de ${cat.labelPt || cat.name}`}
                     style={{ ...G, display:"flex", alignItems:"center", gap:4, padding:"3px 8px", borderRadius:99,
                       background: expandedCat===cat.id ? `${cat.color}18` : T.grayLight,
                       border:`1px solid ${expandedCat===cat.id ? cat.color+"44" : T.border}`,
@@ -307,13 +363,13 @@ export function CategoriesTagsSettingsPanel({
                     <Hash size={10}/>
                     {(cat.tags||[]).length}
                   </button>
-                  <button onClick={() => { setEditCat(cat.id); setNewCatName(cat.name); setNewCatColor(cat.color); }} aria-label={`Editar categoria ${cat.name}`}
+                  <button onClick={() => { setEditCat(cat.id); setNewCatName(cat.labelPt || cat.name); setNewCatColor(cat.color); }} aria-label={`Editar categoria ${cat.labelPt || cat.name}`}
                     style={{ background:"none", border:"none", cursor:"pointer", padding:5, borderRadius:7, display:"flex", flexShrink:0 }}
                     onMouseEnter={e=>e.currentTarget.style.background=T.grayLight}
                     onMouseLeave={e=>e.currentTarget.style.background="none"}>
                     <Pencil size={13} color={T.inkLight}/>
                   </button>
-                  <button onClick={() => handleDeleteCat(cat.id)} aria-label={`Excluir categoria ${cat.name}`}
+                  <button onClick={() => handleDeleteCat(cat.id)} aria-label={`Excluir categoria ${cat.labelPt || cat.name}`}
                     style={{ background:"none", border:"none", cursor:"pointer", padding:5, borderRadius:7, display:"flex", flexShrink:0 }}
                     onMouseEnter={e=>e.currentTarget.style.color=T.red}
                     onMouseLeave={e=>e.currentTarget.style.color=T.red+"66"}>
@@ -326,22 +382,28 @@ export function CategoriesTagsSettingsPanel({
             {expandedCat === cat.id && (
               <div style={{ padding: isMobile ? "10px 16px 14px 36px" : "10px 24px 14px 44px",
                 background:`${cat.color}08`, borderTop:`1px solid ${cat.color}22` }}>
-                <div style={{ ...G, fontSize:10, fontWeight:700, color:cat.color,
+                <div style={{ ...G, fontSize: 11, fontWeight:700, color:cat.color,
                   textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:8 }}>
-                  Tags de {cat.name}
+                  Tags de {cat.labelPt || cat.name}
                 </div>
                 <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:10 }}>
-                  {(cat.tags||[]).map((tag, ti) => (
-                    <span key={getTagId(tag, ti)} style={{ ...G, display:"flex", alignItems:"center", gap:5, fontSize:12,
-                      background:T.surface, border:`1px solid ${T.border}`, borderRadius:99,
-                      padding:"4px 10px", color:T.inkMid }}>
-                      #{getTagName(tag)}
-                      <button onClick={() => void removeTag(cat, ti)}
-                        aria-label={`Remover tag ${getTagName(tag)}`}
-                        style={{ background:"none", border:"none", cursor:"pointer", padding:0, lineHeight:1,
-                          color:T.inkGhost, fontSize:14, display:"flex", alignItems:"center" }}>×</button>
-                    </span>
-                  ))}
+                  {(cat.tags||[]).map((tag, ti) => {
+                    // Tenta criar uma tag que já existe (seed ou não): não duplica, mas
+                    // pisca o chip existente por ~1.5s pra dar feedback visual de "já está aqui".
+                    const isHighlighted = highlightedTagId === String(getTagId(tag, ti));
+                    return (
+                      <span key={getTagId(tag, ti)} style={{ ...G, display:"flex", alignItems:"center", gap:5, fontSize:12,
+                        background: isHighlighted ? `${cat.color}18` : T.surface,
+                        border:`1px solid ${isHighlighted ? cat.color : T.border}`, borderRadius:99,
+                        padding:"4px 10px", color:T.inkMid, transition:"all 0.15s" }}>
+                        #{getTagLabelPt(tag)}
+                        <button onClick={() => void removeTag(cat, ti)}
+                          aria-label={`Remover tag ${getTagLabelPt(tag)}`}
+                          style={{ background:"none", border:"none", cursor:"pointer", padding:0, lineHeight:1,
+                            color:T.inkGhost, fontSize:14, display:"flex", alignItems:"center" }}>×</button>
+                      </span>
+                    );
+                  })}
                   {(cat.tags||[]).length === 0 && (
                     <span style={{ ...G, fontSize:12, color:T.inkLight, fontStyle:"italic" }}>
                       Nenhuma tag ainda
@@ -361,7 +423,7 @@ export function CategoriesTagsSettingsPanel({
                          void addTag(cat);
                        }}
                       placeholder="nova tag (Enter)"
-                      aria-label={`Nova tag de ${cat.name}`}
+                      aria-label={`Nova tag de ${cat.labelPt || cat.name}`}
                       style={{ ...G, flex:1, minWidth:0, border:"none", outline:"none",
                         background:"transparent", fontSize:12, color:T.ink }}/>
                   </div>

@@ -36,7 +36,7 @@ function ImpactLineChartTooltip({ active, payload, label }) {
         border: `1px solid ${T.border}`,
         borderRadius: 8,
         padding: "5px 8px 6px",
-        fontSize: 10,
+        fontSize: 11,
         lineHeight: 1.35,
         boxShadow: "0 2px 10px rgba(15,23,42,0.08)",
         maxWidth: 172,
@@ -48,7 +48,7 @@ function ImpactLineChartTooltip({ active, payload, label }) {
         style={{
           ...G,
           fontWeight: 700,
-          fontSize: 9,
+          fontSize: 11,
           color: T.inkMid,
           marginBottom: 4,
           letterSpacing: "0.02em",
@@ -255,7 +255,7 @@ export function NovaTransacaoImpactPanel({
         </div>
       )}
       {chartData.length > 0 ? (
-        <div style={{ ...G, fontSize: 9, color: T.inkLight, margin: "-8px 0 10px", lineHeight: 1.45 }}>
+        <div style={{ ...G, fontSize: 11, color: T.inkLight, margin: "-8px 0 10px", lineHeight: 1.45 }}>
           <strong style={{ fontWeight: 700, color: T.inkMid }}>Linha escura:</strong> só soma de transações{" "}
           <strong>já registradas</strong> no mês — o valor do rascunho não entra aqui. Os cards abaixo sim
           incluem o preview.
@@ -269,13 +269,13 @@ export function NovaTransacaoImpactPanel({
         </div>
       ) : null}
       {spendingError ? (
-        <div style={{ ...G, fontSize: 10, color: T.red, marginBottom: 8 }}>{spendingError}</div>
+        <div style={{ ...G, fontSize: 11, color: T.red, marginBottom: 8 }}>{spendingError}</div>
       ) : null}
       {previewError ? (
-        <div style={{ ...G, fontSize: 10, color: T.red, marginBottom: 8 }}>{previewError}</div>
+        <div style={{ ...G, fontSize: 11, color: T.red, marginBottom: 8 }}>{previewError}</div>
       ) : null}
       {!(valorNum > 0) && !previewLoading ? (
-        <div style={{ ...G, fontSize: 10, color: T.inkLight, marginBottom: 8 }}>
+        <div style={{ ...G, fontSize: 11, color: T.inkLight, marginBottom: 8 }}>
           Informe um valor &gt; 0 para calcular o preview de orçamento.
         </div>
       ) : null}
@@ -293,7 +293,9 @@ export function NovaTransacaoImpactPanel({
             <div
               style={{
                 ...G,
-                fontSize: kpiTitleSize,
+                // Piso de 11px (WCAG 1.4.4): chamadores passam kpiTitleSize
+                // de 7/8px para o rótulo do KPI.
+                fontSize: Math.max(11, kpiTitleSize),
                 fontWeight: 700,
                 color: T.inkLight,
                 textTransform: "uppercase",
@@ -332,7 +334,7 @@ export function NovaTransacaoImpactPanel({
             >
               {k.val}
             </div>
-            <div style={{ ...G, fontSize: 10, color: T.inkMid, marginTop: 2 }}>{k.sub}</div>
+            <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 2 }}>{k.sub}</div>
           </div>
         ))}
       </div>
@@ -366,27 +368,31 @@ export function NovaTransacaoImpactPanel({
                   h={4}
                 />
               ) : (
-                <div style={{ ...G, fontSize: 10, color: T.inkLight }}>
+                <div style={{ ...G, fontSize: 11, color: T.inkLight }}>
                   Sem orçamento para esta categoria
                 </div>
               )}
             </div>
             <div style={{ textAlign: "right" }}>
-              <span style={{ ...G, ...NUM, fontSize: categoryNumSize, color: T.inkLight }}>
+              {/* Piso de 11px (WCAG 1.4.4): NovaTransacaoModal.jsx chama com
+                  categoryNumSize=10 num dos usos. Sem o Math.max, o número
+                  principal (antes→depois) caía abaixo da legenda "limite"
+                  logo abaixo — hierarquia invertida. */}
+              <span style={{ ...G, ...NUM, fontSize: Math.max(11, categoryNumSize), color: T.inkLight }}>
                 {fmtCat(impactKpis.catBefore)} →{" "}
               </span>
               <span
                 style={{
                   ...G,
                   ...NUM,
-                  fontSize: categoryNumSize,
+                  fontSize: Math.max(11, categoryNumSize),
                   fontWeight: 700,
                   color: impactKpis.catOverBudget ? T.red : T.ink,
                 }}
               >
                 {fmtCat(impactKpis.catAfter)}
               </span>
-              <div style={{ ...G, fontSize: categoryNumSize - 1, color: T.inkMid }}>
+              <div style={{ ...G, fontSize: Math.max(11, categoryNumSize - 1), color: T.inkMid }}>
                 {impactKpis.catLimit != null
                   ? `limite ${fmtCat(impactKpis.catLimit)}`
                   : ""}

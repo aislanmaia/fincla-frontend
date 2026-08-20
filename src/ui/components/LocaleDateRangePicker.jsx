@@ -112,7 +112,7 @@ function RangeDateInput({
       <div
         style={{
           ...G,
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: 700,
           color: active ? T.ink : T.inkMid,
           textTransform: "uppercase",
@@ -385,7 +385,7 @@ export function LocaleDateRangePicker({
             <div
               style={{
                 ...G,
-                fontSize: 10,
+                fontSize: 11,
                 fontWeight: 700,
                 color: T.inkMid,
                 textTransform: "uppercase",

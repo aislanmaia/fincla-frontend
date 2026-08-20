@@ -31,7 +31,7 @@ export function CardsInvoiceHeader({
     ? {
       wrapStyle: { background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: "16px 18px", marginBottom: 14 },
       headerMb: 12,
-      labelFontSize: 10,
+      labelFontSize: 11, // piso WCAG de 11px (era 10)
       labelMb: 3,
       valueFontSize: 22,
       diffFontSize: 11,

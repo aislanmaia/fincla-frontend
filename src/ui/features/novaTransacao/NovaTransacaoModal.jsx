@@ -12,6 +12,7 @@ import { CategoryLucideIcon } from "../../components/CategoryLucideIcon.jsx";
 import { LocaleDatePicker } from "../../components/LocaleDatePicker.jsx";
 import { NovaTransacaoImpactPanel } from "../../components/NovaTransacaoImpactPanel.jsx";
 import { APP_UI_LOCALE } from "../../appLocale.js";
+import { detailLabelPtForTag } from "../../data/categoryLabels.js";
 
 import { useCategoryTagsData } from "../tags/useCategoryTagsData.js";
 import { useNovaTransacaoDetailTags } from "../tags/useNovaTransacaoDetailTags.js";
@@ -76,6 +77,9 @@ import {
 import { listCreditCards } from "../../../api/creditCards";
 import { getOrgBalances } from "../../../api/balances";
 import {
+  buildCreateCreditCardPayload,
+  CARD_BRAND_OPTIONS,
+  createCreditCardForUi,
   formatCreditCardsApiError,
   mapCreditCardToModalPickerRow,
 } from "../../data/creditCardsAdapter.js";
@@ -98,6 +102,35 @@ import {
 } from "./novaTransacaoConstants.js";
 
 /* ─── NOVA TRANSAÇÃO DRAWER ─────────────────────────────── */
+
+/**
+ * Rótulo PT de exibição de uma tag "detalhe" da API (linha crua de
+ * `useNovaTransacaoDetailTags`). `row.name` pode vir cru do seed (ex.
+ * "health_plan") — usa o mesmo rótulo tanto pro chip quanto pra ordenação,
+ * senão a lista ordena por um nome que o usuário nunca vê na tela.
+ * @param {{ name?: string | null } | null | undefined} row
+ * @returns {string}
+ */
+export function resolveDetailTagRowLabel(row) {
+  if (!row) return "";
+  return detailLabelPtForTag(row) || (row.name != null ? String(row.name).trim() : "");
+}
+
+/**
+ * Ordena as sugestões de tag "detalhe" pelo rótulo PT exibido (não pelo nome
+ * cru da API) — senão a lista aparece fora de ordem alfabética em PT-BR
+ * (ex.: "grocery" antes de "uber" ordena errado quando a tela mostra
+ * "mercado" e "uber").
+ * @param {Array<{ name?: string | null }>} rows
+ * @returns {Array<{ name?: string | null }>}
+ */
+export function sortDetailTagRowsByLabelPt(rows) {
+  return [...(rows ?? [])].sort((a, b) =>
+    resolveDetailTagRowLabel(a).localeCompare(resolveDetailTagRowLabel(b), "pt-BR", {
+      sensitivity: "base",
+    }),
+  );
+}
 
 export const NovaTransacaoModal = ({
   open,
@@ -207,6 +240,39 @@ export const NovaTransacaoModal = ({
   const [addingCartao,  setAddingCartao] = useState(false);
   const [quickAddCardName, setQuickAddCardName] = useState("");
   const [quickAddCardLast4, setQuickAddCardLast4] = useState("");
+  /**
+   * Bandeira e dia de vencimento — pedidos no próprio mini-form (não só nome
+   * + 4 dígitos). Defaults inventados (brand "Visa" fixo, due_day 1) foram
+   * revisados e reprovados: o backend deriva `closing_day = due_day - 7`
+   * quando due_day falta, então um due_day errado põe a compra na fatura
+   * errada (bug financeiro silencioso); e "VISA" cravado no picker de um
+   * cartão que na verdade é Nubank fica errado pra sempre até o usuário
+   * lembrar de editar em Cartões. Limite (`credit_limit`) continua com
+   * default 0 — não afeta em qual fatura a compra cai, só o "disponível"
+   * exibido, então mantemos o mini-form curto e sinalizamos que é
+   * provisório (ver nota abaixo do form) em vez de adicionar mais um campo.
+   */
+  const [quickAddCardBrand, setQuickAddCardBrand] = useState(CARD_BRAND_OPTIONS[0]);
+  const [quickAddCardDueDay, setQuickAddCardDueDay] = useState("");
+  /**
+   * CAUSA DO BUG (issue #79): o botão "Adicionar" do quick-add de cartão só
+   * limpava o formulário — nunca chamava a API. Cartão "criado" nunca existia
+   * no backend, então não aparecia na lista nem ficava selecionável. Falha
+   * silenciosa: sem erro, sem loading, sem POST algum.
+   */
+  const [quickAddCardSaving, setQuickAddCardSaving] = useState(false);
+  const [quickAddCardError, setQuickAddCardError] = useState("");
+  /**
+   * Sobe a cada fechamento do drawer — invalida um `handleQuickAddCard` em
+   * voo. O componente não desmonta ao fechar (`return null`), então sem
+   * isso um POST/reload que resolve depois que o usuário fechou e reabriu
+   * (outra transação) aplicaria `setCardId`/`setAddingCartao` por cima do
+   * estado já resetado do drawer novo.
+   */
+  const drawerSessionRef = useRef(0);
+  useEffect(() => {
+    if (!open) drawerSessionRef.current += 1;
+  }, [open]);
 
   const [categoryTagId, setCategoryTagId] = useState(null);
   const [categoryTagIsActive, setCategoryTagIsActive] = useState(true);
@@ -233,7 +299,34 @@ export const NovaTransacaoModal = ({
   const [modalCardsRows, setModalityChoicealCardsRows] = useState([]);
   const [modalCardsLoading, setModalityChoicealCardsLoading] = useState(false);
   const [modalCardsError, setModalityChoicealCardsError] = useState("");
+  /**
+   * Aviso de "cartão criado, mas a lista não recarregou" — SEPARADO de
+   * `modalCardsError`. `modalCardsError` é a ALTERNATIVA à lista no JSX
+   * (loading ? … : erro ? … : cards.map(…)): usá-lo aqui derrubava a lista
+   * inteira (cartões existentes + "+ Novo cartão") pelo resto da sessão do
+   * drawer, incluindo o cartão que acabara de ser selecionado — pior que a
+   * falha de recarga que devia só avisar. Este aviso convive com a lista.
+   */
+  const [modalCardsReloadNotice, setModalCardsReloadNotice] = useState("");
   const appliedModalInitStampRef = useRef(null);
+  /**
+   * Marca se o `preConfig.cartaoId` já foi reconciliado com a lista
+   * carregada nesta sessão do drawer. Sem isso, o efeito de auto-seleção
+   * (abaixo) reforça `preConfig.cartaoId` toda vez que `modalCardsRows`
+   * muda — inclusive depois que o quick-add cria e seleciona um cartão
+   * novo, que a reconciliação desfazia silenciosamente.
+   */
+  const preConfigCardWantAppliedRef = useRef(false);
+  /**
+   * Id (string) do cartão que o quick-add acabou de criar e selecionar,
+   * enquanto a recarga da lista ainda não confirmou que ele existe em
+   * `modalCardsRows`. `setCardId` roda ANTES da recarga (pra fechar o
+   * form mesmo se a recarga falhar — achado #2), então por um instante
+   * `cardId` aponta pra um id que `realIds` ainda não contém; sem esta
+   * trava, o efeito de auto-seleção lia isso como "cardId inválido" e
+   * revertia pro primeiro cartão da lista antes da recarga terminar.
+   */
+  const pendingQuickAddCardIdRef = useRef(null);
 
   const useLiveCategoryTags = Boolean(organizationId && dataMode === "live");
   const categoryTagsData = useCategoryTagsData({
@@ -350,19 +443,17 @@ export const NovaTransacaoModal = ({
   const detailTagRowsAvailable = useMemo(() => {
     if (!useLiveDetailTags || !categoryTagId) return [];
     const sel = new Set(detailTagIds.map((id) => String(id)));
-    return [...detailTagRowsForCategory]
-      .filter((row) => row?.id && !sel.has(String(row.id)))
-      .sort((a, b) =>
-        String(a.name || "").localeCompare(String(b.name || ""), "pt-BR", {
-          sensitivity: "base",
-        }),
-      );
+    return sortDetailTagRowsByLabelPt(
+      detailTagRowsForCategory.filter((row) => row?.id && !sel.has(String(row.id))),
+    );
   }, [useLiveDetailTags, categoryTagId, detailTagRowsForCategory, detailTagIds]);
 
   const addDetailTagByRow = useCallback((row) => {
     if (!row?.id) return;
     const id = String(row.id);
-    const name = row.name != null && String(row.name).trim() ? String(row.name).trim() : "";
+    // `row.name` pode vir cru do seed (ex. "health_plan") — guarda o rótulo já
+    // traduzido pro chip, não o nome cru da API.
+    const name = resolveDetailTagRowLabel(row);
     setDetailTagIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
     if (name) setDetailTagLabelById((prev) => ({ ...prev, [id]: name }));
     setDetailTagMetaById((prev) => ({
@@ -420,6 +511,16 @@ export const NovaTransacaoModal = ({
     const stamp = novaTxModalInitStamp(organizationId, novaRecorrencia, preConfig);
     if (appliedModalInitStampRef.current === stamp) return;
     appliedModalInitStampRef.current = stamp;
+    // Novo stamp = nova intenção de preConfig.cartaoId (ou nenhuma) — ainda
+    // não reconciliada com a lista de cartões carregada.
+    preConfigCardWantAppliedRef.current = false;
+    // Reset roda com o drawer ainda ABERTO quando só o preConfig troca (ex.:
+    // "novo lançamento" disparado de novo enquanto o drawer já estava
+    // montado) — o efeito que zera `drawerSessionRef` só olha `open`, então
+    // sem isto um handleQuickAddCard em voo da intenção anterior aplicaria
+    // setCardId/setAddingCartao por cima deste formulário recém-resetado.
+    drawerSessionRef.current += 1;
+    setModalCardsReloadNotice("");
 
     const pc = preConfig;
     const nr = novaRecorrencia;
@@ -440,6 +541,10 @@ export const NovaTransacaoModal = ({
     setAddingCartao(false);
     setQuickAddCardName("");
     setQuickAddCardLast4("");
+    setQuickAddCardBrand(CARD_BRAND_OPTIONS[0]);
+    setQuickAddCardDueDay("");
+    setQuickAddCardError("");
+    setQuickAddCardSaving(false);
     setNewTag("");
     setAddingTag(false);
     setDetailTagIds([]);
@@ -627,6 +732,12 @@ export const NovaTransacaoModal = ({
     setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, null));
   }, [open, novaRecorrencia, preConfig, organizationId]);
 
+  /** Busca a lista de cartões (linhas do picker do drawer). Reusada pelo fetch inicial e pelo quick-add. */
+  const fetchModalCardRows = useCallback(async () => {
+    const cardRows = await listCreditCards(organizationId);
+    return cardRows.map(mapCreditCardToModalPickerRow);
+  }, [organizationId]);
+
   useEffect(() => {
     if (!open) {
       setModalityChoicealCardsRows([]);
@@ -639,10 +750,10 @@ export const NovaTransacaoModal = ({
     let cancelled = false;
     setModalityChoicealCardsLoading(true);
     setModalityChoicealCardsError("");
-    listCreditCards(organizationId)
-      .then((cardRows) => {
+    fetchModalCardRows()
+      .then((rows) => {
         if (cancelled) return;
-        setModalityChoicealCardsRows(cardRows.map(mapCreditCardToModalPickerRow));
+        setModalityChoicealCardsRows(rows);
         setModalityChoicealCardsLoading(false);
       })
       .catch((e) => {
@@ -654,7 +765,121 @@ export const NovaTransacaoModal = ({
     return () => {
       cancelled = true;
     };
-  }, [open, organizationId, dataMode]);
+  }, [open, organizationId, dataMode, fetchModalCardRows]);
+
+  /** Só existe cartão pra persistir em modo live com organização conhecida — sem isso o quick-add é indisponível (ver JSX). */
+  const quickAddCardAvailable = Boolean(organizationId && dataMode === "live");
+  const quickAddCardDueDayNum = Number(quickAddCardDueDay);
+  const quickAddCardDueDayValid =
+    quickAddCardDueDay !== "" &&
+    Number.isInteger(quickAddCardDueDayNum) &&
+    quickAddCardDueDayNum >= 1 &&
+    quickAddCardDueDayNum <= 31;
+  const quickAddCardCanSubmit =
+    quickAddCardAvailable &&
+    Boolean(quickAddCardName) &&
+    quickAddCardLast4.length === 4 &&
+    quickAddCardDueDayValid &&
+    !quickAddCardSaving;
+
+  /**
+   * Cria o cartão via API (era o passo que faltava — ver comentário no
+   * estado `quickAddCardSaving` acima). Só existe no modo live com
+   * organização conhecida; sem isso não há onde persistir o cartão.
+   * Em caso de sucesso: seleciona o cartão novo e fecha o mini-formulário
+   * — isso é garantido assim que o POST volta, mesmo que a recarga da
+   * lista falhe em seguida (ver comentário no catch da recarga: uma falha
+   * ali não é falha de criação, e não pode se disfarçar de uma).
+   */
+  const handleQuickAddCard = useCallback(async () => {
+    if (!quickAddCardCanSubmit) return;
+    const session = drawerSessionRef.current;
+    const isStale = () => drawerSessionRef.current !== session;
+    setQuickAddCardSaving(true);
+    setQuickAddCardError("");
+    setModalCardsReloadNotice("");
+    let created;
+    try {
+      const payload = buildCreateCreditCardPayload({
+        organizationId,
+        displayName: quickAddCardName,
+        last4Digits: quickAddCardLast4,
+        brand: quickAddCardBrand,
+        dueDay: quickAddCardDueDay,
+      });
+      created = await createCreditCardForUi(payload);
+    } catch (e) {
+      // Drawer fechou/reabriu (outra transação) enquanto o POST estava em
+      // voo — não mexe no estado do drawer novo.
+      if (!isStale()) {
+        setQuickAddCardError(formatCreditCardsApiError(e));
+        setQuickAddCardSaving(false);
+      }
+      return;
+    }
+    if (isStale()) return;
+
+    // Cartão já existe no backend a partir daqui — isso não pode mais virar
+    // "erro de criação" na tela, então fecha o form e seleciona o cartão já.
+    setAddingCartao(false);
+    setQuickAddCardName("");
+    setQuickAddCardLast4("");
+    setQuickAddCardBrand(CARD_BRAND_OPTIONS[0]);
+    setQuickAddCardDueDay("");
+    setCardId(String(created.id));
+    // Marca reconciliado: se havia preConfig.cartaoId pendente, o cartão
+    // recém-criado (escolha explícita do usuário) já venceu essa disputa —
+    // não deixa o efeito de auto-seleção reverter para o cartão do preConfig.
+    preConfigCardWantAppliedRef.current = true;
+    // `cardId` acima aponta pra um id que `modalCardsRows` ainda não tem
+    // (a recarga só termina abaixo) — sem isto, o efeito de auto-seleção
+    // lê esse instante como "cardId inválido" e volta pro primeiro cartão
+    // da lista antes da recarga confirmar o cartão novo.
+    pendingQuickAddCardIdRef.current = String(created.id);
+
+    try {
+      const rows = await fetchModalCardRows();
+      if (!isStale()) {
+        setModalityChoicealCardsRows(rows);
+        // Só limpa a trava quando a lista REALMENTE confirma o cartão —
+        // se a recarga falhar (catch abaixo), `modalCardsRows` continua sem
+        // ele e a trava tem de continuar de pé (ver comentário no `if`
+        // logo abaixo do catch).
+        pendingQuickAddCardIdRef.current = null;
+      }
+    } catch (e) {
+      // Falha aqui é só de RECARGA — o cartão foi criado e já está
+      // selecionado. Não usa o slot de erro do quick-add (que diria
+      // "criação falhou", convidando o usuário a criar um duplicado) NEM
+      // `modalCardsError` (que substitui a lista inteira — derrubaria o
+      // cartão recém-selecionado da tela). Usa um aviso que convive com a
+      // lista renderizada normalmente.
+      //
+      // NÃO limpa `pendingQuickAddCardIdRef` aqui: `modalCardsRows` ainda
+      // não tem o cartão criado, então limpar a trava liberaria o efeito de
+      // auto-seleção pra rodar de novo (troca Débito→Crédito, preConfig
+      // mudando, etc.) achando `cardId` "inválido" — e trocaria o cartão em
+      // silêncio pro primeiro da lista velha, sem pista visual nenhuma
+      // (o cartão novo nem aparece no picker ainda). A trava só é liberada
+      // quando uma recarga (desta função ou de qualquer outra, ver efeito
+      // de auto-seleção) finalmente confirmar o cartão na lista.
+      if (!isStale()) {
+        setModalCardsReloadNotice(
+          `Cartão criado, mas não foi possível atualizar a lista agora: ${formatCreditCardsApiError(e)}`,
+        );
+      }
+    } finally {
+      if (!isStale()) setQuickAddCardSaving(false);
+    }
+  }, [
+    quickAddCardCanSubmit,
+    organizationId,
+    quickAddCardName,
+    quickAddCardLast4,
+    quickAddCardBrand,
+    quickAddCardDueDay,
+    fetchModalCardRows,
+  ]);
 
   const cards = useMemo(() => {
     if (organizationId && dataMode === "live") {
@@ -678,12 +903,32 @@ export const NovaTransacaoModal = ({
     if (modalCardsLoading) return;
     if (method !== "credito") return;
     const realIds = modalCardsRows.map((r) => String(r.id));
+    if (pendingQuickAddCardIdRef.current) {
+      if (realIds.includes(pendingQuickAddCardIdRef.current)) {
+        // A lista finalmente confirmou o cartão pendente — por QUALQUER
+        // recarga, não só a do próprio quick-add (ex.: o usuário reabriu o
+        // drawer e o fetch inicial trouxe o cartão que uma recarga anterior
+        // não confirmou). Libera a trava; segue para a lógica normal abaixo.
+        pendingQuickAddCardIdRef.current = null;
+      } else if (cardId === pendingQuickAddCardIdRef.current) {
+        // Ainda não confirmado — não mexe (ver comentário no
+        // `pendingQuickAddCardIdRef` dentro de `handleQuickAddCard`).
+        return;
+      }
+    }
     if (realIds.length === 0) return;
     const want =
       preConfig?.cartaoId != null && String(preConfig.cartaoId)
         ? String(preConfig.cartaoId)
         : null;
-    if (want && realIds.includes(want)) {
+    // Só força `want` (preConfig.cartaoId) UMA vez por sessão do drawer —
+    // na primeira vez que a lista carrega. Depois disso, uma escolha nova
+    // do usuário (clique manual ou cartão recém-criado pelo quick-add) tem
+    // prioridade; sem essa trava, toda recarga da lista (ex.: depois de
+    // criar um cartão Y) reaplicava o cartão X do preConfig por cima da
+    // seleção que o usuário acabou de fazer, sem aviso nenhum.
+    if (want && realIds.includes(want) && !preConfigCardWantAppliedRef.current) {
+      preConfigCardWantAppliedRef.current = true;
       if (cardId !== want) setCardId(want);
       return;
     }
@@ -1191,7 +1436,7 @@ export const NovaTransacaoModal = ({
               {settled ? "Entra no saldo da conta agora." : "Fica como compromisso pendente."}
             </div>
           </div>
-          <div style={{ width: 42, height: 24, borderRadius: 12, background: settled ? T.green : T.inkGhost, position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
+          <div style={{ width: 42, height: 24, borderRadius: 12, background: settled ? T.green : T.inkFaint, position: "relative", transition: "background 0.2s", flexShrink: 0 }}>
             <div style={{ position: "absolute", top: 3, left: settled ? 21 : 3, width: 18, height: 18, borderRadius: 9999, background: "#fff", transition: "left 0.2s", boxShadow: T.sm }} />
           </div>
         </div>
@@ -1548,6 +1793,12 @@ export const NovaTransacaoModal = ({
   const goBack   = () => { setReviewDir("back");    setReview(false); };
 
   const handleNewTransaction = () => {
+    // Reset roda com o drawer ainda ABERTO (sucesso → "Nova transação",
+    // sem passar por `open` virar false) — mesmo motivo do bump em cima:
+    // invalida qualquer handleQuickAddCard em voo da transação anterior
+    // antes de zerar o formulário.
+    drawerSessionRef.current += 1;
+    setModalCardsReloadNotice("");
     const prefs = readStoredNovaTransacaoPrefs(organizationId);
     const prefTipo = prefs.tipo === "receita" ? "receita" : "despesa";
     const prefMethod = normalizeStoredNovaTxPaymentMethod(prefs.method, prefTipo) ?? "pix";
@@ -1591,6 +1842,8 @@ export const NovaTransacaoModal = ({
     setTxSubmitError(""); setTxSubmitting(false); setTxCreateFailed(false); setTxCreateErrorAmbiguous(false); setTxRetryConfirmPending(false); setDescError(false);
     setMobileReviewImpactOpen(false); resetAi();
     setDescFocused(false); setAddingCartao(false); setQuickAddCardName(""); setQuickAddCardLast4("");
+    setQuickAddCardBrand(CARD_BRAND_OPTIONS[0]); setQuickAddCardDueDay("");
+    setQuickAddCardError(""); setQuickAddCardSaving(false);
     setNewTag(""); setAddingTag(false); resetInstallmentCalc(); setShowImpact(false);
     setEditBaselineDropped(true);
   };
@@ -1649,7 +1902,7 @@ export const NovaTransacaoModal = ({
           <div style={{ width:18, height:18, borderRadius:9999, background:typeColor, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
             <Check size={10} color="#fff" strokeWidth={3} />
           </div>
-          <span style={{ ...G, fontSize:10, fontWeight:700, color:typeColor, textTransform:"uppercase", letterSpacing:"0.09em" }}>
+          <span style={{ ...G, fontSize: 11, fontWeight:700, color:typeColor, textTransform:"uppercase", letterSpacing:"0.09em" }}>
             {novaRecorrencia || isRecurring ? "Recorrência pronta para confirmar" : "Pronto para registrar"}
           </span>
         </div>
@@ -1687,14 +1940,14 @@ export const NovaTransacaoModal = ({
             ]),
           ].map((f,i) => (
             <div key={i} style={{ background:T.surface, padding:"10px 14px" }}>
-              <div style={{ ...G, fontSize:8, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:3 }}>{f.label}</div>
+              <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkLight, textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:3 }}>{f.label}</div>
               <div style={{ ...G, fontSize:12, fontWeight:600, color:f.valColor || T.ink }}>{f.val}</div>
             </div>
           ))}
         </div>
         {((useLiveDetailTags && detailTagIds.length > 0) || (!useLiveDetailTags && tags.length > 0)) && (
           <div>
-            <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Tags</div>
+            <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Tags</div>
             <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
               {useLiveDetailTags
                 ? detailTagIds.map((id) => (
@@ -1806,7 +2059,7 @@ export const NovaTransacaoModal = ({
           {!successOverlay && <>
           {/* Handle */}
           <div style={{ display:"flex", justifyContent:"center", padding:"10px 0 4px" }}>
-            <div style={{ width:36, height:4, borderRadius:99, background:T.inkGhost }} />
+            <div style={{ width:36, height:4, borderRadius:99, background:T.inkFaint }} />
           </div>
 
           {/* Step dots + header */}
@@ -1814,12 +2067,12 @@ export const NovaTransacaoModal = ({
             {/* Progress dots */}
             <div style={{ display:"flex", justifyContent:"center", gap:5, marginBottom:10 }}>
               {mStepsFlow.map((s, i) => (
-                <div key={s} style={{ width: s === mStep ? 18 : 6, height:6, borderRadius:99, background: i < mCurrentIdx ? T.inkGhost : s === mStep ? T.ink : T.border, transition:"all 0.25s" }} />
+                <div key={s} style={{ width: s === mStep ? 18 : 6, height:6, borderRadius:99, background: i < mCurrentIdx ? T.inkFaint : s === mStep ? T.ink : T.border, transition:"all 0.25s" }} />
               ))}
             </div>
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
               <div>
-                <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em" }}>
+                <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em" }}>
                   Step {mCurrentIdx + 1} de {mTotalSteps}
                 </div>
                 <div style={{ ...G, fontSize:16, fontWeight:800, color:T.ink, marginTop:1 }}>{stepLabel[mStep]}</div>
@@ -1972,7 +2225,7 @@ export const NovaTransacaoModal = ({
                 <div>
                   <div style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid, marginBottom:8, display:"flex", alignItems:"center", gap:6 }}>
                     Descrição
-                    <span style={{ ...G, fontSize:10, fontWeight:700, color:T.purple, background:T.purpleLight, padding:"1px 7px", borderRadius:99, display:"flex", alignItems:"center", gap:3 }}>
+                    <span style={{ ...G, fontSize: 11, fontWeight:700, color:T.purple, background:T.purpleLight, padding:"1px 7px", borderRadius:99, display:"flex", alignItems:"center", gap:3 }}>
                       <Star size={8} fill={T.purple} /> IA
                     </span>
                   </div>
@@ -1991,7 +2244,7 @@ export const NovaTransacaoModal = ({
                         <span style={{ ...G, fontSize:11, color:T.ink }}>{aiSuggestion.cat}</span>
                         <span style={{ ...G, fontSize:11, color:T.inkMid }}> · {aiSuggestion.tags.map(t => `#${t}`).join(" ")}</span>
                       </div>
-                      <span style={{ ...G, fontSize:10, fontWeight:700, color:T.purple }}>Aplicar →</span>
+                      <span style={{ ...G, fontSize: 11, fontWeight:700, color:T.purple }}>Aplicar →</span>
                     </button>
                   )}
                   {aiApplied && (
@@ -2063,7 +2316,7 @@ export const NovaTransacaoModal = ({
                         <div style={{ ...G, fontSize:11, color:T.inkLight, marginTop:1 }}>Repetir automaticamente</div>
                       </div>
                     </div>
-                    <div style={{ width:42, height:24, borderRadius:12, background:isRecurring ? T.blue : T.inkGhost, position:"relative", transition:"background 0.2s", flexShrink:0 }}>
+                    <div style={{ width:42, height:24, borderRadius:12, background:isRecurring ? T.blue : T.inkFaint, position:"relative", transition:"background 0.2s", flexShrink:0 }}>
                       <div style={{ position:"absolute", top:3, left:isRecurring ? 21 : 3, width:18, height:18, borderRadius:9999, background:"#fff", transition:"left 0.2s", boxShadow:T.sm }} />
                     </div>
                   </div>
@@ -2093,13 +2346,13 @@ export const NovaTransacaoModal = ({
                             });
                           }}
                             style={{ ...G, fontSize:12, fontWeight:600, color:"#fff", background:isDetailTagInactive(id) ? T.amber : T.purple, padding:"5px 11px", borderRadius:9999, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}>
-                            + {detailChipLabel(id)}{isDetailTagInactive(id) ? " (indisponível)" : ""} <span style={{ opacity:0.7, fontSize:10 }}>✕</span>
+                            + {detailChipLabel(id)}{isDetailTagInactive(id) ? " (indisponível)" : ""} <span style={{ opacity:0.7, fontSize: 11 }}>✕</span>
                           </span>
                         ))
                       : tags.map((tag) => (
                           <span key={tag} onClick={() => setTags((ts) => ts.filter((t) => t !== tag))}
                             style={{ ...G, fontSize:12, fontWeight:600, color:"#fff", background:T.purple, padding:"5px 11px", borderRadius:9999, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}>
-                            + {tag} <span style={{ opacity:0.7, fontSize:10 }}>✕</span>
+                            + {tag} <span style={{ opacity:0.7, fontSize: 11 }}>✕</span>
                           </span>
                         ))}
                     {detailTagRowsAvailable.map((row) => (
@@ -2119,7 +2372,7 @@ export const NovaTransacaoModal = ({
                         }}
                         style={{ ...G, fontSize:12, color:T.inkMid, background:T.grayLight, padding:"5px 11px", borderRadius:9999, cursor:"pointer" }}
                       >
-                        {row.name}
+                        {resolveDetailTagRowLabel(row)}
                       </span>
                     ))}
                     {NOVA_TX_QUICK_DETAIL_LABELS.filter((t) => {
@@ -2150,6 +2403,11 @@ export const NovaTransacaoModal = ({
               <div style={{ padding:"18px 20px", display:"flex", flexDirection:"column", gap:16, ...mobileStepInStyle }}>
                 <div>
                   <div style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid, marginBottom:10 }}>Selecionar cartão</div>
+                  {modalCardsReloadNotice && (
+                    <div style={{ ...G, fontSize:11, color:T.amber, background:T.amberLight, border:`1px solid ${T.amber}33`, borderRadius:9, padding:"8px 10px", marginBottom:8, lineHeight:1.5 }}>
+                      {modalCardsReloadNotice}
+                    </div>
+                  )}
                   <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                     {organizationId && dataMode === "live" && modalCardsLoading && modalCardsRows.length === 0 ? (
                       <div style={{ ...G, fontSize:12, color:T.inkLight, padding:"12px 0" }}>Carregando cartões…</div>
@@ -2166,13 +2424,13 @@ export const NovaTransacaoModal = ({
                       <div key={c.id} onClick={() => setCardId(c.id)}
                         style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px", borderRadius:14, border:`2px solid ${cardId === c.id ? T.ink : T.border}`, background:cardId === c.id ? T.ink : T.surface, cursor:"pointer", transition:"all 0.15s" }}>
                         <div style={{ flex:1, minWidth:0 }}>
-                          <div style={{ ...G, fontSize:8, fontWeight:700, color:cardId===c.id?"rgba(255,255,255,0.5)":T.inkLight, letterSpacing:"0.08em", marginBottom:2 }}>{c.banco}</div>
+                          <div style={{ ...G, fontSize: 11, fontWeight:700, color:cardId===c.id?"rgba(255,255,255,0.5)":T.inkLight, letterSpacing:"0.08em", marginBottom:2 }}>{c.banco}</div>
                           <div style={{ ...G, fontSize:14, fontWeight:700, color:cardId===c.id?"#fff":T.ink }}>{c.nome}</div>
-                          <div style={{ ...G, ...NUM, fontSize:10, color:cardId===c.id?"rgba(255,255,255,0.5)":T.inkLight, marginTop:1 }}>···· {c.dig}</div>
+                          <div style={{ ...G, ...NUM, fontSize: 11, color:cardId===c.id?"rgba(255,255,255,0.5)":T.inkLight, marginTop:1 }}>···· {c.dig}</div>
                         </div>
                         <div style={{ textAlign:"right" }}>
                           <div style={{ ...G, ...NUM, fontSize:13, fontWeight:700, color:cardId===c.id?"#86efac":T.green }}>R$ {c.disp.toLocaleString("pt-BR")}</div>
-                          <div style={{ ...G, fontSize:10, color:cardId===c.id?"rgba(255,255,255,0.4)":T.inkLight }}>disponível</div>
+                          <div style={{ ...G, fontSize: 11, color:cardId===c.id?"rgba(255,255,255,0.4)":T.inkLight }}>disponível</div>
                         </div>
                         {cardId===c.id && <div style={{ width:16, height:16, borderRadius:9999, background:"#fff", display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}><Check size={10} color={T.ink} /></div>}
                       </div>
@@ -2193,8 +2451,8 @@ export const NovaTransacaoModal = ({
                               background: disabled ? T.grayLight : selected ? T.ink : T.surface,
                               cursor: disabled ? "not-allowed" : "pointer",
                               textAlign:"left", transition:"all 0.15s", opacity: disabled ? 0.5 : 1 }}>
-                            <div style={{ ...G, fontSize:13, fontWeight:700, color: disabled ? T.inkGhost : selected?"#fff":T.ink }}>{label}</div>
-                            <div style={{ ...G, fontSize:10, color: disabled ? T.inkGhost : selected?"rgba(255,255,255,0.5)":T.inkLight, marginTop:2 }}>
+                            <div style={{ ...G, fontSize:13, fontWeight:700, color: disabled ? T.inkFaint : selected?"#fff":T.ink }}>{label}</div>
+                            <div style={{ ...G, fontSize: 11, color: disabled ? T.inkFaint : selected?"rgba(255,255,255,0.5)":T.inkLight, marginTop:2 }}>
                               {disabled ? "Indisponível com recorrência" : sub}
                             </div>
                           </button>
@@ -2215,7 +2473,7 @@ export const NovaTransacaoModal = ({
                       {PARCELA_PRESETS.map(p => (
                         <button key={p} onClick={() => setInstallments(p)} style={{ padding:"10px 4px", borderRadius:10, border:`1.5px solid ${installments===p ? T.ink : T.border}`, background:installments===p ? T.ink : T.surface, cursor:"pointer", textAlign:"center", transition:"all 0.15s" }}>
                           <div style={{ ...G, fontSize:13, fontWeight:700, color:installments===p?"#fff":T.ink }}>{p}×</div>
-                          <div style={{ ...G, ...NUM, fontSize:10, color:installments===p?"rgba(255,255,255,0.5)":T.inkLight, marginTop:1 }}>{amountNum > 0 ? `R$${(amountNum/p).toFixed(0)}` : "—"}</div>
+                          <div style={{ ...G, ...NUM, fontSize: 11, color:installments===p?"rgba(255,255,255,0.5)":T.inkLight, marginTop:1 }}>{amountNum > 0 ? `R$${(amountNum/p).toFixed(0)}` : "—"}</div>
                         </button>
                       ))}
                     </div>
@@ -2279,7 +2537,7 @@ export const NovaTransacaoModal = ({
                 <button onClick={handleSaveOrConfirmRetry} disabled={txSubmitting || !desc.trim()}
                   style={{ ...G, flex:1, padding:"13px", borderRadius:12,
                     border:(!success && !(txSubmitting || !desc.trim()) && txCreateFailed && txCreateErrorAmbiguous) ? `1px solid ${T.amberBorder}` : "none",
-                    background:success ? T.green : (txSubmitting || !desc.trim()) ? T.inkGhost : (txCreateFailed && txCreateErrorAmbiguous) ? T.amberLight : typeColor,
+                    background:success ? T.green : (txSubmitting || !desc.trim()) ? T.inkFaint : (txCreateFailed && txCreateErrorAmbiguous) ? T.amberLight : typeColor,
                     fontSize:14, fontWeight:800,
                     color:(!success && !(txSubmitting || !desc.trim()) && txCreateFailed && txCreateErrorAmbiguous) ? T.ink : "#fff",
                     cursor:(txSubmitting || !desc.trim()) ? "not-allowed" : "pointer", opacity:(txSubmitting || !desc.trim()) ? 0.75 : 1, display:"flex", alignItems:"center", justifyContent:"center", gap:7, transition:"background 0.25s" }}>
@@ -2296,7 +2554,7 @@ export const NovaTransacaoModal = ({
                   </button>
                 )}
                 <button onClick={goNext} disabled={mStep === 1 && !amountNum}
-                  style={{ ...G, flex:1, padding:"13px", borderRadius:12, border:"none", background: (mStep === 1 && !amountNum) ? T.inkGhost : T.ink, fontSize:14, fontWeight:800, color:"#fff", cursor:(mStep===1&&!amountNum)?"not-allowed":"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:7, transition:"background 0.2s" }}>
+                  style={{ ...G, flex:1, padding:"13px", borderRadius:12, border:"none", background: (mStep === 1 && !amountNum) ? T.inkFaint : T.ink, fontSize:14, fontWeight:800, color:"#fff", cursor:(mStep===1&&!amountNum)?"not-allowed":"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:7, transition:"background 0.2s" }}>
                   {mNextLabel()}
                 </button>
               </div>
@@ -2371,7 +2629,7 @@ export const NovaTransacaoModal = ({
               {renderRecurrenceConfigBody(false)}
               {/* Tipo de valor */}
               <div>
-                <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Tipo de valor</div>
+                <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Tipo de valor</div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
                   {[
                     { id:"fixo",     label:"Valor fixo",      sub:"Mesmo valor todo mês",             icon:"🔒" },
@@ -2384,7 +2642,7 @@ export const NovaTransacaoModal = ({
                         transition:"all 0.15s" }}>
                       <div style={{ ...G, fontSize:13, marginBottom:2 }}>{opt.icon}</div>
                       <div style={{ ...G, fontSize:12, fontWeight:700, color:recurrenceValueKind===opt.id?"#fff":T.ink }}>{opt.label}</div>
-                      <div style={{ ...G, fontSize:10, color:recurrenceValueKind===opt.id?"rgba(255,255,255,0.55)":T.inkLight, marginTop:2, lineHeight:1.4 }}>{opt.sub}</div>
+                      <div style={{ ...G, fontSize: 11, color:recurrenceValueKind===opt.id?"rgba(255,255,255,0.55)":T.inkLight, marginTop:2, lineHeight:1.4 }}>{opt.sub}</div>
                     </button>
                   ))}
                 </div>
@@ -2443,7 +2701,12 @@ export const NovaTransacaoModal = ({
             <PanelHeader icon={CreditCard} title="Cartão de crédito" onCollapse={beginCloseCardPanel} />
             <div style={{ flex:1, overflowY:"auto", padding:"16px 18px", display:"flex", flexDirection:"column", gap:16 }}>
               <div>
-                <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:10 }}>Selecionar Cartão</div>
+                <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:10 }}>Selecionar Cartão</div>
+                {modalCardsReloadNotice && (
+                  <div style={{ ...G, fontSize:11, color:T.amber, background:T.amberLight, border:`1px solid ${T.amber}33`, borderRadius:9, padding:"8px 10px", marginBottom:8, lineHeight:1.5 }}>
+                    {modalCardsReloadNotice}
+                  </div>
+                )}
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                   {organizationId && dataMode === "live" && modalCardsLoading && modalCardsRows.length === 0 ? (
                     <div style={{ ...G, gridColumn:"1 / -1", fontSize:12, color:T.inkLight, padding:"16px 8px" }}>Carregando cartões…</div>
@@ -2461,10 +2724,10 @@ export const NovaTransacaoModal = ({
                         </div>
                       ) : (
                         <>
-                          <div style={{ ...G, fontSize:8, fontWeight:700, color:cardId===c.id?"rgba(255,255,255,0.6)":T.inkLight, letterSpacing:"0.08em" }}>{c.banco}</div>
+                          <div style={{ ...G, fontSize: 11, fontWeight:700, color:cardId===c.id?"rgba(255,255,255,0.6)":T.inkLight, letterSpacing:"0.08em" }}>{c.banco}</div>
                           <div style={{ ...G, fontSize:12, fontWeight:700, color:cardId===c.id?"#fff":T.ink }}>{c.nome}</div>
-                          <div style={{ ...G, ...NUM, fontSize:10, color:cardId===c.id?"rgba(255,255,255,0.5)":T.inkLight }}>···· {c.dig}</div>
-                          <div style={{ ...G, ...NUM, fontSize:10, fontWeight:700, color:cardId===c.id?"#86efac":T.green, marginTop:2 }}>R$ {c.disp.toLocaleString("pt-BR")} disp.</div>
+                          <div style={{ ...G, ...NUM, fontSize: 11, color:cardId===c.id?"rgba(255,255,255,0.5)":T.inkLight }}>···· {c.dig}</div>
+                          <div style={{ ...G, ...NUM, fontSize: 11, fontWeight:700, color:cardId===c.id?"#86efac":T.green, marginTop:2 }}>R$ {c.disp.toLocaleString("pt-BR")} disp.</div>
                           {cardId===c.id && <div style={{ position:"absolute", top:7, right:7, width:14, height:14, borderRadius:9999, background:"#fff", display:"flex", alignItems:"center", justifyContent:"center" }}><Check size={9} color={T.ink} /></div>}
                         </>
                       )}
@@ -2478,45 +2741,95 @@ export const NovaTransacaoModal = ({
                   <div style={{ ...G, fontSize:11, fontWeight:700, color:T.blue, marginBottom:10 }}>
                     Adicionar cartão
                   </div>
+                  {!quickAddCardAvailable ? (
+                    // Sem organização/modo live não há onde persistir o cartão — o form
+                    // ficava visível e o botão "Adicionar" clicava sem fazer nada (achado
+                    // #4 da revisão). Em vez de abrir um formulário morto, avisa e fecha.
+                    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                      <div style={{ ...G, fontSize:11, color:T.inkMid, lineHeight:1.5 }}>
+                        Cadastro de cartão indisponível no modo demonstração.
+                      </div>
+                      <button onClick={()=>setAddingCartao(false)}
+                        style={{ ...G, padding:"7px", borderRadius:8, border:`1px solid ${T.border}`,
+                          background:T.surface, fontSize:11, fontWeight:600, color:T.inkMid, cursor:"pointer" }}>
+                        Fechar
+                      </button>
+                    </div>
+                  ) : (
                   <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                     <input value={quickAddCardName} onChange={e=>setQuickAddCardName(e.target.value)}
-                      placeholder="Nome (ex: Nubank Roxinho)"
+                      placeholder="Nome (ex: Nubank Roxinho)" disabled={quickAddCardSaving}
                       style={{ ...G, padding:"8px 10px", borderRadius:8, border:`1px solid ${T.border}`,
                         fontSize:12, color:T.ink, outline:"none", background:T.surface,
                         transition:"border-color 0.15s" }}
                       onFocus={e=>e.target.style.borderColor=T.blue}
                       onBlur={e=>e.target.style.borderColor=T.border}/>
-                    <input value={quickAddCardLast4} onChange={e=>setQuickAddCardLast4(e.target.value.slice(0,4))}
-                      placeholder="4 últimos dígitos" maxLength={4}
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                      <input value={quickAddCardLast4}
+                        onChange={e=>setQuickAddCardLast4(e.target.value.replace(/\D/g, "").slice(0,4))}
+                        placeholder="4 últimos dígitos" maxLength={4} disabled={quickAddCardSaving}
+                        style={{ ...G, ...NUM, padding:"8px 10px", borderRadius:8, border:`1px solid ${T.border}`,
+                          fontSize:12, color:T.ink, outline:"none", background:T.surface,
+                          transition:"border-color 0.15s" }}
+                        onFocus={e=>e.target.style.borderColor=T.blue}
+                        onBlur={e=>e.target.style.borderColor=T.border}/>
+                      <select value={quickAddCardBrand} onChange={e=>setQuickAddCardBrand(e.target.value)}
+                        disabled={quickAddCardSaving}
+                        style={{ ...G, padding:"8px 10px", borderRadius:8, border:`1px solid ${T.border}`,
+                          fontSize:12, color:T.ink, outline:"none", background:T.surface, cursor:"pointer" }}>
+                        {CARD_BRAND_OPTIONS.map((b) => <option key={b} value={b}>{b}</option>)}
+                      </select>
+                    </div>
+                    {/* Dia de vencimento — obrigatório aqui (não tem default seguro): o
+                        backend deriva `closing_day` dele quando ausente, e um due_day
+                        errado bota a compra na fatura errada. Bandeira também é pedida
+                        agora — ficava fixa em "Visa" pra sempre no picker senão. */}
+                    <input value={quickAddCardDueDay}
+                      onChange={e=>setQuickAddCardDueDay(e.target.value.replace(/\D/g, "").slice(0,2))}
+                      placeholder="Dia do vencimento (1-31)" inputMode="numeric" disabled={quickAddCardSaving}
                       style={{ ...G, ...NUM, padding:"8px 10px", borderRadius:8, border:`1px solid ${T.border}`,
                         fontSize:12, color:T.ink, outline:"none", background:T.surface,
                         transition:"border-color 0.15s" }}
                       onFocus={e=>e.target.style.borderColor=T.blue}
                       onBlur={e=>e.target.style.borderColor=T.border}/>
+                    <div style={{ ...G, fontSize: 11, color:T.inkLight, lineHeight:1.5 }}>
+                      Limite fica em R$ 0,00 por enquanto — edite em Cartões quando quiser definir o valor.
+                    </div>
+                    {quickAddCardError && (
+                      <div style={{ ...G, fontSize:11, fontWeight:600, color:T.red }}>{quickAddCardError}</div>
+                    )}
                     <div style={{ display:"flex", gap:6 }}>
-                      <button onClick={()=>{setAddingCartao(false);setQuickAddCardName("");setQuickAddCardLast4("");}}
+                      <button onClick={()=>{
+                          setAddingCartao(false);
+                          setQuickAddCardName("");
+                          setQuickAddCardLast4("");
+                          setQuickAddCardBrand(CARD_BRAND_OPTIONS[0]);
+                          setQuickAddCardDueDay("");
+                          setQuickAddCardError("");
+                        }}
+                        disabled={quickAddCardSaving}
                         style={{ ...G, flex:1, padding:"7px", borderRadius:8, border:`1px solid ${T.border}`,
-                          background:T.surface, fontSize:11, fontWeight:600, color:T.inkMid, cursor:"pointer" }}>
+                          background:T.surface, fontSize:11, fontWeight:600, color:T.inkMid,
+                          cursor:quickAddCardSaving?"not-allowed":"pointer" }}>
                         Cancelar
                       </button>
                       <button
-                        disabled={!quickAddCardName||quickAddCardLast4.length<4}
-                        onClick={()=>{
-                          setAddingCartao(false); setQuickAddCardName(""); setQuickAddCardLast4("");
-                        }}
+                        disabled={!quickAddCardCanSubmit}
+                        onClick={handleQuickAddCard}
                         style={{ ...G, flex:1, padding:"7px", borderRadius:8, border:"none",
-                          background:quickAddCardName&&quickAddCardLast4.length===4?T.blue:T.inkGhost,
+                          background:quickAddCardCanSubmit?T.blue:T.inkFaint,
                           fontSize:11, fontWeight:700, color:"#fff",
-                          cursor:quickAddCardName&&quickAddCardLast4.length===4?"pointer":"not-allowed", transition:"background 0.15s" }}>
-                        Adicionar
+                          cursor:quickAddCardCanSubmit?"pointer":"not-allowed", transition:"background 0.15s" }}>
+                        {quickAddCardSaving ? "Adicionando…" : "Adicionar"}
                       </button>
                     </div>
                   </div>
+                  )}
                 </div>
               )}
               {!isRefund && (
                 <div>
-                  <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Modalidade</div>
+                  <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Modalidade</div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
                     {[["avista","À vista","1× sem juros"],["parcelado","Parcelado","Dividir em installments"]].map(([id,label,sub]) => {
                       const disabled = id === "parcelado" && isRecurring;
@@ -2528,8 +2841,8 @@ export const NovaTransacaoModal = ({
                             background: disabled ? T.grayLight : selected ? T.ink : T.surface,
                             cursor: disabled ? "not-allowed" : "pointer",
                             textAlign:"left", opacity: disabled ? 0.5 : 1, transition:"all 0.15s" }}>
-                          <div style={{ ...G, fontSize:12, fontWeight:700, color: disabled ? T.inkGhost : selected?"#fff":T.ink }}>{label}</div>
-                          <div style={{ ...G, fontSize:10, color: disabled ? T.inkGhost : selected?"rgba(255,255,255,0.6)":T.inkLight, marginTop:2 }}>
+                          <div style={{ ...G, fontSize:12, fontWeight:700, color: disabled ? T.inkFaint : selected?"#fff":T.ink }}>{label}</div>
+                          <div style={{ ...G, fontSize: 11, color: disabled ? T.inkFaint : selected?"rgba(255,255,255,0.6)":T.inkLight, marginTop:2 }}>
                             {disabled ? "Indisponível com recorrência" : sub}
                           </div>
                         </button>
@@ -2546,14 +2859,14 @@ export const NovaTransacaoModal = ({
               {!isRefund && modalityChoice==="parcelado" && (
                 <div>
                   <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
-                    <span style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em" }}>Parcelas</span>
+                    <span style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em" }}>Parcelas</span>
                     <span style={{ ...G, ...NUM, fontSize:11, color:T.inkLight }}>R$ {amountNum.toFixed(2)} total</span>
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6 }}>
                     {PARCELA_PRESETS.map(p => (
                       <button key={p} onClick={() => setInstallments(p)} style={{ padding:"8px 4px", borderRadius:8, border:`1.5px solid ${installments===p ? T.ink : T.border}`, background:installments===p ? T.ink : T.surface, cursor:"pointer", textAlign:"center" }}>
                         <div style={{ ...G, fontSize:12, fontWeight:700, color:installments===p?"#fff":T.ink }}>{p}×</div>
-                        <div style={{ ...G, ...NUM, fontSize:10, color:installments===p?"rgba(255,255,255,0.6)":T.inkLight, marginTop:2 }}>{(amountNum/p).toFixed(2)}</div>
+                        <div style={{ ...G, ...NUM, fontSize: 11, color:installments===p?"rgba(255,255,255,0.6)":T.inkLight, marginTop:2 }}>{(amountNum/p).toFixed(2)}</div>
                       </button>
                     ))}
                     {installmentsCustom ? (
@@ -2580,7 +2893,7 @@ export const NovaTransacaoModal = ({
                           style={{ ...G, ...NUM, width:"100%", background:"transparent", border:"none",
                             outline:"none", textAlign:"center", fontSize:12, fontWeight:700,
                             color:"#fff" }} />
-                        <div style={{ ...G, ...NUM, fontSize:10, color:"rgba(255,255,255,0.55)" }}>
+                        <div style={{ ...G, ...NUM, fontSize: 11, color:"rgba(255,255,255,0.55)" }}>
                           {installmentsInput && amountNum > 0
                             ? (amountNum/parseInt(installmentsInput||1)).toFixed(2)
                             : "R$/parc"}
@@ -2597,7 +2910,7 @@ export const NovaTransacaoModal = ({
                           {!PARCELA_PRESETS.includes(installments) ? `${installments}×` : "outro"}
                         </div>
                         {!PARCELA_PRESETS.includes(installments) && amountNum > 0 && (
-                          <div style={{ ...G, ...NUM, fontSize:10, color:"rgba(255,255,255,0.55)", marginTop:2 }}>
+                          <div style={{ ...G, ...NUM, fontSize: 11, color:"rgba(255,255,255,0.55)", marginTop:2 }}>
                             {(amountNum/installments).toFixed(2)}
                           </div>
                         )}
@@ -2660,9 +2973,9 @@ export const NovaTransacaoModal = ({
               <div style={{ padding:"18px 20px", display:"flex", flexDirection:"column", gap:16, animation:"revSlideBack 0.26s ease-out", minWidth:0, width:"100%" }}>
                 <div>
                   <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:8 }}>
-                    <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em" }}>Valor</div>
+                    <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em" }}>Valor</div>
                     {!isRefund && <button onClick={() => { setCalcOpen(m=>!m); if(calcOpen){ setCalcCents(0); } }}
-                      style={{ ...G, fontSize:10, fontWeight:700, color:calcOpen?T.purple:T.inkMid,
+                      style={{ ...G, fontSize: 11, fontWeight:700, color:calcOpen?T.purple:T.inkMid,
                         background:calcOpen?T.purpleLight:"none", border:`1px dashed ${calcOpen?T.purple:T.border}`,
                         borderRadius:7, padding:"3px 9px", cursor:"pointer", display:"flex", alignItems:"center", gap:5,
                         transition:"all 0.15s" }}>
@@ -2700,7 +3013,7 @@ export const NovaTransacaoModal = ({
                       borderRadius:10, padding:"12px 14px", marginBottom:8,
                       animation:"successPop 0.18s ease-out",
                       display:"flex", flexDirection:"column", gap:10 }}>
-                      <div style={{ ...G, fontSize:10, fontWeight:700, color:T.purple,
+                      <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.purple,
                         textTransform:"uppercase", letterSpacing:"0.09em" }}>
                         Calculadora de parcela
                       </div>
@@ -2786,7 +3099,7 @@ export const NovaTransacaoModal = ({
                         <button onClick={applyInstallmentCalc} disabled={calcCents===0}
                           style={{ ...G, fontSize:12, fontWeight:700,
                             color:"#fff",
-                            background: calcCents>0 ? T.purple : T.inkGhost,
+                            background: calcCents>0 ? T.purple : T.inkFaint,
                             border:"none", borderRadius:8, padding:"8px 16px",
                             cursor: calcCents>0 ? "pointer" : "not-allowed",
                             transition:"all 0.15s", flexShrink:0 }}>
@@ -2876,8 +3189,8 @@ export const NovaTransacaoModal = ({
                 {renderRefundLinkBlock("desktop")}
                 <div>
                   <div style={{ display:"flex", alignItems:"center", gap:7, marginBottom:8 }}>
-                    <span style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em" }}>Descrição</span>
-                    <span style={{ ...G, fontSize:10, fontWeight:600, color:T.purple, background:T.purpleLight, padding:"1px 7px", borderRadius:99, display:"flex", alignItems:"center", gap:3 }}>
+                    <span style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em" }}>Descrição</span>
+                    <span style={{ ...G, fontSize: 11, fontWeight:600, color:T.purple, background:T.purpleLight, padding:"1px 7px", borderRadius:99, display:"flex", alignItems:"center", gap:3 }}>
                       <Star size={8} fill={T.purple} /> IA
                     </span>
                   </div>
@@ -2886,7 +3199,7 @@ export const NovaTransacaoModal = ({
                       onFocus={() => setDescFocused(true)}
                       onBlur={() => setDescFocused(false)}
                       style={{ ...G, width:"100%", boxSizing:"border-box", padding:"10px 12px 30px", borderRadius:10, border:`1px solid ${descError ? T.red : T.border}`, fontSize:13, color:T.ink, resize:"none", outline:"none", background:T.surface, lineHeight:1.5, transition:"border-color 0.15s" }} />
-                    <button style={{ ...G, position:"absolute", bottom:8, right:8, display:"flex", alignItems:"center", gap:4, background:T.purpleLight, border:`1px solid ${T.purple}33`, borderRadius:7, padding:"4px 9px", fontSize:10, fontWeight:600, color:T.purple, cursor:"pointer" }}>
+                    <button style={{ ...G, position:"absolute", bottom:8, right:8, display:"flex", alignItems:"center", gap:4, background:T.purpleLight, border:`1px solid ${T.purple}33`, borderRadius:7, padding:"4px 9px", fontSize: 11, fontWeight:600, color:T.purple, cursor:"pointer" }}>
                       <Star size={9} fill={T.purple} /> Sugerir com IA
                     </button>
                   </div>
@@ -2911,7 +3224,7 @@ export const NovaTransacaoModal = ({
                         ) : null}
                         {" "}— toque para aplicar.
                       </span>
-                      <span style={{ ...G, fontSize:10, fontWeight:700, color:T.purple, flexShrink:0 }}>Aplicar →</span>
+                      <span style={{ ...G, fontSize: 11, fontWeight:700, color:T.purple, flexShrink:0 }}>Aplicar →</span>
                     </button>
                   )}
                   {aiSuggestion && aiApplied && (
@@ -2923,7 +3236,7 @@ export const NovaTransacaoModal = ({
                 </div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
                   <div>
-                    <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Categoria</div>
+                    <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Categoria</div>
                     {useLiveCategoryTags && modalCategoryChoices.some((r) => r.id) ? (
                       <select
                         value={categoryTagId || ""}
@@ -2961,7 +3274,7 @@ export const NovaTransacaoModal = ({
                     ) : null}
                   </div>
                   <div>
-                    <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Data</div>
+                    <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Data</div>
                     <LocaleDatePicker
                       id="nova-tx-date-desktop"
                       variant="desktop"
@@ -2975,7 +3288,7 @@ export const NovaTransacaoModal = ({
                   </div>
                 </div>
                 <div>
-                  <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Tags</div>
+                  <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Tags</div>
                   {detailTagsError ? (
                     <div style={{ ...G, fontSize:11, color:T.red, marginBottom:8 }}>{detailTagsError}</div>
                   ) : null}
@@ -2997,13 +3310,13 @@ export const NovaTransacaoModal = ({
                             });
                           }}
                             style={{ ...G, fontSize:11, fontWeight:600, color:"#fff", background:isDetailTagInactive(id) ? T.amber : T.purple, padding:"4px 9px", borderRadius:9999, cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
-                            + {detailChipLabel(id)}{isDetailTagInactive(id) ? " (indisponível)" : ""} <span style={{ opacity:0.7, fontSize:10 }}>✕</span>
+                            + {detailChipLabel(id)}{isDetailTagInactive(id) ? " (indisponível)" : ""} <span style={{ opacity:0.7, fontSize: 11 }}>✕</span>
                           </span>
                         ))
                       : tags.map((tag) => (
                           <span key={tag} onClick={() => setTags((tg) => tg.filter((t) => t !== tag))}
                             style={{ ...G, fontSize:11, fontWeight:600, color:"#fff", background:T.purple, padding:"4px 9px", borderRadius:9999, cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}>
-                            + {tag} <span style={{ opacity:0.7, fontSize:10 }}>✕</span>
+                            + {tag} <span style={{ opacity:0.7, fontSize: 11 }}>✕</span>
                           </span>
                         ))}
                     {detailTagRowsAvailable.map((row) => (
@@ -3023,7 +3336,7 @@ export const NovaTransacaoModal = ({
                         }}
                         style={{ ...G, fontSize:11, color:T.inkMid, background:T.grayLight, padding:"4px 9px", borderRadius:9999, cursor:"pointer" }}
                       >
-                        {row.name}
+                        {resolveDetailTagRowLabel(row)}
                       </span>
                     ))}
                     {NOVA_TX_QUICK_DETAIL_LABELS.filter((t) => {
@@ -3047,7 +3360,7 @@ export const NovaTransacaoModal = ({
                   </div>
                 </div>
                 <div>
-                  <div style={{ ...G, fontSize:10, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Forma de Pagamento</div>
+                  <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Forma de Pagamento</div>
                   <div style={{ display:"flex", gap:6, flexWrap:"wrap", width:"100%", minWidth:0 }}>
                     {methodsList.map(([id, label]) => (
                       <button key={id} onClick={() => {
@@ -3119,10 +3432,10 @@ export const NovaTransacaoModal = ({
                       <Repeat size={14} color={isRecurring ? T.blue : T.inkLight} />
                       <div>
                         <div style={{ ...G, fontSize:12, fontWeight:600, color:T.ink }}>Transação recorrente</div>
-                        <div style={{ ...G, fontSize:10, color:T.inkLight }}>Repetir automaticamente</div>
+                        <div style={{ ...G, fontSize: 11, color:T.inkLight }}>Repetir automaticamente</div>
                       </div>
                     </div>
-                    <div style={{ width:38, height:22, borderRadius:11, background:isRecurring ? T.blue : T.inkGhost, position:"relative", transition:"background 0.2s", flexShrink:0 }}>
+                    <div style={{ width:38, height:22, borderRadius:11, background:isRecurring ? T.blue : T.inkFaint, position:"relative", transition:"background 0.2s", flexShrink:0 }}>
                       <div style={{ position:"absolute", top:3, left:isRecurring?18:3, width:16, height:16, borderRadius:9999, background:"#fff", transition:"left 0.2s", boxShadow:T.sm }} />
                     </div>
                   </div>
@@ -3216,7 +3529,7 @@ export const NovaTransacaoModal = ({
                   </button>
                 ) : (
                   <button onClick={() => { if (!desc.trim()) { setDescError(true); descRef.current?.focus(); return; } goReview(); }} disabled={!amountNum}
-                    style={{ ...G, flex:1, padding:"11px", borderRadius:10, border:"none", background:!amountNum ? T.inkGhost : typeColor, fontSize:13, fontWeight:700, color:"#fff", cursor:!amountNum ? "not-allowed" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, transition:"background 0.2s" }}>
+                    style={{ ...G, flex:1, padding:"11px", borderRadius:10, border:"none", background:!amountNum ? T.inkFaint : typeColor, fontSize:13, fontWeight:700, color:"#fff", cursor:!amountNum ? "not-allowed" : "pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6, transition:"background 0.2s" }}>
                       Revisar {tipo==="despesa" ? (isRefund ? "estorno" : "despesa") : "receita"} <ChevronRight size={14} />
                   </button>
                 )}

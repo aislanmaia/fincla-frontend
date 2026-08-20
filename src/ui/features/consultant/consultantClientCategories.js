@@ -10,13 +10,19 @@
  * `total`/`transaction_count`.
  */
 
+import { categoryLabelPtForTag } from "../../data/categoryLabels.js";
+
 const CAT_FALLBACK = ["#0F0F0D", "#2563EB", "#7C3AED", "#D97706", "#059669", "#DC2626", "#9CA3AF"];
 
-/** Projeta um `CategoryDataPoint` para a linha da aba (ordenação/`max` ficam no select). */
+/**
+ * Projeta um `CategoryDataPoint` para a linha da aba (ordenação/`max` ficam no
+ * select). `tag_name` vem cru do seed (`Food & Groceries`...) — traduz via
+ * `categoryLabelPtForTag` antes de exibir.
+ */
 export function toCategoryRow(cat, index = 0) {
   return {
     id: cat.tag_id ?? cat.tag_name ?? String(index),
-    label: cat.tag_name || "Sem categoria",
+    label: cat.tag_name ? categoryLabelPtForTag(cat) : "Sem categoria",
     color: cat.tag_color || CAT_FALLBACK[index % CAT_FALLBACK.length],
     iconKey: cat.tag_icon_key ?? null,
     pct: Math.round(Number(cat.percentage) || 0),

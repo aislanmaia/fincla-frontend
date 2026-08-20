@@ -60,6 +60,33 @@ const SNAKE_FIELD_REQUIRED_EN =
 /** "card_id is required for …" e variações. */
 const FIELD_REQUIRED_LOOSE_EN = /\b[a-z][a-z0-9_]* is required\b/i;
 
+/**
+ * `RegisterCreditCardUseCase._check_uniqueness` (fincla-api) formata essa
+ * mensagem em inglês e ela chega crua no `detail.message` — status 400,
+ * corpo `{error, message, type}` (não o envelope "safe error" com
+ * `message_key` traduzido). É o erro mais provável do quick-add de cartão
+ * (mesmos 4 dígitos), então merece tradução própria em vez de cair na
+ * mensagem genérica de "dados inválidos".
+ */
+const DUPLICATE_CREDIT_CARD_EN =
+  /^Card with brand '[^']*' and last4 '[^']*' already exists in this organization\.?$/i;
+
+/**
+ * `Transaction.validate_tags` / `create_transaction.py` (fincla-api) — mesmo
+ * caso de uso (POST /v1/transactions sem tag de categoria), duas mensagens
+ * diferentes: genérica e com o nome do tipo interpolado. As duas precisam de
+ * tradução própria: a genérica batia em `FIELD_REQUIRED_LOOSE_EN` (virava o
+ * "verifique os dados" sem dizer que o problema é tag) e a específica NÃO
+ * batia (o apóstrofo em `'Categoria'` quebra esse padrão) — uma saía
+ * genérica de menos, a outra crua em inglês. Checadas ANTES do padrão solto
+ * pra sempre ganhar a prioridade.
+ */
+const TAG_REQUIRED_EN = /^At least one tag is required\.?$/i;
+const TAG_TYPE_REQUIRED_EN = /^At least one tag of type '([^']*)' is required\.?$/i;
+
+/** `CreditCardInvoice` (fincla-api) — marcar fatura como paga sem informar a data. */
+const PAID_DATE_REQUIRED_EN = /^paid_date is required when status is 'paid'\.?$/i;
+
 function looksLikeInternalLeak(text: string): boolean {
   const lower = text.toLowerCase();
   return (
@@ -98,6 +125,21 @@ export function humanizeDetailString(
   if (looksLikeInternalLeak(trimmed)) {
     return '';
   }
+  // Checadas antes de SNAKE_FIELD_REQUIRED_EN/FIELD_REQUIRED_LOOSE_EN —
+  // mensagens específicas do mesmo caso de uso não podem virar o genérico
+  // "verifique os dados" nem vazar cruas por escapar do padrão solto.
+  if (TAG_TYPE_REQUIRED_EN.test(trimmed)) {
+    const [, typeName] = TAG_TYPE_REQUIRED_EN.exec(trimmed) ?? [];
+    return typeName
+      ? `Selecione ao menos uma tag do tipo "${typeName}" para a transação.`
+      : 'Selecione ao menos uma tag para a transação.';
+  }
+  if (TAG_REQUIRED_EN.test(trimmed)) {
+    return 'Selecione ao menos uma tag para a transação.';
+  }
+  if (PAID_DATE_REQUIRED_EN.test(trimmed)) {
+    return 'Informe a data de pagamento para marcar a fatura como paga.';
+  }
   if (SNAKE_FIELD_REQUIRED_EN.test(trimmed)) {
     if (httpStatus === 400 || httpStatus === 422) {
       return 'Verifique os dados informados e tente novamente.';
@@ -109,6 +151,9 @@ export function humanizeDetailString(
       return 'Verifique os dados informados e tente novamente.';
     }
     return 'Não foi possível concluir a operação. Tente novamente.';
+  }
+  if (DUPLICATE_CREDIT_CARD_EN.test(trimmed)) {
+    return 'Já existe um cartão com essa bandeira e esses 4 últimos dígitos nesta organização.';
   }
   return trimmed;
 }

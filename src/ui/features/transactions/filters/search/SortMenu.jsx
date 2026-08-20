@@ -68,7 +68,7 @@ export function SortMenu({ sort, setSort, onClose, compact = false }) {
         <div
           style={{
             ...G,
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 700,
             color: T.inkMid,
             textTransform: "uppercase",
@@ -92,7 +92,7 @@ export function SortMenu({ sort, setSort, onClose, compact = false }) {
               borderRadius: 99,
               background: T.bg,
               color: T.inkMid,
-              fontSize: 9.5,
+              fontSize: 11,
               fontWeight: 700,
               letterSpacing: 0,
             }}
@@ -115,7 +115,7 @@ export function SortMenu({ sort, setSort, onClose, compact = false }) {
               borderRadius: 6,
               border: "none",
               background: "transparent",
-              fontSize: 10.5,
+              fontSize: 11,
               fontWeight: 600,
               color: T.inkLight,
               cursor: "pointer",
@@ -157,7 +157,7 @@ export function SortMenu({ sort, setSort, onClose, compact = false }) {
                   display: "inline-flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: 700,
                   flexShrink: 0,
                 }}
@@ -206,7 +206,7 @@ export function SortMenu({ sort, setSort, onClose, compact = false }) {
                   border: `1px solid ${T.border}`,
                   background: T.surface,
                   color: T.inkMid,
-                  fontSize: 10.5,
+                  fontSize: 11,
                   fontWeight: 600,
                   cursor: "pointer",
                   letterSpacing: "0.01em",
@@ -285,7 +285,7 @@ export function SortMenu({ sort, setSort, onClose, compact = false }) {
           <div
             style={{
               ...G,
-              fontSize: 9.5,
+              fontSize: 11,
               fontWeight: 600,
               color: T.inkLight,
               textTransform: "uppercase",
@@ -368,7 +368,7 @@ export function SortMenu({ sort, setSort, onClose, compact = false }) {
                   gap: 4,
                   padding: "4px 8px",
                   borderRadius: 6,
-                  fontSize: 10.5,
+                  fontSize: 11,
                   fontWeight: 500,
                   color: T.inkLight,
                   fontStyle: "italic",

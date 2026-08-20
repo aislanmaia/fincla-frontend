@@ -434,7 +434,7 @@ export function DashboardPage({
    */
   const compositionSlices = useMemo(() => {
     const slices = [
-      { label: "Gasto", color: T.inkGhost, value: fmtAbs(usedAmt), opacity: 1 },
+      { label: "Gasto", color: T.inkFaint, value: fmtAbs(usedAmt), opacity: 1 },
     ];
     // Num período encerrado não existe "a vencer": a projeção é vazia por construção
     // e o comprometido do período já está inteiro dentro do `Gasto`. Desenhá-lo como
@@ -808,7 +808,7 @@ export function DashboardPage({
               <div
                 style={{
                   ...G,
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: 700,
                   color: "rgba(255,255,255,0.4)",
                   textTransform: "uppercase",
@@ -883,7 +883,7 @@ export function DashboardPage({
                     <div
                       style={{
                         ...G,
-                        fontSize: 10,
+                        fontSize: 11,
                         fontWeight: 700,
                         color: "rgba(255,255,255,0.35)",
                         textTransform: "uppercase",
@@ -896,7 +896,7 @@ export function DashboardPage({
                     <div style={{ ...G, ...NUM, fontSize: 15, fontWeight: 800, color: k.color }}>
                       {k.val}
                     </div>
-                    <div style={{ ...G, fontSize: 10, color: "rgba(255,255,255,0.28)", marginTop: 1 }}>
+                    <div style={{ ...G, fontSize: 11, color: "rgba(255,255,255,0.28)", marginTop: 1 }}>
                       {k.sub}
                     </div>
                   </div>
@@ -912,40 +912,40 @@ export function DashboardPage({
               }}
             >
               <Card style={{ padding: "13px 14px", borderColor: T.green, borderWidth: 1.5 }}>
-                <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.green, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
+                <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.green, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
                   Receita do mês
                 </div>
                 <div style={{ ...G, ...NUM, fontSize: 18, fontWeight: 800, color: T.green, marginBottom: 3 }}>
                   {fmtR(recValNum)}
                 </div>
-                <div style={{ ...G, fontSize: 10, color: T.green }}>registrada ✓</div>
+                <div style={{ ...G, fontSize: 11, color: T.green }}>registrada ✓</div>
               </Card>
               <Card style={{ padding: "13px 14px", background: "#FAFAF9" }}>
-                <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
+                <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
                   Gastos
                 </div>
                 <div style={{ ...G, ...NUM, fontSize: 18, fontWeight: 800, color: T.inkGhost, marginBottom: 5 }}>
                   R$ 0
                 </div>
-                <button onClick={onNewTx} style={{ ...G, background: T.redLight, color: T.red, border: "none", borderRadius: 7, padding: "5px 10px", fontSize: 10, fontWeight: 700, cursor: "pointer" }}>
+                <button onClick={onNewTx} style={{ ...G, background: T.redLight, color: T.red, border: "none", borderRadius: 7, padding: "5px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
                   + Registrar
                 </button>
               </Card>
               <Card style={{ padding: "13px 14px", background: "#FAFAF9" }}>
-                <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
+                <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
                   Sobra do período
                 </div>
                 <div style={{ ...G, ...NUM, fontSize: 18, fontWeight: 800, color: T.inkGhost, marginBottom: 3 }}>
                   —
                 </div>
-                <div style={{ ...G, fontSize: 10, color: T.inkLight }}>após transações</div>
+                <div style={{ ...G, fontSize: 11, color: T.inkLight }}>após transações</div>
               </Card>
               <Card style={{ padding: "13px 14px", background: "#FAFAF9" }}>
-                <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
+                <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
                   Saúde
                 </div>
                 <div style={{ fontSize: 18, margin: "4px 0" }}>⚪</div>
-                <div style={{ ...G, fontSize: 10, color: T.inkLight }}>sem dados</div>
+                <div style={{ ...G, fontSize: 11, color: T.inkLight }}>sem dados</div>
               </Card>
             </div>
 
@@ -953,7 +953,7 @@ export function DashboardPage({
               <Card style={{ padding: 16 }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                   <div style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink }}>Ritmo de gastos</div>
-                  <div style={{ ...G, fontSize: 10, fontWeight: 600, color: T.inkLight, background: T.grayLight, borderRadius: 99, padding: "3px 9px" }}>
+                  <div style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkLight, background: T.grayLight, borderRadius: 99, padding: "3px 9px" }}>
                     {periodBadge}
                   </div>
                 </div>
@@ -1007,9 +1007,9 @@ export function DashboardPage({
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ ...G, fontSize: 12, fontWeight: 600, color: T.ink }}>{rec.desc}</div>
-                    <div style={{ ...G, fontSize: 10, color: T.inkLight }}>
+                    <div style={{ ...G, fontSize: 11, color: T.inkLight }}>
                       Renda · Pix · dia {String(rec.dia).padStart(2, "0")}/04
-                      <span style={{ ...G, fontSize: 10, fontWeight: 700, background: T.grayLight, color: T.inkMid, borderRadius: 99, padding: "1px 7px", marginLeft: 6 }}>
+                      <span style={{ ...G, fontSize: 11, fontWeight: 700, background: T.grayLight, color: T.inkMid, borderRadius: 99, padding: "1px 7px", marginLeft: 6 }}>
                         agendado
                       </span>
                     </div>
@@ -1034,11 +1034,11 @@ export function DashboardPage({
                 <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 10 }}>
                   <div style={{ background: T.greenLight, borderRadius: 7, padding: "3px 7px", textAlign: "center", flexShrink: 0 }}>
                     <div style={{ ...G, ...NUM, fontSize: 13, fontWeight: 800, color: T.green }}>{String(rec.dia).padStart(2, "0")}</div>
-                    <div style={{ ...G, fontSize: 8, fontWeight: 700, color: T.green, textTransform: "uppercase", letterSpacing: "0.06em" }}>ABR</div>
+                    <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.green, textTransform: "uppercase", letterSpacing: "0.06em" }}>ABR</div>
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ ...G, fontSize: 11, fontWeight: 600, color: T.ink }}>{rec.desc}</div>
-                    <div style={{ ...G, fontSize: 10, color: T.inkMid }}>Pix · recorrente</div>
+                    <div style={{ ...G, fontSize: 11, color: T.inkMid }}>Pix · recorrente</div>
                   </div>
                   <div style={{ ...G, ...NUM, fontSize: 11, fontWeight: 700, color: T.green }}>
                     +{fmtR(recValNum)}
@@ -1187,7 +1187,7 @@ export function DashboardPage({
                       a independência das fontes que a #S2 introduziu de propósito. */}
                   {accountHeadline.available ? (
                     <div data-testid="dashboard-headline-saldo-conta" style={{ borderTop: `1px solid ${T.border}`, paddingTop: 14, marginBottom: 18 }}>
-                      <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
+                      <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
                         Saldo em conta
                       </div>
                       <div style={{ ...S, ...NUM, fontSize: isMobile ? "2rem" : "2.35rem", lineHeight: 1.05, color: accountHeadline.negative ? T.red : T.ink, letterSpacing: "-1px", marginBottom: 4 }}>
@@ -1242,7 +1242,7 @@ export function DashboardPage({
                       headline ele precisa sobreviver aqui também, senão a tela mais
                       degradada é justamente a que esconde o único dado que ela tem. */}
                   <div data-testid="dashboard-headline-saldo-conta" style={{ marginBottom: 18 }}>
-                    <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
+                    <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>
                       Saldo em conta
                     </div>
                     <div style={{ ...S, ...NUM, fontSize: isMobile ? "2rem" : "2.35rem", lineHeight: 1.05, color: accountHeadline.negative ? T.red : T.ink, letterSpacing: "-1px", marginBottom: 4 }}>
@@ -1336,8 +1336,16 @@ export function DashboardPage({
           </>
         ) : (
           <>
-            <Card style={{ padding: 22 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <Card style={{ padding: isMobile ? 14 : 22 }}>
+              {/* issue #87 — CORREÇÃO: revisão adversarial mediu layout real (Chromium
+                  headless, 360-412px) e mostrou que esta linha (selo de humor +
+                  saudação + chip da régua) NÃO estourava o card antes deste ajuste —
+                  ela só se espremia (a pílula da régua quebrava feio em duas linhas).
+                  O estouro de verdade estava na legenda da composição, mais abaixo
+                  (ver comentário perto de `compositionSlices.map`). `flexWrap: "wrap"`
+                  aqui segue valendo por estética — evita a pílula feia — mas não é o
+                  que fecha a #87. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 5, background: mood.badgeBg, color: mood.badgeColor, borderRadius: 9999, padding: "3px 10px", fontSize: 11, fontWeight: 700, border: `1px solid ${mood.insightBorder}`, transition: "all 0.8s" }}>
                   <MoodIcon size={10} /> {mood.label}
                 </div>
@@ -1361,10 +1369,10 @@ export function DashboardPage({
                   style={{ ...G, display: "inline-flex", alignItems: "center", gap: 6, background: T.grayLight, borderRadius: 9999, padding: "3px 11px" }}
                 >
                   <span style={{ ...M_MONO, ...NUM, fontSize: 11, fontWeight: 700, color: spentOfIncomePct > 100 ? T.red : T.ink }}>{spentOfIncomePct}%</span>
-                  <span style={{ fontSize: 10, color: T.inkLight }}>da receita gasta</span>
+                  <span style={{ fontSize: 11, color: T.inkLight }}>da receita gasta</span>
                   <span style={{ color: T.border }}>·</span>
                   <span style={{ ...M_MONO, ...NUM, fontSize: 11, fontWeight: 700, color: T.ink }}>{timePct}%</span>
-                  <span style={{ fontSize: 10, color: T.inkLight }}>do período</span>
+                  <span style={{ fontSize: 11, color: T.inkLight }}>do período</span>
                 </span>
                 )}
               </div>
@@ -1381,7 +1389,7 @@ export function DashboardPage({
               <div style={{ display: "flex", alignItems: "flex-end", gap: isMobile ? 16 : 30, flexWrap: "wrap", marginBottom: 18 }}>
                 <div data-testid="dashboard-headline-saldo-conta" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   <div style={{ ...G, display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                       Saldo em conta
                     </span>
                     <InfoTip width={280} text={SALDO_EM_CONTA_TOOLTIP} />
@@ -1399,7 +1407,7 @@ export function DashboardPage({
                 )}
 
                 <div data-testid="dashboard-headline-resultado" style={{ display: "flex", flexDirection: "column", gap: 4, paddingBottom: 4 }}>
-                  <span style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  <span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                     Resultado do período
                   </span>
                   {/* `fmtAbs` aplica Math.abs, então um resultado negativo renderizava
@@ -1440,17 +1448,32 @@ export function DashboardPage({
                   </span>
                 </div>
                 <div style={{ height: 7, background: T.grayLight, borderRadius: 99, overflow: "hidden", display: "flex" }}>
-                  <div style={{ width: `${(usedAmt / barTotal) * 100}%`, background: T.inkGhost, transition: "width 0.6s" }} />
+                  <div style={{ width: `${(usedAmt / barTotal) * 100}%`, background: T.inkFaint, transition: "width 0.6s" }} />
                   <div style={{ width: `${(committedToCome / barTotal) * 100}%`, background: mood.bar, opacity: 0.4, transition: "width 0.6s, background 0.8s" }} />
                   {barIsIncomeSplit ? <div style={{ flex: 1, background: mood.bar, transition: "background 0.18s" }} /> : null}
                 </div>
-                <div style={{ ...G, display: "flex", gap: 14, marginTop: 7 }}>
+                {/* issue #87 — CAUSA REAL do estouro horizontal: esta legenda (3
+                    fatias, cada uma com bolinha + rótulo + valor monoespaçado) não
+                    tinha `flexWrap`. Com valores do dia a dia e o rótulo mais longo
+                    ("Sobra depois das recorrências"), o `min-content` da linha passa
+                    de 380px contra ~330-360px disponíveis a 360-390px de viewport.
+                    Como o card vive numa coluna de grid `1fr` no mobile, o mínimo
+                    automático da coluna É o `min-content` dos filhos — então o CARD
+                    INTEIRO trava nessa largura e o scroller (`overflowX: hidden`) do
+                    shell corta o que sobra, inclusive o valor da última fatia.
+                    Acontece sempre que há projeção de recorrências (caso normal).
+                    `flexWrap: "wrap"` + `rowGap` deixa cada fatia cair pra própria
+                    linha em vez de esticar o card. */}
+                <div
+                  data-testid="dashboard-composicao-legenda"
+                  style={{ ...G, display: "flex", gap: 14, rowGap: 6, marginTop: 7, flexWrap: "wrap" }}
+                >
                   {compositionSlices.map(({ label, color, value, opacity }) => (
                     <div key={label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
                       <div style={{ width: 7, height: 7, borderRadius: 2, background: color, opacity, transition: "background 0.18s", flexShrink: 0 }} />
-                      <span style={{ fontSize: 10, color: T.inkMid }}>{label}</span>
+                      <span style={{ fontSize: 11, color: T.inkMid }}>{label}</span>
                       <span
-                        style={{ ...M_MONO, ...NUM, fontSize: 10, color: T.inkMid, fontWeight: 600 }}
+                        style={{ ...M_MONO, ...NUM, fontSize: 11, color: T.inkMid, fontWeight: 600 }}
                         data-testid={label === "Comprometido a vencer" ? "dashboard-composicao-comprometido" : undefined}
                       >
                         {value}
@@ -1465,21 +1488,27 @@ export function DashboardPage({
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <InsightIcon size={13} color={mood.kicker} />
-                  <span style={{ ...G, fontSize: 10, fontWeight: 700, color: mood.kicker, letterSpacing: "0.08em" }}>
+                  <span style={{ ...G, fontSize: 11, fontWeight: 700, color: mood.kicker, letterSpacing: "0.08em" }}>
                     INSIGHT
                   </span>
                 </div>
                 <Sparkles size={12} color={mood.kicker} style={{ opacity: 0.5 }} />
               </div>
 
+              {/* issue #87 — CORREÇÃO: idem ao comentário acima — medição real mostrou
+                  que estas duas linhas (número corpo 23 + rótulo) também só se
+                  espremiam, sem estourar o card. `flexWrap: "wrap"` melhora a
+                  legibilidade num rótulo comprido lado a lado com o número, mas o
+                  estouro real da #87 estava na legenda da composição (comentário
+                  perto de `compositionSlices.map`), não aqui. */}
               <div data-testid="dashboard-insight-quantias">
-                <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 3 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 3, flexWrap: "wrap" }}>
                   <span style={{ ...M_MONO, ...NUM, fontSize: 23, fontWeight: 700, color: mood.headlineColor, lineHeight: 1, transition: "color 0.18s" }}>
                     {fmtAbs(exp)}
                   </span>
                   <span style={{ ...G, fontSize: 12, color: T.inkMid }}>gastos no período</span>
                 </div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 12, flexWrap: "wrap" }}>
                   <span style={{ ...M_MONO, ...NUM, fontSize: 23, fontWeight: 700, color: T.inkGhost, lineHeight: 1 }}>
                     {fmtAbs(expectedByNow)}
                   </span>
@@ -1544,7 +1573,7 @@ export function DashboardPage({
                   border: "none",
                   borderRadius: 7,
                   padding: "6px 10px",
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: 700,
                   cursor: "pointer",
                 }}
@@ -1582,7 +1611,7 @@ export function DashboardPage({
                 ].map(([c, l]) => (
                   <div key={l} style={{ display: "flex", alignItems: "center", gap: 5 }}>
                     <div style={{ width: 14, height: 2, background: c, borderRadius: 1, transition: "background 0.18s" }} />
-                    <span style={{ ...G, fontSize: 10, color: T.inkLight }}>{l}</span>
+                    <span style={{ ...G, fontSize: 11, color: T.inkLight }}>{l}</span>
                   </div>
                 ))}
               </div>
@@ -1645,8 +1674,8 @@ export function DashboardPage({
               <ResponsiveContainer width="100%" height={isMobile ? 150 : 190}>
                 <ComposedChart data={rhythmSafe} margin={{ top: 4, right: 4, bottom: 0, left: -10 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
-                  <XAxis dataKey="dia" tick={{ ...G, fontSize: 10, fill: T.inkLight }} tickLine={false} axisLine={false} tickFormatter={(v) => (v % 5 === 0 || v === 1 ? `${v}` : "")} />
-                  <YAxis tick={{ ...G, ...NUM, fontSize: 10, fill: T.inkLight }} tickLine={false} axisLine={false} tickFormatter={fmtK} />
+                  <XAxis dataKey="dia" tick={{ ...G, fontSize: 11, fill: T.inkLight }} tickLine={false} axisLine={false} tickFormatter={(v) => (v % 5 === 0 || v === 1 ? `${v}` : "")} />
+                  <YAxis tick={{ ...G, ...NUM, fontSize: 11, fill: T.inkLight }} tickLine={false} axisLine={false} tickFormatter={fmtK} />
                   <Tooltip content={<RhythmTooltipV4 />} />
                   {showTodayMarker ? (
                     <ReferenceLine
@@ -1658,7 +1687,7 @@ export function DashboardPage({
                         value: refLabel,
                         position: "top",
                         fill: mood.bar,
-                        fontSize: 10,
+                        fontSize: 11,
                         fontFamily: "Geist,sans-serif",
                       }}
                     />
@@ -1698,7 +1727,7 @@ export function DashboardPage({
                 {[["#9CA3AF", "atual"], ["#9CA3AF", "referência"], ["#FCA5A5", "acima"]].map(([c, l]) => (
                   <div key={l} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                     <div style={{ width: 10, height: l === "referência" ? 2 : 5, background: c, borderRadius: l === "referência" ? 1 : 2 }} />
-                    <span style={{ ...G, fontSize: 10, color: T.inkLight }}>{l}</span>
+                    <span style={{ ...G, fontSize: 11, color: T.inkLight }}>{l}</span>
                   </div>
                 ))}
               </div>
@@ -1733,7 +1762,7 @@ export function DashboardPage({
                             <span style={{ ...G, fontSize: 12, fontWeight: 500, color: T.ink }}>{c.name}</span>
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                            {isOver && <span style={{ ...G, fontSize: 10, fontWeight: 700, color: T.red, background: T.redLight, borderRadius: 99, padding: "1px 5px" }}>+{Math.round((c.value / c.avg - 1) * 100)}%</span>}
+                            {isOver && <span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.red, background: T.redLight, borderRadius: 99, padding: "1px 5px" }}>+{Math.round((c.value / c.avg - 1) * 100)}%</span>}
                             <span style={{ ...M_MONO, ...NUM, fontSize: 11, fontWeight: 600, color: T.ink }}>{fmtAbs(c.value)}</span>
                           </div>
                         </div>
@@ -1825,13 +1854,13 @@ export function DashboardPage({
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <div style={{ textAlign: "center", minWidth: 32 }}>
                     <div style={{ ...M_MONO, ...NUM, fontSize: 16, fontWeight: 700, color: mood.headlineColor, lineHeight: 1, transition: "color 0.18s" }}>{upcomingDebits[0].day}</div>
-                    <div style={{ ...G, fontSize: 8, color: T.inkLight, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>{upcomingDebits[0].monthShort}</div>
+                    <div style={{ ...G, fontSize: 11, color: T.inkLight, fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase" }}>{upcomingDebits[0].monthShort}</div>
                   </div>
                   <div style={{ width: 1, height: 28, background: mood.insightBorder }} />
                   <div>
                     <div style={{ ...G, fontSize: 12, fontWeight: 700, color: T.ink }}>{upcomingDebits[0].name}</div>
                     <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 1 }}>
-                      <span style={{ ...G, fontSize: 10, color: T.inkMid }}>{upcomingDebits[0].cat}</span>
+                      <span style={{ ...G, fontSize: 11, color: T.inkMid }}>{upcomingDebits[0].cat}</span>
                       <Badge color={mood.kicker} bg={mood.badgeBg}>em {upcomingDebits[0].daysLeft}d</Badge>
                     </div>
                   </div>
@@ -1847,7 +1876,7 @@ export function DashboardPage({
                     <span style={{ ...M_MONO, ...NUM, fontSize: 11, fontWeight: 600, color: T.inkMid, width: 40, textAlign: "center" }}>{d.dateLabel}</span>
                     <div>
                       <div style={{ ...G, fontSize: 12, fontWeight: 500, color: T.ink }}>{d.name}</div>
-                      <div style={{ ...G, fontSize: 10, color: T.inkMid }}>{d.cat}</div>
+                      <div style={{ ...G, fontSize: 11, color: T.inkMid }}>{d.cat}</div>
                     </div>
                   </div>
                   <span style={{ ...M_MONO, ...NUM, fontSize: 12, fontWeight: 600, color: T.ink }}>{fmtAbs(d.value)}</span>

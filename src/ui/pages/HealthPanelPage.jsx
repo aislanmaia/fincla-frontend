@@ -118,12 +118,12 @@ export function HealthPanelPage({ organizationId = null, dataMode = "live", isMo
                 <div style={{ flex: 1, borderRadius: 10, background: T.greenLight, padding: "10px 12px" }}>
                   <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.green }}>ATIVO</div>
                   <div style={{ ...G, ...NUM, fontSize: 17, fontWeight: 700, color: T.green, marginTop: 2 }}>{fmt(data.ativo)}</div>
-                  <div style={{ ...G, fontSize: 10.5, color: T.inkLight }}>saldo das contas</div>
+                  <div style={{ ...G, fontSize: 11, color: T.inkLight }}>saldo das contas</div>
                 </div>
                 <div style={{ flex: 1, borderRadius: 10, background: T.redLight, padding: "10px 12px" }}>
                   <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.red }}>PASSIVO</div>
                   <div style={{ ...G, ...NUM, fontSize: 17, fontWeight: 700, color: T.red, marginTop: 2 }}>{fmt(data.passivo)}</div>
-                  <div style={{ ...G, fontSize: 10.5, color: T.inkLight }}>faturas em aberto</div>
+                  <div style={{ ...G, fontSize: 11, color: T.inkLight }}>faturas em aberto</div>
                 </div>
               </div>
             </Card>

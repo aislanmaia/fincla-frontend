@@ -13,6 +13,7 @@
  */
 
 import { fmtBRL0, fmtPct } from "./consultantFormat";
+import { categoryLabelPtForTag } from "../../data/categoryLabels.js";
 
 const clamp = (v) => Math.max(0, Math.min(100, v));
 
@@ -101,13 +102,16 @@ const DONUT_FALLBACK = ["#0F0F0D", "#2563EB", "#7C3AED", "#D97706", "#059669", "
  * Segmentos do donut "para onde vai o dinheiro" a partir de `by-category`
  * (`CategoryDataPoint[]`). Usa a cor da tag quando houver, senão uma paleta de
  * fallback estável por posição. Retorna também `total`. Ordena do maior p/ menor.
+ *
+ * `tag_name` vem cru do seed (`Food & Groceries`...) — traduz via
+ * `categoryLabelPtForTag` antes de exibir.
  */
 export function categorySegments(categories) {
   const list = Array.isArray(categories) ? categories : [];
   const sorted = [...list].sort((a, b) => (Number(b.total) || 0) - (Number(a.total) || 0));
   const total = sorted.reduce((s, c) => s + (Number(c.total) || 0), 0);
   const segments = sorted.map((c, i) => ({
-    label: c.tag_name || "Sem categoria",
+    label: c.tag_name ? categoryLabelPtForTag(c) : "Sem categoria",
     value: Number(c.total) || 0,
     color: c.tag_color || DONUT_FALLBACK[i % DONUT_FALLBACK.length],
     pct: total > 0 ? Math.round(((Number(c.total) || 0) / total) * 100) : 0,

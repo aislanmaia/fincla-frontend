@@ -168,7 +168,6 @@ describe('handleApiError — validação 422 do FastAPI vira português', () => 
   });
 });
 
-
 describe('interceptor de retry — só GET/HEAD, nunca writes', () => {
   // Writes (POST/PUT/PATCH/DELETE) NÃO são idempotentes: repetir cegamente
   // pode duplicar o que a chamada original já tiver feito no servidor.
@@ -294,5 +293,57 @@ describe('interceptor de retry — só GET/HEAD, nunca writes', () => {
     await vi.runAllTimersAsync();
     await promise;
     expect(adapter.callCount).toBe(2);
+
+describe('handleApiError — formato legado {error,message,type} humanizado (revisão da PR #95, 3ª rodada)', () => {
+  const legacyError = (
+    status: number,
+    detail: { error: string; message: string; type: string },
+  ) =>
+    Object.assign(new Error('Request failed'), {
+      isAxiosError: true,
+      response: { status, data: { detail } },
+    });
+
+  it('traduz "at least one tag is required" (create_transaction.py) sem virar o genérico "verifique os dados"', () => {
+    const err = legacyError(422, {
+      error: 'BUSINESS_LOGIC_ERROR',
+      message: 'At least one tag is required',
+      type: 'business_logic',
+    });
+    expect(handleApiError(err)).toBe('Selecione ao menos uma tag para a transação.');
+  });
+
+  it('traduz "at least one tag of type X is required" preservando o tipo (mesmo caso de uso da mensagem acima, registro diferente)', () => {
+    const err = legacyError(422, {
+      error: 'BUSINESS_LOGIC_ERROR',
+      message: "At least one tag of type 'Categoria' is required",
+      type: 'business_logic',
+    });
+    expect(handleApiError(err)).toBe(
+      'Selecione ao menos uma tag do tipo "Categoria" para a transação.',
+    );
+  });
+
+  it('traduz "paid_date is required when status is paid" (mark-invoice-paid)', () => {
+    const err = legacyError(400, {
+      error: 'INVALID_INVOICE',
+      message: "paid_date is required when status is 'paid'",
+      type: 'domain_validation',
+    });
+    expect(handleApiError(err)).toBe(
+      'Informe a data de pagamento para marcar a fatura como paga.',
+    );
+  });
+
+  it('nao vaza mensagem legada marcada como vazamento interno — cai no fallback por status, nao no texto cru', () => {
+    const err = legacyError(500, {
+      error: 'CONSULTANT_SERVICE_ERROR',
+      message:
+        'Failed to fetch memberships: (psycopg2.OperationalError) connection refused',
+      type: 'internal_error',
+    });
+    const message = handleApiError(err);
+    expect(message).toBe('Erro interno do servidor. Tente novamente mais tarde.');
+    expect(message).not.toContain('psycopg2');
   });
 });

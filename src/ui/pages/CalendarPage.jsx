@@ -5,6 +5,7 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import { T } from "../tokens";
 import { G, NUM } from "../typography";
 import { PageTitle, PageEnter, Card } from "../components/primitives";
+import { CardEmptyWithCta } from "../features/shellExtras.jsx";
 import { useCalendarData } from "../features/calendar/useCalendarData.js";
 import {
   monthMatrix,
@@ -66,7 +67,7 @@ const KIND = {
 };
 function evColors(e) {
   const base = KIND[e.kind] || KIND.expense;
-  if (e.kind === "expense" && !e.paid) return { color: T.inkLight, bg: "transparent", border: T.border, dot: T.inkGhost };
+  if (e.kind === "expense" && !e.paid) return { color: T.inkLight, bg: "transparent", border: T.border, dot: T.inkFaint };
   return base;
 }
 
@@ -117,7 +118,7 @@ function groupByCategory(events) {
 }
 
 /** Calendário Financeiro v2 — workspace, estado no URL (deep-linkável). */
-export function CalendarPage({ organizationId = null, dataMode = "live", isMobile = false, onNewTransaction }) {
+export function CalendarPage({ organizationId = null, dataMode = "live", isMobile = false, onNewTransaction, transactionsRefreshToken = 0 }) {
   const live = shouldUseRealData(organizationId, dataMode);
   const navigate = useNavigate();
   const search = useSearch({ strict: false });
@@ -164,7 +165,19 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
     [selected, patch],
   );
   const shiftPeriod = useCallback((delta) => (view === "week" ? shiftWeek(delta) : shiftMonth(delta)), [view, shiftWeek, shiftMonth]);
-  const pick = useCallback((ymdStr) => patch({ [FC.CAL_DAY]: ymdStr }), [patch]);
+  // Na visão Semana, a semana pode atravessar a virada do mês — as células dos
+  // dias do mês vizinho são clicáveis (ver Grid/`week`). Sem mover `fc_cal_m`
+  // junto, o hook segue buscando só o mês do cursor: selecionar um desses dias
+  // renderizava o card de "vazio confiante" inteiro (o mês certo nunca foi
+  // buscado). Achado #4 da 2ª rodada de revisão da PR #94.
+  const pick = useCallback(
+    (ymdStr) => {
+      const [y, mo] = ymdStr.split("-").map(Number);
+      const monthChanged = y !== cursor.year || mo !== cursor.month;
+      patch(monthChanged ? { [FC.CAL_DAY]: ymdStr, [FC.CAL_MONTH]: `${y}-${pad2(mo)}` } : { [FC.CAL_DAY]: ymdStr });
+    },
+    [patch, cursor.year, cursor.month],
+  );
   const setView = useCallback((v) => patch({ [FC.CAL_VIEW]: v === "week" ? "week" : undefined }), [patch]);
   const goToday = useCallback(() => patch({ [FC.CAL_MONTH]: `${today.year}-${pad2(today.month)}`, [FC.CAL_DAY]: today.ymd }), [patch, today]);
   const toggleType = useCallback(
@@ -201,7 +214,15 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { setPopover(null); }, [view, cursor.year, cursor.month]);
 
-  const liveData = useCalendarData({ organizationId, year: cursor.year, month: cursor.month, enabled: live });
+  const liveData = useCalendarData({
+    organizationId,
+    year: cursor.year,
+    month: cursor.month,
+    enabled: live,
+    // Mesmo token de invalidação usado por Cartões/Recorrências (App.jsx): sem ele
+    // o calendário nunca soube que uma transação nova tinha sido criada em outra tela.
+    transactionsRefreshToken,
+  });
   const mock = useMemo(() => (dataMode === "mock" ? mockByDay() : {}), [dataMode]);
   const rawByDay = live ? liveData.byDay : mock;
 
@@ -219,6 +240,27 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
     [view, selected, cursor],
   );
   const selectedEvents = byDay[selected] || [];
+  // Convenção do repo (ver AccountsPage): "carregando" só cobre o 1º carregamento
+  // do período (`!hasLoaded`) — uma revalidação em segundo plano (token bumpado
+  // com o mesmo mês) já tem dados válidos pra mostrar via stale-while-revalidate,
+  // então não deve regredir a lista pro estado de loading.
+  //
+  // `!liveData.hasLoaded` (agora que só vira true no sucesso — ver useCalendarData)
+  // significa "nunca carregamos este período com sucesso": enquanto isso for
+  // verdade, um `byDay` vazio é uma LACUNA de informação, não o fato "não há
+  // lançamentos" — daí periodLoading/periodLoadFailed cobrirem KPIs, cabeçalho do
+  // dia e o "vazio" do DayList.
+  const periodNeverLoaded = live && !liveData.hasLoaded;
+  const periodLoading = periodNeverLoaded && liveData.loading;
+  const periodLoadFailed = periodNeverLoaded && Boolean(liveData.error);
+  // Já carregamos com sucesso ao menos uma vez, mas a ÚLTIMA revalidação falhou
+  // (ex.: token bumpado por uma transação nova, e o refetch deu erro). Os dados
+  // na tela continuam válidos (stale-while-revalidate) — não escondemos nada —,
+  // mas o usuário precisa de uma pista LOCAL disso, mesmo quando o dia
+  // selecionado tem eventos (senão a falha fica invisível — achado #2 da 2ª
+  // rodada de revisão; no mobile a faixa vermelha do topo pode estar fora da
+  // tela).
+  const periodStaleError = live && liveData.hasLoaded && Boolean(liveData.error);
 
   const navBtn = { ...G, width: 32, height: 32, borderRadius: 9, border: `1px solid ${T.border}`, background: T.surface, cursor: "pointer", fontSize: 15, color: T.inkMid, display: "inline-grid", placeItems: "center" };
 
@@ -236,18 +278,24 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
         </div>
       </div>
 
+      {/* Feedback de busca: carregando e erro são mutuamente exclusivos (o hook nunca
+          liga os dois ao mesmo tempo) e distintos do estado "vazio" — evita a ambiguidade
+          que já mordeu o app antes de confundir ausência de dados com falha/espera. */}
+      {live && liveData.loading ? (
+        <div style={{ ...G, fontSize: 12, color: T.blue, background: T.blueLight, borderRadius: 9, padding: "9px 12px", marginBottom: 12 }}>Carregando lançamentos do mês…</div>
+      ) : null}
       {live && liveData.error ? (
         <div style={{ ...G, fontSize: 12, color: T.red, background: T.redLight, borderRadius: 9, padding: "9px 12px", marginBottom: 12 }}>{liveData.error}</div>
       ) : null}
 
-      <KpiCards totals={totals} />
+      <KpiCards totals={totals} unknownLoading={periodLoading} unknownError={periodLoadFailed} />
 
       {isWide ? (
         <div style={{ display: "grid", gridTemplateColumns: "320px minmax(0, 1fr)", gap: 20, marginTop: 16, alignItems: "start" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <MiniCalendar year={cursor.year} month={cursor.month} todayYmd={today.ymd} selected={selected} onPick={pick} onShift={shiftMonth} />
             <Filters filters={filters} hiddenTypes={hiddenTypes} onToggleType={toggleType} onToggleMethod={toggleMethod} payMethods={payMethods} />
-            <DayList selected={selected} events={selectedEvents} onEdit={openEdit} onNew={onNewTransaction} onSeeExtrato={seeExtrato} />
+            <DayList selected={selected} events={selectedEvents} onEdit={openEdit} onNew={onNewTransaction} onSeeExtrato={seeExtrato} isLoading={periodLoading} loadFailed={periodLoadFailed} staleError={periodStaleError} />
           </div>
           <div>
             <Grid grid={grid} byDay={byDay} todayYmd={today.ymd} selected={selected} onPick={pick} onPickCell={pickCell} onEdit={openEdit} week={view === "week"} />
@@ -261,6 +309,9 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
                 onNew={onNewTransaction}
                 onSeeExtrato={() => { setPopover(null); seeExtrato(); }}
                 onClose={() => setPopover(null)}
+                isLoading={periodLoading}
+                loadFailed={periodLoadFailed}
+                staleError={periodStaleError}
               />
             </DayPopover>
           ) : null}
@@ -271,7 +322,7 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
             <Grid grid={grid} byDay={byDay} todayYmd={today.ymd} selected={selected} onPick={pick} onEdit={openEdit} week={view === "week"} compact />
           </div>
           <div style={{ marginTop: 14 }}>
-            <DayList selected={selected} events={selectedEvents} onEdit={openEdit} onNew={onNewTransaction} onSeeExtrato={seeExtrato} />
+            <DayList selected={selected} events={selectedEvents} onEdit={openEdit} onNew={onNewTransaction} onSeeExtrato={seeExtrato} isLoading={periodLoading} loadFailed={periodLoadFailed} staleError={periodStaleError} />
           </div>
         </>
       )}
@@ -296,11 +347,15 @@ function Segmented({ value, onChange }) {
   );
 }
 
-function KpiCards({ totals }) {
+function KpiCards({ totals, unknownLoading = false, unknownError = false }) {
+  // Enquanto o período nunca carregou com sucesso (1º carregamento em voo ou já
+  // falhou), "R$ 0,00 / 0 lançamentos" é uma AFIRMAÇÃO falsa sobre o mês — não
+  // sabemos ainda. Troca o valor por um placeholder e o rótulo por um aviso.
+  const unknown = unknownLoading || unknownError;
   const cards = [
-    { l: "Receitas", v: totals.income, sub: `${totals.incomeCount} ${totals.incomeCount === 1 ? "lançamento" : "lançamentos"}`, grad: "linear-gradient(135deg,#059669,#10B981)", ic: "↑" },
-    { l: "Despesas", v: totals.expense, sub: `${totals.expenseCount} ${totals.expenseCount === 1 ? "lançamento" : "lançamentos"}`, grad: "linear-gradient(135deg,#DC2626,#EF4444)", ic: "↓" },
-    { l: "Saldo do mês", v: totals.net, sub: totals.net >= 0 ? "superávit" : "déficit", grad: "linear-gradient(135deg,#0F0F0D,#374151)", ic: "≈" },
+    { l: "Receitas", id: "entradas", v: totals.income, sub: `${totals.incomeCount} ${totals.incomeCount === 1 ? "lançamento" : "lançamentos"}`, grad: "linear-gradient(135deg,#059669,#10B981)", ic: "↑" },
+    { l: "Despesas", id: "saidas", v: totals.expense, sub: `${totals.expenseCount} ${totals.expenseCount === 1 ? "lançamento" : "lançamentos"}`, grad: "linear-gradient(135deg,#DC2626,#EF4444)", ic: "↓" },
+    { l: "Saldo do mês", id: "saldo", v: totals.net, sub: totals.net >= 0 ? "superávit" : "déficit", grad: "linear-gradient(135deg,#0F0F0D,#374151)", ic: "≈" },
   ];
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
@@ -308,8 +363,8 @@ function KpiCards({ totals }) {
         <div key={c.l} style={{ borderRadius: 14, padding: "16px 18px", color: "#fff", background: c.grad, position: "relative", overflow: "hidden", boxShadow: T.md }}>
           <span style={{ position: "absolute", right: 14, top: 12, fontSize: 22, opacity: 0.85 }}>{c.ic}</span>
           <div style={{ ...G, fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", opacity: 0.92 }}>{c.l}</div>
-          <div style={{ ...G, ...NUM, fontSize: 27, fontWeight: 800, letterSpacing: "-0.02em", marginTop: 5 }}>{fmt(c.v)}</div>
-          <div style={{ ...G, fontSize: 12, opacity: 0.9, marginTop: 2 }}>{c.sub}</div>
+          <div data-testid={`kpi-value-${c.id}`} style={{ ...G, ...NUM, fontSize: 27, fontWeight: 800, letterSpacing: "-0.02em", marginTop: 5 }}>{unknown ? "—" : fmt(c.v)}</div>
+          <div style={{ ...G, fontSize: 12, opacity: 0.9, marginTop: 2 }}>{unknown ? (unknownError ? "não foi possível carregar" : "carregando…") : c.sub}</div>
         </div>
       ))}
     </div>
@@ -330,7 +385,7 @@ function MiniCalendar({ year, month, todayYmd, selected, onPick, onShift }) {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
         {["D", "S", "T", "Q", "Q", "S", "S"].map((w, i) => (
-          <span key={i} style={{ ...G, fontSize: 9, fontWeight: 700, color: T.inkGhost, textAlign: "center", padding: "2px 0" }}>{w}</span>
+          <span key={i} style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkGhost, textAlign: "center", padding: "2px 0" }}>{w}</span>
         ))}
         {weeks.flat().map((cell, i) => {
           if (!cell) return <span key={i} />;
@@ -355,7 +410,7 @@ function MiniCalendar({ year, month, todayYmd, selected, onPick, onShift }) {
 }
 
 function Filters({ filters, onToggleType, onToggleMethod, payMethods }) {
-  const flt = { ...G, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: T.inkLight, margin: "2px 0 8px" };
+  const flt = { ...G, fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: T.inkLight, margin: "2px 0 8px" };
   const row = { ...G, display: "flex", alignItems: "center", gap: 9, padding: "5px 2px", fontSize: 13, color: T.inkMid, cursor: "pointer" };
   const Box = ({ on }) => (
     <span style={{ width: 16, height: 16, borderRadius: 5, border: `1.5px solid ${on ? T.ink : T.border}`, background: on ? T.ink : "transparent", display: "grid", placeItems: "center", fontSize: 11, color: "#fff", flexShrink: 0 }}>{on ? "✓" : ""}</span>
@@ -391,7 +446,7 @@ function MoreRow({ n, onSeeExtrato }) {
   );
 }
 
-function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose }) {
+function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose, isLoading = false, loadFailed = false, staleError = false }) {
   const [mode, setMode] = useState("category"); // category | list
   const [open, setOpen] = useState({});
   // Ajustes de saldo entram no SALDO, fora de Receitas/Despesas.
@@ -417,7 +472,7 @@ function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose }) {
         <span style={{ width: 8, height: 8, borderRadius: 9999, flexShrink: 0, background: c.dot }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ ...G, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.desc}</div>
-          <div style={{ ...G, fontSize: 10.5, color: T.inkLight }}>{e.kind === "adjustment" ? "Ajuste de saldo" : [payLabel(e.paymentMethod), mode === "list" ? e.category : null].filter(Boolean).join(" · ")}</div>
+          <div style={{ ...G, fontSize: 11, color: T.inkLight }}>{e.kind === "adjustment" ? "Ajuste de saldo" : [payLabel(e.paymentMethod), mode === "list" ? e.category : null].filter(Boolean).join(" · ")}</div>
         </div>
         <span style={{ ...G, ...NUM, fontSize: 13, fontWeight: 700, color: c.dot }}>{fmtShort(e.value)}</span>
       </div>
@@ -429,7 +484,11 @@ function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose }) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <div style={{ ...G, fontWeight: 800, fontSize: 14 }}>{dayLongLabel(selected) || "Selecione um dia"}</div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span style={{ ...G, ...ghost }}>{events.length} {events.length === 1 ? "lançamento" : "lançamentos"}</span>
+          {/* "0 lançamentos" enquanto o período nunca carregou é a mesma afirmação
+              falsa do KpiCards — troca por um rótulo neutro nesse caso. */}
+          <span style={{ ...G, ...ghost }}>
+            {isLoading ? "carregando…" : loadFailed ? "—" : `${events.length} ${events.length === 1 ? "lançamento" : "lançamentos"}`}
+          </span>
           {onClose ? (
             <button onClick={onClose} aria-label="Fechar" style={{ border: "none", background: "none", cursor: "pointer", color: T.inkLight, display: "inline-flex", padding: 2 }}>
               <X size={16} />
@@ -437,18 +496,28 @@ function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose }) {
           ) : null}
         </div>
       </div>
+      {staleError ? (
+        // Já carregamos com sucesso antes (os dados abaixo são válidos, ainda que
+        // desatualizados), mas a ÚLTIMA revalidação falhou. Mostra a pista aqui —
+        // junto do dia selecionado — mesmo quando ele TEM eventos: no mobile a
+        // faixa vermelha do topo pode estar fora da tela, e "tem dado" não pode
+        // silenciar "o dado pode estar velho".
+        <div style={{ ...G, fontSize: 11, color: T.red, background: T.redLight, borderRadius: 8, padding: "6px 9px", margin: "8px 0 0" }}>
+          Não foi possível atualizar agora — mostrando os últimos lançamentos carregados.
+        </div>
+      ) : null}
       {events.length ? (
         <>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, margin: "11px 0 8px" }}>
             {[{ l: "Receitas", v: income, c: T.green }, { l: "Despesas", v: expense, c: T.red }].map((s) => (
               <div key={s.l} style={{ minWidth: 0, border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px" }}>
-                <div style={{ ...G, fontSize: 9, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.inkLight }}>{s.l}</div>
+                <div style={{ ...G, fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.inkLight }}>{s.l}</div>
                 <div style={{ ...G, ...NUM, fontSize: 13, fontWeight: 800, color: s.c, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmt(s.v)}</div>
               </div>
             ))}
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, border: `1px solid ${T.border}`, borderRadius: 9, padding: "8px 11px", marginBottom: 8 }}>
-            <span style={{ ...G, fontSize: 9, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.inkLight }}>Saldo do dia{adjust !== 0 ? " (c/ ajuste)" : ""}</span>
+            <span style={{ ...G, fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.inkLight }}>Saldo do dia{adjust !== 0 ? " (c/ ajuste)" : ""}</span>
             <span style={{ ...G, ...NUM, fontSize: 14, fontWeight: 800, color: dayNet < 0 ? T.red : T.green, whiteSpace: "nowrap" }}>{fmt(dayNet)}</span>
           </div>
           {dense ? (
@@ -466,7 +535,7 @@ function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose }) {
                   return (
                     <div key={g.name} style={{ borderTop: `1px solid ${T.border}` }}>
                       <div onClick={() => setOpen((o) => ({ ...o, [g.name]: !isOpen }))} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 4px", cursor: "pointer" }}>
-                        <span style={{ ...ghost, width: 12, fontSize: 10 }}>{isOpen ? "▾" : "▸"}</span>
+                        <span style={{ ...ghost, width: 12, fontSize: 11 }}>{isOpen ? "▾" : "▸"}</span>
                         <span style={{ ...G, flex: 1, fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{g.name}</span>
                         <span style={{ ...ghost, fontSize: 11 }}>{g.items.length}</span>
                         <span style={{ ...G, ...NUM, fontSize: 13, fontWeight: 700, color: g.total < 0 ? T.red : T.green }}>{fmtShort(g.total)}</span>
@@ -484,8 +553,18 @@ function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose }) {
               )}
           </div>
         </>
+      ) : isLoading ? (
+        // Enquanto busca, NÃO usar o mesmo componente do "vazio de verdade" — senão
+        // o usuário lê "nenhum lançamento" antes da resposta da API chegar.
+        <div style={{ ...G, fontSize: 12.5, color: T.inkLight, marginTop: 8 }}>Carregando lançamentos…</div>
+      ) : loadFailed ? (
+        // Só aparece quando o período NUNCA carregou com sucesso (byDay={} é uma
+        // lacuna, não um fato) — depois de já ter carregado uma vez, uma falha de
+        // revalidação vira o aviso `staleError` acima, e este dia (se realmente
+        // vazio nos dados válidos que já temos) cai no CardEmptyWithCta normal.
+        <div style={{ ...G, fontSize: 12.5, color: T.red, marginTop: 8 }}>Não foi possível carregar os lançamentos deste dia.</div>
       ) : (
-        <div style={{ ...G, fontSize: 12.5, color: T.inkLight, marginTop: 8 }}>Nenhum lançamento neste dia.</div>
+        <CardEmptyWithCta icon="📅" iconSize={22} title="Nenhum lançamento neste dia" sub="Use os botões abaixo para registrar uma transação ou ver o extrato completo." />
       )}
       <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
         {onNew ? (

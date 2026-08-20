@@ -8,7 +8,7 @@ import { goalTypeMeta } from "./goalMeta.js";
 
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const fmt = (v) => brl.format(Number(v || 0));
-const cap = { ...G, fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: T.inkLight };
+const cap = { ...G, fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: T.inkLight };
 const ghost = { ...G, fontSize: 11, color: T.inkGhost };
 
 function monthsUntil(iso) {
@@ -102,7 +102,7 @@ export function GoalProjectionModal({ goal, organizationId, onClose }) {
                 <div style={{ ...G, ...NUM, fontWeight: 800, fontSize: 18, marginTop: 2 }}>{reached ? sum.completion_date && new Date(`${sum.completion_date}T00:00:00`).toLocaleDateString("pt-BR", { month: "short", year: "numeric" }) : "não atinge"}</div>
                 {reached && sum.on_track != null ? (
                   <div style={{ marginTop: 6 }}>
-                    <span style={{ ...G, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, borderRadius: 9999, padding: "2px 8px", color: verdictColor, background: late ? T.amberLight : T.greenLight }}>
+                    <span style={{ ...G, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, borderRadius: 9999, padding: "2px 8px", color: verdictColor, background: late ? T.amberLight : T.greenLight }}>
                       {late ? `✕ ${sum.months_vs_deadline} meses após o prazo` : "✓ dentro do prazo"}
                     </span>
                   </div>

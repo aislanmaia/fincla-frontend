@@ -11,7 +11,7 @@ import { ConsultantClientActions } from "./ConsultantClientActions";
 function MiniStat({ label, value, color = T.ink }) {
   return (
     <div style={{ minWidth: 0 }}>
-      <div style={{ ...G, fontSize: 9.5, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
+      <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
       <div style={{ ...G, ...NUM, fontSize: 13, fontWeight: 800, color, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</div>
     </div>
   );
@@ -72,13 +72,13 @@ export function ConsultantClientCard({ client, onOpenClient, onRegenerate, onEva
         {riskAlert && (
           <span
             title={riskAlert}
-            style={{ ...G, fontSize: 10, color: T.red, background: T.redLight, borderRadius: 99, padding: "2px 7px", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4, maxWidth: 150, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}
+            style={{ ...G, fontSize: 11, color: T.red, background: T.redLight, borderRadius: 99, padding: "2px 7px", fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4, maxWidth: 150, overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}
           >
             <Icon name="alert" size={10} color={T.red} />
             {riskAlert}
           </span>
         )}
-        <span style={{ ...G, fontSize: 10.5, color: T.inkGhost, marginLeft: "auto" }}>{fmtLastActive(client.last_active)}</span>
+        <span style={{ ...G, fontSize: 11, color: T.inkGhost, marginLeft: "auto" }}>{fmtLastActive(client.last_active)}</span>
         <ConsultantClientActions
           pending={!!client.pending_activation}
           onRegenerate={() => onRegenerate?.(client.organization_id)}

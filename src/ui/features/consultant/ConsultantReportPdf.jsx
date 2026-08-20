@@ -14,7 +14,14 @@ import { fmtBRL0 } from "./consultantFormat";
 const C = {
   ink: "#0F0F0D",
   mid: "#4B5563",
-  light: "#9CA3AF",
+  // #9CA3AF dava ~2.5:1 sobre a página branca — reprova WCAG 1.4.3 (4.5:1).
+  // #6B7280 é o mesmo ajuste de contraste feito em T.inkGhost (tokens.js):
+  // 4.83:1 sobre branco, calculado pela fórmula de luminância relativa.
+  // Só a COR mudou aqui — os fontSize abaixo voltaram ao valor original:
+  // isto é StyleSheet do @react-pdf/renderer (pt de PDF, layout A4 fixo,
+  // <Section wrap={false}>), não px de tela — o piso de 11px da issue #86
+  // não se aplica 1:1 e chegou a quebrar linha nos 4 KPIs.
+  light: "#6B7280",
   border: "#E5E7EB",
   bg: "#F9FAFB",
   green: "#059669",

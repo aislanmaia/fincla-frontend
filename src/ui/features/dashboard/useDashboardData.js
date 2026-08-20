@@ -501,7 +501,23 @@ function startOfToday() {
   return t;
 }
 
-function mapUpcomingDebits(recurringResponse, horizonDays = 14) {
+/**
+ * `r.tags` traz qualquer tipo de tag anexada à série (categoria/detalhe/
+ * contexto/local...), não só a de categoria — pegar `tags?.[0]` cegamente e
+ * aplicar o tradutor de CATEGORIA nela traduz o que não é categoria. Mesmo
+ * padrão de `firstCategoryTag` em `recurringSeriesAdapter.js`.
+ */
+function firstCategoryTagFromSeries(tags) {
+  if (!tags?.length) return null;
+  const typeName = (t) => (t.tag_type?.name || "").toLowerCase();
+  return tags.find((t) => typeName(t) === "categoria" || typeName(t) === "category") ?? null;
+}
+
+/**
+ * @param {unknown} recurringResponse
+ * @param {number} horizonDays
+ */
+export function mapUpcomingDebits(recurringResponse, horizonDays = 14) {
   const list = recurringResponse?.series ?? [];
   const start = startOfToday();
   const end = new Date(start);
@@ -523,7 +539,7 @@ function mapUpcomingDebits(recurringResponse, horizonDays = 14) {
         0,
         Math.ceil((occ - start) / 86400000),
       );
-      const tag = r.tags?.[0];
+      const tag = firstCategoryTagFromSeries(r.tags);
       return {
         id: r.id,
         name: r.description,
@@ -532,7 +548,10 @@ function mapUpcomingDebits(recurringResponse, horizonDays = 14) {
         monthShort: occ
           .toLocaleDateString("pt-BR", { month: "short" })
           .replace(".", ""),
-        cat: tag?.name ?? r.category ?? "Recorrente",
+        // `tag.name` vem cru do seed (`Food & Groceries`...); traduz antes de
+        // exibir. Sem tag de categoria (ou sem tags), mantém o fallback
+        // original — nunca mostra o literal "Categoria".
+        cat: tag ? categoryLabelPtForTag(tag) : (r.category ?? "Recorrente"),
         daysLeft,
         dateLabel: occ.toLocaleDateString("pt-BR", {
           day: "2-digit",

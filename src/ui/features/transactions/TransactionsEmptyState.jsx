@@ -25,8 +25,8 @@ export function TransactionsEmptyState({ extraTx = [], onNewTx }) {
               <div style={{ flex:1, minWidth:0 }}>
                 <div style={{ ...G, fontSize:13, fontWeight:600, color:T.ink }}>{tx.desc}</div>
                 <div style={{ ...G, fontSize:11, color:T.inkLight }}>{tx.cat} · {tx.method} · {tx.date}
-                  {tx.rec && <span style={{ ...G, fontSize:10, color:T.blue, background:T.blueLight, borderRadius:99, padding:"1px 7px", marginLeft:6, fontWeight:600 }}>recorrente</span>}
-                  {tx.valorTipo==="estimado" && <span style={{ ...G, fontSize:10, color:T.amber, background:T.amberLight, borderRadius:99, padding:"1px 7px", marginLeft:4, fontWeight:600 }}>≈ estimado</span>}
+                  {tx.rec && <span style={{ ...G, fontSize: 11, color:T.blue, background:T.blueLight, borderRadius:99, padding:"1px 7px", marginLeft:6, fontWeight:600 }}>recorrente</span>}
+                  {tx.valorTipo==="estimado" && <span style={{ ...G, fontSize: 11, color:T.amber, background:T.amberLight, borderRadius:99, padding:"1px 7px", marginLeft:4, fontWeight:600 }}>≈ estimado</span>}
                 </div>
               </div>
               <div style={{ ...G, ...NUM, fontSize:14, fontWeight:700, flexShrink:0,

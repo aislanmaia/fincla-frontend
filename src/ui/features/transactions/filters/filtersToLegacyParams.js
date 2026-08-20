@@ -12,6 +12,20 @@
  * Forma de pagamento é multi-seleção: o backend casa com qualquer um dos valores
  * enviados (param `payment_method` repetido), então mandamos todos os métodos
  * marcados — sem recorte client-side.
+ *
+ * Tags (facet "Tags", `state.tags`): fincla-frontend#78 — a facet guarda NOMES
+ * de tag (o `TagPanel` só trabalha com nomes), mas o único param que o backend
+ * entende é `GET /v1/transactions?tag_id=<uuid>` — um único id, de qualquer
+ * tipo de tag (fincla-api/docs/FRONTEND_API_GUIDE.md linha ~2818). Antes desta
+ * correção o nome nunca era resolvido para um id nem repassado a
+ * `buildTransactionsQuery`: a seleção ficava só no estado local, sem nunca
+ * chegar à query — por isso marcar uma tag não mudava a listagem. O chamador
+ * (`TransacoesPage`) resolve nome→id via o catálogo de tags "detalhe" da
+ * organização (`useNovaTransacaoDetailTags`) e manda o resultado em
+ * `options.tagIds`; aqui ele compete pelo MESMO slot `filterCat` que a
+ * categoria usa (o backend só aceita um `tag_id`) — categoria tem prioridade
+ * quando as duas facets estão preenchidas, e isso é uma limitação real do
+ * contrato (backend não faz AND entre duas tags), não um bug.
  */
 
 import { parseMoneyInput } from "../../onboarding/onboardingValueUtils.js";
@@ -63,6 +77,19 @@ export function mapCatsToLegacy(cats, totalCategories) {
   return cats[0];
 }
 
+/**
+ * Resolve o único slot `filterCat`/`tag_id` que o backend aceita, priorizando a
+ * facet "Categoria" (`cats`) sobre a facet "Tags" (`tagIds`, já resolvidos para
+ * UUID pelo chamador) quando as duas estão preenchidas ao mesmo tempo — ver nota
+ * de topo do arquivo (fincla-frontend#78).
+ */
+export function mapCatsOrTagToLegacy(cats, tagIds, totalCategories) {
+  const catValue = mapCatsToLegacy(cats, totalCategories);
+  if (catValue !== "todas") return catValue;
+  if (Array.isArray(tagIds) && tagIds.length) return tagIds[0];
+  return "todas";
+}
+
 /** Converte strings BRL ("200,00") em números para `value_min`/`value_max` da API. */
 export function mapValueRangeToLegacy(valueMin, valueMax) {
   const min = parseMoneyInput(valueMin);
@@ -93,15 +120,17 @@ export function matchesValueRange(absAmount, valueMin, valueMax) {
  * @param {number} [options.totalCategories] - total de categorias disponíveis;
  *   quando informado, permite detectar "Todas selecionadas" e mapear para o
  *   filtro vazio do backend (caso contrário ele aceitaria só a primeira).
+ * @param {string[]} [options.tagIds] - ids das tags de `state.tags` (nomes) já
+ *   resolvidos pelo chamador; ver nota de topo do arquivo (fincla-frontend#78).
  */
 export function filtersToLegacyParams(
   state,
-  { limit, debouncedSearch = "", totalCategories } = {},
+  { limit, debouncedSearch = "", totalCategories, tagIds } = {},
 ) {
   return {
     search: debouncedSearch,
     filterType: mapTypeToLegacy(state.type),
-    filterCat: mapCatsToLegacy(state.cats, totalCategories),
+    filterCat: mapCatsOrTagToLegacy(state.cats, tagIds, totalCategories),
     filterMethod: mapMethodToLegacy(state.method),
     period: state.period,
     customFrom: state.customFrom,

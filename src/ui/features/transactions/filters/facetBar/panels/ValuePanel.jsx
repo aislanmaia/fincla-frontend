@@ -46,7 +46,7 @@ function ValueField({ label, value, placeholder, ariaLabel, onChange }) {
       <div
         style={{
           ...G,
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: 700,
           color: T.inkMid,
           textTransform: "uppercase",

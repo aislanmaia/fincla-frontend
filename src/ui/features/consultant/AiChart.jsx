@@ -62,7 +62,7 @@ const FORMATTERS = {
 
 const formatterFor = (valueFormat) => FORMATTERS[valueFormat] ?? FORMATTERS.int;
 
-const AXIS_TICK = { ...G, fontSize: 10, fill: T.inkLight };
+const AXIS_TICK = { ...G, fontSize: 11, fill: T.inkLight };
 const MARGIN = { top: 6, right: 6, left: -8, bottom: 0 };
 
 /**

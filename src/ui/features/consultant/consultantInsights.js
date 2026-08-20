@@ -6,12 +6,17 @@
  * stub "em breve" na página.
  */
 
+import { categoryLabelPtForTag } from "../../data/categoryLabels.js";
+
 const EXPENSE_PALETTE = ["#2563EB", "#7C3AED", "#D97706", "#059669", "#DC2626", "#0F0F0D", "#9CA3AF"];
 
 /**
  * Linhas do gráfico "Onde a base gasta" a partir de `expenses-by-category`
  * (`{ name, total, percentage }[]`): top N por gasto, com cor da paleta e o `max`
  * para a largura relativa das barras.
+ *
+ * `name` vem cru do seed (`Food & Groceries`, `Transport`...) — passa por
+ * `categoryLabelPtForTag` pra virar PT-BR antes de chegar no gráfico.
  */
 export function selectExpenseRows(categories, limit = 6) {
   const list = Array.isArray(categories) ? categories : [];
@@ -19,7 +24,7 @@ export function selectExpenseRows(categories, limit = 6) {
     .sort((a, b) => (Number(b.total) || 0) - (Number(a.total) || 0))
     .slice(0, limit)
     .map((c, i) => ({
-      label: c.name || "Sem categoria",
+      label: c.name ? categoryLabelPtForTag(c) : "Sem categoria",
       value: Number(c.total) || 0,
       pct: Math.round(Number(c.percentage) || 0),
       color: EXPENSE_PALETTE[i % EXPENSE_PALETTE.length],

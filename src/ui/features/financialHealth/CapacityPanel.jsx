@@ -15,7 +15,7 @@ const TREND = {
   decreasing: { label: "↘ decrescente", color: T.red, bg: T.redLight },
 };
 
-const cap = { ...G, fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: T.inkLight };
+const cap = { ...G, fontSize: 11, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: T.inkLight };
 
 function TrendChip({ trend }) {
   const t = TREND[trend] || TREND.stable;

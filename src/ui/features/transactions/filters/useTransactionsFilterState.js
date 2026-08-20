@@ -53,6 +53,17 @@ function normalizeInitial(partial) {
       ? [next.method]
       : [];
   if (!isPaymentMethodAllowedForType(next.method, next.type)) next.method = [];
+  // Categoria e Tags competem pelo MESMO slot de filtro no backend — só um
+  // `tag_id` por chamada (ver mapCatsOrTagToLegacy em filtersToLegacyParams.js).
+  // Um snapshot com as duas preenchidas (view salva antes desta correção, ou
+  // restaurada de localStorage/URL) não pode deixar a facet "Tags" acesa na UI
+  // sobre um resultado filtrado só por categoria — dropamos `tags` aqui, na
+  // mesma direção de prioridade que o backend já aplica (fincla-frontend#96
+  // achado 2). Daqui pra frente `setCats`/`setTags` impedem essa combinação
+  // de nascer de novo.
+  if (Array.isArray(next.cats) && next.cats.length && Array.isArray(next.tags) && next.tags.length) {
+    next.tags = [];
+  }
   return next;
 }
 
@@ -79,6 +90,31 @@ export function useTransactionsFilterState({
         : prev.method.filter((item) => isPaymentMethodAllowedForType(item, value));
       if (prev.type === value && prev.method === nextMethod) return prev;
       return { ...prev, type: value, method: nextMethod };
+    });
+  }, []);
+
+  /**
+   * Categoria e Tags são mutuamente exclusivas de propósito (fincla-frontend#96
+   * achado 2): as duas disputam o mesmo slot `tag_id` no backend, e antes desta
+   * correção era possível deixar as duas facets "acesas" ao mesmo tempo — a
+   * categoria vencia por baixo do capô e o chip da tag ficava aceso sobre uma
+   * lista que ela não filtrava, sem NENHUM sinal disso na tela. Em vez de
+   * avisar depois que o filtro foi ignorado, a seleção de uma limpa a outra:
+   * o que está aceso na UI é sempre exatamente o que está filtrando.
+   */
+  const setCats = useCallback((value) => {
+    setState((prev) => {
+      if (prev.cats === value) return prev;
+      const clearsTags = Array.isArray(value) && value.length > 0 && prev.tags.length > 0;
+      return { ...prev, cats: value, tags: clearsTags ? [] : prev.tags };
+    });
+  }, []);
+
+  const setTags = useCallback((value) => {
+    setState((prev) => {
+      if (prev.tags === value) return prev;
+      const clearsCats = Array.isArray(value) && value.length > 0 && prev.cats.length > 0;
+      return { ...prev, tags: value, cats: clearsCats ? [] : prev.cats };
     });
   }, []);
 
@@ -162,16 +198,13 @@ export function useTransactionsFilterState({
         },
         {
           key: "tag",
+          // Single-select (fincla-frontend#96 achado 3): o backend só filtra por
+          // uma tag por vez, então a facet nunca chega a ter "2 tags" de
+          // verdade — o rótulo não precisa (nem pode) prometer isso.
           label: "Tags",
-          value:
-            state.tags.length === 0
-              ? "—"
-              : state.tags.length === 1
-              ? `#${state.tags[0]}`
-              : `${state.tags.length} tags`,
+          value: state.tags.length === 0 ? "—" : `#${state.tags[0]}`,
           icon: "tag",
           active: state.tags.length > 0,
-          multi: state.tags.length,
         },
         {
           key: "cartao",
@@ -241,8 +274,8 @@ export function useTransactionsFilterState({
     setCustomTo: (v) => setField("customTo", v),
     setType,
     setMethod: (v) => setField("method", v),
-    setCats: (v) => setField("cats", v),
-    setTags: (v) => setField("tags", v),
+    setCats,
+    setTags,
     setCardSel: (v) => setField("cardSel", v),
     setRec: (v) => setField("rec", v),
     setSettlement: (v) => setField("settlement", v),

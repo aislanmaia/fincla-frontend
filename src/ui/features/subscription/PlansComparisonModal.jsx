@@ -386,7 +386,7 @@ function PlanCard({
             borderRadius: 999,
             background: "linear-gradient(135deg, #7C3AED, #2563EB)",
             color: "white",
-            fontSize: 10,
+            fontSize: 11,
             fontWeight: 800,
             letterSpacing: "0.06em",
             textTransform: "uppercase",
@@ -625,7 +625,7 @@ function FeatureGroupBlock({ group, plan }) {
       <div
         style={{
           ...G,
-          fontSize: 10,
+          fontSize: 11,
           fontWeight: 700,
           color: T.inkLight,
           textTransform: "uppercase",

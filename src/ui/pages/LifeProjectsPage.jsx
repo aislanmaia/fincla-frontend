@@ -46,12 +46,12 @@ function useIsWide(bp = 1100) {
   return wide;
 }
 
-const cap = { ...G, fontSize: 10, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: T.inkLight };
+const cap = { ...G, fontSize: 11, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: T.inkLight };
 const ghost = { ...G, fontSize: 11, color: T.inkGhost };
 
 function Pill({ children, color, bg }) {
   return (
-    <span style={{ ...G, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, borderRadius: 9999, padding: "2px 8px", color: color || T.inkMid, background: bg || T.grayLight }}>
+    <span style={{ ...G, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, borderRadius: 9999, padding: "2px 8px", color: color || T.inkMid, background: bg || T.grayLight }}>
       {children}
     </span>
   );
@@ -90,11 +90,11 @@ function ProjectCard({ g, onEdit, onContribuir, onProjection }) {
         <div onClick={(e) => { e.stopPropagation(); onProjection && onProjection(g); }} style={{ marginTop: 8, borderTop: `1px solid ${T.border}`, paddingTop: 8, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, cursor: "pointer" }}>
           <span style={{ ...G, fontSize: 11, color: T.inkLight, display: "inline-flex", alignItems: "center", gap: 5 }}>📈 No ritmo: <b style={{ color: T.ink }}>{g.projection.completionLabel}</b></span>
           {g.projection.onTrack === false ? (
-            <span style={{ ...G, fontSize: 10, fontWeight: 700, borderRadius: 9999, padding: "2px 8px", color: T.amber, background: T.amberLight }}>✕ +{g.projection.monthsVsDeadline}m</span>
+            <span style={{ ...G, fontSize: 11, fontWeight: 700, borderRadius: 9999, padding: "2px 8px", color: T.amber, background: T.amberLight }}>✕ +{g.projection.monthsVsDeadline}m</span>
           ) : g.projection.onTrack === true ? (
-            <span style={{ ...G, fontSize: 10, fontWeight: 700, borderRadius: 9999, padding: "2px 8px", color: T.green, background: T.greenLight }}>✓ no prazo</span>
+            <span style={{ ...G, fontSize: 11, fontWeight: 700, borderRadius: 9999, padding: "2px 8px", color: T.green, background: T.greenLight }}>✓ no prazo</span>
           ) : (
-            <span style={{ ...G, fontSize: 10, fontWeight: 700, borderRadius: 9999, padding: "2px 8px", color: T.inkLight, background: T.grayLight }}>estimado</span>
+            <span style={{ ...G, fontSize: 11, fontWeight: 700, borderRadius: 9999, padding: "2px 8px", color: T.inkLight, background: T.grayLight }}>estimado</span>
           )}
         </div>
       ) : null}

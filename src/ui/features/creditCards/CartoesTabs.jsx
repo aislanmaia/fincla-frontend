@@ -43,9 +43,9 @@ export function RecurringTab({
               { label: "% da fatura", val: `${(invoice?.val || 0) > 0 ? Math.round(recurringTotal / (invoice?.val || 0) * 100) : 0}%`, sub: "das cobranças são fixas" },
             ].map((k, i) => (
               <div key={i} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "12px 14px" }}>
-                <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 5 }}>{k.label}</div>
+                <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 5 }}>{k.label}</div>
                 <div style={{ ...G, ...NUM, fontSize: 16, fontWeight: 800, color: T.purple }}>{k.val}</div>
-                <div style={{ ...G, fontSize: 10, color: T.inkMid, marginTop: 3 }}>{k.sub}</div>
+                <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 3 }}>{k.sub}</div>
               </div>
             ))}
           </div>
@@ -85,16 +85,16 @@ export function HistoryTab({ cardInvoices, isMobile, formatBRL }) {
           { label: "Média mensal", val: formatBRL(monthlyAverage), sub: `últimos ${cardInvoices.length} meses` },
         ].map((k, i) => (
           <div key={i} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: "14px 16px" }}>
-            <div style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 5 }}>{k.label}</div>
+            <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 5 }}>{k.label}</div>
             <div style={{ ...G, ...NUM, fontSize: 18, fontWeight: 800, color: T.ink }}>{k.val}</div>
-            <div style={{ ...G, fontSize: 10, color: T.inkLight, marginTop: 3 }}>{k.sub}</div>
+            <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 3 }}>{k.sub}</div>
           </div>
         ))}
       </div>
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, overflow: "hidden" }}>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr auto" : "2fr 1fr 1fr auto", padding: "10px 18px", borderBottom: `1px solid ${T.border}`, background: T.bg, gap: 12 }}>
           {(isMobile ? ["Mês", "Valor"] : ["Mês / Ano", "Vencimento", "Valor", "Status"]).map((h) => (
-            <div key={h} style={{ ...G, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em" }}>{h}</div>
+            <div key={h} style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em" }}>{h}</div>
           ))}
         </div>
         {[...cardInvoices].reverse().map((f, i) => {
@@ -105,11 +105,11 @@ export function HistoryTab({ cardInvoices, isMobile, formatBRL }) {
             <div key={f.id} style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr auto" : "2fr 1fr 1fr auto", gap: 12, padding: "13px 18px", alignItems: "center", borderBottom: i < cardInvoices.length - 1 ? `1px solid ${T.border}` : "none", background: f.atual ? `${T.blueLight}55` : "transparent" }}>
               <div>
                 <div style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink }}>{f.mes}</div>
-                {f.atual && <div style={{ ...G, fontSize: 10, color: T.blue }}>Fatura atual</div>}
+                {f.atual && <div style={{ ...G, fontSize: 11, color: T.blue }}>Fatura atual</div>}
               </div>
               {!isMobile && <div style={{ ...G, fontSize: 12, color: T.inkMid }}>{f.venc}</div>}
               <div style={{ ...G, ...NUM, fontSize: 13, fontWeight: 700, color: overdue ? T.red : T.ink }}>{formatBRL(f.val)}</div>
-              <span style={{ ...G, fontSize: 10, fontWeight: 700, color: statusColor, background: f.pago ? "#DCFCE7" : f.atual ? "#EFF6FF" : "#FEF2F2", borderRadius: 8, padding: "3px 10px", whiteSpace: "nowrap" }}>{statusLabel}</span>
+              <span style={{ ...G, fontSize: 11, fontWeight: 700, color: statusColor, background: f.pago ? "#DCFCE7" : f.atual ? "#EFF6FF" : "#FEF2F2", borderRadius: 8, padding: "3px 10px", whiteSpace: "nowrap" }}>{statusLabel}</span>
             </div>
           );
         })}
@@ -141,15 +141,15 @@ export function PlanningTab({ card, cardInstallments, isMobile, formatBRL }) {
             <div key={month} style={{ background: isNext ? `${T.blueLight}80` : T.surface, border: `1.5px solid ${isNext ? T.blue : T.border}`, borderRadius: 14, padding: "16px 18px" }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                 <div style={{ ...G, fontSize: 13, fontWeight: 800, color: T.ink }}>{month}</div>
-                {isNext && <span style={{ ...G, fontSize: 10, fontWeight: 700, color: "#fff", background: T.blue, borderRadius: 6, padding: "2px 8px" }}>Próximo</span>}
+                {isNext && <span style={{ ...G, fontSize: 11, fontWeight: 700, color: "#fff", background: T.blue, borderRadius: 6, padding: "2px 8px" }}>Próximo</span>}
               </div>
-              <div style={{ ...G, fontSize: 10, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 4 }}>Total previsto</div>
+              <div style={{ ...G, fontSize: 11, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 4 }}>Total previsto</div>
               <div style={{ ...G, ...NUM, fontSize: 20, fontWeight: 800, color: T.ink, marginBottom: 10 }}>
                 {total > 0 ? formatBRL(total) : "R$ 0,00"}
               </div>
               {activeInstallments.length > 0 ? (
                 <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                  <div style={{ ...G, fontSize: 10, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 3 }}>
+                  <div style={{ ...G, fontSize: 11, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 3 }}>
                     {totalCount} parcela{totalCount !== 1 ? "s" : ""}
                   </div>
                   {activeInstallments.slice(0, 3).map((p) => (
@@ -160,7 +160,7 @@ export function PlanningTab({ card, cardInstallments, isMobile, formatBRL }) {
                       </div>
                       {p.hasRefundsLinked && (
                         <div title={`Esta compra tem ${p.refundsCount} estorno${p.refundsCount !== 1 ? "s" : ""} vinculado${p.refundsCount !== 1 ? "s" : ""} totalizando ${formatBRL(p.refundsTotalValue || 0)}. Considere isso ao planejar o orçamento.`}
-                          style={{ ...G, fontSize: 9.5, color: T.green, display: "flex", alignItems: "center", gap: 4, fontWeight: 700 }}>
+                          style={{ ...G, fontSize: 11, color: T.green, display: "flex", alignItems: "center", gap: 4, fontWeight: 700 }}>
                           <RotateCcw size={9} /> Tem estorno{p.refundsTotalValue > 0 ? ` · ${formatBRL(p.refundsTotalValue)} abatido${p.refundsCount !== 1 ? "s" : ""}` : ""}
                         </div>
                       )}
@@ -270,12 +270,12 @@ export function InstallmentsTab({
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 5, flexWrap: "wrap" }}>
                     <span style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.desc}</span>
-                    <span style={{ ...G, fontSize: 10, fontWeight: 700, color: rowColor, background: `${rowColor}14`, borderRadius: 5, padding: "1px 6px", flexShrink: 0 }}>
+                    <span style={{ ...G, fontSize: 11, fontWeight: 700, color: rowColor, background: `${rowColor}14`, borderRadius: 5, padding: "1px 6px", flexShrink: 0 }}>
                       {p.cat}
                     </span>
                     {p.refundsSummary && p.refundsSummary.count > 0 && (
                       <span title={`${p.refundsSummary.count} estorno${p.refundsSummary.count !== 1 ? "s" : ""} · ${formatBRL(p.refundsSummary.totalValue)} abatido${p.refundsSummary.count !== 1 ? "s" : ""}`}
-                        style={{ ...G, fontSize: 10, fontWeight: 700, color: T.green, background: T.greenLight, borderRadius: 5, padding: "1px 6px", flexShrink: 0, cursor: "default" }}>
+                        style={{ ...G, fontSize: 11, fontWeight: 700, color: T.green, background: T.greenLight, borderRadius: 5, padding: "1px 6px", flexShrink: 0, cursor: "default" }}>
                         ↺ Estornado
                       </span>
                     )}
@@ -284,7 +284,7 @@ export function InstallmentsTab({
                     <div style={{ flex: 1, height: 4, background: T.grayLight, borderRadius: 99, overflow: "hidden" }}>
                       <div style={{ height: "100%", width: `${pct}%`, background: rowColor, borderRadius: 99, transition: "width 0.7s cubic-bezier(0.4,0,0.2,1)" }} />
                     </div>
-                    <span style={{ ...G, fontSize: 10, color: T.inkMid, flexShrink: 0, minWidth: 40, textAlign: "right" }}>
+                    <span style={{ ...G, fontSize: 11, color: T.inkMid, flexShrink: 0, minWidth: 40, textAlign: "right" }}>
                       {p.pago}/{p.total}
                     </span>
                   </div>
@@ -292,7 +292,7 @@ export function InstallmentsTab({
                 <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
                   <div style={{ textAlign: "right" }}>
                     <div style={{ ...G, ...NUM, fontSize: 14, fontWeight: 700, color: T.ink }}>{formatBRL(p.vParcela)}</div>
-                    <div style={{ ...G, fontSize: 10, color: T.inkLight }}>{remainingCount}× restam</div>
+                    <div style={{ ...G, fontSize: 11, color: T.inkLight }}>{remainingCount}× restam</div>
                   </div>
                   <ChevronDown size={14} color={T.inkLight}
                     style={{ transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }} />
@@ -307,7 +307,7 @@ export function InstallmentsTab({
                       { label: "Total original", val: formatBRL(p.vTotal) },
                     ].map((s, i) => (
                       <div key={i} style={{ flex: 1, padding: "10px 12px", borderLeft: i > 0 ? `1px solid ${T.border}` : "none", textAlign: i === 2 ? "right" : "left" }}>
-                        <div style={{ ...G, fontSize: 10, fontWeight: 500, color: T.inkLight, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.label}</div>
+                        <div style={{ ...G, fontSize: 11, fontWeight: 500, color: T.inkLight, marginBottom: 3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.label}</div>
                         <div style={{ ...G, ...NUM, fontSize: 13, fontWeight: 700, color: T.ink }}>{s.val}</div>
                       </div>
                     ))}
@@ -418,7 +418,7 @@ export function AnalyticsTab({
               <div style={{ ...G, fontSize: 14, fontWeight: 700, color: healthColor }}>
                 {healthScore >= 70 ? "Saudável" : healthScore >= 40 ? "Regular" : "Atenção"}
               </div>
-              <div style={{ ...G, fontSize: 10, color: T.inkLight, marginTop: 2 }}>de 100 pontos</div>
+              <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 2 }}>de 100 pontos</div>
             </div>
           </div>
           <div style={{ ...G, fontSize: 11, color: T.inkMid, lineHeight: 1.6 }}>
@@ -441,24 +441,24 @@ export function AnalyticsTab({
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
             <div>
               <div style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink }}>Tendência por categoria</div>
-              <div style={{ ...G, fontSize: 10, color: T.inkLight, marginTop: 2 }}>Evolução dos gastos nos últimos 6 meses</div>
+              <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 2 }}>Evolução dos gastos nos últimos 6 meses</div>
             </div>
           </div>
           <ResponsiveContainer width="100%" height={isMobile ? 160 : 200}>
             <ReBarChart data={cardTrend} margin={{ top: 4, right: 4, left: -22, bottom: 0 }} barCategoryGap="32%">
               <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
-              <XAxis dataKey="mes" tick={{ ...G, fontSize: 10, fill: T.inkLight }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ ...G, fontSize: 10, fill: T.inkLight }} axisLine={false} tickLine={false} tickFormatter={(v) => "R$" + formatK(v)} />
+              <XAxis dataKey="mes" tick={{ ...G, fontSize: 11, fill: T.inkLight }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ ...G, fontSize: 11, fill: T.inkLight }} axisLine={false} tickLine={false} tickFormatter={(v) => "R$" + formatK(v)} />
               <Tooltip content={({ active, payload, label }) => {
                 if (!active || !payload?.length) return null;
                 return (
                   <div style={{ ...G, background: T.ink, borderRadius: 10, padding: "8px 12px", boxShadow: T.dark }}>
-                    <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", marginBottom: 5 }}>{label}</div>
+                    <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 5 }}>{label}</div>
                     {payload.map((p, i) => (
                       <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
                         <div style={{ width: 6, height: 6, borderRadius: 2, background: p.fill }} />
-                        <span style={{ fontSize: 10, color: "rgba(255,255,255,0.7)" }}>{p.dataKey}</span>
-                        <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", marginLeft: "auto" }}>R$ {formatK(p.value)}</span>
+                        <span style={{ fontSize: 11, color: "rgba(255,255,255,0.7)" }}>{p.dataKey}</span>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#fff", marginLeft: "auto" }}>R$ {formatK(p.value)}</span>
                       </div>
                     ))}
                   </div>
@@ -474,7 +474,7 @@ export function AnalyticsTab({
             {trendCategories.map((cat) => (
               <div key={cat} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                 <div style={{ width: 8, height: 8, borderRadius: 2, background: trendColors[cat] }} />
-                <span style={{ ...G, fontSize: 10, color: T.inkMid }}>{cat}</span>
+                <span style={{ ...G, fontSize: 11, color: T.inkMid }}>{cat}</span>
               </div>
             ))}
           </div>
@@ -486,23 +486,23 @@ export function AnalyticsTab({
         <ResponsiveContainer width="100%" height={isMobile ? 140 : 170}>
           <ReBarChart data={cardInvoices} margin={{ top: 4, right: 4, left: -22, bottom: 0 }} barCategoryGap="38%">
             <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
-            <XAxis dataKey="mes" tick={{ ...G, fontSize: 10, fill: T.inkLight }} axisLine={false} tickLine={false} />
-            <YAxis tick={{ ...G, fontSize: 10, fill: T.inkLight }} axisLine={false} tickLine={false} tickFormatter={(v) => "R$" + formatK(v)} />
+            <XAxis dataKey="mes" tick={{ ...G, fontSize: 11, fill: T.inkLight }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ ...G, fontSize: 11, fill: T.inkLight }} axisLine={false} tickLine={false} tickFormatter={(v) => "R$" + formatK(v)} />
             <Tooltip content={({ active, payload, label }) => {
               if (!active || !payload?.length) return null;
               const d = payload[0].payload;
               return (
                 <div style={{ ...G, background: T.ink, borderRadius: 10, padding: "8px 12px" }}>
-                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.5)", marginBottom: 4 }}>{label}</div>
+                  <div style={{ fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 4 }}>{label}</div>
                   <div style={{ ...NUM, fontSize: 13, fontWeight: 700, color: "#fff" }}>{formatBRL(d.val)}</div>
-                  <div style={{ fontSize: 10, color: d.pago ? "#86efac" : d.atual ? "#FCD34D" : "#9CA3AF", marginTop: 3 }}>
+                  <div style={{ fontSize: 11, color: d.pago ? "#86efac" : d.atual ? "#FCD34D" : "#9CA3AF", marginTop: 3 }}>
                     {d.pago ? "✓ Paga" : d.atual ? "Em aberto" : "—"}
                   </div>
                 </div>
               );
             }} />
             <ReferenceLine y={averageValue} stroke={T.blue} strokeDasharray="4 3"
-              label={{ value: `Média R$ ${formatK(averageValue)}`, position: "right", fontSize: 8, fill: T.blue, fontFamily: "Geist,sans-serif" }} />
+              label={{ value: `Média R$ ${formatK(averageValue)}`, position: "right", fontSize: 11, fill: T.blue, fontFamily: "Geist,sans-serif" }} />
             <Bar dataKey="val" maxBarSize={26} radius={[4, 4, 0, 0]}>
               {cardInvoices.map((f, i) => (
                 <Cell key={i} fill={f.atual ? (card.corChip || T.blue) : f.pago ? T.green : T.inkGhost} fillOpacity={f.atual ? 0.9 : 0.65} />
@@ -514,7 +514,7 @@ export function AnalyticsTab({
           {[["Paga", T.green], ["Atual", card.corChip || T.blue], ["Média", T.blue]].map(([l, c]) => (
             <div key={l} style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <div style={{ width: 8, height: 8, borderRadius: 2, background: c }} />
-              <span style={{ ...G, fontSize: 10, color: T.inkMid }}>{l}</span>
+              <span style={{ ...G, fontSize: 11, color: T.inkMid }}>{l}</span>
             </div>
           ))}
         </div>
@@ -529,7 +529,7 @@ export function AnalyticsTab({
           Total comprometido em parcelas futuras · {Math.round(cardInstallments.reduce((s, p) => s + p.vParcela, 0) / card.limite * 100)}% do limite mensal · {formatBRL(cardInstallments.reduce((s, p) => s + p.vParcela, 0))}/mês.
         </div>
         {hasRefundedInstallments && (
-          <div style={{ ...G, fontSize: 10, color: T.green, fontWeight: 600, marginBottom: 12 }}>
+          <div style={{ ...G, fontSize: 11, color: T.green, fontWeight: 600, marginBottom: 12 }}>
             ↓ {formatBRL(totalRefunds)} em estornos abatidos · líquido {formatBRL(totalInstallments)}
           </div>
         )}
@@ -545,7 +545,7 @@ export function AnalyticsTab({
                     <span style={{ ...G, fontSize: 12, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.desc}</span>
                     {hasRefund && (
                       <span title={`${p.refundsSummary.count} estorno${p.refundsSummary.count !== 1 ? "s" : ""} · ${formatBRL(p.refundsSummary.totalValue)} abatido${p.refundsSummary.count !== 1 ? "s" : ""}`}
-                        style={{ ...G, fontSize: 9, color: T.green, background: T.greenLight, borderRadius: 99, padding: "1px 6px", fontWeight: 700, whiteSpace: "nowrap", cursor: "default" }}>
+                        style={{ ...G, fontSize: 11, color: T.green, background: T.greenLight, borderRadius: 99, padding: "1px 6px", fontWeight: 700, whiteSpace: "nowrap", cursor: "default" }}>
                         ↺ Estornado
                       </span>
                     )}
@@ -556,7 +556,7 @@ export function AnalyticsTab({
                   <div style={{ height: "100%", width: `${exposurePercent}%`, background: T.blue, borderRadius: 99 }} />
                 </div>
               </div>
-              <span style={{ ...G, fontSize: 10, color: T.inkLight, minWidth: 28, textAlign: "right" }}>{exposurePercent}%</span>
+              <span style={{ ...G, fontSize: 11, color: T.inkLight, minWidth: 28, textAlign: "right" }}>{exposurePercent}%</span>
             </div>
           );
         })}

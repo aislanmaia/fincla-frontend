@@ -31,7 +31,7 @@ export function SortTooltip({ rules }) {
       <div
         style={{
           ...G,
-          fontSize: 9.5,
+          fontSize: 11,
           fontWeight: 700,
           textTransform: "uppercase",
           letterSpacing: "0.08em",
@@ -58,7 +58,7 @@ export function SortTooltip({ rules }) {
                   borderRadius: 4,
                   background: "rgba(255,255,255,0.18)",
                   color: "#fff",
-                  fontSize: 9,
+                  fontSize: 11,
                   fontWeight: 700,
                   flexShrink: 0,
                 }}
