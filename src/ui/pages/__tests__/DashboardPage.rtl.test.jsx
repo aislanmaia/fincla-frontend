@@ -460,3 +460,37 @@ describe("DashboardPage — o que sobra pode ser negativo, e sem caixa não há 
     expect(insight.textContent).toMatch(/Sem caixa disponível/i);
   });
 });
+
+/**
+ * O sintoma que abriu a #88 — "Total · próx. 14 dias" imprimindo R$ NaN — não tinha
+ * teste de renderização em lugar nenhum: o fixture fixava `upcomingDebits: []`, e a
+ * soma dava zero com ou sem a correção. Uma revisão provou por mutação que reverter
+ * o `reduce` mantinha tudo verde.
+ *
+ * Este caso alimenta os débitos com `value` em STRING, que é como a API entregava
+ * antes da normalização na fronteira, e prova que o total sai somado — não
+ * concatenado.
+ */
+describe("DashboardPage — Total dos Próximos Débitos", () => {
+  it("soma os valores em vez de concatenar", () => {
+    mockDashboardData = {
+      ...baseData(),
+      upcomingDebits: [
+        { id: "d1", name: "Internet", value: "120.00", day: 20, monthShort: "ago", cat: "Serviços", daysLeft: 1, dateLabel: "20/08" },
+        { id: "d2", name: "Energia", value: "310.50", day: 22, monthShort: "ago", cat: "Moradia", daysLeft: 3, dateLabel: "22/08" },
+      ],
+    };
+    render(
+      <DashboardPage
+        onNav={vi.fn()}
+        stateCtrl={{ mounted: true, isMobile: false }}
+        dataMode="live"
+        organizationId="org-debitos"
+        onNewTx={vi.fn()}
+      />,
+    );
+    const total = screen.getByText(/Total · próx\. 14 dias/i).parentElement;
+    expect(total.textContent).toContain("R$ 430,50");
+    expect(total.textContent).not.toMatch(/NaN/);
+  });
+});

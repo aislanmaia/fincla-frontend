@@ -39,6 +39,7 @@ import {
 } from "../features/moodV4";
 import { useDashboardData } from "../features/dashboard/useDashboardData.js";
 import { pickCommittedExpenseForDashboard } from "../features/dashboard/dashboardRecurringKpi.js";
+import { toAmount } from "../../api/money";
 import { getRecurringProjection } from "../../api/recurringSeries";
 import { DashboardPeriodSelector } from "../features/dashboard/DashboardPeriodSelector.jsx";
 import {
@@ -159,12 +160,18 @@ export function DashboardPage({
    * continuavam certos, porque `Math.abs("120.00")` funciona por coerção — só o
    * total denunciava (#88).
    *
-   * A conversão de verdade agora acontece na fronteira da API (`src/api/money.ts`).
-   * Este `Number(...) || 0` é segunda linha de defesa: um valor ausente não pode
-   * envenenar o total inteiro com NaN.
+   * A conversão de verdade acontece na fronteira da API (`src/api/money.ts`).
+   * `toAmount` aqui é segunda linha de defesa — e é o MESMO `toAmount` da fronteira,
+   * de propósito: uma regra de coerção só. Hand-rollar `Number(x) || 0` criava duas
+   * regras para o mesmo conceito, que divergem em casos como `true`.
+   *
+   * Vale registrar a assimetria: `toFiniteNumber` devolve `null` para nunca inventar
+   * zero, e aqui o zero volta. É deliberado — num SOMATÓRIO, ausência que vira NaN
+   * apaga o total inteiro, enquanto ausência que vira zero erra só a própria parcela.
+   * O contrário do que vale num saldo, onde zero é afirmação e ausência não é.
    */
   const upcomingDebitsTotal = useMemo(
-    () => upcomingDebits.reduce((acc, d) => acc + (Number(d?.value) || 0), 0),
+    () => upcomingDebits.reduce((acc, d) => acc + toAmount(d?.value), 0),
     [upcomingDebits],
   );
   const {

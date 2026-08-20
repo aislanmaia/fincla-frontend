@@ -33,10 +33,16 @@ describe('toFiniteNumber', () => {
 describe('toAmount', () => {
   it('soma sem propagar NaN quando um item falta', () => {
     const itens = [{ v: '120.00' }, { v: null }, { v: '310.50' }];
-    const total = itens.reduce((s, i) => s + toAmount(i.v), 0);
-    expect(total).toBe(430.5);
-    // A versão que causou o bug: concatenação silenciosa.
-    const errado = itens.reduce((s, i) => s + (i.v as unknown as number), 0 as unknown as number);
-    expect(Number.isNaN(Number(errado))).toBe(true);
+    expect(itens.reduce((s, i) => s + toAmount(i.v), 0)).toBe(430.5);
+  });
+
+  it('não herda as coerções frouxas do `Number` — a versão ingênua difere aqui', () => {
+    // `Number(true) || 0` dá 1; `Number('') || 0` dá 0 por acidente, não por regra.
+    // Sem estas asserções, trocar o corpo por `Number(v) || 0` passa despercebido.
+    expect(toAmount(true)).toBe(0);
+    expect(toAmount([])).toBe(0);
+    expect(toAmount([5])).toBe(0);
+    expect(toAmount('  ')).toBe(0);
+    expect(toAmount('12.5')).toBe(12.5);
   });
 });

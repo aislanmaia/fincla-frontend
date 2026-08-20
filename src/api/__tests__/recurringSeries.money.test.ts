@@ -34,13 +34,20 @@ describe('recurringSeries — dinheiro chega como string', () => {
     vi.mocked(apiClient.get).mockResolvedValueOnce({
       data: {
         series: [],
-        summary: { total_monthly_expense: '4127.64', total_monthly_income: '0.00', active_count: 0, paused_count: 0 },
-        summary_for_period: { total_expense: '250.00', total_income: '0.00', period: { start_date: 'x', end_date: 'y' } },
+        // `total_monthly_*` são Decimal → string. `summary_for_period.*` são float
+        // → número. O conversor tolera as duas formas; os valores aqui refletem o que
+        // cada endpoint realmente manda, e não o que seria conveniente testar.
+        summary: { total_monthly_expense: '4127.64', total_monthly_income: '8400.00', active_count: 2, paused_count: 0 },
+        summary_for_period: { total_expense: 250, total_income: 90.5, period: { start_date: 'x', end_date: 'y' } },
       },
     });
     const out = await listRecurringSeries('org-1');
     expect(out.summary.total_monthly_expense).toBe(4127.64);
+    // Sem esta asserção, encolher a conversão para um campo só passava despercebido:
+    // `total_monthly_income` alimenta `saldoFixo`, a mesma aritmética que gerou o #88.
+    expect(out.summary.total_monthly_income).toBe(8400);
     expect(out.summary_for_period?.total_expense).toBe(250);
+    expect(out.summary_for_period?.total_income).toBe(90.5);
   });
 
   it('não explode quando `series` não vem', async () => {
@@ -51,7 +58,8 @@ describe('recurringSeries — dinheiro chega como string', () => {
 
   it('getRecurringProjection converte o valor de cada ocorrência', async () => {
     vi.mocked(apiClient.get).mockResolvedValueOnce({
-      data: { items: [{ series_id: 's1', date: '2026-08-25', value: '1880.00', type: 'expense', description: 'Fatura', category: 'cartao' }] },
+      // `RecurringProjectionItemResponse.value` é `float` no backend: chega NÚMERO.
+      data: { items: [{ series_id: 's1', date: '2026-08-25', value: 1880, type: 'expense', description: 'Fatura', category: 'cartao' }] },
     });
     const out = await getRecurringProjection('org-1', '2026-08-01', '2026-08-31');
     expect(out.items[0].value).toBe(1880);
