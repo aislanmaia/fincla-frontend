@@ -1,5 +1,43 @@
 import { describe, expect, it } from "vitest";
-import { buildDashboardCategoryRows, mapCategory, mapUpcomingDebits } from "../useDashboardData.js";
+import {
+  buildDashboardCategoryRows,
+  mapCategory,
+  mapUpcomingDebits,
+  pickCategoryName,
+} from "../useDashboardData.js";
+
+// Regressão #100 (achado 4): `pickCategoryName` fazia
+// `Object.values(transaction.tags).flat()[0]` — pega o primeiro tag de
+// QUALQUER grupo, não só o de categoria — e passava pelo tradutor de
+// CATEGORIA. Mesmo defeito que `mapUpcomingDebits` já corrigiu (abaixo)
+// via `firstCategoryTagFromSeries`, aplicado aqui no segundo call site.
+describe("pickCategoryName", () => {
+  it("acha a tag de categoria mesmo quando o primeiro grupo do payload é 'detalhe'", () => {
+    // Object.entries preserva a ordem de inserção: "detalhe" chega ANTES de
+    // "categoria" no payload — pegar tags[0] cego pegaria "grocery" (a tag
+    // detalhe), não a categoria.
+    const name = pickCategoryName({
+      category: null,
+      tags: {
+        detalhe: [{ id: "det-1", name: "grocery", is_default: true }],
+        categoria: [{ id: "cat-1", name: "Food & Groceries", icon_key: "shopping-cart" }],
+      },
+    });
+    expect(name).toBe("Alimentação");
+  });
+
+  it("sem tag de categoria, cai no fallback `transaction.category`", () => {
+    const name = pickCategoryName({
+      category: "Housing",
+      tags: { detalhe: [{ id: "det-1", name: "rent", is_default: true }] },
+    });
+    expect(name).toBe("Moradia");
+  });
+
+  it("sem tag e sem `transaction.category`, cai em 'Sem categoria'", () => {
+    expect(pickCategoryName({ category: null, tags: {} })).toBe("Sem categoria");
+  });
+});
 
 describe("mapCategory", () => {
   it("não inventa comparação quando o período anterior não existe", () => {

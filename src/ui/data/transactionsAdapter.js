@@ -170,7 +170,7 @@ function pickTagNames(transaction, categoryDisplayName) {
       ? String(catTag.id)
       : null;
   const seenIds = new Set();
-  return Object.entries(transaction.tags ?? {})
+  const entries = Object.entries(transaction.tags ?? {})
     .flatMap(([groupKey, tags]) =>
       (tags ?? []).map((tag) => ({ groupKey, tag })),
     )
@@ -198,7 +198,34 @@ function pickTagNames(transaction, categoryDisplayName) {
       return true;
     })
     // `tag.name` pode vir cru do seed (`grocery`, `health_plan`...) — traduz pro chip.
-    .map(({ tag }) => detailLabelPtForTag(tag) || tag.name);
+    .map(({ tag }) => ({ tag, label: detailLabelPtForTag(tag) || tag.name }));
+  return disambiguateTagLabelEntries(entries);
+}
+
+/**
+ * Desambigua rótulos de tags "detalhe" iguais após tradução. O dedupe acima
+ * já é por ID real (achado 3, issue #100): a tag seed "grocery" (→
+ * "mercado") e uma tag do usuário literalmente chamada "mercado" são
+ * IDs diferentes, sobrevivem ambas ao dedupe e — sem isto — viram dois chips
+ * "#mercado" idênticos, que se leem como bug de duplicação embora sejam tags
+ * de verdade diferentes. Quando o rótulo traduzido colide com outro da MESMA
+ * transação, anexa o nome cru original entre parênteses só nas entradas cujo
+ * nome cru difere do rótulo (a tag do usuário, cujo nome já É o rótulo,
+ * fica limpa).
+ * @param {Array<{ tag: Record<string, unknown>; label: string }>} entries
+ * @returns {string[]}
+ */
+function disambiguateTagLabelEntries(entries) {
+  const counts = new Map();
+  for (const { label } of entries) counts.set(label, (counts.get(label) ?? 0) + 1);
+  return entries.map(({ tag, label }) => {
+    if ((counts.get(label) ?? 0) <= 1) return label;
+    const rawName = tag?.name != null ? String(tag.name).trim() : "";
+    if (rawName && rawName.toLowerCase() !== label.toLowerCase()) {
+      return `${label} (${rawName})`;
+    }
+    return label;
+  });
 }
 
 /**

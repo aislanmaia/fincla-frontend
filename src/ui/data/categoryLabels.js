@@ -330,9 +330,6 @@ const DETAIL_LABEL_PT_BY_EN_NAME_NORMALIZED = Object.fromEntries(
   ]),
 );
 
-/** Nomes de tags "detalhe" já avisados no console (evita spam a cada render/tecla). */
-const WARNED_UNMAPPED_DETAIL_NAMES = new Set();
-
 /**
  * Rótulo PT para uma tag "detalhe" (subcategoria). Cobre o seed canônico acima
  * — mas só quando a tag É de fato a linha do seed: `is_default !== true`
@@ -341,10 +338,17 @@ const WARNED_UNMAPPED_DETAIL_NAMES = new Set();
  * tag chamada "App" ou "Bar" tem o nome sequestrado pelo mapa (ela não é a
  * linha do seed, só coincide o texto) e não acha mais a própria tag.
  *
- * Fallback quando `is_default === true` mas o nome não está no mapa (ex.:
- * tags legadas da migração de categoria com nome PT que não é do
- * `CANONICAL_CATEGORY_SEED`): nunca devolve o slug cru — humaniza (`_` →
- * espaço) e registra no console (uma vez por nome) para completar o mapa.
+ * Fallback quando `is_default === true` mas o nome não está no mapa: nunca
+ * devolve o slug cru — humaniza (`_` → espaço) e devolve, SEM avisar no
+ * console. Por quê: o backend nunca reseta `is_default` ao renomear uma tag
+ * semeada (confirmado por investigação no backend, issue #100), então esse
+ * shape (`is_default: true`, nome fora do mapa) é indistinguível entre "dado
+ * legado de uma migração antiga" e "tag do seed renomeada de propósito pra
+ * um nome de escolha da pessoa" — o caso comum. Sem um sinal do backend que
+ * diferencie os dois (ex. `renamed_at`), avisar aqui vira ruído em toda
+ * renomeação legítima. Mesmo trade-off já aceito em `categoryLabelPtForTag`
+ * (rede de segurança do `icon_key`, teste "[trade-off conhecido]") — alinha
+ * as duas metades da correção pra não acusar um nome legítimo.
  * @param {{ name?: string | null; is_default?: boolean | null } | Record<string, unknown> | null | undefined} tag
  * @returns {string}
  */
@@ -357,12 +361,6 @@ export function detailLabelPtForTag(tag) {
   const normalized = normalizeCategoryLookupKey(name);
   const known = DETAIL_LABEL_PT_BY_EN_NAME_NORMALIZED[normalized];
   if (known) return known;
-  if (!WARNED_UNMAPPED_DETAIL_NAMES.has(normalized)) {
-    WARNED_UNMAPPED_DETAIL_NAMES.add(normalized);
-    console.warn(
-      `[categoryLabels] tag "detalhe" (is_default) sem tradução PT no mapa (mostrando fallback legível): "${name}"`,
-    );
-  }
   return name.replace(/_/g, " ").trim();
 }
 

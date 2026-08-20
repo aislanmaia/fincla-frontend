@@ -133,31 +133,37 @@ describe("detailLabelPtForTag", () => {
     expect(detailLabelPtForTag({ name: "grocery" })).toBe("grocery");
   });
 
-  it("nunca mostra slug cru com underscore fora do mapa: humaniza e registra (is_default: true)", () => {
+  it("nunca mostra slug cru com underscore fora do mapa: humaniza (is_default: true)", () => {
+    expect(detailLabelPtForTag({ name: "some_unmapped_tag", is_default: true })).toBe(
+      "some unmapped tag",
+    );
+  });
+
+  // Regressão #100 (achado 2): o backend nunca reseta `is_default` ao
+  // renomear uma tag semeada, então "is_default: true + nome fora do mapa"
+  // cobre tanto dado legado quanto uma tag semeada renomeada de propósito
+  // (o caso comum, ex.: "restaurant" → "chopp"). Sem sinal pra distinguir os
+  // dois, o fallback é silencioso — igual ao de `categoryLabelPtForTag` —
+  // pra nunca acusar no console um nome legítimo escolhido pela pessoa.
+  it("renomear a tag semeada pra fora do mapa não dispara console.warn (regressão #100)", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     expect(detailLabelPtForTag({ name: "some_unmapped_tag", is_default: true })).toBe(
       "some unmapped tag",
     );
-    expect(warn).toHaveBeenCalledTimes(1);
-    warn.mockRestore();
-  });
-
-  // Regressão: slug de uma palavra só (sem "_") também precisa avisar quando
-  // is_default é true e não está no mapa — antes vazava cru e calado.
-  it("slug de palavra única sem tradução também avisa quando is_default é true", () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // Slug de palavra única (sem "_") também precisa cair no mesmo fallback
+    // silencioso — antes só esse caso específico avisava.
     expect(detailLabelPtForTag({ name: "gym", is_default: true })).toBe("gym");
-    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn).not.toHaveBeenCalled();
     warn.mockRestore();
   });
 
-  it("avisa só uma vez por nome não mapeado, não a cada chamada", () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    detailLabelPtForTag({ name: "totally_unmapped_xyz", is_default: true });
-    detailLabelPtForTag({ name: "totally_unmapped_xyz", is_default: true });
-    detailLabelPtForTag({ name: "totally_unmapped_xyz", is_default: true });
-    expect(warn).toHaveBeenCalledTimes(1);
-    warn.mockRestore();
+  it("mesmo nome não mapeado repetido continua consistente entre chamadas (sem estado de módulo)", () => {
+    expect(detailLabelPtForTag({ name: "totally_unmapped_xyz", is_default: true })).toBe(
+      "totally unmapped xyz",
+    );
+    expect(detailLabelPtForTag({ name: "totally_unmapped_xyz", is_default: true })).toBe(
+      "totally unmapped xyz",
+    );
   });
 
   it("aceita o shape de tag do endpoint de transações (name + is_default)", () => {

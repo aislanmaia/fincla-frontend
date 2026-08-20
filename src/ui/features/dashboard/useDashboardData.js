@@ -83,14 +83,21 @@ function dayIndexInRange(isoDate, rangeStart, dayCount) {
   return diff;
 }
 
-function pickCategoryName(transaction) {
-  if (transaction.category) {
-    return categoryLabelPtForTag({ name: transaction.category });
-  }
-
-  const tagGroups = Object.values(transaction.tags ?? {});
-  const firstTag = tagGroups.flat()[0];
-  return categoryLabelPtForTag(firstTag ?? { name: "Sem categoria" });
+/**
+ * `transaction.tags` traz VÁRIOS grupos (categoria/detalhe/contexto...), não
+ * só o de categoria — pegar o primeiro tag de `Object.values(tags).flat()[0]`
+ * cegamente e aplicar o tradutor de CATEGORIA nele traduz o que não é
+ * categoria (ex.: primeiro grupo é "detalhe", mostra o slug cru como
+ * categoria no dashboard). Mesmo defeito já corrigido em `mapUpcomingDebits`
+ * via `firstCategoryTagFromSeries` (achado 4, issue #100) — aqui reaproveita
+ * `pickCategoryTagFromApiTransaction`, que já resolve a tag de categoria de
+ * verdade (por grupo/`tag_type`), com o mesmo fallback pra `transaction.category`
+ * usado em `aggregateExpenseCategoriesFromTransactions` neste arquivo.
+ */
+export function pickCategoryName(transaction) {
+  const tag = pickCategoryTagFromApiTransaction(transaction);
+  const rawName = tag?.name ?? transaction.category ?? "Sem categoria";
+  return categoryLabelPtForTag({ name: rawName, icon_key: tag?.icon_key ?? null });
 }
 
 function pickCategoryColor(category) {

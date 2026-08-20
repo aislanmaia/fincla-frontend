@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   resolveDetailTagRowLabel,
+  resolveQuickAddDetailTagLabel,
   sortDetailTagRowsByLabelPt,
 } from "../NovaTransacaoModal.jsx";
 
@@ -25,6 +26,36 @@ describe("resolveDetailTagRowLabel", () => {
   it("linha nula/sem nome não quebra", () => {
     expect(resolveDetailTagRowLabel(null)).toBe("");
     expect(resolveDetailTagRowLabel({ name: null, is_default: true })).toBe("");
+  });
+});
+
+// Regressão #100 (achado 1): `addQuickDetailTag` guardava o texto DIGITADO
+// como rótulo do chip, mesmo quando `ensureDetailTag` resolvia pra uma linha
+// JÁ EXISTENTE (ex.: "grocery" ou "Mercado" casam com a tag semeada
+// "mercado" via `findByRawNameThenLabel`). O chip mostrava o texto digitado
+// enquanto a mesma tag aparecia como "mercado" nas sugestões, na linha de
+// transações e em Configurações — mesma correção que `addDetailTagByRow` já
+// tinha (via `resolveDetailTagRowLabel`), aplicada ao quick-add.
+describe("resolveQuickAddDetailTagLabel", () => {
+  const rows = [
+    { id: "det-grocery", name: "grocery", is_default: true },
+    { id: "det-uber", name: "uber", is_default: true },
+  ];
+
+  it("usa o rótulo canônico da linha resolvida, não o texto digitado", () => {
+    expect(resolveQuickAddDetailTagLabel("det-grocery", rows, "grocery")).toBe("mercado");
+    expect(resolveQuickAddDetailTagLabel("det-grocery", rows, "Mercado")).toBe("mercado");
+  });
+
+  it("tag genuinamente nova (linha ainda não no snapshot) usa o texto digitado", () => {
+    expect(resolveQuickAddDetailTagLabel("det-nova-id", rows, "Academia")).toBe("Academia");
+  });
+
+  it("linha resolvida sem rótulo traduzível cai no próprio texto digitado", () => {
+    const customRows = [{ id: "det-custom", name: "", is_default: false }];
+    expect(resolveQuickAddDetailTagLabel("det-custom", customRows, "Presente especial")).toBe(
+      "Presente especial",
+    );
   });
 });
 

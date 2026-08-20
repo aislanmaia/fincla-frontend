@@ -105,9 +105,12 @@ describe("transactionsAdapter", () => {
 
     expect(mapped.cat).toBe("Alimentação");
     // Duas tags diferentes (seed "grocery" traduzida + tag do usuário já
-    // chamada "mercado") mostram o mesmo texto — ambas continuam na lista,
-    // dedupe é por ID, não pelo rótulo já traduzido (regressão apontada em review).
-    expect(mapped.tags).toEqual(["mercado", "mercado"]);
+    // chamada "mercado") sobrevivem ambas ao dedupe por ID (não pelo rótulo
+    // já traduzido) — mas o texto exibido precisa se desambiguar, senão os
+    // dois chips "#mercado" idênticos se leem como bug de duplicação
+    // (regressão #100, achado 3). A tag seed leva o nome cru entre
+    // parênteses; a tag do usuário (cujo nome cru já É o rótulo) fica limpa.
+    expect(mapped.tags).toEqual(["mercado (grocery)", "mercado"]);
     expect(mapped.detailTagMetaById["det-grocery"].name).toBe("mercado");
     expect(mapped.detailTagMetaById["det-mercado-custom"].name).toBe("mercado");
     expect(mapped.detailTagDisplayById["det-grocery"]).toBe("mercado");
