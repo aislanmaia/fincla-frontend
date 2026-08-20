@@ -185,13 +185,18 @@ function WaterfallChart({ compact = false, plotHeight, rows, fmtK }) {
 
   const chartH = compact ? 110 : (plotHeight != null ? plotHeight : 155);
   const maxVal = Math.max(1, ...data.map((d) => d.base + d.height));
-  const valSize = compact ? 8 : 10;
+  // Piso WCAG de 11px (era 7/8/10 conforme compact — texto vivo em atributo
+  // SVG `fontSize`, fora do alcance do scan de `style={{ fontSize: ... }}`).
+  const valSize = 11;
   const gapAboveBar = 5;
   const labelClearance = gapAboveBar + Math.ceil(valSize * 0.82) + 3;
-  const marginTop = compact ? 14 : Math.max(20, labelClearance);
+  // `marginTop` fixo de 14 no compact era calibrado para valSize=8; com o
+  // piso de 11px o rótulo de valor passava do topo do viewBox. Usa a mesma
+  // fórmula de clearance nos dois modos, com o mínimo antigo como piso.
+  const marginTop = Math.max(compact ? 14 : 20, labelClearance);
   const padBottom = compact ? 22 : 28;
   const baseY = marginTop + chartH;
-  const nomeFs = compact ? 7 : 10;
+  const nomeFs = 11;
 
   const sidePad = 10;
   const fallbackInner = compact ? 280 : 360;

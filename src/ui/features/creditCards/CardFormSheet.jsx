@@ -184,7 +184,7 @@ export function CardFormSheet({
         <div onClick={onCancel} style={{ position: "absolute", inset: 0, background: "rgba(15,23,35,0.5)" }} />
         <div style={{ position: "relative", background: T.surface, borderRadius: "24px 24px 0 0", maxHeight: "95dvh", display: "flex", flexDirection: "column", animation: "sheetUp 0.5s cubic-bezier(0.32,0.72,0,1) both" }}>
           <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
-            <div style={{ width: 36, height: 4, borderRadius: 99, background: T.inkGhost }} />
+            <div style={{ width: 36, height: 4, borderRadius: 99, background: T.inkFaint }} />
           </div>
           {inner}
         </div>

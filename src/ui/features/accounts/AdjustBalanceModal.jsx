@@ -324,7 +324,7 @@ export function AdjustBalanceModal({
       </div>
 
       <div style={{ ...G, display: "flex", alignItems: "flex-start", gap: 7, fontSize: 11, color: T.inkGhost, marginTop: 12 }}>
-        <span style={{ width: 7, height: 7, borderRadius: 9999, background: T.inkGhost, flex: "0 0 7px", marginTop: 4 }} />
+        <span style={{ width: 7, height: 7, borderRadius: 9999, background: T.inkFaint, flex: "0 0 7px", marginTop: 4 }} />
         <span>
           Não conta como receita ou despesa. <strong>Deste dia em diante o saldo passa a
           ser calculado a partir deste valor</strong>

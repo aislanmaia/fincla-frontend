@@ -111,7 +111,7 @@ export function TransferModal({ accounts, onClose, onSubmit, isSaving, error }) 
       </div>
 
       <div style={{ ...G, display: "flex", alignItems: "center", gap: 7, fontSize: 11, color: T.inkGhost, marginTop: 14 }}>
-        <span style={{ width: 7, height: 7, borderRadius: 9999, background: T.inkGhost, flex: "0 0 7px" }} />
+        <span style={{ width: 7, height: 7, borderRadius: 9999, background: T.inkFaint, flex: "0 0 7px" }} />
         Não conta como receita ou despesa — só move o saldo.
       </div>
     </ModalShell>

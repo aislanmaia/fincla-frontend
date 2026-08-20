@@ -26,6 +26,7 @@ export function CardsCarousel({
       cardSize: "sm",
       cardItemStyle: { paddingTop: 8, paddingBottom: 0 },
       addWidth: 130,
+      addHeight: 94, // acompanha o H de CardVisual size="sm" (cartoesPanels.jsx)
       addBorderRadius: 12,
       addPlusSize: 18,
       addGap: 5,
@@ -36,6 +37,7 @@ export function CardsCarousel({
       wrapStyle: { marginBottom: 16 },
       cardSize: "md",
       addWidth: 200,
+      addHeight: Math.round(200 / 1.586), // desktop mantém a razão clássica (cardSize "md")
       addBorderRadius: 16,
       addPlusSize: 22,
       addGap: 6,
@@ -47,7 +49,7 @@ export function CardsCarousel({
     <div onClick={onAddCard}
       style={{
         width: dims.addWidth,
-        height: Math.round(dims.addWidth / 1.586),
+        height: dims.addHeight,
         borderRadius: dims.addBorderRadius,
         flexShrink: 0,
         border: `2px dashed ${T.border}`,

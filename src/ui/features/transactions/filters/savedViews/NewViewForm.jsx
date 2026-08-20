@@ -320,7 +320,7 @@ export function NewViewForm({
             borderRadius: 8,
             border: `1px solid ${canSave ? T.ink : T.border}`,
             background: canSave ? T.ink : T.grayLight,
-            color: canSave ? "#fff" : T.inkGhost,
+            color: canSave ? "#fff" : T.inkFaint,
             fontSize: compact ? 12.5 : 12,
             fontWeight: 700,
             cursor: canSave ? "pointer" : "not-allowed",
@@ -334,7 +334,7 @@ export function NewViewForm({
             textOverflow: "ellipsis",
           }}
         >
-          <Icon name="save" size={12} color={canSave ? "#fff" : T.inkGhost} />
+          <Icon name="save" size={12} color={canSave ? "#fff" : T.inkFaint} />
           {ctaLabel}
         </button>
       </div>

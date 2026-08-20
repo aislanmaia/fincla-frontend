@@ -374,22 +374,24 @@ export function NovaTransacaoImpactPanel({
               )}
             </div>
             <div style={{ textAlign: "right" }}>
-              <span style={{ ...G, ...NUM, fontSize: categoryNumSize, color: T.inkLight }}>
+              {/* Piso de 11px (WCAG 1.4.4): NovaTransacaoModal.jsx chama com
+                  categoryNumSize=10 num dos usos. Sem o Math.max, o número
+                  principal (antes→depois) caía abaixo da legenda "limite"
+                  logo abaixo — hierarquia invertida. */}
+              <span style={{ ...G, ...NUM, fontSize: Math.max(11, categoryNumSize), color: T.inkLight }}>
                 {fmtCat(impactKpis.catBefore)} →{" "}
               </span>
               <span
                 style={{
                   ...G,
                   ...NUM,
-                  fontSize: categoryNumSize,
+                  fontSize: Math.max(11, categoryNumSize),
                   fontWeight: 700,
                   color: impactKpis.catOverBudget ? T.red : T.ink,
                 }}
               >
                 {fmtCat(impactKpis.catAfter)}
               </span>
-              {/* Piso de 11px (WCAG 1.4.4): categoryNumSize - 1 podia cair para 9/10
-                  quando o chamador passava 10/11. */}
               <div style={{ ...G, fontSize: Math.max(11, categoryNumSize - 1), color: T.inkMid }}>
                 {impactKpis.catLimit != null
                   ? `limite ${fmtCat(impactKpis.catLimit)}`

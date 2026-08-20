@@ -407,7 +407,7 @@ export function RitmoPageLive({
             width: 36,
             height: 36,
             borderRadius: 10,
-            background: pastLight ? T.inkGhost : isOk ? T.green : T.red,
+            background: pastLight ? T.inkFaint : isOk ? T.green : T.red,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -815,7 +815,7 @@ export function RitmoPageLive({
                         style={{
                           height: "100%",
                           width: `${timePct}%`,
-                          background: T.inkGhost,
+                          background: T.inkFaint,
                           borderRadius: 99,
                         }}
                       />
@@ -967,7 +967,7 @@ export function RitmoPageLive({
                       style={{
                         height: "100%",
                         width: `${timePct}%`,
-                        background: T.inkGhost,
+                        background: T.inkFaint,
                         borderRadius: 99,
                       }}
                     />
@@ -1061,7 +1061,7 @@ export function RitmoPageLive({
             const isWeekend = i === 0 || i === 6;
             const isToday = highlightDowToday && i === todayWd;
             const barH = Math.round(pct * 110);
-            const barColor = isToday ? T.blue : pct > 0.75 ? T.red : pct > 0.5 ? T.amber : T.inkGhost;
+            const barColor = isToday ? T.blue : pct > 0.75 ? T.red : pct > 0.5 ? T.amber : T.inkFaint;
             return (
               <div
                 key={d.day}
@@ -1150,7 +1150,7 @@ export function RitmoPageLive({
             { color: T.blue, label: "Hoje" },
             { color: T.red, label: isMobile ? "Alto >75%" : "Alto (>75%)" },
             { color: T.amber, label: isMobile ? "Moderado 50–75%" : "Moderado (50–75%)" },
-            { color: T.inkGhost, label: isMobile ? "Baixo <50%" : "Baixo (<50%)" },
+            { color: T.inkFaint, label: isMobile ? "Baixo <50%" : "Baixo (<50%)" },
           ].map((l, idx) => (
             <div key={idx} style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <div style={{ width: 9, height: 9, borderRadius: 2, background: l.color, flexShrink: 0 }} />
@@ -1200,7 +1200,7 @@ function MonthChevrons({
           background: "none",
           border: "none",
           cursor: canGoPrev ? "pointer" : "default",
-          color: canGoPrev ? T.inkMid : T.inkGhost,
+          color: canGoPrev ? T.inkMid : T.inkFaint,
           padding: "4px 8px",
           borderRadius: 7,
           display: "flex",
@@ -1235,7 +1235,7 @@ function MonthChevrons({
           background: "none",
           border: "none",
           cursor: canGoNext ? "pointer" : "default",
-          color: canGoNext ? T.inkMid : T.inkGhost,
+          color: canGoNext ? T.inkMid : T.inkFaint,
           padding: "4px 8px",
           borderRadius: 7,
           display: "flex",

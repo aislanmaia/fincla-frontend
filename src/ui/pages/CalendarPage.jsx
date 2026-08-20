@@ -67,7 +67,7 @@ const KIND = {
 };
 function evColors(e) {
   const base = KIND[e.kind] || KIND.expense;
-  if (e.kind === "expense" && !e.paid) return { color: T.inkLight, bg: "transparent", border: T.border, dot: T.inkGhost };
+  if (e.kind === "expense" && !e.paid) return { color: T.inkLight, bg: "transparent", border: T.border, dot: T.inkFaint };
   return base;
 }
 
@@ -385,7 +385,7 @@ function MiniCalendar({ year, month, todayYmd, selected, onPick, onShift }) {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
         {["D", "S", "T", "Q", "Q", "S", "S"].map((w, i) => (
-          <span key={i} style={{ ...G, fontSize: 9, fontWeight: 700, color: T.inkGhost, textAlign: "center", padding: "2px 0" }}>{w}</span>
+          <span key={i} style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkGhost, textAlign: "center", padding: "2px 0" }}>{w}</span>
         ))}
         {weeks.flat().map((cell, i) => {
           if (!cell) return <span key={i} />;
@@ -410,7 +410,7 @@ function MiniCalendar({ year, month, todayYmd, selected, onPick, onShift }) {
 }
 
 function Filters({ filters, onToggleType, onToggleMethod, payMethods }) {
-  const flt = { ...G, fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: T.inkLight, margin: "2px 0 8px" };
+  const flt = { ...G, fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: T.inkLight, margin: "2px 0 8px" };
   const row = { ...G, display: "flex", alignItems: "center", gap: 9, padding: "5px 2px", fontSize: 13, color: T.inkMid, cursor: "pointer" };
   const Box = ({ on }) => (
     <span style={{ width: 16, height: 16, borderRadius: 5, border: `1.5px solid ${on ? T.ink : T.border}`, background: on ? T.ink : "transparent", display: "grid", placeItems: "center", fontSize: 11, color: "#fff", flexShrink: 0 }}>{on ? "✓" : ""}</span>
@@ -472,7 +472,7 @@ function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose, isLoa
         <span style={{ width: 8, height: 8, borderRadius: 9999, flexShrink: 0, background: c.dot }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ ...G, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.desc}</div>
-          <div style={{ ...G, fontSize: 10.5, color: T.inkLight }}>{e.kind === "adjustment" ? "Ajuste de saldo" : [payLabel(e.paymentMethod), mode === "list" ? e.category : null].filter(Boolean).join(" · ")}</div>
+          <div style={{ ...G, fontSize: 11, color: T.inkLight }}>{e.kind === "adjustment" ? "Ajuste de saldo" : [payLabel(e.paymentMethod), mode === "list" ? e.category : null].filter(Boolean).join(" · ")}</div>
         </div>
         <span style={{ ...G, ...NUM, fontSize: 13, fontWeight: 700, color: c.dot }}>{fmtShort(e.value)}</span>
       </div>
@@ -511,13 +511,13 @@ function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose, isLoa
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, margin: "11px 0 8px" }}>
             {[{ l: "Receitas", v: income, c: T.green }, { l: "Despesas", v: expense, c: T.red }].map((s) => (
               <div key={s.l} style={{ minWidth: 0, border: `1px solid ${T.border}`, borderRadius: 9, padding: "7px 9px" }}>
-                <div style={{ ...G, fontSize: 9, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.inkLight }}>{s.l}</div>
+                <div style={{ ...G, fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.inkLight }}>{s.l}</div>
                 <div style={{ ...G, ...NUM, fontSize: 13, fontWeight: 800, color: s.c, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{fmt(s.v)}</div>
               </div>
             ))}
           </div>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, border: `1px solid ${T.border}`, borderRadius: 9, padding: "8px 11px", marginBottom: 8 }}>
-            <span style={{ ...G, fontSize: 9, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.inkLight }}>Saldo do dia{adjust !== 0 ? " (c/ ajuste)" : ""}</span>
+            <span style={{ ...G, fontSize: 11, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: T.inkLight }}>Saldo do dia{adjust !== 0 ? " (c/ ajuste)" : ""}</span>
             <span style={{ ...G, ...NUM, fontSize: 14, fontWeight: 800, color: dayNet < 0 ? T.red : T.green, whiteSpace: "nowrap" }}>{fmt(dayNet)}</span>
           </div>
           {dense ? (
@@ -535,7 +535,7 @@ function DayList({ selected, events, onEdit, onNew, onSeeExtrato, onClose, isLoa
                   return (
                     <div key={g.name} style={{ borderTop: `1px solid ${T.border}` }}>
                       <div onClick={() => setOpen((o) => ({ ...o, [g.name]: !isOpen }))} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 4px", cursor: "pointer" }}>
-                        <span style={{ ...ghost, width: 12, fontSize: 10 }}>{isOpen ? "▾" : "▸"}</span>
+                        <span style={{ ...ghost, width: 12, fontSize: 11 }}>{isOpen ? "▾" : "▸"}</span>
                         <span style={{ ...G, flex: 1, fontSize: 13, fontWeight: 700, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{g.name}</span>
                         <span style={{ ...ghost, fontSize: 11 }}>{g.items.length}</span>
                         <span style={{ ...G, ...NUM, fontSize: 13, fontWeight: 700, color: g.total < 0 ? T.red : T.green }}>{fmtShort(g.total)}</span>

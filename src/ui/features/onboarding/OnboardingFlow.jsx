@@ -543,7 +543,7 @@ export const OnboardingFlow = ({
                     ...G,flex:1,padding:"13px 22px",borderRadius:11,border:"none",
                     fontSize:13,fontWeight:700,
                     cursor:canNext()?"pointer":"not-allowed",
-                    background:canNext()?cfg.accent:T.inkGhost,
+                    background:canNext()?cfg.accent:T.inkFaint,
                     color:"#fff",display:"flex",alignItems:"center",
                     justifyContent:"center",gap:7,
                     transition:"background 0.15s,opacity 0.15s",
@@ -563,7 +563,7 @@ export const OnboardingFlow = ({
                   <button onClick={()=>onComplete({ orgNome, orgTipo, cats, temCartao, cardNome, card4, cardLim, cardVenc, temRec, recDesc, recVal, recDia, recTipo, membros: membros.filter(m=>m.trim()) })} disabled={isSubmitting} style={{
                     ...G,flex:1,padding:"14px 22px",borderRadius:11,border:"none",
                     fontSize:14,fontWeight:800,cursor:isSubmitting?"not-allowed":"pointer",
-                    background:isSubmitting?T.inkGhost:T.ink,color:"#fff",
+                    background:isSubmitting?T.inkFaint:T.ink,color:"#fff",
                     display:"flex",alignItems:"center",justifyContent:"center",gap:7,
                     boxShadow:"0 6px 20px rgba(15,15,13,0.2)",transition:"transform 0.15s, opacity 0.15s"}}
                     onMouseEnter={e=>{ if(!isSubmitting) e.currentTarget.style.transform="translateY(-1px)"; }}

@@ -144,14 +144,14 @@ function RitmoPageMock({ onNav, isMobile = false }) {
           <PageTitle sans="Ritmo" serif="de Gastos" />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 2, background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: "4px 6px", boxShadow: T.sm }}>
-          <button onClick={() => setPeriodoKey((k) => (k === "mar26" ? "fev26" : "mar26"))} style={{ background: "none", border: "none", cursor: periodoKey === "mar26" ? "default" : "pointer", color: periodoKey === "mar26" ? T.inkGhost : T.inkMid, padding: "4px 8px", borderRadius: 7, display: "flex", alignItems: "center" }}>
+          <button onClick={() => setPeriodoKey((k) => (k === "mar26" ? "fev26" : "mar26"))} style={{ background: "none", border: "none", cursor: periodoKey === "mar26" ? "default" : "pointer", color: periodoKey === "mar26" ? T.inkFaint : T.inkMid, padding: "4px 8px", borderRadius: 7, display: "flex", alignItems: "center" }}>
             <ChevronLeft size={14} />
           </button>
           <span style={{ ...G, fontSize: 12, fontWeight: 700, color: T.ink, padding: "0 6px", minWidth: 60, textAlign: "center" }}>
             {periodo.label}
             {isClosed && <span style={{ ...G, fontSize: 11, fontWeight: 600, color: T.inkMid, marginLeft: 4 }}>fechado</span>}
           </span>
-          <button onClick={() => setPeriodoKey((k) => (k === "fev26" ? "mar26" : "fev26"))} style={{ background: "none", border: "none", cursor: periodoKey === "mar26" ? "default" : "pointer", color: periodoKey === "mar26" ? T.inkGhost : T.inkMid, padding: "4px 8px", borderRadius: 7, display: "flex", alignItems: "center" }}>
+          <button onClick={() => setPeriodoKey((k) => (k === "fev26" ? "mar26" : "fev26"))} style={{ background: "none", border: "none", cursor: periodoKey === "mar26" ? "default" : "pointer", color: periodoKey === "mar26" ? T.inkFaint : T.inkMid, padding: "4px 8px", borderRadius: 7, display: "flex", alignItems: "center" }}>
             <ChevronRight size={14} />
           </button>
         </div>
@@ -276,7 +276,7 @@ function RitmoPageMock({ onNav, isMobile = false }) {
                     <span style={{ ...G, ...NUM, fontSize: 11, color: T.inkMid }}>{timePct}%</span>
                   </div>
                   <div style={{ height: 4, background: T.grayLight, borderRadius: 99, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: `${timePct}%`, background: T.inkGhost, borderRadius: 99 }} />
+                    <div style={{ height: "100%", width: `${timePct}%`, background: T.inkFaint, borderRadius: 99 }} />
                   </div>
                 </div>
               )}
@@ -342,7 +342,7 @@ function RitmoPageMock({ onNav, isMobile = false }) {
                       <span style={{ ...G, ...NUM, fontSize: 11, color: T.inkMid }}>{timePct}%</span>
                     </div>
                     <div style={{ height: 5, background: T.grayLight, borderRadius: 99, overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${timePct}%`, background: T.inkGhost, borderRadius: 99 }} />
+                      <div style={{ height: "100%", width: `${timePct}%`, background: T.inkFaint, borderRadius: 99 }} />
                     </div>
                   </div>
                   <div>
@@ -386,7 +386,7 @@ function RitmoPageMock({ onNav, isMobile = false }) {
             const isWeekend = i === 0 || i === 6;
             const isToday = !isClosed && i === 3;
             const barH = Math.round(pct * 110);
-            const barColor = isToday ? T.blue : pct > 0.75 ? T.red : pct > 0.5 ? T.amber : T.inkGhost;
+            const barColor = isToday ? T.blue : pct > 0.75 ? T.red : pct > 0.5 ? T.amber : T.inkFaint;
             return (
               <div key={d.day} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
                 {!isMobile && <span style={{ ...M_MONO, ...NUM, fontSize: 11, fontWeight: 600, color: pct > 0.75 ? T.red : pct > 0.5 ? T.amber : T.inkMid }}>{fmtAbs(d.val)}</span>}
@@ -411,7 +411,7 @@ function RitmoPageMock({ onNav, isMobile = false }) {
             { color: T.blue, label: "Hoje" },
             { color: T.red, label: isMobile ? "Alto >75%" : "Alto (>75%)" },
             { color: T.amber, label: isMobile ? "Moderado 50–75%" : "Moderado (50–75%)" },
-            { color: T.inkGhost, label: isMobile ? "Baixo <50%" : "Baixo (<50%)" },
+            { color: T.inkFaint, label: isMobile ? "Baixo <50%" : "Baixo (<50%)" },
           ].map((l, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <div style={{ width: 9, height: 9, borderRadius: 2, background: l.color, flexShrink: 0 }} />

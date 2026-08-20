@@ -12,7 +12,7 @@ const FILTER_TONE = {
   attention: { color: T.amber, bg: T.amberLight, dot: T.amber, activeText: T.amber },
   risk: { color: T.red, bg: T.redLight, dot: T.red, activeText: T.red },
   // Sem score: neutro. Nem verde nem vermelho — não há diagnóstico.
-  none: { color: T.inkGhost, bg: T.grayLight, dot: T.inkGhost, activeText: T.inkMid },
+  none: { color: T.inkFaint, bg: T.grayLight, dot: T.inkFaint, activeText: T.inkMid },
 };
 
 function FilterPill({ id, label, count, active, onClick }) {

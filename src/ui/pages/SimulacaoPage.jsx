@@ -359,7 +359,7 @@ const ModalNovoCenario = ({ open, onClose, onCriar, initialTipo = null }) => {
           </span>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={onClose} style={{ ...G, height: 36, padding: "0 14px", border: `1px solid ${T.border}`, borderRadius: 9, background: "none", fontSize: 12, color: T.inkMid, cursor: "pointer" }}>Cancelar</button>
-            <button onClick={criar} disabled={!nome.trim()} style={{ ...G, height: 36, padding: "0 18px", background: nome.trim() ? T.purple : T.inkGhost, border: "none", borderRadius: 9, fontSize: 12, fontWeight: 700, color: "#fff", cursor: nome.trim() ? "pointer" : "default", transition: "background 0.2s" }}>
+            <button onClick={criar} disabled={!nome.trim()} style={{ ...G, height: 36, padding: "0 18px", background: nome.trim() ? T.purple : T.inkFaint, border: "none", borderRadius: 9, fontSize: 12, fontWeight: 700, color: "#fff", cursor: nome.trim() ? "pointer" : "default", transition: "background 0.2s" }}>
               Criar cenário →
             </button>
           </div>

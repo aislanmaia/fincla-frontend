@@ -8,7 +8,11 @@ import { safePctOrFallback as safe } from "../../data/creditCardsAdapter.js";
 /* ── CardVisual ─────────────────────────────────────────────── */
 export function CardVisual({ c, selected, size = "md", onClick }) {
   const W = size === "sm" ? 130 : size === "md" ? 200 : 260;
-  const H = Math.round(W / 1.586);
+  // "sm" foge da razão 1.586 (cartão físico) de propósito: com o piso de 11px
+  // (WCAG #86) a pilha de texto (banco + número + vence/nome + bandeira/%)
+  // passa de ~52px para ~64px de conteúdo — 82px de altura (130/1.586) cortava
+  // a última linha via overflow:hidden. 94px dá margem real, não só cosmética.
+  const H = size === "sm" ? 94 : Math.round(W / 1.586);
   const pct = safe(c.limite - c.disponivel, c.limite);
   return (
     <div onClick={() => onClick?.(c.id)} style={{
@@ -23,9 +27,10 @@ export function CardVisual({ c, selected, size = "md", onClick }) {
     }}>
       <div style={{ position: "absolute", top: -W * 0.3, right: -W * 0.2, width: W * 0.8, height: W * 0.8, borderRadius: "50%", background: `${c.corChip}12`, pointerEvents: "none" }} />
       <div style={{ position: "absolute", bottom: -W * 0.2, left: -W * 0.1, width: W * 0.55, height: W * 0.55, borderRadius: "50%", background: "rgba(255,255,255,0.04)", pointerEvents: "none" }} />
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", position: "relative" }}>
-        <div style={{ ...G, fontSize: 11, fontWeight: 800, color: c.corChip, textTransform: "uppercase", letterSpacing: "0.16em" }}>{c.banco}</div>
-        <svg width={size === "sm" ? 14 : 17} height={size === "sm" ? 18 : 22} viewBox="0 0 17 22" fill="none">
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 6, position: "relative" }}>
+        {/* minWidth:0 é o que deixa o texto truncar em vez de espremer o flex row */}
+        <div style={{ ...G, fontSize: 11, fontWeight: 800, color: c.corChip, textTransform: "uppercase", letterSpacing: "0.16em", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.banco}</div>
+        <svg width={size === "sm" ? 14 : 17} height={size === "sm" ? 18 : 22} viewBox="0 0 17 22" fill="none" style={{ flexShrink: 0 }}>
           <circle cx="4" cy="11" r="2" fill="rgba(255,255,255,0.7)" />
           <path d="M7 6 Q14 11 7 16" stroke="rgba(255,255,255,0.55)" strokeWidth="1.3" strokeLinecap="round" fill="none" />
           <path d="M10 3 Q20 11 10 19" stroke="rgba(255,255,255,0.3)" strokeWidth="1.3" strokeLinecap="round" fill="none" />
@@ -40,12 +45,14 @@ export function CardVisual({ c, selected, size = "md", onClick }) {
       <div style={{ ...M_MONO, ...NUM, fontSize: 11, color: "rgba(255,255,255,0.65)", letterSpacing: "0.18em" }}>
         ···· ···· ···· {c.dig}
       </div>
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", position: "relative" }}>
-        <div>
-          <div style={{ ...G, fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 2 }}>vence dia {c.vencimento}</div>
-          <div style={{ ...G, fontSize: size === "sm" ? 11 : 12, fontWeight: 700, color: "rgba(255,255,255,0.92)" }}>{c.nome}</div>
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 6, position: "relative" }}>
+        {/* minWidth:0 no wrapper + nowrap/ellipsis nos filhos: "Nubank Ultravioleta"
+            não pode mais quebrar linha e estourar o overflow:hidden do card. */}
+        <div style={{ minWidth: 0, overflow: "hidden" }}>
+          <div style={{ ...G, fontSize: 11, color: "rgba(255,255,255,0.5)", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>vence dia {c.vencimento}</div>
+          <div style={{ ...G, fontSize: size === "sm" ? 11 : 12, fontWeight: 700, color: "rgba(255,255,255,0.92)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.nome}</div>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
           {pct >= 70 && (
             <div style={{ ...G, fontSize: 11, fontWeight: 800, color: pct >= 90 ? "#7F1D1D" : "#78350F", background: pct >= 90 ? "#FCA5A5" : "#FCD34D", borderRadius: 5, padding: "2px 6px" }}>{pct}%</div>
           )}
