@@ -1,5 +1,3 @@
-import axios from "axios";
-
 import {
   createTransaction,
   getTransactionsSummary,
@@ -1277,26 +1275,34 @@ function sameUpdateField(a, b) {
   return a === b;
 }
 
-// `POST /transactions` no máximo 1 retry (2 tentativas no total): o objetivo é
-// absorver um blip curto do gateway, não esconder um backend fora do ar atrás
-// de uma espera longa — se persistir depois disso, é melhor mostrar o erro e
-// deixar o usuário decidir.
-const CREATE_TRANSACTION_MAX_ATTEMPTS = 2;
-const CREATE_TRANSACTION_RETRY_BASE_DELAY_MS = 500;
+// `POST /transactions` NÃO tem retry automático. As candidatas óbvias foram
+// investigadas uma a uma (ver `isCreateTransactionErrorRetryable`) e NENHUMA
+// classe de erro prova hoje que o servidor não processou o request — inclusive
+// 503, que parecia a mais segura até a própria API ser lida: o backend do
+// Fincla devolve `SERVICE_UNAVAILABLE` (`ServiceTemporarilyUnavailableError`,
+// `transaction_service.py:514`/`:567`) DEPOIS de já ter gravado a linha em
+// alguns caminhos — não é hipótese de proxy, é o nosso código. Repetir viraria
+// duplicar lançamento de compra parcelada.
+//
+// Duplicar um lançamento no extrato de alguém é pior do que mostrar um erro.
+// Sem uma `Idempotency-Key` que o backend possa usar para detectar reenvio do
+// MESMO request (ver issue de acompanhamento), não existe erro seguro para
+// repetir uma escrita não idempotente — então o reenvio fica com a pessoa: o
+// formulário permanece preenchido e utilizável, e o botão "Tentar novamente"
+// reenvia só quando ela decide clicar.
+const CREATE_TRANSACTION_MAX_ATTEMPTS = 1;
 
 /**
- * `POST /transactions` NÃO é idempotente: reexecutar às cegas pode duplicar o
- * lançamento no extrato do usuário — um resultado bem pior do que mostrar um
- * erro. Este classificador só marca como repetível o que dá pra PROVAR que o
- * servidor não processou:
+ * Documenta, classe a classe, por que cada erro que PARECIA repetível não é —
+ * e por isso retorna sempre `false`. Mantido (em vez de removido) porque essa
+ * investigação é o que justifica a ausência de retry automático, e porque é o
+ * ponto de extensão natural no dia em que `POST /transactions` aceitar
+ * `Idempotency-Key` (aí sim um subconjunto destes vira `true` com segurança).
  *
- *  - 503 (Service Unavailable): sinal explícito de "não estou aceitando
- *    tráfego agora" — tipicamente um LB/health-check recusando a conexão
- *    ANTES de rotear para a aplicação. É o único status com evidência forte
- *    o bastante para justificar repetir uma escrita não idempotente.
- *
- * Deliberadamente NÃO repete (mesmo parecendo "transiente" à primeira vista):
- *
+ *  - 503 (Service Unavailable): PARECIA a mais segura ("LB recusando antes de
+ *    rotear"), mas o próprio backend do Fincla devolve 503 depois de gravar
+ *    em alguns fluxos (`ServiceTemporarilyUnavailableError` em
+ *    `transaction_service.py`) — não dá pra distinguir do lado do cliente.
  *  - `ERR_NETWORK` / `ECONNRESET` (sem resposta): a suposição óbvia seria "a
  *    conexão caiu antes de qualquer byte trafegar, logo é seguro". Isso é
  *    FALSO em geral. `ECONNRESET` é um RST de TCP — exige conexão já
@@ -1305,11 +1311,9 @@ const CREATE_TRANSACTION_RETRY_BASE_DELAY_MS = 500;
  *    idle-reap ou restart do worker). `ERR_NETWORK` no adapter XHR do axios
  *    vem do mesmo `onerror` tanto para "recusou antes de enviar" quanto para
  *    "caiu depois do 201, antes dos headers chegarem" — o cliente não
- *    consegue distinguir os dois casos. Além disso, o interceptor global de
+ *    consegue distinguir os dois casos. (O interceptor global de
  *    `src/api/client.ts` já repete esses códigos para writes por conta
- *    própria — dobrar o retry aqui explode em até 6 POSTs físicos por
- *    chamada (medido em revisão). Esse retry do interceptor sendo inseguro
- *    para writes é rastreado à parte, não é corrigido aqui.
+ *    própria, com o mesmo problema — rastreado à parte, não é corrigido aqui.)
  *  - qualquer 4xx (validação, auth, conflito): erro definitivo do pedido;
  *    repetir não muda o resultado e some com o feedback real do problema.
  *  - 500 genérico: o servidor pode ter GRAVADO a transação e só quebrado
@@ -1327,44 +1331,33 @@ const CREATE_TRANSACTION_RETRY_BASE_DELAY_MS = 500;
  *  - timeout de LEITURA após o envio (`ECONNABORTED` / `ETIMEDOUT`): mesmo
  *    raciocínio do 504 acima, do lado do cliente.
  */
-export function isCreateTransactionErrorRetryable(error) {
-  if (!axios.isAxiosError(error)) return false;
-  return error.response?.status === 503;
-}
-
-function wait(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+export function isCreateTransactionErrorRetryable(_error) {
+  return false;
 }
 
 /**
- * Cria a transação com retry curto e seguro (ver `isCreateTransactionErrorRetryable`
- * para a política de quais erros são repetíveis — hoje, só 503).
- *
- * `onRetryAttempt(attemptNumber)`, se passado, é chamado antes de CADA nova
- * tentativa — a UI usa isso para trocar o rótulo do botão de "Enviando…" para
- * "Tentando novamente…", pra não parecer travado enquanto espera.
+ * Cria a transação — sem retry automático (ver `isCreateTransactionErrorRetryable`
+ * para o porquê). `maxAttempts` é um parâmetro só de teste: existe unicamente
+ * para exercitar o guard defensivo abaixo com uma configuração inválida
+ * (`0`); o uso real do produto nunca o passa e sempre roda com o padrão (1).
  */
-export async function createTransactionForUi(payload, { onRetryAttempt } = {}) {
+export async function createTransactionForUi(payload, { maxAttempts = CREATE_TRANSACTION_MAX_ATTEMPTS } = {}) {
   let lastError;
-  for (let attempt = 1; attempt <= CREATE_TRANSACTION_MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
       return await createTransaction(payload);
     } catch (error) {
       lastError = error;
-      const isLastAttempt = attempt >= CREATE_TRANSACTION_MAX_ATTEMPTS;
+      const isLastAttempt = attempt >= maxAttempts;
       if (isLastAttempt || !isCreateTransactionErrorRetryable(error)) {
         throw error;
       }
-      onRetryAttempt?.(attempt + 1);
-      // Espera curta e crescente (500ms na 1ª repetição) — o bastante para um
-      // blip curto do gateway se recuperar, sem prender o usuário no formulário.
-      await wait(CREATE_TRANSACTION_RETRY_BASE_DELAY_MS * attempt);
     }
   }
-  // Defensivo: se `CREATE_TRANSACTION_MAX_ATTEMPTS` algum dia virar 0 por
-  // engano, o laço acima nunca roda — sem isso a função retornaria
-  // `undefined` silenciosamente, e o modal mostraria "Registrado!" para uma
-  // transação que nunca foi enviada. Lança em vez de fingir sucesso.
+  // Defensivo: se `maxAttempts` for 0 (configuração inválida), o laço acima
+  // nunca roda — sem isso a função retornaria `undefined` silenciosamente, e
+  // o modal mostraria "Registrado!" para uma transação que nunca foi
+  // enviada. Lança em vez de fingir sucesso.
   throw lastError ?? new Error("createTransactionForUi: nenhuma tentativa foi executada.");
 }
 

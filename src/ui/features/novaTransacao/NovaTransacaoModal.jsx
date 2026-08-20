@@ -211,10 +211,11 @@ export const NovaTransacaoModal = ({
   const [categoryTagIsActive, setCategoryTagIsActive] = useState(true);
   const [txSubmitError, setTxSubmitError] = useState("");
   const [txSubmitting, setTxSubmitting] = useState(false);
-  // Feedback visual enquanto `createTransactionForUi` repete a chamada (ver
-  // política de retry em `transactionsAdapter.js`) — sem isso o botão fica
-  // travado em "Enviando…" pela espera inteira do retry, parecendo travado.
-  const [txRetrying, setTxRetrying] = useState(false);
+  // `POST /transactions` não tem retry automático (ver `isCreateTransactionErrorRetryable`
+  // em `transactionsAdapter.js` — nenhum erro prova que o servidor não gravou).
+  // Quando a última tentativa de CRIAR (não editar) falhou, o botão vira
+  // "Tentar novamente": o reenvio é decisão explícita da pessoa, não automático.
+  const [txCreateFailed, setTxCreateFailed] = useState(false);
   const [modalCardsRows, setModalityChoicealCardsRows] = useState([]);
   const [modalCardsLoading, setModalityChoicealCardsLoading] = useState(false);
   const [modalCardsError, setModalityChoicealCardsError] = useState("");
@@ -1377,7 +1378,8 @@ export const NovaTransacaoModal = ({
       }
       setTxSubmitting(true);
       setTxSubmitError("");
-      setTxRetrying(false);
+      setTxCreateFailed(false);
+      const isEditingExisting = editingTransactionIdStr != null || editingTransactionId != null;
       try {
         if (method === "credito") {
           const idNum = Number(cardId);
@@ -1401,7 +1403,7 @@ export const NovaTransacaoModal = ({
             ? Number(selectedCardId)
             : null;
         const dateIso = transactionDateIsoFromYmd(txDateYmd);
-        if (editingTransactionIdStr != null || editingTransactionId != null) {
+        if (isEditingExisting) {
           const effectiveTipoEdit = tipo === "despesa" && isRefund ? "estorno" : tipo;
           // Update endpoint não aceita refund_of_transaction_id (backend preserva o existente).
           await updateTransactionForUi(
@@ -1425,6 +1427,10 @@ export const NovaTransacaoModal = ({
             }),
           );
         } else {
+          // Sem retry automático: nenhum erro prova que o servidor não gravou
+          // a transação (ver `isCreateTransactionErrorRetryable`). Se falhar,
+          // o catch abaixo marca `txCreateFailed` e o reenvio vira decisão
+          // explícita da pessoa, clicando "Tentar novamente".
           await createTransactionForUi(
             buildCreateTransactionPayload({
               organizationId,
@@ -1442,20 +1448,16 @@ export const NovaTransacaoModal = ({
               accountId: settleAccountId || null,
               paidAt: method !== "credito" && settled ? transactionDateIsoFromYmd(txDateYmd) : null,
             }),
-            // Repetição só acontece em 503 comprovadamente não processado —
-            // ver `isCreateTransactionErrorRetryable`.
-            { onRetryAttempt: () => setTxRetrying(true) },
           );
         }
         clearNovaTransacaoSummaryCache();
         onTransactionSaved?.();
       } catch (err) {
-        setTxRetrying(false);
+        if (!isEditingExisting) setTxCreateFailed(true);
         setTxSubmitError(formatTransactionsApiError(err));
         setTxSubmitting(false);
         return;
       }
-      setTxRetrying(false);
       setTxSubmitting(false);
     }
 
@@ -1507,7 +1509,7 @@ export const NovaTransacaoModal = ({
     }
     setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, null));
     setReview(false); resetMobileStep(); setSuccess(false); setSuccessOverlay(false);
-    setTxSubmitError(""); setTxSubmitting(false); setTxRetrying(false); setDescError(false);
+    setTxSubmitError(""); setTxSubmitting(false); setTxCreateFailed(false); setDescError(false);
     setMobileReviewImpactOpen(false); resetAi();
     setDescFocused(false); setAddingCartao(false); setQuickAddCardName(""); setQuickAddCardLast4("");
     setNewTag(""); setAddingTag(false); resetInstallmentCalc(); setShowImpact(false);
@@ -2180,7 +2182,7 @@ export const NovaTransacaoModal = ({
                 </button>
                 <button onClick={handleSave} disabled={txSubmitting || !desc.trim()}
                   style={{ ...G, flex:1, padding:"13px", borderRadius:12, border:"none", background:success ? T.green : (!desc.trim() ? T.inkGhost : typeColor), fontSize:14, fontWeight:800, color:"#fff", cursor:(txSubmitting || !desc.trim()) ? "not-allowed" : "pointer", opacity:(txSubmitting || !desc.trim()) ? 0.75 : 1, display:"flex", alignItems:"center", justifyContent:"center", gap:7, transition:"background 0.25s" }}>
-                  {success ? <><Check size={16} /> {isRecurring || novaRecorrencia ? "Recorrência salva!" : "Registrado!"}</> : (isRecurring || novaRecorrencia ? "Confirmar recorrência" : (txRetrying ? "Tentando novamente…" : txSubmitting ? "Enviando…" : `Confirmar ${tipo === "despesa" ? (isRefund ? "estorno" : "despesa") : "receita"}`))}
+                  {success ? <><Check size={16} /> {isRecurring || novaRecorrencia ? "Recorrência salva!" : "Registrado!"}</> : (isRecurring || novaRecorrencia ? "Confirmar recorrência" : (txSubmitting ? "Enviando…" : txCreateFailed ? "Tentar novamente" : `Confirmar ${tipo === "despesa" ? (isRefund ? "estorno" : "despesa") : "receita"}`))}
                 </button>
               </div>
               </div>
@@ -3075,7 +3077,7 @@ export const NovaTransacaoModal = ({
                   style={{ ...G, flex:1, padding:"11px", borderRadius:10, border:"none", background:success ? T.green : typeColor, fontSize:13, fontWeight:700, color:"#fff", cursor:txSubmitting ? "not-allowed" : "pointer", opacity:txSubmitting ? 0.75 : 1, display:"flex", alignItems:"center", justifyContent:"center", gap:6, transition:"background 0.25s", animation:success?"successPop 0.35s ease-out":"none" }}>
                   {success
                     ? <><Check size={14} /> {novaRecorrencia || isRecurring ? "Recorrência salva!" : "Registrado!"}</>
-                    : novaRecorrencia || isRecurring ? "Confirmar recorrência" : (txRetrying ? "Tentando novamente…" : txSubmitting ? "Enviando…" : `Confirmar ${tipo === "despesa" ? (isRefund ? "estorno" : "despesa") : "receita"}`)
+                    : novaRecorrencia || isRecurring ? "Confirmar recorrência" : (txSubmitting ? "Enviando…" : txCreateFailed ? "Tentar novamente" : `Confirmar ${tipo === "despesa" ? (isRefund ? "estorno" : "despesa") : "receita"}`)
                   }
                 </button>
               </div>
