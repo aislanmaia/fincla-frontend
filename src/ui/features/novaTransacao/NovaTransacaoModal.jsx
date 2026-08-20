@@ -46,6 +46,7 @@ import {
   buildCreateTransactionPayload,
   buildUpdateTransactionPayload,
   createTransactionForUi,
+  createTransactionPayloadFingerprint,
   formatTransactionsApiError,
   formatYmdToLocaleDisplay,
   isCreateTransactionErrorMaybePersisted,
@@ -299,17 +300,20 @@ export const NovaTransacaoModal = ({
   const [categoryTagIsActive, setCategoryTagIsActive] = useState(true);
   const [txSubmitError, setTxSubmitError] = useState("");
   const [txSubmitting, setTxSubmitting] = useState(false);
-  // `POST /transactions` não tem retry automático (ver `isCreateTransactionErrorRetryable`
-  // em `transactionsAdapter.js` — nenhum erro prova que o servidor não gravou).
-  // Quando a última tentativa de CRIAR (não editar) falhou, o botão vira
-  // "Tentar novamente": o reenvio é decisão explícita da pessoa, não automático.
+  // `POST /transactions` agora vai com `Idempotency-Key` e já repete sozinho
+  // as falhas transientes (ver `createTransactionForUi` em
+  // `transactionsAdapter.js`). O que chega aqui é uma falha que sobreviveu a
+  // essas tentativas: o botão vira "Tentar novamente" e o reenvio volta a ser
+  // decisão da pessoa — só que agora um reenvio do MESMO lançamento não pode
+  // duplicar nada, porque reaproveita a chave da tentativa que falhou.
   const [txCreateFailed, setTxCreateFailed] = useState(false);
   // `true` quando o erro da última criação NÃO prova que nada foi gravado
-  // (ver `isCreateTransactionErrorMaybePersisted`) — rede/timeout/5xx. Nesses
-  // casos o botão de reenvio fica secundário e pede confirmação: um clique
-  // ali pode duplicar um lançamento que o servidor já criou.
+  // (rede/timeout/5xx — ver `isCreateTransactionErrorMaybePersisted`). Não
+  // bloqueia mais o reenvio: serve para decidir se ainda vale avisar sobre o
+  // extrato quando a pessoa MUDA os dados antes de reenviar (payload novo =
+  // chave nova = lançamento novo, e o anterior pode existir no servidor).
   const [txCreateErrorAmbiguous, setTxCreateErrorAmbiguous] = useState(false);
-  // `true` entre o primeiro clique em "Tentar novamente mesmo assim" e a
+  // `true` entre o clique que detectou "erro ambíguo + dados alterados" e a
   // pessoa confirmar/cancelar na própria UI. NÃO usa `window.confirm`: o
   // Playwright descarta diálogos por padrão, o Chrome trava diálogos
   // repetidos, WebView sem `onJsConfirm` devolve `false` sempre, e em jsdom
@@ -317,6 +321,17 @@ export const NovaTransacaoModal = ({
   // pessoa veria um botão que não faz nada. A confirmação inline funciona
   // igual em todo lugar.
   const [txRetryConfirmPending, setTxRetryConfirmPending] = useState(false);
+  // Marca que a pessoa já confirmou a faixa acima, para o próximo `handleSave`
+  // passar direto pelo portão. É `ref` (não state) porque `confirmAmbiguousRetry`
+  // chama `handleSave` no mesmo tick: um `setState` aqui só valeria no render
+  // seguinte, e o portão leria o valor velho.
+  const retryConfirmedRef = useRef(false);
+  // Impressão digital do payload da última criação que FALHOU. Comparar com o
+  // payload do clique atual é o que distingue "reenviar o mesmo lançamento"
+  // (protegido pela chave de idempotência, reenvia direto) de "mandar um
+  // lançamento diferente depois de um erro ambíguo" (chave nova; o anterior
+  // pode existir no servidor, então vale avisar).
+  const failedCreateFingerprintRef = useRef(null);
   const [modalCardsRows, setModalityChoicealCardsRows] = useState([]);
   const [modalCardsLoading, setModalityChoicealCardsLoading] = useState(false);
   const [modalCardsError, setModalityChoicealCardsError] = useState("");
@@ -1056,6 +1071,8 @@ export const NovaTransacaoModal = ({
     setTxCreateFailed(false);
     setTxCreateErrorAmbiguous(false);
     setTxRetryConfirmPending(false);
+    retryConfirmedRef.current = false;
+    failedCreateFingerprintRef.current = null;
     if (!useLiveCategoryTags) {
       setCategoryTagId(null);
       setCategoryTagIsActive(true);
@@ -1731,6 +1748,9 @@ export const NovaTransacaoModal = ({
       setTxCreateErrorAmbiguous(false);
       setTxRetryConfirmPending(false);
       const isEditingExisting = editingTransactionIdStr != null || editingTransactionId != null;
+      // Preenchido logo antes do POST; o catch usa para lembrar QUAL payload
+      // falhou. Fica fora do `try` porque um erro pode acontecer antes dele.
+      let attemptedCreatePayload = null;
       try {
         if (method === "credito") {
           const idNum = Number(cardId);
@@ -1778,45 +1798,74 @@ export const NovaTransacaoModal = ({
             }),
           );
         } else {
-          // Sem retry automático: nenhum erro prova que o servidor não gravou
-          // a transação (ver `isCreateTransactionErrorRetryable`). Se falhar,
-          // o catch abaixo marca `txCreateFailed` e o reenvio vira decisão
-          // explícita da pessoa, clicando "Tentar novamente".
-          await createTransactionForUi(
-            buildCreateTransactionPayload({
-              organizationId,
-              tipo: effectiveTipo,
-              description: desc,
-              value: amountNum,
-              paymentMethodKey: method,
-              categoryTagId,
-              detailTagIds: detailIdsForApi,
-              dateIso,
-              installmentsCount,
-              modality,
-              cardId: Number.isFinite(cardIdNum) ? cardIdNum : null,
-              refundOfTransactionId: isRefund ? refund.refundOfTransactionId : null,
-              accountId: settleAccountId || null,
-              paidAt: method !== "credito" && settled ? transactionDateIsoFromYmd(txDateYmd) : null,
-            }),
-          );
+          const createPayload = buildCreateTransactionPayload({
+            organizationId,
+            tipo: effectiveTipo,
+            description: desc,
+            value: amountNum,
+            paymentMethodKey: method,
+            categoryTagId,
+            detailTagIds: detailIdsForApi,
+            dateIso,
+            installmentsCount,
+            modality,
+            cardId: Number.isFinite(cardIdNum) ? cardIdNum : null,
+            refundOfTransactionId: isRefund ? refund.refundOfTransactionId : null,
+            accountId: settleAccountId || null,
+            paidAt: method !== "credito" && settled ? transactionDateIsoFromYmd(txDateYmd) : null,
+          });
+          // Portão da confirmação inline. `createTransactionForUi` reaproveita
+          // a `Idempotency-Key` da tentativa que falhou enquanto o payload não
+          // muda — nesse caso reenviar devolve a transação original em vez de
+          // criar outra, e pedir confirmação seria só atrito. O aviso volta a
+          // fazer sentido no caso oposto: erro AMBÍGUO (pode ter gravado) e
+          // dados alterados desde então, porque aí vai uma chave nova e o
+          // lançamento anterior pode estar lá.
+          if (
+            txCreateFailed &&
+            txCreateErrorAmbiguous &&
+            !retryConfirmedRef.current &&
+            failedCreateFingerprintRef.current != null &&
+            failedCreateFingerprintRef.current !== createTransactionPayloadFingerprint(createPayload)
+          ) {
+            // Este clique não chegou a enviar nada: desfaz o "limpou o estado
+            // de falha" feito no início desta função (tudo no mesmo tick
+            // síncrono, então o React agrupa e a tela não pisca).
+            setTxSubmitError(txSubmitError);
+            setTxCreateFailed(true);
+            setTxCreateErrorAmbiguous(true);
+            setTxRetryConfirmPending(true);
+            setTxSubmitting(false);
+            return;
+          }
+          retryConfirmedRef.current = false;
+          attemptedCreatePayload = createPayload;
+          await createTransactionForUi(createPayload);
+          // Sucesso: a tentativa acabou, nada mais a comparar.
+          failedCreateFingerprintRef.current = null;
         }
       } catch (err) {
         // Erro na ESCRITA principal (create/update em si): a operação que a
-        // pessoa pediu não foi confirmada. Para criação, decide se o reenvio
-        // pode ser oferecido direto (4xx: API valida antes de gravar, nada
-        // foi criado) ou se precisa de aviso + confirmação (5xx/rede: pode
-        // já ter gravado — ver `isCreateTransactionErrorMaybePersisted`).
+        // pessoa pediu não foi confirmada nem depois das tentativas
+        // automáticas. Guarda se o erro foi AMBÍGUO (5xx/rede: pode ter
+        // gravado) — não para travar o reenvio, que a chave já protege, mas
+        // para o portão acima avisar caso os dados mudem antes dele.
         const ambiguous = !isEditingExisting && isCreateTransactionErrorMaybePersisted(err);
         const baseMessage = formatTransactionsApiError(err);
         setTxSubmitError(
           ambiguous
-            ? `${baseMessage} A transação pode já ter sido registrada mesmo com esse erro — confira seu extrato antes de tentar de novo.`
+            ? `${baseMessage} Pode tentar de novo sem medo: o reenvio reaproveita a mesma chave e não duplica o lançamento.`
             : baseMessage,
         );
         if (!isEditingExisting) {
           setTxCreateFailed(true);
           setTxCreateErrorAmbiguous(ambiguous);
+          // `null` quando o erro estourou ANTES de montar o payload (ex.:
+          // `TypeError` em `buildCreateTransactionPayload`): nada saiu do
+          // navegador, então não há tentativa anterior com que comparar.
+          failedCreateFingerprintRef.current = attemptedCreatePayload
+            ? createTransactionPayloadFingerprint(attemptedCreatePayload)
+            : null;
         }
         setTxSubmitting(false);
         return;
@@ -1847,27 +1896,22 @@ export const NovaTransacaoModal = ({
     setSuccessOverlay(true);
   };
 
-  // Rótulo/estilo/ação do botão principal quando a última criação falhou.
-  // Erro AMBÍGUO (rede/timeout/5xx — pode já ter gravado): botão secundário
-  // e pede confirmação explícita antes de reenviar, porque um clique
-  // impensado ali pode duplicar um lançamento que o servidor já criou.
-  // Erro SEGURO (4xx — API valida antes de gravar, nada foi criado): reenvia
-  // direto, como qualquer outro "tentar de novo".
-  const retryLabel = txCreateErrorAmbiguous ? "Tentar novamente mesmo assim" : "Tentar novamente";
-  // Clique no botão principal quando a última criação falhou. Erro AMBÍGUO
-  // não dispara `handleSave` direto — só arma a confirmação inline (ver
-  // `txRetryConfirmPending` e a faixa renderizada logo abaixo do botão em
-  // cada footer). Erro SEGURO reenvia direto.
-  const handleSaveOrConfirmRetry = () => {
-    if (txCreateFailed && txCreateErrorAmbiguous) {
-      setTxRetryConfirmPending(true);
-      return;
-    }
+  // Rótulo do botão principal quando a última criação falhou. Um só, para
+  // qualquer classe de erro: com `Idempotency-Key`, reenviar o mesmo
+  // lançamento é tão seguro quanto qualquer "tentar de novo" — não existe
+  // mais o "mesmo assim" cheio de dedos. A faixa de confirmação continua
+  // existindo, mas só é armada dentro de `handleSave` quando ela ainda
+  // protege alguma coisa (erro ambíguo + dados alterados desde a falha).
+  const retryLabel = "Tentar novamente";
+  // Clique no botão principal. `handleSave` é async; o wrapper existe para não
+  // devolver a promise ao `onClick` do React.
+  const handlePrimarySave = () => {
     handleSave();
   };
   const cancelAmbiguousRetry = () => setTxRetryConfirmPending(false);
   const confirmAmbiguousRetry = () => {
     setTxRetryConfirmPending(false);
+    retryConfirmedRef.current = true;
     handleSave();
   };
 
@@ -1923,6 +1967,8 @@ export const NovaTransacaoModal = ({
     setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, null));
     setReview(false); resetMobileStep(); setSuccess(false); setSuccessOverlay(false);
     setTxSubmitError(""); setTxSubmitting(false); setTxCreateFailed(false); setTxCreateErrorAmbiguous(false); setTxRetryConfirmPending(false); setDescError(false);
+    retryConfirmedRef.current = false;
+    failedCreateFingerprintRef.current = null;
     setMobileReviewImpactOpen(false); resetAi();
     setDescFocused(false); setAddingCartao(false); setQuickAddCardName(""); setQuickAddCardLast4("");
     setQuickAddCardBrand(CARD_BRAND_OPTIONS[0]); setQuickAddCardDueDay("");
@@ -2599,7 +2645,7 @@ export const NovaTransacaoModal = ({
                 {txRetryConfirmPending ? (
                   <div style={{ display:"flex", flexDirection:"column", gap:8, padding:"10px 12px", background:T.amberLight, border:`1px solid ${T.amberBorder}`, borderRadius:10 }}>
                     <span style={{ ...G, fontSize:12, fontWeight:600, color:T.ink, lineHeight:1.4 }}>
-                      Essa transação pode já ter sido registrada mesmo com o erro anterior. Confira seu extrato antes de continuar.
+                      Você mudou os dados desde o erro, então este é um lançamento novo — o anterior pode ter sido registrado. Confira seu extrato antes de continuar.
                     </span>
                     <div style={{ display:"flex", gap:8 }}>
                       <button onClick={cancelAmbiguousRetry}
@@ -2608,7 +2654,7 @@ export const NovaTransacaoModal = ({
                       </button>
                       <button onClick={confirmAmbiguousRetry}
                         style={{ ...G, flex:1, padding:"11px", borderRadius:10, border:"none", background:T.amber, fontSize:13, fontWeight:700, color:T.ink, cursor:"pointer" }}>
-                        Sim, tentar mesmo assim
+                        Registrar assim mesmo
                       </button>
                     </div>
                   </div>
@@ -2617,12 +2663,11 @@ export const NovaTransacaoModal = ({
                 <button onClick={goPrev} style={{ ...G, display:"flex", alignItems:"center", gap:5, padding:"13px 16px", borderRadius:12, border:`1px solid ${T.border}`, background:T.surface, fontSize:14, fontWeight:600, color:T.inkMid, cursor:"pointer" }}>
                   <ChevronLeft size={16} /> Editar
                 </button>
-                <button onClick={handleSaveOrConfirmRetry} disabled={txSubmitting || !desc.trim()}
-                  style={{ ...G, flex:1, padding:"13px", borderRadius:12,
-                    border:(!success && !(txSubmitting || !desc.trim()) && txCreateFailed && txCreateErrorAmbiguous) ? `1px solid ${T.amberBorder}` : "none",
-                    background:success ? T.green : (txSubmitting || !desc.trim()) ? T.inkFaint : (txCreateFailed && txCreateErrorAmbiguous) ? T.amberLight : typeColor,
+                <button onClick={handlePrimarySave} disabled={txSubmitting || !desc.trim()}
+                  style={{ ...G, flex:1, padding:"13px", borderRadius:12, border:"none",
+                    background:success ? T.green : (txSubmitting || !desc.trim()) ? T.inkFaint : typeColor,
                     fontSize:14, fontWeight:800,
-                    color:(!success && !(txSubmitting || !desc.trim()) && txCreateFailed && txCreateErrorAmbiguous) ? T.ink : "#fff",
+                    color:"#fff",
                     cursor:(txSubmitting || !desc.trim()) ? "not-allowed" : "pointer", opacity:(txSubmitting || !desc.trim()) ? 0.75 : 1, display:"flex", alignItems:"center", justifyContent:"center", gap:7, transition:"background 0.25s" }}>
                   {success ? <><Check size={16} /> {isRecurring || novaRecorrencia ? "Recorrência salva!" : "Registrado!"}</> : (isRecurring || novaRecorrencia ? "Confirmar recorrência" : (txSubmitting ? "Enviando…" : txCreateFailed ? retryLabel : `Confirmar ${tipo === "despesa" ? (isRefund ? "estorno" : "despesa") : "receita"}`))}
                 </button>
@@ -3567,7 +3612,7 @@ export const NovaTransacaoModal = ({
               txRetryConfirmPending ? (
                 <div style={{ display:"flex", flexDirection:"column", gap:8, padding:"10px 12px", background:T.amberLight, border:`1px solid ${T.amberBorder}`, borderRadius:10 }}>
                   <span style={{ ...G, fontSize:12, fontWeight:600, color:T.ink, lineHeight:1.4 }}>
-                    Essa transação pode já ter sido registrada mesmo com o erro anterior. Confira seu extrato antes de continuar.
+                    Você mudou os dados desde o erro, então este é um lançamento novo — o anterior pode ter sido registrado. Confira seu extrato antes de continuar.
                   </span>
                   <div style={{ display:"flex", gap:8 }}>
                     <button onClick={cancelAmbiguousRetry}
@@ -3576,7 +3621,7 @@ export const NovaTransacaoModal = ({
                     </button>
                     <button onClick={confirmAmbiguousRetry}
                       style={{ ...G, flex:1, padding:"9px", borderRadius:8, border:"none", background:T.amber, fontSize:12, fontWeight:700, color:T.ink, cursor:"pointer" }}>
-                      Sim, tentar mesmo assim
+                      Registrar assim mesmo
                     </button>
                   </div>
                 </div>
@@ -3588,12 +3633,11 @@ export const NovaTransacaoModal = ({
                   onMouseLeave={e => e.currentTarget.style.background = T.surface}>
                   <ChevronLeft size={14} /> Editar
                 </button>
-                <button onClick={handleSaveOrConfirmRetry} disabled={txSubmitting}
-                  style={{ ...G, flex:1, padding:"11px", borderRadius:10,
-                    border:(!success && !txSubmitting && txCreateFailed && txCreateErrorAmbiguous) ? `1px solid ${T.amberBorder}` : "none",
-                    background:success ? T.green : (txCreateFailed && txCreateErrorAmbiguous) ? T.amberLight : typeColor,
+                <button onClick={handlePrimarySave} disabled={txSubmitting}
+                  style={{ ...G, flex:1, padding:"11px", borderRadius:10, border:"none",
+                    background:success ? T.green : typeColor,
                     fontSize:13, fontWeight:700,
-                    color:(!success && !txSubmitting && txCreateFailed && txCreateErrorAmbiguous) ? T.ink : "#fff",
+                    color:"#fff",
                     cursor:txSubmitting ? "not-allowed" : "pointer", opacity:txSubmitting ? 0.75 : 1, display:"flex", alignItems:"center", justifyContent:"center", gap:6, transition:"background 0.25s", animation:success?"successPop 0.35s ease-out":"none" }}>
                   {success
                     ? <><Check size={14} /> {novaRecorrencia || isRecurring ? "Recorrência salva!" : "Registrado!"}</>

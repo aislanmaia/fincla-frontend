@@ -1,5 +1,6 @@
 // api/transactions.ts
 import apiClient from './client';
+import { IDEMPOTENCY_KEY_HEADER } from './idempotency';
 import { repeatArrayParams } from './paramsSerializer';
 import type {
   CreateTransactionRequest,
@@ -12,14 +13,24 @@ import type {
 } from './types';
 
 /**
- * Cria uma nova transação
+ * Cria uma nova transação.
+ *
+ * `options.idempotencyKey` vai no header `Idempotency-Key` (ver
+ * `src/api/idempotency.ts`). É o que torna o reenvio deste POST seguro: com a
+ * MESMA chave, o backend devolve a resposta original em vez de criar uma
+ * segunda transação. O header é OPCIONAL no contrato — omitir mantém o
+ * comportamento antigo, e um backend que ainda não conhece o header
+ * simplesmente o ignora.
  */
 export const createTransaction = async (
-  transaction: CreateTransactionRequest
+  transaction: CreateTransactionRequest,
+  options?: { idempotencyKey?: string }
 ): Promise<Transaction> => {
+  const key = options?.idempotencyKey;
   const response = await apiClient.post<Transaction>(
     '/transactions',
-    transaction
+    transaction,
+    key ? { headers: { [IDEMPOTENCY_KEY_HEADER]: key } } : undefined
   );
   return response.data;
 };

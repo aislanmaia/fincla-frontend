@@ -57,8 +57,14 @@ apiClient.interceptors.request.use((config) => {
 // "recusou antes de enviar" quanto para "caiu depois do 201, antes dos
 // headers chegarem" — não dá pra distinguir do lado do cliente. Sem uma
 // forma de provar que o servidor não processou, repetir um write arrisca
-// duplicar (ver issue #102, que documentou essa lacuna, e #103, sobre
-// `Idempotency-Key` como o caminho que reabilitaria isso com segurança).
+// duplicar (ver issue #102, que documentou essa lacuna).
+//
+// `Idempotency-Key` (issue #103) já existe no produto, mas NÃO relaxa esta
+// regra: quem manda a chave é o cliente de cada operação, e hoje só
+// `createTransactionForUi` (`src/ui/data/transactionsAdapter.js`) manda. Um
+// retry genérico aqui repetiria também os writes SEM chave — justamente os
+// que ainda podem duplicar. Este interceptor segue recusando todo write; o
+// retry seguro mora junto de quem gera a chave.
 const RETRYABLE_NETWORK_CODES = new Set([
   'ERR_NETWORK',
   'ECONNRESET',

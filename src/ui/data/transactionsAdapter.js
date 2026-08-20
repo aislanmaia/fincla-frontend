@@ -11,6 +11,7 @@ import {
 } from "../../api/transactions";
 import { downloadTransactionsCsv } from "../../api/analytics";
 import { handleApiError } from "../../api/client";
+import { newIdempotencyKey } from "../../api/idempotency";
 import { categoryLabelPtForTag, detailLabelPtForTag } from "./categoryLabels.js";
 
 /** Máximo por página na API `GET /transactions` (validação backend). */
@@ -921,7 +922,26 @@ export async function downloadTransactionsCsvForUi(organizationId, options) {
   return downloadTransactionsCsv(organizationId, buildTransactionsCsvOptions(options), "transacoes.csv");
 }
 
+/**
+ * Erros de `Idempotency-Key` não têm tradução útil no `handleApiError`
+ * genérico (cairiam em "Dados inválidos" / "Não foi possível concluir"), e
+ * dois deles não são culpa de quem está usando o app: são bug nosso, no
+ * cliente. A mensagem diz o que fazer sem jogar jargão de HTTP na tela.
+ */
+const IDEMPOTENCY_ERROR_MESSAGES = {
+  IDEMPOTENCY_KEY_PAYLOAD_MISMATCH:
+    "Falha interna do aplicativo ao reenviar esta transação. Atualize a página e registre de novo.",
+  INVALID_IDEMPOTENCY_KEY:
+    "Falha interna do aplicativo ao reenviar esta transação. Atualize a página e registre de novo.",
+  IDEMPOTENCY_KEY_IN_FLIGHT:
+    "Este mesmo lançamento ainda está sendo registrado. Aguarde alguns segundos e confira seu extrato antes de tentar de novo.",
+};
+
 export function formatTransactionsApiError(error) {
+  const idempotencyError = idempotencyErrorCodeOf(error);
+  if (idempotencyError && IDEMPOTENCY_ERROR_MESSAGES[idempotencyError]) {
+    return IDEMPOTENCY_ERROR_MESSAGES[idempotencyError];
+  }
   return handleApiError(error);
 }
 
@@ -1414,82 +1434,178 @@ function sameUpdateField(a, b) {
   return a === b;
 }
 
+/* ─── Criação de transação: chave de idempotência + retry ────────────────── */
+
 /**
- * `POST /transactions` NÃO tem retry automático — nunca teve um `for` pra
- * configurar mal. As candidatas óbvias foram investigadas uma a uma e NENHUMA
- * classe de erro prova hoje que o servidor não processou o request. Mantida
- * como documentação pura (sempre `false`, nunca chamada por
- * `createTransactionForUi`) porque essa investigação é o que justifica a
- * ausência de retry, e é o ponto de extensão natural no dia em que
- * `POST /transactions` aceitar `Idempotency-Key` (issue de acompanhamento) —
- * aí sim um subconjunto destes vira `true` com segurança.
+ * A investigação da issue #102 concluiu que NENHUMA classe de erro observável
+ * pelo cliente prova que o servidor não processou um `POST /transactions`:
+ * `ECONNRESET` é um RST de TCP que tipicamente chega DEPOIS de bytes
+ * trocados; `ERR_NETWORK` no adapter XHR do axios sai do mesmo `onerror`
+ * tanto para "recusou antes de enviar" quanto para "caiu depois do 201"; 502
+ * acontece com o upstream morrendo já tendo commitado; 504 é o gateway
+ * desistindo da espera, não o request sendo descartado; e o próprio backend
+ * empacota exceção de infra pós-commit em 503. Por isso não havia retry
+ * nenhum aqui — repetir arriscava duplicar um lançamento.
  *
- *  - 503 (Service Unavailable): PARECIA a mais segura ("LB recusando antes de
- *    rotear"), mas não dá pra afirmar isso do lado do cliente. O backend
- *    empacota QUALQUER exceção de infra (erro do SQLAlchemy/psycopg, erro de
- *    rede outbound via httpx) em `SERVICE_UNAVAILABLE` — ver o classificador
- *    de infra em `safe_errors/translator.py` (fincla-api). Isso inclui o
- *    caso clássico de "commit ambíguo": se a conexão com o Postgres cair
- *    bem na hora do `COMMIT`, o cliente HTTP não tem como saber se o commit
- *    chegou a aplicar no banco antes do erro — o mesmo problema de fundo do
- *    ERR_NETWORK/ECONNRESET abaixo, só que um andar mais embaixo na pilha.
- *  - `ERR_NETWORK` / `ECONNRESET` (sem resposta): a suposição óbvia seria "a
- *    conexão caiu antes de qualquer byte trafegar, logo é seguro". Isso é
- *    FALSO em geral. `ECONNRESET` é um RST de TCP — exige conexão já
- *    estabelecida e tipicamente chega DEPOIS de bytes trocados (ex.: o
- *    servidor termina de escrever o `201` e a conexão cai antes do cliente
- *    terminar de ler a resposta). `ERR_NETWORK` no adapter XHR do axios vem
- *    do mesmo `onerror` tanto para "recusou antes de enviar" quanto para
- *    "caiu depois do 201, antes dos headers chegarem" — o cliente não
- *    consegue distinguir os dois casos. (O interceptor global de
- *    `src/api/client.ts` NÃO repete mais nenhum write por causa disso — só
- *    GET/HEAD, que são seguros por definição.)
- *  - qualquer 4xx (validação, auth, conflito): erro definitivo do pedido;
- *    repetir não muda o resultado e some com o feedback real do problema.
- *    (Estes SÃO seguros para reenvio manual — ver `isCreateTransactionErrorMaybePersisted`,
- *    que existe pra UI diferenciar isso do resto, não pra retry automático.)
- *  - 500 genérico: o servidor pode ter GRAVADO a transação e só quebrado
- *    depois (ex.: ao materializar uma recorrência associada) — repetir
- *    arriscaria justamente o cenário mais caro, que é duplicar.
- *  - 502/504: parecem "gateway antes da aplicação", mas não são. 502 pode
- *    ocorrer com o upstream fechando a conexão DEPOIS de já ter processado
- *    (ex.: worker morto por OOM logo após o commit no banco). 504 é
- *    literalmente o mesmo evento que recusamos em `ECONNABORTED` — "o cliente
- *    desistiu esperando a resposta" —, só que um salto de rede acima: o
- *    gateway encaminhou a chamada normalmente e foi o LADO DELE que cansou de
- *    esperar o app responder. Repetir 504 duplicaria exatamente o cenário de
- *    "compra parcelada materializou 12 linhas, o app estourou o timeout do
- *    proxy, e a resposta nunca voltou".
- *  - timeout de LEITURA após o envio (`ECONNABORTED` / `ETIMEDOUT`): mesmo
- *    raciocínio do 504 acima, do lado do cliente.
+ * `Idempotency-Key` (issue #103) é exatamente o que destrava isso: o backend
+ * grava a chave junto do resultado por 24h e, na repetição com a MESMA chave
+ * e o MESMO payload, devolve a resposta original (`Idempotent-Replay: true`)
+ * em vez de criar de novo. Repetir deixou de arriscar duplicata, então as
+ * classes AMBÍGUAS acima voltam a ser repetíveis — não porque provamos que
+ * nada foi gravado, mas porque agora tanto faz.
+ *
+ * O que continua FORA do retry:
+ *  - 4xx em geral (validação, auth, conflito de negócio): erro definitivo do
+ *    pedido; repetir só some com o feedback real do problema.
+ *  - 500 genérico: quase sempre bug determinístico do servidor — repetir
+ *    queima tempo e a segunda resposta é a mesma. (Se o 500 veio DEPOIS do
+ *    commit, a chave fica presa e a repetição responderia 409 até vencer.)
+ *  - 400 `INVALID_IDEMPOTENCY_KEY` e 422 `IDEMPOTENCY_KEY_PAYLOAD_MISMATCH`:
+ *    são bug NOSSO, não do servidor nem da pessoa. Ver `createTransactionForUi`.
+ *
+ * Caso especial: 409 `IDEMPOTENCY_KEY_IN_FLIGHT` significa "outra requisição
+ * com essa mesma chave está rodando agora". Repetir com a MESMA chave é o
+ * comportamento correto e obrigatório (uma chave nova criaria a duplicata que
+ * o 409 está justamente impedindo); o backend manda `Retry-After: 1`.
  */
-export function isCreateTransactionErrorRetryable(_error) {
-  return false;
+const CREATE_RETRYABLE_NETWORK_CODES = new Set([
+  "ERR_NETWORK",
+  "ECONNRESET",
+  "ECONNABORTED",
+  "ETIMEDOUT",
+]);
+const CREATE_RETRYABLE_STATUSES = new Set([502, 503, 504]);
+
+/** Erros de idempotência que o backend devolve em `detail.error`. */
+const IDEMPOTENCY_IN_FLIGHT = "IDEMPOTENCY_KEY_IN_FLIGHT";
+const IDEMPOTENCY_PAYLOAD_MISMATCH = "IDEMPOTENCY_KEY_PAYLOAD_MISMATCH";
+const IDEMPOTENCY_INVALID_KEY = "INVALID_IDEMPOTENCY_KEY";
+
+/** Poucas tentativas, espera curta e crescente — a pessoa está olhando a tela. */
+const CREATE_MAX_ATTEMPTS = 3;
+const CREATE_RETRY_BASE_DELAY_MS = 400;
+const CREATE_RETRY_MAX_DELAY_MS = 4000;
+
+/** Lê `detail.error` da resposta de erro; `null` quando não é esse formato. */
+export function idempotencyErrorCodeOf(error) {
+  const detail = error?.response?.data?.detail;
+  if (detail && typeof detail === "object" && typeof detail.error === "string") {
+    return detail.error;
+  }
+  return null;
+}
+
+export function isCreateTransactionErrorRetryable(error) {
+  if (!axios.isAxiosError(error)) return false;
+  const status = error.response?.status;
+  if (status == null) {
+    return CREATE_RETRYABLE_NETWORK_CODES.has(error.code);
+  }
+  if (status === 409) return idempotencyErrorCodeOf(error) === IDEMPOTENCY_IN_FLIGHT;
+  return CREATE_RETRYABLE_STATUSES.has(status);
+}
+
+/** `Retry-After` (segundos) — headers do axios podem vir como objeto cru. */
+function retryAfterMs(error) {
+  const headers = error?.response?.headers;
+  if (!headers) return null;
+  const raw =
+    typeof headers.get === "function"
+      ? headers.get("retry-after")
+      : (headers["retry-after"] ?? headers["Retry-After"]);
+  const seconds = Number(raw);
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  return Math.min(seconds * 1000, CREATE_RETRY_MAX_DELAY_MS);
+}
+
+function createRetryDelayMs(error, attempt) {
+  return (
+    retryAfterMs(error) ??
+    Math.min(CREATE_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1), CREATE_RETRY_MAX_DELAY_MS)
+  );
+}
+
+/** Serializa estável (chaves ordenadas) para comparar payloads por conteúdo. */
+function stableStringify(value) {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value) ?? "null";
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`;
+  }
+  return `{${Object.keys(value)
+    .sort()
+    .map((k) => `${JSON.stringify(k)}:${stableStringify(value[k])}`)
+    .join(",")}}`;
+}
+
+/**
+ * Chave retida da última TENTATIVA DE SALVAR que ainda não deu certo, junto
+ * da impressão digital do payload que a gerou. É o que faz a chave ser "uma
+ * por tentativa", não "uma por requisição": todo reenvio daquela tentativa —
+ * o retry automático aqui dentro e o clique manual em "Tentar novamente" —
+ * reusa a mesma chave e por isso não pode duplicar.
+ *
+ * A impressão digital é o que separa uma TENTATIVA da seguinte: se a pessoa
+ * editou qualquer campo, o payload muda, a chave retida deixa de valer e uma
+ * nova é gerada. Sem isso o backend responderia 422
+ * `IDEMPOTENCY_KEY_PAYLOAD_MISMATCH` — um erro confuso para quem só corrigiu
+ * a descrição.
+ */
+let retainedCreateKey = null;
+
+/** Solta a chave retida. Exportado para os testes isolarem cada cenário. */
+export function resetCreateIdempotencyKey() {
+  retainedCreateKey = null;
+}
+
+/**
+ * Impressão digital do payload de criação, por CONTEÚDO (a ordem das chaves
+ * do objeto não conta — o modal remonta o payload do zero a cada clique).
+ *
+ * Exportada porque o modal precisa da MESMA noção de "ainda é a mesma
+ * tentativa" que usamos aqui para decidir a chave: enquanto a impressão
+ * digital não muda, o reenvio reaproveita a chave e não pode duplicar; quando
+ * muda, é lançamento novo e a UI volta a avisar sobre o extrato. Sendo a
+ * mesma função pura dos dois lados, as duas decisões não têm como divergir —
+ * e o modal não fica acoplado ao estado de módulo daqui.
+ */
+export function createTransactionPayloadFingerprint(payload) {
+  return stableStringify(payload);
+}
+
+/**
+ * `true` quando reenviar EXATAMENTE este payload reaproveita a chave retida
+ * da tentativa que falhou (o backend responderia com replay em vez de criar
+ * um segundo lançamento). Usada nos testes para inspecionar a retenção.
+ */
+export function createRetryIsProtectedFor(payload) {
+  return retainedCreateKey?.fingerprint === stableStringify(payload);
+}
+
+function idempotencyKeyForAttempt(payload) {
+  const fingerprint = stableStringify(payload);
+  if (retainedCreateKey?.fingerprint === fingerprint) {
+    return retainedCreateKey.key;
+  }
+  retainedCreateKey = { key: newIdempotencyKey(), fingerprint };
+  return retainedCreateKey.key;
 }
 
 /**
  * Classifica se um erro de CRIAÇÃO pode ter persistido mesmo tendo retornado
- * erro ao cliente — usado só para adaptar a MENSAGEM e o botão de reenvio
- * MANUAL no modal (`NovaTransacaoModal.jsx`), nunca para decidir retry
- * automático (que está sempre desligado, ver `isCreateTransactionErrorRetryable`
- * acima).
+ * erro ao cliente. Continua valendo como fato de rede — o que MUDOU é o uso:
+ * com `Idempotency-Key`, reenviar o MESMO payload é seguro mesmo aqui, então
+ * isto não serve mais para bloquear o reenvio, e sim para avisar quando a
+ * pessoa muda os dados depois de um erro ambíguo (aí a tentativa é outra,
+ * com chave nova, e o lançamento anterior pode existir no servidor).
  *
- *  - Sem NENHUMA requisição ter saído do navegador: NUNCA ambíguo, sempre
- *    SEGURO. Cobre dois casos: (1) erro que não é nem do axios — no modal,
- *    `buildCreateTransactionPayload(...)`/`transactionDateIsoFromYmd(...)`
- *    rodam dentro do MESMO try, ANTES da chamada de rede; um `TypeError` ali
- *    (payload malformado, data inválida) nunca chegou a virar um request, e
- *    tratar isso como "pode ter gravado" mandaria a pessoa conferir o
- *    extrato por um bug local, sem um byte ter saído. (2) erro do axios sem
- *    `error.request` — o axios falhou montando o request (ex.: erro no
- *    `transformRequest`) antes de despachar; mesma conclusão.
- *  - Requisição saiu, sem resposta (erro de rede/timeout) ou 5xx
- *    (500/502/503/504): AMBÍGUO. Nenhum desses prova que a escrita não
- *    aconteceu (ver o raciocínio acima) — a UI deve avisar para conferir o
- *    extrato antes de reenviar.
- *  - 4xx: SEGURO. A API valida antes de gravar — uma rejeição por validação,
- *    autenticação ou conflito significa que nada foi criado ainda. Reenviar
- *    depois de corrigir o campo apontado no erro é seguro.
+ *  - Sem NENHUMA requisição ter saído do navegador: NUNCA ambíguo. Cobre erro
+ *    que não é do axios (um `TypeError` em `buildCreateTransactionPayload`
+ *    roda no MESMO try, antes da rede) e erro do axios sem `error.request`
+ *    (falhou montando o request, nunca despachou).
+ *  - Requisição saiu, sem resposta (rede/timeout) ou 5xx: AMBÍGUO.
+ *  - 4xx: SEGURO. A API valida antes de gravar.
  */
 export function isCreateTransactionErrorMaybePersisted(error) {
   if (!axios.isAxiosError(error)) return false;
@@ -1499,9 +1615,41 @@ export function isCreateTransactionErrorMaybePersisted(error) {
   return status >= 500;
 }
 
-/** Cria a transação. Sem retry — ver `isCreateTransactionErrorRetryable`. */
+/**
+ * Cria a transação carregando a `Idempotency-Key` da tentativa e repetindo,
+ * poucas vezes e com espera crescente, as classes que a chave tornou seguras.
+ */
 export async function createTransactionForUi(payload) {
-  return createTransaction(payload);
+  const idempotencyKey = idempotencyKeyForAttempt(payload);
+
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      const created = await createTransaction(payload, { idempotencyKey });
+      // Sucesso confirmado: a chave cumpriu o papel e precisa ser solta. Se
+      // ficasse retida, registrar DE NOVO um lançamento idêntico (mesmo
+      // valor, mesma descrição, mesmo dia — café duas vezes no mesmo dia
+      // existe) cairia no replay e a segunda transação nunca seria criada.
+      resetCreateIdempotencyKey();
+      return created;
+    } catch (err) {
+      const idempotencyError = idempotencyErrorCodeOf(err);
+      if (
+        idempotencyError === IDEMPOTENCY_PAYLOAD_MISMATCH ||
+        idempotencyError === IDEMPOTENCY_INVALID_KEY
+      ) {
+        // Bug NOSSO: ou geramos uma chave fora do formato, ou reusamos uma
+        // chave com payload diferente. Não repete (repetir dá o mesmo erro) e
+        // solta a chave, para que a próxima tentativa nasça limpa em vez de
+        // ficar presa no mesmo 422 para sempre.
+        resetCreateIdempotencyKey();
+        throw err;
+      }
+      if (attempt >= CREATE_MAX_ATTEMPTS || !isCreateTransactionErrorRetryable(err)) {
+        throw err;
+      }
+      await new Promise((resolve) => setTimeout(resolve, createRetryDelayMs(err, attempt)));
+    }
+  }
 }
 
 export async function updateTransactionForUi(transactionId, organizationId, payload) {

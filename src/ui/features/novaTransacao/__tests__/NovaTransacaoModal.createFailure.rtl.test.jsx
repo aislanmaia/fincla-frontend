@@ -5,15 +5,21 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Cobre o comportamento VISÍVEL prometido pela política de retry manual de
- * `transactionsAdapter.js` (issue #82 / PR #98): sem esse teste, apagar
- * `setTxCreateFailed(true)` ou os dois rótulos "Tentar novamente" deixava a
- * suíte inteira verde — a entrega real (o que a pessoa vê no formulário)
- * nunca era exercitada, só a contagem de POSTs no adapter.
+ * Cobre o comportamento VISÍVEL prometido pela política de reenvio de
+ * `transactionsAdapter.js` (issues #82/#102/#103): sem esse teste, apagar
+ * `setTxCreateFailed(true)` ou os rótulos "Tentar novamente" deixava a suíte
+ * inteira verde — a entrega real (o que a pessoa vê no formulário) nunca era
+ * exercitada, só a contagem de POSTs no adapter.
  *
- * Só `createTransactionForUi` é mockada (o limite de rede) — `formatTransactionsApiError`
- * e `isCreateTransactionErrorMaybePersisted` rodam de verdade, então a
- * classificação segura/ambíguo é testada de ponta a ponta, não simulada.
+ * Com `Idempotency-Key`, reenviar o MESMO lançamento não pode duplicar, então
+ * a confirmação inline saiu do caminho comum. Ela sobrou só onde ainda
+ * protege: erro AMBÍGUO seguido de EDIÇÃO dos dados — aí vai chave nova, e o
+ * lançamento anterior pode existir no servidor.
+ *
+ * Só `createTransactionForUi` é mockada (o limite de rede). `formatTransactionsApiError`,
+ * `isCreateTransactionErrorMaybePersisted` e `createTransactionPayloadFingerprint`
+ * rodam de verdade, então a classificação segura/ambíguo e a comparação de
+ * payload são testadas de ponta a ponta, não simuladas.
  */
 
 // Referências ESTÁVEIS entre renders — de propósito. O componente tem um
@@ -114,7 +120,7 @@ async function fillAndReachReview(user) {
   await waitFor(() => expect(screen.getByRole("button", { name: /Confirmar despesa/i })).toBeInTheDocument());
 }
 
-describe("NovaTransacaoModal — criação que falha (reenvio manual, sem retry automático)", () => {
+describe("NovaTransacaoModal — criação que falha (reenvio manual protegido por Idempotency-Key)", () => {
   const baseProps = {
     open: true,
     onClose: vi.fn(),
@@ -158,12 +164,42 @@ describe("NovaTransacaoModal — criação que falha (reenvio manual, sem retry 
 
     // Reenvio direto: SEM faixa de confirmação inline (erro seguro).
     await user.click(retryBtn);
-    expect(screen.queryByText(/Sim, tentar mesmo assim/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Confira seu extrato/i)).not.toBeInTheDocument();
 
     await waitFor(() => expect(createTransactionForUi).toHaveBeenCalledTimes(2));
   });
 
-  it("erro de REDE (AMBÍGUO — pode já ter gravado): mensagem avisa para conferir o extrato, botão pede confirmação NA PRÓPRIA UI antes de reenviar", async () => {
+  it("erro de REDE (AMBÍGUO): reenviar o MESMO lançamento vai DIRETO — a chave de idempotência já garante que não duplica", async () => {
+    const user = userEvent.setup();
+    createTransactionForUi.mockRejectedValueOnce(networkError());
+
+    render(<NovaTransacaoModal {...baseProps} />);
+    await fillAndReachReview(user);
+
+    await user.click(screen.getByRole("button", { name: /Confirmar despesa/i }));
+
+    // A mensagem passou a explicar a garantia, em vez de mandar conferir o
+    // extrato antes de qualquer reenvio.
+    await waitFor(() =>
+      expect(screen.getByText(/não duplica o lançamento/i)).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/Confira seu extrato/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Uber")).toBeInTheDocument();
+
+    // Rótulo único: acabou o "mesmo assim" cheio de dedos.
+    const retryBtn = await screen.findByRole("button", { name: "Tentar novamente" });
+    createTransactionForUi.mockResolvedValueOnce({ id: 2 });
+    await user.click(retryBtn);
+
+    // Um clique, um POST — sem faixa de confirmação no meio.
+    await waitFor(() => expect(createTransactionForUi).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText(/Confira seu extrato/i)).not.toBeInTheDocument();
+    // E o payload reenviado é IDÊNTICO ao que falhou: é isso que faz o
+    // adapter reaproveitar a chave em vez de gerar uma nova.
+    expect(createTransactionForUi.mock.calls[1][0]).toEqual(createTransactionForUi.mock.calls[0][0]);
+  });
+
+  it("erro AMBÍGUO + dados EDITADOS: aí sim volta a confirmação inline, porque a chave muda e o lançamento anterior pode existir", async () => {
     // Confirmação inline, não `window.confirm`: o Playwright descarta
     // diálogos por padrão, o Chrome trava diálogos repetidos, e em jsdom a
     // chamada nem existe — um teste que dependesse de `window.confirm`
@@ -173,36 +209,33 @@ describe("NovaTransacaoModal — criação que falha (reenvio manual, sem retry 
 
     render(<NovaTransacaoModal {...baseProps} />);
     await fillAndReachReview(user);
-
     await user.click(screen.getByRole("button", { name: /Confirmar despesa/i }));
+    await screen.findByRole("button", { name: "Tentar novamente" });
 
-    await waitFor(() =>
-      expect(screen.getByText(/confira seu extrato antes de tentar de novo/i)).toBeInTheDocument(),
-    );
-    expect(screen.getByText("Uber")).toBeInTheDocument();
-
-    const retryBtn = await screen.findByRole("button", { name: "Tentar novamente mesmo assim" });
-    expect(retryBtn).toBeInTheDocument();
+    // Volta, muda a descrição e revisa de novo: outro lançamento.
+    await user.click(screen.getByRole("button", { name: /Editar/i }));
+    await user.type(document.querySelector("textarea"), " para o aeroporto");
+    await user.click(screen.getByRole("button", { name: /Revisar despesa/i }));
 
     // 1º clique arma a confirmação inline — NÃO reenvia ainda.
-    await user.click(retryBtn);
-    const confirmRow = await screen.findByText(/Sim, tentar mesmo assim/i);
-    expect(confirmRow).toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Tentar novamente" }));
+    expect(await screen.findByText(/Confira seu extrato antes de continuar/i)).toBeInTheDocument();
     expect(createTransactionForUi).toHaveBeenCalledTimes(1);
 
     // Cancelar: volta ao normal, sem reenviar.
     await user.click(screen.getByRole("button", { name: "Cancelar" }));
     expect(createTransactionForUi).toHaveBeenCalledTimes(1);
-    await screen.findByRole("button", { name: "Tentar novamente mesmo assim" });
+    await screen.findByRole("button", { name: "Tentar novamente" });
 
-    // Arma de novo e confirma: reenvia.
+    // Arma de novo e confirma: reenvia (com o texto editado).
     createTransactionForUi.mockResolvedValueOnce({ id: 2 });
-    await user.click(screen.getByRole("button", { name: "Tentar novamente mesmo assim" }));
-    await user.click(await screen.findByRole("button", { name: "Sim, tentar mesmo assim" }));
+    await user.click(screen.getByRole("button", { name: "Tentar novamente" }));
+    await user.click(await screen.findByRole("button", { name: "Registrar assim mesmo" }));
     await waitFor(() => expect(createTransactionForUi).toHaveBeenCalledTimes(2));
+    expect(createTransactionForUi.mock.calls[1][0].description).toMatch(/aeroporto/);
   });
 
-  it("500 (AMBÍGUO): também exige confirmação inline — não é só a família de rede", async () => {
+  it("500 (AMBÍGUO): também reenvia direto — a garantia não é só da família de rede", async () => {
     const user = userEvent.setup();
     createTransactionForUi.mockRejectedValueOnce(httpError(500));
 
@@ -210,11 +243,12 @@ describe("NovaTransacaoModal — criação que falha (reenvio manual, sem retry 
     await fillAndReachReview(user);
     await user.click(screen.getByRole("button", { name: /Confirmar despesa/i }));
 
-    const retryBtn = await screen.findByRole("button", { name: "Tentar novamente mesmo assim" });
-    expect(retryBtn).toBeInTheDocument();
-
+    const retryBtn = await screen.findByRole("button", { name: "Tentar novamente" });
+    createTransactionForUi.mockResolvedValueOnce({ id: 3 });
     await user.click(retryBtn);
-    expect(await screen.findByText(/Sim, tentar mesmo assim/i)).toBeInTheDocument();
+
+    await waitFor(() => expect(createTransactionForUi).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText(/Confira seu extrato/i)).not.toBeInTheDocument();
   });
 
   it("fechar e reabrir o drawer limpa o \"Tentar novamente\" de uma falha anterior (reabrir pra EDITAR não pode herdar a ação de CRIAR)", async () => {
