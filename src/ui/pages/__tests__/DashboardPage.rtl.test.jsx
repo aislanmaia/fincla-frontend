@@ -1,5 +1,7 @@
 /** @vitest-environment jsdom */
 
+import fs from "node:fs";
+import path from "node:path";
 import React from "react";
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";
@@ -501,8 +503,34 @@ describe("DashboardPage — Total dos Próximos Débitos", () => {
  * página — proibido pelo shell (CLAUDE.md). As linhas flex culpadas tinham vários
  * elementos (badge + saudação + chip da régua; número + rótulo comprido) sem
  * `flexWrap`, então cresciam além do container em vez de quebrar linha.
+  });
+});
+
+/**
+ * Issue #87 — a revisão adversarial mediu o layout de verdade (Chromium headless,
+ * 360-412px de viewport, com fonte e padding reais) e apontou que o estouro
+ * horizontal no mobile vinha da LEGENDA DA COMPOSIÇÃO (bolinha + rótulo + valor de
+ * cada fatia, logo abaixo da barrinha "Gastos e compromissos do período"): sem
+ * `flexWrap`, o `min-content` dessa linha (3 fatias, rótulo "Sobra depois das
+ * recorrências") passa de 380px contra ~330-360px disponíveis. Como o card mora
+ * numa coluna de grid `1fr` no mobile, o mínimo automático da coluna é o
+ * `min-content` dos filhos — então o CARD INTEIRO travava nessa largura e o
+ * scroller (`overflowX: hidden`) do shell cortava o valor da última fatia.
+ *
+ * As três linhas tocadas na primeira versão desta correção (selo de humor + chip
+ * da régua; as duas quantias do Insight) NÃO estouravam — só se espremiam. O
+ * `flexWrap` nelas foi mantido por legibilidade, mas não fecha a #87 sozinho.
+ *
+ * `getComputedStyle` em jsdom não faz layout: ele só relê o `style` inline que o
+ * próprio componente escreveu, então nenhum estouro real é observável ali — um
+ * filho com `minWidth: 900px` passa despercebido. Por isso a prova aqui é uma
+ * varredura do CÓDIGO-FONTE (mesmo padrão de `src/ui/__tests__/appShell.test.js`
+ * para `vh`): garante que o `flexWrap: "wrap"` está de fato escrito na linha da
+ * legenda, e falha se alguém reverter o fix.
  */
 describe("DashboardPage — issue #87: sem estouro horizontal no mobile", () => {
+  const source = fs.readFileSync(path.resolve(__dirname, "../DashboardPage.jsx"), "utf8");
+
   function renderMobile(overrides) {
     if (overrides) mockDashboardData = { ...baseData(), ...overrides };
     return render(
@@ -516,22 +544,36 @@ describe("DashboardPage — issue #87: sem estouro horizontal no mobile", () => 
     );
   }
 
-  it("a linha do selo de humor + chip da régua pode quebrar no mobile", () => {
-    renderMobile();
-    const regua = screen.getByTestId("dashboard-regua-ritmo");
-    // O pai imediato é a linha flex que junta badge de humor + saudação + régua.
-    const linha = regua.parentElement;
-    expect(getComputedStyle(linha).flexWrap).toBe("wrap");
+  it("a legenda da composição (causa real do estouro) tem flexWrap no código-fonte", () => {
+    const trecho = source.match(/data-testid="dashboard-composicao-legenda"[\s\S]{0,200}/)?.[0];
+    expect(trecho).toBeTruthy();
+    expect(trecho).toMatch(/flexWrap:\s*"wrap"/);
   });
 
-  it("as duas linhas de quantia do Insight (número + rótulo) podem quebrar no mobile", () => {
+  it("a legenda da composição renderiza como o container marcado, com as fatias dentro", () => {
     renderMobile();
-    const quantias = screen.getByTestId("dashboard-insight-quantias");
-    const linhas = quantias.children;
-    expect(linhas.length).toBeGreaterThanOrEqual(2);
-    for (const linha of linhas) {
-      expect(getComputedStyle(linha).flexWrap).toBe("wrap");
-    }
+    const legenda = screen.getByTestId("dashboard-composicao-legenda");
+    expect(legenda.children.length).toBeGreaterThanOrEqual(2);
+    expect(legenda).toHaveTextContent("Gasto");
+    expect(legenda).toHaveTextContent(/R\$/);
+  });
+
+  it("a linha do selo de humor + chip da régua também tem flexWrap no código-fonte (espremia, não estourava)", () => {
+    const trecho = source.match(/data-testid="dashboard-regua-ritmo"[\s\S]{0,400}/)?.[0];
+    // A régua é filha da linha; procuramos o `flexWrap` no bloco da linha-mãe,
+    // que abre pouco antes do testid da régua no JSX.
+    const inicioLinha = source.indexOf('alignItems: "center", gap: 8, marginBottom: 12');
+    expect(inicioLinha).toBeGreaterThan(-1);
+    const blocoLinha = source.slice(inicioLinha, inicioLinha + 300);
+    expect(blocoLinha).toMatch(/flexWrap:\s*"wrap"/);
+    expect(trecho).toBeTruthy(); // confirma que a régua realmente vive nessa área do arquivo
+  });
+
+  it("as duas linhas de quantia do Insight também têm flexWrap no código-fonte", () => {
+    const bloco = source.match(/data-testid="dashboard-insight-quantias"[\s\S]{0,700}/)?.[0];
+    expect(bloco).toBeTruthy();
+    const ocorrencias = bloco.match(/flexWrap:\s*"wrap"/g) ?? [];
+    expect(ocorrencias.length).toBeGreaterThanOrEqual(2);
   });
 
   it("o filete vertical entre saldo e resultado não sobra sozinho quando as colunas quebram", () => {
