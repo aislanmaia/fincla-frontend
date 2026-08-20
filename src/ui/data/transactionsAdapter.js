@@ -1,3 +1,5 @@
+import axios from "axios";
+
 import {
   createTransaction,
   getTransactionsSummary,
@@ -1275,8 +1277,79 @@ function sameUpdateField(a, b) {
   return a === b;
 }
 
-export async function createTransactionForUi(payload) {
-  return createTransaction(payload);
+// `POST /transactions` no máximo 1 retry (2 tentativas no total): o objetivo é
+// absorver um blip curto de rede/gateway, não esconder um backend fora do ar
+// atrás de uma espera longa — se persistir depois disso, é melhor mostrar o
+// erro e deixar o usuário decidir.
+const CREATE_TRANSACTION_MAX_ATTEMPTS = 2;
+const CREATE_TRANSACTION_RETRY_BASE_DELAY_MS = 500;
+
+/**
+ * `POST /transactions` NÃO é idempotente: reexecutar às cegas pode duplicar o
+ * lançamento no extrato do usuário — um resultado bem pior do que mostrar um
+ * erro. Só é seguro repetir quando dá para PROVAR que o servidor não chegou a
+ * processar o request:
+ *
+ *  - erro de REDE sem NENHUMA resposta (`ERR_NETWORK` / `ECONNRESET`): a
+ *    conexão caiu antes de qualquer byte trafegar, então o POST nunca chegou
+ *    a sair para o backend.
+ *  - 502/503/504: o gateway/servidor estava indisponível e devolveu erro
+ *    ANTES de rotear a chamada para a aplicação — a transação não chegou a
+ *    ser processada.
+ *
+ * NUNCA repete:
+ *  - qualquer 4xx (validação, auth, conflito): erro definitivo do pedido;
+ *    repetir não muda o resultado e some com o feedback real do problema.
+ *  - 500 genérico: o servidor pode ter GRAVADO a transação e só quebrado
+ *    depois (ex.: ao materializar uma recorrência associada) — repetir
+ *    arriscaria justamente o cenário mais caro, que é duplicar.
+ *  - timeout de LEITURA após o envio (`ECONNABORTED` / `ETIMEDOUT`): o axios
+ *    desistiu esperando a resposta, mas o POST pode já ter chegado e sido
+ *    processado no servidor; sem uma resposta que prove o contrário, repetir
+ *    é arriscado.
+ */
+export function isCreateTransactionErrorRetryable(error) {
+  if (!axios.isAxiosError(error)) return false;
+
+  // Resposta HTTP chegou: o servidor recebeu e processou o request (mesmo
+  // que o resultado tenha sido um erro). Só o trio 502/503/504 é seguro.
+  if (error.response) {
+    const status = error.response.status;
+    return status === 502 || status === 503 || status === 504;
+  }
+
+  // Sem resposta: só repete os códigos que significam "a conexão nunca foi
+  // estabelecida" — nunca os que significam "desisti esperando resposta".
+  return error.code === "ERR_NETWORK" || error.code === "ECONNRESET";
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Cria a transação com retry curto e seguro (ver `isCreateTransactionErrorRetryable`
+ * para a política de quais erros são repetíveis).
+ *
+ * `onRetryAttempt(attemptNumber)`, se passado, é chamado antes de CADA nova
+ * tentativa — a UI usa isso para trocar o rótulo do botão de "Enviando…" para
+ * "Tentando novamente…", pra não parecer travado enquanto espera.
+ */
+export async function createTransactionForUi(payload, { onRetryAttempt } = {}) {
+  for (let attempt = 1; attempt <= CREATE_TRANSACTION_MAX_ATTEMPTS; attempt++) {
+    try {
+      return await createTransaction(payload);
+    } catch (error) {
+      const isLastAttempt = attempt >= CREATE_TRANSACTION_MAX_ATTEMPTS;
+      if (isLastAttempt || !isCreateTransactionErrorRetryable(error)) {
+        throw error;
+      }
+      onRetryAttempt?.(attempt + 1);
+      // Espera curta e crescente (500ms na 1ª repetição) — o bastante para um
+      // blip de rede/gateway se recuperar, sem prender o usuário no formulário.
+      await wait(CREATE_TRANSACTION_RETRY_BASE_DELAY_MS * attempt);
+    }
+  }
 }
 
 export async function updateTransactionForUi(transactionId, organizationId, payload) {
