@@ -12,7 +12,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // requisições HTTP de verdade, não chamadas de mock, e deixa inspecionar o
 // header `Idempotency-Key` que saiu em CADA tentativa.
 import apiClient from "../../../api/client";
-import { resetIdempotencySupportObservation } from "../../../api/idempotency";
+import {
+  hasObservedIdempotencySupport,
+  resetIdempotencySupportObservation,
+} from "../../../api/idempotency";
 import {
   createErrorReleasedIdempotencyKey,
   createRetryDelayMs,
@@ -291,6 +294,35 @@ describe("createTransactionForUi — retry SÓ depois que o servidor prova que i
     apiClient.defaults.adapter = adapter;
     await expect(settling(createTransactionForUi(PAYLOAD))).rejects.toBeTruthy();
     expect(adapter.callCount).toBe(1);
+  });
+
+  it("é o HEADER do 201 que arma a proteção: caminho feliz, sem depender de erro nenhum", async () => {
+    // A detecção precisa funcionar pela via mais COMUM — a primeira criação
+    // bem-sucedida. Se dependesse de um erro de idempotência, a proteção só
+    // ligaria depois de algo dar errado. A API expõe o header no CORS
+    // (`expose_headers`), então o browser o lê cross-origin.
+    expect(hasObservedIdempotencySupport()).toBe(false);
+
+    apiClient.defaults.adapter = scriptAdapter([
+      (config) => respondWithStatus(config, 201, { id: 1 }, { "idempotent-replay": "false" }),
+    ]);
+    await createTransactionForUi(PAYLOAD);
+
+    expect(hasObservedIdempotencySupport()).toBe(true);
+  });
+
+  it("`Idempotent-Replay: true` (o próprio replay) também arma — o que prova suporte é a PRESENÇA do header", async () => {
+    apiClient.defaults.adapter = scriptAdapter([
+      (config) => respondWithStatus(config, 201, { id: 1 }, { "idempotent-replay": "true" }),
+    ]);
+    await createTransactionForUi(PAYLOAD);
+    expect(hasObservedIdempotencySupport()).toBe(true);
+  });
+
+  it("201 SEM o header não arma nada: é a resposta que a API atual devolve", async () => {
+    apiClient.defaults.adapter = scriptAdapter([(config) => respondWithStatus(config, 201, { id: 1 })]);
+    await createTransactionForUi(PAYLOAD);
+    expect(hasObservedIdempotencySupport()).toBe(false);
   });
 
   it("depois de UMA resposta com o header, o retry liga", async () => {
