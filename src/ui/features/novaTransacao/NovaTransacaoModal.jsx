@@ -453,12 +453,22 @@ export const NovaTransacaoModal = ({
     useLiveCategoryTags,
     useLiveDetailTags,
     categoryTagsData,
+    // fincla-frontend#109 rodada 4, achado 3: `applyAi` precisa saber a
+    // categoria ATUAL pra decidir se mescla (mesma categoria) ou substitui
+    // (categoria mudando — mesma convenção de qualquer outra troca manual
+    // de categoria neste componente) as tags de detalhe.
+    categoryTagId,
     ensureDetailTag,
     setCat,
     setCategoryTagId,
     setDetailTagIds,
     setDetailTagLabelById,
     setTags,
+    // fincla-frontend#109 rodada 3, achado 3: mesmo canal de erro que
+    // `addQuickDetailTag` já usa — sem isto, uma tag que falha ao aplicar a
+    // sugestão de IA falhava 100% em silêncio (clica "Aplicar", nada muda,
+    // sem explicação).
+    setTxSubmitError,
   });
 
   const detailTagRowsAvailable = useMemo(() => {
@@ -496,13 +506,16 @@ export const NovaTransacaoModal = ({
     [detailTagMetaById],
   );
 
+  // Devolve `true`/`false` (nunca lança) — o chamador usa isso pra decidir se
+  // pode limpar o campo de texto (fincla-frontend#109 achado 5: ver
+  // `commitNewDetailTag` abaixo).
   const addQuickDetailTag = useCallback(
     async (label) => {
       const trimmed = String(label || "").trim();
-      if (!trimmed) return;
+      if (!trimmed) return false;
       if (!useLiveDetailTags) {
         setTags((tg) => (tg.includes(trimmed) ? tg : [...tg, trimmed]));
-        return;
+        return true;
       }
       setTxSubmitError("");
       try {
@@ -521,15 +534,56 @@ export const NovaTransacaoModal = ({
           [String(id)]: { name, isActive: true },
         }));
         setDetailTagIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+        return true;
       } catch (err) {
         setTxSubmitError(
           typeof err?.message === "string"
             ? err.message
             : "Não foi possível adicionar a tag",
         );
+        return false;
       }
     },
     [useLiveDetailTags, ensureDetailTag, detailTagRowsForCategory],
+  );
+
+  // Trava de envio em voo (fincla-frontend#109 rodada 2, achado 1): manter o
+  // campo "+ nova" montado com o texto DURANTE o `await` (achado 5 da rodada
+  // 1) abriu uma nova janela de corrida — Enter seguido de blur (ou dois
+  // Enters em sequência) chama `commitNewDetailTag` DUAS vezes antes da 1ª
+  // resolver; as duas leituras de `allDetail` (ainda sem a tag, que só entra
+  // depois que a 1ª chamada termina) não acham nada e as duas criam a MESMA
+  // tag — a exata duplicata que a guarda de `loading` do fincla-frontend#101
+  // foi corrigida para evitar, só que por outra porta. Um `ref` (não state:
+  // precisa valer no MESMO tick da 2ª chamada, antes de qualquer re-render)
+  // ignora qualquer chamada enquanto uma já está em voo.
+  const committingNewTagRef = useRef(false);
+
+  /**
+   * Confirma o campo "+ nova" (Enter ou perder o foco). `addQuickDetailTag`
+   * é assíncrono e pode rejeitar de propósito agora (catálogo de tags ainda
+   * carregando — fail-closed do fincla-frontend#101); antes desta correção o
+   * chamador limpava `newTag`/fechava o campo INCONDICIONALMENTE logo após
+   * disparar a chamada (`void addQuickDetailTag(...)`), sem esperar o
+   * resultado — uma rejeição virou rotina e o texto digitado sumia toda vez,
+   * sem nada pra tentar de novo (fincla-frontend#109 achado 5). Só limpa/fecha
+   * quando a tag foi de fato resolvida ou criada.
+   */
+  const commitNewDetailTag = useCallback(
+    async (rawValue) => {
+      if (committingNewTagRef.current) return;
+      committingNewTagRef.current = true;
+      try {
+        const ok = await addQuickDetailTag(rawValue);
+        if (ok) {
+          setNewTag("");
+          setAddingTag(false);
+        }
+      } finally {
+        committingNewTagRef.current = false;
+      }
+    },
+    [addQuickDetailTag],
   );
 
   useEffect(() => {
@@ -2416,8 +2470,8 @@ export const NovaTransacaoModal = ({
                     ))}
                     {addingTag ? (
                       <input autoFocus value={newTag} onChange={e => setNewTag(e.target.value)}
-                        onKeyDown={e => { if(e.key==="Enter"&&newTag.trim()){ if(useLiveDetailTags) void addQuickDetailTag(newTag.trim()); else setTags(ts=>[...ts,newTag.trim()]); setNewTag("");setAddingTag(false);} if(e.key==="Escape"){setNewTag("");setAddingTag(false);} }}
-                        onBlur={() => { if(newTag.trim()){ if(useLiveDetailTags) void addQuickDetailTag(newTag.trim()); else setTags(ts=>[...ts,newTag.trim()]); } setNewTag(""); setAddingTag(false); }}
+                        onKeyDown={e => { if(e.key==="Enter"&&newTag.trim()){ void commitNewDetailTag(newTag); } if(e.key==="Escape"){setNewTag("");setAddingTag(false);} }}
+                        onBlur={() => { if(newTag.trim()){ void commitNewDetailTag(newTag); } else { setNewTag(""); setAddingTag(false); } }}
                         style={{ ...G, fontSize:12, color:T.blue, border:`1px dashed ${T.blue}`, padding:"4px 10px", borderRadius:9999, outline:"none", width:90, background:"transparent" }} />
                     ) : (
                       <span onClick={() => setAddingTag(true)} style={{ ...G, fontSize:12, color:T.blue, border:`1px dashed ${T.blue}`, padding:"4px 10px", borderRadius:9999, cursor:"pointer" }}>+ nova</span>
@@ -3380,8 +3434,8 @@ export const NovaTransacaoModal = ({
                     ))}
                     {addingTag ? (
                       <input autoFocus value={newTag} onChange={e => setNewTag(e.target.value)}
-                        onKeyDown={e => { if(e.key==="Enter"&&newTag.trim()){ if(useLiveDetailTags) void addQuickDetailTag(newTag.trim()); else setTags(tg=>[...tg,newTag.trim()]); setNewTag("");setAddingTag(false);} if(e.key==="Escape"){setNewTag("");setAddingTag(false);} }}
-                        onBlur={() => { if(newTag.trim()){ if(useLiveDetailTags) void addQuickDetailTag(newTag.trim()); else setTags(tg=>[...tg,newTag.trim()]); } setNewTag(""); setAddingTag(false); }}
+                        onKeyDown={e => { if(e.key==="Enter"&&newTag.trim()){ void commitNewDetailTag(newTag); } if(e.key==="Escape"){setNewTag("");setAddingTag(false);} }}
+                        onBlur={() => { if(newTag.trim()){ void commitNewDetailTag(newTag); } else { setNewTag(""); setAddingTag(false); } }}
                         style={{ ...G, fontSize:11, color:T.blue, border:`1px dashed ${T.blue}`, padding:"3px 9px", borderRadius:9999, outline:"none", width:80, background:"transparent" }} />
                     ) : (
                       <span onClick={() => setAddingTag(true)} style={{ ...G, fontSize:11, color:T.blue, border:`1px dashed ${T.blue}`, padding:"3px 9px", borderRadius:9999, cursor:"pointer" }}>+ nova</span>

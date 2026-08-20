@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
+import { createElement } from "react";
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
+import { renderToStaticMarkup } from "react-dom/server";
 import * as tagsApi from "../../../../../api/tags";
 import { useTransactionsTagCatalog } from "../../filters/useTransactionsTagCatalog.js";
 
@@ -79,6 +81,49 @@ describe("useTransactionsTagCatalog", () => {
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.rows.map((r) => r.name)).toEqual(["uber"]);
+  });
+
+  // fincla-frontend#101, achado 3: o adapter (`isApiTagTypeCategory` em
+  // transactionsAdapter.js) aceita as duas grafias do tipo categoria —
+  // "categoria" E "category" — mas esta checagem só cobria "categoria". Uma
+  // organização cujo backend manda "category" (seed em inglês) vazava a tag
+  // de categoria pro catálogo de FILTRO, onde ela não faz sentido (a facet
+  // "Categoria" já cobre isso).
+  it("exclui também a grafia 'category' (inglês) — não só 'categoria'", async () => {
+    vi.mocked(tagsApi.listTags).mockResolvedValue({
+      tags: [tagRow("cat-1", "Food", "category"), tagRow("det-1", "lunch", "detalhe")],
+    });
+
+    const { result } = renderHook(() =>
+      useTransactionsTagCatalog({ organizationId: ORG, enabled: true }),
+    );
+
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.rows.map((r) => r.name)).toEqual(["lunch"]);
+  });
+
+  // fincla-frontend#101, achado 1: `loading` começava `false` até o efeito
+  // rodar — no PRIMEIRO quadro (antes do efeito), um consumidor que já lê
+  // `loading` (ex.: `resolveTagFilterStatus` em TransacoesPage.jsx) via um
+  // catálogo "carregado e vazio" e acusava "tag não encontrada" mesmo com a
+  // busca real ainda a caminho. `renderHook`/`render` do RTL rodam efeitos
+  // dentro do MESMO `act()` síncrono da montagem — não dá pra observar o
+  // estado ANTES do efeito por esse caminho. `renderToStaticMarkup` (SSR)
+  // nunca roda `useEffect`, então captura exatamente o 1º quadro que importa.
+  it("loading já começa true no 1º quadro quando enabled+organizationId (SSR — sem efeitos rodarem)", () => {
+    function Probe() {
+      const { loading } = useTransactionsTagCatalog({ organizationId: ORG, enabled: true });
+      return String(loading);
+    }
+    expect(renderToStaticMarkup(createElement(Probe))).toBe("true");
+  });
+
+  it("loading fica false no 1º quadro quando desligado", () => {
+    function Probe() {
+      const { loading } = useTransactionsTagCatalog({ organizationId: ORG, enabled: false });
+      return String(loading);
+    }
+    expect(renderToStaticMarkup(createElement(Probe))).toBe("false");
   });
 
   it("erro na API vira `error` e `rows` fica vazio", async () => {

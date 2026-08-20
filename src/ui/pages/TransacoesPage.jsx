@@ -1,6 +1,7 @@
 import React, {
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -111,15 +112,87 @@ const catBg = (label) => `${catColor(label)}18`;
 
 const fmtBRL = v => "R$\u00a0" + Math.abs(v).toLocaleString("pt-BR",{minimumFractionDigits:2});
 
-const Tip = ({ label, children, pos = "top" }) => {
+// fincla-frontend#105 — evento global mínimo pra garantir UM tooltip aberto
+// por vez sem precisar de Context: cada `Tip` aberto ouve o `show()` de
+// qualquer OUTRO e fecha a si mesmo.
+const TIP_OPEN_EVENT = "fincla:tip-open";
+
+// Exportado só pra teste unitário isolado (fincla-frontend#105) — o
+// comportamento de fechar não depende de nada da página, e testar via
+// `<TransacoesPage>` inteira exigiria montar uma transação com refund/parcela
+// só pra alcançar um `<Tip>`.
+export const Tip = ({ label, children, pos = "top" }) => {
   const [rect, setRect] = useState(null);
   const ref = useRef(null);
-  if (!label) return <>{children}</>;
+  const id = useId();
 
   const show = (e) => {
-    if (ref.current) setRect(ref.current.getBoundingClientRect());
+    if (!ref.current) return;
+    setRect(ref.current.getBoundingClientRect());
+    window.dispatchEvent(new CustomEvent(TIP_OPEN_EVENT, { detail: { id } }));
   };
   const hide = () => setRect(null);
+
+  // fincla-frontend#109 rodada 2, achado 5: com o early return agora DEPOIS
+  // dos hooks (achado 1, crítico), a instância sobrevive ao intervalo em que
+  // `label` fica vazio — mas `rect` (medido enquanto o label ANTERIOR estava
+  // visível) não era limpo nesse intervalo. Quando o label volta (ex.: linha
+  // 390, `hasParcela ? … : isRefund ? … : ""` alternando por causa de uma
+  // atualização in-place), o tooltip REAPARECIA sozinho na posição antiga,
+  // sem nenhum toque/hover novo. `label` vazio precisa fechar o tooltip.
+  useEffect(() => {
+    if (!label) setRect(null);
+  }, [label]);
+
+  // Fecha em QUALQUER interação seguinte enquanto está aberto: toque/clique
+  // fora do próprio gatilho — inclusive o que abre o bottom sheet de
+  // Detalhes, que antes deixava o tooltip flutuando por cima dele (prints do
+  // Owner) —, rolagem de qualquer região (captura no `window` pega o scroll
+  // de containers `.fincla-scroll` aninhados, que não sobe por bubbling
+  // comum), Escape, e a abertura de outro tooltip. O `pointerdown` só fecha
+  // quando o alvo está FORA do próprio gatilho — de propósito: um 2º toque no
+  // MESMO gatilho é o toggle local (`onTouchStart` abaixo) que decide, e como
+  // o `pointerdown` do toque precede o `touchstart`, fechar por fora aqui
+  // reabriria no mesmo gesto (o toggle local leria `rect` já nulo). jsdom não
+  // tem layout nem toque de verdade, então os testes cobrem o COMPORTAMENTO
+  // observável (o tooltip sai do DOM ao disparar cada evento), nunca
+  // `getComputedStyle`.
+  useEffect(() => {
+    if (rect === null) return undefined;
+    const onPointerDown = (e) => {
+      if (ref.current && ref.current.contains(e.target)) return;
+      hide();
+    };
+    const onScroll = () => hide();
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") hide();
+    };
+    const onOtherTipOpen = (e) => {
+      if (e.detail?.id !== id) hide();
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    window.addEventListener("scroll", onScroll, true);
+    document.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener(TIP_OPEN_EVENT, onOtherTipOpen);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      window.removeEventListener("scroll", onScroll, true);
+      document.removeEventListener("keydown", onKeyDown, true);
+      window.removeEventListener(TIP_OPEN_EVENT, onOtherTipOpen);
+    };
+  }, [rect, id]);
+
+  // fincla-frontend#109 achado 1 (crítico): este early return morava ANTES
+  // dos hooks acima. `TxRow` chaveia linhas por `tx.id`, então a MESMA
+  // instância de `<Tip>` sobrevive a uma atualização in-place (ex.: marcar
+  // como estorno no drawer troca `label` de "" pra um texto, ou
+  // `setTransactionSettled` zera `parcela` e troca `hasParcela` de true pra
+  // false) — o número de hooks chamados variava conforme `label` estar vazio
+  // ou não, e o React derruba a árvore inteira ("Rendered more/fewer hooks
+  // than during the previous render"), sem error boundary = tela branca.
+  // TODOS os hooks (`useState`/`useRef`/`useId`/`useEffect`) agora rodam
+  // incondicionalmente; só a SAÍDA (early return) depende de `label`.
+  if (!label) return <>{children}</>;
 
   // Compute fixed position from measured rect
   const tipStyle = rect ? (pos === "top"
@@ -141,7 +214,7 @@ const Tip = ({ label, children, pos = "top" }) => {
           transform: tipStyle.transform,
           background:"#1A1A2E", color:"#fff",
           fontSize:11, fontWeight:600, borderRadius:7, padding:"5px 9px",
-          whiteSpace:"nowrap", zIndex:9999, pointerEvents:"none",
+          whiteSpace:"nowrap", zIndex:90, pointerEvents:"none",
           boxShadow:"0 4px 14px rgba(0,0,0,0.28)", lineHeight:1.4,
         }}>
           {label}
@@ -674,6 +747,13 @@ function TransacoesPageBody({
   const snapshotBeforeViewRef = useRef(null);
   const loadMoreSentinelRef = useRef(null);
   const loadMoreCooldownRef = useRef(false);
+  // fincla-frontend#109 rodada 4, achado 2: uma falha ao "carregar mais" não
+  // tem NENHUM gatilho de retentativa hoje — `refreshToken` (prop, global)
+  // não muda por causa disso. Este token LOCAL, só combinado no
+  // `refreshToken` composto abaixo, dá à pessoa uma ação explícita
+  // ("Tentar novamente") sem reusar o token global (que também dispara
+  // outros efeitos da página, ex.: âncoras de saldo).
+  const [loadMoreRetryToken, setLoadMoreRetryToken] = useState(0);
   const [deletingId,  setDeletingId]  = useState(null);
   // Id em liquidação — trava o botão para o clique duplo não disparar settle + unsettle.
   const [settlingId,  setSettlingId]  = useState(null);
@@ -831,12 +911,32 @@ function TransacoesPageBody({
       shouldUseRealData
         ? resolveTagFilterStatus({
             selectedLabel: filter.tags[0] ?? null,
-            loading: tagCatalog.loading,
+            // fincla-frontend#101: `tagDisplayToId` (via `tagOptions`) depende
+            // de `categoryLabelById` — enquanto CATEGORIAS ainda carregam,
+            // `categoryLabelById` está vazio e uma tag com nome colidente
+            // (duas tags "mensal" em categorias diferentes) resolve para um
+            // `displayLabel` PROVISÓRIO (ex.: "mensal · sem categoria (uuid)")
+            // diferente do rótulo FINAL, estável, que aparece quando as
+            // categorias terminam de carregar (ex.: "mensal · Casa"). Uma
+            // seleção persistida (view salva) com o rótulo final batia contra
+            // o catálogo provisório e virava "unresolved" — falso positivo
+            // de "renomeada ou removida" que sumia sozinho um instante depois.
+            // Contar `categoryTagsData.isLoading` aqui também trava a busca
+            // (fail closed) até o rótulo ser o definitivo, nunca resolve (ou
+            // recusa) contra um valor que ainda vai mudar.
+            loading: tagCatalog.loading || categoryTagsData.isLoading,
             error: tagCatalog.error,
             displayToId: tagDisplayToId,
           })
         : { kind: "none" },
-    [shouldUseRealData, filter.tags, tagCatalog.loading, tagCatalog.error, tagDisplayToId],
+    [
+      shouldUseRealData,
+      filter.tags,
+      tagCatalog.loading,
+      tagCatalog.error,
+      categoryTagsData.isLoading,
+      tagDisplayToId,
+    ],
   );
   const resolvedTagIds = useMemo(
     () => (tagFilterStatus.kind === "resolved" ? [tagFilterStatus.id] : []),
@@ -895,11 +995,38 @@ function TransacoesPageBody({
     // do que mostrar a lista inteira se passando por filtrada.
     enabled: shouldUseRealData && !tagFilterBlocked,
     filters: transactionsFilters,
-    refreshToken: transactionsRefreshToken,
+    // Composto com `loadMoreRetryToken`: o hook só compara por `!==`
+    // (nunca faz aritmética), então uma chave composta funciona igual a um
+    // número — e mantém o retry de paginação isolado do token GLOBAL (que
+    // também dispara outros efeitos da página).
+    refreshToken: `${transactionsRefreshToken}:${loadMoreRetryToken}`,
   });
   const txList = shouldUseRealData
     ? transactionsData.transactions
     : resolveLocalData({ dataMode, mockData: mockTxList, emptyData: [] });
+
+  // fincla-frontend#106 — mesmo padrão do calendário (`useCalendarData`):
+  // `hasLoaded` só vira `true` num sucesso, então "nunca carregou com
+  // sucesso" é a única leitura válida de `!hasLoaded`. Enquanto isso for
+  // verdade, `groups` vazio (mais abaixo) é uma LACUNA de informação — busca
+  // em voo ou falhou —, não o fato "nenhuma transação". Depois da 1ª carga
+  // bem-sucedida, uma falha de revalidação (troca de filtro, refresh) já tem
+  // dados válidos pra mostrar via stale-while-revalidate (ver
+  // useTransactionsData) e não deve regredir a lista pro estado de loading.
+  //
+  // fincla-frontend#109 achado 2 (revisão da PR #109): `listLoading` usava
+  // `transactionsData.isLoading` — mas esse booleano só liga DEPOIS que o
+  // `useEffect` do hook roda; no 1º quadro (e em qualquer transição de
+  // `enabled` false→true, ex.: logo que `tagFilterBlocked` desbloqueia a
+  // busca) ele ainda está `false`, e a tela caía no "vazio de verdade" antes
+  // da API responder — a MESMA falha que o `hasLoaded` acima existe pra
+  // evitar. Dentro de `listNeverLoaded`, "carregando" e "falhou" são
+  // complementares por definição (`!hasLoaded` só sai desse estado num
+  // sucesso ou numa falha visível): sem erro ainda visível, só pode ser
+  // "em voo" — não depende de `isLoading` ter tido tempo de ligar.
+  const listNeverLoaded = shouldUseRealData && !transactionsData.hasLoaded;
+  const listLoadFailed = listNeverLoaded && Boolean(transactionsData.error);
+  const listLoading = listNeverLoaded && !listLoadFailed;
 
   /** Categorias normalizadas para a FacetBar (id + label + color + icon). */
   const categoriesForFilter = useMemo(() => {
@@ -1144,11 +1271,30 @@ function TransacoesPageBody({
       : entries.sort((a,b) => parseDate(b[0]) - parseDate(a[0]));
   }, [shouldUseRealData, filtered, visible]);
 
+  // fincla-frontend#109 rodada 4, achado 1 (CRÍTICO): uma falha ao "carregar
+  // mais" não seta mais o `error` geral (achado 2 da rodada 3) — sem esta
+  // exclusão explícita de `pageError`, `hasMore` continuava `true`, a
+  // sentinela seguia montada, e `tryLoadMore` (chaveado em `isLoading`, que
+  // alterna a cada tentativa) recriava o `IntersectionObserver` a cada
+  // falha — cuja entrega inicial já dispara `tryLoadMore` de novo. Isso virou
+  // uma tempestade de requisições sem fim, com `limit` crescendo pra sempre,
+  // sem nenhuma ação da pessoa. Enquanto houver `pageError`, exige uma ação
+  // EXPLÍCITA ("Tentar novamente" abaixo) — a sentinela some, o observer não
+  // é recriado, e nada re-dispara sozinho.
   const hasMore =
     !searchAwaitingCommit &&
     (shouldUseRealData
-      ? transactionsData.hasMore
+      ? transactionsData.hasMore && !transactionsData.pageError
       : visible < filtered.length);
+
+  // fincla-frontend#109 rodada 4, achado 2: bumpa o token LOCAL de retry
+  // (definido acima, perto de `loadMoreSentinelRef`) — é a ÚNICA forma de
+  // re-disparar a MESMA consulta que falhou (organização/filtros/limit
+  // idênticos, então só um `refreshToken` novo força o efeito a rodar de
+  // novo).
+  const retryLoadMore = useCallback(() => {
+    setLoadMoreRetryToken((t) => t + 1);
+  }, []);
 
   const tryLoadMore = useCallback(() => {
     if (searchAwaitingCommit) return;
@@ -1357,19 +1503,29 @@ function TransacoesPageBody({
     el.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
+  // fincla-frontend#109 rodada 3, achado 4: `resultsLoading` usava
+  // `transactionsData.isLoading` cru — o MESMO booleano que não é confiável
+  // no 1º quadro. Trocado por `listNeverLoaded` — mas isso trocou um bug por
+  // outro (rodada 4, achado 5): `listNeverLoaded` continua `true` PRA SEMPRE
+  // em dois casos que não são "carregando" de jeito nenhum — a 1ª carga
+  // FALHOU (`hasLoaded` só liga num sucesso) e o filtro de tag está
+  // BLOQUEADO (`enabled:false` trava o hook em `EMPTY_STATE` pra sempre). O
+  // CTA "Ver N transações" ficava desabilitado dizendo "Atualizando…" — uma
+  // afirmação falsa, já que nada estava de fato em andamento.
+  //
+  // `listLoading` (definido acima) já exclui o caso de FALHA
+  // (`listNeverLoaded && !listLoadFailed`); falta só excluir o BLOQUEIO.
+  const resultsStillLoading = listLoading && !tagFilterBlocked;
   const filterBarApplyProps = useMemo(
     () => ({
       filteredCount,
-      resultsLoading:
-        searchAwaitingCommit ||
-        (shouldUseRealData && transactionsData.isLoading),
+      resultsLoading: searchAwaitingCommit || resultsStillLoading,
       onAfterApply: isMobile ? undefined : scrollListToTop,
     }),
     [
       filteredCount,
       searchAwaitingCommit,
-      shouldUseRealData,
-      transactionsData.isLoading,
+      resultsStillLoading,
       isMobile,
       scrollListToTop,
     ],
@@ -1496,6 +1652,34 @@ function TransacoesPageBody({
             primaryLabel="Limpar filtro de tag"
             onPrimary={() => filter.setTags([])}
           />
+        ) : listLoading ? (
+          // fincla-frontend#106 — 1ª carga ainda em voo: mesmo cuidado do
+          // calendário (`isLoading` no DayList), NÃO usar o componente do
+          // "vazio de verdade" antes da resposta da API chegar, senão a tela
+          // afirma "nenhuma transação encontrada" sobre uma busca que nem
+          // terminou.
+          <div
+            style={{
+              ...G,
+              fontSize: 13,
+              color: T.inkLight,
+              textAlign: "center",
+              padding: "40px 16px",
+            }}
+          >
+            Carregando transações…
+          </div>
+        ) : listLoadFailed ? (
+          // 1ª carga falhou (nunca tivemos dados válidos pra este filtro) —
+          // distinto do "vazio de verdade": o card diz que a busca falhou,
+          // não que não há transações. `transactionsData.error` já aparece
+          // no banner do topo da página; aqui é a pista LOCAL, junto da lista.
+          <CardEmptyWithCta
+            icon="⚠️"
+            iconSize={28}
+            title="Não foi possível carregar as transações"
+            sub={transactionsData.error || "Tente novamente em instantes."}
+          />
         ) : (
           <CardEmptyWithCta
             icon="🔍"
@@ -1541,10 +1725,16 @@ function TransacoesPageBody({
           </div>
         ))
       )}
-      {/* Paginação infinita: sentinel + feedback (carregamento ao chegar ao fim da lista) */}
+      {/* Paginação infinita: sentinel + feedback (carregamento ao chegar ao fim da lista).
+          `data-testid` só pra prova de teste (fincla-frontend#109 rodada 4,
+          achado 1, CRÍTICO): a garantia central da correção é que este nó
+          SOME do DOM assim que `pageError` liga — é isso que impede o
+          `IntersectionObserver` de ser recriado/observado de novo e alimentar
+          a tempestade de requisições. */}
       {hasMore && (
         <div
           ref={loadMoreSentinelRef}
+          data-testid="load-more-sentinel"
           style={{ height:1, marginTop:8, flexShrink:0 }}
           aria-hidden
         />
@@ -1552,6 +1742,22 @@ function TransacoesPageBody({
       {hasMore && shouldUseRealData && transactionsData.isLoading && (
         <div style={{ ...G, textAlign:"center", fontSize:12, color:T.inkLight, padding:"10px 0 4px" }}>
           Carregando mais…
+        </div>
+      )}
+      {/* fincla-frontend#109 rodada 4, achado 2: `pageError` nunca era
+          consumido em lugar nenhum — a falha ficava muda, a lista truncada
+          com CARA de completa (sem sentinela, sem "Carregando mais…", sem
+          nada). Fora de `hasMore` de propósito: precisa aparecer mesmo com
+          a sentinela escondida (achado 1). */}
+      {shouldUseRealData && transactionsData.pageError && (
+        <div style={{ ...G, display:"flex", alignItems:"center", justifyContent:"center", gap:8,
+          textAlign:"center", fontSize:12, color:T.inkLight, padding:"10px 0 4px" }}>
+          <span>Não foi possível carregar mais transações.</span>
+          <button type="button" onClick={retryLoadMore}
+            style={{ ...G, background:"none", border:"none", padding:0, fontSize:12,
+              fontWeight:700, color:T.blue, cursor:"pointer", textDecoration:"underline" }}>
+            Tentar novamente
+          </button>
         </div>
       )}
     </div>
@@ -1812,15 +2018,25 @@ function TransacoesPageBody({
                 hideSearch
               />
             </div>
-            {/* Footer CTA — safe area aware */}
+            {/* Footer CTA — safe area aware. fincla-frontend#109 rodada 3,
+                achado 4 + rodada 4, achado 6: espelha o `FacetApplyFooter`
+                do desktop no RÓTULO (enquanto `resultsLoading`, "Ver 0
+                transações" seria uma afirmação falsa), mas — diferente do
+                desktop — NUNCA desabilita. Este é o controle de FECHAR o
+                sheet em tela cheia, o mais óbvio pra sair; travá-lo (mesmo
+                achando que é transitório) deixa a pessoa sem saída óbvia se
+                o estado "carregando" persistir (1ª carga falhou, filtro de
+                tag bloqueado). O X e o backdrop já fecham de qualquer jeito
+                — só o texto/opacidade avisam que a contagem pode mudar. */}
             <div style={{ padding:"12px 20px", paddingBottom:"calc(12px + env(safe-area-inset-bottom, 0px))",
               borderTop:`1px solid ${T.border}`, background:T.surface, flexShrink:0 }}>
               <button onClick={onSheetClose}
                 style={{ ...G, width:"100%", background:T.ink, color:"#fff",
                   border:"none", borderRadius:12, padding:"15px",
                   fontSize:15, fontWeight:800, cursor:"pointer",
+                  opacity: filterBarApplyProps.resultsLoading ? 0.7 : 1,
                   display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
-                Ver {filteredCount} transaç{filteredCount!==1?"ões":"ão"}
+                {filterBarApplyProps.resultsLoading ? "Atualizando…" : <>Ver {filteredCount} transaç{filteredCount!==1?"ões":"ão"}</>}
               </button>
             </div>
           </div>
@@ -1828,8 +2044,15 @@ function TransacoesPageBody({
       )}
 
       {/* ── Row 5: KPI strip ─────────────────────────────────────── */}
+      {/* fincla-frontend#109 rodada 2, achado 4: a faixa só tratava
+          `tagFilterBlocked` como "ainda não sei responder" — em `listLoading`/
+          `listLoadFailed` (a MESMA lacuna de informação que fez a lista
+          ganhar `hasLoaded`/#106) ela continuava afirmando "+R$ 0,00" e
+          "0 transações no filtro", contradizendo o card logo abaixo (que já
+          mostra "Carregando…"/erro). `kpiUnknown` cobre as três causas. */}
       <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: isMobile ? 8 : 12 }}>
         {(() => {
+          const kpiUnknown = tagFilterBlocked || listNeverLoaded;
           // Despesa líquida pode ser negativa quando estornos > despesas no período.
           // Quando líquida < 0, cor vira verde mas o sinal `−` é preservado (matemática honesta).
           const despesaPositiva = totalDespesaLiquido >= 0;
@@ -1885,19 +2108,26 @@ function TransacoesPageBody({
               <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>
                 {k.label}
               </div>
-              <div style={{ ...G, fontFamily: "'Geist Mono',monospace", fontSize: isMobile ? 14 : 16, fontWeight: 800, color: tagFilterBlocked ? T.inkLight : k.color, letterSpacing: "-0.01em" }}>
-                {/* Prioridade 2: com a busca em espera, `k.val` é sempre 0 (a
-                    API nem respondeu) — "R$ 0,00" afirmaria um resultado que
-                    não existe. "—" é honesto: não sabemos ainda. */}
-                {tagFilterBlocked ? "—" : <>{k.sign}{fmtBRL(k.val)}</>}
+              <div style={{ ...G, fontFamily: "'Geist Mono',monospace", fontSize: isMobile ? 14 : 16, fontWeight: 800, color: kpiUnknown ? T.inkLight : k.color, letterSpacing: "-0.01em" }}>
+                {/* Prioridade 2: com a busca em espera (ou em voo, ou
+                    falha) `k.val` é sempre 0 (a API nem respondeu de
+                    verdade) — "R$ 0,00" afirmaria um resultado que não
+                    existe. "—" é honesto: não sabemos ainda. */}
+                {kpiUnknown ? "—" : <>{k.sign}{fmtBRL(k.val)}</>}
               </div>
-              {k.subLine && !tagFilterBlocked && (
+              {k.subLine && !kpiUnknown && (
                 <div style={{ ...G, fontSize: 11, color: T.green, marginTop: 3, fontWeight: 600 }}>
                   {k.subLine}
                 </div>
               )}
               <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 3 }}>
-                {tagFilterBlocked ? "Aguardando filtro de tag" : k.countLine}
+                {tagFilterBlocked
+                  ? "Aguardando filtro de tag"
+                  : listLoadFailed
+                    ? "Não foi possível carregar"
+                    : listLoading
+                      ? "Carregando…"
+                      : k.countLine}
               </div>
             </div>
           ));

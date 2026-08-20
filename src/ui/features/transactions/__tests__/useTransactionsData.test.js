@@ -9,8 +9,10 @@
 // rodam de VERDADE aqui — só o limite de rede (`listTransactions` /
 // `getTransactionsSummary`, que chamam `apiClient.get`) é dublado, para
 // inspecionar os params exatos que sairiam na querystring.
+import { createElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 import { useTransactionsData } from "../useTransactionsData.js";
 import { filtersToLegacyParams } from "../filters/filtersToLegacyParams.js";
@@ -140,5 +142,443 @@ describe("fincla-frontend#78 — facet Tags chega como `tag_id` na chamada HTTP"
     expect(listTransactions).toHaveBeenCalledWith(
       expect.objectContaining({ tag_id: CAT_ID }),
     );
+  });
+});
+
+// fincla-frontend#106 — a LISTA não distinguia "carregando"/"erro" de "vazio
+// de verdade": na 1ª carga, antes da resposta chegar, `transactions` já é []
+// e a tela lia isso como "nenhuma transação encontrada" (falso). `hasLoaded`
+// só vira `true` num sucesso (mesmo padrão do `useCalendarData`), e uma
+// revalidação que falha preserva os dados anteriores (stale-while-revalidate)
+// em vez de apagar a lista.
+describe("fincla-frontend#106 — hasLoaded distingue carregando/erro de vazio de verdade", () => {
+  it("começa false e só vira true depois de um sucesso", async () => {
+    listTransactions.mockResolvedValue(EMPTY_PAGE);
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+
+    const { result } = renderWithFilters(BASE_STATE);
+
+    // Antes do efeito resolver, a 1ª carga nunca teve sucesso.
+    expect(result.current.hasLoaded).toBe(false);
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.hasLoaded).toBe(true);
+  });
+
+  it("falha na 1ª carga: hasLoaded continua false e transactions continua vazio", async () => {
+    listTransactions.mockRejectedValue(new Error("network down"));
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+
+    const { result } = renderWithFilters(BASE_STATE);
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.hasLoaded).toBe(false);
+    expect(result.current.error).toBeTruthy();
+    expect(result.current.transactions).toEqual([]);
+  });
+
+  it("stale-while-revalidate: revalidação que falha preserva os dados da carga anterior", async () => {
+    const ROW = {
+      id: "tx-1",
+      description: "Café",
+      amount: -10,
+      type: "expense",
+      date: "2026-08-01",
+      tags: {},
+    };
+    listTransactions.mockResolvedValueOnce({
+      data: [ROW],
+      pagination: { total: 1, has_next: false },
+    });
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+
+    const filters = filtersToLegacyParams(BASE_STATE, { limit: 10 });
+    const { result, rerender } = renderHook(
+      ({ refreshToken }) =>
+        useTransactionsData({ organizationId: ORG, enabled: true, filters, refreshToken }),
+      { initialProps: { refreshToken: 0 } },
+    );
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.hasLoaded).toBe(true);
+    expect(result.current.transactions).toHaveLength(1);
+
+    // Revalidação (mesmos filtros, `refreshToken` bumpado) falha.
+    listTransactions.mockRejectedValueOnce(new Error("network down"));
+    rerender({ refreshToken: 1 });
+
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+
+    // A implementação ANTERIOR zerava `transactions`/`total` no catch — a
+    // lista sumia da tela sob uma falha de revalidação, mesmo com dados
+    // válidos ainda na mão. `hasLoaded` continua true: já carregamos com
+    // sucesso ao menos uma vez.
+    expect(result.current.hasLoaded).toBe(true);
+    expect(result.current.transactions).toHaveLength(1);
+    expect(result.current.transactions[0].id).toBe("tx-1");
+  });
+});
+
+// fincla-frontend#109 achado 2 (revisão da PR #109) — a correção acima do
+// #106 não valia no 1º quadro: `EMPTY_STATE.isLoading` era `false`, e só o
+// `useEffect` ligava. `renderHook`/`render` do RTL flusham efeitos dentro do
+// MESMO `act()` da montagem — não dá pra observar o estado ANTES do efeito
+// por esse caminho (mesma limitação já documentada no teste equivalente de
+// `useTransactionsTagCatalog.test.js`). `renderToStaticMarkup` (SSR) nunca
+// roda `useEffect`, então captura exatamente o 1º quadro que importa.
+describe("fincla-frontend#109 achado 2 — isLoading já começa true no 1º quadro (SSR)", () => {
+  it("enabled+organizationId: isLoading true, hasLoaded false, sem rodar o efeito", () => {
+    function Probe() {
+      const { isLoading, hasLoaded } = useTransactionsData({
+        organizationId: ORG,
+        enabled: true,
+        filters: filtersToLegacyParams(BASE_STATE, { limit: 10 }),
+      });
+      return `${isLoading}|${hasLoaded}`;
+    }
+    expect(renderToStaticMarkup(createElement(Probe))).toBe("true|false");
+  });
+
+  it("sem organizationId: isLoading fica false (não há nada pra carregar)", () => {
+    function Probe() {
+      const { isLoading } = useTransactionsData({
+        organizationId: null,
+        enabled: true,
+        filters: filtersToLegacyParams(BASE_STATE, { limit: 10 }),
+      });
+      return String(isLoading);
+    }
+    expect(renderToStaticMarkup(createElement(Probe))).toBe("false");
+  });
+
+  it("enabled=false: isLoading fica false", () => {
+    function Probe() {
+      const { isLoading } = useTransactionsData({
+        organizationId: ORG,
+        enabled: false,
+        filters: filtersToLegacyParams(BASE_STATE, { limit: 10 }),
+      });
+      return String(isLoading);
+    }
+    expect(renderToStaticMarkup(createElement(Probe))).toBe("false");
+  });
+});
+
+// fincla-frontend#109 achado 3 — o `.catch` mesclava `...current`
+// INCONDICIONALMENTE, mesmo quando organização OU filtros mudaram (não só
+// numa revalidação de verdade do MESMO contexto). Uma falha ao trocar de
+// organização deixava a lista/summary da organização ANTERIOR na tela, com
+// `hasLoaded:true`, como se fossem dados válidos da organização NOVA.
+describe("fincla-frontend#109 achado 3 — falha ao trocar de contexto não herda dados do contexto anterior", () => {
+  it("falha ao trocar de ORGANIZAÇÃO: não preserva transactions/summary/hasLoaded da organização anterior", async () => {
+    const ORG_B = "22222222-2222-4222-8222-222222222222";
+    const ROW = {
+      id: "tx-org-a",
+      description: "Café org A",
+      amount: -10,
+      type: "expense",
+      date: "2026-08-01",
+      tags: {},
+    };
+    listTransactions.mockResolvedValueOnce({
+      data: [ROW],
+      pagination: { total: 1, has_next: false },
+    });
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+
+    const filters = filtersToLegacyParams(BASE_STATE, { limit: 10 });
+    const { result, rerender } = renderHook(
+      ({ organizationId }) => useTransactionsData({ organizationId, enabled: true, filters }),
+      { initialProps: { organizationId: ORG } },
+    );
+
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    expect(result.current.transactions).toHaveLength(1);
+
+    // Troca de organização — a busca da nova organização falha.
+    listTransactions.mockRejectedValueOnce(new Error("network down"));
+    rerender({ organizationId: ORG_B });
+
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+
+    // Não pode mostrar as linhas da organização A sob o contexto da B — isso
+    // é uma mentira silenciosa por trás de um banner de erro.
+    expect(result.current.transactions).toEqual([]);
+    expect(result.current.total).toBe(0);
+    expect(result.current.summary).toBeNull();
+    expect(result.current.hasLoaded).toBe(false);
+  });
+
+  it("falha ao trocar de FILTRO (mesma organização): não preserva a lista do filtro anterior", async () => {
+    const ROW = {
+      id: "tx-filtro-a",
+      description: "Café filtro A",
+      amount: -10,
+      type: "expense",
+      date: "2026-08-01",
+      tags: {},
+    };
+    listTransactions.mockResolvedValueOnce({
+      data: [ROW],
+      pagination: { total: 1, has_next: false },
+    });
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+
+    // `filters` precisa ser uma referência ESTÁVEL entre renders (calculada
+    // FORA do callback do `renderHook`) — computá-la de novo a cada chamada
+    // recria `query`/`summaryQuery` (via `useMemo`) a cada render, o efeito
+    // vê a dependência "mudar" pra sempre e entra num loop infinito de
+    // fetch/render (não é o hook: é um erro de autoria do teste).
+    const filtersA = filtersToLegacyParams(BASE_STATE, { limit: 10 });
+    const filtersB = filtersToLegacyParams({ ...BASE_STATE, type: "despesa" }, { limit: 10 });
+
+    const { result, rerender } = renderHook(
+      ({ filters }) => useTransactionsData({ organizationId: ORG, enabled: true, filters }),
+      { initialProps: { filters: filtersA } },
+    );
+
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    expect(result.current.transactions).toHaveLength(1);
+
+    listTransactions.mockRejectedValueOnce(new Error("network down"));
+    rerender({ filters: filtersB });
+
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+
+    expect(result.current.transactions).toEqual([]);
+    expect(result.current.hasLoaded).toBe(false);
+  });
+});
+
+// fincla-frontend#109 rodada 2, achado 3 — o scroll infinito
+// (`hasMore`/`tryLoadMore` em TransacoesPage.jsx) só aumenta `filters.limit`
+// pra pedir mais páginas da MESMA pergunta; a página recalcula `filters` como
+// objeto NOVO a cada bump, então `query`/`summaryQuery` também trocam de
+// referência — indistinguível, pela checagem referencial de `sameFilters`,
+// de uma troca de verdade de organização/filtro. Uma falha ao "carregar
+// mais" não pode zerar as linhas já lidas.
+describe("fincla-frontend#109 rodada 2, achado 3 — paginação (limit crescente) não é 'contexto novo'", () => {
+  it("falha ao aumentar `limit` (scroll infinito): preserva as linhas/hasLoaded já carregados", async () => {
+    const ROW = {
+      id: "tx-pagina-1",
+      description: "Café página 1",
+      amount: -10,
+      type: "expense",
+      date: "2026-08-01",
+      tags: {},
+    };
+    listTransactions.mockResolvedValueOnce({
+      data: [ROW],
+      pagination: { total: 30, has_next: true },
+    });
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+
+    const filtersPage1 = filtersToLegacyParams(BASE_STATE, { limit: 10 });
+    const filtersPage2 = filtersToLegacyParams(BASE_STATE, { limit: 20 });
+
+    const { result, rerender } = renderHook(
+      ({ filters }) => useTransactionsData({ organizationId: ORG, enabled: true, filters }),
+      { initialProps: { filters: filtersPage1 } },
+    );
+
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    expect(result.current.transactions).toHaveLength(1);
+
+    // "Carregar mais" (limit 10 -> 20) falha.
+    listTransactions.mockRejectedValueOnce(new Error("network down"));
+    rerender({ filters: filtersPage2 });
+
+    // Rodada 3, achado 2: a falha de página vai pro canal `pageError`, não
+    // pro `error` geral (ver describe dedicado abaixo) — aqui só confere
+    // que o dado PRESERVADO (achado da rodada 2) continua de pé.
+    await waitFor(() => expect(result.current.pageError).toBeTruthy());
+
+    // A implementação ANTERIOR (achado 3 da rodada 1, sem distinguir
+    // paginação) trocaria a linha já lida pelo card de erro e derrubaria os
+    // KPIs a zero. Paginação é a MESMA consulta, só mais páginas — conta
+    // como revalidação suave.
+    expect(result.current.hasLoaded).toBe(true);
+    expect(result.current.transactions).toHaveLength(1);
+    expect(result.current.transactions[0].id).toBe("tx-pagina-1");
+  });
+
+  it("falha ao trocar de FILTRO com `limit` também diferente: ainda reseta (não é só paginação)", async () => {
+    const ROW = {
+      id: "tx-filtro-limit",
+      description: "Café filtro",
+      amount: -10,
+      type: "expense",
+      date: "2026-08-01",
+      tags: {},
+    };
+    listTransactions.mockResolvedValueOnce({
+      data: [ROW],
+      pagination: { total: 1, has_next: false },
+    });
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+
+    const filtersA = filtersToLegacyParams(BASE_STATE, { limit: 10 });
+    // MESMO limit que a 1ª chamada de "load more" acima usaria, mas o
+    // FILTRO de verdade também mudou (type) — não pode contar como paginação.
+    const filtersB = filtersToLegacyParams({ ...BASE_STATE, type: "despesa" }, { limit: 20 });
+
+    const { result, rerender } = renderHook(
+      ({ filters }) => useTransactionsData({ organizationId: ORG, enabled: true, filters }),
+      { initialProps: { filters: filtersA } },
+    );
+
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+
+    listTransactions.mockRejectedValueOnce(new Error("network down"));
+    rerender({ filters: filtersB });
+
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+
+    expect(result.current.transactions).toEqual([]);
+    expect(result.current.hasLoaded).toBe(false);
+  });
+});
+
+
+// fincla-frontend#109 rodada 3, achado 2 — a correção da rodada 2 (achado 3:
+// paginação não é "contexto novo") preservava as linhas numa falha de
+// "carregar mais", mas ainda escrevia a mensagem no `error` GERAL — e
+// `hasMore` força `false` sempre que `state.error` está preenchido. Ou seja:
+// o scroll infinito morria de vez (a lista fica truncada com CARA de
+// completa, o sentinel/observer somem, nada re-dispara o fetch), só que de
+// um jeito diferente do bug anterior. `pageError` é um canal PRÓPRIO: não
+// contamina `error` nem `hasMore`.
+describe("fincla-frontend#109 rodada 3, achado 2 — pageError não contamina error/hasMore", () => {
+  it("falha ao 'carregar mais': pageError liga, error GERAL continua vazio, hasMore continua true", async () => {
+    listTransactions.mockResolvedValueOnce({
+      data: Array.from({ length: 10 }, (_, i) => ({
+        id: `tx-${i}`,
+        description: `Item ${i}`,
+        amount: -10,
+        type: "expense",
+        date: "2026-08-01",
+        tags: {},
+      })),
+      pagination: { total: 30, has_next: true },
+    });
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+
+    const filtersPage1 = filtersToLegacyParams(BASE_STATE, { limit: 10 });
+    const filtersPage2 = filtersToLegacyParams(BASE_STATE, { limit: 20 });
+
+    const { result, rerender } = renderHook(
+      ({ filters }) => useTransactionsData({ organizationId: ORG, enabled: true, filters }),
+      { initialProps: { filters: filtersPage1 } },
+    );
+
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    expect(result.current.transactions).toHaveLength(10);
+    expect(result.current.hasMore).toBe(true);
+
+    // "Carregar mais" (limit 10 -> 20) falha.
+    listTransactions.mockRejectedValueOnce(new Error("network down"));
+    rerender({ filters: filtersPage2 });
+
+    await waitFor(() => expect(result.current.pageError).toBeTruthy());
+
+    // As 10 linhas continuam lá (achado 3 da rodada 2, sem regressão)...
+    expect(result.current.transactions).toHaveLength(10);
+    // ...mas agora, ALÉM disso: o erro GERAL não pode ligar (ele governa
+    // `hasMore` abaixo) e `hasMore` precisa continuar `true` — senão o
+    // scroll infinito morre pra sempre, com a lista truncada parecendo
+    // completa.
+    expect(result.current.error).toBe("");
+    expect(result.current.hasMore).toBe(true);
+  });
+
+  it("sucesso ao retomar (mesma página, refreshToken novo) limpa um pageError anterior", async () => {
+    listTransactions.mockResolvedValueOnce({
+      data: [{ id: "tx-0", description: "Item 0", amount: -10, type: "expense", date: "2026-08-01", tags: {} }],
+      pagination: { total: 2, has_next: true },
+    });
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+
+    const filtersPage1 = filtersToLegacyParams(BASE_STATE, { limit: 1 });
+    const filtersPage2 = filtersToLegacyParams(BASE_STATE, { limit: 2 });
+
+    const { result, rerender } = renderHook(
+      ({ filters, refreshToken }) =>
+        useTransactionsData({ organizationId: ORG, enabled: true, filters, refreshToken }),
+      { initialProps: { filters: filtersPage1, refreshToken: 0 } },
+    );
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+
+    listTransactions.mockRejectedValueOnce(new Error("network down"));
+    rerender({ filters: filtersPage2, refreshToken: 0 });
+    await waitFor(() => expect(result.current.pageError).toBeTruthy());
+
+    listTransactions.mockResolvedValueOnce({
+      data: [
+        { id: "tx-0", description: "Item 0", amount: -10, type: "expense", date: "2026-08-01", tags: {} },
+        { id: "tx-1", description: "Item 1", amount: -20, type: "expense", date: "2026-08-01", tags: {} },
+      ],
+      pagination: { total: 2, has_next: false },
+    });
+    // "Retomar" (issue #109 rodada 3, achado 2): a MESMA página (`filtersPage2`
+    // já é a mesma referência — `query` não muda), só um `refreshToken` novo
+    // simulando o gatilho de retentativa. Isso entra pelo ramo
+    // `softRefreshOnly` (é a MESMA consulta que falhou), e um sucesso limpa
+    // `pageError` no `.then` como qualquer outro sucesso.
+    rerender({ filters: filtersPage2, refreshToken: 1 });
+    await waitFor(() => expect(result.current.transactions).toHaveLength(2));
+
+    expect(result.current.pageError).toBe("");
+  });
+});
+
+// fincla-frontend#109 rodada 4, achado 7 — o `setState` de pré-fetch limpava
+// `error` mas não `pageError`. Uma vez setado, só uma resposta bem-sucedida
+// (achado 2 da rodada 3) limpava — e ele influencia a guarda de `hasMore`
+// (achado 1 da rodada 4), então vivia mais que a requisição que o criou:
+// mesmo no INÍCIO de uma nova tentativa (antes dela resolver), `pageError`
+// tinha que continuar aceso indevidamente.
+describe("fincla-frontend#109 rodada 4, achado 7 — pageError é limpo no INÍCIO de qualquer nova tentativa", () => {
+  it("pageError zera assim que uma nova tentativa começa, antes mesmo dela resolver", async () => {
+    listTransactions.mockResolvedValueOnce({
+      data: [{ id: "tx-0", description: "Item 0", amount: -10, type: "expense", date: "2026-08-01", tags: {} }],
+      pagination: { total: 2, has_next: true },
+    });
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+
+    const filtersPage1 = filtersToLegacyParams(BASE_STATE, { limit: 1 });
+    const filtersPage2 = filtersToLegacyParams(BASE_STATE, { limit: 2 });
+
+    const { result, rerender } = renderHook(
+      ({ filters, refreshToken }) =>
+        useTransactionsData({ organizationId: ORG, enabled: true, filters, refreshToken }),
+      { initialProps: { filters: filtersPage1, refreshToken: 0 } },
+    );
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+
+    listTransactions.mockRejectedValueOnce(new Error("network down"));
+    rerender({ filters: filtersPage2, refreshToken: 0 });
+    await waitFor(() => expect(result.current.pageError).toBeTruthy());
+
+    // Nova tentativa (retry) — a promise fica PENDENTE de propósito, pra
+    // provar que a limpeza acontece no INÍCIO do efeito, não só quando (e
+    // se) a resposta chegar.
+    let resolveRetry;
+    const pending = new Promise((resolve) => {
+      resolveRetry = resolve;
+    });
+    listTransactions.mockReturnValueOnce(pending);
+    rerender({ filters: filtersPage2, refreshToken: 1 });
+
+    await waitFor(() => expect(result.current.pageError).toBe(""));
+
+    resolveRetry({
+      data: [
+        { id: "tx-0", description: "Item 0", amount: -10, type: "expense", date: "2026-08-01", tags: {} },
+        { id: "tx-1", description: "Item 1", amount: -20, type: "expense", date: "2026-08-01", tags: {} },
+      ],
+      pagination: { total: 2, has_next: false },
+    });
+    await waitFor(() => expect(result.current.transactions).toHaveLength(2));
   });
 });
