@@ -1336,8 +1336,16 @@ export function DashboardPage({
           </>
         ) : (
           <>
-            <Card style={{ padding: 22 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+            <Card style={{ padding: isMobile ? 14 : 22 }}>
+              {/* issue #87 — CORREÇÃO: revisão adversarial mediu layout real (Chromium
+                  headless, 360-412px) e mostrou que esta linha (selo de humor +
+                  saudação + chip da régua) NÃO estourava o card antes deste ajuste —
+                  ela só se espremia (a pílula da régua quebrava feio em duas linhas).
+                  O estouro de verdade estava na legenda da composição, mais abaixo
+                  (ver comentário perto de `compositionSlices.map`). `flexWrap: "wrap"`
+                  aqui segue valendo por estética — evita a pílula feia — mas não é o
+                  que fecha a #87. */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 5, background: mood.badgeBg, color: mood.badgeColor, borderRadius: 9999, padding: "3px 10px", fontSize: 11, fontWeight: 700, border: `1px solid ${mood.insightBorder}`, transition: "all 0.8s" }}>
                   <MoodIcon size={10} /> {mood.label}
                 </div>
@@ -1444,7 +1452,22 @@ export function DashboardPage({
                   <div style={{ width: `${(committedToCome / barTotal) * 100}%`, background: mood.bar, opacity: 0.4, transition: "width 0.6s, background 0.8s" }} />
                   {barIsIncomeSplit ? <div style={{ flex: 1, background: mood.bar, transition: "background 0.18s" }} /> : null}
                 </div>
-                <div style={{ ...G, display: "flex", gap: 14, marginTop: 7 }}>
+                {/* issue #87 — CAUSA REAL do estouro horizontal: esta legenda (3
+                    fatias, cada uma com bolinha + rótulo + valor monoespaçado) não
+                    tinha `flexWrap`. Com valores do dia a dia e o rótulo mais longo
+                    ("Sobra depois das recorrências"), o `min-content` da linha passa
+                    de 380px contra ~330-360px disponíveis a 360-390px de viewport.
+                    Como o card vive numa coluna de grid `1fr` no mobile, o mínimo
+                    automático da coluna É o `min-content` dos filhos — então o CARD
+                    INTEIRO trava nessa largura e o scroller (`overflowX: hidden`) do
+                    shell corta o que sobra, inclusive o valor da última fatia.
+                    Acontece sempre que há projeção de recorrências (caso normal).
+                    `flexWrap: "wrap"` + `rowGap` deixa cada fatia cair pra própria
+                    linha em vez de esticar o card. */}
+                <div
+                  data-testid="dashboard-composicao-legenda"
+                  style={{ ...G, display: "flex", gap: 14, rowGap: 6, marginTop: 7, flexWrap: "wrap" }}
+                >
                   {compositionSlices.map(({ label, color, value, opacity }) => (
                     <div key={label} style={{ display: "flex", alignItems: "center", gap: 5 }}>
                       <div style={{ width: 7, height: 7, borderRadius: 2, background: color, opacity, transition: "background 0.18s", flexShrink: 0 }} />
@@ -1472,14 +1495,20 @@ export function DashboardPage({
                 <Sparkles size={12} color={mood.kicker} style={{ opacity: 0.5 }} />
               </div>
 
+              {/* issue #87 — CORREÇÃO: idem ao comentário acima — medição real mostrou
+                  que estas duas linhas (número corpo 23 + rótulo) também só se
+                  espremiam, sem estourar o card. `flexWrap: "wrap"` melhora a
+                  legibilidade num rótulo comprido lado a lado com o número, mas o
+                  estouro real da #87 estava na legenda da composição (comentário
+                  perto de `compositionSlices.map`), não aqui. */}
               <div data-testid="dashboard-insight-quantias">
-                <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 3 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 3, flexWrap: "wrap" }}>
                   <span style={{ ...M_MONO, ...NUM, fontSize: 23, fontWeight: 700, color: mood.headlineColor, lineHeight: 1, transition: "color 0.18s" }}>
                     {fmtAbs(exp)}
                   </span>
                   <span style={{ ...G, fontSize: 12, color: T.inkMid }}>gastos no período</span>
                 </div>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 12 }}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 9, marginBottom: 12, flexWrap: "wrap" }}>
                   <span style={{ ...M_MONO, ...NUM, fontSize: 23, fontWeight: 700, color: T.inkGhost, lineHeight: 1 }}>
                     {fmtAbs(expectedByNow)}
                   </span>
