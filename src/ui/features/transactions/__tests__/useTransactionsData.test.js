@@ -389,7 +389,10 @@ describe("fincla-frontend#109 rodada 2, achado 3 — paginação (limit crescent
     listTransactions.mockRejectedValueOnce(new Error("network down"));
     rerender({ filters: filtersPage2 });
 
-    await waitFor(() => expect(result.current.error).toBeTruthy());
+    // Rodada 3, achado 2: a falha de página vai pro canal `pageError`, não
+    // pro `error` geral (ver describe dedicado abaixo) — aqui só confere
+    // que o dado PRESERVADO (achado da rodada 2) continua de pé.
+    await waitFor(() => expect(result.current.pageError).toBeTruthy());
 
     // A implementação ANTERIOR (achado 3 da rodada 1, sem distinguir
     // paginação) trocaria a linha já lida pelo card de erro e derrubaria os
@@ -437,3 +440,94 @@ describe("fincla-frontend#109 rodada 2, achado 3 — paginação (limit crescent
   });
 });
 
+
+// fincla-frontend#109 rodada 3, achado 2 — a correção da rodada 2 (achado 3:
+// paginação não é "contexto novo") preservava as linhas numa falha de
+// "carregar mais", mas ainda escrevia a mensagem no `error` GERAL — e
+// `hasMore` força `false` sempre que `state.error` está preenchido. Ou seja:
+// o scroll infinito morria de vez (a lista fica truncada com CARA de
+// completa, o sentinel/observer somem, nada re-dispara o fetch), só que de
+// um jeito diferente do bug anterior. `pageError` é um canal PRÓPRIO: não
+// contamina `error` nem `hasMore`.
+describe("fincla-frontend#109 rodada 3, achado 2 — pageError não contamina error/hasMore", () => {
+  it("falha ao 'carregar mais': pageError liga, error GERAL continua vazio, hasMore continua true", async () => {
+    listTransactions.mockResolvedValueOnce({
+      data: Array.from({ length: 10 }, (_, i) => ({
+        id: `tx-${i}`,
+        description: `Item ${i}`,
+        amount: -10,
+        type: "expense",
+        date: "2026-08-01",
+        tags: {},
+      })),
+      pagination: { total: 30, has_next: true },
+    });
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+
+    const filtersPage1 = filtersToLegacyParams(BASE_STATE, { limit: 10 });
+    const filtersPage2 = filtersToLegacyParams(BASE_STATE, { limit: 20 });
+
+    const { result, rerender } = renderHook(
+      ({ filters }) => useTransactionsData({ organizationId: ORG, enabled: true, filters }),
+      { initialProps: { filters: filtersPage1 } },
+    );
+
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+    expect(result.current.transactions).toHaveLength(10);
+    expect(result.current.hasMore).toBe(true);
+
+    // "Carregar mais" (limit 10 -> 20) falha.
+    listTransactions.mockRejectedValueOnce(new Error("network down"));
+    rerender({ filters: filtersPage2 });
+
+    await waitFor(() => expect(result.current.pageError).toBeTruthy());
+
+    // As 10 linhas continuam lá (achado 3 da rodada 2, sem regressão)...
+    expect(result.current.transactions).toHaveLength(10);
+    // ...mas agora, ALÉM disso: o erro GERAL não pode ligar (ele governa
+    // `hasMore` abaixo) e `hasMore` precisa continuar `true` — senão o
+    // scroll infinito morre pra sempre, com a lista truncada parecendo
+    // completa.
+    expect(result.current.error).toBe("");
+    expect(result.current.hasMore).toBe(true);
+  });
+
+  it("sucesso ao retomar (mesma página, refreshToken novo) limpa um pageError anterior", async () => {
+    listTransactions.mockResolvedValueOnce({
+      data: [{ id: "tx-0", description: "Item 0", amount: -10, type: "expense", date: "2026-08-01", tags: {} }],
+      pagination: { total: 2, has_next: true },
+    });
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+
+    const filtersPage1 = filtersToLegacyParams(BASE_STATE, { limit: 1 });
+    const filtersPage2 = filtersToLegacyParams(BASE_STATE, { limit: 2 });
+
+    const { result, rerender } = renderHook(
+      ({ filters, refreshToken }) =>
+        useTransactionsData({ organizationId: ORG, enabled: true, filters, refreshToken }),
+      { initialProps: { filters: filtersPage1, refreshToken: 0 } },
+    );
+    await waitFor(() => expect(result.current.hasLoaded).toBe(true));
+
+    listTransactions.mockRejectedValueOnce(new Error("network down"));
+    rerender({ filters: filtersPage2, refreshToken: 0 });
+    await waitFor(() => expect(result.current.pageError).toBeTruthy());
+
+    listTransactions.mockResolvedValueOnce({
+      data: [
+        { id: "tx-0", description: "Item 0", amount: -10, type: "expense", date: "2026-08-01", tags: {} },
+        { id: "tx-1", description: "Item 1", amount: -20, type: "expense", date: "2026-08-01", tags: {} },
+      ],
+      pagination: { total: 2, has_next: false },
+    });
+    // "Retomar" (issue #109 rodada 3, achado 2): a MESMA página (`filtersPage2`
+    // já é a mesma referência — `query` não muda), só um `refreshToken` novo
+    // simulando o gatilho de retentativa. Isso entra pelo ramo
+    // `softRefreshOnly` (é a MESMA consulta que falhou), e um sucesso limpa
+    // `pageError` no `.then` como qualquer outro sucesso.
+    rerender({ filters: filtersPage2, refreshToken: 1 });
+    await waitFor(() => expect(result.current.transactions).toHaveLength(2));
+
+    expect(result.current.pageError).toBe("");
+  });
+});

@@ -1473,19 +1473,24 @@ function TransacoesPageBody({
     el.scrollTo({ top: 0, behavior: "smooth" });
   }, []);
 
+  // fincla-frontend#109 rodada 3, achado 4: `resultsLoading` usava
+  // `transactionsData.isLoading` cru — o MESMO booleano que não é confiável
+  // no 1º quadro (ver comentário de `listNeverLoaded`/`listLoading` acima).
+  // Sem isto, o CTA "Ver N transações" (bottom sheet mobile e
+  // `FacetApplyFooter` no desktop) mostrava "Ver 0 transações" — a mesma
+  // afirmação falsa que a lista e a faixa de KPI já foram corrigidas pra não
+  // fazer. `listNeverLoaded` cobre carregando/falhou/o quadro intermediário
+  // igual às outras duas correções.
   const filterBarApplyProps = useMemo(
     () => ({
       filteredCount,
-      resultsLoading:
-        searchAwaitingCommit ||
-        (shouldUseRealData && transactionsData.isLoading),
+      resultsLoading: searchAwaitingCommit || listNeverLoaded,
       onAfterApply: isMobile ? undefined : scrollListToTop,
     }),
     [
       filteredCount,
       searchAwaitingCommit,
-      shouldUseRealData,
-      transactionsData.isLoading,
+      listNeverLoaded,
       isMobile,
       scrollListToTop,
     ],
@@ -1956,15 +1961,20 @@ function TransacoesPageBody({
                 hideSearch
               />
             </div>
-            {/* Footer CTA — safe area aware */}
+            {/* Footer CTA — safe area aware. fincla-frontend#109 rodada 3,
+                achado 4: espelha o `FacetApplyFooter` do desktop — enquanto
+                `listNeverLoaded`, "Ver 0 transações" seria uma afirmação
+                falsa (a busca ainda não respondeu de verdade). */}
             <div style={{ padding:"12px 20px", paddingBottom:"calc(12px + env(safe-area-inset-bottom, 0px))",
               borderTop:`1px solid ${T.border}`, background:T.surface, flexShrink:0 }}>
               <button onClick={onSheetClose}
+                disabled={listNeverLoaded}
                 style={{ ...G, width:"100%", background:T.ink, color:"#fff",
                   border:"none", borderRadius:12, padding:"15px",
-                  fontSize:15, fontWeight:800, cursor:"pointer",
+                  fontSize:15, fontWeight:800, cursor: listNeverLoaded ? "wait" : "pointer",
+                  opacity: listNeverLoaded ? 0.7 : 1,
                   display:"flex", alignItems:"center", justifyContent:"center", gap:8 }}>
-                Ver {filteredCount} transaç{filteredCount!==1?"ões":"ão"}
+                {listNeverLoaded ? "Atualizando…" : <>Ver {filteredCount} transaç{filteredCount!==1?"ões":"ão"}</>}
               </button>
             </div>
           </div>

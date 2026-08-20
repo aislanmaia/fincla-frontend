@@ -13,6 +13,10 @@ import {
 const EMPTY_STATE = {
   isLoading: false,
   error: "",
+  // fincla-frontend#109 rodada 3, achado 2: canal SEPARADO pra falha ao
+  // "carregar mais" (scroll infinito) — nunca pode contaminar `error`
+  // (que `hasMore` abaixo usa pra decidir se continua oferecendo páginas).
+  pageError: "",
   summary: null,
   transactions: [],
   total: 0,
@@ -128,6 +132,7 @@ export function useTransactionsData({
         setState({
           isLoading: false,
           error: "",
+          pageError: "",
           summary,
           transactions,
           total: response.pagination?.total ?? transactions.length,
@@ -139,31 +144,45 @@ export function useTransactionsData({
         if (cancelled) return;
 
         const message = formatTransactionsApiError(error);
-        setState((current) =>
-          softRefreshOnly || samePaginationContext
-            ? // Stale-while-revalidate de verdade (mesmo padrão do
-              // `useCalendarData`): MESMA organização e MESMOS filtros — só o
-              // `refreshToken` mudou (ex.: transação salva em outra tela) OU
-              // só `limit` cresceu (scroll infinito, achado 3 da rodada 2) —
-              // os dados na tela continuam válidos pra ESTE contexto, então
-              // preserva (`...current`) e só o aviso de erro liga.
-              { ...current, isLoading: false, error: message }
-            : // Organização OU filtros de verdade mudaram (fincla-frontend#109
-              // achado 3): `current` é de OUTRO contexto — preservar aqui
-              // mostraria a lista/KPIs da organização ou do filtro ANTERIOR
-              // sob os chips já trocados na tela, uma mentira silenciosa por
-              // trás de um banner de erro. `hasLoaded` volta a `false`: este
-              // contexto nunca carregou com sucesso.
-              {
-                isLoading: false,
-                error: message,
-                summary: null,
-                transactions: [],
-                total: 0,
-                pagination: null,
-                hasLoaded: false,
-              },
-        );
+        setState((current) => {
+          if (softRefreshOnly) {
+            // Stale-while-revalidate de verdade (mesmo padrão do
+            // `useCalendarData`): MESMA organização e MESMOS filtros — só o
+            // `refreshToken` mudou (ex.: transação salva em outra tela). Os
+            // dados na tela continuam válidos pra ESTE contexto, então
+            // preserva (`...current`) e só o aviso de erro liga.
+            return { ...current, isLoading: false, error: message };
+          }
+          if (samePaginationContext) {
+            // fincla-frontend#109 rodada 3, achado 2: uma falha ao "carregar
+            // mais" (só `limit` cresceu — scroll infinito) NÃO pode virar o
+            // `error` geral. `hasMore` (abaixo) força `false` quando
+            // `state.error` está preenchido — se essa falha usasse o mesmo
+            // canal, o scroll infinito morria pra sempre: a lista ficava
+            // truncada (só as páginas já lidas) mas com CARA de completa
+            // (sentinel/observer somem porque `hasMore` vira false), sem
+            // nada re-disparando o fetch. Fica num canal PRÓPRIO
+            // (`pageError`) — `error`/`hasLoaded`/`hasMore` continuam lendo
+            // o estado de ANTES desta página, que é válido.
+            return { ...current, isLoading: false, pageError: message };
+          }
+          // Organização OU filtros de verdade mudaram (fincla-frontend#109
+          // achado 3, rodada 1): `current` é de OUTRO contexto — preservar
+          // aqui mostraria a lista/KPIs da organização ou do filtro ANTERIOR
+          // sob os chips já trocados na tela, uma mentira silenciosa por
+          // trás de um banner de erro. `hasLoaded` volta a `false`: este
+          // contexto nunca carregou com sucesso.
+          return {
+            isLoading: false,
+            error: message,
+            pageError: "",
+            summary: null,
+            transactions: [],
+            total: 0,
+            pagination: null,
+            hasLoaded: false,
+          };
+        });
       });
 
     return () => {
@@ -222,14 +241,27 @@ export function useTransactionsData({
     const limit = Math.max(1, Number(query.limit) || 10);
     const next = state.pagination?.has_next;
 
-    if (!state.isLoading && loaded < limit) return false;
+    // fincla-frontend#109 rodada 3, achado 2: um sinal EXPLÍCITO do backend
+    // (`has_next`) tem prioridade sobre a heurística de tamanho de página
+    // abaixo — precisa vir ANTES dela. Motivo: numa falha de "carregar
+    // mais" (`pageError`), `state.transactions` fica com o tamanho da
+    // ÚLTIMA PÁGINA QUE CARREGOU COM SUCESSO, menor que `query.limit` (a
+    // página que falhou nunca chegou a preencher `state`) — "loaded <
+    // limit" daria falso negativo bem na hora que mais importa saber que
+    // AINDA HÁ mais páginas.
     if (next === false) return false;
     if (next === true) return true;
+
+    // Sem sinal explícito, cai na heurística — mas só quando o `state`
+    // atual reflete de fato o `limit` pedido (sem uma falha de página
+    // pendente distorcendo a comparação).
+    if (!state.pageError && !state.isLoading && loaded < limit) return false;
 
     return state.total > loaded;
   }, [
     query,
     state.error,
+    state.pageError,
     state.isLoading,
     state.pagination,
     state.total,
@@ -239,6 +271,7 @@ export function useTransactionsData({
   return {
     isLoading: state.isLoading,
     error: state.error,
+    pageError: state.pageError,
     hasLoaded: state.hasLoaded,
     summary: state.summary,
     transactions: state.transactions,

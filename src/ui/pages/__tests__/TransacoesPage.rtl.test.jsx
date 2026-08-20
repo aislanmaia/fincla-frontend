@@ -866,6 +866,59 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     expect(screen.getAllByText("—").length).toBe(1);
     expect(screen.getAllByText(/R\$/).length).toBeGreaterThan(0);
   });
+
+  // fincla-frontend#109 rodada 3, achado 4: o CTA "Ver N transações" (bottom
+  // sheet mobile e `FacetApplyFooter` no painel inline do desktop) usava
+  // `transactionsData.isLoading` cru pra decidir `resultsLoading` — o MESMO
+  // booleano que este arquivo já documentou como não confiável no 1º quadro
+  // (issue #109 achado 2). Com `hasLoaded:false` e `isLoading` AINDA `false`
+  // (o quadro entre habilitar e o efeito ligar `isLoading`), o CTA afirmava
+  // "Ver 0 transações" — a mesma mentira que a lista e a faixa de KPI já
+  // foram corrigidas pra não fazer.
+  it("CTA desktop (FacetApplyFooter): 'Atualizando…' quando a lista nunca carregou, nunca 'Ver 0 transações'", async () => {
+    transactionsDataMock.mockReturnValue({
+      isLoading: false, error: "", hasLoaded: false,
+      summary: null, transactions: [], total: 0, hasMore: false,
+      removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
+    });
+    renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
+
+    expect(screen.getByText("Atualizando…")).toBeInTheDocument();
+    expect(screen.queryByText(/Ver 0 transaç/i)).not.toBeInTheDocument();
+  });
+
+  it("CTA mobile (bottom sheet): 'Atualizando…' quando a lista nunca carregou, nunca 'Ver 0 transações'", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 375 });
+    window.dispatchEvent(new Event("resize"));
+    transactionsDataMock.mockReturnValue({
+      isLoading: false, error: "", hasLoaded: false,
+      summary: null, transactions: [], total: 0, hasMore: false,
+      removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
+    });
+    renderPage({ isMobile: true });
+
+    await userEvent.click(screen.getByRole("button", { name: /Abrir filtros/i }));
+
+    expect(screen.getByRole("button", { name: "Atualizando…" })).toBeInTheDocument();
+    expect(screen.queryByText(/Ver 0 transaç/i)).not.toBeInTheDocument();
+  });
+
+  it("CTA volta ao normal ('Ver N transações') quando hasLoaded=true", async () => {
+    transactionsDataMock.mockReturnValue({
+      isLoading: false, error: "", hasLoaded: true,
+      summary: { total_income: 0, total_expenses: 0, total_refunds: 0, balance: 0 },
+      transactions: [], total: 0, hasMore: false,
+      removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
+    });
+    renderPage();
+
+    await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
+
+    expect(screen.getByText(/Ver 0 transaç/i)).toBeInTheDocument();
+    expect(screen.queryByText("Atualizando…")).not.toBeInTheDocument();
+  });
 });
 
 describe("<TransacoesPage> — lançamentos cobertos por âncora (S4)", { timeout: 15000 }, () => {

@@ -459,6 +459,11 @@ export const NovaTransacaoModal = ({
     setDetailTagIds,
     setDetailTagLabelById,
     setTags,
+    // fincla-frontend#109 rodada 3, achado 3: mesmo canal de erro que
+    // `addQuickDetailTag` já usa — sem isto, uma tag que falha ao aplicar a
+    // sugestão de IA falhava 100% em silêncio (clica "Aplicar", nada muda,
+    // sem explicação).
+    setTxSubmitError,
   });
 
   const detailTagRowsAvailable = useMemo(() => {

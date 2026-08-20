@@ -57,6 +57,7 @@ export function useAiSuggestion({
   setDetailTagIds,
   setDetailTagLabelById,
   setTags,
+  setTxSubmitError,
 }) {
   const [aiSuggestion, setAiSuggestion] = useState(null);
   const [aiApplied, setAiApplied] = useState(false);
@@ -89,16 +90,12 @@ export function useAiSuggestion({
       // local e síncrona: nada impede clicar "Aplicar" antes do catálogo
       // terminar de carregar.
       //
-      // Rodada 2, achado 2: a 1ª correção fazia a tag que falhasse cair em
-      // `setTags` (texto livre) — mas em modo live `tags` é ESTADO MORTO: os
-      // chips da seção "Tags" só leem `detailTagIds` (a seção some se ele
-      // estiver vazio) e o payload da transação só manda `detailTagIds`. A
-      // tag continuava sumindo, só que em silêncio ainda mais fundo, com
-      // `aiApplied(true)` afirmando "Categoria e tags aplicadas". Marca a
-      // falha e NÃO fecha como aplicado — o botão "Aplicar" continua
-      // disponível pra tentar de novo (as tags que já resolveram ficam;
-      // `ensureDetailTag` é idempotente pra elas, não duplica num retry).
-      let hasFailedTag = false;
+      // Rodada 3, achado 3: o `catch` engolia a mensagem — a pessoa clicava
+      // "Aplicar", nada acontecia, sem explicação nenhuma. Mesmo padrão do
+      // caminho irmão `addQuickDetailTag` (NovaTransacaoModal.jsx): mostra
+      // `err.message` via `setTxSubmitError`.
+      if (typeof setTxSubmitError === "function") setTxSubmitError("");
+      let failMessage = "";
       for (const t of aiSuggestion.tags || []) {
         try {
           const id = await ensureDetailTag(String(t), catIdForDetailTags);
@@ -106,13 +103,26 @@ export function useAiSuggestion({
             nextIds.push(id);
             nextLabels[String(id)] = String(t);
           }
-        } catch {
-          hasFailedTag = true;
+        } catch (err) {
+          failMessage =
+            typeof err?.message === "string" ? err.message : "Não foi possível adicionar a tag";
         }
       }
-      setDetailTagIds(nextIds);
-      setDetailTagLabelById(nextLabels);
-      if (hasFailedTag) return;
+      // Rodada 3, achado 1 (regra dura do projeto: nenhuma ação de IA pode
+      // destruir o que a pessoa já tem na tela) — `setDetailTagIds(nextIds)`
+      // SUBSTITUÍA a lista inteira. Se a pessoa já tinha escolhido tags à
+      // mão (quick-add, chips sugeridos) antes de clicar "Aplicar", elas
+      // desapareciam. MESCLA em vez de substituir.
+      setDetailTagIds((prev) => {
+        const merged = [...prev];
+        for (const id of nextIds) if (!merged.includes(id)) merged.push(id);
+        return merged;
+      });
+      setDetailTagLabelById((prev) => ({ ...prev, ...nextLabels }));
+      if (failMessage) {
+        if (typeof setTxSubmitError === "function") setTxSubmitError(failMessage);
+        return;
+      }
     } else {
       setTags(aiSuggestion.tags || []);
       setDetailTagIds([]);
@@ -130,6 +140,7 @@ export function useAiSuggestion({
     setDetailTagIds,
     setDetailTagLabelById,
     setTags,
+    setTxSubmitError,
   ]);
 
   const resetAi = useCallback(() => {
