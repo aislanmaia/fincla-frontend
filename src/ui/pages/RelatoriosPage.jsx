@@ -558,7 +558,9 @@ export function RelatoriosPage({
     const n = Number(v);
     if (!Number.isFinite(n)) return "0";
     const a = Math.abs(n);
-    return a >= 1000 ? (a / 1000).toFixed(1) + "k" : String(a);
+    // Abaixo de mil o eixo passa a ser usado por categorias isoladas (R$ 100,
+    // não R$ 34 mil): arredonda para não imprimir tick com dízima.
+    return a >= 1000 ? (a / 1000).toFixed(1) + "k" : String(Math.round(a * 10) / 10);
   };
 
   /* ── Reusable UI atoms ───────────────────────────────────── */
@@ -668,13 +670,19 @@ export function RelatoriosPage({
         <XAxis dataKey="mes" tick={{ ...G, fontSize: 11, fill:T.inkLight }} axisLine={false} tickLine={false} />
         <YAxis tick={{ ...G, fontSize: 11, fill:T.inkLight }} axisLine={false} tickLine={false} tickFormatter={v=>fmtK(v)} />
         <Tooltip content={<CustomTip />} />
-        {Object.entries(driftColors).map(([cat,color]) => (
-          <Area key={cat} type="monotone" dataKey={cat} stackId="1"
-            stroke={selectedCat&&selectedCat!==cat ? "transparent" : color}
-            fill={selectedCat ? (selectedCat===cat ? color : T.grayLight) : color}
-            fillOpacity={selectedCat ? (selectedCat===cat ? 0.88 : 0.18) : 0.72}
-            strokeWidth={selectedCat===cat ? 2 : 0} />
-        ))}
+        {/* Isolar = mostrar só a categoria, sem empilhar: no stack a linha fica na
+            posição acumulada e o eixo continua na escala do total, o que faz uma
+            categoria de R$ 100 parecer um gasto de R$ 34 mil. */}
+        {selectedCat ? (
+          <Area key={selectedCat} type="monotone" dataKey={selectedCat}
+            stroke={driftColors[selectedCat]} fill={driftColors[selectedCat]}
+            fillOpacity={0.3} strokeWidth={2} />
+        ) : (
+          Object.entries(driftColors).map(([cat,color]) => (
+            <Area key={cat} type="monotone" dataKey={cat} stackId="1"
+              stroke={color} fill={color} fillOpacity={0.72} strokeWidth={0} />
+          ))
+        )}
       </AreaChart>
     </ResponsiveContainer>
   );
