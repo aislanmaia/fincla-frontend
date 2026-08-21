@@ -41,6 +41,34 @@ export async function fetchFirstCategoriaTagId(
   return id;
 }
 
+/** Orgs do owner, na mesma ordem que a SPA recebe (a sessão abre a primeira). */
+export async function listMyOrganizations(
+  bearer: string,
+): Promise<{ id: string; name: string }[]> {
+  const res = await fetch(`${apiBase()}/v1/memberships/my-organizations`, {
+    headers: { Authorization: `Bearer ${bearer}` },
+  });
+  if (!res.ok) throw new Error(`my-organizations: ${res.status} ${await res.text()}`);
+  const data = (await res.json()) as {
+    organizations?: { organization: { id: string; name: string } }[];
+  };
+  return (data.organizations ?? []).map((item) => item.organization);
+}
+
+/** Tags de categoria da org, inteiras (o rótulo PT depende de icon_key/is_default). */
+export async function listCategoriaTags(
+  bearer: string,
+  organizationId: string,
+): Promise<Record<string, any>[]> {
+  const res = await fetch(
+    `${apiBase()}/v1/tags?organization_id=${encodeURIComponent(organizationId)}&tag_type=categoria`,
+    { headers: { Authorization: `Bearer ${bearer}` } },
+  );
+  if (!res.ok) throw new Error(`tags: ${res.status} ${await res.text()}`);
+  const data = (await res.json()) as { tags?: Record<string, any>[] };
+  return data.tags ?? [];
+}
+
 export async function postRecurringSeries(
   bearer: string,
   organizationId: string,

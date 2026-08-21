@@ -46,6 +46,10 @@ export default defineConfig({
       testMatch: "**/settings-categories-tags.spec.ts",
     },
     {
+      name: "reports-category-isolate",
+      testMatch: "**/reports-category-isolate.spec.ts",
+    },
+    {
       name: "simulation",
       testMatch: "**/simulation.spec.ts",
       dependencies: ["smoke"],

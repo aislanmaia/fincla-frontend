@@ -349,6 +349,10 @@ export function RelatoriosPage({
   const driftColors = shouldUseRealData
     ? reportsData.driftColors
     : (dataMode === "mock" ? DRIFT_COLORS : {});
+  /** Isolar só vale enquanto a categoria existir na resposta atual: trocar o
+   *  período muda a lista de categorias, e um selectedCat órfão deixaria o
+   *  gráfico vazio (dataKey que não casa com campo nenhum das linhas). */
+  const isolatedCat = selectedCat && driftColors[selectedCat] ? selectedCat : null;
   const compositionData = shouldUseRealData
     ? reportsData.compositionData
     : (dataMode === "mock" ? REL_COMPOSICAO : []);
@@ -361,6 +365,14 @@ export function RelatoriosPage({
   const velocityDaily = shouldUseRealData
     ? reportsData.velocityDaily
     : (dataMode === "mock" ? REL_DAILY : []);
+
+  /** Categoria isolada que sumiu da resposta: limpa a seleção para o card não
+   *  ficar preso num destaque sem chip aceso. */
+  useEffect(() => {
+    if (!selectedCat) return;
+    if (Object.keys(driftColors).length === 0) return;
+    if (!driftColors[selectedCat]) setSelectedCat(null);
+  }, [selectedCat, driftColors]);
 
   useEffect(() => {
     if (isMobile) return;
@@ -558,9 +570,15 @@ export function RelatoriosPage({
     const n = Number(v);
     if (!Number.isFinite(n)) return "0";
     const a = Math.abs(n);
-    // Abaixo de mil o eixo passa a ser usado por categorias isoladas (R$ 100,
-    // não R$ 34 mil): arredonda para não imprimir tick com dízima.
-    return a >= 1000 ? (a / 1000).toFixed(1) + "k" : String(Math.round(a * 10) / 10);
+    return a >= 1000 ? (a / 1000).toFixed(1) + "k" : String(a);
+  };
+
+  /** Tick do eixo de categorias: com uma categoria isolada o eixo desce para a
+   *  casa das centenas, faixa em que fmtK imprimiria a dízima do valor cru. */
+  const fmtDriftTick = (v) => {
+    const n = Math.abs(Number(v));
+    if (!Number.isFinite(n)) return "0";
+    return n >= 1000 ? fmtK(n) : String(Math.round(n * 10) / 10);
   };
 
   /* ── Reusable UI atoms ───────────────────────────────────── */
@@ -664,27 +682,30 @@ export function RelatoriosPage({
   };
 
   const DriftChart = ({ height=190 }) => (
-    <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={activeDrift} margin={{ top:8, right:4, left:-22, bottom:0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
-        <XAxis dataKey="mes" tick={{ ...G, fontSize: 11, fill:T.inkLight }} axisLine={false} tickLine={false} />
-        <YAxis tick={{ ...G, fontSize: 11, fill:T.inkLight }} axisLine={false} tickLine={false} tickFormatter={v=>fmtK(v)} />
-        <Tooltip content={<CustomTip />} />
-        {/* Isolar = mostrar só a categoria, sem empilhar: no stack a linha fica na
-            posição acumulada e o eixo continua na escala do total, o que faz uma
-            categoria de R$ 100 parecer um gasto de R$ 34 mil. */}
-        {selectedCat ? (
-          <Area key={selectedCat} type="monotone" dataKey={selectedCat}
-            stroke={driftColors[selectedCat]} fill={driftColors[selectedCat]}
-            fillOpacity={0.3} strokeWidth={2} />
-        ) : (
-          Object.entries(driftColors).map(([cat,color]) => (
-            <Area key={cat} type="monotone" dataKey={cat} stackId="1"
-              stroke={color} fill={color} fillOpacity={0.72} strokeWidth={0} />
-          ))
-        )}
-      </AreaChart>
-    </ResponsiveContainer>
+    <div data-testid="reports-drift-chart" style={{ width:"100%", height }}>
+      <ResponsiveContainer width="100%" height={height}>
+        <AreaChart data={activeDrift} margin={{ top:8, right:4, left:-22, bottom:0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
+          <XAxis dataKey="mes" tick={{ ...G, fontSize: 11, fill:T.inkLight }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ ...G, fontSize: 11, fill:T.inkLight }} axisLine={false} tickLine={false}
+            tickFormatter={v=>fmtDriftTick(v)} />
+          <Tooltip content={<CustomTip />} />
+          {/* Isolar = mostrar só a categoria, sem empilhar: no stack a linha fica na
+              posição acumulada e o eixo continua na escala do total, o que faz uma
+              categoria de R$ 100 parecer um gasto de R$ 34 mil. */}
+          {isolatedCat ? (
+            <Area key={isolatedCat} type="monotone" dataKey={isolatedCat}
+              stroke={driftColors[isolatedCat]} fill={driftColors[isolatedCat]}
+              fillOpacity={0.3} strokeWidth={2} />
+          ) : (
+            Object.entries(driftColors).map(([cat,color]) => (
+              <Area key={cat} type="monotone" dataKey={cat} stackId="1"
+                stroke={color} fill={color} fillOpacity={0.72} strokeWidth={0} />
+            ))
+          )}
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
   );
 
   const ScoreChart = ({ height=155 }) => (

@@ -6,6 +6,28 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RelatoriosPage } from "../RelatoriosPage.jsx";
 
+/** Estado servido pelo hook de dados reais — mutável para simular a resposta do
+ *  período seguinte trazendo outra lista de categorias. */
+const liveReports = {
+  driftData: [],
+  driftColors: {},
+};
+vi.mock("../../features/reports/useReportsData.js", () => ({
+  useReportsData: () => ({
+    isLoading: false,
+    error: "",
+    monthlyData: [],
+    driftData: liveReports.driftData,
+    driftColors: liveReports.driftColors,
+    compositionData: [],
+    compositionWindowLabel: null,
+    waterfallRows: [],
+    velocityDaily: [],
+    kpis: { periodTotalR: 0, periodTotalG: 0 },
+    hasRealData: true,
+  }),
+}));
+
 afterEach(cleanup);
 
 // jsdom não tem ResizeObserver (a página mede a cascata com ele).
@@ -66,5 +88,33 @@ describe("RelatoriosPage — evolução por categoria", () => {
     expect(areas).toHaveLength(1);
     expect(areas[0].dataset.datakey).toBe("Lazer");
     expect(areas[0].dataset.stackid).toBe("");
+  });
+
+  it("solta a categoria isolada que sumiu da resposta do novo período", async () => {
+    const user = userEvent.setup();
+    liveReports.driftData = [
+      { mes: "Jul'26", Moradia: 1500, "Educação": 300 },
+      { mes: "Ago'26", Moradia: 1500, "Educação": 280 },
+    ];
+    liveReports.driftColors = { Moradia: "#0F0F0D", "Educação": "#2563EB" };
+
+    const props = { dataMode: "live", organizationId: "org-1" };
+    const { rerender } = render(<RelatoriosPage {...props} />);
+
+    await user.click(
+      screen.getAllByRole("button").find((el) => el.textContent.trim() === "Educação"),
+    );
+    expect(driftAreas()).toHaveLength(1);
+
+    // Novo período: "Educação" não voltou. Sem a guarda, o gráfico ficaria com
+    // uma Area apontando para um dataKey inexistente — plot vazio.
+    liveReports.driftData = [{ mes: "Set'26", Moradia: 1500 }];
+    liveReports.driftColors = { Moradia: "#0F0F0D" };
+    rerender(<RelatoriosPage {...props} periodo="3m" />);
+
+    const areas = driftAreas();
+    expect(areas).toHaveLength(1);
+    expect(areas[0].dataset.datakey).toBe("Moradia");
+    expect(areas[0].dataset.stackid).toBe("1");
   });
 });
