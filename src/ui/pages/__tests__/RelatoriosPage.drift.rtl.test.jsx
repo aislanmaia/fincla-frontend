@@ -90,6 +90,22 @@ describe("RelatoriosPage — evolução por categoria", () => {
     expect(areas[0].dataset.stackid).toBe("");
   });
 
+  it("o controle de limpar devolve a pilha completa", async () => {
+    const user = userEvent.setup();
+    render(<RelatoriosPage dataMode="mock" organizationId={null} />);
+
+    await user.click(
+      screen.getAllByRole("button").find((el) => el.textContent.trim() === "Lazer"),
+    );
+    expect(driftAreas()).toHaveLength(1);
+
+    await user.click(screen.getAllByLabelText("Limpar categoria em destaque")[0]);
+
+    const areas = driftAreas();
+    expect(areas.length).toBeGreaterThan(1);
+    expect(areas.every((el) => el.dataset.stackid === "1")).toBe(true);
+  });
+
   it("solta a categoria isolada que sumiu da resposta do novo período", async () => {
     const user = userEvent.setup();
     liveReports.driftData = [
