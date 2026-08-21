@@ -106,11 +106,12 @@ describe("RelatoriosPage — evolução por categoria", () => {
     );
     expect(driftAreas()).toHaveLength(1);
 
-    // Novo período: "Educação" não voltou. Sem a guarda, o gráfico ficaria com
-    // uma Area apontando para um dataKey inexistente — plot vazio.
+    // Resposta seguinte (outro período, escolhido dentro da página) sem
+    // "Educação". Sem a guarda, sobraria uma Area apontando para um dataKey
+    // que não existe em linha nenhuma — plot vazio.
     liveReports.driftData = [{ mes: "Set'26", Moradia: 1500 }];
     liveReports.driftColors = { Moradia: "#0F0F0D" };
-    rerender(<RelatoriosPage {...props} periodo="3m" />);
+    rerender(<RelatoriosPage {...props} />);
 
     const areas = driftAreas();
     expect(areas).toHaveLength(1);

@@ -745,7 +745,7 @@ export function RelatoriosPage({
             color:selectedCat===cat ? color : T.inkMid }}>{cat}</span>
         </button>
       ))}
-      {selectedCat && (
+      {isolatedCat && (
         <button onClick={() => setSelectedCat(null)}
           style={{ ...G, fontSize: 11, color:T.inkMid, background:"none", border:`1px solid ${T.border}`,
             borderRadius:20, padding:"4px 9px", cursor:"pointer" }}>✕ Limpar</button>
@@ -918,8 +918,8 @@ export function RelatoriosPage({
           {relTab==="categorias" && (<>
             <InsightChip
               color={T.purple} icon="📊"
-              text={selectedCat
-                ? `<strong>${selectedCat}</strong> em destaque. Toque novamente para ver todas.`
+              text={isolatedCat
+                ? `<strong>${isolatedCat}</strong> em destaque. Toque novamente para ver todas.`
                 : `Lazer e Outros foram os principais drivers de variação no período. Toque em uma categoria para isolar.`}
             />
             <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:14, padding:"16px 16px 12px" }}>
@@ -1087,7 +1087,7 @@ export function RelatoriosPage({
         <Section title="Evolução por" serifWord="categoria"
           style={desktopCols===3 ? { gridColumn:"1 / span 2", gridRow:2 } : undefined}
           insight={{ color:T.purple, icon:"📊",
-            text:`Clique nas categorias abaixo para isolar. ${selectedCat ? `<strong>${selectedCat}</strong> em destaque.` : "Lazer e Outros variaram +134% em Nov–Dez vs set."}`}}>
+            text:`Clique nas categorias abaixo para isolar. ${isolatedCat ? `<strong>${isolatedCat}</strong> em destaque.` : "Lazer e Outros variaram +134% em Nov–Dez vs set."}`}}>
           <div style={{ marginBottom:10, flexShrink:0 }}><CatLegend /></div>
           <div style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"center", minHeight:0 }}>
             <DriftChart height={desktopChartH} />

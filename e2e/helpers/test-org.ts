@@ -71,12 +71,16 @@ export async function resetAndSeedOrganization(
     throw new Error(`test/seed: ${seedRes.status} ${await seedRes.text()}`);
   }
 
-  fs.mkdirSync(cacheDir, { recursive: true });
-  fs.writeFileSync(
-    cacheFile,
-    JSON.stringify({ organizationId: resetBody.organization_id, profile }, null, 2),
-    "utf8",
-  );
+  // O cache é o fallback compartilhado das outras specs: um alvo pontual não
+  // pode repontá-lo, senão o resto da suíte passa a semear a org errada.
+  if (!targetOrganizationId) {
+    fs.mkdirSync(cacheDir, { recursive: true });
+    fs.writeFileSync(
+      cacheFile,
+      JSON.stringify({ organizationId: resetBody.organization_id, profile }, null, 2),
+      "utf8",
+    );
+  }
 
   return resetBody.organization_id;
 }

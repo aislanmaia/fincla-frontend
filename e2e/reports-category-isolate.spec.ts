@@ -59,21 +59,33 @@ async function ensureAdvancedReports(page: Page): Promise<void> {
   });
 }
 
-/** Ticks do eixo Y do gráfico, em reais ("5.1k" → 5100). */
-async function yAxisMax(page: Page): Promise<number> {
-  const ticks = await page
-    .locator('[data-testid="reports-drift-chart"] .recharts-yAxis .recharts-cartesian-axis-tick-value')
-    .allTextContents();
-  const values = ticks
+function tickValues(texts: (string | null)[]): number[] {
+  return texts
     .map((t) => (t ?? "").trim())
     .filter(Boolean)
     .map((t) => (t.endsWith("k") ? Number(t.slice(0, -1)) * 1000 : Number(t)))
     .filter((n) => Number.isFinite(n));
-  expect(values.length).toBeGreaterThan(1);
-  return Math.max(...values);
+}
+
+/** Maior tick do eixo Y do gráfico, em reais ("5.1k" → 5100). O eixo é
+ *  redesenhado depois das áreas, então espera os ticks assentarem. */
+async function yAxisMax(page: Page): Promise<number> {
+  const ticks = page.locator(
+    '[data-testid="reports-drift-chart"] .recharts-yAxis .recharts-cartesian-axis-tick-value',
+  );
+  await expect
+    .poll(async () => tickValues(await ticks.allTextContents()).length)
+    .toBeGreaterThan(1);
+  return Math.max(...tickValues(await ticks.allTextContents()));
 }
 
 test.describe("Relatórios — isolar categoria", () => {
+  // O handler de rota faz `route.fetch()`; sem soltar a rota, uma resposta em
+  // voo no teardown derruba um teste que já passou.
+  test.afterEach(async ({ page }) => {
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+  });
+
   test.beforeAll(async () => {
     if (!e2eReady) return;
     const bearer = await loginOwnerBearer();
@@ -114,6 +126,13 @@ test.describe("Relatórios — isolar categoria", () => {
     await ensureAdvancedReports(page);
     await loginAsE2EOwner(page);
     await navViaSidebar(page, "Relatórios");
+
+    // A org semeada tem de ser a que a sessão abriu — senão a falha viria como
+    // um gráfico vazio, sem dizer o motivo.
+    expect(await page.evaluate(() => window.localStorage.getItem("fincla_active_org_id")))
+      .toBe(organizationId);
+    // E o card não pode estar atrás do UpgradeWall.
+    await expect(page.getByRole("button", { name: /ver planos/i })).toHaveCount(0);
 
     const chart = page.locator('[data-testid="reports-drift-chart"]');
     await expect(chart).toBeVisible();
