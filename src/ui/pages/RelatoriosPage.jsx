@@ -349,6 +349,10 @@ export function RelatoriosPage({
   const driftColors = shouldUseRealData
     ? reportsData.driftColors
     : (dataMode === "mock" ? DRIFT_COLORS : {});
+  /** Isolar só vale enquanto a categoria existir na resposta atual: trocar o
+   *  período muda a lista de categorias, e um selectedCat órfão deixaria o
+   *  gráfico vazio (dataKey que não casa com campo nenhum das linhas). */
+  const isolatedCat = selectedCat && driftColors[selectedCat] ? selectedCat : null;
   const compositionData = shouldUseRealData
     ? reportsData.compositionData
     : (dataMode === "mock" ? REL_COMPOSICAO : []);
@@ -361,6 +365,14 @@ export function RelatoriosPage({
   const velocityDaily = shouldUseRealData
     ? reportsData.velocityDaily
     : (dataMode === "mock" ? REL_DAILY : []);
+
+  /** Categoria isolada que sumiu da resposta: limpa a seleção para o card não
+   *  ficar preso num destaque sem chip aceso. */
+  useEffect(() => {
+    if (!selectedCat) return;
+    if (Object.keys(driftColors).length === 0) return;
+    if (!driftColors[selectedCat]) setSelectedCat(null);
+  }, [selectedCat, driftColors]);
 
   useEffect(() => {
     if (isMobile) return;
@@ -561,6 +573,14 @@ export function RelatoriosPage({
     return a >= 1000 ? (a / 1000).toFixed(1) + "k" : String(a);
   };
 
+  /** Tick do eixo de categorias: com uma categoria isolada o eixo desce para a
+   *  casa das centenas, faixa em que fmtK imprimiria a dízima do valor cru. */
+  const fmtDriftTick = (v) => {
+    const n = Math.abs(Number(v));
+    if (!Number.isFinite(n)) return "0";
+    return n >= 1000 ? fmtK(n) : String(Math.round(n * 10) / 10);
+  };
+
   /* ── Reusable UI atoms ───────────────────────────────────── */
   const CustomTip = ({ active, payload, label, fmt=fmtBRL }) => {
     if (!active||!payload?.length) return null;
@@ -662,21 +682,30 @@ export function RelatoriosPage({
   };
 
   const DriftChart = ({ height=190 }) => (
-    <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={activeDrift} margin={{ top:8, right:4, left:-22, bottom:0 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
-        <XAxis dataKey="mes" tick={{ ...G, fontSize: 11, fill:T.inkLight }} axisLine={false} tickLine={false} />
-        <YAxis tick={{ ...G, fontSize: 11, fill:T.inkLight }} axisLine={false} tickLine={false} tickFormatter={v=>fmtK(v)} />
-        <Tooltip content={<CustomTip />} />
-        {Object.entries(driftColors).map(([cat,color]) => (
-          <Area key={cat} type="monotone" dataKey={cat} stackId="1"
-            stroke={selectedCat&&selectedCat!==cat ? "transparent" : color}
-            fill={selectedCat ? (selectedCat===cat ? color : T.grayLight) : color}
-            fillOpacity={selectedCat ? (selectedCat===cat ? 0.88 : 0.18) : 0.72}
-            strokeWidth={selectedCat===cat ? 2 : 0} />
-        ))}
-      </AreaChart>
-    </ResponsiveContainer>
+    <div data-testid="reports-drift-chart" style={{ width:"100%", height }}>
+      <ResponsiveContainer width="100%" height={height}>
+        <AreaChart data={activeDrift} margin={{ top:8, right:4, left:-22, bottom:0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke={T.border} vertical={false} />
+          <XAxis dataKey="mes" tick={{ ...G, fontSize: 11, fill:T.inkLight }} axisLine={false} tickLine={false} />
+          <YAxis tick={{ ...G, fontSize: 11, fill:T.inkLight }} axisLine={false} tickLine={false}
+            tickFormatter={v=>fmtDriftTick(v)} />
+          <Tooltip content={<CustomTip />} />
+          {/* Isolar = mostrar só a categoria, sem empilhar: no stack a linha fica na
+              posição acumulada e o eixo continua na escala do total, o que faz uma
+              categoria de R$ 100 parecer um gasto de R$ 34 mil. */}
+          {isolatedCat ? (
+            <Area key={isolatedCat} type="monotone" dataKey={isolatedCat}
+              stroke={driftColors[isolatedCat]} fill={driftColors[isolatedCat]}
+              fillOpacity={0.3} strokeWidth={2} />
+          ) : (
+            Object.entries(driftColors).map(([cat,color]) => (
+              <Area key={cat} type="monotone" dataKey={cat} stackId="1"
+                stroke={color} fill={color} fillOpacity={0.72} strokeWidth={0} />
+            ))
+          )}
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
   );
 
   const ScoreChart = ({ height=155 }) => (
@@ -716,7 +745,7 @@ export function RelatoriosPage({
             color:selectedCat===cat ? color : T.inkMid }}>{cat}</span>
         </button>
       ))}
-      {selectedCat && (
+      {isolatedCat && (
         <button onClick={() => setSelectedCat(null)}
           style={{ ...G, fontSize: 11, color:T.inkMid, background:"none", border:`1px solid ${T.border}`,
             borderRadius:20, padding:"4px 9px", cursor:"pointer" }}>✕ Limpar</button>
@@ -889,8 +918,8 @@ export function RelatoriosPage({
           {relTab==="categorias" && (<>
             <InsightChip
               color={T.purple} icon="📊"
-              text={selectedCat
-                ? `<strong>${selectedCat}</strong> em destaque. Toque novamente para ver todas.`
+              text={isolatedCat
+                ? `<strong>${isolatedCat}</strong> em destaque. Toque novamente para ver todas.`
                 : `Lazer e Outros foram os principais drivers de variação no período. Toque em uma categoria para isolar.`}
             />
             <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:14, padding:"16px 16px 12px" }}>
@@ -1058,7 +1087,7 @@ export function RelatoriosPage({
         <Section title="Evolução por" serifWord="categoria"
           style={desktopCols===3 ? { gridColumn:"1 / span 2", gridRow:2 } : undefined}
           insight={{ color:T.purple, icon:"📊",
-            text:`Clique nas categorias abaixo para isolar. ${selectedCat ? `<strong>${selectedCat}</strong> em destaque.` : "Lazer e Outros variaram +134% em Nov–Dez vs set."}`}}>
+            text:`Clique nas categorias abaixo para isolar. ${isolatedCat ? `<strong>${isolatedCat}</strong> em destaque.` : "Lazer e Outros variaram +134% em Nov–Dez vs set."}`}}>
           <div style={{ marginBottom:10, flexShrink:0 }}><CatLegend /></div>
           <div style={{ flex:1, display:"flex", flexDirection:"column", justifyContent:"center", minHeight:0 }}>
             <DriftChart height={desktopChartH} />

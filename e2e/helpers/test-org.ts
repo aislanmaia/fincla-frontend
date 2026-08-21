@@ -20,7 +20,15 @@ function readCachedOrganizationId(): string | undefined {
   }
 }
 
-export async function resetAndSeedOrganization(profile: string): Promise<string> {
+/**
+ * `targetOrganizationId` fixa qual org resetar/semear — útil quando o teste
+ * precisa semear justamente a org que a sessão da SPA vai abrir, e não a do
+ * cache.
+ */
+export async function resetAndSeedOrganization(
+  profile: string,
+  targetOrganizationId?: string,
+): Promise<string> {
   const secret = process.env.TEST_RESET_SECRET;
   if (!secret) {
     throw new Error("TEST_RESET_SECRET ausente");
@@ -28,7 +36,9 @@ export async function resetAndSeedOrganization(profile: string): Promise<string>
 
   const base = (process.env.VITE_API_BASE_URL || "http://localhost:5000").replace(/\/$/, "");
   const organizationId =
-    process.env.TEST_ORG_ID?.trim() || readCachedOrganizationId();
+    targetOrganizationId?.trim() ||
+    process.env.TEST_ORG_ID?.trim() ||
+    readCachedOrganizationId();
 
   const resetRes = await fetch(`${base}/v1/test/reset-organization`, {
     method: "POST",
@@ -61,12 +71,16 @@ export async function resetAndSeedOrganization(profile: string): Promise<string>
     throw new Error(`test/seed: ${seedRes.status} ${await seedRes.text()}`);
   }
 
-  fs.mkdirSync(cacheDir, { recursive: true });
-  fs.writeFileSync(
-    cacheFile,
-    JSON.stringify({ organizationId: resetBody.organization_id, profile }, null, 2),
-    "utf8",
-  );
+  // O cache é o fallback compartilhado das outras specs: um alvo pontual não
+  // pode repontá-lo, senão o resto da suíte passa a semear a org errada.
+  if (!targetOrganizationId) {
+    fs.mkdirSync(cacheDir, { recursive: true });
+    fs.writeFileSync(
+      cacheFile,
+      JSON.stringify({ organizationId: resetBody.organization_id, profile }, null, 2),
+      "utf8",
+    );
+  }
 
   return resetBody.organization_id;
 }
