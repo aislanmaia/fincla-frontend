@@ -745,15 +745,16 @@ export function RelatoriosPage({
             color:selectedCat===cat ? color : T.inkMid }}>{cat}</span>
         </button>
       ))}
-      {/* Ação, não categoria: pílula com borda no meio da fileira de chips era
-          lida como mais uma tag. Botão de texto separado por um divisor, como
-          o "✕ Limpar seleção" das Recorrências. */}
+      {/* Ação, não categoria: a pílula com borda no meio da fileira de chips era
+          lida como mais uma tag. Botão de texto, como o "✕ Limpar seleção" das
+          Recorrências — sem divisor, que ficaria pendurado quando a fileira
+          quebra a linha e o botão cai sozinho na de baixo. */}
       {isolatedCat && (
         <button onClick={() => setSelectedCat(null)}
           aria-label="Limpar categoria em destaque"
           style={{ ...G, display:"flex", alignItems:"center", gap:4, fontSize: 11, fontWeight:600,
-            color:T.purple, background:"none", border:"none", borderLeft:`1px solid ${T.border}`,
-            padding:"4px 2px 4px 10px", marginLeft:4, cursor:"pointer" }}>
+            color:T.purple, background:"none", border:"none",
+            padding:"4px 8px", marginLeft:2, cursor:"pointer" }}>
           <X size={11} strokeWidth={2.5} /> Limpar
         </button>
       )}
