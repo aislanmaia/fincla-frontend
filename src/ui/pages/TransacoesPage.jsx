@@ -37,6 +37,15 @@ import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from 
 import { TransactionsEmptyState } from "../features/transactions/TransactionsEmptyState.jsx";
 import { TransactionsStats } from "../features/transactions/TransactionsStats.jsx";
 import { TransactionsListHeader } from "../features/transactions/TransactionsListHeader.jsx";
+import {
+  DAY_HEADER_HEIGHT,
+  DENSITIES,
+  densityRowHeight,
+  groupingAllowed,
+  readListPrefs,
+  rowCost,
+  writeListPrefs,
+} from "../features/transactions/listPrefs.js";
 import { CardEmptyWithCta } from "../features/shellExtras.jsx";
 import {
   getTransactionsPeriodBootstrap,
@@ -157,6 +166,31 @@ const CAT_COLORS = {
   Vestuário: "#BE185D",
 };
 const catColor = (label) => CAT_COLORS[label] || T.inkMid;
+
+/** "20/08/2026" -> { top: "20 ago", sub: "qua" }. Duas linhas curtas cabem numa
+ *  coluna de 54 px sem quebrar; a data por extenso não cabia. */
+const MONTHS_SHORT = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+const WEEKDAYS_SHORT = ["dom","seg","ter","qua","qui","sex","sáb"];
+export function shortDateLabel(raw, today = new Date()) {
+  if (!raw) return { top: "—", sub: "" };
+  const parts = String(raw).split("/");
+  if (parts.length < 2) return { top: String(raw).slice(0, 6), sub: "" };
+  const day = Number(parts[0]);
+  const month = Number(parts[1]) - 1;
+  const year = parts.length === 3 ? Number(parts[2]) : today.getFullYear();
+  if (!Number.isFinite(day) || !Number.isFinite(month) || month < 0 || month > 11) {
+    return { top: String(raw).slice(0, 6), sub: "" };
+  }
+  const d = new Date(year, month, day);
+  const sameDay = (a, b) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const top = `${String(day).padStart(2, "0")} ${MONTHS_SHORT[month]}`;
+  if (sameDay(d, today)) return { top, sub: "hoje" };
+  if (sameDay(d, yesterday)) return { top, sub: "ontem" };
+  return { top, sub: WEEKDAYS_SHORT[d.getDay()] || "" };
+}
 const catBg = (label) => `${catColor(label)}18`;
 
 const fmtBRL = v => "R$\u00a0" + Math.abs(v).toLocaleString("pt-BR",{minimumFractionDigits:2});
@@ -273,7 +307,8 @@ export const Tip = ({ label, children, pos = "top" }) => {
   );
 };
 
-const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor }) => {
+const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
+  rowHeight = 48, showDate = true, dateLabel = "" }) => {
   const isRefund   = tx.type === "refund";
   const isReceita  = tx.type === "income" || isRefund;
   const hasParcela = !!tx.parcela && !isRefund;
@@ -290,14 +325,29 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor }) => {
     <div
       onClick={() => onSelect(tx)}
       className="fincla-row"
-      style={{ display:"flex", alignItems:"flex-start", gap:12,
-        padding: isMobile ? "13px 16px" : "12px 18px",
+      style={{ display:"flex", alignItems:"center", gap: isMobile ? 10 : 12,
+        minHeight: rowHeight,
+        padding: isMobile ? "0 14px" : "0 14px",
         background: isSelected ? `${catColor(tx.cat)}08` : "transparent",
         borderLeft: isSelected ? `3px solid ${catColor(tx.cat)}` : "3px solid transparent",
         cursor:"pointer", transition:"background 0.12s, border-color 0.12s" }}>
 
+      {/* Data em coluna. Ela sai do cabeçalho de grupo porque, com um lançamento
+          por dia — o caso normal —, o cabeçalho custava 48 px por transação só
+          para repetir a data. No modo agrupado o cabeçalho já a carrega e a
+          coluna some. */}
+      {showDate && (
+        <div style={{ ...G, width: isMobile ? 44 : 54, flexShrink:0,
+          fontFamily:"'Geist Mono',monospace", fontSize:11, color:T.inkLight, lineHeight:1.15 }}>
+          <b style={{ display:"block", fontSize:12, color:T.ink, fontWeight:700 }}>{dateLabel.top}</b>
+          {dateLabel.sub}
+        </div>
+      )}
+
       {/* Icon */}
-      <div style={{ width:38, height:38, borderRadius:11, background:avatarBg,
+      <div style={{ width: rowHeight <= 40 ? 24 : rowHeight <= 50 ? 28 : 34,
+        height: rowHeight <= 40 ? 24 : rowHeight <= 50 ? 28 : 34,
+        borderRadius: rowHeight <= 40 ? 7 : 9, background:avatarBg,
         display:"flex", alignItems:"center", justifyContent:"center",
         fontSize:18, color: isRefund ? T.green : undefined,
         fontWeight: isRefund ? 700 : undefined,
@@ -728,8 +778,10 @@ function TransacoesPageBody({
      página, mas voltar não encolhe o que já foi carregado. */
   const pageSizeRef = useRef(0);
   if (pageSizeRef.current === 0) {
+    const prefs = readListPrefs();
     pageSizeRef.current = computePageSize(
       typeof window !== "undefined" ? window.innerHeight - 240 : 0,
+      rowCost(prefs.density, isMobile, prefs.grouped),
     );
   }
   const PAGE_SIZE = pageSizeRef.current;
@@ -797,6 +849,14 @@ function TransacoesPageBody({
   );
   const [compactDesktopFiltersOpen, setCompactDesktopFiltersOpen] = useState(false);
   const [statsExpanded, setStatsExpanded] = useState(false);
+  const [listPrefs, setListPrefsState] = useState(() => readListPrefs());
+  const setListPrefs = useCallback((next) => {
+    setListPrefsState((cur) => {
+      const merged = { ...cur, ...next };
+      writeListPrefs(merged);
+      return merged;
+    });
+  }, []);
   const [saveViewFormOpen, setSaveViewFormOpen] = useState(false);
   const [saveViewFormMode, setSaveViewFormMode] = useState("create");
   // ── Bottom sheet drag-to-dismiss ──────────────────────────────
@@ -1708,6 +1768,12 @@ function TransacoesPageBody({
     </button>
   );
 
+  /* Agrupar por data só faz sentido ordenado por data: por valor ou categoria
+     cada "grupo" vira um item só, o pior dos dois mundos. */
+  const canGroup = groupingAllowed(filter.sort?.[0]?.field ?? filter.sort?.field);
+  const isGrouped = listPrefs.grouped && canGroup;
+  const listRowHeight = densityRowHeight(listPrefs.density, isMobile);
+
   /* Quantos lançamentos do filtro ainda não entraram no saldo. Substitui o
      aviso de 16 px que ocupava uma faixa própria para dizer a mesma coisa. */
   const pendingCount = txList.filter((t) => t.settleable && !t.settled).length;
@@ -1791,37 +1857,48 @@ function TransacoesPageBody({
           />
         )
       ) : (
-        groups.map(([date, txs]) => (
-          <div key={date}>
-            {/* Date group header */}
-            <div style={{ display:"flex", alignItems:"center", gap:10, padding: isMobile ? "10px 16px 4px" : "10px 18px 4px",
-              position:"sticky", top:0, background:T.bg, zIndex:2,
-              boxShadow:"0 1px 0 rgba(15,23,42,0.06)" }}>
-              <div style={{ ...G, fontSize:11, fontWeight:700, color:T.inkMid,
-                textTransform:"capitalize" }}>{fmtDateLabel(date)}</div>
-              <div style={{ flex:1, height:1, background:T.border }}/>
-              <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:11,
-                color: txs.reduce((s,t)=>s+t.val,0) >= 0 ? T.green : T.red, fontWeight:700 }}>
-                {txs.reduce((s,t)=>s+t.val,0) >= 0 ? "+" : "−"}{fmtBRL(Math.abs(txs.reduce((s,t)=>s+t.val,0)))}
-              </div>
-            </div>
-            {/* Rows */}
-            <div style={{ background:T.surface, borderRadius:12, overflow:"hidden",
-              border:`1px solid ${T.border}`, margin: isMobile ? "0 0 10px" : "0 0 8px" }}>
+        /* Lista contínua (padrão) ou agrupada por data — a preferência é do
+           usuário. Contínua: um card só, linhas separadas por hairline, data em
+           coluna. Agrupada: cabeçalho de dia sticky de 24 px (contra os 48 de
+           antes) e a coluna de data some, porque o cabeçalho já a carrega. */
+        <div style={{ background:T.surface, borderRadius:12, overflow:"hidden",
+          border:`1px solid ${T.border}` }}>
+          {groups.map(([date, txs], gi) => (
+            <React.Fragment key={date}>
+              {isGrouped && (
+                <div style={{ display:"flex", alignItems:"center", gap:10,
+                  height: DAY_HEADER_HEIGHT, padding:"0 14px",
+                  position:"sticky", top:isMobile ? 32 : 28, background:"#F4F6F9", zIndex:2,
+                  borderTop: gi > 0 ? `1px solid ${T.border}` : "none",
+                  borderBottom:`1px solid ${T.border}` }}>
+                  <div style={{ ...G, fontSize:11, fontWeight:700, color:T.inkMid,
+                    textTransform:"capitalize" }}>{fmtDateLabel(date)}</div>
+                  <div style={{ flex:1 }}/>
+                  <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:11,
+                    color: txs.reduce((s,t)=>s+t.val,0) >= 0 ? T.green : T.red, fontWeight:700 }}>
+                    {txs.reduce((s,t)=>s+t.val,0) >= 0 ? "+" : "−"}{fmtBRL(Math.abs(txs.reduce((s,t)=>s+t.val,0)))}
+                  </div>
+                </div>
+              )}
               {txs.map((tx, i) => (
-                <div key={tx.id} style={{ borderBottom: i<txs.length-1?`1px solid ${T.border}`:"none" }}>
+                <div key={tx.id} style={{
+                  borderBottom: (gi === groups.length - 1 && i === txs.length - 1)
+                    ? "none" : `1px solid ${T.border}` }}>
                   <TxRow
                     tx={tx}
                     isMobile={isMobile}
                     isSelected={selected?.id === tx.id}
                     onSelect={handleSelectTx}
                     coveringAnchor={anchorCovering(tx, balanceAnchors)}
+                    rowHeight={listRowHeight}
+                    showDate={!isGrouped}
+                    dateLabel={shortDateLabel(tx.date)}
                   />
                 </div>
               ))}
-            </div>
-          </div>
-        ))
+            </React.Fragment>
+          ))}
+        </div>
       )}
       {/* Paginação infinita: sentinel + feedback (carregamento ao chegar ao fim da lista).
           `data-testid` só pra prova de teste (fincla-frontend#109 rodada 4,
@@ -1994,6 +2071,42 @@ function TransacoesPageBody({
             />
           </div>
         )}
+        <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
+          {/* Preferências de exibição — o que muda COMO a lista aparece, não
+              QUAIS transações aparecem (isso é o painel de filtros). */}
+          <button
+            type="button"
+            onClick={() => {
+              const order = Object.keys(DENSITIES);
+              const next = order[(order.indexOf(listPrefs.density) + 1) % order.length];
+              setListPrefs({ density: next });
+            }}
+            title={`Densidade da lista: ${DENSITIES[listPrefs.density].label}`}
+            aria-label={`Densidade da lista: ${DENSITIES[listPrefs.density].label}. Clique para alternar.`}
+            style={{ ...G, width:32, height:32, borderRadius:9, cursor:"pointer",
+              border:`1px solid ${T.border}`, background:T.surface, color:T.inkMid,
+              display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>
+            ▤
+          </button>
+          <button
+            type="button"
+            disabled={!canGroup}
+            onClick={() => setListPrefs({ grouped: !listPrefs.grouped })}
+            title={canGroup
+              ? (isGrouped ? "Agrupado por data" : "Lista contínua")
+              : "Agrupar por data só vale ordenando por data"}
+            aria-pressed={isGrouped}
+            aria-label="Agrupar por data"
+            style={{ ...G, width:32, height:32, borderRadius:9,
+              cursor: canGroup ? "pointer" : "not-allowed",
+              opacity: canGroup ? 1 : 0.4,
+              border:`1px solid ${isGrouped ? "#BFD3FA" : T.border}`,
+              background: isGrouped ? T.blueLight : T.surface,
+              color: isGrouped ? T.blue : T.inkMid,
+              display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>
+            ▦
+          </button>
+        </div>
         <button onClick={exportCSV}
           style={{ ...G, display:"flex", alignItems:"center", gap:5, background:T.surface,
             border:`1px solid ${T.border}`, borderRadius:9, padding:"8px 13px",

@@ -154,6 +154,28 @@ function renderPage(overrides = {}) {
 }
 
 describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }, () => {
+  it("a densidade alterna e fica guardada", async () => {
+    renderPage();
+    const btn = await screen.findByRole("button", { name: /Densidade da lista/i });
+    expect(btn).toHaveAccessibleName(/Padrão/i);
+    await userEvent.click(btn);
+    expect(btn).toHaveAccessibleName(/Compacto/i);
+    expect(JSON.parse(localStorage.getItem("fincla:transactions:list-prefs")).density).toBe(
+      "compacto",
+    );
+  });
+
+  it("agrupar por data desliga quando a ordenação não é por data", async () => {
+    // Ordenado por valor, cada "grupo" viraria um item só — o pior dos dois
+    // mundos. O botão fica desabilitado e diz por quê.
+    renderPage();
+    const group = await screen.findByRole("button", { name: /Agrupar por data/i });
+    expect(group).toBeEnabled();
+    expect(group).toHaveAttribute("aria-pressed", "false");
+    await userEvent.click(group);
+    expect(group).toHaveAttribute("aria-pressed", "true");
+  });
+
   it("1366x768 recebe a barra compacta, não a completa", async () => {
     // O corte era só de largura, e isso invertia o resultado: 1366×768 passava
     // do corte e recebia a barra completa (230 px, 2 transações visíveis),
