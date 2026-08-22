@@ -210,7 +210,9 @@ export function TransactionsFilterBar({
       )}
 
       {!hideFacets && (
-        <>
+        /* `position: relative` só para ancorar o painel. No mobile ele continua
+           inline, dentro do bottom sheet, que já tem rolagem própria. */
+        <div style={{ position: "relative", display: "flex", flexDirection: "column", gap: 8 }}>
           <FacetBar
             facets={facets}
             expanded={expanded}
@@ -233,14 +235,32 @@ export function TransactionsFilterBar({
               id={`facet-panel-${expanded}`}
               role="region"
               aria-label={`Filtro: ${expanded}`}
+              className={compact ? undefined : "fincla-scroll"}
               style={{
                 background: T.surface,
                 border: `1px solid ${T.border}`,
                 borderRadius: 14,
                 padding: compact ? "14px 14px 16px" : "18px 22px",
-                boxShadow: T.md,
+                boxShadow: compact ? T.md : T.xl,
                 animation: "fadeInDown 0.18s ease",
                 scrollMarginTop: compact ? 12 : 24,
+                /* No desktop o painel FLUTUA sobre a lista em vez de empurrá-la.
+                   Medido antes: abrir uma faceta em 1366×768 crescia o bloco de
+                   filtros de 232 para 670 px, empurrava os KPIs para fora da
+                   dobra e deixava a lista com altura ZERO — a página inteira
+                   passava a rolar e o título saía do topo. */
+                ...(compact
+                  ? null
+                  : {
+                      position: "absolute",
+                      top: "100%",
+                      left: 0,
+                      right: 0,
+                      marginTop: 8,
+                      zIndex: 40,
+                      maxHeight: "min(60dvh, 520px)",
+                      overflowY: "auto",
+                    }),
               }}
             >
               <FacetPanelContent
@@ -297,7 +317,7 @@ export function TransactionsFilterBar({
               )}
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );
