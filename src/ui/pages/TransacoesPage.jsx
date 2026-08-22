@@ -362,7 +362,11 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
   const columns = [
     showDate ? (isMobile ? "44px" : "54px") : null,
     `${iconPx}px`,
-    "minmax(0,1fr)",
+    // Em telas largas a descrição PARA de crescer e o vão vai para depois das
+    // colunas de contexto. Com ela em `1fr` competindo com o vão, a descrição
+    // esticava por 2700 px num ultrawide e empurrava categoria e conta para
+    // longe do valor — o olho lia dois extremos separados por um vazio.
+    wide ? "minmax(0,520px)" : "minmax(0,1fr)",
     dense ? "104px" : "128px",
     xwide ? "150px" : null,
     wide ? "120px" : null,
@@ -953,7 +957,13 @@ function TransacoesPageBody({
     yest.setDate(today.getDate() - 1);
     if (dt.toDateString() === today.toDateString()) return "Hoje";
     if (dt.toDateString() === yest.toDateString())  return "Ontem";
-    return dt.toLocaleDateString("pt-BR",{weekday:"long", day:"numeric", month:"long"});
+    // Só a PRIMEIRA letra sobe. O `textTransform:"capitalize"` do CSS sobe a
+    // inicial de CADA palavra e produzia "Quinta-Feira, 20 De Agosto" — em
+    // português só o começo da frase é maiúsculo aqui.
+    const label = dt.toLocaleDateString("pt-BR", {
+      weekday: "long", day: "numeric", month: "long",
+    });
+    return label.charAt(0).toUpperCase() + label.slice(1);
   };
 
   // ── State ─────────────────────────────────────────────────────────────────
@@ -2365,7 +2375,7 @@ function TransacoesPageBody({
                   borderTop: gi > 0 ? `1px solid ${T.border}` : "none",
                   borderBottom:`1px solid ${T.border}` }}>
                   <div style={{ ...G, fontSize:11, fontWeight:700, color:T.inkMid,
-                    textTransform:"capitalize" }}>{fmtDateLabel(date)}</div>
+                  }}>{fmtDateLabel(date)}</div>
                   <div style={{ flex:1 }}/>
                   <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:11,
                     color: txs.reduce((s,t)=>s+t.val,0) >= 0 ? T.green : T.red, fontWeight:700 }}>
