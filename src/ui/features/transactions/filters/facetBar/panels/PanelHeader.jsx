@@ -32,26 +32,30 @@ export function PanelHeader({ title, hint, onClose, compact = false }) {
           </div>
         )}
       </div>
+      {/* Sem handler não há botão: um × que não fecha nada é pior que a
+          ausência dele. */}
+      {onClose && (
       <button
-        type="button"
-        onClick={onClose}
-        aria-label="Fechar painel"
-        style={{
-          background: "none",
-          border: "none",
-          cursor: "pointer",
-          padding: compact ? 10 : 6,
-          minWidth: compact ? 40 : undefined,
-          minHeight: compact ? 40 : undefined,
-          borderRadius: compact ? 10 : undefined,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-        }}
-      >
-        <Icon name="x" size={compact ? 16 : 14} color={T.inkMid} />
-      </button>
+          type="button"
+          onClick={onClose}
+          aria-label="Fechar painel"
+          style={{
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: compact ? 10 : 6,
+            minWidth: compact ? 40 : undefined,
+            minHeight: compact ? 40 : undefined,
+            borderRadius: compact ? 10 : undefined,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+          }}
+        >
+          <Icon name="x" size={compact ? 16 : 14} color={T.inkMid} />
+        </button>
+      )}
     </div>
   );
 }

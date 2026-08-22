@@ -102,6 +102,10 @@ export const TX_ROW_HEIGHT = 101;
  *  terminar de sair, ou fica com um buraco depois que ela já saiu. */
 export const ROW_LEAVE_MS = 260;
 
+/** Largura da barra lateral do app — descontada para saber quanto de conteúdo
+ *  sobra de verdade ao dimensionar o painel ancorado. */
+const SIDEBAR_WIDTH = 195;
+
 /**
  * Texto que existe para o leitor de tela mas não ocupa espaço.
  *
@@ -1055,6 +1059,15 @@ function TransacoesPageBody({
   );
   const [compactDesktopFiltersOpen, setCompactDesktopFiltersOpen] = useState(false);
   const [wideDesktopFiltersOpen, setWideDesktopFiltersOpen] = useState(false);
+  /* Largura do painel ancorado, na regra do artefato: até 1600 px a lista
+     precisa da largura e o painel fica em 396. Acima disso sobra espaço de
+     verdade e ele vai a ~metade da área de conteúdo, com teto de 860 — passar
+     disso deixaria a lista mais estreita que o painel que a filtra. */
+  const dockPanelWidth = useMemo(() => {
+    const content = Math.max(0, viewportWidth - SIDEBAR_WIDTH);
+    return viewportWidth >= 1600 ? Math.min(860, Math.round(content * 0.5)) : 396;
+  }, [viewportWidth]);
+
   /* Qual faceta o painel mostra. Começa em "Período" porque é a que mais muda
      e a única sempre ativa; abrir em "Ativos" com a lista limpa daria uma tela
      vazia como primeira impressão do painel. */
@@ -2942,7 +2955,7 @@ function TransacoesPageBody({
             É o que permite julgar o filtro pelo resultado — a lista continua
             visível e atualizando enquanto se escolhe. */}
         {!isMobile && wideDesktopFiltersOpen && (
-          <div style={{ flex:"none", width:396, marginLeft:14, minHeight:0 }}>
+          <div style={{ flex:"none", width:dockPanelWidth, marginLeft:14, minHeight:0 }}>
             <TransactionsFilterPanel
               filter={filter}
               facet={panelFacet}
@@ -2957,8 +2970,10 @@ function TransacoesPageBody({
               onClearFacet={clearFacetAndResetPage}
               onClearAll={clearAll}
               onApply={() => setWideDesktopFiltersOpen(false)}
+              onClose={() => setWideDesktopFiltersOpen(false)}
               resultCount={filteredCount}
               resultsLoading={listLoading}
+              width={dockPanelWidth}
             />
           </div>
         )}

@@ -63,11 +63,18 @@ export function TransactionsFilterPanel({
   onClearFacet,
   onClearAll,
   onApply,
+  onClose,
   resultCount = 0,
   resultsLoading = false,
   compact = false,
+  /** Largura real do painel — decide se as opções cabem em mais de uma coluna. */
+  width = 396,
 }) {
   const counts = facetSelectionCounts(filter);
+  // Acima de ~560 px o pane comporta as opções em grade. Abaixo disso duas
+  // colunas espremem os rótulos das categorias, que são longos ("Lazer &
+  // Entretenimento"), e cada opção passa a truncar.
+  const roomyPane = !compact && width >= 560;
   const activeTotal = Object.values(counts).reduce((a, b) => a + b, 0);
 
   return (
@@ -145,7 +152,11 @@ export function TransactionsFilterPanel({
         }}
       >
         {facet === "ativos" ? (
-          <ActiveFacetsPane facets={activeFacets} onClearFacet={onClearFacet} />
+          <ActiveFacetsPane
+            facets={activeFacets}
+            onClearFacet={onClearFacet}
+            columns={roomyPane ? 2 : 1}
+          />
         ) : (
           <FacetPanelContent
             facetKey={facet}
@@ -179,10 +190,10 @@ export function TransactionsFilterPanel({
             settlement={filter.settlement}
             setSettlement={filter.setSettlement}
             counts={facetCounts}
-            /* Sem `onClose`: o × fechava só o conteúdo da faceta, deixando o
-               painel aberto e vazio. Quem fecha o painel é o "＋ Filtros" da
-               barra e o CTA do rodapé. */
-            compact
+            /* O × do cabeçalho fecha o PAINEL, não só o conteúdo da faceta —
+               fechar só o conteúdo deixava o painel aberto e vazio. */
+            onClose={onClose}
+            compact={!roomyPane}
           />
         )}
       </div>
@@ -300,7 +311,7 @@ function RailButton({ icon, label, count, on, onClick, compact }) {
 }
 
 /** A aba "Ativos": tudo o que está filtrando, num lugar só, com saída. */
-function ActiveFacetsPane({ facets, onClearFacet }) {
+function ActiveFacetsPane({ facets, onClearFacet, columns = 1 }) {
   if (facets.length === 0) {
     return (
       <div style={{ ...G, fontSize: 12, color: T.inkLight, padding: "6px 2px" }}>
@@ -316,7 +327,8 @@ function ActiveFacetsPane({ facets, onClearFacet }) {
           {facets.length} {facets.length === 1 ? "filtro" : "filtros"}
         </span>
       </div>
-      <div style={{ display: "grid", gap: 7 }}>
+      <div style={{ display: "grid", gap: 7,
+        gridTemplateColumns: `repeat(${columns}, minmax(0,1fr))` }}>
         {facets.map((f) => (
           <div
             key={f.key}
