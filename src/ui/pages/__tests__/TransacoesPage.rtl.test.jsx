@@ -154,6 +154,22 @@ function renderPage(overrides = {}) {
 }
 
 describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }, () => {
+  it("a linha é operável por teclado e Esc fecha a sanfona", async () => {
+    // A linha era um `div` com onClick: invisível para teclado e para leitor de
+    // tela, e quem abrisse o detalhe não tinha como sair sem tabular por ele.
+    renderPage();
+    const row = (await screen.findAllByRole("button", { name: /despesa de|receita de/i }))[0];
+    expect(row).toHaveAttribute("tabIndex", "0");
+    expect(row).toHaveAttribute("aria-expanded", "false");
+
+    row.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(await screen.findByRole("region", { name: /^Detalhes de/i })).toBeInTheDocument();
+
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("region", { name: /^Detalhes de/i })).toBeNull();
+  });
+
   it("a densidade alterna e fica guardada", async () => {
     renderPage();
     const btn = await screen.findByRole("button", { name: /Densidade da lista/i });

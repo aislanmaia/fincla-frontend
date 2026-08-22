@@ -324,7 +324,20 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
   return (
     <div
       onClick={() => onSelect(tx)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect(tx);
+        }
+      }}
       className="fincla-row"
+      /* A linha era um `div` com onClick: invisível para teclado e para leitor
+         de tela. Um único ponto de parada no Tab (a lista inteira seriam 15
+         paradas × 3 ações) e Enter/Espaço abrem o detalhe. */
+      role="button"
+      tabIndex={0}
+      aria-expanded={isSelected}
+      aria-label={`${tx.desc}, ${isReceita ? "receita" : "despesa"} de ${fmtBRL(tx.val)} em ${tx.date}`}
       style={{ display:"flex", alignItems:"center", gap: isMobile ? 10 : 12,
         minHeight: rowHeight,
         padding: isMobile ? "0 14px" : "0 14px",
@@ -1828,6 +1841,15 @@ function TransacoesPageBody({
 
   /* As ações rápidas usam os MESMOS caminhos do detalhe — nenhuma segunda
      implementação de liquidar/excluir, que é onde as duas divergiriam. */
+  /* Esc fecha a sanfona — sem isso, quem abriu por teclado não tem como sair
+     sem tabular por todo o detalhe. */
+  useEffect(() => {
+    if (!selected) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") setSelected(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selected]);
+
   const quickActions = useMemo(() => ({
     onEdit: (tx) => { if (onEditTx) onEditTx(tx); },
     onDelete: (tx) => { setSelected(tx); setDeletingId(tx.id); },
