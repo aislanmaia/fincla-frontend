@@ -585,14 +585,14 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     // id real (via `useTransactionsTagCatalog`, mockado acima) e mandado no
     // MESMO slot que a categoria usa — é o `tag_id` que o backend entende.
     const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
-    expect(lastCall.filters.filterCat).toBe("tag-uuid-trabalho");
+    expect(lastCall.filters.filterCat).toEqual(["tag-uuid-trabalho"]);
   });
 
   // fincla-frontend#96 — revisão adversarial da PR #96, achado 2: Categoria e
   // Tags disputam o mesmo slot de filtro no backend. Decisão: IMPEDIR as duas
   // ativas ao mesmo tempo (não só avisar) — provado aqui no nível da UI real,
   // não só no hook de estado isolado.
-  it("fincla-frontend#96 achado 2: marcar uma categoria com tag ativa apaga o chip da tag (e vice-versa)", async () => {
+  it("categoria e tag ativas ao mesmo tempo continuam as DUAS acesas e as duas filtram", async () => {
     seedSettlement();
     renderPage();
 
@@ -611,23 +611,21 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
       }),
     );
 
-    // A categoria ganhou o slot compartilhado — o chip da tag não pode
-    // continuar aceso fingindo que ainda está filtrando (era exatamente o
-    // achado 2: antes, os dois ficavam acesos e a tag era descartada em
-    // silêncio no backend).
+    // O achado 2 era: as duas acesas e a tag descartada em silêncio pelo
+    // backend, que só aceitava um `tag_id`. A correção da época foi apagar
+    // uma delas. Agora os params são repetíveis e combinam por AND, então as
+    // duas podem ficar acesas — desde que as DUAS cheguem à query. É essa
+    // última parte que este teste guarda.
     expect(screen.getByRole("button", { name: /Categoria: Alimentação/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Tags: —/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Tags: #trabalho/i })).toBeInTheDocument();
     const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
-    expect(lastCall.filters.filterCat).toBe("cat-alim");
+    expect(lastCall.filters.filterCat).toEqual(["cat-alim", "tag-uuid-trabalho"]);
   });
 
   // fincla-frontend#96 — segunda rodada da revisão adversarial, prioridade 1:
   // "Todas" no painel de Categoria chamava `setCats(todosOsIds)` — um array
-  // NÃO VAZIO. Com a exclusão mútua do achado 2, isso apagava qualquer tag
-  // ativa (o usuário perdia o filtro de tag clicando num botão que lê como
-  // "não filtrar por categoria"), e o resultado da query continuava sem
-  // filtro de categoria mesmo assim (`mapCatsToLegacy` já trata "todas
-  // selecionadas" como "todas"). "Todas" tem que se comportar como "Limpar".
+  // NÃO VAZIO, que não é o mesmo que "sem filtro de categoria". "Todas" tem
+  // que se comportar como "Limpar", e nada mais na tela pode se mexer.
   it("fincla-frontend#96 prioridade 1: 'Todas' na Categoria NÃO apaga uma tag ativa", async () => {
     seedSettlement();
     renderPage();
@@ -651,7 +649,7 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     // apagado a tag aqui — este chip precisa continuar aceso.
     expect(screen.getByRole("button", { name: /Tags: #trabalho/i })).toBeInTheDocument();
     const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
-    expect(lastCall.filters.filterCat).toBe("tag-uuid-trabalho");
+    expect(lastCall.filters.filterCat).toEqual(["tag-uuid-trabalho"]);
   });
 
   // Prioridade 5: a revisão provou que revertendo
@@ -774,7 +772,7 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     expect(screen.queryByText(/não foi encontrada/i)).not.toBeInTheDocument();
     const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
     expect(lastCall.enabled).toBe(true);
-    expect(lastCall.filters.filterCat).toBe("tag-trabalho-vendas");
+    expect(lastCall.filters.filterCat).toEqual(["tag-trabalho-vendas"]);
 
     // Restaura os mocks pro estado default, pra não vazar pros testes seguintes.
     tagCatalogMock.mockImplementation(() => ({

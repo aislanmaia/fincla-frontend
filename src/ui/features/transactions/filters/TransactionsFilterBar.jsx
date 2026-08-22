@@ -45,6 +45,9 @@ import { Icon } from "./shared/Icon.jsx";
  *    dentro dos painéis. Opcional: sem ele os painéis só não mostram contagem.
  *  - onExpandedChange: avisa qual facet está aberta (`null` = nenhuma). É o que
  *    permite ao consumidor só pagar a busca de contagens com o painel aberto.
+ *  - requestOpenFacet: `{ key, nonce }` — pedido externo de abrir uma facet
+ *    (clique num chip de filtro ativo). O `nonce` existe porque pedir a MESMA
+ *    facet duas vezes seguidas precisa reabrir; sem ele o efeito não dispara.
  */
 export function TransactionsFilterBar({
   filter,
@@ -70,6 +73,7 @@ export function TransactionsFilterBar({
   filterToolbarActive,
   facetCounts,
   onExpandedChange,
+  requestOpenFacet,
 }) {
   const [expanded, setExpanded] = useState(null);
   const panelRef = useRef(null);
@@ -82,6 +86,14 @@ export function TransactionsFilterBar({
   useEffect(() => {
     if (typeof onExpandedChange === "function") onExpandedChange(expanded);
   }, [expanded, onExpandedChange]);
+
+  useEffect(() => {
+    if (!requestOpenFacet?.key) return;
+    setExpanded(requestOpenFacet.key);
+    // Depende do `nonce`, não da `key`: pedir a mesma facet de novo (fechar e
+    // clicar no mesmo chip) precisa reabrir.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestOpenFacet?.nonce]);
 
   // Fecha o painel inline quando troca de saved view ativa
   useEffect(() => {

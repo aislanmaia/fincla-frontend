@@ -37,6 +37,8 @@ import { useTransactionsFacetCounts } from "../features/transactions/useTransact
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { TransactionsEmptyState } from "../features/transactions/TransactionsEmptyState.jsx";
 import { TransactionsStats } from "../features/transactions/TransactionsStats.jsx";
+import { TransactionsFilterChips } from "../features/transactions/filters/TransactionsFilterChips.jsx";
+import { useFilterHistory } from "../features/transactions/filters/useFilterHistory.js";
 import { TransactionsListHeader } from "../features/transactions/TransactionsListHeader.jsx";
 import {
   DAY_HEADER_HEIGHT,
@@ -309,7 +311,8 @@ export const Tip = ({ label, children, pos = "top" }) => {
 };
 
 const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
-  rowHeight = 48, showDate = true, dateLabel = "", quickActions = null }) => {
+  rowHeight = 48, showDate = true, dateLabel = "", quickActions = null,
+  onFilterByCategory = null, onFilterByTag = null }) => {
   const isRefund   = tx.type === "refund";
   const isReceita  = tx.type === "income" || isRefund;
   const hasParcela = !!tx.parcela && !isRefund;
@@ -396,9 +399,26 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
         {/* Row 2: categoria · método · card digits · status chips */}
         <div style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap",
           marginBottom: (hasParcela || visibleTags.length > 0) ? 4 : 0 }}>
-          <Tip label={`Categoria: ${tx.cat}`}>
-            <span style={{ ...G, fontSize:11, color:catColor(tx.cat), fontWeight:600 }}>{tx.cat}</span>
-          </Tip>
+          {/* Clicar filtra por esta categoria — o gesto mais curto entre "vi
+              algo" e "quero ver só isso". `stopPropagation` porque a linha
+              inteira já é um botão que abre a sanfona: sem isso um clique
+              faria as duas coisas. O desfazer do cabeçalho é a saída. */}
+          {onFilterByCategory ? (
+            <Tip label={`Filtrar por ${tx.cat}`}>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onFilterByCategory(tx); }}
+                aria-label={`Filtrar por categoria ${tx.cat}`}
+                style={{ ...G, fontSize:11, color:catColor(tx.cat), fontWeight:600,
+                  background:"none", border:"none", padding:0, cursor:"pointer",
+                  font:"inherit", textAlign:"left" }}
+              >{tx.cat}</button>
+            </Tip>
+          ) : (
+            <Tip label={`Categoria: ${tx.cat}`}>
+              <span style={{ ...G, fontSize:11, color:catColor(tx.cat), fontWeight:600 }}>{tx.cat}</span>
+            </Tip>
+          )}
           <span style={{ ...G, fontSize:11, color:T.inkGhost }}>·</span>
 
           {/* Para Crédito: mostra "Crédito ●● 1177" inline se tiver cartão, senão só "Crédito" */}
@@ -516,10 +536,24 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
               // requisições, achado 3 da mesma rodada) pode alongar o
               // rótulo ("mensal (a1b2c3d4)") e este pill não tem largura
               // garantida na linha.
-              <span key={tag} title={tag} style={{ ...G, fontSize: 11, color:T.inkMid, background:T.grayLight,
-                borderRadius:99, padding:"2px 8px", fontWeight:500, maxWidth:140,
-                overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
-                display:"inline-block" }}>#{tag}</span>
+              onFilterByTag ? (
+                // `title` continua sendo o rótulo CRU: ele existe para deixar
+                // legível um nome truncado ("mensal (a1b2c3d4)"), e trocá-lo
+                // por um texto de ação tiraria a única forma de ler o resto.
+                // A ação mora no `aria-label`.
+                <button key={tag} type="button" title={tag}
+                  onClick={(e) => { e.stopPropagation(); onFilterByTag(tag); }}
+                  aria-label={`Filtrar pela tag ${tag}`}
+                  style={{ ...G, fontSize: 11, color:T.inkMid, background:T.grayLight,
+                    borderRadius:99, padding:"2px 8px", fontWeight:500, maxWidth:140,
+                    overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                    display:"inline-block", border:"none", cursor:"pointer" }}>#{tag}</button>
+              ) : (
+                <span key={tag} title={tag} style={{ ...G, fontSize: 11, color:T.inkMid, background:T.grayLight,
+                  borderRadius:99, padding:"2px 8px", fontWeight:500, maxWidth:140,
+                  overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                  display:"inline-block" }}>#{tag}</span>
+              )
             ))}
             {hiddenTags.length > 0 && (
               <Tip label={`Todas: ${tags.map(t=>"#"+t).join(", ")}`} pos="top">
@@ -1719,21 +1753,97 @@ function TransacoesPageBody({
     listFiltersActive,
   );
 
-  const activeFacetsForSavedViews = useMemo(() => {
+  // Uma única derivação de facets para os dois consumidores: os chips de
+  // filtro ativo e o resumo das views salvas. Duas listas construídas em
+  // lugares diferentes acabariam divergindo no rótulo de algum filtro.
+  const allFacets = useMemo(() => {
     const categoriesById = Object.fromEntries(
       categoriesForFilter.map((c) => [c.id, c]),
     );
     const cardsById = Object.fromEntries(cardsForFilter.map((c) => [c.id, c]));
-    return filter
-      .buildFacets({ categoriesById, cardsById })
-      .filter((f) => f.active)
-      .map((f) => ({
-        label: f.label,
-        value: f.value,
-        icon: f.icon,
-        color: f.color || T.ink,
-      }));
+    return filter.buildFacets({ categoriesById, cardsById });
   }, [filter, categoriesForFilter, cardsForFilter]);
+
+  const activeFacetsForSavedViews = useMemo(
+    () =>
+      allFacets
+        .filter((f) => f.active)
+        .map((f) => ({
+          label: f.label,
+          value: f.value,
+          icon: f.icon,
+          color: f.color || T.ink,
+        })),
+    [allFacets],
+  );
+
+  /**
+   * Clique na categoria da própria linha → filtra por ela.
+   *
+   * `tx.cat` é o RÓTULO exibido; o filtro trabalha com o id da tag. Quando o
+   * rótulo não resolve para um id (categoria renomeada, catálogo ainda
+   * carregando) não fazemos nada: aplicar um filtro pelo texto traria um
+   * recorte diferente do que o chip promete, e um clique sem efeito é melhor
+   * que um recorte errado com o chip aceso.
+   */
+  const filterByCategoryFromRow = useCallback(
+    (tx) => {
+      const hit = categoriesForFilter.find((c) => c.label === tx.cat);
+      if (!hit) return;
+      filter.setCats([hit.id]);
+      setVisible(PAGE_SIZE);
+    },
+    [categoriesForFilter, filter, PAGE_SIZE],
+  );
+
+  /** Mesma ideia para as tags da linha — a facet Tags guarda o rótulo. */
+  const filterByTagFromRow = useCallback(
+    (tag) => {
+      filter.setTags([tag]);
+      setVisible(PAGE_SIZE);
+    },
+    [filter, PAGE_SIZE],
+  );
+
+  /** "Sem filtros" / "3 filtros" — o que o desfazer vai devolver. */
+  const describeFilterSnapshot = useCallback((snap) => {
+    const n = countActiveFiltersInSnapshot(snap);
+    if (n === 0) return "sem filtros";
+    return n === 1 ? "1 filtro" : `${n} filtros`;
+  }, []);
+
+  // Desfazer dos filtros. O rótulo diz para ONDE volta ("3 filtros"), não
+  // "desfazer" genérico — sem isso o controle é uma aposta.
+  const filterHistory = useFilterHistory(
+    filter.snapshot,
+    filter.applySnapshot,
+    describeFilterSnapshot,
+  );
+  const undoFilter = useCallback(() => {
+    filterHistory.undo();
+    setVisible(PAGE_SIZE);
+  }, [filterHistory, PAGE_SIZE]);
+
+  // Pedido de abrir uma facet vindo de fora da barra (clique num chip). O
+  // `nonce` faz o mesmo chip reabrir o mesmo painel duas vezes seguidas.
+  const [requestOpenFacet, setRequestOpenFacet] = useState(null);
+  const openFacetFromChip = useCallback((key) => {
+    setRequestOpenFacet((prev) => ({ key, nonce: (prev?.nonce ?? 0) + 1 }));
+    // No mobile e no desktop compacto os painéis vivem atrás do botão
+    // "Filtros"; abrir a facet sem abrir o container deixaria o clique sem
+    // efeito visível nenhum.
+    setFiltersOpen(true);
+    setCompactDesktopFiltersOpen(true);
+  }, []);
+
+  const clearFacetAndResetPage = useCallback(
+    (key) => {
+      if (key === "busca") setSearchInput("");
+      else filter.clearFacet(key);
+      setVisible(PAGE_SIZE);
+    },
+    [filter, PAGE_SIZE],
+  );
 
   const scrollListToTop = useCallback(() => {
     const el = listScrollRef.current;
@@ -1842,6 +1952,7 @@ function TransacoesPageBody({
     filterToolbarActive: listFiltersActive,
     facetCounts,
     onExpandedChange: setExpandedFacet,
+    requestOpenFacet,
     ...filterBarApplyProps,
   };
 
@@ -1939,6 +2050,9 @@ function TransacoesPageBody({
                 : null
         }
         onPendingClick={() => filter.setSettlement("a-pagar")}
+        canUndo={filterHistory.canUndo}
+        onUndo={undoFilter}
+        undoLabel={filterHistory.undoLabel}
         compact={isMobile}
       />
       {groups.length === 0 ? (
@@ -2037,6 +2151,8 @@ function TransacoesPageBody({
                     showDate={!isGrouped}
                     dateLabel={shortDateLabel(tx.date)}
                     quickActions={quickActions}
+                    onFilterByCategory={filterByCategoryFromRow}
+                    onFilterByTag={filterByTagFromRow}
                   />
                   {/* Sanfona: o detalhe nasce ONDE O OLHO JÁ ESTÁ, em vez de
                       numa coluna de 320 px que, em 1366×768, sobrava com 32 px
@@ -2358,6 +2474,21 @@ function TransacoesPageBody({
       {!isMobile && !isDesktopCompact && (
         <TransactionsFilterBar {...filterBarCommonProps} />
       )}
+
+      {/* ── Filtros aplicados ────────────────────────────────────
+          Só existe quando há filtro. No mobile e no desktop compacto os cards
+          da FacetBar ficam atrás do botão "Filtros", então sem esta linha era
+          possível olhar uma lista curta sem nenhum sinal do porquê. */}
+      <TransactionsFilterChips
+        facets={allFacets}
+        searchActive={Boolean(debouncedSearch)}
+        searchLabel={debouncedSearch}
+        onOpenFacet={openFacetFromChip}
+        onClearFacet={clearFacetAndResetPage}
+        onClearAll={clearAll}
+        maxVisible={isMobile ? 2 : isDesktopCompact ? 3 : 5}
+        compact={isMobile}
+      />
 
       {/* ── MOBILE FILTER BOTTOM SHEET ───────────────────────────────── */}
       {isMobile && (filtersOpen || sheetClosing) && (

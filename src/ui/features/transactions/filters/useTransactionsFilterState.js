@@ -116,6 +116,46 @@ export function useTransactionsFilterState({
     setSort(DEFAULT_SORT);
   }, []);
 
+  /**
+   * Volta UMA facet ao default, pela mesma `key` que `buildFacets` usa.
+   *
+   * É o que o "×" de cada chip de filtro ativo aciona. Precisa viver aqui
+   * porque cada facet tem um default próprio ("mes", "todos", []), e espalhar
+   * esse conhecimento pelos componentes garantiria que um dia um deles
+   * "limparia" para o valor errado.
+   */
+  const clearFacet = useCallback((key) => {
+    setState((prev) => {
+      switch (key) {
+        case "periodo":
+          return { ...prev, period: DEFAULT_FILTER_STATE.period, customFrom: "", customTo: "" };
+        case "tipo":
+          // Junto com o tipo cai a forma de pagamento incompatível — a mesma
+          // regra que `setType` aplica; sem isso "Todos os tipos" poderia
+          // sobrar com um método que só existe para despesa.
+          return { ...prev, type: DEFAULT_FILTER_STATE.type, method: [] };
+        case "forma":
+          return { ...prev, method: [] };
+        case "categoria":
+          return { ...prev, cats: [] };
+        case "tag":
+          return { ...prev, tags: [] };
+        case "cartao":
+          return { ...prev, cardSel: [] };
+        case "valor":
+          return { ...prev, valueMin: "", valueMax: "" };
+        case "recorrencia":
+          return { ...prev, rec: DEFAULT_FILTER_STATE.rec };
+        case "situacao":
+          return { ...prev, settlement: DEFAULT_FILTER_STATE.settlement };
+        case "busca":
+          return { ...prev, search: "" };
+        default:
+          return prev;
+      }
+    });
+  }, []);
+
   /** Lista canônica de facets para a FacetBar, derivada do estado. */
   const buildFacets = useCallback(
     ({ categoriesById = {}, cardsById = {} } = {}) => {
@@ -269,6 +309,7 @@ export function useTransactionsFilterState({
     // bulk
     applySnapshot,
     clearAll,
+    clearFacet,
     // derivados
     buildFacets,
     sortItems,
