@@ -154,6 +154,19 @@ function renderPage(overrides = {}) {
 }
 
 describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }, () => {
+  it("Enter numa ação rápida executa a ação, não abre a sanfona", async () => {
+    // Os botões de ação são descendentes da linha `role="button"`: sem guarda de
+    // alvo no keydown, o preventDefault da linha cancelava o clique sintetizado
+    // e toda ação rápida ficava inalcançável por teclado.
+    const onNewTx = vi.fn();
+    renderPage({ onEditTx: onNewTx });
+    const editar = (await screen.findAllByRole("button", { name: /^Editar / }))[0];
+    editar.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(onNewTx).toHaveBeenCalled();
+    expect(screen.queryByRole("region", { name: /^Detalhes de/i })).toBeNull();
+  });
+
   it("a linha é operável por teclado e Esc fecha a sanfona", async () => {
     // A linha era um `div` com onClick: invisível para teclado e para leitor de
     // tela, e quem abrisse o detalhe não tinha como sair sem tabular por ele.

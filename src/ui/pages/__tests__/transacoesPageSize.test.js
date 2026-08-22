@@ -28,6 +28,14 @@ describe("computePageSize", () => {
     expect(dense).toBeGreaterThan(comfortable);
   });
 
+  it("o teto é o limit máximo que a API aceita — acima disso ela responde 422", () => {
+    // `visible` É o `limit` da requisição, e "carregar mais" soma PAGE_SIZE a
+    // ele. Sem o teto, uma janela alta chegava a 120 e a lista travava num 422
+    // que o "Tentar novamente" só reenviava.
+    expect(TX_PAGE_MAX).toBe(100);
+    expect(computePageSize(5000, 36)).toBeLessThanOrEqual(TX_PAGE_MAX);
+  });
+
   it("degrada para o piso com entrada inválida em vez de quebrar a página", () => {
     expect(computePageSize(Number.NaN)).toBe(TX_PAGE_MIN);
     expect(computePageSize(500, 0)).toBe(TX_PAGE_MIN);

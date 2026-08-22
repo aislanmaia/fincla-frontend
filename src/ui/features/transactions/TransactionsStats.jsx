@@ -37,7 +37,9 @@ export function TransactionsStats({
   countDespesa,
   countEstorno,
   totalEstorno,
-  maiorDespesa = null,
+  filteredCount = null,
+  countsArePartial = false,
+  stacked = false,
   unknown = false,
   expanded = false,
   onToggleExpanded,
@@ -51,24 +53,44 @@ export function TransactionsStats({
     { color: resultado >= 0 ? T.green : T.red, text: `${resultado >= 0 ? "+" : "−"}${fmt(Math.abs(resultado))}` },
   ];
 
-  const media = countReceita > 0 ? receita / countReceita : 0;
-  const shareMaior =
-    maiorDespesa && despesa > 0 ? Math.min(100, Math.round((maiorDespesa.value / despesa) * 100)) : null;
+  /* `receita` vem do summary remoto (o filtro INTEIRO), enquanto `countReceita`
+     conta só as linhas carregadas. Dividir um pelo outro dava uma "média" que
+     podia estar 10× alta. Só mostramos a média quando os dois descrevem o mesmo
+     conjunto — ou seja, quando não há paginação remota no meio. */
+  const canAverage = !countsArePartial && countReceita > 0;
+  const media = canAverage ? receita / countReceita : null;
 
   const mono = (text) => (
     <b style={{ fontFamily: "'Geist Mono',monospace", color: T.ink, fontWeight: 700 }}>{text}</b>
   );
 
+  const loaded = (n) =>
+    countsArePartial ? (
+      <>
+        {n} carregada{n === 1 ? "" : "s"}
+      </>
+    ) : (
+      <>
+        {n} lançamento{n === 1 ? "" : "s"}
+      </>
+    );
+
+  /* A contagem do filtro é a da API (`filteredCount`), não a das linhas já
+     carregadas: logo acima o cabeçalho da lista mostra a da API, e os dois se
+     contradiriam — "347" no cabeçalho e "23 no filtro" aqui. */
+  const totalNoFiltro = filteredCount ?? countReceita + countDespesa + countEstorno;
+
   const details = [
     countReceita > 0 ? (
       <>
-        {countReceita} lançamento{countReceita === 1 ? "" : "s"} · média {mono(fmt(media))}
+        {loaded(countReceita)}
+        {media != null ? <> · média {mono(fmt(media))}</> : null}
       </>
     ) : (
-      "Nenhuma receita no filtro"
+      "Nenhuma receita carregada"
     ),
     <>
-      {countDespesa} lançamento{countDespesa === 1 ? "" : "s"}
+      {loaded(countDespesa)}
       {countEstorno > 0 ? (
         <>
           {" · "}
@@ -77,16 +99,9 @@ export function TransactionsStats({
           </em>
         </>
       ) : null}
-      {maiorDespesa ? (
-        <>
-          <br />
-          maior: {maiorDespesa.label} · {mono(fmt(maiorDespesa.value))}
-          {shareMaior != null ? ` — ${shareMaior}% do total` : null}
-        </>
-      ) : null}
     </>,
     <>
-      {countReceita + countDespesa} transaç{countReceita + countDespesa === 1 ? "ão" : "ões"} no filtro
+      {totalNoFiltro} transaç{totalNoFiltro === 1 ? "ão" : "ões"} no filtro
     </>,
   ];
 
@@ -94,7 +109,13 @@ export function TransactionsStats({
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "repeat(3, minmax(0, 1fr)) auto",
+        /* Empilhado no mobile: três colunas de `rótulo + −R$ 1.234,56` com
+           nowrap somam ~500 px de largura intrínseca, e o container do app tem
+           `overflowX: hidden` — os números eram CORTADOS em silêncio, sem
+           rolagem e sem transbordo que um teste de scrollWidth pegasse. */
+        gridTemplateColumns: stacked
+          ? "minmax(0, 1fr) minmax(0, 1fr) auto"
+          : "repeat(3, minmax(0, 1fr)) auto",
         alignItems: "center",
         background: T.surface,
         border: `1px solid ${T.border}`,
@@ -104,7 +125,25 @@ export function TransactionsStats({
       }}
     >
       {LABELS.map((l, i) => (
-        <div key={l.key} style={{ display: "flex", alignItems: "baseline", gap: 7, minWidth: 0, ...divider }}>
+        <div
+          key={l.key}
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            gap: 7,
+            minWidth: 0,
+            ...divider,
+            // Empilhado: "Resultado" ocupa a linha inteira, como a faixa de KPIs
+            // que este card substituiu já fazia no mobile.
+            ...(stacked && i === 2
+              ? { gridColumn: "1 / -1", borderRight: "none", paddingRight: 0, marginRight: 0,
+                  marginTop: 8, paddingTop: 8, borderTop: `1px solid ${T.border}` }
+              : null),
+            ...(stacked && i === 1
+              ? { borderRight: "none", paddingRight: 0, marginRight: 0 }
+              : null),
+          }}
+        >
           <span
             style={{
               ...G,
@@ -166,7 +205,16 @@ export function TransactionsStats({
           {details.map((node, i) => (
             <div
               key={LABELS[i].key}
-              style={{ gridRow: 3, display: "flex", flexDirection: "column", minWidth: 0, ...divider }}
+              style={{
+                gridRow: stacked ? undefined : 3,
+                display: "flex",
+                flexDirection: "column",
+                minWidth: 0,
+                ...divider,
+                ...(stacked
+                  ? { gridColumn: "1 / -1", borderRight: "none", paddingRight: 0, marginRight: 0 }
+                  : null),
+              }}
             >
               <div style={{ ...G, fontSize: 11, color: T.inkLight, lineHeight: 1.45 }}>{node}</div>
             </div>

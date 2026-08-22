@@ -325,6 +325,10 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
     <div
       onClick={() => onSelect(tx)}
       onKeyDown={(e) => {
+        // Só a própria linha. Os botões de ação rápida são descendentes: sem
+        // esta guarda, o `preventDefault` cancelava o clique sintetizado deles e
+        // Enter numa ação abria a sanfona em vez de executar a ação.
+        if (e.target !== e.currentTarget) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onSelect(tx);
@@ -499,8 +503,11 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
         )}
 
         {/* Row 4: tags */}
+        {/* As tags dão lugar às ações rápidas no hover — assim a descrição, o
+            valor e a situação não são espremidos quando elas aparecem. */}
         {visibleTags.length > 0 && (
-          <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap" }}>
+          <div className="fincla-quick-hides"
+            style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap" }}>
             {visibleTags.map(tag => (
               // `title` + truncagem (achado 4, rodada 5 de review #100): a
               // desambiguação por prefixo curto e estável do id (não usa
@@ -940,7 +947,13 @@ function TransacoesPageBody({
   /** Estável entre renders: se a identidade mudasse, `TxRow` re-renderizaria à toa
       e o ganho de içar o componente para o módulo iria embora. */
   const handleSelectTx = useCallback((tx) => {
-    setSelected((cur) => (cur?.id === tx.id ? null : tx));
+    setSelected((cur) => {
+      const next = cur?.id === tx.id ? null : tx;
+      // O erro de liquidação é de UMA transação; sem isto ele reapareceria
+      // colado na próxima que fosse aberta.
+      if (cur?.id !== next?.id) setSettleError("");
+      return next;
+    });
   }, []);
   const [visible,     setVisible]     = useState(PAGE_SIZE);
   const listScrollRef = useRef(null);
@@ -1509,7 +1522,11 @@ function TransacoesPageBody({
     if (shouldUseRealData && transactionsData.isLoading) return;
     if (loadMoreCooldownRef.current) return;
     loadMoreCooldownRef.current = true;
-    setVisible((v) => v + PAGE_SIZE);
+    /* `visible` É o `limit` da API, que rejeita acima de 100 com 422 — e o
+       "Tentar novamente" reenviava a MESMA query estourada, deixando a pessoa
+       presa sem saída. Com PAGE_SIZE fixo em 10 a sequência batia exatamente em
+       100; dimensionado pela viewport ela passava do teto. */
+    setVisible((v) => Math.min(TX_PAGE_MAX, v + PAGE_SIZE));
     window.setTimeout(() => {
       loadMoreCooldownRef.current = false;
     }, 400);
@@ -1866,7 +1883,12 @@ function TransacoesPageBody({
           setMockTxList((cur) => cur.map((t) => (t.id === tx.id ? { ...t, settled: next } : t)));
         }
       } catch (e) {
+        // O erro só é renderizado dentro da sanfona. Usando o ✓ da linha sem
+        // abrir nada, a falha ficava invisível — indistinguível de um no-op — e
+        // a string sobrevivia no nível da página, aparecendo depois colada numa
+        // transação sem relação. Abrir a linha põe o erro no contexto certo.
         setSettleError(e?.message || "Não foi possível atualizar o pagamento.");
+        setSelected(tx);
       } finally {
         setSettlingId(null);
       }
@@ -2199,6 +2221,8 @@ function TransacoesPageBody({
               countDespesa={countDespesa}
               countEstorno={countEstorno}
               totalEstorno={totalEstorno}
+              filteredCount={filteredCount}
+              countsArePartial={canUseRemoteSummary}
               unknown={tagFilterBlocked || listNeverLoaded}
               expanded={statsExpanded}
               onToggleExpanded={() => setStatsExpanded((v) => !v)}
@@ -2424,9 +2448,12 @@ function TransacoesPageBody({
           countDespesa={countDespesa}
           countEstorno={countEstorno}
           totalEstorno={totalEstorno}
+          filteredCount={filteredCount}
+          countsArePartial={canUseRemoteSummary}
           unknown={tagFilterBlocked || listNeverLoaded}
           expanded={statsExpanded}
           onToggleExpanded={() => setStatsExpanded((v) => !v)}
+          stacked
           compactLabels
           fmt={fmtBRL}
         />
