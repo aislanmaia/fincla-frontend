@@ -308,7 +308,7 @@ export const Tip = ({ label, children, pos = "top" }) => {
 };
 
 const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
-  rowHeight = 48, showDate = true, dateLabel = "" }) => {
+  rowHeight = 48, showDate = true, dateLabel = "", quickActions = null }) => {
   const isRefund   = tx.type === "refund";
   const isReceita  = tx.type === "income" || isRefund;
   const hasParcela = !!tx.parcela && !isRefund;
@@ -525,14 +525,60 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
             style={{ marginTop:2, transition:"color 0.12s" }}/>
         )}
       </div>
+
+      {/* Ações rápidas — o que hoje exige abrir o detalhe primeiro. */}
+      {quickActions && (
+        <div className="fincla-quick" style={{ flexShrink:0, marginLeft:2 }}>
+          {tx.settleable && (
+            <QuickAction
+              label={tx.settled ? `Desfazer pagamento de ${tx.desc}` : `Marcar ${tx.desc} como pago`}
+              tone="green"
+              onClick={(e) => { e.stopPropagation(); quickActions.onSettle(tx); }}
+            >
+              {tx.settled ? "↺" : "✓"}
+            </QuickAction>
+          )}
+          <QuickAction
+            label={`Editar ${tx.desc}`}
+            onClick={(e) => { e.stopPropagation(); quickActions.onEdit(tx); }}
+          >
+            ✎
+          </QuickAction>
+          <QuickAction
+            label={`Excluir ${tx.desc}`}
+            tone="red"
+            onClick={(e) => { e.stopPropagation(); quickActions.onDelete(tx); }}
+          >
+            🗑
+          </QuickAction>
+        </div>
+      )}
     </div>
   );
 };
+
+/** Botão de 28 px das ações rápidas. Alvo mínimo respeitado; `stopPropagation`
+ *  no chamador para o clique não abrir a sanfona junto. */
+const QuickAction = ({ label, tone, onClick, children }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-label={label}
+    title={label}
+    style={{ ...G, width:28, height:28, borderRadius:8, cursor:"pointer",
+      display:"flex", alignItems:"center", justifyContent:"center", fontSize:12,
+      background:T.surface,
+      border:`1px solid ${tone === "green" ? "#B7E4CE" : tone === "red" ? "#F5C9C9" : T.border}`,
+      color: tone === "green" ? T.green : tone === "red" ? T.red : T.inkMid }}>
+    {children}
+  </button>
+);
 
 /* Mesmo motivo do `TxRow` acima (fincla-frontend#66): definido dentro do corpo,
    o drawer inteiro era desmontado e remontado a cada render da página — inclusive
    a cada transição de `settlingId`, disparada pelo próprio botão de liquidar. */
 const DetailPanel = ({
+  inline = false,
   tx,
   onClose,
   onEditTx,
@@ -551,8 +597,13 @@ const DetailPanel = ({
   if (!tx) return null;
   const isReceita = tx.val > 0;
   return (
-    <div style={{ display:"flex", flexDirection:"column", flex:1, minHeight:0 }}>
+    <div style={ inline
+      ? { display:"flex", flexDirection:"column" }
+      : { display:"flex", flexDirection:"column", flex:1, minHeight:0 }}>
       {/* Header */}
+      {/* No modo sanfona o cabeçalho "Detalhes" some: a linha logo acima já diz
+          de qual transação se trata, e repetir isso custaria altura. */}
+      {!inline && (
       <div style={{ padding:"18px 20px", borderBottom:`1px solid ${T.border}`,
         display:"flex", alignItems:"center", justifyContent:"space-between" }}>
         <div style={{ ...G, fontSize:14, fontWeight:800, color:T.ink }}>Detalhes</div>
@@ -563,7 +614,9 @@ const DetailPanel = ({
           <X size={15} color={T.inkMid}/>
         </button>
       </div>
-      {/* Amount hero */}
+      )}
+      {/* Amount hero — só no painel; na sanfona o valor já está na linha. */}
+      {!inline && (
       <div style={{ padding:"24px 20px 16px", background: isReceita ? T.greenLight : T.redLight,
         borderBottom:`1px solid ${T.border}`, textAlign:"center" }}>
         <div style={{ fontSize:32, marginBottom:6 }}>{tx.icon}</div>
@@ -573,8 +626,13 @@ const DetailPanel = ({
         </div>
         <div style={{ ...G, fontSize:13, color:T.inkMid, marginTop:4 }}>{tx.desc}</div>
       </div>
-      {/* Fields */}
-      <div style={{ flex:1, overflowY:"auto", overflowX:"hidden", padding:"16px 20px", display:"flex", flexDirection:"column", gap:0, minHeight:0 }}>
+      )}
+      {/* Fields — em grade quando inline, para aproveitar a largura toda em vez
+          de empilhar oito linhas numa coluna de 320 px. */}
+      <div style={ inline
+        ? { display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))",
+            gap:"2px 20px", padding:"10px 14px 4px" }
+        : { flex:1, overflowY:"auto", overflowX:"hidden", padding:"16px 20px", display:"flex", flexDirection:"column", gap:0, minHeight:0 }}>
         {[
           { label:"Categoria", val: <span style={{ ...G, display:"flex", alignItems:"center", gap:6 }}>
               <div style={{ width:8, height:8, borderRadius:"50%", background:catColor(tx.cat), flexShrink:0 }}/>
@@ -1768,6 +1826,31 @@ function TransacoesPageBody({
     </button>
   );
 
+  /* As ações rápidas usam os MESMOS caminhos do detalhe — nenhuma segunda
+     implementação de liquidar/excluir, que é onde as duas divergiriam. */
+  const quickActions = useMemo(() => ({
+    onEdit: (tx) => { if (onEditTx) onEditTx(tx); },
+    onDelete: (tx) => { setSelected(tx); setDeletingId(tx.id); },
+    onSettle: async (tx) => {
+      if (settlingId) return;
+      setSettleError("");
+      setSettlingId(tx.id);
+      try {
+        const next = !tx.settled;
+        if (shouldUseRealData) {
+          await transactionsData.setTransactionSettled(tx.id, next);
+          if (onTransactionsInvalidate) onTransactionsInvalidate();
+        } else {
+          setMockTxList((cur) => cur.map((t) => (t.id === tx.id ? { ...t, settled: next } : t)));
+        }
+      } catch (e) {
+        setSettleError(e?.message || "Não foi possível atualizar o pagamento.");
+      } finally {
+        setSettlingId(null);
+      }
+    },
+  }), [onEditTx, settlingId, shouldUseRealData, transactionsData, onTransactionsInvalidate]);
+
   /* Agrupar por data só faz sentido ordenado por data: por valor ou categoria
      cada "grupo" vira um item só, o pior dos dois mundos. */
   const canGroup = groupingAllowed(filter.sort?.[0]?.field ?? filter.sort?.field);
@@ -1882,7 +1965,7 @@ function TransacoesPageBody({
               )}
               {txs.map((tx, i) => (
                 <div key={tx.id} style={{
-                  borderBottom: (gi === groups.length - 1 && i === txs.length - 1)
+                  borderBottom: (gi === groups.length - 1 && i === txs.length - 1 && selected?.id !== tx.id)
                     ? "none" : `1px solid ${T.border}` }}>
                   <TxRow
                     tx={tx}
@@ -1893,7 +1976,38 @@ function TransacoesPageBody({
                     rowHeight={listRowHeight}
                     showDate={!isGrouped}
                     dateLabel={shortDateLabel(tx.date)}
+                    quickActions={quickActions}
                   />
+                  {/* Sanfona: o detalhe nasce ONDE O OLHO JÁ ESTÁ, em vez de
+                      numa coluna de 320 px que, em 1366×768, sobrava com 32 px
+                      de área rolável — sem os botões Editar e Excluir à vista.
+                      Mesmo padrão dos itens de fatura em Cartões. */}
+                  {selected?.id === tx.id && (
+                    <div
+                      role="region"
+                      aria-label={`Detalhes de ${tx.desc}`}
+                      style={{ background:"#FAFBFF", boxShadow:`inset 3px 0 0 ${T.blue}`,
+                        borderTop:`1px solid ${T.border}`,
+                        animation:"fadeInDown 0.18s ease" }}>
+                      <DetailPanel
+                        inline
+                        tx={tx}
+                        onClose={() => setSelected(null)}
+                        onEditTx={onEditTx}
+                        setSelected={setSelected}
+                        shouldUseRealData={shouldUseRealData}
+                        transactionsData={transactionsData}
+                        setMockTxList={setMockTxList}
+                        onTransactionsInvalidate={onTransactionsInvalidate}
+                        deletingId={deletingId}
+                        setDeletingId={setDeletingId}
+                        settlingId={settlingId}
+                        setSettlingId={setSettlingId}
+                        settleError={settleError}
+                        setSettleError={setSettleError}
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
             </React.Fragment>
@@ -2296,115 +2410,21 @@ function TransacoesPageBody({
         />
       )}
 
-            {/* List + Detail panel */}
-      {isMobile ? (
-        /* Mobile: list full width, detail as bottom sheet */
-        <>
+            {/* Lista. O painel lateral de 320 px e o bottom sheet de detalhes
+                deixaram de existir: a sanfona abre embaixo da própria linha.
+                Medido antes: em 1366×768 o painel herdava a altura espremida da
+                lista e sobrava com 32 px de área rolável para 233 px de
+                conteúdo — Editar, Excluir e Marcar como pago ficavam fora de
+                alcance sem rolar dentro dessa janela. */}
+      <div style={{ display:"flex", flex:1, minHeight:0, overflow:"hidden" }}>
+        <div
+          ref={listScrollRef}
+          className="fincla-scroll"
+          style={{ flex:1, minWidth:0, overflowY:"auto", overflowX:"hidden" }}
+        >
           {listContent}
-          {selected && (
-            <div
-              style={{ position:"fixed", inset:0, zIndex:400,
-                display:"flex", flexDirection:"column", justifyContent:"flex-end" }}
-              onClick={e=>{ if(e.target===e.currentTarget) setSelected(null); }}>
-              {/* Backdrop */}
-              <div onClick={()=>setSelected(null)}
-                style={{ position:"absolute", inset:0,
-                  background:"rgba(0,0,0,0.45)",
-                  animation:"backdropIn 0.22s ease-out both" }}/>
-              {/* Sheet */}
-              <div style={{ position:"relative", background:T.surface,
-                borderRadius:"24px 24px 0 0",
-                height:"85dvh", display:"flex", flexDirection:"column",
-                animation:"sheetUp 0.5s cubic-bezier(0.32,0.72,0,1) both",
-                boxShadow:"0 -2px 0 rgba(0,0,0,0.05), 0 -8px 32px rgba(0,0,0,0.14), 0 -24px 80px rgba(0,0,0,0.08)" }}
-                id="tx-detail-sheet">
-                {/* Handle — drag down to dismiss */}
-                <div
-                  onTouchStart={e => {
-                    const sheet  = document.getElementById('tx-detail-sheet');
-                    const startY = e.touches[0].clientY;
-                    const startT = Date.now();
-                    let last = 0;
-                    const mv = ev => {
-                      last = ev.touches[0].clientY - startY;
-                      if (last > 0) sheet.style.transform = `translateY(${last}px)`;
-                    };
-                    const up = () => {
-                      const vel = last / Math.max(1, Date.now() - startT);
-                      sheet.style.transition = 'transform 0.34s cubic-bezier(0.22,1,0.36,1)';
-                      if (vel > 0.45 || last > sheet.offsetHeight * 0.3) {
-                        sheet.style.transform = 'translateY(110%)';
-                        setTimeout(() => { setSelected(null); sheet.style.transform=''; sheet.style.transition=''; }, 340);
-                      } else {
-                        sheet.style.transform = '';
-                        setTimeout(() => sheet.style.transition = '', 340);
-                      }
-                      document.removeEventListener('touchmove', mv);
-                      document.removeEventListener('touchend', up);
-                    };
-                    document.addEventListener('touchmove', mv, { passive: true });
-                    document.addEventListener('touchend', up);
-                  }}
-                  style={{ padding:"12px 0 6px", flexShrink:0, cursor:"grab",
-                    touchAction:"none", display:"flex", justifyContent:"center" }}>
-                  <div style={{ width:36, height:4, borderRadius:99, background:"rgba(0,0,0,0.15)" }}/>
-                </div>
-                <DetailPanel
-                  tx={selected}
-                  onClose={() => setSelected(null)}
-                  onEditTx={onEditTx}
-                  setSelected={setSelected}
-                  shouldUseRealData={shouldUseRealData}
-                  transactionsData={transactionsData}
-                  setMockTxList={setMockTxList}
-                  onTransactionsInvalidate={onTransactionsInvalidate}
-                  deletingId={deletingId}
-                  setDeletingId={setDeletingId}
-                  settlingId={settlingId}
-                  setSettlingId={setSettlingId}
-                  settleError={settleError}
-                  setSettleError={setSettleError}
-                />
-              </div>
-            </div>
-          )}
-        </>
-      ) : (
-        /* Desktop: master-detail — flex:1 fills remaining height, list scrolls internally */
-        <div style={{ display:"flex", gap:16, flex:1, minHeight:0, overflow:"hidden" }}>
-          {/* List — scrolls internally */}
-          <div
-            ref={listScrollRef}
-            style={{ flex:1, minWidth:0, overflowY:"auto", overflowX:"hidden" }}
-          >
-            {listContent}
-          </div>
-          {/* Detail panel — fixed width, fills full height of this zone */}
-          {selected && (
-            <div style={{ width:320, flexShrink:0, display:"flex", flexDirection:"column",
-              background:T.surface, border:`1px solid ${T.border}`, borderRadius:16,
-              overflow:"hidden", boxShadow:"0 4px 24px rgba(0,0,0,0.08)",
-              animation:"fadeIn 0.15s ease" }}>
-              <DetailPanel
-                  tx={selected}
-                  onClose={() => setSelected(null)}
-                  onEditTx={onEditTx}
-                  setSelected={setSelected}
-                  shouldUseRealData={shouldUseRealData}
-                  transactionsData={transactionsData}
-                  setMockTxList={setMockTxList}
-                  onTransactionsInvalidate={onTransactionsInvalidate}
-                  deletingId={deletingId}
-                  setDeletingId={setDeletingId}
-                  settlingId={settlingId}
-                  setSettlingId={setSettlingId}
-                  settleError={settleError}
-                  setSettleError={setSettleError}
-                />
-            </div>
-          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

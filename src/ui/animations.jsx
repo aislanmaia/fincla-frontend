@@ -34,6 +34,19 @@ export const ANIM_CSS = `
   }
   .fincla-row { transition: background 0.11s; }
   .fincla-row:hover { background: #F0EFEB !important; }
+  /* Ações rápidas: aparecem no hover e ocupam o lugar da pill de categoria, de
+     modo que data, descrição, valor e situação nunca ficam encobertos. No toque
+     não há hover, então elas ficam sempre visíveis — a alternativa seria um alvo
+     de 24 px dentro de uma linha de 56, onde o erro abre a transação vizinha. */
+  .fincla-quick { display: none; align-items: center; gap: 4px; }
+  .fincla-row:hover .fincla-quick,
+  .fincla-row:focus-within .fincla-quick { display: flex; }
+  .fincla-row:hover .fincla-quick-hides,
+  .fincla-row:focus-within .fincla-quick-hides { display: none; }
+  @media (hover: none) {
+    .fincla-quick { display: flex; }
+    .fincla-quick-hides { display: none; }
+  }
   .fincla-card-lift { transition: box-shadow 0.18s ease, transform 0.18s ease; }
   .fincla-card-lift:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.09) !important; transform: translateY(-1px); }
   .fincla-btn { transition: opacity 0.13s, transform 0.13s; }

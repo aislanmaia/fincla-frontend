@@ -505,7 +505,10 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     renderPage();
 
     await userEvent.click(screen.getAllByText("Mercado")[0]);
-    await userEvent.click(await screen.findByRole("button", { name: /Desfazer pagamento/i }));
+    // A ação existe em dois lugares agora — na sanfona e como ação rápida da
+    // linha. Este teste cobre a da sanfona, então a busca é escopada nela.
+    const detail = await screen.findByRole("region", { name: /^Detalhes de/i });
+    await userEvent.click(within(detail).getByRole("button", { name: /Desfazer pagamento/i }));
 
     expect(setTransactionSettled).toHaveBeenCalledWith("tx-paga", false);
   });
@@ -517,7 +520,14 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     await userEvent.click(screen.getAllByText("Notebook")[0]);
 
     expect(screen.queryByRole("button", { name: /Marcar como pago/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Desfazer pagamento/i })).not.toBeInTheDocument();
+    const cardDetail = await screen.findByRole("region", { name: /^Detalhes de/i });
+    expect(
+      within(cardDetail).queryByRole("button", { name: /Desfazer pagamento/i }),
+    ).not.toBeInTheDocument();
+    // E também não como ação rápida DESTA linha: cartão liquida pela FATURA,
+    // não por lançamento. (Escopado à linha; outras linhas da lista têm a ação.)
+    const cardRow = screen.getAllByText("Notebook")[0].closest(".fincla-row");
+    expect(within(cardRow).queryByRole("button", { name: /como pago/i })).not.toBeInTheDocument();
   });
 
   it("o facet Situação chega ao hook de dados como settlement", async () => {
