@@ -70,6 +70,41 @@ const DEFAULT_RESTORE_SNAPSHOT = Object.freeze({
   debouncedSearch: "",
 });
 
+/** Altura de um lançamento na lista de hoje: 28 px de cabeçalho do dia + 53 da
+ *  linha + 20 de respiro. Com um lançamento por dia — o caso normal — quase toda
+ *  linha carrega o próprio cabeçalho, então é este o custo real por transação. */
+export const TX_ROW_HEIGHT = 101;
+
+/** Piso e teto da primeira página. O teto é o `limit` máximo que
+ *  `GET /v1/transactions` aceita; o piso evita pedir pouco demais numa janela
+ *  minúscula e ficar disparando "carregar mais" logo de cara. */
+export const TX_PAGE_MIN = 20;
+export const TX_PAGE_MAX = 100;
+
+/**
+ * Tamanho da primeira página, dimensionado pela altura disponível.
+ *
+ * O valor fixo de 10 fazia sentido quando cabiam duas transações na tela. Numa
+ * janela alta cabem dezenas, e aí a pessoa chega ao fim da primeira página
+ * ANTES de a tela encher — vê a rolagem infinita disparar duas ou três vezes só
+ * para preencher o que já deveria estar à vista. A sensação é de tela lenta,
+ * não de lista longa.
+ *
+ * @param {number} availableHeight Altura útil para a lista, em px.
+ * @param {number} rowHeight Custo por transação, em px.
+ * @returns {number} Itens da primeira página, entre TX_PAGE_MIN e TX_PAGE_MAX.
+ */
+export function computePageSize(availableHeight, rowHeight = TX_ROW_HEIGHT) {
+  const height = Number(availableHeight);
+  const row = Number(rowHeight);
+  if (!Number.isFinite(height) || !Number.isFinite(row) || row <= 0 || height <= 0) {
+    return TX_PAGE_MIN;
+  }
+  // +5 de folga: a primeira rolagem já encontra conteúdo em vez de um sentinel.
+  const fits = Math.ceil(height / row) + 5;
+  return Math.min(TX_PAGE_MAX, Math.max(TX_PAGE_MIN, fits));
+}
+
 /** Viewport ≥ breakpoint: filtros desktop sempre visíveis. Abaixo: colapsados por padrão. */
 const DESKTOP_FILTERS_EXPAND_BREAKPOINT = 1280;
 
@@ -677,7 +712,16 @@ function TransacoesPageBody({
 }) {
   const urlSearch = useSearch({ strict: false });
   const navigate = useNavigate();
-  const PAGE_SIZE = 10;
+  /* Calculado UMA vez, no primeiro layout — redimensionar a janela não pode
+     disparar refetch. E só cresce: trocar para uma lista mais densa aumenta a
+     página, mas voltar não encolhe o que já foi carregado. */
+  const pageSizeRef = useRef(0);
+  if (pageSizeRef.current === 0) {
+    pageSizeRef.current = computePageSize(
+      typeof window !== "undefined" ? window.innerHeight - 240 : 0,
+    );
+  }
+  const PAGE_SIZE = pageSizeRef.current;
 
   const parseDate = d => {
     if (!d) return new Date(0);
