@@ -474,30 +474,25 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
           bloco que pode sumir sem esconder informação que a pessoa precisa para
           decidir. */}
       <div style={{ minWidth:0, display:"flex", justifyContent:"flex-start" }}>
-        <span className="fincla-quick-hides" style={{ minWidth:0, display:"flex" }}>
-          {onFilterByCategory ? (
-            <Tip label={`Filtrar por ${tx.cat}`}>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onFilterByCategory(tx); }}
-                aria-label={`Filtrar por categoria ${tx.cat}`}
-                // NUNCA `font:"inherit"` aqui: `font` é atalho e reseta
-                // `fontSize`/`fontWeight` declarados antes dele no mesmo objeto.
-                // Foi assim que a categoria virou 16px peso 400 — maior que a
-                // própria descrição, invertendo a hierarquia da linha.
-                style={{ ...G, fontFamily:"inherit", fontSize:10, fontWeight:600,
-                  color:catCol, background:`${catCol}18`, border:"none",
-                  borderRadius:99, padding:"2px 7px", cursor:"pointer",
-                  maxWidth:"100%", overflow:"hidden", textOverflow:"ellipsis",
-                  whiteSpace:"nowrap", lineHeight:1.5 }}
-              >{tx.cat}</button>
-            </Tip>
-          ) : (
+        {/* SEM `display` inline: estilo inline vence a folha de estilo, e o
+            `display:none` de `.fincla-row:hover .fincla-quick-hides` deixava de
+            valer — a pílula continuava desenhada POR BAIXO das ações rápidas,
+            as duas empilhadas na mesma célula. */}
+        {/* SEM `display` inline: estilo inline vence a folha de estilo, e o
+            `display:none` de `.fincla-row:hover .fincla-quick-hides` deixava de
+            valer — a pílula continuava desenhada POR BAIXO das ações rápidas.
+
+            E rótulo, não botão: no hover esta célula dá lugar às ações rápidas,
+            então uma pílula clicável seria inalcançável pelo mouse — ela some
+            exatamente quando o ponteiro chega. Filtrar pela categoria mora na
+            sanfona, no campo CATEGORIA. */}
+        <span className="fincla-quick-hides" style={{ minWidth:0 }}>
+          <Tip label={`Categoria: ${tx.cat}`}>
             <span style={{ ...G, fontSize:10, fontWeight:600, color:catCol,
               background:`${catCol}18`, borderRadius:99, padding:"2px 7px",
               maxWidth:"100%", overflow:"hidden", textOverflow:"ellipsis",
-              whiteSpace:"nowrap", lineHeight:1.5 }}>{tx.cat}</span>
-          )}
+              whiteSpace:"nowrap", lineHeight:1.5, display:"inline-block" }}>{tx.cat}</span>
+          </Tip>
         </span>
         {quickActions && (
           <div className="fincla-quick">
@@ -603,6 +598,28 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
   );
 };
 
+/** Botão de 30 px da sanfona. Todos do mesmo tamanho: são ações do mesmo
+ *  nível, e pesos visuais diferentes sugeririam uma hierarquia que não existe. */
+const AccButton = ({ tone = "plain", disabled = false, onClick, children }) => (
+  <button
+    type="button"
+    disabled={disabled}
+    onClick={onClick}
+    style={{ ...G, height:30, padding:"0 12px", borderRadius:8, fontSize:11.5,
+      fontWeight:700, display:"inline-flex", alignItems:"center", gap:6,
+      cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.6 : 1,
+      whiteSpace:"nowrap",
+      ...(tone === "dark"
+        ? { background:T.ink, color:"#fff", border:`1px solid ${T.ink}` }
+        : tone === "green"
+        ? { background:T.green, color:"#fff", border:`1px solid ${T.green}` }
+        : tone === "red"
+        ? { background:T.surface, color:T.red, border:`1px solid ${T.red}44` }
+        : { background:T.surface, color:T.inkMid, border:`1px solid ${T.border}` }) }}>
+    {children}
+  </button>
+);
+
 const QuickAction = ({ label, tone, onClick, children }) => (
   <button
     type="button"
@@ -633,6 +650,8 @@ const DetailPanel = ({
   onTransactionsInvalidate,
   deletingId,
   onRowLeave,
+  onDuplicateTx,
+  onFilterByCategory,
   setDeletingId,
   settlingId,
   setSettlingId,
@@ -675,14 +694,33 @@ const DetailPanel = ({
       {/* Fields — em grade quando inline, para aproveitar a largura toda em vez
           de empilhar oito linhas numa coluna de 320 px. */}
       <div style={ inline
-        ? { display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))",
-            gap:"2px 20px", padding:"10px 14px 4px" }
+        ? { display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(150px, 1fr))",
+            gap:"10px 18px", padding:"4px 14px 0 107px" }
         : { flex:1, overflowY:"auto", overflowX:"hidden", padding:"16px 20px", display:"flex", flexDirection:"column", gap:0, minHeight:0 }}>
         {[
-          { label:"Categoria", val: <span style={{ ...G, display:"flex", alignItems:"center", gap:6 }}>
-              <div style={{ width:8, height:8, borderRadius:"50%", background:catColor(tx.cat), flexShrink:0 }}/>
-              {tx.cat}
-            </span>},
+          { label:"Categoria", val: onFilterByCategory ? (
+              /* Clicável: é o gesto mais curto entre "vi algo" e "quero ver só
+                 isso". Na linha a pílula não pode ser botão (o hover a troca
+                 pelas ações rápidas), então ele mora aqui — onde a sanfona já
+                 mostra a categoria de qualquer forma. */
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onFilterByCategory(tx); }}
+                aria-label={`Filtrar por categoria ${tx.cat}`}
+                title={`Filtrar por ${tx.cat}`}
+                style={{ ...G, fontFamily:"inherit", display:"flex", alignItems:"center",
+                  gap:6, background:"none", border:"none", padding:0, cursor:"pointer",
+                  fontSize:12, fontWeight:600, color:T.ink, textAlign:"left" }}>
+                <span style={{ width:8, height:8, borderRadius:"50%",
+                  background:catColor(tx.cat), flexShrink:0 }}/>
+                {tx.cat}
+              </button>
+            ) : (
+              <span style={{ ...G, display:"flex", alignItems:"center", gap:6 }}>
+                <div style={{ width:8, height:8, borderRadius:"50%", background:catColor(tx.cat), flexShrink:0 }}/>
+                {tx.cat}
+              </span>
+            )},
           { label:"Data",      val: tx.date },
           { label:"Método",    val: tx.method + (tx.parcela?.cartao ? ` · ${tx.parcela.cartao}` : "") },
           { label:"Status",    val: <span style={{ ...G, fontSize:12, fontWeight:700, padding:"2px 8px", borderRadius:99,
@@ -700,11 +738,24 @@ const DetailPanel = ({
             { label:"Valor residual",val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:700, color:T.red }}>{fmtBRL(tx.parcela.valorResidual)}</span> },
           ] : []),
         ].map(({label,val})=>(
-          <div key={label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
-            padding:"11px 0", borderBottom:`1px solid ${T.border}` }}>
-            <div style={{ ...G, fontSize:12, color:T.inkMid }}>{label}</div>
-            <div style={{ ...G, fontSize:13, color:T.ink, fontWeight:500 }}>{val}</div>
-          </div>
+          /* Na sanfona: rótulo EM CIMA do valor, como no artefato. Lado a lado
+             com `space-between`, um campo curto ("Não") ficava colado na borda
+             direita a 300 px do próprio rótulo, e o olho tinha que atravessar
+             a linha para juntar os dois. */
+          inline ? (
+            <div key={label} style={{ minWidth:0 }}>
+              <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:9.5,
+                letterSpacing:"0.07em", textTransform:"uppercase", color:T.inkGhost }}>{label}</div>
+              <div style={{ ...G, fontSize:12, fontWeight:600, color:T.ink, marginTop:2,
+                overflow:"hidden", textOverflow:"ellipsis" }}>{val}</div>
+            </div>
+          ) : (
+            <div key={label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
+              padding:"11px 0", borderBottom:`1px solid ${T.border}` }}>
+              <div style={{ ...G, fontSize:12, color:T.inkMid }}>{label}</div>
+              <div style={{ ...G, fontSize:13, color:T.ink, fontWeight:500 }}>{val}</div>
+            </div>
+          )
         ))}
         {tx.parcela && (
           <div style={{ padding:"11px 0", borderBottom:`1px solid ${T.border}` }}>
@@ -744,20 +795,27 @@ const DetailPanel = ({
           </div>
         )}
       </div>
-      {/* Liquidação — só para métodos que o usuário liquida por lançamento.
-          Cartão liquida pela fatura, então a ação aqui mentiria sobre o que ele controla. */}
-      {tx.settleable && (
-        <div style={{ padding:"12px 20px 0", display:"flex", alignItems:"center", justifyContent:"space-between", gap:10 }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ ...G, fontSize:12.5, fontWeight:700, color: tx.settled ? T.green : T.amber }}>
-              {tx.settled ? "Pago" : "A pagar"}
-            </div>
-            <div style={{ ...G, fontSize:11, color:T.inkLight, marginTop:1 }}>
-              {tx.settled ? "Já entrou no saldo da conta" : "Ainda não entrou no saldo da conta"}
-            </div>
-          </div>
-          <button
-            type="button"
+      {tx.settleable && settleError && (
+        <div style={{ ...G, margin: inline ? "8px 14px 0 107px" : "8px 20px 0",
+          fontSize:11.5, color:T.red, background:T.redLight, borderRadius:9,
+          padding:"7px 10px" }}>
+          {settleError}
+        </div>
+      )}
+
+      {/* Ações — UMA linha de botões do mesmo tamanho, como no artefato.
+          Antes: "Marcar como pago" numa faixa própria com texto explicativo,
+          "Editar" preto ocupando a largura inteira e a lixeira solta na ponta.
+          Três pesos visuais diferentes para três ações do mesmo nível, e a
+          altura de duas faixas onde cabe uma. */}
+      <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap",
+        padding: inline ? "12px 14px 14px 107px" : "14px 20px",
+        borderTop: inline ? "none" : `1px solid ${T.border}` }}>
+        {/* Cartão fica de fora: ele liquida quando a FATURA é paga, não por
+            lançamento, então a ação aqui mentiria sobre o que o usuário controla. */}
+        {tx.settleable && (
+          <AccButton
+            tone={tx.settled ? "plain" : "green"}
             disabled={settlingId === tx.id}
             onClick={async (e) => {
               e.stopPropagation();
@@ -775,86 +833,72 @@ const DetailPanel = ({
               setSettleError("");
               try {
                 const updated = await transactionsData.setTransactionSettled(tx.id, next);
-                // O drawer renderiza a partir de `selected`, que é um snapshot — sem
-                // isto o painel continuaria mostrando o estado antigo até fechar.
+                // O painel renderiza a partir de `selected`, que é um snapshot — sem
+                // isto ele continuaria mostrando o estado antigo até fechar.
                 if (updated) setSelected((cur) => (cur && cur.id === tx.id ? { ...cur, ...updated } : cur));
-                // A linha já foi trocada em memória (sem piscar), mas o summary e o
-                // recorte do filtro continuariam velhos: com Situação = "A pagar",
-                // a linha recém-paga ficaria visível sob um filtro que a exclui, e o
-                // card "Resultado" somaria um conjunto que a lista não mostra.
+                // A linha já foi trocada em memória, mas o summary e o recorte do
+                // filtro continuariam velhos: com Situação = "A pagar", a linha
+                // recém-paga ficaria visível sob um filtro que a exclui.
                 onTransactionsInvalidate?.();
               } catch (err) {
-                // `transactionsData.error` renderiza no topo da página; no mobile o
-                // botão vive dentro do bottom sheet e a faixa fica coberta, então a
-                // falha pareceria "não aconteceu nada". Mensagem local, ao lado da ação.
+                // Mensagem local, ao lado da ação: `transactionsData.error` renderiza
+                // no topo da página, e no mobile a faixa fica coberta pelo sheet.
                 setSettleError(err?.message || "Não foi possível atualizar o pagamento.");
               } finally {
                 setSettlingId(null);
               }
-            }}
-            style={{ ...G, flexShrink:0, background: tx.settled ? "none" : T.green,
-              color: tx.settled ? T.inkMid : "#fff",
-              border: tx.settled ? `1px solid ${T.border}` : "none",
-              borderRadius:10, padding:"9px 14px", fontSize:12.5, fontWeight:700,
-              cursor: settlingId === tx.id ? "default" : "pointer",
-              opacity: settlingId === tx.id ? 0.6 : 1 }}>
-            {settlingId === tx.id ? "…" : tx.settled ? "Desfazer pagamento" : "Marcar como pago"}
-          </button>
-        </div>
-      )}
-      {tx.settleable && settleError && (
-        <div style={{ ...G, margin:"8px 20px 0", fontSize:11.5, color:T.red,
-          background:T.redLight, borderRadius:9, padding:"7px 10px" }}>
-          {settleError}
-        </div>
-      )}
-      {/* Actions */}
-      <div style={{ padding:"14px 20px", borderTop:`1px solid ${T.border}`, display:"flex", gap:10 }}>
-        <button
-          type="button"
+            }}>
+            {settlingId === tx.id ? "…" : tx.settled ? "↺ Desfazer pagamento" : "✓ Marcar como pago"}
+          </AccButton>
+        )}
+        <AccButton
+          tone="dark"
           onClick={(e) => {
             e.stopPropagation();
             if (onEditTx) onEditTx(tx);
-            // Fecha o painel no próximo tick para o pai aplicar `flushSync` + `navigate`
-            // antes do unmount do detalhe (evita corridas com o estado do modal).
+            // Fecha o painel no próximo tick para o pai aplicar `flushSync` +
+            // `navigate` antes do unmount (evita corrida com o estado do modal).
             queueMicrotask(() => onClose());
-          }}
-          style={{ ...G, flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
-            background:T.ink, color:"#fff", border:"none", borderRadius:10,
-            padding:"10px", fontSize:13, fontWeight:700, cursor:"pointer" }}>
-          <Pencil size={13}/> Editar
-        </button>
+          }}>
+          ✎ Editar
+        </AccButton>
+        {onDuplicateTx && (
+          <AccButton onClick={(e) => { e.stopPropagation(); onDuplicateTx(tx); }}>
+            ⧉ Duplicar
+          </AccButton>
+        )}
         {deletingId === tx.id ? (
-          <button onClick={async () => {
-            if (shouldUseRealData) {
-              try {
-                await transactionsData.removeTransaction(tx.id);
-              } catch (_) {
-                return;
+          <AccButton
+            tone="red"
+            onClick={async (e) => {
+              e.stopPropagation();
+              if (shouldUseRealData) {
+                try {
+                  await transactionsData.removeTransaction(tx.id);
+                } catch (_) {
+                  return;
+                }
+              } else {
+                setMockTxList((prev) => prev.filter((item) => item.id !== tx.id));
               }
-            } else {
-              setMockTxList((prev) => prev.filter((item) => item.id !== tx.id));
-            }
-            setSelected(null);
-            setDeletingId(null);
-            // A linha colapsa ANTES do refetch. Sem isso a lista se
-            // reorganizaria de um quadro para o outro e o olho perderia onde
-            // estava; `onRowLeave` fecha a sanfona, roda a saída e só então
-            // revalida.
-            onRowLeave?.(tx.id);
-          }}
-            style={{ ...G, flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
-              background:T.red, color:"#fff", border:"none", borderRadius:10,
-              padding:"10px", fontSize:13, fontWeight:700, cursor:"pointer" }}>
-            <Trash2 size={13}/> Confirmar exclusão
-          </button>
+              setSelected(null);
+              setDeletingId(null);
+              // A linha colapsa ANTES do refetch. Sem isso a lista se
+              // reorganizaria de um quadro para o outro e o olho perderia onde
+              // estava; `onRowLeave` roda a saída e só então revalida.
+              onRowLeave?.(tx.id);
+            }}>
+            🗑 Confirmar exclusão
+          </AccButton>
         ) : (
-          <button onClick={() => setDeletingId(tx.id)}
-            style={{ ...G, display:"flex", alignItems:"center", justifyContent:"center",
-              background:"none", color:T.red, border:`1px solid ${T.red}44`,
-              borderRadius:10, padding:"10px 14px", fontSize:13, cursor:"pointer" }}>
-            <Trash2 size={13}/>
-          </button>
+          <AccButton tone="red" onClick={(e) => { e.stopPropagation(); setDeletingId(tx.id); }}>
+            🗑 Excluir
+          </AccButton>
+        )}
+        {inline && (
+          <span style={{ ...G, marginLeft:"auto", fontSize:10.5, color:T.inkLight }}>
+            Enter expande · Esc fecha
+          </span>
         )}
       </div>
     </div>
@@ -1820,6 +1864,10 @@ function TransacoesPageBody({
     filterHistory.undo();
     setVisible(PAGE_SIZE);
   }, [filterHistory, PAGE_SIZE]);
+  const redoFilter = useCallback(() => {
+    filterHistory.redo();
+    setVisible(PAGE_SIZE);
+  }, [filterHistory, PAGE_SIZE]);
 
   // Pedido de abrir uma facet vindo de fora da barra (clique num chip). O
   // `nonce` faz o mesmo chip reabrir o mesmo painel duas vezes seguidas.
@@ -2217,6 +2265,9 @@ function TransacoesPageBody({
         canUndo={filterHistory.canUndo}
         onUndo={undoFilter}
         undoLabel={filterHistory.undoLabel}
+        canRedo={filterHistory.canRedo}
+        onRedo={redoFilter}
+        redoLabel={filterHistory.redoLabel}
         compact={isMobile}
       />
       {groups.length === 0 ? (
@@ -2351,6 +2402,8 @@ function TransacoesPageBody({
                         deletingId={deletingId}
                         setDeletingId={setDeletingId}
                         onRowLeave={startRowLeave}
+                        onDuplicateTx={onDuplicateTx}
+                        onFilterByCategory={filterByCategoryFromRow}
                         settlingId={settlingId}
                         setSettlingId={setSettlingId}
                         settleError={settleError}

@@ -64,19 +64,25 @@ export function SortButton({ sort, setSort, compact = false }) {
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      <span
-        style={{
-          ...G,
-          fontSize: 11,
-          fontWeight: 700,
-          color: T.inkLight,
-          textTransform: "uppercase",
-          letterSpacing: "0.08em",
-          whiteSpace: "nowrap",
-        }}
-      >
-        Ordenar por
-      </span>
+      {/* O rótulo "ORDENAR POR" só existe no modo compacto. Na barra de
+          comando do desktop o chip já se lê como "⇅ Data ↓" — o prefixo
+          gastava largura que a busca e os chips disputam, para dizer o que o
+          próprio ícone diz. */}
+      {compact && (
+        <span
+          style={{
+            ...G,
+            fontSize: 11,
+            fontWeight: 700,
+            color: T.inkLight,
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            whiteSpace: "nowrap",
+          }}
+        >
+          Ordenar por
+        </span>
+      )}
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}

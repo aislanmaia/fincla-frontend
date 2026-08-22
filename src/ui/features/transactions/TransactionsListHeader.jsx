@@ -27,6 +27,9 @@ export function TransactionsListHeader({
   canUndo = false,
   onUndo,
   undoLabel = "",
+  canRedo = false,
+  onRedo,
+  redoLabel = "",
   compact = false,
 }) {
   const num = (v) => (loading ? "—" : String(v));
@@ -118,46 +121,23 @@ export function TransactionsListHeader({
         {/* Desfazer o último recorte. Sem ele, um clique acidental na categoria
             de uma linha (um gesto de UM toque) obrigaria a reconstruir o filtro
             à mão — e a tela puniria a exploração que ela quer incentivar. */}
-        {canUndo ? (
-          <button
-            type="button"
-            onClick={onUndo}
-            aria-label={
-              undoLabel ? `Desfazer filtro — voltar para ${undoLabel}` : "Desfazer filtro"
-            }
-            title={undoLabel ? `Voltar para: ${undoLabel}` : "Desfazer o último filtro"}
-            style={{
-              ...G,
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-              background: "none",
-              border: "none",
-              padding: "2px 4px",
-              margin: "0 -2px",
-              cursor: "pointer",
-              color: T.inkMid,
-              fontWeight: 600,
-              fontSize: 11,
-            }}
-          >
-            <svg
-              width="12"
-              height="12"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M9 14 4 9l5-5" />
-              <path d="M4 9h10a6 6 0 0 1 0 12h-3" />
-            </svg>
-            {compact ? null : "desfazer"}
-          </button>
-        ) : null}
+        {(canUndo || canRedo) && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+            <HistoryButton
+              dir="undo"
+              enabled={canUndo}
+              onClick={onUndo}
+              label={undoLabel}
+            />
+            <HistoryButton
+              dir="redo"
+              enabled={canRedo}
+              onClick={onRedo}
+              label={redoLabel}
+            />
+          </span>
+        )}
+        {null}
         {sum != null && !loading ? (
         <span style={{ display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
           soma
@@ -175,5 +155,58 @@ export function TransactionsListHeader({
         ) : null}
       </span>
     </div>
+  );
+}
+
+/**
+ * Um passo do histórico de filtros. Ícone só — o rótulo do que vai acontecer
+ * mora no `title` e no nome acessível, porque ele muda a cada passo ("voltar
+ * para 3 filtros") e um texto que se reescreve sozinho na barra faria o
+ * cabeçalho pular de largura a cada clique.
+ *
+ * Desabilitado continua DESENHADO, apagado: some-e-volta faria os dois botões
+ * trocarem de posição conforme o histórico enche.
+ */
+function HistoryButton({ dir, enabled, onClick, label }) {
+  const verb = dir === "undo" ? "Desfazer" : "Refazer";
+  const title = enabled && label ? `${verb}: voltar para ${label}` : `${verb} filtro`;
+  return (
+    <button
+      type="button"
+      onClick={enabled ? onClick : undefined}
+      disabled={!enabled}
+      aria-label={enabled && label ? `${verb} filtro — ${label}` : `${verb} filtro`}
+      title={title}
+      style={{
+        ...G,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 22,
+        height: 22,
+        borderRadius: 6,
+        border: "none",
+        background: "none",
+        color: enabled ? T.inkMid : T.border,
+        cursor: enabled ? "pointer" : "default",
+        padding: 0,
+      }}
+    >
+      <svg
+        width="12"
+        height="12"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+        style={dir === "redo" ? { transform: "scaleX(-1)" } : undefined}
+      >
+        <path d="M9 14 4 9l5-5" />
+        <path d="M4 9h10a6 6 0 0 1 0 12h-3" />
+      </svg>
+    </button>
   );
 }

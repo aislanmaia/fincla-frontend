@@ -39,6 +39,9 @@ export const ANIM_CSS = `
      não há hover, então elas ficam sempre visíveis — a alternativa seria um alvo
      de 24 px dentro de uma linha de 56, onde o erro abre a transação vizinha. */
   .fincla-quick { display: none; align-items: center; gap: 4px; }
+  /* A pílula de categoria e as ações dividem a MESMA célula da grade: uma
+     aparece quando a outra some. Por isso o par abaixo alterna display, e não
+     visibility — visibility manteria a célula ocupada pelas duas. */
   .fincla-row:hover .fincla-quick,
   .fincla-row:focus-within .fincla-quick { display: flex; }
   .fincla-row:hover .fincla-quick-hides,
