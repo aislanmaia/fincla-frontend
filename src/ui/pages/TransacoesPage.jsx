@@ -37,6 +37,7 @@ import { useTransactionsFacetCounts } from "../features/transactions/useTransact
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { TransactionsEmptyState } from "../features/transactions/TransactionsEmptyState.jsx";
 import { TransactionsStats } from "../features/transactions/TransactionsStats.jsx";
+import { UndoToast } from "../features/transactions/UndoToast.jsx";
 import { TransactionsFilterChips } from "../features/transactions/filters/TransactionsFilterChips.jsx";
 import { useFilterHistory } from "../features/transactions/filters/useFilterHistory.js";
 import { TransactionsListHeader } from "../features/transactions/TransactionsListHeader.jsx";
@@ -88,6 +89,11 @@ const DEFAULT_RESTORE_SNAPSHOT = Object.freeze({
  *  linha + 20 de respiro. Com um lançamento por dia — o caso normal — quase toda
  *  linha carrega o próprio cabeçalho, então é este o custo real por transação. */
 export const TX_ROW_HEIGHT = 101;
+
+/** Duração do colapso de saída — casa com `@keyframes txRowLeave` em
+ *  `animations.jsx`. Se os dois divergirem, ou a lista pisca antes de a linha
+ *  terminar de sair, ou fica com um buraco depois que ela já saiu. */
+export const ROW_LEAVE_MS = 260;
 
 /** Piso e teto da primeira página. O teto é o `limit` máximo que
  *  `GET /v1/transactions` aceita; o piso evita pedir pouco demais numa janela
@@ -599,6 +605,14 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
           >
             ✎
           </QuickAction>
+          {quickActions.onDuplicate && (
+            <QuickAction
+              label={`Duplicar ${tx.desc}`}
+              onClick={(e) => { e.stopPropagation(); quickActions.onDuplicate(tx); }}
+            >
+              ⧉
+            </QuickAction>
+          )}
           <QuickAction
             label={`Excluir ${tx.desc}`}
             tone="red"
@@ -643,6 +657,7 @@ const DetailPanel = ({
   setMockTxList,
   onTransactionsInvalidate,
   deletingId,
+  onRowLeave,
   setDeletingId,
   settlingId,
   setSettlingId,
@@ -839,7 +854,6 @@ const DetailPanel = ({
             if (shouldUseRealData) {
               try {
                 await transactionsData.removeTransaction(tx.id);
-                onTransactionsInvalidate?.();
               } catch (_) {
                 return;
               }
@@ -848,6 +862,11 @@ const DetailPanel = ({
             }
             setSelected(null);
             setDeletingId(null);
+            // A linha colapsa ANTES do refetch. Sem isso a lista se
+            // reorganizaria de um quadro para o outro e o olho perderia onde
+            // estava; `onRowLeave` fecha a sanfona, roda a saída e só então
+            // revalida.
+            onRowLeave?.(tx.id);
           }}
             style={{ ...G, flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
               background:T.red, color:"#fff", border:"none", borderRadius:10,
@@ -878,6 +897,7 @@ function TransacoesPageBody({
   onNav,
   isMobile = false,
   onEditTx,
+  onDuplicateTx,
   onNewTx,
   dataMode = "live",
   organizationId = null,
@@ -1007,6 +1027,7 @@ function TransacoesPageBody({
   const [deletingId,  setDeletingId]  = useState(null);
   // Id em liquidação — trava o botão para o clique duplo não disparar settle + unsettle.
   const [settlingId,  setSettlingId]  = useState(null);
+  const [undoToast,   setUndoToast]   = useState(null);
   /** Erro da liquidação, mostrado ao lado do botão (a faixa global fica coberta
       pelo bottom sheet no mobile, onde essa ação vive). */
   const [settleError, setSettleError] = useState("");
@@ -1994,8 +2015,81 @@ function TransacoesPageBody({
     return () => window.removeEventListener("keydown", onKey);
   }, [selected]);
 
+  /**
+   * Movimento de saída e de confirmação da lista.
+   *
+   * `leavingIds`: a linha excluída fica na lista mais 260 ms, colapsando a
+   * própria altura. Só depois disso pedimos o refetch — trocar a lista no
+   * mesmo quadro faria as linhas de baixo pularem de uma vez para o lugar da
+   * que saiu, e a pessoa perderia onde estava lendo.
+   *
+   * `settledFlash`: um pulso verde na linha que acabou de ser paga. O ✓ some
+   * quando o estado muda, e sem o pulso não sobra nenhum sinal de que a ação
+   * aconteceu — só uma linha que mudou de cor num canto.
+   */
+  const [leavingIds, setLeavingIds] = useState(() => new Set());
+  const [settledFlashId, setSettledFlashId] = useState(null);
+  const leaveTimers = useRef([]);
+
+  useEffect(
+    () => () => {
+      leaveTimers.current.forEach(clearTimeout);
+      leaveTimers.current = [];
+    },
+    [],
+  );
+
+  const startRowLeave = useCallback(
+    (id) => {
+      setLeavingIds((prev) => new Set(prev).add(id));
+      const t = setTimeout(() => {
+        setLeavingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+        onTransactionsInvalidate?.();
+      }, ROW_LEAVE_MS);
+      leaveTimers.current.push(t);
+    },
+    [onTransactionsInvalidate],
+  );
+
+  const flashSettled = useCallback((id) => {
+    setSettledFlashId(id);
+    const t = setTimeout(() => setSettledFlashId((cur) => (cur === id ? null : cur)), 900);
+    leaveTimers.current.push(t);
+  }, []);
+
+  /**
+   * Desfazer a liquidação anunciada na torrada.
+   *
+   * Reaplica o inverso pela API (não é um rollback local): o saldo da conta só
+   * conta `status='paid'`, então um desfazer que mexesse só na tela deixaria a
+   * lista e o saldo contando coisas diferentes.
+   */
+  const undoLastAction = useCallback(async () => {
+    if (!undoToast) return;
+    const { id, revert } = undoToast;
+    setUndoToast(null);
+    try {
+      if (shouldUseRealData) {
+        await transactionsData.setTransactionSettled(id, !revert);
+        onTransactionsInvalidate?.();
+      } else {
+        setMockTxList((cur) => cur.map((t) => (t.id === id ? { ...t, settled: !revert } : t)));
+      }
+      flashSettled(id);
+    } catch (e) {
+      setSettleError(e?.message || "Não foi possível desfazer.");
+    }
+  }, [undoToast, shouldUseRealData, transactionsData, onTransactionsInvalidate, flashSettled]);
+
   const quickActions = useMemo(() => ({
     onEdit: (tx) => { if (onEditTx) onEditTx(tx); },
+    // Só existe quando o consumidor sabe duplicar. Um botão que não faz nada
+    // é pior que um botão ausente.
+    onDuplicate: onDuplicateTx ? (tx) => onDuplicateTx(tx) : null,
     onDelete: (tx) => { setSelected(tx); setDeletingId(tx.id); },
     onSettle: async (tx) => {
       if (settlingId) return;
@@ -2009,6 +2103,15 @@ function TransacoesPageBody({
         } else {
           setMockTxList((cur) => cur.map((t) => (t.id === tx.id ? { ...t, settled: next } : t)));
         }
+        flashSettled(tx.id);
+        // Liquidar é reversível pela própria API (`unsettle`), então o desfazer
+        // é honesto aqui. Excluir não tem volta no backend — por isso ele
+        // continua atrás da confirmação, e não ganha torrada de desfazer.
+        setUndoToast({
+          id: tx.id,
+          label: next ? `"${tx.desc}" marcada como paga` : `Pagamento de "${tx.desc}" desfeito`,
+          revert: next,
+        });
       } catch (e) {
         // O erro só é renderizado dentro da sanfona. Usando o ✓ da linha sem
         // abrir nada, a falha ficava invisível — indistinguível de um no-op — e
@@ -2020,7 +2123,8 @@ function TransacoesPageBody({
         setSettlingId(null);
       }
     },
-  }), [onEditTx, settlingId, shouldUseRealData, transactionsData, onTransactionsInvalidate]);
+  }), [onEditTx, onDuplicateTx, settlingId, shouldUseRealData, transactionsData,
+      onTransactionsInvalidate, flashSettled]);
 
   /* Agrupar por data só faz sentido ordenado por data: por valor ou categoria
      cada "grupo" vira um item só, o pior dos dois mundos. */
@@ -2138,7 +2242,12 @@ function TransacoesPageBody({
                 </div>
               )}
               {txs.map((tx, i) => (
-                <div key={tx.id} style={{
+                <div key={tx.id}
+                  className={[
+                    leavingIds.has(tx.id) ? "fincla-tx-leave" : "",
+                    settledFlashId === tx.id ? "fincla-tx-settled" : "",
+                  ].filter(Boolean).join(" ")}
+                  style={{
                   borderBottom: (gi === groups.length - 1 && i === txs.length - 1 && selected?.id !== tx.id)
                     ? "none" : `1px solid ${T.border}` }}>
                   <TxRow
@@ -2177,6 +2286,7 @@ function TransacoesPageBody({
                         onTransactionsInvalidate={onTransactionsInvalidate}
                         deletingId={deletingId}
                         setDeletingId={setDeletingId}
+                        onRowLeave={startRowLeave}
                         settlingId={settlingId}
                         setSettlingId={setSettlingId}
                         settleError={settleError}
@@ -2469,6 +2579,12 @@ function TransacoesPageBody({
           )}
         </>
       )}
+
+      <UndoToast
+        toast={undoToast}
+        onUndo={undoLastAction}
+        onDismiss={() => setUndoToast(null)}
+      />
 
       {/* ── Desktop wide: barra completa ─ */}
       {!isMobile && !isDesktopCompact && (

@@ -76,6 +76,43 @@ export const ANIM_CSS = `
     from { transform: translateX(100%); }
     to   { transform: translateX(0);    }
   }
+  /* ── Movimento da lista de Transações ────────────────────────────────
+     Sair da lista é um COLAPSO DE ALTURA, não só um fade: sem ele as linhas
+     de baixo pulam de uma vez para o lugar da que saiu, e o olho perde onde
+     estava. O max-height grande o bastante para qualquer densidade (a linha
+     mais alta é 64 px, mais a sanfona aberta) faz a interpolação acontecer;
+     height:0 não anima a partir de auto. */
+  @keyframes txRowLeave {
+    0%   { opacity: 1; transform: translateX(0);     max-height: 240px; }
+    35%  { opacity: 0; transform: translateX(-14px); max-height: 240px; }
+    100% { opacity: 0; transform: translateX(-14px); max-height: 0;
+           padding-top: 0; padding-bottom: 0; border-width: 0; }
+  }
+  /* Confirmação de pagamento: um pulso verde que atravessa a linha. Curto de
+     propósito — é um recibo, não um evento. */
+  @keyframes txRowSettled {
+    0%   { background: rgba(5,150,105,0); }
+    30%  { background: rgba(5,150,105,0.16); }
+    100% { background: rgba(5,150,105,0); }
+  }
+  @keyframes toastIn {
+    from { opacity: 0; transform: translateY(10px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0)    scale(1);    }
+  }
+  .fincla-tx-leave {
+    animation: txRowLeave 260ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .fincla-tx-settled { animation: txRowSettled 900ms ease-out; }
+  .fincla-toast { animation: toastIn 180ms cubic-bezier(0.2, 0, 0, 1); }
+  /* Quem pediu menos movimento recebe o resultado, não a viagem: a linha some
+     na hora em vez de deslizar, e o pulso não pisca. */
+  @media (prefers-reduced-motion: reduce) {
+    .fincla-tx-leave { animation-duration: 1ms; }
+    .fincla-tx-settled { animation: none; }
+    .fincla-toast { animation: none; }
+  }
   .ai-spin { animation: spin 0.7s linear infinite; }
   .ai-shimmer {
     background: linear-gradient(90deg, #F3F4F6, #E9EBEF, #F3F4F6);

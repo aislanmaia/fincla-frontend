@@ -469,6 +469,61 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     });
   }
 
+  it("duplicar manda a transação para o consumidor, sem a identidade do original", async () => {
+    const onDuplicateTx = vi.fn();
+    seedSettlement();
+    renderPage({ onDuplicateTx });
+
+    await userEvent.click(
+      (await screen.findAllByRole("button", { name: /^Duplicar Boleto luz$/ }))[0],
+    );
+    expect(onDuplicateTx).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "tx-pend", desc: "Boleto luz" }),
+    );
+  });
+
+  it("sem consumidor que saiba duplicar, o botão não existe", async () => {
+    // Um botão que não faz nada é pior que um botão ausente.
+    seedSettlement();
+    renderPage();
+    await screen.findAllByText("Boleto luz");
+    expect(screen.queryByRole("button", { name: /^Duplicar / })).toBeNull();
+  });
+
+  it("liquidar oferece desfazer, e desfazer reverte pela API", async () => {
+    const setTransactionSettled = vi.fn().mockResolvedValue({ settled: true });
+    seedSettlement(setTransactionSettled);
+    renderPage();
+
+    await userEvent.click(
+      (await screen.findAllByRole("button", { name: /^Marcar Boleto luz como pago$/ }))[0],
+    );
+
+    expect(
+      await screen.findByText(/"Boleto luz" marcada como paga/),
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Desfazer" }));
+    // Reverte pela API, não só na tela: o saldo da conta só conta status=paid,
+    // então um rollback local deixaria lista e saldo contando coisas diferentes.
+    expect(setTransactionSettled).toHaveBeenLastCalledWith("tx-pend", false);
+  });
+
+  it("fechar a torrada não desfaz nada", async () => {
+    const setTransactionSettled = vi.fn().mockResolvedValue({ settled: true });
+    seedSettlement(setTransactionSettled);
+    renderPage();
+
+    await userEvent.click(
+      (await screen.findAllByRole("button", { name: /^Marcar Boleto luz como pago$/ }))[0],
+    );
+    await screen.findByRole("button", { name: "Fechar aviso" });
+    await userEvent.click(screen.getByRole("button", { name: "Fechar aviso" }));
+
+    expect(setTransactionSettled).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Desfazer" })).toBeNull();
+  });
+
   it("marca com badge 'A pagar' só o que está pendente", () => {
     seedSettlement();
     renderPage();
