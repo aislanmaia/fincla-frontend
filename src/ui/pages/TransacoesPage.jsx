@@ -40,6 +40,7 @@ import { TransactionsEmptyState } from "../features/transactions/TransactionsEmp
 import { TransactionsStats } from "../features/transactions/TransactionsStats.jsx";
 import { UndoToast } from "../features/transactions/UndoToast.jsx";
 import { TransactionsFilterChips } from "../features/transactions/filters/TransactionsFilterChips.jsx";
+import { SavedViewsChip } from "../features/transactions/filters/savedViews/SavedViewsChip.jsx";
 import { useFilterHistory } from "../features/transactions/filters/useFilterHistory.js";
 import { TransactionsListHeader } from "../features/transactions/TransactionsListHeader.jsx";
 import {
@@ -2198,6 +2199,24 @@ function TransacoesPageBody({
     </>
   );
 
+  /* A visualização salva ativa vira o primeiro item da barra, como no
+     artefato. Antes ela ocupava uma faixa própria acima, com cards de ~74 px
+     que existiam mesmo sem nenhuma view salva — altura cobrada de todo mundo
+     por um recurso que poucos usam, e longe dos filtros que ela guarda. */
+  const savedViewsChip = (
+    <SavedViewsChip
+      items={savedViewsProp.items}
+      active={savedViewsProp.active}
+      dirty={activeSavedViewDirty}
+      onActivate={savedViewsProp.onActivate}
+      onDelete={savedViewsProp.onDelete}
+      onCreate={() => openSaveViewForm("create")}
+      onUpdate={() => openSaveViewForm("update")}
+      canCreate={canSaveNewView}
+      canUpdate={canUpdateSavedView}
+    />
+  );
+
   /* Os chips do que está filtrando, já com o "＋ Filtros" embutido. Abaixo de
      1200 px eles recolhem para o contador do próprio botão: nessa largura não
      cabem sem espremer a busca. */
@@ -2600,13 +2619,17 @@ function TransacoesPageBody({
         </button>
       </div>
 
-      {showSavedViewsSection && (
+      {/* A faixa de cards de views salvas saiu: ela virou o chip da barra de
+          comando (`savedViewsChip`). O formulário de salvar/atualizar continua
+          aqui, montado só quando aberto — ele precisa de largura, e como chip
+          não caberia. */}
+      {saveViewFormOpen && (
         <div ref={savedViewsSectionRef}>
           <SavedViewsCards
-            items={savedViewsProp.items}
-            active={savedViewsProp.active}
-            onActivate={savedViewsProp.onActivate}
-            onDelete={savedViewsProp.onDelete}
+            items={[]}
+            active={null}
+            onActivate={() => {}}
+            onDelete={() => {}}
             onOpenSaveForm={openSaveViewForm}
             onSaveView={handleSaveViewForm}
             activeFacets={activeFacetsForSavedViews}
@@ -2650,6 +2673,7 @@ function TransacoesPageBody({
                 {...filterBarCommonProps}
                 hideSavedViews
                 hideFacets
+                barLeading={savedViewsChip}
                 barChips={commandBarChipsCompact}
               />
             </div>
@@ -2678,6 +2702,7 @@ function TransacoesPageBody({
             {...filterBarCommonProps}
             hideSavedViews
             hideFacets
+            barLeading={savedViewsChip}
             barChips={commandBarChips}
             barTrailing={listPrefsButtons}
           />
