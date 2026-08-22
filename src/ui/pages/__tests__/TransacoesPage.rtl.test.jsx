@@ -153,6 +153,20 @@ function renderPage(overrides = {}) {
   );
 }
 
+/**
+ * Abre o painel de filtros.
+ *
+ * A faixa permanente de nove cards de faceta saiu da tela: o artefato a
+ * substitui por uma linha de busca + chips + "+ Filtros", e os cards agora
+ * vivem atrás desse botão em TODAS as larguras. Os testes escritos quando a
+ * faixa era permanente continuam válidos — só precisam abrir o painel antes de
+ * procurar um card, que é o que uma pessoa faz agora.
+ */
+async function openFilters() {
+  const btn = screen.queryAllByRole("button", { name: /^Abrir filtros$/i })[0];
+  if (btn) await userEvent.click(btn);
+}
+
 describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }, () => {
   it("Enter numa ação rápida executa a ação, não abre a sanfona", async () => {
     // Os botões de ação são descendentes da linha `role="button"`: sem guarda de
@@ -160,6 +174,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     // e toda ação rápida ficava inalcançável por teclado.
     const onNewTx = vi.fn();
     renderPage({ onEditTx: onNewTx });
+    await openFilters();
     const editar = (await screen.findAllByRole("button", { name: /^Editar / }))[0];
     editar.focus();
     await userEvent.keyboard("{Enter}");
@@ -171,6 +186,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     // A linha era um `div` com onClick: invisível para teclado e para leitor de
     // tela, e quem abrisse o detalhe não tinha como sair sem tabular por ele.
     renderPage();
+    await openFilters();
     const row = (await screen.findAllByRole("button", { name: /despesa de|receita de/i }))[0];
     expect(row).toHaveAttribute("tabIndex", "0");
     expect(row).toHaveAttribute("aria-expanded", "false");
@@ -185,6 +201,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
 
   it("a densidade alterna e fica guardada", async () => {
     renderPage();
+    await openFilters();
     const btn = await screen.findByRole("button", { name: /Densidade da lista/i });
     expect(btn).toHaveAccessibleName(/Padrão/i);
     await userEvent.click(btn);
@@ -198,6 +215,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     // Ordenado por valor, cada "grupo" viraria um item só — o pior dos dois
     // mundos. O botão fica desabilitado e diz por quê.
     renderPage();
+    await openFilters();
     const group = await screen.findByRole("button", { name: /Agrupar por data/i });
     expect(group).toBeEnabled();
     expect(group).toHaveAttribute("aria-pressed", "false");
@@ -213,6 +231,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1366 });
     Object.defineProperty(window, "innerHeight", { configurable: true, writable: true, value: 768 });
     renderPage();
+    await openFilters();
     expect(await screen.findByRole("button", { name: /Abrir filtros/i })).toBeInTheDocument();
     expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).toBeNull();
   });
@@ -221,13 +240,15 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1366 });
     Object.defineProperty(window, "innerHeight", { configurable: true, writable: true, value: 900 });
     renderPage();
+    await openFilters();
     expect(
       await screen.findByRole("toolbar", { name: /Filtros de transações/i }),
     ).toBeInTheDocument();
   });
 
-  it("monta a página com TransactionsFilterBar (desktop)", () => {
+  it("monta a página com TransactionsFilterBar (desktop)", async () => {
     renderPage();
+    await openFilters();
     expect(screen.getByText("Transações")).toBeInTheDocument();
     expect(screen.getByLabelText(/Buscar transações/i)).toBeInTheDocument();
     expect(screen.queryByText(/Visualizações salvas/i)).not.toBeInTheDocument();
@@ -236,6 +257,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
 
   it("exibe visualizações salvas ao aplicar filtro (sem views persistidas)", async () => {
     renderPage();
+    await openFilters();
     expect(screen.queryByText(/Visualizações salvas/i)).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
     await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
@@ -246,6 +268,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
 
   it("atalho na FacetBar abre o formulário para salvar como nova visualização", async () => {
     renderPage();
+    await openFilters();
     await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
     await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
     await userEvent.click(
@@ -254,7 +277,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     expect(screen.getByText("Nova visualização")).toBeInTheDocument();
   });
 
-  it("exibe visualizações salvas por padrão quando já existem views persistidas", () => {
+  it("exibe visualizações salvas por padrão quando já existem views persistidas", async () => {
     localStorage.setItem(
       "fincla.transactions.savedViews.v1",
       JSON.stringify({
@@ -274,12 +297,14 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
       }),
     );
     renderPage();
+    await openFilters();
     expect(screen.getByText(/Visualizações salvas/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Minha view" })).toBeInTheDocument();
   });
 
-  it("renderiza os 7 facet cards com valores derivados do estado inicial", () => {
+  it("renderiza os 7 facet cards com valores derivados do estado inicial", async () => {
     renderPage();
+    await openFilters();
     // Período inicial: Este mês (default)
     expect(screen.getByRole("button", { name: /Período: Este mês/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Tipo: Todos/i })).toBeInTheDocument();
@@ -292,6 +317,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
 
   it("expande o painel inline da facet Tipo e a seleção atualiza o card e fecha o painel", async () => {
     renderPage();
+    await openFilters();
     await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
     expect(screen.getByRole("region", { name: /Filtro: tipo/i })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
@@ -301,6 +327,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
 
   it("ordenação multi-nível é acessível via SortButton da SearchBar", async () => {
     renderPage();
+    await openFilters();
     const sortBtn = screen.getByRole("button", { name: /Ordenar transações: Data ↓/i });
     await userEvent.click(sortBtn);
     expect(screen.getByRole("dialog", { name: /Editor de ordenação/i })).toBeInTheDocument();
@@ -312,6 +339,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
 
   it("Limpar tudo zera os filtros aplicados", async () => {
     renderPage();
+    await openFilters();
     await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
     await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
     expect(screen.getByRole("button", { name: /Tipo: Despesa/i })).toBeInTheDocument();
@@ -319,8 +347,9 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     expect(screen.getByRole("button", { name: /Tipo: Todos/i })).toBeInTheDocument();
   });
 
-  it("renderiza KPIs (Receitas/Despesas/Resultado) a partir do summary", () => {
+  it("renderiza KPIs (Receitas/Despesas/Resultado) a partir do summary", async () => {
     renderPage();
+    await openFilters();
     expect(screen.getByText("Receitas")).toBeInTheDocument();
     expect(screen.getByText("Despesas")).toBeInTheDocument();
     // Era "Saldo"; renomeado na S2 porque colidia com o saldo da conta.
@@ -331,14 +360,16 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
   // categorias etc. Quando a página passou a refiltrar tudo no cliente, o
   // `periodFilter` descartava a lista inteira (as linhas de apresentação trazem
   // `date` = "21/05", sem ano) — tela vazia com dados no banco.
-  it("renderiza lista de transações vinda do hook mockado", () => {
+  it("renderiza lista de transações vinda do hook mockado", async () => {
     renderPage();
+    await openFilters();
     expect(screen.getAllByText("Almoço").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Salário").length).toBeGreaterThan(0);
   });
 
-  it("mostra crédito inline com cartão quando paymentMethodKey indica crédito", () => {
+  it("mostra crédito inline com cartão quando paymentMethodKey indica crédito", async () => {
     renderPage();
+    await openFilters();
     expect(screen.getByText("Crédito")).toBeInTheDocument();
     expect(screen.getByText(/1177/)).toBeInTheDocument();
   });
@@ -347,6 +378,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 375 });
     window.dispatchEvent(new Event("resize"));
     renderPage({ isMobile: true });
+    await openFilters();
     expect(screen.getByPlaceholderText(/Buscar por descrição, categoria ou tag/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /Abrir filtros/i }));
     // Sheet aberto — toolbar dentro e botão de fechar
@@ -356,6 +388,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
 
   it("criar saved view persiste em localStorage por org", async () => {
     renderPage();
+    await openFilters();
     await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
     await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
     await userEvent.click(screen.getByRole("button", { name: /^Nova$/ }));
@@ -371,6 +404,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
 
   it("clicar na view ativa desaplica filtros e desseleciona o card", async () => {
     renderPage();
+    await openFilters();
     expect(screen.getByRole("button", { name: /Tipo: Todos/i })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
     await userEvent.click(screen.getByRole("button", { name: "Receita" }));
@@ -387,6 +421,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
 
   it("view dirty: card mostra Filtros alterados; Limpar tudo desseleciona", async () => {
     renderPage();
+    await openFilters();
     await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
     await userEvent.click(screen.getByRole("button", { name: "Receita" }));
     await userEvent.click(screen.getByRole("button", { name: /^Nova$/ }));
@@ -406,6 +441,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1200 });
     window.dispatchEvent(new Event("resize"));
     renderPage();
+    await openFilters();
     expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Abrir filtros/i })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /Abrir filtros/i }));
@@ -421,6 +457,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
   // repetido) e a página confia no resultado, sem refiltrar.
   it("modo live: selecionar várias formas de pagamento não esvazia a lista", async () => {
     renderPage();
+    await openFilters();
     // Todas as linhas do hook aparecem antes de qualquer filtro.
     expect(screen.getAllByText("Almoço").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Salário").length).toBeGreaterThan(0);
@@ -473,6 +510,7 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     const onDuplicateTx = vi.fn();
     seedSettlement();
     renderPage({ onDuplicateTx });
+    await openFilters();
 
     await userEvent.click(
       (await screen.findAllByRole("button", { name: /^Duplicar Boleto luz$/ }))[0],
@@ -486,6 +524,7 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     // Um botão que não faz nada é pior que um botão ausente.
     seedSettlement();
     renderPage();
+    await openFilters();
     await screen.findAllByText("Boleto luz");
     expect(screen.queryByRole("button", { name: /^Duplicar / })).toBeNull();
   });
@@ -494,6 +533,7 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     const setTransactionSettled = vi.fn().mockResolvedValue({ settled: true });
     seedSettlement(setTransactionSettled);
     renderPage();
+    await openFilters();
 
     await userEvent.click(
       (await screen.findAllByRole("button", { name: /^Marcar Boleto luz como pago$/ }))[0],
@@ -513,6 +553,7 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     const setTransactionSettled = vi.fn().mockResolvedValue({ settled: true });
     seedSettlement(setTransactionSettled);
     renderPage();
+    await openFilters();
 
     await userEvent.click(
       (await screen.findAllByRole("button", { name: /^Marcar Boleto luz como pago$/ }))[0],
@@ -524,9 +565,10 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     expect(screen.queryByRole("button", { name: "Desfazer" })).toBeNull();
   });
 
-  it("marca com badge 'A pagar' só o que está pendente", () => {
+  it("marca com badge 'A pagar' só o que está pendente", async () => {
     seedSettlement();
     renderPage();
+    await openFilters();
     // Texto exato do badge: /A pagar/i casaria também com a linha-ponte e com o
     // botão "Ver só os a pagar", que não são badges de linha.
     // A ampulheta saiu: dizia "processando", mas o lançamento existe e só não
@@ -535,9 +577,10 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     expect(screen.getAllByText("A pagar").length).toBe(1);
   });
 
-  it("cartão NÃO ganha badge 'A pagar' — ele liquida pela fatura, não por lançamento", () => {
+  it("cartão NÃO ganha badge 'A pagar' — ele liquida pela fatura, não por lançamento", async () => {
     seedSettlement();
     renderPage();
+    await openFilters();
     const badges = screen.getAllByText("A pagar");
     // Se o cartão entrasse, seriam dois. O badge mentiria sobre o que o usuário controla.
     expect(badges.length).toBe(1);
@@ -548,6 +591,7 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     const setTransactionSettled = vi.fn().mockResolvedValue({ settled: true });
     seedSettlement(setTransactionSettled);
     renderPage();
+    await openFilters();
 
     await userEvent.click(screen.getAllByText("Boleto luz")[0]);
     await userEvent.click(await screen.findByRole("button", { name: /Marcar como pago/i }));
@@ -560,6 +604,7 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     const setTransactionSettled = vi.fn().mockResolvedValue({ settled: true });
     seedSettlement(setTransactionSettled);
     renderPage({ onTransactionsInvalidate });
+    await openFilters();
 
     await userEvent.click(screen.getAllByText("Boleto luz")[0]);
     await userEvent.click(await screen.findByRole("button", { name: /Marcar como pago/i }));
@@ -574,6 +619,7 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     const setTransactionSettled = vi.fn().mockRejectedValue(new Error("Servidor recusou"));
     seedSettlement(setTransactionSettled);
     renderPage();
+    await openFilters();
 
     await userEvent.click(screen.getAllByText("Boleto luz")[0]);
     await userEvent.click(await screen.findByRole("button", { name: /Marcar como pago/i }));
@@ -587,6 +633,7 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     const setTransactionSettled = vi.fn().mockResolvedValue({ settled: false });
     seedSettlement(setTransactionSettled);
     renderPage();
+    await openFilters();
 
     await userEvent.click(screen.getAllByText("Mercado")[0]);
     // A ação existe em dois lugares agora — na sanfona e como ação rápida da
@@ -600,6 +647,7 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
   it("transação de cartão não oferece a ação de liquidar no detalhe", async () => {
     seedSettlement();
     renderPage();
+    await openFilters();
 
     await userEvent.click(screen.getAllByText("Notebook")[0]);
 
@@ -617,6 +665,7 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
   it("o facet Situação chega ao hook de dados como settlement", async () => {
     seedSettlement();
     renderPage();
+    await openFilters();
 
     await userEvent.click(screen.getByRole("button", { name: /Situação: Todas/i }));
     const panel = screen.getByRole("region", { name: /Filtro: situa/i });
@@ -629,6 +678,7 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
   it("fincla-frontend#78: marcar uma tag chega ao hook de dados como filterCat (tag_id)", async () => {
     seedSettlement();
     renderPage();
+    await openFilters();
 
     await userEvent.click(screen.getByRole("button", { name: /Tags: —/i }));
     const panel = screen.getByRole("region", { name: /Filtro: tag/i });
@@ -650,6 +700,7 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
   it("categoria e tag ativas ao mesmo tempo continuam as DUAS acesas e as duas filtram", async () => {
     seedSettlement();
     renderPage();
+    await openFilters();
 
     await userEvent.click(screen.getByRole("button", { name: /Tags: —/i }));
     await userEvent.click(
@@ -684,6 +735,7 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
   it("fincla-frontend#96 prioridade 1: 'Todas' na Categoria NÃO apaga uma tag ativa", async () => {
     seedSettlement();
     renderPage();
+    await openFilters();
 
     await userEvent.click(screen.getByRole("button", { name: /Tags: —/i }));
     await userEvent.click(
@@ -719,6 +771,7 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
   it("fincla-frontend#96 prioridade 2/4/5: tag que deixou de existir no catálogo trava a busca (fail closed) e avisa", async () => {
     seedSettlement();
     renderPage();
+    await openFilters();
 
     await userEvent.click(screen.getByRole("button", { name: /Tags: —/i }));
     await userEvent.click(
@@ -801,6 +854,7 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     categoryTagsDataMock.mockReturnValue({ isLoading: true, categories: [] });
 
     renderPage();
+    await openFilters();
     await userEvent.click(screen.getByRole("button", { name: "Trabalho (Vendas)" }));
 
     // Enquanto as categorias carregam, o filtro fica em "loading" — nunca
@@ -849,7 +903,7 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
 });
 
 describe("<TransacoesPage> — desambiguação de nomes (S2)", { timeout: 15000 }, () => {
-  it('o card chama-se "Resultado", não "Saldo" — o nome antigo colidia com o saldo da conta', () => {
+  it('o card chama-se "Resultado", não "Saldo" — o nome antigo colidia com o saldo da conta', async () => {
     transactionsDataMock.mockReturnValue({
       isLoading: false, error: "",
       summary: { total_income: 100, total_expenses: 40, total_refunds: 0, balance: 60 },
@@ -861,6 +915,7 @@ describe("<TransacoesPage> — desambiguação de nomes (S2)", { timeout: 15000 
       total: 1, hasMore: false, removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
     });
     renderPage();
+    await openFilters();
 
     expect(screen.getByText("Resultado")).toBeInTheDocument();
     // "Saldo" sozinho não pode mais aparecer como rótulo de card nessa tela.
@@ -879,6 +934,7 @@ describe("<TransacoesPage> — desambiguação de nomes (S2)", { timeout: 15000 
       total: 1, hasMore: false, removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
     });
     renderPage();
+    await openFilters();
 
     // O aviso de 16 px numa faixa própria virou o contador do cabeçalho da
     // lista: mesma função, encostado no que ele descreve, e zero altura extra.
@@ -890,7 +946,7 @@ describe("<TransacoesPage> — desambiguação de nomes (S2)", { timeout: 15000 
     expect(lastCall.filters.settlement).toBe("a-pagar");
   });
 
-  it("não polui a tela quando está tudo pago", () => {
+  it("não polui a tela quando está tudo pago", async () => {
     transactionsDataMock.mockReturnValue({
       isLoading: false, error: "",
       summary: { total_income: 0, total_expenses: 40, total_refunds: 0, balance: -40 },
@@ -902,6 +958,7 @@ describe("<TransacoesPage> — desambiguação de nomes (S2)", { timeout: 15000 
       total: 1, hasMore: false, removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
     });
     renderPage();
+    await openFilters();
 
     expect(screen.queryByRole("button", { name: /Ver só os a pagar/i })).not.toBeInTheDocument();
   });
@@ -914,31 +971,33 @@ describe("<TransacoesPage> — desambiguação de nomes (S2)", { timeout: 15000 
 // useTransactionsData) separa "nunca carregou com sucesso" de "carregou e
 // está mesmo vazio".
 describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { timeout: 15000 }, () => {
-  it("1ª carga em voo: mostra 'Carregando…', nunca 'Nenhuma transação encontrada'", () => {
+  it("1ª carga em voo: mostra 'Carregando…', nunca 'Nenhuma transação encontrada'", async () => {
     transactionsDataMock.mockReturnValue({
       isLoading: true, error: "", hasLoaded: false,
       summary: null, transactions: [], total: 0, hasMore: false,
       removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
     });
     renderPage();
+    await openFilters();
 
     expect(screen.getByText(/Carregando transações/i)).toBeInTheDocument();
     expect(screen.queryByText(/Nenhuma transação encontrada/i)).not.toBeInTheDocument();
   });
 
-  it("1ª carga falhou: mostra aviso de erro na lista, nunca 'Nenhuma transação encontrada'", () => {
+  it("1ª carga falhou: mostra aviso de erro na lista, nunca 'Nenhuma transação encontrada'", async () => {
     transactionsDataMock.mockReturnValue({
       isLoading: false, error: "Falha ao carregar transações.", hasLoaded: false,
       summary: null, transactions: [], total: 0, hasMore: false,
       removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
     });
     renderPage();
+    await openFilters();
 
     expect(screen.getByText(/Não foi possível carregar as transações/i)).toBeInTheDocument();
     expect(screen.queryByText(/Nenhuma transação encontrada/i)).not.toBeInTheDocument();
   });
 
-  it("vazio de verdade (já carregou com sucesso, sem resultados): mostra 'Nenhuma transação encontrada'", () => {
+  it("vazio de verdade (já carregou com sucesso, sem resultados): mostra 'Nenhuma transação encontrada'", async () => {
     transactionsDataMock.mockReturnValue({
       isLoading: false, error: "", hasLoaded: true,
       summary: { total_income: 0, total_expenses: 0, total_refunds: 0, balance: 0 },
@@ -946,6 +1005,7 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
       removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
     });
     renderPage();
+    await openFilters();
 
     expect(screen.getByText(/Nenhuma transação encontrada/i)).toBeInTheDocument();
   });
@@ -955,13 +1015,14 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
   // tag desbloqueia a busca) — o efeito do hook ainda não teve chance de
   // ligar `isLoading`. Nunca carregou (`hasLoaded:false`) e ainda não há
   // erro (`error:""`) — só pode ser "em voo".
-  it("hasLoaded=false, error='', isLoading AINDA false (quadro entre habilitar e o efeito ligar isLoading): mostra 'Carregando…', nunca 'Nenhuma transação encontrada'", () => {
+  it("hasLoaded=false, error='', isLoading AINDA false (quadro entre habilitar e o efeito ligar isLoading): mostra 'Carregando…', nunca 'Nenhuma transação encontrada'", async () => {
     transactionsDataMock.mockReturnValue({
       isLoading: false, error: "", hasLoaded: false,
       summary: null, transactions: [], total: 0, hasMore: false,
       removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
     });
     renderPage();
+    await openFilters();
 
     expect(screen.getByText(/Carregando transações/i)).toBeInTheDocument();
     expect(screen.queryByText(/Nenhuma transação encontrada/i)).not.toBeInTheDocument();
@@ -973,13 +1034,14 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
   // "+R$ 0,00" e "0 lançamentos"/"0 transações no filtro", contradizendo o
   // card da lista logo abaixo. É o mesmo "zero confiante" que o #106 corrigiu
   // na lista, só que no componente vizinho.
-  it("KPI: em listLoading mostra '—' e 'Carregando…', nunca 'R$' nem contagem de lançamentos", () => {
+  it("KPI: em listLoading mostra '—' e 'Carregando…', nunca 'R$' nem contagem de lançamentos", async () => {
     transactionsDataMock.mockReturnValue({
       isLoading: true, error: "", hasLoaded: false,
       summary: null, transactions: [], total: 0, hasMore: false,
       removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
     });
     renderPage();
+    await openFilters();
 
     // 3 valores da faixa de estatísticas + a contagem do cabeçalho da lista +
     // o chip "Tags: —" da facet (sem seleção, sempre "—" independente de
@@ -993,20 +1055,21 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     expect(screen.queryByText(/transaç.*no filtro/i)).not.toBeInTheDocument();
   });
 
-  it("KPI: em listLoadFailed mostra '—' e 'Não foi possível carregar', nunca 'R$'", () => {
+  it("KPI: em listLoadFailed mostra '—' e 'Não foi possível carregar', nunca 'R$'", async () => {
     transactionsDataMock.mockReturnValue({
       isLoading: false, error: "Falha ao carregar transações.", hasLoaded: false,
       summary: null, transactions: [], total: 0, hasMore: false,
       removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
     });
     renderPage();
+    await openFilters();
 
     expect(screen.getAllByText("—").length).toBe(5);
     expect(screen.getAllByText("Não foi possível carregar").length).toBe(1);
     expect(screen.queryByText(/R\$/)).not.toBeInTheDocument();
   });
 
-  it("KPI: vazio de verdade (hasLoaded=true) volta a mostrar valores e contagem normais", () => {
+  it("KPI: vazio de verdade (hasLoaded=true) volta a mostrar valores e contagem normais", async () => {
     transactionsDataMock.mockReturnValue({
       isLoading: false, error: "", hasLoaded: true,
       summary: { total_income: 0, total_expenses: 0, total_refunds: 0, balance: 0 },
@@ -1014,6 +1077,7 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
       removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
     });
     renderPage();
+    await openFilters();
 
     // Só sobra o chip "Tags: —" (facet sem seleção) — nenhum "—" extra
     // vindo da faixa de KPI.
@@ -1036,6 +1100,7 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
       removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
     });
     renderPage();
+    await openFilters();
 
     await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
 
@@ -1052,6 +1117,7 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
       removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
     });
     renderPage({ isMobile: true });
+    await openFilters();
 
     await userEvent.click(screen.getByRole("button", { name: /Abrir filtros/i }));
 
@@ -1067,6 +1133,7 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
       removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
     });
     renderPage();
+    await openFilters();
 
     await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
 
@@ -1088,6 +1155,7 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
       removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
     });
     renderPage();
+    await openFilters();
 
     await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
 
@@ -1120,6 +1188,7 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
       removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
     });
     renderPage();
+    await openFilters();
 
     await userEvent.click(screen.getByRole("button", { name: "Tag sumida" }));
     expect(screen.getAllByText(/não foi encontrada/i).length).toBeGreaterThan(0);
@@ -1144,6 +1213,7 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
       removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
     });
     renderPage({ isMobile: true });
+    await openFilters();
 
     await userEvent.click(screen.getByRole("button", { name: /Abrir filtros/i }));
 
@@ -1211,9 +1281,10 @@ describe("<TransacoesPage> — scroll infinito não vira tempestade de requisiç
     };
   }
 
-  it("sem pageError: sentinela presente (scroll infinito ativo, sem aviso de falha)", () => {
+  it("sem pageError: sentinela presente (scroll infinito ativo, sem aviso de falha)", async () => {
     transactionsDataMock.mockReturnValue(transactionsMockValue());
     renderPage();
+    await openFilters();
 
     expect(screen.getByTestId("load-more-sentinel")).toBeInTheDocument();
     expect(screen.queryByText("Tentar novamente")).not.toBeInTheDocument();
@@ -1265,6 +1336,7 @@ describe("<TransacoesPage> — scroll infinito não vira tempestade de requisiç
       transactionsMockValue({ pageError: "network down", hasMore: true }),
     );
     renderPage();
+    await openFilters();
 
     expect(screen.getByText("Tentar novamente")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Tentar novamente" }));
@@ -1300,6 +1372,7 @@ describe("<TransacoesPage> — lançamentos cobertos por âncora (S4)", { timeou
         date: "2026-08-13T12:00:00", reason: "conciliação", created_at: "2026-08-13T12:00:00" },
     ]);
     renderPage();
+    await openFilters();
 
     // "Já no acerto" só na linha de 10/08; a de 20/08 é posterior e conta normalmente.
     expect(await screen.findByText("⚓ Já no acerto")).toBeInTheDocument();
@@ -1309,6 +1382,7 @@ describe("<TransacoesPage> — lançamentos cobertos por âncora (S4)", { timeou
   it("não marca nada quando a conta não tem acerto", async () => {
     seed([]);
     renderPage();
+    await openFilters();
 
     expect(await screen.findByText("Compra antiga")).toBeInTheDocument();
     expect(screen.queryByText("⚓ Já no acerto")).not.toBeInTheDocument();
@@ -1323,6 +1397,7 @@ describe("<TransacoesPage> — lançamentos cobertos por âncora (S4)", { timeou
     ]);
     seed([]);
     renderPage();
+    await openFilters();
 
     // 10/08 é anterior à abertura em 13/08 -> marcado; 20/08 é posterior -> não.
     expect(await screen.findByText("⚓ Antes da abertura")).toBeInTheDocument();
@@ -1335,6 +1410,7 @@ describe("<TransacoesPage> — lançamentos cobertos por âncora (S4)", { timeou
     ]);
     seed([]);
     renderPage();
+    await openFilters();
 
     expect(await screen.findByText("Compra antiga")).toBeInTheDocument();
     expect(screen.queryByText(/⚓/)).not.toBeInTheDocument();
@@ -1345,6 +1421,7 @@ describe("<TransacoesPage> — lançamentos cobertos por âncora (S4)", { timeou
     seed([]);
     listOrgBalanceAdjustmentsMock.mockRejectedValue(new Error("backend fora"));
     renderPage();
+    await openFilters();
 
     expect(await screen.findByText("Compra antiga")).toBeInTheDocument();
     expect(screen.queryByText("⚓ Já no acerto")).not.toBeInTheDocument();
@@ -1373,6 +1450,7 @@ describe("<TransacoesPage> — estabilidade das linhas (issue #66)", { timeout: 
       setTransactionSettled: vi.fn(),
     });
     renderPage();
+    await openFilters();
 
     const before = screen.getAllByText("Almoço")[0].closest(".fincla-row");
     expect(before).toBeTruthy();
@@ -1404,6 +1482,7 @@ describe("<TransacoesPage> — estabilidade das linhas (issue #66)", { timeout: 
       setTransactionSettled: vi.fn().mockResolvedValue({ settled: true }),
     });
     renderPage();
+    await openFilters();
 
     await userEvent.click(screen.getAllByText("Almoço")[0]);
     const before = screen.getByRole("button", { name: /Marcar como pago/i }).closest("div");
@@ -1441,6 +1520,7 @@ describe("chip de tag na linha — truncagem (achado 4, rodada 4)", () => {
       setTransactionSettled: vi.fn(),
     });
     renderPage();
+    await openFilters();
 
     const chip = await screen.findByText("#trabalho");
     expect(chip).toHaveAttribute("title", "trabalho");

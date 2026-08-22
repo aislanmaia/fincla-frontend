@@ -74,6 +74,9 @@ export function TransactionsFilterBar({
   facetCounts,
   onExpandedChange,
   requestOpenFacet,
+  barLeading = null,
+  barChips = null,
+  barTrailing = null,
 }) {
   const [expanded, setExpanded] = useState(null);
   const panelRef = useRef(null);
@@ -221,6 +224,9 @@ export function TransactionsFilterBar({
           sort={filter.sort}
           setSort={filter.setSort}
           compact={compact}
+          leading={barLeading}
+          chips={barChips}
+          trailing={barTrailing}
         />
       )}
 

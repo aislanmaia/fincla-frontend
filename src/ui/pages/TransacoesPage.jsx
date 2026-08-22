@@ -12,6 +12,7 @@ import { FC } from "../routing/searchContract.js";
 import {
   Search,
   ChevronRight,
+  ChevronDown,
   X,
   Pencil,
   Trash2,
@@ -316,20 +317,61 @@ export const Tip = ({ label, children, pos = "top" }) => {
   );
 };
 
+/**
+ * Uma linha da lista, na grade do artefato.
+ *
+ * Colunas (desktop): data · ícone · descrição/método · categoria · [conta] ·
+ * [vão] · valor · situação · chevron.
+ *
+ * Duas decisões da proposta que a versão anterior não tinha e que mudam a
+ * leitura da tela:
+ *
+ * 1. A categoria sai da linha de metadados e vira uma PÍLULA em coluna
+ *    própria. Empilhada como "Alimentação · Pix" ela competia com a descrição
+ *    pelo mesmo eixo; numa coluna, o olho varre categorias verticalmente sem
+ *    reler a descrição de cada linha.
+ * 2. As ações rápidas ocupam ESSA coluna no hover, não uma coluna extra. É o
+ *    único bloco da linha que pode desaparecer sem perda: data, descrição,
+ *    valor e situação continuam à vista enquanto se decide o que fazer.
+ */
 const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
   rowHeight = 48, showDate = true, dateLabel = "", quickActions = null,
-  onFilterByCategory = null, onFilterByTag = null }) => {
+  onFilterByCategory = null, onFilterByTag = null, wide = false, xwide = false }) => {
   const isRefund   = tx.type === "refund";
   const isReceita  = tx.type === "income" || isRefund;
   const hasParcela = !!tx.parcela && !isRefund;
   const isCredito  = tx.paymentMethodKey === "credito" || tx.method === "Crédito";
   const hasRefundsLinked = tx.refundsSummary && tx.refundsSummary.count > 0;
   const tags       = tx.tags || [];
-  const visibleTags = tags.slice(0,2);
-  const hiddenTags  = tags.slice(2);
+  const avatarBg   = isRefund ? T.greenLight : catBg(tx.cat);
+  const catCol     = catColor(tx.cat);
+  const dense      = rowHeight <= 40;
 
-  // Avatar: estorno usa fundo verde claro com ícone ↺. Demais mantêm a cor da categoria.
-  const avatarBg = isRefund ? T.greenLight : catBg(tx.cat);
+  // Método é o único metadado que sobra sob a descrição. Para crédito ele
+  // carrega os 4 dígitos, que só fazem sentido colados nele.
+  const methodLine = isCredito
+    ? `Crédito${tx.parcela?.cartao ? " ●● " + (tx.parcela.cartao.split("••")[1] || "").trim() : ""}`
+    : tx.method;
+
+  const iconPx = dense ? 22 : rowHeight <= 50 ? 28 : 30;
+
+  /* A grade nasce das medições do artefato. As colunas de conta e de rótulo da
+     situação só existem acima de 1600 px: abaixo disso a descrição precisa da
+     largura, e uma coluna de conta espremida em 60 px não informa nada. */
+  const columns = [
+    showDate ? (isMobile ? "44px" : "54px") : null,
+    `${iconPx}px`,
+    "minmax(0,1fr)",
+    dense ? "104px" : "128px",
+    xwide ? "150px" : null,
+    wide ? "120px" : null,
+    wide ? "1fr" : null,
+    dense ? "88px" : "100px",
+    wide ? "76px" : "20px",
+    "14px",
+  ].filter(Boolean).join(" ");
+
+  const statusRing = tx.settleable && !tx.settled;
 
   return (
     <div
@@ -352,11 +394,12 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
       tabIndex={0}
       aria-expanded={isSelected}
       aria-label={`${tx.desc}, ${isReceita ? "receita" : "despesa"} de ${fmtBRL(tx.val)} em ${tx.date}`}
-      style={{ display:"flex", alignItems:"center", gap: isMobile ? 10 : 12,
-        minHeight: rowHeight,
-        padding: isMobile ? "0 14px" : "0 14px",
-        background: isSelected ? `${catColor(tx.cat)}08` : "transparent",
-        borderLeft: isSelected ? `3px solid ${catColor(tx.cat)}` : "3px solid transparent",
+      style={{ display:"grid", gridTemplateColumns: columns,
+        alignItems:"center", gap: dense ? 9 : 11,
+        height: rowHeight,
+        padding:"0 14px",
+        background: isSelected ? `${catCol}08` : "transparent",
+        borderLeft: isSelected ? `3px solid ${catCol}` : "3px solid transparent",
         cursor:"pointer", transition:"background 0.12s, border-color 0.12s" }}>
 
       {/* Data em coluna. Ela sai do cabeçalho de grupo porque, com um lançamento
@@ -364,123 +407,55 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
           para repetir a data. No modo agrupado o cabeçalho já a carrega e a
           coluna some. */}
       {showDate && (
-        <div style={{ ...G, width: isMobile ? 44 : 54, flexShrink:0,
-          fontFamily:"'Geist Mono',monospace", fontSize:11, color:T.inkLight, lineHeight:1.15 }}>
-          <b style={{ display:"block", fontSize:12, color:T.ink, fontWeight:700 }}>{dateLabel.top}</b>
+        <div style={{ ...G, fontFamily:"'Geist Mono',monospace",
+          fontSize: dense ? 10 : 11, color:T.inkLight, lineHeight:1.15 }}>
+          <b style={{ display:"block", fontSize: dense ? 11.5 : 12.5, color:T.ink,
+            fontWeight:700 }}>{dateLabel.top}</b>
           {dateLabel.sub}
         </div>
       )}
 
-      {/* Icon */}
-      <div style={{ width: rowHeight <= 40 ? 24 : rowHeight <= 50 ? 28 : 34,
-        height: rowHeight <= 40 ? 24 : rowHeight <= 50 ? 28 : 34,
-        borderRadius: rowHeight <= 40 ? 7 : 9, background:avatarBg,
-        display:"flex", alignItems:"center", justifyContent:"center",
-        fontSize:18, color: isRefund ? T.green : undefined,
-        fontWeight: isRefund ? 700 : undefined,
-        flexShrink:0, marginTop:1 }}>
+      <div style={{ width:iconPx, height:iconPx, borderRadius: dense ? 7 : 9,
+        background:avatarBg, display:"flex", alignItems:"center", justifyContent:"center",
+        fontSize: dense ? 11 : 14, color: isRefund ? T.green : undefined,
+        fontWeight: isRefund ? 700 : undefined }}>
         {tx.icon}
       </div>
 
-      {/* Main info */}
-      <div style={{ flex:1, minWidth:0 }}>
-
-        {/* Row 1: description — estorno ganha ícone ↺ inline + badge "Há estorno" quando aplicável */}
-        <div style={{ ...G, fontSize:13, fontWeight:600, color:T.ink,
-          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", marginBottom:3,
+      {/* Descrição em cima, método embaixo — a hierarquia da proposta. A
+          categoria NÃO mora aqui: ela tem coluna própria à direita. */}
+      <div style={{ minWidth:0 }}>
+        <div style={{ ...G, fontSize: dense ? 12 : 12.5, fontWeight:600, color:T.ink,
+          lineHeight:1.25, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
           display:"flex", alignItems:"center", gap:6 }}>
           <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
             {tx.desc}
           </span>
           {hasRefundsLinked && !isRefund && (
             <Tip label={`${tx.refundsSummary.count} estorno${tx.refundsSummary.count !== 1 ? "s" : ""} relacionado${tx.refundsSummary.count !== 1 ? "s" : ""} · ${fmtBRL(tx.refundsSummary.totalValue)} abatido${tx.refundsSummary.totalValue !== 1 ? "s" : ""}`}>
-              <span style={{ ...G, fontSize: 11, color:T.green, background:T.greenLight,
-                borderRadius:99, padding:"1px 6px", fontWeight:700, cursor:"default", whiteSpace:"nowrap" }}>
-                ↺ Estorno
-              </span>
+              <span style={{ ...G, fontSize:11, color:T.green, background:T.greenLight,
+                borderRadius:99, padding:"1px 6px", fontWeight:700, cursor:"default",
+                whiteSpace:"nowrap" }}>↺</span>
             </Tip>
           )}
         </div>
-
-        {/* Row 2: categoria · método · card digits · status chips */}
-        <div style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap",
-          marginBottom: (hasParcela || visibleTags.length > 0) ? 4 : 0 }}>
-          {/* Clicar filtra por esta categoria — o gesto mais curto entre "vi
-              algo" e "quero ver só isso". `stopPropagation` porque a linha
-              inteira já é um botão que abre a sanfona: sem isso um clique
-              faria as duas coisas. O desfazer do cabeçalho é a saída. */}
-          {onFilterByCategory ? (
-            <Tip label={`Filtrar por ${tx.cat}`}>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onFilterByCategory(tx); }}
-                aria-label={`Filtrar por categoria ${tx.cat}`}
-                style={{ ...G, fontSize:11, color:catColor(tx.cat), fontWeight:600,
-                  background:"none", border:"none", padding:0, cursor:"pointer",
-                  font:"inherit", textAlign:"left" }}
-              >{tx.cat}</button>
-            </Tip>
-          ) : (
-            <Tip label={`Categoria: ${tx.cat}`}>
-              <span style={{ ...G, fontSize:11, color:catColor(tx.cat), fontWeight:600 }}>{tx.cat}</span>
-            </Tip>
-          )}
-          <span style={{ ...G, fontSize:11, color:T.inkGhost }}>·</span>
-
-          {/* Para Crédito: mostra "Crédito ●● 1177" inline se tiver cartão, senão só "Crédito" */}
-          {isCredito ? (
-            <Tip label={tx.parcela?.cartao || "Cartão de crédito"}>
-              <span style={{ ...G, fontSize:11, color:T.inkMid }}>
-                Crédito
-                {tx.parcela?.cartao && (
-                  <span style={{ color:T.inkGhost, fontFamily:"'Geist Mono',monospace", letterSpacing:"0.04em" }}>
-                    {" ●● "}{tx.parcela.cartao.split("••")[1]?.trim()}
-                  </span>
-                )}
+        <div style={{ ...G, fontSize: dense ? 9.5 : 10.5, color:T.inkGhost,
+          lineHeight:1.2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+          display:"flex", alignItems:"center", gap:5 }}>
+          <span style={{ overflow:"hidden", textOverflow:"ellipsis" }}>{methodLine}</span>
+          {hasParcela && (
+            <Tip label={`${tx.parcela.atual}ª de ${tx.parcela.total} parcelas · ${fmtBRL(tx.parcela.valParcela)}/mês`}>
+              <span style={{ ...G, fontFamily:"'Geist Mono',monospace", color:T.blue,
+                fontWeight:600, whiteSpace:"nowrap" }}>
+                {tx.parcela.atual}/{tx.parcela.total}×
               </span>
             </Tip>
-          ) : (
-            <Tip label={`Método: ${tx.method}`}>
-              <span style={{ ...G, fontSize:11, color:T.inkMid }}>{tx.method}</span>
-            </Tip>
           )}
-
           {tx.rec && (
-            <Tip label="Transação recorrente — repete todo mês">
-              <span style={{ ...G, fontSize:11, color:T.blue, background:T.blueLight,
-                borderRadius:99, padding:"1px 6px", fontWeight:700, cursor:"default" }}>↻</span>
+            <Tip label="Transação recorrente — repete todo período">
+              <span style={{ color:T.blue, fontWeight:700 }}>↻</span>
             </Tip>
           )}
-
-          {tx.status === "pendente" && (
-            <Tip label="Aguardando confirmação do lançamento">
-              <span style={{ ...G, fontSize:11, color:T.amber, background:T.amberLight,
-                borderRadius:99, padding:"1px 6px", fontWeight:700 }}>⏳ Pendente</span>
-            </Tip>
-          )}
-
-          {/* Liquidação: sem este badge, um compromisso pendente é visualmente idêntico
-              a um pago — e some do saldo da conta sem o usuário ter como perceber.
-              Cartão fica de fora: ele liquida quando a FATURA é paga, não por lançamento. */}
-          {tx.settleable && !tx.settled && (
-            <Tip label="Ainda não entrou no saldo da conta — marque como pago quando o dinheiro sair">
-              <span style={{ ...G, fontSize:11, color:T.amber, background:T.amberLight,
-                borderRadius:99, padding:"1px 6px", fontWeight:700,
-                display:"inline-flex", alignItems:"center", gap:5 }}>
-                {/* Anel vazado, não ampulheta: o lançamento não está
-                    "processando" — ele existe e só ainda não entrou no saldo.
-                    Mesma marca do cabeçalho da lista, e um ícone em vez de um
-                    emoji que renderiza diferente em cada sistema. */}
-                <i aria-hidden="true" style={{ display:"inline-block", width:8, height:8,
-                  border:"1.75px solid currentColor", borderRadius:"50%", boxSizing:"border-box" }}/>
-                A pagar
-              </span>
-            </Tip>
-          )}
-
-          {/* Sem isto, o usuário lança algo retroativo, vê o saldo não se mexer e não
-              tem como saber por quê — o modelo de âncora trocaria um erro silencioso
-              por outro. É esta marca que fecha o ciclo. */}
           {coveringAnchor && (
             <Tip
               label={
@@ -489,145 +464,145 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
                   : `Você acertou o saldo desta conta em ${coveringAnchor.ymd.split("-").reverse().join("/")}. O acerto cobre esse dia inteiro, então este lançamento já está contemplado nele e não altera o saldo.`
               }
             >
-              <span style={{ ...G, fontSize:11, color:T.inkMid, background:T.grayLight,
-                borderRadius:99, padding:"1px 6px", fontWeight:600 }}>
-                {coveringAnchor.kind === "opening" ? "⚓ Antes da abertura" : "⚓ Já no acerto"}
-              </span>
+              <span style={{ whiteSpace:"nowrap" }}>⚓</span>
             </Tip>
-          )}
-
-          {isRefund && (
-            <>
-              <span style={{ ...G, fontSize:11, color:T.inkGhost }}>·</span>
-              <span style={{ ...G, fontSize:11, color:T.green, fontWeight:600 }}>↺ Estorno</span>
-            </>
           )}
         </div>
+      </div>
 
-        {/* Row 3: parcela — compacta, sem redundância com row 2 */}
-        {hasParcela && (
-          <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom: visibleTags.length > 0 ? 4 : 0 }}>
-            <Tip label={`${tx.parcela.atual}ª de ${tx.parcela.total} parcelas · ${tx.parcela.cartao}`}>
-              <span style={{ ...G, fontSize:11, color:T.blue, fontWeight:600,
-                fontFamily:"'Geist Mono',monospace" }}>
-                {tx.parcela.atual}/{tx.parcela.total}×
-              </span>
+      {/* Coluna da categoria. No hover ela dá lugar às ações rápidas: é o único
+          bloco que pode sumir sem esconder informação que a pessoa precisa para
+          decidir. */}
+      <div style={{ minWidth:0, display:"flex", justifyContent:"flex-start" }}>
+        <span className="fincla-quick-hides" style={{ minWidth:0, display:"flex" }}>
+          {onFilterByCategory ? (
+            <Tip label={`Filtrar por ${tx.cat}`}>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onFilterByCategory(tx); }}
+                aria-label={`Filtrar por categoria ${tx.cat}`}
+                // NUNCA `font:"inherit"` aqui: `font` é atalho e reseta
+                // `fontSize`/`fontWeight` declarados antes dele no mesmo objeto.
+                // Foi assim que a categoria virou 16px peso 400 — maior que a
+                // própria descrição, invertendo a hierarquia da linha.
+                style={{ ...G, fontFamily:"inherit", fontSize:10, fontWeight:600,
+                  color:catCol, background:`${catCol}18`, border:"none",
+                  borderRadius:99, padding:"2px 7px", cursor:"pointer",
+                  maxWidth:"100%", overflow:"hidden", textOverflow:"ellipsis",
+                  whiteSpace:"nowrap", lineHeight:1.5 }}
+              >{tx.cat}</button>
             </Tip>
-            <span style={{ ...G, fontSize: 11, color:T.inkGhost }}>·</span>
-            <Tip label={`Parcela: ${fmtBRL(tx.parcela.valParcela)}/mês · Vence ${tx.parcela.vencimento}`}>
-              <span style={{ ...G, fontSize:11, color:T.inkMid,
-                fontFamily:"'Geist Mono',monospace" }}>
-                {fmtBRL(tx.parcela.valParcela)}/mês
-              </span>
-            </Tip>
-            <span style={{ ...G, fontSize: 11, color:T.inkGhost }}>·</span>
-            <Tip label={`Já pago: ${fmtBRL(tx.parcela.valorPago)} · Residual: ${fmtBRL(tx.parcela.valorResidual)}`}>
-              <span style={{ ...G, fontSize:11, color:T.inkLight }}>
-                {tx.parcela.total - tx.parcela.atual} restantes
-              </span>
-            </Tip>
-          </div>
-        )}
-
-        {/* Row 4: tags */}
-        {/* As tags dão lugar às ações rápidas no hover — assim a descrição, o
-            valor e a situação não são espremidos quando elas aparecem. */}
-        {visibleTags.length > 0 && (
-          <div className="fincla-quick-hides"
-            style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap" }}>
-            {visibleTags.map(tag => (
-              // `title` + truncagem (achado 4, rodada 5 de review #100): a
-              // desambiguação por prefixo curto e estável do id (não usa
-              // índice de ocorrência posicional — não é estável entre
-              // requisições, achado 3 da mesma rodada) pode alongar o
-              // rótulo ("mensal (a1b2c3d4)") e este pill não tem largura
-              // garantida na linha.
-              onFilterByTag ? (
-                // `title` continua sendo o rótulo CRU: ele existe para deixar
-                // legível um nome truncado ("mensal (a1b2c3d4)"), e trocá-lo
-                // por um texto de ação tiraria a única forma de ler o resto.
-                // A ação mora no `aria-label`.
-                <button key={tag} type="button" title={tag}
-                  onClick={(e) => { e.stopPropagation(); onFilterByTag(tag); }}
-                  aria-label={`Filtrar pela tag ${tag}`}
-                  style={{ ...G, fontSize: 11, color:T.inkMid, background:T.grayLight,
-                    borderRadius:99, padding:"2px 8px", fontWeight:500, maxWidth:140,
-                    overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
-                    display:"inline-block", border:"none", cursor:"pointer" }}>#{tag}</button>
-              ) : (
-                <span key={tag} title={tag} style={{ ...G, fontSize: 11, color:T.inkMid, background:T.grayLight,
-                  borderRadius:99, padding:"2px 8px", fontWeight:500, maxWidth:140,
-                  overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
-                  display:"inline-block" }}>#{tag}</span>
-              )
-            ))}
-            {hiddenTags.length > 0 && (
-              <Tip label={`Todas: ${tags.map(t=>"#"+t).join(", ")}`} pos="top">
-                <span style={{ ...G, fontSize: 11, color:T.blue, background:T.blueLight,
-                  borderRadius:99, padding:"2px 8px", fontWeight:700, cursor:"default" }}>
-                  +{hiddenTags.length}
-                </span>
-              </Tip>
+          ) : (
+            <span style={{ ...G, fontSize:10, fontWeight:600, color:catCol,
+              background:`${catCol}18`, borderRadius:99, padding:"2px 7px",
+              maxWidth:"100%", overflow:"hidden", textOverflow:"ellipsis",
+              whiteSpace:"nowrap", lineHeight:1.5 }}>{tx.cat}</span>
+          )}
+        </span>
+        {quickActions && (
+          <div className="fincla-quick">
+            {tx.settleable && (
+              <QuickAction
+                label={tx.settled ? `Desfazer pagamento de ${tx.desc}` : `Marcar ${tx.desc} como pago`}
+                tone="green"
+                onClick={(e) => { e.stopPropagation(); quickActions.onSettle(tx); }}
+              >
+                {tx.settled ? "↺" : "✓"}
+              </QuickAction>
             )}
+            <QuickAction
+              label={`Editar ${tx.desc}`}
+              onClick={(e) => { e.stopPropagation(); quickActions.onEdit(tx); }}
+            >
+              ✎
+            </QuickAction>
+            {quickActions.onDuplicate && (
+              <QuickAction
+                label={`Duplicar ${tx.desc}`}
+                onClick={(e) => { e.stopPropagation(); quickActions.onDuplicate(tx); }}
+              >
+                ⧉
+              </QuickAction>
+            )}
+            <QuickAction
+              label={`Excluir ${tx.desc}`}
+              tone="red"
+              onClick={(e) => { e.stopPropagation(); quickActions.onDelete(tx); }}
+            >
+              🗑
+            </QuickAction>
           </div>
         )}
       </div>
 
-      {/* Amount column — total da compra + parcela/mês abaixo */}
-      <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", flexShrink:0, gap:2, marginTop:1 }}>
-        <Tip label={hasParcela ? `Total da compra: ${fmtBRL(tx.val)}` : isRefund ? "Estorno · dinheiro voltando" : ""} pos="top">
-          <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:14, fontWeight:700,
-            color: isRefund ? T.green : (isReceita ? T.green : T.ink) }}>
-            {isReceita ? "+" : "−"}{fmtBRL(tx.val)}
-          </div>
-        </Tip>
-        {!isMobile && (
-          <ChevronRight size={12} color={isSelected ? catColor(tx.cat) : T.inkGhost}
-            style={{ marginTop:2, transition:"color 0.12s" }}/>
-        )}
-      </div>
-
-      {/* Ações rápidas — o que hoje exige abrir o detalhe primeiro. */}
-      {quickActions && (
-        <div className="fincla-quick" style={{ flexShrink:0, marginLeft:2 }}>
-          {tx.settleable && (
-            <QuickAction
-              label={tx.settled ? `Desfazer pagamento de ${tx.desc}` : `Marcar ${tx.desc} como pago`}
-              tone="green"
-              onClick={(e) => { e.stopPropagation(); quickActions.onSettle(tx); }}
-            >
-              {tx.settled ? "↺" : "✓"}
-            </QuickAction>
+      {/* Tags — só acima de 2100 px. Abaixo disso elas competiriam com a
+          descrição por largura, e o artefato as reserva para quando a folga
+          existe de verdade. */}
+      {xwide && (
+        <div style={{ display:"flex", gap:5, minWidth:0, overflow:"hidden" }}>
+          {tags.slice(0, 2).map((tag) =>
+            onFilterByTag ? (
+              // `title` é o rótulo CRU: ele existe para deixar legível um nome
+              // truncado ("mensal (a1b2c3d4)"). A ação mora no `aria-label`.
+              <button key={tag} type="button" title={tag}
+                onClick={(e) => { e.stopPropagation(); onFilterByTag(tag); }}
+                aria-label={`Filtrar pela tag ${tag}`}
+                style={{ ...G, fontSize:10, fontWeight:600, color:T.inkMid,
+                  background:T.grayLight, border:"none", borderRadius:6,
+                  padding:"2px 7px", cursor:"pointer", maxWidth:70,
+                  overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                {tag}
+              </button>
+            ) : (
+              <span key={tag} title={tag} style={{ ...G, fontSize:10, fontWeight:600,
+                color:T.inkMid, background:T.grayLight, borderRadius:6, padding:"2px 7px",
+                maxWidth:70, overflow:"hidden", textOverflow:"ellipsis",
+                whiteSpace:"nowrap" }}>{tag}</span>
+            ),
           )}
-          <QuickAction
-            label={`Editar ${tx.desc}`}
-            onClick={(e) => { e.stopPropagation(); quickActions.onEdit(tx); }}
-          >
-            ✎
-          </QuickAction>
-          {quickActions.onDuplicate && (
-            <QuickAction
-              label={`Duplicar ${tx.desc}`}
-              onClick={(e) => { e.stopPropagation(); quickActions.onDuplicate(tx); }}
-            >
-              ⧉
-            </QuickAction>
-          )}
-          <QuickAction
-            label={`Excluir ${tx.desc}`}
-            tone="red"
-            onClick={(e) => { e.stopPropagation(); quickActions.onDelete(tx); }}
-          >
-            🗑
-          </QuickAction>
         </div>
       )}
+
+      {/* Conta — só acima de 1600 px, onde a folga vira informação em vez de
+          esticar a descrição por 2700 px e jogar o valor no fim do trilho. */}
+      {wide && (
+        <div style={{ ...G, fontSize:11, color:T.inkLight, minWidth:0,
+          overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+          {tx.accountLabel || tx.contaLabel || "Conta principal"}
+        </div>
+      )}
+      {wide && <span />}
+
+      <div style={{ ...G, fontFamily:"'Geist Mono',monospace",
+        fontSize: dense ? 12 : 13.5, fontWeight:700, textAlign:"right",
+        color: isRefund ? T.green : (isReceita ? T.green : T.ink) }}>
+        {isReceita ? "+" : "−"}{fmtBRL(tx.val)}
+      </div>
+
+      {/* Situação: anel vazado, não ampulheta. O lançamento não está
+          "processando" — ele existe e só ainda não entrou no saldo. */}
+      {statusRing ? (
+        <Tip label="Ainda não entrou no saldo da conta">
+          <span style={{ ...G, color:T.amber, display:"flex", alignItems:"center",
+            gap:5, fontSize:10.5, fontWeight:700, whiteSpace:"nowrap",
+            justifyContent: wide ? "flex-end" : "center" }}>
+            <i aria-hidden="true" style={{ display:"inline-block", width:8, height:8,
+              border:"1.75px solid currentColor", borderRadius:"50%", boxSizing:"border-box" }}/>
+            {wide ? "A pagar" : ""}
+          </span>
+        </Tip>
+      ) : <span />}
+
+      <span style={{ display:"flex", justifyContent:"center", color: isSelected ? catCol : T.inkGhost,
+        transition:"color 0.12s" }}>
+        {isSelected
+          ? <ChevronDown size={12} color={catCol}/>
+          : <ChevronRight size={12} color={T.inkGhost}/>}
+      </span>
     </div>
   );
 };
 
-/** Botão de 28 px das ações rápidas. Alvo mínimo respeitado; `stopPropagation`
- *  no chamador para o clique não abrir a sanfona junto. */
 const QuickAction = ({ label, tone, onClick, children }) => (
   <button
     type="button"
@@ -981,6 +956,7 @@ function TransacoesPageBody({
     () => (typeof window !== "undefined" ? window.innerHeight : DESKTOP_FILTERS_EXPAND_MIN_HEIGHT),
   );
   const [compactDesktopFiltersOpen, setCompactDesktopFiltersOpen] = useState(false);
+  const [wideDesktopFiltersOpen, setWideDesktopFiltersOpen] = useState(false);
   const [statsExpanded, setStatsExpanded] = useState(false);
   const [listPrefs, setListPrefsState] = useState(() => readListPrefs());
   const setListPrefs = useCallback((next) => {
@@ -1855,6 +1831,7 @@ function TransacoesPageBody({
     // efeito visível nenhum.
     setFiltersOpen(true);
     setCompactDesktopFiltersOpen(true);
+    setWideDesktopFiltersOpen(true);
   }, []);
 
   const clearFacetAndResetPage = useCallback(
@@ -2132,12 +2109,95 @@ function TransacoesPageBody({
   const isGrouped = listPrefs.grouped && canGroup;
   const listRowHeight = densityRowHeight(listPrefs.density, isMobile);
 
+  /* Densidade e agrupamento: mudam COMO a lista aparece, não QUAIS transações
+     aparecem (isso é o painel de filtros). No artefato eles moram na ponta
+     direita da barra de comando, ao lado da ordenação — junto do resto do que
+     controla a apresentação, em vez de soltos na linha do título. */
+  const listPrefsButtons = (
+    <>
+          <button
+            type="button"
+            onClick={() => {
+              const order = Object.keys(DENSITIES);
+              const next = order[(order.indexOf(listPrefs.density) + 1) % order.length];
+              setListPrefs({ density: next });
+            }}
+            title={`Densidade da lista: ${DENSITIES[listPrefs.density].label}`}
+            aria-label={`Densidade da lista: ${DENSITIES[listPrefs.density].label}. Clique para alternar.`}
+            style={{ ...G, width:32, height:32, borderRadius:9, cursor:"pointer",
+              border:`1px solid ${T.border}`, background:T.surface, color:T.inkMid,
+              display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>
+            ▤
+          </button>
+          <button
+            type="button"
+            disabled={!canGroup}
+            onClick={() => setListPrefs({ grouped: !listPrefs.grouped })}
+            title={canGroup
+              ? (isGrouped ? "Agrupado por data" : "Lista contínua")
+              : "Agrupar por data só vale ordenando por data"}
+            aria-pressed={isGrouped}
+            aria-label="Agrupar por data"
+            style={{ ...G, width:32, height:32, borderRadius:9,
+              cursor: canGroup ? "pointer" : "not-allowed",
+              opacity: canGroup ? 1 : 0.4,
+              border:`1px solid ${isGrouped ? "#BFD3FA" : T.border}`,
+              background: isGrouped ? T.blueLight : T.surface,
+              color: isGrouped ? T.blue : T.inkMid,
+              display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>
+            ▦
+          </button>
+    </>
+  );
+
+  /* Os chips do que está filtrando, já com o "＋ Filtros" embutido. Abaixo de
+     1200 px eles recolhem para o contador do próprio botão: nessa largura não
+     cabem sem espremer a busca. */
+  const commandBarChips = (
+    <TransactionsFilterChips
+      facets={allFacets}
+      searchActive={Boolean(debouncedSearch)}
+      searchLabel={debouncedSearch}
+      onOpenFacet={openFacetFromChip}
+      onClearFacet={clearFacetAndResetPage}
+      onClearAll={clearAll}
+      maxVisible={viewportWidth >= 1600 ? 3 : 2}
+      collapsed={viewportWidth < 1200}
+      filtersOpen={wideDesktopFiltersOpen}
+      onToggleFilters={() => setWideDesktopFiltersOpen((open) => !open)}
+    />
+  );
+
+  const commandBarChipsCompact = (
+    <TransactionsFilterChips
+      facets={allFacets}
+      searchActive={Boolean(debouncedSearch)}
+      searchLabel={debouncedSearch}
+      onOpenFacet={openFacetFromChip}
+      onClearFacet={clearFacetAndResetPage}
+      onClearAll={clearAll}
+      collapsed
+      filtersOpen={compactDesktopFiltersOpen}
+      onToggleFilters={() => setCompactDesktopFiltersOpen((open) => !open)}
+    />
+  );
+
+
   /* Quantos lançamentos do filtro ainda não entraram no saldo. Substitui o
      aviso de 16 px que ocupava uma faixa própria para dizer a mesma coisa. */
   const pendingCount = txList.filter((t) => t.settleable && !t.settled).length;
 
   const listContent = (
-    <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
+    /* Um card só: o cabeçalho é o TOPO da lista, não um bloco solto acima
+       dela. Enquanto estavam separados, o cabeçalho ficava quadrado e o
+       primeiro lançamento aparecia arredondado por baixo — dois cantos
+       diferentes na mesma junção.
+       SEM `overflow:hidden` de propósito: ele criaria um scrollport novo e o
+       `position:sticky` do cabeçalho e dos cabeçalhos de dia passaria a se
+       ancorar NESTE card em vez de na região rolável — os dois parariam de
+       grudar no topo ao rolar. O arredondamento vem de raios explícitos. */
+    <div style={{ display:"flex", flexDirection:"column", gap:0,
+      background:T.surface, border:`1px solid ${T.border}`, borderRadius:12 }}>
       <TransactionsListHeader
         total={filteredCount}
         pending={filter.settlement === "todas" ? pendingCount : 0}
@@ -2222,8 +2282,10 @@ function TransacoesPageBody({
            usuário. Contínua: um card só, linhas separadas por hairline, data em
            coluna. Agrupada: cabeçalho de dia sticky de 24 px (contra os 48 de
            antes) e a coluna de data some, porque o cabeçalho já a carrega. */
-        <div style={{ background:T.surface, borderRadius:12, overflow:"hidden",
-          border:`1px solid ${T.border}` }}>
+        /* Sem borda nem raio próprios: quem os carrega é o card externo, que
+           agora inclui o cabeçalho. Repeti-los aqui desenharia uma segunda
+           moldura logo abaixo da primeira. */
+        <div>
           {groups.map(([date, txs], gi) => (
             <React.Fragment key={date}>
               {isGrouped && (
@@ -2262,6 +2324,8 @@ function TransacoesPageBody({
                     quickActions={quickActions}
                     onFilterByCategory={filterByCategoryFromRow}
                     onFilterByTag={filterByTagFromRow}
+                    wide={!isMobile && viewportWidth >= 1600}
+                    xwide={!isMobile && viewportWidth >= 2100}
                   />
                   {/* Sanfona: o detalhe nasce ONDE O OLHO JÁ ESTÁ, em vez de
                       numa coluna de 320 px que, em 1366×768, sobrava com 32 px
@@ -2474,40 +2538,6 @@ function TransacoesPageBody({
           </div>
         )}
         <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
-          {/* Preferências de exibição — o que muda COMO a lista aparece, não
-              QUAIS transações aparecem (isso é o painel de filtros). */}
-          <button
-            type="button"
-            onClick={() => {
-              const order = Object.keys(DENSITIES);
-              const next = order[(order.indexOf(listPrefs.density) + 1) % order.length];
-              setListPrefs({ density: next });
-            }}
-            title={`Densidade da lista: ${DENSITIES[listPrefs.density].label}`}
-            aria-label={`Densidade da lista: ${DENSITIES[listPrefs.density].label}. Clique para alternar.`}
-            style={{ ...G, width:32, height:32, borderRadius:9, cursor:"pointer",
-              border:`1px solid ${T.border}`, background:T.surface, color:T.inkMid,
-              display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>
-            ▤
-          </button>
-          <button
-            type="button"
-            disabled={!canGroup}
-            onClick={() => setListPrefs({ grouped: !listPrefs.grouped })}
-            title={canGroup
-              ? (isGrouped ? "Agrupado por data" : "Lista contínua")
-              : "Agrupar por data só vale ordenando por data"}
-            aria-pressed={isGrouped}
-            aria-label="Agrupar por data"
-            style={{ ...G, width:32, height:32, borderRadius:9,
-              cursor: canGroup ? "pointer" : "not-allowed",
-              opacity: canGroup ? 1 : 0.4,
-              border:`1px solid ${isGrouped ? "#BFD3FA" : T.border}`,
-              background: isGrouped ? T.blueLight : T.surface,
-              color: isGrouped ? T.blue : T.inkMid,
-              display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>
-            ▦
-          </button>
         </div>
         <button onClick={exportCSV}
           style={{ ...G, display:"flex", alignItems:"center", gap:5, background:T.surface,
@@ -2567,12 +2597,9 @@ function TransacoesPageBody({
                 {...filterBarCommonProps}
                 hideSavedViews
                 hideFacets
+                barChips={commandBarChipsCompact}
               />
             </div>
-            {filtersToggleButton(
-              compactDesktopFiltersOpen,
-              () => setCompactDesktopFiltersOpen((open) => !open),
-            )}
           </div>
           {compactDesktopFiltersOpen && (
             <TransactionsFilterBar {...filterBarCommonProps} hideSearch />
@@ -2586,25 +2613,26 @@ function TransacoesPageBody({
         onDismiss={() => setUndoToast(null)}
       />
 
-      {/* ── Desktop wide: barra completa ─ */}
+      {/* ── Desktop largo: MESMA barra de comando do compacto ────
+          O artefato substitui a faixa permanente de nove cards de faceta por
+          uma linha só — busca, chips do que está filtrando e "+ Filtros". A
+          faixa custava 57 px de altura o tempo todo para mostrar sobretudo
+          "Todas / Todos / Qualquer": nove rótulos que só informam quando algum
+          deles sai do padrão, que é justamente o que os chips já dizem. */}
       {!isMobile && !isDesktopCompact && (
-        <TransactionsFilterBar {...filterBarCommonProps} />
+        <>
+          <TransactionsFilterBar
+            {...filterBarCommonProps}
+            hideSavedViews
+            hideFacets
+            barChips={commandBarChips}
+            barTrailing={listPrefsButtons}
+          />
+          {wideDesktopFiltersOpen && (
+            <TransactionsFilterBar {...filterBarCommonProps} hideSearch />
+          )}
+        </>
       )}
-
-      {/* ── Filtros aplicados ────────────────────────────────────
-          Só existe quando há filtro. No mobile e no desktop compacto os cards
-          da FacetBar ficam atrás do botão "Filtros", então sem esta linha era
-          possível olhar uma lista curta sem nenhum sinal do porquê. */}
-      <TransactionsFilterChips
-        facets={allFacets}
-        searchActive={Boolean(debouncedSearch)}
-        searchLabel={debouncedSearch}
-        onOpenFacet={openFacetFromChip}
-        onClearFacet={clearFacetAndResetPage}
-        onClearAll={clearAll}
-        maxVisible={isMobile ? 2 : isDesktopCompact ? 3 : 5}
-        compact={isMobile}
-      />
 
       {/* ── MOBILE FILTER BOTTOM SHEET ───────────────────────────────── */}
       {isMobile && (filtersOpen || sheetClosing) && (

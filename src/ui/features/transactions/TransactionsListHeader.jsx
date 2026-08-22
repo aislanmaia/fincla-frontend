@@ -39,6 +39,11 @@ export function TransactionsListHeader({
         position: "sticky",
         top: 0,
         zIndex: 3,
+        // Raios explícitos em vez de `overflow:hidden` no card: recortar por
+        // overflow criaria um scrollport e este `sticky` deixaria de grudar no
+        // topo da região rolável. 11 = 12 do card menos a borda de 1 px.
+        borderTopLeftRadius: 11,
+        borderTopRightRadius: 11,
         height: compact ? 32 : 28,
         flex: "none",
         display: "flex",

@@ -1,24 +1,72 @@
 import React, { useEffect, useRef, useState } from "react";
 import { T } from "../../../tokens";
 import { G } from "../../../typography";
-import { Icon } from "./shared/Icon.jsx";
 
 /**
- * Os filtros ATIVOS, em linha, logo acima da lista.
+ * Os filtros ATIVOS, dentro da barra de comando.
  *
- * Sem isso, o que está filtrando mora dentro dos cards da FacetBar — que no
- * desktop compacto e no mobile ficam atrás de um botão. Era possível olhar uma
- * lista filtrada sem nenhum sinal na tela de por quê ela está curta.
+ * Substituem a faixa permanente de nove cards de faceta: aquela linha custava
+ * 57 px de altura o tempo todo para mostrar sobretudo "Todas / Todos /
+ * Qualquer" — nove rótulos que só informam quando algum sai do padrão, que é
+ * exatamente o que um chip diz por si.
  *
- * Cada chip faz duas coisas distintas, e o alvo de clique separa as duas:
- * o corpo ABRE o painel daquela facet (para ajustar), o "×" REMOVE só aquele
+ * Cada chip faz duas coisas distintas, e o alvo de clique separa as duas: o
+ * corpo ABRE o painel daquela facet (para ajustar), o "✕" REMOVE só aquele
  * filtro. Um chip que só removesse obrigaria a reabrir o painel pelo caminho
  * longo para trocar um valor.
  *
- * Overflow: a partir de `maxVisible` os excedentes viram um "+N" que abre a
- * lista inteira. Uma linha que quebra em três empurraria a lista para baixo —
- * exatamente o problema que esta tela existe para resolver.
+ * Overflow: a partir de `maxVisible` os excedentes viram um chip de contagem
+ * que abre a lista inteira. Uma linha que quebra em três empurraria a lista
+ * para baixo — o problema que esta tela existe para resolver.
  */
+
+const CHIP_H = 28;
+
+/** Pílula base da barra. `tone`: 'on' (filtro ativo) | 'ghost' | 'plain'. */
+function chipStyle(tone) {
+  const base = {
+    ...G,
+    height: CHIP_H,
+    padding: "0 10px",
+    borderRadius: 999,
+    fontSize: 11.5,
+    fontWeight: 600,
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    whiteSpace: "nowrap",
+    cursor: "pointer",
+    flexShrink: 0,
+  };
+  if (tone === "on") {
+    return { ...base, background: T.blueLight, border: "1px solid #BFD3FA", color: T.blue };
+  }
+  if (tone === "ghost") {
+    return { ...base, background: T.surface, border: `1px dashed ${T.border}`, color: T.inkGhost };
+  }
+  return { ...base, background: T.surface, border: `1px solid ${T.border}`, color: T.inkMid };
+}
+
+/** Contador dentro de um chip (o "+3" do overflow). */
+function CountBadge({ n }) {
+  return (
+    <span
+      style={{
+        ...G,
+        background: T.blue,
+        color: "#fff",
+        borderRadius: 999,
+        padding: "0 5px",
+        fontSize: 11,
+        fontWeight: 700,
+        lineHeight: 1.5,
+      }}
+    >
+      +{n}
+    </span>
+  );
+}
+
 export function TransactionsFilterChips({
   facets = [],
   searchActive = false,
@@ -26,15 +74,20 @@ export function TransactionsFilterChips({
   onOpenFacet,
   onClearFacet,
   onClearAll,
-  maxVisible = 4,
+  maxVisible = 3,
   compact = false,
+  /** Abre/fecha o painel de facetas — o chip "＋ Filtros" da proposta. */
+  filtersOpen = false,
+  onToggleFilters,
+  /** Recolhe TODOS os chips no contador do "＋ Filtros" (telas estreitas). */
+  collapsed = false,
 }) {
   const [overflowOpen, setOverflowOpen] = useState(false);
   const overflowRef = useRef(null);
 
   const chips = [
     ...(searchActive
-      ? [{ key: "busca", label: "Busca", value: `"${searchLabel}"`, icon: "search" }]
+      ? [{ key: "busca", label: "Busca", value: `"${searchLabel}"` }]
       : []),
     ...facets.filter((f) => f.active),
   ];
@@ -55,67 +108,60 @@ export function TransactionsFilterChips({
     };
   }, [overflowOpen]);
 
-  // Some junto com o último filtro: uma faixa vazia ocupando altura é o oposto
-  // do que esta tela precisa.
   useEffect(() => {
     if (chips.length <= maxVisible) setOverflowOpen(false);
   }, [chips.length, maxVisible]);
 
-  if (chips.length === 0) return null;
+  // Abaixo de ~1200 px os chips não cabem sem espremer a busca: recolhem para o
+  // contador do próprio "＋ Filtros", como já acontece no mobile.
+  const shown = collapsed ? [] : chips.slice(0, maxVisible);
+  const hidden = collapsed ? chips : chips.slice(maxVisible);
 
-  const shown = chips.slice(0, maxVisible);
-  const hidden = chips.slice(maxVisible);
+  const filtrosChip = (
+    <button
+      type="button"
+      onClick={onToggleFilters}
+      aria-expanded={filtersOpen}
+      aria-label={filtersOpen ? "Ocultar filtros" : "Abrir filtros"}
+      style={{
+        ...chipStyle(filtersOpen ? "on" : "ghost"),
+        ...(filtersOpen ? {} : { borderStyle: "dashed" }),
+      }}
+    >
+      ＋ Filtros
+      {collapsed && chips.length > 0 && <CountBadge n={chips.length} />}
+    </button>
+  );
+
+  if (chips.length === 0) return filtrosChip;
 
   return (
     <div
       role="group"
       aria-label="Filtros aplicados"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 6,
-        flexWrap: "nowrap",
-        minWidth: 0,
-        overflow: "visible",
-      }}
+      style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}
     >
       {shown.map((f) => (
-        <Chip
-          key={f.key}
-          facet={f}
-          compact={compact}
-          onOpen={onOpenFacet}
-          onClear={onClearFacet}
-        />
+        <Chip key={f.key} facet={f} compact={compact} onOpen={onOpenFacet} onClear={onClearFacet} />
       ))}
 
-      {hidden.length > 0 && (
+      {!collapsed && hidden.length > 0 && (
         <div ref={overflowRef} style={{ position: "relative", flexShrink: 0 }}>
           <button
             type="button"
             onClick={() => setOverflowOpen((v) => !v)}
             aria-expanded={overflowOpen}
             aria-label={`Mais ${hidden.length} ${hidden.length === 1 ? "filtro" : "filtros"}`}
-            style={{
-              ...G,
-              padding: "4px 9px",
-              borderRadius: 99,
-              border: `1px dashed ${T.border}`,
-              background: T.surface,
-              color: T.inkMid,
-              fontSize: 11.5,
-              fontWeight: 700,
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-            }}
+            style={chipStyle("on")}
           >
-            +{hidden.length}
+            <CountBadge n={hidden.length} />
           </button>
           {overflowOpen && (
             <div
+              className="fincla-scroll"
               style={{
                 position: "absolute",
-                top: "calc(100% + 6px)",
+                top: "calc(100% + 8px)",
                 right: 0,
                 zIndex: 40,
                 background: T.surface,
@@ -130,7 +176,6 @@ export function TransactionsFilterChips({
                 maxHeight: "min(50dvh, 320px)",
                 overflowY: "auto",
               }}
-              className="fincla-scroll"
             >
               {hidden.map((f) => (
                 <Chip
@@ -145,48 +190,46 @@ export function TransactionsFilterChips({
                   onClear={onClearFacet}
                 />
               ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setOverflowOpen(false);
+                  onClearAll?.();
+                }}
+                style={{
+                  ...G,
+                  marginTop: 2,
+                  padding: "5px 8px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: "none",
+                  color: T.inkLight,
+                  fontSize: 11.5,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  textAlign: "left",
+                }}
+              >
+                Limpar tudo
+              </button>
             </div>
           )}
         </div>
       )}
 
-      <button
-        type="button"
-        onClick={onClearAll}
-        style={{
-          ...G,
-          marginLeft: 2,
-          padding: "4px 8px",
-          borderRadius: 8,
-          border: "none",
-          background: "none",
-          color: T.inkLight,
-          fontSize: 11.5,
-          fontWeight: 600,
-          cursor: "pointer",
-          whiteSpace: "nowrap",
-          flexShrink: 0,
-        }}
-      >
-        Limpar tudo
-      </button>
+      {filtrosChip}
     </div>
   );
 }
 
 function Chip({ facet, onOpen, onClear, compact, block = false }) {
-  const color = facet.color || T.ink;
   return (
     <span
       style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 2,
-        borderRadius: 99,
-        border: `1px solid ${color}33`,
-        background: `${color}0f`,
-        flexShrink: 0,
-        maxWidth: block ? "none" : compact ? 150 : 230,
+        ...chipStyle("on"),
+        paddingRight: 4,
+        cursor: "default",
+        maxWidth: block ? "none" : compact ? 140 : 200,
         width: block ? "100%" : undefined,
       }}
     >
@@ -201,31 +244,21 @@ function Chip({ facet, onOpen, onClear, compact, block = false }) {
           ...G,
           display: "inline-flex",
           alignItems: "center",
-          gap: 5,
           minWidth: 0,
           flex: block ? 1 : undefined,
-          padding: "4px 4px 4px 9px",
           border: "none",
           background: "none",
+          padding: 0,
           cursor: "pointer",
           fontSize: 11.5,
-          color: T.ink,
-          textAlign: "left",
+          fontWeight: 600,
+          color: "inherit",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
         }}
       >
-        {facet.icon && <Icon name={facet.icon} size={11} color={color} />}
-        <span style={{ color: T.inkMid, fontWeight: 600, flexShrink: 0 }}>{facet.label}</span>
-        <span
-          style={{
-            fontWeight: 700,
-            minWidth: 0,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {facet.value}
-        </span>
+        {facet.value}
       </button>
       <button
         type="button"
@@ -235,21 +268,23 @@ function Chip({ facet, onOpen, onClear, compact, block = false }) {
           display: "inline-flex",
           alignItems: "center",
           justifyContent: "center",
-          // 22px é o alvo mínimo que ainda cabe num chip de 24px de altura;
-          // menor que isso o "×" vira uma armadilha de precisão no toque.
-          width: 22,
-          height: 22,
-          marginRight: 3,
+          // 20px é o alvo mínimo que ainda cabe num chip de 28px de altura;
+          // menor que isso o "✕" vira uma armadilha de precisão no toque.
+          width: 20,
+          height: 20,
           borderRadius: "50%",
           border: "none",
           background: "none",
-          color: T.inkLight,
+          color: "inherit",
+          opacity: 0.6,
           cursor: "pointer",
           flexShrink: 0,
           padding: 0,
+          fontSize: 10,
+          lineHeight: 1,
         }}
       >
-        <Icon name="x" size={11} color={T.inkLight} />
+        ✕
       </button>
     </span>
   );
