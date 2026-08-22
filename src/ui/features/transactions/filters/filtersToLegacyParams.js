@@ -140,6 +140,9 @@ export function filtersToLegacyParams(
     sortBy: mapSortToLegacy(state.sort),
     ...mapValueRangeToLegacy(state.valueMin, state.valueMax),
     recurring: mapRecToLegacy(state.rec),
+    // Só viaja quando é "all": "any" é o default do backend, e mandá-lo
+    // explicitamente só engorda a query e a assinatura de cache.
+    ...(state.tagMode === "all" ? { tagMatch: "all" } : {}),
     // Vai para a lista E para o summary: `buildTransactionsSummaryQuery` recebe o
     // mesmo objeto, então o card de totais e a lista não podem descrever conjuntos
     // diferentes de linhas.

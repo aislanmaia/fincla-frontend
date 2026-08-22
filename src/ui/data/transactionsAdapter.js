@@ -719,6 +719,7 @@ export function buildTransactionsQuery({
   sortBy = "date-desc",
   valueMin,
   valueMax,
+  tagMatch,
   recurring,
   settlement = "todas",
   limit = 10,
@@ -737,6 +738,7 @@ export function buildTransactionsQuery({
     ...resolveDateRange(period, customFrom, customTo),
     ...(valueMin != null ? { value_min: valueMin } : {}),
     ...(valueMax != null ? { value_max: valueMax } : {}),
+    ...(tagMatch === "all" ? { tag_match: "all" } : {}),
     ...(recurring != null ? { recurring } : {}),
     ...resolveSettlement(settlement),
     page: 1,
@@ -825,6 +827,7 @@ export function buildTransactionsSummaryQuery({
   customTo = "",
   valueMin,
   valueMax,
+  tagMatch,
   recurring,
   settlement = "todas",
 }) {
@@ -845,6 +848,7 @@ export function buildTransactionsSummaryQuery({
     // Mesmo eixo da lista, de propósito: sem isso o card de totais somaria todas as
     // linhas enquanto a lista abaixo mostra só o subconjunto filtrado, e o usuário
     // ficaria olhando um total que nenhuma linha visível fecha.
+    ...(tagMatch === "all" ? { tag_match: "all" } : {}),
     ...(recurring != null ? { recurring } : {}),
     ...resolveSettlement(settlement),
   };

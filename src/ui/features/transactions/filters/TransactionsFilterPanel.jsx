@@ -175,6 +175,8 @@ export function TransactionsFilterPanel({
             categories={categories}
             tags={filter.tags}
             setTags={filter.setTags}
+            tagMode={filter.tagMode}
+            setTagMode={filter.setTagMode}
             allTags={allTags}
             allTagsLoading={allTagsLoading}
             allTagsError={allTagsError}

@@ -7,11 +7,16 @@ import { PanelHeader } from "./PanelHeader.jsx";
 /**
  * Painel da facet "Tags".
  *
- * Já foi single-select: o backend aceitava um `tag_id` só, então marcar uma
- * segunda tag ou não mudava nada (superconjunto silencioso) ou apagava o
- * filtro inteiro (fincla-frontend#96 achado 3). Agora `tag_id` é repetível e
- * casa com qualquer uma das marcadas, então a promessa de multi-seleção da UI
- * volta a bater com o que a API entrega.
+ * Duas coisas que ele ganhou e valem o comentário:
+ *
+ * 1. **Mesma gramática do painel de Categoria** — linhas de opção com nome,
+ *    contagem e caixa de seleção. Antes eram pílulas soltas: dois padrões
+ *    diferentes para a mesma tarefa, e a contagem não cabia em nenhum.
+ * 2. **OU / E explícito.** Já foi single-select porque o backend aceitava um
+ *    `tag_id` só (fincla-frontend#96 achado 3). Agora ele aceita vários, e a
+ *    pergunta "qualquer uma ou todas juntas?" tem duas respostas legítimas que
+ *    devolvem conjuntos MUITO diferentes — deixar isso implícito faria a lista
+ *    parecer errada metade das vezes.
  */
 export function TagPanel({
   tags,
@@ -19,8 +24,11 @@ export function TagPanel({
   allTags = [],
   loading = false,
   error = false,
+  tagMode = "any",
+  setTagMode,
   counts,
   onClose,
+  compact = false,
 }) {
   const [search, setSearch] = useState("");
   const term = search.trim().toLowerCase();
@@ -30,9 +38,61 @@ export function TagPanel({
     <div>
       <PanelHeader
         title="Tags"
-        hint="Selecione uma ou mais — a lista traz as que tiverem qualquer uma delas"
+        hint="Selecione uma ou mais"
         onClose={onClose}
+        compact={compact}
       />
+
+      {/* O modo vem ANTES da lista: ele muda o significado de cada marcação
+          abaixo, então escolher depois obrigaria a reler o que já foi marcado. */}
+      {setTagMode && (
+        <div
+          role="group"
+          aria-label="Como combinar as tags"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: 3,
+            padding: 3,
+            background: T.grayLight,
+            borderRadius: 9,
+            marginBottom: 12,
+          }}
+        >
+          {[
+            ["any", "Qualquer uma (OU)"],
+            ["all", "Todas juntas (E)"],
+          ].map(([value, label]) => {
+            const on = tagMode === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setTagMode(value)}
+                aria-pressed={on}
+                style={{
+                  ...G,
+                  height: 28,
+                  borderRadius: 7,
+                  border: "none",
+                  background: on ? T.surface : "transparent",
+                  boxShadow: on ? "0 1px 2px rgba(0,0,0,.06)" : "none",
+                  color: on ? T.ink : T.inkMid,
+                  fontSize: 11.5,
+                  fontWeight: on ? 700 : 600,
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <input
         value={search}
         onChange={(e) => setSearch(e.target.value)}
@@ -41,16 +101,17 @@ export function TagPanel({
         style={{
           ...G,
           width: "100%",
-          padding: "10px 13px",
+          padding: "9px 12px",
           borderRadius: 9,
           border: `1px solid ${T.border}`,
           fontSize: 12.5,
           outline: "none",
           color: T.ink,
-          marginBottom: 14,
+          marginBottom: 12,
           boxSizing: "border-box",
         }}
       />
+
       {visible.length === 0 ? (
         <div
           style={{
@@ -63,13 +124,9 @@ export function TagPanel({
             textAlign: "center",
           }}
         >
-          {/* Achado 5: "carregando" precisa de mensagem própria — senão o
-              catálogo ainda a caminho lê como "você não tem tags nenhuma".
-              Prioridade 3: erro TAMBÉM precisa de mensagem própria — em erro
-              o chamador manda `allTags=[]` de propósito (não oferece opções
-              que sempre travariam a página ao serem clicadas), então sem este
-              ramo cairíamos em "Nenhuma tag cadastrada." de novo — o mesmo
-              falso "você não tem tags" que o achado 5 corrigiu. */}
+          {/* "Carregando" e "erro" precisam de mensagem própria: sem elas, um
+              catálogo a caminho ou uma falha de rede liam como "você não tem
+              tag nenhuma" (fincla-frontend#96 achado 5). */}
           {loading
             ? "Carregando tags…"
             : error
@@ -79,7 +136,13 @@ export function TagPanel({
                 : "Nenhuma tag encontrada."}
         </div>
       ) : (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: compact ? "1fr" : "repeat(2, minmax(0,1fr))",
+            gap: 7,
+          }}
+        >
           {visible.map((tg) => {
             const active = tags.includes(tg);
             // A facet guarda NOMES; o backend indexa a contagem por id, então a
@@ -89,8 +152,6 @@ export function TagPanel({
               <button
                 type="button"
                 key={tg}
-                // Multi-seleção: `tag_id` é repetível e casa com qualquer
-                // uma das tags marcadas.
                 onClick={() =>
                   setTags(active ? tags.filter((x) => x !== tg) : [...tags, tg])
                 }
@@ -98,33 +159,66 @@ export function TagPanel({
                 aria-label={`Tag ${tg}`}
                 style={{
                   ...G,
-                  padding: "6px 11px",
-                  borderRadius: 99,
-                  border: `1.5px solid ${active ? T.ink : T.border}`,
-                  background: active ? T.ink : T.surface,
-                  color: active ? "#fff" : T.inkMid,
+                  minHeight: 36,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "0 10px",
+                  borderRadius: 9,
+                  border: `1px solid ${active ? "#BFD3FA" : T.border}`,
+                  background: active ? T.blueLight : T.surface,
+                  color: active ? T.blue : T.inkMid,
                   fontSize: 12,
                   fontWeight: 600,
                   cursor: "pointer",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 5,
+                  textAlign: "left",
+                  // Zero continua clicável, só apagado: avisa antes do clique
+                  // que a opção levaria a uma lista vazia.
+                  opacity: n === 0 && !active ? 0.45 : 1,
                 }}
               >
-                {active && <Icon name="check" size={10} color="#fff" />}
-                #{tg}
+                <span
+                  style={{
+                    minWidth: 0,
+                    flex: 1,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  #{tg}
+                </span>
                 {n != null && (
                   <span
+                    aria-label={`${n} ${n === 1 ? "transação" : "transações"}`}
                     style={{
+                      ...G,
                       fontFamily: "'Geist Mono', ui-monospace, monospace",
                       fontSize: 11,
-                      fontWeight: 600,
-                      opacity: active ? 0.75 : 0.6,
+                      fontWeight: 500,
+                      color: active ? T.blue : T.inkGhost,
+                      flexShrink: 0,
                     }}
                   >
                     {n}
                   </span>
                 )}
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 15,
+                    height: 15,
+                    borderRadius: 4,
+                    flexShrink: 0,
+                    border: `1.5px solid ${active ? T.blue : T.border}`,
+                    background: active ? T.blue : "transparent",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {active && <Icon name="check" size={9} color="#fff" />}
+                </span>
               </button>
             );
           })}

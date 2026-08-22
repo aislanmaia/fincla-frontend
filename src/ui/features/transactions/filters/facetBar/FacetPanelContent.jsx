@@ -34,6 +34,8 @@ export function FacetPanelContent({
   // tag
   tags,
   setTags,
+  tagMode,
+  setTagMode,
   allTags,
   allTagsLoading,
   allTagsError,
@@ -115,8 +117,11 @@ export function FacetPanelContent({
           allTags={allTags}
           loading={allTagsLoading}
           error={allTagsError}
+          tagMode={tagMode}
+          setTagMode={setTagMode}
           counts={counts}
           onClose={onClose}
+          compact={compact}
         />
       );
     case "cartao":

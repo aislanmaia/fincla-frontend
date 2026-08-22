@@ -35,6 +35,7 @@ import {
 } from "../features/transactions/filters/tagCatalogResolution.js";
 import { useTransactionsData } from "../features/transactions/useTransactionsData.js";
 import { useTransactionsFacetCounts } from "../features/transactions/useTransactionsFacetCounts.js";
+import { useNarrowestFilter } from "../features/transactions/useNarrowestFilter.js";
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { TransactionsEmptyState } from "../features/transactions/TransactionsEmptyState.jsx";
 import { TransactionsStats } from "../features/transactions/TransactionsStats.jsx";
@@ -1330,6 +1331,7 @@ function TransacoesPageBody({
           valueMax: filter.valueMax,
           settlement: filter.settlement,
           rec: filter.rec,
+          tagMode: filter.tagMode,
         },
         {
           limit: visible,
@@ -1351,6 +1353,7 @@ function TransacoesPageBody({
       filter.valueMax,
       filter.settlement,
       filter.rec,
+      filter.tagMode,
       visible,
       totalCategoriesForBackend,
       resolvedTagIds,
@@ -1911,6 +1914,60 @@ function TransacoesPageBody({
     return filter.buildFacets({ categoriesById, cardsById });
   }, [filter, categoriesForFilter, cardsForFilter]);
 
+
+  /* Um recorte por filtro ativo, cada um SEM aquele filtro — é o que permite
+     dizer qual deles matou o resultado. Montado aqui porque só a página conhece
+     o estado inteiro; o hook só mede. */
+  const filtersWithoutEach = useMemo(() => {
+    if (!listFiltersActive) return {};
+    const base = {
+      type: filter.type, method: filter.method, cats: filter.cats,
+      period: filter.period, customFrom: filter.customFrom, customTo: filter.customTo,
+      sort: filter.sort, valueMin: filter.valueMin, valueMax: filter.valueMax,
+      settlement: filter.settlement, rec: filter.rec, tagMode: filter.tagMode,
+    };
+    const drops = {
+      busca: { search: "" },
+      periodo: { period: "mes", customFrom: "", customTo: "" },
+      tipo: { type: "todos", method: [] },
+      forma: { method: [] },
+      categoria: { cats: [] },
+      tag: { tagIds: [] },
+      valor: { valueMin: "", valueMax: "" },
+      recorrencia: { rec: "any" },
+      situacao: { settlement: "todas" },
+    };
+    const active = new Set(allFacets.filter((f) => f.active).map((f) => f.key));
+    if (debouncedSearch) active.add("busca");
+    const out = {};
+    for (const key of active) {
+      const { tagIds: dropTagIds, search: dropSearch, ...stateDrop } = drops[key] || {};
+      out[key] = filtersToLegacyParams(
+        { ...base, ...stateDrop },
+        {
+          limit: 1,
+          debouncedSearch: dropSearch != null ? dropSearch : debouncedSearch,
+          totalCategories: totalCategoriesForBackend,
+          tagIds: dropTagIds != null ? dropTagIds : resolvedTagIds,
+        },
+      );
+    }
+    return out;
+  }, [
+    listFiltersActive, allFacets, debouncedSearch, filter.type, filter.method,
+    filter.cats, filter.period, filter.customFrom, filter.customTo, filter.sort,
+    filter.valueMin, filter.valueMax, filter.settlement, filter.rec, filter.tagMode,
+    totalCategoriesForBackend, resolvedTagIds,
+  ]);
+
+  const facetLabels = useMemo(() => {
+    // Sem aspas aqui: o texto do vazio já envolve o rótulo em aspas curvas, e
+    // as duas juntas viravam «busca "termo"» dentro de outro par de aspas.
+    const map = { busca: `busca ${debouncedSearch}` };
+    for (const f of allFacets) map[f.key] = `${f.label}: ${f.value}`;
+    return map;
+  }, [allFacets, debouncedSearch]);
+
   const activeFacetsForSavedViews = useMemo(
     () =>
       allFacets
@@ -2360,6 +2417,16 @@ function TransacoesPageBody({
      aviso de 16 px que ocupava uma faixa própria para dizer a mesma coisa. */
   const pendingCount = txList.filter((t) => t.settleable && !t.settled).length;
 
+  const listIsEmptyUnderFilters =
+    shouldUseRealData && !tagFilterBlocked && !listLoading && !listLoadFailed &&
+    filteredCount === 0 && listFiltersActive;
+  const { narrowest } = useNarrowestFilter({
+    organizationId,
+    filtersByKey: filtersWithoutEach,
+    enabled: listIsEmptyUnderFilters,
+    labelsByKey: facetLabels,
+  });
+
   const listContent = (
     /* Um card só: o cabeçalho é o TOPO da lista, não um bloco solto acima
        dela. Enquanto estavam separados, o cabeçalho ficava quadrado e o
@@ -2443,16 +2510,35 @@ function TransacoesPageBody({
             sub={transactionsData.error || "Tente novamente em instantes."}
           />
         ) : (
+          /* Vazio SEMÂNTICO: quando dá para apontar o culpado, o texto nomeia
+             o filtro que mais restringe e o botão remove exatamente aquele.
+             "Tente ajustar os filtros" deixa a pessoa tentando às cegas qual
+             dos seis filtros ativos matou o resultado. */
+          narrowest ? (
+            <CardEmptyWithCta
+              icon="🔍"
+              iconSize={28}
+              title="Nenhuma transação neste filtro"
+              sub={`O filtro “${narrowest.label}” é o que mais restringe: sem ele ${
+                narrowest.total === 1 ? "volta 1 transação" : `voltam ${narrowest.total} transações`
+              }.`}
+              primaryLabel={`Remover “${narrowest.label}”`}
+              onPrimary={() => clearFacetAndResetPage(narrowest.key)}
+              secondaryLabel="Limpar filtros"
+              onSecondary={clearAll}
+            />
+          ) : (
           <CardEmptyWithCta
             icon="🔍"
             iconSize={28}
-            title="Nenhuma transação encontrada"
+            title={listFiltersActive ? "Nenhuma transação neste filtro" : "Nenhuma transação encontrada"}
             sub="Tente ajustar os filtros ou a busca — ou registre um lançamento novo."
             primaryLabel={listFiltersActive ? "Limpar filtros" : onNewTx ? "+ Nova transação" : undefined}
             onPrimary={listFiltersActive ? clearAll : onNewTx || undefined}
             secondaryLabel={listFiltersActive && onNewTx ? "+ Nova transação" : undefined}
             onSecondary={listFiltersActive && onNewTx ? onNewTx : undefined}
           />
+          )
         )
       ) : (
         /* Lista contínua (padrão) ou agrupada por data — a preferência é do

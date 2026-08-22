@@ -38,6 +38,8 @@ export const DEFAULT_FILTER_STATE = Object.freeze({
   method: [],
   cats: [],
   tags: [],
+  // "any" = a transação tem QUALQUER uma das tags; "all" = tem TODAS.
+  tagMode: "any",
   cardSel: [],
   rec: "any",
   valueMin: "",
@@ -139,7 +141,7 @@ export function useTransactionsFilterState({
         case "categoria":
           return { ...prev, cats: [] };
         case "tag":
-          return { ...prev, tags: [] };
+          return { ...prev, tags: [], tagMode: DEFAULT_FILTER_STATE.tagMode };
         case "cartao":
           return { ...prev, cardSel: [] };
         case "valor":
@@ -224,7 +226,10 @@ export function useTransactionsFilterState({
               ? "—"
               : state.tags.length === 1
               ? `#${state.tags[0]}`
-              : `${state.tags.length} tags`,
+              // O modo entra no rótulo: "2 tags" não diz se a lista traz o que
+              // tem qualquer uma delas ou só o que tem as duas — conjuntos
+              // bem diferentes sob o mesmo texto.
+              : `${state.tags.length} tags (${state.tagMode === "all" ? "E" : "OU"})`,
           icon: "tag",
           active: state.tags.length > 0,
           multi: state.tags.length,
@@ -299,6 +304,7 @@ export function useTransactionsFilterState({
     setMethod: (v) => setField("method", v),
     setCats,
     setTags,
+    setTagMode: (v) => setField("tagMode", v),
     setCardSel: (v) => setField("cardSel", v),
     setRec: (v) => setField("rec", v),
     setSettlement: (v) => setField("settlement", v),
