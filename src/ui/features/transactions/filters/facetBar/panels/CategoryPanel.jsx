@@ -30,7 +30,11 @@ export function CategoryPanel({
         onClose={onClose}
         compact={compact}
       />
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+      {/* Quebra em duas linhas quando estreito: no painel ancorado o pane tem
+          ~250 px, e busca + Limpar + Todas lado a lado cortavam o texto dos
+          botões. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14,
+        flexWrap: "wrap" }}>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -38,7 +42,8 @@ export function CategoryPanel({
           aria-label="Buscar categoria"
           style={{
             ...G,
-            flex: 1,
+            flex: "1 1 140px",
+            minWidth: 0,
             padding: "9px 12px",
             borderRadius: 9,
             border: `1px solid ${T.border}`,

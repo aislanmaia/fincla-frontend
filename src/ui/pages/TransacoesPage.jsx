@@ -40,6 +40,7 @@ import { TransactionsEmptyState } from "../features/transactions/TransactionsEmp
 import { TransactionsStats } from "../features/transactions/TransactionsStats.jsx";
 import { UndoToast } from "../features/transactions/UndoToast.jsx";
 import { TransactionsFilterChips } from "../features/transactions/filters/TransactionsFilterChips.jsx";
+import { TransactionsFilterPanel } from "../features/transactions/filters/TransactionsFilterPanel.jsx";
 import { SavedViewsChip } from "../features/transactions/filters/savedViews/SavedViewsChip.jsx";
 import { useFilterHistory } from "../features/transactions/filters/useFilterHistory.js";
 import {
@@ -396,12 +397,15 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
     "auto",
     "1fr",
     xwide ? "150px" : null,
-    // A pílula de categoria é CLICÁVEL, então não pode ser encoberta pelas
-    // ações rápidas. Elas ganham coluna própria, reservada mesmo vazia: se ela
-    // nascesse no hover, a linha inteira se reorganizaria embaixo do ponteiro.
-    quickActions ? (dense ? "96px" : "112px") : null,
     dense ? "88px" : "100px",
-    "18px",
+    // Situação: com largura, o anel ganha o rótulo. Só o anel obriga a decorar
+    // o que ele significa — e há espaço de sobra aqui.
+    wide ? "76px" : "18px",
+    // Ações rápidas DEPOIS do valor, não antes: como coluna intermediária elas
+    // empurravam o valor para a direita, e o valor é a âncora vertical que o
+    // olho segue ao varrer a lista. Reservada mesmo vazia, para nada se mover
+    // quando elas aparecem no hover.
+    quickActions ? (dense ? "96px" : "112px") : null,
     "14px",
   ].filter(Boolean).join(" ");
 
@@ -575,6 +579,27 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
         </div>
       )}
 
+
+      <div style={{ ...G, fontFamily:"'Geist Mono',monospace",
+        fontSize: dense ? 12 : 13.5, fontWeight:700, textAlign:"right",
+        color: isRefund ? T.green : (isReceita ? T.green : T.ink) }}>
+        {isReceita ? "+" : "−"}{fmtBRL(tx.val)}
+      </div>
+
+      {/* Situação: anel vazado, não ampulheta. O lançamento não está
+          "processando" — ele existe e só ainda não entrou no saldo. */}
+      {statusRing ? (
+        <Tip label="Ainda não entrou no saldo da conta">
+          <span style={{ ...G, color:T.amber, display:"flex", alignItems:"center",
+            gap:5, fontSize:10.5, fontWeight:700, whiteSpace:"nowrap",
+            justifyContent: wide ? "flex-end" : "center" }}>
+            <i aria-hidden="true" style={{ display:"inline-block", width:8, height:8,
+              border:"1.75px solid currentColor", borderRadius:"50%", boxSizing:"border-box" }}/>
+            <span style={wide ? undefined : SR_ONLY}>A pagar</span>
+          </span>
+        </Tip>
+      ) : <span />}
+
       {/* Ações rápidas em coluna PRÓPRIA, reservada mesmo vazia. */}
       {quickActions && (
         <div className="fincla-quick" style={{ justifyContent:"flex-end" }}>
@@ -610,26 +635,6 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
           </QuickAction>
         </div>
       )}
-
-      <div style={{ ...G, fontFamily:"'Geist Mono',monospace",
-        fontSize: dense ? 12 : 13.5, fontWeight:700, textAlign:"right",
-        color: isRefund ? T.green : (isReceita ? T.green : T.ink) }}>
-        {isReceita ? "+" : "−"}{fmtBRL(tx.val)}
-      </div>
-
-      {/* Situação: anel vazado, não ampulheta. O lançamento não está
-          "processando" — ele existe e só ainda não entrou no saldo. */}
-      {statusRing ? (
-        <Tip label="Ainda não entrou no saldo da conta">
-          <span style={{ ...G, color:T.amber, display:"flex", alignItems:"center",
-            gap:5, fontSize:10.5, fontWeight:700, whiteSpace:"nowrap",
-            justifyContent:"center" }}>
-            <i aria-hidden="true" style={{ display:"inline-block", width:8, height:8,
-              border:"1.75px solid currentColor", borderRadius:"50%", boxSizing:"border-box" }}/>
-            <span style={SR_ONLY}>A pagar</span>
-          </span>
-        </Tip>
-      ) : <span />}
 
       <span style={{ display:"flex", justifyContent:"center", color: isSelected ? catCol : T.inkGhost,
         transition:"color 0.12s" }}>
@@ -1050,6 +1055,10 @@ function TransacoesPageBody({
   );
   const [compactDesktopFiltersOpen, setCompactDesktopFiltersOpen] = useState(false);
   const [wideDesktopFiltersOpen, setWideDesktopFiltersOpen] = useState(false);
+  /* Qual faceta o painel mostra. Começa em "Período" porque é a que mais muda
+     e a única sempre ativa; abrir em "Ativos" com a lista limpa daria uma tela
+     vazia como primeira impressão do painel. */
+  const [panelFacet, setPanelFacet] = useState("periodo");
   const [statsExpanded, setStatsExpanded] = useState(false);
   const [listPrefs, setListPrefsState] = useState(() => readListPrefs());
   const setListPrefs = useCallback((next) => {
@@ -1958,6 +1967,7 @@ function TransacoesPageBody({
   const [requestOpenFacet, setRequestOpenFacet] = useState(null);
   const openFacetFromChip = useCallback((key) => {
     setRequestOpenFacet((prev) => ({ key, nonce: (prev?.nonce ?? 0) + 1 }));
+    setPanelFacet(key === "busca" ? "ativos" : key);
     // No mobile e no desktop compacto os painéis vivem atrás do botão
     // "Filtros"; abrir a facet sem abrir o container deixaria o clique sem
     // efeito visível nenhum.
@@ -2795,9 +2805,6 @@ function TransacoesPageBody({
             barChips={commandBarChips}
             barTrailing={listPrefsButtons}
           />
-          {wideDesktopFiltersOpen && (
-            <TransactionsFilterBar {...filterBarCommonProps} hideSearch />
-          )}
         </>
       )}
 
@@ -2931,6 +2938,30 @@ function TransacoesPageBody({
         >
           {listContent}
         </div>
+        {/* Ancorado: a lista COMPRIME em vez de o painel flutuar por cima dela.
+            É o que permite julgar o filtro pelo resultado — a lista continua
+            visível e atualizando enquanto se escolhe. */}
+        {!isMobile && wideDesktopFiltersOpen && (
+          <div style={{ flex:"none", width:396, marginLeft:14, minHeight:0 }}>
+            <TransactionsFilterPanel
+              filter={filter}
+              facet={panelFacet}
+              onFacetChange={setPanelFacet}
+              categories={categoriesForFilter}
+              cards={cardsForFilter}
+              allTags={allTagsForFilter}
+              allTagsLoading={shouldUseRealData && tagCatalog.loading}
+              allTagsError={shouldUseRealData && Boolean(tagCatalog.error)}
+              facetCounts={facetCounts}
+              activeFacets={allFacets.filter((f) => f.active)}
+              onClearFacet={clearFacetAndResetPage}
+              onClearAll={clearAll}
+              onApply={() => setWideDesktopFiltersOpen(false)}
+              resultCount={filteredCount}
+              resultsLoading={listLoading}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
