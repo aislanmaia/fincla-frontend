@@ -41,6 +41,10 @@ import { Icon } from "./shared/Icon.jsx";
  *  - filteredCount: total de transações visíveis (CTA "Ver N transações").
  *  - resultsLoading: desabilita CTA enquanto a lista recarrega (ex.: debounce busca).
  *  - onAfterApply: callback após dismiss (ex.: scroll suave para a lista).
+ *  - facetCounts: retorno de `useTransactionsFacetCounts` — números por opção
+ *    dentro dos painéis. Opcional: sem ele os painéis só não mostram contagem.
+ *  - onExpandedChange: avisa qual facet está aberta (`null` = nenhuma). É o que
+ *    permite ao consumidor só pagar a busca de contagens com o painel aberto.
  */
 export function TransactionsFilterBar({
   filter,
@@ -64,6 +68,8 @@ export function TransactionsFilterBar({
   onSaveViewUpdate,
   saveViewUpdateLabel = "",
   filterToolbarActive,
+  facetCounts,
+  onExpandedChange,
 }) {
   const [expanded, setExpanded] = useState(null);
   const panelRef = useRef(null);
@@ -72,6 +78,10 @@ export function TransactionsFilterBar({
     setExpanded(null);
     if (typeof onAfterApply === "function") onAfterApply();
   }, [onAfterApply]);
+
+  useEffect(() => {
+    if (typeof onExpandedChange === "function") onExpandedChange(expanded);
+  }, [expanded, onExpandedChange]);
 
   // Fecha o painel inline quando troca de saved view ativa
   useEffect(() => {
@@ -303,6 +313,7 @@ export function TransactionsFilterBar({
                 // situação (liquidação)
                 settlement={filter.settlement}
                 setSettlement={filter.setSettlement}
+                counts={facetCounts}
                 // chrome
                 onClose={dismissPanel}
                 onApply={dismissPanel}

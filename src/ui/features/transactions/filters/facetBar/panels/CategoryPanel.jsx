@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { T } from "../../../../../tokens";
 import { G } from "../../../../../typography";
 import { Icon } from "../../shared/Icon.jsx";
+import { FacetCount } from "../../shared/FacetCount.jsx";
 import { PanelHeader } from "./PanelHeader.jsx";
 
 /**
@@ -12,6 +13,7 @@ export function CategoryPanel({
   cats,
   setCats,
   categories = [],
+  counts,
   onClose,
   compact = false,
 }) {
@@ -95,6 +97,10 @@ export function CategoryPanel({
         >
           {filtered.map((c) => {
             const active = cats.includes(c.id);
+            // As categorias da UI são tags (id = UUID), então quem conta é a
+            // facet `tag` do backend — a facet `category` conta a coluna de
+            // texto legada, que não é o que estes botões filtram.
+            const n = counts?.optionCount("tag", c.id);
             return (
               <button
                 type="button"
@@ -148,6 +154,7 @@ export function CategoryPanel({
                     {c.label}
                   </div>
                 </div>
+                <FacetCount n={n} active={active} />
                 <div
                   style={{
                     width: 16,

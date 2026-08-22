@@ -94,7 +94,7 @@ describe("fincla-frontend#80 — facet Situação chega como `settled` na chamad
   });
 });
 
-describe("fincla-frontend#78 — facet Tags chega como `tag_id` na chamada HTTP", () => {
+describe("facet Tags chega como `tag_id` na chamada HTTP", () => {
   it("tag selecionada (id já resolvido pelo chamador) -> tag_id na chamada real", async () => {
     listTransactions.mockResolvedValue(EMPTY_PAGE);
     getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
@@ -107,10 +107,10 @@ describe("fincla-frontend#78 — facet Tags chega como `tag_id` na chamada HTTP"
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(listTransactions).toHaveBeenCalledWith(
-      expect.objectContaining({ organization_id: ORG, tag_id: TAG_ID }),
+      expect.objectContaining({ organization_id: ORG, tag_id: [TAG_ID] }),
     );
     expect(getTransactionsSummary).toHaveBeenCalledWith(
-      expect.objectContaining({ tag_id: TAG_ID }),
+      expect.objectContaining({ tag_id: [TAG_ID] }),
     );
   });
 
@@ -127,7 +127,7 @@ describe("fincla-frontend#78 — facet Tags chega como `tag_id` na chamada HTTP"
     expect(sentParams).not.toHaveProperty("category");
   });
 
-  it("categoria selecionada continua ganhando de tag_id (limitação: backend só aceita um)", async () => {
+  it("categoria e tag selecionadas viajam JUNTAS — o backend faz AND entre elas", async () => {
     listTransactions.mockResolvedValue(EMPTY_PAGE);
     getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
 
@@ -139,8 +139,25 @@ describe("fincla-frontend#78 — facet Tags chega como `tag_id` na chamada HTTP"
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
+    // Os dois são UUID, então caem no mesmo param repetido: a lista traz o que
+    // tiver QUALQUER uma das duas tags. Antes só `CAT_ID` era enviado e o chip
+    // da tag ficava aceso filtrando nada.
     expect(listTransactions).toHaveBeenCalledWith(
-      expect.objectContaining({ tag_id: CAT_ID }),
+      expect.objectContaining({ tag_id: [CAT_ID, TAG_ID] }),
+    );
+  });
+
+  it("manda TODAS as tags resolvidas, não só a primeira", async () => {
+    listTransactions.mockResolvedValue(EMPTY_PAGE);
+    getTransactionsSummary.mockResolvedValue(EMPTY_SUMMARY);
+
+    const SECOND = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const { result } = renderWithFilters(BASE_STATE, { tagIds: [TAG_ID, SECOND] });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(listTransactions).toHaveBeenCalledWith(
+      expect.objectContaining({ tag_id: [TAG_ID, SECOND] }),
     );
   });
 });

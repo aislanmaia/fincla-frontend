@@ -28,11 +28,12 @@ import { useTransactionsTagCatalog } from "../features/transactions/filters/useT
 import {
   buildTagOptions,
   isTagFilterBlocked,
-  resolveTagFilterStatus,
+  resolveTagFilterStatuses,
   tagFilterStatusMessage,
   tagOptionsToDisplayMap,
 } from "../features/transactions/filters/tagCatalogResolution.js";
 import { useTransactionsData } from "../features/transactions/useTransactionsData.js";
+import { useTransactionsFacetCounts } from "../features/transactions/useTransactionsFacetCounts.js";
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { TransactionsEmptyState } from "../features/transactions/TransactionsEmptyState.jsx";
 import { TransactionsStats } from "../features/transactions/TransactionsStats.jsx";
@@ -1123,14 +1124,14 @@ function TransacoesPageBody({
     [tagCatalog.rows, categoryLabelById],
   );
   const tagDisplayToId = useMemo(() => tagOptionsToDisplayMap(tagOptions), [tagOptions]);
-  // A facet virou single-select (achado 3: "todas as tags marcadas" não é
-  // entregável — o backend só aceita um `tag_id` — então só existe UM rótulo
-  // selecionado para resolver, sem a ambiguidade de "qual dos N tentar").
+  // A facet voltou a ser multi agora que `tag_id` é repetível: resolvemos a
+  // seleção INTEIRA, e se qualquer rótulo falhar o conjunto todo bloqueia —
+  // ver `resolveTagFilterStatuses` para o porquê de não mandar o subconjunto.
   const tagFilterStatus = useMemo(
     () =>
       shouldUseRealData
-        ? resolveTagFilterStatus({
-            selectedLabel: filter.tags[0] ?? null,
+        ? resolveTagFilterStatuses({
+            selectedLabels: filter.tags,
             // fincla-frontend#101: `tagDisplayToId` (via `tagOptions`) depende
             // de `categoryLabelById` — enquanto CATEGORIAS ainda carregam,
             // `categoryLabelById` está vazio e uma tag com nome colidente
@@ -1159,7 +1160,7 @@ function TransacoesPageBody({
     ],
   );
   const resolvedTagIds = useMemo(
-    () => (tagFilterStatus.kind === "resolved" ? [tagFilterStatus.id] : []),
+    () => (tagFilterStatus.kind === "resolved" ? tagFilterStatus.ids : []),
     [tagFilterStatus],
   );
   // Achado 4: um rótulo selecionado que não resolve para id NUNCA pode virar
@@ -1182,6 +1183,7 @@ function TransacoesPageBody({
           valueMin: filter.valueMin,
           valueMax: filter.valueMax,
           settlement: filter.settlement,
+          rec: filter.rec,
         },
         {
           limit: visible,
@@ -1202,6 +1204,7 @@ function TransacoesPageBody({
       filter.valueMin,
       filter.valueMax,
       filter.settlement,
+      filter.rec,
       visible,
       totalCategoriesForBackend,
       resolvedTagIds,
@@ -1221,6 +1224,17 @@ function TransacoesPageBody({
     // também dispara outros efeitos da página).
     refreshToken: `${transactionsRefreshToken}:${loadMoreRetryToken}`,
   });
+  // Contagens por opção do painel de filtro. `expandedFacet` mantém a busca
+  // preguiçosa: quem só quer ver a lista não paga uma requisição a mais por um
+  // número que nunca vai aparecer na tela.
+  const [expandedFacet, setExpandedFacet] = useState(null);
+  const facetCounts = useTransactionsFacetCounts({
+    organizationId,
+    filters: transactionsFilters,
+    enabled: shouldUseRealData && !tagFilterBlocked && expandedFacet != null,
+    refreshToken: transactionsRefreshToken,
+  });
+
   const txList = shouldUseRealData
     ? transactionsData.transactions
     : resolveLocalData({ dataMode, mockData: mockTxList, emptyData: [] });
@@ -1826,6 +1840,8 @@ function TransacoesPageBody({
       canUpdateSavedView && !saveViewFormOpen ? () => openSaveViewForm("update") : undefined,
     saveViewUpdateLabel: activeSavedView?.label ?? "",
     filterToolbarActive: listFiltersActive,
+    facetCounts,
+    onExpandedChange: setExpandedFacet,
     ...filterBarApplyProps,
   };
 

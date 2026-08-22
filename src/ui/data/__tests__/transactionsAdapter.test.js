@@ -244,7 +244,7 @@ describe("transactionsAdapter", () => {
       organization_id: "org-1",
       description: "uber",
       type: "expense",
-      category: "Alimentação",
+      category: ["Alimentação"],
       payment_method: ["credit_card"],
       date_start: "2026-03-01",
       date_end: "2026-03-31",
@@ -286,7 +286,7 @@ describe("transactionsAdapter", () => {
     ).toEqual(
       expect.objectContaining({
         organization_id: "org-1",
-        tag_id: tagId,
+        tag_id: [tagId],
       }),
     );
     expect(
@@ -296,8 +296,56 @@ describe("transactionsAdapter", () => {
       }),
     ).toEqual({
       organization_id: "org-1",
-      tag_id: tagId,
+      tag_id: [tagId],
     });
+  });
+
+  it("manda a seleção INTEIRA de categorias, não só a primeira", () => {
+    // O backend passou a aceitar `category` repetido casando com qualquer um
+    // dos valores. Antes só `cats[0]` chegava à query e as outras marcações
+    // ficavam acesas na tela filtrando nada.
+    expect(
+      buildTransactionsQuery({
+        organizationId: "org-1",
+        filterCat: ["Alimentação", "Transporte"],
+        limit: 10,
+      }),
+    ).toEqual(
+      expect.objectContaining({ category: ["Alimentação", "Transporte"] }),
+    );
+  });
+
+  it("separa nomes de categoria e UUIDs de tag em params distintos", () => {
+    // Os dois params combinam por AND no backend, então categoria e tag podem
+    // estar ativas ao mesmo tempo — o que aposentou a exclusão mútua na UI.
+    const tagId = "123e4567-e89b-12d3-a456-426614174000";
+    expect(
+      buildTransactionsQuery({
+        organizationId: "org-1",
+        filterCat: ["Alimentação", tagId],
+        limit: 10,
+      }),
+    ).toEqual(
+      expect.objectContaining({ category: ["Alimentação"], tag_id: [tagId] }),
+    );
+  });
+
+  it("trata 'todas' e vazios como ausência de filtro", () => {
+    expect(buildTransactionsSummaryQuery({ organizationId: "org-1", filterCat: [] })).toEqual({
+      organization_id: "org-1",
+    });
+    expect(
+      buildTransactionsSummaryQuery({ organizationId: "org-1", filterCat: ["todas"] }),
+    ).toEqual({ organization_id: "org-1" });
+  });
+
+  it("recurring vai para a query da lista e do summary", () => {
+    expect(
+      buildTransactionsQuery({ organizationId: "org-1", recurring: true, limit: 10 }),
+    ).toEqual(expect.objectContaining({ recurring: true }));
+    expect(
+      buildTransactionsSummaryQuery({ organizationId: "org-1", recurring: false }),
+    ).toEqual({ organization_id: "org-1", recurring: false });
   });
 
   it("período Este mês: do dia 1 ao último dia do mês civil (não só até hoje)", () => {
@@ -352,7 +400,7 @@ describe("transactionsAdapter", () => {
       organization_id: "org-1",
       description: "freela",
       type: "income",
-      category: "Receita",
+      category: ["Receita"],
       payment_method: ["pix"],
       date_start: "2026-03-01",
       date_end: "2026-03-31",

@@ -2,6 +2,7 @@ import React from "react";
 import { T } from "../../../../../tokens";
 import { G } from "../../../../../typography";
 import { Icon } from "../../shared/Icon.jsx";
+import { FacetCount } from "../../shared/FacetCount.jsx";
 import { PanelHeader } from "./PanelHeader.jsx";
 
 /**
@@ -29,7 +30,14 @@ const OPTIONS = [
   },
 ];
 
-export function SettlementPanel({ settlement, setSettlement, onClose, onApply, compact = false }) {
+export function SettlementPanel({
+  settlement,
+  setSettlement,
+  counts,
+  onClose,
+  onApply,
+  compact = false,
+}) {
   const select = (value) => {
     setSettlement(value);
     if (typeof onApply === "function") onApply();
@@ -53,6 +61,10 @@ export function SettlementPanel({ settlement, setSettlement, onClose, onApply, c
         {OPTIONS.map((o) => {
           const active = settlement === o.v;
           const col = o.color || T.ink;
+          const n =
+            o.v === "todas"
+              ? (counts?.total ?? null)
+              : counts?.binaryCount("settlement", o.v === "pagas" ? "paid" : "pending");
           return (
             <button
               type="button"
@@ -90,7 +102,10 @@ export function SettlementPanel({ settlement, setSettlement, onClose, onApply, c
                 <Icon name={o.icon} size={13} color={active ? "#fff" : col} />
               </div>
               <div>
-                <div style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink }}>{o.l}</div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                  <div style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink }}>{o.l}</div>
+                  <FacetCount n={n} active={active} />
+                </div>
                 <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 2 }}>{o.hint}</div>
               </div>
             </button>

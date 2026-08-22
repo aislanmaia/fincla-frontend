@@ -51,6 +51,8 @@ export function FacetPanelContent({
   setRec,
   settlement,
   setSettlement,
+  // contagens por opção (GET /v1/transactions/facets) — opcional
+  counts,
   // chrome
   onClose,
   onApply,
@@ -73,7 +75,14 @@ export function FacetPanelContent({
       );
     case "tipo":
       return (
-        <TypePanel type={type} setType={setType} onClose={onClose} onApply={onApply} compact={compact} />
+        <TypePanel
+          type={type}
+          setType={setType}
+          counts={counts}
+          onClose={onClose}
+          onApply={onApply}
+          compact={compact}
+        />
       );
     case "forma":
       return (
@@ -81,6 +90,7 @@ export function FacetPanelContent({
           type={type}
           method={method}
           setMethod={setMethod}
+          counts={counts}
           onClose={onClose}
           onApply={onApply}
           compact={compact}
@@ -92,6 +102,7 @@ export function FacetPanelContent({
           cats={cats}
           setCats={setCats}
           categories={categories}
+          counts={counts}
           onClose={onClose}
           compact={compact}
         />
@@ -104,6 +115,7 @@ export function FacetPanelContent({
           allTags={allTags}
           loading={allTagsLoading}
           error={allTagsError}
+          counts={counts}
           onClose={onClose}
         />
       );
@@ -124,19 +136,28 @@ export function FacetPanelContent({
           valueMax={valueMax}
           setValueMin={setValueMin}
           setValueMax={setValueMax}
+          counts={counts}
           onClose={onClose}
           compact={compact}
         />
       );
     case "recorrencia":
       return (
-        <RecPanel rec={rec} setRec={setRec} onClose={onClose} onApply={onApply} compact={compact} />
+        <RecPanel
+          rec={rec}
+          setRec={setRec}
+          counts={counts}
+          onClose={onClose}
+          onApply={onApply}
+          compact={compact}
+        />
       );
     case "situacao":
       return (
         <SettlementPanel
           settlement={settlement}
           setSettlement={setSettlement}
+          counts={counts}
           onClose={onClose}
           onApply={onApply}
           compact={compact}

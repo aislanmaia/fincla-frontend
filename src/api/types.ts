@@ -558,7 +558,8 @@ export type SortOrder = 'asc' | 'desc';
 export interface ListTransactionsQuery {
   organization_id: string;
   type?: 'income' | 'expense' | 'refund';
-  category?: string;
+  /** Um valor, ou vários (casa com qualquer um) — serializado como param repetido. */
+  category?: string | string[];
   /** Um valor, ou vários (casa com qualquer um) — serializado como param repetido. */
   payment_method?: string | string[];
   description?: string;
@@ -569,7 +570,11 @@ export interface ListTransactionsQuery {
    * de totais soma um conjunto de linhas e a lista mostra outro.
    */
   settled?: boolean;
-  tag_id?: string;
+  /**
+   * Um valor, ou vários (casa com qualquer um). Combina com `category` por AND,
+   * então as duas facets podem estar ativas ao mesmo tempo.
+   */
+  tag_id?: string | string[];
   date_start?: string;
   date_end?: string;
   value_min?: number;
@@ -579,6 +584,72 @@ export interface ListTransactionsQuery {
   limit?: number;
   sort_by?: SortByField;
   sort_order?: SortOrder;
+}
+
+/** Um nome de facet aceito por `GET /v1/transactions/facets`. */
+export type TransactionFacetName =
+  | 'type'
+  | 'category'
+  | 'tag'
+  | 'payment_method'
+  | 'settlement'
+  | 'recurring'
+  | 'value_bucket';
+
+/** Uma opção selecionável de uma facet, com quantas transações ela traria. */
+export interface FacetOption {
+  value: string;
+  label: string | null;
+  count: number;
+}
+
+/**
+ * Uma faixa do histograma de valor. As DUAS pontas são inclusivas — é
+ * exatamente o par `value_min`/`value_max` que um clique na barra manda de
+ * volta. `from`/`to` nulos são faixas abertas, e o backend devolve a chave
+ * com `null` de propósito: sem ela, `if (b.from !== undefined)` mandaria
+ * `value_min=undefined` e a barra traria o conjunto errado.
+ */
+export interface FacetValueBucket {
+  from: number | null;
+  to: number | null;
+  count: number;
+}
+
+/** Uma facet de exatamente dois desfechos. */
+export interface FacetBinary {
+  paid?: number | null;
+  pending?: number | null;
+  yes?: number | null;
+  no?: number | null;
+}
+
+export interface TransactionsFacetsQuery
+  extends Omit<ListTransactionsQuery, 'page' | 'limit' | 'sort_by' | 'sort_order'> {
+  /** Facets a calcular. Omita para receber todas. */
+  facets?: TransactionFacetName[];
+}
+
+/**
+ * Contagens por opção do painel de filtro.
+ *
+ * Semântica de drill-down: a contagem de cada opção é «quantas linhas eu teria
+ * se marcasse ESTA opção», com todos os OUTROS filtros aplicados. Consequência
+ * que a UI precisa respeitar: as opções de uma facet só somam `total` quando o
+ * filtro DELA está inativo — com um filtro próprio ativo, as contagens são
+ * hipóteses, não uma partição.
+ *
+ * Facets não pedidas voltam como `null`, não ausentes.
+ */
+export interface TransactionsFacetsResponse {
+  type: FacetOption[] | null;
+  category: FacetOption[] | null;
+  tag: FacetOption[] | null;
+  payment_method: FacetOption[] | null;
+  settlement: FacetBinary | null;
+  recurring: FacetBinary | null;
+  value_bucket: FacetValueBucket[] | null;
+  total: number;
 }
 
 export interface PaginationMetadata {

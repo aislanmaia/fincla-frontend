@@ -14,6 +14,8 @@ import type {
   PaginatedTransactionsResponse,
   TransactionsSummaryQuery,
   TransactionsSummaryResponse,
+  TransactionsFacetsQuery,
+  TransactionsFacetsResponse,
 } from './types';
 
 /**
@@ -78,6 +80,25 @@ export const getTransactionsSummary = async (
 ): Promise<TransactionsSummaryResponse> => {
   const response = await apiClient.get<TransactionsSummaryResponse>(
     '/transactions/summary',
+    { params: filters, paramsSerializer: repeatArrayParams }
+  );
+  return response.data;
+};
+
+/**
+ * Contagens por opção do painel de filtro — «quantas linhas eu teria se
+ * marcasse esta opção», com todos os OUTROS filtros aplicados.
+ *
+ * Recebe os MESMOS filtros da lista (menos paginação e ordenação): é isso que
+ * faz `total` bater com o total da listagem na tela. Ver
+ * `fincla-api/docs/FRONTEND_API_GUIDE.md` para a semântica de drill-down e
+ * para a ressalva de que uma facet com filtro próprio ativo não particiona.
+ */
+export const getTransactionsFacets = async (
+  filters: TransactionsFacetsQuery
+): Promise<TransactionsFacetsResponse> => {
+  const response = await apiClient.get<TransactionsFacetsResponse>(
+    '/transactions/facets',
     { params: filters, paramsSerializer: repeatArrayParams }
   );
   return response.data;

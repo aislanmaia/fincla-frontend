@@ -2,6 +2,7 @@ import React from "react";
 import { T } from "../../../../../tokens";
 import { G } from "../../../../../typography";
 import { Icon } from "../../shared/Icon.jsx";
+import { FacetCount } from "../../shared/FacetCount.jsx";
 import { PanelHeader } from "./PanelHeader.jsx";
 
 const OPTIONS = [
@@ -10,7 +11,7 @@ const OPTIONS = [
   { v: "despesa", l: "Despesa", hint: "Saídas e gastos", icon: "trending-down", color: T.red },
 ];
 
-export function TypePanel({ type, setType, onClose, onApply, compact = false }) {
+export function TypePanel({ type, setType, counts, onClose, onApply, compact = false }) {
   const select = (value) => {
     setType(value);
     if (typeof onApply === "function") onApply();
@@ -28,6 +29,13 @@ export function TypePanel({ type, setType, onClose, onApply, compact = false }) 
       >
         {OPTIONS.map((o) => {
           const active = type === o.v;
+          // "Todos" é a ausência de filtro, então sua contagem é o total do
+          // recorte atual — não a soma das outras opções, que só particionam
+          // enquanto o filtro de tipo está inativo.
+          const n =
+            o.v === "todos"
+              ? (counts?.total ?? null)
+              : counts?.optionCount("type", o.v === "receita" ? "income" : "expense");
           return (
             <button
               type="button"
@@ -66,7 +74,10 @@ export function TypePanel({ type, setType, onClose, onApply, compact = false }) 
                 <Icon name={o.icon} size={compact ? 13 : 15} color={active ? "#fff" : o.color} />
               </div>
               <div style={{ flex: compact ? 1 : "initial" }}>
-                <div style={{ ...G, fontSize: 14, fontWeight: 700, color: T.ink }}>{o.l}</div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                  <div style={{ ...G, fontSize: 14, fontWeight: 700, color: T.ink }}>{o.l}</div>
+                  <FacetCount n={n} active={active} />
+                </div>
                 <div style={{ ...G, fontSize: 11.5, color: T.inkLight, marginTop: 2 }}>{o.hint}</div>
               </div>
               {active && (

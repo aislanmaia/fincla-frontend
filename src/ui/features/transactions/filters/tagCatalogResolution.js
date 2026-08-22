@@ -131,6 +131,39 @@ export function resolveTagFilterStatus({ selectedLabel, loading, error, displayT
   return { kind: "unresolved", label };
 }
 
+/**
+ * Mesma resolução, para a seleção INTEIRA — a facet voltou a ser multi agora
+ * que `tag_id` é repetível no backend.
+ *
+ * Regra de agregação, e o motivo dela: se QUALQUER rótulo selecionado não
+ * resolve, o conjunto todo bloqueia. Mandar só o subconjunto que resolveu
+ * traria um SUPERCONJUNTO do que a tela promete (os params repetidos casam com
+ * qualquer uma das tags), com todos os chips acesos — exatamente o falso
+ * "filtrado" que o achado 4 corrigiu, só que mais difícil de perceber, porque
+ * a lista pareceria plausível.
+ *
+ * A precedência loading > error > unresolved mantém a mensagem mais
+ * informativa: "ainda carregando" é temporário e não deve ser reportado como
+ * "tag não encontrada".
+ *
+ * @returns {{kind: string, ids?: string[], label?: string}}
+ */
+export function resolveTagFilterStatuses({ selectedLabels, loading, error, displayToId }) {
+  const labels = (Array.isArray(selectedLabels) ? selectedLabels : [])
+    .map(normalizeForCompare)
+    .filter(Boolean);
+  if (labels.length === 0) return { kind: "none", ids: [] };
+
+  const statuses = labels.map((label) =>
+    resolveTagFilterStatus({ selectedLabel: label, loading, error, displayToId }),
+  );
+  for (const kind of ["loading", "error", "unresolved"]) {
+    const hit = statuses.find((st) => st.kind === kind);
+    if (hit) return hit;
+  }
+  return { kind: "resolved", ids: statuses.map((st) => st.id) };
+}
+
 /** A busca deve ficar em espera (fail-closed) em vez de rodar sem o filtro. */
 export function isTagFilterBlocked(status) {
   return status.kind === "loading" || status.kind === "error" || status.kind === "unresolved";

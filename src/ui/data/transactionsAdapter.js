@@ -4,6 +4,7 @@ import {
   createTransaction,
   getTransactionsSummary,
   deleteTransaction,
+  getTransactionsFacets,
   listTransactions,
   settleTransaction,
   unsettleTransaction,
@@ -682,6 +683,30 @@ function resolveSettlement(settlement) {
   return {};
 }
 
+/**
+ * Traduz a seleção de categoria/tag da UI nos params do backend.
+ *
+ * Aceita um escalar ou uma lista. Cada item vira `tag_id` quando é UUID e
+ * `category` quando é um nome — os dois params são repetíveis, casam com
+ * QUALQUER valor dentro da mesma chave (OR) e se combinam entre chaves por AND.
+ * Foi isso que aposentou o slot único: antes só o primeiro item da seleção
+ * chegava à query, e as outras marcações ficavam acesas na tela filtrando nada.
+ *
+ * `"todas"` (e vazio) significam "sem filtro".
+ */
+function resolveCategoryParams(filterCat) {
+  const items = (Array.isArray(filterCat) ? filterCat : [filterCat])
+    .filter((v) => v != null && v !== "" && v !== "todas")
+    .map(String);
+  if (items.length === 0) return {};
+  const tagIds = items.filter(isUuidString);
+  const categories = items.filter((v) => !isUuidString(v));
+  return {
+    ...(categories.length ? { category: categories } : {}),
+    ...(tagIds.length ? { tag_id: tagIds } : {}),
+  };
+}
+
 export function buildTransactionsQuery({
   organizationId,
   search = "",
@@ -694,15 +719,11 @@ export function buildTransactionsQuery({
   sortBy = "date-desc",
   valueMin,
   valueMax,
+  recurring,
   settlement = "todas",
   limit = 10,
 }) {
-  const categoryFilter =
-    filterCat !== "todas"
-      ? isUuidString(filterCat)
-        ? { tag_id: filterCat }
-        : { category: filterCat }
-      : {};
+  const categoryFilter = resolveCategoryParams(filterCat);
   const paymentMethod = resolvePaymentMethodParam(filterMethod);
 
   return {
@@ -716,6 +737,7 @@ export function buildTransactionsQuery({
     ...resolveDateRange(period, customFrom, customTo),
     ...(valueMin != null ? { value_min: valueMin } : {}),
     ...(valueMax != null ? { value_max: valueMax } : {}),
+    ...(recurring != null ? { recurring } : {}),
     ...resolveSettlement(settlement),
     page: 1,
     limit,
@@ -803,14 +825,10 @@ export function buildTransactionsSummaryQuery({
   customTo = "",
   valueMin,
   valueMax,
+  recurring,
   settlement = "todas",
 }) {
-  const categoryFilter =
-    filterCat !== "todas"
-      ? isUuidString(filterCat)
-        ? { tag_id: filterCat }
-        : { category: filterCat }
-      : {};
+  const categoryFilter = resolveCategoryParams(filterCat);
   const paymentMethod = resolvePaymentMethodParam(filterMethod);
 
   return {
@@ -827,8 +845,36 @@ export function buildTransactionsSummaryQuery({
     // Mesmo eixo da lista, de propósito: sem isso o card de totais somaria todas as
     // linhas enquanto a lista abaixo mostra só o subconjunto filtrado, e o usuário
     // ficaria olhando um total que nenhuma linha visível fecha.
+    ...(recurring != null ? { recurring } : {}),
     ...resolveSettlement(settlement),
   };
+}
+
+/**
+ * Query de `GET /v1/transactions/facets`: exatamente os filtros da lista, menos
+ * paginação e ordenação. É essa igualdade que faz o `total` das facets bater com
+ * o total da listagem — se as duas perguntas divergirem, os números do painel
+ * descrevem um conjunto que a tela não mostra.
+ *
+ * @param {string[]} [facets] - subconjunto a calcular; omitido = todas.
+ */
+export function buildTransactionsFacetsQuery({ facets, ...filters }) {
+  const query = buildTransactionsSummaryQuery(filters);
+  return Array.isArray(facets) && facets.length ? { ...query, facets } : query;
+}
+
+/**
+ * Busca as contagens do painel de filtro. Devolve `null` em qualquer falha:
+ * contagem é enfeite informativo, e um painel sem números continua utilizável —
+ * derrubar o filtro inteiro por causa delas seria uma troca ruim.
+ */
+export async function getTransactionsFacetsForUi(query) {
+  if (!query?.organization_id) return null;
+  try {
+    return await getTransactionsFacets(query);
+  } catch (_err) {
+    return null;
+  }
 }
 
 /**
