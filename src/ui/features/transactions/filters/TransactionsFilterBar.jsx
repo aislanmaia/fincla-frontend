@@ -83,17 +83,24 @@ export function TransactionsFilterBar({
     if (typeof onAfterApply === "function") onAfterApply();
   }, [onAfterApply]);
 
+  // As duas notificações abaixo são inertes quando `hideFacets` está ligado.
+  // No desktop compacto existem DUAS instâncias desta barra ao mesmo tempo (uma
+  // só com a busca, outra só com as facets); a que esconde as facets não
+  // renderiza painel nenhum, então deixá-la aceitar um pedido de abrir só
+  // armaria o Esc global dela sobre um painel que não existe — e o Esc do
+  // usuário rolaria a lista sem nada ter fechado.
   useEffect(() => {
+    if (hideFacets) return;
     if (typeof onExpandedChange === "function") onExpandedChange(expanded);
-  }, [expanded, onExpandedChange]);
+  }, [expanded, onExpandedChange, hideFacets]);
 
   useEffect(() => {
-    if (!requestOpenFacet?.key) return;
+    if (hideFacets || !requestOpenFacet?.key) return;
     setExpanded(requestOpenFacet.key);
     // Depende do `nonce`, não da `key`: pedir a mesma facet de novo (fechar e
     // clicar no mesmo chip) precisa reabrir.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestOpenFacet?.nonce]);
+  }, [requestOpenFacet?.nonce, hideFacets]);
 
   // Fecha o painel inline quando troca de saved view ativa
   useEffect(() => {

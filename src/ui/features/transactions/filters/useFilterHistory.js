@@ -23,6 +23,12 @@ export function useFilterHistory(snapshot, applySnapshot, describe) {
   const [stack, setStack] = useState([]);
   const previous = useRef(snapshot);
   const restoring = useRef(false);
+  // Espelho do topo da pilha para `undo()` ler SEM entrar no updater. Um
+  // updater de `useState` tem que ser puro: o React o invoca duas vezes em
+  // StrictMode, e chamar `applySnapshot` lá dentro dispararia a restauração
+  // em duplicidade.
+  const stackRef = useRef(stack);
+  stackRef.current = stack;
 
   useEffect(() => {
     const before = previous.current;
@@ -39,12 +45,11 @@ export function useFilterHistory(snapshot, applySnapshot, describe) {
   }, [snapshot]);
 
   const undo = useCallback(() => {
-    setStack((prev) => {
-      if (prev.length === 0) return prev;
-      restoring.current = true;
-      applySnapshot(prev[0]);
-      return prev.slice(1);
-    });
+    const top = stackRef.current[0];
+    if (top === undefined) return;
+    restoring.current = true;
+    setStack((prev) => prev.slice(1));
+    applySnapshot(top);
   }, [applySnapshot]);
 
   const reset = useCallback(() => setStack([]), []);

@@ -35,8 +35,16 @@ export function useTransactionsFacetCounts({
   const [isLoading, setIsLoading] = useState(false);
   // Uma vez aberto, segue acompanhando: fechar o painel não deve descartar o
   // que já foi pago, senão reabrir pisca o número de novo a cada visita.
+  //
+  // O trinco vive num efeito, não no corpo do render: mutar ref durante a
+  // renderização é inseguro sob renderização concorrente (um render pode ser
+  // descartado e o trinco ficaria ligado sem nunca ter sido comitado). Efeitos
+  // do mesmo commit rodam na ordem de declaração, então este roda ANTES do
+  // efeito de busca abaixo e a primeira abertura não perde o quadro.
   const everEnabled = useRef(false);
-  if (enabled) everEnabled.current = true;
+  useEffect(() => {
+    if (enabled) everEnabled.current = true;
+  }, [enabled]);
 
   const query = useMemo(() => {
     if (!organizationId) return null;
