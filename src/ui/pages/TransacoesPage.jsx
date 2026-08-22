@@ -73,6 +73,18 @@ const DEFAULT_RESTORE_SNAPSHOT = Object.freeze({
 /** Viewport ≥ breakpoint: filtros desktop sempre visíveis. Abaixo: colapsados por padrão. */
 const DESKTOP_FILTERS_EXPAND_BREAKPOINT = 1280;
 
+/** Altura mínima para a barra de filtros completa (9 facetas em duas linhas, 230 px).
+ *
+ *  A decisão era só de largura, e isso invertia o resultado: em 1366×768 a janela
+ *  passa do corte de largura e recebe a barra completa, sobrando 232 px de lista
+ *  (2 transações); em 1152×700 — mais estreita E mais baixa — ela recebe a barra
+ *  compacta e sobra 343 px (3 transações). A restrição real num laptop é vertical,
+ *  então a altura precisa entrar na conta.
+ *
+ *  820 = 768 (a tela mais comum do Brasil) com folga, para 800 e 768 caírem no
+ *  modo compacto e um 1080p continuar com a barra completa. */
+const DESKTOP_FILTERS_EXPAND_MIN_HEIGHT = 820;
+
 /* ── Helpers puros e componentes de linha ──────────────────────────────────
    Estes três blocos moravam DENTRO do corpo de `TransacoesPageBody`. Como o
    corpo roda a cada render, `Tip` e `TxRow` viravam TIPOS novos toda vez — e o
@@ -725,6 +737,9 @@ function TransacoesPageBody({
   const [viewportWidth, setViewportWidth] = useState(
     () => (typeof window !== "undefined" ? window.innerWidth : DESKTOP_FILTERS_EXPAND_BREAKPOINT),
   );
+  const [viewportHeight, setViewportHeight] = useState(
+    () => (typeof window !== "undefined" ? window.innerHeight : DESKTOP_FILTERS_EXPAND_MIN_HEIGHT),
+  );
   const [compactDesktopFiltersOpen, setCompactDesktopFiltersOpen] = useState(false);
   const [saveViewFormOpen, setSaveViewFormOpen] = useState(false);
   const [saveViewFormMode, setSaveViewFormMode] = useState("create");
@@ -767,10 +782,15 @@ function TransacoesPageBody({
   const [savedViewActive, setSavedViewActive] = useState(null);
 
   const isDesktopCompact =
-    !isMobile && viewportWidth < DESKTOP_FILTERS_EXPAND_BREAKPOINT;
+    !isMobile
+    && (viewportWidth < DESKTOP_FILTERS_EXPAND_BREAKPOINT
+      || viewportHeight < DESKTOP_FILTERS_EXPAND_MIN_HEIGHT);
 
   useEffect(() => {
-    const onResize = () => setViewportWidth(window.innerWidth);
+    const onResize = () => {
+      setViewportWidth(window.innerWidth);
+      setViewportHeight(window.innerHeight);
+    };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);

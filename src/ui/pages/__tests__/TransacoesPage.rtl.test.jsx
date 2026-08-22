@@ -119,6 +119,15 @@ beforeEach(() => {
     writable: true,
     value: 1440,
   });
+  // A barra completa passou a depender também da ALTURA: o jsdom nasce com
+  // innerHeight 768, que hoje cai no modo compacto (é a tela que motivou a
+  // mudança). Os testes que exercitam a barra completa precisam declarar as
+  // duas dimensões.
+  Object.defineProperty(window, "innerHeight", {
+    configurable: true,
+    writable: true,
+    value: 900,
+  });
   window.dispatchEvent(new Event("resize"));
 });
 
@@ -145,6 +154,27 @@ function renderPage(overrides = {}) {
 }
 
 describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }, () => {
+  it("1366x768 recebe a barra compacta, não a completa", async () => {
+    // O corte era só de largura, e isso invertia o resultado: 1366×768 passava
+    // do corte e recebia a barra completa (230 px, 2 transações visíveis),
+    // enquanto 1152×700 — mais estreita E mais baixa — recebia a compacta e
+    // mostrava 3. A altura é a restrição real num laptop.
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1366 });
+    Object.defineProperty(window, "innerHeight", { configurable: true, writable: true, value: 768 });
+    renderPage();
+    expect(await screen.findByRole("button", { name: /Abrir filtros/i })).toBeInTheDocument();
+    expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).toBeNull();
+  });
+
+  it("1366x900 mantém a barra completa (só a altura mudou)", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1366 });
+    Object.defineProperty(window, "innerHeight", { configurable: true, writable: true, value: 900 });
+    renderPage();
+    expect(
+      await screen.findByRole("toolbar", { name: /Filtros de transações/i }),
+    ).toBeInTheDocument();
+  });
+
   it("monta a página com TransactionsFilterBar (desktop)", () => {
     renderPage();
     expect(screen.getByText("Transações")).toBeInTheDocument();
