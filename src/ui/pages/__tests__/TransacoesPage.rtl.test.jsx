@@ -251,19 +251,19 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     await openFilters();
     expect(screen.getByText("Transações")).toBeInTheDocument();
     expect(screen.getByLabelText(/Buscar transações/i)).toBeInTheDocument();
-    expect(screen.queryByText(/Visualizações salvas/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Visualizações salvas/i })).not.toBeInTheDocument();
     expect(screen.getByRole("toolbar", { name: /Filtros de transações/i })).toBeInTheDocument();
   });
 
   it("exibe visualizações salvas ao aplicar filtro (sem views persistidas)", async () => {
     renderPage();
     await openFilters();
-    expect(screen.queryByText(/Visualizações salvas/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Visualizações salvas/i })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
     await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
-    expect(screen.getByText(/Visualizações salvas/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Visualizações salvas/i })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /Limpar todos os filtros/i }));
-    expect(screen.queryByText(/Visualizações salvas/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Visualizações salvas/i })).not.toBeInTheDocument();
   });
 
   it("atalho na FacetBar abre o formulário para salvar como nova visualização", async () => {
@@ -298,7 +298,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     );
     renderPage();
     await openFilters();
-    expect(screen.getByText(/Visualizações salvas/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Visualizações salvas/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Minha view" })).toBeInTheDocument();
   });
 
@@ -391,7 +391,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     await openFilters();
     await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
     await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
-    await userEvent.click(screen.getByRole("button", { name: /^Nova$/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
     await userEvent.type(screen.getByLabelText(/Nome da visualização/i), "Minha view");
     await userEvent.click(screen.getByRole("button", { name: /Salvar como nova visualização/i }));
     expect(screen.getByRole("button", { name: "Minha view" })).toBeInTheDocument();
@@ -408,7 +408,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     expect(screen.getByRole("button", { name: /Tipo: Todos/i })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
     await userEvent.click(screen.getByRole("button", { name: "Receita" }));
-    await userEvent.click(screen.getByRole("button", { name: /^Nova$/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
     await userEvent.type(screen.getByLabelText(/Nome da visualização/i), "receitas");
     await userEvent.click(screen.getByRole("button", { name: /Salvar como nova visualização/i }));
     const card = screen.getByRole("button", { name: "receitas" });
@@ -424,7 +424,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     await openFilters();
     await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
     await userEvent.click(screen.getByRole("button", { name: "Receita" }));
-    await userEvent.click(screen.getByRole("button", { name: /^Nova$/ }));
+    await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
     await userEvent.type(screen.getByLabelText(/Nome da visualização/i), "receitas");
     await userEvent.click(screen.getByRole("button", { name: /Salvar como nova visualização/i }));
     const card = screen.getByRole("button", { name: "receitas" });
@@ -1385,7 +1385,7 @@ describe("<TransacoesPage> — lançamentos cobertos por âncora (S4)", { timeou
     await openFilters();
 
     expect(await screen.findByText("Compra antiga")).toBeInTheDocument();
-    expect(screen.queryByText("⚓ Já no acerto")).not.toBeInTheDocument();
+    expect(screen.queryByText("Já no acerto")).not.toBeInTheDocument();
   });
 
   it("marca lançamento anterior ao saldo de ABERTURA declarado da conta", async () => {
@@ -1424,7 +1424,7 @@ describe("<TransacoesPage> — lançamentos cobertos por âncora (S4)", { timeou
     await openFilters();
 
     expect(await screen.findByText("Compra antiga")).toBeInTheDocument();
-    expect(screen.queryByText("⚓ Já no acerto")).not.toBeInTheDocument();
+    expect(screen.queryByText("Já no acerto")).not.toBeInTheDocument();
   });
 });
 

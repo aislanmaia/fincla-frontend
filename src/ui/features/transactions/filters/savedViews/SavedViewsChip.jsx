@@ -50,10 +50,6 @@ export function SavedViewsChip({
   const label = activeItem ? activeItem.label : "Visualizações";
   const suffix = activeItem && dirty ? " · alterada" : "";
 
-  // Nada salvo e nada a salvar: o chip não teria o que oferecer, e um controle
-  // que abre um menu vazio é pior que a ausência dele.
-  if (items.length === 0 && !canCreate) return null;
-
   return (
     <div ref={ref} style={{ position: "relative", flexShrink: 0 }}>
       <button
@@ -118,7 +114,9 @@ export function SavedViewsChip({
         >
           {items.length === 0 && (
             <div style={{ ...G, padding: "10px 10px 12px", fontSize: 11.5, color: T.inkLight }}>
-              Nenhuma visualização salva ainda.
+              {canCreate
+                ? "Nenhuma visualização salva ainda. Salve o recorte atual para voltar a ele depois."
+                : "Nenhuma visualização salva ainda. Aplique um filtro e salve o recorte para voltar a ele depois."}
             </div>
           )}
           {items.map((v) => {

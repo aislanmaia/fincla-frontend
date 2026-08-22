@@ -4,6 +4,15 @@ import { T } from "../../tokens";
 import { G } from "../../typography";
 
 /**
+ * Altura do cabeçalho da lista, exportada porque os cabeçalhos de DIA grudam
+ * logo abaixo dele: os dois são sticky no mesmo container, então o `top` de um
+ * é a altura do outro. Enquanto o número estava escrito à mão nos dois lugares,
+ * mudar a altura aqui fez o cabeçalho de dia grudar POR BAIXO deste.
+ */
+export const LIST_HEADER_HEIGHT = 44;
+export const LIST_HEADER_HEIGHT_COMPACT = 40;
+
+/**
  * Cabeçalho da lista: quantas transações sobraram do filtro, quantas ainda não
  * entraram no saldo, e a soma.
  *
@@ -18,6 +27,7 @@ import { G } from "../../typography";
  */
 export function TransactionsListHeader({
   total,
+  totalUnfiltered = null,
   pending = 0,
   sum = null,
   fmt,
@@ -47,29 +57,42 @@ export function TransactionsListHeader({
         // topo da região rolável. 11 = 12 do card menos a borda de 1 px.
         borderTopLeftRadius: 11,
         borderTopRightRadius: 11,
-        height: compact ? 32 : 28,
+        // Maior e BRANCO, como o protótipo funcional da seção 07: o cabeçalho
+        // é o topo do card, não uma tarja separadora. Em cinza ele lia como
+        // divisória; em branco ele pertence à lista que descreve.
+        height: compact ? LIST_HEADER_HEIGHT_COMPACT : LIST_HEADER_HEIGHT,
         flex: "none",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
         gap: 12,
-        padding: compact ? "0 12px" : "0 14px",
+        padding: compact ? "0 12px" : "0 16px",
         borderBottom: `1px solid ${T.border}`,
-        background: T.grayLight,
-        fontSize: 11,
+        background: T.surface,
+        fontSize: 12,
         fontWeight: 600,
         color: T.inkMid,
       }}
     >
       <span style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-        <b style={{ fontFamily: "'Geist Mono',monospace", color: T.ink, fontSize: 12 }}>{num(total)}</b>
-        {/* Quando não sabemos, o motivo vem junto do "—". Antes esse texto morava
-            na terceira linha de cada card de KPI; aqui ele aparece uma vez, ao
-            lado do número que ele explica. */}
+        {/* "17 de 20 transações": o filtro sozinho não diz nada sem o total de
+            onde ele saiu. Só "17" deixa a pessoa sem saber se cortou muito ou
+            pouco — e é essa relação que responde "meu filtro está certo?". */}
+        <b style={{ fontFamily: "'Geist Mono',monospace", color: T.ink, fontSize: 14 }}>{num(total)}</b>
         {statusLabel ? (
           <span style={{ fontWeight: 500, color: T.inkLight }}>{statusLabel}</span>
-        ) : compact ? null : (
-          <>transaç{total === 1 ? "ão" : "ões"}</>
+        ) : (
+          <span style={{ fontWeight: 500, color: T.inkLight }}>
+            {totalUnfiltered != null && totalUnfiltered > total ? (
+              <>
+                de{" "}
+                <b style={{ fontFamily: "'Geist Mono',monospace", color: T.inkMid, fontWeight: 600 }}>
+                  {num(totalUnfiltered)}
+                </b>{" "}
+              </>
+            ) : null}
+            transaç{total === 1 ? "ão" : "ões"}
+          </span>
         )}
         {pending > 0 ? (
           <>
@@ -185,9 +208,10 @@ function HistoryButton({ dir, enabled, onClick, label }) {
         width: 22,
         height: 22,
         borderRadius: 6,
-        border: "none",
-        background: "none",
+        border: `1px solid ${T.border}`,
+        background: T.surface,
         color: enabled ? T.inkMid : T.border,
+        opacity: enabled ? 1 : 0.32,
         cursor: enabled ? "pointer" : "default",
         padding: 0,
       }}
