@@ -5,16 +5,23 @@ import { Icon } from "../../shared/Icon.jsx";
 import { PanelHeader } from "./PanelHeader.jsx";
 
 /**
- * fincla-frontend#96 (revisão adversarial da PR #96, achado 3): o painel
- * prometia "todas as tags marcadas" (AND entre várias), mas o backend só
- * aceita UM `tag_id` por chamada — o filtro real sempre foi limitado a uma
- * tag. Antes só a primeira selecionada ia pra query, então marcar uma
- * segunda tag ou não mudava nada (superconjunto silencioso) ou, se a
- * primeira não resolvesse, apagava o filtro inteiro. Virou single-select de
- * verdade: clicar numa tag troca a seleção em vez de somar, e a promessa da
- * UI passa a bater com o que a API entrega.
+ * Painel da facet "Tags".
+ *
+ * Já foi single-select: o backend aceitava um `tag_id` só, então marcar uma
+ * segunda tag ou não mudava nada (superconjunto silencioso) ou apagava o
+ * filtro inteiro (fincla-frontend#96 achado 3). Agora `tag_id` é repetível e
+ * casa com qualquer uma das marcadas, então a promessa de multi-seleção da UI
+ * volta a bater com o que a API entrega.
  */
-export function TagPanel({ tags, setTags, allTags = [], loading = false, error = false, onClose }) {
+export function TagPanel({
+  tags,
+  setTags,
+  allTags = [],
+  loading = false,
+  error = false,
+  counts,
+  onClose,
+}) {
   const [search, setSearch] = useState("");
   const term = search.trim().toLowerCase();
   const visible = allTags.filter((tg) => tg.toLowerCase().includes(term));
@@ -23,7 +30,7 @@ export function TagPanel({ tags, setTags, allTags = [], loading = false, error =
     <div>
       <PanelHeader
         title="Tags"
-        hint="Filtra transações que tenham esta tag (uma por vez)"
+        hint="Selecione uma ou mais — a lista traz as que tiverem qualquer uma delas"
         onClose={onClose}
       />
       <input
@@ -75,13 +82,18 @@ export function TagPanel({ tags, setTags, allTags = [], loading = false, error =
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
           {visible.map((tg) => {
             const active = tags.includes(tg);
+            // A facet guarda NOMES; o backend indexa a contagem por id, então a
+            // busca aqui é pelo rótulo que ele devolve junto.
+            const n = counts?.optionCountByLabel("tag", tg);
             return (
               <button
                 type="button"
                 key={tg}
-                // Single-select: marcar uma tag substitui a seleção anterior
-                // (nunca soma); clicar na já marcada limpa o filtro.
-                onClick={() => setTags(active ? [] : [tg])}
+                // Multi-seleção: `tag_id` é repetível e casa com qualquer
+                // uma das tags marcadas.
+                onClick={() =>
+                  setTags(active ? tags.filter((x) => x !== tg) : [...tags, tg])
+                }
                 aria-pressed={active}
                 aria-label={`Tag ${tg}`}
                 style={{
@@ -101,6 +113,18 @@ export function TagPanel({ tags, setTags, allTags = [], loading = false, error =
               >
                 {active && <Icon name="check" size={10} color="#fff" />}
                 #{tg}
+                {n != null && (
+                  <span
+                    style={{
+                      fontFamily: "'Geist Mono', ui-monospace, monospace",
+                      fontSize: 11,
+                      fontWeight: 600,
+                      opacity: active ? 0.75 : 0.6,
+                    }}
+                  >
+                    {n}
+                  </span>
+                )}
               </button>
             );
           })}

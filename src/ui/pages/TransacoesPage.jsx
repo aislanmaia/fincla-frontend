@@ -28,14 +28,18 @@ import { useTransactionsTagCatalog } from "../features/transactions/filters/useT
 import {
   buildTagOptions,
   isTagFilterBlocked,
-  resolveTagFilterStatus,
+  resolveTagFilterStatuses,
   tagFilterStatusMessage,
   tagOptionsToDisplayMap,
 } from "../features/transactions/filters/tagCatalogResolution.js";
 import { useTransactionsData } from "../features/transactions/useTransactionsData.js";
+import { useTransactionsFacetCounts } from "../features/transactions/useTransactionsFacetCounts.js";
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { TransactionsEmptyState } from "../features/transactions/TransactionsEmptyState.jsx";
 import { TransactionsStats } from "../features/transactions/TransactionsStats.jsx";
+import { UndoToast } from "../features/transactions/UndoToast.jsx";
+import { TransactionsFilterChips } from "../features/transactions/filters/TransactionsFilterChips.jsx";
+import { useFilterHistory } from "../features/transactions/filters/useFilterHistory.js";
 import { TransactionsListHeader } from "../features/transactions/TransactionsListHeader.jsx";
 import {
   DAY_HEADER_HEIGHT,
@@ -85,6 +89,11 @@ const DEFAULT_RESTORE_SNAPSHOT = Object.freeze({
  *  linha + 20 de respiro. Com um lançamento por dia — o caso normal — quase toda
  *  linha carrega o próprio cabeçalho, então é este o custo real por transação. */
 export const TX_ROW_HEIGHT = 101;
+
+/** Duração do colapso de saída — casa com `@keyframes txRowLeave` em
+ *  `animations.jsx`. Se os dois divergirem, ou a lista pisca antes de a linha
+ *  terminar de sair, ou fica com um buraco depois que ela já saiu. */
+export const ROW_LEAVE_MS = 260;
 
 /** Piso e teto da primeira página. O teto é o `limit` máximo que
  *  `GET /v1/transactions` aceita; o piso evita pedir pouco demais numa janela
@@ -308,7 +317,8 @@ export const Tip = ({ label, children, pos = "top" }) => {
 };
 
 const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
-  rowHeight = 48, showDate = true, dateLabel = "", quickActions = null }) => {
+  rowHeight = 48, showDate = true, dateLabel = "", quickActions = null,
+  onFilterByCategory = null, onFilterByTag = null }) => {
   const isRefund   = tx.type === "refund";
   const isReceita  = tx.type === "income" || isRefund;
   const hasParcela = !!tx.parcela && !isRefund;
@@ -395,9 +405,26 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
         {/* Row 2: categoria · método · card digits · status chips */}
         <div style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap",
           marginBottom: (hasParcela || visibleTags.length > 0) ? 4 : 0 }}>
-          <Tip label={`Categoria: ${tx.cat}`}>
-            <span style={{ ...G, fontSize:11, color:catColor(tx.cat), fontWeight:600 }}>{tx.cat}</span>
-          </Tip>
+          {/* Clicar filtra por esta categoria — o gesto mais curto entre "vi
+              algo" e "quero ver só isso". `stopPropagation` porque a linha
+              inteira já é um botão que abre a sanfona: sem isso um clique
+              faria as duas coisas. O desfazer do cabeçalho é a saída. */}
+          {onFilterByCategory ? (
+            <Tip label={`Filtrar por ${tx.cat}`}>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onFilterByCategory(tx); }}
+                aria-label={`Filtrar por categoria ${tx.cat}`}
+                style={{ ...G, fontSize:11, color:catColor(tx.cat), fontWeight:600,
+                  background:"none", border:"none", padding:0, cursor:"pointer",
+                  font:"inherit", textAlign:"left" }}
+              >{tx.cat}</button>
+            </Tip>
+          ) : (
+            <Tip label={`Categoria: ${tx.cat}`}>
+              <span style={{ ...G, fontSize:11, color:catColor(tx.cat), fontWeight:600 }}>{tx.cat}</span>
+            </Tip>
+          )}
           <span style={{ ...G, fontSize:11, color:T.inkGhost }}>·</span>
 
           {/* Para Crédito: mostra "Crédito ●● 1177" inline se tiver cartão, senão só "Crédito" */}
@@ -515,10 +542,24 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
               // requisições, achado 3 da mesma rodada) pode alongar o
               // rótulo ("mensal (a1b2c3d4)") e este pill não tem largura
               // garantida na linha.
-              <span key={tag} title={tag} style={{ ...G, fontSize: 11, color:T.inkMid, background:T.grayLight,
-                borderRadius:99, padding:"2px 8px", fontWeight:500, maxWidth:140,
-                overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
-                display:"inline-block" }}>#{tag}</span>
+              onFilterByTag ? (
+                // `title` continua sendo o rótulo CRU: ele existe para deixar
+                // legível um nome truncado ("mensal (a1b2c3d4)"), e trocá-lo
+                // por um texto de ação tiraria a única forma de ler o resto.
+                // A ação mora no `aria-label`.
+                <button key={tag} type="button" title={tag}
+                  onClick={(e) => { e.stopPropagation(); onFilterByTag(tag); }}
+                  aria-label={`Filtrar pela tag ${tag}`}
+                  style={{ ...G, fontSize: 11, color:T.inkMid, background:T.grayLight,
+                    borderRadius:99, padding:"2px 8px", fontWeight:500, maxWidth:140,
+                    overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                    display:"inline-block", border:"none", cursor:"pointer" }}>#{tag}</button>
+              ) : (
+                <span key={tag} title={tag} style={{ ...G, fontSize: 11, color:T.inkMid, background:T.grayLight,
+                  borderRadius:99, padding:"2px 8px", fontWeight:500, maxWidth:140,
+                  overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                  display:"inline-block" }}>#{tag}</span>
+              )
             ))}
             {hiddenTags.length > 0 && (
               <Tip label={`Todas: ${tags.map(t=>"#"+t).join(", ")}`} pos="top">
@@ -564,6 +605,14 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
           >
             ✎
           </QuickAction>
+          {quickActions.onDuplicate && (
+            <QuickAction
+              label={`Duplicar ${tx.desc}`}
+              onClick={(e) => { e.stopPropagation(); quickActions.onDuplicate(tx); }}
+            >
+              ⧉
+            </QuickAction>
+          )}
           <QuickAction
             label={`Excluir ${tx.desc}`}
             tone="red"
@@ -608,6 +657,7 @@ const DetailPanel = ({
   setMockTxList,
   onTransactionsInvalidate,
   deletingId,
+  onRowLeave,
   setDeletingId,
   settlingId,
   setSettlingId,
@@ -804,7 +854,6 @@ const DetailPanel = ({
             if (shouldUseRealData) {
               try {
                 await transactionsData.removeTransaction(tx.id);
-                onTransactionsInvalidate?.();
               } catch (_) {
                 return;
               }
@@ -813,6 +862,11 @@ const DetailPanel = ({
             }
             setSelected(null);
             setDeletingId(null);
+            // A linha colapsa ANTES do refetch. Sem isso a lista se
+            // reorganizaria de um quadro para o outro e o olho perderia onde
+            // estava; `onRowLeave` fecha a sanfona, roda a saída e só então
+            // revalida.
+            onRowLeave?.(tx.id);
           }}
             style={{ ...G, flex:1, display:"flex", alignItems:"center", justifyContent:"center", gap:6,
               background:T.red, color:"#fff", border:"none", borderRadius:10,
@@ -843,6 +897,7 @@ function TransacoesPageBody({
   onNav,
   isMobile = false,
   onEditTx,
+  onDuplicateTx,
   onNewTx,
   dataMode = "live",
   organizationId = null,
@@ -972,6 +1027,7 @@ function TransacoesPageBody({
   const [deletingId,  setDeletingId]  = useState(null);
   // Id em liquidação — trava o botão para o clique duplo não disparar settle + unsettle.
   const [settlingId,  setSettlingId]  = useState(null);
+  const [undoToast,   setUndoToast]   = useState(null);
   /** Erro da liquidação, mostrado ao lado do botão (a faixa global fica coberta
       pelo bottom sheet no mobile, onde essa ação vive). */
   const [settleError, setSettleError] = useState("");
@@ -1123,14 +1179,14 @@ function TransacoesPageBody({
     [tagCatalog.rows, categoryLabelById],
   );
   const tagDisplayToId = useMemo(() => tagOptionsToDisplayMap(tagOptions), [tagOptions]);
-  // A facet virou single-select (achado 3: "todas as tags marcadas" não é
-  // entregável — o backend só aceita um `tag_id` — então só existe UM rótulo
-  // selecionado para resolver, sem a ambiguidade de "qual dos N tentar").
+  // A facet voltou a ser multi agora que `tag_id` é repetível: resolvemos a
+  // seleção INTEIRA, e se qualquer rótulo falhar o conjunto todo bloqueia —
+  // ver `resolveTagFilterStatuses` para o porquê de não mandar o subconjunto.
   const tagFilterStatus = useMemo(
     () =>
       shouldUseRealData
-        ? resolveTagFilterStatus({
-            selectedLabel: filter.tags[0] ?? null,
+        ? resolveTagFilterStatuses({
+            selectedLabels: filter.tags,
             // fincla-frontend#101: `tagDisplayToId` (via `tagOptions`) depende
             // de `categoryLabelById` — enquanto CATEGORIAS ainda carregam,
             // `categoryLabelById` está vazio e uma tag com nome colidente
@@ -1159,7 +1215,7 @@ function TransacoesPageBody({
     ],
   );
   const resolvedTagIds = useMemo(
-    () => (tagFilterStatus.kind === "resolved" ? [tagFilterStatus.id] : []),
+    () => (tagFilterStatus.kind === "resolved" ? tagFilterStatus.ids : []),
     [tagFilterStatus],
   );
   // Achado 4: um rótulo selecionado que não resolve para id NUNCA pode virar
@@ -1182,6 +1238,7 @@ function TransacoesPageBody({
           valueMin: filter.valueMin,
           valueMax: filter.valueMax,
           settlement: filter.settlement,
+          rec: filter.rec,
         },
         {
           limit: visible,
@@ -1202,6 +1259,7 @@ function TransacoesPageBody({
       filter.valueMin,
       filter.valueMax,
       filter.settlement,
+      filter.rec,
       visible,
       totalCategoriesForBackend,
       resolvedTagIds,
@@ -1221,6 +1279,17 @@ function TransacoesPageBody({
     // também dispara outros efeitos da página).
     refreshToken: `${transactionsRefreshToken}:${loadMoreRetryToken}`,
   });
+  // Contagens por opção do painel de filtro. `expandedFacet` mantém a busca
+  // preguiçosa: quem só quer ver a lista não paga uma requisição a mais por um
+  // número que nunca vai aparecer na tela.
+  const [expandedFacet, setExpandedFacet] = useState(null);
+  const facetCounts = useTransactionsFacetCounts({
+    organizationId,
+    filters: transactionsFilters,
+    enabled: shouldUseRealData && !tagFilterBlocked && expandedFacet != null,
+    refreshToken: transactionsRefreshToken,
+  });
+
   const txList = shouldUseRealData
     ? transactionsData.transactions
     : resolveLocalData({ dataMode, mockData: mockTxList, emptyData: [] });
@@ -1705,21 +1774,97 @@ function TransacoesPageBody({
     listFiltersActive,
   );
 
-  const activeFacetsForSavedViews = useMemo(() => {
+  // Uma única derivação de facets para os dois consumidores: os chips de
+  // filtro ativo e o resumo das views salvas. Duas listas construídas em
+  // lugares diferentes acabariam divergindo no rótulo de algum filtro.
+  const allFacets = useMemo(() => {
     const categoriesById = Object.fromEntries(
       categoriesForFilter.map((c) => [c.id, c]),
     );
     const cardsById = Object.fromEntries(cardsForFilter.map((c) => [c.id, c]));
-    return filter
-      .buildFacets({ categoriesById, cardsById })
-      .filter((f) => f.active)
-      .map((f) => ({
-        label: f.label,
-        value: f.value,
-        icon: f.icon,
-        color: f.color || T.ink,
-      }));
+    return filter.buildFacets({ categoriesById, cardsById });
   }, [filter, categoriesForFilter, cardsForFilter]);
+
+  const activeFacetsForSavedViews = useMemo(
+    () =>
+      allFacets
+        .filter((f) => f.active)
+        .map((f) => ({
+          label: f.label,
+          value: f.value,
+          icon: f.icon,
+          color: f.color || T.ink,
+        })),
+    [allFacets],
+  );
+
+  /**
+   * Clique na categoria da própria linha → filtra por ela.
+   *
+   * `tx.cat` é o RÓTULO exibido; o filtro trabalha com o id da tag. Quando o
+   * rótulo não resolve para um id (categoria renomeada, catálogo ainda
+   * carregando) não fazemos nada: aplicar um filtro pelo texto traria um
+   * recorte diferente do que o chip promete, e um clique sem efeito é melhor
+   * que um recorte errado com o chip aceso.
+   */
+  const filterByCategoryFromRow = useCallback(
+    (tx) => {
+      const hit = categoriesForFilter.find((c) => c.label === tx.cat);
+      if (!hit) return;
+      filter.setCats([hit.id]);
+      setVisible(PAGE_SIZE);
+    },
+    [categoriesForFilter, filter, PAGE_SIZE],
+  );
+
+  /** Mesma ideia para as tags da linha — a facet Tags guarda o rótulo. */
+  const filterByTagFromRow = useCallback(
+    (tag) => {
+      filter.setTags([tag]);
+      setVisible(PAGE_SIZE);
+    },
+    [filter, PAGE_SIZE],
+  );
+
+  /** "Sem filtros" / "3 filtros" — o que o desfazer vai devolver. */
+  const describeFilterSnapshot = useCallback((snap) => {
+    const n = countActiveFiltersInSnapshot(snap);
+    if (n === 0) return "sem filtros";
+    return n === 1 ? "1 filtro" : `${n} filtros`;
+  }, []);
+
+  // Desfazer dos filtros. O rótulo diz para ONDE volta ("3 filtros"), não
+  // "desfazer" genérico — sem isso o controle é uma aposta.
+  const filterHistory = useFilterHistory(
+    filter.snapshot,
+    filter.applySnapshot,
+    describeFilterSnapshot,
+  );
+  const undoFilter = useCallback(() => {
+    filterHistory.undo();
+    setVisible(PAGE_SIZE);
+  }, [filterHistory, PAGE_SIZE]);
+
+  // Pedido de abrir uma facet vindo de fora da barra (clique num chip). O
+  // `nonce` faz o mesmo chip reabrir o mesmo painel duas vezes seguidas.
+  const [requestOpenFacet, setRequestOpenFacet] = useState(null);
+  const openFacetFromChip = useCallback((key) => {
+    setRequestOpenFacet((prev) => ({ key, nonce: (prev?.nonce ?? 0) + 1 }));
+    // No mobile e no desktop compacto os painéis vivem atrás do botão
+    // "Filtros"; abrir a facet sem abrir o container deixaria o clique sem
+    // efeito visível nenhum.
+    setFiltersOpen(true);
+    setCompactDesktopFiltersOpen(true);
+  }, []);
+
+  const clearFacetAndResetPage = useCallback(
+    (key) => {
+      if (key === "busca") setSearchInput("");
+      else filter.clearFacet(key);
+      setVisible(PAGE_SIZE);
+    },
+    [filter, PAGE_SIZE],
+  );
 
   const scrollListToTop = useCallback(() => {
     const el = listScrollRef.current;
@@ -1826,6 +1971,9 @@ function TransacoesPageBody({
       canUpdateSavedView && !saveViewFormOpen ? () => openSaveViewForm("update") : undefined,
     saveViewUpdateLabel: activeSavedView?.label ?? "",
     filterToolbarActive: listFiltersActive,
+    facetCounts,
+    onExpandedChange: setExpandedFacet,
+    requestOpenFacet,
     ...filterBarApplyProps,
   };
 
@@ -1867,8 +2015,81 @@ function TransacoesPageBody({
     return () => window.removeEventListener("keydown", onKey);
   }, [selected]);
 
+  /**
+   * Movimento de saída e de confirmação da lista.
+   *
+   * `leavingIds`: a linha excluída fica na lista mais 260 ms, colapsando a
+   * própria altura. Só depois disso pedimos o refetch — trocar a lista no
+   * mesmo quadro faria as linhas de baixo pularem de uma vez para o lugar da
+   * que saiu, e a pessoa perderia onde estava lendo.
+   *
+   * `settledFlash`: um pulso verde na linha que acabou de ser paga. O ✓ some
+   * quando o estado muda, e sem o pulso não sobra nenhum sinal de que a ação
+   * aconteceu — só uma linha que mudou de cor num canto.
+   */
+  const [leavingIds, setLeavingIds] = useState(() => new Set());
+  const [settledFlashId, setSettledFlashId] = useState(null);
+  const leaveTimers = useRef([]);
+
+  useEffect(
+    () => () => {
+      leaveTimers.current.forEach(clearTimeout);
+      leaveTimers.current = [];
+    },
+    [],
+  );
+
+  const startRowLeave = useCallback(
+    (id) => {
+      setLeavingIds((prev) => new Set(prev).add(id));
+      const t = setTimeout(() => {
+        setLeavingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+        onTransactionsInvalidate?.();
+      }, ROW_LEAVE_MS);
+      leaveTimers.current.push(t);
+    },
+    [onTransactionsInvalidate],
+  );
+
+  const flashSettled = useCallback((id) => {
+    setSettledFlashId(id);
+    const t = setTimeout(() => setSettledFlashId((cur) => (cur === id ? null : cur)), 900);
+    leaveTimers.current.push(t);
+  }, []);
+
+  /**
+   * Desfazer a liquidação anunciada na torrada.
+   *
+   * Reaplica o inverso pela API (não é um rollback local): o saldo da conta só
+   * conta `status='paid'`, então um desfazer que mexesse só na tela deixaria a
+   * lista e o saldo contando coisas diferentes.
+   */
+  const undoLastAction = useCallback(async () => {
+    if (!undoToast) return;
+    const { id, revert } = undoToast;
+    setUndoToast(null);
+    try {
+      if (shouldUseRealData) {
+        await transactionsData.setTransactionSettled(id, !revert);
+        onTransactionsInvalidate?.();
+      } else {
+        setMockTxList((cur) => cur.map((t) => (t.id === id ? { ...t, settled: !revert } : t)));
+      }
+      flashSettled(id);
+    } catch (e) {
+      setSettleError(e?.message || "Não foi possível desfazer.");
+    }
+  }, [undoToast, shouldUseRealData, transactionsData, onTransactionsInvalidate, flashSettled]);
+
   const quickActions = useMemo(() => ({
     onEdit: (tx) => { if (onEditTx) onEditTx(tx); },
+    // Só existe quando o consumidor sabe duplicar. Um botão que não faz nada
+    // é pior que um botão ausente.
+    onDuplicate: onDuplicateTx ? (tx) => onDuplicateTx(tx) : null,
     onDelete: (tx) => { setSelected(tx); setDeletingId(tx.id); },
     onSettle: async (tx) => {
       if (settlingId) return;
@@ -1882,6 +2103,15 @@ function TransacoesPageBody({
         } else {
           setMockTxList((cur) => cur.map((t) => (t.id === tx.id ? { ...t, settled: next } : t)));
         }
+        flashSettled(tx.id);
+        // Liquidar é reversível pela própria API (`unsettle`), então o desfazer
+        // é honesto aqui. Excluir não tem volta no backend — por isso ele
+        // continua atrás da confirmação, e não ganha torrada de desfazer.
+        setUndoToast({
+          id: tx.id,
+          label: next ? `"${tx.desc}" marcada como paga` : `Pagamento de "${tx.desc}" desfeito`,
+          revert: next,
+        });
       } catch (e) {
         // O erro só é renderizado dentro da sanfona. Usando o ✓ da linha sem
         // abrir nada, a falha ficava invisível — indistinguível de um no-op — e
@@ -1893,7 +2123,8 @@ function TransacoesPageBody({
         setSettlingId(null);
       }
     },
-  }), [onEditTx, settlingId, shouldUseRealData, transactionsData, onTransactionsInvalidate]);
+  }), [onEditTx, onDuplicateTx, settlingId, shouldUseRealData, transactionsData,
+      onTransactionsInvalidate, flashSettled]);
 
   /* Agrupar por data só faz sentido ordenado por data: por valor ou categoria
      cada "grupo" vira um item só, o pior dos dois mundos. */
@@ -1923,6 +2154,9 @@ function TransacoesPageBody({
                 : null
         }
         onPendingClick={() => filter.setSettlement("a-pagar")}
+        canUndo={filterHistory.canUndo}
+        onUndo={undoFilter}
+        undoLabel={filterHistory.undoLabel}
         compact={isMobile}
       />
       {groups.length === 0 ? (
@@ -2008,7 +2242,12 @@ function TransacoesPageBody({
                 </div>
               )}
               {txs.map((tx, i) => (
-                <div key={tx.id} style={{
+                <div key={tx.id}
+                  className={[
+                    leavingIds.has(tx.id) ? "fincla-tx-leave" : "",
+                    settledFlashId === tx.id ? "fincla-tx-settled" : "",
+                  ].filter(Boolean).join(" ")}
+                  style={{
                   borderBottom: (gi === groups.length - 1 && i === txs.length - 1 && selected?.id !== tx.id)
                     ? "none" : `1px solid ${T.border}` }}>
                   <TxRow
@@ -2021,6 +2260,8 @@ function TransacoesPageBody({
                     showDate={!isGrouped}
                     dateLabel={shortDateLabel(tx.date)}
                     quickActions={quickActions}
+                    onFilterByCategory={filterByCategoryFromRow}
+                    onFilterByTag={filterByTagFromRow}
                   />
                   {/* Sanfona: o detalhe nasce ONDE O OLHO JÁ ESTÁ, em vez de
                       numa coluna de 320 px que, em 1366×768, sobrava com 32 px
@@ -2045,6 +2286,7 @@ function TransacoesPageBody({
                         onTransactionsInvalidate={onTransactionsInvalidate}
                         deletingId={deletingId}
                         setDeletingId={setDeletingId}
+                        onRowLeave={startRowLeave}
                         settlingId={settlingId}
                         setSettlingId={setSettlingId}
                         settleError={settleError}
@@ -2338,10 +2580,31 @@ function TransacoesPageBody({
         </>
       )}
 
+      <UndoToast
+        toast={undoToast}
+        onUndo={undoLastAction}
+        onDismiss={() => setUndoToast(null)}
+      />
+
       {/* ── Desktop wide: barra completa ─ */}
       {!isMobile && !isDesktopCompact && (
         <TransactionsFilterBar {...filterBarCommonProps} />
       )}
+
+      {/* ── Filtros aplicados ────────────────────────────────────
+          Só existe quando há filtro. No mobile e no desktop compacto os cards
+          da FacetBar ficam atrás do botão "Filtros", então sem esta linha era
+          possível olhar uma lista curta sem nenhum sinal do porquê. */}
+      <TransactionsFilterChips
+        facets={allFacets}
+        searchActive={Boolean(debouncedSearch)}
+        searchLabel={debouncedSearch}
+        onOpenFacet={openFacetFromChip}
+        onClearFacet={clearFacetAndResetPage}
+        onClearAll={clearAll}
+        maxVisible={isMobile ? 2 : isDesktopCompact ? 3 : 5}
+        compact={isMobile}
+      />
 
       {/* ── MOBILE FILTER BOTTOM SHEET ───────────────────────────────── */}
       {isMobile && (filtersOpen || sheetClosing) && (

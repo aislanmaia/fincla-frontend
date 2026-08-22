@@ -14,32 +14,30 @@ afterEach(() => {
 // Decisão tomada: IMPEDIR a combinação em vez de só avisar — a seleção de uma
 // sempre limpa a outra, então o que está aceso na tela é sempre exatamente o
 // que está filtrando.
-describe("useTransactionsFilterState — achado 2: Categoria e Tags são mutuamente exclusivas", () => {
-  it("selecionar uma categoria com uma tag já marcada limpa a tag", () => {
+describe("useTransactionsFilterState — Categoria e Tags convivem", () => {
+  // A exclusão mútua (achado 2) existia porque as duas facets disputavam o
+  // único `tag_id` que o backend aceitava: deixar as duas acesas mostrava um
+  // chip filtrando nada. Agora `category` e `tag_id` são repetíveis e se
+  // combinam por AND, então marcar as duas pede a interseção — e é isso que a
+  // tela precisa deixar aceso.
+  it("selecionar uma categoria PRESERVA a tag já marcada", () => {
     const { result } = renderHook(() => useTransactionsFilterState());
 
     act(() => result.current.setTags(["ifood"]));
-    expect(result.current.tags).toEqual(["ifood"]);
-
     act(() => result.current.setCats(["cat-alimentacao"]));
 
     expect(result.current.cats).toEqual(["cat-alimentacao"]);
-    // Prova direta do achado 2: com a implementação anterior (`setField`
-    // isolado) o array de tags continuaria `["ifood"]` — aceso, mas ignorado
-    // pela query real (categoria ganhava o slot no backend).
-    expect(result.current.tags).toEqual([]);
+    expect(result.current.tags).toEqual(["ifood"]);
   });
 
-  it("selecionar uma tag com uma categoria já marcada limpa a categoria", () => {
+  it("selecionar uma tag PRESERVA a categoria já marcada", () => {
     const { result } = renderHook(() => useTransactionsFilterState());
 
     act(() => result.current.setCats(["cat-alimentacao"]));
-    expect(result.current.cats).toEqual(["cat-alimentacao"]);
-
     act(() => result.current.setTags(["ifood"]));
 
     expect(result.current.tags).toEqual(["ifood"]);
-    expect(result.current.cats).toEqual([]);
+    expect(result.current.cats).toEqual(["cat-alimentacao"]);
   });
 
   it("limpar a seleção (array vazio) NÃO mexe na outra facet", () => {
@@ -48,12 +46,10 @@ describe("useTransactionsFilterState — achado 2: Categoria e Tags são mutuame
     act(() => result.current.setCats(["cat-alimentacao"]));
     act(() => result.current.setTags([]));
 
-    // `setTags([])` é "desmarcar tag", não "marcar tag vazia" — não deve
-    // limpar a categoria que estava ativa.
     expect(result.current.cats).toEqual(["cat-alimentacao"]);
   });
 
-  it("um snapshot legado com as duas facets preenchidas (view salva antiga) sanitiza tags ao aplicar", () => {
+  it("um snapshot com as duas facets preenchidas mantém as duas", () => {
     const { result } = renderHook(() => useTransactionsFilterState());
 
     act(() =>
@@ -65,10 +61,10 @@ describe("useTransactionsFilterState — achado 2: Categoria e Tags são mutuame
     );
 
     expect(result.current.cats).toEqual(["cat-alimentacao"]);
-    expect(result.current.tags).toEqual([]);
+    expect(result.current.tags).toEqual(["ifood"]);
   });
 
-  it("um estado inicial com as duas facets preenchidas também sanitiza tags", () => {
+  it("um estado inicial com as duas facets preenchidas mantém as duas", () => {
     const { result } = renderHook(() =>
       useTransactionsFilterState({
         initial: { cats: ["cat-alimentacao"], tags: ["ifood"] },
@@ -76,11 +72,11 @@ describe("useTransactionsFilterState — achado 2: Categoria e Tags são mutuame
     );
 
     expect(result.current.cats).toEqual(["cat-alimentacao"]);
-    expect(result.current.tags).toEqual([]);
+    expect(result.current.tags).toEqual(["ifood"]);
   });
 });
 
-describe("useTransactionsFilterState — facet Tags no buildFacets (single-select)", () => {
+describe("useTransactionsFilterState — facet Tags no buildFacets", () => {
   it("sem tag selecionada mostra '—'", () => {
     const { result } = renderHook(() => useTransactionsFilterState());
     const facets = result.current.buildFacets();
@@ -96,5 +92,13 @@ describe("useTransactionsFilterState — facet Tags no buildFacets (single-selec
     const tagFacet = facets.find((f) => f.key === "tag");
     expect(tagFacet.value).toBe("#ifood");
     expect(tagFacet.active).toBe(true);
+  });
+
+  it("com várias tags mostra a contagem", () => {
+    const { result } = renderHook(() => useTransactionsFilterState());
+    act(() => result.current.setTags(["ifood", "viagem"]));
+    const tagFacet = result.current.buildFacets().find((f) => f.key === "tag");
+    expect(tagFacet.value).toBe("2 tags");
+    expect(tagFacet.multi).toBe(2);
   });
 });

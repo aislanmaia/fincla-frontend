@@ -41,6 +41,13 @@ import { Icon } from "./shared/Icon.jsx";
  *  - filteredCount: total de transações visíveis (CTA "Ver N transações").
  *  - resultsLoading: desabilita CTA enquanto a lista recarrega (ex.: debounce busca).
  *  - onAfterApply: callback após dismiss (ex.: scroll suave para a lista).
+ *  - facetCounts: retorno de `useTransactionsFacetCounts` — números por opção
+ *    dentro dos painéis. Opcional: sem ele os painéis só não mostram contagem.
+ *  - onExpandedChange: avisa qual facet está aberta (`null` = nenhuma). É o que
+ *    permite ao consumidor só pagar a busca de contagens com o painel aberto.
+ *  - requestOpenFacet: `{ key, nonce }` — pedido externo de abrir uma facet
+ *    (clique num chip de filtro ativo). O `nonce` existe porque pedir a MESMA
+ *    facet duas vezes seguidas precisa reabrir; sem ele o efeito não dispara.
  */
 export function TransactionsFilterBar({
   filter,
@@ -64,6 +71,9 @@ export function TransactionsFilterBar({
   onSaveViewUpdate,
   saveViewUpdateLabel = "",
   filterToolbarActive,
+  facetCounts,
+  onExpandedChange,
+  requestOpenFacet,
 }) {
   const [expanded, setExpanded] = useState(null);
   const panelRef = useRef(null);
@@ -72,6 +82,25 @@ export function TransactionsFilterBar({
     setExpanded(null);
     if (typeof onAfterApply === "function") onAfterApply();
   }, [onAfterApply]);
+
+  // As duas notificações abaixo são inertes quando `hideFacets` está ligado.
+  // No desktop compacto existem DUAS instâncias desta barra ao mesmo tempo (uma
+  // só com a busca, outra só com as facets); a que esconde as facets não
+  // renderiza painel nenhum, então deixá-la aceitar um pedido de abrir só
+  // armaria o Esc global dela sobre um painel que não existe — e o Esc do
+  // usuário rolaria a lista sem nada ter fechado.
+  useEffect(() => {
+    if (hideFacets) return;
+    if (typeof onExpandedChange === "function") onExpandedChange(expanded);
+  }, [expanded, onExpandedChange, hideFacets]);
+
+  useEffect(() => {
+    if (hideFacets || !requestOpenFacet?.key) return;
+    setExpanded(requestOpenFacet.key);
+    // Depende do `nonce`, não da `key`: pedir a mesma facet de novo (fechar e
+    // clicar no mesmo chip) precisa reabrir.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestOpenFacet?.nonce, hideFacets]);
 
   // Fecha o painel inline quando troca de saved view ativa
   useEffect(() => {
@@ -303,6 +332,7 @@ export function TransactionsFilterBar({
                 // situação (liquidação)
                 settlement={filter.settlement}
                 setSettlement={filter.setSettlement}
+                counts={facetCounts}
                 // chrome
                 onClose={dismissPanel}
                 onApply={dismissPanel}

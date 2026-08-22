@@ -17,13 +17,14 @@ describe("mapCatsToLegacy", () => {
     expect(mapCatsToLegacy(undefined)).toBe("todas");
   });
 
-  it("retorna o id único quando há exatamente 1 categoria selecionada", () => {
-    expect(mapCatsToLegacy(["alim"])).toBe("alim");
-    expect(mapCatsToLegacy(["alim"], 5)).toBe("alim");
+  it("retorna a seleção quando há exatamente 1 categoria selecionada", () => {
+    expect(mapCatsToLegacy(["alim"])).toEqual(["alim"]);
+    expect(mapCatsToLegacy(["alim"], 5)).toEqual(["alim"]);
   });
 
-  it("retorna a primeira quando há múltiplas mas não todas (limitação do contrato)", () => {
-    expect(mapCatsToLegacy(["alim", "trans"], 5)).toBe("alim");
+  it("retorna a seleção INTEIRA quando há múltiplas mas não todas", () => {
+    // `category` é repetível no backend e casa com qualquer um dos valores.
+    expect(mapCatsToLegacy(["alim", "trans"], 5)).toEqual(["alim", "trans"]);
   });
 
   it("retorna 'todas' quando TODAS as categorias estão selecionadas (botão 'Todas' na UI)", () => {
@@ -35,33 +36,35 @@ describe("mapCatsToLegacy", () => {
     expect(mapCatsToLegacy(["a", "b", "c"], 2)).toBe("todas");
   });
 
-  it("ignora totalCategories quando 0 ou ausente (back-compat: usa a primeira)", () => {
-    expect(mapCatsToLegacy(["alim", "trans"])).toBe("alim");
-    expect(mapCatsToLegacy(["alim", "trans"], 0)).toBe("alim");
+  it("ignora totalCategories quando 0 ou ausente", () => {
+    expect(mapCatsToLegacy(["alim", "trans"])).toEqual(["alim", "trans"]);
+    expect(mapCatsToLegacy(["alim", "trans"], 0)).toEqual(["alim", "trans"]);
   });
 });
 
-describe("mapCatsOrTagToLegacy — fincla-frontend#78 (facet Tags)", () => {
+describe("mapCatsOrTagToLegacy — categoria E tag convivem", () => {
   it("sem categoria nem tag selecionada -> 'todas' (sem filtro)", () => {
     expect(mapCatsOrTagToLegacy([], [])).toBe("todas");
     expect(mapCatsOrTagToLegacy([], undefined)).toBe("todas");
   });
 
-  it("só tag selecionada -> usa o id da tag no MESMO slot que a categoria usaria", () => {
-    expect(mapCatsOrTagToLegacy([], ["tag-uuid-1"])).toBe("tag-uuid-1");
+  it("só tag selecionada -> manda os ids da tag", () => {
+    expect(mapCatsOrTagToLegacy([], ["tag-uuid-1"])).toEqual(["tag-uuid-1"]);
   });
 
-  it("categoria tem prioridade sobre tag quando as duas facets estão preenchidas", () => {
-    // O backend só aceita um `tag_id`; não dá pra mandar os dois ao mesmo tempo.
-    expect(mapCatsOrTagToLegacy(["cat-1"], ["tag-uuid-1"])).toBe("cat-1");
+  it("categoria e tag juntas viram uma lista só — o backend faz AND entre elas", () => {
+    expect(mapCatsOrTagToLegacy(["cat-1"], ["tag-uuid-1"])).toEqual(["cat-1", "tag-uuid-1"]);
   });
 
-  it("só a primeira tag selecionada é enviada (mesma limitação de categoria)", () => {
-    expect(mapCatsOrTagToLegacy([], ["tag-uuid-1", "tag-uuid-2"])).toBe("tag-uuid-1");
+  it("manda TODAS as tags selecionadas, não só a primeira", () => {
+    expect(mapCatsOrTagToLegacy([], ["tag-uuid-1", "tag-uuid-2"])).toEqual([
+      "tag-uuid-1",
+      "tag-uuid-2",
+    ]);
   });
 
-  it("'Todas categorias' selecionadas libera o slot para a tag", () => {
-    expect(mapCatsOrTagToLegacy(["a", "b"], ["tag-uuid-1"], 2)).toBe("tag-uuid-1");
+  it("'Todas categorias' selecionadas equivale a nenhuma, sobrando só a tag", () => {
+    expect(mapCatsOrTagToLegacy(["a", "b"], ["tag-uuid-1"], 2)).toEqual(["tag-uuid-1"]);
   });
 });
 
@@ -201,28 +204,34 @@ describe("filtersToLegacyParams", () => {
       { ...base, cats: ["a", "b"] },
       { limit: 30, totalCategories: 3 },
     );
-    expect(partial.filterCat).toBe("a");
+    expect(partial.filterCat).toEqual(["a", "b"]);
   });
 
-  it("fincla-frontend#78: tagIds resolvido pelo chamador vira filterCat (tag_id no backend)", () => {
+  it("tagIds resolvido pelo chamador vira filterCat (tag_id no backend)", () => {
     const out = filtersToLegacyParams(
       { ...base },
       { limit: 30, tagIds: ["tag-uuid-viagem"] },
     );
-    expect(out.filterCat).toBe("tag-uuid-viagem");
+    expect(out.filterCat).toEqual(["tag-uuid-viagem"]);
   });
 
-  it("fincla-frontend#78: categoria selecionada continua ganhando de tagIds", () => {
+  it("categoria e tag selecionadas ao mesmo tempo vão as duas (interseção)", () => {
     const out = filtersToLegacyParams(
       { ...base, cats: ["cat-alim"] },
       { limit: 30, tagIds: ["tag-uuid-viagem"] },
     );
-    expect(out.filterCat).toBe("cat-alim");
+    expect(out.filterCat).toEqual(["cat-alim", "tag-uuid-viagem"]);
   });
 
-  it("fincla-frontend#78: sem tagIds resolvido (nome não encontrado no catálogo) não filtra por engano", () => {
+  it("sem tagIds resolvido (nome não encontrado no catálogo) não filtra por engano", () => {
     const out = filtersToLegacyParams({ ...base }, { limit: 30, tagIds: [] });
     expect(out.filterCat).toBe("todas");
+  });
+
+  it("mapeia recorrência para o param `recurring` do backend", () => {
+    expect(filtersToLegacyParams({ ...base, rec: "yes" }, { limit: 30 }).recurring).toBe(true);
+    expect(filtersToLegacyParams({ ...base, rec: "no" }, { limit: 30 }).recurring).toBe(false);
+    expect(filtersToLegacyParams({ ...base, rec: "any" }, { limit: 30 }).recurring).toBeUndefined();
   });
 
   it("mapeia uma forma de pagamento para o valor da API", () => {

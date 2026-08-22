@@ -101,6 +101,11 @@ async function seedEnoughTransactions(): Promise<void> {
       value: 25 + ((i * 37) % 900),
       payment_method: methods[i % methods.length],
       date: `${day.toISOString().slice(0, 10)}T12:00:00`,
+      // Uma em cada cinco nasce PENDENTE ('confirmed' = ainda não entrou no
+      // saldo). Sem isso a lista inteira já vem liquidada, o contador de "a
+      // pagar" fica em zero e o teste do desfazer se pula em silêncio — que é
+      // pior que falhar, porque parece cobertura.
+      status: i % 5 === 0 ? "confirmed" : "paid",
     });
   }
 }
@@ -224,10 +229,24 @@ test.describe("Transações — redesenho", () => {
     await expect(detail).toBeVisible();
 
     // A sanfona nasce embaixo da própria linha, não numa coluna ao lado.
-    const rowBox = await firstRow.boundingBox();
+    //
+    // A medição espera a animação assentar: a sanfona entra com
+    // `translateY(-6px)` em 180 ms, então medir no instante em que ela fica
+    // visível pega uma posição intermediária e o teste vira uma corrida contra
+    // o relógio — passava ou falhava conforme a carga da máquina.
+    await expect
+      .poll(
+        async () => {
+          const r = await firstRow.boundingBox();
+          const d = await detail.boundingBox();
+          if (!r || !d) return null;
+          return Math.round(d.y - (r.y + r.height));
+        },
+        { timeout: 5_000 },
+      )
+      .toBe(0);
+
     const detailBox = await detail.boundingBox();
-    expect(rowBox && detailBox).toBeTruthy();
-    expect(detailBox!.y).toBeGreaterThanOrEqual(rowBox!.y + rowBox!.height - 2);
     expect(detailBox!.width).toBeGreaterThan(600);
 
     // Editar está visível sem rolar dentro do detalhe.
@@ -255,6 +274,183 @@ test.describe("Transações — redesenho", () => {
     await page.keyboard.press("Enter");
     await expect(page.getByRole("region", { name: /^Detalhes de/i })).toBeVisible();
     await page.keyboard.press("Escape");
+  });
+
+  test("contagens por opção aparecem no painel de filtro", async ({ page }) => {
+    // O backend responde `GET /v1/transactions/facets`; o painel mostra, ao
+    // lado de cada opção, quantas linhas ela traria. Estes números só valem
+    // alguma coisa se baterem com o que o clique entrega — é o que este teste
+    // e o próximo verificam de ponta a ponta.
+    await loginAsE2EOwner(page);
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await openTransactions(page);
+
+    await page.getByRole("button", { name: /^Tipo:/i }).click();
+    const painel = page.getByRole("region", { name: /Filtro: tipo/i });
+    await expect(painel).toBeVisible();
+
+    // Cada opção da facet Tipo ganha um número; o de "Todos" é o total do
+    // recorte atual.
+    const despesa = painel.getByRole("button", { name: "Despesa" });
+    await expect(despesa.locator("xpath=.//*[@aria-label]").first()).toBeVisible({
+      timeout: 15_000,
+    });
+    const rotulo = await despesa
+      .locator('[aria-label*="transaç"]')
+      .first()
+      .getAttribute("aria-label");
+    expect(rotulo).toMatch(/^\d+ transa/);
+
+    const prometido = Number((rotulo || "").match(/^(\d+)/)?.[1]);
+    expect(Number.isFinite(prometido)).toBe(true);
+
+    // Clicar entrega exatamente o número que o painel prometeu.
+    await despesa.click();
+    await expect(page.getByRole("status").first()).toContainText(String(prometido), {
+      timeout: 15_000,
+    });
+  });
+
+  test("chips mostram o filtro aplicado, o × remove e o desfazer volta", async ({ page }) => {
+    await loginAsE2EOwner(page);
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await openTransactions(page);
+
+    const chips = page.getByRole("group", { name: "Filtros aplicados" });
+    // Sem filtro não existe faixa nenhuma — uma linha vazia ocupando altura é
+    // o oposto do que esta tela resolve.
+    await expect(chips).toHaveCount(0);
+
+    await page.getByRole("button", { name: /^Tipo:/i }).click();
+    await page.getByRole("region", { name: /Filtro: tipo/i }).getByRole("button", { name: "Despesa" }).click();
+
+    await expect(chips).toBeVisible();
+    await expect(chips.getByRole("button", { name: /Filtro aplicado — Tipo/i })).toBeVisible();
+
+    // O × remove só aquele filtro, e o chip some junto.
+    await chips.getByRole("button", { name: "Remover filtro Tipo" }).click();
+    await expect(chips).toHaveCount(0);
+  });
+
+  test("clicar na categoria da linha filtra, e o desfazer devolve o recorte", async ({ page }) => {
+    await loginAsE2EOwner(page);
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await openTransactions(page);
+
+    const header = page.getByRole("status").first();
+    const antes = Number((await header.textContent())?.match(/(\d+)/)?.[1]);
+    expect(antes).toBeGreaterThan(0);
+
+    const catBtn = page.getByRole("button", { name: /^Filtrar por categoria /i }).first();
+    const nome = (await catBtn.getAttribute("aria-label"))!.replace(
+      /^Filtrar por categoria /i,
+      "",
+    );
+    await catBtn.click();
+
+    // O chip acende com a categoria clicada.
+    const chips = page.getByRole("group", { name: "Filtros aplicados" });
+    await expect(chips.getByRole("button", { name: /Filtro aplicado — Categoria/i })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(chips).toContainText(nome);
+
+    // Um clique de UM toque precisa ter volta de UM toque.
+    const desfazer = page.getByRole("button", { name: /^Desfazer filtro/i });
+    await expect(desfazer).toBeVisible();
+    await desfazer.click();
+    await expect(chips).toHaveCount(0);
+    await expect(header).toContainText(String(antes), { timeout: 15_000 });
+  });
+
+  test("duplicar abre o modal preenchido, sem herdar a identidade do original", async ({
+    page,
+  }) => {
+    await loginAsE2EOwner(page);
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await openTransactions(page);
+
+    const firstRow = page.locator(".fincla-row").first();
+    const nome = (await firstRow.getAttribute("aria-label")) || "";
+    await firstRow.hover();
+    const dup = firstRow.getByRole("button", { name: /^Duplicar /i });
+    await expect(dup).toBeVisible();
+    const desc = (await dup.getAttribute("aria-label"))!.replace(/^Duplicar /i, "");
+    await dup.click();
+
+    // O modal abre com a descrição do original já preenchida. Ele não tem
+    // `role="dialog"`, e o campo de descrição é um `textarea` no desktop e um
+    // `input` no mobile — então a asserção olha o VALOR em qualquer campo de
+    // texto, que é o que de fato prova o pré-preenchimento nos dois caminhos.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() =>
+            Array.from(
+              document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+                "input, textarea",
+              ),
+            ).map((n) => n.value),
+          ),
+        { timeout: 20_000 },
+      )
+      .toContain(desc);
+
+    // E abre em modo CRIAÇÃO: a URL não carrega o id da transação original.
+    // Se carregasse, o submit salvaria por cima dela — o oposto do que o botão
+    // promete.
+    expect(page.url()).not.toContain("fc_tx=");
+    expect(nome).toBeTruthy();
+  });
+
+  test("liquidar oferece desfazer, e desfazer devolve o estado", async ({ page }) => {
+    await loginAsE2EOwner(page);
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await openTransactions(page);
+
+    // A âncora é o badge "A pagar", não o botão de liquidar: as ações rápidas
+    // são `display: none` até o hover, e um seletor por elas não casaria com
+    // nada antes de a linha certa já ter sido encontrada.
+    const alvo = page.locator(".fincla-row").filter({ hasText: "A pagar" }).first();
+    // Falha em vez de pular: o seed CRIA linhas pendentes de propósito, então
+    // não achar nenhuma é um defeito, não uma condição ambiental.
+    await expect(alvo, "seed sem linha liquidável").toBeVisible({ timeout: 20_000 });
+
+    await alvo.hover();
+    await alvo.getByRole("button", { name: /como pago$/i }).click();
+
+    // `exact`: o ↺ da própria linha se chama "Desfazer pagamento de …" e casaria
+    // por substring. São controles distintos — este é o da torrada.
+    const desfazer = page.getByRole("button", { name: "Desfazer", exact: true });
+    await expect(desfazer).toBeVisible({ timeout: 15_000 });
+    await desfazer.click();
+    await expect(desfazer).toHaveCount(0, { timeout: 15_000 });
+  });
+
+  test("mobile: chips de filtro cabem sem transbordar", async ({ page }) => {
+    await loginAsE2EOwner(page);
+    await openTransactions(page);
+
+    for (const size of MOBILE) {
+      await page.setViewportSize({ width: size.width, height: size.height });
+      await page.waitForTimeout(300);
+
+      const catBtn = page.getByRole("button", { name: /^Filtrar por categoria /i }).first();
+      if ((await catBtn.count()) === 0) continue;
+      await catBtn.click();
+      await expect(
+        page.getByRole("group", { name: "Filtros aplicados" }),
+      ).toBeVisible({ timeout: 15_000 });
+
+      // A faixa de chips é a mais fácil de transbordar: são pílulas de largura
+      // variável numa linha que não pode quebrar.
+      expect(
+        await horizontalOverflow(page),
+        `${size.name}: transbordo com chips`,
+      ).toBe(0);
+
+      await page.getByRole("button", { name: /^Desfazer filtro/i }).click();
+    }
   });
 
   test("mobile: descrição legível e nada transborda", async ({ page }) => {

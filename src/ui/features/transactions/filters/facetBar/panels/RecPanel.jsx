@@ -2,6 +2,7 @@ import React from "react";
 import { T } from "../../../../../tokens";
 import { G } from "../../../../../typography";
 import { Icon } from "../../shared/Icon.jsx";
+import { FacetCount } from "../../shared/FacetCount.jsx";
 import { PanelHeader } from "./PanelHeader.jsx";
 
 const OPTIONS = [
@@ -16,7 +17,7 @@ const OPTIONS = [
   { v: "no", l: "Apenas únicas", hint: "Lançamento isolado", icon: "circle" },
 ];
 
-export function RecPanel({ rec, setRec, onClose, onApply, compact = false }) {
+export function RecPanel({ rec, setRec, counts, onClose, onApply, compact = false }) {
   const select = (value) => {
     setRec(value);
     if (typeof onApply === "function") onApply();
@@ -40,6 +41,7 @@ export function RecPanel({ rec, setRec, onClose, onApply, compact = false }) {
         {OPTIONS.map((o) => {
           const active = rec === o.v;
           const col = o.color || T.ink;
+          const n = o.v === "any" ? (counts?.total ?? null) : counts?.binaryCount("recurring", o.v);
           return (
             <button
               type="button"
@@ -77,7 +79,10 @@ export function RecPanel({ rec, setRec, onClose, onApply, compact = false }) {
                 <Icon name={o.icon} size={13} color={active ? "#fff" : col} />
               </div>
               <div>
-                <div style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink }}>{o.l}</div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                  <div style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink }}>{o.l}</div>
+                  <FacetCount n={n} active={active} />
+                </div>
                 <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 2 }}>{o.hint}</div>
               </div>
             </button>

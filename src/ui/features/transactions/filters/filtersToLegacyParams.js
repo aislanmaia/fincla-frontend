@@ -4,28 +4,22 @@
  * `useTransactionsData` (que falam com o backend).
  *
  * Algumas limitações do contrato atual:
- *  - O backend aceita UMA categoria (`filterCat`); enviamos a primeira da seleção.
  *  - O sort do backend é único; enviamos o primeiro critério da lista multi-nível.
- *  - Recorrência (`rec`) ainda não tem filtro correspondente no backend.
- *  - Situação (`settlement`) tem: vira `?settled=` na lista e no summary.
+ *  - Situação (`settlement`) vira `?settled=` na lista e no summary.
+ *  - Recorrência (`rec`) vira `?recurring=` nos dois.
+ *
+ * Categoria e Tags deixaram de disputar um slot: `category` e `tag_id` são
+ * params REPETÍVEIS que casam com qualquer valor dentro da mesma chave e se
+ * combinam entre chaves por AND. Mandamos a seleção inteira das duas.
  *
  * Forma de pagamento é multi-seleção: o backend casa com qualquer um dos valores
  * enviados (param `payment_method` repetido), então mandamos todos os métodos
  * marcados — sem recorte client-side.
  *
- * Tags (facet "Tags", `state.tags`): fincla-frontend#78 — a facet guarda NOMES
- * de tag (o `TagPanel` só trabalha com nomes), mas o único param que o backend
- * entende é `GET /v1/transactions?tag_id=<uuid>` — um único id, de qualquer
- * tipo de tag (fincla-api/docs/FRONTEND_API_GUIDE.md linha ~2818). Antes desta
- * correção o nome nunca era resolvido para um id nem repassado a
- * `buildTransactionsQuery`: a seleção ficava só no estado local, sem nunca
- * chegar à query — por isso marcar uma tag não mudava a listagem. O chamador
+ * Tags (facet "Tags", `state.tags`): a facet guarda NOMES de tag (o `TagPanel`
+ * só trabalha com nomes) e o backend filtra por `tag_id` (UUID). O chamador
  * (`TransacoesPage`) resolve nome→id via o catálogo de tags "detalhe" da
- * organização (`useNovaTransacaoDetailTags`) e manda o resultado em
- * `options.tagIds`; aqui ele compete pelo MESMO slot `filterCat` que a
- * categoria usa (o backend só aceita um `tag_id`) — categoria tem prioridade
- * quando as duas facets estão preenchidas, e isso é uma limitação real do
- * contrato (backend não faz AND entre duas tags), não um bug.
+ * organização e manda o resultado em `options.tagIds`.
  */
 
 import { parseMoneyInput } from "../../onboarding/onboardingValueUtils.js";
@@ -63,31 +57,39 @@ export function mapMethodToLegacy(method) {
 }
 
 /**
- * Backend aceita um único `filterCat`. Mapeamento da seleção multi do front:
+ * Mapeamento da seleção multi do front para `filterCat`:
  *  - vazia → "todas" (sem filtro)
  *  - todas selecionadas (clicar "Todas" na UI) → "todas" (equivalente a sem filtro)
- *  - 1 categoria → o id dela
- *  - >1 mas não todas → primeira da lista (limitação registrada do contrato atual)
+ *  - qualquer outra → a lista INTEIRA, que o adapter reparte entre `category`
+ *    (nomes) e `tag_id` (UUIDs) como params repetidos.
  */
 export function mapCatsToLegacy(cats, totalCategories) {
   if (!Array.isArray(cats) || cats.length === 0) return "todas";
   if (typeof totalCategories === "number" && totalCategories > 0 && cats.length >= totalCategories) {
     return "todas";
   }
-  return cats[0];
+  return cats;
 }
 
 /**
- * Resolve o único slot `filterCat`/`tag_id` que o backend aceita, priorizando a
- * facet "Categoria" (`cats`) sobre a facet "Tags" (`tagIds`, já resolvidos para
- * UUID pelo chamador) quando as duas estão preenchidas ao mesmo tempo — ver nota
- * de topo do arquivo (fincla-frontend#78).
+ * Junta as duas facets num único valor para `buildTransactionsQuery`, que separa
+ * nomes de UUIDs na hora de montar a query. As duas convivem: `category` e
+ * `tag_id` se combinam por AND no backend, então marcar uma categoria E uma tag
+ * pede a interseção — que é o que a tela mostra acesa.
  */
 export function mapCatsOrTagToLegacy(cats, tagIds, totalCategories) {
   const catValue = mapCatsToLegacy(cats, totalCategories);
-  if (catValue !== "todas") return catValue;
-  if (Array.isArray(tagIds) && tagIds.length) return tagIds[0];
-  return "todas";
+  const catList = catValue === "todas" ? [] : catValue;
+  const tagList = Array.isArray(tagIds) ? tagIds.filter(Boolean) : [];
+  const merged = [...catList, ...tagList];
+  return merged.length ? merged : "todas";
+}
+
+/** `rec` da UI → `?recurring=` do backend. "any" não manda nada. */
+export function mapRecToLegacy(rec) {
+  if (rec === "yes") return true;
+  if (rec === "no") return false;
+  return undefined;
 }
 
 /** Converte strings BRL ("200,00") em números para `value_min`/`value_max` da API. */
@@ -137,6 +139,7 @@ export function filtersToLegacyParams(
     customTo: state.customTo,
     sortBy: mapSortToLegacy(state.sort),
     ...mapValueRangeToLegacy(state.valueMin, state.valueMax),
+    recurring: mapRecToLegacy(state.rec),
     // Vai para a lista E para o summary: `buildTransactionsSummaryQuery` recebe o
     // mesmo objeto, então o card de totais e a lista não podem descrever conjuntos
     // diferentes de linhas.

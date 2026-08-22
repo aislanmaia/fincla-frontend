@@ -211,20 +211,32 @@ describe("<TagPanel>", () => {
     expect(screen.queryByRole("button", { name: /Tag casa/i })).not.toBeInTheDocument();
   });
 
-  // fincla-frontend#96 achado 3: o painel prometia "todas as tags marcadas"
-  // (AND multi-select), mas só a primeira ia pro backend. Virou single-select
-  // de verdade — estas provas reprovam a implementação anterior (que somava
-  // ao array em vez de substituir).
-  it("marcar uma segunda tag SUBSTITUI a primeira, nunca soma (single-select)", async () => {
+  // O painel foi single-select enquanto o backend só aceitava um `tag_id`
+  // (fincla-frontend#96 achado 3). Com o param repetível, marcar uma segunda
+  // tag volta a SOMAR — e a lista traz o que tiver qualquer uma delas.
+  it("marcar uma segunda tag soma à seleção", async () => {
     render(<Harness />);
     await userEvent.click(screen.getByRole("button", { name: /Tag trabalho/i }));
     await userEvent.click(screen.getByRole("button", { name: /Tag casa/i }));
 
     expect(screen.getByRole("button", { name: /Tag casa/i })).toHaveAttribute("aria-pressed", "true");
-    // A implementação antiga (`[...tags, tg]`) deixaria as DUAS marcadas.
+    expect(screen.getByRole("button", { name: /Tag trabalho/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("desmarcar uma das tags preserva as outras", async () => {
+    render(<Harness initial={["trabalho", "casa"]} />);
+    await userEvent.click(screen.getByRole("button", { name: /Tag trabalho/i }));
+
     expect(screen.getByRole("button", { name: /Tag trabalho/i })).toHaveAttribute(
       "aria-pressed",
       "false",
+    );
+    expect(screen.getByRole("button", { name: /Tag casa/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
     );
   });
 

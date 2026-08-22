@@ -6,6 +6,8 @@ import {
   isPaymentMethodAllowedForType,
 } from "../../paymentMethodOptions.js";
 import { Icon } from "../../shared/Icon.jsx";
+import { mapUiPaymentMethodToApi } from "../../../../../data/transactionsAdapter.js";
+import { FacetCount } from "../../shared/FacetCount.jsx";
 import { PanelHeader } from "./PanelHeader.jsx";
 
 const TYPE_HINT = {
@@ -18,6 +20,7 @@ export function PaymentMethodPanel({
   type = "todos",
   method = [],
   setMethod,
+  counts,
   onClose,
   compact = false,
 }) {
@@ -58,13 +61,17 @@ export function PaymentMethodPanel({
         >
           <OptionIcon active={method.length === 0} compact={compact} />
           <div>
-            <div style={titleStyle}>Todas</div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+              <div style={titleStyle}>Todas</div>
+              <FacetCount n={counts?.total ?? null} active={method.length === 0} />
+            </div>
             <div style={hintStyle}>Sem filtro por forma</div>
           </div>
         </button>
         {options.map(([value, label]) => {
           const active = method.includes(value);
           const allowed = isPaymentMethodAllowedForType(value, type);
+          const n = counts?.optionCount("payment_method", mapUiPaymentMethodToApi(value));
           return (
             <button
               type="button"
@@ -77,7 +84,10 @@ export function PaymentMethodPanel({
             >
               <OptionIcon active={active} compact={compact} />
               <div>
-                <div style={titleStyle}>{label}</div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                  <div style={titleStyle}>{label}</div>
+                  <FacetCount n={n} active={active} />
+                </div>
                 <div style={hintStyle}>{type === "receita" ? "Entrada" : type === "despesa" ? "Saída" : "Receita ou despesa"}</div>
               </div>
             </button>

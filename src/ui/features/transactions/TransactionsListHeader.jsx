@@ -12,9 +12,9 @@ import { G } from "../../typography";
  * Antes ele morava na faixa de KPIs e era o primeiro a quebrar em telas
  * estreitas; aqui ele tem a largura toda.
  *
- * Fica fixo no topo ao rolar: a contagem descreve o que está à vista e, mais
- * adiante, é aqui que mora o desfazer — nenhum dos dois pode exigir que a pessoa
- * volte ao topo para reaparecer.
+ * Fica fixo no topo ao rolar: a contagem descreve o que está à vista e é aqui
+ * que mora o desfazer — nenhum dos dois pode exigir que a pessoa volte ao topo
+ * para reaparecer.
  */
 export function TransactionsListHeader({
   total,
@@ -24,6 +24,9 @@ export function TransactionsListHeader({
   loading = false,
   statusLabel = null,
   onPendingClick,
+  canUndo = false,
+  onUndo,
+  undoLabel = "",
   compact = false,
 }) {
   const num = (v) => (loading ? "—" : String(v));
@@ -106,7 +109,51 @@ export function TransactionsListHeader({
         ) : null}
       </span>
 
-      {sum != null && !loading ? (
+      <span style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>
+        {/* Desfazer o último recorte. Sem ele, um clique acidental na categoria
+            de uma linha (um gesto de UM toque) obrigaria a reconstruir o filtro
+            à mão — e a tela puniria a exploração que ela quer incentivar. */}
+        {canUndo ? (
+          <button
+            type="button"
+            onClick={onUndo}
+            aria-label={
+              undoLabel ? `Desfazer filtro — voltar para ${undoLabel}` : "Desfazer filtro"
+            }
+            title={undoLabel ? `Voltar para: ${undoLabel}` : "Desfazer o último filtro"}
+            style={{
+              ...G,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 4,
+              background: "none",
+              border: "none",
+              padding: "2px 4px",
+              margin: "0 -2px",
+              cursor: "pointer",
+              color: T.inkMid,
+              fontWeight: 600,
+              fontSize: 11,
+            }}
+          >
+            <svg
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M9 14 4 9l5-5" />
+              <path d="M4 9h10a6 6 0 0 1 0 12h-3" />
+            </svg>
+            {compact ? null : "desfazer"}
+          </button>
+        ) : null}
+        {sum != null && !loading ? (
         <span style={{ display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
           soma
           <b
@@ -120,7 +167,8 @@ export function TransactionsListHeader({
             {fmt(Math.abs(sum))}
           </b>
         </span>
-      ) : null}
+        ) : null}
+      </span>
     </div>
   );
 }

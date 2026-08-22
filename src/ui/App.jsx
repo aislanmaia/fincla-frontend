@@ -67,6 +67,55 @@ import { useAuthRedirects } from "./routing/useAuthRedirects.js";
 import { resolveDataMode } from "./dataMode.js";
 
 /* ─── APP ────────────────────────────────────────────────── */
+/**
+ * Pré-preenchimento do modal de transação a partir de uma linha da lista.
+ *
+ * Extraído porque editar e duplicar precisam EXATAMENTE do mesmo mapeamento —
+ * duas cópias divergiriam num campo qualquer e só a duplicação sairia errada,
+ * silenciosamente.
+ */
+function buildTxModalPreConfig(tx) {
+  const txMethod = modalPaymentKeyFromTransactionUi(tx);
+  const isParcelado = tx.parcela && tx.parcela.total > 1;
+  // Refund: tx.val é positivo mas o tipo no domínio é 'refund' → drawer abre na
+  // aba Despesa com toggle estorno ON.
+  let tipoForModal;
+  if (tx.type === "refund") tipoForModal = "despesa";
+  else if (tx.type === "income" || tx.val > 0) tipoForModal = "receita";
+  else tipoForModal = "despesa";
+  return {
+    tipo: tipoForModal,
+    isEstorno: tx.type === "refund",
+    desc: tx.desc,
+    cat: tx.cat,
+    categoryTagId: tx.categoryTagId ?? null,
+    method: txMethod,
+    valorInicial: transactionUiValAbsForEdit(tx),
+    recorre: tx.rec,
+    editingTransactionId: tx.id,
+    dateIso:
+      tx.dateIsoForEdit ?? transactionDateIsoFromBrDisplay(tx.date) ?? undefined,
+    cartaoId: tx.cartaoId != null ? tx.cartaoId : undefined,
+    modalidade: txMethod === "credito" ? (isParcelado ? "parcelado" : "avista") : undefined,
+    parcelas: isParcelado ? tx.parcela.total : undefined,
+    tags: tx.tags ?? [],
+    detailTagIds: tx.detailTagIds ?? [],
+    detailTagDisplayById: tx.detailTagDisplayById ?? {},
+    refundOfTransactionId: tx.refundOfTransactionId ?? null,
+    // A lista traz a transação inteira, então o baseline nasce aqui: este
+    // caminho curto-circuita o fetch de hidratação (`hasEditorPayload`) e sem
+    // isso o submit voltaria a mandar o pacote cheio.
+    editBaseline: buildEditBaselineFromUi(tx),
+  };
+}
+
+/** "yyyy-mm-dd" de hoje, no fuso local. */
+function todayIsoDate() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 export default function App() {
   const session = useSession();
   const mockDataEnabled = import.meta.env.VITE_ENABLE_UI_MOCKS === "true";
@@ -259,44 +308,23 @@ export default function App() {
       extraTx={extraTx}
       onNewTx={() => openTxModal()}
       onEditTx={(tx) => {
-        const txMethod = modalPaymentKeyFromTransactionUi(tx);
-        const isParcelado = tx.parcela && tx.parcela.total > 1;
-        // Refund: tx.val é positivo mas o tipo no domínio é 'refund' → drawer abre na aba Despesa com toggle estorno ON.
-        let tipoForModal;
-        if (tx.type === "refund") tipoForModal = "despesa";
-        else if (tx.type === "income" || tx.val > 0) tipoForModal = "receita";
-        else tipoForModal = "despesa";
-        flushSync(() => {
-          setModalPreConfig({
-            tipo: tipoForModal,
-            isEstorno: tx.type === "refund",
-            desc: tx.desc,
-            cat: tx.cat,
-            categoryTagId: tx.categoryTagId ?? null,
-            method: txMethod,
-            valorInicial: transactionUiValAbsForEdit(tx),
-            recorre: tx.rec,
-            editingTransactionId: tx.id,
-            dateIso:
-              tx.dateIsoForEdit ??
-              transactionDateIsoFromBrDisplay(tx.date) ??
-              undefined,
-            cartaoId: tx.cartaoId != null ? tx.cartaoId : undefined,
-            modalidade: txMethod === "credito"
-              ? (isParcelado ? "parcelado" : "avista")
-              : undefined,
-            parcelas: isParcelado ? tx.parcela.total : undefined,
-            tags: tx.tags ?? [],
-            detailTagIds: tx.detailTagIds ?? [],
-            detailTagDisplayById: tx.detailTagDisplayById ?? {},
-            refundOfTransactionId: tx.refundOfTransactionId ?? null,
-            // A lista traz a transação inteira, então o baseline nasce aqui: este caminho
-            // curto-circuita o fetch de hidratação (`hasEditorPayload`) e sem isso o
-            // submit voltaria a mandar o pacote cheio.
-            editBaseline: buildEditBaselineFromUi(tx),
-          });
-        });
+        flushSync(() => setModalPreConfig(buildTxModalPreConfig(tx)));
         openTxModal({ [FC.TX]: String(tx.id) });
+      }}
+      /**
+       * Duplicar: o MESMO pré-preenchimento da edição, menos a identidade.
+       *
+       * Sem tirar `editingTransactionId` e `editBaseline` o modal salvaria por
+       * cima da transação original em vez de criar uma nova — o oposto do que
+       * o botão promete. A data vai para hoje porque duplicar quase sempre é
+       * "de novo, agora", não "de novo, na data antiga"; quem quiser a data
+       * original ainda pode trocá-la antes de salvar.
+       */
+      onDuplicateTx={(tx) => {
+        const { editingTransactionId, editBaseline, dateIso, ...base } =
+          buildTxModalPreConfig(tx);
+        flushSync(() => setModalPreConfig({ ...base, dateIso: todayIsoDate() }));
+        openTxModal();
       }}
     />,
     recurring: <RecorrenciasPageView onNav={navTo} cenarios={cenarios} isMobile={isMobile} dataMode={dataMode} extraRecs={extraRecs} organizationId={session.activeOrgId} recurringRefreshToken={transactionsListVersion} onNovaRec={(tipo) => {
