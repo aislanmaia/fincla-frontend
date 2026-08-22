@@ -423,13 +423,16 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     renderPage();
     // Texto exato do badge: /A pagar/i casaria também com a linha-ponte e com o
     // botão "Ver só os a pagar", que não são badges de linha.
-    expect(screen.getAllByText("⏳ A pagar").length).toBe(1);
+    // A ampulheta saiu: dizia "processando", mas o lançamento existe e só não
+    // entrou no saldo. A marca agora é um anel vazado (decorativo), então o
+    // texto do badge é só "A pagar".
+    expect(screen.getAllByText("A pagar").length).toBe(1);
   });
 
   it("cartão NÃO ganha badge 'A pagar' — ele liquida pela fatura, não por lançamento", () => {
     seedSettlement();
     renderPage();
-    const badges = screen.getAllByText("⏳ A pagar");
+    const badges = screen.getAllByText("A pagar");
     // Se o cartão entrasse, seriam dois. O badge mentiria sobre o que o usuário controla.
     expect(badges.length).toBe(1);
     expect(screen.getAllByText("Notebook").length).toBeGreaterThan(0);

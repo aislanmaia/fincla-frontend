@@ -371,7 +371,16 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor }) => {
           {tx.settleable && !tx.settled && (
             <Tip label="Ainda não entrou no saldo da conta — marque como pago quando o dinheiro sair">
               <span style={{ ...G, fontSize:11, color:T.amber, background:T.amberLight,
-                borderRadius:99, padding:"1px 6px", fontWeight:700 }}>⏳ A pagar</span>
+                borderRadius:99, padding:"1px 6px", fontWeight:700,
+                display:"inline-flex", alignItems:"center", gap:5 }}>
+                {/* Anel vazado, não ampulheta: o lançamento não está
+                    "processando" — ele existe e só ainda não entrou no saldo.
+                    Mesma marca do cabeçalho da lista, e um ícone em vez de um
+                    emoji que renderiza diferente em cada sistema. */}
+                <i aria-hidden="true" style={{ display:"inline-block", width:8, height:8,
+                  border:"1.75px solid currentColor", borderRadius:"50%", boxSizing:"border-box" }}/>
+                A pagar
+              </span>
             </Tip>
           )}
 
