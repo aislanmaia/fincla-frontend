@@ -55,6 +55,13 @@ export default defineConfig({
       dependencies: ["smoke"],
     },
     {
+      // Prova do redesenho da tela de Transações em todas as resoluções que o
+      // artefato mede — do ultrawide ao 360x740. Depende do seed do owner.
+      name: "transactions-redesign",
+      testMatch: "**/transactions-redesign.spec.ts",
+      dependencies: ["smoke"],
+    },
+    {
       // Provisiona o próprio consultor e cliente via API; não depende do seed
       // do owner, então roda sem `smoke`.
       name: "consultant-ai-evaluation",

@@ -20,7 +20,7 @@ const CARDS = [
 ];
 const ALL_TAGS = ["trabalho", "casa"];
 
-function Harness({ initialViews = [], filteredCount = 2 } = {}) {
+function Harness({ initialViews = [], filteredCount = 2, compact = false } = {}) {
   const filter = useTransactionsFilterState();
   const [views, setViews] = useState(initialViews);
   const [active, setActive] = useState(null);
@@ -46,6 +46,7 @@ function Harness({ initialViews = [], filteredCount = 2 } = {}) {
           if (active === id) setActive(null);
         },
       }}
+      compact={compact}
     />
   );
 }
@@ -66,6 +67,24 @@ describe("<TransactionsFilterBar>", { timeout: 15000 }, () => {
     expect(tipoCard).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("region", { name: /Filtro: tipo/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Despesa" })).toBeInTheDocument();
+  });
+
+  it("no desktop o painel flutua sobre a lista, sem empurrá-la", async () => {
+    // Medido antes desta mudança: abrir uma faceta em 1366x768 crescia o bloco
+    // de filtros de 232 para 670 px, empurrava os KPIs para fora da dobra e
+    // deixava a lista com altura ZERO.
+    render(<Harness />);
+    await userEvent.click(screen.getByRole("button", { name: /Tipo:/i }));
+    const panel = screen.getByRole("region", { name: /Filtro: tipo/i });
+    expect(panel).toHaveStyle({ position: "absolute" });
+    expect(panel.parentElement).toHaveStyle({ position: "relative" });
+  });
+
+  it("no mobile o painel segue inline dentro do sheet", async () => {
+    render(<Harness compact />);
+    await userEvent.click(screen.getByRole("button", { name: /Tipo:/i }));
+    const panel = screen.getByRole("region", { name: /Filtro: tipo/i });
+    expect(panel).not.toHaveStyle({ position: "absolute" });
   });
 
   it("apenas um painel por vez (alternar facet fecha o anterior)", async () => {

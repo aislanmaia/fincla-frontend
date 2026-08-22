@@ -35,6 +35,17 @@ import {
 import { useTransactionsData } from "../features/transactions/useTransactionsData.js";
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { TransactionsEmptyState } from "../features/transactions/TransactionsEmptyState.jsx";
+import { TransactionsStats } from "../features/transactions/TransactionsStats.jsx";
+import { TransactionsListHeader } from "../features/transactions/TransactionsListHeader.jsx";
+import {
+  DAY_HEADER_HEIGHT,
+  DENSITIES,
+  densityRowHeight,
+  groupingAllowed,
+  readListPrefs,
+  rowCost,
+  writeListPrefs,
+} from "../features/transactions/listPrefs.js";
 import { CardEmptyWithCta } from "../features/shellExtras.jsx";
 import {
   getTransactionsPeriodBootstrap,
@@ -70,8 +81,55 @@ const DEFAULT_RESTORE_SNAPSHOT = Object.freeze({
   debouncedSearch: "",
 });
 
+/** Altura de um lançamento na lista de hoje: 28 px de cabeçalho do dia + 53 da
+ *  linha + 20 de respiro. Com um lançamento por dia — o caso normal — quase toda
+ *  linha carrega o próprio cabeçalho, então é este o custo real por transação. */
+export const TX_ROW_HEIGHT = 101;
+
+/** Piso e teto da primeira página. O teto é o `limit` máximo que
+ *  `GET /v1/transactions` aceita; o piso evita pedir pouco demais numa janela
+ *  minúscula e ficar disparando "carregar mais" logo de cara. */
+export const TX_PAGE_MIN = 20;
+export const TX_PAGE_MAX = 100;
+
+/**
+ * Tamanho da primeira página, dimensionado pela altura disponível.
+ *
+ * O valor fixo de 10 fazia sentido quando cabiam duas transações na tela. Numa
+ * janela alta cabem dezenas, e aí a pessoa chega ao fim da primeira página
+ * ANTES de a tela encher — vê a rolagem infinita disparar duas ou três vezes só
+ * para preencher o que já deveria estar à vista. A sensação é de tela lenta,
+ * não de lista longa.
+ *
+ * @param {number} availableHeight Altura útil para a lista, em px.
+ * @param {number} rowHeight Custo por transação, em px.
+ * @returns {number} Itens da primeira página, entre TX_PAGE_MIN e TX_PAGE_MAX.
+ */
+export function computePageSize(availableHeight, rowHeight = TX_ROW_HEIGHT) {
+  const height = Number(availableHeight);
+  const row = Number(rowHeight);
+  if (!Number.isFinite(height) || !Number.isFinite(row) || row <= 0 || height <= 0) {
+    return TX_PAGE_MIN;
+  }
+  // +5 de folga: a primeira rolagem já encontra conteúdo em vez de um sentinel.
+  const fits = Math.ceil(height / row) + 5;
+  return Math.min(TX_PAGE_MAX, Math.max(TX_PAGE_MIN, fits));
+}
+
 /** Viewport ≥ breakpoint: filtros desktop sempre visíveis. Abaixo: colapsados por padrão. */
 const DESKTOP_FILTERS_EXPAND_BREAKPOINT = 1280;
+
+/** Altura mínima para a barra de filtros completa (9 facetas em duas linhas, 230 px).
+ *
+ *  A decisão era só de largura, e isso invertia o resultado: em 1366×768 a janela
+ *  passa do corte de largura e recebe a barra completa, sobrando 232 px de lista
+ *  (2 transações); em 1152×700 — mais estreita E mais baixa — ela recebe a barra
+ *  compacta e sobra 343 px (3 transações). A restrição real num laptop é vertical,
+ *  então a altura precisa entrar na conta.
+ *
+ *  820 = 768 (a tela mais comum do Brasil) com folga, para 800 e 768 caírem no
+ *  modo compacto e um 1080p continuar com a barra completa. */
+const DESKTOP_FILTERS_EXPAND_MIN_HEIGHT = 820;
 
 /* ── Helpers puros e componentes de linha ──────────────────────────────────
    Estes três blocos moravam DENTRO do corpo de `TransacoesPageBody`. Como o
@@ -108,6 +166,31 @@ const CAT_COLORS = {
   Vestuário: "#BE185D",
 };
 const catColor = (label) => CAT_COLORS[label] || T.inkMid;
+
+/** "20/08/2026" -> { top: "20 ago", sub: "qua" }. Duas linhas curtas cabem numa
+ *  coluna de 54 px sem quebrar; a data por extenso não cabia. */
+const MONTHS_SHORT = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+const WEEKDAYS_SHORT = ["dom","seg","ter","qua","qui","sex","sáb"];
+export function shortDateLabel(raw, today = new Date()) {
+  if (!raw) return { top: "—", sub: "" };
+  const parts = String(raw).split("/");
+  if (parts.length < 2) return { top: String(raw).slice(0, 6), sub: "" };
+  const day = Number(parts[0]);
+  const month = Number(parts[1]) - 1;
+  const year = parts.length === 3 ? Number(parts[2]) : today.getFullYear();
+  if (!Number.isFinite(day) || !Number.isFinite(month) || month < 0 || month > 11) {
+    return { top: String(raw).slice(0, 6), sub: "" };
+  }
+  const d = new Date(year, month, day);
+  const sameDay = (a, b) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const top = `${String(day).padStart(2, "0")} ${MONTHS_SHORT[month]}`;
+  if (sameDay(d, today)) return { top, sub: "hoje" };
+  if (sameDay(d, yesterday)) return { top, sub: "ontem" };
+  return { top, sub: WEEKDAYS_SHORT[d.getDay()] || "" };
+}
 const catBg = (label) => `${catColor(label)}18`;
 
 const fmtBRL = v => "R$\u00a0" + Math.abs(v).toLocaleString("pt-BR",{minimumFractionDigits:2});
@@ -224,7 +307,8 @@ export const Tip = ({ label, children, pos = "top" }) => {
   );
 };
 
-const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor }) => {
+const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
+  rowHeight = 48, showDate = true, dateLabel = "", quickActions = null }) => {
   const isRefund   = tx.type === "refund";
   const isReceita  = tx.type === "income" || isRefund;
   const hasParcela = !!tx.parcela && !isRefund;
@@ -240,15 +324,47 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor }) => {
   return (
     <div
       onClick={() => onSelect(tx)}
+      onKeyDown={(e) => {
+        // Só a própria linha. Os botões de ação rápida são descendentes: sem
+        // esta guarda, o `preventDefault` cancelava o clique sintetizado deles e
+        // Enter numa ação abria a sanfona em vez de executar a ação.
+        if (e.target !== e.currentTarget) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect(tx);
+        }
+      }}
       className="fincla-row"
-      style={{ display:"flex", alignItems:"flex-start", gap:12,
-        padding: isMobile ? "13px 16px" : "12px 18px",
+      /* A linha era um `div` com onClick: invisível para teclado e para leitor
+         de tela. Um único ponto de parada no Tab (a lista inteira seriam 15
+         paradas × 3 ações) e Enter/Espaço abrem o detalhe. */
+      role="button"
+      tabIndex={0}
+      aria-expanded={isSelected}
+      aria-label={`${tx.desc}, ${isReceita ? "receita" : "despesa"} de ${fmtBRL(tx.val)} em ${tx.date}`}
+      style={{ display:"flex", alignItems:"center", gap: isMobile ? 10 : 12,
+        minHeight: rowHeight,
+        padding: isMobile ? "0 14px" : "0 14px",
         background: isSelected ? `${catColor(tx.cat)}08` : "transparent",
         borderLeft: isSelected ? `3px solid ${catColor(tx.cat)}` : "3px solid transparent",
         cursor:"pointer", transition:"background 0.12s, border-color 0.12s" }}>
 
+      {/* Data em coluna. Ela sai do cabeçalho de grupo porque, com um lançamento
+          por dia — o caso normal —, o cabeçalho custava 48 px por transação só
+          para repetir a data. No modo agrupado o cabeçalho já a carrega e a
+          coluna some. */}
+      {showDate && (
+        <div style={{ ...G, width: isMobile ? 44 : 54, flexShrink:0,
+          fontFamily:"'Geist Mono',monospace", fontSize:11, color:T.inkLight, lineHeight:1.15 }}>
+          <b style={{ display:"block", fontSize:12, color:T.ink, fontWeight:700 }}>{dateLabel.top}</b>
+          {dateLabel.sub}
+        </div>
+      )}
+
       {/* Icon */}
-      <div style={{ width:38, height:38, borderRadius:11, background:avatarBg,
+      <div style={{ width: rowHeight <= 40 ? 24 : rowHeight <= 50 ? 28 : 34,
+        height: rowHeight <= 40 ? 24 : rowHeight <= 50 ? 28 : 34,
+        borderRadius: rowHeight <= 40 ? 7 : 9, background:avatarBg,
         display:"flex", alignItems:"center", justifyContent:"center",
         fontSize:18, color: isRefund ? T.green : undefined,
         fontWeight: isRefund ? 700 : undefined,
@@ -322,7 +438,16 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor }) => {
           {tx.settleable && !tx.settled && (
             <Tip label="Ainda não entrou no saldo da conta — marque como pago quando o dinheiro sair">
               <span style={{ ...G, fontSize:11, color:T.amber, background:T.amberLight,
-                borderRadius:99, padding:"1px 6px", fontWeight:700 }}>⏳ A pagar</span>
+                borderRadius:99, padding:"1px 6px", fontWeight:700,
+                display:"inline-flex", alignItems:"center", gap:5 }}>
+                {/* Anel vazado, não ampulheta: o lançamento não está
+                    "processando" — ele existe e só ainda não entrou no saldo.
+                    Mesma marca do cabeçalho da lista, e um ícone em vez de um
+                    emoji que renderiza diferente em cada sistema. */}
+                <i aria-hidden="true" style={{ display:"inline-block", width:8, height:8,
+                  border:"1.75px solid currentColor", borderRadius:"50%", boxSizing:"border-box" }}/>
+                A pagar
+              </span>
             </Tip>
           )}
 
@@ -378,8 +503,11 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor }) => {
         )}
 
         {/* Row 4: tags */}
+        {/* As tags dão lugar às ações rápidas no hover — assim a descrição, o
+            valor e a situação não são espremidos quando elas aparecem. */}
         {visibleTags.length > 0 && (
-          <div style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap" }}>
+          <div className="fincla-quick-hides"
+            style={{ display:"flex", alignItems:"center", gap:4, flexWrap:"wrap" }}>
             {visibleTags.map(tag => (
               // `title` + truncagem (achado 4, rodada 5 de review #100): a
               // desambiguação por prefixo curto e estável do id (não usa
@@ -417,14 +545,60 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor }) => {
             style={{ marginTop:2, transition:"color 0.12s" }}/>
         )}
       </div>
+
+      {/* Ações rápidas — o que hoje exige abrir o detalhe primeiro. */}
+      {quickActions && (
+        <div className="fincla-quick" style={{ flexShrink:0, marginLeft:2 }}>
+          {tx.settleable && (
+            <QuickAction
+              label={tx.settled ? `Desfazer pagamento de ${tx.desc}` : `Marcar ${tx.desc} como pago`}
+              tone="green"
+              onClick={(e) => { e.stopPropagation(); quickActions.onSettle(tx); }}
+            >
+              {tx.settled ? "↺" : "✓"}
+            </QuickAction>
+          )}
+          <QuickAction
+            label={`Editar ${tx.desc}`}
+            onClick={(e) => { e.stopPropagation(); quickActions.onEdit(tx); }}
+          >
+            ✎
+          </QuickAction>
+          <QuickAction
+            label={`Excluir ${tx.desc}`}
+            tone="red"
+            onClick={(e) => { e.stopPropagation(); quickActions.onDelete(tx); }}
+          >
+            🗑
+          </QuickAction>
+        </div>
+      )}
     </div>
   );
 };
+
+/** Botão de 28 px das ações rápidas. Alvo mínimo respeitado; `stopPropagation`
+ *  no chamador para o clique não abrir a sanfona junto. */
+const QuickAction = ({ label, tone, onClick, children }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-label={label}
+    title={label}
+    style={{ ...G, width:28, height:28, borderRadius:8, cursor:"pointer",
+      display:"flex", alignItems:"center", justifyContent:"center", fontSize:12,
+      background:T.surface,
+      border:`1px solid ${tone === "green" ? "#B7E4CE" : tone === "red" ? "#F5C9C9" : T.border}`,
+      color: tone === "green" ? T.green : tone === "red" ? T.red : T.inkMid }}>
+    {children}
+  </button>
+);
 
 /* Mesmo motivo do `TxRow` acima (fincla-frontend#66): definido dentro do corpo,
    o drawer inteiro era desmontado e remontado a cada render da página — inclusive
    a cada transição de `settlingId`, disparada pelo próprio botão de liquidar. */
 const DetailPanel = ({
+  inline = false,
   tx,
   onClose,
   onEditTx,
@@ -443,8 +617,13 @@ const DetailPanel = ({
   if (!tx) return null;
   const isReceita = tx.val > 0;
   return (
-    <div style={{ display:"flex", flexDirection:"column", flex:1, minHeight:0 }}>
+    <div style={ inline
+      ? { display:"flex", flexDirection:"column" }
+      : { display:"flex", flexDirection:"column", flex:1, minHeight:0 }}>
       {/* Header */}
+      {/* No modo sanfona o cabeçalho "Detalhes" some: a linha logo acima já diz
+          de qual transação se trata, e repetir isso custaria altura. */}
+      {!inline && (
       <div style={{ padding:"18px 20px", borderBottom:`1px solid ${T.border}`,
         display:"flex", alignItems:"center", justifyContent:"space-between" }}>
         <div style={{ ...G, fontSize:14, fontWeight:800, color:T.ink }}>Detalhes</div>
@@ -455,7 +634,9 @@ const DetailPanel = ({
           <X size={15} color={T.inkMid}/>
         </button>
       </div>
-      {/* Amount hero */}
+      )}
+      {/* Amount hero — só no painel; na sanfona o valor já está na linha. */}
+      {!inline && (
       <div style={{ padding:"24px 20px 16px", background: isReceita ? T.greenLight : T.redLight,
         borderBottom:`1px solid ${T.border}`, textAlign:"center" }}>
         <div style={{ fontSize:32, marginBottom:6 }}>{tx.icon}</div>
@@ -465,8 +646,13 @@ const DetailPanel = ({
         </div>
         <div style={{ ...G, fontSize:13, color:T.inkMid, marginTop:4 }}>{tx.desc}</div>
       </div>
-      {/* Fields */}
-      <div style={{ flex:1, overflowY:"auto", overflowX:"hidden", padding:"16px 20px", display:"flex", flexDirection:"column", gap:0, minHeight:0 }}>
+      )}
+      {/* Fields — em grade quando inline, para aproveitar a largura toda em vez
+          de empilhar oito linhas numa coluna de 320 px. */}
+      <div style={ inline
+        ? { display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(180px, 1fr))",
+            gap:"2px 20px", padding:"10px 14px 4px" }
+        : { flex:1, overflowY:"auto", overflowX:"hidden", padding:"16px 20px", display:"flex", flexDirection:"column", gap:0, minHeight:0 }}>
         {[
           { label:"Categoria", val: <span style={{ ...G, display:"flex", alignItems:"center", gap:6 }}>
               <div style={{ width:8, height:8, borderRadius:"50%", background:catColor(tx.cat), flexShrink:0 }}/>
@@ -665,7 +851,18 @@ function TransacoesPageBody({
 }) {
   const urlSearch = useSearch({ strict: false });
   const navigate = useNavigate();
-  const PAGE_SIZE = 10;
+  /* Calculado UMA vez, no primeiro layout — redimensionar a janela não pode
+     disparar refetch. E só cresce: trocar para uma lista mais densa aumenta a
+     página, mas voltar não encolhe o que já foi carregado. */
+  const pageSizeRef = useRef(0);
+  if (pageSizeRef.current === 0) {
+    const prefs = readListPrefs();
+    pageSizeRef.current = computePageSize(
+      typeof window !== "undefined" ? window.innerHeight - 240 : 0,
+      rowCost(prefs.density, isMobile, prefs.grouped),
+    );
+  }
+  const PAGE_SIZE = pageSizeRef.current;
 
   const parseDate = d => {
     if (!d) return new Date(0);
@@ -725,7 +922,19 @@ function TransacoesPageBody({
   const [viewportWidth, setViewportWidth] = useState(
     () => (typeof window !== "undefined" ? window.innerWidth : DESKTOP_FILTERS_EXPAND_BREAKPOINT),
   );
+  const [viewportHeight, setViewportHeight] = useState(
+    () => (typeof window !== "undefined" ? window.innerHeight : DESKTOP_FILTERS_EXPAND_MIN_HEIGHT),
+  );
   const [compactDesktopFiltersOpen, setCompactDesktopFiltersOpen] = useState(false);
+  const [statsExpanded, setStatsExpanded] = useState(false);
+  const [listPrefs, setListPrefsState] = useState(() => readListPrefs());
+  const setListPrefs = useCallback((next) => {
+    setListPrefsState((cur) => {
+      const merged = { ...cur, ...next };
+      writeListPrefs(merged);
+      return merged;
+    });
+  }, []);
   const [saveViewFormOpen, setSaveViewFormOpen] = useState(false);
   const [saveViewFormMode, setSaveViewFormMode] = useState("create");
   // ── Bottom sheet drag-to-dismiss ──────────────────────────────
@@ -738,7 +947,13 @@ function TransacoesPageBody({
   /** Estável entre renders: se a identidade mudasse, `TxRow` re-renderizaria à toa
       e o ganho de içar o componente para o módulo iria embora. */
   const handleSelectTx = useCallback((tx) => {
-    setSelected((cur) => (cur?.id === tx.id ? null : tx));
+    setSelected((cur) => {
+      const next = cur?.id === tx.id ? null : tx;
+      // O erro de liquidação é de UMA transação; sem isto ele reapareceria
+      // colado na próxima que fosse aberta.
+      if (cur?.id !== next?.id) setSettleError("");
+      return next;
+    });
   }, []);
   const [visible,     setVisible]     = useState(PAGE_SIZE);
   const listScrollRef = useRef(null);
@@ -767,10 +982,15 @@ function TransacoesPageBody({
   const [savedViewActive, setSavedViewActive] = useState(null);
 
   const isDesktopCompact =
-    !isMobile && viewportWidth < DESKTOP_FILTERS_EXPAND_BREAKPOINT;
+    !isMobile
+    && (viewportWidth < DESKTOP_FILTERS_EXPAND_BREAKPOINT
+      || viewportHeight < DESKTOP_FILTERS_EXPAND_MIN_HEIGHT);
 
   useEffect(() => {
-    const onResize = () => setViewportWidth(window.innerWidth);
+    const onResize = () => {
+      setViewportWidth(window.innerWidth);
+      setViewportHeight(window.innerHeight);
+    };
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
@@ -1302,7 +1522,11 @@ function TransacoesPageBody({
     if (shouldUseRealData && transactionsData.isLoading) return;
     if (loadMoreCooldownRef.current) return;
     loadMoreCooldownRef.current = true;
-    setVisible((v) => v + PAGE_SIZE);
+    /* `visible` É o `limit` da API, que rejeita acima de 100 com 422 — e o
+       "Tentar novamente" reenviava a MESMA query estourada, deixando a pessoa
+       presa sem saída. Com PAGE_SIZE fixo em 10 a sequência batia exatamente em
+       100; dimensionado pela viewport ela passava do teto. */
+    setVisible((v) => Math.min(TX_PAGE_MAX, v + PAGE_SIZE));
     window.setTimeout(() => {
       loadMoreCooldownRef.current = false;
     }, 400);
@@ -1632,8 +1856,75 @@ function TransacoesPageBody({
     </button>
   );
 
+  /* As ações rápidas usam os MESMOS caminhos do detalhe — nenhuma segunda
+     implementação de liquidar/excluir, que é onde as duas divergiriam. */
+  /* Esc fecha a sanfona — sem isso, quem abriu por teclado não tem como sair
+     sem tabular por todo o detalhe. */
+  useEffect(() => {
+    if (!selected) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") setSelected(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selected]);
+
+  const quickActions = useMemo(() => ({
+    onEdit: (tx) => { if (onEditTx) onEditTx(tx); },
+    onDelete: (tx) => { setSelected(tx); setDeletingId(tx.id); },
+    onSettle: async (tx) => {
+      if (settlingId) return;
+      setSettleError("");
+      setSettlingId(tx.id);
+      try {
+        const next = !tx.settled;
+        if (shouldUseRealData) {
+          await transactionsData.setTransactionSettled(tx.id, next);
+          if (onTransactionsInvalidate) onTransactionsInvalidate();
+        } else {
+          setMockTxList((cur) => cur.map((t) => (t.id === tx.id ? { ...t, settled: next } : t)));
+        }
+      } catch (e) {
+        // O erro só é renderizado dentro da sanfona. Usando o ✓ da linha sem
+        // abrir nada, a falha ficava invisível — indistinguível de um no-op — e
+        // a string sobrevivia no nível da página, aparecendo depois colada numa
+        // transação sem relação. Abrir a linha põe o erro no contexto certo.
+        setSettleError(e?.message || "Não foi possível atualizar o pagamento.");
+        setSelected(tx);
+      } finally {
+        setSettlingId(null);
+      }
+    },
+  }), [onEditTx, settlingId, shouldUseRealData, transactionsData, onTransactionsInvalidate]);
+
+  /* Agrupar por data só faz sentido ordenado por data: por valor ou categoria
+     cada "grupo" vira um item só, o pior dos dois mundos. */
+  const canGroup = groupingAllowed(filter.sort?.[0]?.field ?? filter.sort?.field);
+  const isGrouped = listPrefs.grouped && canGroup;
+  const listRowHeight = densityRowHeight(listPrefs.density, isMobile);
+
+  /* Quantos lançamentos do filtro ainda não entraram no saldo. Substitui o
+     aviso de 16 px que ocupava uma faixa própria para dizer a mesma coisa. */
+  const pendingCount = txList.filter((t) => t.settleable && !t.settled).length;
+
   const listContent = (
     <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
+      <TransactionsListHeader
+        total={filteredCount}
+        pending={filter.settlement === "todas" ? pendingCount : 0}
+        sum={canUseRemoteSummary || filtered.length ? saldo : null}
+        fmt={fmtBRL}
+        loading={tagFilterBlocked || listNeverLoaded}
+        statusLabel={
+          tagFilterBlocked
+            ? "Aguardando filtro de tag"
+            : listLoadFailed
+              ? "Não foi possível carregar"
+              : listLoading
+                ? "Carregando…"
+                : null
+        }
+        onPendingClick={() => filter.setSettlement("a-pagar")}
+        compact={isMobile}
+      />
       {groups.length === 0 ? (
         // Prioridade 2 (revisão adversarial da PR #96): com a busca em espera
         // (`tagFilterBlocked`), `groups` também dá 0 — mas "Nenhuma transação
@@ -1693,37 +1984,79 @@ function TransacoesPageBody({
           />
         )
       ) : (
-        groups.map(([date, txs]) => (
-          <div key={date}>
-            {/* Date group header */}
-            <div style={{ display:"flex", alignItems:"center", gap:10, padding: isMobile ? "10px 16px 4px" : "10px 18px 4px",
-              position:"sticky", top:0, background:T.bg, zIndex:2,
-              boxShadow:"0 1px 0 rgba(15,23,42,0.06)" }}>
-              <div style={{ ...G, fontSize:11, fontWeight:700, color:T.inkMid,
-                textTransform:"capitalize" }}>{fmtDateLabel(date)}</div>
-              <div style={{ flex:1, height:1, background:T.border }}/>
-              <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:11,
-                color: txs.reduce((s,t)=>s+t.val,0) >= 0 ? T.green : T.red, fontWeight:700 }}>
-                {txs.reduce((s,t)=>s+t.val,0) >= 0 ? "+" : "−"}{fmtBRL(Math.abs(txs.reduce((s,t)=>s+t.val,0)))}
-              </div>
-            </div>
-            {/* Rows */}
-            <div style={{ background:T.surface, borderRadius:12, overflow:"hidden",
-              border:`1px solid ${T.border}`, margin: isMobile ? "0 0 10px" : "0 0 8px" }}>
+        /* Lista contínua (padrão) ou agrupada por data — a preferência é do
+           usuário. Contínua: um card só, linhas separadas por hairline, data em
+           coluna. Agrupada: cabeçalho de dia sticky de 24 px (contra os 48 de
+           antes) e a coluna de data some, porque o cabeçalho já a carrega. */
+        <div style={{ background:T.surface, borderRadius:12, overflow:"hidden",
+          border:`1px solid ${T.border}` }}>
+          {groups.map(([date, txs], gi) => (
+            <React.Fragment key={date}>
+              {isGrouped && (
+                <div style={{ display:"flex", alignItems:"center", gap:10,
+                  height: DAY_HEADER_HEIGHT, padding:"0 14px",
+                  position:"sticky", top:isMobile ? 32 : 28, background:"#F4F6F9", zIndex:2,
+                  borderTop: gi > 0 ? `1px solid ${T.border}` : "none",
+                  borderBottom:`1px solid ${T.border}` }}>
+                  <div style={{ ...G, fontSize:11, fontWeight:700, color:T.inkMid,
+                    textTransform:"capitalize" }}>{fmtDateLabel(date)}</div>
+                  <div style={{ flex:1 }}/>
+                  <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:11,
+                    color: txs.reduce((s,t)=>s+t.val,0) >= 0 ? T.green : T.red, fontWeight:700 }}>
+                    {txs.reduce((s,t)=>s+t.val,0) >= 0 ? "+" : "−"}{fmtBRL(Math.abs(txs.reduce((s,t)=>s+t.val,0)))}
+                  </div>
+                </div>
+              )}
               {txs.map((tx, i) => (
-                <div key={tx.id} style={{ borderBottom: i<txs.length-1?`1px solid ${T.border}`:"none" }}>
+                <div key={tx.id} style={{
+                  borderBottom: (gi === groups.length - 1 && i === txs.length - 1 && selected?.id !== tx.id)
+                    ? "none" : `1px solid ${T.border}` }}>
                   <TxRow
                     tx={tx}
                     isMobile={isMobile}
                     isSelected={selected?.id === tx.id}
                     onSelect={handleSelectTx}
                     coveringAnchor={anchorCovering(tx, balanceAnchors)}
+                    rowHeight={listRowHeight}
+                    showDate={!isGrouped}
+                    dateLabel={shortDateLabel(tx.date)}
+                    quickActions={quickActions}
                   />
+                  {/* Sanfona: o detalhe nasce ONDE O OLHO JÁ ESTÁ, em vez de
+                      numa coluna de 320 px que, em 1366×768, sobrava com 32 px
+                      de área rolável — sem os botões Editar e Excluir à vista.
+                      Mesmo padrão dos itens de fatura em Cartões. */}
+                  {selected?.id === tx.id && (
+                    <div
+                      role="region"
+                      aria-label={`Detalhes de ${tx.desc}`}
+                      style={{ background:"#FAFBFF", boxShadow:`inset 3px 0 0 ${T.blue}`,
+                        borderTop:`1px solid ${T.border}`,
+                        animation:"fadeInDown 0.18s ease" }}>
+                      <DetailPanel
+                        inline
+                        tx={tx}
+                        onClose={() => setSelected(null)}
+                        onEditTx={onEditTx}
+                        setSelected={setSelected}
+                        shouldUseRealData={shouldUseRealData}
+                        transactionsData={transactionsData}
+                        setMockTxList={setMockTxList}
+                        onTransactionsInvalidate={onTransactionsInvalidate}
+                        deletingId={deletingId}
+                        setDeletingId={setDeletingId}
+                        settlingId={settlingId}
+                        setSettlingId={setSettlingId}
+                        settleError={settleError}
+                        setSettleError={setSettleError}
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
-            </div>
-          </div>
-        ))
+            </React.Fragment>
+          ))}
+        </div>
       )}
       {/* Paginação infinita: sentinel + feedback (carregamento ao chegar ao fim da lista).
           `data-testid` só pra prova de teste (fincla-frontend#109 rodada 4,
@@ -1871,9 +2204,69 @@ function TransacoesPageBody({
         </div>
       )}
 
-      {/* ── Row 1: Title + CSV ─────────────────────────────────── */}
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
+      {/* ── Row 1: Título + estatísticas + CSV ───────────────────
+          A faixa de KPIs de 87 px e o aviso de "a pagar" de 16 px saíram: os
+          três números vieram para cá (a linha era quase toda espaço vazio) e a
+          contagem foi para o cabeçalho da lista, que é o que ela descreve. */}
+      <div style={{ display:"flex", alignItems: statsExpanded ? "flex-start" : "center",
+        justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
         <PageTitle sans="Minhas" serif="Transações"/>
+        {!isMobile && (
+          <div style={{ flex:"1 1 420px", minWidth:0, maxWidth:900, marginLeft:"auto" }}>
+            <TransactionsStats
+              receita={totalReceita}
+              despesa={totalDespesaLiquido}
+              resultado={saldo}
+              countReceita={countReceita}
+              countDespesa={countDespesa}
+              countEstorno={countEstorno}
+              totalEstorno={totalEstorno}
+              filteredCount={filteredCount}
+              countsArePartial={canUseRemoteSummary}
+              unknown={tagFilterBlocked || listNeverLoaded}
+              expanded={statsExpanded}
+              onToggleExpanded={() => setStatsExpanded((v) => !v)}
+              compactLabels={viewportWidth < 1400}
+              fmt={fmtBRL}
+            />
+          </div>
+        )}
+        <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
+          {/* Preferências de exibição — o que muda COMO a lista aparece, não
+              QUAIS transações aparecem (isso é o painel de filtros). */}
+          <button
+            type="button"
+            onClick={() => {
+              const order = Object.keys(DENSITIES);
+              const next = order[(order.indexOf(listPrefs.density) + 1) % order.length];
+              setListPrefs({ density: next });
+            }}
+            title={`Densidade da lista: ${DENSITIES[listPrefs.density].label}`}
+            aria-label={`Densidade da lista: ${DENSITIES[listPrefs.density].label}. Clique para alternar.`}
+            style={{ ...G, width:32, height:32, borderRadius:9, cursor:"pointer",
+              border:`1px solid ${T.border}`, background:T.surface, color:T.inkMid,
+              display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>
+            ▤
+          </button>
+          <button
+            type="button"
+            disabled={!canGroup}
+            onClick={() => setListPrefs({ grouped: !listPrefs.grouped })}
+            title={canGroup
+              ? (isGrouped ? "Agrupado por data" : "Lista contínua")
+              : "Agrupar por data só vale ordenando por data"}
+            aria-pressed={isGrouped}
+            aria-label="Agrupar por data"
+            style={{ ...G, width:32, height:32, borderRadius:9,
+              cursor: canGroup ? "pointer" : "not-allowed",
+              opacity: canGroup ? 1 : 0.4,
+              border:`1px solid ${isGrouped ? "#BFD3FA" : T.border}`,
+              background: isGrouped ? T.blueLight : T.surface,
+              color: isGrouped ? T.blue : T.inkMid,
+              display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>
+            ▦
+          </button>
+        </div>
         <button onClick={exportCSV}
           style={{ ...G, display:"flex", alignItems:"center", gap:5, background:T.surface,
             border:`1px solid ${T.border}`, borderRadius:9, padding:"8px 13px",
@@ -2043,224 +2436,44 @@ function TransacoesPageBody({
         </div>
       )}
 
-      {/* ── Row 5: KPI strip ─────────────────────────────────────── */}
-      {/* fincla-frontend#109 rodada 2, achado 4: a faixa só tratava
-          `tagFilterBlocked` como "ainda não sei responder" — em `listLoading`/
-          `listLoadFailed` (a MESMA lacuna de informação que fez a lista
-          ganhar `hasLoaded`/#106) ela continuava afirmando "+R$ 0,00" e
-          "0 transações no filtro", contradizendo o card logo abaixo (que já
-          mostra "Carregando…"/erro). `kpiUnknown` cobre as três causas. */}
-      <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: isMobile ? 8 : 12 }}>
-        {(() => {
-          const kpiUnknown = tagFilterBlocked || listNeverLoaded;
-          // Despesa líquida pode ser negativa quando estornos > despesas no período.
-          // Quando líquida < 0, cor vira verde mas o sinal `−` é preservado (matemática honesta).
-          const despesaPositiva = totalDespesaLiquido >= 0;
-          const despesaColor = despesaPositiva ? T.red : T.green;
-          const despesaBg = despesaPositiva ? T.redLight : T.greenLight;
-          return [
-            {
-              label: "Receitas",
-              val: totalReceita,
-              sign: "+",
-              color: T.green,
-              bg: T.greenLight,
-              countLine: `${countReceita} lançamento${countReceita !== 1 ? "s" : ""}`,
-            },
-            {
-              label: "Despesas",
-              val: Math.abs(totalDespesaLiquido),
-              sign: despesaPositiva ? "−" : "−", // mantém sinal mesmo quando líquido < 0
-              color: despesaColor,
-              bg: despesaBg,
-              subLine: totalEstorno > 0
-                ? `↳ ${fmtBRL(totalEstorno)} em estornos abatidos`
-                : null,
-              countLine: countEstorno > 0
-                ? `${countDespesa} desp · ${countEstorno} ↺`
-                : `${countDespesa} lançamento${countDespesa !== 1 ? "s" : ""}`,
-              tooltip: !despesaPositiva ? "Saldo positivo de estornos no período" : undefined,
-            },
-            {
-              // "Resultado", não "Saldo": este número é receitas − despesas DO FILTRO
-              // atual, não o dinheiro que existe na conta. Chamá-lo de "Saldo" fazia o
-              // usuário procurar aqui o saldo da conta e concluir que ele estava errado.
-              label: "Resultado",
-              val: Math.abs(saldo),
-              sign: saldo >= 0 ? "+" : "−",
-              color: saldo >= 0 ? T.green : T.red,
-              bg: saldo >= 0 ? T.greenLight : T.redLight,
-              countLine: `${filteredCount} transaç${filteredCount !== 1 ? "ões" : "ão"} no filtro`,
-              tooltip: "Receitas menos despesas dos lançamentos filtrados. Não é o saldo da conta — esse fica em Contas e na Visão Geral.",
-            },
-          ].map((k) => (
-            <div
-              key={k.label}
-              title={k.tooltip}
-              style={{
-                background: T.surface,
-                border: `1px solid ${T.border}`,
-                borderRadius: 12,
-                padding: isMobile ? "12px 14px" : "14px 18px",
-                gridColumn: isMobile && k.label === "Resultado" ? "1 / -1" : "auto",
-              }}
-            >
-              <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>
-                {k.label}
-              </div>
-              <div style={{ ...G, fontFamily: "'Geist Mono',monospace", fontSize: isMobile ? 14 : 16, fontWeight: 800, color: kpiUnknown ? T.inkLight : k.color, letterSpacing: "-0.01em" }}>
-                {/* Prioridade 2: com a busca em espera (ou em voo, ou
-                    falha) `k.val` é sempre 0 (a API nem respondeu de
-                    verdade) — "R$ 0,00" afirmaria um resultado que não
-                    existe. "—" é honesto: não sabemos ainda. */}
-                {kpiUnknown ? "—" : <>{k.sign}{fmtBRL(k.val)}</>}
-              </div>
-              {k.subLine && !kpiUnknown && (
-                <div style={{ ...G, fontSize: 11, color: T.green, marginTop: 3, fontWeight: 600 }}>
-                  {k.subLine}
-                </div>
-              )}
-              <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 3 }}>
-                {tagFilterBlocked
-                  ? "Aguardando filtro de tag"
-                  : listLoadFailed
-                    ? "Não foi possível carregar"
-                    : listLoading
-                      ? "Carregando…"
-                      : k.countLine}
-              </div>
-            </div>
-          ));
-        })()}
-      </div>
-
-      {/* Ponte entre os dois números: o "Resultado" acima conta tudo que está no
-          filtro, mas o saldo da conta só conta o que foi pago. Sem esta linha o
-          usuário não tem como descobrir que existe essa diferença — nem o facet. */}
-      {filter.settlement === "todas" && txList.some((t) => t.settleable && !t.settled) && (
-        <div style={{ ...G, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap",
-          fontSize:12, color:T.inkLight, marginTop:-4 }}>
-          <span style={{ color:T.amber, fontWeight:700 }}>⏳</span>
-          Há lançamentos a pagar aqui — eles ainda não entraram no saldo da conta.
-          <button
-            type="button"
-            onClick={() => filter.setSettlement("a-pagar")}
-            style={{ ...G, background:"none", border:"none", padding:0, fontSize:12,
-              fontWeight:700, color:T.blue, cursor:"pointer", textDecoration:"underline" }}>
-            Ver só os a pagar
-          </button>
-        </div>
+      {/* A faixa de KPIs de 87 px foi para a linha do título (Row 1) e a
+          contagem para o cabeçalho da lista. No mobile, onde não há largura para
+          dividir a linha do título, as estatísticas viram uma faixa própria. */}
+      {isMobile && (
+        <TransactionsStats
+          receita={totalReceita}
+          despesa={totalDespesaLiquido}
+          resultado={saldo}
+          countReceita={countReceita}
+          countDespesa={countDespesa}
+          countEstorno={countEstorno}
+          totalEstorno={totalEstorno}
+          filteredCount={filteredCount}
+          countsArePartial={canUseRemoteSummary}
+          unknown={tagFilterBlocked || listNeverLoaded}
+          expanded={statsExpanded}
+          onToggleExpanded={() => setStatsExpanded((v) => !v)}
+          stacked
+          compactLabels
+          fmt={fmtBRL}
+        />
       )}
 
-            {/* List + Detail panel */}
-      {isMobile ? (
-        /* Mobile: list full width, detail as bottom sheet */
-        <>
+            {/* Lista. O painel lateral de 320 px e o bottom sheet de detalhes
+                deixaram de existir: a sanfona abre embaixo da própria linha.
+                Medido antes: em 1366×768 o painel herdava a altura espremida da
+                lista e sobrava com 32 px de área rolável para 233 px de
+                conteúdo — Editar, Excluir e Marcar como pago ficavam fora de
+                alcance sem rolar dentro dessa janela. */}
+      <div style={{ display:"flex", flex:1, minHeight:0, overflow:"hidden" }}>
+        <div
+          ref={listScrollRef}
+          className="fincla-scroll"
+          style={{ flex:1, minWidth:0, overflowY:"auto", overflowX:"hidden" }}
+        >
           {listContent}
-          {selected && (
-            <div
-              style={{ position:"fixed", inset:0, zIndex:400,
-                display:"flex", flexDirection:"column", justifyContent:"flex-end" }}
-              onClick={e=>{ if(e.target===e.currentTarget) setSelected(null); }}>
-              {/* Backdrop */}
-              <div onClick={()=>setSelected(null)}
-                style={{ position:"absolute", inset:0,
-                  background:"rgba(0,0,0,0.45)",
-                  animation:"backdropIn 0.22s ease-out both" }}/>
-              {/* Sheet */}
-              <div style={{ position:"relative", background:T.surface,
-                borderRadius:"24px 24px 0 0",
-                height:"85dvh", display:"flex", flexDirection:"column",
-                animation:"sheetUp 0.5s cubic-bezier(0.32,0.72,0,1) both",
-                boxShadow:"0 -2px 0 rgba(0,0,0,0.05), 0 -8px 32px rgba(0,0,0,0.14), 0 -24px 80px rgba(0,0,0,0.08)" }}
-                id="tx-detail-sheet">
-                {/* Handle — drag down to dismiss */}
-                <div
-                  onTouchStart={e => {
-                    const sheet  = document.getElementById('tx-detail-sheet');
-                    const startY = e.touches[0].clientY;
-                    const startT = Date.now();
-                    let last = 0;
-                    const mv = ev => {
-                      last = ev.touches[0].clientY - startY;
-                      if (last > 0) sheet.style.transform = `translateY(${last}px)`;
-                    };
-                    const up = () => {
-                      const vel = last / Math.max(1, Date.now() - startT);
-                      sheet.style.transition = 'transform 0.34s cubic-bezier(0.22,1,0.36,1)';
-                      if (vel > 0.45 || last > sheet.offsetHeight * 0.3) {
-                        sheet.style.transform = 'translateY(110%)';
-                        setTimeout(() => { setSelected(null); sheet.style.transform=''; sheet.style.transition=''; }, 340);
-                      } else {
-                        sheet.style.transform = '';
-                        setTimeout(() => sheet.style.transition = '', 340);
-                      }
-                      document.removeEventListener('touchmove', mv);
-                      document.removeEventListener('touchend', up);
-                    };
-                    document.addEventListener('touchmove', mv, { passive: true });
-                    document.addEventListener('touchend', up);
-                  }}
-                  style={{ padding:"12px 0 6px", flexShrink:0, cursor:"grab",
-                    touchAction:"none", display:"flex", justifyContent:"center" }}>
-                  <div style={{ width:36, height:4, borderRadius:99, background:"rgba(0,0,0,0.15)" }}/>
-                </div>
-                <DetailPanel
-                  tx={selected}
-                  onClose={() => setSelected(null)}
-                  onEditTx={onEditTx}
-                  setSelected={setSelected}
-                  shouldUseRealData={shouldUseRealData}
-                  transactionsData={transactionsData}
-                  setMockTxList={setMockTxList}
-                  onTransactionsInvalidate={onTransactionsInvalidate}
-                  deletingId={deletingId}
-                  setDeletingId={setDeletingId}
-                  settlingId={settlingId}
-                  setSettlingId={setSettlingId}
-                  settleError={settleError}
-                  setSettleError={setSettleError}
-                />
-              </div>
-            </div>
-          )}
-        </>
-      ) : (
-        /* Desktop: master-detail — flex:1 fills remaining height, list scrolls internally */
-        <div style={{ display:"flex", gap:16, flex:1, minHeight:0, overflow:"hidden" }}>
-          {/* List — scrolls internally */}
-          <div
-            ref={listScrollRef}
-            style={{ flex:1, minWidth:0, overflowY:"auto", overflowX:"hidden" }}
-          >
-            {listContent}
-          </div>
-          {/* Detail panel — fixed width, fills full height of this zone */}
-          {selected && (
-            <div style={{ width:320, flexShrink:0, display:"flex", flexDirection:"column",
-              background:T.surface, border:`1px solid ${T.border}`, borderRadius:16,
-              overflow:"hidden", boxShadow:"0 4px 24px rgba(0,0,0,0.08)",
-              animation:"fadeIn 0.15s ease" }}>
-              <DetailPanel
-                  tx={selected}
-                  onClose={() => setSelected(null)}
-                  onEditTx={onEditTx}
-                  setSelected={setSelected}
-                  shouldUseRealData={shouldUseRealData}
-                  transactionsData={transactionsData}
-                  setMockTxList={setMockTxList}
-                  onTransactionsInvalidate={onTransactionsInvalidate}
-                  deletingId={deletingId}
-                  setDeletingId={setDeletingId}
-                  settlingId={settlingId}
-                  setSettlingId={setSettlingId}
-                  settleError={settleError}
-                  setSettleError={setSettleError}
-                />
-            </div>
-          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

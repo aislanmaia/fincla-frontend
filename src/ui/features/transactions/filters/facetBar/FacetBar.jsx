@@ -197,21 +197,27 @@ export function FacetBar({
           />
         ))}
       </div>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-          padding: "6px 10px 8px",
-          borderTop: `1px solid ${T.border}`,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flexWrap: "wrap" }}>
-          {saveButtons}
+      {/* O rodapé custava ~47 px em TODA renderização — inclusive no estado
+          padrão, onde ele hospeda um "Limpar tudo" desabilitado e cinza e não
+          há nada para salvar. Numa tela de 768 px isso é ~20% da lista gasto
+          para não dizer nada. Só existe quando tem o que oferecer. */}
+      {(hasAnyActive || saveActions.length > 0) && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12,
+            padding: "6px 10px 8px",
+            borderTop: `1px solid ${T.border}`,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flexWrap: "wrap" }}>
+            {saveButtons}
+          </div>
+          {clearButton}
         </div>
-        {clearButton}
-      </div>
+      )}
     </div>
   );
 }

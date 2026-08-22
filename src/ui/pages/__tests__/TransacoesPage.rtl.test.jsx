@@ -119,6 +119,15 @@ beforeEach(() => {
     writable: true,
     value: 1440,
   });
+  // A barra completa passou a depender também da ALTURA: o jsdom nasce com
+  // innerHeight 768, que hoje cai no modo compacto (é a tela que motivou a
+  // mudança). Os testes que exercitam a barra completa precisam declarar as
+  // duas dimensões.
+  Object.defineProperty(window, "innerHeight", {
+    configurable: true,
+    writable: true,
+    value: 900,
+  });
   window.dispatchEvent(new Event("resize"));
 });
 
@@ -145,6 +154,78 @@ function renderPage(overrides = {}) {
 }
 
 describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }, () => {
+  it("Enter numa ação rápida executa a ação, não abre a sanfona", async () => {
+    // Os botões de ação são descendentes da linha `role="button"`: sem guarda de
+    // alvo no keydown, o preventDefault da linha cancelava o clique sintetizado
+    // e toda ação rápida ficava inalcançável por teclado.
+    const onNewTx = vi.fn();
+    renderPage({ onEditTx: onNewTx });
+    const editar = (await screen.findAllByRole("button", { name: /^Editar / }))[0];
+    editar.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(onNewTx).toHaveBeenCalled();
+    expect(screen.queryByRole("region", { name: /^Detalhes de/i })).toBeNull();
+  });
+
+  it("a linha é operável por teclado e Esc fecha a sanfona", async () => {
+    // A linha era um `div` com onClick: invisível para teclado e para leitor de
+    // tela, e quem abrisse o detalhe não tinha como sair sem tabular por ele.
+    renderPage();
+    const row = (await screen.findAllByRole("button", { name: /despesa de|receita de/i }))[0];
+    expect(row).toHaveAttribute("tabIndex", "0");
+    expect(row).toHaveAttribute("aria-expanded", "false");
+
+    row.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(await screen.findByRole("region", { name: /^Detalhes de/i })).toBeInTheDocument();
+
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("region", { name: /^Detalhes de/i })).toBeNull();
+  });
+
+  it("a densidade alterna e fica guardada", async () => {
+    renderPage();
+    const btn = await screen.findByRole("button", { name: /Densidade da lista/i });
+    expect(btn).toHaveAccessibleName(/Padrão/i);
+    await userEvent.click(btn);
+    expect(btn).toHaveAccessibleName(/Compacto/i);
+    expect(JSON.parse(localStorage.getItem("fincla:transactions:list-prefs")).density).toBe(
+      "compacto",
+    );
+  });
+
+  it("agrupar por data desliga quando a ordenação não é por data", async () => {
+    // Ordenado por valor, cada "grupo" viraria um item só — o pior dos dois
+    // mundos. O botão fica desabilitado e diz por quê.
+    renderPage();
+    const group = await screen.findByRole("button", { name: /Agrupar por data/i });
+    expect(group).toBeEnabled();
+    expect(group).toHaveAttribute("aria-pressed", "false");
+    await userEvent.click(group);
+    expect(group).toHaveAttribute("aria-pressed", "true");
+  });
+
+  it("1366x768 recebe a barra compacta, não a completa", async () => {
+    // O corte era só de largura, e isso invertia o resultado: 1366×768 passava
+    // do corte e recebia a barra completa (230 px, 2 transações visíveis),
+    // enquanto 1152×700 — mais estreita E mais baixa — recebia a compacta e
+    // mostrava 3. A altura é a restrição real num laptop.
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1366 });
+    Object.defineProperty(window, "innerHeight", { configurable: true, writable: true, value: 768 });
+    renderPage();
+    expect(await screen.findByRole("button", { name: /Abrir filtros/i })).toBeInTheDocument();
+    expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).toBeNull();
+  });
+
+  it("1366x900 mantém a barra completa (só a altura mudou)", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1366 });
+    Object.defineProperty(window, "innerHeight", { configurable: true, writable: true, value: 900 });
+    renderPage();
+    expect(
+      await screen.findByRole("toolbar", { name: /Filtros de transações/i }),
+    ).toBeInTheDocument();
+  });
+
   it("monta a página com TransactionsFilterBar (desktop)", () => {
     renderPage();
     expect(screen.getByText("Transações")).toBeInTheDocument();
@@ -393,13 +474,16 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     renderPage();
     // Texto exato do badge: /A pagar/i casaria também com a linha-ponte e com o
     // botão "Ver só os a pagar", que não são badges de linha.
-    expect(screen.getAllByText("⏳ A pagar").length).toBe(1);
+    // A ampulheta saiu: dizia "processando", mas o lançamento existe e só não
+    // entrou no saldo. A marca agora é um anel vazado (decorativo), então o
+    // texto do badge é só "A pagar".
+    expect(screen.getAllByText("A pagar").length).toBe(1);
   });
 
   it("cartão NÃO ganha badge 'A pagar' — ele liquida pela fatura, não por lançamento", () => {
     seedSettlement();
     renderPage();
-    const badges = screen.getAllByText("⏳ A pagar");
+    const badges = screen.getAllByText("A pagar");
     // Se o cartão entrasse, seriam dois. O badge mentiria sobre o que o usuário controla.
     expect(badges.length).toBe(1);
     expect(screen.getAllByText("Notebook").length).toBeGreaterThan(0);
@@ -450,7 +534,10 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     renderPage();
 
     await userEvent.click(screen.getAllByText("Mercado")[0]);
-    await userEvent.click(await screen.findByRole("button", { name: /Desfazer pagamento/i }));
+    // A ação existe em dois lugares agora — na sanfona e como ação rápida da
+    // linha. Este teste cobre a da sanfona, então a busca é escopada nela.
+    const detail = await screen.findByRole("region", { name: /^Detalhes de/i });
+    await userEvent.click(within(detail).getByRole("button", { name: /Desfazer pagamento/i }));
 
     expect(setTransactionSettled).toHaveBeenCalledWith("tx-paga", false);
   });
@@ -462,7 +549,14 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     await userEvent.click(screen.getAllByText("Notebook")[0]);
 
     expect(screen.queryByRole("button", { name: /Marcar como pago/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Desfazer pagamento/i })).not.toBeInTheDocument();
+    const cardDetail = await screen.findByRole("region", { name: /^Detalhes de/i });
+    expect(
+      within(cardDetail).queryByRole("button", { name: /Desfazer pagamento/i }),
+    ).not.toBeInTheDocument();
+    // E também não como ação rápida DESTA linha: cartão liquida pela FATURA,
+    // não por lançamento. (Escopado à linha; outras linhas da lista têm a ação.)
+    const cardRow = screen.getAllByText("Notebook")[0].closest(".fincla-row");
+    expect(within(cardRow).queryByRole("button", { name: /como pago/i })).not.toBeInTheDocument();
   });
 
   it("o facet Situação chega ao hook de dados como settlement", async () => {
@@ -733,7 +827,11 @@ describe("<TransacoesPage> — desambiguação de nomes (S2)", { timeout: 15000 
     });
     renderPage();
 
-    await userEvent.click(screen.getByRole("button", { name: /Ver só os a pagar/i }));
+    // O aviso de 16 px numa faixa própria virou o contador do cabeçalho da
+    // lista: mesma função, encostado no que ele descreve, e zero altura extra.
+    await userEvent.click(
+      screen.getByRole("button", { name: /Ainda não entraram no saldo da conta/i }),
+    );
 
     const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
     expect(lastCall.filters.settlement).toBe("a-pagar");
@@ -830,10 +928,13 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     });
     renderPage();
 
-    // 3 cards de KPI + o chip "Tags: —" da facet (sem seleção, sempre "—"
-    // independente de loading — não é o que este teste cobre).
-    expect(screen.getAllByText("—").length).toBe(4);
-    expect(screen.getAllByText("Carregando…").length).toBe(3);
+    // 3 valores da faixa de estatísticas + a contagem do cabeçalho da lista +
+    // o chip "Tags: —" da facet (sem seleção, sempre "—" independente de
+    // loading — não é o que este teste cobre).
+    expect(screen.getAllByText("—").length).toBe(5);
+    // O motivo agora aparece UMA vez, ao lado do número que ele explica, em vez
+    // de repetido na terceira linha de cada um dos três cards.
+    expect(screen.getAllByText("Carregando…").length).toBe(1);
     expect(screen.queryByText(/R\$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/lançamento/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/transaç.*no filtro/i)).not.toBeInTheDocument();
@@ -847,8 +948,8 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     });
     renderPage();
 
-    expect(screen.getAllByText("—").length).toBe(4);
-    expect(screen.getAllByText("Não foi possível carregar").length).toBe(3);
+    expect(screen.getAllByText("—").length).toBe(5);
+    expect(screen.getAllByText("Não foi possível carregar").length).toBe(1);
     expect(screen.queryByText(/R\$/)).not.toBeInTheDocument();
   });
 

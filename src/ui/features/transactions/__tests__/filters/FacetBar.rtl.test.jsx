@@ -49,9 +49,33 @@ describe("<FacetBar>", () => {
     expect(onClearAll).toHaveBeenCalled();
   });
 
-  it("Limpar tudo fica desabilitado quando nada está ativo", () => {
+  it("o rodapé some quando não há filtro ativo nem ação de salvar", () => {
+    // Antes o rodapé renderizava sempre, com um "Limpar tudo" desabilitado e
+    // cinza — ~47 px gastos para não oferecer nada. Numa tela de 768 px isso é
+    // ~20% da lista.
     render(<Harness hasAnyActive={false} />);
-    expect(screen.getByRole("button", { name: /Limpar todos os filtros/i })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /Limpar todos os filtros/i })).toBeNull();
+  });
+
+  it("o rodapé volta assim que existe filtro ativo", () => {
+    render(<Harness hasAnyActive />);
+    expect(screen.getByRole("button", { name: /Limpar todos os filtros/i })).toBeEnabled();
+  });
+
+  it("o rodapé existe sem filtro ativo quando há ação de salvar", () => {
+    render(
+      <FacetBar
+        facets={FACETS}
+        expanded={null}
+        onToggle={vi.fn()}
+        onClearAll={vi.fn()}
+        onSaveViewCreate={vi.fn()}
+        hasAnyActive={false}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: /Salvar como nova visualização/i }),
+    ).toBeInTheDocument();
   });
 
   it("Salvar como nova visualização chama callback", async () => {
