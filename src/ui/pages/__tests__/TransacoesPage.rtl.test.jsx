@@ -763,7 +763,11 @@ describe("<TransacoesPage> — desambiguação de nomes (S2)", { timeout: 15000 
     });
     renderPage();
 
-    await userEvent.click(screen.getByRole("button", { name: /Ver só os a pagar/i }));
+    // O aviso de 16 px numa faixa própria virou o contador do cabeçalho da
+    // lista: mesma função, encostado no que ele descreve, e zero altura extra.
+    await userEvent.click(
+      screen.getByRole("button", { name: /Ainda não entraram no saldo da conta/i }),
+    );
 
     const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
     expect(lastCall.filters.settlement).toBe("a-pagar");
@@ -860,10 +864,13 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     });
     renderPage();
 
-    // 3 cards de KPI + o chip "Tags: —" da facet (sem seleção, sempre "—"
-    // independente de loading — não é o que este teste cobre).
-    expect(screen.getAllByText("—").length).toBe(4);
-    expect(screen.getAllByText("Carregando…").length).toBe(3);
+    // 3 valores da faixa de estatísticas + a contagem do cabeçalho da lista +
+    // o chip "Tags: —" da facet (sem seleção, sempre "—" independente de
+    // loading — não é o que este teste cobre).
+    expect(screen.getAllByText("—").length).toBe(5);
+    // O motivo agora aparece UMA vez, ao lado do número que ele explica, em vez
+    // de repetido na terceira linha de cada um dos três cards.
+    expect(screen.getAllByText("Carregando…").length).toBe(1);
     expect(screen.queryByText(/R\$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/lançamento/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/transaç.*no filtro/i)).not.toBeInTheDocument();
@@ -877,8 +884,8 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     });
     renderPage();
 
-    expect(screen.getAllByText("—").length).toBe(4);
-    expect(screen.getAllByText("Não foi possível carregar").length).toBe(3);
+    expect(screen.getAllByText("—").length).toBe(5);
+    expect(screen.getAllByText("Não foi possível carregar").length).toBe(1);
     expect(screen.queryByText(/R\$/)).not.toBeInTheDocument();
   });
 

@@ -35,6 +35,8 @@ import {
 import { useTransactionsData } from "../features/transactions/useTransactionsData.js";
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { TransactionsEmptyState } from "../features/transactions/TransactionsEmptyState.jsx";
+import { TransactionsStats } from "../features/transactions/TransactionsStats.jsx";
+import { TransactionsListHeader } from "../features/transactions/TransactionsListHeader.jsx";
 import { CardEmptyWithCta } from "../features/shellExtras.jsx";
 import {
   getTransactionsPeriodBootstrap,
@@ -785,6 +787,7 @@ function TransacoesPageBody({
     () => (typeof window !== "undefined" ? window.innerHeight : DESKTOP_FILTERS_EXPAND_MIN_HEIGHT),
   );
   const [compactDesktopFiltersOpen, setCompactDesktopFiltersOpen] = useState(false);
+  const [statsExpanded, setStatsExpanded] = useState(false);
   const [saveViewFormOpen, setSaveViewFormOpen] = useState(false);
   const [saveViewFormMode, setSaveViewFormMode] = useState("create");
   // ── Bottom sheet drag-to-dismiss ──────────────────────────────
@@ -1696,8 +1699,30 @@ function TransacoesPageBody({
     </button>
   );
 
+  /* Quantos lançamentos do filtro ainda não entraram no saldo. Substitui o
+     aviso de 16 px que ocupava uma faixa própria para dizer a mesma coisa. */
+  const pendingCount = txList.filter((t) => t.settleable && !t.settled).length;
+
   const listContent = (
     <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
+      <TransactionsListHeader
+        total={filteredCount}
+        pending={filter.settlement === "todas" ? pendingCount : 0}
+        sum={canUseRemoteSummary || filtered.length ? saldo : null}
+        fmt={fmtBRL}
+        loading={tagFilterBlocked || listNeverLoaded}
+        statusLabel={
+          tagFilterBlocked
+            ? "Aguardando filtro de tag"
+            : listLoadFailed
+              ? "Não foi possível carregar"
+              : listLoading
+                ? "Carregando…"
+                : null
+        }
+        onPendingClick={() => filter.setSettlement("a-pagar")}
+        compact={isMobile}
+      />
       {groups.length === 0 ? (
         // Prioridade 2 (revisão adversarial da PR #96): com a busca em espera
         // (`tagFilterBlocked`), `groups` também dá 0 — mas "Nenhuma transação
@@ -1935,9 +1960,31 @@ function TransacoesPageBody({
         </div>
       )}
 
-      {/* ── Row 1: Title + CSV ─────────────────────────────────── */}
-      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10 }}>
+      {/* ── Row 1: Título + estatísticas + CSV ───────────────────
+          A faixa de KPIs de 87 px e o aviso de "a pagar" de 16 px saíram: os
+          três números vieram para cá (a linha era quase toda espaço vazio) e a
+          contagem foi para o cabeçalho da lista, que é o que ela descreve. */}
+      <div style={{ display:"flex", alignItems: statsExpanded ? "flex-start" : "center",
+        justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
         <PageTitle sans="Minhas" serif="Transações"/>
+        {!isMobile && (
+          <div style={{ flex:"1 1 420px", minWidth:0, maxWidth:900, marginLeft:"auto" }}>
+            <TransactionsStats
+              receita={totalReceita}
+              despesa={totalDespesaLiquido}
+              resultado={saldo}
+              countReceita={countReceita}
+              countDespesa={countDespesa}
+              countEstorno={countEstorno}
+              totalEstorno={totalEstorno}
+              unknown={tagFilterBlocked || listNeverLoaded}
+              expanded={statsExpanded}
+              onToggleExpanded={() => setStatsExpanded((v) => !v)}
+              compactLabels={viewportWidth < 1400}
+              fmt={fmtBRL}
+            />
+          </div>
+        )}
         <button onClick={exportCSV}
           style={{ ...G, display:"flex", alignItems:"center", gap:5, background:T.surface,
             border:`1px solid ${T.border}`, borderRadius:9, padding:"8px 13px",
@@ -2107,113 +2154,24 @@ function TransacoesPageBody({
         </div>
       )}
 
-      {/* ── Row 5: KPI strip ─────────────────────────────────────── */}
-      {/* fincla-frontend#109 rodada 2, achado 4: a faixa só tratava
-          `tagFilterBlocked` como "ainda não sei responder" — em `listLoading`/
-          `listLoadFailed` (a MESMA lacuna de informação que fez a lista
-          ganhar `hasLoaded`/#106) ela continuava afirmando "+R$ 0,00" e
-          "0 transações no filtro", contradizendo o card logo abaixo (que já
-          mostra "Carregando…"/erro). `kpiUnknown` cobre as três causas. */}
-      <div style={{ display:"grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: isMobile ? 8 : 12 }}>
-        {(() => {
-          const kpiUnknown = tagFilterBlocked || listNeverLoaded;
-          // Despesa líquida pode ser negativa quando estornos > despesas no período.
-          // Quando líquida < 0, cor vira verde mas o sinal `−` é preservado (matemática honesta).
-          const despesaPositiva = totalDespesaLiquido >= 0;
-          const despesaColor = despesaPositiva ? T.red : T.green;
-          const despesaBg = despesaPositiva ? T.redLight : T.greenLight;
-          return [
-            {
-              label: "Receitas",
-              val: totalReceita,
-              sign: "+",
-              color: T.green,
-              bg: T.greenLight,
-              countLine: `${countReceita} lançamento${countReceita !== 1 ? "s" : ""}`,
-            },
-            {
-              label: "Despesas",
-              val: Math.abs(totalDespesaLiquido),
-              sign: despesaPositiva ? "−" : "−", // mantém sinal mesmo quando líquido < 0
-              color: despesaColor,
-              bg: despesaBg,
-              subLine: totalEstorno > 0
-                ? `↳ ${fmtBRL(totalEstorno)} em estornos abatidos`
-                : null,
-              countLine: countEstorno > 0
-                ? `${countDespesa} desp · ${countEstorno} ↺`
-                : `${countDespesa} lançamento${countDespesa !== 1 ? "s" : ""}`,
-              tooltip: !despesaPositiva ? "Saldo positivo de estornos no período" : undefined,
-            },
-            {
-              // "Resultado", não "Saldo": este número é receitas − despesas DO FILTRO
-              // atual, não o dinheiro que existe na conta. Chamá-lo de "Saldo" fazia o
-              // usuário procurar aqui o saldo da conta e concluir que ele estava errado.
-              label: "Resultado",
-              val: Math.abs(saldo),
-              sign: saldo >= 0 ? "+" : "−",
-              color: saldo >= 0 ? T.green : T.red,
-              bg: saldo >= 0 ? T.greenLight : T.redLight,
-              countLine: `${filteredCount} transaç${filteredCount !== 1 ? "ões" : "ão"} no filtro`,
-              tooltip: "Receitas menos despesas dos lançamentos filtrados. Não é o saldo da conta — esse fica em Contas e na Visão Geral.",
-            },
-          ].map((k) => (
-            <div
-              key={k.label}
-              title={k.tooltip}
-              style={{
-                background: T.surface,
-                border: `1px solid ${T.border}`,
-                borderRadius: 12,
-                padding: isMobile ? "12px 14px" : "14px 18px",
-                gridColumn: isMobile && k.label === "Resultado" ? "1 / -1" : "auto",
-              }}
-            >
-              <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>
-                {k.label}
-              </div>
-              <div style={{ ...G, fontFamily: "'Geist Mono',monospace", fontSize: isMobile ? 14 : 16, fontWeight: 800, color: kpiUnknown ? T.inkLight : k.color, letterSpacing: "-0.01em" }}>
-                {/* Prioridade 2: com a busca em espera (ou em voo, ou
-                    falha) `k.val` é sempre 0 (a API nem respondeu de
-                    verdade) — "R$ 0,00" afirmaria um resultado que não
-                    existe. "—" é honesto: não sabemos ainda. */}
-                {kpiUnknown ? "—" : <>{k.sign}{fmtBRL(k.val)}</>}
-              </div>
-              {k.subLine && !kpiUnknown && (
-                <div style={{ ...G, fontSize: 11, color: T.green, marginTop: 3, fontWeight: 600 }}>
-                  {k.subLine}
-                </div>
-              )}
-              <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 3 }}>
-                {tagFilterBlocked
-                  ? "Aguardando filtro de tag"
-                  : listLoadFailed
-                    ? "Não foi possível carregar"
-                    : listLoading
-                      ? "Carregando…"
-                      : k.countLine}
-              </div>
-            </div>
-          ));
-        })()}
-      </div>
-
-      {/* Ponte entre os dois números: o "Resultado" acima conta tudo que está no
-          filtro, mas o saldo da conta só conta o que foi pago. Sem esta linha o
-          usuário não tem como descobrir que existe essa diferença — nem o facet. */}
-      {filter.settlement === "todas" && txList.some((t) => t.settleable && !t.settled) && (
-        <div style={{ ...G, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap",
-          fontSize:12, color:T.inkLight, marginTop:-4 }}>
-          <span style={{ color:T.amber, fontWeight:700 }}>⏳</span>
-          Há lançamentos a pagar aqui — eles ainda não entraram no saldo da conta.
-          <button
-            type="button"
-            onClick={() => filter.setSettlement("a-pagar")}
-            style={{ ...G, background:"none", border:"none", padding:0, fontSize:12,
-              fontWeight:700, color:T.blue, cursor:"pointer", textDecoration:"underline" }}>
-            Ver só os a pagar
-          </button>
-        </div>
+      {/* A faixa de KPIs de 87 px foi para a linha do título (Row 1) e a
+          contagem para o cabeçalho da lista. No mobile, onde não há largura para
+          dividir a linha do título, as estatísticas viram uma faixa própria. */}
+      {isMobile && (
+        <TransactionsStats
+          receita={totalReceita}
+          despesa={totalDespesaLiquido}
+          resultado={saldo}
+          countReceita={countReceita}
+          countDespesa={countDespesa}
+          countEstorno={countEstorno}
+          totalEstorno={totalEstorno}
+          unknown={tagFilterBlocked || listNeverLoaded}
+          expanded={statsExpanded}
+          onToggleExpanded={() => setStatsExpanded((v) => !v)}
+          compactLabels
+          fmt={fmtBRL}
+        />
       )}
 
             {/* List + Detail panel */}
