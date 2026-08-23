@@ -39,6 +39,8 @@ import { useNarrowestFilter } from "../features/transactions/useNarrowestFilter.
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { TransactionsEmptyState } from "../features/transactions/TransactionsEmptyState.jsx";
 import { TransactionsStats } from "../features/transactions/TransactionsStats.jsx";
+import { TransactionsSummarySheet } from "../features/transactions/TransactionsSummarySheet.jsx";
+import { useSwipeActions, SWIPE_WIDTH } from "../features/transactions/useSwipeActions.js";
 import { UndoToast } from "../features/transactions/UndoToast.jsx";
 import { TransactionsFilterChips } from "../features/transactions/filters/TransactionsFilterChips.jsx";
 import { TransactionsFilterPanel } from "../features/transactions/filters/TransactionsFilterPanel.jsx";
@@ -367,7 +369,8 @@ export const Tip = ({ label, children, pos = "top" }) => {
  */
 const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
   rowHeight = 48, showDate = true, dateLabel = "", quickActions = null,
-  onFilterByCategory = null, onFilterByTag = null, wide = false, xwide = false }) => {
+  onFilterByCategory = null, onFilterByTag = null, wide = false, xwide = false,
+  swipe = null }) => {
   const isRefund   = tx.type === "refund";
   const isReceita  = tx.type === "income" || isRefund;
   const hasParcela = !!tx.parcela && !isRefund;
@@ -415,6 +418,108 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
   ].filter(Boolean).join(" ");
 
   const statusRing = tx.settleable && !tx.settled;
+
+  /* MOBILE tem grade própria: três colunas (ícone · descrição sobre
+     data·categoria·método · valor). A grade do desktop tem nove — em 390 px
+     elas colapsam, a descrição fica sem largura nenhuma e a pílula de
+     categoria acaba desenhada por cima do valor. Aqui a data e a categoria
+     entram na linha de metadados, e não há coluna de ações nem chevron: a
+     linha inteira abre a sanfona, e no toque as ações vivem dentro dela. */
+  if (isMobile) {
+    const swipeOpen = swipe?.isOpen(tx.id);
+    return (
+      /* Envelope só para o gesto: as ações ficam ESTACIONADAS fora da tela à
+         direita e a linha desliza por cima delas. Renderizá-las só quando
+         aberto faria a primeira fração do arrasto mostrar um vão branco. */
+      <div style={{ position:"relative", overflow:"hidden" }}>
+        {swipe && (
+          <div aria-hidden={!swipeOpen} style={{ position:"absolute", right:0, top:0, bottom:0,
+            width:SWIPE_WIDTH, display:"flex" }}>
+            {tx.settleable && (
+              <button type="button"
+                tabIndex={swipeOpen ? 0 : -1}
+                onClick={(e) => { e.stopPropagation(); swipe.close(); quickActions?.onSettle(tx); }}
+                aria-label={tx.settled ? `Desfazer pagamento de ${tx.desc}` : `Marcar ${tx.desc} como pago`}
+                style={{ ...G, flex:1, display:"flex", flexDirection:"column", alignItems:"center",
+                  justifyContent:"center", gap:3, border:"none", background:T.green, color:"#fff",
+                  fontSize:11, fontWeight:700, cursor:"pointer" }}>
+                <b style={{ fontSize:14 }}>{tx.settled ? "↺" : "✓"}</b>
+                {tx.settled ? "desfazer" : "pagar"}
+              </button>
+            )}
+            <button type="button"
+              tabIndex={swipeOpen ? 0 : -1}
+              onClick={(e) => { e.stopPropagation(); swipe.close(); quickActions?.onDelete(tx); }}
+              aria-label={`Excluir ${tx.desc}`}
+              style={{ ...G, flex:1, display:"flex", flexDirection:"column", alignItems:"center",
+                justifyContent:"center", gap:3, border:"none", background:T.red, color:"#fff",
+                fontSize:11, fontWeight:700, cursor:"pointer" }}>
+              <b style={{ fontSize:14 }}>🗑</b>
+              excluir
+            </button>
+          </div>
+        )}
+      <div
+        {...(swipe ? swipe.handlers(tx.id) : {})}
+        onClick={() => (swipeOpen ? swipe.close() : onSelect(tx))}
+        onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onSelect(tx);
+          }
+        }}
+        className="fincla-row"
+        role="button"
+        tabIndex={0}
+        aria-expanded={isSelected}
+        aria-label={`${tx.desc}, ${isReceita ? "receita" : "despesa"} de ${fmtBRL(tx.val)} em ${tx.date}`}
+        style={{ display:"grid", gridTemplateColumns:"28px minmax(0,1fr) auto",
+          alignItems:"center", gap:10, height: rowHeight, padding:"0 12px",
+          background: isSelected ? `${catCol}08` : T.surface,
+          borderLeft: isSelected ? `3px solid ${catCol}` : "3px solid transparent",
+          cursor:"pointer", position:"relative",
+          transform: swipeOpen ? `translateX(-${SWIPE_WIDTH}px)` : "translateX(0)",
+          transition:"transform 0.22s cubic-bezier(0.32,0.72,0,1)" }}>
+        <div style={{ width:28, height:28, borderRadius:8, background:avatarBg,
+          display:"flex", alignItems:"center", justifyContent:"center", fontSize:13 }}>
+          {tx.icon}
+        </div>
+        <div style={{ minWidth:0 }}>
+          <div style={{ ...G, fontSize:12.5, fontWeight:600, color:T.ink, lineHeight:1.3,
+            overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+            {tx.desc}
+          </div>
+          <div style={{ ...G, fontSize:10, color:T.inkGhost, lineHeight:1.35,
+            display:"flex", gap:5, overflow:"hidden", whiteSpace:"nowrap" }}>
+            {showDate && (
+              <span style={{ fontFamily:"'Geist Mono',monospace", color:T.inkLight,
+                flex:"none" }}>{dateLabel.top}</span>
+            )}
+            <span style={{ fontWeight:600, color:catCol, flex:"none" }}>{tx.cat}</span>
+            <span style={{ overflow:"hidden", textOverflow:"ellipsis" }}>
+              {methodLine}
+              {accountLabel ? ` · ${accountLabel}` : ""}
+            </span>
+          </div>
+        </div>
+        <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:12.5, fontWeight:700,
+          whiteSpace:"nowrap", display:"flex", alignItems:"center", gap:5,
+          color: isRefund ? T.green : (isReceita ? T.green : T.ink) }}>
+          {isReceita ? "+" : "−"}{fmtBRL(tx.val)}
+          {statusRing && (
+            <span style={{ color:T.amber, display:"inline-flex", alignItems:"center" }}>
+              <i aria-hidden="true" style={{ display:"inline-block", width:8, height:8,
+                border:"1.75px solid currentColor", borderRadius:"50%", boxSizing:"border-box" }}/>
+              <span style={SR_ONLY}>A pagar</span>
+            </span>
+          )}
+        </div>
+      </div>
+      </div>
+    );
+  }
+
 
   return (
     <div
@@ -705,6 +810,7 @@ const DetailPanel = ({
   onRowLeave,
   onDuplicateTx,
   onFilterByCategory,
+  isMobileDetail = false,
   setDeletingId,
   settlingId,
   setSettlingId,
@@ -747,8 +853,14 @@ const DetailPanel = ({
       {/* Fields — em grade quando inline, para aproveitar a largura toda em vez
           de empilhar oito linhas numa coluna de 320 px. */}
       <div style={ inline
-        ? { display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(150px, 1fr))",
-            gap:"10px 18px", padding:"4px 14px 0 107px" }
+        ? (isMobileDetail
+            /* No mobile a sanfona não tem o recuo de 107 px (não há coluna de
+               data) e as duas colunas fixas cabem melhor que `auto-fit`, que
+               em 390 px colapsa para uma só e dobra a altura do painel. */
+            ? { display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px 12px",
+                padding:"10px 12px 0" }
+            : { display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(150px, 1fr))",
+                gap:"10px 18px", padding:"4px 14px 0 107px" })
         : { flex:1, overflowY:"auto", overflowX:"hidden", padding:"16px 20px", display:"flex", flexDirection:"column", gap:0, minHeight:0 }}>
         {[
           { label:"Categoria", val: onFilterByCategory ? (
@@ -861,9 +973,14 @@ const DetailPanel = ({
           "Editar" preto ocupando a largura inteira e a lixeira solta na ponta.
           Três pesos visuais diferentes para três ações do mesmo nível, e a
           altura de duas faixas onde cabe uma. */}
-      <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap",
-        padding: inline ? "12px 14px 14px 107px" : "14px 20px",
-        borderTop: inline ? "none" : `1px solid ${T.border}` }}>
+      <div style={ inline && isMobileDetail
+        /* Botões em 2×2 no mobile: em linha, quatro deles de 30 px ficam com
+           ~85 px cada num aparelho de 390 — alvo de toque menor que o mínimo
+           confortável, e os rótulos truncam. */
+        ? { display:"grid", gridTemplateColumns:"1fr 1fr", gap:7, padding:"10px 12px 12px" }
+        : { display:"flex", gap:8, alignItems:"center", flexWrap:"wrap",
+            padding: inline ? "12px 14px 14px 107px" : "14px 20px",
+            borderTop: inline ? "none" : `1px solid ${T.border}` }}>
         {/* Cartão fica de fora: ele liquida quando a FATURA é paga, não por
             lançamento, então a ação aqui mentiria sobre o que o usuário controla. */}
         {tx.settleable && (
@@ -948,7 +1065,7 @@ const DetailPanel = ({
             🗑 Excluir
           </AccButton>
         )}
-        {inline && (
+        {inline && !isMobileDetail && (
           <span style={{ ...G, marginLeft:"auto", fontSize:10.5, color:T.inkLight }}>
             Enter expande · Esc fecha
           </span>
@@ -1073,6 +1190,8 @@ function TransacoesPageBody({
      e a única sempre ativa; abrir em "Ativos" com a lista limpa daria uma tela
      vazia como primeira impressão do painel. */
   const [panelFacet, setPanelFacet] = useState("periodo");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const swipeActions = useSwipeActions();
   const [statsExpanded, setStatsExpanded] = useState(false);
   const [listPrefs, setListPrefsState] = useState(() => readListPrefs());
   const setListPrefs = useCallback((next) => {
@@ -2455,6 +2574,8 @@ function TransacoesPageBody({
                 : null
         }
         onPendingClick={() => filter.setSettlement("a-pagar")}
+        onSumClick={isMobile ? () => setStatsExpanded((v) => !v) : undefined}
+        sumOpen={isMobile && statsExpanded}
         canUndo={filterHistory.canUndo}
         onUndo={undoFilter}
         undoLabel={filterHistory.undoLabel}
@@ -2592,6 +2713,7 @@ function TransacoesPageBody({
                     quickActions={quickActions}
                     onFilterByCategory={filterByCategoryFromRow}
                     onFilterByTag={filterByTagFromRow}
+                    swipe={isMobile ? swipeActions : null}
                     wide={!isMobile && viewportWidth >= 1600}
                     xwide={!isMobile && viewportWidth >= 2100}
                   />
@@ -2621,6 +2743,7 @@ function TransacoesPageBody({
                         onRowLeave={startRowLeave}
                         onDuplicateTx={onDuplicateTx}
                         onFilterByCategory={filterByCategoryFromRow}
+                        isMobileDetail={isMobile}
                         settlingId={settlingId}
                         setSettlingId={setSettlingId}
                         settleError={settleError}
@@ -2807,14 +2930,91 @@ function TransacoesPageBody({
             />
           </div>
         )}
-        <div style={{ display:"flex", alignItems:"center", gap:6, flexShrink:0 }}>
-        </div>
-        <button onClick={exportCSV}
-          style={{ ...G, display:"flex", alignItems:"center", gap:5, background:T.surface,
-            border:`1px solid ${T.border}`, borderRadius:9, padding:"8px 13px",
-            fontSize:12, fontWeight:600, color:T.inkMid, cursor:"pointer", flexShrink:0 }}>
-          <Download size={13}/> CSV
-        </button>
+        {/* No MOBILE tudo isso vira um "⋯": densidade, agrupamento e exportação
+            são ajustes ocasionais, e três controles permanentes ao lado de um
+            título que já compete por largura empurrariam a busca para baixo. */}
+        {isMobile ? (
+          <div style={{ position:"relative", flexShrink:0 }}>
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen((v) => !v)}
+              aria-haspopup="menu"
+              aria-expanded={mobileMenuOpen}
+              aria-label="Opções da lista"
+              style={{ ...G, width:36, height:36, borderRadius:10, background:T.surface,
+                border:`1px solid ${T.border}`, color:T.inkMid, cursor:"pointer",
+                display:"flex", alignItems:"center", justifyContent:"center", fontSize:15 }}>
+              ⋯
+            </button>
+            {mobileMenuOpen && (
+              <>
+                <button
+                  type="button"
+                  aria-label="Fechar menu"
+                  onClick={() => setMobileMenuOpen(false)}
+                  style={{ position:"fixed", inset:0, zIndex:11, border:"none",
+                    background:"transparent", cursor:"default" }}
+                />
+                <div role="menu"
+                  style={{ position:"absolute", right:0, top:"calc(100% + 8px)", zIndex:12,
+                    width:246, background:T.surface, border:`1px solid ${T.border}`,
+                    borderRadius:13, boxShadow:"0 16px 44px rgba(0,0,0,.18)", padding:6,
+                    display:"flex", flexDirection:"column", gap:2 }}>
+                  <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:11,
+                    letterSpacing:"0.09em", textTransform:"uppercase", color:T.inkGhost,
+                    padding:"8px 10px 4px" }}>Densidade</div>
+                  <div style={{ display:"flex", gap:4, padding:"0 4px 6px" }}>
+                    {Object.entries(DENSITIES).map(([key, d]) => (
+                      <button key={key} type="button"
+                        onClick={() => setListPrefs({ density: key })}
+                        aria-pressed={listPrefs.density === key}
+                        style={{ ...G, flex:1, height:32, borderRadius:8, cursor:"pointer",
+                          fontSize:11, fontWeight:600, whiteSpace:"nowrap",
+                          border:`1px solid ${listPrefs.density === key ? T.ink : T.border}`,
+                          background: listPrefs.density === key ? T.ink : T.surface,
+                          color: listPrefs.density === key ? "#fff" : T.inkMid }}>
+                        {d.label}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ height:1, background:T.border, margin:"3px 4px" }}/>
+                  <button type="button" role="menuitemcheckbox"
+                    aria-checked={isGrouped}
+                    disabled={!canGroup}
+                    onClick={() => setListPrefs({ grouped: !listPrefs.grouped })}
+                    style={{ ...G, height:38, borderRadius:9, display:"flex", alignItems:"center",
+                      gap:10, padding:"0 10px", fontSize:12.5, border:"none", textAlign:"left",
+                      cursor: canGroup ? "pointer" : "not-allowed",
+                      opacity: canGroup ? 1 : 0.45,
+                      background: isGrouped ? T.blueLight : "none",
+                      color: isGrouped ? T.blue : T.inkMid,
+                      fontWeight: isGrouped ? 700 : 500 }}>
+                    ▦ Agrupar por data
+                    {!canGroup && (
+                      <span style={{ marginLeft:"auto", fontSize:11, color:T.inkGhost }}>
+                        só por data
+                      </span>
+                    )}
+                  </button>
+                  <button type="button" role="menuitem"
+                    onClick={() => { setMobileMenuOpen(false); exportCSV(); }}
+                    style={{ ...G, height:38, borderRadius:9, display:"flex", alignItems:"center",
+                      gap:10, padding:"0 10px", fontSize:12.5, border:"none", background:"none",
+                      color:T.inkMid, cursor:"pointer", textAlign:"left" }}>
+                    <Download size={13}/> Exportar CSV
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        ) : (
+          <button onClick={exportCSV}
+            style={{ ...G, display:"flex", alignItems:"center", gap:5, background:T.surface,
+              border:`1px solid ${T.border}`, borderRadius:9, padding:"8px 13px",
+              fontSize:12, fontWeight:600, color:T.inkMid, cursor:"pointer", flexShrink:0 }}>
+            <Download size={13}/> CSV
+          </button>
+        )}
       </div>
 
       {/* A faixa de cards de views salvas saiu: ela virou o chip da barra de
@@ -3000,28 +3200,23 @@ function TransacoesPageBody({
         </div>
       )}
 
-      {/* A faixa de KPIs de 87 px foi para a linha do título (Row 1) e a
-          contagem para o cabeçalho da lista. No mobile, onde não há largura para
-          dividir a linha do título, as estatísticas viram uma faixa própria. */}
-      {isMobile && (
-        <TransactionsStats
-          receita={totalReceita}
-          despesa={totalDespesaLiquido}
-          resultado={saldo}
-          countReceita={countReceita}
-          countDespesa={countDespesa}
-          countEstorno={countEstorno}
-          totalEstorno={totalEstorno}
-          filteredCount={filteredCount}
-          countsArePartial={canUseRemoteSummary}
-          unknown={tagFilterBlocked || listNeverLoaded}
-          expanded={statsExpanded}
-          onToggleExpanded={() => setStatsExpanded((v) => !v)}
-          stacked
-          compactLabels
-          fmt={fmtBRL}
-        />
-      )}
+      {/* No MOBILE não existe faixa de KPIs. O cabeçalho da lista já carrega a
+          contagem, a situação e o resultado; os outros dois totais abrem numa
+          sheet a partir dele. A faixa custava ~87 px permanentes numa tela de
+          844, e a alternativa antes tentada — três números atrás de uma rolagem
+          lateral — escondia informação atrás de um gesto que ninguém adivinha. */}
+      <TransactionsSummarySheet
+        open={isMobile && statsExpanded}
+        onClose={() => setStatsExpanded(false)}
+        receita={totalReceita}
+        despesa={totalDespesaLiquido}
+        resultado={saldo}
+        countReceita={countReceita}
+        countDespesa={countDespesa}
+        totalEstorno={totalEstorno}
+        countsArePartial={canUseRemoteSummary}
+        fmt={fmtBRL}
+      />
 
             {/* Lista. O painel lateral de 320 px e o bottom sheet de detalhes
                 deixaram de existir: a sanfona abre embaixo da própria linha.
@@ -3032,8 +3227,16 @@ function TransacoesPageBody({
       <div style={{ display:"flex", flex:1, minHeight:0, overflow:"hidden" }}>
         <div
           ref={listScrollRef}
-          className="fincla-scroll"
-          style={{ flex:1, minWidth:0, overflowY:"auto", overflowX:"hidden" }}
+          /* No mobile a lista NÃO é uma região de rolagem própria: quem rola é
+             a página. Marcá-la como `.fincla-scroll` aqui aplicava
+             `overscroll-behavior: contain` num container que não precisa
+             rolar (o conteúdo cabe), e o `contain` ISOLA o gesto — arrastar
+             em cima de um item não encadeava para o scroller de fora, então
+             só dava para rolar pelas margens laterais vazias. */
+          className={isMobile ? undefined : "fincla-scroll"}
+          style={{ flex:1, minWidth:0,
+            overflowY: isMobile ? "visible" : "auto",
+            overflowX:"hidden" }}
         >
           {listContent}
         </div>

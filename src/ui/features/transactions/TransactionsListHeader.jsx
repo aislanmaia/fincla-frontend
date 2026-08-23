@@ -40,6 +40,9 @@ export function TransactionsListHeader({
   canRedo = false,
   onRedo,
   redoLabel = "",
+  /** Mobile: o resultado abre o resumo em sheet. Sem handler ele é só texto. */
+  onSumClick,
+  sumOpen = false,
   compact = false,
 }) {
   const num = (v) => (loading ? "—" : String(v));
@@ -162,6 +165,46 @@ export function TransactionsListHeader({
         )}
         {null}
         {sum != null && !loading ? (
+          onSumClick ? (
+            /* No mobile este número É o resumo: a faixa de KPIs não existe, e
+               os outros dois totais abrem daqui. Sem caixa e colado ao valor,
+               para ler como "abre este número" e não como mais um botão irmão
+               do desfazer. */
+            <button
+              type="button"
+              onClick={onSumClick}
+              aria-expanded={sumOpen}
+              aria-label={`Resultado ${sum >= 0 ? "positivo" : "negativo"} de ${fmt(Math.abs(sum))}. Ver resumo do filtro.`}
+              style={{
+                ...G,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                padding: "3px 6px",
+                borderRadius: 7,
+                border: "none",
+                background: sumOpen ? T.bg : "none",
+                boxShadow: sumOpen ? `inset 0 0 0 1px ${T.border}` : "none",
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}
+            >
+              <b
+                style={{
+                  fontFamily: "'Geist Mono',monospace",
+                  fontSize: 13,
+                  fontWeight: 800,
+                  color: sum >= 0 ? T.green : T.red,
+                }}
+              >
+                {sum >= 0 ? "+" : "−"}
+                {fmt(Math.abs(sum))}
+              </b>
+              <span aria-hidden="true" style={{ fontSize: 11, color: T.inkGhost }}>
+                {sumOpen ? "▲" : "▼"}
+              </span>
+            </button>
+          ) : (
         <span style={{ display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
           soma
           <b
@@ -175,6 +218,7 @@ export function TransactionsListHeader({
             {fmt(Math.abs(sum))}
           </b>
         </span>
+          )
         ) : null}
       </span>
     </div>
