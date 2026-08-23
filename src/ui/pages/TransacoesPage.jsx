@@ -370,7 +370,7 @@ export const Tip = ({ label, children, pos = "top" }) => {
 const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
   rowHeight = 48, showDate = true, dateLabel = "", quickActions = null,
   onFilterByCategory = null, onFilterByTag = null, wide = false, xwide = false,
-  swipe = null }) => {
+  swipe = null, flash = false }) => {
   const isRefund   = tx.type === "refund";
   const isReceita  = tx.type === "income" || isRefund;
   const hasParcela = !!tx.parcela && !isRefund;
@@ -461,6 +461,11 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
         )}
       <div
         {...(swipe ? swipe.handlers(tx.id) : {})}
+        /* O pulso vive AQUI, não no elemento de fora: a linha do mobile tem
+           fundo opaco para cobrir o painel de swipe, e um fundo sólido pinta
+           por cima de qualquer animação do pai — o "marcar como pago" não
+           mostrava efeito nenhum. */
+        className={`fincla-row${flash ? " fincla-tx-settled" : ""}`}
         onClick={() => (swipeOpen ? swipe.close() : onSelect(tx))}
         onKeyDown={(e) => {
           if (e.target !== e.currentTarget) return;
@@ -469,7 +474,6 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
             onSelect(tx);
           }
         }}
-        className="fincla-row"
         role="button"
         tabIndex={0}
         aria-expanded={isSelected}
@@ -811,6 +815,7 @@ const DetailPanel = ({
   onDuplicateTx,
   onFilterByCategory,
   isMobileDetail = false,
+  onSettled,
   setDeletingId,
   settlingId,
   setSettlingId,
@@ -997,6 +1002,7 @@ const DetailPanel = ({
                   prev.map((item) => (item.id === tx.id ? { ...item, settled: next } : item)),
                 );
                 setSelected((cur) => (cur && cur.id === tx.id ? { ...cur, settled: next } : cur));
+                onSettled?.(tx.id, next);
                 return;
               }
               setSettlingId(tx.id);
@@ -1006,6 +1012,11 @@ const DetailPanel = ({
                 // O painel renderiza a partir de `selected`, que é um snapshot — sem
                 // isto ele continuaria mostrando o estado antigo até fechar.
                 if (updated) setSelected((cur) => (cur && cur.id === tx.id ? { ...cur, ...updated } : cur));
+                // O pulso verde estava só na ação rápida da linha. No mobile
+                // ela não existe (o caminho é swipe ou sanfona), então marcar
+                // como pago não mostrava efeito NENHUM — a linha só mudava de
+                // cor num canto.
+                onSettled?.(tx.id, next);
                 // A linha já foi trocada em memória, mas o summary e o recorte do
                 // filtro continuariam velhos: com Situação = "A pagar", a linha
                 // recém-paga ficaria visível sob um filtro que a exclui.
@@ -1058,14 +1069,25 @@ const DetailPanel = ({
               // estava; `onRowLeave` roda a saída e só então revalida.
               onRowLeave?.(tx.id);
             }}>
-            🗑 Confirmar exclusão
+            {/* Rótulo CURTO: "Confirmar exclusão" estourava a célula da grade
+                2×2 do mobile e empurrava o botão vizinho. O que a pessoa
+                precisa ler é que este clique é o definitivo. */}
+            🗑 Confirmar
           </AccButton>
         ) : (
           <AccButton tone="red" onClick={(e) => { e.stopPropagation(); setDeletingId(tx.id); }}>
             🗑 Excluir
           </AccButton>
         )}
-        {inline && !isMobileDetail && (
+        {/* Sem CANCELAR, "Excluir" era uma porta sem saída: a linha ficava
+            armada para sempre, e o único jeito de sair era confirmar ou
+            recarregar. Ocupa a célula da dica, que só existe no desktop. */}
+        {deletingId === tx.id ? (
+          <AccButton onClick={(e) => { e.stopPropagation(); setDeletingId(null); }}>
+            Cancelar
+          </AccButton>
+        ) : null}
+        {inline && !isMobileDetail && deletingId !== tx.id && (
           <span style={{ ...G, marginLeft:"auto", fontSize:10.5, color:T.inkLight }}>
             Enter expande · Esc fecha
           </span>
@@ -1212,12 +1234,54 @@ function TransacoesPageBody({
   const [selected,    setSelected]    = useState(null);
   /** Estável entre renders: se a identidade mudasse, `TxRow` re-renderizaria à toa
       e o ganho de içar o componente para o módulo iria embora. */
+  /**
+   * Rola o MÍNIMO para a sanfona recém-aberta caber inteira.
+   *
+   * Abrir uma linha no fim da lista revelava um painel que nascia fora da
+   * área visível: a pessoa via a linha destacar e nada acontecer. Rola só o
+   * quanto falta — puxar a linha para o topo tiraria de vista o contexto ao
+   * redor, que é justamente o que a sanfona existe para preservar.
+   *
+   * Roda como ref callback, no mesmo commit em que o painel entra no DOM, e
+   * espera a animação de entrada (`fadeInDown`, 180ms) terminar: medir antes
+   * disso pega a altura no meio do movimento.
+   */
+  const revealAccordion = useCallback((node) => {
+    if (!node) return;
+    const scroller = isMobile
+      ? node.closest(".fincla-scroll")
+      : listScrollRef.current;
+    if (!scroller) return;
+    const settle = () => {
+      const box = node.getBoundingClientRect();
+      const view = scroller.getBoundingClientRect();
+      const overflow = box.bottom - view.bottom;
+      if (overflow <= 0) return;
+      // Nunca mais que o topo da linha: passar disso empurraria a própria
+      // transação para fora da tela.
+      const row = node.previousElementSibling;
+      const maxUp = row ? row.getBoundingClientRect().top - view.top : Infinity;
+      scroller.scrollBy({
+        top: Math.min(overflow + 12, Math.max(0, maxUp)),
+        behavior: "smooth",
+      });
+    };
+    const t = setTimeout(settle, 200);
+    return () => clearTimeout(t);
+  }, [isMobile]);
+
   const handleSelectTx = useCallback((tx) => {
     setSelected((cur) => {
       const next = cur?.id === tx.id ? null : tx;
       // O erro de liquidação é de UMA transação; sem isto ele reapareceria
-      // colado na próxima que fosse aberta.
-      if (cur?.id !== next?.id) setSettleError("");
+      // colado na próxima que fosse aberta. A confirmação de exclusão segue a
+      // mesma regra: fechar a sanfona ou abrir outra linha DESARMA o "tem
+      // certeza?" — deixá-lo armado faria a próxima abertura já nascer a um
+      // clique de apagar.
+      if (cur?.id !== next?.id) {
+        setSettleError("");
+        setDeletingId(null);
+      }
       return next;
     });
   }, []);
@@ -1541,6 +1605,12 @@ function TransacoesPageBody({
   const txList = shouldUseRealData
     ? transactionsData.transactions
     : resolveLocalData({ dataMode, mockData: mockTxList, emptyData: [] });
+  /* Espelho de `txList` para callbacks que rodam FORA do render (o pulso da
+     sanfona). Sem ele o callback precisaria de `txList` na lista de
+     dependências e seria recriado a cada página carregada. */
+  const txListRef = useRef(txList);
+  txListRef.current = txList;
+
 
   // fincla-frontend#106 — mesmo padrão do calendário (`useCalendarData`):
   // `hasLoaded` só vira `true` num sucesso, então "nunca carregou com
@@ -2393,6 +2463,22 @@ function TransacoesPageBody({
     }
   }, [undoToast, shouldUseRealData, transactionsData, onTransactionsInvalidate, flashSettled]);
 
+  /** Pulso + torrada quando a liquidação vem da sanfona, não da ação rápida. */
+  const handleSettledFromDetail = useCallback(
+    (id, next) => {
+      flashSettled(id);
+      const tx = txListRef.current.find((t) => t.id === id);
+      setUndoToast({
+        id,
+        label: next
+          ? `"${tx?.desc ?? "Transação"}" marcada como paga`
+          : `Pagamento de "${tx?.desc ?? "transação"}" desfeito`,
+        revert: next,
+      });
+    },
+    [flashSettled],
+  );
+
   const quickActions = useMemo(() => ({
     onEdit: (tx) => { if (onEditTx) onEditTx(tx); },
     // Só existe quando o consumidor sabe duplicar. Um botão que não faz nada
@@ -2714,6 +2800,7 @@ function TransacoesPageBody({
                     onFilterByCategory={filterByCategoryFromRow}
                     onFilterByTag={filterByTagFromRow}
                     swipe={isMobile ? swipeActions : null}
+                    flash={settledFlashId === tx.id}
                     wide={!isMobile && viewportWidth >= 1600}
                     xwide={!isMobile && viewportWidth >= 2100}
                   />
@@ -2723,6 +2810,7 @@ function TransacoesPageBody({
                       Mesmo padrão dos itens de fatura em Cartões. */}
                   {selected?.id === tx.id && (
                     <div
+                      ref={revealAccordion}
                       role="region"
                       aria-label={`Detalhes de ${tx.desc}`}
                       style={{ background:"#FAFBFF", boxShadow:`inset 3px 0 0 ${T.blue}`,
@@ -2744,6 +2832,7 @@ function TransacoesPageBody({
                         onDuplicateTx={onDuplicateTx}
                         onFilterByCategory={filterByCategoryFromRow}
                         isMobileDetail={isMobile}
+                        onSettled={handleSettledFromDetail}
                         settlingId={settlingId}
                         setSettlingId={setSettlingId}
                         settleError={settleError}
