@@ -24,8 +24,12 @@ export function ValuePanel({
    * barra entregaria um número diferente do que ela mesma mostra.
    */
   const applyBucket = (b) => {
-    const active = isBucketActive(b, valueMin, valueMax);
-    if (active) {
+    // Clicar na barra que JÁ é a faixa inteira desmarca — o mesmo gesto
+    // desfaz, sem precisar de um segundo controle para limpar.
+    const soEla =
+      parseBrl(valueMin) === (b.from == null ? null : b.from) &&
+      parseBrl(valueMax) === (b.to == null ? null : b.to);
+    if (soEla) {
       setValueMin("");
       setValueMax("");
       return;
@@ -34,19 +38,151 @@ export function ValuePanel({
     setValueMax(b.to == null ? "" : formatBrl(b.to));
   };
 
+  const min = parseBrl(valueMin);
+  const max = parseBrl(valueMax);
+  const temFaixa = min != null || max != null;
+  const edges = Array.isArray(buckets) ? bucketEdges(buckets, min, max) : { first: -1, last: -1 };
+  const temBarras = Array.isArray(buckets) && buckets.some((b) => b.count > 0);
+
+  /* Atalhos: o caminho de um clique para os três recortes que respondem a
+     quase toda pergunta sobre valor. As faixas do backend são fechadas nos
+     dois lados, daí o `.99` — mandar 250 traria também a barra seguinte, e o
+     atalho entregaria um número diferente do que o rótulo promete. */
+  const ATALHOS = [
+    { label: "até R$ 50", from: null, to: 49.99 },
+    { label: "R$ 50–250", from: 50, to: 249.99 },
+    { label: "acima de R$ 250", from: 250, to: null },
+  ];
+  const atalhoAtivo = (a) =>
+    (a.from == null ? min == null : min === a.from) && (a.to == null ? max == null : max === a.to);
+  const aplicarAtalho = (a) => {
+    if (atalhoAtivo(a)) {
+      setValueMin("");
+      setValueMax("");
+      return;
+    }
+    setValueMin(a.from == null ? "" : formatBrl(a.from));
+    setValueMax(a.to == null ? "" : formatBrl(a.to));
+  };
+
   return (
     <div>
       <PanelHeader
         title="Faixa de valor"
-        hint="Filtre por valor absoluto da transação"
+        hint="Em módulo: receita ou despesa"
         onClose={onClose}
         compact={compact}
       />
+
+      {/* O histograma vem ANTES dos campos. Pedir "valor mínimo" a quem não
+          conhece a distribuição dos próprios gastos é pedir um chute; com as
+          barras à vista a escolha vira leitura. */}
+      {temBarras && (
+        <div
+          role="group"
+          aria-label="Distribuição por faixa de valor"
+          style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${buckets.length}, 1fr)`,
+            gap: 4,
+            alignItems: "end",
+            height: 64,
+            marginBottom: 6,
+          }}
+        >
+          {buckets.map((b, i) => {
+            const dentro = temFaixa && isBucketInRange(b, min, max);
+            const ponta = dentro && (i === edges.first || i === edges.last);
+            const label = bucketLabel(b);
+            return (
+              <button
+                type="button"
+                key={label}
+                onClick={() => applyBucket(b)}
+                aria-pressed={dentro}
+                aria-label={`${label}: ${b.count} ${b.count === 1 ? "transação" : "transações"}`}
+                title={`${label} · ${b.count}`}
+                disabled={b.count === 0}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "flex-end",
+                  alignItems: "stretch",
+                  gap: 4,
+                  height: "100%",
+                  padding: 0,
+                  border: "none",
+                  background: "none",
+                  cursor: b.count === 0 ? "default" : "pointer",
+                  opacity: b.count === 0 ? 0.4 : 1,
+                }}
+              >
+                <span
+                  style={{
+                    ...G,
+                    ...MONO,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: ponta ? T.ink : dentro ? T.blue : T.inkLight,
+                    textAlign: "center",
+                  }}
+                >
+                  {b.count}
+                </span>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    // Piso de 3px: uma faixa com poucas transações precisa
+                    // continuar clicável, e uma barra de 0px não é alvo.
+                    height: Math.max(3, Math.round((b.count / peak) * 34)),
+                    borderRadius: "3px 3px 0 0",
+                    // Ponta escura, miolo azul: com 30 a 800 digitado à mão as
+                    // cinco barras da faixa acendem e as duas das pontas dizem
+                    // onde ela começa e termina.
+                    background: ponta ? T.ink : dentro ? T.blue : T.border,
+                    transition: "background 120ms ease",
+                  }}
+                />
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {temBarras && (
+        <div
+          aria-hidden="true"
+          style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${buckets.length}, 1fr)`,
+            gap: 4,
+            marginBottom: compact ? 12 : 16,
+          }}
+        >
+          {buckets.map((b) => (
+            <span
+              key={bucketLabel(b)}
+              style={{
+                ...G,
+                ...MONO,
+                fontSize: 10,
+                color: T.inkLight,
+                textAlign: "center",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {bucketShortLabel(b)}
+            </span>
+          ))}
+        </div>
+      )}
+
       <div
         style={{
           display: "grid",
           gridTemplateColumns: compact ? "1fr" : "1fr 1fr",
-          gap: compact ? 12 : 16,
+          gap: compact ? 10 : 16,
         }}
       >
         <ValueField
@@ -64,100 +200,34 @@ export function ValuePanel({
           onChange={setValueMax}
         />
       </div>
-      {Array.isArray(buckets) && buckets.some((b) => b.count > 0) && (
-        <div style={{ marginTop: compact ? 14 : 18 }}>
-          <div
-            style={{
-              ...G,
-              fontSize: 11,
-              fontWeight: 700,
-              color: T.inkMid,
-              textTransform: "uppercase",
-              letterSpacing: "0.08em",
-              marginBottom: 8,
-            }}
-          >
-            Distribuição
-          </div>
-          <div
-            role="group"
-            aria-label="Distribuição por faixa de valor"
-            style={{
-              display: "grid",
-              gridTemplateColumns: `repeat(${buckets.length}, 1fr)`,
-              gap: 4,
-              alignItems: "end",
-              height: 64,
-            }}
-          >
-            {buckets.map((b) => {
-              const active = isBucketActive(b, valueMin, valueMax);
-              const label = bucketLabel(b);
-              return (
-                <button
-                  type="button"
-                  key={label}
-                  onClick={() => applyBucket(b)}
-                  aria-pressed={active}
-                  aria-label={`${label}: ${b.count} ${b.count === 1 ? "transação" : "transações"}`}
-                  title={`${label} · ${b.count}`}
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "flex-end",
-                    alignItems: "stretch",
-                    gap: 4,
-                    height: "100%",
-                    padding: 0,
-                    border: "none",
-                    background: "none",
-                    cursor: b.count === 0 ? "default" : "pointer",
-                    opacity: b.count === 0 ? 0.4 : 1,
-                  }}
-                  disabled={b.count === 0}
-                >
-                  <span
-                    style={{
-                      ...G,
-                      ...MONO,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: active ? T.ink : T.inkLight,
-                      textAlign: "center",
-                    }}
-                  >
-                    {b.count}
-                  </span>
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      // Piso de 3px: uma faixa com poucas transações precisa
-                      // continuar clicável, e uma barra de 0px não é alvo.
-                      height: Math.max(3, Math.round((b.count / peak) * 34)),
-                      borderRadius: 3,
-                      background: active ? T.ink : T.border,
-                      transition: "background 120ms ease",
-                    }}
-                  />
-                  <span
-                    style={{
-                      ...G,
-                      fontSize: 11,
-                      color: T.inkLight,
-                      textAlign: "center",
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {bucketShortLabel(b)}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: compact ? 12 : 14 }}>
+        {ATALHOS.map((a) => {
+          const on = atalhoAtivo(a);
+          return (
+            <button
+              type="button"
+              key={a.label}
+              onClick={() => aplicarAtalho(a)}
+              aria-pressed={on}
+              style={{
+                ...G,
+                height: 30,
+                padding: "0 11px",
+                borderRadius: 99,
+                border: `1px solid ${on ? T.ink : T.border}`,
+                background: on ? T.ink : T.surface,
+                color: on ? "#fff" : T.inkMid,
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              {a.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -180,10 +250,35 @@ function bucketShortLabel(b) {
   return k(b.from);
 }
 
-/** A barra está acesa quando os campos contêm exatamente a faixa dela. */
-function isBucketActive(b, valueMin, valueMax) {
-  const want = (n) => (n == null ? "" : formatBrl(n));
-  return (valueMin || "") === want(b.from) && (valueMax || "") === want(b.to);
+/** `"1.234,50"` → `1234.5`. Vazio ou lixo vira `null`, que significa sem limite. */
+export function parseBrl(v) {
+  if (typeof v !== "string") return null;
+  const t = v.replace(/[^\d,.-]/g, "").replace(/\./g, "").replace(",", ".");
+  if (t === "" || t === "-") return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * A barra está acesa quando ela INTERSECTA a faixa escolhida — não quando os
+ * campos batem exatamente com os limites dela.
+ *
+ * A regra anterior era exata, e por isso o histograma só acendia se a pessoa
+ * tivesse clicado numa barra: digitar 30 a 800 à mão deixava as seis apagadas,
+ * e o histograma virava enfeite justamente para quem estava mirando uma faixa
+ * própria. Como as faixas do backend são fechadas nos dois lados, a
+ * intersecção usa `>=` e `<=` dos dois lados.
+ */
+export function isBucketInRange(b, min, max) {
+  const lo = b.from == null ? Number.NEGATIVE_INFINITY : b.from;
+  const hi = b.to == null ? Number.POSITIVE_INFINITY : b.to;
+  return (min == null || hi >= min) && (max == null || lo <= max);
+}
+
+/** A barra é PONTA quando é a primeira ou a última dentro da faixa. */
+export function bucketEdges(buckets, min, max) {
+  const idx = buckets.map((b, i) => (isBucketInRange(b, min, max) ? i : -1)).filter((i) => i >= 0);
+  return idx.length ? { first: idx[0], last: idx[idx.length - 1] } : { first: -1, last: -1 };
 }
 
 function ValueField({ label, value, placeholder, ariaLabel, onChange }) {
