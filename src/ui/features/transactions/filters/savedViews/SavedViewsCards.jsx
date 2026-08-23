@@ -87,7 +87,10 @@ export function SavedViewsCards({
         aria-label="Visualizações salvas"
         style={{
           display: compact ? "grid" : "flex",
-          gridTemplateColumns: compact ? "1fr" : undefined,
+          /* DUAS colunas no compacto: quatro views custam a altura de duas, e
+             o sheet divide altura contada com nove facetas. Em uma coluna, com
+             quatro views salvas as facetas já saem da dobra. */
+          gridTemplateColumns: compact ? "1fr 1fr" : undefined,
           gap: 8,
           overflowX: "visible",
           paddingBottom: 4,
