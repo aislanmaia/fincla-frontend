@@ -135,6 +135,18 @@ export function parseBrDateLooseOnCommit(raw, minYmd, maxYmd) {
     return parseBrDateLooseResult(expanded, minYmd, maxYmd);
   }
 
+  // 4 dígitos = dia e mês, ano corrente. É o atalho mais usado num filtro —
+  // quase toda busca acontece dentro do ano em que se está — e sem ele a
+  // entrada caía em `incomplete`, que faz o campo REVERTER em silêncio: quem
+  // digitou 3102 via 31/02 sumir sem nenhuma explicação.
+  if (digits.length === 4) {
+    const dd = parseInt(digits.slice(0, 2), 10);
+    const mm = parseInt(digits.slice(2, 4), 10);
+    const yyyy = new Date().getFullYear();
+    const expanded = `${String(dd).padStart(2, "0")}/${String(mm).padStart(2, "0")}/${yyyy}`;
+    return parseBrDateLooseResult(expanded, minYmd, maxYmd);
+  }
+
   return res;
 }
 

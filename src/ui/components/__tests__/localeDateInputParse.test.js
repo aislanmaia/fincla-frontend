@@ -55,3 +55,41 @@ describe("parseBrDateLooseOnCommit", () => {
     });
   });
 });
+
+describe("parseBrDateLooseOnCommit — 4 dígitos", () => {
+  const ANO = new Date().getFullYear();
+
+  it("completa dia/mês com o ano corrente", () => {
+    const r = parseBrDateLooseOnCommit("1604", "2000-01-01", "2100-12-31");
+    expect(r.status).toBe("ok");
+    expect(r.ymd).toBe(`${ANO}-04-16`);
+  });
+
+  it("aceita a forma com barra", () => {
+    const r = parseBrDateLooseOnCommit("16/04", "2000-01-01", "2100-12-31");
+    expect(r.status).toBe("ok");
+    expect(r.ymd).toBe(`${ANO}-04-16`);
+  });
+
+  it("dia que não existe no mês vira erro visível, não silêncio", () => {
+    // 31/02 caía em `incomplete`, e `incomplete` faz o campo reverter sem
+    // mensagem — o defeito que motivou esta expansão.
+    const r = parseBrDateLooseOnCommit("3102", "2000-01-01", "2100-12-31");
+    expect(r.status).toBe("invalid_date");
+  });
+
+  it("mês inexistente também", () => {
+    expect(parseBrDateLooseOnCommit("1613", "2000-01-01", "2100-12-31").status).toBe(
+      "invalid_date",
+    );
+  });
+
+  it("não atropela 6 nem 8 dígitos", () => {
+    expect(parseBrDateLooseOnCommit("160426", "2000-01-01", "2100-12-31").ymd).toBe("2026-04-16");
+    expect(parseBrDateLooseOnCommit("16042026", "2000-01-01", "2100-12-31").ymd).toBe("2026-04-16");
+  });
+
+  it("3 dígitos continua incompleto", () => {
+    expect(parseBrDateLooseOnCommit("160", "2000-01-01", "2100-12-31").status).toBe("incomplete");
+  });
+});
