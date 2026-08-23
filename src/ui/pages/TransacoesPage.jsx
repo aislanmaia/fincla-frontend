@@ -1591,14 +1591,23 @@ function TransacoesPageBody({
     refreshToken: transactionsRefreshToken,
   });
 
-  // Contagens por opção do painel de filtro. `expandedFacet` mantém a busca
-  // preguiçosa: quem só quer ver a lista não paga uma requisição a mais por um
-  // número que nunca vai aparecer na tela.
+  // Contagens por opção do painel de filtro. A busca é preguiçosa: quem só quer
+  // ver a lista não paga uma requisição a mais por um número que nunca vai
+  // aparecer na tela.
+  //
+  // São DUAS superfícies de filtro, e cada uma anuncia de um jeito. A barra
+  // (`TransactionsFilterBar`, usada no mobile e no desktop compacto) avisa qual
+  // facet abriu via `onExpandedChange`. O painel ancorado (`TransactionsFilterPanel`,
+  // só no desktop largo) não avisa nada: ele sempre tem uma facet selecionada,
+  // então o gatilho dele é simplesmente estar aberto. Considerar só a primeira
+  // deixava TODAS as contagens mortas no painel — inclusive o histograma de
+  // valor, que existe no código e nunca chegava a aparecer.
   const [expandedFacet, setExpandedFacet] = useState(null);
+  const anyFacetPanelOpen = expandedFacet != null || (!isMobile && wideDesktopFiltersOpen);
   const facetCounts = useTransactionsFacetCounts({
     organizationId,
     filters: transactionsFilters,
-    enabled: shouldUseRealData && !tagFilterBlocked && expandedFacet != null,
+    enabled: shouldUseRealData && !tagFilterBlocked && anyFacetPanelOpen,
     refreshToken: transactionsRefreshToken,
   });
 
