@@ -3220,9 +3220,20 @@ function TransacoesPageBody({
           <div
             ref={sheetRef}
             style={{ position:"relative", background:T.surface,
-              borderRadius:"24px 24px 0 0",
-              maxHeight: snapFull ? "92dvh" : "72dvh",
-              transition: "max-height 0.38s cubic-bezier(0.32,0.72,0,1)",
+              /* Cantos QUADRAM no cheio. É o sinal de que o sheet deixou de ser
+                 camada sobre a lista e virou tela — e o único disponível, já
+                 que o fundo escurecido some junto. */
+              borderRadius: snapFull ? "0" : "24px 24px 0 0",
+              /* 100dvh, não 92: o painel de Período mede 669 px e o corpo a
+                 92% deixa a última fileira do calendário fora. Em 100% sobram
+                 712 px de corpo e ele cabe inteiro.
+                 As DUAS saídas continuam de pé, e é o que autoriza chegar a
+                 100%: o ✕ do cabeçalho nunca sai da tela (ele mora fora da
+                 região que rola) e o puxador continua reduzindo o sheet no
+                 arrasto para baixo. */
+              maxHeight: snapFull ? "100dvh" : "72dvh",
+              paddingTop: snapFull ? "env(safe-area-inset-top, 0px)" : 0,
+              transition: "max-height 0.38s cubic-bezier(0.32,0.72,0,1), border-radius 0.2s ease",
               display:"flex", flexDirection:"column",
               animation: sheetClosing
                 ? "sheetDown 0.38s cubic-bezier(0.32,0.72,0,1) both"
