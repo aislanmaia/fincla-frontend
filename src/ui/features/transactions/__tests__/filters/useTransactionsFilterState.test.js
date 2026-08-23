@@ -94,11 +94,31 @@ describe("useTransactionsFilterState — facet Tags no buildFacets", () => {
     expect(tagFacet.active).toBe(true);
   });
 
-  it("com várias tags mostra a contagem", () => {
+  it("com várias tags mostra a contagem E o modo de combinação", () => {
     const { result } = renderHook(() => useTransactionsFilterState());
     act(() => result.current.setTags(["ifood", "viagem"]));
     const tagFacet = result.current.buildFacets().find((f) => f.key === "tag");
-    expect(tagFacet.value).toBe("2 tags");
+    // O modo entra no rótulo porque "2 tags" descreve dois recortes bem
+    // diferentes: qualquer uma delas (OU) ou as duas juntas (E). Sem ele o
+    // card mente para metade dos casos.
+    expect(tagFacet.value).toBe("2 tags (OU)");
     expect(tagFacet.multi).toBe(2);
+  });
+
+  it("no modo E o rótulo acompanha", () => {
+    const { result } = renderHook(() => useTransactionsFilterState());
+    act(() => {
+      result.current.setTags(["ifood", "viagem"]);
+      result.current.setTagMode("all");
+    });
+    const tagFacet = result.current.buildFacets().find((f) => f.key === "tag");
+    expect(tagFacet.value).toBe("2 tags (E)");
+  });
+
+  it("uma tag só não carrega modo — não há o que combinar", () => {
+    const { result } = renderHook(() => useTransactionsFilterState());
+    act(() => result.current.setTags(["ifood"]));
+    const tagFacet = result.current.buildFacets().find((f) => f.key === "tag");
+    expect(tagFacet.value).not.toMatch(/\((OU|E)\)/);
   });
 });

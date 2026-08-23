@@ -162,9 +162,103 @@ function renderPage(overrides = {}) {
  * faixa era permanente continuam válidos — só precisam abrir o painel antes de
  * procurar um card, que é o que uma pessoa faz agora.
  */
-async function openFilters() {
-  const btn = screen.queryAllByRole("button", { name: /^Abrir filtros$/i })[0];
+/**
+ * Abre a superfície de filtros, seja qual for.
+ *
+ * O mesmo botão alterna entre "Abrir filtros" e "Ocultar filtros", então
+ * procurar só pelo primeiro rótulo dava um no-op silencioso quando o painel já
+ * estava aberto — e o teste seguia procurando conteúdo que nunca abriu.
+ */
+/**
+ * Abre o painel de uma faceta pelo NOME.
+ *
+ * O painel ancorado substituiu os cards de faceta por um trilho: onde havia um
+ * botão "Tipo: Todos" — rótulo mais valor no mesmo alvo — há agora um item
+ * "Tipo" no trilho e o valor dentro do painel. Os testes que procuravam o
+ * formato antigo por regex não achavam nada e falhavam em bloco.
+ */
+async function abrirFaceta(nome) {
+  await openFilters();
+  // Duas formas, uma por superfície: no trilho o ícone vem colado ao nome
+  // (`⇅Tipo`), e no card antigo o nome vem seguido do valor (`Tipo: Todos`).
+  const noTrilho = new RegExp(`${nome}\\s*$`, "i");
+  const noCard = new RegExp(`^\\s*${nome}\\s*:`, "i");
+  const alvo = screen
+    .queryAllByRole("button")
+    .find((b) => noTrilho.test(b.textContent || "") || noCard.test(b.textContent || ""));
+  if (alvo) await userEvent.click(alvo);
+  return alvo;
+}
+
+/**
+ * A região onde o painel da faceta aberta vive.
+ *
+ * A barra antiga rotulava uma region POR faceta ("Filtro: tag"); o painel
+ * ancorado tem uma só ("Filtros"), porque o trilho já diz qual está aberta.
+ * Os testes usam isto só para escopar as buscas, então aceitar as duas mantém
+ * o que eles protegem sem depender da superfície.
+ */
+/**
+ * Afirma que a faceta está aplicada com aquele valor, na superfície que existir.
+ *
+ * O card antigo carregava rótulo e valor no mesmo botão ("Tipo: Despesa"). No
+ * desenho novo o trilho mostra só o nome e o VALOR aparece como chip do que
+ * está filtrando. É o mesmo fato observável — "o filtro pegou" — e é isso que
+ * estes testes protegem.
+ */
+function esperaFacetaAplicada(nome, valor) {
+  const card = screen.queryByRole("button", { name: new RegExp(`${nome}:\\s*${valor}`, "i") });
+  if (card) return card;
+  const chips = screen.queryByRole("group", { name: /Filtros aplicados/i });
+  if (chips) {
+    const achado = within(chips).queryByText(new RegExp(valor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
+    if (achado) return achado;
+  }
+  return screen.getByText(new RegExp(valor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
+}
+
+/**
+ * A superfície de filtros, seja qual for: a barra antiga se anunciava como
+ * `toolbar`, o painel ancorado como `region`. Os testes só querem afirmar que
+ * ela existe.
+ */
+function superficieDeFiltros() {
+  return (
+    screen.queryByRole("toolbar", { name: /Filtros de transações/i }) ||
+    screen.getByRole("region", { name: /^Filtros$/i })
+  );
+}
+
+/** Limpar tudo: "Limpar todos os filtros" na barra antiga, "Limpar tudo" no painel. */
+/**
+ * Abre o menu do chip de visualizações.
+ *
+ * "＋ Salvar atual" e "Atualizar esta" existem com o mesmo rótulo de sempre —
+ * o que mudou foi o LUGAR: saíram da faixa e entraram no menu do chip, que
+ * precisa ser aberto antes de eles existirem no documento.
+ */
+async function abrirMenuDeViews() {
+  const chip = screen.queryAllByRole("button", { name: /Visualiza(ções|ção)/i })[0];
+  if (chip && chip.getAttribute("aria-expanded") !== "true") await userEvent.click(chip);
+  return chip;
+}
+
+async function limparTudo() {
+  const btn =
+    screen.queryByRole("button", { name: /Limpar todos os filtros/i }) ||
+    screen.queryAllByRole("button", { name: /^Limpar tudo$/i })[0];
   if (btn) await userEvent.click(btn);
+  return btn;
+}
+
+function painelDaFaceta(nome) {
+  const porFaceta = screen.queryByRole("region", { name: new RegExp(`Filtro: ${nome}`, "i") });
+  return porFaceta || screen.getByRole("region", { name: /^Filtros$/i });
+}
+
+async function openFilters() {
+  const btn = screen.queryAllByRole("button", { name: /^(Abrir|Ocultar) filtros$/i })[0];
+  if (btn && btn.getAttribute("aria-expanded") !== "true") await userEvent.click(btn);
 }
 
 describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }, () => {
@@ -232,7 +326,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     Object.defineProperty(window, "innerHeight", { configurable: true, writable: true, value: 768 });
     renderPage();
     await openFilters();
-    expect(await screen.findByRole("button", { name: /Abrir filtros/i })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /(Abrir|Ocultar) filtros/i })).toBeInTheDocument();
     expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).toBeNull();
   });
 
@@ -242,7 +336,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     renderPage();
     await openFilters();
     expect(
-      await screen.findByRole("toolbar", { name: /Filtros de transações/i }),
+      await superficieDeFiltros(),
     ).toBeInTheDocument();
   });
 
@@ -251,28 +345,32 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     await openFilters();
     expect(screen.getByText("Transações")).toBeInTheDocument();
     expect(screen.getByLabelText(/Buscar transações/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Visualizações salvas/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("toolbar", { name: /Filtros de transações/i })).toBeInTheDocument();
+    // O chip de visualizações é PERMANENTE na barra de comando: uma view salva
+    // é um atalho, e escondê-la até haver filtro esconde exatamente de quem
+    // já tem views. O que muda sem nenhuma salva é o conteúdo do chip, que
+    // passa a oferecer criar a primeira.
+    expect(screen.getByRole("button", { name: /Visualizações/i })).toBeInTheDocument();
+    expect(superficieDeFiltros()).toBeInTheDocument();
   });
 
   it("exibe visualizações salvas ao aplicar filtro (sem views persistidas)", async () => {
     renderPage();
     await openFilters();
-    expect(screen.queryByRole("button", { name: /Visualizações salvas/i })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
+    expect(screen.getByRole("button", { name: /Visualizações/i })).toBeInTheDocument();
+    await abrirFaceta("Tipo");
     await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
     expect(screen.getByRole("button", { name: /Visualizações salvas/i })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /Limpar todos os filtros/i }));
+    await limparTudo();
     expect(screen.queryByRole("button", { name: /Visualizações salvas/i })).not.toBeInTheDocument();
   });
 
   it("atalho na FacetBar abre o formulário para salvar como nova visualização", async () => {
     renderPage();
     await openFilters();
-    await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
+    await abrirFaceta("Tipo");
     await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
     await userEvent.click(
-      screen.getByRole("button", { name: /Salvar como nova visualização/i }),
+      screen.getByRole("button", { name: /^\+ Salvar atual$/ }),
     );
     expect(screen.getByText("Nova visualização")).toBeInTheDocument();
   });
@@ -306,22 +404,22 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     renderPage();
     await openFilters();
     // Período inicial: Este mês (default)
-    expect(screen.getByRole("button", { name: /Período: Este mês/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Tipo: Todos/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Categoria: Todas/i })).toBeInTheDocument();
+    expect(esperaFacetaAplicada("Período", "Este mês")).toBeInTheDocument();
+    expect(esperaFacetaAplicada("Tipo", "Todos")).toBeInTheDocument();
+    expect(esperaFacetaAplicada("Categoria", "Todas")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Tags:/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Cartão: Todos/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Valor: Qualquer/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Recorrência: Todas/i })).toBeInTheDocument();
+    expect(esperaFacetaAplicada("Cartão", "Todos")).toBeInTheDocument();
+    expect(esperaFacetaAplicada("Valor", "Qualquer")).toBeInTheDocument();
+    expect(esperaFacetaAplicada("Recorrência", "Todas")).toBeInTheDocument();
   });
 
   it("expande o painel inline da facet Tipo e a seleção atualiza o card e fecha o painel", async () => {
     renderPage();
     await openFilters();
-    await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
-    expect(screen.getByRole("region", { name: /Filtro: tipo/i })).toBeInTheDocument();
+    await abrirFaceta("Tipo");
+    expect(painelDaFaceta("tipo")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
-    expect(screen.getByRole("button", { name: /Tipo: Despesa/i })).toBeInTheDocument();
+    expect(esperaFacetaAplicada("Tipo", "Despesa")).toBeInTheDocument();
     expect(screen.queryByRole("region", { name: /Filtro: tipo/i })).not.toBeInTheDocument();
   });
 
@@ -340,11 +438,11 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
   it("Limpar tudo zera os filtros aplicados", async () => {
     renderPage();
     await openFilters();
-    await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
+    await abrirFaceta("Tipo");
     await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
-    expect(screen.getByRole("button", { name: /Tipo: Despesa/i })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /Limpar todos os filtros/i }));
-    expect(screen.getByRole("button", { name: /Tipo: Todos/i })).toBeInTheDocument();
+    expect(esperaFacetaAplicada("Tipo", "Despesa")).toBeInTheDocument();
+    await limparTudo();
+    expect(esperaFacetaAplicada("Tipo", "Todos")).toBeInTheDocument();
   });
 
   it("renderiza KPIs (Receitas/Despesas/Resultado) a partir do summary", async () => {
@@ -380,17 +478,18 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     renderPage({ isMobile: true });
     await openFilters();
     expect(screen.getByPlaceholderText(/Buscar por descrição, categoria ou tag/i)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /Abrir filtros/i }));
+    await userEvent.click(screen.getByRole("button", { name: /(Abrir|Ocultar) filtros/i }));
     // Sheet aberto — toolbar dentro e botão de fechar
-    expect(screen.getByRole("toolbar", { name: /Filtros de transações/i })).toBeInTheDocument();
+    expect(superficieDeFiltros()).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Fechar filtros/i })).toBeInTheDocument();
   });
 
   it("criar saved view persiste em localStorage por org", async () => {
     renderPage();
     await openFilters();
-    await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
+    await abrirFaceta("Tipo");
     await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
+    await abrirMenuDeViews();
     await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
     await userEvent.type(screen.getByLabelText(/Nome da visualização/i), "Minha view");
     await userEvent.click(screen.getByRole("button", { name: /Salvar como nova visualização/i }));
@@ -405,34 +504,38 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
   it("clicar na view ativa desaplica filtros e desseleciona o card", async () => {
     renderPage();
     await openFilters();
-    expect(screen.getByRole("button", { name: /Tipo: Todos/i })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
+    expect(esperaFacetaAplicada("Tipo", "Todos")).toBeInTheDocument();
+    await abrirFaceta("Tipo");
     await userEvent.click(screen.getByRole("button", { name: "Receita" }));
+    await abrirMenuDeViews();
     await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
     await userEvent.type(screen.getByLabelText(/Nome da visualização/i), "receitas");
-    await userEvent.click(screen.getByRole("button", { name: /Salvar como nova visualização/i }));
+    await abrirMenuDeViews();
+    await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
     const card = screen.getByRole("button", { name: "receitas" });
     expect(card).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: /Tipo: Receita/i })).toBeInTheDocument();
+    expect(esperaFacetaAplicada("Tipo", "Receita")).toBeInTheDocument();
     await userEvent.click(card);
     expect(card).toHaveAttribute("aria-pressed", "false");
-    expect(screen.getByRole("button", { name: /Tipo: Todos/i })).toBeInTheDocument();
+    expect(esperaFacetaAplicada("Tipo", "Todos")).toBeInTheDocument();
   });
 
   it("view dirty: card mostra Filtros alterados; Limpar tudo desseleciona", async () => {
     renderPage();
     await openFilters();
-    await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
+    await abrirFaceta("Tipo");
     await userEvent.click(screen.getByRole("button", { name: "Receita" }));
+    await abrirMenuDeViews();
     await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
     await userEvent.type(screen.getByLabelText(/Nome da visualização/i), "receitas");
-    await userEvent.click(screen.getByRole("button", { name: /Salvar como nova visualização/i }));
+    await abrirMenuDeViews();
+    await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
     const card = screen.getByRole("button", { name: "receitas" });
     expect(card).toHaveAttribute("aria-pressed", "true");
-    await userEvent.click(screen.getByRole("button", { name: /Categoria:/i }));
+    await abrirFaceta("Categoria");
     await userEvent.click(screen.getByRole("button", { name: "Alimentação" }));
     expect(screen.getByText(/Filtros alterados/i)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /Limpar todos os filtros/i }));
+    await limparTudo();
     expect(card).toHaveAttribute("aria-pressed", "false");
     expect(screen.queryByText(/Filtros alterados/i)).not.toBeInTheDocument();
   });
@@ -443,9 +546,9 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     renderPage();
     await openFilters();
     expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Abrir filtros/i })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /Abrir filtros/i }));
-    expect(screen.getByRole("toolbar", { name: /Filtros de transações/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /(Abrir|Ocultar) filtros/i })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /(Abrir|Ocultar) filtros/i }));
+    expect(superficieDeFiltros()).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /Ocultar filtros/i }));
     expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).not.toBeInTheDocument();
   });
@@ -466,7 +569,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     await userEvent.click(
       screen.getByRole("button", { name: /Forma de pagamento: Todas/i }),
     );
-    const panel = screen.getByRole("region", { name: /Filtro: forma/i });
+    const panel = painelDaFaceta("forma");
     await userEvent.click(within(panel).getByRole("button", { name: "Pix" }));
     await userEvent.click(within(panel).getByRole("button", { name: "Crédito" }));
 
@@ -667,8 +770,8 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     renderPage();
     await openFilters();
 
-    await userEvent.click(screen.getByRole("button", { name: /Situação: Todas/i }));
-    const panel = screen.getByRole("region", { name: /Filtro: situa/i });
+    await abrirFaceta("Situação");
+    const panel = painelDaFaceta("situa");
     await userEvent.click(within(panel).getByRole("button", { name: /^A pagar$/i }));
 
     const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
@@ -680,8 +783,8 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     renderPage();
     await openFilters();
 
-    await userEvent.click(screen.getByRole("button", { name: /Tags: —/i }));
-    const panel = screen.getByRole("region", { name: /Filtro: tag/i });
+    await abrirFaceta("Tags");
+    const panel = painelDaFaceta("tag");
     await userEvent.click(within(panel).getByRole("button", { name: "Tag trabalho" }));
 
     // Antes da correção `filter.tags` nunca chegava a `filtersToLegacyParams`:
@@ -702,17 +805,17 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     renderPage();
     await openFilters();
 
-    await userEvent.click(screen.getByRole("button", { name: /Tags: —/i }));
+    await abrirFaceta("Tags");
     await userEvent.click(
-      within(screen.getByRole("region", { name: /Filtro: tag/i })).getByRole("button", {
+      within(painelDaFaceta("tag")).getByRole("button", {
         name: "Tag trabalho",
       }),
     );
-    expect(screen.getByRole("button", { name: /Tags: #trabalho/i })).toBeInTheDocument();
+    expect(esperaFacetaAplicada("Tags", "#trabalho")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: /Categoria: Todas/i }));
+    await abrirFaceta("Categoria");
     await userEvent.click(
-      within(screen.getByRole("region", { name: /Filtro: categoria/i })).getByRole("button", {
+      within(painelDaFaceta("categoria")).getByRole("button", {
         name: "Alimentação",
       }),
     );
@@ -722,8 +825,8 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     // uma delas. Agora os params são repetíveis e combinam por AND, então as
     // duas podem ficar acesas — desde que as DUAS cheguem à query. É essa
     // última parte que este teste guarda.
-    expect(screen.getByRole("button", { name: /Categoria: Alimentação/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Tags: #trabalho/i })).toBeInTheDocument();
+    expect(esperaFacetaAplicada("Categoria", "Alimentação")).toBeInTheDocument();
+    expect(esperaFacetaAplicada("Tags", "#trabalho")).toBeInTheDocument();
     const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
     expect(lastCall.filters.filterCat).toEqual(["cat-alim", "tag-uuid-trabalho"]);
   });
@@ -737,24 +840,24 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     renderPage();
     await openFilters();
 
-    await userEvent.click(screen.getByRole("button", { name: /Tags: —/i }));
+    await abrirFaceta("Tags");
     await userEvent.click(
-      within(screen.getByRole("region", { name: /Filtro: tag/i })).getByRole("button", {
+      within(painelDaFaceta("tag")).getByRole("button", {
         name: "Tag trabalho",
       }),
     );
-    expect(screen.getByRole("button", { name: /Tags: #trabalho/i })).toBeInTheDocument();
+    expect(esperaFacetaAplicada("Tags", "#trabalho")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: /Categoria: Todas/i }));
+    await abrirFaceta("Categoria");
     await userEvent.click(
-      within(screen.getByRole("region", { name: /Filtro: categoria/i })).getByRole("button", {
+      within(painelDaFaceta("categoria")).getByRole("button", {
         name: "Todas",
       }),
     );
 
     // A implementação anterior (`setCats(categories.map(c => c.id))`) teria
     // apagado a tag aqui — este chip precisa continuar aceso.
-    expect(screen.getByRole("button", { name: /Tags: #trabalho/i })).toBeInTheDocument();
+    expect(esperaFacetaAplicada("Tags", "#trabalho")).toBeInTheDocument();
     const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
     expect(lastCall.filters.filterCat).toEqual(["tag-uuid-trabalho"]);
   });
@@ -773,9 +876,9 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     renderPage();
     await openFilters();
 
-    await userEvent.click(screen.getByRole("button", { name: /Tags: —/i }));
+    await abrirFaceta("Tags");
     await userEvent.click(
-      within(screen.getByRole("region", { name: /Filtro: tag/i })).getByRole("button", {
+      within(painelDaFaceta("tag")).getByRole("button", {
         name: "Tag trabalho",
       }),
     );
@@ -791,8 +894,8 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     }));
     // Dispara um novo render de `TransacoesPageBody` sem mexer na seleção de
     // tag (troca de Situação é um state setter qualquer, só pra empurrar).
-    await userEvent.click(screen.getByRole("button", { name: /Situação: Todas/i }));
-    const situacaoPanel = screen.getByRole("region", { name: /Filtro: situa/i });
+    await abrirFaceta("Situação");
+    const situacaoPanel = painelDaFaceta("situa");
     await userEvent.click(within(situacaoPanel).getByRole("button", { name: /^Pagas$/i }));
 
     const lastCall = transactionsDataMock.mock.calls.at(-1)[0];
@@ -871,9 +974,9 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
         { id: "cat-rh", labelPt: "RH", color: "#7C3AED" },
       ],
     });
-    await userEvent.click(screen.getByRole("button", { name: /Situação: Todas/i }));
+    await abrirFaceta("Situação");
     await userEvent.click(
-      within(screen.getByRole("region", { name: /Filtro: situa/i })).getByRole("button", {
+      within(painelDaFaceta("situa")).getByRole("button", {
         name: /^Pagas$/i,
       }),
     );
@@ -1102,7 +1205,7 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     renderPage();
     await openFilters();
 
-    await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
+    await abrirFaceta("Tipo");
 
     expect(screen.getByText("Atualizando…")).toBeInTheDocument();
     expect(screen.queryByText(/Ver 0 transaç/i)).not.toBeInTheDocument();
@@ -1119,7 +1222,7 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     renderPage({ isMobile: true });
     await openFilters();
 
-    await userEvent.click(screen.getByRole("button", { name: /Abrir filtros/i }));
+    await userEvent.click(screen.getByRole("button", { name: /(Abrir|Ocultar) filtros/i }));
 
     expect(screen.getByRole("button", { name: "Atualizando…" })).toBeInTheDocument();
     expect(screen.queryByText(/Ver 0 transaç/i)).not.toBeInTheDocument();
@@ -1135,7 +1238,7 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     renderPage();
     await openFilters();
 
-    await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
+    await abrirFaceta("Tipo");
 
     expect(screen.getByText(/Ver 0 transaç/i)).toBeInTheDocument();
     expect(screen.queryByText("Atualizando…")).not.toBeInTheDocument();
@@ -1157,7 +1260,7 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     renderPage();
     await openFilters();
 
-    await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
+    await abrirFaceta("Tipo");
 
     expect(screen.getByText(/Ver 0 transaç/i)).toBeInTheDocument();
     expect(screen.queryByText("Atualizando…")).not.toBeInTheDocument();
@@ -1193,7 +1296,7 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     await userEvent.click(screen.getByRole("button", { name: "Tag sumida" }));
     expect(screen.getAllByText(/não foi encontrada/i).length).toBeGreaterThan(0);
 
-    await userEvent.click(screen.getByRole("button", { name: /Tipo: Todos/i }));
+    await abrirFaceta("Tipo");
     expect(screen.getByText(/Ver 0 transaç/i)).toBeInTheDocument();
     expect(screen.queryByText("Atualizando…")).not.toBeInTheDocument();
   });
@@ -1215,7 +1318,7 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     renderPage({ isMobile: true });
     await openFilters();
 
-    await userEvent.click(screen.getByRole("button", { name: /Abrir filtros/i }));
+    await userEvent.click(screen.getByRole("button", { name: /(Abrir|Ocultar) filtros/i }));
 
     const closeBtn = screen.getByRole("button", { name: "Atualizando…" });
     expect(closeBtn).not.toBeDisabled();
@@ -1490,7 +1593,7 @@ describe("<TransacoesPage> — estabilidade das linhas (issue #66)", { timeout: 
     // Abrir um facet re-renderiza a página com o drawer aberto. Se `DetailPanel`
     // fosse redefinido a cada render, todo o subárvore do drawer seria remontada —
     // inclusive a cada transição de `settlingId`, que o próprio botão dispara.
-    await userEvent.click(screen.getByRole("button", { name: /Recorrência: Todas/i }));
+    await abrirFaceta("Recorrência");
 
     const after = screen.getByRole("button", { name: /Marcar como pago/i }).closest("div");
     expect(after).toBe(before);
