@@ -35,12 +35,13 @@ function renderChips(props = {}) {
 }
 
 describe("<TransactionsFilterChips>", () => {
-  it("não renderiza nada quando não há filtro ativo", () => {
-    const { container } = render(
-      <TransactionsFilterChips facets={FACETS.map((f) => ({ ...f, active: false }))} />,
-    );
-    // Uma faixa vazia ocupando altura é o oposto do que esta tela resolve.
-    expect(container).toBeEmptyDOMElement();
+  it("sem filtro ativo sobra só o botão de abrir, nenhum chip", () => {
+    render(<TransactionsFilterChips facets={FACETS.map((f) => ({ ...f, active: false }))} />);
+    // O "＋ Filtros" é embutido na faixa de chips de propósito: são o mesmo
+    // assunto, e separá-los custaria uma segunda linha permanente. O que a
+    // tela não pode ter é uma faixa de CHIPS vazia ocupando altura.
+    expect(screen.getByRole("button", { name: "Abrir filtros" })).toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Filtros aplicados" })).not.toBeInTheDocument();
   });
 
   it("mostra só as facets ativas", () => {
@@ -115,8 +116,12 @@ describe("<TransactionsFilterChips>", () => {
     expect(onClearFacet).toHaveBeenCalledWith("busca");
   });
 
-  it("Limpar tudo avisa o consumidor", async () => {
-    const { onClearAll } = renderChips({ maxVisible: 10 });
+  it("Limpar tudo avisa o consumidor — dentro do excedente", async () => {
+    // "Limpar tudo" mora no popover do excedente, não na faixa: na faixa ele
+    // disputaria largura com os próprios chips, que são o conteúdo. Por isso
+    // o teste precisa de MAIS filtros do que cabem, e de abrir o excedente.
+    const { onClearAll } = renderChips({ maxVisible: 2 });
+    await userEvent.click(screen.getByRole("button", { name: /mais/i }));
     await userEvent.click(screen.getByRole("button", { name: "Limpar tudo" }));
     expect(onClearAll).toHaveBeenCalledTimes(1);
   });
