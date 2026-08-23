@@ -65,6 +65,10 @@ function MonthGrid({
   locale,
   onDayClick,
   onDayHover,
+  /* Com UM mês, quem nomeia o mês é a barra de navegação — o título aqui
+     dentro repetia a mesma palavra duas vezes, uma sob a outra. Com dois, a
+     barra fica só com as setas e cada grade precisa dizer qual mês é. */
+  showTitle = true,
 }) {
   const weekdays = useMemo(() => weekdayLabelsShort(locale), [locale]);
   const firstDow = new Date(year, monthIndex, 1).getDay();
@@ -77,16 +81,18 @@ function MonthGrid({
 
   return (
     <div style={{ minWidth: 0 }}>
-      <div
-        style={{
-          ...G,
-          ...finclaCalMonthTitleStyle,
-          textAlign: "center",
-          marginBottom: 8,
-        }}
-      >
-        {formatCalendarNavMonth(year, monthIndex, locale)}
-      </div>
+      {showTitle ? (
+        <div
+          style={{
+            ...G,
+            ...finclaCalMonthTitleStyle,
+            textAlign: "center",
+            marginBottom: 8,
+          }}
+        >
+          {formatCalendarNavMonth(year, monthIndex, locale)}
+        </div>
+      ) : null}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", marginBottom: 4 }}>
         {weekdays.map((label, i) => (
           <div key={i} style={{ ...G, ...finclaCalendarWeekdayCellStyle }}>
@@ -277,6 +283,7 @@ export function RangeCalendarGrid({
             locale={locale}
             onDayClick={onDayClick}
             onDayHover={onDayHover}
+            showTitle={monthCount > 1}
           />
         ))}
       </div>
