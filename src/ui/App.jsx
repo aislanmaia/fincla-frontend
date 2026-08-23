@@ -65,6 +65,7 @@ import { useNavTo } from "./routing/useNavTo.js";
 import { useAuthRedirects } from "./routing/useAuthRedirects.js";
 
 import { resolveDataMode } from "./dataMode.js";
+import { nextDuplicateLabel } from "./features/transactions/duplicateLabel.js";
 
 /* ─── APP ────────────────────────────────────────────────── */
 /**
@@ -323,7 +324,17 @@ export default function App() {
       onDuplicateTx={(tx) => {
         const { editingTransactionId, editBaseline, dateIso, ...base } =
           buildTxModalPreConfig(tx);
-        flushSync(() => setModalPreConfig({ ...base, dateIso: todayIsoDate() }));
+        flushSync(() =>
+          setModalPreConfig({
+            ...base,
+            // `Uber` → `Uber (1)` → `Uber (2)`: sem isso a lista fica com duas
+            // linhas de nome idêntico e mesma data, e nada distingue a cópia
+            // do original. O nome vem pré-preenchido e editável — quem quiser
+            // outro nome troca antes de salvar.
+            desc: nextDuplicateLabel(base.desc),
+            dateIso: todayIsoDate(),
+          }),
+        );
         openTxModal();
       }}
     />,
