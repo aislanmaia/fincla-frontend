@@ -3271,6 +3271,13 @@ function TransacoesPageBody({
                 {...filterBarCommonProps}
                 compact
                 hideSearch
+                /* Uma visualização É um filtro, então ela mora junto dos
+                   filtros — no TOPO do sheet, antes das facetas. Estava só no
+                   menu `⋯`, que é sobre COMO a lista aparece, não sobre QUAIS
+                   transações aparecem. E quem tem uma view quase sempre quer
+                   aplicá-la inteira, não montar filtro do zero. */
+                hideSavedViews={false}
+                savedViews={savedViewsProp}
               />
             </div>
             {/* Footer CTA — safe area aware. fincla-frontend#109 rodada 3,
