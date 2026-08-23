@@ -217,6 +217,40 @@ function esperaFacetaAplicada(nome, valor) {
   return screen.getByText(new RegExp(valor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"));
 }
 
+/**
+ * A superfície de filtros, seja qual for: a barra antiga se anunciava como
+ * `toolbar`, o painel ancorado como `region`. Os testes só querem afirmar que
+ * ela existe.
+ */
+function superficieDeFiltros() {
+  return (
+    screen.queryByRole("toolbar", { name: /Filtros de transações/i }) ||
+    screen.getByRole("region", { name: /^Filtros$/i })
+  );
+}
+
+/** Limpar tudo: "Limpar todos os filtros" na barra antiga, "Limpar tudo" no painel. */
+/**
+ * Abre o menu do chip de visualizações.
+ *
+ * "＋ Salvar atual" e "Atualizar esta" existem com o mesmo rótulo de sempre —
+ * o que mudou foi o LUGAR: saíram da faixa e entraram no menu do chip, que
+ * precisa ser aberto antes de eles existirem no documento.
+ */
+async function abrirMenuDeViews() {
+  const chip = screen.queryAllByRole("button", { name: /Visualiza(ções|ção)/i })[0];
+  if (chip && chip.getAttribute("aria-expanded") !== "true") await userEvent.click(chip);
+  return chip;
+}
+
+async function limparTudo() {
+  const btn =
+    screen.queryByRole("button", { name: /Limpar todos os filtros/i }) ||
+    screen.queryAllByRole("button", { name: /^Limpar tudo$/i })[0];
+  if (btn) await userEvent.click(btn);
+  return btn;
+}
+
 function painelDaFaceta(nome) {
   const porFaceta = screen.queryByRole("region", { name: new RegExp(`Filtro: ${nome}`, "i") });
   return porFaceta || screen.getByRole("region", { name: /^Filtros$/i });
@@ -302,7 +336,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     renderPage();
     await openFilters();
     expect(
-      await screen.findByRole("toolbar", { name: /Filtros de transações/i }),
+      await superficieDeFiltros(),
     ).toBeInTheDocument();
   });
 
@@ -311,18 +345,22 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     await openFilters();
     expect(screen.getByText("Transações")).toBeInTheDocument();
     expect(screen.getByLabelText(/Buscar transações/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Visualizações salvas/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("toolbar", { name: /Filtros de transações/i })).toBeInTheDocument();
+    // O chip de visualizações é PERMANENTE na barra de comando: uma view salva
+    // é um atalho, e escondê-la até haver filtro esconde exatamente de quem
+    // já tem views. O que muda sem nenhuma salva é o conteúdo do chip, que
+    // passa a oferecer criar a primeira.
+    expect(screen.getByRole("button", { name: /Visualizações/i })).toBeInTheDocument();
+    expect(superficieDeFiltros()).toBeInTheDocument();
   });
 
   it("exibe visualizações salvas ao aplicar filtro (sem views persistidas)", async () => {
     renderPage();
     await openFilters();
-    expect(screen.queryByRole("button", { name: /Visualizações salvas/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Visualizações/i })).toBeInTheDocument();
     await abrirFaceta("Tipo");
     await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
     expect(screen.getByRole("button", { name: /Visualizações salvas/i })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /Limpar todos os filtros/i }));
+    await limparTudo();
     expect(screen.queryByRole("button", { name: /Visualizações salvas/i })).not.toBeInTheDocument();
   });
 
@@ -332,7 +370,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     await abrirFaceta("Tipo");
     await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
     await userEvent.click(
-      screen.getByRole("button", { name: /Salvar como nova visualização/i }),
+      screen.getByRole("button", { name: /^\+ Salvar atual$/ }),
     );
     expect(screen.getByText("Nova visualização")).toBeInTheDocument();
   });
@@ -403,7 +441,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     await abrirFaceta("Tipo");
     await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
     expect(esperaFacetaAplicada("Tipo", "Despesa")).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /Limpar todos os filtros/i }));
+    await limparTudo();
     expect(esperaFacetaAplicada("Tipo", "Todos")).toBeInTheDocument();
   });
 
@@ -442,7 +480,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     expect(screen.getByPlaceholderText(/Buscar por descrição, categoria ou tag/i)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /(Abrir|Ocultar) filtros/i }));
     // Sheet aberto — toolbar dentro e botão de fechar
-    expect(screen.getByRole("toolbar", { name: /Filtros de transações/i })).toBeInTheDocument();
+    expect(superficieDeFiltros()).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Fechar filtros/i })).toBeInTheDocument();
   });
 
@@ -451,6 +489,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     await openFilters();
     await abrirFaceta("Tipo");
     await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
+    await abrirMenuDeViews();
     await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
     await userEvent.type(screen.getByLabelText(/Nome da visualização/i), "Minha view");
     await userEvent.click(screen.getByRole("button", { name: /Salvar como nova visualização/i }));
@@ -468,9 +507,11 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     expect(esperaFacetaAplicada("Tipo", "Todos")).toBeInTheDocument();
     await abrirFaceta("Tipo");
     await userEvent.click(screen.getByRole("button", { name: "Receita" }));
+    await abrirMenuDeViews();
     await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
     await userEvent.type(screen.getByLabelText(/Nome da visualização/i), "receitas");
-    await userEvent.click(screen.getByRole("button", { name: /Salvar como nova visualização/i }));
+    await abrirMenuDeViews();
+    await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
     const card = screen.getByRole("button", { name: "receitas" });
     expect(card).toHaveAttribute("aria-pressed", "true");
     expect(esperaFacetaAplicada("Tipo", "Receita")).toBeInTheDocument();
@@ -484,15 +525,17 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     await openFilters();
     await abrirFaceta("Tipo");
     await userEvent.click(screen.getByRole("button", { name: "Receita" }));
+    await abrirMenuDeViews();
     await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
     await userEvent.type(screen.getByLabelText(/Nome da visualização/i), "receitas");
-    await userEvent.click(screen.getByRole("button", { name: /Salvar como nova visualização/i }));
+    await abrirMenuDeViews();
+    await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
     const card = screen.getByRole("button", { name: "receitas" });
     expect(card).toHaveAttribute("aria-pressed", "true");
     await abrirFaceta("Categoria");
     await userEvent.click(screen.getByRole("button", { name: "Alimentação" }));
     expect(screen.getByText(/Filtros alterados/i)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /Limpar todos os filtros/i }));
+    await limparTudo();
     expect(card).toHaveAttribute("aria-pressed", "false");
     expect(screen.queryByText(/Filtros alterados/i)).not.toBeInTheDocument();
   });
@@ -505,7 +548,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /(Abrir|Ocultar) filtros/i })).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /(Abrir|Ocultar) filtros/i }));
-    expect(screen.getByRole("toolbar", { name: /Filtros de transações/i })).toBeInTheDocument();
+    expect(superficieDeFiltros()).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /Ocultar filtros/i }));
     expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).not.toBeInTheDocument();
   });
