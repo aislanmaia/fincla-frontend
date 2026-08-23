@@ -50,6 +50,12 @@ function RangeDateInput({
   min,
   max,
   messages,
+  /* Modo de UMA LINHA: o campo perde o rótulo em bloco, a borda e o ícone
+     próprios — quem os carrega é a caixa que abriga as duas bordas. É o que
+     faz o intervalo caber em 234 px, onde a régua de três colunas não cabia e
+     era amputada em silêncio. */
+  inline = false,
+  onErrorChange,
 }) {
   const [draft, setDraft] = useState(() => ymdToDraft(value, locale));
   const [error, setError] = useState(null);
@@ -59,6 +65,12 @@ function RangeDateInput({
     setDraft(ymdToDraft(value, locale));
     setError(null);
   }, [value, locale]);
+
+  // No modo inline a mensagem não cabe sob o campo: ela é do INTERVALO, e
+  // aparece na linha que já mostra o resumo e a contagem de dias.
+  useEffect(() => {
+    if (typeof onErrorChange === "function") onErrorChange(error);
+  }, [error, onErrorChange]);
 
   const formatError = (status) => {
     if (status === "invalid_date") return messages.dateInvalid;
@@ -107,6 +119,64 @@ function RangeDateInput({
     }
   };
 
+  const campo = (
+    <input
+      id={id}
+      type="text"
+      inputMode="numeric"
+      autoComplete="off"
+      placeholder={BR_DATE_INPUT_MASK_PLACEHOLDER}
+      aria-label={label}
+      aria-invalid={error ? "true" : "false"}
+      aria-describedby={error && !inline ? errId : undefined}
+      value={draft}
+      onFocus={onFocus}
+      onClick={onFocus}
+      onChange={(e) => handleChange(e.target.value)}
+      onBlur={(e) => commitDraft(e.target.value, { blur: true })}
+      onKeyDown={(e) => {
+        if (e.key !== "Enter") return;
+        e.preventDefault();
+        commitDraft(e.target.value, { blur: true });
+      }}
+      style={{
+        ...G,
+        ...NUM,
+        flex: inline ? "none" : 1,
+        width: inline ? 90 : undefined,
+        minWidth: 0,
+        border: "none",
+        outline: "none",
+        background: inline && active ? `${T.ink}0A` : "transparent",
+        borderRadius: inline ? 6 : undefined,
+        padding: inline ? "4px 4px" : undefined,
+        fontSize: inline ? 12.5 : 13,
+        fontWeight: 600,
+        color: T.ink,
+        letterSpacing: "0.04em",
+      }}
+    />
+  );
+
+  if (inline) {
+    return (
+      <>
+        <span
+          style={{
+            ...G,
+            flexShrink: 0,
+            fontSize: 11,
+            fontWeight: 600,
+            color: active ? T.ink : T.inkLight,
+          }}
+        >
+          {label.toLowerCase()}
+        </span>
+        {campo}
+      </>
+    );
+  }
+
   return (
     <div style={{ minWidth: 0 }}>
       <div
@@ -153,39 +223,7 @@ function RangeDateInput({
         >
           <Calendar size={14} color={active ? T.ink : T.inkMid} aria-hidden />
         </button>
-        <input
-          id={id}
-          type="text"
-          inputMode="numeric"
-          autoComplete="off"
-          placeholder={BR_DATE_INPUT_MASK_PLACEHOLDER}
-          aria-label={label}
-          aria-invalid={error ? "true" : "false"}
-          aria-describedby={error ? errId : undefined}
-          value={draft}
-          onFocus={onFocus}
-          onClick={onFocus}
-          onChange={(e) => handleChange(e.target.value)}
-          onBlur={(e) => commitDraft(e.target.value, { blur: true })}
-          onKeyDown={(e) => {
-            if (e.key !== "Enter") return;
-            e.preventDefault();
-            commitDraft(e.target.value, { blur: true });
-          }}
-          style={{
-            ...G,
-            ...NUM,
-            flex: 1,
-            minWidth: 0,
-            border: "none",
-            outline: "none",
-            background: "transparent",
-            fontSize: 13,
-            fontWeight: 600,
-            color: T.ink,
-            letterSpacing: "0.04em",
-          }}
-        />
+        {campo}
       </div>
       {error ? (
         <div id={errId} role="alert" style={{ ...G, fontSize: 11, color: T.red, marginTop: 4 }}>
@@ -213,6 +251,11 @@ export function LocaleDateRangePicker({
 }) {
   const messages = useMemo(() => resolveLocaleDatePickerMessages(locale), [locale]);
   const [activeEdge, setActiveEdge] = useState("from");
+  // No modo de uma linha a mensagem é do INTERVALO, não de um campo: as duas
+  // bordas reportam para cá e a linha de baixo mostra uma de cada vez.
+  const [errFrom, setErrFrom] = useState(null);
+  const [errTo, setErrTo] = useState(null);
+  const rangeError = errFrom || errTo;
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [hoverYmd, setHoverYmd] = useState(null);
 
@@ -335,12 +378,107 @@ export function LocaleDateRangePicker({
     : "Digite dd/mm/aaaa ou toque no campo para abrir o calendário.";
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: compact ? 8 : 12 }}>
+      {compact ? (
+        /* UMA LINHA. O intervalo é um objeto só, então ocupa uma caixa só —
+           e é o que faz o resumo e a contagem de dias existirem abaixo de
+           1600 px de viewport, onde a régua de três colunas não cabia e era
+           silenciosamente amputada junto com o segundo mês. */
+        <>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 2,
+              padding: "0 7px",
+              height: 44,
+              borderRadius: 10,
+              border: `1px solid ${rangeError ? T.red : T.border}`,
+              background: T.surface,
+              minWidth: 0,
+            }}
+          >
+            {/* Sem ícone de calendário aqui: focar qualquer uma das bordas já
+                abre o calendário, e o botão custava 17 px que a caixa de
+                234 px não tem — era ele que fazia o ano ser cortado. */}
+            <RangeDateInput
+              id="period-range-from"
+              label="De"
+              inline
+              value={displayFrom}
+              active={activeEdge === "from"}
+              onFocus={() => openCalendar("from")}
+              onCalendarClick={() => toggleCalendar("from")}
+              calendarOpen={calendarOpen && activeEdge === "from"}
+              onChange={applyFrom}
+              onClear={() => { markCustom(); setCustomFrom(""); }}
+              onErrorChange={setErrFrom}
+              locale={locale}
+              min={TRANSACTIONS_DATE_MIN}
+              max={TRANSACTIONS_DATE_MAX}
+              messages={messages}
+            />
+            <RangeDateInput
+              id="period-range-to"
+              label="Até"
+              inline
+              value={displayTo}
+              active={activeEdge === "to"}
+              onFocus={() => openCalendar("to")}
+              onCalendarClick={() => toggleCalendar("to")}
+              calendarOpen={calendarOpen && activeEdge === "to"}
+              onChange={applyTo}
+              onClear={() => { markCustom(); setCustomTo(""); }}
+              onErrorChange={setErrTo}
+              locale={locale}
+              min={TRANSACTIONS_DATE_MIN}
+              max={TRANSACTIONS_DATE_MAX}
+              messages={messages}
+            />
+          </div>
+          {/* O resumo e a contagem de dias — o que o compacto perdia por
+              inteiro. Some enquanto há erro, para não descrever um intervalo
+              que o campo já não mostra. */}
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, minWidth: 0 }}>
+            {rangeError ? (
+              <span role="alert" style={{ ...G, fontSize: 11, fontWeight: 600, color: T.red }}>
+                {rangeError}
+              </span>
+            ) : (
+              <>
+                <span
+                  style={{
+                    ...G, ...NUM, flexShrink: 0, fontSize: 10.5,
+                    color: dayCount != null ? T.blue : T.amber,
+                    background: dayCount != null ? T.blueLight : T.amberLight,
+                    borderRadius: 99, padding: "2px 8px",
+                  }}
+                >
+                  {dayCount != null
+                    ? `${dayCount} dia${dayCount === 1 ? "" : "s"}`
+                    : displayFrom || displayTo
+                      ? "aberto"
+                      : "sem limites"}
+                </span>
+                <span
+                  style={{
+                    ...G, fontSize: 11, color: T.inkLight, minWidth: 0,
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                  }}
+                >
+                  {summaryLabel}
+                </span>
+              </>
+            )}
+          </div>
+        </>
+      ) : (
+      /* Régua de três colunas: só onde ela cabe de verdade. */
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: compact ? "1fr" : "1fr 1fr minmax(120px, 0.8fr)",
-          gap: compact ? 10 : 14,
+          gridTemplateColumns: "1fr 1fr minmax(120px, 0.8fr)",
+          gap: 14,
           alignItems: "flex-start",
         }}
       >
@@ -353,10 +491,7 @@ export function LocaleDateRangePicker({
           onCalendarClick={() => toggleCalendar("from")}
           calendarOpen={calendarOpen && activeEdge === "from"}
           onChange={applyFrom}
-          onClear={() => {
-            markCustom();
-            setCustomFrom("");
-          }}
+          onClear={() => { markCustom(); setCustomFrom(""); }}
           locale={locale}
           min={TRANSACTIONS_DATE_MIN}
           max={TRANSACTIONS_DATE_MAX}
@@ -371,57 +506,39 @@ export function LocaleDateRangePicker({
           onCalendarClick={() => toggleCalendar("to")}
           calendarOpen={calendarOpen && activeEdge === "to"}
           onChange={applyTo}
-          onClear={() => {
-            markCustom();
-            setCustomTo("");
-          }}
+          onClear={() => { markCustom(); setCustomTo(""); }}
           locale={locale}
           min={TRANSACTIONS_DATE_MIN}
           max={TRANSACTIONS_DATE_MAX}
           messages={messages}
         />
-        {!compact && (
-          <div style={{ minWidth: 0 }}>
-            <div
-              style={{
-                ...G,
-                fontSize: 11,
-                fontWeight: 700,
-                color: T.inkMid,
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-                marginBottom: 6,
-              }}
-            >
-              Intervalo
-            </div>
-            <div
-              style={{
-                ...G,
-                padding: "9px 11px",
-                borderRadius: 9,
-                background: T.bg,
-                border: `1px solid ${T.border}`,
-                fontSize: 13,
-                color: T.inkMid,
-                lineHeight: 1.35,
-                minHeight: 42,
-                boxSizing: "border-box",
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "center",
-              }}
-            >
-              <span style={{ fontWeight: 700, color: T.ink }}>{summaryLabel}</span>
-              {dayCount != null ? (
-                <span style={{ fontSize: 11, marginTop: 2 }}>
-                  {dayCount} dia{dayCount === 1 ? "" : "s"}
-                </span>
-              ) : null}
-            </div>
+        <div style={{ minWidth: 0 }}>
+          <div
+            style={{
+              ...G, fontSize: 11, fontWeight: 700, color: T.inkMid,
+              textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6,
+            }}
+          >
+            Intervalo
           </div>
-        )}
+          <div
+            style={{
+              ...G, padding: "9px 11px", borderRadius: 9, background: T.bg,
+              border: `1px solid ${T.border}`, fontSize: 13, color: T.inkMid,
+              lineHeight: 1.35, minHeight: 42, boxSizing: "border-box",
+              display: "flex", flexDirection: "column", justifyContent: "center",
+            }}
+          >
+            <span style={{ fontWeight: 700, color: T.ink }}>{summaryLabel}</span>
+            {dayCount != null ? (
+              <span style={{ fontSize: 11, marginTop: 2 }}>
+                {dayCount} dia{dayCount === 1 ? "" : "s"}
+              </span>
+            ) : null}
+          </div>
+        </div>
       </div>
+      )}
 
       {calendarOpen && (
         <RangeCalendarGrid
