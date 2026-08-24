@@ -47,24 +47,28 @@ export const ANIM_CSS = `
   /* Ações rápidas: aparecem no hover ANCORADAS À ESQUERDA DO VALOR, flutuando
      dentro do vão que a linha já tem. Absolutas de propósito — no fluxo elas
      empurrariam o valor ao aparecer e a linha inteira saltaria sob o cursor,
-     pior ainda com o rótulo expandindo. O "right: 100%" prende o grupo à borda
-     esquerda da célula do valor, então ele cresce para a esquerda, para dentro
-     do vazio, seja qual for a largura das colunas.
+     pior ainda com o rótulo expandindo. O grupo é ancorado à borda DIREITA do
+     próprio vão — a coluna 1fr —, então cresce para a esquerda, para dentro do
+     vazio, e nunca cobre o que vem depois: nem o valor, nem a coluna de tags
+     que entra entre os dois acima de 2100 px.
 
      No toque não há hover: elas ficam sempre visíveis — a alternativa seria um
      alvo de 24 px numa linha de 56, onde o erro abre a transação vizinha. */
   .fincla-quick {
     display: none; align-items: center; gap: 4px;
-    position: absolute; right: 100%; top: 50%; transform: translateY(-50%);
+    position: absolute; right: 0; top: 50%; transform: translateY(-50%);
     margin-right: 10px; white-space: nowrap;
   }
   .fincla-row:hover .fincla-quick,
   .fincla-row:focus-within .fincla-quick { display: flex; }
-  .fincla-row:hover .fincla-quick-hides,
-  .fincla-row:focus-within .fincla-quick-hides { display: none; }
-  @media (hover: none) {
+  /* "hover: none" sozinho pegava TABLET: "isMobile" é largura (< 768 px), então
+     um iPad em paisagem renderiza a linha do DESKTOP — e a regra deixava o grupo
+     permanentemente visível. Antes isso era inofensivo (ele tinha coluna
+     própria); agora ele é absoluto e flutuaria sobre o vão da linha, que é
+     justamente onde o dedo toca para abrir a sanfona, com o 🗑 entre os alvos.
+     Casando os dois critérios, a regra só vale onde a linha é mesmo a mobile. */
+  @media (hover: none) and (max-width: 767px) {
     .fincla-quick { display: flex; }
-    .fincla-quick-hides { display: none; }
   }
 
   /* O rótulo abre por max-width, não por display: só uma propriedade animável
@@ -79,9 +83,15 @@ export const ANIM_CSS = `
   /* Abaixo de ~1200 px o vão não tem para onde crescer: o rótulo fica fora e o
      botão volta a ser só o ícone. */
   .fincla-qa-mute .lb { display: none; }
-  .fincla-qa[data-tone="neutral"]:hover { border-color: #BFD3FA; background: #EFF6FF; color: #2563EB; }
-  .fincla-qa[data-tone="green"]:hover { background: #ECFDF5; }
-  .fincla-qa[data-tone="red"]:hover { background: #FEF2F2; }
+  /* "!important" porque "QuickAction" declara background/border/color INLINE, e
+     declaração inline vence qualquer regra de autor sem ele. Sem isto o botão
+     não mudava de cor nenhuma no hover e o "transition" acima animava o vazio —
+     o mesmo motivo do "!important" do ".fincla-row:hover" logo acima. */
+  .fincla-qa[data-tone="neutral"]:hover {
+    border-color: #BFD3FA !important; background: #EFF6FF !important; color: #2563EB !important;
+  }
+  .fincla-qa[data-tone="green"]:hover { background: #ECFDF5 !important; }
+  .fincla-qa[data-tone="red"]:hover { background: #FEF2F2 !important; }
   @media (prefers-reduced-motion: reduce) {
     .fincla-qa .lb { transition: none; }
   }

@@ -397,7 +397,6 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
   const accountLabel = tx.accountLabel || tx.contaLabel || "";
 
 
-
   /* A grade nasce das medições do artefato. As colunas de conta e de rótulo da
      situação só existem acima de 1600 px: abaixo disso a descrição precisa da
      largura, e uma coluna de conta espremida em 60 px não informa nada. */
@@ -676,46 +675,16 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
         )}
       </div>
 
-      <span />
-
-      {/* Tags — só acima de 2100 px. Abaixo disso elas competiriam com a
-          descrição por largura, e o artefato as reserva para quando a folga
-          existe de verdade. */}
-      {xwide && (
-        <div style={{ display:"flex", gap:5, minWidth:0, overflow:"hidden" }}>
-          {tags.slice(0, 2).map((tag) =>
-            onFilterByTag ? (
-              // `title` é o rótulo CRU: ele existe para deixar legível um nome
-              // truncado ("mensal (a1b2c3d4)"). A ação mora no `aria-label`.
-              <button key={tag} type="button" title={tag}
-                onClick={(e) => { e.stopPropagation(); onFilterByTag(tag); }}
-                aria-label={`Filtrar pela tag ${tag}`}
-                style={{ ...G, fontSize:10, fontWeight:600, color:T.inkMid,
-                  background:T.grayLight, border:"none", borderRadius:6,
-                  padding:"2px 7px", cursor:"pointer", maxWidth:70,
-                  overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                {tag}
-              </button>
-            ) : (
-              <span key={tag} title={tag} style={{ ...G, fontSize:10, fontWeight:600,
-                color:T.inkMid, background:T.grayLight, borderRadius:6, padding:"2px 7px",
-                maxWidth:70, overflow:"hidden", textOverflow:"ellipsis",
-                whiteSpace:"nowrap" }}>{tag}</span>
-            ),
-          )}
-        </div>
-      )}
-
-
-      {/* O valor é a âncora das ações: `position: relative` aqui é o que
-          permite ancorá-las em `right: 100%` — a borda esquerda do valor —,
-          seja qual for a largura das colunas. */}
-      <div style={{ ...G, fontFamily:"'Geist Mono',monospace",
-        fontSize: dense ? 12 : 13.5, fontWeight:700, textAlign:"right",
-        position:"relative",
-        color: isRefund ? T.green : (isReceita ? T.green : T.ink) }}>
-        {isReceita ? "+" : "−"}{fmtBRL(tx.val)}
-
+      {/* O VÃO — e o dono das ações rápidas.
+          Elas moravam ancoradas ao `right: 100%` da célula do valor, o que
+          funcionava até 2100 px. Acima disso entra a coluna de tags ENTRE o vão
+          e o valor, e o grupo (~146 px só de ícones) passava por cima dela —
+          cobrindo justamente os chips clicáveis de filtrar por tag, na largura
+          em que as tags foram introduzidas.
+          Ancorando na borda direita do próprio vão, elas ficam sempre no vazio:
+          à esquerda das tags quando elas existem, à esquerda do valor quando
+          não. */}
+      <span style={{ position:"relative" }}>
         {quickActions && (
           <div className="fincla-quick">
             {tx.settleable && (
@@ -758,6 +727,44 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
             </QuickAction>
           </div>
         )}
+      </span>
+
+      {/* Tags — só acima de 2100 px. Abaixo disso elas competiriam com a
+          descrição por largura, e o artefato as reserva para quando a folga
+          existe de verdade. */}
+      {xwide && (
+        <div style={{ display:"flex", gap:5, minWidth:0, overflow:"hidden" }}>
+          {tags.slice(0, 2).map((tag) =>
+            onFilterByTag ? (
+              // `title` é o rótulo CRU: ele existe para deixar legível um nome
+              // truncado ("mensal (a1b2c3d4)"). A ação mora no `aria-label`.
+              <button key={tag} type="button" title={tag}
+                onClick={(e) => { e.stopPropagation(); onFilterByTag(tag); }}
+                aria-label={`Filtrar pela tag ${tag}`}
+                style={{ ...G, fontSize:10, fontWeight:600, color:T.inkMid,
+                  background:T.grayLight, border:"none", borderRadius:6,
+                  padding:"2px 7px", cursor:"pointer", maxWidth:70,
+                  overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                {tag}
+              </button>
+            ) : (
+              <span key={tag} title={tag} style={{ ...G, fontSize:10, fontWeight:600,
+                color:T.inkMid, background:T.grayLight, borderRadius:6, padding:"2px 7px",
+                maxWidth:70, overflow:"hidden", textOverflow:"ellipsis",
+                whiteSpace:"nowrap" }}>{tag}</span>
+            ),
+          )}
+        </div>
+      )}
+
+
+      {/* O valor é a âncora das ações: `position: relative` aqui é o que
+          permite ancorá-las em `right: 100%` — a borda esquerda do valor —,
+          seja qual for a largura das colunas. */}
+      <div style={{ ...G, fontFamily:"'Geist Mono',monospace",
+        fontSize: dense ? 12 : 13.5, fontWeight:700, textAlign:"right",
+        color: isRefund ? T.green : (isReceita ? T.green : T.ink) }}>
+        {isReceita ? "+" : "−"}{fmtBRL(tx.val)}
       </div>
 
       {/* Situação: anel vazado, não ampulheta. O lançamento não está
@@ -1251,6 +1258,22 @@ function TransacoesPageBody({
   /* Qual faceta o painel mostra. Começa em "Período" porque é a que mais muda
      e a única sempre ativa; abrir em "Ativos" com a lista limpa daria uma tela
      vazia como primeira impressão do painel. */
+  /* Largura REAL da lista, medida. O rótulo da ação rápida cresce para dentro do
+     vão da linha, e o vão depende da lista — não da viewport: com a dock aberta
+     em 1300 px a lista cai para ~695 px (1300 − sidebar 195 − painel 396 − 14),
+     e um limiar de viewport deixaria o rótulo crescer por cima da categoria e do
+     fim da descrição. Medir é a única leitura que sobrevive à dock. */
+  const [listWidth, setListWidth] = useState(0);
+  useEffect(() => {
+    const el = listScrollRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver(([entry]) => {
+      setListWidth(Math.round(entry.contentRect.width));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isMobile]);
+
   const [panelFacet, setPanelFacet] = useState("periodo");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const swipeActions = useSwipeActions();
@@ -2917,7 +2940,13 @@ function TransacoesPageBody({
                     swipe={isMobile ? swipeActions : null}
                     flash={settledFlashId === tx.id}
                     wide={!isMobile && viewportWidth >= 1600}
-                    showActionLabels={!isMobile && viewportWidth >= 1200}
+                    /* 1000 px de LISTA — não de viewport. Abaixo disso o vão
+                       não comporta o botão aberto e ele invadiria a descrição.
+                       Enquanto a medição não chega (primeiro render), cai no
+                       limiar de viewport, que erra só para menos. */
+                    showActionLabels={
+                      !isMobile && (listWidth > 0 ? listWidth >= 1000 : viewportWidth >= 1200)
+                    }
                     xwide={!isMobile && viewportWidth >= 2100}
                   />
                   {/* Sanfona: o detalhe nasce ONDE O OLHO JÁ ESTÁ, em vez de
