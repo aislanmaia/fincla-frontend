@@ -42,6 +42,12 @@ export function SearchBar({
      tempo a largura total, a busca e os outros controles. Os chips recebem o
      número pronto e decidem quantos cabem. */
   onChipsBudget = null,
+  /* A tecla "/" precisa alcançar o campo, e o campo mora aqui dentro. */
+  inputRef = null,
+  /* O "?" da ajuda: recurso da TELA, não de uma linha nem de um filtro, então
+     mora no fim da faixa de controles da tela. Redondo porque todo o resto da
+     barra é retangular — a forma diz "isto não recorta a lista" sem rótulo. */
+  onHelp = null,
 }) {
   const barRef = useRef(null);
   const buscaRef = useRef(null);
@@ -175,6 +181,7 @@ export function SearchBar({
       >
         <Icon name="search" size={14} color={T.inkLight} />
         <input
+          ref={inputRef}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={placeholder}
@@ -198,6 +205,22 @@ export function SearchBar({
       <Sep />
       <SortButton sort={sort} setSort={setSort} />
       {trailing}
+      {onHelp && (
+        <button
+          type="button"
+          onClick={onHelp}
+          aria-label="Atalhos de teclado"
+          title="Atalhos de teclado (?)"
+          style={{
+            ...G, width: 28, height: 28, borderRadius: 999, flex: "none",
+            border: `1px solid ${T.border}`, background: T.surface, color: T.inkMid,
+            fontWeight: 800, fontSize: 13, cursor: "pointer",
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+          }}
+        >
+          ?
+        </button>
+      )}
     </div>
   );
 }

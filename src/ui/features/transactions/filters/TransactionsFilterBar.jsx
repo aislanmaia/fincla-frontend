@@ -53,6 +53,8 @@ export function TransactionsFilterBar({
   /* Repassa para a página o orçamento que a barra mediu — é ela que monta os
      chips e portanto quem precisa do número. */
   onChipsBudget = null,
+  searchInputRef = null,
+  onHelp = null,
   filter,
   categories = [],
   cards = [],
@@ -231,6 +233,8 @@ export function TransactionsFilterBar({
           chips={barChips}
           trailing={barTrailing}
           onChipsBudget={onChipsBudget}
+          inputRef={searchInputRef}
+          onHelp={onHelp}
         />
       )}
 
