@@ -248,6 +248,24 @@ async function abrirMenuDeViews() {
   return chip;
 }
 
+/**
+ * Aplica um filtro de tipo e salva o recorte como uma view nova.
+ *
+ * São dois botões DIFERENTES no caminho: "＋ Salvar atual", que abre o
+ * formulário de dentro do menu do chip, e "Salvar como nova visualização",
+ * que confirma. Trocar um pelo outro apaga metade do fluxo.
+ */
+async function salvarViewDoTipo(tipo, nome) {
+  await abrirFaceta("Tipo");
+  await userEvent.click(screen.getByRole("button", { name: tipo }));
+  await abrirMenuDeViews();
+  await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
+  await userEvent.type(screen.getByLabelText(/Nome da visualização/i), nome);
+  await userEvent.click(screen.getByRole("button", { name: /Salvar como nova visualização/i }));
+  await abrirMenuDeViews();
+  return screen.getByRole("menuitemradio", { name: new RegExp(`^${nome}\\b`) });
+}
+
 async function limparTudo() {
   const btn =
     screen.queryByRole("button", { name: /Limpar todos os filtros/i }) ||
@@ -361,24 +379,21 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     expect(superficieDeFiltros()).toBeInTheDocument();
   });
 
-  it("exibe visualizações salvas ao aplicar filtro (sem views persistidas)", async () => {
+  it("o chip de visualizações é permanente; a oferta de salvar é que depende de filtro", async () => {
     renderPage();
     await openFilters();
-    expect(screen.getByRole("button", { name: /Visualizações/i })).toBeInTheDocument();
-    await abrirFaceta("Tipo");
-    await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
-    // Com filtro aplicado há o que salvar, e o menu oferece.
-    await abrirMenuDeViews();
-    expect(screen.getByRole("button", { name: /^\+ Salvar atual$/ })).toBeInTheDocument();
-    await userEvent.keyboard("{Escape}");
 
-    await limparTudo();
-    // Sem filtro nenhum o CHIP continua lá — ele é permanente, porque uma view
-    // salva é um atalho e esconder o acesso a ela até haver filtro esconde de
-    // quem já tem views. O que some é a oferta de SALVAR: não há recorte
-    // nenhum para guardar.
+    // O CHIP existe desde sempre — ele é permanente porque uma view salva é um
+    // atalho, e esconder o acesso a ela até haver filtro esconde exatamente de
+    // quem já tem views. Sem filtro, porém, não há recorte para guardar.
     await abrirMenuDeViews();
     expect(screen.queryByRole("button", { name: /^\+ Salvar atual$/ })).not.toBeInTheDocument();
+
+    // Com filtro aplicado a oferta aparece.
+    await abrirFaceta("Tipo");
+    await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
+    await abrirMenuDeViews();
+    expect(screen.getByRole("button", { name: /^\+ Salvar atual$/ })).toBeInTheDocument();
   });
 
   it("atalho na FacetBar abre o formulário para salvar como nova visualização", async () => {
@@ -496,7 +511,10 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
   it("mostra crédito inline com cartão quando paymentMethodKey indica crédito", async () => {
     renderPage();
     await openFilters();
-    expect(screen.getByText("Crédito")).toBeInTheDocument();
+    // "Crédito" e os 4 dígitos são UM texto só na linha ("Crédito ●● 1177"):
+    // colados de propósito, porque os dígitos só fazem sentido junto ao
+    // método que os explica.
+    expect(screen.getByText(/Crédito/)).toBeInTheDocument();
     expect(screen.getByText(/1177/)).toBeInTheDocument();
   });
 
@@ -515,13 +533,9 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
   it("criar saved view persiste em localStorage por org", async () => {
     renderPage();
     await openFilters();
-    await abrirFaceta("Tipo");
-    await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
-    await abrirMenuDeViews();
-    await abrirMenuDeViews();
-    await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
-    await userEvent.type(screen.getByLabelText(/Nome da visualização/i), "Minha view");
-    await userEvent.click(screen.getByRole("button", { name: /Salvar como nova visualização/i }));
+    // Salvar FECHA o menu — é o comportamento certo, a tarefa acabou. Para
+    // afirmar que a view existe é preciso abri-lo de novo.
+    await salvarViewDoTipo("Despesa", "Minha view");
     expect(screen.getByRole("menuitemradio", { name: /^Minha view\b/ })).toBeInTheDocument();
     const raw = localStorage.getItem("fincla.transactions.savedViews.v1");
     expect(raw).toBeTruthy();
@@ -530,47 +544,42 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     expect(parsed.orgs["org-test"][0].label).toBe("Minha view");
   });
 
-  it("clicar na view ativa desaplica filtros e desseleciona o card", async () => {
+  it("clicar na view ativa desaplica filtros e desseleciona o item", async () => {
     renderPage();
     await openFilters();
-    expect(esperaFacetaAplicada("Tipo", "Todos")).toBeInTheDocument();
-    await abrirFaceta("Tipo");
-    await userEvent.click(screen.getByRole("button", { name: "Receita" }));
-    await abrirMenuDeViews();
-    await abrirMenuDeViews();
-    await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
-    await userEvent.type(screen.getByLabelText(/Nome da visualização/i), "receitas");
-    await abrirMenuDeViews();
-    await abrirMenuDeViews();
-    await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
-    const card = screen.getByRole("button", { name: "receitas" });
-    expect(card).toHaveAttribute("aria-pressed", "true");
+    // Sem filtro nenhum não há chip: "Todos" é o padrão e padrão não vira
+    // texto na tela.
+    expect(screen.queryByRole("group", { name: /Filtros aplicados/i })).not.toBeInTheDocument();
+
+    const item = await salvarViewDoTipo("Receita", "receitas");
+    expect(item).toHaveAttribute("aria-checked", "true");
     expect(esperaFacetaAplicada("Tipo", "Receita")).toBeInTheDocument();
-    await userEvent.click(card);
-    expect(card).toHaveAttribute("aria-pressed", "false");
-    expect(esperaFacetaAplicada("Tipo", "Todos")).toBeInTheDocument();
+
+    await userEvent.click(item);
+    // Clicar na view ativa desaplica: o filtro sai e o chip some com ele.
+    await abrirMenuDeViews();
+    expect(
+      screen.getByRole("menuitemradio", { name: /^receitas\b/ }),
+    ).toHaveAttribute("aria-checked", "false");
+    expect(screen.queryByRole("group", { name: /Filtros aplicados/i })).not.toBeInTheDocument();
   });
 
   it("view dirty: card mostra Filtros alterados; Limpar tudo desseleciona", async () => {
     renderPage();
     await openFilters();
-    await abrirFaceta("Tipo");
-    await userEvent.click(screen.getByRole("button", { name: "Receita" }));
-    await abrirMenuDeViews();
-    await abrirMenuDeViews();
-    await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
-    await userEvent.type(screen.getByLabelText(/Nome da visualização/i), "receitas");
-    await abrirMenuDeViews();
-    await abrirMenuDeViews();
-    await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
-    const card = screen.getByRole("button", { name: "receitas" });
-    expect(card).toHaveAttribute("aria-pressed", "true");
+    const item = await salvarViewDoTipo("Receita", "receitas");
+    expect(item).toHaveAttribute("aria-checked", "true");
+    await userEvent.keyboard("{Escape}");
+
     await abrirFaceta("Categoria");
     await userEvent.click(screen.getByRole("button", { name: "Alimentação" }));
-    expect(screen.getByText(/Filtros alterados/i)).toBeInTheDocument();
+    expect(screen.getByText(/alterada|Filtros alterados/i)).toBeInTheDocument();
+
     await limparTudo();
-    expect(card).toHaveAttribute("aria-pressed", "false");
-    expect(screen.queryByText(/Filtros alterados/i)).not.toBeInTheDocument();
+    await abrirMenuDeViews();
+    expect(
+      screen.getByRole("menuitemradio", { name: /^receitas\b/ }),
+    ).toHaveAttribute("aria-checked", "false");
   });
 
   it("desktop compacto: facets ocultos por padrão; botão Filtros expande inline", async () => {
@@ -603,9 +612,9 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     expect(screen.getAllByText("Salário").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Notebook").length).toBeGreaterThan(0);
 
-    await userEvent.click(
-      screen.getByRole("button", { name: /Forma de pagamento: Todas/i }),
-    );
+    // A faceta se chamava "Forma de pagamento" no card; no trilho é
+    // "Pagamento" — o painel ao lado já diz de que forma se trata.
+    await abrirFaceta("Pagamento");
     const panel = painelDaFaceta("forma");
     await userEvent.click(within(panel).getByRole("button", { name: "Pix" }));
     await userEvent.click(within(panel).getByRole("button", { name: "Crédito" }));
@@ -995,7 +1004,8 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
 
     renderPage();
     await openFilters();
-    await userEvent.click(screen.getByRole("button", { name: "Trabalho (Vendas)" }));
+    await abrirMenuDeViews();
+    await userEvent.click(screen.getByRole("menuitemradio", { name: /^Trabalho \(Vendas\)/ }));
 
     // Enquanto as categorias carregam, o filtro fica em "loading" — nunca
     // "não encontrada" (falso) nem resolvido contra um rótulo provisório.
@@ -1332,7 +1342,8 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     renderPage();
     await openFilters();
 
-    await userEvent.click(screen.getByRole("button", { name: "Tag sumida" }));
+    await abrirMenuDeViews();
+    await userEvent.click(screen.getByRole("menuitemradio", { name: /^Tag sumida/ }));
     expect(screen.getAllByText(/não foi encontrada/i).length).toBeGreaterThan(0);
 
     await abrirFaceta("Tipo");
