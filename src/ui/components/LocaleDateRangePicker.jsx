@@ -56,8 +56,18 @@ function RangeDateInput({
      era amputada em silêncio. */
   inline = false,
   onErrorChange,
+  /* O dia sob o cursor no calendário mexeria ESTE campo. Sem o realce, passar o
+     mouse pelos dias não diz nada sobre o que vai mudar e a pessoa só descobre
+     depois de clicar — o §14 chama isso de "a borda que ele mexeria acende no
+     campo". Verde porque é a mesma cor da ponta pega no calendário: o mesmo
+     significado nas duas pontas do gesto. */
+  hovered = false,
+  hoverValue = null,
 }) {
   const [draft, setDraft] = useState(() => ymdToDraft(value, locale));
+  /* Com o cursor sobre um dia, o campo mostra a data QUE FICARIA — não a atual.
+     É a diferença entre "esta ponta vai mudar" e "esta ponta vai virar 12/08". */
+  const previa = hovered && hoverValue ? ymdToDraft(hoverValue, locale) : null;
   const [error, setError] = useState(null);
   const errId = useId();
 
@@ -129,7 +139,11 @@ function RangeDateInput({
       aria-label={label}
       aria-invalid={error ? "true" : "false"}
       aria-describedby={error && !inline ? errId : undefined}
-      value={draft}
+      /* A prévia é SÓ leitura: sem isto o input do DOM passava a conter a data
+         apontada, e o `handleChange` lia esse mesmo valor — digitar uma tecla
+         com o mouse parado sobre um dia comitava uma data que ninguém clicou. */
+      value={previa ?? draft}
+      readOnly={Boolean(previa)}
       onFocus={onFocus}
       onClick={onFocus}
       onChange={(e) => handleChange(e.target.value)}
@@ -147,13 +161,19 @@ function RangeDateInput({
         minWidth: 0,
         border: "none",
         outline: "none",
-        background: inline && active ? `${T.ink}0A` : "transparent",
+        background: inline && hovered
+          ? "#ECFDF5"
+          : inline && active
+            ? `${T.ink}0A`
+            : "transparent",
+        boxShadow: inline && hovered ? "inset 0 0 0 1.5px #0F8A5F" : undefined,
         borderRadius: inline ? 6 : undefined,
         padding: inline ? "4px 4px" : undefined,
         fontSize: inline ? 12.5 : 13,
         fontWeight: 600,
         color: T.ink,
         letterSpacing: "0.04em",
+        transition: "background .1s, box-shadow .1s",
       }}
     />
   );
@@ -167,7 +187,8 @@ function RangeDateInput({
             flexShrink: 0,
             fontSize: 11,
             fontWeight: 600,
-            color: active ? T.ink : T.inkLight,
+            color: hovered ? "#0F8A5F" : active ? T.ink : T.inkLight,
+            fontWeight: hovered ? 700 : 600,
           }}
         >
           {label.toLowerCase()}
@@ -542,6 +563,24 @@ export function LocaleDateRangePicker({
     setCalendarOpen(true);
   };
 
+  /* Qual ponta o dia sob o cursor mexeria — é ela que acende no campo.
+     Sem isto o hover no calendário não diz NADA sobre o que vai mudar, e a
+     pessoa descobre só depois de clicar. Com o intervalo fechado, a ponta é a
+     mais próxima; com ele aberto, é sempre o fim. */
+  const pontaSobHover = useMemo(() => {
+    if (touch || !hoverYmd) return null;
+    if (grabbedEdge) return grabbedEdge;
+    /* Espelha `handleDayClick` LINHA A LINHA, e não a ponta mais próxima.
+       Com o intervalo fechado, um clique RECOMEÇA em "de" — mas a heurística de
+       proximidade acendia "até" e prometia uma coisa enquanto o clique fazia
+       outra. Um realce que mente é pior que realce nenhum. */
+    if (!displayFrom || (displayFrom && displayTo)) return "from";
+    const h = parseLocalYmd(hoverYmd);
+    const f = parseLocalYmd(displayFrom);
+    if (!h || !f) return null;
+    return h.getTime() < f.getTime() ? "from" : "to";
+  }, [touch, hoverYmd, grabbedEdge, displayFrom, displayTo]);
+
   const summaryLabel =
     period === "tudo" && !displayFrom && !displayTo
       ? "Todo período"
@@ -580,12 +619,14 @@ export function LocaleDateRangePicker({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: compact ? 8 : 12 }}>
-      {compact ? (
-        /* UMA LINHA. O intervalo é um objeto só, então ocupa uma caixa só —
-           e é o que faz o resumo e a contagem de dias existirem abaixo de
-           1600 px de viewport, onde a régua de três colunas não cabia e era
-           silenciosamente amputada junto com o segundo mês. */
-        <>
+      {/* UMA CAIXA, em toda largura.
+          A régua de três colunas (De | Até | Intervalo) morava aqui para telas
+          largas e era o problema que o §14 existe para resolver: ela só cabia
+          com 698 px de pane — ou seja, viewport ≥ 1600 —, e abaixo disso era
+          amputada em silêncio, levando junto o resumo e a contagem de dias.
+          Duas caixas com borda para um intervalo também dizem "dois campos"
+          quando a coisa é UMA: o intervalo cabe numa linha só. */}
+      <>
           <div
             style={{
               display: "flex",
@@ -608,6 +649,8 @@ export function LocaleDateRangePicker({
               inline
               value={displayFrom}
               active={activeEdge === "from"}
+              hovered={pontaSobHover === "from"}
+              hoverValue={pontaSobHover === "from" ? hoverYmd : null}
               onFocus={() => openCalendar("from")}
               onCalendarClick={() => toggleCalendar("from")}
               calendarOpen={calendarOpen && activeEdge === "from"}
@@ -625,6 +668,8 @@ export function LocaleDateRangePicker({
               inline
               value={displayTo}
               active={activeEdge === "to"}
+              hovered={pontaSobHover === "to"}
+              hoverValue={pontaSobHover === "to" ? hoverYmd : null}
               onFocus={() => openCalendar("to")}
               onCalendarClick={() => toggleCalendar("to")}
               calendarOpen={calendarOpen && activeEdge === "to"}
@@ -673,73 +718,6 @@ export function LocaleDateRangePicker({
             )}
           </div>
         </>
-      ) : (
-      /* Régua de três colunas: só onde ela cabe de verdade. */
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr minmax(120px, 0.8fr)",
-          gap: 14,
-          alignItems: "flex-start",
-        }}
-      >
-        <RangeDateInput
-          id="period-range-from"
-          label="De"
-          value={displayFrom}
-          active={activeEdge === "from"}
-          onFocus={() => openCalendar("from")}
-          onCalendarClick={() => toggleCalendar("from")}
-          calendarOpen={calendarOpen && activeEdge === "from"}
-          onChange={applyFrom}
-          onClear={() => { markCustom(); setCustomFrom(""); }}
-          locale={locale}
-          min={TRANSACTIONS_DATE_MIN}
-          max={TRANSACTIONS_DATE_MAX}
-          messages={messages}
-        />
-        <RangeDateInput
-          id="period-range-to"
-          label="Até"
-          value={displayTo}
-          active={activeEdge === "to"}
-          onFocus={() => openCalendar("to")}
-          onCalendarClick={() => toggleCalendar("to")}
-          calendarOpen={calendarOpen && activeEdge === "to"}
-          onChange={applyTo}
-          onClear={() => { markCustom(); setCustomTo(""); }}
-          locale={locale}
-          min={TRANSACTIONS_DATE_MIN}
-          max={TRANSACTIONS_DATE_MAX}
-          messages={messages}
-        />
-        <div style={{ minWidth: 0 }}>
-          <div
-            style={{
-              ...G, fontSize: 11, fontWeight: 700, color: T.inkMid,
-              textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6,
-            }}
-          >
-            Intervalo
-          </div>
-          <div
-            style={{
-              ...G, padding: "9px 11px", borderRadius: 9, background: T.bg,
-              border: `1px solid ${T.border}`, fontSize: 13, color: T.inkMid,
-              lineHeight: 1.35, minHeight: 42, boxSizing: "border-box",
-              display: "flex", flexDirection: "column", justifyContent: "center",
-            }}
-          >
-            <span style={{ fontWeight: 700, color: T.ink }}>{summaryLabel}</span>
-            {dayCount != null ? (
-              <span style={{ fontSize: 11, marginTop: 2 }}>
-                {dayCount} dia{dayCount === 1 ? "" : "s"}
-              </span>
-            ) : null}
-          </div>
-        </div>
-      </div>
-      )}
 
       {calendarOpen && (
         <RangeCalendarGrid

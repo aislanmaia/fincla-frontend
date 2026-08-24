@@ -105,3 +105,102 @@ export function ConfirmActionInline({ kind, desc, busy = false, onConfirm, onCan
     </div>
   );
 }
+
+/**
+ * A mesma pergunta, num modal — a moldura do DESKTOP.
+ *
+ * Por que modal e não a sanfona: no desktop a ação rápida vive na linha, e a
+ * linha tem 48 px. Abrir a sanfona só para perguntar move a lista inteira sob
+ * o cursor e esconde a resposta atrás de uma animação de expansão. O modal
+ * pergunta onde o olho já está.
+ *
+ * Esc cancela e o foco começa no CANCELAR, não no confirmar: quem abriu por
+ * engano sai apertando Enter, e o caminho mais provável não pode ser o
+ * destrutivo.
+ */
+export function ConfirmActionModal({ kind, desc, busy = false, onConfirm, onCancel }) {
+  const copy = CONFIRM_COPY[kind];
+  const cancelarRef = React.useRef(null);
+
+  React.useEffect(() => {
+    cancelarRef.current?.focus();
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onCancel?.();
+      }
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [onCancel]);
+
+  if (!copy) return null;
+  const tone = copy.danger ? T.red : T.ink;
+
+  return (
+    <div
+      onClick={onCancel}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 900,
+        background: "rgba(15,23,42,.34)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 20,
+      }}
+    >
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-label={copy.title(desc)}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          ...G,
+          width: "min(420px, 100%)",
+          background: T.surface,
+          borderRadius: 16,
+          boxShadow: "0 24px 64px rgba(15,23,42,.22)",
+          padding: "20px 22px 18px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 10,
+        }}
+      >
+        <div style={{ ...G, fontSize: 16, fontWeight: 800, color: T.ink, lineHeight: 1.3 }}>
+          {copy.title(desc)}
+        </div>
+        <div style={{ ...G, fontSize: 13, color: T.inkMid, lineHeight: 1.5 }}>{copy.detail}</div>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 6 }}>
+          <button
+            ref={cancelarRef}
+            type="button"
+            onClick={onCancel}
+            style={{
+              ...G, height: 38, padding: "0 16px", borderRadius: 9,
+              border: `1px solid ${T.border}`, background: T.surface, color: T.inkMid,
+              fontSize: 12.5, fontWeight: 700, cursor: "pointer",
+            }}
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onConfirm}
+            style={{
+              ...G, height: 38, padding: "0 16px", borderRadius: 9,
+              border: `1px solid ${tone}`,
+              background: copy.danger ? tone : T.ink,
+              color: "#fff", fontSize: 12.5, fontWeight: 700,
+              cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1,
+            }}
+          >
+            {busy ? "…" : copy.confirm}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

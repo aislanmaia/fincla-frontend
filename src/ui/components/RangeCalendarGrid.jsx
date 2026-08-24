@@ -136,6 +136,13 @@ function MonthGrid({
             (grabbedEdge === "from" && isFrom) || (grabbedEdge === "to" && isTo);
           const edgeCommitted =
             (Boolean(fromYmd) && ymd === fromYmd) || (Boolean(toYmd) && ymd === toYmd);
+          const balao = !touch && hov && !disabled;
+          const balaoTexto = balao
+            ? new Date(year, monthIndex, day).toLocaleDateString(locale, {
+                day: "2-digit",
+                month: "short",
+              })
+            : "";
 
           return (
             <div
@@ -180,6 +187,7 @@ function MonthGrid({
               onMouseEnter={() => !disabled && onDayHover(ymd)}
               style={{
                 textAlign: "center",
+                position: "relative",
                 cursor: disabled ? "not-allowed" : "pointer",
                 /* O miolo do intervalo pinta a CÉLULA inteira, sem raio: é o que
                    faz a faixa parecer contínua entre as pontas. Antes o fundo
@@ -229,6 +237,49 @@ function MonthGrid({
                     intervalo está aberto, então cada dia por onde o cursor
                     passava ganhava um "até" com cara de definitivo — e o
                     próprio dia inicial virava "só" sem nada ter sido escolhido. */}
+                {/* Balão com ponteiro, só no hover e só no mouse.
+                    Ele diz a data por extenso do dia apontado — o número na
+                    célula é só o dia, e "23" não basta quando o calendário
+                    mostra dois meses. Verde quando a ponta está pega, azul no
+                    hover comum: a mesma gramática de cor do anel na célula e do
+                    realce no campo, para os três lerem como um só estado.
+                    Não existe no toque: sem cursor, ele ficaria na tela até o
+                    toque seguinte, cobrindo os dias que a pessoa quer tocar. */}
+                {balao && (
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      ...G,
+                      position: "absolute",
+                      bottom: "calc(100% + 6px)",
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      background: grabbed ? GRAB_RING : T.ink,
+                      color: "#fff",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      lineHeight: 1,
+                      padding: "5px 7px",
+                      borderRadius: 6,
+                      whiteSpace: "nowrap",
+                      pointerEvents: "none",
+                      zIndex: 3,
+                    }}
+                  >
+                    {balaoTexto}
+                    <i
+                      style={{
+                        position: "absolute",
+                        top: "100%",
+                        left: "50%",
+                        transform: "translateX(-50%)",
+                        borderLeft: "4px solid transparent",
+                        borderRight: "4px solid transparent",
+                        borderTop: `4px solid ${grabbed ? GRAB_RING : T.ink}`,
+                      }}
+                    />
+                  </span>
+                )}
                 {edgeCommitted && (
                   <em
                     style={{

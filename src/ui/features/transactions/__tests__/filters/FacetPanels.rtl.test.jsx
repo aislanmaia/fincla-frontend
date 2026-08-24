@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React, { useState } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -52,12 +52,54 @@ describe("<PeriodPanel>", () => {
     expect(screen.getByLabelText(/^Até$/i)).toHaveValue("30/06/2026");
     expect(screen.getByText("1–30 jun")).toBeInTheDocument();
   });
-  it("trocar para Últimos 3m atualiza De/Até e intervalo", () => {
+  /* "Últimos 3m" virou a JANELA RELATIVA: o mesmo recorte, com o número
+     destravado e a unidade escolhível. O chip fixo era esse recorte com um
+     número que nós escolhíamos pela pessoa. */
+  it("a janela relativa preenche De/Até ao ser acionada", () => {
     render(<Harness />);
-    fireEvent.click(screen.getByRole("button", { name: /Preset: Últimos 3m/i }));
-    expect(screen.getByLabelText(/^De$/i)).toHaveValue("08/03/2026");
-    expect(screen.getByLabelText(/^Até$/i)).toHaveValue("08/06/2026");
-    expect(screen.getByText(/8 mar.*8 jun/i)).toBeInTheDocument();
+    const chip = screen.getByRole("button", { name: /^Últimos 3 meses$/i });
+    fireEvent.click(chip);
+    expect(chip).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText(/^De$/i)).not.toHaveValue("");
+    expect(screen.getByLabelText(/^Até$/i)).not.toHaveValue("");
+  });
+
+  it("editar o número JÁ escolhe a janela — o meio do chip é o próprio campo", () => {
+    // Exigir o clique no chip não funciona: o centro dele é o input, e o input
+    // precisa parar a propagação para posicionar o cursor sem acionar o chip.
+    // O resultado era um chip cujo meio não fazia nada.
+    //
+    // A aplicação é DEBOUNCED: digitar "120" são três recortes sem sentido
+    // (1, 12, 120) e três refetches, e a busca da lista não tem debounce
+    // própria. Por isso o teste espera o valor pousar, em vez de afirmar no
+    // mesmo tick — afirmar síncrono aqui congelaria o defeito.
+    render(<Harness />);
+    const n = screen.getByLabelText(/Quantidade da janela relativa/i);
+    fireEvent.change(n, { target: { value: "45" } });
+    // O rótulo do botão acompanha o campo na hora; o FILTRO é que espera.
+    expect(screen.getByRole("button", { name: /^Últimos 45 meses$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Últimos 45 meses$/i })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    // Este describe usa timers falsos: sem avançar, o debounce nunca chega.
+    act(() => { vi.advanceTimersByTime(400); });
+    expect(screen.getByRole("button", { name: /^Últimos 45 meses$/i })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  it("trocar a unidade prende o número ao teto DELA", () => {
+    // "últimos 999 anos" é ruído: o limite tem de fazer sentido no que se conta.
+    render(<Harness />);
+    fireEvent.change(screen.getByLabelText(/Quantidade da janela relativa/i), {
+      target: { value: "500" },
+    });
+    fireEvent.change(screen.getByLabelText(/Unidade da janela relativa/i), {
+      target: { value: "a" },
+    });
+    expect(screen.getByLabelText(/Quantidade da janela relativa/i)).toHaveValue("20");
   });
   it("preset ativo tem aria-pressed=true", () => {
     render(<Harness />);

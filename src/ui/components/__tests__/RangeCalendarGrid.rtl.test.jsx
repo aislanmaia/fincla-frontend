@@ -35,7 +35,7 @@ describe("<RangeCalendarGrid>", () => {
     expect(dia("2026-08-10")).toHaveTextContent("de");
     expect(dia("2026-08-20")).toHaveTextContent("até");
     // Um dia do meio não carrega rótulo nenhum.
-    expect(dia("2026-08-15").textContent).toBe("15");
+    expect(dia("2026-08-15").querySelector("em")).toBeNull();
   });
 
   it("intervalo de um dia só diz 'só', não 'de' e 'até' no mesmo lugar", () => {
@@ -85,7 +85,9 @@ describe("<RangeCalendarGrid>", () => {
     // dia por onde o mouse passava ganhava um "até" com cara de definitivo, e o
     // próprio dia inicial virava "só" sem nada ter sido escolhido.
     render(<RangeCalendarGrid {...base} toYmd="" hoverYmd="2026-08-18" />);
-    expect(dia("2026-08-18").textContent).toBe("18");
+    // O dia sob o cursor ganha BALÃO (a data por extenso), mas não o rótulo de
+    // ponta: um é "estou apontando aqui", o outro é "esta ponta é esta".
+    expect(dia("2026-08-18").querySelector("em")).toBeNull();
     expect(dia("2026-08-10")).toHaveTextContent("de");
     expect(dia("2026-08-10")).not.toHaveTextContent("só");
   });
@@ -101,6 +103,16 @@ describe("<RangeCalendarGrid>", () => {
     // Estar dentro do intervalo é o que a faixa azul diz a quem enxerga.
     expect(dia("2026-08-15")).toHaveAttribute("aria-pressed", "true");
     expect(dia("2026-08-25")).toHaveAttribute("aria-pressed", "false");
+  });
+
+
+  it("o balão só existe no mouse, e some no toque", () => {
+    // Sem cursor o balão ficaria na tela até o toque seguinte, cobrindo
+    // justamente os dias que a pessoa pode querer tocar.
+    const { rerender } = render(<RangeCalendarGrid {...base} hoverYmd="2026-08-18" />);
+    expect(dia("2026-08-18").textContent).toMatch(/18.*ago/i);
+    rerender(<RangeCalendarGrid {...base} hoverYmd="2026-08-18" touch />);
+    expect(dia("2026-08-18").textContent).not.toMatch(/ago/i);
   });
 
 });
