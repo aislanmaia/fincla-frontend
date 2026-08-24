@@ -1228,9 +1228,14 @@ function TransacoesPageBody({
   const [saveViewFormMode, setSaveViewFormMode] = useState("create");
   // ── Bottom sheet drag-to-dismiss ──────────────────────────────
   const sheetRef      = useRef(null);
-  const snapFullRef   = useRef(false);   // read in RAF/touch handlers (no stale closure)
+  const snapFullRef   = useRef(true);    // read in RAF/touch handlers (no stale closure)
   const isClosingRef  = useRef(false);   // prevents double-close
-  const [snapFull,    setSnapFull]    = useState(false);  // false=72dvh, true=92dvh
+  /* O sheet de filtros abre JÁ EM TELA CHEIA. Ele é o painel mais denso do
+     app — visualizações salvas, ordenação e nove facetas — e abrir a 72%
+     obrigava a arrastar antes de conseguir usar. As duas saídas continuam de
+     pé: o ✕ do cabeçalho e o puxador, que reduz. */
+  const snapFullRefInit = true;
+  const [snapFull,    setSnapFull]    = useState(snapFullRefInit);  // false=72dvh, true=100dvh
   const [sheetClosing,setSheetClosing]= useState(false);  // drives exit animation
   const [selected,    setSelected]    = useState(null);
   /** Estável entre renders: se a identidade mudasse, `TxRow` re-renderizaria à toa
@@ -2919,8 +2924,10 @@ function TransacoesPageBody({
     setTimeout(() => {
       setFiltersOpen(false);
       setSheetClosing(false);
-      setSnapFull(false);
-      snapFullRef.current  = false;
+      // Volta ao PADRÃO — que agora é cheio — e não a 72%: senão a próxima
+      // abertura viria menor do que a pessoa acabou de usar.
+      setSnapFull(true);
+      snapFullRef.current  = true;
       isClosingRef.current = false;
     }, 420);
   };
@@ -3176,7 +3183,7 @@ function TransacoesPageBody({
             {searchInput && <button onClick={()=>setSearchInput("")} style={{ background:"none", border:"none",
               cursor:"pointer", padding:2, display:"flex" }}><X size={12} color={T.inkLight}/></button>}
           </div>
-          {filtersToggleButton(filtersOpen, () => { setFiltersOpen(true); setSnapFull(false); })}
+          {filtersToggleButton(filtersOpen, () => { setFiltersOpen(true); setSnapFull(true); snapFullRef.current = true; })}
         </div>
       )}
 
