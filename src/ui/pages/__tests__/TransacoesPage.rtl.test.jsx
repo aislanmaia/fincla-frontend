@@ -330,9 +330,12 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1366 });
     Object.defineProperty(window, "innerHeight", { configurable: true, writable: true, value: 768 });
     renderPage();
-    await openFilters();
+    // SEM abrir: o que a regra de altura protege é o estado de REPOUSO. A
+    // 768 px de altura a barra completa custaria 230 px e sobrariam duas
+    // transações, então ela nasce recolhida atrás do botão.
     expect(await screen.findByRole("button", { name: /(Abrir|Ocultar) filtros/i })).toBeInTheDocument();
     expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).toBeNull();
+    expect(screen.queryByRole("region", { name: /^Filtros$/i })).toBeNull();
   });
 
   it("1366x900 mantém a barra completa (só a altura mudou)", async () => {
@@ -416,17 +419,26 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     expect(screen.getByRole("menuitemradio", { name: /^Minha view\b/ })).toBeInTheDocument();
   });
 
-  it("renderiza os 7 facet cards com valores derivados do estado inicial", async () => {
+  it("todas as facetas ficam alcançáveis, e nenhum valor padrão polui a tela", async () => {
     renderPage();
     await openFilters();
-    // Período inicial: Este mês (default)
-    expect(esperaFacetaAplicada("Período", "Este mês")).toBeInTheDocument();
-    expect(esperaFacetaAplicada("Tipo", "Todos")).toBeInTheDocument();
-    expect(esperaFacetaAplicada("Categoria", "Todas")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Tags:/i })).toBeInTheDocument();
-    expect(esperaFacetaAplicada("Cartão", "Todos")).toBeInTheDocument();
-    expect(esperaFacetaAplicada("Valor", "Qualquer")).toBeInTheDocument();
-    expect(esperaFacetaAplicada("Recorrência", "Todas")).toBeInTheDocument();
+
+    // Todas alcançáveis: o trilho lista as nove.
+    for (const nome of [
+      "Período", "Tipo", "Categoria", "Tags",
+      "Pagamento", "Cartão", "Valor", "Recorrência", "Situação",
+    ]) {
+      expect(
+        screen.queryAllByRole("button").some((b) => new RegExp(`${nome}\\s*$`, "i").test(b.textContent || "")),
+      ).toBe(true);
+    }
+
+    // E nenhum valor PADRÃO aparece. Os cards antigos ficavam permanentemente
+    // abertos anunciando "Todos", "Todas", "—" — o maior bloco da tela e o de
+    // menor informação. Só filtro ATIVO vira texto agora, como chip.
+    expect(screen.queryByRole("group", { name: /Filtros aplicados/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Todas$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Qualquer$/)).not.toBeInTheDocument();
   });
 
   it("expande o painel inline da facet Tipo e a seleção atualiza o card e fecha o painel", async () => {
@@ -565,13 +577,17 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1200 });
     window.dispatchEvent(new Event("resize"));
     renderPage();
-    await openFilters();
+    // Em repouso, nada de facets — este teste É sobre o padrão recolhido,
+    // então ele não pode abrir antes de afirmar.
     expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /(Abrir|Ocultar) filtros/i })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /(Abrir|Ocultar) filtros/i }));
+
+    await openFilters();
     expect(superficieDeFiltros()).toBeInTheDocument();
+
     await userEvent.click(screen.getByRole("button", { name: /Ocultar filtros/i }));
     expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /^Filtros$/i })).not.toBeInTheDocument();
   });
 
   // Regressão do bug relatado: selecionar 2+ formas de pagamento fazia a lista
@@ -1645,10 +1661,15 @@ describe("chip de tag na linha — truncagem (achado 4, rodada 4)", () => {
       total: 1, hasMore: false, removeTransaction: vi.fn(),
       setTransactionSettled: vi.fn(),
     });
+    // A pílula de tag só existe a partir de 2100 px: abaixo disso a linha já
+    // disputa largura entre descrição, categoria e valor, e a tag seria a
+    // primeira coisa a espremer as outras. E o texto perdeu o `#` — o fundo
+    // e o formato já dizem que é tag, e o `#` roubava dois dos 70 px úteis.
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 2400 });
     renderPage();
     await openFilters();
 
-    const chip = await screen.findByText("#trabalho");
+    const chip = await screen.findByText("trabalho");
     expect(chip).toHaveAttribute("title", "trabalho");
     expect(chip.style.textOverflow).toBe("ellipsis");
     expect(chip.style.whiteSpace).toBe("nowrap");
