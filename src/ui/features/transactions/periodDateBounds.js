@@ -37,7 +37,11 @@ export function normalizeOpenRange(fromYmd, toYmd) {
  * @returns {{ from: string; to: string }}
  */
 export function resolvePeriodDisplayBounds(period, customFrom = "", customTo = "") {
-  if (period === "custom") {
+  /* "rel" (janela relativa: últimos N dias/semanas/meses/anos) resolve como
+     custom: quem calcula o intervalo é o chip, e ele grava nos campos. Assim o
+     backend recebe datas concretas e o calendário mostra o que foi escolhido —
+     sem uma segunda implementação da aritmética de calendário aqui. */
+  if (period === "custom" || period === "rel") {
     return { from: customFrom || "", to: customTo || "" };
   }
 

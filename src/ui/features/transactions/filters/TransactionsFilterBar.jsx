@@ -50,6 +50,9 @@ import { Icon } from "./shared/Icon.jsx";
  *    facet duas vezes seguidas precisa reabrir; sem ele o efeito não dispara.
  */
 export function TransactionsFilterBar({
+  /* Repassa para a página o orçamento que a barra mediu — é ela que monta os
+     chips e portanto quem precisa do número. */
+  onChipsBudget = null,
   filter,
   categories = [],
   cards = [],
@@ -227,6 +230,7 @@ export function TransactionsFilterBar({
           leading={barLeading}
           chips={barChips}
           trailing={barTrailing}
+          onChipsBudget={onChipsBudget}
         />
       )}
 

@@ -21,6 +21,57 @@ import { G } from "../../../typography";
  */
 
 const CHIP_H = 28;
+/* Teto de chips visíveis. Acima disso o olho varre em vez de ler — e "+5" com
+   dois chips informa mais que "+2" com cinco, porque admite que há um painel a
+   abrir. */
+const TETO_CHIPS = 4;
+
+/* Quantos chips cabem no orçamento, MEDINDO o texto de cada um.
+   Uma escada de breakpoints (1440 → 3 chips) erra no dia em que a pessoa filtra
+   por "Alimentação fora de casa": ela tem o dobro de "Casa" e a conta feita no
+   olho estoura a busca, que é o controle mais usado da barra. */
+let medidorChips = null;
+export function chipsQueCabem(rotulos, orcamento, { teto = TETO_CHIPS } = {}) {
+  if (!Array.isArray(rotulos) || rotulos.length === 0) return 0;
+  if (!(orcamento > 0)) return 0;
+  const estimativa = (t) => Math.ceil(String(t).length * 6.4);
+  let mede = estimativa;
+  try {
+    if (typeof document !== "undefined") {
+      if (!medidorChips) medidorChips = document.createElement("canvas");
+      const ctx = medidorChips.getContext && medidorChips.getContext("2d");
+      if (ctx) {
+        mede = (t) => {
+          try {
+            ctx.font = "600 11.5px 'Geist', 'DM Sans', system-ui, sans-serif";
+            return Math.ceil(ctx.measureText(t).width);
+          } catch {
+            return estimativa(t);
+          }
+        };
+      }
+    }
+  } catch {
+    mede = estimativa;
+  }
+
+  const PAD = 42; // medido no DOM: padding do chip + o alvo de 20px do "✕"
+  const GAP = 6;
+  const MAIS = 40; // a pílula "+N" quando sobra alguém
+
+  let usado = 0;
+  let n = 0;
+  const limite = Math.min(teto, rotulos.length);
+  for (let i = 0; i < limite; i += 1) {
+    const w = Math.min(200, mede(rotulos[i]) + PAD) + (n > 0 ? GAP : 0);
+    // Se ainda vai sobrar gente, o "+N" também precisa caber.
+    const reserva = i + 1 < rotulos.length ? GAP + MAIS : 0;
+    if (usado + w + reserva > orcamento) break;
+    usado += w;
+    n += 1;
+  }
+  return n;
+}
 
 /** Pílula base da barra. `tone`: 'on' (filtro ativo) | 'ghost' | 'plain'. */
 function chipStyle(tone) {
@@ -87,6 +138,9 @@ export function TransactionsFilterChips({
   onClearFacet,
   onClearAll,
   maxVisible = 3,
+  /* Orçamento medido pela barra. Quando presente, ele MANDA — `maxVisible` fica
+     como piso para quem renderiza os chips fora da barra (testes, mocks). */
+  chipsBudget = null,
   compact = false,
   /** Abre/fecha o painel de facetas — o chip "＋ Filtros" da proposta. */
   filtersOpen = false,
@@ -120,14 +174,19 @@ export function TransactionsFilterChips({
     };
   }, [overflowOpen]);
 
+  const cabem =
+    chipsBudget == null
+      ? maxVisible
+      : chipsQueCabem(chips.map((c) => String(c.value ?? c.label ?? "")), chipsBudget);
+
   useEffect(() => {
-    if (chips.length <= maxVisible) setOverflowOpen(false);
-  }, [chips.length, maxVisible]);
+    if (chips.length <= cabem) setOverflowOpen(false);
+  }, [chips.length, cabem]);
 
   // Abaixo de ~1200 px os chips não cabem sem espremer a busca: recolhem para o
   // contador do próprio "＋ Filtros", como já acontece no mobile.
-  const shown = collapsed ? [] : chips.slice(0, maxVisible);
-  const hidden = collapsed ? chips : chips.slice(maxVisible);
+  const shown = collapsed ? [] : chips.slice(0, cabem);
+  const hidden = collapsed ? chips : chips.slice(cabem);
 
   /* O rótulo diz o que o clique FAZ. Um botão que abre e fecha e não muda de
      texto obriga a olhar a tela para descobrir em que estado se está — e no
@@ -173,7 +232,13 @@ export function TransactionsFilterChips({
          chips têm ~490 px disponíveis contra um teto aritmético de ~446 — 44 px
          de margem. Fina o bastante para que, sem a guarda, um chip a mais
          pintasse POR CIMA da ordenação em vez de ser cortado. */
-      style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, overflow: "hidden" }}
+      /* A faixa de chips cresce com transição: é ela que empurra a busca, e
+         animar a que se move dá o mesmo resultado sem depender de a busca ter
+         uma largura animável (ela é flex). */
+      style={{
+        display: "flex", alignItems: "center", gap: 6, minWidth: 0, overflow: "hidden",
+        transition: "max-width .34s cubic-bezier(.4,0,.2,1)", maxWidth: 900,
+      }}
     >
       {shown.map((f) => (
         <Chip key={f.key} facet={f} compact={compact} onOpen={onOpenFacet} onClear={onClearFacet} />
@@ -259,6 +324,11 @@ export function TransactionsFilterChips({
 function Chip({ facet, onOpen, onClear, compact, block = false }) {
   return (
     <span
+      /* Marca o que é CHIP de verdade. A barra soma a largura destes para saber
+         quanto espaço os chips podem devolver à busca — somar o slot inteiro
+         incluía o botão "Filtros", que não é descartável, e inflava o orçamento
+         em ~95 px. */
+      data-chip="1"
       style={{
         ...chipStyle("on"),
         paddingRight: 4,

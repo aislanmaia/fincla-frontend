@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { T } from "../../../../tokens";
 import { G } from "../../../../typography";
 import { Icon } from "../shared/Icon.jsx";
@@ -37,7 +37,56 @@ export function SearchBar({
   leading = null,
   chips = null,
   trailing = null,
+  /* Quanto de largura sobra para os chips depois de a busca ficar com o piso
+     dela. Quem sabe disso é ESTA barra — ela é a única que enxerga ao mesmo
+     tempo a largura total, a busca e os outros controles. Os chips recebem o
+     número pronto e decidem quantos cabem. */
+  onChipsBudget = null,
 }) {
+  const barRef = useRef(null);
+  const buscaRef = useRef(null);
+  const chipsRef = useRef(null);
+  const vaoRef = useRef(null);
+
+  /* O orçamento dos chips = largura da barra − os outros controles − o PISO da
+     busca. O piso é o maior entre 280 px absolutos e 40% da barra: o mínimo
+     protege telas pequenas, e a cota é o que faz sobrar mais espaço para chips
+     conforme a tela cresce, sem tabela de breakpoints.
+     Uma escada de breakpoints erra sempre que um nome é longo — "Alimentação
+     fora de casa" tem o dobro de "Casa" — e erra estourando a busca, que é o
+     controle mais usado da barra. */
+  const medeOrcamento = useCallback(() => {
+    const bar = barRef.current;
+    const busca = buscaRef.current;
+    if (!bar || !busca || typeof onChipsBudget !== "function") return;
+    const total = bar.clientWidth;
+    if (total <= 0) return;
+    /* Largura dos CHIPS agora — só o que é descartável.
+       Somar o slot inteiro incluía o botão "Filtros" e o "+N", que ficam de
+       qualquer jeito, e inflava o orçamento em ~95 px: a conta liberava dois
+       chips onde cabia um, e a busca terminava abaixo do próprio piso. */
+    const bar2 = barRef.current;
+    let chipsAgora = 0;
+    const marcados = bar2 ? bar2.querySelectorAll("[data-chip]") : [];
+    marcados.forEach((el) => { chipsAgora += el.getBoundingClientRect().width + 6; });
+    /* O VÃO também é orçamento. Sem contá-lo, a barra tratava o espaço vazio
+       como controle imóvel: em 1920 a busca já estava no teto de 720 px, sobrava
+       um vão de ~600 px e a conta liberava ZERO chips — menos que em 1440. */
+    const vao = vaoRef.current ? vaoRef.current.getBoundingClientRect().width : 0;
+    const outros = Math.max(0, total - busca.offsetWidth - chipsAgora - vao);
+    const piso = Math.max(280, Math.round(total * 0.4));
+    onChipsBudget(Math.max(0, total - outros - piso));
+  }, [onChipsBudget]);
+
+  useLayoutEffect(medeOrcamento);
+
+  useEffect(() => {
+    if (typeof ResizeObserver === "undefined" || !barRef.current) return undefined;
+    const ro = new ResizeObserver(medeOrcamento);
+    ro.observe(barRef.current);
+    return () => ro.disconnect();
+  }, [medeOrcamento]);
+
   if (compact) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -80,6 +129,7 @@ export function SearchBar({
 
   return (
     <div
+      ref={barRef}
       style={{
         display: "flex",
         alignItems: "center",
@@ -95,6 +145,7 @@ export function SearchBar({
       {leading}
       {leading && <Sep />}
       <div
+        ref={buscaRef}
         style={{
           display: "flex",
           alignItems: "center",
@@ -110,6 +161,11 @@ export function SearchBar({
           minWidth: 180,
           maxWidth: 720,
           height: 32,
+          /* Aplicar um filtro tira largura da busca de uma vez só — 96 px
+             sumindo num frame lê como falha de layout, não como resposta. A
+             transição vale para qualquer origem do filtro (chip, painel, a
+             label do cabeçalho), porque é a barra que muda, não o gatilho. */
+          transition: "flex-basis .34s cubic-bezier(.4,0,.2,1), max-width .34s cubic-bezier(.4,0,.2,1)",
           border: `1px solid ${T.border}`,
           borderRadius: 9,
           background: T.bg,
@@ -136,8 +192,8 @@ export function SearchBar({
       </div>
       {/* O vão fica AQUI, entre a busca e o recorte: é o que empurra chips,
           Filtros e ordenação para a direita como um bloco só. */}
-      <span style={{ flex: 1, minWidth: 0 }} />
-      {chips}
+      <span ref={vaoRef} style={{ flex: 1, minWidth: 0 }} />
+      <span ref={chipsRef} style={{ display: "contents" }}>{chips}</span>
       <Sep />
       <SortButton sort={sort} setSort={setSort} />
       {trailing}

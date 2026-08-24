@@ -438,7 +438,13 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
        Zero quando ninguém na página tem tag: espaço permanente para mostrar o
        vazio é o pior negócio da tela, e tag é opt-in. */
     tagsColPx > 0 ? `${tagsColPx}px` : null,
-    "1fr",
+    /* O vão tem PISO quando há ações rápidas. Elas são absolutas e ancoradas à
+       borda direita dele, então um vão menor que o grupo (~146 px só de ícones)
+       faz o grupo transbordar para a ESQUERDA, por cima da coluna de tags — e
+       os chips de tag são botões, então o alvo de "filtrar por tag" some sob o
+       de "Editar". Medido: em 1280, com a coluna de tags presente, o clique na
+       tag era interceptado pela ação. */
+    quickActions ? "minmax(156px, 1fr)" : "1fr",
     dense ? "88px" : "100px",
     // Situação: com largura, o anel ganha o rótulo. Só o anel obriga a decorar
     // o que ele significa — e há espaço de sobra aqui.
@@ -1431,6 +1437,8 @@ function TransacoesPageBody({
     return () => ro.disconnect();
   }, [isMobile]);
 
+  const [chipsBudget, setChipsBudget] = useState(null);
+
   const [panelFacet, setPanelFacet] = useState("periodo");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const swipeActions = useSwipeActions();
@@ -1995,6 +2003,9 @@ function TransacoesPageBody({
     if (period === "mes")     return d.getMonth()===TODAY.getMonth() && d.getFullYear()===TODAY.getFullYear();
     if (period === "mes-ant") { const m = new Date(TODAY); m.setMonth(m.getMonth()-1); return d.getMonth()===m.getMonth() && d.getFullYear()===m.getFullYear(); }
     if (period === "3m")      { const m3 = new Date(TODAY); m3.setMonth(m3.getMonth()-3); return d >= m3; }
+    // "rel" (janela relativa) grava o intervalo nos campos custom — o filtro por
+    // data cai no mesmo caminho do custom, sem repetir a aritmética aqui.
+    if (period === "rel")     return true;
     if (period === "ano")     return d.getFullYear()===TODAY.getFullYear();
     if (period === "custom")  {
       const from = filter.customFrom ? new Date(filter.customFrom) : null;
@@ -2926,7 +2937,11 @@ function TransacoesPageBody({
       onOpenFacet={openFacetFromChip}
       onClearFacet={clearFacetAndResetPage}
       onClearAll={clearAll}
-      maxVisible={viewportWidth >= 1600 ? 3 : 2}
+      /* Sem escada de breakpoints: quem decide é o orçamento medido pela
+         própria barra. `maxVisible` continua como piso para quem renderiza os
+         chips fora dela (testes, mocks). */
+      maxVisible={2}
+      chipsBudget={chipsBudget}
       collapsed={viewportWidth < 1200}
       filtersOpen={wideDesktopFiltersOpen}
       onToggleFilters={() => setWideDesktopFiltersOpen((open) => !open)}
@@ -3552,6 +3567,7 @@ function TransacoesPageBody({
             hideSavedViews
             hideFacets
             barLeading={savedViewsChip}
+            onChipsBudget={setChipsBudget}
             barChips={commandBarChips}
             barTrailing={listPrefsButtons}
           />
