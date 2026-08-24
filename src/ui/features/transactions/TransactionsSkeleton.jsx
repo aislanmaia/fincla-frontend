@@ -14,7 +14,13 @@ import { T } from "../../tokens";
  * Menos que isso deixa um buraco embaixo; mais empurra o rodapé para fora e
  * cria rolagem que some sozinha.
  */
-export function TransactionsSkeleton({ rows = 8, rowHeight = 48, isMobile = false }) {
+export function TransactionsSkeleton({
+  rows = 8,
+  rowHeight = 48,
+  isMobile = false,
+  catColPx = 0,
+  tagsColPx = 0,
+}) {
   return (
     <div aria-hidden="true" data-testid="transactions-skeleton">
       {Array.from({ length: rows }, (_, i) => (
@@ -22,9 +28,25 @@ export function TransactionsSkeleton({ rows = 8, rowHeight = 48, isMobile = fals
           key={i}
           style={{
             display: "grid",
+            /* Esta grade tem de ser a MESMA das linhas de verdade, senão o
+               esqueleto deixa de cumprir o que promete: quando o dado chega,
+               tudo desliza de lado. `catColPx`/`tagsColPx` vêm da página — ela
+               já os mediu — e o `auto`/ausência de tags aqui era exatamente o
+               desencontro. */
             gridTemplateColumns: isMobile
               ? "28px minmax(0,1fr) 88px"
-              : "54px 30px minmax(0,1fr) auto 1fr 100px 18px",
+              : [
+                  "54px",
+                  "30px",
+                  tagsColPx > 0 ? "minmax(0,380px)" : "minmax(0,1fr)",
+                  catColPx > 0 ? `${catColPx}px` : "auto",
+                  tagsColPx > 0 ? `${tagsColPx}px` : null,
+                  "1fr",
+                  "100px",
+                  "18px",
+                ]
+                  .filter(Boolean)
+                  .join(" "),
             alignItems: "center",
             gap: 10,
             height: rowHeight,
@@ -39,7 +61,8 @@ export function TransactionsSkeleton({ rows = 8, rowHeight = 48, isMobile = fals
           {!isMobile && <Bar w={30} />}
           <Bar w={isMobile ? 22 : 22} h={isMobile ? 22 : 22} r={7} />
           <Bar w={`${52 + ((i * 13) % 34)}%`} />
-          {!isMobile && <Bar w={64} h={14} r={99} />}
+          {!isMobile && <Bar w={Math.min(64, catColPx || 64)} h={14} r={99} />}
+          {!isMobile && tagsColPx > 0 && <Bar w={Math.round(tagsColPx * 0.7)} h={12} r={6} />}
           {!isMobile && <span />}
           <Bar w={isMobile ? 60 : 68} justify="end" />
           {!isMobile && <span />}

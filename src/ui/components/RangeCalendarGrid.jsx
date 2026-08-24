@@ -91,7 +91,7 @@ function MonthGrid({
 }) {
   const weekdays = useMemo(() => weekdayLabelsShort(locale), [locale]);
   const cellH = touch ? 44 : 30;
-  const dayFont = touch ? 12.5 : 12;
+  const dayFont = touch ? 13.5 : 13;
   const firstDow = new Date(year, monthIndex, 1).getDay();
   const nDays = new Date(year, monthIndex + 1, 0).getDate();
   const cells = [];
@@ -234,11 +234,20 @@ function MonthGrid({
                     style={{
                       ...G,
                       fontStyle: "normal",
-                      fontSize: touch ? 8.5 : 7.5,
+                      /* O §14 desenhou este rótulo com 7,5 px. Fica em 11 —
+                         o piso de legibilidade que o projeto guarda por teste
+                         (`fontSize.test.js`), e que uma marca de estado não
+                         pode furar só por ser secundária. A hierarquia sai da
+                         RAZÃO com o número (13 contra 11) e da opacidade, não
+                         de espremer o texto até a borda do ilegível.
+                         Divergência deliberada do artefato, a favor de quem
+                         enxerga pouco. */
+                      fontSize: 11,
                       fontWeight: 700,
-                      letterSpacing: "0.04em",
+                      letterSpacing: "0.02em",
                       color: "#fff",
-                      opacity: 0.85,
+                      opacity: 0.8,
+                      marginTop: -1,
                     }}
                   >
                     {isFrom && isTo ? "só" : isFrom ? "de" : "até"}
