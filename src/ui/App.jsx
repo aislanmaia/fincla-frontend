@@ -174,6 +174,12 @@ export default function App() {
   const [budgetPct, setBudgetPct] = useState(38);
   const [freePct, setFreePct]     = useState(45);
   const [isMobile, setIsMobile]   = useState(() => window.innerWidth < 768);
+
+  /* A tela é dona do próprio scroll? Só Transações no mobile, por enquanto.
+     O `padding-bottom` de 40 também sai: ele existe para dar respiro ao fim de
+     uma página que rola, e numa tela autocontida vira uma faixa morta. */
+  const selfScrollingScreen = isMobile && activeSegment === "transactions";
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [transactionsListVersion, setTransactionsListVersion] = useState(0);
   const bumpTransactionsList = useCallback(() => {
@@ -564,7 +570,23 @@ export default function App() {
 
         {!isMobile && <StatePanelV4 open={panelOpen} day={day} setDay={setDay} budgetPct={budgetPct} setBudgetPct={setBudgetPct} freePct={freePct} setFreePct={setFreePct} moodKey={moodKey} onStartOnboarding={() => { setPanelOpen(false); setShowOnboarding(true); }} dataMode={dataMode} allowDataModeToggle={mockDataEnabled} onSetDataMode={(mode) => { setRequestedDataMode(mode); if (mode === 'empty') { setCenarios([]); setCenarioId(null); } else { setCenarios(SIM_CENARIOS_INIT); setCenarioId(SIM_CENARIOS_INIT[0].id); } }} />}
 
-        <div data-fincla-main-scroll className="fincla-scroll" style={{ flex:1, minHeight:0, overflowY:"auto", overflowX:"hidden", padding:isMobile?"14px 14px 40px":"20px 28px 40px" }}>
+        {/* Transações no mobile é a única tela AUTOCONTIDA: a lista é longa por
+            natureza, e deixar a página inteira rolar tirava da vista a barra de
+            comando e o botão de filtros justamente enquanto se procura algo.
+            Aqui o shell para de rolar e a própria lista assume o scroll — o
+            que também dá ao `position:sticky` do cabeçalho um scrollport que
+            de fato rola. As demais telas seguem com o scroll do shell. */}
+        <div
+          data-fincla-main-scroll
+          className={selfScrollingScreen ? undefined : "fincla-scroll"}
+          style={{ flex:1, minHeight:0,
+            overflowY: selfScrollingScreen ? "hidden" : "auto",
+            overflowX: selfScrollingScreen ? "clip" : "hidden",
+            display: selfScrollingScreen ? "flex" : undefined,
+            flexDirection: selfScrollingScreen ? "column" : undefined,
+            padding: selfScrollingScreen
+              ? "14px 14px 0"
+              : isMobile ? "14px 14px 40px" : "20px 28px 40px" }}>
           {activeSegment === "dashboard" && onboardingWarnings.length > 0 && (
             <div style={{ display:"flex", alignItems:"flex-start", gap:10, background:T.amberLight, border:`1px solid ${T.amberBorder}`, borderRadius:11, padding:"12px 14px", marginBottom:14 }}>
               <span style={{ color:T.amber, flexShrink:0, lineHeight:1.5 }}>⚠</span>
@@ -590,7 +612,7 @@ export default function App() {
               onNav={(dest) => { if (dest === "_nova_transacao") { openTxModal(); } else { navTo(dest); } }}
             />
           )}
-          <ErrorBoundary key={finclaMainOutletRemountKey(pathname)}><PageEnter key={finclaMainOutletRemountKey(pathname)}><Outlet /></PageEnter></ErrorBoundary>
+          <ErrorBoundary key={finclaMainOutletRemountKey(pathname)}><PageEnter key={finclaMainOutletRemountKey(pathname)} fill={selfScrollingScreen}><Outlet /></PageEnter></ErrorBoundary>
         </div>
       </div>
       <NovaTransacaoModal open={txModalOpen} onClose={closeTxModal} onTransactionSaved={bumpTransactionsList} novaRecorrencia={novaRecorrenciaModal} preConfig={modalPreConfig} isMobile={isMobile} organizationId={session.activeOrgId} dataMode={dataMode} />

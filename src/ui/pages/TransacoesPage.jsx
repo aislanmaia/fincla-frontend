@@ -2996,7 +2996,12 @@ function TransacoesPageBody({
 
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:14, height: isMobile ? undefined : "calc(100dvh - 116px)" }}>
+    /* No mobile a raiz OCUPA a altura que o shell deu e pode encolher, em vez
+       de crescer com a lista. É o que torna a tela autocontida: a barra de
+       comando e o botão de filtros ficam sempre à vista, e quem rola é a
+       lista. No desktop a altura já vinha travada por `calc`. */
+    <div style={{ display:"flex", flexDirection:"column", gap:14,
+      ...(isMobile ? { flex:1, minHeight:0 } : { height:"calc(100dvh - 116px)" }) }}>
       {shouldUseRealData && transactionsData.error && (
         <div style={{ ...G, fontSize:13, color:T.red, background:T.redLight, border:`1px solid ${T.red}22`, borderRadius:12, padding:"12px 14px" }}>
           {transactionsData.error}
@@ -3361,8 +3366,7 @@ function TransacoesPageBody({
           o cabeçalho da lista e os rótulos de dia grudavam num container que
           nunca rola, ou seja, não grudavam em nada. Ele existe para o painel
           ancorado do desktop, que no mobile não existe. */}
-      <div style={{ display:"flex", flex:1, minHeight:0,
-        overflow: isMobile ? "visible" : "hidden" }}>
+      <div style={{ display:"flex", flex:1, minHeight:0, overflow:"hidden" }}>
         <div
           ref={listScrollRef}
           /* No mobile a lista NÃO é uma região de rolagem própria: quem rola é
@@ -3371,17 +3375,17 @@ function TransacoesPageBody({
              rolar (o conteúdo cabe), e o `contain` ISOLA o gesto — arrastar
              em cima de um item não encadeava para o scroller de fora, então
              só dava para rolar pelas margens laterais vazias. */
-          className={isMobile ? undefined : "fincla-scroll"}
-          style={{ flex:1, minWidth:0,
-            overflowY: isMobile ? "visible" : "auto",
-            /* `clip`, não `hidden` — a mesma regra que o app-shell já
-               documenta. Pela spec, quando um eixo é `hidden` o outro NÃO
-               pode continuar `visible`: ele vira `auto`, e o elemento passa a
-               ser um scrollport. Como `position:sticky` gruda no scrollport
-               mais próximo, o cabeçalho da lista grudava aqui — num container
-               que nunca rola — em vez de grudar em quem rola de verdade.
-               `clip` corta no eixo X sem criar scrollport nenhum. */
-            overflowX: isMobile ? "clip" : "hidden" }}
+          /* A lista É a região de rolagem, no mobile também. Antes ela ficava
+             `visible` e quem rolava era a página inteira — o que empurrava a
+             barra de comando e o botão de filtros para fora da vista bem na
+             hora de procurar algo. Como agora ela REALMENTE rola, o
+             `overscroll-behavior: contain` do `.fincla-scroll` deixa de ser
+             problema: ele isola o gesto de um container que precisa dele.
+             Foi o contrário disso — `contain` num container que NÃO rolava —
+             que tinha travado a rolagem por cima dos itens. */
+          className="fincla-scroll"
+          style={{ flex:1, minWidth:0, minHeight:0,
+            overflowY:"auto", overflowX:"hidden" }}
         >
           {listContent}
         </div>
