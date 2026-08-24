@@ -13,22 +13,32 @@ import { G } from "../../typography";
  *
  * Fechar a sanfona CANCELA: quem sai de onde perguntou não respondeu.
  */
+/* O título NÃO repete a descrição da transação: ela aparece logo abaixo, no
+   cartão, com ícone, data, categoria e valor. Repetir gastava a linha mais
+   visível do modal para dizer de novo o que o cartão já mostra melhor. */
 export const CONFIRM_COPY = {
   delete: {
-    title: (desc) => `Excluir “${desc}”?`,
-    detail: "O lançamento sai da lista e do saldo. Não dá para desfazer.",
+    title: () => "Excluir esta transação?",
+    /* O aviso de irreversibilidade vem em NEGRITO e no fim: é a única coisa
+       aqui que a pessoa não pode descobrir depois. */
+    detail: "O lançamento some da lista e o valor sai do saldo.",
+    alerta: "Não há como desfazer.",
     confirm: "🗑 Excluir",
     danger: true,
   },
   settle: {
-    title: (desc) => `Marcar “${desc}” como pago?`,
+    title: () => "Marcar como paga?",
     detail: "O valor passa a contar no saldo da conta a partir de hoje.",
-    confirm: "✓ Marcar como pago",
+    alerta: null,
+    reversivel: "Dá para desfazer depois.",
+    confirm: "✓ Confirmar pagamento",
     danger: false,
   },
   unsettle: {
-    title: (desc) => `Desfazer o pagamento de “${desc}”?`,
+    title: () => "Desfazer este pagamento?",
     detail: "O lançamento volta a ser um compromisso e sai do saldo.",
+    alerta: null,
+    reversivel: "Dá para refazer depois.",
     confirm: "↺ Desfazer pagamento",
     danger: false,
   },
@@ -118,7 +128,7 @@ export function ConfirmActionInline({ kind, desc, busy = false, onConfirm, onCan
  * engano sai apertando Enter, e o caminho mais provável não pode ser o
  * destrutivo.
  */
-export function ConfirmActionModal({ kind, desc, busy = false, onConfirm, onCancel }) {
+export function ConfirmActionModal({ kind, desc, tx = null, busy = false, onConfirm, onCancel }) {
   const copy = CONFIRM_COPY[kind];
   const cancelarRef = React.useRef(null);
 
@@ -154,7 +164,7 @@ export function ConfirmActionModal({ kind, desc, busy = false, onConfirm, onCanc
       <div
         role="alertdialog"
         aria-modal="true"
-        aria-label={copy.title(desc)}
+        aria-label={`${copy.title()} ${desc}`}
         onClick={(e) => e.stopPropagation()}
         style={{
           ...G,
@@ -169,9 +179,62 @@ export function ConfirmActionModal({ kind, desc, busy = false, onConfirm, onCanc
         }}
       >
         <div style={{ ...G, fontSize: 16, fontWeight: 800, color: T.ink, lineHeight: 1.3 }}>
-          {copy.title(desc)}
+          {copy.title()}
         </div>
-        <div style={{ ...G, fontSize: 13, color: T.inkMid, lineHeight: 1.5 }}>{copy.detail}</div>
+
+        {/* O CARTÃO da transação. Ele é o que responde "qual delas?" sem a
+            pessoa precisar confiar na memória de qual linha clicou — e é o que
+            faltava: o modal antigo tinha só um título e uma frase. */}
+        {tx && (
+          <div
+            style={{
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "10px 12px", margin: "4px 0 2px",
+              border: `1px solid ${T.border}`, borderRadius: 10, background: T.bg,
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                width: 28, height: 28, borderRadius: 8, background: T.surface,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 14, flex: "none",
+              }}
+            >
+              {tx.icon || "•"}
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <div
+                style={{
+                  ...G, fontSize: 12.5, fontWeight: 600, color: T.ink,
+                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                }}
+              >
+                {tx.desc}
+              </div>
+              <div style={{ ...G, fontSize: 10.5, color: T.inkLight }}>
+                {[tx.date, tx.cat, tx.method].filter(Boolean).join(" · ")}
+              </div>
+            </div>
+            <span
+              style={{
+                ...G, marginLeft: "auto", flex: "none",
+                fontFamily: "'Geist Mono', ui-monospace, monospace",
+                fontSize: 13.5, fontWeight: 700,
+                color: tx.type === "income" || tx.type === "refund" ? T.green : T.ink,
+              }}
+            >
+              {tx.type === "income" || tx.type === "refund" ? "+" : "−"}
+              {tx.valorFormatado}
+            </span>
+          </div>
+        )}
+
+        <div style={{ ...G, fontSize: 12.5, color: T.inkMid, lineHeight: 1.5 }}>
+          {copy.detail}
+          {copy.alerta ? <> <b style={{ color: T.ink }}>{copy.alerta}</b></> : null}
+          {copy.reversivel ? ` ${copy.reversivel}` : null}
+        </div>
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 6 }}>
           <button
             ref={cancelarRef}
@@ -189,11 +252,15 @@ export function ConfirmActionModal({ kind, desc, busy = false, onConfirm, onCanc
             type="button"
             disabled={busy}
             onClick={onConfirm}
+            /* A ação destrutiva é CONTORNADA, não sólida: sólida ela vira o
+               botão primário e a mão cai nela por inércia. Confirmar pagamento
+               é verde sólido porque é construtivo e reversível. */
             style={{
               ...G, height: 38, padding: "0 16px", borderRadius: 9,
-              border: `1px solid ${tone}`,
-              background: copy.danger ? tone : T.ink,
-              color: "#fff", fontSize: 12.5, fontWeight: 700,
+              border: `1px solid ${copy.danger ? "#F3C7C7" : T.green}`,
+              background: copy.danger ? T.surface : T.green,
+              color: copy.danger ? T.red : "#fff",
+              fontSize: 12.5, fontWeight: 700,
               cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1,
             }}
           >

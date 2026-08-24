@@ -43,6 +43,7 @@ import { ConfirmActionModal } from "../features/transactions/ConfirmAction.jsx";
 import { ShortcutsModal } from "../features/transactions/ShortcutsModal.jsx";
 import { useTransactionsKeyboard } from "../features/transactions/useTransactionsKeyboard.js";
 import { useFocusTrap } from "../features/transactions/useFocusTrap.js";
+import { describeFilterChange } from "../features/transactions/filters/describeFilterChange.js";
 import { flyToChip } from "../features/transactions/flyToChip.js";
 import { TransactionsStats } from "../features/transactions/TransactionsStats.jsx";
 import { TransactionsSummarySheet } from "../features/transactions/TransactionsSummarySheet.jsx";
@@ -2442,13 +2443,22 @@ function TransacoesPageBody({
   // Uma única derivação de facets para os dois consumidores: os chips de
   // filtro ativo e o resumo das views salvas. Duas listas construídas em
   // lugares diferentes acabariam divergindo no rótulo de algum filtro.
-  const allFacets = useMemo(() => {
-    const categoriesById = Object.fromEntries(
-      categoriesForFilter.map((c) => [c.id, c]),
-    );
-    const cardsById = Object.fromEntries(cardsForFilter.map((c) => [c.id, c]));
-    return filter.buildFacets({ categoriesById, cardsById });
-  }, [filter, categoriesForFilter, cardsForFilter]);
+  /* Os mapas saem do `useMemo` porque o rótulo do desfazer também precisa
+     deles: sem os nomes, "Categoria volta para alim-3f2a" é pior que o
+     genérico que ele veio substituir. */
+  const categoriesById = useMemo(
+    () => Object.fromEntries(categoriesForFilter.map((c) => [c.id, c])),
+    [categoriesForFilter],
+  );
+  const cardsById = useMemo(
+    () => Object.fromEntries(cardsForFilter.map((c) => [c.id, c])),
+    [cardsForFilter],
+  );
+
+  const allFacets = useMemo(
+    () => filter.buildFacets({ categoriesById, cardsById }),
+    [filter, categoriesById, cardsById],
+  );
 
 
   /* Um recorte por filtro ativo, cada um SEM aquele filtro — é o que permite
@@ -2552,14 +2562,16 @@ function TransacoesPageBody({
   );
 
   /** "Sem filtros" / "3 filtros" — o que o desfazer vai devolver. */
-  const describeFilterSnapshot = useCallback((snap) => {
-    const n = countActiveFiltersInSnapshot(snap);
-    if (n === 0) return "sem filtros";
-    return n === 1 ? "1 filtro" : `${n} filtros`;
-  }, []);
+  /* O rótulo diz QUAL mudança o botão desfaz, não para onde ele volta.
+     "Desfazer: voltar para 2 filtros" obriga a clicar para descobrir qual dos
+     três some — o oposto do que um desfazer serve. */
+  const describeFilterSnapshot = useCallback(
+    (destino, atual, verbo) =>
+      describeFilterChange(atual, destino, verbo, { categorias: categoriesById, cartoes: cardsById }),
+    [categoriesById, cardsById],
+  );
 
-  // Desfazer dos filtros. O rótulo diz para ONDE volta ("3 filtros"), não
-  // "desfazer" genérico — sem isso o controle é uma aposta.
+  // Desfazer dos filtros, com o rótulo nomeando a mudança.
   const filterHistory = useFilterHistory(
     filter.snapshot,
     filter.applySnapshot,
@@ -2807,6 +2819,34 @@ function TransacoesPageBody({
    */
   const [leavingIds, setLeavingIds] = useState(() => new Set());
   const [settledFlashId, setSettledFlashId] = useState(null);
+  /* Linhas que acabaram de nascer. A marca dura só o tempo da animação: mantê-la
+     faria a linha renascer a cada re-render da lista. */
+  const [nascendoIds, setNascendoIds] = useState(() => new Set());
+  const marcarNascimento = useCallback((id) => {
+    const chave = String(id);
+    setNascendoIds((prev) => new Set(prev).add(chave));
+    setTimeout(() => {
+      setNascendoIds((prev) => {
+        if (!prev.has(chave)) return prev;
+        const proximo = new Set(prev);
+        proximo.delete(chave);
+        return proximo;
+      });
+    }, 600);
+  }, []);
+
+  /* Toda linha NOVA que aparece no topo depois do primeiro carregamento nasce
+     com a animação — não só a duplicada. É o mesmo evento do ponto de vista de
+     quem olha: "apareceu uma que não estava aí". */
+  const idsConhecidosRef = useRef(null);
+  useEffect(() => {
+    const atuais = new Set(txList.map((t) => String(t.id)));
+    const antes = idsConhecidosRef.current;
+    idsConhecidosRef.current = atuais;
+    // A primeira carga não é nascimento: seria a lista inteira animando.
+    if (!antes) return;
+    for (const id of atuais) if (!antes.has(id)) marcarNascimento(id);
+  }, [txList, marcarNascimento]);
 
   /* O sheet cobre a tela, mas o botão que o abriu continua no fluxo de Tab por
      trás do backdrop: sem prender, quem navega por teclado tabula para fora,
@@ -2927,7 +2967,17 @@ function TransacoesPageBody({
       if (isMobile) { setSelected(tx); setDeletingId(tx.id); return; }
       setConfirmAcao({ kind: "delete", tx });
     },
-    onSettle: async (tx) => {
+    /* Liquidar TAMBÉM pergunta no desktop. Ela muda o saldo — o mesmo tipo de
+       consequência que a exclusão —, e a diferença é só que esta é reversível,
+       o que o próprio modal diz. Executar direto deixava a ação mais frequente
+       da tela sem nenhuma rede.
+       No toque continua direto: lá a ação já exige o gesto deliberado de abrir
+       a sanfona ou arrastar a linha, que é a confirmação. */
+    onSettle: (tx) => {
+      if (isMobile) { quickActions.onSettleConfirmado(tx); return; }
+      setConfirmAcao({ kind: tx.settled ? "unsettle" : "settle", tx });
+    },
+    onSettleConfirmado: async (tx) => {
       if (settlingId) return;
       setSettleError("");
       setSettlingId(tx.id);
@@ -3142,9 +3192,12 @@ function TransacoesPageBody({
              zero por definição — mas sumir sem transição desorienta: a pessoa
              clica e o que ela clicou evapora. O voo diz que é o mesmo objeto
              mudando de lugar. */
-          const alvo = document.querySelector(
-            '[aria-label^="Abrir filtros"], [aria-label^="Fechar filtros"], [aria-label^="Filtros"]',
-          );
+          /* Âncora explícita, não uma lista de seletores: `querySelector` com
+             lista devolve o primeiro em ordem de DOCUMENTO, e o grupo
+             "Filtros aplicados" — que é ANCESTRAL do botão — casava primeiro
+             sempre que havia um chip. O clone voava para o centro da faixa
+             inteira (~490 px) em vez de para o botão. */
+          const alvo = document.querySelector('[data-fly-target="filtros"]');
           if (e?.currentTarget && alvo) flyToChip(e.currentTarget, alvo);
           filter.setSettlement("a-pagar");
         }}
@@ -3276,6 +3329,10 @@ function TransacoesPageBody({
                   className={[
                     leavingIds.has(tx.id) ? "fincla-tx-leave" : "",
                     settledFlashId === tx.id ? "fincla-tx-settled" : "",
+                    /* Nascimento: serve ao duplicado, ao desfazer de uma
+                       exclusão e à transação recém-criada. Os três são "isto
+                       acabou de aparecer, e é seu". */
+                    nascendoIds.has(String(tx.id)) ? "fincla-tx-born" : "",
                   ].filter(Boolean).join(" ")}
                   style={{
                   borderBottom: (gi === groups.length - 1 && i === txs.length - 1 && selected?.id !== tx.id)
@@ -3737,10 +3794,26 @@ function TransacoesPageBody({
         <ConfirmActionModal
           kind={confirmAcao.kind}
           desc={confirmAcao.tx.desc}
+          /* O cartão da transação dentro do modal responde "qual delas?" sem a
+             pessoa depender da memória de qual linha clicou. */
+          tx={{
+            icon: confirmAcao.tx.icon,
+            desc: confirmAcao.tx.desc,
+            date: confirmAcao.tx.date,
+            cat: confirmAcao.tx.cat,
+            method: confirmAcao.tx.method,
+            type: confirmAcao.tx.type,
+            valorFormatado: fmtBRL(Math.abs(confirmAcao.tx.val)),
+          }}
           busy={deletingBusy}
           onCancel={() => setConfirmAcao(null)}
           onConfirm={async () => {
             const tx = confirmAcao.tx;
+            if (confirmAcao.kind !== "delete") {
+              setConfirmAcao(null);
+              await quickActions.onSettleConfirmado(tx);
+              return;
+            }
             setDeletingBusy(true);
             try {
               if (shouldUseRealData) await transactionsData.removeTransaction(tx.id);

@@ -567,19 +567,34 @@ export function LocaleDateRangePicker({
      Sem isto o hover no calendário não diz NADA sobre o que vai mudar, e a
      pessoa descobre só depois de clicar. Com o intervalo fechado, a ponta é a
      mais próxima; com ele aberto, é sempre o fim. */
-  const pontaSobHover = useMemo(() => {
+
+  /* O que o clique no dia sob o cursor VAI FAZER — e o texto do balão.
+     Ele nasce AQUI, junto de `handleDayClick`, e não no calendário: derivar a
+     promessa longe da ação foi o que fez o balão prometer "novo fim" onde o
+     clique movia o início, e "mover o até" onde o clique recomeçava o
+     intervalo. Uma regra, um lugar. */
+  const acaoSobHover = useMemo(() => {
     if (touch || !hoverYmd) return null;
-    if (grabbedEdge) return grabbedEdge;
-    /* Espelha `handleDayClick` LINHA A LINHA, e não a ponta mais próxima.
-       Com o intervalo fechado, um clique RECOMEÇA em "de" — mas a heurística de
-       proximidade acendia "até" e prometia uma coisa enquanto o clique fazia
-       outra. Um realce que mente é pior que realce nenhum. */
-    if (!displayFrom || (displayFrom && displayTo)) return "from";
+    if (grabbedEdge) return `soltar o ${grabbedEdge === "from" ? "de" : "até"}`;
+    // Intervalo fechado: o clique RECOMEÇA (é o que handleDayClick faz).
+    if (displayFrom && displayTo) return "novo início";
+    if (!displayFrom) return "novo início";
     const h = parseLocalYmd(hoverYmd);
     const f = parseLocalYmd(displayFrom);
     if (!h || !f) return null;
-    return h.getTime() < f.getTime() ? "from" : "to";
+    // Com o início posto e o fim em aberto, um dia ANTES do início vira o novo
+    // início — não o fim.
+    return h.getTime() < f.getTime() ? "novo início" : "novo fim";
   }, [touch, hoverYmd, grabbedEdge, displayFrom, displayTo]);
+
+  /* Qual CAMPO acende — derivado da mesma ação, para os dois nunca divergirem.
+     Antes eram duas heurísticas independentes e elas discordavam: o campo dizia
+     "de" e o balão dizia "novo fim" no mesmo hover. */
+  const pontaSobHover = useMemo(() => {
+    if (!acaoSobHover) return null;
+    if (grabbedEdge) return grabbedEdge;
+    return acaoSobHover === "novo fim" ? "to" : "from";
+  }, [acaoSobHover, grabbedEdge]);
 
   const summaryLabel =
     period === "tudo" && !displayFrom && !displayTo
@@ -628,7 +643,13 @@ export function LocaleDateRangePicker({
           quando a coisa é UMA: o intervalo cabe numa linha só. */}
       <>
           {/* A legenda existe para a caixa não ficar solta entre os chips e o
-              calendário: sem ela, a linha `de … até …` lê como mais um chip. */}
+              calendário: sem ela, a linha `de … até …` lê como mais um chip.
+              Some no COMPACTO: o painel de Período mede 669 px contra 712 de
+              corpo do sheet, e os ~27 px dela derrubavam a folga para ~15 —
+              a última fileira do calendário a um aparelho pequeno de distância
+              de ser cortada de novo, que é exatamente o bug que aquela conta
+              registra ter consertado. */}
+          {!compact && (
           <div
             style={{
               ...G,
@@ -642,6 +663,7 @@ export function LocaleDateRangePicker({
           >
             Intervalo
           </div>
+          )}
           <div
             style={{
               display: "flex",
@@ -755,6 +777,7 @@ export function LocaleDateRangePicker({
           onNextMonth={() => shiftMonth(1)}
           touch={touch}
           grabbedEdge={grabbedEdge}
+          acaoSobHover={acaoSobHover}
         />
       )}
 

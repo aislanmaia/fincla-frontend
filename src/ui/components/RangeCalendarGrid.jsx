@@ -84,6 +84,9 @@ function MonthGrid({
   /* Qual ponta está "pega" (arrastada no mouse, ou tocada no mobile). Ela ganha
      anel verde: sem hover, seria a única mudança de estado invisível da tela. */
   grabbedEdge = null,
+  /* O que o clique no dia sob o cursor vai fazer, já em texto. Vem do pai:
+     derivar aqui criava uma segunda regra que discordava do handler. */
+  acaoSobHover = null,
   /* Com UM mês, quem nomeia o mês é a barra de navegação — o título aqui
      dentro repetia a mesma palavra duas vezes, uma sob a outra. Com dois, a
      barra fica só com as setas e cada grade precisa dizer qual mês é. */
@@ -357,6 +360,7 @@ export function RangeCalendarGrid({
   onNextMonth,
   touch = false,
   grabbedEdge = null,
+  acaoSobHover = null,
 }) {
   const months = useMemo(() => {
     const list = [];
@@ -459,6 +463,7 @@ export function RangeCalendarGrid({
             onDayPointerDown={onDayPointerDown}
             touch={touch}
             grabbedEdge={grabbedEdge}
+            acaoSobHover={acaoSobHover}
             showTitle={monthCount > 1}
           />
         ))}

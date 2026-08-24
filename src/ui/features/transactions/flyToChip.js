@@ -26,6 +26,16 @@ export function flyToChip(origem, destino, { duracao = 420 } = {}) {
 
   const clone = origem.cloneNode(true);
   clone.setAttribute("aria-hidden", "true");
+  /* O original é um `<button>`, então o clone nasce focável — e um elemento
+     focável dentro de `aria-hidden` é violação clássica: um Tab durante o voo
+     pousaria num botão invisível (o original acabou de desmontar, então o foco
+     já está solto). `inert` cobre navegadores modernos; o `tabIndex` cobre o
+     resto. */
+  clone.setAttribute("inert", "");
+  clone.tabIndex = -1;
+  clone.querySelectorAll?.("a, button, input, select, textarea, [tabindex]").forEach((el) => {
+    el.tabIndex = -1;
+  });
   // Sem `pointer-events`, o clone intercepta o cursor no caminho e pode roubar
   // o clique seguinte no meio do voo.
   Object.assign(clone.style, {

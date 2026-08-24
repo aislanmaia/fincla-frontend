@@ -764,6 +764,12 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     await userEvent.click(
       (await screen.findAllByRole("button", { name: /^Marcar Boleto luz como pago$/ }))[0],
     );
+    /* No DESKTOP a liquidação passa pelo modal: ela muda o saldo, a mesma
+       classe de consequência da exclusão. A diferença é ser reversível, e é o
+       próprio modal que diz isso. */
+    await userEvent.click(
+      await screen.findByRole("button", { name: /Confirmar pagamento/i }),
+    );
 
     expect(
       await screen.findByText(/"Boleto luz" marcada como paga/),
@@ -775,6 +781,38 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     expect(setTransactionSettled).toHaveBeenLastCalledWith("tx-pend", false);
   });
 
+it("cancelar no modal NÃO liquida", async () => {
+    // A rede só serve se ela puder ser puxada: um modal cujo cancelar executa
+    // mesmo assim é pior que nenhum, porque ensina a pessoa a não ler.
+    const setTransactionSettled = vi.fn().mockResolvedValue({ settled: true });
+    seedSettlement(setTransactionSettled);
+    renderPage();
+    await openFilters();
+
+    await userEvent.click(
+      (await screen.findAllByRole("button", { name: /^Marcar Boleto luz como pago$/ }))[0],
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Cancelar" }));
+
+    expect(setTransactionSettled).not.toHaveBeenCalled();
+  });
+
+  it("o modal mostra QUAL transação — não só o verbo", async () => {
+    // Sem o cartão, confirmar depende da memória de qual linha foi clicada.
+    const setTransactionSettled = vi.fn().mockResolvedValue({ settled: true });
+    seedSettlement(setTransactionSettled);
+    renderPage();
+    await openFilters();
+
+    await userEvent.click(
+      (await screen.findAllByRole("button", { name: /^Marcar Boleto luz como pago$/ }))[0],
+    );
+    const modal = await screen.findByRole("alertdialog");
+    expect(modal).toHaveTextContent("Boleto luz");
+    // E diz que é reversível: é o que separa esta pergunta da exclusão.
+    expect(modal).toHaveTextContent(/desfazer depois/i);
+  });
+
   it("fechar a torrada não desfaz nada", async () => {
     const setTransactionSettled = vi.fn().mockResolvedValue({ settled: true });
     seedSettlement(setTransactionSettled);
@@ -783,6 +821,9 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
 
     await userEvent.click(
       (await screen.findAllByRole("button", { name: /^Marcar Boleto luz como pago$/ }))[0],
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: /Confirmar pagamento/i }),
     );
     await screen.findByRole("button", { name: "Fechar aviso" });
     await userEvent.click(screen.getByRole("button", { name: "Fechar aviso" }));

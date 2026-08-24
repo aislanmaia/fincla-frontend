@@ -1,5 +1,40 @@
 /** CSS global de keyframes e utilitários — injetado uma vez (espelho do protótipo de referência em docs/) */
 export const ANIM_CSS = `
+  /* ── TOKENS DE MOVIMENTO ────────────────────────────────────────────
+     Regra da UI da Fincla, não decoração de uma tela: toda mudança de estado
+     que a pessoa provocou deve ser visível NO CAMINHO, não só no destino. Uma
+     linha que some, um painel que aparece, um número que muda — se o passo do
+     meio não é mostrado, ela precisa reconstruir sozinha o que aconteceu, e é
+     aí que a interface parece "dura".
+     A contrapartida é disciplina: nada acima de 550 ms, UM floreio por
+     interação, e nunca bloquear a entrada. */
+  :root {
+    /* Resposta imediata: hover, foco, troca de pílula, crossfade de estado. */
+    --mo-fast: 120ms;
+    --mo-fast-ease: ease-out;
+    /* Padrão da casa. Colapso de linha, sanfona, entrada de chip.
+       Sai rápido, assenta devagar. */
+    --mo-base: 220ms;
+    --mo-base-ease: cubic-bezier(.32,.72,0,1);
+    /* Superfícies que ocupam área: painel de filtros, bottom sheet, drawer. */
+    --mo-panel: 300ms;
+    --mo-panel-ease: cubic-bezier(.32,.72,0,1);
+    /* O floreio raro, um por interação: a varredura de "marcado como pago". */
+    --mo-accent: 500ms;
+    --mo-accent-ease: cubic-bezier(.4,0,.2,1);
+    /* Saída acelerada: o que vai embora não merece a mesma cerimônia da
+       entrada. */
+    --mo-exit: 180ms;
+    --mo-exit-ease: cubic-bezier(.4,0,1,1);
+  }
+  /* Degrada para crossfade — a regra vale para o app inteiro, não por tela. */
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --mo-fast: 120ms; --mo-base: 120ms; --mo-panel: 120ms;
+      --mo-accent: 120ms; --mo-exit: 120ms;
+    }
+  }
+
   /* Esqueleto da lista: opacidade, nunca posicao. Um shimmer que desliza
      custa repaint em cada linha; o pulso e uma propriedade composta e roda
      na GPU mesmo com trinta linhas na tela. */
@@ -130,18 +165,84 @@ export const ANIM_CSS = `
      estava. O max-height grande o bastante para qualquer densidade (a linha
      mais alta é 64 px, mais a sanfona aberta) faz a interpolação acontecer;
      height:0 não anima a partir de auto. */
-  @keyframes txRowLeave {
-    0%   { opacity: 1; transform: translateX(0);     max-height: 240px; }
-    35%  { opacity: 0; transform: translateX(-14px); max-height: 240px; }
-    100% { opacity: 0; transform: translateX(-14px); max-height: 0;
-           padding-top: 0; padding-bottom: 0; border-width: 0; }
+  .fincla-card-lift { transition: box-shadow 0.18s ease, transform 0.18s ease; }
+  .fincla-card-lift:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.09) !important; transform: translateY(-1px); }
+  .fincla-btn { transition: opacity 0.13s, transform 0.13s; }
+  .fincla-btn:active { transform: scale(0.97) !important; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes popIn { from { opacity: 0; transform: scale(0.96) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+  @keyframes sheetUp {
+    from { transform: translateY(100%); opacity: 0;   }
+    to   { transform: translateY(0);    opacity: 1;   }
   }
-  /* Confirmação de pagamento: um pulso verde que atravessa a linha. Curto de
-     propósito — é um recibo, não um evento. */
+  @keyframes sheetDown {
+    from { transform: translateY(0);    opacity: 1;   }
+    to   { transform: translateY(100%); opacity: 0;   }
+  }
+  @keyframes backdropIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @keyframes backdropOut {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+  }
+  /* Drawer lateral (AiDrawer da referência cons-copiloto.jsx).
+     slideInRight desloca só 18px — suficiente para um card, não para um
+     painel de 440px, que precisa entrar da borda da viewport. */
+  @keyframes slideInPanel {
+    from { transform: translateX(100%); }
+    to   { transform: translateX(0);    }
+  }
+  /* ── Movimento da lista de Transações ────────────────────────────────
+     Sair da lista é um COLAPSO DE ALTURA, não só um fade: sem ele as linhas
+     de baixo pulam de uma vez para o lugar da que saiu, e o olho perde onde
+     estava. O max-height grande o bastante para qualquer densidade (a linha
+     mais alta é 64 px, mais a sanfona aberta) faz a interpolação acontecer;
+     height:0 não anima a partir de auto. */
+  /* ── SAÍDA DE UMA LINHA — 340 ms do clique ao fim ───────────────────
+     Duas fases SOBREPOSTAS, e é a sobreposição que faz parecer uma coisa só:
+     0–180 ms a linha desliza para a DIREITA e apaga; 120–340 ms a altura, o
+     padding e a borda vão a zero, e as de baixo sobem no mesmo movimento em
+     vez de saltar depois.
+     Direita, não esquerda: é o sentido do swipe-to-delete do mobile — o gesto
+     que a pessoa já conhece, executado pela interface. O fundo passa por um
+     vermelho suave no caminho, dizendo o que a saída significa. */
+  @keyframes txRowLeave {
+    0%   { opacity: 1; transform: translateX(0);    max-height: 240px; background: rgba(220,38,38,0); }
+    20%  { opacity: .9; transform: translateX(8px); max-height: 240px; background: rgba(220,38,38,.10); }
+    53%  { opacity: 0;  transform: translateX(46px); max-height: 240px; background: rgba(220,38,38,.10); }
+    100% { opacity: 0;  transform: translateX(46px); max-height: 0;
+           padding-top: 0; padding-bottom: 0; border-width: 0; background: rgba(220,38,38,0); }
+  }
+
+  /* ── PAGAMENTO CONFIRMADO — 500 ms, e é um momento feliz ─────────────
+     Diferente do excluir: aqui nada desaparece, algo se CONFIRMA. O movimento
+     é de preenchimento, não de saída — uma varredura verde atravessa a linha
+     da esquerda para a direita, uma vez só. É o único floreio da tela, e vale
+     porque marca o instante em que o dinheiro entrou no saldo. */
   @keyframes txRowSettled {
-    0%   { background: rgba(5,150,105,0); }
-    30%  { background: rgba(5,150,105,0.16); }
-    100% { background: rgba(5,150,105,0); }
+    0%   { background-position: -140% 0; }
+    100% { background-position: 140% 0; }
+  }
+  @keyframes txRowSettledRest {
+    0%   { box-shadow: inset 0 0 0 999px rgba(5,150,105,.09); }
+    70%  { box-shadow: inset 0 0 0 999px rgba(5,150,105,.09); }
+    100% { box-shadow: inset 0 0 0 999px rgba(5,150,105,0); }
+  }
+
+  /* ── NASCIMENTO — 550 ms ────────────────────────────────────────────
+     Serve ao item duplicado, ao desfazer de uma exclusão e à transação
+     recém-criada pela modal: os três são "isto acabou de aparecer, e é seu".
+     A altura abre empurrando as de baixo suavemente, e o destaque azul esvai
+     para o branco em vez de sumir de uma vez. */
+  @keyframes txRowBorn {
+    0%   { max-height: 0; opacity: 0; transform: translateY(-6px);
+           padding-top: 0; padding-bottom: 0; box-shadow: inset 0 0 0 999px rgba(37,99,235,.14); }
+    55%  { max-height: 240px; opacity: 1; transform: translateY(0);
+           box-shadow: inset 0 0 0 999px rgba(37,99,235,.14); }
+    100% { max-height: 240px; opacity: 1; transform: translateY(0);
+           box-shadow: inset 0 0 0 999px rgba(37,99,235,0); }
   }
   @keyframes toastIn {
     from { opacity: 0; transform: translateY(10px) scale(0.98); }
@@ -152,13 +253,35 @@ export const ANIM_CSS = `
     overflow: hidden;
     pointer-events: none;
   }
-  .fincla-tx-settled { animation: txRowSettled 900ms ease-out; }
+  /* A varredura é um GRADIENTE que atravessa, não um fundo que pisca: piscar
+     diz "algo aconteceu", atravessar diz "de onde para onde". */
+  .fincla-tx-settled {
+    background-image: linear-gradient(
+      100deg,
+      rgba(5,150,105,0) 0%,
+      rgba(5,150,105,.28) 45%,
+      rgba(5,150,105,.28) 55%,
+      rgba(5,150,105,0) 100%
+    );
+    background-size: 70% 100%;
+    background-repeat: no-repeat;
+    animation:
+      txRowSettled 500ms cubic-bezier(.4,0,.2,1) 1,
+      txRowSettledRest 1200ms ease-out 1;
+  }
+  .fincla-tx-born {
+    overflow: hidden;
+    animation: txRowBorn 550ms cubic-bezier(.32,.72,0,1) both;
+  }
   .fincla-toast { animation: toastIn 180ms cubic-bezier(0.2, 0, 0, 1); }
   /* Quem pediu menos movimento recebe o resultado, não a viagem: a linha some
      na hora em vez de deslizar, e o pulso não pisca. */
   @media (prefers-reduced-motion: reduce) {
     .fincla-tx-leave { animation-duration: 1ms; }
-    .fincla-tx-settled { animation: none; }
+    /* "prefers-reduced-motion" corta o deslize e a varredura: sobra o
+       crossfade e o colapso instantâneo. */
+    .fincla-tx-settled { animation: none; background-image: none; }
+    .fincla-tx-born { animation-duration: 120ms; }
     .fincla-toast { animation: none; }
   }
   .ai-spin { animation: spin 0.7s linear infinite; }

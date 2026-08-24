@@ -17,7 +17,10 @@ const MAX_DEPTH = 12;
  *
  * @param {object} snapshot - o snapshot atual (de `useTransactionsFilterState`)
  * @param {(s: object) => void} applySnapshot
- * @param {(s: object) => string} describe - rótulo do que voltar significa
+ * @param {(destino: object, atual: object, verbo: string) => string} describe
+ *   Rótulo do que o botão FAZ. Recebe destino E atual porque o rótulo útil sai
+ *   do diff entre os dois: só o destino produz "voltar para 2 filtros", que não
+ *   diz qual dos filtros vai embora — a pergunta que a pessoa tem na mão.
  */
 export function useFilterHistory(snapshot, applySnapshot, describe) {
   const [stack, setStack] = useState([]);
@@ -82,7 +85,13 @@ export function useFilterHistory(snapshot, applySnapshot, describe) {
     redo,
     reset,
     /** O que o botão vai devolver — vira o `title`/`aria-label` do controle. */
-    undoLabel: stack.length > 0 && typeof describe === "function" ? describe(stack[0]) : "",
-    redoLabel: redoStack.length > 0 && typeof describe === "function" ? describe(redoStack[0]) : "",
+    undoLabel:
+      stack.length > 0 && typeof describe === "function"
+        ? describe(stack[0], snapshot, "Desfazer")
+        : "",
+    redoLabel:
+      redoStack.length > 0 && typeof describe === "function"
+        ? describe(redoStack[0], snapshot, "Refazer")
+        : "",
   };
 }
