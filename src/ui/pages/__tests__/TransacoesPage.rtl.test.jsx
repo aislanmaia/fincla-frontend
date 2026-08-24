@@ -238,9 +238,32 @@ function superficieDeFiltros() {
  * precisa ser aberto antes de eles existirem no documento.
  */
 async function abrirMenuDeViews() {
-  const chip = screen.queryAllByRole("button", { name: /Visualiza(ções|ção)/i })[0];
+  // Pelo `aria-haspopup`, não pelo nome: "Visualização" aparece também no
+  // rótulo do botão de EXCLUIR cada view, e pegar o primeiro por nome caía
+  // nele em vez de no chip.
+  const chip = screen
+    .queryAllByRole("button")
+    .find((b) => b.getAttribute("aria-haspopup") === "menu");
   if (chip && chip.getAttribute("aria-expanded") !== "true") await userEvent.click(chip);
   return chip;
+}
+
+/**
+ * Aplica um filtro de tipo e salva o recorte como uma view nova.
+ *
+ * São dois botões DIFERENTES no caminho: "＋ Salvar atual", que abre o
+ * formulário de dentro do menu do chip, e "Salvar como nova visualização",
+ * que confirma. Trocar um pelo outro apaga metade do fluxo.
+ */
+async function salvarViewDoTipo(tipo, nome) {
+  await abrirFaceta("Tipo");
+  await userEvent.click(screen.getByRole("button", { name: tipo }));
+  await abrirMenuDeViews();
+  await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
+  await userEvent.type(screen.getByLabelText(/Nome da visualização/i), nome);
+  await userEvent.click(screen.getByRole("button", { name: /Salvar como nova visualização/i }));
+  await abrirMenuDeViews();
+  return screen.getByRole("menuitemradio", { name: new RegExp(`^${nome}\\b`) });
 }
 
 async function limparTudo() {
@@ -325,9 +348,12 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1366 });
     Object.defineProperty(window, "innerHeight", { configurable: true, writable: true, value: 768 });
     renderPage();
-    await openFilters();
+    // SEM abrir: o que a regra de altura protege é o estado de REPOUSO. A
+    // 768 px de altura a barra completa custaria 230 px e sobrariam duas
+    // transações, então ela nasce recolhida atrás do botão.
     expect(await screen.findByRole("button", { name: /(Abrir|Ocultar) filtros/i })).toBeInTheDocument();
     expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).toBeNull();
+    expect(screen.queryByRole("region", { name: /^Filtros$/i })).toBeNull();
   });
 
   it("1366x900 mantém a barra completa (só a altura mudou)", async () => {
@@ -353,15 +379,21 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     expect(superficieDeFiltros()).toBeInTheDocument();
   });
 
-  it("exibe visualizações salvas ao aplicar filtro (sem views persistidas)", async () => {
+  it("o chip de visualizações é permanente; a oferta de salvar é que depende de filtro", async () => {
     renderPage();
     await openFilters();
-    expect(screen.getByRole("button", { name: /Visualizações/i })).toBeInTheDocument();
+
+    // O CHIP existe desde sempre — ele é permanente porque uma view salva é um
+    // atalho, e esconder o acesso a ela até haver filtro esconde exatamente de
+    // quem já tem views. Sem filtro, porém, não há recorte para guardar.
+    await abrirMenuDeViews();
+    expect(screen.queryByRole("button", { name: /^\+ Salvar atual$/ })).not.toBeInTheDocument();
+
+    // Com filtro aplicado a oferta aparece.
     await abrirFaceta("Tipo");
     await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
-    expect(screen.getByRole("button", { name: /Visualizações salvas/i })).toBeInTheDocument();
-    await limparTudo();
-    expect(screen.queryByRole("button", { name: /Visualizações salvas/i })).not.toBeInTheDocument();
+    await abrirMenuDeViews();
+    expect(screen.getByRole("button", { name: /^\+ Salvar atual$/ })).toBeInTheDocument();
   });
 
   it("atalho na FacetBar abre o formulário para salvar como nova visualização", async () => {
@@ -369,9 +401,8 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     await openFilters();
     await abrirFaceta("Tipo");
     await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
-    await userEvent.click(
-      screen.getByRole("button", { name: /^\+ Salvar atual$/ }),
-    );
+    await abrirMenuDeViews();
+    await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
     expect(screen.getByText("Nova visualização")).toBeInTheDocument();
   });
 
@@ -396,21 +427,33 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     );
     renderPage();
     await openFilters();
-    expect(screen.getByRole("button", { name: /Visualizações salvas/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Minha view" })).toBeInTheDocument();
+    // O chip anuncia a view ATIVA; a lista de views mora no menu dele, e é lá
+    // que "Minha view" existe. Antes elas eram cards soltos na faixa.
+    expect(screen.getByRole("button", { name: /Visualiza(ções|ção)/i })).toBeInTheDocument();
+    await abrirMenuDeViews();
+    expect(screen.getByRole("menuitemradio", { name: /^Minha view\b/ })).toBeInTheDocument();
   });
 
-  it("renderiza os 7 facet cards com valores derivados do estado inicial", async () => {
+  it("todas as facetas ficam alcançáveis, e nenhum valor padrão polui a tela", async () => {
     renderPage();
     await openFilters();
-    // Período inicial: Este mês (default)
-    expect(esperaFacetaAplicada("Período", "Este mês")).toBeInTheDocument();
-    expect(esperaFacetaAplicada("Tipo", "Todos")).toBeInTheDocument();
-    expect(esperaFacetaAplicada("Categoria", "Todas")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Tags:/i })).toBeInTheDocument();
-    expect(esperaFacetaAplicada("Cartão", "Todos")).toBeInTheDocument();
-    expect(esperaFacetaAplicada("Valor", "Qualquer")).toBeInTheDocument();
-    expect(esperaFacetaAplicada("Recorrência", "Todas")).toBeInTheDocument();
+
+    // Todas alcançáveis: o trilho lista as nove.
+    for (const nome of [
+      "Período", "Tipo", "Categoria", "Tags",
+      "Pagamento", "Cartão", "Valor", "Recorrência", "Situação",
+    ]) {
+      expect(
+        screen.queryAllByRole("button").some((b) => new RegExp(`${nome}\\s*$`, "i").test(b.textContent || "")),
+      ).toBe(true);
+    }
+
+    // E nenhum valor PADRÃO aparece. Os cards antigos ficavam permanentemente
+    // abertos anunciando "Todos", "Todas", "—" — o maior bloco da tela e o de
+    // menor informação. Só filtro ATIVO vira texto agora, como chip.
+    expect(screen.queryByRole("group", { name: /Filtros aplicados/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Todas$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Qualquer$/)).not.toBeInTheDocument();
   });
 
   it("expande o painel inline da facet Tipo e a seleção atualiza o card e fecha o painel", async () => {
@@ -468,7 +511,10 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
   it("mostra crédito inline com cartão quando paymentMethodKey indica crédito", async () => {
     renderPage();
     await openFilters();
-    expect(screen.getByText("Crédito")).toBeInTheDocument();
+    // "Crédito" e os 4 dígitos são UM texto só na linha ("Crédito ●● 1177"):
+    // colados de propósito, porque os dígitos só fazem sentido junto ao
+    // método que os explica.
+    expect(screen.getByText(/Crédito/)).toBeInTheDocument();
     expect(screen.getByText(/1177/)).toBeInTheDocument();
   });
 
@@ -487,13 +533,10 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
   it("criar saved view persiste em localStorage por org", async () => {
     renderPage();
     await openFilters();
-    await abrirFaceta("Tipo");
-    await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
-    await abrirMenuDeViews();
-    await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
-    await userEvent.type(screen.getByLabelText(/Nome da visualização/i), "Minha view");
-    await userEvent.click(screen.getByRole("button", { name: /Salvar como nova visualização/i }));
-    expect(screen.getByRole("button", { name: "Minha view" })).toBeInTheDocument();
+    // Salvar FECHA o menu — é o comportamento certo, a tarefa acabou. Para
+    // afirmar que a view existe é preciso abri-lo de novo.
+    await salvarViewDoTipo("Despesa", "Minha view");
+    expect(screen.getByRole("menuitemradio", { name: /^Minha view\b/ })).toBeInTheDocument();
     const raw = localStorage.getItem("fincla.transactions.savedViews.v1");
     expect(raw).toBeTruthy();
     const parsed = JSON.parse(raw);
@@ -501,56 +544,59 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     expect(parsed.orgs["org-test"][0].label).toBe("Minha view");
   });
 
-  it("clicar na view ativa desaplica filtros e desseleciona o card", async () => {
+  it("clicar na view ativa desaplica filtros e desseleciona o item", async () => {
     renderPage();
     await openFilters();
-    expect(esperaFacetaAplicada("Tipo", "Todos")).toBeInTheDocument();
-    await abrirFaceta("Tipo");
-    await userEvent.click(screen.getByRole("button", { name: "Receita" }));
-    await abrirMenuDeViews();
-    await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
-    await userEvent.type(screen.getByLabelText(/Nome da visualização/i), "receitas");
-    await abrirMenuDeViews();
-    await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
-    const card = screen.getByRole("button", { name: "receitas" });
-    expect(card).toHaveAttribute("aria-pressed", "true");
+    // Sem filtro nenhum não há chip: "Todos" é o padrão e padrão não vira
+    // texto na tela.
+    expect(screen.queryByRole("group", { name: /Filtros aplicados/i })).not.toBeInTheDocument();
+
+    const item = await salvarViewDoTipo("Receita", "receitas");
+    expect(item).toHaveAttribute("aria-checked", "true");
     expect(esperaFacetaAplicada("Tipo", "Receita")).toBeInTheDocument();
-    await userEvent.click(card);
-    expect(card).toHaveAttribute("aria-pressed", "false");
-    expect(esperaFacetaAplicada("Tipo", "Todos")).toBeInTheDocument();
+
+    await userEvent.click(item);
+    // Clicar na view ativa desaplica: o filtro sai e o chip some com ele.
+    await abrirMenuDeViews();
+    expect(
+      screen.getByRole("menuitemradio", { name: /^receitas\b/ }),
+    ).toHaveAttribute("aria-checked", "false");
+    expect(screen.queryByRole("group", { name: /Filtros aplicados/i })).not.toBeInTheDocument();
   });
 
   it("view dirty: card mostra Filtros alterados; Limpar tudo desseleciona", async () => {
     renderPage();
     await openFilters();
-    await abrirFaceta("Tipo");
-    await userEvent.click(screen.getByRole("button", { name: "Receita" }));
-    await abrirMenuDeViews();
-    await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
-    await userEvent.type(screen.getByLabelText(/Nome da visualização/i), "receitas");
-    await abrirMenuDeViews();
-    await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
-    const card = screen.getByRole("button", { name: "receitas" });
-    expect(card).toHaveAttribute("aria-pressed", "true");
+    const item = await salvarViewDoTipo("Receita", "receitas");
+    expect(item).toHaveAttribute("aria-checked", "true");
+    await userEvent.keyboard("{Escape}");
+
     await abrirFaceta("Categoria");
     await userEvent.click(screen.getByRole("button", { name: "Alimentação" }));
-    expect(screen.getByText(/Filtros alterados/i)).toBeInTheDocument();
+    expect(screen.getByText(/alterada|Filtros alterados/i)).toBeInTheDocument();
+
     await limparTudo();
-    expect(card).toHaveAttribute("aria-pressed", "false");
-    expect(screen.queryByText(/Filtros alterados/i)).not.toBeInTheDocument();
+    await abrirMenuDeViews();
+    expect(
+      screen.getByRole("menuitemradio", { name: /^receitas\b/ }),
+    ).toHaveAttribute("aria-checked", "false");
   });
 
   it("desktop compacto: facets ocultos por padrão; botão Filtros expande inline", async () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1200 });
     window.dispatchEvent(new Event("resize"));
     renderPage();
-    await openFilters();
+    // Em repouso, nada de facets — este teste É sobre o padrão recolhido,
+    // então ele não pode abrir antes de afirmar.
     expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /(Abrir|Ocultar) filtros/i })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /(Abrir|Ocultar) filtros/i }));
+
+    await openFilters();
     expect(superficieDeFiltros()).toBeInTheDocument();
+
     await userEvent.click(screen.getByRole("button", { name: /Ocultar filtros/i }));
     expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /^Filtros$/i })).not.toBeInTheDocument();
   });
 
   // Regressão do bug relatado: selecionar 2+ formas de pagamento fazia a lista
@@ -566,9 +612,9 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     expect(screen.getAllByText("Salário").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Notebook").length).toBeGreaterThan(0);
 
-    await userEvent.click(
-      screen.getByRole("button", { name: /Forma de pagamento: Todas/i }),
-    );
+    // A faceta se chamava "Forma de pagamento" no card; no trilho é
+    // "Pagamento" — o painel ao lado já diz de que forma se trata.
+    await abrirFaceta("Pagamento");
     const panel = painelDaFaceta("forma");
     await userEvent.click(within(panel).getByRole("button", { name: "Pix" }));
     await userEvent.click(within(panel).getByRole("button", { name: "Crédito" }));
@@ -958,7 +1004,8 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
 
     renderPage();
     await openFilters();
-    await userEvent.click(screen.getByRole("button", { name: "Trabalho (Vendas)" }));
+    await abrirMenuDeViews();
+    await userEvent.click(screen.getByRole("menuitemradio", { name: /^Trabalho \(Vendas\)/ }));
 
     // Enquanto as categorias carregam, o filtro fica em "loading" — nunca
     // "não encontrada" (falso) nem resolvido contra um rótulo provisório.
@@ -1146,10 +1193,11 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     renderPage();
     await openFilters();
 
-    // 3 valores da faixa de estatísticas + a contagem do cabeçalho da lista +
-    // o chip "Tags: —" da facet (sem seleção, sempre "—" independente de
-    // loading — não é o que este teste cobre).
-    expect(screen.getAllByText("—").length).toBe(5);
+    // 3 valores da faixa de estatísticas + a contagem do cabeçalho da lista.
+    // Eram 5 enquanto existia o chip "Tags: —": o card de faceta carregava
+    // rótulo e valor juntos. No painel ancorado o trilho mostra só o nome, e o
+    // "—" da facet sem seleção vive dentro do painel dela.
+    expect(screen.getAllByText("—").length).toBe(4);
     // O motivo agora aparece UMA vez, ao lado do número que ele explica, em vez
     // de repetido na terceira linha de cada um dos três cards.
     expect(screen.getAllByText("Carregando…").length).toBe(1);
@@ -1167,7 +1215,7 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     renderPage();
     await openFilters();
 
-    expect(screen.getAllByText("—").length).toBe(5);
+    expect(screen.getAllByText("—").length).toBe(4);
     expect(screen.getAllByText("Não foi possível carregar").length).toBe(1);
     expect(screen.queryByText(/R\$/)).not.toBeInTheDocument();
   });
@@ -1182,9 +1230,10 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     renderPage();
     await openFilters();
 
-    // Só sobra o chip "Tags: —" (facet sem seleção) — nenhum "—" extra
-    // vindo da faixa de KPI.
-    expect(screen.getAllByText("—").length).toBe(1);
+    // Com dados carregados NENHUM "—" sobra: os três KPIs e a contagem voltam
+    // a mostrar número. O único que restava era o do chip "Tags: —", que saiu
+    // junto com os cards de faceta.
+    expect(screen.queryAllByText("—").length).toBe(0);
     expect(screen.getAllByText(/R\$/).length).toBeGreaterThan(0);
   });
 
@@ -1293,7 +1342,8 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     renderPage();
     await openFilters();
 
-    await userEvent.click(screen.getByRole("button", { name: "Tag sumida" }));
+    await abrirMenuDeViews();
+    await userEvent.click(screen.getByRole("menuitemradio", { name: /^Tag sumida/ }));
     expect(screen.getAllByText(/não foi encontrada/i).length).toBeGreaterThan(0);
 
     await abrirFaceta("Tipo");
@@ -1478,8 +1528,8 @@ describe("<TransacoesPage> — lançamentos cobertos por âncora (S4)", { timeou
     await openFilters();
 
     // "Já no acerto" só na linha de 10/08; a de 20/08 é posterior e conta normalmente.
-    expect(await screen.findByText("⚓ Já no acerto")).toBeInTheDocument();
-    expect(screen.getAllByText("⚓ Já no acerto").length).toBe(1);
+    expect(await screen.findByText("Já no acerto")).toBeInTheDocument();
+    expect(screen.getAllByText("Já no acerto").length).toBe(1);
   });
 
   it("não marca nada quando a conta não tem acerto", async () => {
@@ -1503,8 +1553,8 @@ describe("<TransacoesPage> — lançamentos cobertos por âncora (S4)", { timeou
     await openFilters();
 
     // 10/08 é anterior à abertura em 13/08 -> marcado; 20/08 é posterior -> não.
-    expect(await screen.findByText("⚓ Antes da abertura")).toBeInTheDocument();
-    expect(screen.getAllByText("⚓ Antes da abertura").length).toBe(1);
+    expect(await screen.findByText("Antes da abertura")).toBeInTheDocument();
+    expect(screen.getAllByText("Antes da abertura").length).toBe(1);
   });
 
   it("saldo de abertura ZERO não marca nada — não é afirmação nenhuma", async () => {
@@ -1622,10 +1672,15 @@ describe("chip de tag na linha — truncagem (achado 4, rodada 4)", () => {
       total: 1, hasMore: false, removeTransaction: vi.fn(),
       setTransactionSettled: vi.fn(),
     });
+    // A pílula de tag só existe a partir de 2100 px: abaixo disso a linha já
+    // disputa largura entre descrição, categoria e valor, e a tag seria a
+    // primeira coisa a espremer as outras. E o texto perdeu o `#` — o fundo
+    // e o formato já dizem que é tag, e o `#` roubava dois dos 70 px úteis.
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 2400 });
     renderPage();
     await openFilters();
 
-    const chip = await screen.findByText("#trabalho");
+    const chip = await screen.findByText("trabalho");
     expect(chip).toHaveAttribute("title", "trabalho");
     expect(chip.style.textOverflow).toBe("ellipsis");
     expect(chip.style.whiteSpace).toBe("nowrap");

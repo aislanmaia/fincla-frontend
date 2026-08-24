@@ -3377,7 +3377,11 @@ function TransacoesPageBody({
               onApply={() => setWideDesktopFiltersOpen(false)}
               onClose={() => setWideDesktopFiltersOpen(false)}
               resultCount={filteredCount}
-              resultsLoading={listLoading}
+              /* A MESMA regra da barra, não `listLoading` cru: com o filtro
+                 de tag BLOQUEADO nenhuma busca acontece, `hasLoaded` nunca
+                 vira true e o CTA ficaria "Atualizando…" para sempre — sem
+                 nunca dizer quantas transações o filtro devolve. */
+              resultsLoading={filterBarApplyProps.resultsLoading}
               width={dockPanelWidth}
             />
           </div>
