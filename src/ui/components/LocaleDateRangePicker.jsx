@@ -294,6 +294,9 @@ export function LocaleDateRangePicker({
     setGrabbedEdge(null);
   }, []);
 
+  /* O intervalo desenhado pelo arrasto, ainda não gravado no filtro. */
+  const [arrasto, setArrasto] = useState(null);
+
   const [coarsePointer, setCoarsePointer] = useState(false);
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return undefined;
@@ -374,8 +377,19 @@ export function LocaleDateRangePicker({
          justamente o que a pessoa estava tentando ajustar. */
       const pega = grabRef.current;
       if (pega && pega.ymdPego === ymd) {
-        // Toque no dia que acabou de ser pego: ele não move nada.
+        /* O PRIMEIRO toque no dia pego não move nada — é o click do próprio
+           gesto que pegou. Do segundo em diante, SOLTA: sem isto um toque
+           perdido numa ponta (fácil numa célula de 44 px dentro de um sheet que
+           rola) prendia o seletor em modo mover-ponta para sempre, e todo toque
+           seguinte movia essa ponta em vez de começar um intervalo novo. */
+        if (pega.confirmado) soltarPonta();
+        else grabRef.current = { ...pega, confirmado: true };
         return;
+      }
+      if (pega && (!displayFrom || !displayTo)) {
+        // Pega órfã: sem as duas pontas não há o que mover. Soltar evita que ela
+        // fique presa e sequestre os toques seguintes.
+        soltarPonta();
       }
       markCustom();
       if (pega && displayFrom && displayTo) {
@@ -473,25 +487,38 @@ export function LocaleDateRangePicker({
       const alvo = parseLocalYmd(ymd);
       const outro = parseLocalYmd(drag.other);
       if (!alvo || !outro) return;
-      markCustom();
+      /* O intervalo do arrasto fica LOCAL até soltar. `setCustomFrom/To`
+         alimentam o filtro, e a busca da lista não tem debounce: arrastar uma
+         ponta por um mês inteiro eram ~30 idas ao backend (lista + summary) e a
+         lista re-renderizando sob o cursor, para um gesto com um só estado
+         final. */
       if (alvo.getTime() <= outro.getTime()) {
-        setCustomFrom(ymd);
-        setCustomTo(drag.other);
+        setArrasto({ from: ymd, to: drag.other });
         pegarPonta("from");
       } else {
-        setCustomFrom(drag.other);
-        setCustomTo(ymd);
+        setArrasto({ from: drag.other, to: ymd });
         pegarPonta("to");
       }
     },
-    [markCustom, setCustomFrom, setCustomTo],
+    [pegarPonta],
   );
 
   useEffect(() => {
     if (touch) return undefined;
     const solta = () => {
-      if (dragRef.current) dragRef.current = null;
+      const arrastando = Boolean(dragRef.current);
+      dragRef.current = null;
       soltarPonta();
+      if (!arrastando) return;
+      // Grava UMA vez, no fim do gesto.
+      setArrasto((faixa) => {
+        if (faixa) {
+          markCustom();
+          setCustomFrom(faixa.from);
+          setCustomTo(faixa.to);
+        }
+        return null;
+      });
     };
     window.addEventListener("pointerup", solta);
     window.addEventListener("pointercancel", solta);
@@ -499,7 +526,7 @@ export function LocaleDateRangePicker({
       window.removeEventListener("pointerup", solta);
       window.removeEventListener("pointercancel", solta);
     };
-  }, [touch, soltarPonta]);
+  }, [touch, soltarPonta, markCustom, setCustomFrom, setCustomTo]);
 
   const openCalendar = (edge) => {
     setActiveEdge(edge);
@@ -719,11 +746,11 @@ export function LocaleDateRangePicker({
           cursorYear={cursorYear}
           cursorMonth={cursorMonth}
           monthCount={compact ? 1 : 2}
-          fromYmd={displayFrom}
-          toYmd={displayTo}
+          fromYmd={arrasto ? arrasto.from : displayFrom}
+          toYmd={arrasto ? arrasto.to : displayTo}
           /* No toque não há hover, então não há prévia: passar `hoverYmd` ali
              pintaria um caminho que ninguém está apontando. */
-          hoverYmd={touch ? null : hoverYmd}
+          hoverYmd={touch || arrasto ? null : hoverYmd}
           minYmd={TRANSACTIONS_DATE_MIN}
           maxYmd={TRANSACTIONS_DATE_MAX}
           locale={locale}

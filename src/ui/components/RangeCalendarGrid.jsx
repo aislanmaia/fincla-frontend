@@ -12,9 +12,15 @@ import { todayLocalYmd } from "../data/transactionsAdapter.js";
 import { parseLocalYmd, ymdFromDate } from "../features/transactions/periodDateBounds.js";
 
 /* Os tons do §14: o intervalo fechado é mais forte que a prévia porque um é
-   fato e o outro é proposta. */
-const RANGE_MID = "#EFF6FF";
+   fato e o outro é proposta. `T.blueLight` é a mesma cor do desenho; a prévia é
+   o único valor sem token, e fica declarada aqui com o porquê em vez de virar
+   um token novo para um uso só. */
+const RANGE_MID = T.blueLight;
 const RANGE_PREVIEW = "#F1F5FF";
+/* Verde da ponta PEGA. Não é o `T.green` (#059669) de propósito: aquele é o
+   verde de receita e apareceria como "isto é dinheiro entrando" num anel que só
+   quer dizer "esta ponta está na sua mão". */
+const GRAB_RING = "#0F8A5F";
 
 function startOfDay(dt) {
   return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
@@ -128,13 +134,31 @@ function MonthGrid({
           const hovPreview = inRange && !toYmd;
           const grabbed =
             (grabbedEdge === "from" && isFrom) || (grabbedEdge === "to" && isTo);
+          const edgeCommitted =
+            (Boolean(fromYmd) && ymd === fromYmd) || (Boolean(toYmd) && ymd === toYmd);
 
           return (
             <div
               key={ymd}
               role="button"
               tabIndex={disabled ? -1 : 0}
-              aria-label={ymd}
+              /* O `aria-label` substitui o conteúdo no cálculo do nome, então o
+                 rótulo "de"/"até"/"só" e o anel verde seriam puramente visuais.
+                 Aqui o nome carrega o papel do dia, e `aria-pressed` diz se ele
+                 está dentro do intervalo — que é a informação que a faixa azul
+                 dá a quem enxerga. */
+              aria-label={
+                grabbed
+                  ? `${ymd} — ponta selecionada, toque outro dia para movê-la`
+                  : isFrom && isTo && edgeCommitted
+                    ? `${ymd} — dia único`
+                    : edgeCommitted && isFrom
+                      ? `${ymd} — início`
+                      : edgeCommitted && isTo
+                        ? `${ymd} — fim`
+                        : ymd
+              }
+              aria-pressed={inRange || edgeCommitted}
               aria-disabled={disabled}
               onClick={() => !disabled && onDayClick(ymd)}
               onDoubleClick={() => {
@@ -178,9 +202,9 @@ function MonthGrid({
                   lineHeight: 1.05,
                   background: edge ? T.ink : "transparent",
                   boxShadow: grabbed
-                    ? "inset 0 0 0 1.5px #0F8A5F"
+                    ? `inset 0 0 0 1.5px ${GRAB_RING}`
                     : hov && !edge
-                      ? "inset 0 0 0 1.5px #2563EB"
+                      ? `inset 0 0 0 1.5px ${T.blue}`
                       : "none",
                   border: isToday && !edge ? `1.5px solid ${T.ink}` : "none",
                   boxSizing: "border-box",
@@ -190,7 +214,7 @@ function MonthGrid({
                 <span
                   style={{
                     ...G,
-                    fontFamily: "'Geist Mono',monospace",
+                    fontFamily: "'Geist Mono', ui-monospace, monospace",
                     fontSize: dayFont,
                     fontWeight: edge || isToday ? 700 : 500,
                     color: edge ? "#fff" : isToday ? T.ink : T.inkMid,
@@ -201,7 +225,11 @@ function MonthGrid({
                 {/* O rótulo na célula é o marcador PERMANENTE. No toque não há
                     hover nem balão, então ele é o único que diz qual ponta é
                     qual — e no mouse ele evita ter que inferir pela ordem. */}
-                {edge && (
+                {/* Só em ponta de verdade. `isTo` cai no `hoverYmd` quando o
+                    intervalo está aberto, então cada dia por onde o cursor
+                    passava ganhava um "até" com cara de definitivo — e o
+                    próprio dia inicial virava "só" sem nada ter sido escolhido. */}
+                {edgeCommitted && (
                   <em
                     style={{
                       ...G,

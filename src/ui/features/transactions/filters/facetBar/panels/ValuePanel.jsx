@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { T } from "../../../../../tokens";
 import { G } from "../../../../../typography";
 import { PanelHeader } from "./PanelHeader.jsx";
@@ -38,24 +38,57 @@ export function ValuePanel({
     setValueMax(b.to == null ? "" : formatBrl(limiteRedondo(b.to)));
   };
 
-  const min = parseBrl(valueMin);
-  const max = parseBrl(valueMax);
-  const temFaixa = min != null || max != null;
   const arrastoRef = useRef(null);
+  /* A faixa que o arrasto está desenhando. Ela NÃO vai para os campos enquanto
+     o gesto corre: `setValueMin/Max` alimentam o filtro, e o filtro dispara
+     lista + summary sem debounce — arrastar por seis barras eram doze
+     requisições para um gesto com um só estado final. Aqui a faixa fica local e
+     só é gravada ao soltar. */
+  const [faixaArrasto, setFaixaArrasto] = useState(null);
+  const arrastouRef = useRef(false);
+
+  // Durante o arrasto, o histograma mostra a faixa do gesto — não a gravada.
+  const min = parseBrl(faixaArrasto ? faixaArrasto.min : valueMin);
+  const max = parseBrl(faixaArrasto ? faixaArrasto.max : valueMax);
+  const temFaixa = min != null || max != null;
 
   /* A faixa que o arrasto cobre: da borda de baixo da primeira barra à borda de
      cima da última, com os limites arredondados pela mesma régua dos atalhos —
      um `to` de 999,99 num campo de MÁXIMO não quer dizer nada para quem lê. */
-  const aplicaFaixaDeBarras = (i, j) => {
-    if (!Array.isArray(buckets)) return;
-    const lo = Math.min(i, j);
-    const hi = Math.max(i, j);
-    const primeiro = buckets[lo];
-    const ultimo = buckets[hi];
-    if (!primeiro || !ultimo) return;
-    setValueMin(primeiro.from == null ? "" : formatBrl(limiteRedondo(primeiro.from)));
-    setValueMax(ultimo.to == null ? "" : formatBrl(limiteRedondo(ultimo.to)));
+  const faixaDeBarras = (i, j) => {
+    if (!Array.isArray(buckets)) return null;
+    const primeiro = buckets[Math.min(i, j)];
+    const ultimo = buckets[Math.max(i, j)];
+    if (!primeiro || !ultimo) return null;
+    return {
+      min: primeiro.from == null ? "" : formatBrl(limiteRedondo(primeiro.from)),
+      max: ultimo.to == null ? "" : formatBrl(limiteRedondo(ultimo.to)),
+    };
   };
+
+  /* Soltar o ponteiro FORA do histograma nunca chegava ao container, e o
+     arrasto ficava armado: depois disso, só passar o mouse sobre as barras —
+     sem botão nenhum apertado — reescrevia os campos a cada barra cruzada.
+     O listener é global por isso. */
+  useEffect(() => {
+    const solta = () => {
+      if (!arrastoRef.current) return;
+      arrastoRef.current = null;
+      setFaixaArrasto((faixa) => {
+        if (faixa) {
+          setValueMin(faixa.min);
+          setValueMax(faixa.max);
+        }
+        return null;
+      });
+    };
+    window.addEventListener("pointerup", solta);
+    window.addEventListener("pointercancel", solta);
+    return () => {
+      window.removeEventListener("pointerup", solta);
+      window.removeEventListener("pointercancel", solta);
+    };
+  }, [setValueMin, setValueMax]);
 
   const edges = Array.isArray(buckets) ? bucketEdges(buckets, min, max) : { first: -1, last: -1 };
   const temBarras = Array.isArray(buckets) && buckets.some((b) => b.count > 0);
@@ -125,6 +158,7 @@ export function ValuePanel({
             const alvo = e.target.closest("button[data-bucket]");
             if (!alvo) return;
             arrastoRef.current = { de: Number(alvo.dataset.bucket), ate: null };
+            arrastouRef.current = false;
           }}
           onPointerMove={(e) => {
             const arr = arrastoRef.current;
@@ -135,10 +169,9 @@ export function ValuePanel({
             const i = Number(btn.dataset.bucket);
             if (i === arr.de || i === arr.ate) return;
             arr.ate = i;
-            aplicaFaixaDeBarras(arr.de, i);
+            arrastouRef.current = true;
+            setFaixaArrasto(faixaDeBarras(arr.de, i));
           }}
-          onPointerUp={() => { arrastoRef.current = null; }}
-          onPointerCancel={() => { arrastoRef.current = null; }}
           style={{
             display: "grid",
             gridTemplateColumns: `repeat(${buckets.length}, 1fr)`,
@@ -158,9 +191,15 @@ export function ValuePanel({
                 key={label}
                 data-bucket={i}
                 onClick={() => {
-                  // Se o gesto virou arrasto, o clique final não pode reduzir a
-                  // faixa inteira à última barra tocada.
-                  if (arrastoRef.current && arrastoRef.current.ate != null) return;
+                  /* O `click` chega DEPOIS do `pointerup`, que já limpou
+                     `arrastoRef` — por isso a guarda é uma flag própria. Sem
+                     ela, arrastar da barra 2 até a 5 e voltar soltando na 2
+                     disparava `applyBucket(2)` e a faixa que a pessoa acabou de
+                     arrastar colapsava numa barra só. */
+                  if (arrastouRef.current) {
+                    arrastouRef.current = false;
+                    return;
+                  }
                   applyBucket(b);
                 }}
                 aria-pressed={dentro}

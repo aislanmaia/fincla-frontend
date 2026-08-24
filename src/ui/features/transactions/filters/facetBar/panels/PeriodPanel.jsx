@@ -5,6 +5,7 @@ import { Icon } from "../../shared/Icon.jsx";
 import { PanelHeader } from "./PanelHeader.jsx";
 import { LocaleDateRangePicker } from "../../../../../components/LocaleDateRangePicker.jsx";
 import { formatCustomPeriodLabel } from "../../customPeriodLabel.js";
+import { resolvePeriodDisplayBounds } from "../../../periodDateBounds.js";
 
 /* "Personalizado" é o PRIMEIRO da fileira, e não o último.
    Ele é o único chip que precisa ser encontrado quando nenhum dos outros serve
@@ -46,10 +47,25 @@ export function PeriodPanel({
   locale = "pt-BR",
 }) {
   const applyPreset = (value) => {
+    if (value === "custom") {
+      /* Trocar para "Personalizado" com um preset ativo SEMEIA os campos com os
+         limites dele. Sem a semente, `resolvePeriodDisplayBounds` devolve
+         intervalo vazio para custom e a lista saltava de "Este mês" para toda a
+         história — alargando o filtro justamente no chip que existe para
+         estreitá-lo. */
+      if (!customFrom && !customTo) {
+        const bounds = resolvePeriodDisplayBounds(period, customFrom, customTo);
+        if (bounds.from) setCustomFrom(bounds.from);
+        if (bounds.to) setCustomTo(bounds.to);
+      }
+      setPeriod("custom");
+      /* E NÃO fecha o painel. `onApply` é o `dismissPanel` do popover: o único
+         chip cujo propósito é "agora deixe eu escolher as datas aqui embaixo"
+         sumia com o calendário antes de qualquer data ser escolhida. */
+      return;
+    }
     setPeriod(value);
-    /* Escolher "Personalizado" não limpa as datas: se já havia um intervalo, ele
-       continua valendo — a pessoa está voltando para ele, não recomeçando. */
-    if (value !== "custom") {
+    {
       setCustomFrom("");
       setCustomTo("");
     }
@@ -113,7 +129,14 @@ export function PeriodPanel({
                 gap: 5,
               }}
             >
-              {active && <Icon name="check" size={11} color="#fff" />}
+              {/* Espaço do check RESERVADO em todo chip. Só a largura fixa do
+                  rótulo não bastava: ativar um chip insere o ícone + o gap
+                  (~16 px) e desativa o anterior, então os pontos de quebra da
+                  fileira ainda podiam mudar entre o 1º e o 2º clique de um
+                  duplo clique — que é o defeito que a largura fixa foi corrigir. */}
+              <span style={{ width: 11, flex: "none", display: "inline-flex" }}>
+                {active && <Icon name="check" size={11} color="#fff" />}
+              </span>
               {o.v === "custom" ? (
                 /* Largura FIXA. O rótulo troca de "Personalizado" para o
                    intervalo ("A partir de 12 ago"), e um chip que muda de

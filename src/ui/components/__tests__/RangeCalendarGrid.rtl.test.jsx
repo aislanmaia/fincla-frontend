@@ -27,7 +27,7 @@ const base = {
   onNextMonth: () => {},
 };
 
-const dia = (ymd) => screen.getByRole("button", { name: ymd });
+const dia = (ymd) => screen.getByRole("button", { name: new RegExp(`^${ymd}`) });
 
 describe("<RangeCalendarGrid>", () => {
   it("as pontas carregam o rótulo que diz qual é qual", () => {
@@ -79,4 +79,28 @@ describe("<RangeCalendarGrid>", () => {
     render(<RangeCalendarGrid {...base} />);
     expect(dia("2026-08-15")).toHaveStyle({ background: "#EFF6FF", borderRadius: "0" });
   });
+
+  it("o rótulo é de ponta COMMITADA, não de prévia sob o cursor", () => {
+    // Com o intervalo aberto, `isTo` cai no dia sob o cursor: sem a guarda, cada
+    // dia por onde o mouse passava ganhava um "até" com cara de definitivo, e o
+    // próprio dia inicial virava "só" sem nada ter sido escolhido.
+    render(<RangeCalendarGrid {...base} toYmd="" hoverYmd="2026-08-18" />);
+    expect(dia("2026-08-18").textContent).toBe("18");
+    expect(dia("2026-08-10")).toHaveTextContent("de");
+    expect(dia("2026-08-10")).not.toHaveTextContent("só");
+  });
+
+  it("o papel do dia existe para leitor de tela, não só na cor", () => {
+    // `aria-label` substitui o conteúdo no cálculo do nome: sem isto o rótulo
+    // na célula e o anel verde seriam puramente visuais.
+    render(<RangeCalendarGrid {...base} grabbedEdge="to" />);
+    expect(screen.getByRole("button", { name: /2026-08-10 — início/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /2026-08-20 — ponta selecionada/ }),
+    ).toBeInTheDocument();
+    // Estar dentro do intervalo é o que a faixa azul diz a quem enxerga.
+    expect(dia("2026-08-15")).toHaveAttribute("aria-pressed", "true");
+    expect(dia("2026-08-25")).toHaveAttribute("aria-pressed", "false");
+  });
+
 });
