@@ -1750,11 +1750,12 @@ describe("chip de tag na linha — truncagem (achado 4, rodada 4)", () => {
       total: 1, hasMore: false, removeTransaction: vi.fn(),
       setTransactionSettled: vi.fn(),
     });
-    // A pílula de tag só existe a partir de 2100 px: abaixo disso a linha já
-    // disputa largura entre descrição, categoria e valor, e a tag seria a
-    // primeira coisa a espremer as outras. E o texto perdeu o `#` — o fundo
-    // e o formato já dizem que é tag, e o `#` roubava dois dos 70 px úteis.
-    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 2400 });
+    // A pílula de tag existe a partir de 1200 px: abaixo disso a linha já
+    // disputa largura entre descrição, categoria e valor, e o vão que financia
+    // a coluna já não existe. (Era 2100 px até a coluna sair do fim da linha e
+    // ir para o vão, colada na categoria.) E o texto perdeu o `#` — o fundo e o
+    // formato já dizem que é tag, e o `#` roubava dois dos 78 px úteis.
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1500 });
     renderPage();
     await openFilters();
 
