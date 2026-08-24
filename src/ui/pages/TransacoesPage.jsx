@@ -371,6 +371,16 @@ export const Tip = ({ label, children, pos = "top" }) => {
 const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
   rowHeight = 48, showDate = true, dateLabel = "", quickActions = null,
   onFilterByCategory = null, onFilterByTag = null, wide = false, xwide = false,
+  /* Largura da coluna de tags, em px, IGUAL para todas as linhas da página.
+     Zero = ninguém tem tag e a coluna não existe. */
+  tagsColPx = 0,
+  /* Largura da coluna de categoria, igual para toda a página. Zero = cai no
+     `auto` de antes (mocks, testes). */
+  catColPx = 0,
+  /* Quais tags já estão no filtro. O clique ALTERNA, então o rótulo precisa
+     dizer qual das duas coisas ele vai fazer — dizer "Adicionar" enquanto
+     remove é pior que não dizer nada. */
+  tagsAtivas = EMPTY_ARRAY,
   /* O rótulo no hover da ação cresce para DENTRO do vão. Acima de ~1200 px o vão
      comporta; abaixo, o botão volta a ser só o ícone em vez de invadir a
      descrição. Vem como prop própria e não de `wide` (≥1600): amarrá-lo a `wide`
@@ -408,10 +418,27 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
     // par descrição↔categoria, que é o que se lê junto. A conta saiu da grade
     // e voltou para a linha de metadados, ao lado do método: uma coluna
     // inteira repetindo "Conta principal" informava menos do que custava.
-    xwide ? "minmax(0,520px)" : wide ? "minmax(0,420px)" : "minmax(0,1fr)",
-    "auto",
+    /* A descrição ganha TETO sempre que existe coluna de tags, não só acima de
+       1600. Sem isso a premissa do §16 se quebra: descrição e vão são dois
+       tracks `1fr`, então uma coluna de tags de 190 px sai METADE do vão e
+       METADE da descrição — em 1500 a descrição perdia ~95 px, exatamente o
+       custo que o desenho dizia não existir. Com teto, o que sobra vai todo
+       para o vão, e é o vão que paga. */
+    xwide ? "minmax(0,520px)" : wide ? "minmax(0,420px)"
+      : tagsColPx > 0 ? "minmax(0,380px)" : "minmax(0,1fr)",
+    catColPx > 0 ? `${catColPx}px` : "auto",
+    /* TAGS colada na categoria — não no fim da linha. O vão já existe e está
+       vazio (336 px em 1500, 613 em 1920), então a coluna cabe ali sem tirar um
+       pixel da descrição; e ficando ao lado da categoria, as duas leem como uma
+       hierarquia só em vez de dois campos soltos.
+       A largura é a MESMA em todas as linhas (medida na página, não por linha):
+       cada `.fincla-row` é uma grade independente, então `max-content` daria uma
+       largura por linha e as tags desalinhariam de cima a baixo — o mesmo defeito
+       que já tinha desalinhado as categorias.
+       Zero quando ninguém na página tem tag: espaço permanente para mostrar o
+       vazio é o pior negócio da tela, e tag é opt-in. */
+    tagsColPx > 0 ? `${tagsColPx}px` : null,
     "1fr",
-    xwide ? "150px" : null,
     dense ? "88px" : "100px",
     // Situação: com largura, o anel ganha o rótulo. Só o anel obriga a decorar
     // o que ele significa — e há espaço de sobra aqui.
@@ -491,7 +518,16 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
         aria-expanded={isSelected}
         aria-label={`${tx.desc}, ${isReceita ? "receita" : "despesa"} de ${fmtBRL(tx.val)} em ${tx.date}`}
         style={{ display:"grid", gridTemplateColumns:"28px minmax(0,1fr) auto",
-          alignItems:"center", gap:10, height: rowHeight, padding:"0 12px",
+          alignItems:"center", gap:10,
+          /* `minHeight` e não `height`: com a terceira linha a altura cresce e um
+             `height` fixo cortaria as tags em vez de acomodá-las.
+             Na densidade PADRÃO (56 px) ela custa zero — descrição 16 + metadado
+             13,5 + tags 13,5 cabem nos 44 px de caixa. Na COMPACTA (48 px) a
+             caixa é 36 e não cabe: as linhas com tag cresceriam e as sem tag
+             não, deixando a lista visivelmente irregular. Por isso lá a terceira
+             linha não entra — quem escolheu compacto pediu ritmo, e as tags
+             continuam na sanfona. */
+          minHeight: rowHeight, padding: dense ? "4px 12px" : "6px 12px",
           background: isSelected ? `${catCol}08` : T.surface,
           borderLeft: isSelected ? `3px solid ${catCol}` : "3px solid transparent",
           cursor:"pointer", position:"relative",
@@ -518,6 +554,22 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
               {accountLabel ? ` · ${accountLabel}` : ""}
             </span>
           </div>
+          {/* TAGS em linha própria, por vírgula, SEM chip e SEM clique.
+              Sem chip porque numa lista mista — parte com tag, parte sem — um
+              chip no lugar do método faria a mesma posição carregar dois
+              significados: a pessoa lê "Pix" numa linha e "mercado" na
+              seguinte, no mesmo lugar, e não tem como saber o que está lendo.
+              Sem clique porque no toque um alvo pequeno colado ao alvo
+              principal da linha vira toque errado — e filtrar por tag já existe
+              no sheet, com OU/E e contagem.
+              A altura VARIA: reservar a linha em todas cobraria a mesma linha da
+              dobra também nos lançamentos sem tag nenhuma, e tag é opt-in. */}
+          {tags.length > 0 && !dense && (
+            <div style={{ ...G, fontSize:10, color:T.inkLight, lineHeight:1.35,
+              overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+              {tags.join(", ")}
+            </div>
+          )}
         </div>
         <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:12.5, fontWeight:700,
           whiteSpace:"nowrap", display:"flex", alignItems:"center", gap:5,
@@ -675,6 +727,47 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
         )}
       </div>
 
+      {tagsColPx > 0 && (
+        <div style={{ display:"flex", gap:5, minWidth:0, overflow:"hidden", alignItems:"center" }}>
+          {tags.slice(0, TAGS_VISIVEIS).map((tag) =>
+            onFilterByTag ? (
+              // `title` é o rótulo CRU: ele existe para deixar legível um nome
+              // truncado ("mensal (a1b2c3d4)"). A ação mora no `aria-label`.
+              <button key={tag} type="button" title={tag}
+                onClick={(e) => { e.stopPropagation(); onFilterByTag(tag); }}
+                /* SOMAR, não trocar — e o rótulo precisa dizer isso. Categoria é
+                   uma por transação, então clicar substitui; tag é várias, e
+                   substituir faria o segundo clique desfazer o primeiro, que é o
+                   oposto do que se quer ao clicar em duas tags seguidas. */
+                aria-pressed={tagsAtivas.includes(tag)}
+                aria-label={
+                  tagsAtivas.includes(tag)
+                    ? `Remover a tag ${tag} do filtro`
+                    : `Adicionar a tag ${tag} ao filtro`
+                }
+                style={{ ...G, fontSize:10, fontWeight:600, color:T.inkMid,
+                  background:T.grayLight, border:"none", borderRadius:6,
+                  padding:"2px 7px", cursor:"pointer", maxWidth:TAG_MAX_PX,
+                  overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                {tag}
+              </button>
+            ) : (
+              <span key={tag} title={tag} style={{ ...G, fontSize:10, fontWeight:600,
+                color:T.inkMid, background:T.grayLight, borderRadius:6, padding:"2px 7px",
+                maxWidth:TAG_MAX_PX, overflow:"hidden", textOverflow:"ellipsis",
+                whiteSpace:"nowrap" }}>{tag}</span>
+            ),
+          )}
+          {/* O "+N" não é enfeite: ele avisa que há mais, e a sanfona mostra
+              todas. Sem teto, uma transação com cinco tags decidiria a largura
+              da coluna para as outras cem. */}
+          {tags.length > TAGS_VISIVEIS && (
+            <span title={tags.join(", ")} style={{ ...G, fontSize:10, fontWeight:700,
+              color:T.inkGhost, whiteSpace:"nowrap" }}>+{tags.length - TAGS_VISIVEIS}</span>
+          )}
+        </div>
+      )}
+
       {/* O VÃO — e o dono das ações rápidas.
           Elas moravam ancoradas ao `right: 100%` da célula do valor, o que
           funcionava até 2100 px. Acima disso entra a coluna de tags ENTRE o vão
@@ -732,32 +825,6 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
       {/* Tags — só acima de 2100 px. Abaixo disso elas competiriam com a
           descrição por largura, e o artefato as reserva para quando a folga
           existe de verdade. */}
-      {xwide && (
-        <div style={{ display:"flex", gap:5, minWidth:0, overflow:"hidden" }}>
-          {tags.slice(0, 2).map((tag) =>
-            onFilterByTag ? (
-              // `title` é o rótulo CRU: ele existe para deixar legível um nome
-              // truncado ("mensal (a1b2c3d4)"). A ação mora no `aria-label`.
-              <button key={tag} type="button" title={tag}
-                onClick={(e) => { e.stopPropagation(); onFilterByTag(tag); }}
-                aria-label={`Filtrar pela tag ${tag}`}
-                style={{ ...G, fontSize:10, fontWeight:600, color:T.inkMid,
-                  background:T.grayLight, border:"none", borderRadius:6,
-                  padding:"2px 7px", cursor:"pointer", maxWidth:70,
-                  overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                {tag}
-              </button>
-            ) : (
-              <span key={tag} title={tag} style={{ ...G, fontSize:10, fontWeight:600,
-                color:T.inkMid, background:T.grayLight, borderRadius:6, padding:"2px 7px",
-                maxWidth:70, overflow:"hidden", textOverflow:"ellipsis",
-                whiteSpace:"nowrap" }}>{tag}</span>
-            ),
-          )}
-        </div>
-      )}
-
-
       {/* O valor é a âncora das ações: `position: relative` aqui é o que
           permite ancorá-las em `right: 100%` — a borda esquerda do valor —,
           seja qual for a largura das colunas. */}
@@ -813,6 +880,15 @@ const AccButton = ({ tone = "plain", disabled = false, onClick, children }) => (
   </button>
 );
 
+/* Referência estável para o default de props de lista: `[]` inline cria um
+   array novo a cada render e quebra qualquer memo que dependa dele. */
+const EMPTY_ARRAY = [];
+
+/* Duas tags visíveis e o resto no "+N". O teto por chip existe para uma tag
+   comprida não decidir a largura da coluna para a página inteira. */
+const TAGS_VISIVEIS = 2;
+const TAG_MAX_PX = 78;
+
 /**
  * Ação rápida da linha. O ícone abre num botão com rótulo ao receber o cursor.
  *
@@ -826,6 +902,87 @@ const AccButton = ({ tone = "plain", disabled = false, onClick, children }) => (
  * descrição da transação: quem usa leitor de tela precisa saber *qual* linha
  * está prestes a excluir.
  */
+
+/* A largura da coluna de tags, calculada UMA vez para a página.
+   Cada `.fincla-row` é uma grade independente — `max-content` daria uma largura
+   por linha e as tags desalinhariam verticalmente, o mesmo defeito que já tinha
+   desalinhado as categorias. Medir o texto de verdade (canvas) em vez de
+   estimar por número de caracteres: a fonte é proporcional, e "ii" e "MM" têm
+   contagens iguais e larguras muito diferentes. */
+let medidorCanvas = null;
+/* Medidor de texto com degradação HONESTA.
+   `getContext("2d")` devolve `null` em jsdom e em navegadores com canvas
+   desligado. Voltar 0 dali escondia a coluna INTEIRA — um recurso sumindo em
+   silêncio por causa de uma API de medição. O fallback estima por caractere:
+   erra alguns pixels numa fonte proporcional, e o teto corta o excesso. */
+function medidor(fonte, pxPorChar) {
+  const estimativa = (t) => Math.ceil(String(t).length * pxPorChar);
+  if (typeof document === "undefined") return estimativa;
+  try {
+    if (!medidorCanvas) medidorCanvas = document.createElement("canvas");
+    const ctx = medidorCanvas.getContext && medidorCanvas.getContext("2d");
+    if (!ctx) return estimativa;
+    return (t) => {
+      try {
+        /* A fonte é setada A CADA medição, não uma vez na criação: o canvas é
+           de módulo e os dois medidores dividem o mesmo contexto — segurar um
+           medidor de categoria por cima de uma chamada de tags mediria tudo na
+           última fonte configurada. */
+        ctx.font = fonte;
+        return Math.ceil(ctx.measureText(t).width);
+      } catch {
+        return estimativa(t);
+      }
+    };
+  } catch {
+    /* Navegadores e extensões anti-fingerprinting (Tor, canvas-blockers) fazem
+       `getContext` LANÇAR em vez de devolver null. Isto roda dentro de um
+       `useMemo`, durante o render: sem o try a exceção derrubava a tela inteira
+       de Transações em vez de cair na estimativa. */
+    return estimativa;
+  }
+}
+
+/* A largura da coluna de CATEGORIA, também compartilhada pela página.
+   Ela era `auto`, e `auto` numa grade por linha significa "cada linha decide a
+   sua" — as pílulas começavam alinhadas à esquerda mas terminavam em onze
+   posições diferentes, e a coluna seguinte (as tags) herdava a bagunça. Fixar
+   as duas é o que dá a sensação de coluna, que é o ponto de existir uma. */
+export function larguraColunaCategoria(txs, { teto = 168 } = {}) {
+  if (!Array.isArray(txs) || txs.length === 0) return 0;
+  const mede = medidor("600 10px 'Geist', 'DM Sans', system-ui, sans-serif", 5.6);
+  const PAD = 16; // padding 7+7 + borda 1+1 da pílula, medidos no componente
+  let maior = 0;
+  for (const tx of txs) {
+    if (!tx.cat) continue;
+    const w = mede(tx.cat) + PAD;
+    if (w > maior) maior = w;
+  }
+  return maior === 0 ? 0 : Math.min(teto, maior);
+}
+
+export function larguraColunaTags(txs, { visiveis = TAGS_VISIVEIS, tetoChip = TAG_MAX_PX, teto = 190 } = {}) {
+  if (!Array.isArray(txs) || txs.length === 0) return 0;
+  const mede = medidor("600 10px 'Geist', 'DM Sans', system-ui, sans-serif", 5.6);
+
+  const PAD = 14; // padding 7px de cada lado do chip
+  const GAP = 5;
+  let maior = 0;
+  for (const tx of txs) {
+    const tags = tx.tags || [];
+    if (tags.length === 0) continue;
+    const mostradas = tags.slice(0, visiveis);
+    let w = mostradas.reduce(
+      (acc, tag) => acc + Math.min(tetoChip, mede(tag) + PAD),
+      0,
+    );
+    w += GAP * Math.max(0, mostradas.length - 1);
+    if (tags.length > visiveis) w += GAP + mede(`+${tags.length - visiveis}`);
+    if (w > maior) maior = w;
+  }
+  return maior === 0 ? 0 : Math.min(teto, maior);
+}
+
 const QuickAction = ({ label, text, tone, onClick, showText = true, children }) => (
   <button
     type="button"
@@ -1941,6 +2098,35 @@ function TransacoesPageBody({
   const countDespesa = filtered.filter(t=>t.type==="expense").length;
   const countEstorno = filtered.filter(t=>t.type==="refund").length;
 
+  /* A coluna de tags é medida UMA vez por página de resultados — sobre as
+     mesmas linhas que serão renderizadas, e não sobre o filtro inteiro: medir o
+     que não está na tela daria uma coluna larga por causa de uma linha que
+     ninguém vê. Abaixo de 1200 px ela não entra: a descrição precisa da
+     largura, e o vão que a financiaria já não existe. */
+  /* Medir sobre a PRIMEIRA página, não sobre tudo que já foi carregado.
+     `visible` cresce com a rolagem infinita, e como as duas medidas são um
+     máximo, cada "carregar mais" só podia ALARGAR as faixas — a lista inteira
+     re-diagramava e a descrição encolhia sob o cursor de quem estava lendo.
+     A primeira página é amostra suficiente e é estável. */
+  const pageRows = useMemo(() => filtered.slice(0, PAGE_SIZE), [filtered, PAGE_SIZE]);
+  /* A coluna depende da largura da LISTA, não da viewport. Com a dock aberta em
+     1300 px a lista cai para ~695 px, e ali as faixas fixas (data, ícone,
+     categoria, tags, valor, situação) somam quase tudo — a descrição, que é
+     `minmax(0,1fr)`, colapsaria a zero. É o mesmo critério do rótulo da ação
+     rápida, pelo mesmo motivo. */
+  const tagsColPx = useMemo(
+    () => {
+      const largura = listWidth > 0 ? listWidth : viewportWidth - 200;
+      if (isMobile || largura < 1000) return 0;
+      return larguraColunaTags(pageRows);
+    },
+    [isMobile, listWidth, viewportWidth, pageRows],
+  );
+  const catColPx = useMemo(
+    () => (isMobile ? 0 : larguraColunaCategoria(pageRows)),
+    [isMobile, pageRows],
+  );
+
   // ── Group by date ─────────────────────────────────────────────────────────
   const groups = useMemo(() => {
     const map = {};
@@ -2281,9 +2467,15 @@ function TransacoesPageBody({
   );
 
   /** Mesma ideia para as tags da linha — a facet Tags guarda o rótulo. */
+  /* Clicar numa tag SOMA ao filtro; clicar de novo tira.
+     É a regra que a categoria não tem: categoria é uma por transação, então
+     clicar substitui. Tag é várias, e o filtro já tem o par OU/E — substituir
+     faria o segundo clique desfazer o primeiro, que é o oposto do que se quer
+     ao clicar em duas tags seguidas. */
   const filterByTagFromRow = useCallback(
     (tag) => {
-      filter.setTags([tag]);
+      const atuais = filter.tags || [];
+      filter.setTags(atuais.includes(tag) ? atuais.filter((t) => t !== tag) : [...atuais, tag]);
       setVisible(PAGE_SIZE);
     },
     [filter, PAGE_SIZE],
@@ -2842,6 +3034,11 @@ function TransacoesPageBody({
             rows={Math.max(4, Math.min(14, PAGE_SIZE))}
             rowHeight={listRowHeight}
             isMobile={isMobile}
+            /* Mesmas larguras das linhas reais: senão o esqueleto deixa de
+               cumprir o que promete e tudo desliza de lado quando o dado
+               chega. */
+            catColPx={catColPx}
+            tagsColPx={tagsColPx}
           />
         ) : listLoadFailed ? (
           // 1ª carga falhou (nunca tivemos dados válidos pra este filtro) —
@@ -2940,6 +3137,9 @@ function TransacoesPageBody({
                     swipe={isMobile ? swipeActions : null}
                     flash={settledFlashId === tx.id}
                     wide={!isMobile && viewportWidth >= 1600}
+                    tagsColPx={tagsColPx}
+                    catColPx={catColPx}
+                    tagsAtivas={filter.tags}
                     /* 1000 px de LISTA — não de viewport. Abaixo disso o vão
                        não comporta o botão aberto e ele invadiria a descrição.
                        Enquanto a medição não chega (primeiro render), cai no
