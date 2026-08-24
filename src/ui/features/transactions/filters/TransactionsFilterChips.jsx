@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { T } from "../../../tokens";
 import { G } from "../../../typography";
 
@@ -150,6 +150,8 @@ export function TransactionsFilterChips({
 }) {
   const [overflowOpen, setOverflowOpen] = useState(false);
   const overflowRef = useRef(null);
+  const stripRef = useRef(null);
+  const [larguraNatural, setLarguraNatural] = useState(null);
 
   const chips = [
     ...(searchActive
@@ -182,6 +184,18 @@ export function TransactionsFilterChips({
   useEffect(() => {
     if (chips.length <= cabem) setOverflowOpen(false);
   }, [chips.length, cabem]);
+
+  /* Mede o conteúdo sem o teto e devolve o teto medido, para a transição ter
+     dois valores concretos entre os quais correr. */
+  useLayoutEffect(() => {
+    const el = stripRef.current;
+    if (!el) return;
+    const anterior = el.style.maxWidth;
+    el.style.maxWidth = "none";
+    const w = el.scrollWidth;
+    el.style.maxWidth = anterior;
+    setLarguraNatural((prev) => (prev === w ? prev : w));
+  });
 
   // Abaixo de ~1200 px os chips não cabem sem espremer a busca: recolhem para o
   // contador do próprio "＋ Filtros", como já acontece no mobile.
@@ -232,12 +246,17 @@ export function TransactionsFilterChips({
          chips têm ~490 px disponíveis contra um teto aritmético de ~446 — 44 px
          de margem. Fina o bastante para que, sem a guarda, um chip a mais
          pintasse POR CIMA da ordenação em vez de ser cortado. */
-      /* A faixa de chips cresce com transição: é ela que empurra a busca, e
-         animar a que se move dá o mesmo resultado sem depender de a busca ter
-         uma largura animável (ela é flex). */
+      ref={stripRef}
+      /* A faixa de chips cresce com transição, e é ela que empurra a busca.
+         O `max-width` precisa ser a largura MEDIDA do conteúdo: com um valor
+         constante (900) ele nunca restringe, e uma propriedade que não muda não
+         anima — a declaração ficava lá sem efeito nenhum, e os 96 px continuavam
+         sumindo num quadro só. Animar a busca diretamente não funciona: a
+         largura dela vem de distribuição de espaço livre, que não é animável. */
       style={{
         display: "flex", alignItems: "center", gap: 6, minWidth: 0, overflow: "hidden",
-        transition: "max-width .34s cubic-bezier(.4,0,.2,1)", maxWidth: 900,
+        transition: "max-width .34s cubic-bezier(.4,0,.2,1)",
+        maxWidth: larguraNatural == null ? "none" : larguraNatural,
       }}
     >
       {shown.map((f) => (
@@ -281,6 +300,13 @@ export function TransactionsFilterChips({
                   key={f.key}
                   facet={f}
                   compact={compact}
+                  /* `noMedir`: estes chips vivem no popover do "+N", que é
+                     absoluto. Eles não ocupam lugar no fluxo, mas eram contados
+                     pela barra como se ocupassem — abrir o "+N" inflava o
+                     orçamento em centenas de px, liberava mais chips, o popover
+                     re-renderizava com menos, e o par oscilava até estourar a
+                     profundidade de atualização do React. */
+                  noMedir
                   block
                   onOpen={(key) => {
                     setOverflowOpen(false);
@@ -321,14 +347,14 @@ export function TransactionsFilterChips({
   );
 }
 
-function Chip({ facet, onOpen, onClear, compact, block = false }) {
+function Chip({ facet, onOpen, onClear, compact, block = false, noMedir = false }) {
   return (
     <span
       /* Marca o que é CHIP de verdade. A barra soma a largura destes para saber
          quanto espaço os chips podem devolver à busca — somar o slot inteiro
          incluía o botão "Filtros", que não é descartável, e inflava o orçamento
          em ~95 px. */
-      data-chip="1"
+      data-chip={noMedir ? undefined : "1"}
       style={{
         ...chipStyle("on"),
         paddingRight: 4,

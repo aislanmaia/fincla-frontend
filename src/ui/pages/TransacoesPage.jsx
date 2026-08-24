@@ -39,6 +39,7 @@ import { useNarrowestFilter } from "../features/transactions/useNarrowestFilter.
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { TransactionsEmptyState } from "../features/transactions/TransactionsEmptyState.jsx";
 import { TransactionsSkeleton } from "../features/transactions/TransactionsSkeleton.jsx";
+import { ConfirmActionModal } from "../features/transactions/ConfirmAction.jsx";
 import { TransactionsStats } from "../features/transactions/TransactionsStats.jsx";
 import { TransactionsSummarySheet } from "../features/transactions/TransactionsSummarySheet.jsx";
 import { useSwipeActions, SWIPE_WIDTH } from "../features/transactions/useSwipeActions.js";
@@ -1438,6 +1439,8 @@ function TransacoesPageBody({
   }, [isMobile]);
 
   const [chipsBudget, setChipsBudget] = useState(null);
+  const [confirmAcao, setConfirmAcao] = useState(null);
+  const [deletingBusy, setDeletingBusy] = useState(false);
 
   const [panelFacet, setPanelFacet] = useState("periodo");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -2003,11 +2006,11 @@ function TransacoesPageBody({
     if (period === "mes")     return d.getMonth()===TODAY.getMonth() && d.getFullYear()===TODAY.getFullYear();
     if (period === "mes-ant") { const m = new Date(TODAY); m.setMonth(m.getMonth()-1); return d.getMonth()===m.getMonth() && d.getFullYear()===m.getFullYear(); }
     if (period === "3m")      { const m3 = new Date(TODAY); m3.setMonth(m3.getMonth()-3); return d >= m3; }
-    // "rel" (janela relativa) grava o intervalo nos campos custom — o filtro por
-    // data cai no mesmo caminho do custom, sem repetir a aritmética aqui.
-    if (period === "rel")     return true;
+
     if (period === "ano")     return d.getFullYear()===TODAY.getFullYear();
-    if (period === "custom")  {
+    // "rel" grava o intervalo nos campos custom, então cai no MESMO ramo — e
+    // não num `return true` que deixava tudo passar.
+    if (period === "custom" || period === "rel") {
       const from = filter.customFrom ? new Date(filter.customFrom) : null;
       const to   = filter.customTo   ? new Date(filter.customTo+"T23:59:59") : null;
       if (from && d < from) return false;
@@ -2840,7 +2843,15 @@ function TransacoesPageBody({
     // Só existe quando o consumidor sabe duplicar. Um botão que não faz nada
     // é pior que um botão ausente.
     onDuplicate: onDuplicateTx ? (tx) => onDuplicateTx(tx) : null,
-    onDelete: (tx) => { setSelected(tx); setDeletingId(tx.id); },
+    /* No DESKTOP a pergunta vai num modal. Abrir a sanfona só para perguntar
+       move a lista inteira sob o cursor e esconde a resposta atrás de uma
+       animação de expansão — e a linha tem 48 px, onde a pergunta não cabe.
+       No toque continua na sanfona, que já está aberta e já é o foco da tela:
+       um modal ali seria uma camada a mais para ler e para sair. */
+    onDelete: (tx) => {
+      if (isMobile) { setSelected(tx); setDeletingId(tx.id); return; }
+      setConfirmAcao({ kind: "delete", tx });
+    },
     onSettle: async (tx) => {
       if (settlingId) return;
       setSettleError("");
@@ -3596,6 +3607,33 @@ function TransacoesPageBody({
             barTrailing={listPrefsButtons}
           />
         </>
+      )}
+
+      {confirmAcao && (
+        <ConfirmActionModal
+          kind={confirmAcao.kind}
+          desc={confirmAcao.tx.desc}
+          busy={deletingBusy}
+          onCancel={() => setConfirmAcao(null)}
+          onConfirm={async () => {
+            const tx = confirmAcao.tx;
+            setDeletingBusy(true);
+            try {
+              if (shouldUseRealData) await transactionsData.removeTransaction(tx.id);
+              else setMockTxList((prev) => prev.filter((item) => item.id !== tx.id));
+            } catch (_) {
+              setDeletingBusy(false);
+              return;
+            }
+            setDeletingBusy(false);
+            setConfirmAcao(null);
+            setSelected((cur) => (cur && cur.id === tx.id ? null : cur));
+            /* A linha colapsa ANTES do refetch: sem isso a lista se
+               reorganizaria de um quadro para o outro e o olho perderia onde
+               estava. */
+            onRowLeave(tx.id);
+          }}
+        />
       )}
 
       {/* ── MOBILE FILTER BOTTOM SHEET ───────────────────────────────── */}

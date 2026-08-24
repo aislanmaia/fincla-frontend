@@ -161,11 +161,12 @@ export function SearchBar({
           minWidth: 180,
           maxWidth: 720,
           height: 32,
-          /* Aplicar um filtro tira largura da busca de uma vez só — 96 px
-             sumindo num frame lê como falha de layout, não como resposta. A
-             transição vale para qualquer origem do filtro (chip, painel, a
-             label do cabeçalho), porque é a barra que muda, não o gatilho. */
-          transition: "flex-basis .34s cubic-bezier(.4,0,.2,1), max-width .34s cubic-bezier(.4,0,.2,1)",
+          /* NÃO há transição aqui, e não é esquecimento: a largura da busca vem
+             de distribuição de espaço livre do flex, que não é uma propriedade
+             animável. Quem anima é a faixa de chips (o `max-width` medido em
+             `TransactionsFilterChips`) — ela é que empurra, e animar quem empurra
+             produz o mesmo movimento. Declarar `transition` neste elemento seria
+             CSS morto, do tipo que engana quem lê o código depois. */
           border: `1px solid ${T.border}`,
           borderRadius: 9,
           background: T.bg,

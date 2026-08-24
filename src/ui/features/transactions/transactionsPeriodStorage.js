@@ -17,6 +17,11 @@ const ALLOWED = new Set([
   "3m",
   "ano",
   "custom",
+  /* "rel" (janela relativa) guarda as DATAS calculadas, como o custom. Fora
+     desta lista o `normalizeRow` devolvia `null`, a gravação era pulada em
+     silêncio e o período anterior continuava no storage: a pessoa escolhia
+     "últimos 45 dias", recarregava e voltava para "Este mês". */
+  "rel",
 ]);
 
 /** @param {string} s */
@@ -35,7 +40,7 @@ function normalizeRow(raw) {
   const customFrom = typeof raw.customFrom === "string" ? raw.customFrom : "";
   const customTo = typeof raw.customTo === "string" ? raw.customTo : "";
   if (typeof period !== "string" || !ALLOWED.has(period)) return null;
-  if (period === "custom") {
+  if (period === "custom" || period === "rel") {
     const f = parseYmd(customFrom);
     const t = parseYmd(customTo);
     if (!f && !t) return null;

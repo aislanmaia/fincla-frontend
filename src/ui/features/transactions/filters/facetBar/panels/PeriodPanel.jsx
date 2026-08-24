@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { T } from "../../../../../tokens";
 import { G } from "../../../../../typography";
 import { Icon } from "../../shared/Icon.jsx";
@@ -52,6 +52,35 @@ export function faixaRelativa(n, u, hoje = new Date()) {
   return [inicio, fim];
 }
 
+/* Qual janela relativa descreve o intervalo em vigor — DERIVADO, não guardado.
+   Se o intervalo não for uma janela redonda, cai no padrão de 3 meses. */
+function janelaDoIntervalo(period, from, to) {
+  const padrao = { n: 3, u: "m" };
+  if (period !== "rel" || !from || !to) return padrao;
+  const di = new Date(`${from}T00:00:00`);
+  const df = new Date(`${to}T00:00:00`);
+  if (Number.isNaN(di) || Number.isNaN(df)) return padrao;
+  const dias = Math.round((df - di) / 86400000) + 1;
+  /* Só os candidatos POSSÍVEIS, em vez de varrer as ~1660 combinações a cada
+     render: o número de dias já elimina quase tudo. */
+  const candidatos = [];
+  if (dias >= 1 && dias <= UNIDADES.d.max) candidatos.push([dias, "d"]);
+  if (dias % 7 === 0 && dias / 7 <= UNIDADES.s.max) candidatos.push([dias / 7, "s"]);
+  const meses = Math.round(dias / 30.44);
+  for (const m of [meses - 1, meses, meses + 1]) {
+    if (m >= 1 && m <= UNIDADES.m.max) candidatos.push([m, "m"]);
+    if (m % 12 === 0 && m / 12 >= 1 && m / 12 <= UNIDADES.a.max) candidatos.push([m / 12, "a"]);
+  }
+  /* Meses e anos primeiro: "últimos 3 meses" descreve melhor que "últimos 92
+     dias", e as duas descrevem o mesmo intervalo. */
+  candidatos.sort((a, b) => "asmd".indexOf(a[1]) - "asmd".indexOf(b[1]));
+  for (const [n, u] of candidatos) {
+    const [i, f] = faixaRelativa(n, u);
+    if (ymdLocal(i) === from && ymdLocal(f) === to) return { n, u };
+  }
+  return padrao;
+}
+
 function rotuloUnidade(n, u) {
   const uni = UNIDADES[u] || UNIDADES.m;
   return Number(n) === 1 ? uni.um : uni.varios;
@@ -72,8 +101,30 @@ export function PeriodPanel({
   compact = false,
   locale = "pt-BR",
 }) {
-  const [relN, setRelN] = useState(3);
-  const [relU, setRelU] = useState("m");
+  /* O número e a unidade são DERIVADOS do intervalo em vigor quando ele já é
+     uma janela relativa. Guardá-los só localmente fazia o chip reabrir dizendo
+     "Últimos 3 meses" sobre um recorte de 45 dias — e o primeiro clique, ou só
+     um blur no campo, reescrevia a janela da pessoa em silêncio. */
+  const [relN, setRelN] = useState(() => janelaDoIntervalo(period, customFrom, customTo).n);
+  const [relU, setRelU] = useState(() => janelaDoIntervalo(period, customFrom, customTo).u);
+
+  useEffect(() => {
+    if (period !== "rel") return;
+    const { n, u } = janelaDoIntervalo(period, customFrom, customTo);
+    setRelN(n);
+    setRelU(u);
+  }, [period, customFrom, customTo]);
+
+  /* Uma tecla no número não pode virar uma ida ao backend: digitar "120" são
+     três recortes sem sentido (1, 12, 120) e três refetches. O valor digitado
+     fica local e só vira filtro depois que a digitação para. É a mesma regra do
+     arrasto do calendário, que ficou local até soltar. */
+  const debounceRef = useRef(null);
+  useEffect(() => () => clearTimeout(debounceRef.current), []);
+  const aplicarComEspera = (n, u) => {
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => aplicarRelativo(n, u), 320);
+  };
 
   const chipBase = (active) => ({
     ...G,
@@ -158,24 +209,29 @@ export function PeriodPanel({
             escolhemos pela pessoa. Aqui o número é editável e a unidade também:
             "últimos 45 dias" e "últimos 2 anos" deixam de precisar do caminho
             de digitar duas datas. */}
-        <span
-          role="button"
-          tabIndex={0}
-          aria-pressed={period === "rel"}
-          aria-label={`Últimos ${relN} ${rotuloUnidade(relN, relU)}`}
-          onClick={() => aplicarRelativo()}
-          onKeyDown={(e) => {
-            if (e.target !== e.currentTarget) return;
-            if (e.key === "Enter" || e.key === " ") { e.preventDefault(); aplicarRelativo(); }
-          }}
-          style={{ ...chipBase(period === "rel"), gap: 6, cursor: "pointer" }}
-        >
+        {/* Um `role="button"` embrulhando um input e um select é ARIA inválido:
+            o `aria-label` do embrulho substitui a subárvore inteira no cálculo
+            do nome, e os dois controles de dentro deixam de ser anunciados.
+            Aqui o chip é um contêiner comum e quem tem papel de botão é só a
+            palavra da frente — os três controles ficam independentes. */}
+        <span style={{ ...chipBase(period === "rel"), gap: 6, cursor: "default" }}>
           <span style={{ width: 11, flex: "none", display: "inline-flex" }}>
             {period === "rel" && <Icon name="check" size={11} color="#fff" />}
           </span>
           {/* "Último 1 mês" e "Últimos 3 meses": a palavra da frente concorda
               com o número, senão a fileira lê como texto quebrado. */}
-          {relN === 1 ? "Último" : "Últimos"}
+          <button
+            type="button"
+            aria-pressed={period === "rel"}
+            aria-label={`Últimos ${relN} ${rotuloUnidade(relN, relU)}`}
+            onClick={() => aplicarRelativo()}
+            style={{
+              ...G, border: "none", background: "none", padding: 0, cursor: "pointer",
+              color: "inherit", fontSize: 12.5, fontWeight: 600,
+            }}
+          >
+            {relN === 1 ? "Último" : "Últimos"}
+          </button>
           <input
             aria-label="Quantidade da janela relativa"
             inputMode="numeric"
@@ -185,10 +241,12 @@ export function PeriodPanel({
               const bruto = e.target.value.replace(/\D/g, "").slice(0, 3);
               const n = bruto === "" ? "" : Math.min(UNIDADES[relU].max, Number(bruto));
               setRelN(n);
-              if (n !== "" && n >= 1) aplicarRelativo(n, relU);
+              if (n !== "" && n >= 1) aplicarComEspera(n, relU);
             }}
             onBlur={() => {
+              clearTimeout(debounceRef.current);
               if (relN === "" || Number(relN) < 1) { setRelN(1); aplicarRelativo(1, relU); }
+              else aplicarRelativo(relN, relU);
             }}
             style={{
               ...G, width: 34, height: 20, textAlign: "center", borderRadius: 5,

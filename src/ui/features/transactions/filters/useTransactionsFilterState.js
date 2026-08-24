@@ -11,7 +11,7 @@ import { DEFAULT_SORT, sortItems as sortItemsFn } from "./search/sortModel.js";
  *
  * Filtros suportados (modelo interno):
  *   search:      string
- *   period:      "tudo" | "hoje" | "semana" | "mes" | "mes-ant" | "3m" | "ano" | "custom"
+ *   period:      "tudo" | "hoje" | "semana" | "mes" | "mes-ant" | "3m" | "ano" | "custom" | "rel"
  *   customFrom:  "yyyy-mm-dd" (somente quando period === "custom")
  *   customTo:    "yyyy-mm-dd"
  *   type:        "todos" | "receita" | "despesa"
@@ -170,8 +170,10 @@ export function useTransactionsFilterState({
         "3m": "Últimos 3m",
         ano: "Este ano",
       };
+      /* "rel" descreve o intervalo pelas DATAS, como o custom: sem isto o chip
+         caía no `|| "Este mês"` e anunciava um filtro que ninguém escolheu. */
       const periodLabel =
-        state.period === "custom"
+        state.period === "custom" || state.period === "rel"
           ? formatCustomPeriodLabel(state.customFrom, state.customTo)
           : presetPeriodLabels[state.period];
 

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React, { useState } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -68,9 +68,22 @@ describe("<PeriodPanel>", () => {
     // Exigir o clique no chip não funciona: o centro dele é o input, e o input
     // precisa parar a propagação para posicionar o cursor sem acionar o chip.
     // O resultado era um chip cujo meio não fazia nada.
+    //
+    // A aplicação é DEBOUNCED: digitar "120" são três recortes sem sentido
+    // (1, 12, 120) e três refetches, e a busca da lista não tem debounce
+    // própria. Por isso o teste espera o valor pousar, em vez de afirmar no
+    // mesmo tick — afirmar síncrono aqui congelaria o defeito.
     render(<Harness />);
     const n = screen.getByLabelText(/Quantidade da janela relativa/i);
     fireEvent.change(n, { target: { value: "45" } });
+    // O rótulo do botão acompanha o campo na hora; o FILTRO é que espera.
+    expect(screen.getByRole("button", { name: /^Últimos 45 meses$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Últimos 45 meses$/i })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    // Este describe usa timers falsos: sem avançar, o debounce nunca chega.
+    act(() => { vi.advanceTimersByTime(400); });
     expect(screen.getByRole("button", { name: /^Últimos 45 meses$/i })).toHaveAttribute(
       "aria-pressed",
       "true",

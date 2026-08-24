@@ -641,7 +641,12 @@ function resolveDateRange(period, customFrom, customTo) {
     };
   }
 
-  if (period === "custom" && (customFrom || customTo)) {
+  /* "rel" (janela relativa: últimos N dias/semanas/meses/anos) grava o
+     intervalo calculado nos MESMOS campos do custom. Sem esta linha o filtro
+     saía sem `date_start`/`date_end` nenhum: os campos na tela mostravam as
+     datas e a lista mostrava a história inteira — o oposto do que o chip
+     promete, e sem nada acusando. */
+  if ((period === "custom" || period === "rel") && (customFrom || customTo)) {
     return {
       ...(customFrom ? { date_start: customFrom } : {}),
       ...(customTo ? { date_end: customTo } : {}),

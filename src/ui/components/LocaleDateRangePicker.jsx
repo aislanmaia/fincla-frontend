@@ -139,7 +139,11 @@ function RangeDateInput({
       aria-label={label}
       aria-invalid={error ? "true" : "false"}
       aria-describedby={error && !inline ? errId : undefined}
+      /* A prévia é SÓ leitura: sem isto o input do DOM passava a conter a data
+         apontada, e o `handleChange` lia esse mesmo valor — digitar uma tecla
+         com o mouse parado sobre um dia comitava uma data que ninguém clicou. */
       value={previa ?? draft}
+      readOnly={Boolean(previa)}
       onFocus={onFocus}
       onClick={onFocus}
       onChange={(e) => handleChange(e.target.value)}
@@ -566,13 +570,15 @@ export function LocaleDateRangePicker({
   const pontaSobHover = useMemo(() => {
     if (touch || !hoverYmd) return null;
     if (grabbedEdge) return grabbedEdge;
-    if (!displayFrom) return "from";
-    if (!displayTo) return "to";
+    /* Espelha `handleDayClick` LINHA A LINHA, e não a ponta mais próxima.
+       Com o intervalo fechado, um clique RECOMEÇA em "de" — mas a heurística de
+       proximidade acendia "até" e prometia uma coisa enquanto o clique fazia
+       outra. Um realce que mente é pior que realce nenhum. */
+    if (!displayFrom || (displayFrom && displayTo)) return "from";
     const h = parseLocalYmd(hoverYmd);
     const f = parseLocalYmd(displayFrom);
-    const t = parseLocalYmd(displayTo);
-    if (!h || !f || !t) return null;
-    return Math.abs(h - f) <= Math.abs(h - t) ? "from" : "to";
+    if (!h || !f) return null;
+    return h.getTime() < f.getTime() ? "from" : "to";
   }, [touch, hoverYmd, grabbedEdge, displayFrom, displayTo]);
 
   const summaryLabel =
