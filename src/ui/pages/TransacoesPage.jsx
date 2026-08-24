@@ -371,6 +371,11 @@ export const Tip = ({ label, children, pos = "top" }) => {
 const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
   rowHeight = 48, showDate = true, dateLabel = "", quickActions = null,
   onFilterByCategory = null, onFilterByTag = null, wide = false, xwide = false,
+  /* O rótulo no hover da ação cresce para DENTRO do vão. Acima de ~1200 px o vão
+     comporta; abaixo, o botão volta a ser só o ícone em vez de invadir a
+     descrição. Vem como prop própria e não de `wide` (≥1600): amarrá-lo a `wide`
+     deixava 1500 px — onde há vão de sobra — sem rótulo nenhum. */
+  showActionLabels = false,
   swipe = null, flash = false }) => {
   const isRefund   = tx.type === "refund";
   const isReceita  = tx.type === "income" || isRefund;
@@ -391,6 +396,8 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
   const iconPx = dense ? 22 : rowHeight <= 50 ? 28 : 30;
   const accountLabel = tx.accountLabel || tx.contaLabel || "";
 
+
+
   /* A grade nasce das medições do artefato. As colunas de conta e de rótulo da
      situação só existem acima de 1600 px: abaixo disso a descrição precisa da
      largura, e uma coluna de conta espremida em 60 px não informa nada. */
@@ -410,11 +417,16 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
     // Situação: com largura, o anel ganha o rótulo. Só o anel obriga a decorar
     // o que ele significa — e há espaço de sobra aqui.
     wide ? "76px" : "18px",
-    // Ações rápidas DEPOIS do valor, não antes: como coluna intermediária elas
-    // empurravam o valor para a direita, e o valor é a âncora vertical que o
-    // olho segue ao varrer a lista. Reservada mesmo vazia, para nada se mover
-    // quando elas aparecem no hover.
-    quickActions ? (dense ? "96px" : "112px") : null,
+    // Não há mais coluna de ações. Elas eram uma coluna DEPOIS do valor —
+    // reservada mesmo vazia, para nada se mover no hover —, mas isso punha o
+    // valor no meio de quatro botões quando o valor é o que fecha a linha na
+    // leitura da esquerda para a direita.
+    //
+    // Agora elas são ABSOLUTAS, ancoradas ao `right: 100%` da célula do valor:
+    // entram e saem dentro do vão que já existe, sem deslocar um pixel, e o
+    // botão pode crescer para a ESQUERDA ao abrir o rótulo porque cresce para
+    // dentro do vazio. Pôr as ações no fluxo antes do valor empurraria a linha
+    // inteira sob o cursor — pior ainda com o rótulo expandindo.
     "14px",
   ].filter(Boolean).join(" ");
 
@@ -695,10 +707,57 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
       )}
 
 
+      {/* O valor é a âncora das ações: `position: relative` aqui é o que
+          permite ancorá-las em `right: 100%` — a borda esquerda do valor —,
+          seja qual for a largura das colunas. */}
       <div style={{ ...G, fontFamily:"'Geist Mono',monospace",
         fontSize: dense ? 12 : 13.5, fontWeight:700, textAlign:"right",
+        position:"relative",
         color: isRefund ? T.green : (isReceita ? T.green : T.ink) }}>
         {isReceita ? "+" : "−"}{fmtBRL(tx.val)}
+
+        {quickActions && (
+          <div className="fincla-quick">
+            {tx.settleable && (
+              <QuickAction
+                label={tx.settled ? `Desfazer pagamento de ${tx.desc}` : `Marcar ${tx.desc} como pago`}
+                text={tx.settled ? "Desfazer" : "Pagar"}
+                tone="green"
+                showText={showActionLabels}
+                onClick={(e) => { e.stopPropagation(); quickActions.onSettle(tx); }}
+              >
+                {tx.settled ? "↺" : "✓"}
+              </QuickAction>
+            )}
+            <QuickAction
+              label={`Editar ${tx.desc}`}
+              text="Editar"
+              showText={showActionLabels}
+              onClick={(e) => { e.stopPropagation(); quickActions.onEdit(tx); }}
+            >
+              ✎
+            </QuickAction>
+            {quickActions.onDuplicate && (
+              <QuickAction
+                label={`Duplicar ${tx.desc}`}
+                text="Duplicar"
+                showText={showActionLabels}
+                onClick={(e) => { e.stopPropagation(); quickActions.onDuplicate(tx); }}
+              >
+                ⧉
+              </QuickAction>
+            )}
+            <QuickAction
+              label={`Excluir ${tx.desc}`}
+              text="Excluir"
+              tone="red"
+              showText={showActionLabels}
+              onClick={(e) => { e.stopPropagation(); quickActions.onDelete(tx); }}
+            >
+              🗑
+            </QuickAction>
+          </div>
+        )}
       </div>
 
       {/* Situação: anel vazado, não ampulheta. O lançamento não está
@@ -714,42 +773,6 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
           </span>
         </Tip>
       ) : <span />}
-
-      {/* Ações rápidas em coluna PRÓPRIA, reservada mesmo vazia. */}
-      {quickActions && (
-        <div className="fincla-quick" style={{ justifyContent:"flex-end" }}>
-          {tx.settleable && (
-            <QuickAction
-              label={tx.settled ? `Desfazer pagamento de ${tx.desc}` : `Marcar ${tx.desc} como pago`}
-              tone="green"
-              onClick={(e) => { e.stopPropagation(); quickActions.onSettle(tx); }}
-            >
-              {tx.settled ? "↺" : "✓"}
-            </QuickAction>
-          )}
-          <QuickAction
-            label={`Editar ${tx.desc}`}
-            onClick={(e) => { e.stopPropagation(); quickActions.onEdit(tx); }}
-          >
-            ✎
-          </QuickAction>
-          {quickActions.onDuplicate && (
-            <QuickAction
-              label={`Duplicar ${tx.desc}`}
-              onClick={(e) => { e.stopPropagation(); quickActions.onDuplicate(tx); }}
-            >
-              ⧉
-            </QuickAction>
-          )}
-          <QuickAction
-            label={`Excluir ${tx.desc}`}
-            tone="red"
-            onClick={(e) => { e.stopPropagation(); quickActions.onDelete(tx); }}
-          >
-            🗑
-          </QuickAction>
-        </div>
-      )}
 
       <span style={{ display:"flex", justifyContent:"center", color: isSelected ? catCol : T.inkGhost,
         transition:"color 0.12s" }}>
@@ -783,18 +806,34 @@ const AccButton = ({ tone = "plain", disabled = false, onClick, children }) => (
   </button>
 );
 
-const QuickAction = ({ label, tone, onClick, children }) => (
+/**
+ * Ação rápida da linha. O ícone abre num botão com rótulo ao receber o cursor.
+ *
+ * O rótulo cresce por `max-width` (0 → 96 px) e não por `display`, porque só
+ * uma propriedade animável dá a transição; com `display` o botão saltaria de
+ * um tamanho para o outro. Ele cresce para a ESQUERDA porque o contêiner das
+ * ações está ancorado à borda esquerda do valor — ou seja, para dentro do vão.
+ *
+ * Ícone sozinho obriga a decorar, e "editar" e "duplicar" são justamente os
+ * dois que se confundem. O `aria-label` continua sendo a frase inteira, com a
+ * descrição da transação: quem usa leitor de tela precisa saber *qual* linha
+ * está prestes a excluir.
+ */
+const QuickAction = ({ label, text, tone, onClick, showText = true, children }) => (
   <button
     type="button"
+    className={showText ? "fincla-qa" : "fincla-qa fincla-qa-mute"}
     onClick={onClick}
     aria-label={label}
     title={label}
-    style={{ ...G, width:28, height:28, borderRadius:8, cursor:"pointer",
-      display:"flex", alignItems:"center", justifyContent:"center", fontSize:12,
-      background:T.surface,
+    data-tone={tone || "neutral"}
+    style={{ ...G, height:28, borderRadius:8, cursor:"pointer",
+      display:"flex", alignItems:"center", justifyContent:"center", gap:0,
+      fontSize:12, fontWeight:600, padding:"0 7px", background:T.surface,
       border:`1px solid ${tone === "green" ? "#B7E4CE" : tone === "red" ? "#F5C9C9" : T.border}`,
       color: tone === "green" ? T.green : tone === "red" ? T.red : T.inkMid }}>
-    {children}
+    <span aria-hidden="true" style={{ display:"flex", flex:"none" }}>{children}</span>
+    {text && <span className="lb" aria-hidden="true">{text}</span>}
   </button>
 );
 
@@ -2878,6 +2917,7 @@ function TransacoesPageBody({
                     swipe={isMobile ? swipeActions : null}
                     flash={settledFlashId === tx.id}
                     wide={!isMobile && viewportWidth >= 1600}
+                    showActionLabels={!isMobile && viewportWidth >= 1200}
                     xwide={!isMobile && viewportWidth >= 2100}
                   />
                   {/* Sanfona: o detalhe nasce ONDE O OLHO JÁ ESTÁ, em vez de

@@ -290,6 +290,43 @@ async function openFilters() {
 }
 
 describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }, () => {
+  it("as ações rápidas ficam ANTES do valor na ordem do DOM", async () => {
+    // O valor é o que fecha a linha lendo da esquerda para a direita. Antes as
+    // ações vinham depois dele, deixando o valor no meio de quatro botões.
+    //
+    // Testar a ORDEM e não a posição em px é o que faz o teste valer em jsdom:
+    // as ações são absolutas, ancoradas ao `right: 100%` da célula do valor —
+    // logo elas moram DENTRO dessa célula, e é essa contenção que garante que
+    // aparecer no hover não desloca o valor. Se alguém as devolver para uma
+    // coluna própria, esta asserção cai.
+    renderPage();
+    const acao = (await screen.findAllByRole("button", { name: /^Editar / }))[0];
+    const celula = acao.closest("div[style]");
+    expect(celula).not.toBeNull();
+    expect(celula.textContent).toMatch(/R\$/);
+  });
+
+  it("o rótulo da ação só existe quando há vão para ele crescer", async () => {
+    // O rótulo abre para a ESQUERDA, para dentro do vão. Abaixo de 1200 px não
+    // há para onde crescer e ele invadiria a descrição — ali o botão volta a ser
+    // só o ícone. O `aria-label` continua completo nos dois casos: quem usa
+    // leitor de tela precisa saber QUAL linha vai excluir, com vão ou sem.
+    window.innerWidth = 1000;
+    window.dispatchEvent(new Event("resize"));
+    renderPage();
+    const estreito = (await screen.findAllByRole("button", { name: /^Excluir / }))[0];
+    expect(estreito.className).toContain("fincla-qa-mute");
+    expect(estreito.getAttribute("aria-label")).toMatch(/^Excluir .+/);
+
+    cleanup();
+    window.innerWidth = 1500;
+    window.dispatchEvent(new Event("resize"));
+    renderPage();
+    const largo = (await screen.findAllByRole("button", { name: /^Excluir / }))[0];
+    expect(largo.className).not.toContain("fincla-qa-mute");
+    expect(largo).toHaveTextContent("Excluir");
+  });
+
   it("Enter numa ação rápida executa a ação, não abre a sanfona", async () => {
     // Os botões de ação são descendentes da linha `role="button"`: sem guarda de
     // alvo no keydown, o preventDefault da linha cancelava o clique sintetizado

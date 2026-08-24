@@ -44,14 +44,20 @@ export const ANIM_CSS = `
   }
   .fincla-row { transition: background 0.11s; }
   .fincla-row:hover { background: #F0EFEB !important; }
-  /* Ações rápidas: aparecem no hover e ocupam o lugar da pill de categoria, de
-     modo que data, descrição, valor e situação nunca ficam encobertos. No toque
-     não há hover, então elas ficam sempre visíveis — a alternativa seria um alvo
-     de 24 px dentro de uma linha de 56, onde o erro abre a transação vizinha. */
-  .fincla-quick { display: none; align-items: center; gap: 4px; }
-  /* A pílula de categoria e as ações dividem a MESMA célula da grade: uma
-     aparece quando a outra some. Por isso o par abaixo alterna display, e não
-     visibility — visibility manteria a célula ocupada pelas duas. */
+  /* Ações rápidas: aparecem no hover ANCORADAS À ESQUERDA DO VALOR, flutuando
+     dentro do vão que a linha já tem. Absolutas de propósito — no fluxo elas
+     empurrariam o valor ao aparecer e a linha inteira saltaria sob o cursor,
+     pior ainda com o rótulo expandindo. O "right: 100%" prende o grupo à borda
+     esquerda da célula do valor, então ele cresce para a esquerda, para dentro
+     do vazio, seja qual for a largura das colunas.
+
+     No toque não há hover: elas ficam sempre visíveis — a alternativa seria um
+     alvo de 24 px numa linha de 56, onde o erro abre a transação vizinha. */
+  .fincla-quick {
+    display: none; align-items: center; gap: 4px;
+    position: absolute; right: 100%; top: 50%; transform: translateY(-50%);
+    margin-right: 10px; white-space: nowrap;
+  }
   .fincla-row:hover .fincla-quick,
   .fincla-row:focus-within .fincla-quick { display: flex; }
   .fincla-row:hover .fincla-quick-hides,
@@ -59,6 +65,25 @@ export const ANIM_CSS = `
   @media (hover: none) {
     .fincla-quick { display: flex; }
     .fincla-quick-hides { display: none; }
+  }
+
+  /* O rótulo abre por max-width, não por display: só uma propriedade animável
+     dá transição — com display o botão saltaria de um tamanho ao outro. */
+  .fincla-qa { transition: border-color .13s, background .13s, color .13s; }
+  .fincla-qa .lb {
+    max-width: 0; overflow: hidden; margin-left: 0;
+    transition: max-width .16s ease, margin-left .16s ease;
+  }
+  .fincla-qa:hover .lb,
+  .fincla-qa:focus-visible .lb { max-width: 96px; margin-left: 6px; }
+  /* Abaixo de ~1200 px o vão não tem para onde crescer: o rótulo fica fora e o
+     botão volta a ser só o ícone. */
+  .fincla-qa-mute .lb { display: none; }
+  .fincla-qa[data-tone="neutral"]:hover { border-color: #BFD3FA; background: #EFF6FF; color: #2563EB; }
+  .fincla-qa[data-tone="green"]:hover { background: #ECFDF5; }
+  .fincla-qa[data-tone="red"]:hover { background: #FEF2F2; }
+  @media (prefers-reduced-motion: reduce) {
+    .fincla-qa .lb { transition: none; }
   }
   .fincla-card-lift { transition: box-shadow 0.18s ease, transform 0.18s ease; }
   .fincla-card-lift:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.09) !important; transform: translateY(-1px); }
