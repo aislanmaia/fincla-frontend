@@ -43,6 +43,7 @@ import { ConfirmActionModal } from "../features/transactions/ConfirmAction.jsx";
 import { ShortcutsModal } from "../features/transactions/ShortcutsModal.jsx";
 import { useTransactionsKeyboard } from "../features/transactions/useTransactionsKeyboard.js";
 import { useFocusTrap } from "../features/transactions/useFocusTrap.js";
+import { flyToChip } from "../features/transactions/flyToChip.js";
 import { TransactionsStats } from "../features/transactions/TransactionsStats.jsx";
 import { TransactionsSummarySheet } from "../features/transactions/TransactionsSummarySheet.jsx";
 import { useSwipeActions, SWIPE_WIDTH } from "../features/transactions/useSwipeActions.js";
@@ -3135,7 +3136,18 @@ function TransacoesPageBody({
                 ? "Carregando…"
                 : null
         }
-        onPendingClick={() => filter.setSettlement("a-pagar")}
+        onPendingClick={(e) => {
+          /* A label voa até o botão de filtros antes de sumir. Ela some porque
+             com "a pagar" ativo toda linha visível é a pagar e o contador vira
+             zero por definição — mas sumir sem transição desorienta: a pessoa
+             clica e o que ela clicou evapora. O voo diz que é o mesmo objeto
+             mudando de lugar. */
+          const alvo = document.querySelector(
+            '[aria-label^="Abrir filtros"], [aria-label^="Fechar filtros"], [aria-label^="Filtros"]',
+          );
+          if (e?.currentTarget && alvo) flyToChip(e.currentTarget, alvo);
+          filter.setSettlement("a-pagar");
+        }}
         onSumClick={isMobile ? () => setStatsExpanded((v) => !v) : undefined}
         sumOpen={isMobile && statsExpanded}
         canUndo={filterHistory.canUndo}

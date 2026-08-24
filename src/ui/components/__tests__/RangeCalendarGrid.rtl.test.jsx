@@ -110,9 +110,36 @@ describe("<RangeCalendarGrid>", () => {
     // Sem cursor o balão ficaria na tela até o toque seguinte, cobrindo
     // justamente os dias que a pessoa pode querer tocar.
     const { rerender } = render(<RangeCalendarGrid {...base} hoverYmd="2026-08-18" />);
-    expect(dia("2026-08-18").textContent).toMatch(/18.*ago/i);
+    expect(dia("2026-08-18").textContent).toMatch(/novo início/i);
     rerender(<RangeCalendarGrid {...base} hoverYmd="2026-08-18" touch />);
-    expect(dia("2026-08-18").textContent).not.toMatch(/ago/i);
+    expect(dia("2026-08-18").textContent).not.toMatch(/novo/i);
+  });
+
+
+  it("o balão diz a AÇÃO, não a data — a data já está na célula e no campo", () => {
+    // Repetir a data seria gastar um balão para não informar nada. O que falta
+    // saber é o que o clique VAI FAZER.
+    const { rerender } = render(<RangeCalendarGrid {...base} hoverYmd="2026-08-15" />);
+    // Dia comum com intervalo fechado: o clique recomeça.
+    expect(dia("2026-08-15")).toHaveTextContent("novo início");
+
+    // Sobre uma PONTA: o clique move aquela ponta, e o balão nomeia qual.
+    rerender(<RangeCalendarGrid {...base} hoverYmd="2026-08-10" />);
+    expect(dia("2026-08-10")).toHaveTextContent("mover o de");
+    rerender(<RangeCalendarGrid {...base} hoverYmd="2026-08-20" />);
+    expect(dia("2026-08-20")).toHaveTextContent("mover o até");
+
+    // Com a ponta já pega, o próximo clique SOLTA.
+    rerender(<RangeCalendarGrid {...base} hoverYmd="2026-08-20" grabbedEdge="to" />);
+    expect(dia("2026-08-20")).toHaveTextContent("soltar o até");
+  });
+
+  it("a ponta sob o cursor mostra a mão de pegar", () => {
+    const { rerender } = render(<RangeCalendarGrid {...base} hoverYmd="2026-08-10" />);
+    expect(dia("2026-08-10")).toHaveStyle({ cursor: "grab" });
+    expect(dia("2026-08-15")).toHaveStyle({ cursor: "pointer" });
+    rerender(<RangeCalendarGrid {...base} hoverYmd="2026-08-10" grabbedEdge="from" />);
+    expect(dia("2026-08-10")).toHaveStyle({ cursor: "grabbing" });
   });
 
 });

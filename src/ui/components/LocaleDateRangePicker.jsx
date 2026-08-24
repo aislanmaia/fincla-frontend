@@ -627,6 +627,21 @@ export function LocaleDateRangePicker({
           Duas caixas com borda para um intervalo também dizem "dois campos"
           quando a coisa é UMA: o intervalo cabe numa linha só. */}
       <>
+          {/* A legenda existe para a caixa não ficar solta entre os chips e o
+              calendário: sem ela, a linha `de … até …` lê como mais um chip. */}
+          <div
+            style={{
+              ...G,
+              fontFamily: "'Geist Mono', ui-monospace, monospace",
+              fontSize: 11,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: T.inkLight,
+              marginBottom: 4,
+            }}
+          >
+            Intervalo
+          </div>
           <div
             style={{
               display: "flex",
