@@ -2104,10 +2104,25 @@ function TransacoesPageBody({
     ? transactionsData.summary.balance
     : totalReceita - totalDespesaBruto + totalEstorno;
   const filteredCount = canUseRemoteSummary ? transactionsData.total : filtered.length;
-  // Contagens por tipo (apenas no modo mock — em modo live usaríamos endpoints separados).
-  const countReceita = filtered.filter(t=>t.type==="income").length;
-  const countDespesa = filtered.filter(t=>t.type==="expense").length;
-  const countEstorno = filtered.filter(t=>t.type==="refund").length;
+
+  /* Contagens por tipo. Em modo live vêm do summary — do FILTRO INTEIRO.
+     Antes eram sempre contadas nas linhas carregadas, e como os totais vêm do
+     filtro, dividir um pelo outro dava uma "média" que podia sair 10× alta.
+     O código escondia a média por causa disso; com a contagem certa ela volta. */
+  const sumario = canUseRemoteSummary ? transactionsData.summary : null;
+  const countReceita = sumario?.income_count ?? filtered.filter(t=>t.type==="income").length;
+  const countDespesa = sumario?.expense_count ?? filtered.filter(t=>t.type==="expense").length;
+  const countEstorno = sumario?.refund_count ?? filtered.filter(t=>t.type==="refund").length;
+  /* `countsArePartial` deixa de ser "estamos em live" e passa a ser o que o
+     nome diz: as contagens descrevem menos que o filtro. Com os campos novos
+     elas descrevem o filtro inteiro. */
+  const countsArePartial = canUseRemoteSummary && sumario?.income_count == null;
+
+  const maiorReceita = sumario?.largest_income ?? null;
+  const maiorDespesa = sumario?.largest_expense ?? null;
+  const aPagarCount = sumario?.unsettled_count ?? null;
+  const aPagarDespesas = sumario?.unsettled_expenses ?? null;
+  const saldoLiquidado = sumario?.settled_balance ?? null;
 
   /* A coluna de tags é medida UMA vez por página de resultados — sobre as
      mesmas linhas que serão renderizadas, e não sobre o filtro inteiro: medir o
@@ -2965,7 +2980,11 @@ function TransacoesPageBody({
 
   /* Quantos lançamentos do filtro ainda não entraram no saldo. Substitui o
      aviso de 16 px que ocupava uma faixa própria para dizer a mesma coisa. */
-  const pendingCount = txList.filter((t) => t.settleable && !t.settled).length;
+  /* "N a pagar" do cabeçalho vem do FILTRO INTEIRO quando a API o fornece.
+     Contar só as linhas carregadas dava 19 no cabeçalho e 34 nas estatísticas
+     logo acima — dois números para a mesma pergunta, na mesma tela. A contagem
+     local fica como fallback (mock, ou API antiga sem o campo). */
+  const pendingCount = aPagarCount ?? txList.filter((t) => t.settleable && !t.settled).length;
 
   const listIsEmptyUnderFilters =
     shouldUseRealData && !tagFilterBlocked && !listLoading && !listLoadFailed &&
@@ -3377,7 +3396,12 @@ function TransacoesPageBody({
               countEstorno={countEstorno}
               totalEstorno={totalEstorno}
               filteredCount={filteredCount}
-              countsArePartial={canUseRemoteSummary}
+              countsArePartial={countsArePartial}
+              maiorReceita={maiorReceita}
+              maiorDespesa={maiorDespesa}
+              aPagarCount={aPagarCount}
+              aPagarDespesas={aPagarDespesas}
+              saldoLiquidado={saldoLiquidado}
               unknown={tagFilterBlocked || listNeverLoaded}
               expanded={statsExpanded}
               onToggleExpanded={() => setStatsExpanded((v) => !v)}
@@ -3705,7 +3729,7 @@ function TransacoesPageBody({
         countReceita={countReceita}
         countDespesa={countDespesa}
         totalEstorno={totalEstorno}
-        countsArePartial={canUseRemoteSummary}
+        countsArePartial={countsArePartial}
         fmt={fmtBRL}
       />
 
