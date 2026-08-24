@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useId, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Calendar } from "lucide-react";
 import { T } from "../tokens";
 import { G, NUM } from "../typography";
@@ -239,6 +239,12 @@ function RangeDateInput({
  * Suporta intervalo aberto (só De ou só Até).
  */
 export function LocaleDateRangePicker({
+  /* Toque: células de 44 px, sem hover e sem arrasto.
+     `undefined` (o padrão) = detectar. NÃO derive isto de `compact`: compacto
+     quer dizer ESTREITO, e o dock do desktop é estreito abaixo de 1600 px — ali
+     as células viravam 44 px para um cursor que acerta 26. Quem decide é o tipo
+     de ponteiro, não a largura. */
+  touch: touchProp,
   period = "custom",
   customFrom = "",
   customTo = "",
@@ -263,6 +269,44 @@ export function LocaleDateRangePicker({
      numérico cobrindo meia tela contra um campo de 90 px. */
   const [calendarOpen, setCalendarOpen] = useState(true);
   const [hoverYmd, setHoverYmd] = useState(null);
+  /* A ponta "pega": arrastada no mouse, tocada no toque. Ela ganha anel verde
+     porque, sem hover, seria a única mudança de estado invisível da tela. */
+  const [grabbedEdge, setGrabbedEdge] = useState(null);
+  const dragRef = useRef(null);
+  /* O estado do React não chega a tempo: no toque, o `click` dispara no mesmo
+     gesto do `pointerdown`, e lia `grabbedEdge` ainda nulo — o toque na ponta
+     recomeçava o intervalo em vez de pegá-la. A ref é escrita de forma síncrona
+     no pointerdown e é ela que o click consulta. */
+  const grabRef = useRef(null);
+  /* No toque, o `click` do MESMO gesto que pegou a ponta consumia a pega na
+     hora, movendo-a para onde ela já estava — um toque que não fazia nada.
+     A guarda é pelo DIA pego, e não por "ignore o próximo clique": medindo o
+     gesto real, o primeiro toque às vezes nem gera `click` (a re-renderização
+     troca o alvo no meio), e a flag ficava presa engolindo o toque seguinte.
+     Comparar o dia não tem esse estado pendurado: clique no mesmo dia não move,
+     clique em outro dia move. */
+  const pegarPonta = useCallback((edge, ymdPego = null) => {
+    grabRef.current = { edge, ymdPego };
+    setGrabbedEdge(edge);
+  }, []);
+  const soltarPonta = useCallback(() => {
+    grabRef.current = null;
+    setGrabbedEdge(null);
+  }, []);
+
+  /* O intervalo desenhado pelo arrasto, ainda não gravado no filtro. */
+  const [arrasto, setArrasto] = useState(null);
+
+  const [coarsePointer, setCoarsePointer] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return undefined;
+    const mq = window.matchMedia("(hover: none)");
+    const sync = () => setCoarsePointer(mq.matches);
+    sync();
+    mq.addEventListener?.("change", sync);
+    return () => mq.removeEventListener?.("change", sync);
+  }, []);
+  const touch = touchProp ?? coarsePointer;
 
   const { from: displayFrom, to: displayTo } = useMemo(
     () => resolvePeriodDisplayBounds(period, customFrom, customTo),
@@ -309,9 +353,61 @@ export function LocaleDateRangePicker({
     [period, customFrom, markCustom, setCustomFrom, setCustomTo],
   );
 
-  const handleDayClick = useCallback(
+  /* Duplo clique num dia: o período vira aquele dia só.
+     Sem isto, "só hoje" custa dois cliques no MESMO dia — o gesto que ninguém
+     tenta, porque o primeiro clique já parece ter feito alguma coisa. */
+  const handleDayDoubleClick = useCallback(
     (ymd) => {
       markCustom();
+      setCustomFrom(ymd);
+      setCustomTo(ymd);
+      setActiveEdge("from");
+    },
+    [markCustom, setCustomFrom, setCustomTo],
+  );
+
+  const handleDayClick = useCallback(
+    (ymd) => {
+      /* Ponta pega no toque: este clique move ELA, não recomeça o intervalo.
+         É o caminho de dois toques que substitui o arrasto no mobile.
+
+         O `markCustom()` vem DEPOIS destas guardas de propósito: ele troca o
+         período para "custom", e com um preset ativo os campos custom estão
+         vazios — chamá-lo antes apagava o intervalo inteiro no primeiro toque,
+         justamente o que a pessoa estava tentando ajustar. */
+      const pega = grabRef.current;
+      if (pega && pega.ymdPego === ymd) {
+        /* O PRIMEIRO toque no dia pego não move nada — é o click do próprio
+           gesto que pegou. Do segundo em diante, SOLTA: sem isto um toque
+           perdido numa ponta (fácil numa célula de 44 px dentro de um sheet que
+           rola) prendia o seletor em modo mover-ponta para sempre, e todo toque
+           seguinte movia essa ponta em vez de começar um intervalo novo. */
+        if (pega.confirmado) soltarPonta();
+        else grabRef.current = { ...pega, confirmado: true };
+        return;
+      }
+      if (pega && (!displayFrom || !displayTo)) {
+        // Pega órfã: sem as duas pontas não há o que mover. Soltar evita que ela
+        // fique presa e sequestre os toques seguintes.
+        soltarPonta();
+      }
+      markCustom();
+      if (pega && displayFrom && displayTo) {
+        const outro = pega.edge === "from" ? displayTo : displayFrom;
+        const alvo = parseLocalYmd(ymd);
+        const ref = parseLocalYmd(outro);
+        soltarPonta();
+        if (alvo && ref) {
+          if (alvo.getTime() <= ref.getTime()) {
+            setCustomFrom(ymd);
+            setCustomTo(outro);
+          } else {
+            setCustomFrom(outro);
+            setCustomTo(ymd);
+          }
+          return;
+        }
+      }
       if (!displayFrom || (displayFrom && displayTo)) {
         setCustomFrom(ymd);
         setCustomTo("");
@@ -333,8 +429,104 @@ export function LocaleDateRangePicker({
       }
       setActiveEdge("from");
     },
-    [displayFrom, displayTo, markCustom, setCustomFrom, setCustomTo],
+    [displayFrom, displayTo, soltarPonta, markCustom, setCustomFrom, setCustomTo],
   );
+
+  /* Arrastar uma ponta. Só no mouse: no toque isto disputaria o gesto com a
+     rolagem do sheet — o mesmo conflito que já quebrou a rolagem da lista uma
+     vez. Lá o caminho é tocar a ponta (que fica "pega") e tocar o dia novo, com
+     o mesmo resultado e sem sequestrar a rolagem.
+
+     Ao arrastar uma ponta ALÉM da outra, as duas trocam de papel no meio do
+     gesto: é o que a pessoa espera ao ver o intervalo acompanhar o cursor, em
+     vez de o intervalo colapsar em zero e travar. */
+  const handleDayPointerDown = useCallback(
+    (ymd, e) => {
+      if (touch) {
+        /* Toque: a ponta fica pega no primeiro toque, o segundo define o par.
+           Se o intervalo vem de um PRESET, semeamos os campos custom com os
+           limites dele antes de pegar: sem isso, o `markCustom` do toque
+           seguinte encontraria os campos vazios e o intervalo sumiria. */
+        const ehPonta = ymd === displayFrom || ymd === displayTo;
+        if (!ehPonta || !displayFrom || !displayTo) return;
+        if (period !== "custom") {
+          markCustom();
+          setCustomFrom(displayFrom);
+          setCustomTo(displayTo);
+        }
+        pegarPonta(ymd === displayFrom ? "from" : "to", ymd);
+        return;
+      }
+      const isEdge = ymd === displayFrom || ymd === displayTo;
+      if (!isEdge || !displayFrom || !displayTo) return;
+      if (period !== "custom") {
+        markCustom();
+        setCustomFrom(displayFrom);
+        setCustomTo(displayTo);
+      }
+      const edge = ymd === displayFrom ? "from" : "to";
+      pegarPonta(edge);
+      dragRef.current = { edge, moved: false, other: edge === "from" ? displayTo : displayFrom };
+      if (e && e.currentTarget && e.pointerId != null) {
+        try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* noop */ }
+      }
+    },
+    [touch, period, displayFrom, displayTo, pegarPonta, markCustom, setCustomFrom, setCustomTo],
+  );
+
+  /* O arrasto vive no hover: o dia sob o cursor vira a nova posição da ponta
+     pega. Fica aqui, e não num listener de `pointermove` na grade, porque a
+     grade já reporta o dia — um segundo caminho de coordenadas para px
+     divergiria dela nas bordas da célula. */
+  const handleDayHoverDrag = useCallback(
+    (ymd) => {
+      setHoverYmd(ymd);
+      const drag = dragRef.current;
+      if (!drag || !ymd) return;
+      drag.moved = true;
+      const alvo = parseLocalYmd(ymd);
+      const outro = parseLocalYmd(drag.other);
+      if (!alvo || !outro) return;
+      /* O intervalo do arrasto fica LOCAL até soltar. `setCustomFrom/To`
+         alimentam o filtro, e a busca da lista não tem debounce: arrastar uma
+         ponta por um mês inteiro eram ~30 idas ao backend (lista + summary) e a
+         lista re-renderizando sob o cursor, para um gesto com um só estado
+         final. */
+      if (alvo.getTime() <= outro.getTime()) {
+        setArrasto({ from: ymd, to: drag.other });
+        pegarPonta("from");
+      } else {
+        setArrasto({ from: drag.other, to: ymd });
+        pegarPonta("to");
+      }
+    },
+    [pegarPonta],
+  );
+
+  useEffect(() => {
+    if (touch) return undefined;
+    const solta = () => {
+      const arrastando = Boolean(dragRef.current);
+      dragRef.current = null;
+      soltarPonta();
+      if (!arrastando) return;
+      // Grava UMA vez, no fim do gesto.
+      setArrasto((faixa) => {
+        if (faixa) {
+          markCustom();
+          setCustomFrom(faixa.from);
+          setCustomTo(faixa.to);
+        }
+        return null;
+      });
+    };
+    window.addEventListener("pointerup", solta);
+    window.addEventListener("pointercancel", solta);
+    return () => {
+      window.removeEventListener("pointerup", solta);
+      window.removeEventListener("pointercancel", solta);
+    };
+  }, [touch, soltarPonta, markCustom, setCustomFrom, setCustomTo]);
 
   const openCalendar = (edge) => {
     setActiveEdge(edge);
@@ -374,7 +566,11 @@ export function LocaleDateRangePicker({
     setCalendarOpen(false);
   };
 
-  const hintText = calendarOpen
+  const hintText = grabbedEdge
+    ? grabbedEdge === "from"
+      ? "Toque o novo início."
+      : "Toque o novo fim."
+    : calendarOpen
     ? displayFrom && !displayTo
       ? "1 clique no calendário define o fim — ou deixe em aberto."
       : !displayFrom && !displayTo
@@ -550,16 +746,22 @@ export function LocaleDateRangePicker({
           cursorYear={cursorYear}
           cursorMonth={cursorMonth}
           monthCount={compact ? 1 : 2}
-          fromYmd={displayFrom}
-          toYmd={displayTo}
-          hoverYmd={hoverYmd}
+          fromYmd={arrasto ? arrasto.from : displayFrom}
+          toYmd={arrasto ? arrasto.to : displayTo}
+          /* No toque não há hover, então não há prévia: passar `hoverYmd` ali
+             pintaria um caminho que ninguém está apontando. */
+          hoverYmd={touch || arrasto ? null : hoverYmd}
           minYmd={TRANSACTIONS_DATE_MIN}
           maxYmd={TRANSACTIONS_DATE_MAX}
           locale={locale}
           onDayClick={handleDayClick}
-          onDayHover={setHoverYmd}
+          onDayDoubleClick={handleDayDoubleClick}
+          onDayHover={handleDayHoverDrag}
+          onDayPointerDown={handleDayPointerDown}
           onPrevMonth={() => shiftMonth(-1)}
           onNextMonth={() => shiftMonth(1)}
+          touch={touch}
+          grabbedEdge={grabbedEdge}
         />
       )}
 
