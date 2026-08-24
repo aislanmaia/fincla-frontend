@@ -238,7 +238,12 @@ function superficieDeFiltros() {
  * precisa ser aberto antes de eles existirem no documento.
  */
 async function abrirMenuDeViews() {
-  const chip = screen.queryAllByRole("button", { name: /Visualiza(ções|ção)/i })[0];
+  // Pelo `aria-haspopup`, não pelo nome: "Visualização" aparece também no
+  // rótulo do botão de EXCLUIR cada view, e pegar o primeiro por nome caía
+  // nele em vez de no chip.
+  const chip = screen
+    .queryAllByRole("button")
+    .find((b) => b.getAttribute("aria-haspopup") === "menu");
   if (chip && chip.getAttribute("aria-expanded") !== "true") await userEvent.click(chip);
   return chip;
 }
@@ -359,9 +364,18 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     expect(screen.getByRole("button", { name: /Visualizações/i })).toBeInTheDocument();
     await abrirFaceta("Tipo");
     await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
-    expect(screen.getByRole("button", { name: /Visualizações salvas/i })).toBeInTheDocument();
+    // Com filtro aplicado há o que salvar, e o menu oferece.
+    await abrirMenuDeViews();
+    expect(screen.getByRole("button", { name: /^\+ Salvar atual$/ })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+
     await limparTudo();
-    expect(screen.queryByRole("button", { name: /Visualizações salvas/i })).not.toBeInTheDocument();
+    // Sem filtro nenhum o CHIP continua lá — ele é permanente, porque uma view
+    // salva é um atalho e esconder o acesso a ela até haver filtro esconde de
+    // quem já tem views. O que some é a oferta de SALVAR: não há recorte
+    // nenhum para guardar.
+    await abrirMenuDeViews();
+    expect(screen.queryByRole("button", { name: /^\+ Salvar atual$/ })).not.toBeInTheDocument();
   });
 
   it("atalho na FacetBar abre o formulário para salvar como nova visualização", async () => {
@@ -369,9 +383,8 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     await openFilters();
     await abrirFaceta("Tipo");
     await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
-    await userEvent.click(
-      screen.getByRole("button", { name: /^\+ Salvar atual$/ }),
-    );
+    await abrirMenuDeViews();
+    await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
     expect(screen.getByText("Nova visualização")).toBeInTheDocument();
   });
 
@@ -396,8 +409,11 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     );
     renderPage();
     await openFilters();
-    expect(screen.getByRole("button", { name: /Visualizações salvas/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Minha view" })).toBeInTheDocument();
+    // O chip anuncia a view ATIVA; a lista de views mora no menu dele, e é lá
+    // que "Minha view" existe. Antes elas eram cards soltos na faixa.
+    expect(screen.getByRole("button", { name: /Visualiza(ções|ção)/i })).toBeInTheDocument();
+    await abrirMenuDeViews();
+    expect(screen.getByRole("menuitemradio", { name: /^Minha view\b/ })).toBeInTheDocument();
   });
 
   it("renderiza os 7 facet cards com valores derivados do estado inicial", async () => {
@@ -490,10 +506,11 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     await abrirFaceta("Tipo");
     await userEvent.click(screen.getByRole("button", { name: "Despesa" }));
     await abrirMenuDeViews();
+    await abrirMenuDeViews();
     await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
     await userEvent.type(screen.getByLabelText(/Nome da visualização/i), "Minha view");
     await userEvent.click(screen.getByRole("button", { name: /Salvar como nova visualização/i }));
-    expect(screen.getByRole("button", { name: "Minha view" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitemradio", { name: /^Minha view\b/ })).toBeInTheDocument();
     const raw = localStorage.getItem("fincla.transactions.savedViews.v1");
     expect(raw).toBeTruthy();
     const parsed = JSON.parse(raw);
@@ -508,8 +525,10 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     await abrirFaceta("Tipo");
     await userEvent.click(screen.getByRole("button", { name: "Receita" }));
     await abrirMenuDeViews();
+    await abrirMenuDeViews();
     await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
     await userEvent.type(screen.getByLabelText(/Nome da visualização/i), "receitas");
+    await abrirMenuDeViews();
     await abrirMenuDeViews();
     await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
     const card = screen.getByRole("button", { name: "receitas" });
@@ -526,8 +545,10 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     await abrirFaceta("Tipo");
     await userEvent.click(screen.getByRole("button", { name: "Receita" }));
     await abrirMenuDeViews();
+    await abrirMenuDeViews();
     await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
     await userEvent.type(screen.getByLabelText(/Nome da visualização/i), "receitas");
+    await abrirMenuDeViews();
     await abrirMenuDeViews();
     await userEvent.click(screen.getByRole("button", { name: /^\+ Salvar atual$/ }));
     const card = screen.getByRole("button", { name: "receitas" });
@@ -1146,10 +1167,11 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     renderPage();
     await openFilters();
 
-    // 3 valores da faixa de estatísticas + a contagem do cabeçalho da lista +
-    // o chip "Tags: —" da facet (sem seleção, sempre "—" independente de
-    // loading — não é o que este teste cobre).
-    expect(screen.getAllByText("—").length).toBe(5);
+    // 3 valores da faixa de estatísticas + a contagem do cabeçalho da lista.
+    // Eram 5 enquanto existia o chip "Tags: —": o card de faceta carregava
+    // rótulo e valor juntos. No painel ancorado o trilho mostra só o nome, e o
+    // "—" da facet sem seleção vive dentro do painel dela.
+    expect(screen.getAllByText("—").length).toBe(4);
     // O motivo agora aparece UMA vez, ao lado do número que ele explica, em vez
     // de repetido na terceira linha de cada um dos três cards.
     expect(screen.getAllByText("Carregando…").length).toBe(1);
@@ -1167,7 +1189,7 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     renderPage();
     await openFilters();
 
-    expect(screen.getAllByText("—").length).toBe(5);
+    expect(screen.getAllByText("—").length).toBe(4);
     expect(screen.getAllByText("Não foi possível carregar").length).toBe(1);
     expect(screen.queryByText(/R\$/)).not.toBeInTheDocument();
   });
@@ -1182,9 +1204,10 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     renderPage();
     await openFilters();
 
-    // Só sobra o chip "Tags: —" (facet sem seleção) — nenhum "—" extra
-    // vindo da faixa de KPI.
-    expect(screen.getAllByText("—").length).toBe(1);
+    // Com dados carregados NENHUM "—" sobra: os três KPIs e a contagem voltam
+    // a mostrar número. O único que restava era o do chip "Tags: —", que saiu
+    // junto com os cards de faceta.
+    expect(screen.queryAllByText("—").length).toBe(0);
     expect(screen.getAllByText(/R\$/).length).toBeGreaterThan(0);
   });
 
@@ -1478,8 +1501,8 @@ describe("<TransacoesPage> — lançamentos cobertos por âncora (S4)", { timeou
     await openFilters();
 
     // "Já no acerto" só na linha de 10/08; a de 20/08 é posterior e conta normalmente.
-    expect(await screen.findByText("⚓ Já no acerto")).toBeInTheDocument();
-    expect(screen.getAllByText("⚓ Já no acerto").length).toBe(1);
+    expect(await screen.findByText("Já no acerto")).toBeInTheDocument();
+    expect(screen.getAllByText("Já no acerto").length).toBe(1);
   });
 
   it("não marca nada quando a conta não tem acerto", async () => {
@@ -1503,8 +1526,8 @@ describe("<TransacoesPage> — lançamentos cobertos por âncora (S4)", { timeou
     await openFilters();
 
     // 10/08 é anterior à abertura em 13/08 -> marcado; 20/08 é posterior -> não.
-    expect(await screen.findByText("⚓ Antes da abertura")).toBeInTheDocument();
-    expect(screen.getAllByText("⚓ Antes da abertura").length).toBe(1);
+    expect(await screen.findByText("Antes da abertura")).toBeInTheDocument();
+    expect(screen.getAllByText("Antes da abertura").length).toBe(1);
   });
 
   it("saldo de abertura ZERO não marca nada — não é afirmação nenhuma", async () => {
