@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef } from "react";
 import { T } from "../../../../../tokens";
 import { G } from "../../../../../typography";
 import { PanelHeader } from "./PanelHeader.jsx";
@@ -41,6 +41,22 @@ export function ValuePanel({
   const min = parseBrl(valueMin);
   const max = parseBrl(valueMax);
   const temFaixa = min != null || max != null;
+  const arrastoRef = useRef(null);
+
+  /* A faixa que o arrasto cobre: da borda de baixo da primeira barra à borda de
+     cima da última, com os limites arredondados pela mesma régua dos atalhos —
+     um `to` de 999,99 num campo de MÁXIMO não quer dizer nada para quem lê. */
+  const aplicaFaixaDeBarras = (i, j) => {
+    if (!Array.isArray(buckets)) return;
+    const lo = Math.min(i, j);
+    const hi = Math.max(i, j);
+    const primeiro = buckets[lo];
+    const ultimo = buckets[hi];
+    if (!primeiro || !ultimo) return;
+    setValueMin(primeiro.from == null ? "" : formatBrl(limiteRedondo(primeiro.from)));
+    setValueMax(ultimo.to == null ? "" : formatBrl(limiteRedondo(ultimo.to)));
+  };
+
   const edges = Array.isArray(buckets) ? bucketEdges(buckets, min, max) : { first: -1, last: -1 };
   const temBarras = Array.isArray(buckets) && buckets.some((b) => b.count > 0);
 
@@ -99,6 +115,30 @@ export function ValuePanel({
         <div
           role="group"
           aria-label="Distribuição por faixa de valor"
+          /* Arrastar sobre as barras seleciona a FAIXA inteira do gesto.
+             Clicar barra a barra obriga a somar faixas de cabeça; arrastar diz
+             "daqui até ali", que é como a pessoa lê o próprio histograma.
+             O clique simples continua valendo — o arrasto só entra quando o
+             ponteiro atravessa para outra barra, então um clique preciso nunca
+             vira um arrasto de uma barra só. */
+          onPointerDown={(e) => {
+            const alvo = e.target.closest("button[data-bucket]");
+            if (!alvo) return;
+            arrastoRef.current = { de: Number(alvo.dataset.bucket), ate: null };
+          }}
+          onPointerMove={(e) => {
+            const arr = arrastoRef.current;
+            if (!arr) return;
+            const alvo = document.elementFromPoint(e.clientX, e.clientY);
+            const btn = alvo && alvo.closest("button[data-bucket]");
+            if (!btn) return;
+            const i = Number(btn.dataset.bucket);
+            if (i === arr.de || i === arr.ate) return;
+            arr.ate = i;
+            aplicaFaixaDeBarras(arr.de, i);
+          }}
+          onPointerUp={() => { arrastoRef.current = null; }}
+          onPointerCancel={() => { arrastoRef.current = null; }}
           style={{
             display: "grid",
             gridTemplateColumns: `repeat(${buckets.length}, 1fr)`,
@@ -116,7 +156,13 @@ export function ValuePanel({
               <button
                 type="button"
                 key={label}
-                onClick={() => applyBucket(b)}
+                data-bucket={i}
+                onClick={() => {
+                  // Se o gesto virou arrasto, o clique final não pode reduzir a
+                  // faixa inteira à última barra tocada.
+                  if (arrastoRef.current && arrastoRef.current.ate != null) return;
+                  applyBucket(b);
+                }}
                 aria-pressed={dentro}
                 aria-label={`${label}: ${b.count} ${b.count === 1 ? "transação" : "transações"}`}
                 title={`${label} · ${b.count}`}

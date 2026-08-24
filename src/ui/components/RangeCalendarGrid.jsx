@@ -4,13 +4,17 @@ import { T } from "../tokens";
 import { G } from "../typography";
 import { weekdayLabelsShort, formatCalendarNavMonth } from "./finclaCalendarI18n.js";
 import {
-  FINCLA_CAL_DAY_PX,
   finclaCalendarWeekdayCellStyle,
   finclaCalNavButtonBase,
   finclaCalMonthTitleStyle,
 } from "./finclaCalendarStyles.js";
 import { todayLocalYmd } from "../data/transactionsAdapter.js";
 import { parseLocalYmd, ymdFromDate } from "../features/transactions/periodDateBounds.js";
+
+/* Os tons do §14: o intervalo fechado é mais forte que a prévia porque um é
+   fato e o outro é proposta. */
+const RANGE_MID = "#EFF6FF";
+const RANGE_PREVIEW = "#F1F5FF";
 
 function startOfDay(dt) {
   return new Date(dt.getFullYear(), dt.getMonth(), dt.getDate()).getTime();
@@ -64,13 +68,24 @@ function MonthGrid({
   maxYmd,
   locale,
   onDayClick,
+  onDayDoubleClick,
   onDayHover,
+  onDayPointerDown,
+  /* Célula de 44 px no toque, 26 no mouse — os números do §14. Trinta e poucos
+     servem para o cursor e não para o dedo: com 314 px de largura, 44 dá uma
+     célula quadrada o bastante para acertar sem ampliar. */
+  touch = false,
+  /* Qual ponta está "pega" (arrastada no mouse, ou tocada no mobile). Ela ganha
+     anel verde: sem hover, seria a única mudança de estado invisível da tela. */
+  grabbedEdge = null,
   /* Com UM mês, quem nomeia o mês é a barra de navegação — o título aqui
      dentro repetia a mesma palavra duas vezes, uma sob a outra. Com dois, a
      barra fica só com as setas e cada grade precisa dizer qual mês é. */
   showTitle = true,
 }) {
   const weekdays = useMemo(() => weekdayLabelsShort(locale), [locale]);
+  const cellH = touch ? 44 : 30;
+  const dayFont = touch ? 12.5 : 12;
   const firstDow = new Date(year, monthIndex, 1).getDay();
   const nDays = new Date(year, monthIndex + 1, 0).getDate();
   const cells = [];
@@ -108,6 +123,11 @@ function MonthGrid({
           const { edge, isFrom, isTo, inRange } = dayState(ymd, fromYmd, toYmd, hoverYmd);
           const isToday = ymd === todayY;
           const hov = hoverYmd === ymd;
+          // Prévia: com só uma ponta posta, o caminho até o cursor é sombreado
+          // mais claro que o intervalo fechado — um é proposta, o outro é fato.
+          const hovPreview = inRange && !toYmd;
+          const grabbed =
+            (grabbedEdge === "from" && isFrom) || (grabbedEdge === "to" && isTo);
 
           return (
             <div
@@ -117,6 +137,15 @@ function MonthGrid({
               aria-label={ymd}
               aria-disabled={disabled}
               onClick={() => !disabled && onDayClick(ymd)}
+              onDoubleClick={() => {
+                // Duplo clique = aquele dia sozinho. Sem isto, "só hoje" custa
+                // dois cliques no MESMO dia, que é o gesto que ninguém tenta.
+                if (!disabled && typeof onDayDoubleClick === "function") onDayDoubleClick(ymd);
+              }}
+              onPointerDown={(e) => {
+                if (disabled || typeof onDayPointerDown !== "function") return;
+                onDayPointerDown(ymd, e);
+              }}
               onKeyDown={(e) => {
                 if (disabled) return;
                 if (e.key === "Enter" || e.key === " ") {
@@ -128,37 +157,65 @@ function MonthGrid({
               style={{
                 textAlign: "center",
                 cursor: disabled ? "not-allowed" : "pointer",
-                padding: "1px 0",
-                background: inRange ? `${T.blue}18` : "transparent",
-                borderRadius: isFrom && isTo ? 8 : isFrom ? "8px 0 0 8px" : isTo ? "0 8px 8px 0" : "none",
+                /* O miolo do intervalo pinta a CÉLULA inteira, sem raio: é o que
+                   faz a faixa parecer contínua entre as pontas. Antes o fundo
+                   ficava numa bolinha de 28 px e a faixa aparecia furada. */
+                background: inRange ? RANGE_MID : hovPreview ? RANGE_PREVIEW : "transparent",
+                borderRadius: 0,
                 opacity: disabled ? 0.35 : 1,
+                userSelect: "none",
+                touchAction: touch ? "manipulation" : undefined,
               }}
             >
               <div
                 style={{
-                  width: FINCLA_CAL_DAY_PX,
-                  height: FINCLA_CAL_DAY_PX,
-                  borderRadius: "50%",
-                  margin: "0 auto",
+                  height: cellH,
+                  borderRadius: 6,
                   display: "flex",
+                  flexDirection: "column",
                   alignItems: "center",
                   justifyContent: "center",
-                  background: edge ? T.ink : hov ? T.bg : "transparent",
+                  lineHeight: 1.05,
+                  background: edge ? T.ink : "transparent",
+                  boxShadow: grabbed
+                    ? "inset 0 0 0 1.5px #0F8A5F"
+                    : hov && !edge
+                      ? "inset 0 0 0 1.5px #2563EB"
+                      : "none",
                   border: isToday && !edge ? `1.5px solid ${T.ink}` : "none",
                   boxSizing: "border-box",
-                  transition: "background 0.1s",
+                  transition: "background 0.1s, box-shadow 0.1s",
                 }}
               >
                 <span
                   style={{
                     ...G,
-                    fontSize: 12,
+                    fontFamily: "'Geist Mono',monospace",
+                    fontSize: dayFont,
                     fontWeight: edge || isToday ? 700 : 500,
                     color: edge ? "#fff" : isToday ? T.ink : T.inkMid,
                   }}
                 >
                   {day}
                 </span>
+                {/* O rótulo na célula é o marcador PERMANENTE. No toque não há
+                    hover nem balão, então ele é o único que diz qual ponta é
+                    qual — e no mouse ele evita ter que inferir pela ordem. */}
+                {edge && (
+                  <em
+                    style={{
+                      ...G,
+                      fontStyle: "normal",
+                      fontSize: touch ? 8.5 : 7.5,
+                      fontWeight: 700,
+                      letterSpacing: "0.04em",
+                      color: "#fff",
+                      opacity: 0.85,
+                    }}
+                  >
+                    {isFrom && isTo ? "só" : isFrom ? "de" : "até"}
+                  </em>
+                )}
               </div>
             </div>
           );
@@ -182,9 +239,13 @@ export function RangeCalendarGrid({
   maxYmd,
   locale = "pt-BR",
   onDayClick,
+  onDayDoubleClick,
   onDayHover,
+  onDayPointerDown,
   onPrevMonth,
   onNextMonth,
+  touch = false,
+  grabbedEdge = null,
 }) {
   const months = useMemo(() => {
     const list = [];
@@ -211,7 +272,7 @@ export function RangeCalendarGrid({
 
   return (
     <div
-      onMouseLeave={() => onDayHover(null)}
+      onMouseLeave={touch ? undefined : () => onDayHover(null)}
       style={{
         border: `1px solid ${T.border}`,
         borderRadius: 12,
@@ -282,7 +343,11 @@ export function RangeCalendarGrid({
             maxYmd={maxYmd}
             locale={locale}
             onDayClick={onDayClick}
+            onDayDoubleClick={onDayDoubleClick}
             onDayHover={onDayHover}
+            onDayPointerDown={onDayPointerDown}
+            touch={touch}
+            grabbedEdge={grabbedEdge}
             showTitle={monthCount > 1}
           />
         ))}

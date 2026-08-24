@@ -154,7 +154,15 @@ describe("<TransactionsFilterBar>", { timeout: 15000 }, () => {
     fireEvent.change(toInput, { target: { value: "15/10/2026" } });
     fireEvent.blur(toInput);
     expect(screen.getByRole("button", { name: /Período: 1–15 out/i })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Personalizado/i })).not.toBeInTheDocument();
+    // O CARD da faceta mostra o intervalo, nunca a palavra. O chip
+    // "Personalizado" dentro do painel é outra coisa e existe de propósito
+    // (é o primeiro da fileira) — por isso a asserção é escopada ao card.
+    expect(screen.queryByRole("button", { name: /^Período: Personalizado/i })).not.toBeInTheDocument();
+    // E o chip, quando há intervalo, nomeia o intervalo junto: o rótulo visível
+    // é "1–15 out" e o nome acessível precisa contê-lo.
+    expect(
+      screen.getByRole("button", { name: /Preset: Personalizado — 1–15 out/i }),
+    ).toBeInTheDocument();
   });
 
   it("período personalizado aberto: só De exibe A partir de no facet", async () => {
