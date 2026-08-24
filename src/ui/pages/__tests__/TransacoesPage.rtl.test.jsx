@@ -9,6 +9,13 @@ import userEvent from "@testing-library/user-event";
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => vi.fn(),
   useSearch: () => ({}),
+  /* A página observa o CAMINHO para saber que o modal de edição fechou — o
+     modal é uma rota (`/transactions/{-$transactionId}`), e essa é a única
+     pista que a página tem. */
+  useRouterState: (opts) =>
+    typeof opts?.select === "function"
+      ? opts.select({ location: { pathname: "/transactions" } })
+      : { location: { pathname: "/transactions" } },
 }));
 
 // Mocks: hooks de dados ─────────────────────────────────────────────────────

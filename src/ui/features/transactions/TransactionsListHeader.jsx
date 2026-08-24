@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 
 import { T } from "../../tokens";
 import { G } from "../../typography";
@@ -46,14 +46,35 @@ export function TransactionsListHeader({
   compact = false,
 }) {
   const num = (v) => (loading ? "—" : String(v));
+
+  /* O ANÚNCIO é uma frase própria, separada do que se vê.
+     A região viva antiga era o cabeçalho inteiro: ela recitava a linha toda a
+     cada render, "—" incluído durante o carregamento, e quem usa leitor de tela
+     ouvia ruído em vez de resultado. Aqui vai só o que mudou de fato — e só
+     quando o número já é verdade. */
+  const [anuncio, setAnuncio] = useState("");
+  useEffect(() => {
+    if (loading) return undefined;
+    /* O atraso não é sobre a busca (essa já é debounced antes de virar
+       consulta): é sobre trocas RÁPIDAS de filtro, em que anunciar cada estado
+       intermediário atropela a leitura do anterior. */
+    const id = setTimeout(() => {
+      setAnuncio(
+        pending > 0
+          ? `${total} transaç${total === 1 ? "ão" : "ões"}, ${pending} a pagar`
+          : `${total} transaç${total === 1 ? "ão" : "ões"}`,
+      );
+    }, 350);
+    return () => clearTimeout(id);
+  }, [total, pending, loading]);
+
   return (
     <div
-      role="status"
-      aria-live="polite"
       style={{
         ...G,
         position: "sticky",
         top: 0,
+        // (o anúncio vive na região viva logo abaixo, fora do fluxo visual)
         zIndex: 3,
         // Raios explícitos em vez de `overflow:hidden` no card: recortar por
         // overflow criaria um scrollport e este `sticky` deixaria de grudar no
@@ -220,6 +241,19 @@ export function TransactionsListHeader({
         </span>
           )
         ) : null}
+      </span>
+      {/* A região viva propriamente dita: invisível, e com UMA frase.
+          `role="status"` já implica `aria-live="polite"`; o par existe porque
+          leitores antigos honram um ou outro. */}
+      <span
+        role="status"
+        aria-live="polite"
+        style={{
+          position: "absolute", width: 1, height: 1, padding: 0, margin: -1,
+          overflow: "hidden", clip: "rect(0 0 0 0)", whiteSpace: "nowrap", border: 0,
+        }}
+      >
+        {anuncio}
       </span>
     </div>
   );

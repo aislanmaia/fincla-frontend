@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
 import { FC } from "../routing/searchContract.js";
 import {
   Search,
@@ -40,6 +40,9 @@ import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from 
 import { TransactionsEmptyState } from "../features/transactions/TransactionsEmptyState.jsx";
 import { TransactionsSkeleton } from "../features/transactions/TransactionsSkeleton.jsx";
 import { ConfirmActionModal } from "../features/transactions/ConfirmAction.jsx";
+import { ShortcutsModal } from "../features/transactions/ShortcutsModal.jsx";
+import { useTransactionsKeyboard } from "../features/transactions/useTransactionsKeyboard.js";
+import { useFocusTrap } from "../features/transactions/useFocusTrap.js";
 import { TransactionsStats } from "../features/transactions/TransactionsStats.jsx";
 import { TransactionsSummarySheet } from "../features/transactions/TransactionsSummarySheet.jsx";
 import { useSwipeActions, SWIPE_WIDTH } from "../features/transactions/useSwipeActions.js";
@@ -382,6 +385,8 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
      dizer qual das duas coisas ele vai fazer — dizer "Adicionar" enquanto
      remove é pior que não dizer nada. */
   tagsAtivas = EMPTY_ARRAY,
+  /* Esta linha é o ponto de parada do Tab da lista. */
+  isRovingStop = false,
   /* O rótulo no hover da ação cresce para DENTRO do vão. Acima de ~1200 px o vão
      comporta; abaixo, o botão volta a ser só o ícone em vez de invadir a
      descrição. Vem como prop própria e não de `wide` (≥1600): amarrá-lo a `wide`
@@ -614,7 +619,11 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
          de tela. Um único ponto de parada no Tab (a lista inteira seriam 15
          paradas × 3 ações) e Enter/Espaço abrem o detalhe. */
       role="button"
-      tabIndex={0}
+      data-tx-row={tx.id}
+      /* `roving tabindex`: UMA parada no Tab para a lista inteira, e ↑↓ andam
+         entre as linhas. Com `tabIndex=0` em todas, 20 linhas × 4 ações rápidas
+         viravam ~100 paradas entre a busca e o rodapé. */
+      tabIndex={isRovingStop ? 0 : -1}
       aria-expanded={isSelected}
       aria-label={`${tx.desc}, ${isReceita ? "receita" : "despesa"} de ${fmtBRL(tx.val)} em ${tx.date}`}
       style={{ display:"grid", gridTemplateColumns: columns,
@@ -1016,6 +1025,9 @@ const DetailPanel = ({
   tx,
   onClose,
   onEditTx,
+  /* Avisa a página de que a edição começou nesta linha, para o foco voltar
+     para ela quando o modal fechar. */
+  onEditRequested,
   setSelected,
   shouldUseRealData,
   transactionsData,
@@ -1248,9 +1260,15 @@ const DetailPanel = ({
           onClick={(e) => {
             e.stopPropagation();
             if (onEditTx) onEditTx(tx);
-            // Fecha o painel no próximo tick para o pai aplicar `flushSync` +
-            // `navigate` antes do unmount (evita corrida com o estado do modal).
-            queueMicrotask(() => onClose());
+            /* A sanfona NÃO fecha. Ela fechava por uma corrida que não existe
+               neste caminho: a edição navega para
+               `/transactions/{-$transactionId}`, segmento OPCIONAL da mesma
+               rota, então a página não desmonta e `selected` sobrevive ao modal.
+               Fechar tirava da tela justamente o contexto de onde a pessoa
+               chamou a edição — e ao voltar ela caía numa lista sem marca de
+               onde estava. A sanfona já faz merge do resultado, então ela volta
+               com os dados novos sem recarregar. */
+            onEditRequested?.(tx);
           }}>
           ✎ Editar
         </AccButton>
@@ -1440,6 +1458,19 @@ function TransacoesPageBody({
 
   const [chipsBudget, setChipsBudget] = useState(null);
   const [confirmAcao, setConfirmAcao] = useState(null);
+  /* `rovingId` guarda a linha lembrada; `rovingStopId` é a que REALMENTE está
+     na tela. A comparação era `tx.id === rovingId` com `rovingId` sempre string
+     e `tx.id` numérico no mock: `1 === "1"` é falso, então nenhuma linha era a
+     parada e a lista inteira saía da ordem de Tab — exatamente a regressão que
+     esta feature veio evitar. E mesmo com UUIDs, a linha lembrada some ao ser
+     excluída ou filtrada, e ninguém limpava o estado. Se a lembrada não está
+     mais renderizada, a parada volta para a primeira linha. */
+  const [rovingId, setRovingId] = useState(null);
+  const [ajudaAberta, setAjudaAberta] = useState(false);
+  const buscaRef = useRef(null);
+  /* Qual linha pediu a edição. Ao fechar o modal, o foco volta para ela: sem
+     isso o Tab recomeça do topo do documento e quem editou perde o lugar. */
+  const editandoDeRef = useRef(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
 
   const [panelFacet, setPanelFacet] = useState("periodo");
@@ -2156,6 +2187,15 @@ function TransacoesPageBody({
     [isMobile, pageRows],
   );
 
+  /* A parada de Tab que EXISTE na tela. Se a linha lembrada saiu da lista
+     (excluída, filtrada, ou a página trocou), a parada volta para a primeira —
+     nunca para "nenhuma", que tirava a lista da ordem de Tab. */
+  const rovingStopId = useMemo(() => {
+    const visiveis = filtered.slice(0, visible).map((t) => String(t.id));
+    if (visiveis.length === 0) return null;
+    return rovingId && visiveis.includes(rovingId) ? rovingId : visiveis[0];
+  }, [filtered, visible, rovingId]);
+
   // ── Group by date ─────────────────────────────────────────────────────────
   const groups = useMemo(() => {
     const map = {};
@@ -2766,6 +2806,33 @@ function TransacoesPageBody({
    */
   const [leavingIds, setLeavingIds] = useState(() => new Set());
   const [settledFlashId, setSettledFlashId] = useState(null);
+
+  /* O sheet cobre a tela, mas o botão que o abriu continua no fluxo de Tab por
+     trás do backdrop: sem prender, quem navega por teclado tabula para fora,
+     alcança controles que não vê e age neles às cegas. E ao fechar, o foco
+     volta para o gatilho em vez de recomeçar do topo do documento. */
+  useFocusTrap(sheetRef, isMobile && filtersOpen && !sheetClosing);
+
+  /* O modal de edição é uma ROTA (`/transactions/{-$transactionId}`), então a
+     volta dele é uma mudança de caminho — que é o sinal mais confiável que esta
+     página tem. Watch de estado do modal não serve: ele vive no App. */
+  const caminhoAtual = useRouterState({ select: (st) => st.location.pathname });
+  const emModalDeTransacao = /\/transactions\/[^/]+/.test(caminhoAtual);
+  useEffect(() => {
+    const id = editandoDeRef.current;
+    if (!id) return;
+    if (emModalDeTransacao) return; // ainda no modal
+    editandoDeRef.current = null;
+    const linha = document.querySelector(`[data-tx-row="${id}"]`);
+    if (!linha) return;
+    setRovingId(id);
+    linha.focus();
+    linha.scrollIntoView({ block: "nearest" });
+    /* O mesmo flash que a lista já usa ao liquidar: quem volta de um modal
+       precisa de uma marca dizendo "você estava aqui". */
+    setSettledFlashId(id);
+    setTimeout(() => setSettledFlashId((cur) => (cur === id ? null : cur)), 900);
+  }, [caminhoAtual, emModalDeTransacao]);
   const leaveTimers = useRef([]);
 
   useEffect(
@@ -2839,7 +2906,14 @@ function TransacoesPageBody({
   );
 
   const quickActions = useMemo(() => ({
-    onEdit: (tx) => { if (onEditTx) onEditTx(tx); },
+    /* Marca a origem ANTES de navegar: é ela que traz o foco de volta ao
+       fechar o modal. Vale para o ✎ da linha e para a tecla E — os dois passam
+       por aqui, e sem a marca o foco ficava no `body` depois de editar, que é
+       justamente o caminho que o painel de atalhos anuncia. */
+    onEdit: (tx) => {
+      editandoDeRef.current = String(tx.id);
+      if (onEditTx) onEditTx(tx);
+    },
     // Só existe quando o consumidor sabe duplicar. Um botão que não faz nada
     // é pior que um botão ausente.
     onDuplicate: onDuplicateTx ? (tx) => onDuplicateTx(tx) : null,
@@ -2886,6 +2960,33 @@ function TransacoesPageBody({
     },
   }), [onEditTx, onDuplicateTx, settlingId, shouldUseRealData, transactionsData,
       onTransactionsInvalidate, flashSettled]);
+
+  /* Os atalhos usam os MESMOS caminhos das ações rápidas — nenhuma segunda
+     implementação de liquidar/excluir, que é onde as duas divergiriam. */
+  useTransactionsKeyboard({
+    containerRef: listScrollRef,
+    /* O modal de edição é uma ROTA e a página segue montada por baixo dele
+       (é o que faz a sanfona sobreviver). Sem esta guarda, "/" mandava o foco
+       para a busca ATRÁS do modal, "f" abria a dock por trás e ↑↓ arrancavam o
+       foco de dentro do modal para a lista. */
+    enabled: !isMobile && !confirmAcao && !ajudaAberta && !emModalDeTransacao,
+    onFocusSearch: () => buscaRef.current?.focus(),
+    /* Cada layout tem o SEU estado de dock. Alternar sempre o `wide` abria o
+       painel largo enquanto o botão visível no compacto continuava dizendo
+       "fechado" — a tecla mexia num estado que ninguém estava vendo. */
+    onToggleFilters: () =>
+      isDesktopCompact
+        ? setCompactDesktopFiltersOpen((v) => !v)
+        : setWideDesktopFiltersOpen((v) => !v),
+    onHelp: () => setAjudaAberta(true),
+    getTransaction: (id) => txList.find((t) => String(t.id) === String(id)) || null,
+    onSettle: (tx) => quickActions.onSettle(tx),
+    onEdit: (tx) => quickActions.onEdit(tx),
+    onDuplicate: (tx) => quickActions.onDuplicate?.(tx),
+    onDelete: (tx) => quickActions.onDelete(tx),
+    onRovingChange: setRovingId,
+  });
+
 
   /* Agrupar por data só faz sentido ordenado por data: por valor ou categoria
      cada "grupo" vira um item só, o pior dos dois mundos. */
@@ -3185,6 +3286,7 @@ function TransacoesPageBody({
                     tagsColPx={tagsColPx}
                     catColPx={catColPx}
                     tagsAtivas={filter.tags}
+                    isRovingStop={rovingStopId === String(tx.id)}
                     /* 1000 px de LISTA — não de viewport. Abaixo disso o vão
                        não comporta o botão aberto e ele invadiria a descrição.
                        Enquanto a medição não chega (primeiro render), cai no
@@ -3211,6 +3313,7 @@ function TransacoesPageBody({
                         tx={tx}
                         onClose={() => setSelected(null)}
                         onEditTx={onEditTx}
+                        onEditRequested={(tx) => { editandoDeRef.current = String(tx.id); }}
                         setSelected={setSelected}
                         shouldUseRealData={shouldUseRealData}
                         transactionsData={transactionsData}
@@ -3574,6 +3677,11 @@ function TransacoesPageBody({
                 hideFacets
                 barLeading={savedViewsChip}
                 barChips={commandBarChipsCompact}
+                /* Os atalhos valem em TODO desktop, então a busca e o "?"
+                   precisam existir aqui também: sem o ref, "/" engolia a tecla
+                   e focava um `null`. */
+                searchInputRef={buscaRef}
+                onHelp={() => setAjudaAberta(true)}
               />
             </div>
           </div>
@@ -3603,11 +3711,15 @@ function TransacoesPageBody({
             hideFacets
             barLeading={savedViewsChip}
             onChipsBudget={setChipsBudget}
+            searchInputRef={buscaRef}
+            onHelp={() => setAjudaAberta(true)}
             barChips={commandBarChips}
             barTrailing={listPrefsButtons}
           />
         </>
       )}
+
+      {ajudaAberta && <ShortcutsModal onClose={() => setAjudaAberta(false)} />}
 
       {confirmAcao && (
         <ConfirmActionModal
@@ -3650,6 +3762,9 @@ function TransacoesPageBody({
           {/* Sheet */}
           <div
             ref={sheetRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Filtros"
             style={{ position:"relative", background:T.surface,
               /* Cantos QUADRAM no cheio. É o sinal de que o sheet deixou de ser
                  camada sobre a lista e virou tela — e o único disponível, já
