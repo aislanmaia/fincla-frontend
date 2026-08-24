@@ -1,0 +1,49 @@
+{
+  "total_transactions": 20,
+  "total_value": 25221.04,
+  "total_income": 18717.79,
+  "total_expenses": 6503.25,
+  "total_refunds": 0.0,
+  "balance": 12214.54,
+  "average_transaction": 1261.05,
+  "period": {
+    "start_date": "2025-01-01",
+    "end_date": "2025-01-31"
+  },
+  "filters_applied": {
+    "organization_id": "123e4567-e89b-12d3-a456-426614174000",
+    "type": null,
+    "category": "Alimentação",
+    "payment_methods": null,
+    "date_start": "2025-01-01",
+    "date_end": "2025-01-31",
+    "recurring": null,
+    "tag_id": null
+  },
+  "recurring_in_period": {
+    "total_expense": 320.0,
+    "total_income": 0.0,
+    "period": {
+      "start_date": "2025-01-01",
+      "end_date": "2025-01-31"
+    },
+    "series_count_expense": 2,
+    "series_count_income": 0
+  },
+  "income_count": 2,
+  "expense_count": 18,
+  "refund_count": 0,
+  "largest_income": {
+    "description": "Salário mensal",
+    "value": 8500.0,
+    "date": "2025-01-05"
+  },
+  "largest_expense": {
+    "description": "Aluguel",
+    "value": 2400.0,
+    "date": "2025-01-10"
+  },
+  "unsettled_count": 11,
+  "unsettled_expenses": 4129.56,
+  "settled_balance": 8084.98
+}

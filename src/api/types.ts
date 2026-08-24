@@ -714,6 +714,14 @@ export interface RecurringInPeriod {
   series_count_income?: number;
 }
 
+/** Maior lançamento de um tipo dentro do filtro. `value` é sempre positivo. */
+export interface LargestTransaction {
+  description: string;
+  value: number;
+  /** YYYY-MM-DD */
+  date: string;
+}
+
 export interface TransactionsSummaryResponse {
   total_transactions: number;
   total_value: number;
@@ -722,13 +730,33 @@ export interface TransactionsSummaryResponse {
   total_expenses: number;
   /** Bruto — soma absoluta de transações type='refund'. */
   total_refunds: number;
-  /** Líquido — total_income − total_expenses + total_refunds. */
+  /** Líquido — total_income − total_expenses + total_refunds. Conta TUDO no
+   *  filtro, pago ou não; para só o liquidado, ver `settled_balance`. */
   balance: number;
+  /** Média GLOBAL. Para média por tipo: total_income / income_count. */
   average_transaction: number;
   period: PeriodInfo;
   filters_applied: FiltersInfo;
   /** Presente quando date_start e date_end são enviados e válidos (inclusivos). */
   recurring_in_period?: RecurringInPeriod;
+
+  // ── Estatísticas expandidas ────────────────────────────────────────────
+  /** Contagens do FILTRO inteiro, por tipo — não da página carregada. É o que
+   *  permite calcular média por tipo sem dividir um total do filtro pela
+   *  contagem de uma página (o bug que fazia a média sair 10× alta). */
+  income_count: number;
+  expense_count: number;
+  refund_count: number;
+  /** `null` quando não há nenhuma linha daquele tipo no filtro — diferente de
+   *  um lançamento de R$ 0. */
+  largest_income: LargestTransaction | null;
+  largest_expense: LargestTransaction | null;
+  /** Linhas com status != 'paid'. Mesma régua do parâmetro `settled`. */
+  unsettled_count: number;
+  /** Soma absoluta das DESPESAS ainda não liquidadas. */
+  unsettled_expenses: number;
+  /** Mesma fórmula de `balance`, restrita a status = 'paid'. */
+  settled_balance: number;
 }
 
 // ===== CARTÕES DE CRÉDITO =====
