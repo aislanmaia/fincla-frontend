@@ -256,7 +256,12 @@ export function LocaleDateRangePicker({
   const [errFrom, setErrFrom] = useState(null);
   const [errTo, setErrTo] = useState(null);
   const rangeError = errFrom || errTo;
-  const [calendarOpen, setCalendarOpen] = useState(false);
+  /* O calendário nasce ABERTO. Ele é o controle principal deste filtro —
+     escolher "aquela semana" são dois cliques, contra doze dígitos digitados —
+     e nascer fechado obrigava a descobrir que tocar no campo o revela, sem
+     nenhuma pista de que ele existe. No celular pesa ainda mais: teclado
+     numérico cobrindo meia tela contra um campo de 90 px. */
+  const [calendarOpen, setCalendarOpen] = useState(true);
   const [hoverYmd, setHoverYmd] = useState(null);
 
   const { from: displayFrom, to: displayTo } = useMemo(

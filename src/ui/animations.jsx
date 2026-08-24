@@ -1,5 +1,15 @@
 /** CSS global de keyframes e utilitários — injetado uma vez (espelho do protótipo de referência em docs/) */
 export const ANIM_CSS = `
+  /* Esqueleto da lista: opacidade, nunca posicao. Um shimmer que desliza
+     custa repaint em cada linha; o pulso e uma propriedade composta e roda
+     na GPU mesmo com trinta linhas na tela. */
+  @keyframes finclaSkelPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    [data-testid="transactions-skeleton"] > div { animation: none !important; opacity: 0.7; }
+  }
   @keyframes fadeSlideUp {
     from { opacity:0; transform:translateY(8px); }
     to   { opacity:1; transform:translateY(0);   }

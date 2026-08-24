@@ -1130,7 +1130,11 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     renderPage();
     await openFilters();
 
-    expect(screen.getByText(/Carregando transações/i)).toBeInTheDocument();
+    // O sinal de carregando é o ESQUELETO da lista, não um texto centralizado:
+    // ele ocupa a mesma grade das linhas, então quando o dado chega nada muda
+    // de lugar. O cabeçalho segue dizendo "Carregando…".
+    expect(screen.getByTestId("transactions-skeleton")).toBeInTheDocument();
+    expect(screen.getAllByText("Carregando…").length).toBeGreaterThan(0);
     expect(screen.queryByText(/Nenhuma transação encontrada/i)).not.toBeInTheDocument();
   });
 
@@ -1174,7 +1178,11 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     renderPage();
     await openFilters();
 
-    expect(screen.getByText(/Carregando transações/i)).toBeInTheDocument();
+    // O sinal de carregando é o ESQUELETO da lista, não um texto centralizado:
+    // ele ocupa a mesma grade das linhas, então quando o dado chega nada muda
+    // de lugar. O cabeçalho segue dizendo "Carregando…".
+    expect(screen.getByTestId("transactions-skeleton")).toBeInTheDocument();
+    expect(screen.getAllByText("Carregando…").length).toBeGreaterThan(0);
     expect(screen.queryByText(/Nenhuma transação encontrada/i)).not.toBeInTheDocument();
   });
 
