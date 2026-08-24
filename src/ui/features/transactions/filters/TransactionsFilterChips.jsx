@@ -47,22 +47,34 @@ function chipStyle(tone) {
   return { ...base, background: T.surface, border: `1px solid ${T.border}`, color: T.inkMid };
 }
 
-/** Contador dentro de um chip (o "+3" do overflow). */
-function CountBadge({ n }) {
+/** Contador dentro de um chip (o "+3" do overflow, e o total no "Filtros").
+ *
+ * Redondo de verdade — `minWidth` igual à altura — e não uma pílula apertada:
+ * um dígito solto num retângulo de 5 px de padding lê como texto do botão, não
+ * como contagem. Com dois dígitos ele estica, o que é inevitável e continua
+ * legível como badge. */
+function CountBadge({ n, prefix = "" }) {
   return (
     <span
       style={{
         ...G,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
         background: T.blue,
         color: "#fff",
         borderRadius: 999,
+        minWidth: 18,
+        height: 18,
         padding: "0 5px",
         fontSize: 11,
         fontWeight: 700,
-        lineHeight: 1.5,
+        lineHeight: 1,
+        flexShrink: 0,
       }}
     >
-      +{n}
+      {prefix}
+      {n}
     </span>
   );
 }
@@ -117,19 +129,36 @@ export function TransactionsFilterChips({
   const shown = collapsed ? [] : chips.slice(0, maxVisible);
   const hidden = collapsed ? chips : chips.slice(maxVisible);
 
+  /* O rótulo diz o que o clique FAZ. Um botão que abre e fecha e não muda de
+     texto obriga a olhar a tela para descobrir em que estado se está — e no
+     desktop o painel abre ancorado, longe do botão. */
   const filtrosChip = (
     <button
       type="button"
       onClick={onToggleFilters}
       aria-expanded={filtersOpen}
-      aria-label={filtersOpen ? "Ocultar filtros" : "Abrir filtros"}
+      /* O `aria-label` SUBSTITUI todo o conteúdo do botão no cálculo do nome
+         acessível — com ele fixo, o contador dentro do botão não é anunciado, e
+         o ponto do contador (o número decide se vale abrir) sumia para quem usa
+         leitor de tela. O gêmeo do mobile já dobra a contagem no nome; aqui
+         faltava. */
+      aria-label={
+        filtersOpen
+          ? "Fechar filtros"
+          : chips.length > 0
+            ? `Abrir filtros — ${chips.length} aplicado${chips.length === 1 ? "" : "s"}`
+            : "Abrir filtros"
+      }
       style={{
         ...chipStyle(filtersOpen ? "on" : "ghost"),
         ...(filtersOpen ? {} : { borderStyle: "dashed" }),
       }}
     >
-      ＋ Filtros
-      {collapsed && chips.length > 0 && <CountBadge n={chips.length} />}
+      {filtersOpen ? "✕ Fechar filtros" : "＋ Filtros"}
+      {/* O contador aparece SEMPRE que há filtro, não só quando os chips
+          recolhem: o destaque do botão diz *que* há filtro, o número diz
+          *quantos* — e a segunda é a pergunta que decide se vale abrir. */}
+      {chips.length > 0 && <CountBadge n={chips.length} />}
     </button>
   );
 
@@ -139,7 +168,12 @@ export function TransactionsFilterChips({
     <div
       role="group"
       aria-label="Filtros aplicados"
-      style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}
+      /* `overflow: hidden` é rede de segurança, não o mecanismo: o `+N` é quem
+         controla quantos chips aparecem. Medido em 1280 com a busca no piso, os
+         chips têm ~490 px disponíveis contra um teto aritmético de ~446 — 44 px
+         de margem. Fina o bastante para que, sem a guarda, um chip a mais
+         pintasse POR CIMA da ordenação em vez de ser cortado. */
+      style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, overflow: "hidden" }}
     >
       {shown.map((f) => (
         <Chip key={f.key} facet={f} compact={compact} onOpen={onOpenFacet} onClear={onClearFacet} />
@@ -154,7 +188,7 @@ export function TransactionsFilterChips({
             aria-label={`Mais ${hidden.length} ${hidden.length === 1 ? "filtro" : "filtros"}`}
             style={chipStyle("on")}
           >
-            <CountBadge n={hidden.length} />
+            <CountBadge n={hidden.length} prefix="+" />
           </button>
           {overflowOpen && (
             <div

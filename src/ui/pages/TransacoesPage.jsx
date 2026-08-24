@@ -2384,7 +2384,14 @@ function TransacoesPageBody({
     ...filterBarApplyProps,
   };
 
-  const filtersToggleButton = (expanded, onToggle) => (
+  /* Quantos filtros estão aplicados — a busca conta como um, porque ela recorta
+     a lista igual a qualquer faceta e o usuário não faz essa distinção. */
+  const activeFilterCount =
+    allFacets.filter((f) => f.active).length + (debouncedSearch ? 1 : 0);
+
+  const filtersToggleButton = (expanded, onToggle) => {
+    const filtersApplied = activeFilterCount > 0 || expanded;
+    return (
     <button
       type="button"
       onClick={onToggle}
@@ -2394,22 +2401,62 @@ function TransacoesPageBody({
         alignItems: "center",
         gap: 6,
         padding: "9px 13px",
-        background: filter.hasAnyActive || expanded ? T.ink : T.surface,
-        color: filter.hasAnyActive || expanded ? "#fff" : T.inkMid,
-        border: `1px solid ${filter.hasAnyActive || expanded ? T.ink : T.border}`,
+        /* O destaque usa a MESMA definição do contador (`activeFilterCount`,
+           que inclui a busca). Com `filter.hasAnyActive` o botão ficava branco
+           mostrando "1" ao lado: dois sinais no mesmo botão discordando sobre
+           se existe filtro. */
+        background: filtersApplied ? T.ink : T.surface,
+        color: filtersApplied ? "#fff" : T.inkMid,
+        border: `1px solid ${filtersApplied ? T.ink : T.border}`,
         borderRadius: 10,
         fontSize: 12,
         fontWeight: 700,
         cursor: "pointer",
         flexShrink: 0,
       }}
-      aria-label={expanded ? "Ocultar filtros" : "Abrir filtros"}
+      /* Nome estável + `aria-expanded`: é o padrão de disclosure, e é o que
+         mantém o nome acessível igual ao rótulo visível (o "Fechar filtros"
+         quebrava isso, além de colidir com o ✕ do sheet). O estado quem conta é
+         o `aria-expanded`. */
+      aria-label={
+        activeFilterCount > 0
+          ? `Filtros — ${activeFilterCount} aplicado${activeFilterCount === 1 ? "" : "s"}`
+          : "Filtros"
+      }
       aria-expanded={expanded}
     >
       <SlidersHorizontal size={14} />
-      {expanded ? "Ocultar" : "Filtros"}
+      Filtros
+      {/* No mobile os chips não cabem na barra, então este número é a ÚNICA
+          pista de quanto está filtrado. O fundo preto diz que há filtro; o
+          contador diz quantos — e é a segunda pergunta que decide se vale
+          abrir o sheet. */}
+      {activeFilterCount > 0 && (
+        <span
+          aria-hidden="true"
+          style={{
+            ...G,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            minWidth: 18,
+            height: 18,
+            padding: "0 5px",
+            borderRadius: 999,
+            background: filtersApplied ? "rgba(255,255,255,0.22)" : T.blue,
+            color: "#fff",
+            fontSize: 11,
+            fontWeight: 700,
+            lineHeight: 1,
+            flexShrink: 0,
+          }}
+        >
+          {activeFilterCount}
+        </span>
+      )}
     </button>
-  );
+    );
+  };
 
   /* As ações rápidas usam os MESMOS caminhos do detalhe — nenhuma segunda
      implementação de liquidar/excluir, que é onde as duas divergiriam. */
@@ -3183,7 +3230,17 @@ function TransacoesPageBody({
             {searchInput && <button onClick={()=>setSearchInput("")} style={{ background:"none", border:"none",
               cursor:"pointer", padding:2, display:"flex" }}><X size={12} color={T.inkLight}/></button>}
           </div>
-          {filtersToggleButton(filtersOpen, () => { setFiltersOpen(true); setSnapFull(true); snapFullRef.current = true; })}
+          {/* O botão ALTERNA. Antes só abria: com o sheet aberto ele já dizia
+              "Ocultar" e não fazia nada, e o rótulo novo ("Fechar filtros")
+              tornou a mentira explícita. Fechar passa por `onSheetClose` para a
+              animação de saída rodar — `setFiltersOpen(false)` cru desmontaria
+              o sheet no meio dela. */}
+          {filtersToggleButton(filtersOpen, () => {
+            if (filtersOpen) { onSheetClose(); return; }
+            setFiltersOpen(true);
+            setSnapFull(true);
+            snapFullRef.current = true;
+          })}
         </div>
       )}
 
@@ -3286,7 +3343,11 @@ function TransacoesPageBody({
               padding:"4px 20px 10px", borderBottom:`1px solid ${T.border}`, flexShrink:0 }}>
               <div style={{ ...G, fontSize:16, fontWeight:800, color:T.ink }}>Filtros</div>
               <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-                {filter.hasAnyActive && (
+                {/* Mesma definição do contador do botão. Com `filter.hasAnyActive`
+                    a busca não contava — e ela é externa nesta página
+                    (`searchInput`/`debouncedSearch`), então um filtro só de busca
+                    deixava o botão preto com "1" e o sheet sem "Limpar tudo". */}
+                {activeFilterCount > 0 && (
                   <button onClick={clearAll}
                     style={{ ...G, background:T.redLight, border:"none", cursor:"pointer",
                       fontSize:12, color:T.red, fontWeight:700, padding:"6px 12px",
@@ -3294,6 +3355,8 @@ function TransacoesPageBody({
                     Limpar tudo
                   </button>
                 )}
+                {/* Este é o ÚNICO controle de fechar visível com o sheet aberto:
+                    o botão da barra fica atrás do backdrop. */}
                 <button onClick={onSheetClose}
                   aria-label="Fechar filtros"
                   style={{ background:"none", border:"none", cursor:"pointer", padding:6,

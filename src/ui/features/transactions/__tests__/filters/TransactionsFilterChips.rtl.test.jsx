@@ -131,4 +131,46 @@ describe("<TransactionsFilterChips>", () => {
     const group = screen.getByRole("group", { name: "Filtros aplicados" });
     expect(within(group).getByText("Despesa")).toBeInTheDocument();
   });
+
+  it("o rótulo do botão diz o que o clique FAZ, não em que estado se está", () => {
+    // Um botão que abre e fecha e não muda de texto obriga a olhar a tela para
+    // descobrir o estado — e no desktop o painel abre ancorado, longe dele.
+    const { rerender } = render(
+      <TransactionsFilterChips facets={[]} onToggleFilters={() => {}} filtersOpen={false} />,
+    );
+    expect(screen.getByRole("button", { name: "Abrir filtros" })).toHaveTextContent("＋ Filtros");
+
+    rerender(<TransactionsFilterChips facets={[]} onToggleFilters={() => {}} filtersOpen />);
+    const aberto = screen.getByRole("button", { name: "Fechar filtros" });
+    expect(aberto).toHaveTextContent("✕ Fechar filtros");
+    expect(aberto).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("o contador aparece sempre que há filtro — não só quando os chips recolhem", () => {
+    // O destaque do botão diz *que* há filtro; o número diz *quantos*, e é a
+    // segunda pergunta que decide se vale abrir o painel. Antes o número só
+    // existia com `collapsed`, ou seja, nunca nas larguras em que os chips cabem.
+    render(
+      <TransactionsFilterChips
+        facets={[
+          { key: "tipo", label: "Tipo", value: "Despesa", active: true },
+          { key: "cat", label: "Categoria", value: "Moradia", active: true },
+        ]}
+        maxVisible={3}
+        onToggleFilters={() => {}}
+      />,
+    );
+
+    const botao = screen.getByRole("button", { name: /^Abrir filtros/ });
+    expect(botao).toHaveTextContent("2");
+    // Sem "+": o "+3" é do overflow e significa "mais 3 além dos visíveis".
+    // Aqui o número é o TOTAL, e um "+2" ali diria outra coisa.
+    expect(botao).not.toHaveTextContent("+2");
+    // E o número precisa chegar ao LEITOR DE TELA, não só ao DOM: um
+    // `aria-label` fixo substitui todo o conteúdo do botão no cálculo do nome
+    // acessível, e o contador seria anunciado como nada — perdendo justamente o
+    // ponto dele, que é decidir se vale abrir o painel.
+    expect(botao).toHaveAccessibleName("Abrir filtros — 2 aplicados");
+  });
+
 });
