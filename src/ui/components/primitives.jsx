@@ -2,10 +2,23 @@ import React, { useState, useEffect } from "react";
 import { T } from "../tokens";
 import { G, S, NUM } from "../typography";
 
-/** Transição de página — só opacity (evita quebrar position:fixed) */
-export function PageEnter({ children }) {
+/**
+ * Transição de página — só opacity (evita quebrar position:fixed).
+ *
+ * `fill` faz este wrapper VIRAR uma coluna que ocupa a altura disponível e
+ * pode encolher. Sem isso ele cresce com o conteúdo, e uma tela que quer ser
+ * autocontida no viewport nunca consegue: a altura vaza por aqui.
+ */
+export function PageEnter({ children, fill = false }) {
   return (
-    <div style={{ animation: "fadeIn 0.18s ease both" }}>
+    <div
+      style={{
+        animation: "fadeIn 0.18s ease both",
+        ...(fill
+          ? { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }
+          : null),
+      }}
+    >
       {children}
     </div>
   );
