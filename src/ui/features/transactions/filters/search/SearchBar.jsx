@@ -12,9 +12,16 @@ import { SortButton } from "./SortButton.jsx";
  * substituiu a faixa permanente de nove cards de faceta, que custava 57 px de
  * altura o tempo todo para mostrar sobretudo "Todas / Todos / Qualquer".
  *
- * A busca tem largura MÁXIMA de propósito: sem o teto e o espaçador depois dos
- * chips, ela esticava por ~2000 px num monitor de 3440 e a ordenação ficava
- * sozinha no outro extremo da tela.
+ * A busca é ELÁSTICA e o espaçador vem ANTES dos chips. Antes era o contrário:
+ * a busca tinha 460 px fixos e o espaçador ficava depois dos chips, deixando um
+ * vão morto no meio da barra — 400 px em 1500, 782 px em 1920 — enquanto o
+ * controle que mais se beneficia de largura ficava travado. Trocar a ordem faz o
+ * vão virar campo de busca e cola chips · Filtros · ordenação num bloco só à
+ * direita; antes "Filtros" ficava à esquerda e "Ordenar" na outra ponta, dois
+ * controles do mesmo assunto separados pelo vão.
+ *
+ * O teto continua existindo, só que muito mais alto: sem NENHUM teto a busca
+ * esticava por ~2000 px num monitor de 3440.
  *
  * Modo `compact`: input em uma linha, SortButton em linha separada abaixo
  * (cada um ocupa 100% da largura). Look and feel de app nativo mobile.
@@ -92,9 +99,16 @@ export function SearchBar({
           display: "flex",
           alignItems: "center",
           gap: 8,
-          flex: 1,
-          minWidth: 80,
-          maxWidth: 460,
+          /* `flex: 100` contra o `flex: 1` do espaçador: os dois crescem, mas a
+             sobra vai quase toda para a busca ATÉ ela bater no teto — só então o
+             espaçador recebe o resto e empurra o recorte para a direita. Com
+             `flex: 1` nos dois eles dividiam a sobra meio a meio e a busca
+             empacava em 422 px num monitor de 1500. */
+          flex: 100,
+          /* 180 px é o piso: abaixo disso o placeholder some e a busca deixa de
+             ser usável — é ela que cede espaço por último, não primeiro. */
+          minWidth: 180,
+          maxWidth: 720,
           height: 32,
           border: `1px solid ${T.border}`,
           borderRadius: 9,
@@ -120,8 +134,10 @@ export function SearchBar({
           }}
         />
       </div>
+      {/* O vão fica AQUI, entre a busca e o recorte: é o que empurra chips,
+          Filtros e ordenação para a direita como um bloco só. */}
+      <span style={{ flex: 1, minWidth: 0 }} />
       {chips}
-      <span style={{ flex: 1 }} />
       <Sep />
       <SortButton sort={sort} setSort={setSort} />
       {trailing}

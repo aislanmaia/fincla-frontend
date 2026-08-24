@@ -165,7 +165,8 @@ function renderPage(overrides = {}) {
 /**
  * Abre a superfície de filtros, seja qual for.
  *
- * O mesmo botão alterna entre "Abrir filtros" e "Ocultar filtros", então
+ * O mesmo botão alterna entre "Abrir filtros" e "Fechar filtros" — o rótulo
+ * diz o que o clique FAZ, não em que estado se está —, então
  * procurar só pelo primeiro rótulo dava um no-op silencioso quando o painel já
  * estava aberto — e o teste seguia procurando conteúdo que nunca abriu.
  */
@@ -280,7 +281,7 @@ function painelDaFaceta(nome) {
 }
 
 async function openFilters() {
-  const btn = screen.queryAllByRole("button", { name: /^(Abrir|Ocultar) filtros$/i })[0];
+  const btn = screen.queryAllByRole("button", { name: /^(Abrir|Fechar) filtros/i })[0];
   if (btn && btn.getAttribute("aria-expanded") !== "true") await userEvent.click(btn);
 }
 
@@ -351,7 +352,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     // SEM abrir: o que a regra de altura protege é o estado de REPOUSO. A
     // 768 px de altura a barra completa custaria 230 px e sobrariam duas
     // transações, então ela nasce recolhida atrás do botão.
-    expect(await screen.findByRole("button", { name: /(Abrir|Ocultar) filtros/i })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /(Abrir|Fechar) filtros/i })).toBeInTheDocument();
     expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).toBeNull();
     expect(screen.queryByRole("region", { name: /^Filtros$/i })).toBeNull();
   });
@@ -524,7 +525,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     renderPage({ isMobile: true });
     await openFilters();
     expect(screen.getByPlaceholderText(/Buscar por descrição, categoria ou tag/i)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /(Abrir|Ocultar) filtros/i }));
+    await userEvent.click(screen.getByRole("button", { name: /(Abrir|Fechar) filtros/i }));
     // Sheet aberto — toolbar dentro e botão de fechar
     expect(superficieDeFiltros()).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Fechar filtros/i })).toBeInTheDocument();
@@ -589,12 +590,12 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     // Em repouso, nada de facets — este teste É sobre o padrão recolhido,
     // então ele não pode abrir antes de afirmar.
     expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /(Abrir|Ocultar) filtros/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /(Abrir|Fechar) filtros/i })).toBeInTheDocument();
 
     await openFilters();
     expect(superficieDeFiltros()).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: /Ocultar filtros/i }));
+    await userEvent.click(screen.getByRole("button", { name: /Fechar filtros/i }));
     expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("region", { name: /^Filtros$/i })).not.toBeInTheDocument();
   });
@@ -1279,7 +1280,7 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     renderPage({ isMobile: true });
     await openFilters();
 
-    await userEvent.click(screen.getByRole("button", { name: /(Abrir|Ocultar) filtros/i }));
+    await userEvent.click(screen.getByRole("button", { name: /(Abrir|Fechar) filtros/i }));
 
     expect(screen.getByRole("button", { name: "Atualizando…" })).toBeInTheDocument();
     expect(screen.queryByText(/Ver 0 transaç/i)).not.toBeInTheDocument();
@@ -1376,7 +1377,7 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
     renderPage({ isMobile: true });
     await openFilters();
 
-    await userEvent.click(screen.getByRole("button", { name: /(Abrir|Ocultar) filtros/i }));
+    await userEvent.click(screen.getByRole("button", { name: /(Abrir|Fechar) filtros/i }));
 
     const closeBtn = screen.getByRole("button", { name: "Atualizando…" });
     expect(closeBtn).not.toBeDisabled();
