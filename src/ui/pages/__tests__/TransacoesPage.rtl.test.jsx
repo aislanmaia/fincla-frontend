@@ -2,7 +2,7 @@
 
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // Mocks: router (TransacoesPage usa useSearch + useNavigate) ─────────────────
@@ -165,8 +165,10 @@ function renderPage(overrides = {}) {
 /**
  * Abre a superfície de filtros, seja qual for.
  *
- * O mesmo botão alterna entre "Abrir filtros" e "Fechar filtros" — o rótulo
- * diz o que o clique FAZ, não em que estado se está —, então
+ * No desktop o mesmo botão alterna entre "Abrir filtros" e "Fechar filtros" —
+ * o rótulo diz o que o clique FAZ, não em que estado se está. No mobile ele
+ * mantém o nome "Filtros" e sinaliza por `aria-expanded`, porque com o sheet
+ * aberto ele fica atrás do backdrop. Então
  * procurar só pelo primeiro rótulo dava um no-op silencioso quando o painel já
  * estava aberto — e o teste seguia procurando conteúdo que nunca abriu.
  */
@@ -281,7 +283,9 @@ function painelDaFaceta(nome) {
 }
 
 async function openFilters() {
-  const btn = screen.queryAllByRole("button", { name: /^(Abrir|Fechar) filtros/i })[0];
+  // Desktop: "Abrir filtros" / "Fechar filtros". Mobile: "Filtros" + a contagem
+  // — lá o estado vai no `aria-expanded`, porque o botão fica atrás do backdrop.
+  const btn = screen.queryAllByRole("button", { name: /^(Abrir |Fechar )?Filtros/i })[0];
   if (btn && btn.getAttribute("aria-expanded") !== "true") await userEvent.click(btn);
 }
 
@@ -525,10 +529,38 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     renderPage({ isMobile: true });
     await openFilters();
     expect(screen.getByPlaceholderText(/Buscar por descrição, categoria ou tag/i)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /(Abrir|Fechar) filtros/i }));
-    // Sheet aberto — toolbar dentro e botão de fechar
+    // O sheet já está aberto por `openFilters()`. No mobile o botão da barra
+    // mantém o nome "Filtros" e sinaliza o estado por `aria-expanded` — ele fica
+    // atrás do backdrop, e rótulo de fechar num controle coberto é ruído.
     expect(superficieDeFiltros()).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Fechar filtros/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Filtros/ })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+
+    // O ✕ do cabeçalho é o único controle de fechar visível.
+    await userEvent.click(screen.getByRole("button", { name: /Fechar filtros/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: /^Filtros$/i })).not.toBeInTheDocument();
+    });
+  });
+
+  it("mobile: o ✕ do cabeçalho do sheet fecha o sheet", async () => {
+    // Cobertura que não existia em lugar nenhum: o teste acima apontava para o
+    // ✕ por acidente (ele se chamava "Fechar filtros") e passou a apontar para o
+    // botão da barra quando o nome mudou, sem que nada acusasse.
+    window.innerWidth = 500;
+    window.dispatchEvent(new Event("resize"));
+    renderPage({ isMobile: true });
+    await openFilters();
+    expect(superficieDeFiltros()).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /Fechar filtros/i }));
+    await waitFor(() => {
+      expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("region", { name: /^Filtros$/i })).not.toBeInTheDocument();
+    });
   });
 
   it("criar saved view persiste em localStorage por org", async () => {
@@ -590,7 +622,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     // Em repouso, nada de facets — este teste É sobre o padrão recolhido,
     // então ele não pode abrir antes de afirmar.
     expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /(Abrir|Fechar) filtros/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^(Abrir |Fechar )?Filtros/i })).toBeInTheDocument();
 
     await openFilters();
     expect(superficieDeFiltros()).toBeInTheDocument();

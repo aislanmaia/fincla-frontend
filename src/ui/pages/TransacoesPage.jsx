@@ -2414,17 +2414,19 @@ function TransacoesPageBody({
         cursor: "pointer",
         flexShrink: 0,
       }}
+      /* Nome estável + `aria-expanded`: é o padrão de disclosure, e é o que
+         mantém o nome acessível igual ao rótulo visível (o "Fechar filtros"
+         quebrava isso, além de colidir com o ✕ do sheet). O estado quem conta é
+         o `aria-expanded`. */
       aria-label={
-        expanded
-          ? "Fechar filtros"
-          : activeFilterCount > 0
-            ? `Abrir filtros — ${activeFilterCount} aplicado${activeFilterCount === 1 ? "" : "s"}`
-            : "Abrir filtros"
+        activeFilterCount > 0
+          ? `Filtros — ${activeFilterCount} aplicado${activeFilterCount === 1 ? "" : "s"}`
+          : "Filtros"
       }
       aria-expanded={expanded}
     >
       <SlidersHorizontal size={14} />
-      {expanded ? "Fechar filtros" : "Filtros"}
+      Filtros
       {/* No mobile os chips não cabem na barra, então este número é a ÚNICA
           pista de quanto está filtrado. O fundo preto diz que há filtro; o
           contador diz quantos — e é a segunda pergunta que decide se vale
@@ -3228,7 +3230,17 @@ function TransacoesPageBody({
             {searchInput && <button onClick={()=>setSearchInput("")} style={{ background:"none", border:"none",
               cursor:"pointer", padding:2, display:"flex" }}><X size={12} color={T.inkLight}/></button>}
           </div>
-          {filtersToggleButton(filtersOpen, () => { setFiltersOpen(true); setSnapFull(true); snapFullRef.current = true; })}
+          {/* O botão ALTERNA. Antes só abria: com o sheet aberto ele já dizia
+              "Ocultar" e não fazia nada, e o rótulo novo ("Fechar filtros")
+              tornou a mentira explícita. Fechar passa por `onSheetClose` para a
+              animação de saída rodar — `setFiltersOpen(false)` cru desmontaria
+              o sheet no meio dela. */}
+          {filtersToggleButton(filtersOpen, () => {
+            if (filtersOpen) { onSheetClose(); return; }
+            setFiltersOpen(true);
+            setSnapFull(true);
+            snapFullRef.current = true;
+          })}
         </div>
       )}
 
@@ -3331,7 +3343,11 @@ function TransacoesPageBody({
               padding:"4px 20px 10px", borderBottom:`1px solid ${T.border}`, flexShrink:0 }}>
               <div style={{ ...G, fontSize:16, fontWeight:800, color:T.ink }}>Filtros</div>
               <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-                {filter.hasAnyActive && (
+                {/* Mesma definição do contador do botão. Com `filter.hasAnyActive`
+                    a busca não contava — e ela é externa nesta página
+                    (`searchInput`/`debouncedSearch`), então um filtro só de busca
+                    deixava o botão preto com "1" e o sheet sem "Limpar tudo". */}
+                {activeFilterCount > 0 && (
                   <button onClick={clearAll}
                     style={{ ...G, background:T.redLight, border:"none", cursor:"pointer",
                       fontSize:12, color:T.red, fontWeight:700, padding:"6px 12px",
@@ -3339,14 +3355,10 @@ function TransacoesPageBody({
                     Limpar tudo
                   </button>
                 )}
-                {/* Só "Fechar": o cabeçalho ao lado já diz "Filtros", e o botão
-                    da barra que abre/fecha o sheet passou a se chamar "Fechar
-                    filtros". Dois controles com o mesmo nome acessível fazendo
-                    coisas diferentes são indistinguíveis por leitor de tela — e
-                    um ✕ dentro de um painel rotulado não precisa repetir o
-                    assunto do painel. */}
+                {/* Este é o ÚNICO controle de fechar visível com o sheet aberto:
+                    o botão da barra fica atrás do backdrop. */}
                 <button onClick={onSheetClose}
-                  aria-label="Fechar"
+                  aria-label="Fechar filtros"
                   style={{ background:"none", border:"none", cursor:"pointer", padding:6,
                     borderRadius:8, display:"flex" }}>
                   <X size={18} color={T.inkMid}/>

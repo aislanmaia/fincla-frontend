@@ -137,7 +137,18 @@ export function TransactionsFilterChips({
       type="button"
       onClick={onToggleFilters}
       aria-expanded={filtersOpen}
-      aria-label={filtersOpen ? "Fechar filtros" : "Abrir filtros"}
+      /* O `aria-label` SUBSTITUI todo o conteúdo do botão no cálculo do nome
+         acessível — com ele fixo, o contador dentro do botão não é anunciado, e
+         o ponto do contador (o número decide se vale abrir) sumia para quem usa
+         leitor de tela. O gêmeo do mobile já dobra a contagem no nome; aqui
+         faltava. */
+      aria-label={
+        filtersOpen
+          ? "Fechar filtros"
+          : chips.length > 0
+            ? `Abrir filtros — ${chips.length} aplicado${chips.length === 1 ? "" : "s"}`
+            : "Abrir filtros"
+      }
       style={{
         ...chipStyle(filtersOpen ? "on" : "ghost"),
         ...(filtersOpen ? {} : { borderStyle: "dashed" }),
@@ -157,7 +168,12 @@ export function TransactionsFilterChips({
     <div
       role="group"
       aria-label="Filtros aplicados"
-      style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}
+      /* `overflow: hidden` é rede de segurança, não o mecanismo: o `+N` é quem
+         controla quantos chips aparecem. Medido em 1280 com a busca no piso, os
+         chips têm ~490 px disponíveis contra um teto aritmético de ~446 — 44 px
+         de margem. Fina o bastante para que, sem a guarda, um chip a mais
+         pintasse POR CIMA da ordenação em vez de ser cortado. */
+      style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, overflow: "hidden" }}
     >
       {shown.map((f) => (
         <Chip key={f.key} facet={f} compact={compact} onOpen={onOpenFacet} onClear={onClearFacet} />

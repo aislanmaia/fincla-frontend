@@ -161,11 +161,16 @@ describe("<TransactionsFilterChips>", () => {
       />,
     );
 
-    const botao = screen.getByRole("button", { name: "Abrir filtros" });
+    const botao = screen.getByRole("button", { name: /^Abrir filtros/ });
     expect(botao).toHaveTextContent("2");
     // Sem "+": o "+3" é do overflow e significa "mais 3 além dos visíveis".
     // Aqui o número é o TOTAL, e um "+2" ali diria outra coisa.
     expect(botao).not.toHaveTextContent("+2");
+    // E o número precisa chegar ao LEITOR DE TELA, não só ao DOM: um
+    // `aria-label` fixo substitui todo o conteúdo do botão no cálculo do nome
+    // acessível, e o contador seria anunciado como nada — perdendo justamente o
+    // ponto dele, que é decidir se vale abrir o painel.
+    expect(botao).toHaveAccessibleName("Abrir filtros — 2 aplicados");
   });
 
 });
