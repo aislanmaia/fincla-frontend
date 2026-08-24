@@ -2085,6 +2085,14 @@ function TransacoesPageBody({
         }
         savedViewsApi.removeView(id);
       },
+      /* Sem isto o formulário do sheet mobile FECHA SEM GRAVAR: o
+         `TransactionsFilterBar` cai num fallback que não faz nada quando nem
+         `onSaveView` nem `onCreate` existem, e a pessoa vê o painel sumir
+         achando que salvou. `SavedViewsCards` chama com
+         `{ mode, name, icon, color }`, que é a mesma forma que
+         `handleSaveViewForm` já espera. */
+      onSaveView: handleSaveViewForm,
+      onOpenSaveForm: openSaveViewForm,
     }),
     [
       savedViewsApi,
@@ -2093,6 +2101,8 @@ function TransacoesPageBody({
       applySavedViewFilters,
       captureSnapshotBeforeView,
       deapplyActiveSavedView,
+      handleSaveViewForm,
+      openSaveViewForm,
     ],
   );
 
