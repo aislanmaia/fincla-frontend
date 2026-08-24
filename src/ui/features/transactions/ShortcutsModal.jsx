@@ -36,7 +36,9 @@ export const GRUPOS_DE_ATALHOS = [
     ],
   ],
   [
-    "Filtros",
+    /* "Geral" e não "Filtros": a tecla de filtro é o `F`, que está em Navegar.
+       Um título que não descreve o que lista custa mais que não ter título. */
+    "Geral",
     [
       [["Esc"], "Fecha painel, sheet ou sanfona", "na ordem em que estiverem abertos"],
       [["?"], "Abre esta ajuda", ""],
@@ -62,13 +64,44 @@ const teclaStyle = {
 
 export function ShortcutsModal({ onClose }) {
   const fecharRef = useRef(null);
+  const painelRef = useRef(null);
 
+  /* Foco inicial UMA vez. Com `[onClose]` nas dependências — e o pai passando
+     uma arrow nova a cada render — o efeito refazia a cada atualização da
+     página e puxava o foco de volta para o ✕, tirando a pessoa de onde ela
+     tinha tabulado dentro do painel. */
   useEffect(() => {
     fecharRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
     const onKey = (e) => {
       if (e.key === "Escape") {
         e.stopPropagation();
         onClose?.();
+        return;
+      }
+      /* Focus trap: `aria-modal` promete que o resto da página está inerte, e
+         sem prender o Tab a promessa é falsa — tabula-se para trás do painel e
+         age-se às cegas em controles que não se vê. */
+      if (e.key !== "Tab") return;
+      const raiz = painelRef.current;
+      if (!raiz) return;
+      const itens = Array.from(
+        raiz.querySelectorAll('a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'),
+      );
+      if (itens.length === 0) return;
+      const primeiro = itens[0];
+      const ultimo = itens[itens.length - 1];
+      if (e.shiftKey && document.activeElement === primeiro) {
+        e.preventDefault();
+        ultimo.focus();
+      } else if (!e.shiftKey && document.activeElement === ultimo) {
+        e.preventDefault();
+        primeiro.focus();
+      } else if (!raiz.contains(document.activeElement)) {
+        e.preventDefault();
+        primeiro.focus();
       }
     };
     document.addEventListener("keydown", onKey, true);
@@ -87,6 +120,7 @@ export function ShortcutsModal({ onClose }) {
         role="dialog"
         aria-modal="true"
         aria-label="Atalhos de teclado"
+        ref={painelRef}
         onClick={(e) => e.stopPropagation()}
         className="fincla-scroll"
         style={{

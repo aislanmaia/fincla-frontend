@@ -40,6 +40,10 @@ export function useTransactionsKeyboard({
   onDuplicate,
   onDelete,
   getTransaction,
+  /* Sem isto o `roving tabindex` não rove: as setas moviam o FOCO mas a parada
+     de Tab continuava na primeira linha, então sair e voltar com Tab jogava a
+     pessoa de volta ao topo da lista. */
+  onRovingChange,
 }) {
   const focoRef = useRef(null);
 
@@ -53,13 +57,14 @@ export function useTransactionsKeyboard({
       const el = lista[proximo];
       if (!el) return;
       focoRef.current = el.dataset.txRow;
+      onRovingChange?.(el.dataset.txRow);
       el.focus();
       /* `block: "nearest"` e não `center`: centralizar salta a lista inteira a
          cada seta, e quem está andando de uma linha para a vizinha perde a
          referência do que acabou de ver. */
       el.scrollIntoView({ block: "nearest" });
     },
-    [containerRef],
+    [containerRef, onRovingChange],
   );
 
   useEffect(() => {
@@ -69,19 +74,23 @@ export function useTransactionsKeyboard({
       if (e.defaultPrevented) return;
       const emCampo = focoEmCampoDeTexto(e.target);
 
+      /* A guarda de modificadores vem ANTES de tudo: `Ctrl+/`, `Cmd+/` e
+         `Cmd+?` são acordes do navegador e do sistema, e interceptá-los
+         roubaria atalhos que não são nossos. */
+      if (emCampo || e.metaKey || e.ctrlKey || e.altKey) return;
+
       // "?" (Shift+/) abre a ajuda. É a convenção de GitHub, Linear, Gmail e
       // Slack — quem já tem o hábito acha sem procurar.
-      if (e.key === "?" && !emCampo) {
+      if (e.key === "?") {
         e.preventDefault();
         onHelp?.();
         return;
       }
-      if (e.key === "/" && !emCampo) {
+      if (e.key === "/") {
         e.preventDefault();
         onFocusSearch?.();
         return;
       }
-      if (emCampo || e.metaKey || e.ctrlKey || e.altKey) return;
 
       if (e.key === "ArrowDown") { e.preventDefault(); mover(1); return; }
       if (e.key === "ArrowUp") { e.preventDefault(); mover(-1); return; }
