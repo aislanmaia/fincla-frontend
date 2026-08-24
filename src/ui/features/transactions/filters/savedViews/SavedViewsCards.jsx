@@ -90,7 +90,7 @@ export function SavedViewsCards({
           /* DUAS colunas no compacto: quatro views custam a altura de duas, e
              o sheet divide altura contada com nove facetas. Em uma coluna, com
              quatro views salvas as facetas já saem da dobra. */
-          gridTemplateColumns: compact ? "1fr 1fr" : undefined,
+          gridTemplateColumns: compact ? "minmax(0,1fr) minmax(0,1fr)" : undefined,
           gap: 8,
           overflowX: "visible",
           paddingBottom: 4,
@@ -214,7 +214,13 @@ export function SavedViewsCards({
           style={{
             position: "relative",
             flexShrink: 0,
+            minWidth: 0,
             width: compact ? "100%" : undefined,
+            /* Com o formulário ABERTO o bloco toma a linha inteira. Em duas
+               colunas ele não cabe em meia célula, e como o wrapper não
+               encolhe a célula é que crescia — empurrando a grade para fora da
+               tela e criando barra horizontal no sheet. */
+            gridColumn: compact && showCreateForm ? "1 / -1" : undefined,
           }}
           onClick={(e) => e.stopPropagation()}
         >

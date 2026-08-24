@@ -38,6 +38,7 @@ import { useTransactionsFacetCounts } from "../features/transactions/useTransact
 import { useNarrowestFilter } from "../features/transactions/useNarrowestFilter.js";
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { TransactionsEmptyState } from "../features/transactions/TransactionsEmptyState.jsx";
+import { TransactionsSkeleton } from "../features/transactions/TransactionsSkeleton.jsx";
 import { TransactionsStats } from "../features/transactions/TransactionsStats.jsx";
 import { TransactionsSummarySheet } from "../features/transactions/TransactionsSummarySheet.jsx";
 import { useSwipeActions, SWIPE_WIDTH } from "../features/transactions/useSwipeActions.js";
@@ -2085,6 +2086,19 @@ function TransacoesPageBody({
         }
         savedViewsApi.removeView(id);
       },
+      /* Sem isto o formulário do sheet mobile FECHA SEM GRAVAR: o
+         `TransactionsFilterBar` cai num fallback que não faz nada quando nem
+         `onSaveView` nem `onCreate` existem, e a pessoa vê o painel sumir
+         achando que salvou. `SavedViewsCards` chama com
+         `{ mode, name, icon, color }`, que é a mesma forma que
+         `handleSaveViewForm` já espera. */
+      onSaveView: handleSaveViewForm,
+      /* SEM `onOpenSaveForm` de propósito. Aquele caminho FECHA o sheet no
+         mobile e rola até a faixa de views da página — o que estava certo
+         enquanto as views só existiam lá. Agora que elas moram DENTRO do
+         sheet, fechá-lo ao tocar "＋ Nova" tira a pessoa de onde ela está e
+         abre o formulário noutro lugar. Sem o callback, `SavedViewsCards`
+         abre o formulário inline, no próprio sheet. */
     }),
     [
       savedViewsApi,
@@ -2093,6 +2107,7 @@ function TransacoesPageBody({
       applySavedViewFilters,
       captureSnapshotBeforeView,
       deapplyActiveSavedView,
+      handleSaveViewForm,
     ],
   );
 
@@ -2698,22 +2713,22 @@ function TransacoesPageBody({
             onPrimary={() => filter.setTags([])}
           />
         ) : listLoading ? (
-          // fincla-frontend#106 — 1ª carga ainda em voo: mesmo cuidado do
-          // calendário (`isLoading` no DayList), NÃO usar o componente do
-          // "vazio de verdade" antes da resposta da API chegar, senão a tela
+          // fincla-frontend#106 — 1ª carga ainda em voo: NÃO usar o componente
+          // do "vazio de verdade" antes da resposta chegar, senão a tela
           // afirma "nenhuma transação encontrada" sobre uma busca que nem
           // terminou.
-          <div
-            style={{
-              ...G,
-              fontSize: 13,
-              color: T.inkLight,
-              textAlign: "center",
-              padding: "40px 16px",
-            }}
-          >
-            Carregando transações…
-          </div>
+          //
+          // E não um texto centralizado: ele deixa a área vazia e depois a
+          // enche de uma vez, e o olho perde onde estava. O esqueleto ocupa a
+          // MESMA grade das linhas, então quando o dado chega nada muda de
+          // lugar — só as barras viram texto.
+          <TransactionsSkeleton
+            /* Tantas linhas quantas caberiam: menos deixa buraco embaixo,
+               mais empurra o rodapé e cria uma rolagem que some sozinha. */
+            rows={Math.max(4, Math.min(14, PAGE_SIZE))}
+            rowHeight={listRowHeight}
+            isMobile={isMobile}
+          />
         ) : listLoadFailed ? (
           // 1ª carga falhou (nunca tivemos dados válidos pra este filtro) —
           // distinto do "vazio de verdade": o card diz que a busca falhou,
@@ -3340,7 +3355,14 @@ function TransacoesPageBody({
                 lista e sobrava com 32 px de área rolável para 233 px de
                 conteúdo — Editar, Excluir e Marcar como pago ficavam fora de
                 alcance sem rolar dentro dessa janela. */}
-      <div style={{ display:"flex", flex:1, minHeight:0, overflow:"hidden" }}>
+      {/* `overflow:hidden` cria um SCROLLPORT, e `position:sticky` gruda no
+          scrollport mais próximo — não em quem realmente rola. No mobile quem
+          rola é a página, várias camadas acima: com este `hidden` no caminho,
+          o cabeçalho da lista e os rótulos de dia grudavam num container que
+          nunca rola, ou seja, não grudavam em nada. Ele existe para o painel
+          ancorado do desktop, que no mobile não existe. */}
+      <div style={{ display:"flex", flex:1, minHeight:0,
+        overflow: isMobile ? "visible" : "hidden" }}>
         <div
           ref={listScrollRef}
           /* No mobile a lista NÃO é uma região de rolagem própria: quem rola é
@@ -3352,7 +3374,14 @@ function TransacoesPageBody({
           className={isMobile ? undefined : "fincla-scroll"}
           style={{ flex:1, minWidth:0,
             overflowY: isMobile ? "visible" : "auto",
-            overflowX:"hidden" }}
+            /* `clip`, não `hidden` — a mesma regra que o app-shell já
+               documenta. Pela spec, quando um eixo é `hidden` o outro NÃO
+               pode continuar `visible`: ele vira `auto`, e o elemento passa a
+               ser um scrollport. Como `position:sticky` gruda no scrollport
+               mais próximo, o cabeçalho da lista grudava aqui — num container
+               que nunca rola — em vez de grudar em quem rola de verdade.
+               `clip` corta no eixo X sem criar scrollport nenhum. */
+            overflowX: isMobile ? "clip" : "hidden" }}
         >
           {listContent}
         </div>
