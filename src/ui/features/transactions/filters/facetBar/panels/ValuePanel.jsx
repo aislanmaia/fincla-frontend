@@ -27,15 +27,15 @@ export function ValuePanel({
     // Clicar na barra que JÁ é a faixa inteira desmarca — o mesmo gesto
     // desfaz, sem precisar de um segundo controle para limpar.
     const soEla =
-      parseBrl(valueMin) === (b.from == null ? null : b.from) &&
-      parseBrl(valueMax) === (b.to == null ? null : b.to);
+      parseBrl(valueMin) === limiteRedondo(b.from) &&
+      parseBrl(valueMax) === limiteRedondo(b.to);
     if (soEla) {
       setValueMin("");
       setValueMax("");
       return;
     }
-    setValueMin(b.from == null ? "" : formatBrl(b.from));
-    setValueMax(b.to == null ? "" : formatBrl(b.to));
+    setValueMin(b.from == null ? "" : formatBrl(limiteRedondo(b.from)));
+    setValueMax(b.to == null ? "" : formatBrl(limiteRedondo(b.to)));
   };
 
   const min = parseBrl(valueMin);
@@ -44,15 +44,33 @@ export function ValuePanel({
   const edges = Array.isArray(buckets) ? bucketEdges(buckets, min, max) : { first: -1, last: -1 };
   const temBarras = Array.isArray(buckets) && buckets.some((b) => b.count > 0);
 
-  /* Atalhos: o caminho de um clique para os três recortes que respondem a
-     quase toda pergunta sobre valor. As faixas do backend são fechadas nos
-     dois lados, daí o `.99` — mandar 250 traria também a barra seguinte, e o
-     atalho entregaria um número diferente do que o rótulo promete. */
+  /* Atalhos em números REDONDOS. O `.99` existe nas faixas do backend para as
+     barras do histograma não se sobreporem — ali ele é necessário, porque a
+     barra precisa devolver exatamente o número que mostra. Mas num CAMPO ele
+     só confunde: quem lê "até R$ 50" e vê 49,99 escrito no máximo não pensa
+     "ah, exclusivo" — pensa que a tela errou. E o custo de usar 50 é uma
+     transação de exatos R$ 50,00 entrar no recorte, que é justamente o que
+     "até R$ 50" promete. */
   const ATALHOS = [
-    { label: "até R$ 50", from: null, to: 49.99 },
-    { label: "R$ 50–250", from: 50, to: 249.99 },
+    { label: "até R$ 50", from: null, to: 50 },
+    { label: "R$ 50–250", from: 50, to: 250 },
     { label: "acima de R$ 250", from: 250, to: null },
   ];
+  /* Quantas transações cada atalho traria. Conta só as barras INTEIRAMENTE
+     dentro do intervalo, não as que ele apenas toca: com atalhos em números
+     redondos e barras fechadas no `.99`, "R$ 50–250" encosta na barra de
+     250–500 e somá-la inflava o número para mais que o total da tela.
+     Contido é um piso honesto; tocado seria uma promessa falsa. */
+  const contaAtalho = (a) => {
+    if (!Array.isArray(buckets)) return null;
+    const min = a.from == null ? Number.NEGATIVE_INFINITY : a.from;
+    const max = a.to == null ? Number.POSITIVE_INFINITY : a.to;
+    return buckets.reduce((n, bk) => {
+      const lo = bk.from == null ? Number.NEGATIVE_INFINITY : bk.from;
+      const hi = bk.to == null ? Number.POSITIVE_INFINITY : bk.to;
+      return n + (lo >= min && hi <= max ? bk.count : 0);
+    }, 0);
+  };
   const atalhoAtivo = (a) =>
     (a.from == null ? min == null : min === a.from) && (a.to == null ? max == null : max === a.to);
   const aplicarAtalho = (a) => {
@@ -132,9 +150,13 @@ export function ValuePanel({
                 <span
                   aria-hidden="true"
                   style={{
-                    // Piso de 3px: uma faixa com poucas transações precisa
-                    // continuar clicável, e uma barra de 0px não é alvo.
-                    height: Math.max(3, Math.round((b.count / peak) * 34)),
+                    /* Piso de 6px e escala em RAIZ. Com contagens pequenas e
+                       um pico alto, a proporção linear achatava quase tudo em
+                       3px — seis traços indistinguíveis, que não deixam ler
+                       onde o dinheiro está. A raiz preserva a ordem e mantém
+                       as barras pequenas visíveis. */
+                    height: b.count === 0 ? 4
+                      : Math.max(6, Math.round(Math.sqrt(b.count / peak) * 40)),
                     borderRadius: "3px 3px 0 0",
                     // Ponta escura, miolo azul: com 30 a 800 digitado à mão as
                     // cinco barras da faixa acendem e as duas das pontas dizem
@@ -224,6 +246,16 @@ export function ValuePanel({
               }}
             >
               {a.label}
+              {contaAtalho(a) != null && (
+                <span
+                  style={{
+                    ...G, ...MONO, marginLeft: 6, fontSize: 10,
+                    color: on ? "rgba(255,255,255,.72)" : T.inkLight,
+                  }}
+                >
+                  {contaAtalho(a)}
+                </span>
+              )}
             </button>
           );
         })}
@@ -238,19 +270,36 @@ function formatBrl(n) {
 }
 
 function bucketLabel(b) {
-  if (b.from == null) return `Até R$ ${formatBrl(b.to)}`;
-  if (b.to == null) return `R$ ${formatBrl(b.from)} ou mais`;
-  return `R$ ${formatBrl(b.from)} a ${formatBrl(b.to)}`;
+  // Rótulos em números redondos, pelo mesmo motivo dos campos.
+  const de = limiteRedondo(b.from);
+  const ate = limiteRedondo(b.to);
+  if (de == null) return `Até R$ ${formatBrl(ate)}`;
+  if (ate == null) return `R$ ${formatBrl(de)} ou mais`;
+  return `R$ ${formatBrl(de)} a ${formatBrl(ate)}`;
 }
 
 function bucketShortLabel(b) {
   const k = (n) => (n >= 1000 ? `${Math.round(n / 1000)}k` : String(Math.round(n)));
-  if (b.from == null) return `<${k(b.to + 0.01)}`;
+  if (b.from == null) return `<${k(limiteRedondo(b.to))}`;
   if (b.to == null) return `${k(b.from)}+`;
   return k(b.from);
 }
 
 /** `"1.234,50"` → `1234.5`. Vazio ou lixo vira `null`, que significa sem limite. */
+/**
+ * O limite REDONDO de uma faixa: 49,99 → 50, 999,99 → 1000.
+ *
+ * O `.99` existe no backend para as faixas do histograma não se sobreporem —
+ * lá ele é necessário, porque cada barra precisa devolver exatamente o número
+ * que mostra. Mas ele nunca deve chegar a um CAMPO nem a um rótulo: ninguém
+ * pensa "até R$ 999,99", pensa "até mil". O preço é uma transação de exatos
+ * R$ 1.000,00 entrar no recorte de "500 a 1.000" — que é o que o rótulo
+ * promete de qualquer forma.
+ */
+export function limiteRedondo(n) {
+  return n == null ? null : Math.ceil(n);
+}
+
 export function parseBrl(v) {
   if (typeof v !== "string") return null;
   const t = v.replace(/[^\d,.-]/g, "").replace(/\./g, "").replace(",", ".");
