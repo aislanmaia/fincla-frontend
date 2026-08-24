@@ -751,10 +751,18 @@ export interface TransactionsSummaryResponse {
    *  um lançamento de R$ 0. */
   largest_income: LargestTransaction | null;
   largest_expense: LargestTransaction | null;
-  /** Linhas com status != 'paid'. Mesma régua do parâmetro `settled`. */
+  /** Linhas com status != 'paid', de QUALQUER tipo. Mesma régua do parâmetro
+   *  `settled` e do "N a pagar" do cabeçalho da lista. */
   unsettled_count: number;
-  /** Soma absoluta das DESPESAS ainda não liquidadas. */
+  /** O dinheiro em aberto, separado nos três tipos. A contagem acima não
+   *  separa, então um total só de despesas ao lado dela descreveria um conjunto
+   *  diferente do que ela conta.
+   *
+   *  Vale sempre:
+   *  `balance − settled_balance === unsettled_income − unsettled_expenses + unsettled_refunds` */
   unsettled_expenses: number;
+  unsettled_income: number;
+  unsettled_refunds: number;
   /** Mesma fórmula de `balance`, restrita a status = 'paid'. */
   settled_balance: number;
 }
