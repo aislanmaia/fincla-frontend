@@ -32,7 +32,12 @@ export function PeriodPanel({
       setCustomFrom("");
       setCustomTo("");
     }
-    if (typeof onApply === "function") onApply();
+    /* No compacto o painel NÃO fecha ao escolher um preset. O calendário e a
+       contagem de dias logo abaixo acabaram de mudar — fechar esconde
+       exatamente o feedback da ação, e quem está experimentando as opções
+       precisa reabrir tudo a cada toque. No desktop o painel é um popover
+       sobre a lista, e fechar é o que devolve a lista à vista. */
+    if (!compact && typeof onApply === "function") onApply();
   };
 
   const switchToCustomPeriod = () => {
