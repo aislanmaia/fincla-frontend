@@ -76,11 +76,17 @@ describe("sortModel", () => {
   });
 
   describe("manipulação imutável", () => {
-    it("addRule adiciona campo no fim com dir default e ignora duplicatas", () => {
+    /* O campo escolhido entra NA FRENTE, não no fim. A API lê só a primeira
+       regra (`sort_by`/`sort_order` são escalares), então um campo acrescentado
+       no fim virava critério de desempate de terceiro nível: a pessoa pedia
+       "por valor" e a lista continuava exatamente na mesma ordem por data.
+       Os níveis seguintes continuam existindo para o dia em que a API aceitar
+       ordenação composta — e para a ordenação local do modo mock. */
+    it("addRule promove o campo a critério PRIMÁRIO e ignora duplicatas", () => {
       const a = addRule(DEFAULT_SORT, "val");
       expect(a).toEqual([
-        { field: "date", dir: "desc" },
         { field: "val", dir: "desc" },
+        { field: "date", dir: "desc" },
       ]);
       // duplicata
       expect(addRule(a, "val")).toEqual(a);

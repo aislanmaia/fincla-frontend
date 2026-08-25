@@ -116,10 +116,25 @@ export function decodeSort(encoded) {
 }
 
 /** Helpers de manipulação imutável usados pelo SortMenu. */
+/**
+ * Escolher um campo o torna PRINCIPAL, e o que era principal vira desempate.
+ *
+ * Acrescentar no fim parecia o mais conservador e era o pior dos dois mundos:
+ * quem clicava em "maior valor primeiro" via a lista não mudar nada, porque a
+ * primeira regra continuava sendo a data. Pior, a API ordena por UM campo — ela
+ * recebe a primeira regra —, então a regra acrescentada só valia sobre a página
+ * já carregada, ordenando 20 de 36 linhas e produzindo uma ordem que não é nem
+ * a antiga nem a pedida.
+ *
+ * Empurrar para a frente é também o que a pessoa quer dizer: "por valor, e
+ * empate pela data" é exatamente a cascata que sai daqui.
+ */
 export function addRule(sort, field) {
   if (!SORT_FIELDS[field]) return sort;
   if (sort.some((r) => r.field === field)) return sort;
-  return [...sort, { field, dir: DEFAULT_DIR[field] }];
+  /* Teto de 3: uma cascata mais longa que isso não se lê no rótulo do botão, e
+     ninguém consegue prever o resultado de quatro desempates encadeados. */
+  return [{ field, dir: DEFAULT_DIR[field] }, ...sort].slice(0, 3);
 }
 
 export function removeRule(sort, index) {

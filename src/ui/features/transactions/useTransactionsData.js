@@ -12,6 +12,10 @@ import {
 
 const EMPTY_STATE = {
   isLoading: false,
+  /* Carregando MAIS uma página da mesma pergunta — distinto de trocar a
+     pergunta. Quem consome usa isto para não apagar (nem congelar) linhas que
+     a pessoa já está lendo enquanto o scroll infinito busca a próxima página. */
+  isAppending: false,
   error: "",
   // fincla-frontend#109 rodada 3, achado 2: canal SEPARADO pra falha ao
   // "carregar mais" (scroll infinito) — nunca pode contaminar `error`
@@ -118,6 +122,7 @@ export function useTransactionsData({
       setState((current) => ({
         ...current,
         isLoading: true,
+        isAppending: samePaginationContext,
         error: "",
         pageError: "",
       }));
@@ -139,6 +144,7 @@ export function useTransactionsData({
         const transactions = (response.data ?? []).map(mapApiTransactionToUi);
         setState({
           isLoading: false,
+          isAppending: false,
           error: "",
           pageError: "",
           summary,
@@ -159,7 +165,7 @@ export function useTransactionsData({
             // `refreshToken` mudou (ex.: transação salva em outra tela). Os
             // dados na tela continuam válidos pra ESTE contexto, então
             // preserva (`...current`) e só o aviso de erro liga.
-            return { ...current, isLoading: false, error: message };
+            return { ...current, isLoading: false, isAppending: false, error: message };
           }
           if (samePaginationContext) {
             // fincla-frontend#109 rodada 3, achado 2: uma falha ao "carregar
@@ -172,7 +178,7 @@ export function useTransactionsData({
             // nada re-disparando o fetch. Fica num canal PRÓPRIO
             // (`pageError`) — `error`/`hasLoaded`/`hasMore` continuam lendo
             // o estado de ANTES desta página, que é válido.
-            return { ...current, isLoading: false, pageError: message };
+            return { ...current, isLoading: false, isAppending: false, pageError: message };
           }
           // Organização OU filtros de verdade mudaram (fincla-frontend#109
           // achado 3, rodada 1): `current` é de OUTRO contexto — preservar
@@ -182,6 +188,7 @@ export function useTransactionsData({
           // contexto nunca carregou com sucesso.
           return {
             isLoading: false,
+            isAppending: false,
             error: message,
             pageError: "",
             summary: null,
@@ -278,6 +285,7 @@ export function useTransactionsData({
 
   return {
     isLoading: state.isLoading,
+    isAppending: state.isAppending,
     error: state.error,
     pageError: state.pageError,
     hasLoaded: state.hasLoaded,

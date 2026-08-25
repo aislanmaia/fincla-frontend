@@ -14,12 +14,44 @@ import { resolveLocaleDatePickerMessages } from "./LocaleDatePicker.jsx";
 import { RangeCalendarGrid } from "./RangeCalendarGrid.jsx";
 import { formatCustomPeriodLabel } from "../features/transactions/filters/customPeriodLabel.js";
 import {
+
   normalizeOpenRange,
   parseLocalYmd,
   resolvePeriodDisplayBounds,
   TRANSACTIONS_DATE_MAX,
   TRANSACTIONS_DATE_MIN,
 } from "../features/transactions/periodDateBounds.js";
+
+/** O que o clique no dia sob o cursor VAI FAZER — a frase do balão.
+ *
+ * Pura e exportada de propósito: é a REGRA, e ela precisa poder ser conferida
+ * caso a caso sem montar calendário nenhum. O balão só conta se disser a mesma
+ * coisa que `handleDayClick` faz — foi divergir daí que o fez prometer
+ * "novo fim" onde o clique movia o início. Uma regra, um lugar.
+ */
+export function acaoDoClique({ touch, hoverYmd, grabbedEdge, from, to }) {
+  if (touch || !hoverYmd) return null;
+  if (grabbedEdge) return `soltar o ${grabbedEdge === "from" ? "de" : "até"}`;
+  if (from && to) {
+    /* Sobre uma PONTA o clique não recomeça nada: `handleDayPointerDown` já
+       pegou aquela ponta no mousedown, e o clique que vem em seguida só
+       confirma a pega. Prometer "novo início" ali contradizia tanto o que
+       acontece quanto o cursor `grab` que a própria célula mostra — duas
+       promessas diferentes no mesmo pixel. */
+    if (hoverYmd === from) return "pegar o de";
+    if (hoverYmd === to) return "pegar o até";
+    // Fora das pontas, com o intervalo fechado, o clique RECOMEÇA.
+    return "novo início";
+  }
+  if (!from) return "novo início";
+  const h = parseLocalYmd(hoverYmd);
+  const f = parseLocalYmd(from);
+  if (!h || !f) return null;
+  // Com o início posto e o fim em aberto, um dia ANTES do início vira o novo
+  // início — não o fim.
+  return h.getTime() < f.getTime() ? "novo início" : "novo fim";
+}
+
 
 function ymdToDraft(ymd, locale) {
   if (!ymd) return "";
@@ -567,19 +599,25 @@ export function LocaleDateRangePicker({
      Sem isto o hover no calendário não diz NADA sobre o que vai mudar, e a
      pessoa descobre só depois de clicar. Com o intervalo fechado, a ponta é a
      mais próxima; com ele aberto, é sempre o fim. */
+
+  /* O que o clique no dia sob o cursor VAI FAZER — e o texto do balão.
+     Ele nasce AQUI, junto de `handleDayClick`, e não no calendário: derivar a
+     promessa longe da ação foi o que fez o balão prometer "novo fim" onde o
+     clique movia o início, e "mover o até" onde o clique recomeçava o
+     intervalo. Uma regra, um lugar. */
+  const acaoSobHover = useMemo(
+    () => acaoDoClique({ touch, hoverYmd, grabbedEdge, from: displayFrom, to: displayTo }),
+    [touch, hoverYmd, grabbedEdge, displayFrom, displayTo],
+  );
+
+  /* Qual CAMPO acende — derivado da mesma ação, para os dois nunca divergirem.
+     Antes eram duas heurísticas independentes e elas discordavam: o campo dizia
+     "de" e o balão dizia "novo fim" no mesmo hover. */
   const pontaSobHover = useMemo(() => {
-    if (touch || !hoverYmd) return null;
+    if (!acaoSobHover) return null;
     if (grabbedEdge) return grabbedEdge;
-    /* Espelha `handleDayClick` LINHA A LINHA, e não a ponta mais próxima.
-       Com o intervalo fechado, um clique RECOMEÇA em "de" — mas a heurística de
-       proximidade acendia "até" e prometia uma coisa enquanto o clique fazia
-       outra. Um realce que mente é pior que realce nenhum. */
-    if (!displayFrom || (displayFrom && displayTo)) return "from";
-    const h = parseLocalYmd(hoverYmd);
-    const f = parseLocalYmd(displayFrom);
-    if (!h || !f) return null;
-    return h.getTime() < f.getTime() ? "from" : "to";
-  }, [touch, hoverYmd, grabbedEdge, displayFrom, displayTo]);
+    return acaoSobHover === "novo fim" ? "to" : "from";
+  }, [acaoSobHover, grabbedEdge]);
 
   const summaryLabel =
     period === "tudo" && !displayFrom && !displayTo
@@ -627,6 +665,28 @@ export function LocaleDateRangePicker({
           Duas caixas com borda para um intervalo também dizem "dois campos"
           quando a coisa é UMA: o intervalo cabe numa linha só. */}
       <>
+          {/* A legenda existe para a caixa não ficar solta entre os chips e o
+              calendário: sem ela, a linha `de … até …` lê como mais um chip.
+              Some no COMPACTO: o painel de Período mede 669 px contra 712 de
+              corpo do sheet, e os ~27 px dela derrubavam a folga para ~15 —
+              a última fileira do calendário a um aparelho pequeno de distância
+              de ser cortada de novo, que é exatamente o bug que aquela conta
+              registra ter consertado. */}
+          {!compact && (
+          <div
+            style={{
+              ...G,
+              fontFamily: "'Geist Mono', ui-monospace, monospace",
+              fontSize: 11,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              color: T.inkLight,
+              marginBottom: 4,
+            }}
+          >
+            Intervalo
+          </div>
+          )}
           <div
             style={{
               display: "flex",
@@ -740,6 +800,7 @@ export function LocaleDateRangePicker({
           onNextMonth={() => shiftMonth(1)}
           touch={touch}
           grabbedEdge={grabbedEdge}
+          acaoSobHover={acaoSobHover}
         />
       )}
 

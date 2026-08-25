@@ -28,9 +28,9 @@ describe("<SortMenu>", () => {
     render(<Harness />);
     expect(screen.getByText("Ordenar por")).toBeInTheDocument();
     expect(screen.getByText("1 nível")).toBeInTheDocument();
-    expect(screen.getByText(/Disponíveis · clique para adicionar/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Adicionar Valor/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Adicionar Tipo/i })).toBeInTheDocument();
+    expect(screen.getByText(/Disponíveis · clique para ordenar por/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Ordenar por Valor/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Ordenar por Tipo/i })).toBeInTheDocument();
   });
 
   it("não mostra Resetar quando estado é o default", () => {
@@ -56,12 +56,14 @@ describe("<SortMenu>", () => {
     expect(screen.queryByRole("button", { name: /Resetar/i })).not.toBeInTheDocument();
   });
 
-  it("clique em campo inativo o promove para o fim com dir default", async () => {
+  /* "Adicionar Valor" tem que virar ordenação POR VALOR de verdade: a API lê só
+     a primeira regra, então entrar no fim deixava a lista idêntica. */
+  it("clique em campo inativo o promove a critério PRIMÁRIO com dir default", async () => {
     render(<Harness />);
-    await userEvent.click(screen.getByRole("button", { name: /Adicionar Valor/i }));
+    await userEvent.click(screen.getByRole("button", { name: /Ordenar por Valor/i }));
     expect(readState()).toEqual([
-      { field: "date", dir: "desc" },
       { field: "val", dir: "desc" },
+      { field: "date", dir: "desc" },
     ]);
     expect(screen.getByText("2 níveis")).toBeInTheDocument();
   });
@@ -97,7 +99,7 @@ describe("<SortMenu>", () => {
     );
     await userEvent.click(screen.getByRole("button", { name: /Remover Valor/i }));
     expect(readState()).toEqual([{ field: "date", dir: "desc" }]);
-    expect(screen.getByRole("button", { name: /Adicionar Valor/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Ordenar por Valor/i })).toBeInTheDocument();
   });
 
   it("badge no header reflete contagem em PT-BR", () => {

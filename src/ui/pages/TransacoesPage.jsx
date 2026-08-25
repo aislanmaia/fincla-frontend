@@ -43,6 +43,8 @@ import { ConfirmActionModal } from "../features/transactions/ConfirmAction.jsx";
 import { ShortcutsModal } from "../features/transactions/ShortcutsModal.jsx";
 import { useTransactionsKeyboard } from "../features/transactions/useTransactionsKeyboard.js";
 import { useFocusTrap } from "../features/transactions/useFocusTrap.js";
+import { describeFilterChange } from "../features/transactions/filters/describeFilterChange.js";
+import { flyToChip } from "../features/transactions/flyToChip.js";
 import { TransactionsStats } from "../features/transactions/TransactionsStats.jsx";
 import { TransactionsSummarySheet } from "../features/transactions/TransactionsSummarySheet.jsx";
 import { useSwipeActions, SWIPE_WIDTH } from "../features/transactions/useSwipeActions.js";
@@ -392,7 +394,13 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
      descrição. Vem como prop própria e não de `wide` (≥1600): amarrá-lo a `wide`
      deixava 1500 px — onde há vão de sobra — sem rótulo nenhum. */
   showActionLabels = false,
-  swipe = null, flash = false }) => {
+  swipe = null, flash = false,
+  /* A linha está saindo: a COR da saída mora aqui, e o colapso de altura no
+     wrapper. Separados porque cada um precisa de um elemento diferente. */
+  leaving = false,
+  /* §28: esta linha está esperando o servidor terminar uma ação dela. */
+  busy = false,
+  born = false }) => {
   const isRefund   = tx.type === "refund";
   const isReceita  = tx.type === "income" || isRefund;
   const hasParcela = !!tx.parcela && !isRefund;
@@ -516,7 +524,16 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
            fundo opaco para cobrir o painel de swipe, e um fundo sólido pinta
            por cima de qualquer animação do pai — o "marcar como pago" não
            mostrava efeito nenhum. */
-        className={`fincla-row${flash ? " fincla-tx-settled" : ""}`}
+        className={[
+          "fincla-row",
+          /* A COR vive aqui, na linha, porque é ela que tem o `background`
+             inline — e declaração inline vence regra de classe. Por isso a
+             varredura e o vermelho da saída são pintados dentro dos keyframes:
+             a origem "animação" vence o inline, a origem "autor" não. */
+          flash ? "fincla-tx-settled" : "",
+          leaving ? "fincla-tx-leaving-cor" : "",
+          born ? "fincla-tx-born-cor" : "",
+        ].filter(Boolean).join(" ")}
         onClick={() => (swipeOpen ? swipe.close() : onSelect(tx))}
         onKeyDown={(e) => {
           if (e.target !== e.currentTarget) return;
@@ -527,6 +544,11 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
         }}
         role="button"
         tabIndex={0}
+        /* Mesma marca da linha do desktop: é por ela que o foco volta depois de
+           editar. Sem isso o `querySelector` não achava nada no toque e o foco
+           ficava no `body` — o defeito só não aparecia porque ninguém o via. */
+        data-tx-row={tx.id}
+        aria-busy={busy || undefined}
         aria-expanded={isSelected}
         aria-label={`${tx.desc}, ${isReceita ? "receita" : "despesa"} de ${fmtBRL(tx.val)} em ${tx.date}`}
         style={{ display:"grid", gridTemplateColumns:"28px minmax(0,1fr) auto",
@@ -540,7 +562,16 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
              linha não entra — quem escolheu compacto pediu ritmo, e as tags
              continuam na sanfona. */
           minHeight: rowHeight, padding: dense ? "4px 12px" : "6px 12px",
-          background: isSelected ? `${catCol}08` : T.surface,
+          /* A linha PRECISA ser opaca: as ações de arrasto ficam estacionadas
+             embaixo dela e só devem aparecer quando ela desliza. O antigo
+             `background: catCol + "08"` tem 3% de alfa — a linha selecionada
+             virava vidro e revelava os botões verde/vermelho sem gesto nenhum.
+             Por isso o tom da categoria entra como CAMADA (background-image)
+             sobre uma cor de fundo sólida, em vez de substituí-la. */
+          backgroundColor: T.surface,
+          backgroundImage: isSelected
+            ? `linear-gradient(${catCol}08, ${catCol}08)`
+            : "none",
           borderLeft: isSelected ? `3px solid ${catCol}` : "3px solid transparent",
           cursor:"pointer", position:"relative",
           transform: swipeOpen ? `translateX(-${SWIPE_WIDTH}px)` : "translateX(0)",
@@ -586,8 +617,12 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
         <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:12.5, fontWeight:700,
           whiteSpace:"nowrap", display:"flex", alignItems:"center", gap:5,
           color: isRefund ? T.green : (isReceita ? T.green : T.ink) }}>
-          {isReceita ? "+" : "−"}{fmtBRL(tx.val)}
-          {statusRing && (
+          {/* §28: o indicador ocupa o LUGAR DO VALOR porque é justamente o
+              número que a ação vai mudar. A linha não apaga nem se move — ela é
+              a única coisa na tela que ainda vale olhar. */}
+          {busy && <span className="fincla-spin" aria-hidden="true" />}
+          {!busy && (isReceita ? "+" : "−")}{!busy && fmtBRL(tx.val)}
+          {!busy && statusRing && (
             <span style={{ color:T.amber, display:"inline-flex", alignItems:"center" }}>
               <i aria-hidden="true" style={{ display:"inline-block", width:8, height:8,
                 border:"1.75px solid currentColor", borderRadius:"50%", boxSizing:"border-box" }}/>
@@ -614,7 +649,17 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
           onSelect(tx);
         }
       }}
-      className="fincla-row"
+      className={[
+        "fincla-row",
+        /* A COR das animações vive na LINHA, não no wrapper: a linha tem
+           `background` opaco e pinta por cima de qualquer fundo do pai — foi
+           por isso que a varredura e o vermelho da saída ficaram invisíveis.
+           E vive nas DUAS linhas, desktop e mobile: pôr só numa fazia a
+           animação existir em metade do app. */
+        flash ? "fincla-tx-settled" : "",
+        leaving ? "fincla-tx-leaving-cor" : "",
+        born ? "fincla-tx-born-cor" : "",
+      ].filter(Boolean).join(" ")}
       /* A linha era um `div` com onClick: invisível para teclado e para leitor
          de tela. Um único ponto de parada no Tab (a lista inteira seriam 15
          paradas × 3 ações) e Enter/Espaço abrem o detalhe. */
@@ -624,6 +669,7 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
          entre as linhas. Com `tabIndex=0` em todas, 20 linhas × 4 ações rápidas
          viravam ~100 paradas entre a busca e o rodapé. */
       tabIndex={isRovingStop ? 0 : -1}
+      aria-busy={busy || undefined}
       aria-expanded={isSelected}
       aria-label={`${tx.desc}, ${isReceita ? "receita" : "despesa"} de ${fmtBRL(tx.val)} em ${tx.date}`}
       style={{ display:"grid", gridTemplateColumns: columns,
@@ -847,7 +893,11 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
       <div style={{ ...G, fontFamily:"'Geist Mono',monospace",
         fontSize: dense ? 12 : 13.5, fontWeight:700, textAlign:"right",
         color: isRefund ? T.green : (isReceita ? T.green : T.ink) }}>
-        {isReceita ? "+" : "−"}{fmtBRL(tx.val)}
+        {/* §28: mesmo lugar que a linha do toque usa — o valor é o número que
+            a ação vai mudar, então é nele que o "aguarde" pertence. */}
+        {busy
+          ? <span className="fincla-spin" aria-hidden="true" />
+          : <>{isReceita ? "+" : "−"}{fmtBRL(tx.val)}</>}
       </div>
 
       {/* Situação: anel vazado, não ampulheta. O lançamento não está
@@ -1028,6 +1078,9 @@ const DetailPanel = ({
   /* Avisa a página de que a edição começou nesta linha, para o foco voltar
      para ela quando o modal fechar. */
   onEditRequested,
+  /* Abre o modal e devolve `true` quando ele assumiu a decisão. Devolve
+     `false` no toque, onde a confirmação é in-place. */
+  pedirConfirmacao,
   setSelected,
   shouldUseRealData,
   transactionsData,
@@ -1217,6 +1270,12 @@ const DetailPanel = ({
             disabled={settlingId === tx.id}
             onClick={async (e) => {
               e.stopPropagation();
+              /* A pergunta é a MESMA da ação rápida da linha: são dois botões
+                 para uma decisão só, e a rede não pode depender de por onde a
+                 pessoa entrou. No desktop abre o modal e este handler para
+                 aqui; no toque segue direto, porque abrir a sanfona já foi o
+                 gesto deliberado. */
+              if (pedirConfirmacao?.(tx.settled ? "unsettle" : "settle", tx)) return;
               const next = !tx.settled;
               // Demo/mock não tem backend: sem este ramo o botão fica clicável e
               // não faz nada, que é pior que não existir.
@@ -1283,11 +1342,14 @@ const DetailPanel = ({
             onClick={async (e) => {
               e.stopPropagation();
               if (shouldUseRealData) {
+                marcarExcluindo?.(tx.id);
                 try {
                   await transactionsData.removeTransaction(tx.id);
                 } catch (_) {
+                  marcarExcluindo?.(null);
                   return;
                 }
+                marcarExcluindo?.(null);
               } else {
                 setMockTxList((prev) => prev.filter((item) => item.id !== tx.id));
               }
@@ -1304,7 +1366,11 @@ const DetailPanel = ({
             🗑 Confirmar
           </AccButton>
         ) : (
-          <AccButton tone="red" onClick={(e) => { e.stopPropagation(); setDeletingId(tx.id); }}>
+          <AccButton tone="red" onClick={(e) => {
+            e.stopPropagation();
+            if (pedirConfirmacao?.("delete", tx)) return;
+            setDeletingId(tx.id);
+          }}>
             🗑 Excluir
           </AccButton>
         )}
@@ -1457,6 +1523,9 @@ function TransacoesPageBody({
   }, [isMobile]);
 
   const [chipsBudget, setChipsBudget] = useState(null);
+  /* A dock fica montada durante a saída para ter para onde encolher: desmontar
+     na hora tira o elemento antes de a largura poder animar até zero. */
+  const [dockFechando, setDockFechando] = useState(false);
   const [confirmAcao, setConfirmAcao] = useState(null);
   /* `rovingId` guarda a linha lembrada; `rovingStopId` é a que REALMENTE está
      na tela. A comparação era `tx.id === rovingId` com `rovingId` sempre string
@@ -1472,6 +1541,34 @@ function TransacoesPageBody({
      isso o Tab recomeça do topo do documento e quem editou perde o lugar. */
   const editandoDeRef = useRef(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
+  /* QUAL linha está sendo excluída no servidor. `deletingBusy` sozinho não
+     serve: ele vive no caminho do modal, onde `deletingId` é sempre null, e o
+     caminho da sanfona não tinha sinal nenhum — a linha ficava parada durante
+     a chamada, que é o convite para tocar de novo. */
+  const [excluindoId, setExcluindoId] = useState(null);
+
+  /* `dockLarga` é a largura RENDERIZADA, e ela sempre atrasa um quadro em
+     relação a `wideDesktopFiltersOpen`. É o que dá à transição um valor de
+     partida: montar já com a largura final não anima nada — o elemento nasce
+     grande e a lista salta 396 px de uma vez, que era exatamente o defeito. */
+  const [dockLarga, setDockLarga] = useState(false);
+  const dockAbertaAntesRef = useRef(false);
+  useEffect(() => {
+    const abriu = !dockAbertaAntesRef.current && wideDesktopFiltersOpen;
+    const fechou = dockAbertaAntesRef.current && !wideDesktopFiltersOpen;
+    dockAbertaAntesRef.current = wideDesktopFiltersOpen;
+
+    if (abriu) {
+      // Um quadro com largura zero, e só então a final.
+      const raf = requestAnimationFrame(() => setDockLarga(true));
+      return () => cancelAnimationFrame(raf);
+    }
+    if (!fechou) return undefined;
+    setDockLarga(false);
+    setDockFechando(true);
+    const t = setTimeout(() => setDockFechando(false), 320);
+    return () => clearTimeout(t);
+  }, [wideDesktopFiltersOpen]);
 
   const [panelFacet, setPanelFacet] = useState("periodo");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -1909,7 +2006,36 @@ function TransacoesPageBody({
   // "em voo" — não depende de `isLoading` ter tido tempo de ligar.
   const listNeverLoaded = shouldUseRealData && !transactionsData.hasLoaded;
   const listLoadFailed = listNeverLoaded && Boolean(transactionsData.error);
+  /* PRIMEIRA carga: sem dado nenhum, a tela mostra o esqueleto. */
   const listLoading = listNeverLoaded && !listLoadFailed;
+
+  /* REFILTRAGEM: já há uma lista na tela e uma consulta nova em voo.
+     Isto faltava por inteiro — `listLoading` exige `!hasLoaded`, então depois
+     da primeira carga ele é falso PARA SEMPRE. Trocar um filtro, desfazer ou
+     refazer não acendia nada: a lista antiga ficava parada, com números que já
+     não correspondiam ao que estava sendo pedido, até a resposta chegar. Uma
+     lista que não se mexe é indistinguível de uma lista que ignorou o clique. */
+  /* `isAppending` fica de FORA: o scroll infinito só aumenta `limit` — é a
+     mesma pergunta, com mais páginas. Tratá-lo como refiltragem apagava as
+     linhas JÁ LIDAS a cada página e, pior, punha `pointerEvents: none` no
+     container de rolagem: a roda do mouse parava de chegar no scroller e o
+     scroll travava no meio do gesto, exatamente enquanto se rolava. */
+  const listRefiltering =
+    shouldUseRealData &&
+    transactionsData.hasLoaded &&
+    transactionsData.isLoading &&
+    !transactionsData.isAppending;
+
+  /* §28: o apagamento sozinho lê como "desabilitado", não como "carregando" —
+     falta direção. A barra dá a direção, mas só depois de 180 ms: a maioria das
+     refiltragens volta antes disso, e uma barra que pisca a cada tecla da busca
+     é pior que barra nenhuma. */
+  const [barraCarregando, setBarraCarregando] = useState(false);
+  useEffect(() => {
+    if (!listRefiltering) { setBarraCarregando(false); return undefined; }
+    const t = setTimeout(() => setBarraCarregando(true), 180);
+    return () => clearTimeout(t);
+  }, [listRefiltering]);
 
   /** Categorias normalizadas para a FacetBar (id + label + color + icon). */
   const categoriesForFilter = useMemo(() => {
@@ -2441,13 +2567,22 @@ function TransacoesPageBody({
   // Uma única derivação de facets para os dois consumidores: os chips de
   // filtro ativo e o resumo das views salvas. Duas listas construídas em
   // lugares diferentes acabariam divergindo no rótulo de algum filtro.
-  const allFacets = useMemo(() => {
-    const categoriesById = Object.fromEntries(
-      categoriesForFilter.map((c) => [c.id, c]),
-    );
-    const cardsById = Object.fromEntries(cardsForFilter.map((c) => [c.id, c]));
-    return filter.buildFacets({ categoriesById, cardsById });
-  }, [filter, categoriesForFilter, cardsForFilter]);
+  /* Os mapas saem do `useMemo` porque o rótulo do desfazer também precisa
+     deles: sem os nomes, "Categoria volta para alim-3f2a" é pior que o
+     genérico que ele veio substituir. */
+  const categoriesById = useMemo(
+    () => Object.fromEntries(categoriesForFilter.map((c) => [c.id, c])),
+    [categoriesForFilter],
+  );
+  const cardsById = useMemo(
+    () => Object.fromEntries(cardsForFilter.map((c) => [c.id, c])),
+    [cardsForFilter],
+  );
+
+  const allFacets = useMemo(
+    () => filter.buildFacets({ categoriesById, cardsById }),
+    [filter, categoriesById, cardsById],
+  );
 
 
   /* Um recorte por filtro ativo, cada um SEM aquele filtro — é o que permite
@@ -2551,24 +2686,51 @@ function TransacoesPageBody({
   );
 
   /** "Sem filtros" / "3 filtros" — o que o desfazer vai devolver. */
-  const describeFilterSnapshot = useCallback((snap) => {
-    const n = countActiveFiltersInSnapshot(snap);
-    if (n === 0) return "sem filtros";
-    return n === 1 ? "1 filtro" : `${n} filtros`;
-  }, []);
+  /* O rótulo diz QUAL mudança o botão desfaz, não para onde ele volta.
+     "Desfazer: voltar para 2 filtros" obriga a clicar para descobrir qual dos
+     três some — o oposto do que um desfazer serve. */
+  const describeFilterSnapshot = useCallback(
+    (destino, atual, verbo) =>
+      describeFilterChange(atual, destino, verbo, { categorias: categoriesById, cartoes: cardsById }),
+    [categoriesById, cardsById],
+  );
 
-  // Desfazer dos filtros. O rótulo diz para ONDE volta ("3 filtros"), não
-  // "desfazer" genérico — sem isso o controle é uma aposta.
+  // Desfazer dos filtros, com o rótulo nomeando a mudança.
   const filterHistory = useFilterHistory(
     filter.snapshot,
     filter.applySnapshot,
     describeFilterSnapshot,
   );
+  /* §28: qual dos dois botões está esperando a recarga. Zera sozinho quando a
+     lista para de carregar — não com um timer, porque o tempo da resposta é da
+     rede e um timer fixo ou mente ou pisca. */
+  const [historyBusy, setHistoryBusy] = useState(null);
+  const viuCargaRef = useRef(false);
+  useEffect(() => {
+    if (!historyBusy) { viuCargaRef.current = false; return undefined; }
+    /* Só o flanco de DESCIDA apaga: limpar assim que `listRefiltering` está
+       falso mataria o indicador no mesmo commit do clique, antes de a busca
+       sequer começar. */
+    if (listRefiltering) { viuCargaRef.current = true; return undefined; }
+    if (viuCargaRef.current) { setHistoryBusy(null); return undefined; }
+    // A recarga pode nem acontecer (dados em cache, modo mock): rede de segurança.
+    const t = setTimeout(() => setHistoryBusy(null), 600);
+    return () => clearTimeout(t);
+  }, [listRefiltering, historyBusy]);
+
+  /* §28: a linha que está esperando o servidor. Quem agiu pelo arrasto (toque)
+     ou pela ação rápida (desktop) não recebia retorno nenhum — a linha ficava
+     parada e parecia que o toque não pegou, que é o convite exato para tocar
+     de novo e pagar duas vezes. */
+  const rowBusyId = settlingId ?? excluindoId;
+
   const undoFilter = useCallback(() => {
+    setHistoryBusy("undo");
     filterHistory.undo();
     setVisible(PAGE_SIZE);
   }, [filterHistory, PAGE_SIZE]);
   const redoFilter = useCallback(() => {
+    setHistoryBusy("redo");
     filterHistory.redo();
     setVisible(PAGE_SIZE);
   }, [filterHistory, PAGE_SIZE]);
@@ -2806,6 +2968,61 @@ function TransacoesPageBody({
    */
   const [leavingIds, setLeavingIds] = useState(() => new Set());
   const [settledFlashId, setSettledFlashId] = useState(null);
+  /* Linhas que acabaram de nascer. A marca dura só o tempo da animação: mantê-la
+     faria a linha renascer a cada re-render da lista. */
+  const [nascendoIds, setNascendoIds] = useState(() => new Set());
+  const marcarNascimento = useCallback((id) => {
+    const chave = String(id);
+    setNascendoIds((prev) => new Set(prev).add(chave));
+    setTimeout(() => {
+      setNascendoIds((prev) => {
+        if (!prev.has(chave)) return prev;
+        const proximo = new Set(prev);
+        proximo.delete(chave);
+        return proximo;
+      });
+    }, 600);
+  }, []);
+
+  /* Toda linha NOVA que aparece no topo depois do primeiro carregamento nasce
+     com a animação — não só a duplicada. É o mesmo evento do ponto de vista de
+     quem olha: "apareceu uma que não estava aí". */
+  const idsConhecidosRef = useRef(null);
+  const assinaturaDoFiltroRef = useRef(null);
+  useEffect(() => {
+    /* A assinatura do FILTRO decide se isto é "linha nova" ou "consulta nova".
+       Sem ela, qualquer troca de período, busca ou categoria trocava a lista
+       inteira por outra sem interseção de ids — e as vinte linhas nasciam de
+       uma vez, cada uma com 550 ms de altura animada e um `setTimeout`. Pior:
+       isso disparava no próprio caminho novo desta entrega, quando clicar em
+       "N a pagar" aplica o filtro. */
+    const assinatura = JSON.stringify(transactionsFilters);
+    const trocouDeConsulta = assinaturaDoFiltroRef.current !== assinatura;
+    assinaturaDoFiltroRef.current = assinatura;
+
+    /* A assinatura muda um render ANTES de os dados dela chegarem — o hook
+       segura a lista antiga enquanto busca. Guardar os ids agora carimbaria a
+       lista VELHA como conhecida sob a assinatura NOVA; quando a resposta
+       chegasse, a assinatura já bateria, nenhum id da página nova estaria no
+       conjunto anterior, e as vinte linhas nasceriam de uma vez — que é
+       exatamente o que esta guarda existe para impedir.
+
+       Por isso trocar de consulta ESQUECE os ids em vez de regravá-los, e nada
+       é comparado enquanto a resposta está em voo. */
+    if (trocouDeConsulta) {
+      idsConhecidosRef.current = null;
+      return;
+    }
+    if (listRefiltering) return;
+
+    const atuais = new Set(txList.map((t) => String(t.id)));
+    const antes = idsConhecidosRef.current;
+    idsConhecidosRef.current = atuais;
+
+    // Primeira lista deste recorte não é nascimento: é o ponto de partida.
+    if (!antes) return;
+    for (const id of atuais) if (!antes.has(id)) marcarNascimento(id);
+  }, [txList, transactionsFilters, listRefiltering, marcarNascimento]);
 
   /* O sheet cobre a tela, mas o botão que o abriu continua no fluxo de Tab por
      trás do backdrop: sem prender, quem navega por teclado tabula para fora,
@@ -2926,7 +3143,17 @@ function TransacoesPageBody({
       if (isMobile) { setSelected(tx); setDeletingId(tx.id); return; }
       setConfirmAcao({ kind: "delete", tx });
     },
-    onSettle: async (tx) => {
+    /* Liquidar TAMBÉM pergunta no desktop. Ela muda o saldo — o mesmo tipo de
+       consequência que a exclusão —, e a diferença é só que esta é reversível,
+       o que o próprio modal diz. Executar direto deixava a ação mais frequente
+       da tela sem nenhuma rede.
+       No toque continua direto: lá a ação já exige o gesto deliberado de abrir
+       a sanfona ou arrastar a linha, que é a confirmação. */
+    onSettle: (tx) => {
+      if (isMobile) { quickActions.onSettleConfirmado(tx); return; }
+      setConfirmAcao({ kind: tx.settled ? "unsettle" : "settle", tx });
+    },
+    onSettleConfirmado: async (tx) => {
       if (settlingId) return;
       setSettleError("");
       setSettlingId(tx.id);
@@ -3135,9 +3362,24 @@ function TransacoesPageBody({
                 ? "Carregando…"
                 : null
         }
-        onPendingClick={() => filter.setSettlement("a-pagar")}
+        onPendingClick={(e) => {
+          /* A label voa até o botão de filtros antes de sumir. Ela some porque
+             com "a pagar" ativo toda linha visível é a pagar e o contador vira
+             zero por definição — mas sumir sem transição desorienta: a pessoa
+             clica e o que ela clicou evapora. O voo diz que é o mesmo objeto
+             mudando de lugar. */
+          /* Âncora explícita, não uma lista de seletores: `querySelector` com
+             lista devolve o primeiro em ordem de DOCUMENTO, e o grupo
+             "Filtros aplicados" — que é ANCESTRAL do botão — casava primeiro
+             sempre que havia um chip. O clone voava para o centro da faixa
+             inteira (~490 px) em vez de para o botão. */
+          const alvo = document.querySelector('[data-fly-target="filtros"]');
+          if (e?.currentTarget && alvo) flyToChip(e.currentTarget, alvo);
+          filter.setSettlement("a-pagar");
+        }}
         onSumClick={isMobile ? () => setStatsExpanded((v) => !v) : undefined}
         sumOpen={isMobile && statsExpanded}
+        historyBusy={historyBusy}
         canUndo={filterHistory.canUndo}
         onUndo={undoFilter}
         undoLabel={filterHistory.undoLabel}
@@ -3262,8 +3504,16 @@ function TransacoesPageBody({
               {txs.map((tx, i) => (
                 <div key={tx.id}
                   className={[
+                    /* Só o que mexe em ALTURA fica no wrapper — colapso e
+                       abertura empurram as linhas vizinhas, e é o wrapper que
+                       ocupa o lugar na lista.
+                       Cor NÃO vem para cá: a linha filha tem `background`
+                       opaco e pinta por cima de qualquer fundo ou sombra do
+                       pai. Foi assim que a varredura verde e o vermelho da
+                       saída ficaram invisíveis mesmo com o CSS aplicado — eu
+                       conferi que a regra existia, não que ela aparecia. */
                     leavingIds.has(tx.id) ? "fincla-tx-leave" : "",
-                    settledFlashId === tx.id ? "fincla-tx-settled" : "",
+                    nascendoIds.has(String(tx.id)) ? "fincla-tx-born" : "",
                   ].filter(Boolean).join(" ")}
                   style={{
                   borderBottom: (gi === groups.length - 1 && i === txs.length - 1 && selected?.id !== tx.id)
@@ -3282,11 +3532,14 @@ function TransacoesPageBody({
                     onFilterByTag={filterByTagFromRow}
                     swipe={isMobile ? swipeActions : null}
                     flash={settledFlashId === tx.id}
+                    busy={rowBusyId != null && String(rowBusyId) === String(tx.id)}
                     wide={!isMobile && viewportWidth >= 1600}
                     tagsColPx={tagsColPx}
                     catColPx={catColPx}
                     tagsAtivas={filter.tags}
                     isRovingStop={rovingStopId === String(tx.id)}
+                    leaving={leavingIds.has(tx.id)}
+                    born={nascendoIds.has(String(tx.id))}
                     /* 1000 px de LISTA — não de viewport. Abaixo disso o vão
                        não comporta o botão aberto e ele invadiria a descrição.
                        Enquanto a medição não chega (primeiro render), cai no
@@ -3314,6 +3567,11 @@ function TransacoesPageBody({
                         onClose={() => setSelected(null)}
                         onEditTx={onEditTx}
                         onEditRequested={(tx) => { editandoDeRef.current = String(tx.id); }}
+                        pedirConfirmacao={(kind, alvo) => {
+                          if (isMobile) return false;
+                          setConfirmAcao({ kind, tx: alvo });
+                          return true;
+                        }}
                         setSelected={setSelected}
                         shouldUseRealData={shouldUseRealData}
                         transactionsData={transactionsData}
@@ -3321,6 +3579,7 @@ function TransacoesPageBody({
                         onTransactionsInvalidate={onTransactionsInvalidate}
                         deletingId={deletingId}
                         setDeletingId={setDeletingId}
+                        marcarExcluindo={setExcluindoId}
                         onRowLeave={startRowLeave}
                         onDuplicateTx={onDuplicateTx}
                         onFilterByCategory={filterByCategoryFromRow}
@@ -3725,25 +3984,49 @@ function TransacoesPageBody({
         <ConfirmActionModal
           kind={confirmAcao.kind}
           desc={confirmAcao.tx.desc}
+          /* O cartão da transação dentro do modal responde "qual delas?" sem a
+             pessoa depender da memória de qual linha clicou. */
+          tx={{
+            icon: confirmAcao.tx.icon,
+            desc: confirmAcao.tx.desc,
+            date: confirmAcao.tx.date,
+            cat: confirmAcao.tx.cat,
+            method: confirmAcao.tx.method,
+            type: confirmAcao.tx.type,
+            valorFormatado: fmtBRL(Math.abs(confirmAcao.tx.val)),
+          }}
           busy={deletingBusy}
           onCancel={() => setConfirmAcao(null)}
           onConfirm={async () => {
             const tx = confirmAcao.tx;
+            if (confirmAcao.kind !== "delete") {
+              setConfirmAcao(null);
+              await quickActions.onSettleConfirmado(tx);
+              return;
+            }
             setDeletingBusy(true);
+            setExcluindoId(tx.id);
             try {
               if (shouldUseRealData) await transactionsData.removeTransaction(tx.id);
               else setMockTxList((prev) => prev.filter((item) => item.id !== tx.id));
             } catch (_) {
               setDeletingBusy(false);
+              setExcluindoId(null);
               return;
             }
             setDeletingBusy(false);
+            setExcluindoId(null);
             setConfirmAcao(null);
             setSelected((cur) => (cur && cur.id === tx.id ? null : cur));
             /* A linha colapsa ANTES do refetch: sem isso a lista se
                reorganizaria de um quadro para o outro e o olho perderia onde
-               estava. */
-            onRowLeave(tx.id);
+               estava.
+               `startRowLeave`, não `onRowLeave`: este handler vive na PÁGINA,
+               e `onRowLeave` é o nome do prop lá dentro do painel de detalhe.
+               Aqui ele era um identificador livre — cada exclusão pelo modal
+               lançava ReferenceError e o colapso nunca rodava, engolido pelo
+               fato de a linha sumir no refetch logo em seguida. */
+            startRowLeave(tx.id);
           }}
         />
       )}
@@ -3917,15 +4200,55 @@ function TransacoesPageBody({
              que tinha travado a rolagem por cima dos itens. */
           className="fincla-scroll"
           style={{ flex:1, minWidth:0, minHeight:0,
-            overflowY:"auto", overflowX:"hidden" }}
+            overflowY:"auto", overflowX:"hidden",
+            /* A lista ANTIGA recua enquanto a nova está em voo: ela continua
+               legível (quem estava lendo não perde o lugar) mas para de se
+               apresentar como resposta ao filtro que acabou de mudar.
+               Recuar em vez de trocar por esqueleto é de propósito — trocar
+               pisca a tela inteira a cada tecla da busca. */
+            opacity: listRefiltering ? 0.55 : 1,
+            transition: "opacity var(--mo-fast, 120ms) var(--mo-fast-ease, ease-out)" }}
+          /* SEM `pointerEvents: none`: este elemento É o scroller, e um alvo
+             que não recebe evento de ponteiro também não recebe roda — rolar
+             durante uma refiltragem travava no meio do gesto. O risco que a
+             trava cobria (clicar numa linha que está prestes a mudar) já é
+             coberto onde importa: toda ação destrutiva passa por confirmação,
+             então o pior caso de um clique perdido é abrir uma sanfona. */
+          aria-busy={listRefiltering || undefined}
         >
+          {/* Fica DENTRO da região que rola e presa ao topo dela: colada na
+              borda superior da lista, que é onde o conteúdo novo vai entrar. */}
+          {barraCarregando && (
+            <div aria-hidden="true" className="fincla-loadbar"
+              /* `marginBottom: -2` zera a altura de fluxo: sticky OCUPA lugar, e
+                 sem isso a lista inteira descia 2 px ao aparecer e subia ao
+                 sumir — um solavanco a cada filtro, causado pelo próprio
+                 indicador que existe para acalmar a espera. */
+              style={{ position:"sticky", top:0, left:0, right:0, height:2,
+                marginBottom:-2, zIndex:5 }} />
+          )}
           {listContent}
         </div>
         {/* Ancorado: a lista COMPRIME em vez de o painel flutuar por cima dela.
             É o que permite julgar o filtro pelo resultado — a lista continua
             visível e atualizando enquanto se escolhe. */}
-        {!isMobile && wideDesktopFiltersOpen && (
-          <div style={{ flex:"none", width:dockPanelWidth, marginLeft:14, minHeight:0 }}>
+        {/* A dock ABRE e FECHA com transição de largura, e a lista acompanha
+            porque é `flex:1` — ela recomprime no mesmo movimento em vez de
+            saltar. Sem isso, a maior mudança de layout da tela era a única sem
+            passo do meio: a lista pulava 396 px de uma vez e o olho perdia a
+            linha que estava lendo.
+            O desmonte é ADIADO pelo tempo da animação, como o sheet do mobile
+            já fazia: desmontar na hora tira o elemento antes de ele ter para
+            onde encolher. */}
+        {/* `dockLarga` segura a montagem no quadro em que a dock fecha: sem ele o nó
+           sai do DOM antes de `dockFechando` virar true e a lista salta de volta. */}
+        {!isMobile && (wideDesktopFiltersOpen || dockLarga || dockFechando) && (
+          <div style={{ flex:"none",
+            width: dockLarga ? dockPanelWidth : 0,
+            marginLeft: dockLarga ? 14 : 0,
+            minHeight:0, overflow:"hidden",
+            transition: "width var(--mo-panel, 300ms) var(--mo-panel-ease, cubic-bezier(.32,.72,0,1)),"
+              + " margin-left var(--mo-panel, 300ms) var(--mo-panel-ease, cubic-bezier(.32,.72,0,1))" }}>
             <TransactionsFilterPanel
               filter={filter}
               facet={panelFacet}

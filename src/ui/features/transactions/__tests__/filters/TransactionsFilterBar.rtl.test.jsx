@@ -208,9 +208,9 @@ describe("<TransactionsFilterBar>", { timeout: 15000 }, () => {
   it("ordenação multi-nível: adicionar 2º critério vira badge contador na barra", async () => {
     render(<Harness />);
     await userEvent.click(screen.getByRole("button", { name: /Ordenar transações:/i }));
-    await userEvent.click(screen.getByRole("button", { name: /Adicionar Valor/i }));
+    await userEvent.click(screen.getByRole("button", { name: /Ordenar por Valor/i }));
     expect(
-      screen.getByRole("button", { name: /Ordenar transações: Data ↓ · Valor ↓/i }),
+      screen.getByRole("button", { name: /Ordenar transações: Valor ↓ · Data ↓/i }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText(/2 critérios/i)).toBeInTheDocument();
   });

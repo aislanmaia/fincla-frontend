@@ -293,7 +293,7 @@ export function SortMenu({ sort, setSort, onClose, compact = false }) {
               padding: "8px 8px 2px",
             }}
           >
-            Disponíveis · clique para adicionar
+            Disponíveis · clique para ordenar por
           </div>
         )}
 
@@ -305,7 +305,7 @@ export function SortMenu({ sort, setSort, onClose, compact = false }) {
               type="button"
               key={field}
               onClick={() => setSort(addRule(sort, field))}
-              aria-label={`Adicionar ${f.label}`}
+              aria-label={`Ordenar por ${f.label}`}
               style={{
                 ...G,
                 display: "flex",

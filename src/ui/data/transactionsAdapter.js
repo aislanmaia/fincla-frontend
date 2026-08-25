@@ -656,13 +656,39 @@ function resolveDateRange(period, customFrom, customTo) {
   return {};
 }
 
+/* Token legado → o par (`sort_by`, `sort_order`) que a API entende.
+
+   A ordenação chega aqui SEMPRE como token legado: `filtersToLegacyParams`
+   converte o modelo de regras da tela antes de o hook montar a query. Não
+   existe caminho em que um array chegue nesta função — havia um ramo para isso
+   e ele era código morto, que ainda por cima sugeria ao próximo leitor que
+   `tipo`/`cat` já chegavam à API.
+
+   `type` e `category` PRECISAM estar aqui: a API os aceita
+   (`SortByField = date | value | type | payment_method | description |
+   category`), e sem o token correspondente clicar em "Ordenar por Tipo"
+   renomeava o botão e deixava a lista exatamente como estava. */
+const ORDENACAO_DA_API = {
+  "date-asc": { sort_by: "date", sort_order: "asc" },
+  "date-desc": { sort_by: "date", sort_order: "desc" },
+  "val-asc": { sort_by: "value", sort_order: "asc" },
+  "val-desc": { sort_by: "value", sort_order: "desc" },
+  "name-asc": { sort_by: "description", sort_order: "asc" },
+  "name-desc": { sort_by: "description", sort_order: "desc" },
+  "type-asc": { sort_by: "type", sort_order: "asc" },
+  "type-desc": { sort_by: "type", sort_order: "desc" },
+  "cat-asc": { sort_by: "category", sort_order: "asc" },
+  "cat-desc": { sort_by: "category", sort_order: "desc" },
+};
+
+/**
+ * @param {string} sortBy Token legado ("val-desc", "cat-asc", …).
+ */
 function resolveSort(sortBy) {
-  if (sortBy === "date-asc") return { sort_by: "date", sort_order: "asc" };
-  if (sortBy === "val-desc") return { sort_by: "value", sort_order: "desc" };
-  if (sortBy === "val-asc") return { sort_by: "value", sort_order: "asc" };
-  if (sortBy === "name-asc") return { sort_by: "description", sort_order: "asc" };
-  if (sortBy === "name-desc") return { sort_by: "description", sort_order: "desc" };
-  return { sort_by: "date", sort_order: "desc" };
+  /* A API ordena por UM campo. A cascata de desempate da tela ("valor, depois
+     data") não tem equivalente lá: mandamos a regra que decide a ordem
+     visível, que é a primeira — e é `mapSortToLegacy` quem já a escolheu. */
+  return ORDENACAO_DA_API[sortBy] ?? { sort_by: "date", sort_order: "desc" };
 }
 
 /**

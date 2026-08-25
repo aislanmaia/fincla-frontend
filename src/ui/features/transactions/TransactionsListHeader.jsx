@@ -40,6 +40,10 @@ export function TransactionsListHeader({
   canRedo = false,
   onRedo,
   redoLabel = "",
+  /** §28: qual dos dois foi apertado e ainda está recarregando ("undo" | "redo" | null).
+      O sinal precisa nascer no botão — é para ele que a pessoa olha depois de
+      apertar, e a lista fica no canto oposto da tela. */
+  historyBusy = null,
   /** Mobile: o resultado abre o resumo em sheet. Sem handler ele é só texto. */
   onSumClick,
   sumOpen = false,
@@ -175,12 +179,14 @@ export function TransactionsListHeader({
               enabled={canUndo}
               onClick={onUndo}
               label={undoLabel}
+              busy={historyBusy === "undo"}
             />
             <HistoryButton
               dir="redo"
               enabled={canRedo}
               onClick={onRedo}
               label={redoLabel}
+              busy={historyBusy === "redo"}
             />
           </span>
         )}
@@ -263,20 +269,27 @@ export function TransactionsListHeader({
  * Um passo do histórico de filtros. Ícone só — o rótulo do que vai acontecer
  * mora no `title` e no nome acessível, porque ele muda a cada passo ("voltar
  * para 3 filtros") e um texto que se reescreve sozinho na barra faria o
- * cabeçalho pular de largura a cada clique.
+ * cabeçalho pular de largura a cada clique. Por isso a frase vive no `title` e
+ * no nome acessível, não no corpo do botão.
  *
  * Desabilitado continua DESENHADO, apagado: some-e-volta faria os dois botões
  * trocarem de posição conforme o histórico enche.
  */
-function HistoryButton({ dir, enabled, onClick, label }) {
+function HistoryButton({ dir, enabled, onClick, label, busy = false }) {
   const verb = dir === "undo" ? "Desfazer" : "Refazer";
-  const title = enabled && label ? `${verb}: voltar para ${label}` : `${verb} filtro`;
+  /* O `label` JÁ é a frase inteira ("Desfazer: remover Alimentação"), porque
+     quem sabe o que a mudança foi é quem calculou o diff. Montar
+     "{verbo}: voltar para {label}" em cima dela produzia
+     "Desfazer: voltar para Desfazer: remover Alimentação" — o verbo duas
+     vezes, e um "voltar para" que contradiz o "remover" que vem depois. */
+  const title = enabled && label ? label : `${verb} filtro`;
   return (
     <button
       type="button"
-      onClick={enabled ? onClick : undefined}
-      disabled={!enabled}
-      aria-label={enabled && label ? `${verb} filtro — ${label}` : `${verb} filtro`}
+      onClick={enabled && !busy ? onClick : undefined}
+      disabled={!enabled || busy}
+      aria-label={enabled && label ? label : `${verb} filtro`}
+      aria-busy={busy || undefined}
       title={title}
       style={{
         ...G,
@@ -294,21 +307,28 @@ function HistoryButton({ dir, enabled, onClick, label }) {
         padding: 0,
       }}
     >
-      <svg
-        width="12"
-        height="12"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-        style={dir === "redo" ? { transform: "scaleX(-1)" } : undefined}
-      >
-        <path d="M9 14 4 9l5-5" />
-        <path d="M4 9h10a6 6 0 0 1 0 12h-3" />
-      </svg>
+      {/* Do MESMO tamanho da seta (12 px): trocar por algo maior ou menor faria
+          o botão pular no instante em que a pessoa está olhando para ele. */}
+      {busy ? (
+        <span className="fincla-spin" aria-hidden="true"
+          style={{ width: 12, height: 12, borderWidth: 2 }} />
+      ) : (
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          style={dir === "redo" ? { transform: "scaleX(-1)" } : undefined}
+        >
+          <path d="M9 14 4 9l5-5" />
+          <path d="M4 9h10a6 6 0 0 1 0 12h-3" />
+        </svg>
+      )}
     </button>
   );
 }

@@ -84,6 +84,9 @@ function MonthGrid({
   /* Qual ponta está "pega" (arrastada no mouse, ou tocada no mobile). Ela ganha
      anel verde: sem hover, seria a única mudança de estado invisível da tela. */
   grabbedEdge = null,
+  /* O que o clique no dia sob o cursor vai fazer, já em texto. Vem do pai:
+     derivar aqui criava uma segunda regra que discordava do handler. */
+  acaoSobHover = null,
   /* Com UM mês, quem nomeia o mês é a barra de navegação — o título aqui
      dentro repetia a mesma palavra duas vezes, uma sob a outra. Com dois, a
      barra fica só com as setas e cada grade precisa dizer qual mês é. */
@@ -136,13 +139,18 @@ function MonthGrid({
             (grabbedEdge === "from" && isFrom) || (grabbedEdge === "to" && isTo);
           const edgeCommitted =
             (Boolean(fromYmd) && ymd === fromYmd) || (Boolean(toYmd) && ymd === toYmd);
-          const balao = !touch && hov && !disabled;
-          const balaoTexto = balao
-            ? new Date(year, monthIndex, day).toLocaleDateString(locale, {
-                day: "2-digit",
-                month: "short",
-              })
-            : "";
+          /* O balão diz a AÇÃO, não a data. A data já está na célula e no campo
+             — repeti-la é o gasto de um balão para não informar nada. O que
+             falta saber é o que o clique VAI FAZER: mover qual ponta, ou
+             recomeçar o intervalo. Foi essa a decisão fechada no desenho, e a
+             primeira versão daqui mostrava a data. */
+          /* O TEXTO vem pronto de fora, calculado ao lado do handler do clique.
+             Recalcular aqui foi o erro anterior: viraram duas regras
+             independentes que discordavam — o campo acendia "de" enquanto o
+             balão prometia "mover o até", e o clique fazia uma terceira coisa. */
+          const balao = !touch && hov && !disabled && Boolean(acaoSobHover);
+          const balaoTexto = balao ? acaoSobHover : "";
+          const balaoVerde = balao && acaoSobHover.startsWith("soltar");
 
           return (
             <div
@@ -188,7 +196,13 @@ function MonthGrid({
               style={{
                 textAlign: "center",
                 position: "relative",
-                cursor: disabled ? "not-allowed" : "pointer",
+                cursor: disabled
+                  ? "not-allowed"
+                  : grabbedEdge
+                    ? "grabbing"
+                    : Boolean(fromYmd) && Boolean(toYmd) && (isFrom || isTo)
+                      ? "grab"
+                      : "pointer",
                 /* O miolo do intervalo pinta a CÉLULA inteira, sem raio: é o que
                    faz a faixa parecer contínua entre as pontas. Antes o fundo
                    ficava numa bolinha de 28 px e a faixa aparecia furada. */
@@ -254,7 +268,7 @@ function MonthGrid({
                       bottom: "calc(100% + 6px)",
                       left: "50%",
                       transform: "translateX(-50%)",
-                      background: grabbed ? GRAB_RING : T.ink,
+                      background: balaoVerde ? GRAB_RING : T.blue,
                       color: "#fff",
                       fontSize: 11,
                       fontWeight: 700,
@@ -275,7 +289,7 @@ function MonthGrid({
                         transform: "translateX(-50%)",
                         borderLeft: "4px solid transparent",
                         borderRight: "4px solid transparent",
-                        borderTop: `4px solid ${grabbed ? GRAB_RING : T.ink}`,
+                        borderTop: `4px solid ${balaoVerde ? GRAB_RING : T.blue}`,
                       }}
                     />
                   </span>
@@ -334,6 +348,7 @@ export function RangeCalendarGrid({
   onNextMonth,
   touch = false,
   grabbedEdge = null,
+  acaoSobHover = null,
 }) {
   const months = useMemo(() => {
     const list = [];
@@ -436,6 +451,7 @@ export function RangeCalendarGrid({
             onDayPointerDown={onDayPointerDown}
             touch={touch}
             grabbedEdge={grabbedEdge}
+            acaoSobHover={acaoSobHover}
             showTitle={monthCount > 1}
           />
         ))}

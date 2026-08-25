@@ -208,6 +208,9 @@ export function TransactionsFilterChips({
   const filtrosChip = (
     <button
       type="button"
+      /* Alvo do voo da label "N a pagar": marcado explicitamente porque um
+         seletor por `aria-label` casava antes com o grupo que o contém. */
+      data-fly-target="filtros"
       onClick={onToggleFilters}
       aria-expanded={filtersOpen}
       /* O `aria-label` SUBSTITUI todo o conteúdo do botão no cálculo do nome

@@ -29,7 +29,12 @@ const SORT_FIELD_TO_LEGACY = {
   date: { asc: "date-asc", desc: "date-desc" },
   val: { asc: "val-asc", desc: "val-desc" },
   desc: { asc: "name-asc", desc: "name-desc" },
-  // "tipo" e "cat" não têm equivalente direto na API; caem no default
+  /* `tipo` e `cat` TÊM equivalente: a API aceita `sort_by=type` e
+     `sort_by=category`. Enquanto não tinham token aqui, escolher "Ordenar por
+     Tipo" trocava o rótulo do botão e não mexia uma linha da lista — o pior
+     tipo de defeito, o que responde ao clique sem fazer nada. */
+  tipo: { asc: "type-asc", desc: "type-desc" },
+  cat: { asc: "cat-asc", desc: "cat-desc" },
 };
 
 export function mapSortToLegacy(sort) {

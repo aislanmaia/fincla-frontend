@@ -1,5 +1,6 @@
 import React from "react";
 
+import { AnimNum } from "../../components/primitives.jsx";
 import { T } from "../../tokens";
 import { G } from "../../typography";
 
@@ -55,10 +56,15 @@ export function TransactionsStats({
   fmt,
 }) {
   const despesaPositiva = despesa >= 0;
+  /* Os KPIs ANIMAM até o novo valor. É o elo que faltava: a pessoa marca uma
+     transação como paga e não vê efeito nenhum, porque o número está a 400 px
+     dali — o movimento é o que liga a ação ao resultado. `AnimNum` já existe
+     nas primitivas e é o mesmo usado na Visão Geral, então os dois lugares
+     contam a mesma história do mesmo jeito. */
   const values = [
-    { color: T.green, text: `+${fmt(receita)}` },
-    { color: despesaPositiva ? T.red : T.green, text: `−${fmt(Math.abs(despesa))}` },
-    { color: resultado >= 0 ? T.green : T.red, text: `${resultado >= 0 ? "+" : "−"}${fmt(Math.abs(resultado))}` },
+    { color: T.green, sinal: "+", valor: receita },
+    { color: despesaPositiva ? T.red : T.green, sinal: "−", valor: Math.abs(despesa) },
+    { color: resultado >= 0 ? T.green : T.red, sinal: resultado >= 0 ? "+" : "−", valor: Math.abs(resultado) },
   ];
 
   /* `receita` vem do summary remoto (o filtro INTEIRO), enquanto `countReceita`
@@ -272,7 +278,17 @@ export function TransactionsStats({
           >
             {/* "—" e não "R$ 0,00": com a busca em espera, em voo ou falha, o
                 valor é sempre zero porque a API nem respondeu. */}
-            {unknown ? "—" : values[i].text}
+            {unknown ? (
+              "—"
+            ) : (
+              <>
+                {values[i].sinal}
+                {/* Sem `prefix`: o default de `AnimNum` já é "R$\u00a0" com o caractere
+                    de verdade. Passar "R$&nbsp;" imprimia a entidade literal, porque
+                    React não decodifica HTML em string de JS. */}
+                <AnimNum value={values[i].valor} />
+              </>
+            )}
           </span>
         </div>
       ))}

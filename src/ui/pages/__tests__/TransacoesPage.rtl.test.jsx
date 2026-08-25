@@ -521,9 +521,9 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     const sortBtn = screen.getByRole("button", { name: /Ordenar transações: Data ↓/i });
     await userEvent.click(sortBtn);
     expect(screen.getByRole("dialog", { name: /Editor de ordenação/i })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: /Adicionar Valor/i }));
+    await userEvent.click(screen.getByRole("button", { name: /Ordenar por Valor/i }));
     expect(
-      screen.getByRole("button", { name: /Ordenar transações: Data ↓ · Valor ↓/i }),
+      screen.getByRole("button", { name: /Ordenar transações: Valor ↓ · Data ↓/i }),
     ).toBeInTheDocument();
   });
 
@@ -641,6 +641,10 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     expect(screen.queryByRole("group", { name: /Filtros aplicados/i })).not.toBeInTheDocument();
   });
 
+  /* 30 s, não 15: isolado este teste leva ~14,7 s — cada `userEvent` percorre a
+     árvore inteira da página, que tem 4 mil linhas, e são seis interações.
+     Sob a suíte cheia ele estourava o padrão por margem de segundos. O limite
+     maior é sobre o custo do jsdom nesta página, não sobre esperar bug passar. */
   it("view dirty: card mostra Filtros alterados; Limpar tudo desseleciona", async () => {
     renderPage();
     await openFilters();
@@ -657,7 +661,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     expect(
       screen.getByRole("menuitemradio", { name: /^receitas\b/ }),
     ).toHaveAttribute("aria-checked", "false");
-  });
+  }, 30000);
 
   it("desktop compacto: facets ocultos por padrão; botão Filtros expande inline", async () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1200 });
@@ -764,6 +768,12 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     await userEvent.click(
       (await screen.findAllByRole("button", { name: /^Marcar Boleto luz como pago$/ }))[0],
     );
+    /* No DESKTOP a liquidação passa pelo modal: ela muda o saldo, a mesma
+       classe de consequência da exclusão. A diferença é ser reversível, e é o
+       próprio modal que diz isso. */
+    await userEvent.click(
+      await screen.findByRole("button", { name: /Confirmar pagamento/i }),
+    );
 
     expect(
       await screen.findByText(/"Boleto luz" marcada como paga/),
@@ -775,6 +785,38 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     expect(setTransactionSettled).toHaveBeenLastCalledWith("tx-pend", false);
   });
 
+it("cancelar no modal NÃO liquida", async () => {
+    // A rede só serve se ela puder ser puxada: um modal cujo cancelar executa
+    // mesmo assim é pior que nenhum, porque ensina a pessoa a não ler.
+    const setTransactionSettled = vi.fn().mockResolvedValue({ settled: true });
+    seedSettlement(setTransactionSettled);
+    renderPage();
+    await openFilters();
+
+    await userEvent.click(
+      (await screen.findAllByRole("button", { name: /^Marcar Boleto luz como pago$/ }))[0],
+    );
+    await userEvent.click(await screen.findByRole("button", { name: "Cancelar" }));
+
+    expect(setTransactionSettled).not.toHaveBeenCalled();
+  });
+
+  it("o modal mostra QUAL transação — não só o verbo", async () => {
+    // Sem o cartão, confirmar depende da memória de qual linha foi clicada.
+    const setTransactionSettled = vi.fn().mockResolvedValue({ settled: true });
+    seedSettlement(setTransactionSettled);
+    renderPage();
+    await openFilters();
+
+    await userEvent.click(
+      (await screen.findAllByRole("button", { name: /^Marcar Boleto luz como pago$/ }))[0],
+    );
+    const modal = await screen.findByRole("alertdialog");
+    expect(modal).toHaveTextContent("Boleto luz");
+    // E diz que é reversível: é o que separa esta pergunta da exclusão.
+    expect(modal).toHaveTextContent(/desfazer depois/i);
+  });
+
   it("fechar a torrada não desfaz nada", async () => {
     const setTransactionSettled = vi.fn().mockResolvedValue({ settled: true });
     seedSettlement(setTransactionSettled);
@@ -783,6 +825,9 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
 
     await userEvent.click(
       (await screen.findAllByRole("button", { name: /^Marcar Boleto luz como pago$/ }))[0],
+    );
+    await userEvent.click(
+      await screen.findByRole("button", { name: /Confirmar pagamento/i }),
     );
     await screen.findByRole("button", { name: "Fechar aviso" });
     await userEvent.click(screen.getByRole("button", { name: "Fechar aviso" }));
@@ -821,6 +866,10 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
 
     await userEvent.click(screen.getAllByText("Boleto luz")[0]);
     await userEvent.click(await screen.findByRole("button", { name: /Marcar como pago/i }));
+    /* A sanfona no DESKTOP também pergunta antes: liquidar mexe no saldo, e o
+       artefato pede a mesma confirmação venha ela da ação rápida ou de dentro
+       do item. Sem este passo o teste media o clique, não a liquidação. */
+    await userEvent.click(await screen.findByRole("button", { name: /Confirmar pagamento/i }));
 
     expect(setTransactionSettled).toHaveBeenCalledWith("tx-pend", true);
   });
@@ -834,6 +883,10 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
 
     await userEvent.click(screen.getAllByText("Boleto luz")[0]);
     await userEvent.click(await screen.findByRole("button", { name: /Marcar como pago/i }));
+    /* A sanfona no DESKTOP também pergunta antes: liquidar mexe no saldo, e o
+       artefato pede a mesma confirmação venha ela da ação rápida ou de dentro
+       do item. Sem este passo o teste media o clique, não a liquidação. */
+    await userEvent.click(await screen.findByRole("button", { name: /Confirmar pagamento/i }));
 
     // Sem isto, com Situação = "A pagar" a linha recém-paga continuaria visível sob
     // um filtro que a exclui, e o card "Resultado" somaria um conjunto que a lista
@@ -849,6 +902,10 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
 
     await userEvent.click(screen.getAllByText("Boleto luz")[0]);
     await userEvent.click(await screen.findByRole("button", { name: /Marcar como pago/i }));
+    /* A sanfona no DESKTOP também pergunta antes: liquidar mexe no saldo, e o
+       artefato pede a mesma confirmação venha ela da ação rápida ou de dentro
+       do item. Sem este passo o teste media o clique, não a liquidação. */
+    await userEvent.click(await screen.findByRole("button", { name: /Confirmar pagamento/i }));
 
     // No mobile o botão vive dentro do bottom sheet e a faixa global fica coberta:
     // uma falha pareceria "não aconteceu nada".
@@ -866,6 +923,11 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
     // linha. Este teste cobre a da sanfona, então a busca é escopada nela.
     const detail = await screen.findByRole("region", { name: /^Detalhes de/i });
     await userEvent.click(within(detail).getByRole("button", { name: /Desfazer pagamento/i }));
+    // Desfazer o pagamento também mexe no saldo — mesma pergunta, verbo trocado.
+    const modal = await screen.findByRole("alertdialog");
+    await userEvent.click(
+      within(modal).getByRole("button", { name: /^↺ Desfazer pagamento$/ }),
+    );
 
     expect(setTransactionSettled).toHaveBeenCalledWith("tx-paga", false);
   });
