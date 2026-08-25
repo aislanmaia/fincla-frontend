@@ -134,27 +134,28 @@ export const ANIM_CSS = `
 
      No toque não há hover: elas ficam sempre visíveis — a alternativa seria um
      alvo de 24 px numa linha de 56, onde o erro abre a transação vizinha. */
-  /* visibility, NAO display. Trocar "none" por "flex" no hover e uma mudanca de
-     LAYOUT: o grupo entra e sai do fluxo de posicionamento, e com ele o
-     navegador refaz style + layout + paint daquela linha.
+  /* DISPLAY, e nao visibility — a troca foi tentada e revertida.
 
-     Em repouso isso passa despercebido — acontece uma vez por linha, quando o
-     cursor chega. Mas quando a lista MUDA DE LARGURA (abrir e fechar a dock) as
-     linhas deslizam por baixo de um cursor parado: a cada quadro o hover cai
-     numa linha diferente, e cada troca custava um ciclo de layout. Medido em
-     1600 px com 34 linhas: HitTest 139 ms e handleMouseMoveEvent 144 ms num
-     gesto de 300 ms — era isso a "animacao lagada", e e por isso que ela
-     melhorava com menos itens na lista.
+     Com visibility hidden o grupo ficaria posicionado o tempo todo e o hover viraria
+     trabalho de composicao, sem layout. Medido, ganhava: varrer o
+     cursor pela lista ia de 33,3 ms de pior quadro (1 perdido) para 16,8 ms
+     (nenhum).
 
-     Com visibility o grupo ja esta posicionado o tempo todo; mostrar e esconder
-     vira trabalho de composicao, sem layout nenhum. */
+     E quebrava o clique na linha. Com o grupo ocupando caixa, o hover que o
+     proprio clique provoca o torna visivel sobre o ponto que ia ser clicado, e
+     o clique cai no botao em vez de na linha: a sanfona parava de abrir. Pego
+     pelo e2e, que passa em main e falhava aqui.
+
+     Um ganho de 16 ms num gesto secundario nao paga quebrar o gesto principal
+     da tela. Se um dia valer a pena, o caminho e outro: mover o grupo para
+     fora do caminho do clique, nao esconde-lo de outro jeito. */
   .fincla-quick {
-    display: flex; visibility: hidden; align-items: center; gap: 4px;
+    display: none; align-items: center; gap: 4px;
     position: absolute; right: 0; top: 50%; transform: translateY(-50%);
     margin-right: 10px; white-space: nowrap;
   }
   .fincla-row:hover .fincla-quick,
-  .fincla-row:focus-within .fincla-quick { visibility: visible; }
+  .fincla-row:focus-within .fincla-quick { display: flex; }
   /* "hover: none" sozinho pegava TABLET: "isMobile" é largura (< 768 px), então
      um iPad em paisagem renderiza a linha do DESKTOP — e a regra deixava o grupo
      permanentemente visível. Antes isso era inofensivo (ele tinha coluna
@@ -162,7 +163,7 @@ export const ANIM_CSS = `
      justamente onde o dedo toca para abrir a sanfona, com o 🗑 entre os alvos.
      Casando os dois critérios, a regra só vale onde a linha é mesmo a mobile. */
   @media (hover: none) and (max-width: 767px) {
-    .fincla-quick { visibility: visible; }
+    .fincla-quick { display: flex; }
   }
 
   /* O rótulo abre por max-width, não por display: só uma propriedade animável

@@ -72,7 +72,33 @@ async function horizontalOverflow(page: Page): Promise<number> {
   );
 }
 
+/** Páginas cujo estado local já foi zerado nesta execução de teste. */
+const jaLimpou = new WeakSet<Page>();
+
 async function openTransactions(page: Page): Promise<void> {
+  /* Cada teste começa do zero. A tela guarda em `localStorage` o filtro, a
+     densidade, o agrupamento e as visualizações salvas — e com `workers: 1` os
+     testes correm em sequência no mesmo perfil, então um deixava o próximo com
+     a dock aberta ou um recorte aplicado. Enquanto os seletores estavam
+     defasados isso não aparecia (os testes morriam antes de mexer em nada);
+     consertados, eles passaram a ir até o fim e a herança começou a doer.
+     Limpar aqui é mais barato — e mais honesto — que cada teste desfazer o que
+     fez. Mas só na PRIMEIRA navegação de cada teste: um deles verifica
+     justamente que densidade e agrupamento sobrevivem ao reload, e limpar a
+     cada volta apagaria a coisa que ele mede. */
+
+  if (!jaLimpou.has(page)) {
+    jaLimpou.add(page);
+    await page.evaluate(() => {
+      try {
+        for (const k of Object.keys(localStorage)) {
+          if (k.startsWith("fincla:transactions") || k.startsWith("fincla.transactions")) {
+            localStorage.removeItem(k);
+          }
+        }
+      } catch { /* janela privativa: nada a limpar */ }
+    });
+  }
   await navViaSidebar(page, "Transações");
   await expect(page.getByRole("status")).toBeVisible({ timeout: 20_000 });
   // O cabeçalho aparece antes das linhas (ele mostra "—" enquanto carrega), então
