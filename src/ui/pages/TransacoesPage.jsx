@@ -91,6 +91,7 @@ import {
   filtersToCsvOptions,
   matchesValueRange,
 } from "../features/transactions/filters/filtersToLegacyParams.js";
+import { DisclosureChevron } from "../components/DisclosureChevron.jsx";
 
 const TRANSACTIONS_SEARCH_DEBOUNCE_MS = 1500;
 
@@ -585,7 +586,7 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
             overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
             {tx.desc}
           </div>
-          <div style={{ ...G, fontSize:10, color:T.inkGhost, lineHeight:1.35,
+          <div style={{ ...G, fontSize:MICRO_PX, color:T.inkGhost, lineHeight:1.35,
             display:"flex", gap:5, overflow:"hidden", whiteSpace:"nowrap" }}>
             {showDate && (
               <span style={{ fontFamily:"'Geist Mono',monospace", color:T.inkLight,
@@ -608,7 +609,7 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
               A altura VARIA: reservar a linha em todas cobraria a mesma linha da
               dobra também nos lançamentos sem tag nenhuma, e tag é opt-in. */}
           {tags.length > 0 && !dense && (
-            <div style={{ ...G, fontSize:10, color:T.inkLight, lineHeight:1.35,
+            <div style={{ ...G, fontSize:MICRO_PX, color:T.inkLight, lineHeight:1.35,
               overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
               {tags.join(", ")}
             </div>
@@ -686,7 +687,7 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
           coluna some. */}
       {showDate && (
         <div style={{ ...G, fontFamily:"'Geist Mono',monospace",
-          fontSize: dense ? 10 : 11, color:T.inkLight, lineHeight:1.15 }}>
+          fontSize: MICRO_PX, color:T.inkLight, lineHeight:1.15 }}>
           <b style={{ display:"block", fontSize: dense ? 11.5 : 12.5, color:T.ink,
             fontWeight:700 }}>{dateLabel.top}</b>
           {dateLabel.sub}
@@ -717,7 +718,7 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
             </Tip>
           )}
         </div>
-        <div style={{ ...G, fontSize: dense ? 9.5 : 10.5, color:T.inkGhost,
+        <div style={{ ...G, fontSize: MICRO_PX, color:T.inkGhost,
           lineHeight:1.2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
           display:"flex", alignItems:"center", gap:5 }}>
           <span style={{ overflow:"hidden", textOverflow:"ellipsis" }}>
@@ -771,7 +772,7 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
               // `fontSize`/`fontWeight` declarados antes dele no mesmo objeto.
               // Foi assim que a categoria virou 16px peso 400 — maior que a
               // própria descrição, invertendo a hierarquia da linha.
-              style={{ ...G, fontFamily:"inherit", fontSize:10, fontWeight:600,
+              style={{ ...G, fontFamily:"inherit", fontSize:MICRO_PX, fontWeight:600,
                 color:catCol, background:`${catCol}18`,
                 border:"1px solid transparent", borderRadius:99,
                 padding:"3px 7px", cursor:"pointer", maxWidth:"100%",
@@ -782,7 +783,7 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
             >{tx.cat}</button>
           </Tip>
         ) : (
-          <span style={{ ...G, fontSize:10, fontWeight:600, color:catCol,
+          <span style={{ ...G, fontSize:MICRO_PX, fontWeight:600, color:catCol,
             background:`${catCol}18`, borderRadius:99, padding:"3px 7px",
             maxWidth:"100%", overflow:"hidden", textOverflow:"ellipsis",
             whiteSpace:"nowrap", lineHeight:1.4 }}>{tx.cat}</span>
@@ -807,14 +808,14 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
                     ? `Remover a tag ${tag} do filtro`
                     : `Adicionar a tag ${tag} ao filtro`
                 }
-                style={{ ...G, fontSize:10, fontWeight:600, color:T.inkMid,
+                style={{ ...G, fontSize:MICRO_PX, fontWeight:600, color:T.inkMid,
                   background:T.grayLight, border:"none", borderRadius:6,
                   padding:"2px 7px", cursor:"pointer", maxWidth:TAG_MAX_PX,
                   overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                 {tag}
               </button>
             ) : (
-              <span key={tag} title={tag} style={{ ...G, fontSize:10, fontWeight:600,
+              <span key={tag} title={tag} style={{ ...G, fontSize:MICRO_PX, fontWeight:600,
                 color:T.inkMid, background:T.grayLight, borderRadius:6, padding:"2px 7px",
                 maxWidth:TAG_MAX_PX, overflow:"hidden", textOverflow:"ellipsis",
                 whiteSpace:"nowrap" }}>{tag}</span>
@@ -824,7 +825,7 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
               todas. Sem teto, uma transação com cinco tags decidiria a largura
               da coluna para as outras cem. */}
           {tags.length > TAGS_VISIVEIS && (
-            <span title={tags.join(", ")} style={{ ...G, fontSize:10, fontWeight:700,
+            <span title={tags.join(", ")} style={{ ...G, fontSize:MICRO_PX, fontWeight:700,
               color:T.inkGhost, whiteSpace:"nowrap" }}>+{tags.length - TAGS_VISIVEIS}</span>
           )}
         </div>
@@ -905,7 +906,7 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
       {statusRing ? (
         <Tip label="Ainda não entrou no saldo da conta">
           <span style={{ ...G, color:T.amber, display:"flex", alignItems:"center",
-            gap:5, fontSize:10.5, fontWeight:700, whiteSpace:"nowrap",
+            gap:5, fontSize:MICRO_PX, fontWeight:700, whiteSpace:"nowrap",
             justifyContent: wide ? "flex-end" : "center" }}>
             <i aria-hidden="true" style={{ display:"inline-block", width:8, height:8,
               border:"1.75px solid currentColor", borderRadius:"50%", boxSizing:"border-box" }}/>
@@ -975,6 +976,16 @@ const TAG_MAX_PX = 78;
    desalinhado as categorias. Medir o texto de verdade (canvas) em vez de
    estimar por número de caracteres: a fonte é proporcional, e "ii" e "MM" têm
    contagens iguais e larguras muito diferentes. */
+/* O corpo dos micro-rótulos da linha (pílula de categoria, chips de tag,
+   metadado). Constante e não literal porque ele aparece em DOIS lugares que
+   precisam concordar: o estilo que desenha e a string de fonte do canvas que
+   mede a largura da coluna. Divergir aqui não quebra nada visível — só
+   desalinha as colunas por alguns pixels, que é o tipo de defeito que ninguém
+   consegue atribuir depois.
+
+   11 e não 10: é o piso WCAG que `__tests__/fontSize.test.js` guarda. */
+const MICRO_PX = 11;
+
 let medidorCanvas = null;
 /* Medidor de texto com degradação HONESTA.
    `getContext("2d")` devolve `null` em jsdom e em navegadores com canvas
@@ -1016,7 +1027,7 @@ function medidor(fonte, pxPorChar) {
    as duas é o que dá a sensação de coluna, que é o ponto de existir uma. */
 export function larguraColunaCategoria(txs, { teto = 168 } = {}) {
   if (!Array.isArray(txs) || txs.length === 0) return 0;
-  const mede = medidor("600 10px 'Geist', 'DM Sans', system-ui, sans-serif", 5.6);
+  const mede = medidor(`600 ${MICRO_PX}px 'Geist', 'DM Sans', system-ui, sans-serif`, 6.2);
   const PAD = 16; // padding 7+7 + borda 1+1 da pílula, medidos no componente
   let maior = 0;
   for (const tx of txs) {
@@ -1029,7 +1040,7 @@ export function larguraColunaCategoria(txs, { teto = 168 } = {}) {
 
 export function larguraColunaTags(txs, { visiveis = TAGS_VISIVEIS, tetoChip = TAG_MAX_PX, teto = 190 } = {}) {
   if (!Array.isArray(txs) || txs.length === 0) return 0;
-  const mede = medidor("600 10px 'Geist', 'DM Sans', system-ui, sans-serif", 5.6);
+  const mede = medidor(`600 ${MICRO_PX}px 'Geist', 'DM Sans', system-ui, sans-serif`, 6.2);
 
   const PAD = 14; // padding 7px de cada lado do chip
   const GAP = 5;
@@ -1190,7 +1201,7 @@ const DetailPanel = ({
              a linha para juntar os dois. */
           inline ? (
             <div key={label} style={{ minWidth:0 }}>
-              <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:9.5,
+              <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:MICRO_PX,
                 letterSpacing:"0.07em", textTransform:"uppercase", color:T.inkGhost }}>{label}</div>
               <div style={{ ...G, fontSize:12, fontWeight:600, color:T.ink, marginTop:2,
                 overflow:"hidden", textOverflow:"ellipsis" }}>{val}</div>
@@ -1383,7 +1394,7 @@ const DetailPanel = ({
           </AccButton>
         ) : null}
         {inline && !isMobileDetail && deletingId !== tx.id && (
-          <span style={{ ...G, marginLeft:"auto", fontSize:10.5, color:T.inkLight }}>
+          <span style={{ ...G, marginLeft:"auto", fontSize:MICRO_PX, color:T.inkLight }}>
             Enter expande · Esc fecha
           </span>
         )}
@@ -1663,6 +1674,17 @@ function TransacoesPageBody({
   // ("Tentar novamente") sem reusar o token global (que também dispara
   // outros efeitos da página, ex.: âncoras de saldo).
   const [loadMoreRetryToken, setLoadMoreRetryToken] = useState(0);
+  /* §29: recarregar a lista SEM recarregar a página.
+     Uma falha de rede deixava a lista parada com um aviso e nenhuma saída: o
+     único caminho de volta era o F5, que descarta filtro, rolagem e a linha
+     aberta — preço absurdo para um problema que costuma durar dois segundos.
+
+     Reusa o token LOCAL de retentativa em vez do global (`transactionsRefreshToken`,
+     que é prop e dispara outros efeitos da página, como as âncoras de saldo).
+     O que se quer aqui é refazer ESTA busca, não sacudir a tela inteira. */
+  const recarregarLista = useCallback(() => {
+    setLoadMoreRetryToken((n) => n + 1);
+  }, []);
   const [deletingId,  setDeletingId]  = useState(null);
   // Id em liquidação — trava o botão para o clique duplo não disparar settle + unsettle.
   const [settlingId,  setSettlingId]  = useState(null);
@@ -3165,13 +3187,29 @@ function TransacoesPageBody({
         } else {
           setMockTxList((cur) => cur.map((t) => (t.id === tx.id ? { ...t, settled: next } : t)));
         }
-        flashSettled(tx.id);
+        /* §09: com o eixo de situação filtrado, liquidar EXPULSA a linha do
+           recorte — ela deixa de casar com a pergunta que está na tela. Sem
+           dizer isso, a transação que a pessoa acabou de pagar simplesmente
+           some, e o único palpite disponível é que algo deu errado.
+
+           A saída é a mesma da exclusão (colapso de altura), porque o evento é
+           o mesmo do ponto de vista de quem olha: "sumiu". O que muda é a
+           frase — e o botão "Ver", que desfaz o RECORTE, não a liquidação. */
+        const saiuDoFiltro =
+          (next && filter.settlement === "a-pagar") ||
+          (!next && filter.settlement === "pagas");
+        if (saiuDoFiltro) startRowLeave(tx.id);
+        else flashSettled(tx.id);
+
         // Liquidar é reversível pela própria API (`unsettle`), então o desfazer
         // é honesto aqui. Excluir não tem volta no backend — por isso ele
         // continua atrás da confirmação, e não ganha torrada de desfazer.
         setUndoToast({
           id: tx.id,
           label: next ? `"${tx.desc}" marcada como paga` : `Pagamento de "${tx.desc}" desfeito`,
+          nota: saiuDoFiltro
+            ? `Saiu do filtro "${next ? "A pagar" : "Pagas"}"`
+            : null,
           revert: next,
         });
       } catch (e) {
@@ -3186,7 +3224,7 @@ function TransacoesPageBody({
       }
     },
   }), [onEditTx, onDuplicateTx, settlingId, shouldUseRealData, transactionsData,
-      onTransactionsInvalidate, flashSettled]);
+      onTransactionsInvalidate, flashSettled, filter.settlement, startRowLeave]);
 
   /* Os atalhos usam os MESMOS caminhos das ações rápidas — nenhuma segunda
      implementação de liquidar/excluir, que é onde as duas divergiriam. */
@@ -3198,6 +3236,7 @@ function TransacoesPageBody({
        foco de dentro do modal para a lista. */
     enabled: !isMobile && !confirmAcao && !ajudaAberta && !emModalDeTransacao,
     onFocusSearch: () => buscaRef.current?.focus(),
+    onReload: recarregarLista,
     /* Cada layout tem o SEU estado de dock. Alternar sempre o `wide` abria o
        painel largo enquanto o botão visível no compacto continuava dizendo
        "fechado" — a tecla mexia num estado que ninguém estava vendo. */
@@ -3240,6 +3279,29 @@ function TransacoesPageBody({
               border:`1px solid ${T.border}`, background:T.surface, color:T.inkMid,
               display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>
             ▤
+          </button>
+          {/* Recarregar. Mesmo peso visual dos vizinhos de propósito: na
+              esmagadora maioria das sessões ele nunca é usado, e destacá-lo
+              sugeriria que a lista costuma estar errada. */}
+          <button
+            type="button"
+            onClick={recarregarLista}
+            disabled={listRefiltering}
+            title="Recarregar a lista (R)"
+            aria-label="Recarregar a lista"
+            style={{ ...G, width:32, height:32, borderRadius:9,
+              cursor: listRefiltering ? "default" : "pointer",
+              border:`1px solid ${T.border}`, background:T.surface, color:T.inkMid,
+              display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>
+            {listRefiltering
+              ? <span className="fincla-spin" aria-hidden="true" style={{ width:13, height:13 }} />
+              : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                  strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                  <path d="M21 3v6h-6" />
+                </svg>
+              )}
           </button>
           <button
             type="button"
@@ -3438,6 +3500,10 @@ function TransacoesPageBody({
             iconSize={28}
             title="Não foi possível carregar as transações"
             sub={transactionsData.error || "Tente novamente em instantes."}
+            /* A saída fica AQUI, junto do problema. Sem ela o único caminho
+               era o F5, que também descarta filtro, rolagem e seleção. */
+            primaryLabel={listRefiltering ? "Carregando…" : "Tentar de novo"}
+            onPrimary={listRefiltering ? undefined : recarregarLista}
           />
         ) : (
           /* Vazio SEMÂNTICO: quando dá para apontar o culpado, o texto nomeia
@@ -3953,6 +4019,10 @@ function TransacoesPageBody({
       <UndoToast
         toast={undoToast}
         onUndo={undoLastAction}
+        /* "Ver" tira o RECORTE, não a liquidação: a pessoa quis pagar, e o que
+           ela perdeu de vista foi a linha. Desfazer o pagamento para poder
+           vê-la seria trocar um problema por outro. */
+        onVer={() => { filter.setSettlement("todas"); setUndoToast(null); }}
         onDismiss={() => setUndoToast(null)}
       />
 
@@ -4078,10 +4148,8 @@ function TransacoesPageBody({
                 minHeight:44 }}>
               <div style={{ width:36, height:4, borderRadius:99,
                 background:"rgba(0,0,0,0.18)" }}/>
-              <div style={{ fontSize: 11, color:"rgba(0,0,0,0.2)", lineHeight:1,
-                letterSpacing:1, userSelect:"none" }}>
-                {snapFull ? "▼" : "▲"}
-              </div>
+              <DisclosureChevron open={!snapFull} size={12}
+                style={{ color:"rgba(0,0,0,0.2)" }} />
             </div>
             {/* Header */}
             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between",

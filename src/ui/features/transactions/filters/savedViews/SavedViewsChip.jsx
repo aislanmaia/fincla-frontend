@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { T } from "../../../../tokens";
 import { G } from "../../../../typography";
 import { Icon } from "../shared/Icon.jsx";
+import { DisclosureChevron } from "../../../../components/DisclosureChevron.jsx";
 
 /**
  * A visualização salva ativa, como chip na barra de comando.
@@ -85,9 +86,7 @@ export function SavedViewsChip({
           {label}
           {suffix}
         </span>
-        <span aria-hidden="true" style={{ opacity: 0.7 }}>
-          {open ? "⌃" : "⌄"}
-        </span>
+        <DisclosureChevron open={open} size={12} style={{ opacity: 0.7 }} />
       </button>
 
       {open && (

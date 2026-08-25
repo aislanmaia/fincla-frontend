@@ -413,7 +413,7 @@ function Chip({ facet, onOpen, onClear, compact, block = false, noMedir = false 
           cursor: "pointer",
           flexShrink: 0,
           padding: 0,
-          fontSize: 10,
+          fontSize: 11,
           lineHeight: 1,
         }}
       >

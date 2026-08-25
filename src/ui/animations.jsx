@@ -77,6 +77,24 @@ export const ANIM_CSS = `
     70%  { box-shadow: 0 0 0 8px rgba(37,99,235,0);  }
     100% { box-shadow: 0 0 0 0 rgba(37,99,235,0);    }
   }
+  /* §29 — o anel que responde "o foco chegou agora".
+     ACENDE E APAGA: um anel que fica seria estado ("aqui"), e o cursor piscando
+     ja diz isso. O que faltava era o EVENTO, principalmente quando o foco vem
+     da tecla "/" e nada na tela muda. */
+  @keyframes finclaFocusRing {
+    0%   { box-shadow: 0 0 0 0 rgba(37,99,235,0.55); }
+    45%  { box-shadow: 0 0 0 4px rgba(37,99,235,0.26); }
+    100% { box-shadow: 0 0 0 0 rgba(37,99,235,0); }
+  }
+  .fincla-focus-ring {
+    animation: finclaFocusRing var(--mo-accent, 500ms) var(--mo-accent-ease, ease-out);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    /* Sem pulso, mas o sinal NAO some: quem pediu menos movimento continua
+       precisando saber para onde o foco foi. */
+    .fincla-focus-ring { animation: none; outline: 2px solid #2563EB; outline-offset: 1px; }
+  }
+
   /* §28 — carregamento da lista. Indeterminada: a API nao diz progresso, e uma
      barra que finge saber a porcentagem mente. O gradiente varre da esquerda
      para a direita, que e a direcao em que o conteudo novo chega. */

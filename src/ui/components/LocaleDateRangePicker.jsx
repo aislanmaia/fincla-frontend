@@ -754,7 +754,7 @@ export function LocaleDateRangePicker({
               <>
                 <span
                   style={{
-                    ...G, ...NUM, flexShrink: 0, fontSize: 10.5,
+                    ...G, ...NUM, flexShrink: 0, fontSize: 11,
                     color: dayCount != null ? T.blue : T.amber,
                     background: dayCount != null ? T.blueLight : T.amberLight,
                     borderRadius: 99, padding: "2px 8px",

@@ -315,6 +315,31 @@ export const NovaTransacaoModal = ({
     if (!open) drawerSessionRef.current += 1;
   }, [open]);
 
+  /* Esc fecha o painel. Ele NÃO pode ser um listener global: os campos de
+     dentro (nova tag, parcelas "outro", calculadora) já usam Esc para cancelar
+     a si mesmos, e o evento sobe. Um handler no shell que só olhasse a tecla
+     fecharia o painel inteiro quando a pessoa quis apenas desistir de digitar
+     uma tag — descartando tudo o que ela já tinha preenchido.
+
+     Por isso três guardas: `defaultPrevented` (alguém já tratou), o alvo ser um
+     campo de texto (o Esc é dele), e qualquer sub-painel estar aberto (o Esc
+     fecha o sub-painel primeiro, uma camada por vez).
+
+     Fica pendente, e é deliberado: com dados já editados o fechamento deveria
+     perguntar antes. Enquanto essa pergunta não existe, Esc descarta como o ✕
+     e o clique no backdrop sempre descartaram — não é um caminho novo de perda,
+     é o mesmo. */
+  const fecharComEsc = useCallback((e) => {
+    if (e.key !== "Escape" || e.defaultPrevented) return;
+    const alvo = e.target;
+    const ehCampo =
+      alvo && (alvo.tagName === "INPUT" || alvo.tagName === "TEXTAREA" || alvo.isContentEditable);
+    if (ehCampo) return;
+    if (addingTag || cardPanelOpen || recurrencePanelOpen || successOverlay) return;
+    e.preventDefault();
+    beginClose();
+  }, [addingTag, cardPanelOpen, recurrencePanelOpen, successOverlay, beginClose]);
+
   const [categoryTagId, setCategoryTagId] = useState(null);
   const [categoryTagIsActive, setCategoryTagIsActive] = useState(true);
   const [txSubmitError, setTxSubmitError] = useState("");
@@ -2230,6 +2255,7 @@ export const NovaTransacaoModal = ({
 
     return (
       <div ref={shellRef} tabIndex={-1} role="dialog" aria-modal="true"
+        onKeyDown={fecharComEsc}
         aria-label={preConfig ? "Editar transação" : "Nova transação"}
         style={{ position:"fixed", inset:0, zIndex:300, overflow:"hidden", display:"flex", flexDirection:"column", justifyContent:"flex-end", outline:"none", pointerEvents: successOverlay ? "none" : "auto" }}>
         <style>{`
@@ -2792,6 +2818,7 @@ export const NovaTransacaoModal = ({
   ════════════════════════════════════════════════════════════ */
   return (
     <div ref={shellRef} tabIndex={-1} role="dialog" aria-modal="true"
+      onKeyDown={fecharComEsc}
       aria-label={preConfig ? "Editar transação" : "Nova transação"}
       style={{ position:"fixed", inset:0, zIndex:200, overflow:"hidden", display:"flex", justifyContent:"flex-end", outline:"none", pointerEvents: successOverlay ? "none" : "auto" }}>
       <style>{`

@@ -3,6 +3,7 @@ import React from "react";
 import { AnimNum } from "../../components/primitives.jsx";
 import { T } from "../../tokens";
 import { G } from "../../typography";
+import { DisclosureChevron } from "../../components/DisclosureChevron.jsx";
 
 const LABELS = [
   { key: "receitas", full: "Receitas", short: "Rec" },
@@ -315,7 +316,7 @@ export function TransactionsStats({
           flexShrink: 0,
         }}
       >
-        {expanded ? "⌃" : "⌄"}
+        <DisclosureChevron open={expanded} size={13} />
       </button>
 
       {expanded && !unknown ? (

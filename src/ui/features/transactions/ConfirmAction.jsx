@@ -212,7 +212,7 @@ export function ConfirmActionModal({ kind, desc, tx = null, busy = false, onConf
               >
                 {tx.desc}
               </div>
-              <div style={{ ...G, fontSize: 10.5, color: T.inkLight }}>
+              <div style={{ ...G, fontSize: 11, color: T.inkLight }}>
                 {[tx.date, tx.cat, tx.method].filter(Boolean).join(" · ")}
               </div>
             </div>

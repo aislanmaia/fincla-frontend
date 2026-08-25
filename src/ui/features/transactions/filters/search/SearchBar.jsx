@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { T } from "../../../../tokens";
 import { G } from "../../../../typography";
 import { Icon } from "../shared/Icon.jsx";
@@ -51,6 +51,32 @@ export function SearchBar({
 }) {
   const barRef = useRef(null);
   const buscaRef = useRef(null);
+
+  /* O anel ACENDE E APAGA — ele não é `:focus` estático.
+     Quando o foco chega pelo mouse a pessoa já sabe onde ele está: ela acabou
+     de clicar ali. Quando chega pela tecla `/` não há nada: o cursor aparece
+     num campo que continua igual, e o atalho fica indistinguível de não ter
+     funcionado. O que falta não é o ESTADO "estou aqui" (o cursor piscando já
+     diz isso) — é o EVENTO "o foco acabou de chegar". Evento tem começo e fim,
+     então o anel também tem. */
+  const [anelAceso, setAnelAceso] = useState(false);
+  const anelTimerRef = useRef(null);
+  const acenderAnel = useCallback((e) => {
+    /* `:focus-visible` é exatamente a pergunta certa — o navegador já distingue
+       foco por teclado de foco por clique, e replicar essa heurística à mão dá
+       errado em teclado virtual, leitor de tela e caneta. */
+    const alvo = e?.currentTarget;
+    if (alvo && typeof alvo.matches === "function") {
+      try { if (!alvo.matches(":focus-visible")) return; } catch { /* jsdom antigo */ }
+    }
+    setAnelAceso(false);
+    clearTimeout(anelTimerRef.current);
+    /* Dois quadros: remover e recolocar a classe no MESMO quadro não reinicia a
+       animação, e um segundo `/` seguido não acenderia nada. */
+    requestAnimationFrame(() => requestAnimationFrame(() => setAnelAceso(true)));
+    anelTimerRef.current = setTimeout(() => setAnelAceso(false), 620);
+  }, []);
+  useEffect(() => () => clearTimeout(anelTimerRef.current), []);
   const chipsRef = useRef(null);
   const vaoRef = useRef(null);
 
@@ -152,6 +178,7 @@ export function SearchBar({
       {leading && <Sep />}
       <div
         ref={buscaRef}
+        className={anelAceso ? "fincla-focus-ring" : undefined}
         style={{
           display: "flex",
           alignItems: "center",
@@ -163,9 +190,15 @@ export function SearchBar({
              empacava em 422 px num monitor de 1500. */
           flex: 100,
           /* 180 px é o piso: abaixo disso o placeholder some e a busca deixa de
-             ser usável — é ela que cede espaço por último, não primeiro. */
+             ser usável — é ela que cede espaço por último, não primeiro.
+
+             E NÃO há teto. Havia um `maxWidth: 720`, e ele fazia a barra de
+             comando terminar num vão morto: num monitor de 2560 a busca parava
+             na metade e o resto da linha ficava vazio. O `flex: 100` acima foi
+             escrito justamente para ela levar quase toda a sobra — o teto
+             desfazia isso silenciosamente a partir de ~1500 px. Caixa de
+             comando ocupa a linha que tem. */
           minWidth: 180,
-          maxWidth: 720,
           height: 32,
           /* NÃO há transição aqui, e não é esquecimento: a largura da busca vem
              de distribuição de espaço livre do flex, que não é uma propriedade
@@ -183,6 +216,7 @@ export function SearchBar({
         <input
           ref={inputRef}
           value={search}
+          onFocus={acenderAnel}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={placeholder}
           aria-label="Buscar transações"
