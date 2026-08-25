@@ -795,7 +795,7 @@ const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
           <Tip label={`Filtrar por ${tx.cat}`}>
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); onFilterByCategory(tx); }}
+              onClick={(e) => { e.stopPropagation(); onFilterByCategory(tx, e); }}
               aria-label={`Filtrar por categoria ${tx.cat}`}
               // NUNCA `font:"inherit"` aqui: `font` é atalho e reseta
               // `fontSize`/`fontWeight` declarados antes dele no mesmo objeto.
@@ -826,7 +826,7 @@ const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
               // `title` é o rótulo CRU: ele existe para deixar legível um nome
               // truncado ("mensal (a1b2c3d4)"). A ação mora no `aria-label`.
               <button key={tag} type="button" title={tag}
-                onClick={(e) => { e.stopPropagation(); onFilterByTag(tag); }}
+                onClick={(e) => { e.stopPropagation(); onFilterByTag(tag, e); }}
                 /* SOMAR, não trocar — e o rótulo precisa dizer isso. Categoria é
                    uma por transação, então clicar substitui; tag é várias, e
                    substituir faria o segundo clique desfazer o primeiro, que é o
@@ -837,10 +837,18 @@ const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
                     ? `Remover a tag ${tag} do filtro`
                     : `Adicionar a tag ${tag} ao filtro`
                 }
+                /* Borda TRANSPARENTE em repouso, não `none`: é ela que acende
+                   no hover sem mudar a caixa. Com `border: none`, acender no
+                   hover acrescentaria 2 px e o chip pularia — e era por isso
+                   que a tag não tinha a afordância que a categoria tem, embora
+                   as duas façam a mesma coisa ao clique. */
                 style={{ ...G, fontSize:MICRO_PX, fontWeight:600, color:T.inkMid,
-                  background:T.grayLight, border:"none", borderRadius:6,
-                  padding:"2px 7px", cursor:"pointer", maxWidth:TAG_MAX_PX,
-                  overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                  background:T.grayLight, border:"1px solid transparent", borderRadius:6,
+                  padding:"1px 6px", cursor:"pointer", maxWidth:TAG_MAX_PX,
+                  overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                  transition:"border-color var(--mo-fast, 120ms) var(--mo-fast-ease, ease-out)" }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = T.inkLight; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "transparent"; }}>
                 {tag}
               </button>
             ) : (
@@ -1181,7 +1189,12 @@ const DetailPanel = ({
                em 390 px colapsa para uma só e dobra a altura do painel. */
             ? { display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px 12px",
                 padding:"10px 12px 0" }
-            : { display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(150px, 1fr))",
+            /* QUATRO colunas fixas, como o §"linha" do artefato — não
+               `auto-fit`. Com `minmax(150px, 1fr)` a contagem seguia a largura:
+               em 1600 px davam SEIS colunas, e os campos ficavam esparramados
+               numa fileira fina que não se parecia com o desenho. Quatro é a
+               medida em que rótulo e valor ainda leem como par. */
+            : { display:"grid", gridTemplateColumns:"repeat(4, minmax(0, 1fr))",
                 gap:"10px 18px", padding:"4px 14px 0 107px" })
         : { flex:1, overflowY:"auto", overflowX:"hidden", padding:"16px 20px", display:"flex", flexDirection:"column", gap:0, minHeight:0 }}>
         {[
@@ -1192,7 +1205,7 @@ const DetailPanel = ({
                  mostra a categoria de qualquer forma. */
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); onFilterByCategory(tx); }}
+                onClick={(e) => { e.stopPropagation(); onFilterByCategory(tx, e); }}
                 aria-label={`Filtrar por categoria ${tx.cat}`}
                 title={`Filtrar por ${tx.cat}`}
                 style={{ ...G, fontFamily:"inherit", display:"flex", alignItems:"center",
@@ -1428,7 +1441,7 @@ const DetailPanel = ({
         ) : null}
         {inline && !isMobileDetail && deletingId !== tx.id && (
           <span style={{ ...G, marginLeft:"auto", fontSize:MICRO_PX, color:T.inkLight }}>
-            Enter expande · Esc fecha
+            Enter expande · E edita · Del exclui
           </span>
         )}
       </div>
@@ -2799,14 +2812,25 @@ function TransacoesPageBody({
   const filterRef = useRef(filter);
   filterRef.current = filter;
 
+  /* O mesmo VOO do "N a pagar": o chip clicado se destaca e viaja até a faixa
+     de filtros aplicados. Sem ele, a pílula some da linha e reaparece no topo
+     sem nada ligar as duas coisas — o que se lê como "sumiu", não como
+     "virou filtro". A faixa é o mesmo destino nos três casos, porque é onde
+     todo filtro aplicado passa a morar. */
+  const voarParaOsChips = useCallback((e) => {
+    const alvo = document.querySelector('[data-fly-target="filtros"]');
+    if (e?.currentTarget && alvo) flyToChip(e.currentTarget, alvo);
+  }, []);
+
   const filterByCategoryFromRow = useCallback(
-    (tx) => {
+    (tx, e) => {
       const hit = categoriesForFilter.find((c) => c.label === tx.cat);
       if (!hit) return;
+      voarParaOsChips(e);
       filterRef.current.setCats([hit.id]);
       setVisible(PAGE_SIZE);
     },
-    [categoriesForFilter, PAGE_SIZE],
+    [categoriesForFilter, PAGE_SIZE, voarParaOsChips],
   );
 
   /** Mesma ideia para as tags da linha — a facet Tags guarda o rótulo. */
@@ -2816,12 +2840,16 @@ function TransacoesPageBody({
      faria o segundo clique desfazer o primeiro, que é o oposto do que se quer
      ao clicar em duas tags seguidas. */
   const filterByTagFromRow = useCallback(
-    (tag) => {
+    (tag, e) => {
       const atuais = filterRef.current.tags || [];
-      filterRef.current.setTags(atuais.includes(tag) ? atuais.filter((t) => t !== tag) : [...atuais, tag]);
+      const removendo = atuais.includes(tag);
+      // Só voa ao ADICIONAR: tirar do filtro é o caminho contrário, e um clone
+      // indo PARA a faixa enquanto o chip sai dela diria o oposto do que houve.
+      if (!removendo) voarParaOsChips(e);
+      filterRef.current.setTags(removendo ? atuais.filter((t) => t !== tag) : [...atuais, tag]);
       setVisible(PAGE_SIZE);
     },
-    [PAGE_SIZE],
+    [PAGE_SIZE, voarParaOsChips],
   );
 
   /** "Sem filtros" / "3 filtros" — o que o desfazer vai devolver. */
