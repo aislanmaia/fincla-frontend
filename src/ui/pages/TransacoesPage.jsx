@@ -2124,9 +2124,54 @@ function TransacoesPageBody({
   // valor, que existe no código e nunca chegava a aparecer.
   const [expandedFacet, setExpandedFacet] = useState(null);
   const anyFacetPanelOpen = expandedFacet != null || (!isMobile && wideDesktopFiltersOpen);
+  /* As contagens do painel ignoram a seleção da PRÓPRIA faceta.
+     Dentro de uma faceta a combinação é OU, então "quantas em Alimentação?" tem
+     de ser respondida sem o recorte de Categoria aplicado. Perguntando com ele,
+     a resposta vira "quantas em Alimentação E Compras Pessoais" — e como uma
+     transação tem uma categoria só, o resultado é zero para todas as outras.
+     Era isso: escolher uma categoria zerava o contador de todas as demais, e
+     clicar numa "zerada" trazia transações e restaurava o número.
+
+     Só a faceta ABERTA precisa disso — é a única cujos contadores estão à
+     vista —, então continua sendo UMA requisição, não uma por faceta. */
+  const NEUTRO_POR_FACETA = useMemo(() => ({
+    categoria: { cats: [] },
+    tag: { tagIds: [] },
+    forma: { method: [] },
+    tipo: { type: "todos" },
+    valor: { valueMin: "", valueMax: "" },
+    recorrencia: { rec: "any" },
+    situacao: { settlement: "todas" },
+  }), []);
+
+  const filtrosParaContagem = useMemo(() => {
+    const neutro = NEUTRO_POR_FACETA[panelFacet];
+    if (!neutro) return transactionsFilters;
+    const { tagIds: zerarTags, ...estado } = neutro;
+    return filtersToLegacyParams(
+      {
+        type: filter.type, method: filter.method, cats: filter.cats,
+        period: filter.period, customFrom: filter.customFrom, customTo: filter.customTo,
+        sort: filter.sort, valueMin: filter.valueMin, valueMax: filter.valueMax,
+        settlement: filter.settlement, rec: filter.rec, tagMode: filter.tagMode,
+        ...estado,
+      },
+      {
+        limit: visible,
+        debouncedSearch,
+        totalCategories: totalCategoriesForBackend,
+        catLabelById: categoryApiNameById,
+        tagIds: zerarTags !== undefined ? [] : resolvedTagIds,
+      },
+    );
+  }, [NEUTRO_POR_FACETA, panelFacet, transactionsFilters, filter.type, filter.method,
+      filter.cats, filter.period, filter.customFrom, filter.customTo, filter.sort,
+      filter.valueMin, filter.valueMax, filter.settlement, filter.rec, filter.tagMode,
+      visible, debouncedSearch, totalCategoriesForBackend, categoryApiNameById, resolvedTagIds]);
+
   const facetCounts = useTransactionsFacetCounts({
     organizationId,
-    filters: transactionsFilters,
+    filters: filtrosParaContagem,
     enabled: shouldUseRealData && !tagFilterBlocked && anyFacetPanelOpen,
     refreshToken: transactionsRefreshToken,
   });
