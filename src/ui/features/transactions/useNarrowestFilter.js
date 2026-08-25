@@ -62,9 +62,20 @@ export function useNarrowestFilter({
       setIsLoading(false);
       // O "mais restritivo" é o que MAIS devolve quando sai — remover um filtro
       // que devolveria zero não ajudaria ninguém, então esses ficam de fora.
-      const best = rows
-        .filter((r) => typeof r.total === "number" && r.total > 0)
-        .sort((a, b) => b.total - a.total)[0];
+      const uteis = rows.filter((r) => typeof r.total === "number" && r.total > 0);
+      /* ESPECÍFICO ANTES DE GRANDE. Uma chave com ":" nomeia um VALOR
+         ("tag:#combustível"); sem ":", a faceta inteira ("tag").
+
+         Ordenar só por quantidade nunca nomearia um valor: tirar as duas tags
+         devolve por definição pelo menos tanto quanto tirar uma delas, então a
+         faceta ganharia sempre — e a frase dizia «o filtro "2 tags (E)"» quando
+         quem matou o resultado foi #combustível sozinho. Pior, o botão ao lado
+         removia as duas, mais do que a pessoa precisava perder.
+
+         Entre valores, e entre facetas, aí sim vale a quantidade. */
+      const especificos = uteis.filter((r) => r.key.includes(":"));
+      const candidatos = especificos.length ? especificos : uteis;
+      const best = candidatos.sort((a, b) => b.total - a.total)[0];
       setResult(best ? { key: best.key, label: labelsByKey[best.key] || best.key, total: best.total } : null);
     });
 

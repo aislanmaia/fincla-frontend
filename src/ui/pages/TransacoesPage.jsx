@@ -84,6 +84,7 @@ import {
   matchesValueRange,
 } from "../features/transactions/filters/filtersToLegacyParams.js";
 import { facetSentenceLabel } from "../features/transactions/filters/facetSentenceLabel.js";
+import { getPaymentMethodLabel } from "../features/transactions/filters/paymentMethodOptions.js";
 import { DisclosureChevron } from "../components/DisclosureChevron.jsx";
 import { usePullToRefresh } from "../features/transactions/usePullToRefresh.js";
 import { detailLabelPtForTag } from "../data/categoryLabels.js";
@@ -2890,9 +2891,47 @@ function TransacoesPageBody({
         },
       );
     }
+    /* Candidatos POR VALOR, além dos por faceta. Com mais de uma tag (ou mais
+       de uma categoria) selecionada, quem matou o resultado costuma ser UMA
+       delas — e a frase só ajuda se disser qual. Cada entrada refaz a mesma
+       pergunta sem AQUELE valor; a chave leva ":" para o cálculo saber que ela
+       é específica e preferi-la.
+
+       Só quando há mais de um valor: com um só, remover o valor e remover a
+       faceta são a mesma coisa, e duas requisições diriam o mesmo. */
+    if (active.has("tag") && filter.tags.length > 1) {
+      filter.tags.forEach((rotulo, i) => {
+        const idsSemEsta = resolvedTagIds.filter((_, j) => j !== i);
+        out[`tag:${rotulo}`] = filtersToLegacyParams(
+          { ...base },
+          {
+            limit: 1,
+            debouncedSearch,
+            totalCategories: totalCategoriesForBackend,
+            catLabelById: categoryApiNameById,
+            tagIds: idsSemEsta,
+          },
+        );
+      });
+    }
+    if (active.has("categoria") && filter.cats.length > 1) {
+      filter.cats.forEach((id, i) => {
+        out[`categoria:${id}`] = filtersToLegacyParams(
+          { ...base, cats: filter.cats.filter((_, j) => j !== i) },
+          {
+            limit: 1,
+            debouncedSearch,
+            totalCategories: totalCategoriesForBackend,
+            catLabelById: categoryApiNameById,
+            tagIds: resolvedTagIds,
+          },
+        );
+      });
+    }
     return out;
   }, [
     listFiltersActive, allFacets, debouncedSearch, filter.type, filter.method,
+    filter.tags,
     filter.cats, filter.period, filter.customFrom, filter.customTo, filter.sort,
     filter.valueMin, filter.valueMax, filter.settlement, filter.rec, filter.tagMode,
     totalCategoriesForBackend, resolvedTagIds,
@@ -2905,8 +2944,45 @@ function TransacoesPageBody({
     /* Ver `facetSentenceLabel`: o prefixo só entra quando o valor ainda não
        nomeia a faceta. */
     for (const f of allFacets) map[f.key] = facetSentenceLabel(f.label, f.value);
+    /* Rótulos dos candidatos POR VALOR. Estes já se nomeiam sozinhos — a
+       pessoa reconhece "#combustível" sem precisar do prefixo "Tags:". */
+    for (const rotulo of filter.tags) map[`tag:${rotulo}`] = `#${rotulo}`;
+    for (const id of filter.cats) {
+      map[`categoria:${id}`] = categoryLabelById.get(String(id)) || String(id);
+    }
     return map;
-  }, [allFacets, debouncedSearch]);
+  }, [allFacets, debouncedSearch, filter.tags, filter.cats, categoryLabelById]);
+
+  /* Um item por VALOR aplicado, não por faceta.
+     A aba "Ativos" existe para tirar filtros rapidamente, e agrupando eles
+     ficava "Categoria: 2 categorias" com um ✕ só — que remove as DUAS. Quem
+     quer tirar uma tinha de sair dali, abrir a faceta e desmarcar. O artefato
+     mostra cada valor aplicado com a própria saída, e é isso que faz a aba
+     valer a pena.
+
+     A chave leva ":" e é a mesma convenção que `clearFacetAndResetPage`
+     entende — a mesma que o vazio semântico usa para nomear um valor. */
+  const activeFilterEntries = useMemo(() => {
+    const out = [];
+    for (const f of allFacets) {
+      if (!f.active) continue;
+      if (f.key === "categoria" && filter.cats.length > 1) {
+        for (const id of filter.cats) {
+          out.push({ ...f, key: `categoria:${id}`,
+            value: categoryLabelById.get(String(id)) || String(id) });
+        }
+      } else if (f.key === "tag" && filter.tags.length > 1) {
+        for (const t of filter.tags) out.push({ ...f, key: `tag:${t}`, value: `#${t}` });
+      } else if (f.key === "forma" && filter.method.length > 1) {
+        for (const m of filter.method) {
+          out.push({ ...f, key: `forma:${m}`, value: getPaymentMethodLabel([m]) });
+        }
+      } else {
+        out.push(f);
+      }
+    }
+    return out;
+  }, [allFacets, filter.cats, filter.tags, filter.method, categoryLabelById]);
 
   const activeFacetsForSavedViews = useMemo(
     () =>
@@ -3044,6 +3120,24 @@ function TransacoesPageBody({
 
   const clearFacetAndResetPage = useCallback(
     (key) => {
+      /* Chave com ":" nomeia UM VALOR ("tag:combustível"), não a faceta. O
+         botão do vazio promete remover exatamente o que a frase nomeou — tirar
+         a faceta inteira ali faria a pessoa perder as outras tags junto, sem
+         ter pedido. */
+      const sep = String(key).indexOf(":");
+      if (sep > 0) {
+        const faceta = key.slice(0, sep);
+        const valor = key.slice(sep + 1);
+        if (faceta === "tag") {
+          filter.setTags((filter.tags || []).filter((t) => t !== valor));
+        } else if (faceta === "categoria") {
+          filter.setCats((filter.cats || []).filter((c) => String(c) !== valor));
+        } else if (faceta === "forma") {
+          filter.setMethod((filter.method || []).filter((m) => String(m) !== valor));
+        }
+        setVisible(PAGE_SIZE);
+        return;
+      }
       if (key === "busca") setSearchInput("");
       else filter.clearFacet(key);
       setVisible(PAGE_SIZE);
@@ -4723,7 +4817,7 @@ function TransacoesPageBody({
               allTagsLoading={shouldUseRealData && tagCatalog.loading}
               allTagsError={shouldUseRealData && Boolean(tagCatalog.error)}
               facetCounts={facetCounts}
-              activeFacets={allFacets.filter((f) => f.active)}
+              activeFacets={activeFilterEntries}
               onClearFacet={clearFacetAndResetPage}
               onClearAll={clearAll}
               onApply={() => setWideDesktopFiltersOpen(false)}
