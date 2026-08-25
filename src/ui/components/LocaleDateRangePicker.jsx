@@ -14,12 +14,35 @@ import { resolveLocaleDatePickerMessages } from "./LocaleDatePicker.jsx";
 import { RangeCalendarGrid } from "./RangeCalendarGrid.jsx";
 import { formatCustomPeriodLabel } from "../features/transactions/filters/customPeriodLabel.js";
 import {
+
   normalizeOpenRange,
   parseLocalYmd,
   resolvePeriodDisplayBounds,
   TRANSACTIONS_DATE_MAX,
   TRANSACTIONS_DATE_MIN,
 } from "../features/transactions/periodDateBounds.js";
+
+/** O que o clique no dia sob o cursor VAI FAZER — a frase do balão.
+ *
+ * Pura e exportada de propósito: é a REGRA, e ela precisa poder ser conferida
+ * caso a caso sem montar calendário nenhum. O balão só conta se disser a mesma
+ * coisa que `handleDayClick` faz — foi divergir daí que o fez prometer
+ * "novo fim" onde o clique movia o início. Uma regra, um lugar.
+ */
+export function acaoDoClique({ touch, hoverYmd, grabbedEdge, from, to }) {
+  if (touch || !hoverYmd) return null;
+  if (grabbedEdge) return `soltar o ${grabbedEdge === "from" ? "de" : "até"}`;
+  // Intervalo fechado: o clique RECOMEÇA (é o que handleDayClick faz).
+  if (from && to) return "novo início";
+  if (!from) return "novo início";
+  const h = parseLocalYmd(hoverYmd);
+  const f = parseLocalYmd(from);
+  if (!h || !f) return null;
+  // Com o início posto e o fim em aberto, um dia ANTES do início vira o novo
+  // início — não o fim.
+  return h.getTime() < f.getTime() ? "novo início" : "novo fim";
+}
+
 
 function ymdToDraft(ymd, locale) {
   if (!ymd) return "";
@@ -573,19 +596,10 @@ export function LocaleDateRangePicker({
      promessa longe da ação foi o que fez o balão prometer "novo fim" onde o
      clique movia o início, e "mover o até" onde o clique recomeçava o
      intervalo. Uma regra, um lugar. */
-  const acaoSobHover = useMemo(() => {
-    if (touch || !hoverYmd) return null;
-    if (grabbedEdge) return `soltar o ${grabbedEdge === "from" ? "de" : "até"}`;
-    // Intervalo fechado: o clique RECOMEÇA (é o que handleDayClick faz).
-    if (displayFrom && displayTo) return "novo início";
-    if (!displayFrom) return "novo início";
-    const h = parseLocalYmd(hoverYmd);
-    const f = parseLocalYmd(displayFrom);
-    if (!h || !f) return null;
-    // Com o início posto e o fim em aberto, um dia ANTES do início vira o novo
-    // início — não o fim.
-    return h.getTime() < f.getTime() ? "novo início" : "novo fim";
-  }, [touch, hoverYmd, grabbedEdge, displayFrom, displayTo]);
+  const acaoSobHover = useMemo(
+    () => acaoDoClique({ touch, hoverYmd, grabbedEdge, from: displayFrom, to: displayTo }),
+    [touch, hoverYmd, grabbedEdge, displayFrom, displayTo],
+  );
 
   /* Qual CAMPO acende — derivado da mesma ação, para os dois nunca divergirem.
      Antes eram duas heurísticas independentes e elas discordavam: o campo dizia

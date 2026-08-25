@@ -1,3 +1,4 @@
+import { MET_LABELS } from "../../novaTransacao/novaTransacaoConstants.js";
 /**
  * O que o desfazer/refazer VAI FAZER, dito por extenso.
  *
@@ -22,9 +23,15 @@ const RÓTULOS_PERIODO = {
   rel: "Janela relativa",
 };
 
+/* As chaves são os valores REAIS do estado — conferidos nos painéis, não
+   supostos. Chutar "sim"/"nao" onde o estado guarda "yes"/"no" fazia o rótulo
+   cair no valor cru e imprimir inglês no meio de uma frase em português:
+   "Desfazer: Recorrência volta para yes". */
 const RÓTULOS_TIPO = { receita: "Receitas", despesa: "Despesas", estorno: "Estornos" };
-const RÓTULOS_SITUACAO = { paga: "Pagas", "a-pagar": "A pagar" };
-const RÓTULOS_REC = { sim: "Recorrentes", nao: "Não recorrentes" };
+const RÓTULOS_SITUACAO = { pagas: "Pagas", "a-pagar": "A pagar" };
+const RÓTULOS_REC = { yes: "Recorrentes", no: "Apenas únicas" };
+/* Os métodos vêm da MESMA tabela que a tela de nova transação usa: duas
+   listas de rótulos para as mesmas chaves divergem no primeiro rename. */
 
 const lista = (v) => (Array.isArray(v) ? v : []);
 const texto = (v) => String(v ?? "").trim();
@@ -45,7 +52,9 @@ export function chipsDoSnapshot(snap, { categorias = {}, cartoes = {} } = {}) {
     out.push({ faceta: "categoria", nome: "Categoria", valor: categorias[c]?.label || c });
   }
   for (const t of lista(snap.tags)) out.push({ faceta: "tag", nome: "Tag", valor: t });
-  for (const m of lista(snap.method)) out.push({ faceta: "forma", nome: "Forma de pagamento", valor: m });
+  for (const m of lista(snap.method)) {
+    out.push({ faceta: "forma", nome: "Forma de pagamento", valor: MET_LABELS[m] || m });
+  }
   for (const k of lista(snap.cardSel)) {
     out.push({ faceta: "cartao", nome: "Cartão", valor: cartoes[k]?.label || k });
   }
@@ -83,11 +92,18 @@ export function describeFilterChange(atual, destino, verbo = "Desfazer", maps = 
   /* TROCA de valor na mesma faceta vem primeiro: é o caso mais comum de todos
      (mudar o período) e o que antes caía no genérico. Nomear a faceta e o
      destino é o que separa "voltar ao anterior" de saber o que o clique faz. */
+  /* O conectivo acompanha o VERBO: "Refazer: Período volta para Este ano"
+     descreve andar para trás numa ação que anda para frente. */
+  const conectivo = verbo === "Refazer" ? "vai para" : "volta para";
   if (saem.length === 1 && entram.length === 1 && saem[0].faceta === entram[0].faceta) {
-    return `${verbo}: ${entram[0].nome} volta para ${entram[0].valor}`;
+    return `${verbo}: ${entram[0].nome} ${conectivo} ${entram[0].valor}`;
   }
   if (saem.length === 1 && entram.length === 0) return `${verbo}: remover ${saem[0].valor}`;
-  if (entram.length === 1 && saem.length === 0) return `${verbo}: trazer ${entram[0].valor} de volta`;
+  if (entram.length === 1 && saem.length === 0) {
+    return verbo === "Refazer"
+      ? `${verbo}: aplicar ${entram[0].valor}`
+      : `${verbo}: trazer ${entram[0].valor} de volta`;
+  }
   if (a.length > 0 && b.length === 0) {
     return `${verbo}: limpar ${a.length === 1 ? "o filtro" : `os ${a.length} filtros`}`;
   }

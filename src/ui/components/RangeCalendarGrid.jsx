@@ -144,25 +144,13 @@ function MonthGrid({
              falta saber é o que o clique VAI FAZER: mover qual ponta, ou
              recomeçar o intervalo. Foi essa a decisão fechada no desenho, e a
              primeira versão daqui mostrava a data. */
-          const balao = !touch && hov && !disabled;
-          const intervaloCheio = Boolean(fromYmd) && Boolean(toYmd);
-          const pontaSobCursor = intervaloCheio && (isFrom || isTo);
-          const qualPonta = isFrom ? "de" : "até";
-          const balaoTexto = !balao
-            ? ""
-            : grabbedEdge
-              ? `soltar o ${grabbedEdge === "from" ? "de" : "até"}`
-              : pontaSobCursor
-                ? `mover o ${qualPonta}`
-                : intervaloCheio
-                  ? "novo início"
-                  : fromYmd
-                    ? "novo fim"
-                    : "novo início";
-          /* Verde = a ponta está na sua mão (pega, ou prestes a ser pega).
-             Azul = este clique cria/recomeça. Mesma gramática do anel na célula
-             e do realce no campo, para os três lerem como um só estado. */
-          const balaoVerde = Boolean(grabbedEdge) || pontaSobCursor;
+          /* O TEXTO vem pronto de fora, calculado ao lado do handler do clique.
+             Recalcular aqui foi o erro anterior: viraram duas regras
+             independentes que discordavam — o campo acendia "de" enquanto o
+             balão prometia "mover o até", e o clique fazia uma terceira coisa. */
+          const balao = !touch && hov && !disabled && Boolean(acaoSobHover);
+          const balaoTexto = balao ? acaoSobHover : "";
+          const balaoVerde = balao && acaoSobHover.startsWith("soltar");
 
           return (
             <div

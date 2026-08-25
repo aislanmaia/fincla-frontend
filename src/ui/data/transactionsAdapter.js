@@ -656,7 +656,37 @@ function resolveDateRange(period, customFrom, customTo) {
   return {};
 }
 
+/* Os campos do modelo de ordenação da tela → os nomes que a API entende.
+   Só `date` coincidia por acaso, e era por isso que ele era o ÚNICO que
+   funcionava: a ordenação chegava aqui como array de regras, esta função
+   esperava strings legadas ("val-desc"), nenhuma casava e todas caíam no
+   default de data decrescente. A pessoa escolhia "maior valor primeiro" e a
+   lista não mudava. */
+const CAMPO_DA_API = {
+  date: "date",
+  val: "value",
+  tipo: "type",
+  desc: "description",
+  cat: "category",
+};
+
+/**
+ * @param {Array<{field:string,dir:string}>|string} sortBy
+ *   Array de regras (o formato de hoje) ou a string legada.
+ */
 function resolveSort(sortBy) {
+  /* A API ordena por UM campo. A cascata de desempate da tela ("valor, depois
+     data") não tem equivalente lá, então mandamos a primeira regra — a que
+     decide a ordem visível — e o resto continua valendo no cliente, sobre a
+     página carregada. */
+  if (Array.isArray(sortBy)) {
+    const primeira = sortBy.find((r) => r && CAMPO_DA_API[r.field]);
+    if (!primeira) return { sort_by: "date", sort_order: "desc" };
+    return {
+      sort_by: CAMPO_DA_API[primeira.field],
+      sort_order: primeira.dir === "asc" ? "asc" : "desc",
+    };
+  }
   if (sortBy === "date-asc") return { sort_by: "date", sort_order: "asc" };
   if (sortBy === "val-desc") return { sort_by: "value", sort_order: "desc" };
   if (sortBy === "val-asc") return { sort_by: "value", sort_order: "asc" };
@@ -721,7 +751,10 @@ export function buildTransactionsQuery({
   period = "tudo",
   customFrom = "",
   customTo = "",
+  /* Aceita o array de regras da tela; a string legada continua valendo para
+     quem ainda a passa. */
   sortBy = "date-desc",
+  sort,
   valueMin,
   valueMax,
   tagMatch,
@@ -748,7 +781,7 @@ export function buildTransactionsQuery({
     ...resolveSettlement(settlement),
     page: 1,
     limit,
-    ...resolveSort(sortBy),
+    ...resolveSort(sort ?? sortBy),
   };
 }
 

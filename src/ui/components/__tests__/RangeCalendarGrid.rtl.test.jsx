@@ -12,6 +12,7 @@ import React from "react";
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 import { RangeCalendarGrid } from "../RangeCalendarGrid.jsx";
+import { acaoDoClique } from "../LocaleDateRangePicker.jsx";
 
 afterEach(cleanup);
 
@@ -109,29 +110,48 @@ describe("<RangeCalendarGrid>", () => {
   it("o balão só existe no mouse, e some no toque", () => {
     // Sem cursor o balão ficaria na tela até o toque seguinte, cobrindo
     // justamente os dias que a pessoa pode querer tocar.
-    const { rerender } = render(<RangeCalendarGrid {...base} hoverYmd="2026-08-18" />);
+    const { rerender } = render(
+      <RangeCalendarGrid {...base} hoverYmd="2026-08-18" acaoSobHover="novo início" />,
+    );
     expect(dia("2026-08-18").textContent).toMatch(/novo início/i);
-    rerender(<RangeCalendarGrid {...base} hoverYmd="2026-08-18" touch />);
+    // No toque a REGRA não produz ação nenhuma — e é ela que decide, não a grade.
+    expect(
+      acaoDoClique({ touch: true, hoverYmd: "2026-08-18", from: "2026-08-10", to: "2026-08-20" }),
+    ).toBeNull();
+    rerender(<RangeCalendarGrid {...base} hoverYmd="2026-08-18" acaoSobHover={null} touch />);
     expect(dia("2026-08-18").textContent).not.toMatch(/novo/i);
   });
 
 
-  it("o balão diz a AÇÃO, não a data — a data já está na célula e no campo", () => {
-    // Repetir a data seria gastar um balão para não informar nada. O que falta
-    // saber é o que o clique VAI FAZER.
-    const { rerender } = render(<RangeCalendarGrid {...base} hoverYmd="2026-08-15" />);
-    // Dia comum com intervalo fechado: o clique recomeça.
-    expect(dia("2026-08-15")).toHaveTextContent("novo início");
+  /* O balão diz a AÇÃO, não a data — repetir a data seria gastar um balão para
+     não informar nada. A regra é conferida aqui, direto, porque é ela que tem
+     que bater com `handleDayClick`; a grade só desenha a frase que recebe. */
+  it("a regra do balão promete exatamente o que o clique faz", () => {
+    const fechado = { from: "2026-08-10", to: "2026-08-20" };
+    // Intervalo fechado: QUALQUER dia recomeça — inclusive sobre as pontas.
+    expect(acaoDoClique({ hoverYmd: "2026-08-15", ...fechado })).toBe("novo início");
+    expect(acaoDoClique({ hoverYmd: "2026-08-10", ...fechado })).toBe("novo início");
+    expect(acaoDoClique({ hoverYmd: "2026-08-20", ...fechado })).toBe("novo início");
 
-    // Sobre uma PONTA: o clique move aquela ponta, e o balão nomeia qual.
-    rerender(<RangeCalendarGrid {...base} hoverYmd="2026-08-10" />);
-    expect(dia("2026-08-10")).toHaveTextContent("mover o de");
-    rerender(<RangeCalendarGrid {...base} hoverYmd="2026-08-20" />);
-    expect(dia("2026-08-20")).toHaveTextContent("mover o até");
+    // Início posto, fim em aberto: depois dele fecha, antes dele recomeça.
+    const aberto = { from: "2026-08-10", to: "" };
+    expect(acaoDoClique({ hoverYmd: "2026-08-20", ...aberto })).toBe("novo fim");
+    expect(acaoDoClique({ hoverYmd: "2026-08-05", ...aberto })).toBe("novo início");
 
     // Com a ponta já pega, o próximo clique SOLTA.
-    rerender(<RangeCalendarGrid {...base} hoverYmd="2026-08-20" grabbedEdge="to" />);
+    expect(acaoDoClique({ hoverYmd: "2026-08-20", grabbedEdge: "to", ...fechado }))
+      .toBe("soltar o até");
+    expect(acaoDoClique({ hoverYmd: "2026-08-10", grabbedEdge: "from", ...fechado }))
+      .toBe("soltar o de");
+  });
+
+  it("a grade desenha a frase que recebe, no dia sob o cursor", () => {
+    const { rerender } = render(
+      <RangeCalendarGrid {...base} hoverYmd="2026-08-20" acaoSobHover="soltar o até" />,
+    );
     expect(dia("2026-08-20")).toHaveTextContent("soltar o até");
+    rerender(<RangeCalendarGrid {...base} hoverYmd="2026-08-15" acaoSobHover="novo início" />);
+    expect(dia("2026-08-15")).toHaveTextContent("novo início");
   });
 
   it("a ponta sob o cursor mostra a mão de pegar", () => {

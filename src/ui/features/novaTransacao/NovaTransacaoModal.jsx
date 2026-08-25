@@ -167,6 +167,22 @@ export const NovaTransacaoModal = ({
   organizationId = null,
   dataMode = "live",
 }) => {
+  /* O painel abre como diálogo, mas o foco ficava onde estava — no item
+     expandido da lista, atrás do backdrop. Quem navega por teclado ou leitor
+     de tela não recebia sinal nenhum de que uma camada nova subiu, e o Tab
+     seguinte continuava passeando pela lista invisível.
+
+     O alvo é o PRÓPRIO painel (`tabIndex={-1}`), não o primeiro campo: focar
+     um input aqui abriria o teclado virtual no toque e roubaria a leitura do
+     título antes que o leitor anunciasse o diálogo. */
+  const shellRef = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    // Um quadro de espera: o drawer entra animando e só existe no DOM depois.
+    const raf = requestAnimationFrame(() => shellRef.current?.focus());
+    return () => cancelAnimationFrame(raf);
+  }, [open]);
+
   const [tipo,      setTipo]      = useState("despesa");
   // Toggle "↺ Isto é um estorno?" — só ativável quando tipo === "despesa".
   // Quando true, o payload enviado ao backend usa type='refund' (dinheiro voltando).
@@ -2213,7 +2229,9 @@ export const NovaTransacaoModal = ({
       : {};
 
     return (
-      <div style={{ position:"fixed", inset:0, zIndex:300, overflow:"hidden", display:"flex", flexDirection:"column", justifyContent:"flex-end", pointerEvents: successOverlay ? "none" : "auto" }}>
+      <div ref={shellRef} tabIndex={-1} role="dialog" aria-modal="true"
+        aria-label={preConfig ? "Editar transação" : "Nova transação"}
+        style={{ position:"fixed", inset:0, zIndex:300, overflow:"hidden", display:"flex", flexDirection:"column", justifyContent:"flex-end", outline:"none", pointerEvents: successOverlay ? "none" : "auto" }}>
         <style>{`
           @keyframes sheetUp { from { transform:translateY(100%) } to { transform:translateY(0) } }
           @keyframes sheetDown { from { transform:translateY(0) } to { transform:translateY(100%) } }
@@ -2773,7 +2791,9 @@ export const NovaTransacaoModal = ({
      DESKTOP — original drawer (preserved)
   ════════════════════════════════════════════════════════════ */
   return (
-    <div style={{ position:"fixed", inset:0, zIndex:200, overflow:"hidden", display:"flex", justifyContent:"flex-end", pointerEvents: successOverlay ? "none" : "auto" }}>
+    <div ref={shellRef} tabIndex={-1} role="dialog" aria-modal="true"
+      aria-label={preConfig ? "Editar transação" : "Nova transação"}
+      style={{ position:"fixed", inset:0, zIndex:200, overflow:"hidden", display:"flex", justifyContent:"flex-end", outline:"none", pointerEvents: successOverlay ? "none" : "auto" }}>
       <style>{`
         @keyframes drawerIn    { from { transform:translateX(100%); opacity:0 } to { transform:translateX(0); opacity:1 } }
         @keyframes drawerOut   { from { transform:translateX(0); opacity:1 } to { transform:translateX(100%); opacity:1 } }

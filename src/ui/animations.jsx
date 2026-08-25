@@ -77,6 +77,31 @@ export const ANIM_CSS = `
     70%  { box-shadow: 0 0 0 8px rgba(37,99,235,0);  }
     100% { box-shadow: 0 0 0 0 rgba(37,99,235,0);    }
   }
+  /* §28 — carregamento da lista. Indeterminada: a API nao diz progresso, e uma
+     barra que finge saber a porcentagem mente. O gradiente varre da esquerda
+     para a direita, que e a direcao em que o conteudo novo chega. */
+  @keyframes finclaLoadbar {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(100%);  }
+  }
+  .fincla-loadbar { overflow: hidden; background: rgba(37,99,235,0.12); }
+  .fincla-loadbar::after {
+    content: ""; display: block; height: 100%; width: 45%;
+    background: linear-gradient(90deg, rgba(37,99,235,0), #2563EB, rgba(37,99,235,0));
+    animation: finclaLoadbar 1.05s cubic-bezier(.65,0,.35,1) infinite;
+  }
+  /* Indicador de acao numa LINHA (pagar / excluir): ocupa o lugar do valor,
+     que e exatamente o numero que a acao vai mudar. */
+  @keyframes finclaSpin { to { transform: rotate(360deg); } }
+  .fincla-spin {
+    display: inline-block; width: 14px; height: 14px; border-radius: 50%;
+    border: 2px solid rgba(55,65,81,0.18); border-top-color: #374151;
+    animation: finclaSpin 0.62s linear infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .fincla-loadbar::after { animation-duration: 2.4s; }
+    .fincla-spin { animation-duration: 1.6s; }
+  }
   .fincla-row { transition: background 0.11s; }
   .fincla-row:hover { background: #F0EFEB !important; }
   /* Ações rápidas: aparecem no hover ANCORADAS À ESQUERDA DO VALOR, flutuando
@@ -165,35 +190,7 @@ export const ANIM_CSS = `
      estava. O max-height grande o bastante para qualquer densidade (a linha
      mais alta é 64 px, mais a sanfona aberta) faz a interpolação acontecer;
      height:0 não anima a partir de auto. */
-  .fincla-card-lift { transition: box-shadow 0.18s ease, transform 0.18s ease; }
-  .fincla-card-lift:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.09) !important; transform: translateY(-1px); }
-  .fincla-btn { transition: opacity 0.13s, transform 0.13s; }
-  .fincla-btn:active { transform: scale(0.97) !important; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  @keyframes popIn { from { opacity: 0; transform: scale(0.96) translateY(8px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-  @keyframes sheetUp {
-    from { transform: translateY(100%); opacity: 0;   }
-    to   { transform: translateY(0);    opacity: 1;   }
-  }
-  @keyframes sheetDown {
-    from { transform: translateY(0);    opacity: 1;   }
-    to   { transform: translateY(100%); opacity: 0;   }
-  }
-  @keyframes backdropIn {
-    from { opacity: 0; }
-    to   { opacity: 1; }
-  }
-  @keyframes backdropOut {
-    from { opacity: 1; }
-    to   { opacity: 0; }
-  }
-  /* Drawer lateral (AiDrawer da referência cons-copiloto.jsx).
-     slideInRight desloca só 18px — suficiente para um card, não para um
-     painel de 440px, que precisa entrar da borda da viewport. */
-  @keyframes slideInPanel {
-    from { transform: translateX(100%); }
-    to   { transform: translateX(0);    }
-  }
+    }
   /* ── Movimento da lista de Transações ────────────────────────────────
      Sair da lista é um COLAPSO DE ALTURA, não só um fade: sem ele as linhas
      de baixo pulam de uma vez para o lugar da que saiu, e o olho perde onde
@@ -208,13 +205,23 @@ export const ANIM_CSS = `
      Direita, não esquerda: é o sentido do swipe-to-delete do mobile — o gesto
      que a pessoa já conhece, executado pela interface. O fundo passa por um
      vermelho suave no caminho, dizendo o que a saída significa. */
+  /* O WRAPPER faz o que mexe em altura e posição — é ele que ocupa lugar na
+     lista e empurra as vizinhas. */
   @keyframes txRowLeave {
-    0%   { opacity: 1; transform: translateX(0);    max-height: 240px; background: rgba(220,38,38,0); }
-    20%  { opacity: .9; transform: translateX(8px); max-height: 240px; background: rgba(220,38,38,.10); }
-    53%  { opacity: 0;  transform: translateX(46px); max-height: 240px; background: rgba(220,38,38,.10); }
+    0%   { opacity: 1;  transform: translateX(0);    max-height: 240px; }
+    20%  { opacity: .9; transform: translateX(8px);  max-height: 240px; }
+    53%  { opacity: 0;  transform: translateX(46px); max-height: 240px; }
     100% { opacity: 0;  transform: translateX(46px); max-height: 0;
-           padding-top: 0; padding-bottom: 0; border-width: 0; background: rgba(220,38,38,0); }
+           padding-top: 0; padding-bottom: 0; border-width: 0; }
   }
+  /* A COR vai na LINHA, pelo mesmo motivo da varredura: o filho opaco pinta por
+     cima de qualquer fundo do pai. */
+  @keyframes txRowLeaveCor {
+    0%   { background: rgba(254,242,242,0); }
+    25%  { background: rgba(254,226,226,1); }
+    100% { background: rgba(254,226,226,1); }
+  }
+  .fincla-tx-leaving-cor { animation: txRowLeaveCor 180ms cubic-bezier(.4,0,1,1) both; }
 
   /* ── PAGAMENTO CONFIRMADO — 500 ms, e é um momento feliz ─────────────
      Diferente do excluir: aqui nada desaparece, algo se CONFIRMA. O movimento
@@ -222,8 +229,20 @@ export const ANIM_CSS = `
      da esquerda para a direita, uma vez só. É o único floreio da tela, e vale
      porque marca o instante em que o dinheiro entrou no saldo. */
   @keyframes txRowSettled {
-    0%   { background-position: -140% 0; }
-    100% { background-position: 140% 0; }
+    0% {
+      background-image: linear-gradient(100deg,
+        rgba(5,150,105,0) 0%, rgba(5,150,105,.30) 45%,
+        rgba(5,150,105,.30) 55%, rgba(5,150,105,0) 100%);
+      background-size: 70% 100%; background-repeat: no-repeat;
+      background-position: -140% 0;
+    }
+    100% {
+      background-image: linear-gradient(100deg,
+        rgba(5,150,105,0) 0%, rgba(5,150,105,.30) 45%,
+        rgba(5,150,105,.30) 55%, rgba(5,150,105,0) 100%);
+      background-size: 70% 100%; background-repeat: no-repeat;
+      background-position: 140% 0;
+    }
   }
   @keyframes txRowSettledRest {
     0%   { box-shadow: inset 0 0 0 999px rgba(5,150,105,.09); }
@@ -238,12 +257,17 @@ export const ANIM_CSS = `
      para o branco em vez de sumir de uma vez. */
   @keyframes txRowBorn {
     0%   { max-height: 0; opacity: 0; transform: translateY(-6px);
-           padding-top: 0; padding-bottom: 0; box-shadow: inset 0 0 0 999px rgba(37,99,235,.14); }
-    55%  { max-height: 240px; opacity: 1; transform: translateY(0);
-           box-shadow: inset 0 0 0 999px rgba(37,99,235,.14); }
-    100% { max-height: 240px; opacity: 1; transform: translateY(0);
-           box-shadow: inset 0 0 0 999px rgba(37,99,235,0); }
+           padding-top: 0; padding-bottom: 0; }
+    55%  { max-height: 240px; opacity: 1; transform: translateY(0); }
+    100% { max-height: 240px; opacity: 1; transform: translateY(0); }
   }
+  /* O destaque azul do nascimento, na linha. */
+  @keyframes txRowBornCor {
+    0%   { background: rgba(219,234,254,1); }
+    55%  { background: rgba(219,234,254,1); }
+    100% { background: rgba(219,234,254,0); }
+  }
+  .fincla-tx-born-cor { animation: txRowBornCor 550ms cubic-bezier(.32,.72,0,1) both; }
   @keyframes toastIn {
     from { opacity: 0; transform: translateY(10px) scale(0.98); }
     to   { opacity: 1; transform: translateY(0)    scale(1);    }
@@ -255,16 +279,11 @@ export const ANIM_CSS = `
   }
   /* A varredura é um GRADIENTE que atravessa, não um fundo que pisca: piscar
      diz "algo aconteceu", atravessar diz "de onde para onde". */
+  /* O gradiente é declarado DENTRO dos keyframes, não na classe: a linha tem
+     "background" inline, e declaração inline vence regra de autor — a classe
+     era simplesmente ignorada e a varredura nunca aparecia. A origem
+     "animação" vence o inline; é a única forma que funciona aqui. */
   .fincla-tx-settled {
-    background-image: linear-gradient(
-      100deg,
-      rgba(5,150,105,0) 0%,
-      rgba(5,150,105,.28) 45%,
-      rgba(5,150,105,.28) 55%,
-      rgba(5,150,105,0) 100%
-    );
-    background-size: 70% 100%;
-    background-repeat: no-repeat;
     animation:
       txRowSettled 500ms cubic-bezier(.4,0,.2,1) 1,
       txRowSettledRest 1200ms ease-out 1;
