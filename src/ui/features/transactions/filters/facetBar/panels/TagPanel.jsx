@@ -27,6 +27,8 @@ export function TagPanel({
   tagMode = "any",
   setTagMode,
   counts,
+  /** Rótulo exibido → id da tag. A contagem da API é indexada por id. */
+  tagIdByLabel = null,
   onClose,
   compact = false,
 }) {
@@ -145,9 +147,18 @@ export function TagPanel({
         >
           {visible.map((tg) => {
             const active = tags.includes(tg);
-            // A facet guarda NOMES; o backend indexa a contagem por id, então a
-            // busca aqui é pelo rótulo que ele devolve junto.
-            const n = counts?.optionCountByLabel("tag", tg);
+            /* A facet guarda NOMES, mas o backend indexa a contagem por ID —
+               e o rótulo que ele devolve junto é o do BANCO, não o que a tela
+               mostra. Desde que o catálogo passou a traduzir as tags do seed,
+               procurar pelo texto só acertava os nomes iguais nas duas línguas:
+               "#streaming" contava, "#aplicativo" e "#médico" ficavam zerados
+               com transações visíveis na lista logo ao lado.
+               Por id não há tradução no caminho. O rótulo continua como
+               fallback para quem não passa o mapa. */
+            const idDaTag = tagIdByLabel?.get?.(tg);
+            const n = idDaTag
+              ? counts?.optionCount?.("tag", idDaTag)
+              : counts?.optionCountByLabel("tag", tg);
             return (
               <button
                 type="button"

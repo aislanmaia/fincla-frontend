@@ -1557,7 +1557,11 @@ function TransacoesPageBody({
      disso deixaria a lista mais estreita que o painel que a filtra. */
   const dockPanelWidth = useMemo(() => {
     const content = Math.max(0, viewportWidth - SIDEBAR_WIDTH);
-    return viewportWidth >= 1600 ? Math.min(860, Math.round(content * 0.5)) : 396;
+    /* 420 e não 396: o trilho agora se dimensiona pelo rótulo mais largo, e
+       nesta faixa ele cresce ~24 px em relação aos 132 fixos de antes. Sem
+       compensar, esses pixels sairiam do painel de opções — que é onde os
+       cartões de escolha vivem e onde a largura faz falta de verdade. */
+    return viewportWidth >= 1600 ? Math.min(860, Math.round(content * 0.5)) : 420;
   }, [viewportWidth]);
 
   /* Qual faceta o painel mostra. Começa em "Período" porque é a que mais muda
@@ -1573,14 +1577,23 @@ function TransacoesPageBody({
     const el = listScrollRef.current;
     if (!el || typeof ResizeObserver === "undefined") return undefined;
     let t = null;
+    /* O "já mediu alguma vez" vive num REF, não no updater do `setState`.
+       Um updater tem de ser puro: o React pode reexecutá-lo (StrictMode, e
+       filas de render reprocessadas quando um render concorrente é
+       interrompido), e com `clearTimeout`/`setTimeout` lá dentro cada
+       reexecução cancelava e rearmava a medição — uma rajada de renders alheios
+       dentro da janela ia empurrando a medida para a frente indefinidamente. */
+    let jaMediu = false;
     const ro = new ResizeObserver(([entry]) => {
       const w = Math.round(entry.contentRect.width);
       /* A PRIMEIRA medida vale na hora: até ela chegar a lista usa o palpite
          pela viewport, e adiar isso faria as colunas nascerem erradas. */
-      setListWidth((atual) => {
-        if (atual === 0) return w;
-        clearTimeout(t);
-        /* Depois disso, ESPERA a largura assentar. Abrir a dock anima a largura
+      if (!jaMediu) {
+        jaMediu = true;
+        setListWidth(w);
+        return;
+      }
+      /* Depois disso, ESPERA a largura assentar. Abrir a dock anima a largura
            por 300 ms, e este observer disparava a cada quadro: cada disparo era
            um `setState` na página inteira, re-renderizando as 34 linhas e
            refazendo a medição das colunas no canvas. Medido em 1600 px: 593 ms
@@ -1588,9 +1601,8 @@ function TransacoesPageBody({
            de 60. A largura intermediária não serve para nada aqui: o que ela
            alimenta são LIMIARES (o rótulo da ação rápida em 1000 px) e a medida
            das colunas, e os dois só precisam do valor final. */
-        t = setTimeout(() => setListWidth(w), 90);
-        return atual;
-      });
+      clearTimeout(t);
+      t = setTimeout(() => setListWidth(w), 90);
     });
     ro.observe(el);
     return () => { clearTimeout(t); ro.disconnect(); };
@@ -1910,6 +1922,21 @@ function TransacoesPageBody({
     }
     return map;
   }, [categoryTagsData.categories]);
+
+  /* id da categoria → o nome que o BACKEND guarda (`apiName`), não o rótulo
+     exibido. `GET /v1/transactions?category=` casa pelo nome armazenado, e as
+     categorias do seed são gravadas em inglês (`transport`) enquanto a tela
+     mostra "Transporte" — mandar o rótulo devolvia ZERO linhas, medido.
+     São dois mapas de propósito: um responde "como isto se chama para o
+     usuário", o outro "como isto se chama para a API", e confundi-los é
+     exatamente o defeito que este par existe para impedir. */
+  const categoryApiNameById = useMemo(() => {
+    const map = new Map();
+    for (const c of categoryTagsData.categories || []) {
+      if (c?.id != null && c.apiName) map.set(String(c.id), c.apiName);
+    }
+    return map;
+  }, [categoryTagsData.categories]);
   // Achado 1: tags não-categoria podem repetir o NOME sob categorias-pai
   // diferentes (ex.: "mensal" em Casa e em Trabalho) — `buildTagOptions`
   // desambigua o rótulo exibido quando isso acontece, então cada opção do
@@ -1930,7 +1957,12 @@ function TransacoesPageBody({
   const tagRowsPt = useMemo(
     () => (tagCatalog.rows || []).map((row) => {
       const pt = detailLabelPtForTag(row);
-      return pt && pt !== row?.name ? { ...row, name: pt } : row;
+      /* `rawName` sobrevive à tradução: é por ele que uma visualização salva
+         ANTES desta mudança — que guardou "doctor" no localStorage — continua
+         resolvendo. Sem ele, abrir a view travaria a lista alegando que a tag
+         foi removida, e não há migração possível sem reescrever o
+         armazenamento de todo mundo. */
+      return pt && pt !== row?.name ? { ...row, name: pt, rawName: row.name } : row;
     }),
     [tagCatalog.rows],
   );
@@ -2005,6 +2037,7 @@ function TransacoesPageBody({
           limit: visible,
           debouncedSearch,
           totalCategories: totalCategoriesForBackend,
+          catLabelById: categoryApiNameById,
           tagIds: resolvedTagIds,
         },
       ),
@@ -2762,6 +2795,7 @@ function TransacoesPageBody({
           limit: 1,
           debouncedSearch: dropSearch != null ? dropSearch : debouncedSearch,
           totalCategories: totalCategoriesForBackend,
+          catLabelById: categoryApiNameById,
           tagIds: dropTagIds != null ? dropTagIds : resolvedTagIds,
         },
       );
@@ -3009,6 +3043,7 @@ function TransacoesPageBody({
     categories: categoriesForFilter,
     cards: cardsForFilter,
     allTags: allTagsForFilter,
+    tagIdByLabel: tagDisplayToId,
     // Achado 5: sem isto o painel mostra "Nenhuma tag cadastrada" enquanto o
     // catálogo ainda está a caminho — parece "você não tem tags" quando é só
     // um instante de carregamento.
@@ -4540,6 +4575,7 @@ function TransacoesPageBody({
               categories={categoriesForFilter}
               cards={cardsForFilter}
               allTags={allTagsForFilter}
+              tagIdByLabel={tagDisplayToId}
               allTagsLoading={shouldUseRealData && tagCatalog.loading}
               allTagsError={shouldUseRealData && Boolean(tagCatalog.error)}
               facetCounts={facetCounts}

@@ -82,11 +82,23 @@ export function mapCatsToLegacy(cats, totalCategories) {
  * `tag_id` se combinam por AND no backend, então marcar uma categoria E uma tag
  * pede a interseção — que é o que a tela mostra acesa.
  */
-export function mapCatsOrTagToLegacy(cats, tagIds, totalCategories) {
+export function mapCatsOrTagToLegacy(cats, tagIds, totalCategories, catLabelById) {
   const catValue = mapCatsToLegacy(cats, totalCategories);
   const catList = catValue === "todas" ? [] : catValue;
+  /* A categoria viaja pelo NOME, e é isso que a separa das tags.
+     `GET /v1/transactions` documenta: `category` é `list[str]` de NOMES, e
+     "combines with `tag_id` using AND". O adapter roteava por FORMATO — se
+     parece UUID, vira `tag_id` —, mas categoria também é uma tag e o id dela
+     também é UUID. Resultado: a categoria caía no mesmo `tag_id` das tags de
+     detalhe, que faz OU consigo mesmo. Medido: com "Transporte" + duas tags,
+     saíam três `tag_id` e a lista mostrava ONZE categorias, quando a pessoa
+     tinha acabado de pedir uma.
+
+     Quem sabe o nome é o chamador (a página tem o catálogo), então ele passa o
+     mapa. Sem mapa, o id segue como estava — nenhum caminho piora. */
+  const catNomes = catList.map((id) => catLabelById?.get?.(String(id)) ?? id);
   const tagList = Array.isArray(tagIds) ? tagIds.filter(Boolean) : [];
-  const merged = [...catList, ...tagList];
+  const merged = [...catNomes, ...tagList];
   return merged.length ? merged : "todas";
 }
 
@@ -129,15 +141,18 @@ export function matchesValueRange(absAmount, valueMin, valueMax) {
  *   filtro vazio do backend (caso contrário ele aceitaria só a primeira).
  * @param {string[]} [options.tagIds] - ids das tags de `state.tags` (nomes) já
  *   resolvidos pelo chamador; ver nota de topo do arquivo (fincla-frontend#78).
+ * @param {Map<string,string>} [options.catLabelById] - id da categoria → NOME.
+ *   Sem ele a categoria sai como id e o backend a trata como tag, fazendo OU
+ *   com as tags de detalhe em vez de E.
  */
 export function filtersToLegacyParams(
   state,
-  { limit, debouncedSearch = "", totalCategories, tagIds } = {},
+  { limit, debouncedSearch = "", totalCategories, tagIds, catLabelById } = {},
 ) {
   return {
     search: debouncedSearch,
     filterType: mapTypeToLegacy(state.type),
-    filterCat: mapCatsOrTagToLegacy(state.cats, tagIds, totalCategories),
+    filterCat: mapCatsOrTagToLegacy(state.cats, tagIds, totalCategories, catLabelById),
     filterMethod: mapMethodToLegacy(state.method),
     period: state.period,
     customFrom: state.customFrom,

@@ -61,6 +61,7 @@ export function TransactionsFilterBar({
   allTags = [],
   allTagsLoading = false,
   allTagsError = false,
+  tagIdByLabel = null,
   savedViews,
   searchInput,
   setSearchInput,
@@ -333,6 +334,7 @@ export function TransactionsFilterBar({
                 allTags={allTags}
                 allTagsLoading={allTagsLoading}
                 allTagsError={allTagsError}
+            tagIdByLabel={tagIdByLabel}
                 // card
                 cardSel={filter.cardSel}
                 setCardSel={filter.setCardSel}
