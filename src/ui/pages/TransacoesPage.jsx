@@ -83,6 +83,7 @@ import {
   filtersToCsvOptions,
   matchesValueRange,
 } from "../features/transactions/filters/filtersToLegacyParams.js";
+import { facetSentenceLabel } from "../features/transactions/filters/facetSentenceLabel.js";
 import { DisclosureChevron } from "../components/DisclosureChevron.jsx";
 import { usePullToRefresh } from "../features/transactions/usePullToRefresh.js";
 import { detailLabelPtForTag } from "../data/categoryLabels.js";
@@ -2812,7 +2813,9 @@ function TransacoesPageBody({
     // Sem aspas aqui: o texto do vazio já envolve o rótulo em aspas curvas, e
     // as duas juntas viravam «busca "termo"» dentro de outro par de aspas.
     const map = { busca: `busca ${debouncedSearch}` };
-    for (const f of allFacets) map[f.key] = `${f.label}: ${f.value}`;
+    /* Ver `facetSentenceLabel`: o prefixo só entra quando o valor ainda não
+       nomeia a faceta. */
+    for (const f of allFacets) map[f.key] = facetSentenceLabel(f.label, f.value);
     return map;
   }, [allFacets, debouncedSearch]);
 
@@ -3442,8 +3445,12 @@ function TransacoesPageBody({
         setSettlingId(null);
       }
     },
+    /* `isMobile` É dependência: `onDelete` e `onSettle` se ramificam nele.
+       Sem ele aqui, cruzar os 768 px sem tocar em nenhuma outra dep mantinha o
+       ramo velho — num desktop recém-redimensionado o 🗑 abria a confirmação da
+       sanfona em vez do modal, e o ✓ liquidava SEM perguntar. */
   }), [onEditTx, onDuplicateTx, settlingId, shouldUseRealData, transactionsData,
-      onTransactionsInvalidate, flashSettled, filter.settlement, startRowLeave]);
+      onTransactionsInvalidate, flashSettled, filter.settlement, startRowLeave, isMobile]);
 
   /* Os atalhos usam os MESMOS caminhos das ações rápidas — nenhuma segunda
      implementação de liquidar/excluir, que é onde as duas divergiriam. */
