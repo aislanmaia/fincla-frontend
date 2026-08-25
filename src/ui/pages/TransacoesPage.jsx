@@ -31,7 +31,7 @@ import { useNarrowestFilter } from "../features/transactions/useNarrowestFilter.
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { TransactionsEmptyState } from "../features/transactions/TransactionsEmptyState.jsx";
 import { TransactionsSkeleton } from "../features/transactions/TransactionsSkeleton.jsx";
-import { ConfirmActionModal } from "../features/transactions/ConfirmAction.jsx";
+import { ConfirmActionInline, ConfirmActionModal } from "../features/transactions/ConfirmAction.jsx";
 import { ShortcutsModal } from "../features/transactions/ShortcutsModal.jsx";
 import { useTransactionsKeyboard } from "../features/transactions/useTransactionsKeyboard.js";
 import { useFocusTrap } from "../features/transactions/useFocusTrap.js";
@@ -1147,6 +1147,13 @@ const DetailPanel = ({
   setSettlingId,
   settleError,
   setSettleError,
+  /* Pedido de confirmação in-place (toque): `{ kind, tx }` ou `null`. No
+     desktop a pergunta vai num modal; aqui ela ocupa o lugar dos botões dentro
+     da própria sanfona, que já está aberta e já é o foco da tela. */
+  confirmInline = null,
+  setConfirmInline,
+  confirmInlineBusy = false,
+  onConfirmInline,
 }) => {
   if (!tx) return null;
   const isReceita = tx.val > 0;
@@ -1309,6 +1316,19 @@ const DetailPanel = ({
           "Editar" preto ocupando a largura inteira e a lixeira solta na ponta.
           Três pesos visuais diferentes para três ações do mesmo nível, e a
           altura de duas faixas onde cabe uma. */}
+      {/* A pergunta OCUPA o lugar dos botões: deixá-los visíveis por baixo dela
+          convidaria a responder duas vezes, e a resposta certa está aqui. */}
+      {confirmInline && confirmInline.tx?.id === tx.id ? (
+        <div style={{ padding: inline ? "10px 12px 12px" : "14px 20px" }}>
+          <ConfirmActionInline
+            kind={confirmInline.kind}
+            desc={tx.desc}
+            busy={confirmInlineBusy}
+            onConfirm={() => onConfirmInline?.(confirmInline)}
+            onCancel={() => setConfirmInline?.(null)}
+          />
+        </div>
+      ) : (
       <div style={ inline && isMobileDetail
         /* Botões em 2×2 no mobile: em linha, quatro deles de 30 px ficam com
            ~85 px cada num aparelho de 390 — alvo de toque menor que o mínimo
@@ -1331,6 +1351,13 @@ const DetailPanel = ({
                  aqui; no toque segue direto, porque abrir a sanfona já foi o
                  gesto deliberado. */
               if (pedirConfirmacao?.(tx.settled ? "unsettle" : "settle", tx)) return;
+              /* No toque a pergunta é in-place, aqui mesmo. Liquidar mexe no
+                 saldo — a mesma classe de consequência da exclusão —, e a única
+                 diferença entre as duas superfícies é ONDE se pergunta. */
+              if (setConfirmInline) {
+                setConfirmInline({ kind: tx.settled ? "unsettle" : "settle", tx });
+                return;
+              }
               const next = !tx.settled;
               // Demo/mock não tem backend: sem este ramo o botão fica clicável e
               // não faz nada, que é pior que não existir.
@@ -1427,6 +1454,9 @@ const DetailPanel = ({
           <AccButton tone="red" onClick={(e) => {
             e.stopPropagation();
             if (pedirConfirmacao?.("delete", tx)) return;
+            /* No toque a pergunta é in-place. `setDeletingId` continua sendo o
+               caminho para quem não passa o setter (testes, mocks). */
+            if (setConfirmInline) { setConfirmInline({ kind: "delete", tx }); return; }
             setDeletingId(tx.id);
           }}>
             🗑 Excluir
@@ -1446,6 +1476,7 @@ const DetailPanel = ({
           </span>
         )}
       </div>
+      )}
     </div>
   );
 };
@@ -1614,6 +1645,12 @@ function TransacoesPageBody({
      na hora tira o elemento antes de a largura poder animar até zero. */
   const [dockFechando, setDockFechando] = useState(false);
   const [confirmAcao, setConfirmAcao] = useState(null);
+  /* No TOQUE a pergunta é in-place, dentro da sanfona — que já está aberta e já
+     é o foco da tela; um modal ali seria uma camada a mais para ler e para
+     sair. O componente existia (`ConfirmActionInline`) e nunca tinha sido
+     ligado: a exclusão armava dois botões soltos na grade da sanfona, e
+     liquidar não perguntava nada. */
+  const [confirmInline, setConfirmInline] = useState(null);
   /* `rovingId` guarda a linha lembrada; `rovingStopId` é a que REALMENTE está
      na tela. A comparação era `tx.id === rovingId` com `rovingId` sempre string
      e `tx.id` numérico no mock: `1 === "1"` é falso, então nenhuma linha era a
@@ -2144,8 +2181,15 @@ function TransacoesPageBody({
     situacao: { settlement: "todas" },
   }), []);
 
+  /* Qual faceta está com os contadores à vista. São DUAS superfícies: a barra
+     (mobile e desktop compacto) anuncia por `expandedFacet`, e o painel
+     ancorado do desktop largo tem sempre uma selecionada em `panelFacet`.
+     Olhar só a segunda deixava o mobile com o defeito inteiro — que é
+     exatamente onde ele foi reportado depois. */
+  const facetaComContadoresAVista = expandedFacet ?? (isMobile ? null : panelFacet);
+
   const filtrosParaContagem = useMemo(() => {
-    const neutro = NEUTRO_POR_FACETA[panelFacet];
+    const neutro = NEUTRO_POR_FACETA[facetaComContadoresAVista];
     if (!neutro) return transactionsFilters;
     const { tagIds: zerarTags, ...estado } = neutro;
     return filtersToLegacyParams(
@@ -2164,7 +2208,7 @@ function TransacoesPageBody({
         tagIds: zerarTags !== undefined ? [] : resolvedTagIds,
       },
     );
-  }, [NEUTRO_POR_FACETA, panelFacet, transactionsFilters, filter.type, filter.method,
+  }, [NEUTRO_POR_FACETA, facetaComContadoresAVista, transactionsFilters, filter.type, filter.method,
       filter.cats, filter.period, filter.customFrom, filter.customTo, filter.sort,
       filter.valueMin, filter.valueMax, filter.settlement, filter.rec, filter.tagMode,
       visible, debouncedSearch, totalCategoriesForBackend, categoryApiNameById, resolvedTagIds]);
@@ -3401,6 +3445,34 @@ function TransacoesPageBody({
     [flashSettled, filter.settlement, startRowLeave, shouldUseRealData, onTransactionsInvalidate],
   );
 
+  const quickActionsRef = useRef(null);
+
+  /* Executa a resposta da pergunta in-place. Mesmos caminhos das ações do
+     desktop — a diferença é ONDE se pergunta, não o que acontece depois. */
+  const [confirmInlineBusy, setConfirmInlineBusy] = useState(false);
+  const responderConfirmInline = useCallback(async (pedido) => {
+    if (!pedido || confirmInlineBusy) return;
+    setConfirmInlineBusy(true);
+    try {
+      if (pedido.kind === "delete") {
+        setExcluindoId(pedido.tx.id);
+        if (shouldUseRealData) await transactionsData.removeTransaction(pedido.tx.id);
+        else setMockTxList((cur) => cur.filter((t) => t.id !== pedido.tx.id));
+        setConfirmInline(null);
+        setSelected((cur) => (cur && cur.id === pedido.tx.id ? null : cur));
+        startRowLeave(pedido.tx.id);
+      } else {
+        setConfirmInline(null);
+        await quickActionsRef.current?.onSettleConfirmado(pedido.tx);
+      }
+    } catch (e) {
+      setSettleError(e?.message || "Não foi possível concluir a ação.");
+    } finally {
+      setExcluindoId(null);
+      setConfirmInlineBusy(false);
+    }
+  }, [confirmInlineBusy, shouldUseRealData, transactionsData, startRowLeave]);
+
   const quickActions = useMemo(() => ({
     /* Marca a origem ANTES de navegar: é ela que traz o foco de volta ao
        fechar o modal. Vale para o ✎ da linha e para a tecla E — os dois passam
@@ -3419,7 +3491,7 @@ function TransacoesPageBody({
        No toque continua na sanfona, que já está aberta e já é o foco da tela:
        um modal ali seria uma camada a mais para ler e para sair. */
     onDelete: (tx) => {
-      if (isMobile) { setSelected(tx); setDeletingId(tx.id); return; }
+      if (isMobile) { setSelected(tx); setConfirmInline({ kind: "delete", tx }); return; }
       setConfirmAcao({ kind: "delete", tx });
     },
     /* Liquidar TAMBÉM pergunta no desktop. Ela muda o saldo — o mesmo tipo de
@@ -3429,7 +3501,11 @@ function TransacoesPageBody({
        No toque continua direto: lá a ação já exige o gesto deliberado de abrir
        a sanfona ou arrastar a linha, que é a confirmação. */
     onSettle: (tx) => {
-      if (isMobile) { quickActions.onSettleConfirmado(tx); return; }
+      if (isMobile) {
+        setSelected(tx);
+        setConfirmInline({ kind: tx.settled ? "unsettle" : "settle", tx });
+        return;
+      }
       setConfirmAcao({ kind: tx.settled ? "unsettle" : "settle", tx });
     },
     onSettleConfirmado: async (tx) => {
@@ -3496,6 +3572,8 @@ function TransacoesPageBody({
        sanfona em vez do modal, e o ✓ liquidava SEM perguntar. */
   }), [onEditTx, onDuplicateTx, settlingId, shouldUseRealData, transactionsData,
       onTransactionsInvalidate, flashSettled, filter.settlement, startRowLeave, isMobile]);
+  quickActionsRef.current = quickActions;
+
 
   /* Os atalhos usam os MESMOS caminhos das ações rápidas — nenhuma segunda
      implementação de liquidar/excluir, que é onde as duas divergiriam. */
@@ -3616,12 +3694,21 @@ function TransacoesPageBody({
   /* Os chips do que está filtrando, já com o "＋ Filtros" embutido. Abaixo de
      1200 px eles recolhem para o contador do próprio botão: nessa largura não
      cabem sem espremer a busca. */
+  /* O "+N" leva à aba "Ativos", abrindo a dock se preciso. É o caminho curto
+     entre "há mais filtros do que cabem aqui" e "quero tirar alguns". */
+  const abrirAtivos = useCallback(() => {
+    setPanelFacet("ativos");
+    if (isDesktopCompact) setCompactDesktopFiltersOpen(true);
+    else setWideDesktopFiltersOpen(true);
+  }, [isDesktopCompact]);
+
   const commandBarChips = (
     <TransactionsFilterChips
       facets={allFacets}
       searchActive={Boolean(debouncedSearch)}
       searchLabel={debouncedSearch}
       onOpenFacet={openFacetFromChip}
+      onAbrirAtivos={abrirAtivos}
       onClearFacet={clearFacetAndResetPage}
       onClearAll={clearAll}
       /* Sem escada de breakpoints: quem decide é o orçamento medido pela
@@ -3641,6 +3728,7 @@ function TransacoesPageBody({
       searchActive={Boolean(debouncedSearch)}
       searchLabel={debouncedSearch}
       onOpenFacet={openFacetFromChip}
+      onAbrirAtivos={abrirAtivos}
       onClearFacet={clearFacetAndResetPage}
       onClearAll={clearAll}
       collapsed
@@ -3925,6 +4013,10 @@ function TransacoesPageBody({
                         deletingId={deletingId}
                         setDeletingId={setDeletingId}
                         marcarExcluindo={setExcluindoId}
+                        confirmInline={confirmInline}
+                        setConfirmInline={setConfirmInline}
+                        confirmInlineBusy={confirmInlineBusy}
+                        onConfirmInline={responderConfirmInline}
                         onRowLeave={startRowLeave}
                         onDuplicateTx={onDuplicateTx}
                         onFilterByCategory={filterByCategoryFromRow}

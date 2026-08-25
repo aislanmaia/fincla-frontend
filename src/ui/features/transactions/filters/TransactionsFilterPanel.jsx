@@ -75,7 +75,13 @@ export function TransactionsFilterPanel({
   // Acima de ~560 px o pane comporta as opções em grade. Abaixo disso duas
   // colunas espremem os rótulos das categorias, que são longos ("Lazer &
   // Entretenimento"), e cada opção passa a truncar.
-  const roomyPane = !compact && width >= 560;
+  /* O limiar mede o PAINEL, não a dock. `width` é a dock inteira e inclui o
+     trilho (136 px, e mais em idiomas de rótulo longo): comparar a dock com 560
+     dizia "cabe em duas colunas" a partir de um painel de 424 px, e diria coisas
+     diferentes em cada idioma para a mesma largura útil. Subtraindo o trilho, o
+     número passa a significar o que o nome diz. */
+  const LARGURA_DO_TRILHO = 136;
+  const roomyPane = !compact && width - LARGURA_DO_TRILHO >= 424;
   const activeTotal = Object.values(counts).reduce((a, b) => a + b, 0);
 
   return (
