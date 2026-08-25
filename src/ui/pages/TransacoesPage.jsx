@@ -92,6 +92,7 @@ import {
   matchesValueRange,
 } from "../features/transactions/filters/filtersToLegacyParams.js";
 import { DisclosureChevron } from "../components/DisclosureChevron.jsx";
+import { usePullToRefresh } from "../features/transactions/usePullToRefresh.js";
 
 const TRANSACTIONS_SEARCH_DEBOUNCE_MS = 1500;
 
@@ -2080,6 +2081,15 @@ function TransacoesPageBody({
     transactionsData.hasLoaded &&
     transactionsData.isLoading &&
     !transactionsData.isAppending;
+
+  /* §29: puxar ↓ a partir do topo recarrega. Só no toque — no desktop o gesto
+     não existe e o botão de recarregar já está a um clique. */
+  const puxar = usePullToRefresh({
+    scrollRef: listScrollRef,
+    onRefresh: recarregarLista,
+    enabled: isMobile && shouldUseRealData,
+    busy: transactionsData.isLoading,
+  });
 
   /* §28: o apagamento sozinho lê como "desabilitado", não como "carregando" —
      falta direção. A barra dá a direção, mas só depois de 180 ms: a maioria das
@@ -4364,6 +4374,31 @@ function TransacoesPageBody({
              então o pior caso de um clique perdido é abrir uma sanfona. */
           aria-busy={listRefiltering || undefined}
         >
+          {/* §29: o indicador da puxada. Vive DENTRO do scroller e cresce com o
+              dedo, empurrando a lista para baixo — é o movimento que faz o
+              gesto parecer físico em vez de um botão escondido. Altura zero em
+              repouso: sem isso ele cobraria espaço permanente de toda sessão
+              por um gesto que a maioria nunca usa. */}
+          {!puxar.inerte && (
+            <div aria-hidden="true"
+              style={{ height: puxar.puxada, overflow: "hidden",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                /* Sem transição ENQUANTO o dedo manda: animar aqui atrasaria o
+                   indicador em relação à mão e quebraria a sensação de arrastar
+                   um objeto. A transição só entra na volta, quando solta. */
+                transition: puxar.aguardando || puxar.puxada === 0
+                  ? "height var(--mo-base, 220ms) var(--mo-base-ease, cubic-bezier(.32,.72,0,1))"
+                  : "none",
+                color: puxar.passouDoLimiar ? T.blue : T.inkLight }}>
+              {puxar.aguardando
+                ? <span className="fincla-spin" aria-hidden="true" />
+                : (
+                  <span style={{ ...G, fontSize: 11, fontWeight: 600 }}>
+                    {puxar.passouDoLimiar ? "Solte para recarregar" : "Puxe para recarregar"}
+                  </span>
+                )}
+            </div>
+          )}
           {/* Fica DENTRO da região que rola e presa ao topo dela: colada na
               borda superior da lista, que é onde o conteúdo novo vai entrar. */}
           {barraCarregando && (
