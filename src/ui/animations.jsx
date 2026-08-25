@@ -132,13 +132,27 @@ export const ANIM_CSS = `
 
      No toque não há hover: elas ficam sempre visíveis — a alternativa seria um
      alvo de 24 px numa linha de 56, onde o erro abre a transação vizinha. */
+  /* visibility, NAO display. Trocar "none" por "flex" no hover e uma mudanca de
+     LAYOUT: o grupo entra e sai do fluxo de posicionamento, e com ele o
+     navegador refaz style + layout + paint daquela linha.
+
+     Em repouso isso passa despercebido — acontece uma vez por linha, quando o
+     cursor chega. Mas quando a lista MUDA DE LARGURA (abrir e fechar a dock) as
+     linhas deslizam por baixo de um cursor parado: a cada quadro o hover cai
+     numa linha diferente, e cada troca custava um ciclo de layout. Medido em
+     1600 px com 34 linhas: HitTest 139 ms e handleMouseMoveEvent 144 ms num
+     gesto de 300 ms — era isso a "animacao lagada", e e por isso que ela
+     melhorava com menos itens na lista.
+
+     Com visibility o grupo ja esta posicionado o tempo todo; mostrar e esconder
+     vira trabalho de composicao, sem layout nenhum. */
   .fincla-quick {
-    display: none; align-items: center; gap: 4px;
+    display: flex; visibility: hidden; align-items: center; gap: 4px;
     position: absolute; right: 0; top: 50%; transform: translateY(-50%);
     margin-right: 10px; white-space: nowrap;
   }
   .fincla-row:hover .fincla-quick,
-  .fincla-row:focus-within .fincla-quick { display: flex; }
+  .fincla-row:focus-within .fincla-quick { visibility: visible; }
   /* "hover: none" sozinho pegava TABLET: "isMobile" é largura (< 768 px), então
      um iPad em paisagem renderiza a linha do DESKTOP — e a regra deixava o grupo
      permanentemente visível. Antes isso era inofensivo (ele tinha coluna
@@ -146,7 +160,7 @@ export const ANIM_CSS = `
      justamente onde o dedo toca para abrir a sanfona, com o 🗑 entre os alvos.
      Casando os dois critérios, a regra só vale onde a linha é mesmo a mobile. */
   @media (hover: none) and (max-width: 767px) {
-    .fincla-quick { display: flex; }
+    .fincla-quick { visibility: visible; }
   }
 
   /* O rótulo abre por max-width, não por display: só uma propriedade animável

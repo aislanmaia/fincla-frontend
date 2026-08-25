@@ -309,7 +309,13 @@ export function useTransactionsData({
     state.transactions.length,
   ]);
 
-  return {
+  /* O retorno é MEMOIZADO. Ele é objeto literal, então sem isto vira uma
+     referência nova a cada render do consumidor — e a página o usa como
+     dependência de `useMemo`/`useCallback` (as ações rápidas da linha, entre
+     outros). O efeito medido: abrir a dock re-renderizava as 34 linhas DEZ
+     vezes, porque cada render da página inventava um `transactionsData` novo e
+     derrubava toda a memoização abaixo dele. */
+  return useMemo(() => ({
     reload,
     isLoading: state.isLoading,
     isAppending: state.isAppending,
@@ -322,5 +328,5 @@ export function useTransactionsData({
     hasMore,
     removeTransaction,
     setTransactionSettled,
-  };
+  }), [reload, state, hasMore, removeTransaction, setTransactionSettled]);
 }
