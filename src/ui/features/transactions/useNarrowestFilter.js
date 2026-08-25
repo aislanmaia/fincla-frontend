@@ -62,9 +62,41 @@ export function useNarrowestFilter({
       setIsLoading(false);
       // O "mais restritivo" é o que MAIS devolve quando sai — remover um filtro
       // que devolveria zero não ajudaria ninguém, então esses ficam de fora.
-      const best = rows
-        .filter((r) => typeof r.total === "number" && r.total > 0)
-        .sort((a, b) => b.total - a.total)[0];
+      const uteis = rows.filter((r) => typeof r.total === "number" && r.total > 0);
+      /* ESPECÍFICO ANTES DE GRANDE. Uma chave com ":" nomeia um VALOR
+         ("tag:#combustível"); sem ":", a faceta inteira ("tag").
+
+         Ordenar só por quantidade nunca nomearia um valor: tirar as duas tags
+         devolve por definição pelo menos tanto quanto tirar uma delas, então a
+         faceta ganharia sempre — e a frase dizia «o filtro "2 tags (E)"» quando
+         quem matou o resultado foi #combustível sozinho. Pior, o botão ao lado
+         removia as duas, mais do que a pessoa precisava perder.
+
+         Entre valores, e entre facetas, aí sim vale a quantidade. */
+      /* A preferência vale DENTRO de cada faceta, não sobre todas. Descartar
+         todo candidato de faceta assim que QUALQUER valor específico aparece
+         jogava fora facetas sem relação: com duas tags e um piso de valor, se
+         tirar a tag devolve 3 e tirar a faixa devolve 500, a frase afirmava
+         «o filtro "#a" é o que mais restringe: sem ele voltam 3» — falso — e o
+         botão removia o filtro errado.
+
+         Então: por faceta, o valor específico ganha do grupo (é a resposta mais
+         precisa para a MESMA pergunta); entre facetas, ganha quem devolve mais. */
+      const porFaceta = new Map();
+      for (const r of uteis) {
+        const sep = r.key.indexOf(":");
+        const faceta = sep > 0 ? r.key.slice(0, sep) : r.key;
+        const atual = porFaceta.get(faceta);
+        if (!atual) { porFaceta.set(faceta, r); continue; }
+        const rEspecifico = sep > 0;
+        const atualEspecifico = atual.key.includes(":");
+        if (rEspecifico !== atualEspecifico) {
+          if (rEspecifico) porFaceta.set(faceta, r);
+        } else if (r.total > atual.total) {
+          porFaceta.set(faceta, r);
+        }
+      }
+      const best = [...porFaceta.values()].sort((a, b) => b.total - a.total)[0];
       setResult(best ? { key: best.key, label: labelsByKey[best.key] || best.key, total: best.total } : null);
     });
 

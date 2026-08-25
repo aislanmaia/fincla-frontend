@@ -48,7 +48,7 @@ function normalizeForCompare(value) {
  *
  * @param {Array<{id: string, name: string, parent_category_tag_id?: string|null}>} rows
  * @param {Map<string, string>} categoryLabelById - id de categoria → rótulo PT
- * @returns {Array<{id: string, name: string, displayLabel: string}>}
+ * @returns {Array<{id: string, name: string, rawName?: string, displayLabel: string}>}
  */
 export function buildTagOptions(rows, categoryLabelById = new Map()) {
   const byName = new Map();
@@ -63,7 +63,7 @@ export function buildTagOptions(rows, categoryLabelById = new Map()) {
   const options = [];
   for (const [name, group] of byName) {
     if (group.length === 1) {
-      options.push({ id: String(group[0].id), name, displayLabel: name });
+      options.push({ id: String(group[0].id), name, rawName: group[0].rawName, displayLabel: name });
       continue;
     }
 
@@ -84,7 +84,7 @@ export function buildTagOptions(rows, categoryLabelById = new Map()) {
       // um prefixo curto (ex.: 8 chars) pode colidir de novo entre ids que
       // começam iguais, e aí voltaríamos pro mesmo bug com uma casca a mais.
       const displayLabel = candidateCounts.get(candidate) > 1 ? `${candidate} (${t.id})` : candidate;
-      options.push({ id: String(t.id), name, displayLabel });
+      options.push({ id: String(t.id), name, rawName: t.rawName, displayLabel });
     }
   }
 
@@ -95,6 +95,56 @@ export function buildTagOptions(rows, categoryLabelById = new Map()) {
 export function tagOptionsToDisplayMap(options) {
   const map = new Map();
   for (const opt of options ?? []) map.set(opt.displayLabel, opt.id);
+
+  /* APELIDOS — o `displayLabel` é a chave canônica, e estes são as outras
+     grafias pelas quais a MESMA tag pode chegar aqui. Cada um resolve um caso
+     em que a seleção era legítima e a tela travava mesmo assim:
+
+     1. NOME CRU, sem tradução. Uma visualização salva antes de o catálogo
+        passar a traduzir guardou "doctor" no localStorage. Sem apelido, abrir
+        essa view trava a lista com "a tag foi renomeada ou removida" — sobre
+        uma tag que está lá, intacta, só com outro rótulo. E não há migração
+        possível sem reescrever o armazenamento de todo mundo.
+
+     2. RÓTULO BASE, sem o sufixo de desambiguação. A linha desambigua por
+        transação ("mercado"), o catálogo desambigua pela página inteira
+        ("mercado · Alimentação"): quando um nome de seed traduzido colide com
+        uma tag do usuário, os dois lados produzem grafias diferentes para a
+        mesma tag e o clique na linha para de resolver.
+
+     Um apelido só entra se for ÚNICO — ambíguo, ele escolheria uma tag por
+     sorte, que é pior que travar. E nunca sobrescreve uma chave canônica: se
+     "mercado" é o `displayLabel` de alguém, é dessa pessoa que ele é. */
+  const candidatos = new Map();
+  for (const opt of options ?? []) {
+    const base = String(opt.displayLabel).split(" · ")[0].trim();
+    /* As formas que a LINHA produz. Os dois lados desambiguam de jeitos
+       diferentes — o catálogo pela categoria pai ("mercado · Alimentação"), a
+       linha pelo nome cru ou por um prefixo do id ("mercado (grocery)",
+       "mercado (a1b2c3d4)") — e é a grafia da LINHA que chega aqui quando
+       alguém clica no chip dela. Sem estes apelidos, clicar num chip de tag
+       colidida travava a lista inteira alegando que a tag foi removida, sobre
+       uma tag visível uma linha acima.
+
+       O apelido "base" sozinho nunca resolve isso: um `displayLabel` só ganha
+       o sufixo " · " quando há colisão, então a base é ambígua por construção e
+       cai na regra de unicidade abaixo. Ela fica porque é barata e cobre
+       grafias vindas de fora (views salvas antigas). */
+    const comoALinhaEscreve = [];
+    if (opt.rawName && opt.rawName.toLowerCase() !== String(opt.name).toLowerCase()) {
+      comoALinhaEscreve.push(`${opt.name} (${opt.rawName})`);
+    }
+    comoALinhaEscreve.push(`${opt.name} (${String(opt.id).slice(0, 8)})`);
+
+    for (const alias of [opt.rawName, opt.name, base, ...comoALinhaEscreve]) {
+      const chave = String(alias ?? "").trim();
+      if (!chave || map.has(chave)) continue;
+      const visto = candidatos.get(chave);
+      // `null` marca "ambíguo": visto com mais de um id, não serve de apelido.
+      candidatos.set(chave, visto === undefined ? opt.id : (visto === opt.id ? visto : null));
+    }
+  }
+  for (const [chave, id] of candidatos) if (id) map.set(chave, id);
   return map;
 }
 

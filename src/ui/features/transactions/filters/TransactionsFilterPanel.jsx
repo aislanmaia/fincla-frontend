@@ -58,6 +58,7 @@ export function TransactionsFilterPanel({
   allTags = [],
   allTagsLoading = false,
   allTagsError = false,
+  tagIdByLabel = null,
   facetCounts,
   activeFacets = [],
   onClearFacet,
@@ -74,7 +75,13 @@ export function TransactionsFilterPanel({
   // Acima de ~560 px o pane comporta as opções em grade. Abaixo disso duas
   // colunas espremem os rótulos das categorias, que são longos ("Lazer &
   // Entretenimento"), e cada opção passa a truncar.
-  const roomyPane = !compact && width >= 560;
+  /* O limiar mede o PAINEL, não a dock. `width` é a dock inteira e inclui o
+     trilho (136 px, e mais em idiomas de rótulo longo): comparar a dock com 560
+     dizia "cabe em duas colunas" a partir de um painel de 424 px, e diria coisas
+     diferentes em cada idioma para a mesma largura útil. Subtraindo o trilho, o
+     número passa a significar o que o nome diz. */
+  const LARGURA_DO_TRILHO = 136;
+  const roomyPane = !compact && width - LARGURA_DO_TRILHO >= 424;
   const activeTotal = Object.values(counts).reduce((a, b) => a + b, 0);
 
   return (
@@ -83,7 +90,18 @@ export function TransactionsFilterPanel({
       aria-label="Filtros"
       style={{
         display: "grid",
-        gridTemplateColumns: compact ? "minmax(0,1fr)" : "132px minmax(0,1fr)",
+        /* O trilho CRESCE com o rótulo mais largo, em vez de ter uma largura
+           cravada. 132 px foi medido para o português — "Recorrência" já batia
+           no limite e truncava —, e o app vai receber i18n: em alemão
+           "Zahlungsmethode" e "Wiederkehrend" são bem maiores, e uma largura
+           afinada para um idioma quebra em todos os outros.
+
+           `minmax(132px, max-content)`: nunca menor que hoje, e o suficiente
+           para o maior rótulo. O teto não está aqui e sim no botão
+           (`maxWidth`), porque é o item que o `max-content` mede — assim o
+           trilho não pode comer o painel se algum idioma trouxer um rótulo
+           absurdo, e aí o `ellipsis` volta a ser a última linha de defesa. */
+        gridTemplateColumns: compact ? "minmax(0,1fr)" : "minmax(132px, max-content) minmax(0,1fr)",
         gridTemplateRows: "minmax(0,1fr) auto",
         height: "100%",
         minHeight: 0,
@@ -180,6 +198,7 @@ export function TransactionsFilterPanel({
             allTags={allTags}
             allTagsLoading={allTagsLoading}
             allTagsError={allTagsError}
+            tagIdByLabel={tagIdByLabel}
             cardSel={filter.cardSel}
             setCardSel={filter.setCardSel}
             cards={cards}
@@ -278,19 +297,41 @@ function RailButton({ icon, label, count, on, onClick, compact }) {
         fontWeight: on ? 700 : 500,
         color: on ? T.ink : count > 0 ? T.blue : T.inkMid,
         textAlign: "left",
-        width: compact ? "auto" : "100%",
+        /* `auto`, não `100%`: dentro de uma trilha `max-content` uma largura
+           percentual é indefinida, e o navegador não conseguiria medir o
+           conteúdo para dimensionar a coluna. O `stretch` do flex já iguala
+           todos os botões à largura da trilha. */
+        width: "auto",
+        maxWidth: compact ? undefined : 208,
         flex: compact ? "none" : undefined,
-        whiteSpace: "nowrap",
+        /* `minWidth: 0` no trilho vertical: sem ele o botão nunca encolhe
+           abaixo do conteúdo, e o rótulo mais largo empurrava o contador para
+           FORA da caixa — "Pagamento" era o único que estourava, então só ele
+           aparecia desalinhado e por cima da borda do estado ativo. */
+        minWidth: compact ? undefined : 0,
+        whiteSpace: compact ? "nowrap" : undefined,
         cursor: "pointer",
       }}
     >
-      <span aria-hidden="true">{icon}</span>
-      <span>{label}</span>
+      <span aria-hidden="true" style={{ flex: "none" }}>{icon}</span>
+      {/* O rótulo é quem cede espaço. No trilho vertical ele cresce para
+          empurrar o contador até a borda — é isso que alinha TODOS os
+          contadores na mesma coluna, seja qual for o tamanho da palavra — e
+          trunca em vez de estourar. */}
+      <span
+        style={compact
+          ? { flex: "none" }
+          : { flex: 1, minWidth: 0, overflow: "hidden",
+              textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+      >
+        {label}
+      </span>
       {count > 0 && (
         <span
           style={{
             ...G,
-            marginLeft: compact ? 6 : "auto",
+            marginLeft: compact ? 6 : 0,
+            flex: "none",
             minWidth: 16,
             height: 16,
             padding: "0 4px",
@@ -363,7 +404,10 @@ function ActiveFacetsPane({ facets, onClearFacet, columns = 1 }) {
             <button
               type="button"
               onClick={() => onClearFacet?.(f.key)}
-              aria-label={`Remover filtro ${f.label}`}
+              /* O VALOR entra no rótulo: com a divisão por valor, três tags produziam
+                 três botões anunciados "Remover filtro Tags", indistinguíveis para
+                 quem usa leitor de tela — e ambíguos para `getByRole`. */
+              aria-label={`Remover filtro ${f.label}: ${f.value}`}
               style={{
                 ...G,
                 marginLeft: "auto",

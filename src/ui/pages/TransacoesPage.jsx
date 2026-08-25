@@ -1,12 +1,4 @@
-import React, {
-  useCallback,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useRouterState, useSearch } from "@tanstack/react-router";
 import { FC } from "../routing/searchContract.js";
 import {
@@ -39,7 +31,7 @@ import { useNarrowestFilter } from "../features/transactions/useNarrowestFilter.
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { TransactionsEmptyState } from "../features/transactions/TransactionsEmptyState.jsx";
 import { TransactionsSkeleton } from "../features/transactions/TransactionsSkeleton.jsx";
-import { ConfirmActionModal } from "../features/transactions/ConfirmAction.jsx";
+import { ConfirmActionInline, ConfirmActionModal } from "../features/transactions/ConfirmAction.jsx";
 import { ShortcutsModal } from "../features/transactions/ShortcutsModal.jsx";
 import { useTransactionsKeyboard } from "../features/transactions/useTransactionsKeyboard.js";
 import { useFocusTrap } from "../features/transactions/useFocusTrap.js";
@@ -91,8 +83,27 @@ import {
   filtersToCsvOptions,
   matchesValueRange,
 } from "../features/transactions/filters/filtersToLegacyParams.js";
+import { facetSentenceLabel } from "../features/transactions/filters/facetSentenceLabel.js";
+import { getPaymentMethodLabel } from "../features/transactions/filters/paymentMethodOptions.js";
 import { DisclosureChevron } from "../components/DisclosureChevron.jsx";
 import { usePullToRefresh } from "../features/transactions/usePullToRefresh.js";
+import { detailLabelPtForTag } from "../data/categoryLabels.js";
+
+/** `shortDateLabel` com identidade estável — ver `cacheDeRotuloDeData`. */
+function rotuloDeData(raw) {
+  const hoje = new Date();
+  const chave = `${raw}|${hoje.getFullYear()}-${hoje.getMonth()}-${hoje.getDate()}`;
+  let v = cacheDeRotuloDeData.get(chave);
+  if (v === undefined) {
+    v = shortDateLabel(raw, hoje);
+    /* Teto simples: a chave inclui a data de hoje, então o cache rotaciona
+       sozinho a cada dia; o limite só existe para uma sessão que role por
+       milhares de datas distintas. */
+    if (cacheDeRotuloDeData.size > 2000) cacheDeRotuloDeData.clear();
+    cacheDeRotuloDeData.set(chave, v);
+  }
+  return v;
+}
 
 const TRANSACTIONS_SEARCH_DEBOUNCE_MS = 1500;
 
@@ -223,6 +234,14 @@ const catColor = (label) => CAT_COLORS[label] || T.inkMid;
  *  coluna de 54 px sem quebrar; a data por extenso não cabia. */
 const MONTHS_SHORT = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
 const WEEKDAYS_SHORT = ["dom","seg","ter","qua","qui","sex","sáb"];
+/* Cache por data. `shortDateLabel` devolve um OBJETO ({top, sub}), e a linha o
+   recebe como prop: sem cache, cada render inventava um objeto novo para a
+   mesma data e a memoização da linha caía por completo. Medido: esta prop
+   sozinha respondia por 526 das quebras de igualdade ao abrir a dock.
+   A chave inclui o dia de hoje porque "hoje"/"ontem" dependem dele — virar o
+   dia com a aba aberta tem de reescrever os rótulos. */
+const cacheDeRotuloDeData = new Map();
+
 export function shortDateLabel(raw, today = new Date()) {
   if (!raw) return { top: "—", sub: "" };
   const parts = String(raw).split("/");
@@ -376,7 +395,18 @@ export const Tip = ({ label, children, pos = "top" }) => {
  *    único bloco da linha que pode desaparecer sem perda: data, descrição,
  *    valor e situação continuam à vista enquanto se decide o que fazer.
  */
-const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
+/* `memo` porque a lista é grande e a página inteira re-renderiza a cada estado
+   dela — abrir a dock, mudar de faceta, uma torrada aparecer. Medido em 1600 px
+   com 34 linhas: o clique que abre a dock custava um quadro de 183 ms, e ele
+   não era a montagem do painel (mantê-lo montado não mudou nada) — era esta
+   lista sendo reconstruída por um estado que não diz respeito a nenhuma linha.
+   O engasgo acontecia no quadro 5, antes de a transição começar: a animação
+   sempre foi suave, o que travava era o que vinha antes dela.
+
+   As props aguentam a comparação rasa: os callbacks são `useCallback`,
+   `quickActions` é `useMemo`, e `anchorCovering` devolve a âncora existente ou
+   `null`, nunca um objeto novo. */
+const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
   rowHeight = 48, showDate = true, dateLabel = "", quickActions = null,
   onFilterByCategory = null, onFilterByTag = null, wide = false, xwide = false,
   /* Largura da coluna de tags, em px, IGUAL para todas as linhas da página.
@@ -767,7 +797,7 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
           <Tip label={`Filtrar por ${tx.cat}`}>
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); onFilterByCategory(tx); }}
+              onClick={(e) => { e.stopPropagation(); onFilterByCategory(tx, e); }}
               aria-label={`Filtrar por categoria ${tx.cat}`}
               // NUNCA `font:"inherit"` aqui: `font` é atalho e reseta
               // `fontSize`/`fontWeight` declarados antes dele no mesmo objeto.
@@ -798,7 +828,7 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
               // `title` é o rótulo CRU: ele existe para deixar legível um nome
               // truncado ("mensal (a1b2c3d4)"). A ação mora no `aria-label`.
               <button key={tag} type="button" title={tag}
-                onClick={(e) => { e.stopPropagation(); onFilterByTag(tag); }}
+                onClick={(e) => { e.stopPropagation(); onFilterByTag(tag, e); }}
                 /* SOMAR, não trocar — e o rótulo precisa dizer isso. Categoria é
                    uma por transação, então clicar substitui; tag é várias, e
                    substituir faria o segundo clique desfazer o primeiro, que é o
@@ -809,10 +839,18 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
                     ? `Remover a tag ${tag} do filtro`
                     : `Adicionar a tag ${tag} ao filtro`
                 }
+                /* Borda TRANSPARENTE em repouso, não `none`: é ela que acende
+                   no hover sem mudar a caixa. Com `border: none`, acender no
+                   hover acrescentaria 2 px e o chip pularia — e era por isso
+                   que a tag não tinha a afordância que a categoria tem, embora
+                   as duas façam a mesma coisa ao clique. */
                 style={{ ...G, fontSize:MICRO_PX, fontWeight:600, color:T.inkMid,
-                  background:T.grayLight, border:"none", borderRadius:6,
-                  padding:"2px 7px", cursor:"pointer", maxWidth:TAG_MAX_PX,
-                  overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                  background:T.grayLight, border:"1px solid transparent", borderRadius:6,
+                  padding:"1px 6px", cursor:"pointer", maxWidth:TAG_MAX_PX,
+                  overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                  transition:"border-color var(--mo-fast, 120ms) var(--mo-fast-ease, ease-out)" }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = T.inkLight; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "transparent"; }}>
                 {tag}
               </button>
             ) : (
@@ -924,7 +962,8 @@ const TxRow = ({ tx, isMobile, isSelected, onSelect, coveringAnchor,
       </span>
     </div>
   );
-};
+});
+TxRow.displayName = "TxRow";
 
 /** Botão de 30 px da sanfona. Todos do mesmo tamanho: são ações do mesmo
  *  nível, e pesos visuais diferentes sugeririam uma hierarquia que não existe. */
@@ -1109,7 +1148,41 @@ const DetailPanel = ({
   setSettlingId,
   settleError,
   setSettleError,
+  /* Pedido de confirmação in-place (toque): `{ kind, tx }` ou `null`. No
+     desktop a pergunta vai num modal; aqui ela ocupa o lugar dos botões dentro
+     da própria sanfona, que já está aberta e já é o foco da tela. */
+  confirmInline = null,
+  setConfirmInline,
+  confirmInlineBusy = false,
+  onConfirmInline,
 }) => {
+  /* A sanfona CRESCE quando a pergunta entra — e perto do fim da lista ela
+     cresce para fora da tela: a confirmação nasce escondida, com os botões
+     abaixo da dobra, e a ação da pessoa parece não ter tido resposta.
+
+     `block: "nearest"` rola o MÍNIMO necessário: se já cabe, não mexe em nada.
+     Rolar sempre para o centro arrancaria a lista do lugar mesmo quando não
+     havia problema — e o que se quer aqui é caber, não recentralizar.
+
+     Os hooks ficam ANTES do `if (!tx)`: um `return` antecipado no meio deles
+     mudaria a ordem entre renders. */
+  const confirmRef = useRef(null);
+  const pedidoAberto =
+    confirmInline && tx && confirmInline.tx?.id === tx.id ? confirmInline.kind : null;
+  useEffect(() => {
+    if (!pedidoAberto) return undefined;
+    /* Um quadro de espera: no mesmo commit em que a pergunta entra, o elemento
+       ainda não tem altura, e rolar para uma caixa de zero pixel não rola nada. */
+    const raf = requestAnimationFrame(() => {
+      const semMovimento = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+      confirmRef.current?.scrollIntoView({
+        block: "nearest",
+        behavior: semMovimento ? "auto" : "smooth",
+      });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [pedidoAberto]);
+
   if (!tx) return null;
   const isReceita = tx.val > 0;
   return (
@@ -1152,7 +1225,12 @@ const DetailPanel = ({
                em 390 px colapsa para uma só e dobra a altura do painel. */
             ? { display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px 12px",
                 padding:"10px 12px 0" }
-            : { display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(150px, 1fr))",
+            /* QUATRO colunas fixas, como o §"linha" do artefato — não
+               `auto-fit`. Com `minmax(150px, 1fr)` a contagem seguia a largura:
+               em 1600 px davam SEIS colunas, e os campos ficavam esparramados
+               numa fileira fina que não se parecia com o desenho. Quatro é a
+               medida em que rótulo e valor ainda leem como par. */
+            : { display:"grid", gridTemplateColumns:"repeat(4, minmax(0, 1fr))",
                 gap:"10px 18px", padding:"4px 14px 0 107px" })
         : { flex:1, overflowY:"auto", overflowX:"hidden", padding:"16px 20px", display:"flex", flexDirection:"column", gap:0, minHeight:0 }}>
         {[
@@ -1163,7 +1241,7 @@ const DetailPanel = ({
                  mostra a categoria de qualquer forma. */
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); onFilterByCategory(tx); }}
+                onClick={(e) => { e.stopPropagation(); onFilterByCategory(tx, e); }}
                 aria-label={`Filtrar por categoria ${tx.cat}`}
                 title={`Filtrar por ${tx.cat}`}
                 style={{ ...G, fontFamily:"inherit", display:"flex", alignItems:"center",
@@ -1266,6 +1344,19 @@ const DetailPanel = ({
           "Editar" preto ocupando a largura inteira e a lixeira solta na ponta.
           Três pesos visuais diferentes para três ações do mesmo nível, e a
           altura de duas faixas onde cabe uma. */}
+      {/* A pergunta OCUPA o lugar dos botões: deixá-los visíveis por baixo dela
+          convidaria a responder duas vezes, e a resposta certa está aqui. */}
+      {pedidoAberto ? (
+        <div ref={confirmRef} style={{ padding: inline ? "10px 12px 12px" : "14px 20px" }}>
+          <ConfirmActionInline
+            kind={confirmInline.kind}
+            desc={tx.desc}
+            busy={confirmInlineBusy}
+            onConfirm={() => onConfirmInline?.(confirmInline)}
+            onCancel={() => setConfirmInline?.(null)}
+          />
+        </div>
+      ) : (
       <div style={ inline && isMobileDetail
         /* Botões em 2×2 no mobile: em linha, quatro deles de 30 px ficam com
            ~85 px cada num aparelho de 390 — alvo de toque menor que o mínimo
@@ -1288,6 +1379,13 @@ const DetailPanel = ({
                  aqui; no toque segue direto, porque abrir a sanfona já foi o
                  gesto deliberado. */
               if (pedirConfirmacao?.(tx.settled ? "unsettle" : "settle", tx)) return;
+              /* No toque a pergunta é in-place, aqui mesmo. Liquidar mexe no
+                 saldo — a mesma classe de consequência da exclusão —, e a única
+                 diferença entre as duas superfícies é ONDE se pergunta. */
+              if (setConfirmInline) {
+                setConfirmInline({ kind: tx.settled ? "unsettle" : "settle", tx });
+                return;
+              }
               const next = !tx.settled;
               // Demo/mock não tem backend: sem este ramo o botão fica clicável e
               // não faz nada, que é pior que não existir.
@@ -1384,6 +1482,9 @@ const DetailPanel = ({
           <AccButton tone="red" onClick={(e) => {
             e.stopPropagation();
             if (pedirConfirmacao?.("delete", tx)) return;
+            /* No toque a pergunta é in-place. `setDeletingId` continua sendo o
+               caminho para quem não passa o setter (testes, mocks). */
+            if (setConfirmInline) { setConfirmInline({ kind: "delete", tx }); return; }
             setDeletingId(tx.id);
           }}>
             🗑 Excluir
@@ -1399,10 +1500,11 @@ const DetailPanel = ({
         ) : null}
         {inline && !isMobileDetail && deletingId !== tx.id && (
           <span style={{ ...G, marginLeft:"auto", fontSize:MICRO_PX, color:T.inkLight }}>
-            Enter expande · Esc fecha
+            Enter expande · E edita · Del exclui
           </span>
         )}
       </div>
+      )}
     </div>
   );
 };
@@ -1515,7 +1617,11 @@ function TransacoesPageBody({
      disso deixaria a lista mais estreita que o painel que a filtra. */
   const dockPanelWidth = useMemo(() => {
     const content = Math.max(0, viewportWidth - SIDEBAR_WIDTH);
-    return viewportWidth >= 1600 ? Math.min(860, Math.round(content * 0.5)) : 396;
+    /* 420 e não 396: o trilho agora se dimensiona pelo rótulo mais largo, e
+       nesta faixa ele cresce ~24 px em relação aos 132 fixos de antes. Sem
+       compensar, esses pixels sairiam do painel de opções — que é onde os
+       cartões de escolha vivem e onde a largura faz falta de verdade. */
+    return viewportWidth >= 1600 ? Math.min(860, Math.round(content * 0.5)) : 420;
   }, [viewportWidth]);
 
   /* Qual faceta o painel mostra. Começa em "Período" porque é a que mais muda
@@ -1530,11 +1636,36 @@ function TransacoesPageBody({
   useEffect(() => {
     const el = listScrollRef.current;
     if (!el || typeof ResizeObserver === "undefined") return undefined;
+    let t = null;
+    /* O "já mediu alguma vez" vive num REF, não no updater do `setState`.
+       Um updater tem de ser puro: o React pode reexecutá-lo (StrictMode, e
+       filas de render reprocessadas quando um render concorrente é
+       interrompido), e com `clearTimeout`/`setTimeout` lá dentro cada
+       reexecução cancelava e rearmava a medição — uma rajada de renders alheios
+       dentro da janela ia empurrando a medida para a frente indefinidamente. */
+    let jaMediu = false;
     const ro = new ResizeObserver(([entry]) => {
-      setListWidth(Math.round(entry.contentRect.width));
+      const w = Math.round(entry.contentRect.width);
+      /* A PRIMEIRA medida vale na hora: até ela chegar a lista usa o palpite
+         pela viewport, e adiar isso faria as colunas nascerem erradas. */
+      if (!jaMediu) {
+        jaMediu = true;
+        setListWidth(w);
+        return;
+      }
+      /* Depois disso, ESPERA a largura assentar. Abrir a dock anima a largura
+           por 300 ms, e este observer disparava a cada quadro: cada disparo era
+           um `setState` na página inteira, re-renderizando as 34 linhas e
+           refazendo a medição das colunas no canvas. Medido em 1600 px: 593 ms
+           de script para uma animação de 300 ms — layout e estilo somavam menos
+           de 60. A largura intermediária não serve para nada aqui: o que ela
+           alimenta são LIMIARES (o rótulo da ação rápida em 1000 px) e a medida
+           das colunas, e os dois só precisam do valor final. */
+      clearTimeout(t);
+      t = setTimeout(() => setListWidth(w), 90);
     });
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => { clearTimeout(t); ro.disconnect(); };
   }, [isMobile]);
 
   const [chipsBudget, setChipsBudget] = useState(null);
@@ -1542,6 +1673,12 @@ function TransacoesPageBody({
      na hora tira o elemento antes de a largura poder animar até zero. */
   const [dockFechando, setDockFechando] = useState(false);
   const [confirmAcao, setConfirmAcao] = useState(null);
+  /* No TOQUE a pergunta é in-place, dentro da sanfona — que já está aberta e já
+     é o foco da tela; um modal ali seria uma camada a mais para ler e para
+     sair. O componente existia (`ConfirmActionInline`) e nunca tinha sido
+     ligado: a exclusão armava dois botões soltos na grade da sanfona, e
+     liquidar não perguntava nada. */
+  const [confirmInline, setConfirmInline] = useState(null);
   /* `rovingId` guarda a linha lembrada; `rovingStopId` é a que REALMENTE está
      na tela. A comparação era `tx.id === rovingId` com `rovingId` sempre string
      e `tx.id` numérico no mock: `1 === "1"` é falso, então nenhuma linha era a
@@ -1851,13 +1988,53 @@ function TransacoesPageBody({
     }
     return map;
   }, [categoryTagsData.categories]);
+
+  /* id da categoria → o nome que o BACKEND guarda (`apiName`), não o rótulo
+     exibido. `GET /v1/transactions?category=` casa pelo nome armazenado, e as
+     categorias do seed são gravadas em inglês (`transport`) enquanto a tela
+     mostra "Transporte" — mandar o rótulo devolvia ZERO linhas, medido.
+     São dois mapas de propósito: um responde "como isto se chama para o
+     usuário", o outro "como isto se chama para a API", e confundi-los é
+     exatamente o defeito que este par existe para impedir. */
+  const categoryApiNameById = useMemo(() => {
+    const map = new Map();
+    for (const c of categoryTagsData.categories || []) {
+      if (c?.id != null && c.apiName) map.set(String(c.id), c.apiName);
+    }
+    return map;
+  }, [categoryTagsData.categories]);
   // Achado 1: tags não-categoria podem repetir o NOME sob categorias-pai
   // diferentes (ex.: "mensal" em Casa e em Trabalho) — `buildTagOptions`
   // desambigua o rótulo exibido quando isso acontece, então cada opção do
   // painel resolve para um único id, nunca colapsa duas tags num chip só.
+  /* O catálogo entra JÁ TRADUZIDO, com a mesma função que a linha usa.
+     Sem isto havia duas verdades para a mesma tag: a linha mostrava "médico"
+     (`detailLabelPtForTag` traduz as tags do seed) e o catálogo guardava
+     "doctor", o nome cru. Clicar no chip da linha gravava "médico" no filtro,
+     a resolução procurava esse rótulo num catálogo que só conhecia "doctor",
+     não achava — e a tela travava com "a tag não foi encontrada — pode ter sido
+     renomeada ou removida", sobre uma tag que estava visível na linha de cima.
+
+     E o defeito tinha um segundo lado, igualmente visível: o painel de filtros
+     e os chips ofereciam a tag em INGLÊS, num app em PT-BR.
+
+     A tradução vale só para tags do seed (`is_default`); tag criada por
+     usuário passa intacta. */
+  const tagRowsPt = useMemo(
+    () => (tagCatalog.rows || []).map((row) => {
+      const pt = detailLabelPtForTag(row);
+      /* `rawName` sobrevive à tradução: é por ele que uma visualização salva
+         ANTES desta mudança — que guardou "doctor" no localStorage — continua
+         resolvendo. Sem ele, abrir a view travaria a lista alegando que a tag
+         foi removida, e não há migração possível sem reescrever o
+         armazenamento de todo mundo. */
+      return pt && pt !== row?.name ? { ...row, name: pt, rawName: row.name } : row;
+    }),
+    [tagCatalog.rows],
+  );
   const tagOptions = useMemo(
-    () => buildTagOptions(tagCatalog.rows, categoryLabelById),
-    [tagCatalog.rows, categoryLabelById],
+    () => buildTagOptions(tagRowsPt, categoryLabelById),
+    [tagRowsPt, categoryLabelById],
   );
   const tagDisplayToId = useMemo(() => tagOptionsToDisplayMap(tagOptions), [tagOptions]);
   // A facet voltou a ser multi agora que `tag_id` é repetível: resolvemos a
@@ -1926,6 +2103,7 @@ function TransacoesPageBody({
           limit: visible,
           debouncedSearch,
           totalCategories: totalCategoriesForBackend,
+          catLabelById: categoryApiNameById,
           tagIds: resolvedTagIds,
         },
       ),
@@ -1945,6 +2123,11 @@ function TransacoesPageBody({
       filter.tagMode,
       visible,
       totalCategoriesForBackend,
+      /* O MAPA, não só a contagem. Renomear uma categoria não muda quantas
+         existem, então `totalCategoriesForBackend` não se mexe — e o memo
+         seguia mandando `category=<nome antigo>`, devolvendo zero linhas com o
+         chip já exibindo o nome novo. */
+      categoryApiNameById,
       resolvedTagIds,
     ],
   );
@@ -2011,9 +2194,61 @@ function TransacoesPageBody({
   // valor, que existe no código e nunca chegava a aparecer.
   const [expandedFacet, setExpandedFacet] = useState(null);
   const anyFacetPanelOpen = expandedFacet != null || (!isMobile && wideDesktopFiltersOpen);
+  /* As contagens do painel ignoram a seleção da PRÓPRIA faceta.
+     Dentro de uma faceta a combinação é OU, então "quantas em Alimentação?" tem
+     de ser respondida sem o recorte de Categoria aplicado. Perguntando com ele,
+     a resposta vira "quantas em Alimentação E Compras Pessoais" — e como uma
+     transação tem uma categoria só, o resultado é zero para todas as outras.
+     Era isso: escolher uma categoria zerava o contador de todas as demais, e
+     clicar numa "zerada" trazia transações e restaurava o número.
+
+     Só a faceta ABERTA precisa disso — é a única cujos contadores estão à
+     vista —, então continua sendo UMA requisição, não uma por faceta. */
+  const NEUTRO_POR_FACETA = useMemo(() => ({
+    categoria: { cats: [] },
+    tag: { tagIds: [] },
+    forma: { method: [] },
+    tipo: { type: "todos" },
+    valor: { valueMin: "", valueMax: "" },
+    recorrencia: { rec: "any" },
+    situacao: { settlement: "todas" },
+  }), []);
+
+  /* Qual faceta está com os contadores à vista. São DUAS superfícies: a barra
+     (mobile e desktop compacto) anuncia por `expandedFacet`, e o painel
+     ancorado do desktop largo tem sempre uma selecionada em `panelFacet`.
+     Olhar só a segunda deixava o mobile com o defeito inteiro — que é
+     exatamente onde ele foi reportado depois. */
+  const facetaComContadoresAVista = expandedFacet ?? (isMobile ? null : panelFacet);
+
+  const filtrosParaContagem = useMemo(() => {
+    const neutro = NEUTRO_POR_FACETA[facetaComContadoresAVista];
+    if (!neutro) return transactionsFilters;
+    const { tagIds: zerarTags, ...estado } = neutro;
+    return filtersToLegacyParams(
+      {
+        type: filter.type, method: filter.method, cats: filter.cats,
+        period: filter.period, customFrom: filter.customFrom, customTo: filter.customTo,
+        sort: filter.sort, valueMin: filter.valueMin, valueMax: filter.valueMax,
+        settlement: filter.settlement, rec: filter.rec, tagMode: filter.tagMode,
+        ...estado,
+      },
+      {
+        limit: visible,
+        debouncedSearch,
+        totalCategories: totalCategoriesForBackend,
+        catLabelById: categoryApiNameById,
+        tagIds: zerarTags !== undefined ? [] : resolvedTagIds,
+      },
+    );
+  }, [NEUTRO_POR_FACETA, facetaComContadoresAVista, transactionsFilters, filter.type, filter.method,
+      filter.cats, filter.period, filter.customFrom, filter.customTo, filter.sort,
+      filter.valueMin, filter.valueMax, filter.settlement, filter.rec, filter.tagMode,
+      visible, debouncedSearch, totalCategoriesForBackend, categoryApiNameById, resolvedTagIds]);
+
   const facetCounts = useTransactionsFacetCounts({
     organizationId,
-    filters: transactionsFilters,
+    filters: filtrosParaContagem,
     enabled: shouldUseRealData && !tagFilterBlocked && anyFacetPanelOpen,
     refreshToken: transactionsRefreshToken,
   });
@@ -2683,25 +2918,111 @@ function TransacoesPageBody({
           limit: 1,
           debouncedSearch: dropSearch != null ? dropSearch : debouncedSearch,
           totalCategories: totalCategoriesForBackend,
+          catLabelById: categoryApiNameById,
           tagIds: dropTagIds != null ? dropTagIds : resolvedTagIds,
         },
       );
     }
+    /* Candidatos POR VALOR, além dos por faceta. Com mais de uma tag (ou mais
+       de uma categoria) selecionada, quem matou o resultado costuma ser UMA
+       delas — e a frase só ajuda se disser qual. Cada entrada refaz a mesma
+       pergunta sem AQUELE valor; a chave leva ":" para o cálculo saber que ela
+       é específica e preferi-la.
+
+       Só quando há mais de um valor: com um só, remover o valor e remover a
+       faceta são a mesma coisa, e duas requisições diriam o mesmo. */
+    if (active.has("tag") && filter.tags.length > 1) {
+      filter.tags.forEach((rotulo, i) => {
+        const idsSemEsta = resolvedTagIds.filter((_, j) => j !== i);
+        out[`tag:${rotulo}`] = filtersToLegacyParams(
+          { ...base },
+          {
+            limit: 1,
+            debouncedSearch,
+            totalCategories: totalCategoriesForBackend,
+            catLabelById: categoryApiNameById,
+            tagIds: idsSemEsta,
+          },
+        );
+      });
+    }
+    if (active.has("categoria") && filter.cats.length > 1) {
+      filter.cats.forEach((id, i) => {
+        out[`categoria:${id}`] = filtersToLegacyParams(
+          { ...base, cats: filter.cats.filter((_, j) => j !== i) },
+          {
+            limit: 1,
+            debouncedSearch,
+            totalCategories: totalCategoriesForBackend,
+            catLabelById: categoryApiNameById,
+            tagIds: resolvedTagIds,
+          },
+        );
+      });
+    }
     return out;
   }, [
     listFiltersActive, allFacets, debouncedSearch, filter.type, filter.method,
+    filter.tags,
     filter.cats, filter.period, filter.customFrom, filter.customTo, filter.sort,
     filter.valueMin, filter.valueMax, filter.settlement, filter.rec, filter.tagMode,
-    totalCategoriesForBackend, resolvedTagIds,
+    totalCategoriesForBackend, categoryApiNameById, resolvedTagIds,
   ]);
 
   const facetLabels = useMemo(() => {
     // Sem aspas aqui: o texto do vazio já envolve o rótulo em aspas curvas, e
     // as duas juntas viravam «busca "termo"» dentro de outro par de aspas.
     const map = { busca: `busca ${debouncedSearch}` };
-    for (const f of allFacets) map[f.key] = `${f.label}: ${f.value}`;
+    /* Ver `facetSentenceLabel`: o prefixo só entra quando o valor ainda não
+       nomeia a faceta. */
+    for (const f of allFacets) map[f.key] = facetSentenceLabel(f.label, f.value);
+    /* Rótulos dos candidatos POR VALOR. Estes já se nomeiam sozinhos — a
+       pessoa reconhece "#combustível" sem precisar do prefixo "Tags:". */
+    for (const rotulo of filter.tags) map[`tag:${rotulo}`] = `#${rotulo}`;
+    for (const id of filter.cats) {
+      map[`categoria:${id}`] = categoryLabelById.get(String(id)) || String(id);
+    }
     return map;
-  }, [allFacets, debouncedSearch]);
+  }, [allFacets, debouncedSearch, filter.tags, filter.cats, categoryLabelById]);
+
+  /* Um item por VALOR aplicado, não por faceta.
+     A aba "Ativos" existe para tirar filtros rapidamente, e agrupando eles
+     ficava "Categoria: 2 categorias" com um ✕ só — que remove as DUAS. Quem
+     quer tirar uma tinha de sair dali, abrir a faceta e desmarcar. O artefato
+     mostra cada valor aplicado com a própria saída, e é isso que faz a aba
+     valer a pena.
+
+     A chave leva ":" e é a mesma convenção que `clearFacetAndResetPage`
+     entende — a mesma que o vazio semântico usa para nomear um valor. */
+  const activeFilterEntries = useMemo(() => {
+    const out = [];
+    /* A BUSCA entra aqui. Ela é um chip da barra como os outros e entra na
+       conta do "+N" — mas o painel de Ativos só via `allFacets`. Com o "+N"
+       levando para cá, um termo de busca escondido virava um filtro sem saída:
+       o botão prometia "ver os N filtros ativos", o painel mostrava N−1, e o
+       ✕ da busca não existia em lugar nenhum. */
+    if (debouncedSearch) {
+      out.push({ key: "busca", label: "Busca", value: debouncedSearch, icon: "search" });
+    }
+    for (const f of allFacets) {
+      if (!f.active) continue;
+      if (f.key === "categoria" && filter.cats.length > 1) {
+        for (const id of filter.cats) {
+          out.push({ ...f, key: `categoria:${id}`,
+            value: categoryLabelById.get(String(id)) || String(id) });
+        }
+      } else if (f.key === "tag" && filter.tags.length > 1) {
+        for (const t of filter.tags) out.push({ ...f, key: `tag:${t}`, value: `#${t}` });
+      } else if (f.key === "forma" && filter.method.length > 1) {
+        for (const m of filter.method) {
+          out.push({ ...f, key: `forma:${m}`, value: getPaymentMethodLabel([m]) });
+        }
+      } else {
+        out.push(f);
+      }
+    }
+    return out;
+  }, [allFacets, debouncedSearch, filter.cats, filter.tags, filter.method, categoryLabelById]);
 
   const activeFacetsForSavedViews = useMemo(
     () =>
@@ -2725,14 +3046,33 @@ function TransacoesPageBody({
    * recorte diferente do que o chip promete, e um clique sem efeito é melhor
    * que um recorte errado com o chip aceso.
    */
+  /* `filter` é recriado a cada render (o hook devolve estado + setters num
+     objeto literal), então usá-lo como dependência tornava estes dois callbacks
+     instáveis — e eles são props de TODA linha. Medido: 526 quebras de
+     igualdade por gesto, cada uma re-renderizando as 34 linhas. O ref dá acesso
+     ao valor atual sem entrar na identidade do callback. */
+  const filterRef = useRef(filter);
+  filterRef.current = filter;
+
+  /* O mesmo VOO do "N a pagar": o chip clicado se destaca e viaja até a faixa
+     de filtros aplicados. Sem ele, a pílula some da linha e reaparece no topo
+     sem nada ligar as duas coisas — o que se lê como "sumiu", não como
+     "virou filtro". A faixa é o mesmo destino nos três casos, porque é onde
+     todo filtro aplicado passa a morar. */
+  const voarParaOsChips = useCallback((e) => {
+    const alvo = document.querySelector('[data-fly-target="filtros"]');
+    if (e?.currentTarget && alvo) flyToChip(e.currentTarget, alvo);
+  }, []);
+
   const filterByCategoryFromRow = useCallback(
-    (tx) => {
+    (tx, e) => {
       const hit = categoriesForFilter.find((c) => c.label === tx.cat);
       if (!hit) return;
-      filter.setCats([hit.id]);
+      voarParaOsChips(e);
+      filterRef.current.setCats([hit.id]);
       setVisible(PAGE_SIZE);
     },
-    [categoriesForFilter, filter, PAGE_SIZE],
+    [categoriesForFilter, PAGE_SIZE, voarParaOsChips],
   );
 
   /** Mesma ideia para as tags da linha — a facet Tags guarda o rótulo. */
@@ -2742,12 +3082,16 @@ function TransacoesPageBody({
      faria o segundo clique desfazer o primeiro, que é o oposto do que se quer
      ao clicar em duas tags seguidas. */
   const filterByTagFromRow = useCallback(
-    (tag) => {
-      const atuais = filter.tags || [];
-      filter.setTags(atuais.includes(tag) ? atuais.filter((t) => t !== tag) : [...atuais, tag]);
+    (tag, e) => {
+      const atuais = filterRef.current.tags || [];
+      const removendo = atuais.includes(tag);
+      // Só voa ao ADICIONAR: tirar do filtro é o caminho contrário, e um clone
+      // indo PARA a faixa enquanto o chip sai dela diria o oposto do que houve.
+      if (!removendo) voarParaOsChips(e);
+      filterRef.current.setTags(removendo ? atuais.filter((t) => t !== tag) : [...atuais, tag]);
       setVisible(PAGE_SIZE);
     },
-    [filter, PAGE_SIZE],
+    [PAGE_SIZE, voarParaOsChips],
   );
 
   /** "Sem filtros" / "3 filtros" — o que o desfazer vai devolver. */
@@ -2816,6 +3160,24 @@ function TransacoesPageBody({
 
   const clearFacetAndResetPage = useCallback(
     (key) => {
+      /* Chave com ":" nomeia UM VALOR ("tag:combustível"), não a faceta. O
+         botão do vazio promete remover exatamente o que a frase nomeou — tirar
+         a faceta inteira ali faria a pessoa perder as outras tags junto, sem
+         ter pedido. */
+      const sep = String(key).indexOf(":");
+      if (sep > 0) {
+        const faceta = key.slice(0, sep);
+        const valor = key.slice(sep + 1);
+        if (faceta === "tag") {
+          filter.setTags((filter.tags || []).filter((t) => t !== valor));
+        } else if (faceta === "categoria") {
+          filter.setCats((filter.cats || []).filter((c) => String(c) !== valor));
+        } else if (faceta === "forma") {
+          filter.setMethod((filter.method || []).filter((m) => String(m) !== valor));
+        }
+        setVisible(PAGE_SIZE);
+        return;
+      }
       if (key === "busca") setSearchInput("");
       else filter.clearFacet(key);
       setVisible(PAGE_SIZE);
@@ -2907,6 +3269,7 @@ function TransacoesPageBody({
     categories: categoriesForFilter,
     cards: cardsForFilter,
     allTags: allTagsForFilter,
+    tagIdByLabel: tagDisplayToId,
     // Achado 5: sem isto o painel mostra "Nenhuma tag cadastrada" enquanto o
     // catálogo ainda está a caminho — parece "você não tem tags" quando é só
     // um instante de carregamento.
@@ -3216,6 +3579,34 @@ function TransacoesPageBody({
     [flashSettled, filter.settlement, startRowLeave, shouldUseRealData, onTransactionsInvalidate],
   );
 
+  const quickActionsRef = useRef(null);
+
+  /* Executa a resposta da pergunta in-place. Mesmos caminhos das ações do
+     desktop — a diferença é ONDE se pergunta, não o que acontece depois. */
+  const [confirmInlineBusy, setConfirmInlineBusy] = useState(false);
+  const responderConfirmInline = useCallback(async (pedido) => {
+    if (!pedido || confirmInlineBusy) return;
+    setConfirmInlineBusy(true);
+    try {
+      if (pedido.kind === "delete") {
+        setExcluindoId(pedido.tx.id);
+        if (shouldUseRealData) await transactionsData.removeTransaction(pedido.tx.id);
+        else setMockTxList((cur) => cur.filter((t) => t.id !== pedido.tx.id));
+        setConfirmInline(null);
+        setSelected((cur) => (cur && cur.id === pedido.tx.id ? null : cur));
+        startRowLeave(pedido.tx.id);
+      } else {
+        setConfirmInline(null);
+        await quickActionsRef.current?.onSettleConfirmado(pedido.tx);
+      }
+    } catch (e) {
+      setSettleError(e?.message || "Não foi possível concluir a ação.");
+    } finally {
+      setExcluindoId(null);
+      setConfirmInlineBusy(false);
+    }
+  }, [confirmInlineBusy, shouldUseRealData, transactionsData, startRowLeave]);
+
   const quickActions = useMemo(() => ({
     /* Marca a origem ANTES de navegar: é ela que traz o foco de volta ao
        fechar o modal. Vale para o ✎ da linha e para a tecla E — os dois passam
@@ -3234,7 +3625,7 @@ function TransacoesPageBody({
        No toque continua na sanfona, que já está aberta e já é o foco da tela:
        um modal ali seria uma camada a mais para ler e para sair. */
     onDelete: (tx) => {
-      if (isMobile) { setSelected(tx); setDeletingId(tx.id); return; }
+      if (isMobile) { setSelected(tx); setConfirmInline({ kind: "delete", tx }); return; }
       setConfirmAcao({ kind: "delete", tx });
     },
     /* Liquidar TAMBÉM pergunta no desktop. Ela muda o saldo — o mesmo tipo de
@@ -3244,7 +3635,11 @@ function TransacoesPageBody({
        No toque continua direto: lá a ação já exige o gesto deliberado de abrir
        a sanfona ou arrastar a linha, que é a confirmação. */
     onSettle: (tx) => {
-      if (isMobile) { quickActions.onSettleConfirmado(tx); return; }
+      if (isMobile) {
+        setSelected(tx);
+        setConfirmInline({ kind: tx.settled ? "unsettle" : "settle", tx });
+        return;
+      }
       setConfirmAcao({ kind: tx.settled ? "unsettle" : "settle", tx });
     },
     onSettleConfirmado: async (tx) => {
@@ -3305,8 +3700,14 @@ function TransacoesPageBody({
         setSettlingId(null);
       }
     },
+    /* `isMobile` É dependência: `onDelete` e `onSettle` se ramificam nele.
+       Sem ele aqui, cruzar os 768 px sem tocar em nenhuma outra dep mantinha o
+       ramo velho — num desktop recém-redimensionado o 🗑 abria a confirmação da
+       sanfona em vez do modal, e o ✓ liquidava SEM perguntar. */
   }), [onEditTx, onDuplicateTx, settlingId, shouldUseRealData, transactionsData,
-      onTransactionsInvalidate, flashSettled, filter.settlement, startRowLeave]);
+      onTransactionsInvalidate, flashSettled, filter.settlement, startRowLeave, isMobile]);
+  quickActionsRef.current = quickActions;
+
 
   /* Os atalhos usam os MESMOS caminhos das ações rápidas — nenhuma segunda
      implementação de liquidar/excluir, que é onde as duas divergiriam. */
@@ -3427,12 +3828,21 @@ function TransacoesPageBody({
   /* Os chips do que está filtrando, já com o "＋ Filtros" embutido. Abaixo de
      1200 px eles recolhem para o contador do próprio botão: nessa largura não
      cabem sem espremer a busca. */
+  /* O "+N" leva à aba "Ativos", abrindo a dock se preciso. É o caminho curto
+     entre "há mais filtros do que cabem aqui" e "quero tirar alguns". */
+  const abrirAtivos = useCallback(() => {
+    setPanelFacet("ativos");
+    if (isDesktopCompact) setCompactDesktopFiltersOpen(true);
+    else setWideDesktopFiltersOpen(true);
+  }, [isDesktopCompact]);
+
   const commandBarChips = (
     <TransactionsFilterChips
       facets={allFacets}
       searchActive={Boolean(debouncedSearch)}
       searchLabel={debouncedSearch}
       onOpenFacet={openFacetFromChip}
+      onAbrirAtivos={abrirAtivos}
       onClearFacet={clearFacetAndResetPage}
       onClearAll={clearAll}
       /* Sem escada de breakpoints: quem decide é o orçamento medido pela
@@ -3452,6 +3862,7 @@ function TransacoesPageBody({
       searchActive={Boolean(debouncedSearch)}
       searchLabel={debouncedSearch}
       onOpenFacet={openFacetFromChip}
+      onAbrirAtivos={abrirAtivos}
       onClearFacet={clearFacetAndResetPage}
       onClearAll={clearAll}
       collapsed
@@ -3682,7 +4093,7 @@ function TransacoesPageBody({
                     coveringAnchor={anchorCovering(tx, balanceAnchors)}
                     rowHeight={listRowHeight}
                     showDate={!isGrouped}
-                    dateLabel={shortDateLabel(tx.date)}
+                    dateLabel={rotuloDeData(tx.date)}
                     quickActions={quickActions}
                     onFilterByCategory={filterByCategoryFromRow}
                     onFilterByTag={filterByTagFromRow}
@@ -3736,6 +4147,10 @@ function TransacoesPageBody({
                         deletingId={deletingId}
                         setDeletingId={setDeletingId}
                         marcarExcluindo={setExcluindoId}
+                        confirmInline={confirmInline}
+                        setConfirmInline={setConfirmInline}
+                        confirmInlineBusy={confirmInlineBusy}
+                        onConfirmInline={responderConfirmInline}
                         onRowLeave={startRowLeave}
                         onDuplicateTx={onDuplicateTx}
                         onFilterByCategory={filterByCategoryFromRow}
@@ -4438,10 +4853,11 @@ function TransacoesPageBody({
               categories={categoriesForFilter}
               cards={cardsForFilter}
               allTags={allTagsForFilter}
+              tagIdByLabel={tagDisplayToId}
               allTagsLoading={shouldUseRealData && tagCatalog.loading}
               allTagsError={shouldUseRealData && Boolean(tagCatalog.error)}
               facetCounts={facetCounts}
-              activeFacets={allFacets.filter((f) => f.active)}
+              activeFacets={activeFilterEntries}
               onClearFacet={clearFacetAndResetPage}
               onClearAll={clearAll}
               onApply={() => setWideDesktopFiltersOpen(false)}

@@ -6,6 +6,7 @@ import {
   tagFilterStatusMessage,
   tagOptionsToDisplayMap,
 } from "../../filters/tagCatalogResolution.js";
+import { detailLabelPtForTag } from "../../../../data/categoryLabels.js";
 
 // fincla-frontend#96 — revisão adversarial da PR #96 (achados 1, 3, 4).
 // Estas provas são desenhadas para reprovar a implementação ANTERIOR de cada
@@ -226,5 +227,133 @@ describe("isTagFilterBlocked / tagFilterStatusMessage", () => {
     expect(error).toMatch(/não foi possível/i);
     expect(unresolved).toMatch(/tag-x/);
     expect(new Set([loading, error, unresolved]).size).toBe(3);
+  });
+});
+
+/* ── O catálogo e a LINHA falam a mesma língua ───────────────────────────── */
+describe("rótulo do catálogo × rótulo da linha", () => {
+  /* O bug: a linha mostra "médico" (`detailLabelPtForTag` traduz as tags do
+     seed) e o catálogo guardava "doctor", o nome cru da API. Clicar no chip da
+     linha gravava "médico" no filtro, a resolução procurava esse rótulo num
+     catálogo que só conhecia "doctor" — e a tela travava com "a tag não foi
+     encontrada, pode ter sido renomeada ou removida", sobre uma tag visível na
+     linha logo acima. O defeito tinha um segundo lado igualmente visível: o
+     painel oferecia a tag em INGLÊS num app em PT-BR.
+
+     A ponte é alimentar `buildTagOptions` com o nome JÁ traduzido — é o que a
+     página faz. Este teste guarda a consequência: o rótulo que a linha exibe
+     resolve para o id que o backend entende. */
+  it("o rótulo PT que a linha exibe resolve para o id da tag", () => {
+    const linhas = [
+      { id: "id-doctor", name: detailLabelPtForTag({ name: "doctor", is_default: true }) },
+      { id: "id-grocery", name: detailLabelPtForTag({ name: "grocery", is_default: true }) },
+    ];
+    const opcoes = buildTagOptions(linhas, new Map());
+    const mapa = tagOptionsToDisplayMap(opcoes);
+    // "médico" é exatamente o que a linha pinta no chip.
+    expect(mapa.get("médico")).toBe("id-doctor");
+    expect(mapa.get("mercado")).toBe("id-grocery");
+    // E o nome cru NÃO é mais oferecido: o app é PT-BR.
+    expect(mapa.has("doctor")).toBe(false);
+  });
+
+  it("tag criada pelo usuário passa intacta — a tradução é só do seed", () => {
+    const nome = detailLabelPtForTag({ name: "doctor", is_default: false });
+    expect(nome).toBe("doctor");
+    const mapa = tagOptionsToDisplayMap(
+      buildTagOptions([{ id: "id-usuario", name: nome }], new Map()),
+    );
+    expect(mapa.get("doctor")).toBe("id-usuario");
+  });
+});
+
+/* ── Apelidos: as outras grafias pelas quais a MESMA tag chega ───────────── */
+describe("apelidos de rótulo", () => {
+  /* Achado do review: uma visualização salva ANTES de o catálogo traduzir
+     guardou "doctor" no localStorage. Sem apelido, abrir essa view trava a
+     lista com "a tag foi renomeada ou removida" — sobre uma tag intacta. E não
+     existe migração possível sem reescrever o armazenamento de todo mundo. */
+  it("o nome CRU ainda resolve — visualização salva antes da tradução", () => {
+    const mapa = tagOptionsToDisplayMap(
+      buildTagOptions([{ id: "id-doctor", name: "médico", rawName: "doctor" }], new Map()),
+    );
+    expect(mapa.get("médico")).toBe("id-doctor");
+    expect(mapa.get("doctor")).toBe("id-doctor");
+  });
+
+  /* Achado do review: a linha desambigua por TRANSAÇÃO ("mercado"), o catálogo
+     desambigua pela PÁGINA ("mercado · Alimentação"). Quando um nome de seed
+     traduzido colide com uma tag do usuário, os dois lados produzem grafias
+     diferentes para a mesma tag — e o clique na linha parava de resolver. */
+  it("o rótulo BASE resolve quando a desambiguação só existe de um lado", () => {
+    const mapa = tagOptionsToDisplayMap(
+      buildTagOptions(
+        [
+          { id: "id-seed", name: "mercado", rawName: "grocery", parent_category_tag_id: "cat-a" },
+          { id: "id-usuario", name: "mercado" },
+        ],
+        new Map([["cat-a", "Alimentação"]]),
+      ),
+    );
+    expect(mapa.get("mercado · Alimentação")).toBe("id-seed");
+    // "grocery" é único, então serve de apelido para a tag do seed.
+    expect(mapa.get("grocery")).toBe("id-seed");
+    /* "mercado" cru é AMBÍGUO — duas tags o produzem. Não vira apelido: escolher
+       uma por sorte é pior que travar, porque filtra errado em silêncio. */
+    expect(mapa.has("mercado")).toBe(false);
+  });
+
+  it("um apelido nunca sobrescreve um rótulo canônico", () => {
+    /* Uma tag do usuário chamada literalmente "doctor" e a tag do seed
+       traduzida para "médico": "doctor" é o `displayLabel` da primeira, e tem
+       de continuar sendo dela. */
+    const mapa = tagOptionsToDisplayMap(
+      buildTagOptions(
+        [
+          { id: "id-seed", name: "médico", rawName: "doctor" },
+          { id: "id-usuario", name: "doctor" },
+        ],
+        new Map(),
+      ),
+    );
+    expect(mapa.get("doctor")).toBe("id-usuario");
+    expect(mapa.get("médico")).toBe("id-seed");
+  });
+});
+
+/* ── A grafia que a LINHA produz também resolve ──────────────────────────── */
+describe("apelidos: as formas da linha", () => {
+  /* Os dois lados desambiguam de jeitos diferentes: o catálogo pela categoria
+     pai ("mercado · Alimentação"), a linha pelo nome cru ("mercado (grocery)").
+     É a grafia da LINHA que chega aqui quando alguém clica no chip dela — e sem
+     apelido a lista inteira travava alegando que a tag tinha sido removida. */
+  it('"nome (nomeCru)" — a forma que a linha usa numa colisão — resolve', () => {
+    const mapa = tagOptionsToDisplayMap(
+      buildTagOptions(
+        [
+          { id: "id-seed", name: "mercado", rawName: "grocery", parent_category_tag_id: "cat-a" },
+          { id: "id-usuario", name: "mercado" },
+        ],
+        new Map([["cat-a", "Alimentação"]]),
+      ),
+    );
+    // O rótulo canônico do catálogo continua valendo…
+    expect(mapa.get("mercado · Alimentação")).toBe("id-seed");
+    // …e a grafia da linha também.
+    expect(mapa.get("mercado (grocery)")).toBe("id-seed");
+  });
+
+  it('"nome (id8)" — o desempate final da linha — resolve', () => {
+    const mapa = tagOptionsToDisplayMap(
+      buildTagOptions(
+        [
+          { id: "aaaaaaaa-1111-4111-8111-111111111111", name: "mensal" },
+          { id: "bbbbbbbb-2222-4222-8222-222222222222", name: "mensal" },
+        ],
+        new Map(),
+      ),
+    );
+    expect(mapa.get("mensal (aaaaaaaa)")).toBe("aaaaaaaa-1111-4111-8111-111111111111");
+    expect(mapa.get("mensal (bbbbbbbb)")).toBe("bbbbbbbb-2222-4222-8222-222222222222");
   });
 });

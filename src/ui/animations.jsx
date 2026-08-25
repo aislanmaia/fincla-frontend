@@ -1,3 +1,5 @@
+import { T } from "./tokens";
+
 /** CSS global de keyframes e utilitários — injetado uma vez (espelho do protótipo de referência em docs/) */
 export const ANIM_CSS = `
   /* ── TOKENS DE MOVIMENTO ────────────────────────────────────────────
@@ -132,6 +134,21 @@ export const ANIM_CSS = `
 
      No toque não há hover: elas ficam sempre visíveis — a alternativa seria um
      alvo de 24 px numa linha de 56, onde o erro abre a transação vizinha. */
+  /* DISPLAY, e nao visibility — a troca foi tentada e revertida.
+
+     Com visibility hidden o grupo ficaria posicionado o tempo todo e o hover viraria
+     trabalho de composicao, sem layout. Medido, ganhava: varrer o
+     cursor pela lista ia de 33,3 ms de pior quadro (1 perdido) para 16,8 ms
+     (nenhum).
+
+     E quebrava o clique na linha. Com o grupo ocupando caixa, o hover que o
+     proprio clique provoca o torna visivel sobre o ponto que ia ser clicado, e
+     o clique cai no botao em vez de na linha: a sanfona parava de abrir. Pego
+     pelo e2e, que passa em main e falhava aqui.
+
+     Um ganho de 16 ms num gesto secundario nao paga quebrar o gesto principal
+     da tela. Se um dia valer a pena, o caminho e outro: mover o grupo para
+     fora do caminho do clique, nao esconde-lo de outro jeito. */
   .fincla-quick {
     display: none; align-items: center; gap: 4px;
     position: absolute; right: 0; top: 50%; transform: translateY(-50%);
@@ -272,13 +289,29 @@ export const ANIM_CSS = `
     55%  { max-height: 240px; opacity: 1; transform: translateY(0); }
     100% { max-height: 240px; opacity: 1; transform: translateY(0); }
   }
-  /* O destaque azul do nascimento, na linha. */
+  /* O destaque azul do nascimento, na linha.
+
+     O fim e a cor da SUPERFICIE — interpolada do token, nao um hex repetido:
+     sem fill-mode, o ultimo quadro tem de casar EXATAMENTE com o
+     backgroundColor T.surface que a linha pinta, senao ela salta de cor aos
+     550 ms. Duplicar o valor faria o piscar voltar em silencio no dia em que o
+     token mudar (modo escuro, fundo de lista tingido). Nao transparente — e a diferenca
+     nao e cosmetica. A origem "animacao" vence a declaracao inline, entao
+     enquanto esta classe existe e ela quem manda no fundo: terminar em
+     rgba(...,0) deixava a linha REALMENTE transparente, e as acoes do arrasto
+     ficam estacionadas embaixo dela. Medido na primeira carga em 390 px:
+     19 linhas transparentes por ~100 ms, e o verde/vermelho dos botoes
+     aparecendo por baixo. Era esse o piscar.
+
+     E sem fill-mode (o "both" saiu): ao terminar, o fundo volta a ser o inline —
+     que ja e a mesma cor, entao o corte e invisivel, e uma linha selecionada
+     recupera o tom da categoria em vez de ficar branca ate a classe sair. */
   @keyframes txRowBornCor {
     0%   { background: rgba(219,234,254,1); }
     55%  { background: rgba(219,234,254,1); }
-    100% { background: rgba(219,234,254,0); }
+    100% { background: ${T.surface}; }
   }
-  .fincla-tx-born-cor { animation: txRowBornCor 550ms cubic-bezier(.32,.72,0,1) both; }
+  .fincla-tx-born-cor { animation: txRowBornCor 550ms cubic-bezier(.32,.72,0,1); }
   @keyframes toastIn {
     from { opacity: 0; transform: translateY(10px) scale(0.98); }
     to   { opacity: 1; transform: translateY(0)    scale(1);    }

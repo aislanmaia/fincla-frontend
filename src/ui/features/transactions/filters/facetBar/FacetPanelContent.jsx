@@ -39,6 +39,7 @@ export function FacetPanelContent({
   allTags,
   allTagsLoading,
   allTagsError,
+  tagIdByLabel,
   // card
   cardSel,
   setCardSel,
@@ -120,6 +121,7 @@ export function FacetPanelContent({
           tagMode={tagMode}
           setTagMode={setTagMode}
           counts={counts}
+          tagIdByLabel={tagIdByLabel}
           onClose={onClose}
           compact={compact}
         />

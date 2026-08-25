@@ -117,9 +117,18 @@ export function SearchBar({
 
   useEffect(() => {
     if (typeof ResizeObserver === "undefined" || !barRef.current) return undefined;
-    const ro = new ResizeObserver(medeOrcamento);
+    /* ESPERA a barra assentar antes de recontar. Abrir a dock anima a largura
+       por 300 ms e este observer disparava a cada quadro; cada disparo levanta
+       um `onChipsBudget`, que é estado na página e re-renderiza a lista toda.
+       O orçamento de chips é uma decisão de "quantos cabem" — ela não tem o que
+       fazer com uma largura que ainda está mudando. */
+    let t = null;
+    const ro = new ResizeObserver(() => {
+      clearTimeout(t);
+      t = setTimeout(medeOrcamento, 90);
+    });
     ro.observe(barRef.current);
-    return () => ro.disconnect();
+    return () => { clearTimeout(t); ro.disconnect(); };
   }, [medeOrcamento]);
 
   if (compact) {

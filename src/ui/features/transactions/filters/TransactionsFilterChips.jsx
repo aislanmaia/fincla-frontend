@@ -135,6 +135,8 @@ export function TransactionsFilterChips({
   searchActive = false,
   searchLabel = "",
   onOpenFacet,
+  /** Leva à aba "Ativos". Presente, o "+N" navega em vez de abrir o popover. */
+  onAbrirAtivos = null,
   onClearFacet,
   onClearAll,
   maxVisible = 3,
@@ -270,14 +272,28 @@ export function TransactionsFilterChips({
         <div ref={overflowRef} style={{ position: "relative", flexShrink: 0 }}>
           <button
             type="button"
-            onClick={() => setOverflowOpen((v) => !v)}
-            aria-expanded={overflowOpen}
-            aria-label={`Mais ${hidden.length} ${hidden.length === 1 ? "filtro" : "filtros"}`}
+            /* Com um lugar para ir, o "+N" LEVA em vez de listar. O popover
+               mostrava os chips escondidos e parava aí: para remover vários era
+               um clique por chip, num painel flutuante de 200 px. A aba
+               "Ativos" já existe, já lista tudo com um "remover" ao lado de
+               cada um, e é onde a pessoa vai acabar indo de qualquer forma. */
+            onClick={() => (onAbrirAtivos ? onAbrirAtivos() : setOverflowOpen((v) => !v))}
+            aria-expanded={onAbrirAtivos ? undefined : overflowOpen}
+            aria-label={
+              onAbrirAtivos
+                /* Só o que está ESCONDIDO. Contar os visíveis junto prometia um
+                   número que o painel não repete — ele divide facetas de vários
+                   valores em uma linha cada, então os dois nunca bateriam. O que
+                   o "+N" tem a dizer é quantos não couberam. */
+                ? `Ver mais ${hidden.length} ${hidden.length === 1 ? "filtro" : "filtros"}`
+                : `Mais ${hidden.length} ${hidden.length === 1 ? "filtro" : "filtros"}`
+            }
+            title={onAbrirAtivos ? "Ver todos os filtros ativos" : undefined}
             style={chipStyle("on")}
           >
             <CountBadge n={hidden.length} prefix="+" />
           </button>
-          {overflowOpen && (
+          {overflowOpen && !onAbrirAtivos && (
             <div
               className="fincla-scroll"
               style={{
