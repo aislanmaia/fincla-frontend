@@ -10,19 +10,21 @@
 import React, { useRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, act } from "@testing-library/react";
-import { usePullToRefresh, LIMIAR_PX } from "../usePullToRefresh.js";
+import { usePullToRefresh, LIMIAR_PX, TETO_PX } from "../usePullToRefresh.js";
 
 afterEach(cleanup);
 
-function Harness({ onRefresh, busy = false, enabled = true, scrollTop = 0 }) {
+function Harness({ onRefresh, busy = false, enabled = true }) {
   const ref = useRef(null);
   const p = usePullToRefresh({ scrollRef: ref, onRefresh, enabled, busy });
   return (
     <div ref={ref} data-testid="scroller" style={{ overflowY: "auto" }}>
-      <span data-testid="puxada">{p.puxada}</span>
+      {/* Espelha o consumidor real: o nó só existe fora do repouso, e a altura
+          é escrita pelo hook direto no DOM — não por estado do React. */}
+      {!p.inerte && <div ref={p.indicadorRef} data-testid="indicador" style={{ height: 0 }} />}
+      <span data-testid="fase">{p.fase}</span>
       <span data-testid="limiar">{String(p.passouDoLimiar)}</span>
       <span data-testid="aguardando">{String(p.aguardando)}</span>
-      <span data-testid="scrolltop-fixture">{scrollTop}</span>
     </div>
   );
 }
@@ -35,7 +37,11 @@ function toque(el, tipo, { x = 100, y = 200 } = {}) {
   return ev;
 }
 
-const puxada = () => Number(screen.getByTestId("puxada").textContent);
+const fase = () => screen.getByTestId("fase").textContent;
+const altura = () => {
+  const el = screen.queryByTestId("indicador");
+  return el ? parseFloat(el.style.height || "0") : 0;
+};
 
 describe("usePullToRefresh", () => {
   it("puxar além do limiar recarrega ao soltar", () => {
@@ -46,8 +52,9 @@ describe("usePullToRefresh", () => {
     toque(el, "touchmove", { y: 220 });
     toque(el, "touchmove", { y: 400 });
     // Resistência de 0,5: 200 px de dedo viram 100, limitados ao teto de 96.
-    expect(puxada()).toBeGreaterThanOrEqual(LIMIAR_PX);
-    expect(screen.getByTestId("limiar").textContent).toBe("true");
+    expect(altura()).toBeGreaterThanOrEqual(LIMIAR_PX);
+    expect(altura()).toBeLessThanOrEqual(TETO_PX);
+    expect(fase()).toBe("solte");
     toque(el, "touchend");
     expect(onRefresh).toHaveBeenCalledTimes(1);
   });
@@ -59,10 +66,11 @@ describe("usePullToRefresh", () => {
     toque(el, "touchstart", { y: 200 });
     toque(el, "touchmove", { y: 220 });
     toque(el, "touchmove", { y: 250 });   // 50 px de dedo → 25 px de puxada
-    expect(puxada()).toBeLessThan(LIMIAR_PX);
+    expect(altura()).toBeLessThan(LIMIAR_PX);
+    expect(fase()).toBe("puxando");
     toque(el, "touchend");
     expect(onRefresh).not.toHaveBeenCalled();
-    expect(puxada()).toBe(0);
+    expect(altura()).toBe(0);
   });
 
   it("arrastar para CIMA é rolar — o gesto desiste", () => {
@@ -72,7 +80,7 @@ describe("usePullToRefresh", () => {
     toque(el, "touchstart", { y: 200 });
     toque(el, "touchmove", { y: 120 });
     toque(el, "touchmove", { y: 60 });
-    expect(puxada()).toBe(0);
+    expect(fase()).toBe("inerte");
     toque(el, "touchend");
     expect(onRefresh).not.toHaveBeenCalled();
   });
@@ -84,7 +92,7 @@ describe("usePullToRefresh", () => {
     toque(el, "touchstart", { x: 200, y: 200 });
     toque(el, "touchmove", { x: 120, y: 210 });
     toque(el, "touchmove", { x: 40, y: 214 });
-    expect(puxada()).toBe(0);
+    expect(fase()).toBe("inerte");
     toque(el, "touchend");
     expect(onRefresh).not.toHaveBeenCalled();
   });
@@ -96,7 +104,7 @@ describe("usePullToRefresh", () => {
     Object.defineProperty(el, "scrollTop", { configurable: true, value: 400 });
     toque(el, "touchstart", { y: 200 });
     toque(el, "touchmove", { y: 400 });
-    expect(puxada()).toBe(0);
+    expect(fase()).toBe("inerte");
     toque(el, "touchend");
     expect(onRefresh).not.toHaveBeenCalled();
   });
@@ -108,7 +116,7 @@ describe("usePullToRefresh", () => {
     toque(el, "touchstart", { y: 200 });
     toque(el, "touchmove", { y: 400 });
     toque(el, "touchend");
-    expect(puxada()).toBe(0);
+    expect(fase()).toBe("inerte");
     expect(onRefresh).not.toHaveBeenCalled();
   });
 
@@ -120,6 +128,90 @@ describe("usePullToRefresh", () => {
     toque(el, "touchmove", { y: 400 });
     toque(el, "touchend");
     expect(onRefresh).not.toHaveBeenCalled();
+  });
+
+
+  /* O caminho que a suíte anterior não cobria — e por isso ficava verde com ele
+     quebrado. `onRefresh` só PEDE a recarga; quem acende `busy` é o hook de
+     dados, um commit depois. Recolher em "aguardando + !busy" desmontava o
+     indicador no quadro seguinte ao touchend, e `aguardando` nunca chegava a
+     ser verdade uma única vez. */
+  it("o indicador FICA na passagem de mão até a busca acender", async () => {
+    const onRefresh = vi.fn();
+    const { rerender } = render(<Harness onRefresh={onRefresh} busy={false} />);
+    const el = screen.getByTestId("scroller");
+    toque(el, "touchstart", { y: 200 });
+    toque(el, "touchmove", { y: 220 });
+    toque(el, "touchmove", { y: 400 });
+    toque(el, "touchend");
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+    // Ainda não acendeu: o indicador não pode ter sumido.
+    expect(fase()).toBe("aguardando");
+    expect(altura()).toBeGreaterThan(0);
+
+    // Acende…
+    rerender(<Harness onRefresh={onRefresh} busy />);
+    expect(fase()).toBe("aguardando");
+    expect(screen.getByTestId("aguardando").textContent).toBe("true");
+
+    // …e só quando apaga é que ele recolhe.
+    rerender(<Harness onRefresh={onRefresh} busy={false} />);
+    expect(altura()).toBe(0);
+  });
+
+  it("voltar o dedo ACIMA da origem não produz altura negativa", () => {
+    render(<Harness onRefresh={vi.fn()} />);
+    const el = screen.getByTestId("scroller");
+    toque(el, "touchstart", { y: 200 });
+    toque(el, "touchmove", { y: 240 });   // compromete o gesto
+    toque(el, "touchmove", { y: 100 });   // e volta bem acima
+    /* `height: -50px` é valor inválido: o navegador o descarta e a caixa volta
+       para `auto`, deixando o rótulo à mostra em vez de encolhida. */
+    expect(altura()).toBe(0);
+  });
+
+  it("touchcancel NÃO recarrega — o sistema tomou o gesto, a pessoa não soltou", () => {
+    const onRefresh = vi.fn();
+    render(<Harness onRefresh={onRefresh} />);
+    const el = screen.getByTestId("scroller");
+    toque(el, "touchstart", { y: 200 });
+    toque(el, "touchmove", { y: 220 });
+    toque(el, "touchmove", { y: 400 });
+    expect(fase()).toBe("solte");
+    toque(el, "touchcancel");
+    expect(onRefresh).not.toHaveBeenCalled();
+    expect(altura()).toBe(0);
+  });
+
+  it("um segundo dedo CANCELA — não deixa a recarga escapar no meio", () => {
+    const onRefresh = vi.fn();
+    render(<Harness onRefresh={onRefresh} />);
+    const el = screen.getByTestId("scroller");
+    toque(el, "touchstart", { y: 200 });
+    toque(el, "touchmove", { y: 400 });
+    /* O segundo dedo chega; o `touchend` DELE não pode executar a recarga com o
+       primeiro ainda na tela. */
+    const ev = new Event("touchstart", { bubbles: true, cancelable: true });
+    ev.touches = [{ clientX: 100, clientY: 400 }, { clientX: 150, clientY: 300 }];
+    act(() => { el.dispatchEvent(ev); });
+    toque(el, "touchend");
+    expect(onRefresh).not.toHaveBeenCalled();
+  });
+
+  it("o gesto não re-renderiza a página a cada movimento", () => {
+    const renders = { n: 0 };
+    function Contador(props) { renders.n += 1; return <Harness {...props} />; }
+    render(<Contador onRefresh={vi.fn()} />);
+    const el = screen.getByTestId("scroller");
+    const antes = renders.n;
+    toque(el, "touchstart", { y: 200 });
+    for (let y = 210; y <= 260; y += 5) toque(el, "touchmove", { y });
+    /* Onze movimentos, UMA mudança de fase ("inerte" → "puxando"). A altura vai
+       direto no DOM: nada aqui é `memo` e as linhas não são virtualizadas, então
+       um `setState` por movimento seria a lista inteira re-renderizando na
+       cadência do dedo, num celular. */
+    expect(renders.n - antes).toBeLessThanOrEqual(2);
+    expect(altura()).toBeGreaterThan(0);
   });
 
   it("o movimento que puxa CANCELA o evento — senão a lista rola por baixo", () => {

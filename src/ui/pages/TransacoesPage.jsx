@@ -4376,19 +4376,18 @@ function TransacoesPageBody({
         >
           {/* §29: o indicador da puxada. Vive DENTRO do scroller e cresce com o
               dedo, empurrando a lista para baixo — é o movimento que faz o
-              gesto parecer físico em vez de um botão escondido. Altura zero em
-              repouso: sem isso ele cobraria espaço permanente de toda sessão
-              por um gesto que a maioria nunca usa. */}
+              gesto parecer físico em vez de um botão escondido.
+
+              A ALTURA não vem daqui: o hook escreve direto no nó, porque um
+              `setState` por `touchmove` re-renderizaria a lista inteira na
+              cadência do dedo. Este JSX só reage às FASES, que mudam meia dúzia
+              de vezes por gesto. E o nó fica montado durante o recolhimento —
+              desmontá-lo em `height: 0` cancelava a própria animação de volta
+              que ele promete. */}
           {!puxar.inerte && (
-            <div aria-hidden="true"
-              style={{ height: puxar.puxada, overflow: "hidden",
+            <div ref={puxar.indicadorRef} aria-hidden="true"
+              style={{ height: 0, overflow: "hidden",
                 display: "flex", alignItems: "center", justifyContent: "center",
-                /* Sem transição ENQUANTO o dedo manda: animar aqui atrasaria o
-                   indicador em relação à mão e quebraria a sensação de arrastar
-                   um objeto. A transição só entra na volta, quando solta. */
-                transition: puxar.aguardando || puxar.puxada === 0
-                  ? "height var(--mo-base, 220ms) var(--mo-base-ease, cubic-bezier(.32,.72,0,1))"
-                  : "none",
                 color: puxar.passouDoLimiar ? T.blue : T.inkLight }}>
               {puxar.aguardando
                 ? <span className="fincla-spin" aria-hidden="true" />
