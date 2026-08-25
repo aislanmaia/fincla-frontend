@@ -286,13 +286,25 @@ export const ANIM_CSS = `
     55%  { max-height: 240px; opacity: 1; transform: translateY(0); }
     100% { max-height: 240px; opacity: 1; transform: translateY(0); }
   }
-  /* O destaque azul do nascimento, na linha. */
+  /* O destaque azul do nascimento, na linha.
+
+     O fim é a cor da SUPERFICIE (#FFFFFF), nao transparente — e a diferenca
+     nao e cosmetica. A origem "animacao" vence a declaracao inline, entao
+     enquanto esta classe existe e ela quem manda no fundo: terminar em
+     rgba(...,0) deixava a linha REALMENTE transparente, e as acoes do arrasto
+     ficam estacionadas embaixo dela. Medido na primeira carga em 390 px:
+     19 linhas transparentes por ~100 ms, e o verde/vermelho dos botoes
+     aparecendo por baixo. Era esse o piscar.
+
+     E sem fill-mode (o "both" saiu): ao terminar, o fundo volta a ser o inline —
+     que ja e a mesma cor, entao o corte e invisivel, e uma linha selecionada
+     recupera o tom da categoria em vez de ficar branca ate a classe sair. */
   @keyframes txRowBornCor {
     0%   { background: rgba(219,234,254,1); }
     55%  { background: rgba(219,234,254,1); }
-    100% { background: rgba(219,234,254,0); }
+    100% { background: #FFFFFF; }
   }
-  .fincla-tx-born-cor { animation: txRowBornCor 550ms cubic-bezier(.32,.72,0,1) both; }
+  .fincla-tx-born-cor { animation: txRowBornCor 550ms cubic-bezier(.32,.72,0,1); }
   @keyframes toastIn {
     from { opacity: 0; transform: translateY(10px) scale(0.98); }
     to   { opacity: 1; transform: translateY(0)    scale(1);    }
