@@ -281,7 +281,11 @@ export function TransactionsFilterChips({
             aria-expanded={onAbrirAtivos ? undefined : overflowOpen}
             aria-label={
               onAbrirAtivos
-                ? `Ver os ${hidden.length + cabem} filtros ativos`
+                /* Só o que está ESCONDIDO. Contar os visíveis junto prometia um
+                   número que o painel não repete — ele divide facetas de vários
+                   valores em uma linha cada, então os dois nunca bateriam. O que
+                   o "+N" tem a dizer é quantos não couberam. */
+                ? `Ver mais ${hidden.length} ${hidden.length === 1 ? "filtro" : "filtros"}`
                 : `Mais ${hidden.length} ${hidden.length === 1 ? "filtro" : "filtros"}`
             }
             title={onAbrirAtivos ? "Ver todos os filtros ativos" : undefined}

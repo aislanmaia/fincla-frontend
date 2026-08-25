@@ -118,7 +118,25 @@ export function tagOptionsToDisplayMap(options) {
   const candidatos = new Map();
   for (const opt of options ?? []) {
     const base = String(opt.displayLabel).split(" · ")[0].trim();
-    for (const alias of [opt.rawName, opt.name, base]) {
+    /* As formas que a LINHA produz. Os dois lados desambiguam de jeitos
+       diferentes — o catálogo pela categoria pai ("mercado · Alimentação"), a
+       linha pelo nome cru ou por um prefixo do id ("mercado (grocery)",
+       "mercado (a1b2c3d4)") — e é a grafia da LINHA que chega aqui quando
+       alguém clica no chip dela. Sem estes apelidos, clicar num chip de tag
+       colidida travava a lista inteira alegando que a tag foi removida, sobre
+       uma tag visível uma linha acima.
+
+       O apelido "base" sozinho nunca resolve isso: um `displayLabel` só ganha
+       o sufixo " · " quando há colisão, então a base é ambígua por construção e
+       cai na regra de unicidade abaixo. Ela fica porque é barata e cobre
+       grafias vindas de fora (views salvas antigas). */
+    const comoALinhaEscreve = [];
+    if (opt.rawName && opt.rawName.toLowerCase() !== String(opt.name).toLowerCase()) {
+      comoALinhaEscreve.push(`${opt.name} (${opt.rawName})`);
+    }
+    comoALinhaEscreve.push(`${opt.name} (${String(opt.id).slice(0, 8)})`);
+
+    for (const alias of [opt.rawName, opt.name, base, ...comoALinhaEscreve]) {
       const chave = String(alias ?? "").trim();
       if (!chave || map.has(chave)) continue;
       const visto = candidatos.get(chave);

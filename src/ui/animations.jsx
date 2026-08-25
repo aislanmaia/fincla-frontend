@@ -1,3 +1,5 @@
+import { T } from "./tokens";
+
 /** CSS global de keyframes e utilitários — injetado uma vez (espelho do protótipo de referência em docs/) */
 export const ANIM_CSS = `
   /* ── TOKENS DE MOVIMENTO ────────────────────────────────────────────
@@ -288,7 +290,11 @@ export const ANIM_CSS = `
   }
   /* O destaque azul do nascimento, na linha.
 
-     O fim é a cor da SUPERFICIE (#FFFFFF), nao transparente — e a diferenca
+     O fim e a cor da SUPERFICIE — interpolada do token, nao um hex repetido:
+     sem fill-mode, o ultimo quadro tem de casar EXATAMENTE com o
+     backgroundColor T.surface que a linha pinta, senao ela salta de cor aos
+     550 ms. Duplicar o valor faria o piscar voltar em silencio no dia em que o
+     token mudar (modo escuro, fundo de lista tingido). Nao transparente — e a diferenca
      nao e cosmetica. A origem "animacao" vence a declaracao inline, entao
      enquanto esta classe existe e ela quem manda no fundo: terminar em
      rgba(...,0) deixava a linha REALMENTE transparente, e as acoes do arrasto
@@ -302,7 +308,7 @@ export const ANIM_CSS = `
   @keyframes txRowBornCor {
     0%   { background: rgba(219,234,254,1); }
     55%  { background: rgba(219,234,254,1); }
-    100% { background: #FFFFFF; }
+    100% { background: ${T.surface}; }
   }
   .fincla-tx-born-cor { animation: txRowBornCor 550ms cubic-bezier(.32,.72,0,1); }
   @keyframes toastIn {

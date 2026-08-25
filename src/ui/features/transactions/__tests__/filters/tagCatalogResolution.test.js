@@ -320,3 +320,40 @@ describe("apelidos de rótulo", () => {
     expect(mapa.get("médico")).toBe("id-seed");
   });
 });
+
+/* ── A grafia que a LINHA produz também resolve ──────────────────────────── */
+describe("apelidos: as formas da linha", () => {
+  /* Os dois lados desambiguam de jeitos diferentes: o catálogo pela categoria
+     pai ("mercado · Alimentação"), a linha pelo nome cru ("mercado (grocery)").
+     É a grafia da LINHA que chega aqui quando alguém clica no chip dela — e sem
+     apelido a lista inteira travava alegando que a tag tinha sido removida. */
+  it('"nome (nomeCru)" — a forma que a linha usa numa colisão — resolve', () => {
+    const mapa = tagOptionsToDisplayMap(
+      buildTagOptions(
+        [
+          { id: "id-seed", name: "mercado", rawName: "grocery", parent_category_tag_id: "cat-a" },
+          { id: "id-usuario", name: "mercado" },
+        ],
+        new Map([["cat-a", "Alimentação"]]),
+      ),
+    );
+    // O rótulo canônico do catálogo continua valendo…
+    expect(mapa.get("mercado · Alimentação")).toBe("id-seed");
+    // …e a grafia da linha também.
+    expect(mapa.get("mercado (grocery)")).toBe("id-seed");
+  });
+
+  it('"nome (id8)" — o desempate final da linha — resolve', () => {
+    const mapa = tagOptionsToDisplayMap(
+      buildTagOptions(
+        [
+          { id: "aaaaaaaa-1111-4111-8111-111111111111", name: "mensal" },
+          { id: "bbbbbbbb-2222-4222-8222-222222222222", name: "mensal" },
+        ],
+        new Map(),
+      ),
+    );
+    expect(mapa.get("mensal (aaaaaaaa)")).toBe("aaaaaaaa-1111-4111-8111-111111111111");
+    expect(mapa.get("mensal (bbbbbbbb)")).toBe("bbbbbbbb-2222-4222-8222-222222222222");
+  });
+});

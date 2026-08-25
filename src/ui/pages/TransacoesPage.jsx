@@ -2123,6 +2123,11 @@ function TransacoesPageBody({
       filter.tagMode,
       visible,
       totalCategoriesForBackend,
+      /* O MAPA, não só a contagem. Renomear uma categoria não muda quantas
+         existem, então `totalCategoriesForBackend` não se mexe — e o memo
+         seguia mandando `category=<nome antigo>`, devolvendo zero linhas com o
+         chip já exibindo o nome novo. */
+      categoryApiNameById,
       resolvedTagIds,
     ],
   );
@@ -2961,7 +2966,7 @@ function TransacoesPageBody({
     filter.tags,
     filter.cats, filter.period, filter.customFrom, filter.customTo, filter.sort,
     filter.valueMin, filter.valueMax, filter.settlement, filter.rec, filter.tagMode,
-    totalCategoriesForBackend, resolvedTagIds,
+    totalCategoriesForBackend, categoryApiNameById, resolvedTagIds,
   ]);
 
   const facetLabels = useMemo(() => {
@@ -2991,6 +2996,14 @@ function TransacoesPageBody({
      entende — a mesma que o vazio semântico usa para nomear um valor. */
   const activeFilterEntries = useMemo(() => {
     const out = [];
+    /* A BUSCA entra aqui. Ela é um chip da barra como os outros e entra na
+       conta do "+N" — mas o painel de Ativos só via `allFacets`. Com o "+N"
+       levando para cá, um termo de busca escondido virava um filtro sem saída:
+       o botão prometia "ver os N filtros ativos", o painel mostrava N−1, e o
+       ✕ da busca não existia em lugar nenhum. */
+    if (debouncedSearch) {
+      out.push({ key: "busca", label: "Busca", value: debouncedSearch, icon: "search" });
+    }
     for (const f of allFacets) {
       if (!f.active) continue;
       if (f.key === "categoria" && filter.cats.length > 1) {
@@ -3009,7 +3022,7 @@ function TransacoesPageBody({
       }
     }
     return out;
-  }, [allFacets, filter.cats, filter.tags, filter.method, categoryLabelById]);
+  }, [allFacets, debouncedSearch, filter.cats, filter.tags, filter.method, categoryLabelById]);
 
   const activeFacetsForSavedViews = useMemo(
     () =>

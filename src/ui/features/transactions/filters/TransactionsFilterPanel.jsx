@@ -404,7 +404,10 @@ function ActiveFacetsPane({ facets, onClearFacet, columns = 1 }) {
             <button
               type="button"
               onClick={() => onClearFacet?.(f.key)}
-              aria-label={`Remover filtro ${f.label}`}
+              /* O VALOR entra no rótulo: com a divisão por valor, três tags produziam
+                 três botões anunciados "Remover filtro Tags", indistinguíveis para
+                 quem usa leitor de tela — e ambíguos para `getByRole`. */
+              aria-label={`Remover filtro ${f.label}: ${f.value}`}
               style={{
                 ...G,
                 marginLeft: "auto",
