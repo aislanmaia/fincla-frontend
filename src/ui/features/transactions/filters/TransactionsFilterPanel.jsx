@@ -280,17 +280,34 @@ function RailButton({ icon, label, count, on, onClick, compact }) {
         textAlign: "left",
         width: compact ? "auto" : "100%",
         flex: compact ? "none" : undefined,
-        whiteSpace: "nowrap",
+        /* `minWidth: 0` no trilho vertical: sem ele o botão nunca encolhe
+           abaixo do conteúdo, e o rótulo mais largo empurrava o contador para
+           FORA da caixa — "Pagamento" era o único que estourava, então só ele
+           aparecia desalinhado e por cima da borda do estado ativo. */
+        minWidth: compact ? undefined : 0,
+        whiteSpace: compact ? "nowrap" : undefined,
         cursor: "pointer",
       }}
     >
-      <span aria-hidden="true">{icon}</span>
-      <span>{label}</span>
+      <span aria-hidden="true" style={{ flex: "none" }}>{icon}</span>
+      {/* O rótulo é quem cede espaço. No trilho vertical ele cresce para
+          empurrar o contador até a borda — é isso que alinha TODOS os
+          contadores na mesma coluna, seja qual for o tamanho da palavra — e
+          trunca em vez de estourar. */}
+      <span
+        style={compact
+          ? { flex: "none" }
+          : { flex: 1, minWidth: 0, overflow: "hidden",
+              textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+      >
+        {label}
+      </span>
       {count > 0 && (
         <span
           style={{
             ...G,
-            marginLeft: compact ? 6 : "auto",
+            marginLeft: compact ? 6 : 0,
+            flex: "none",
             minWidth: 16,
             height: 16,
             padding: "0 4px",

@@ -85,6 +85,7 @@ import {
 } from "../features/transactions/filters/filtersToLegacyParams.js";
 import { DisclosureChevron } from "../components/DisclosureChevron.jsx";
 import { usePullToRefresh } from "../features/transactions/usePullToRefresh.js";
+import { detailLabelPtForTag } from "../data/categoryLabels.js";
 
 /** `shortDateLabel` com identidade estável — ver `cacheDeRotuloDeData`. */
 function rotuloDeData(raw) {
@@ -1900,9 +1901,29 @@ function TransacoesPageBody({
   // diferentes (ex.: "mensal" em Casa e em Trabalho) — `buildTagOptions`
   // desambigua o rótulo exibido quando isso acontece, então cada opção do
   // painel resolve para um único id, nunca colapsa duas tags num chip só.
+  /* O catálogo entra JÁ TRADUZIDO, com a mesma função que a linha usa.
+     Sem isto havia duas verdades para a mesma tag: a linha mostrava "médico"
+     (`detailLabelPtForTag` traduz as tags do seed) e o catálogo guardava
+     "doctor", o nome cru. Clicar no chip da linha gravava "médico" no filtro,
+     a resolução procurava esse rótulo num catálogo que só conhecia "doctor",
+     não achava — e a tela travava com "a tag não foi encontrada — pode ter sido
+     renomeada ou removida", sobre uma tag que estava visível na linha de cima.
+
+     E o defeito tinha um segundo lado, igualmente visível: o painel de filtros
+     e os chips ofereciam a tag em INGLÊS, num app em PT-BR.
+
+     A tradução vale só para tags do seed (`is_default`); tag criada por
+     usuário passa intacta. */
+  const tagRowsPt = useMemo(
+    () => (tagCatalog.rows || []).map((row) => {
+      const pt = detailLabelPtForTag(row);
+      return pt && pt !== row?.name ? { ...row, name: pt } : row;
+    }),
+    [tagCatalog.rows],
+  );
   const tagOptions = useMemo(
-    () => buildTagOptions(tagCatalog.rows, categoryLabelById),
-    [tagCatalog.rows, categoryLabelById],
+    () => buildTagOptions(tagRowsPt, categoryLabelById),
+    [tagRowsPt, categoryLabelById],
   );
   const tagDisplayToId = useMemo(() => tagOptionsToDisplayMap(tagOptions), [tagOptions]);
   // A facet voltou a ser multi agora que `tag_id` é repetível: resolvemos a
