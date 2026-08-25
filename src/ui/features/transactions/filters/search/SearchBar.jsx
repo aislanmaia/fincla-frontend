@@ -20,8 +20,9 @@ import { SortButton } from "./SortButton.jsx";
  * direita; antes "Filtros" ficava à esquerda e "Ordenar" na outra ponta, dois
  * controles do mesmo assunto separados pelo vão.
  *
- * O teto continua existindo, só que muito mais alto: sem NENHUM teto a busca
- * esticava por ~2000 px num monitor de 3440.
+ * O teto continua existindo, só que muito mais alto (1100 px): sem NENHUM teto
+ * a busca esticava por ~2000 px num monitor de 3440, e com os 720 px de antes a
+ * barra terminava num vão morto já em 1500.
  *
  * Modo `compact`: input em uma linha, SortButton em linha separada abaixo
  * (cada um ocupa 100% da largura). Look and feel de app nativo mobile.
@@ -102,8 +103,10 @@ export function SearchBar({
     const marcados = bar2 ? bar2.querySelectorAll("[data-chip]") : [];
     marcados.forEach((el) => { chipsAgora += el.getBoundingClientRect().width + 6; });
     /* O VÃO também é orçamento. Sem contá-lo, a barra tratava o espaço vazio
-       como controle imóvel: em 1920 a busca já estava no teto de 720 px, sobrava
-       um vão de ~600 px e a conta liberava ZERO chips — menos que em 1440. */
+       como controle imóvel: com o teto antigo de 720 px a busca já o atingia em
+       1920, sobrava um vão de ~600 px e a conta liberava ZERO chips — menos que
+       em 1440. Com o teto em 1100 o vão só reaparece no ultrawide, mas a conta
+       continua precisando dele: é ela que impede a regressão. */
     const vao = vaoRef.current ? vaoRef.current.getBoundingClientRect().width : 0;
     const outros = Math.max(0, total - busca.offsetWidth - chipsAgora - vao);
     const piso = Math.max(280, Math.round(total * 0.4));
@@ -192,13 +195,20 @@ export function SearchBar({
           /* 180 px é o piso: abaixo disso o placeholder some e a busca deixa de
              ser usável — é ela que cede espaço por último, não primeiro.
 
-             E NÃO há teto. Havia um `maxWidth: 720`, e ele fazia a barra de
-             comando terminar num vão morto: num monitor de 2560 a busca parava
-             na metade e o resto da linha ficava vazio. O `flex: 100` acima foi
-             escrito justamente para ela levar quase toda a sobra — o teto
-             desfazia isso silenciosamente a partir de ~1500 px. Caixa de
-             comando ocupa a linha que tem. */
+             O teto existe, mas MUITO mais alto: 720 px fazia a barra terminar
+             num vão morto já em 1500 (medido: busca 720, barra 1250), e o
+             `flex: 100` acima foi escrito justamente para ela levar a sobra —
+             o teto desfazia isso em silêncio. Tirá-lo de vez, porém, devolve o
+             defeito oposto que ESTE arquivo já documentava: num monitor de
+             3440 a busca esticava ~2000 px, um campo onde o texto fica
+             encostado à esquerda com um deserto à direita.
+
+             1100 é onde o campo ainda é um campo. Ele só passa a morder acima
+             de ~2400 px de barra, então nas larguras reais de trabalho a busca
+             ocupa tudo — que é o que o Owner pediu — e só o ultrawide vê o
+             limite. */
           minWidth: 180,
+          maxWidth: 1100,
           height: 32,
           /* NÃO há transição aqui, e não é esquecimento: a largura da busca vem
              de distribuição de espaço livre do flex, que não é uma propriedade

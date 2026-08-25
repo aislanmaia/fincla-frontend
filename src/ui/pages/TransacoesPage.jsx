@@ -1309,11 +1309,14 @@ const DetailPanel = ({
                 // ela não existe (o caminho é swipe ou sanfona), então marcar
                 // como pago não mostrava efeito NENHUM — a linha só mudava de
                 // cor num canto.
+                /* Quem decide o que acontece depois é a PÁGINA, não a
+                   sanfona: só lá se sabe se o recorte atual ainda comporta esta
+                   linha. Ela é que escolhe entre pulsar (fica) e colapsar com
+                   explicação (sai) — e é ela que revalida, no momento certo de
+                   cada caso. Revalidar aqui derrubava a linha antes de qualquer
+                   animação, e no toque a sanfona é o caminho PRINCIPAL de
+                   liquidar: quase todo mundo caía justamente por aqui. */
                 onSettled?.(tx.id, next);
-                // A linha já foi trocada em memória, mas o summary e o recorte do
-                // filtro continuariam velhos: com Situação = "A pagar", a linha
-                // recém-paga ficaria visível sob um filtro que a exclui.
-                onTransactionsInvalidate?.();
               } catch (err) {
                 // Mensagem local, ao lado da ação: `transactionsData.error` renderiza
                 // no topo da página, e no mobile a faixa fica coberta pelo sheet.
@@ -1682,8 +1685,24 @@ function TransacoesPageBody({
      Reusa o token LOCAL de retentativa em vez do global (`transactionsRefreshToken`,
      que é prop e dispara outros efeitos da página, como as âncoras de saldo).
      O que se quer aqui é refazer ESTA busca, não sacudir a tela inteira. */
+  /* Ref e não a variável direta: `transactionsData` nasce ~250 linhas abaixo,
+     e este callback precisa existir antes (a barra e o atalho o consomem). */
+  const transactionsDataRef = useRef(null);
+  /* Guarda de voo SÍNCRONA. `transactionsData.isLoading` só vira `true` no
+     próximo render, então entre o clique e esse render existe uma janela em que
+     ele ainda diz `false` — segurar `R` fazia duas buscas escaparem por ali. O
+     ref fecha na hora; o estado só o libera. */
+  const recargaEmVooRef = useRef(false);
+  const soltarRecargaRef = useRef(null);
   const recarregarLista = useCallback(() => {
-    setLoadMoreRetryToken((n) => n + 1);
+    if (recargaEmVooRef.current || transactionsDataRef.current?.isLoading) return;
+    recargaEmVooRef.current = true;
+    /* Rede de segurança, não o mecanismo: quem solta de verdade é o flanco de
+       descida do carregamento (efeito abaixo). Se por qualquer motivo a busca
+       não chegar a acender, o botão não pode ficar morto para sempre. */
+    clearTimeout(soltarRecargaRef.current);
+    soltarRecargaRef.current = setTimeout(() => { recargaEmVooRef.current = false; }, 8000);
+    transactionsDataRef.current?.reload?.();
   }, []);
   const [deletingId,  setDeletingId]  = useState(null);
   // Id em liquidação — trava o botão para o clique duplo não disparar settle + unsettle.
@@ -1942,6 +1961,7 @@ function TransacoesPageBody({
     // também dispara outros efeitos da página).
     refreshToken: `${transactionsRefreshToken}:${loadMoreRetryToken}`,
   });
+  transactionsDataRef.current = transactionsData;
   /* Total do período SEM os demais filtros — o "de 20" de "17 de 20
      transações". Sozinho, "17" não diz se o filtro cortou muito ou pouco, e é
      essa relação que responde "meu filtro está certo?".
@@ -2042,6 +2062,19 @@ function TransacoesPageBody({
      linhas JÁ LIDAS a cada página e, pior, punha `pointerEvents: none` no
      container de rolagem: a roda do mouse parava de chegar no scroller e o
      scroll travava no meio do gesto, exatamente enquanto se rolava. */
+  /* Solta a guarda de recarga no FLANCO DE DESCIDA. Limpar sempre que
+     `isLoading` for falso não serve: entre o clique e o efeito que acende a
+     busca existe um render em que ele ainda é falso, e um segundo toque caindo
+     exatamente ali escapava das duas guardas. */
+  const viuRecargaRef = useRef(false);
+  useEffect(() => {
+    if (transactionsData.isLoading) { viuRecargaRef.current = true; return; }
+    if (!viuRecargaRef.current) return;
+    viuRecargaRef.current = false;
+    recargaEmVooRef.current = false;
+    clearTimeout(soltarRecargaRef.current);
+  }, [transactionsData.isLoading]);
+
   const listRefiltering =
     shouldUseRealData &&
     transactionsData.hasLoaded &&
@@ -3056,7 +3089,22 @@ function TransacoesPageBody({
      volta dele é uma mudança de caminho — que é o sinal mais confiável que esta
      página tem. Watch de estado do modal não serve: ele vive no App. */
   const caminhoAtual = useRouterState({ select: (st) => st.location.pathname });
-  const emModalDeTransacao = /\/transactions\/[^/]+/.test(caminhoAtual);
+  /* O painel de transação chega por DOIS caminhos e os dois têm de desligar os
+     atalhos da lista: editar é um segmento de rota
+     (`/transactions/{-$transactionId}`), mas CRIAR é um search param
+     (`?fc_modal=...`). Olhando só o pathname, a página continuava atalhável
+     atrás do drawer aberto — e como ele foca a própria casca (um `div`, não um
+     campo), nenhuma guarda de "está num input" pegava isso: com o drawer na
+     tela, `R` recarregava a lista por baixo dele. */
+  const buscaDaRota = useRouterState({ select: (st) => st.location.search });
+  const emModalDeTransacao =
+    /\/transactions\/[^/]+/.test(caminhoAtual) ||
+    /(^|[?&])fc_modal=/.test(
+      typeof buscaDaRota === "string" ? buscaDaRota : new URLSearchParams(
+        Object.entries(buscaDaRota || {}).filter(([, v]) => v != null)
+          .map(([k, v]) => [k, String(v)]),
+      ).toString(),
+    );
   useEffect(() => {
     const id = editandoDeRef.current;
     if (!id) return;
@@ -3129,19 +3177,33 @@ function TransacoesPageBody({
   }, [undoToast, shouldUseRealData, transactionsData, onTransactionsInvalidate, flashSettled]);
 
   /** Pulso + torrada quando a liquidação vem da sanfona, não da ação rápida. */
+  /* A liquidação vinda da SANFONA. No toque este é o caminho principal — não há
+     ação rápida no mobile —, então o §09 precisa valer aqui igual, ou o recurso
+     existiria só para quem usa mouse. */
   const handleSettledFromDetail = useCallback(
     (id, next) => {
-      flashSettled(id);
       const tx = txListRef.current.find((t) => t.id === id);
+      const saiuDoFiltro =
+        (next && filter.settlement === "a-pagar") ||
+        (!next && filter.settlement === "pagas");
+      if (saiuDoFiltro) {
+        // Colapsa e revalida ao fim — `startRowLeave` cuida das duas coisas.
+        setSelected((cur) => (cur && cur.id === id ? null : cur));
+        startRowLeave(id);
+      } else {
+        flashSettled(id);
+        if (shouldUseRealData) onTransactionsInvalidate?.();
+      }
       setUndoToast({
         id,
         label: next
           ? `"${tx?.desc ?? "Transação"}" marcada como paga`
           : `Pagamento de "${tx?.desc ?? "transação"}" desfeito`,
+        nota: saiuDoFiltro ? `Saiu do filtro "${next ? "A pagar" : "Pagas"}"` : null,
         revert: next,
       });
     },
-    [flashSettled],
+    [flashSettled, filter.settlement, startRowLeave, shouldUseRealData, onTransactionsInvalidate],
   );
 
   const quickActions = useMemo(() => ({
@@ -3183,7 +3245,12 @@ function TransacoesPageBody({
         const next = !tx.settled;
         if (shouldUseRealData) {
           await transactionsData.setTransactionSettled(tx.id, next);
-          if (onTransactionsInvalidate) onTransactionsInvalidate();
+          /* A revalidação vem DEPOIS de decidir a saída, e só quando a linha
+             fica. Invalidar aqui derrubava a linha na resposta — cortando o
+             colapso que o §09 existe para mostrar — e ainda cobrava DUAS
+             viagens por liquidação, porque `startRowLeave` revalida de novo ao
+             fim da animação. É o mesmo desenho da exclusão: muda local,
+             colapsa, e só então revalida. */
         } else {
           setMockTxList((cur) => cur.map((t) => (t.id === tx.id ? { ...t, settled: next } : t)));
         }
@@ -3198,8 +3265,13 @@ function TransacoesPageBody({
         const saiuDoFiltro =
           (next && filter.settlement === "a-pagar") ||
           (!next && filter.settlement === "pagas");
-        if (saiuDoFiltro) startRowLeave(tx.id);
-        else flashSettled(tx.id);
+        if (saiuDoFiltro) {
+          // `startRowLeave` revalida sozinho ao terminar o colapso.
+          startRowLeave(tx.id);
+        } else {
+          flashSettled(tx.id);
+          if (shouldUseRealData && onTransactionsInvalidate) onTransactionsInvalidate();
+        }
 
         // Liquidar é reversível pela própria API (`unsettle`), então o desfazer
         // é honesto aqui. Excluir não tem volta no backend — por isso ele
@@ -3501,9 +3573,17 @@ function TransacoesPageBody({
             title="Não foi possível carregar as transações"
             sub={transactionsData.error || "Tente novamente em instantes."}
             /* A saída fica AQUI, junto do problema. Sem ela o único caminho
-               era o F5, que também descarta filtro, rolagem e seleção. */
-            primaryLabel={listRefiltering ? "Carregando…" : "Tentar de novo"}
-            onPrimary={listRefiltering ? undefined : recarregarLista}
+               era o F5, que também descarta filtro, rolagem e seleção.
+
+               O rótulo NÃO alterna com `listRefiltering`: este card só existe
+               quando `hasLoaded` é falso, e `listRefiltering` exige que ele
+               seja verdadeiro — os dois nunca coexistem, então o estado
+               "Carregando…" aqui seria letra morta. Quem segura o clique
+               repetido é a guarda de voo dentro de `recarregarLista`.
+               (E `onPrimary: undefined` faria o botão SUMIR, não desabilitar:
+               `CardEmptyWithCta` só o renderiza com os dois props presentes.) */
+            primaryLabel="Tentar de novo"
+            onPrimary={recarregarLista}
           />
         ) : (
           /* Vazio SEMÂNTICO: quando dá para apontar o culpado, o texto nomeia

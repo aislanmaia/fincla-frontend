@@ -733,8 +733,13 @@ describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
       hasMore: false,
       removeTransaction: vi.fn(),
       setTransactionSettled,
+      reload: recarregarMock,
     });
   }
+
+  /** O `reload` do hook, para os testes de recarga verem que foi chamado. */
+  let recarregarMock = vi.fn();
+  beforeEach(() => { recarregarMock = vi.fn(); });
 
   it("duplicar manda a transação para o consumidor, sem a identidade do original", async () => {
     const onDuplicateTx = vi.fn();
@@ -910,6 +915,79 @@ it("cancelar no modal NÃO liquida", async () => {
     // No mobile o botão vive dentro do bottom sheet e a faixa global fica coberta:
     // uma falha pareceria "não aconteceu nada".
     expect(await screen.findByText("Servidor recusou")).toBeInTheDocument();
+  });
+
+
+  /* ── §29 · recarregar a lista ────────────────────────────────────────── */
+
+  it("o botão de recarregar pede recarga ao hook — não recarrega a página", async () => {
+    seedSettlement();
+    renderPage();
+    await userEvent.click(screen.getByRole("button", { name: /Recarregar a lista/i }));
+    expect(recarregarMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("a tecla R recarrega, e martelar não enfileira buscas", async () => {
+    seedSettlement();
+    renderPage();
+    /* A guarda de voo é SÍNCRONA (um ref), porque `isLoading` só vira `true` no
+       render seguinte — sem ela, dois toques rápidos escapavam pela janela. */
+    await userEvent.keyboard("rrrr");
+    expect(recarregarMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("o card de falha oferece a saída, em vez de exigir F5", async () => {
+    transactionsDataMock.mockReturnValue({
+      isLoading: false,
+      error: "Falha de rede",
+      summary: null,
+      transactions: [],
+      total: 0,
+      hasMore: false,
+      removeTransaction: vi.fn(),
+      setTransactionSettled: vi.fn(),
+      reload: recarregarMock,
+    });
+    renderPage();
+    await userEvent.click(await screen.findByRole("button", { name: /Tentar de novo/i }));
+    expect(recarregarMock).toHaveBeenCalledTimes(1);
+  });
+
+  /* ── §09 · a linha que sai do recorte ────────────────────────────────── */
+
+  it("liquidar sob o filtro 'A pagar' DIZ que a linha saiu, e oferece ver", async () => {
+    seedSettlement(vi.fn().mockResolvedValue({ settled: true }));
+    renderPage();
+    await openFilters();
+    await abrirFaceta("Situação");
+    await userEvent.click(screen.getByRole("button", { name: /^A pagar$/ }));
+    await userEvent.keyboard("{Escape}");
+
+    await userEvent.click(
+      (await screen.findAllByRole("button", { name: /^Marcar Boleto luz como pago$/ }))[0],
+    );
+    await userEvent.click(await screen.findByRole("button", { name: /Confirmar pagamento/i }));
+
+    /* Sem esta frase a transação recém-paga simplesmente sumia, e o único
+       palpite disponível era que algo tinha dado errado. */
+    expect(await screen.findByText(/Saiu do filtro "A pagar"/)).toBeInTheDocument();
+    // "Ver" desfaz o RECORTE, não o pagamento — quem pagou quis pagar.
+    expect(screen.getByRole("button", { name: "Ver" })).toBeInTheDocument();
+  });
+
+  it("sem filtro de situação a linha FICA, e não há frase de saída", async () => {
+    seedSettlement(vi.fn().mockResolvedValue({ settled: true }));
+    renderPage();
+    await openFilters();
+
+    await userEvent.click(
+      (await screen.findAllByRole("button", { name: /^Marcar Boleto luz como pago$/ }))[0],
+    );
+    await userEvent.click(await screen.findByRole("button", { name: /Confirmar pagamento/i }));
+
+    expect(await screen.findByText(/marcada como paga/)).toBeInTheDocument();
+    expect(screen.queryByText(/Saiu do filtro/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Ver" })).not.toBeInTheDocument();
   });
 
   it("numa transação já paga a ação é desfazer, com settled=false", async () => {

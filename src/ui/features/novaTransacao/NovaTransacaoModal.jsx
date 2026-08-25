@@ -331,14 +331,36 @@ export const NovaTransacaoModal = ({
      é o mesmo. */
   const fecharComEsc = useCallback((e) => {
     if (e.key !== "Escape" || e.defaultPrevented) return;
-    const alvo = e.target;
-    const ehCampo =
-      alvo && (alvo.tagName === "INPUT" || alvo.tagName === "TEXTAREA" || alvo.isContentEditable);
-    if (ehCampo) return;
-    if (addingTag || cardPanelOpen || recurrencePanelOpen || successOverlay) return;
+    /* A celebração de sucesso tem o botão "Fechar" dela e nada mais para
+       cancelar: Esc ali não teria camada nenhuma para tirar. */
+    if (successOverlay) return;
+
+    /* UMA CAMADA POR VEZ, de dentro para fora — e cada camada é FECHADA aqui,
+       não apenas "respeitada". A versão anterior só desistia quando um
+       sub-painel estava aberto: com o painel de cartão à mostra, Esc não fazia
+       absolutamente nada, para sempre, enquanto o painel de atalhos anunciava
+       "fecha painel, sheet ou sanfona, na ordem em que estiverem abertos".
+
+       Os campos que tratam Esc por conta própria (nova tag, parcela "outro", a
+       calculadora) chamam `stopPropagation`, então nunca chegam aqui. Por isso
+       NÃO existe mais uma desistência genérica para `<input>`: ela fazia Esc
+       ser um nada em qualquer campo comum — descrição, valor —, que é
+       justamente onde o cursor costuma estar quando alguém decide sair. */
     e.preventDefault();
+    if (addingTag) { setNewTag(""); setAddingTag(false); return; }
+    /* Só o estado ABERTO conta como camada — `cardPanelExiting` e
+       `recurrencePanelExiting` ficam DE FORA de propósito. Eles só voltam a
+       `false` num `onAnimationEnd`, e esse evento não é garantido: não existe em
+       jsdom, some com `prefers-reduced-motion` desligando a animação, e pode se
+       perder num quadro descartado. Um "saindo" preso tornaria o Esc
+       permanentemente morto — o defeito exato que este handler veio corrigir,
+       de volta por outra porta. O preço é dois Esc em 320 ms fecharem o drawer,
+       que é o que dois Esc seguidos deveriam mesmo significar. */
+    if (cardPanelOpen) { beginCloseCardPanel(); return; }
+    if (recurrencePanelOpen) { beginCloseRecurrencePanel(); return; }
     beginClose();
-  }, [addingTag, cardPanelOpen, recurrencePanelOpen, successOverlay, beginClose]);
+  }, [addingTag, cardPanelOpen, recurrencePanelOpen,
+      successOverlay, beginClose, beginCloseCardPanel, beginCloseRecurrencePanel]);
 
   const [categoryTagId, setCategoryTagId] = useState(null);
   const [categoryTagIsActive, setCategoryTagIsActive] = useState(true);
@@ -2635,7 +2657,7 @@ export const NovaTransacaoModal = ({
                     ))}
                     {addingTag ? (
                       <input autoFocus value={newTag} onChange={e => setNewTag(e.target.value)}
-                        onKeyDown={e => { if(e.key==="Enter"&&newTag.trim()){ void commitNewDetailTag(newTag); } if(e.key==="Escape"){setNewTag("");setAddingTag(false);} }}
+                        onKeyDown={e => { if(e.key==="Enter"&&newTag.trim()){ void commitNewDetailTag(newTag); } if(e.key==="Escape"){e.stopPropagation();setNewTag("");setAddingTag(false);} }}
                         onBlur={() => { if(newTag.trim()){ void commitNewDetailTag(newTag); } else { setNewTag(""); setAddingTag(false); } }}
                         style={{ ...G, fontSize:12, color:T.blue, border:`1px dashed ${T.blue}`, padding:"4px 10px", borderRadius:9999, outline:"none", width:90, background:"transparent" }} />
                     ) : (
@@ -3137,7 +3159,7 @@ export const NovaTransacaoModal = ({
                               setInstallmentsCustom(false); setInstallmentsInput("");
                             }
                           }}
-                          onKeyDown={e => { if (e.key === "Enter" || e.key === "Escape") { setInstallmentsCustom(false); } }}
+                          onKeyDown={e => { if (e.key === "Enter" || e.key === "Escape") { e.stopPropagation(); setInstallmentsCustom(false); } }}
                           placeholder="N"
                           maxLength={3}
                           style={{ ...G, ...NUM, width:"100%", background:"transparent", border:"none",
@@ -3313,7 +3335,7 @@ export const NovaTransacaoModal = ({
                               }}
                               onKeyDown={e => {
                                 if (e.key === "Enter") e.target.blur();
-                                if (e.key === "Escape") { setCalcCustom(false); setCalcCustomInput(""); setCalcCount(2); }
+                                if (e.key === "Escape") { e.stopPropagation(); setCalcCustom(false); setCalcCustomInput(""); setCalcCount(2); }
                               }}
                               placeholder="ex: 18"
                               maxLength={3}
@@ -3601,7 +3623,7 @@ export const NovaTransacaoModal = ({
                     ))}
                     {addingTag ? (
                       <input autoFocus value={newTag} onChange={e => setNewTag(e.target.value)}
-                        onKeyDown={e => { if(e.key==="Enter"&&newTag.trim()){ void commitNewDetailTag(newTag); } if(e.key==="Escape"){setNewTag("");setAddingTag(false);} }}
+                        onKeyDown={e => { if(e.key==="Enter"&&newTag.trim()){ void commitNewDetailTag(newTag); } if(e.key==="Escape"){e.stopPropagation();setNewTag("");setAddingTag(false);} }}
                         onBlur={() => { if(newTag.trim()){ void commitNewDetailTag(newTag); } else { setNewTag(""); setAddingTag(false); } }}
                         style={{ ...G, fontSize:11, color:T.blue, border:`1px dashed ${T.blue}`, padding:"3px 9px", borderRadius:9999, outline:"none", width:80, background:"transparent" }} />
                     ) : (
