@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 
 import { T } from "../../tokens";
 import { G } from "../../typography";
+import { DisclosureChevron } from "../../components/DisclosureChevron.jsx";
 
 /**
  * Altura do cabeçalho da lista, exportada porque os cabeçalhos de DIA grudam
@@ -227,9 +228,7 @@ export function TransactionsListHeader({
                 {sum >= 0 ? "+" : "−"}
                 {fmt(Math.abs(sum))}
               </b>
-              <span aria-hidden="true" style={{ fontSize: 11, color: T.inkGhost }}>
-                {sumOpen ? "▲" : "▼"}
-              </span>
+              <DisclosureChevron open={sumOpen} size={12} style={{ color: T.inkGhost }} />
             </button>
           ) : (
         <span style={{ display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>

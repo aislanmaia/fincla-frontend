@@ -48,6 +48,11 @@ export function useTransactionsData({
   refreshToken = 0,
 }) {
   const [state, setState] = useState(() => initialState(enabled, organizationId));
+  /* Nonce da recarga PEDIDA. Mora aqui e não fora porque quem sabe distinguir
+     "recarregar" de "revalidar" é este hook — e a distinção é o que decide se
+     acende carregamento. */
+  const [reloadNonce, setReloadNonce] = useState(0);
+  const reload = useCallback(() => setReloadNonce((n) => n + 1), []);
   const prevFetchSig = useRef(null);
 
   const query = useMemo(() => {
@@ -79,8 +84,18 @@ export function useTransactionsData({
       prev.organizationId === organizationId &&
       prev.query === query &&
       prev.summaryQuery === summaryQuery;
+    /* Recarregar É diferente de revalidar. `softRefreshOnly` existe para o
+       stale-while-revalidate silencioso (uma transação salva em outra tela):
+       ali NÃO se acende carregamento, de propósito, porque ninguém pediu nada.
+
+       Quando a pessoa clica em "recarregar", ela pediu — e precisa ver que
+       pediu. Sem este nonce a recarga caía no ramo silencioso: o botão não
+       girava, a lista não recuava, a barra não aparecia, o `disabled` nunca
+       engatava, e marteladas no botão disparavam N buscas concorrentes. */
+    const recargaExplicita = prev != null && prev.reloadNonce !== reloadNonce;
     const softRefreshOnly =
       sameFilters &&
+      !recargaExplicita &&
       prev.refreshToken != null &&
       prev.refreshToken !== refreshToken;
 
@@ -102,12 +117,23 @@ export function useTransactionsData({
     });
     const samePaginationContext =
       prev != null && prev.browsingContextKey === browsingContextKey;
+    /* "Mesmo contexto" NÃO é o mesmo que "carregando mais uma página": ele é
+       verdadeiro para QUALQUER refetch da mesma pergunta, recarga explícita
+       inclusive. Usá-lo sozinho como `isAppending` fazia a recarga se declarar
+       paginação — e a página, que tira `isAppending` do sinal de carregamento
+       justamente para o scroll infinito não apagar as linhas lidas, ficava
+       muda: botão sem giro, lista sem recuo, barra sem aparecer.
+
+       O que distingue os dois é o objeto `query`: o scroll infinito recalcula
+       com `limit` maior, então ele muda de referência; a recarga não toca nele. */
+    const carregandoMaisPaginas = samePaginationContext && prev.query !== query;
 
     prevFetchSig.current = {
       organizationId,
       query,
       summaryQuery,
       refreshToken,
+      reloadNonce,
       browsingContextKey,
     };
 
@@ -122,7 +148,7 @@ export function useTransactionsData({
       setState((current) => ({
         ...current,
         isLoading: true,
-        isAppending: samePaginationContext,
+        isAppending: carregandoMaisPaginas,
         error: "",
         pageError: "",
       }));
@@ -203,7 +229,7 @@ export function useTransactionsData({
     return () => {
       cancelled = true;
     };
-  }, [enabled, organizationId, query, summaryQuery, refreshToken]);
+  }, [enabled, organizationId, query, summaryQuery, refreshToken, reloadNonce]);
 
   const removeTransaction = useCallback(async (transactionId) => {
     if (!organizationId) return;
@@ -284,6 +310,7 @@ export function useTransactionsData({
   ]);
 
   return {
+    reload,
     isLoading: state.isLoading,
     isAppending: state.isAppending,
     error: state.error,

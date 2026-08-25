@@ -24,7 +24,7 @@
  * - #4: teste dedicado para modo não-live — o quick-add avisa em vez de
  *   ficar com um formulário morto.
  */
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -631,4 +631,65 @@ describe("NovaTransacaoModal — quick-add de cartão no drawer (issue #79)", ()
       SELECTED_BG,
     );
   }, 15000);
+});
+
+describe("NovaTransacaoModal — Esc fecha, uma camada por vez (§29)", () => {
+  /* As preferências do drawer moram em localStorage e sobrevivem entre testes:
+     um teste anterior deixa "crédito" como último método, o drawer abre já com
+     o painel de cartão à mostra, e aí Esc fecha ESSA camada — corretamente.
+     Sem limpar, estes testes mediriam o resíduo do vizinho. */
+  beforeEach(() => { localStorage.clear(); });
+
+  /* A primeira versão deste handler desistia para QUALQUER `<input>`, e por
+     isso era um nada justamente no caso mais comum: o cursor num campo de
+     texto, que é onde ele está quando alguém decide sair. Só os campos que
+     tratam Esc por conta própria param a propagação — os demais têm de subir
+     até aqui. É essa subida que este teste tranca. */
+  it("Esc DISPARADO NUM CAMPO comum sobe e fecha o painel", async () => {
+    const onClose = vi.fn();
+    renderDrawer({ onClose });
+    const dialogo = await screen.findByRole("dialog");
+    const campo = dialogo.querySelector("input");
+    expect(campo).toBeTruthy();
+    fireEvent.keyDown(campo, { key: "Escape", bubbles: true });
+    await waitFor(() => expect(onClose).toHaveBeenCalled(), { timeout: 5000 });
+  });
+
+  it("Esc no próprio painel fecha", async () => {
+    const onClose = vi.fn();
+    renderDrawer({ onClose });
+    const dialogo = await screen.findByRole("dialog");
+    fireEvent.keyDown(dialogo, { key: "Escape" });
+    await waitFor(() => expect(onClose).toHaveBeenCalled(), { timeout: 5000 });
+  });
+
+  /* A regra que dá nome ao describe. A versão anterior deste handler apenas
+     DESISTIA quando um sub-painel estava aberto: com o painel de cartão à
+     mostra, Esc não fazia absolutamente nada — para sempre —, enquanto o painel
+     de atalhos anunciava "fecha painel, sheet ou sanfona, na ordem em que
+     estiverem abertos". Prometer camadas e não tirar nenhuma é pior que não
+     prometer. */
+  it("com o painel de cartão aberto, o primeiro Esc tira ELE — não o drawer", async () => {
+    const onClose = vi.fn();
+    renderDrawer({ onClose });
+    const dialogo = await screen.findByRole("dialog");
+    // O painel lateral do cartão entra: é ele a camada de cima agora.
+    await openCardPanel(userEvent.setup());
+
+    fireEvent.keyDown(dialogo, { key: "Escape" });
+    await new Promise((r) => setTimeout(r, 500));
+    expect(onClose).not.toHaveBeenCalled();
+
+    // O segundo Esc, sem camada por cima, fecha o drawer.
+    fireEvent.keyDown(dialogo, { key: "Escape" });
+    await waitFor(() => expect(onClose).toHaveBeenCalled(), { timeout: 5000 });
+  });
+
+  it("o painel toma o foco ao abrir — senão o atalho não tem onde chegar", async () => {
+    renderDrawer();
+    const dialogo = await screen.findByRole("dialog");
+    await waitFor(() => {
+      expect(document.activeElement === dialogo || dialogo.contains(document.activeElement)).toBe(true);
+    });
+  });
 });

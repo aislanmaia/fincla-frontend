@@ -40,6 +40,7 @@ export const GRUPOS_DE_ATALHOS = [
        Um título que não descreve o que lista custa mais que não ter título. */
     "Geral",
     [
+      [["R"], "Recarrega a lista", "mantém filtro, rolagem e seleção"],
       [["Esc"], "Fecha painel, sheet ou sanfona", "na ordem em que estiverem abertos"],
       [["?"], "Abre esta ajuda", ""],
     ],

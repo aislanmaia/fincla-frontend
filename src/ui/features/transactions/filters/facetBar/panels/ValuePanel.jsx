@@ -271,7 +271,7 @@ export function ValuePanel({
               style={{
                 ...G,
                 ...MONO,
-                fontSize: 10,
+                fontSize: 11,
                 color: T.inkLight,
                 textAlign: "center",
                 whiteSpace: "nowrap",
@@ -334,7 +334,7 @@ export function ValuePanel({
               {contaAtalho(a) != null && (
                 <span
                   style={{
-                    ...G, ...MONO, marginLeft: 6, fontSize: 10,
+                    ...G, ...MONO, marginLeft: 6, fontSize: 11,
                     color: on ? "rgba(255,255,255,.72)" : T.inkLight,
                   }}
                 >

@@ -232,7 +232,7 @@ export function TransactionsFilterPanel({
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {/* Não existe "aplicar": o filtro já está valendo. Sem esta frase, o
               botão escuro ao lado lê como formulário pendente de envio. */}
-          <span style={{ ...G, fontSize: 10.5, color: T.inkGhost }}>aplica ao vivo</span>
+          <span style={{ ...G, fontSize: 11, color: T.inkGhost }}>aplica ao vivo</span>
           <button
             type="button"
             onClick={onApply}
@@ -325,7 +325,7 @@ function ActiveFacetsPane({ facets, onClearFacet, columns = 1 }) {
     <>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
         <h4 style={{ ...G, fontSize: 14, fontWeight: 700, color: T.ink, margin: 0 }}>Filtros ativos</h4>
-        <span style={{ ...G, fontSize: 10.5, color: T.inkGhost }}>
+        <span style={{ ...G, fontSize: 11, color: T.inkGhost }}>
           {facets.length} {facets.length === 1 ? "filtro" : "filtros"}
         </span>
       </div>

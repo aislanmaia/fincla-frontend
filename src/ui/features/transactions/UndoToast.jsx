@@ -17,7 +17,7 @@ const DEFAULT_TTL_MS = 6000;
  * anúncio não deve interromper o que a pessoa está fazendo. O botão fica
  * dentro da região anunciada para ser alcançável logo depois dela.
  */
-export function UndoToast({ toast, onUndo, onDismiss, ttlMs = DEFAULT_TTL_MS }) {
+export function UndoToast({ toast, onUndo, onVer, onDismiss, ttlMs = DEFAULT_TTL_MS }) {
   const onDismissRef = useRef(onDismiss);
   onDismissRef.current = onDismiss;
 
@@ -55,19 +55,59 @@ export function UndoToast({ toast, onUndo, onDismiss, ttlMs = DEFAULT_TTL_MS }) 
         boxShadow: "0 8px 28px rgba(15,25,40,.28)",
       }}
     >
-      <span
-        style={{
-          ...G,
-          fontSize: 12.5,
-          fontWeight: 600,
-          minWidth: 0,
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {toast.label}
+      <span style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 1 }}>
+        <span
+          style={{
+            ...G,
+            fontSize: 12.5,
+            fontWeight: 600,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {toast.label}
+        </span>
+        {/* A segunda linha existe só quando a ação teve uma CONSEQUÊNCIA que a
+            primeira não conta — hoje, a linha ter saído do recorte na tela. Ela
+            não repete o que aconteceu; diz por que a transação sumiu. */}
+        {toast.nota && (
+          <span
+            style={{
+              ...G,
+              fontSize: 11,
+              fontWeight: 500,
+              color: "rgba(255,255,255,0.72)",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {toast.nota}
+          </span>
+        )}
       </span>
+      {toast.nota && onVer && (
+        <button
+          type="button"
+          onClick={onVer}
+          style={{
+            ...G,
+            flexShrink: 0,
+            padding: "5px 12px",
+            borderRadius: 8,
+            border: "1px solid rgba(255,255,255,0.28)",
+            background: "none",
+            color: "#fff",
+            fontSize: 12,
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          Ver
+        </button>
+      )}
       <button
         type="button"
         onClick={onUndo}

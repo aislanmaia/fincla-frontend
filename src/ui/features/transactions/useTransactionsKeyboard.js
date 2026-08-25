@@ -33,6 +33,8 @@ export function useTransactionsKeyboard({
   containerRef,
   enabled = true,
   onFocusSearch,
+  /** Recarregar a lista (tecla R). */
+  onReload,
   onToggleFilters,
   onHelp,
   onSettle,
@@ -96,6 +98,9 @@ export function useTransactionsKeyboard({
       if (e.key === "ArrowUp") { e.preventDefault(); mover(-1); return; }
 
       const k = e.key.toLowerCase();
+      /* `R` de recarregar. Fica antes do `f` só por vizinhança de leitura; a
+         ordem não importa porque cada tecla tem um dono só. */
+      if (k === "r") { e.preventDefault(); onReload?.(); return; }
       if (k === "f") { e.preventDefault(); onToggleFilters?.(); return; }
 
       /* As ações precisam de uma LINHA em foco. Sem ela, "excluir" não teria
@@ -115,7 +120,7 @@ export function useTransactionsKeyboard({
 
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [enabled, mover, onFocusSearch, onToggleFilters, onHelp, onSettle, onEdit, onDuplicate, onDelete, getTransaction]);
+  }, [enabled, mover, onFocusSearch, onReload, onToggleFilters, onHelp, onSettle, onEdit, onDuplicate, onDelete, getTransaction]);
 
   return { focoRef };
 }
