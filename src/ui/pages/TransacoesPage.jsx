@@ -92,6 +92,7 @@ import {
   matchesValueRange,
 } from "../features/transactions/filters/filtersToLegacyParams.js";
 import { DisclosureChevron } from "../components/DisclosureChevron.jsx";
+import { usePullToRefresh } from "../features/transactions/usePullToRefresh.js";
 
 const TRANSACTIONS_SEARCH_DEBOUNCE_MS = 1500;
 
@@ -2080,6 +2081,15 @@ function TransacoesPageBody({
     transactionsData.hasLoaded &&
     transactionsData.isLoading &&
     !transactionsData.isAppending;
+
+  /* §29: puxar ↓ a partir do topo recarrega. Só no toque — no desktop o gesto
+     não existe e o botão de recarregar já está a um clique. */
+  const puxar = usePullToRefresh({
+    scrollRef: listScrollRef,
+    onRefresh: recarregarLista,
+    enabled: isMobile && shouldUseRealData,
+    busy: transactionsData.isLoading,
+  });
 
   /* §28: o apagamento sozinho lê como "desabilitado", não como "carregando" —
      falta direção. A barra dá a direção, mas só depois de 180 ms: a maioria das
@@ -4364,6 +4374,30 @@ function TransacoesPageBody({
              então o pior caso de um clique perdido é abrir uma sanfona. */
           aria-busy={listRefiltering || undefined}
         >
+          {/* §29: o indicador da puxada. Vive DENTRO do scroller e cresce com o
+              dedo, empurrando a lista para baixo — é o movimento que faz o
+              gesto parecer físico em vez de um botão escondido.
+
+              A ALTURA não vem daqui: o hook escreve direto no nó, porque um
+              `setState` por `touchmove` re-renderizaria a lista inteira na
+              cadência do dedo. Este JSX só reage às FASES, que mudam meia dúzia
+              de vezes por gesto. E o nó fica montado durante o recolhimento —
+              desmontá-lo em `height: 0` cancelava a própria animação de volta
+              que ele promete. */}
+          {!puxar.inerte && (
+            <div ref={puxar.indicadorRef} aria-hidden="true"
+              style={{ height: 0, overflow: "hidden",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                color: puxar.passouDoLimiar ? T.blue : T.inkLight }}>
+              {puxar.aguardando
+                ? <span className="fincla-spin" aria-hidden="true" />
+                : (
+                  <span style={{ ...G, fontSize: 11, fontWeight: 600 }}>
+                    {puxar.passouDoLimiar ? "Solte para recarregar" : "Puxe para recarregar"}
+                  </span>
+                )}
+            </div>
+          )}
           {/* Fica DENTRO da região que rola e presa ao topo dela: colada na
               borda superior da lista, que é onde o conteúdo novo vai entrar. */}
           {barraCarregando && (
