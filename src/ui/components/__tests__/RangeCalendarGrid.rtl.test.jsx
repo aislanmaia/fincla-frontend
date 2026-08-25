@@ -128,10 +128,13 @@ describe("<RangeCalendarGrid>", () => {
      que bater com `handleDayClick`; a grade só desenha a frase que recebe. */
   it("a regra do balão promete exatamente o que o clique faz", () => {
     const fechado = { from: "2026-08-10", to: "2026-08-20" };
-    // Intervalo fechado: QUALQUER dia recomeça — inclusive sobre as pontas.
+    // Intervalo fechado, dia do MEIO: o clique recomeça.
     expect(acaoDoClique({ hoverYmd: "2026-08-15", ...fechado })).toBe("novo início");
-    expect(acaoDoClique({ hoverYmd: "2026-08-10", ...fechado })).toBe("novo início");
-    expect(acaoDoClique({ hoverYmd: "2026-08-20", ...fechado })).toBe("novo início");
+    /* Sobre uma PONTA, não: o mousedown já pega aquela ponta e o clique
+       seguinte só confirma a pega. É o mesmo que o cursor `grab` promete —
+       antes, balão e cursor diziam coisas diferentes no mesmo pixel. */
+    expect(acaoDoClique({ hoverYmd: "2026-08-10", ...fechado })).toBe("pegar o de");
+    expect(acaoDoClique({ hoverYmd: "2026-08-20", ...fechado })).toBe("pegar o até");
 
     // Início posto, fim em aberto: depois dele fecha, antes dele recomeça.
     const aberto = { from: "2026-08-10", to: "" };

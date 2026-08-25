@@ -1342,11 +1342,14 @@ const DetailPanel = ({
             onClick={async (e) => {
               e.stopPropagation();
               if (shouldUseRealData) {
+                marcarExcluindo?.(tx.id);
                 try {
                   await transactionsData.removeTransaction(tx.id);
                 } catch (_) {
+                  marcarExcluindo?.(null);
                   return;
                 }
+                marcarExcluindo?.(null);
               } else {
                 setMockTxList((prev) => prev.filter((item) => item.id !== tx.id));
               }
@@ -1538,6 +1541,11 @@ function TransacoesPageBody({
      isso o Tab recomeça do topo do documento e quem editou perde o lugar. */
   const editandoDeRef = useRef(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
+  /* QUAL linha está sendo excluída no servidor. `deletingBusy` sozinho não
+     serve: ele vive no caminho do modal, onde `deletingId` é sempre null, e o
+     caminho da sanfona não tinha sinal nenhum — a linha ficava parada durante
+     a chamada, que é o convite para tocar de novo. */
+  const [excluindoId, setExcluindoId] = useState(null);
 
   /* `dockLarga` é a largura RENDERIZADA, e ela sempre atrasa um quadro em
      relação a `wideDesktopFiltersOpen`. É o que dá à transição um valor de
@@ -2007,8 +2015,16 @@ function TransacoesPageBody({
      refazer não acendia nada: a lista antiga ficava parada, com números que já
      não correspondiam ao que estava sendo pedido, até a resposta chegar. Uma
      lista que não se mexe é indistinguível de uma lista que ignorou o clique. */
+  /* `isAppending` fica de FORA: o scroll infinito só aumenta `limit` — é a
+     mesma pergunta, com mais páginas. Tratá-lo como refiltragem apagava as
+     linhas JÁ LIDAS a cada página e, pior, punha `pointerEvents: none` no
+     container de rolagem: a roda do mouse parava de chegar no scroller e o
+     scroll travava no meio do gesto, exatamente enquanto se rolava. */
   const listRefiltering =
-    shouldUseRealData && transactionsData.hasLoaded && transactionsData.isLoading;
+    shouldUseRealData &&
+    transactionsData.hasLoaded &&
+    transactionsData.isLoading &&
+    !transactionsData.isAppending;
 
   /* §28: o apagamento sozinho lê como "desabilitado", não como "carregando" —
      falta direção. A barra dá a direção, mas só depois de 180 ms: a maioria das
@@ -2706,7 +2722,7 @@ function TransacoesPageBody({
      ou pela ação rápida (desktop) não recebia retorno nenhum — a linha ficava
      parada e parecia que o toque não pegou, que é o convite exato para tocar
      de novo e pagar duas vezes. */
-  const rowBusyId = settlingId ?? (deletingBusy ? deletingId : null);
+  const rowBusyId = settlingId ?? excluindoId;
 
   const undoFilter = useCallback(() => {
     setHistoryBusy("undo");
@@ -2984,14 +3000,29 @@ function TransacoesPageBody({
     const trocouDeConsulta = assinaturaDoFiltroRef.current !== assinatura;
     assinaturaDoFiltroRef.current = assinatura;
 
+    /* A assinatura muda um render ANTES de os dados dela chegarem — o hook
+       segura a lista antiga enquanto busca. Guardar os ids agora carimbaria a
+       lista VELHA como conhecida sob a assinatura NOVA; quando a resposta
+       chegasse, a assinatura já bateria, nenhum id da página nova estaria no
+       conjunto anterior, e as vinte linhas nasceriam de uma vez — que é
+       exatamente o que esta guarda existe para impedir.
+
+       Por isso trocar de consulta ESQUECE os ids em vez de regravá-los, e nada
+       é comparado enquanto a resposta está em voo. */
+    if (trocouDeConsulta) {
+      idsConhecidosRef.current = null;
+      return;
+    }
+    if (listRefiltering) return;
+
     const atuais = new Set(txList.map((t) => String(t.id)));
     const antes = idsConhecidosRef.current;
     idsConhecidosRef.current = atuais;
 
-    // Consulta nova (ou a primeira carga) não é nascimento: é outra lista.
-    if (!antes || trocouDeConsulta) return;
+    // Primeira lista deste recorte não é nascimento: é o ponto de partida.
+    if (!antes) return;
     for (const id of atuais) if (!antes.has(id)) marcarNascimento(id);
-  }, [txList, transactionsFilters, marcarNascimento]);
+  }, [txList, transactionsFilters, listRefiltering, marcarNascimento]);
 
   /* O sheet cobre a tela, mas o botão que o abriu continua no fluxo de Tab por
      trás do backdrop: sem prender, quem navega por teclado tabula para fora,
@@ -3548,6 +3579,7 @@ function TransacoesPageBody({
                         onTransactionsInvalidate={onTransactionsInvalidate}
                         deletingId={deletingId}
                         setDeletingId={setDeletingId}
+                        marcarExcluindo={setExcluindoId}
                         onRowLeave={startRowLeave}
                         onDuplicateTx={onDuplicateTx}
                         onFilterByCategory={filterByCategoryFromRow}
@@ -3973,20 +4005,28 @@ function TransacoesPageBody({
               return;
             }
             setDeletingBusy(true);
+            setExcluindoId(tx.id);
             try {
               if (shouldUseRealData) await transactionsData.removeTransaction(tx.id);
               else setMockTxList((prev) => prev.filter((item) => item.id !== tx.id));
             } catch (_) {
               setDeletingBusy(false);
+              setExcluindoId(null);
               return;
             }
             setDeletingBusy(false);
+            setExcluindoId(null);
             setConfirmAcao(null);
             setSelected((cur) => (cur && cur.id === tx.id ? null : cur));
             /* A linha colapsa ANTES do refetch: sem isso a lista se
                reorganizaria de um quadro para o outro e o olho perderia onde
-               estava. */
-            onRowLeave(tx.id);
+               estava.
+               `startRowLeave`, não `onRowLeave`: este handler vive na PÁGINA,
+               e `onRowLeave` é o nome do prop lá dentro do painel de detalhe.
+               Aqui ele era um identificador livre — cada exclusão pelo modal
+               lançava ReferenceError e o colapso nunca rodava, engolido pelo
+               fato de a linha sumir no refetch logo em seguida. */
+            startRowLeave(tx.id);
           }}
         />
       )}
@@ -4167,8 +4207,13 @@ function TransacoesPageBody({
                Recuar em vez de trocar por esqueleto é de propósito — trocar
                pisca a tela inteira a cada tecla da busca. */
             opacity: listRefiltering ? 0.55 : 1,
-            transition: "opacity var(--mo-fast, 120ms) var(--mo-fast-ease, ease-out)",
-            pointerEvents: listRefiltering ? "none" : undefined }}
+            transition: "opacity var(--mo-fast, 120ms) var(--mo-fast-ease, ease-out)" }}
+          /* SEM `pointerEvents: none`: este elemento É o scroller, e um alvo
+             que não recebe evento de ponteiro também não recebe roda — rolar
+             durante uma refiltragem travava no meio do gesto. O risco que a
+             trava cobria (clicar numa linha que está prestes a mudar) já é
+             coberto onde importa: toda ação destrutiva passa por confirmação,
+             então o pior caso de um clique perdido é abrir uma sanfona. */
           aria-busy={listRefiltering || undefined}
         >
           {/* Fica DENTRO da região que rola e presa ao topo dela: colada na

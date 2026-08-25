@@ -79,8 +79,17 @@ describe("mapSortToLegacy", () => {
     expect(mapSortToLegacy([{ field: "desc", dir: "desc" }])).toBe("name-desc");
   });
 
-  it("campo sem equivalente cai no default", () => {
-    expect(mapSortToLegacy([{ field: "tipo", dir: "asc" }])).toBe("date-desc");
+  /* `tipo` e `cat` TÊM equivalente: a API aceita `sort_by=type` e
+     `sort_by=category`. Enquanto não tinham token, escolhê-los renomeava o
+     botão e não mexia uma linha — o defeito que responde ao clique sem fazer
+     nada. O default continua existindo para campo de verdade desconhecido. */
+  it("tipo e categoria têm token próprio — não caem no default", () => {
+    expect(mapSortToLegacy([{ field: "tipo", dir: "asc" }])).toBe("type-asc");
+    expect(mapSortToLegacy([{ field: "cat", dir: "desc" }])).toBe("cat-desc");
+  });
+
+  it("campo desconhecido cai no default", () => {
+    expect(mapSortToLegacy([{ field: "lol", dir: "asc" }])).toBe("date-desc");
   });
 });
 

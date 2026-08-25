@@ -32,8 +32,17 @@ import {
 export function acaoDoClique({ touch, hoverYmd, grabbedEdge, from, to }) {
   if (touch || !hoverYmd) return null;
   if (grabbedEdge) return `soltar o ${grabbedEdge === "from" ? "de" : "até"}`;
-  // Intervalo fechado: o clique RECOMEÇA (é o que handleDayClick faz).
-  if (from && to) return "novo início";
+  if (from && to) {
+    /* Sobre uma PONTA o clique não recomeça nada: `handleDayPointerDown` já
+       pegou aquela ponta no mousedown, e o clique que vem em seguida só
+       confirma a pega. Prometer "novo início" ali contradizia tanto o que
+       acontece quanto o cursor `grab` que a própria célula mostra — duas
+       promessas diferentes no mesmo pixel. */
+    if (hoverYmd === from) return "pegar o de";
+    if (hoverYmd === to) return "pegar o até";
+    // Fora das pontas, com o intervalo fechado, o clique RECOMEÇA.
+    return "novo início";
+  }
   if (!from) return "novo início";
   const h = parseLocalYmd(hoverYmd);
   const f = parseLocalYmd(from);

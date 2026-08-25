@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { T } from "../tokens";
 import { G, S, NUM } from "../typography";
 
@@ -41,21 +41,34 @@ export function AnimBar({ pct, color, h = 4, delay = 0 }) {
 }
 
 export function AnimNum({ value, prefix = "R$\u00a0", style = {}, suffix = "" }) {
-  const [display, setDisplay] = useState(0);
   const target =
     typeof value === "number" ? value : parseFloat(String(value).replace(/[^0-9.,]/g, "").replace(",", ".")) || 0;
+  const [display, setDisplay] = useState(target);
+  /* Interpola do valor ANTERIOR até o novo, não de zero. `target * ease` com
+     `ease` começando em 0 fazia todo número recomeçar do zero a cada mudança:
+     marcar uma transação como paga piscava "R$ 0,00" nos três KPIs e contava
+     de volta — lido como falha de dados, não como animação. A primeira
+     renderização já nasce no alvo, porque não existe "anterior" para percorrer
+     e uma contagem na abertura da tela é ruído, não informação. */
+  /* Espelha o que está NA TELA, não o último alvo: se um trecho for
+     interrompido no meio (o valor mudou de novo antes dos 700 ms), o próximo
+     parte do número que a pessoa está vendo, e não de um salto. */
+  const exibidoRef = useRef(target);
   useEffect(() => {
+    const de = exibidoRef.current;
+    if (de === target) return undefined;
     let start = null;
+    let raf = 0;
     const dur = 700;
+    const pintar = (v) => { exibidoRef.current = v; setDisplay(v); };
     const step = (ts) => {
       if (!start) start = ts;
       const p = Math.min((ts - start) / dur, 1);
       const ease = 1 - Math.pow(1 - p, 3);
-      setDisplay(target * ease);
-      if (p < 1) requestAnimationFrame(step);
-      else setDisplay(target);
+      if (p < 1) { pintar(de + (target - de) * ease); raf = requestAnimationFrame(step); }
+      else pintar(target);
     };
-    const raf = requestAnimationFrame(step);
+    raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
   }, [target]);
   const fmt = display.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });

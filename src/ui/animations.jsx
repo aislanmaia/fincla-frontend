@@ -190,13 +190,6 @@ export const ANIM_CSS = `
      estava. O max-height grande o bastante para qualquer densidade (a linha
      mais alta é 64 px, mais a sanfona aberta) faz a interpolação acontecer;
      height:0 não anima a partir de auto. */
-    }
-  /* ── Movimento da lista de Transações ────────────────────────────────
-     Sair da lista é um COLAPSO DE ALTURA, não só um fade: sem ele as linhas
-     de baixo pulam de uma vez para o lugar da que saiu, e o olho perde onde
-     estava. O max-height grande o bastante para qualquer densidade (a linha
-     mais alta é 64 px, mais a sanfona aberta) faz a interpolação acontecer;
-     height:0 não anima a partir de auto. */
   /* ── SAÍDA DE UMA LINHA — 340 ms do clique ao fim ───────────────────
      Duas fases SOBREPOSTAS, e é a sobreposição que faz parecer uma coisa só:
      0–180 ms a linha desliza para a DIREITA e apaga; 120–340 ms a altura, o
