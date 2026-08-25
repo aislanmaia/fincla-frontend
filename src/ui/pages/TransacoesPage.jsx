@@ -1156,6 +1156,33 @@ const DetailPanel = ({
   confirmInlineBusy = false,
   onConfirmInline,
 }) => {
+  /* A sanfona CRESCE quando a pergunta entra — e perto do fim da lista ela
+     cresce para fora da tela: a confirmação nasce escondida, com os botões
+     abaixo da dobra, e a ação da pessoa parece não ter tido resposta.
+
+     `block: "nearest"` rola o MÍNIMO necessário: se já cabe, não mexe em nada.
+     Rolar sempre para o centro arrancaria a lista do lugar mesmo quando não
+     havia problema — e o que se quer aqui é caber, não recentralizar.
+
+     Os hooks ficam ANTES do `if (!tx)`: um `return` antecipado no meio deles
+     mudaria a ordem entre renders. */
+  const confirmRef = useRef(null);
+  const pedidoAberto =
+    confirmInline && tx && confirmInline.tx?.id === tx.id ? confirmInline.kind : null;
+  useEffect(() => {
+    if (!pedidoAberto) return undefined;
+    /* Um quadro de espera: no mesmo commit em que a pergunta entra, o elemento
+       ainda não tem altura, e rolar para uma caixa de zero pixel não rola nada. */
+    const raf = requestAnimationFrame(() => {
+      const semMovimento = window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+      confirmRef.current?.scrollIntoView({
+        block: "nearest",
+        behavior: semMovimento ? "auto" : "smooth",
+      });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [pedidoAberto]);
+
   if (!tx) return null;
   const isReceita = tx.val > 0;
   return (
@@ -1319,8 +1346,8 @@ const DetailPanel = ({
           altura de duas faixas onde cabe uma. */}
       {/* A pergunta OCUPA o lugar dos botões: deixá-los visíveis por baixo dela
           convidaria a responder duas vezes, e a resposta certa está aqui. */}
-      {confirmInline && confirmInline.tx?.id === tx.id ? (
-        <div style={{ padding: inline ? "10px 12px 12px" : "14px 20px" }}>
+      {pedidoAberto ? (
+        <div ref={confirmRef} style={{ padding: inline ? "10px 12px 12px" : "14px 20px" }}>
           <ConfirmActionInline
             kind={confirmInline.kind}
             desc={tx.desc}
