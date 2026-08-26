@@ -44,12 +44,25 @@ describe("<RangeCalendarGrid>", () => {
     expect(dia("2026-08-12")).toHaveTextContent("só");
   });
 
-  it("célula de 44 px no toque e 30 no mouse", () => {
+  /* O dia é quadrado, não de altura fixa: a grade é `repeat(7, 1fr)` e a largura
+     da célula muda com o painel (~45 px no popover da barra, ~32 px na dock).
+     Altura fixa acerta um e erra o outro — foi o que achatou o calendário em
+     produção. O piso protege o alvo do dedo; o teto impede o tabuleiro. */
+  it("o dia é quadrado, com piso maior no toque", () => {
     const { rerender } = render(<RangeCalendarGrid {...base} />);
-    expect(dia("2026-08-15").firstChild).toHaveStyle({ height: "30px" });
+    expect(dia("2026-08-15").firstChild).toHaveStyle({
+      aspectRatio: "1 / 1", minHeight: "30px", maxHeight: "48px",
+    });
     rerender(<RangeCalendarGrid {...base} touch />);
-    // Trinta serve para o cursor e não para o dedo.
-    expect(dia("2026-08-15").firstChild).toHaveStyle({ height: "44px" });
+    expect(dia("2026-08-15").firstChild).toHaveStyle({
+      aspectRatio: "1 / 1", minHeight: "44px", maxHeight: "56px",
+    });
+  });
+
+  it("o dia sob o cursor acende fundo azul suave, não só o anel", () => {
+    render(<RangeCalendarGrid {...base} hoverYmd="2026-08-15" acaoSobHover="novo início" />);
+    // `blueLight` é a mesma cor da faixa: o hover prenuncia o que a seleção deixa.
+    expect(dia("2026-08-15").firstChild).toHaveStyle({ background: "#EFF6FF" });
   });
 
   it("a ponta pega ganha anel verde — no toque é a única pista que existe", () => {

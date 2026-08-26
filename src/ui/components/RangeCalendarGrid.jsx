@@ -93,7 +93,16 @@ function MonthGrid({
   showTitle = true,
 }) {
   const weekdays = useMemo(() => weekdayLabelsShort(locale), [locale]);
-  const cellH = touch ? 44 : 30;
+  /* O dia é QUADRADO, não de altura fixa — e essa é a divergência assumida
+     contra os 26 px do §14. A grade é `repeat(7, 1fr)`, então a largura da
+     célula depende de onde o calendário está: ~45 px no popover largo da barra,
+     ~32 px no painel estreito da dock. Uma altura fixa acerta um contexto e erra
+     o outro — 30 achata o popover (que foi o que se viu em produção) e 40 põe o
+     dia em pé dentro da dock. `aspect-ratio` deixa a altura seguir a largura em
+     qualquer painel; o piso protege o alvo do dedo e o teto impede que um
+     calendário muito largo vire um tabuleiro. */
+  const cellMin = touch ? 44 : 30;
+  const cellMax = touch ? 56 : 48;
   const dayFont = touch ? 13.5 : 13;
   const firstDow = new Date(year, monthIndex, 1).getDay();
   const nDays = new Date(year, monthIndex + 1, 0).getDate();
@@ -215,14 +224,21 @@ function MonthGrid({
             >
               <div
                 style={{
-                  height: cellH,
+                  aspectRatio: "1 / 1",
+                  minHeight: cellMin,
+                  maxHeight: cellMax,
                   borderRadius: 6,
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
                   justifyContent: "center",
                   lineHeight: 1.05,
-                  background: edge ? T.ink : "transparent",
+                  /* O dia sob o cursor acende um FUNDO azul suave, além do
+                     anel. O anel sozinho diz "é aqui"; o fundo é o que faz o
+                     dia parecer alcançável antes do clique — e é o mesmo
+                     `blueLight` da faixa, então passar o cursor já prenuncia a
+                     cor que a seleção vai deixar. */
+                  background: edge ? T.ink : hov ? T.blueLight : "transparent",
                   boxShadow: grabbed
                     ? `inset 0 0 0 1.5px ${GRAB_RING}`
                     : hov && !edge

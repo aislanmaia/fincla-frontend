@@ -2,7 +2,14 @@
 
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  waitForElementToBeRemoved,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 // Mocks: router (TransacoesPage usa useSearch + useNavigate) ─────────────────
@@ -663,7 +670,12 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     ).toHaveAttribute("aria-checked", "false");
   }, 30000);
 
-  it("desktop compacto: facets ocultos por padrão; botão Filtros expande inline", async () => {
+  /* O desktop compacto abre A MESMA DOCK do largo. Antes ele abria a faixa
+     permanente de nove cards — o painel que o redesenho aposentou —, e o teste
+     aceitava qualquer uma das duas superfícies. Aceitar as duas foi o que
+     deixou a faixa antiga sobreviver em produção abaixo de 1280 px sem nenhum
+     teste reclamar: a dock não é um recurso de tela grande. */
+  it("desktop compacto: filtros recolhidos por padrão; botão Filtros abre a dock", async () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1200 });
     window.dispatchEvent(new Event("resize"));
     renderPage();
@@ -673,11 +685,17 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
     expect(screen.getByRole("button", { name: /^(Abrir |Fechar )?Filtros/i })).toBeInTheDocument();
 
     await openFilters();
-    expect(superficieDeFiltros()).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: /^Filtros$/i })).toBeInTheDocument();
+    // E é a dock mesmo: o trilho de facetas só existe nela.
+    expect(screen.getByRole("button", { name: /^Período$/ })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: /Fechar filtros/i }));
     expect(screen.queryByRole("toolbar", { name: /Filtros de transações/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: /^Filtros$/i })).not.toBeInTheDocument();
+    /* `waitForElementToBeRemoved`, não uma asserção seca: a dock ADIA o
+       desmonte pelo tempo da animação de fechamento — desmontar na hora tira o
+       elemento antes de ele ter para onde encolher, e a lista salta os 360 px
+       de uma vez. A faixa antiga sumia no mesmo tique; a dock não. */
+    await waitForElementToBeRemoved(() => screen.queryByRole("region", { name: /^Filtros$/i }));
   });
 
   // Regressão do bug relatado: selecionar 2+ formas de pagamento fazia a lista

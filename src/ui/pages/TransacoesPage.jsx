@@ -415,6 +415,13 @@ const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
   /* Largura da coluna de categoria, igual para toda a página. Zero = cai no
      `auto` de antes (mocks, testes). */
   catColPx = 0,
+  /* Desktop ESTREITO: a pílula de categoria desce para a linha de metadados, ao
+     lado do método, e a coluna própria some. A coluna era fixa em 141 px e a
+     descrição é a única da grade que encolhe até zero — abaixo de 1280 os dois
+     não cabem, e quem estava sumindo era a descrição. Descer em vez de esconder
+     preserva o clique-para-filtrar, que é o gesto mais curto entre "vi algo" e
+     "quero ver só isso". */
+  catNaLinhaDeMeta = false,
   /* Quais tags já estão no filtro. O clique ALTERNA, então o rótulo precisa
      dizer qual das duas coisas ele vai fazer — dizer "Adicionar" enquanto
      remove é pior que não dizer nada. */
@@ -472,7 +479,7 @@ const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
        para o vão, e é o vão que paga. */
     xwide ? "minmax(0,520px)" : wide ? "minmax(0,420px)"
       : tagsColPx > 0 ? "minmax(0,380px)" : "minmax(0,1fr)",
-    catColPx > 0 ? `${catColPx}px` : "auto",
+    catNaLinhaDeMeta ? null : catColPx > 0 ? `${catColPx}px` : "auto",
     /* TAGS colada na categoria — não no fim da linha. O vão já existe e está
        vazio (336 px em 1500, 613 em 1920), então a coluna cabe ali sem tirar um
        pixel da descrição; e ficando ao lado da categoria, as duas leem como uma
@@ -752,6 +759,30 @@ const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
         <div style={{ ...G, fontSize: MICRO_PX, color:T.inkGhost,
           lineHeight:1.2, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
           display:"flex", alignItems:"center", gap:5 }}>
+          {/* No estreito a categoria abre a linha de metadados, ANTES do
+              método: ela é o metadado mais consultado e não pode ser o que
+              trunca. O botão é o mesmo da coluna — mesmo rótulo acessível,
+              mesmo clique-para-filtrar —, só menor e sem a moldura de hover,
+              que a esta altura já disputaria espaço com o próprio texto. */}
+          {catNaLinhaDeMeta && (
+            onFilterByCategory ? (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onFilterByCategory(tx, e); }}
+                aria-label={`Filtrar por categoria ${tx.cat}`}
+                style={{ ...G, fontFamily:"inherit", fontSize:MICRO_PX, fontWeight:600,
+                  color:catCol, background:`${catCol}18`, border:"none", borderRadius:99,
+                  padding:"1px 6px", cursor:"pointer", flexShrink:0, maxWidth:"55%",
+                  overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
+                  lineHeight:1.4 }}
+              >{tx.cat}</button>
+            ) : (
+              <span style={{ ...G, fontSize:MICRO_PX, fontWeight:600, color:catCol,
+                background:`${catCol}18`, borderRadius:99, padding:"1px 6px",
+                flexShrink:0, maxWidth:"55%", overflow:"hidden",
+                textOverflow:"ellipsis", whiteSpace:"nowrap", lineHeight:1.4 }}>{tx.cat}</span>
+            )
+          )}
           <span style={{ overflow:"hidden", textOverflow:"ellipsis" }}>
             {methodLine}
             {accountLabel ? ` · ${accountLabel}` : ""}
@@ -791,7 +822,10 @@ const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
       {/* Categoria: pílula CLICÁVEL, encostada à ESQUERDA da própria coluna —
           logo depois da descrição, que é o que se lê junto com ela.
           Filtrar por ela é o gesto mais curto entre "vi algo" e "quero ver só
-          isso" — por isso as ações rápidas não moram mais aqui em cima. */}
+          isso" — por isso as ações rápidas não moram mais aqui em cima.
+          No desktop estreito a coluna some e a pílula desce para a linha de
+          metadados, acima. */}
+      {!catNaLinhaDeMeta && (
       <div style={{ minWidth:0, display:"flex", justifyContent:"flex-start" }}>
         {onFilterByCategory ? (
           <Tip label={`Filtrar por ${tx.cat}`}>
@@ -820,6 +854,7 @@ const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
             whiteSpace:"nowrap", lineHeight:1.4 }}>{tx.cat}</span>
         )}
       </div>
+      )}
 
       {tagsColPx > 0 && (
         <div style={{ display:"flex", gap:5, minWidth:0, overflow:"hidden", alignItems:"center" }}>
@@ -1609,7 +1644,6 @@ function TransacoesPageBody({
   const [viewportHeight, setViewportHeight] = useState(
     () => (typeof window !== "undefined" ? window.innerHeight : DESKTOP_FILTERS_EXPAND_MIN_HEIGHT),
   );
-  const [compactDesktopFiltersOpen, setCompactDesktopFiltersOpen] = useState(false);
   const [wideDesktopFiltersOpen, setWideDesktopFiltersOpen] = useState(false);
   /* Largura do painel ancorado, na regra do artefato: até 1600 px a lista
      precisa da largura e o painel fica em 396. Acima disso sobra espaço de
@@ -1621,6 +1655,14 @@ function TransacoesPageBody({
        nesta faixa ele cresce ~24 px em relação aos 132 fixos de antes. Sem
        compensar, esses pixels sairiam do painel de opções — que é onde os
        cartões de escolha vivem e onde a largura faz falta de verdade. */
+    /* Abaixo de 1280 a dock FLUTUA sobre a metade direita da lista, então ela
+       não disputa largura com a linha — pode ser generosa. Metade da área de
+       conteúdo dá ~478 px em 1152: trilho 132 + painel 346, e o painel de
+       Período (que precisa de 238) para de rolar na horizontal. Era por isso
+       que a dock ancorada de 360 aparecia com barra horizontal dentro. */
+    if (viewportWidth < DESKTOP_FILTERS_EXPAND_BREAKPOINT) {
+      return Math.max(420, Math.round(content * 0.5));
+    }
     return viewportWidth >= 1600 ? Math.min(860, Math.round(content * 0.5)) : 420;
   }, [viewportWidth]);
 
@@ -1860,6 +1902,11 @@ function TransacoesPageBody({
     && (viewportWidth < DESKTOP_FILTERS_EXPAND_BREAKPOINT
       || viewportHeight < DESKTOP_FILTERS_EXPAND_MIN_HEIGHT);
 
+  /* Só a LARGURA decide se a dock flutua — `isDesktopCompact` também olha a
+     altura, e altura não tem nada a ver com a lista caber ao lado do painel.
+     Numa tela de 1920×760 a dock ancorada continua certa. */
+  const dockFlutua = !isMobile && viewportWidth < DESKTOP_FILTERS_EXPAND_BREAKPOINT;
+
   useEffect(() => {
     const onResize = () => {
       setViewportWidth(window.innerWidth);
@@ -1868,10 +1915,6 @@ function TransacoesPageBody({
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
-
-  useEffect(() => {
-    if (!isDesktopCompact) setCompactDesktopFiltersOpen(false);
-  }, [isDesktopCompact]);
 
   useLayoutEffect(() => {
     if (!organizationId) {
@@ -2612,6 +2655,20 @@ function TransacoesPageBody({
     () => (isMobile ? 0 : larguraColunaCategoria(pageRows)),
     [isMobile, pageRows],
   );
+  /* Primeira da ORDEM DE SACRIFÍCIO: quando a linha aperta, a coluna de
+     categoria (141 px fixos) sai da grade e a pílula desce para a linha de
+     metadados. A descrição é `minmax(0,1fr)` e vai a ZERO, enquanto categoria,
+     vão e valor se defendem com largura fixa ou piso — sem uma ordem explícita,
+     quem some é sempre o campo pelo qual a pessoa reconhece a transação.
+     Medido em 1152 com a dock ancorada: 54+30+141+156+100+18+14 = 513 numa
+     linha de 515.
+     O gatilho é a LISTA MEDIDA, não a viewport: com a dock aberta em 1600 a
+     lista cai para 620 px — mais estreita que a de 1152 com a dock fechada. Uma
+     régua de viewport diria "largo" justamente onde não é.
+     800 é a conta: 590 de colunas e gaps + 28 de padding + ~180 de piso para a
+     descrição. */
+  const catNaLinhaDeMeta = !isMobile
+    && (listWidth > 0 ? listWidth < 800 : viewportWidth < DESKTOP_FILTERS_EXPAND_BREAKPOINT);
 
   /* A parada de Tab que EXISTE na tela. Se a linha lembrada saiu da lista
      (excluída, filtrada, ou a página trocou), a parada volta para a primeira —
@@ -3154,7 +3211,6 @@ function TransacoesPageBody({
     // "Filtros"; abrir a facet sem abrir o container deixaria o clique sem
     // efeito visível nenhum.
     setFiltersOpen(true);
-    setCompactDesktopFiltersOpen(true);
     setWideDesktopFiltersOpen(true);
   }, []);
 
@@ -3720,13 +3776,11 @@ function TransacoesPageBody({
     enabled: !isMobile && !confirmAcao && !ajudaAberta && !emModalDeTransacao,
     onFocusSearch: () => buscaRef.current?.focus(),
     onReload: recarregarLista,
-    /* Cada layout tem o SEU estado de dock. Alternar sempre o `wide` abria o
-       painel largo enquanto o botão visível no compacto continuava dizendo
-       "fechado" — a tecla mexia num estado que ninguém estava vendo. */
-    onToggleFilters: () =>
-      isDesktopCompact
-        ? setCompactDesktopFiltersOpen((v) => !v)
-        : setWideDesktopFiltersOpen((v) => !v),
+    /* Um estado só: a dock é a mesma em todo desktop. Enquanto o compacto tinha
+       o seu próprio (`compactDesktopFiltersOpen`), esse estado alimentava a
+       faixa antiga — e a tecla abria um painel deprecado de um lado e a dock do
+       outro. */
+    onToggleFilters: () => setWideDesktopFiltersOpen((v) => !v),
     onHelp: () => setAjudaAberta(true),
     getTransaction: (id) => txList.find((t) => String(t.id) === String(id)) || null,
     onSettle: (tx) => quickActions.onSettle(tx),
@@ -3832,9 +3886,8 @@ function TransacoesPageBody({
      entre "há mais filtros do que cabem aqui" e "quero tirar alguns". */
   const abrirAtivos = useCallback(() => {
     setPanelFacet("ativos");
-    if (isDesktopCompact) setCompactDesktopFiltersOpen(true);
-    else setWideDesktopFiltersOpen(true);
-  }, [isDesktopCompact]);
+    setWideDesktopFiltersOpen(true);
+  }, []);
 
   const commandBarChips = (
     <TransactionsFilterChips
@@ -3866,8 +3919,15 @@ function TransacoesPageBody({
       onClearFacet={clearFacetAndResetPage}
       onClearAll={clearAll}
       collapsed
-      filtersOpen={compactDesktopFiltersOpen}
-      onToggleFilters={() => setCompactDesktopFiltersOpen((open) => !open)}
+      /* A MESMA dock do desktop largo. Antes este toggle abria
+         `compactDesktopFiltersOpen`, e esse estado só alimentava a faixa
+         permanente de nove cards — o painel que o redesenho aposentou. O
+         resultado é que abaixo de 1280 px (ou de 820 px de altura) "Filtros"
+         devolvia a tela antiga, com os nove rótulos "Todas / Todos / Qualquer"
+         que os chips já dizem. A dock não é um recurso de tela grande: ela é O
+         painel de filtros. */
+      filtersOpen={wideDesktopFiltersOpen}
+      onToggleFilters={() => setWideDesktopFiltersOpen((open) => !open)}
     />
   );
 
@@ -3981,6 +4041,7 @@ function TransacoesPageBody({
                cumprir o que promete e tudo desliza de lado quando o dado
                chega. */
             catColPx={catColPx}
+            catNaLinhaDeMeta={catNaLinhaDeMeta}
             tagsColPx={tagsColPx}
           />
         ) : listLoadFailed ? (
@@ -4100,9 +4161,16 @@ function TransacoesPageBody({
                     swipe={isMobile ? swipeActions : null}
                     flash={settledFlashId === tx.id}
                     busy={rowBusyId != null && String(rowBusyId) === String(tx.id)}
-                    wide={!isMobile && viewportWidth >= 1600}
+                    /* A LISTA medida, não a viewport — a mesma régua de
+                       `showActionLabels`. Com a dock aberta em 1600 a lista cai
+                       para 620 px, e um `wide` de viewport ainda reservava
+                       76 px para o rótulo da situação e um teto de 420 para a
+                       descrição: a linha prometia largura que não tinha, e a
+                       descrição (a única coluna que encolhe até zero) pagava. */
+                    wide={!isMobile && (listWidth > 0 ? listWidth >= 1300 : viewportWidth >= 1600)}
                     tagsColPx={tagsColPx}
                     catColPx={catColPx}
+                    catNaLinhaDeMeta={catNaLinhaDeMeta}
                     tagsAtivas={filter.tags}
                     isRovingStop={rovingStopId === String(tx.id)}
                     leaving={leavingIds.has(tx.id)}
@@ -4114,7 +4182,7 @@ function TransacoesPageBody({
                     showActionLabels={
                       !isMobile && (listWidth > 0 ? listWidth >= 1000 : viewportWidth >= 1200)
                     }
-                    xwide={!isMobile && viewportWidth >= 2100}
+                    xwide={!isMobile && (listWidth > 0 ? listWidth >= 1800 : viewportWidth >= 2100)}
                   />
                   {/* Sanfona: o detalhe nasce ONDE O OLHO JÁ ESTÁ, em vez de
                       numa coluna de 320 px que, em 1366×768, sobrava com 32 px
@@ -4515,9 +4583,6 @@ function TransacoesPageBody({
               />
             </div>
           </div>
-          {compactDesktopFiltersOpen && (
-            <TransactionsFilterBar {...filterBarCommonProps} hideSearch />
-          )}
         </>
       )}
 
@@ -4754,7 +4819,11 @@ function TransacoesPageBody({
           o cabeçalho da lista e os rótulos de dia grudavam num container que
           nunca rola, ou seja, não grudavam em nada. Ele existe para o painel
           ancorado do desktop, que no mobile não existe. */}
-      <div style={{ display:"flex", flex:1, minHeight:0, overflow:"hidden" }}>
+      <div style={{ display:"flex", flex:1, minHeight:0, overflow:"hidden",
+        /* Referência para a dock FLUTUANTE do desktop estreito. Ancorar no
+           wrapper e não na viewport é o que a mantém dentro da área da lista,
+           abaixo da barra de comando. */
+        position:"relative" }}>
         <div
           ref={listScrollRef}
           /* No mobile a lista NÃO é uma região de rolagem própria: quem rola é
@@ -4840,9 +4909,23 @@ function TransacoesPageBody({
         {/* `dockLarga` segura a montagem no quadro em que a dock fecha: sem ele o nó
            sai do DOM antes de `dockFechando` virar true e a lista salta de volta. */}
         {!isMobile && (wideDesktopFiltersOpen || dockLarga || dockFechando) && (
-          <div style={{ flex:"none",
-            width: dockLarga ? dockPanelWidth : 0,
-            marginLeft: dockLarga ? 14 : 0,
+          <div style={{
+            ...(dockFlutua
+              /* FLUTUANTE abaixo de 1280. A conta: com um piso decente na
+                 descrição a linha precisa de ~700 px, e sidebar 195 + dock 360
+                 + respiro já somam 569 — não cabem os dois. Ancorada nessa
+                 largura, a lista caía para 515 px e a descrição ia a ZERO,
+                 porque é a única coluna da grade que pode encolher até sumir.
+                 Flutuando, a lista mantém a largura inteira atrás do painel.
+                 Sem scrim de propósito: escurecer a lista mataria justamente a
+                 premissa da dock, que é julgar o filtro pelo resultado. A
+                 sombra na borda esquerda é o que separa os dois planos. */
+              ? { position:"absolute", top:0, right:0, bottom:0, zIndex:5,
+                  width: dockLarga ? dockPanelWidth : 0,
+                  boxShadow: dockLarga ? "-8px 0 24px rgba(15,15,13,0.10)" : "none" }
+              : { flex:"none",
+                  width: dockLarga ? dockPanelWidth : 0,
+                  marginLeft: dockLarga ? 14 : 0 }),
             minHeight:0, overflow:"hidden",
             transition: "width var(--mo-panel, 300ms) var(--mo-panel-ease, cubic-bezier(.32,.72,0,1)),"
               + " margin-left var(--mo-panel, 300ms) var(--mo-panel-ease, cubic-bezier(.32,.72,0,1))" }}>
@@ -4859,6 +4942,10 @@ function TransacoesPageBody({
               facetCounts={facetCounts}
               activeFacets={activeFilterEntries}
               onClearFacet={clearFacetAndResetPage}
+              /* A busca não tem painel na dock — o campo mora na barra de
+                 comando. Clicar no corpo do item "Busca" leva o cursor até
+                 lá, que é o equivalente honesto de "abrir esse filtro". */
+              onFocusSearch={() => buscaRef.current?.focus()}
               onClearAll={clearAll}
               onApply={() => setWideDesktopFiltersOpen(false)}
               onClose={() => setWideDesktopFiltersOpen(false)}
