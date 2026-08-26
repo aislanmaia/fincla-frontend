@@ -1,6 +1,7 @@
 import React from "react";
 import { T } from "../../../tokens";
 import { G } from "../../../typography";
+import { Tip } from "../../../components/Tip.jsx";
 import { FacetPanelContent } from "./facetBar/FacetPanelContent.jsx";
 
 /**
@@ -408,7 +409,14 @@ function ActiveFacetsPane({ facets, onClearFacet, onFacetChange, onFocusSearch, 
                 nele — trocar o valor, somar outro do mesmo tipo — e até aqui
                 a única ação era destruí-lo e recomeçar pelo trilho. Precisa
                 ser um <button> irmão do ✕, não o pai: botão dentro de botão é
-                HTML inválido e o clique no ✕ dispararia os dois. */}
+                HTML inválido e o clique no ✕ dispararia os dois.
+
+                Os dois alvos ficam colados e não se anunciam: o corpo parece
+                um rótulo, não um botão, e nada distingue "abrir" de "remover"
+                antes do clique — num item cuja outra ação DESTRÓI o filtro. O
+                `aria-label` já dizia; o tooltip é o mesmo aviso para quem
+                enxerga. */}
+            <Tip label={facetaDoItemAtivo(f.key) ? `Abrir ${f.label}` : "Ir para a busca"}>
             <button
               type="button"
               onClick={() => {
@@ -449,6 +457,8 @@ function ActiveFacetsPane({ facets, onClearFacet, onFacetChange, onFocusSearch, 
                 {f.value}
               </span>
             </button>
+            </Tip>
+            <Tip label={`Remover ${f.label}`}>
             <button
               type="button"
               onClick={() => onClearFacet?.(f.key)}
@@ -471,6 +481,7 @@ function ActiveFacetsPane({ facets, onClearFacet, onFacetChange, onFocusSearch, 
             >
               ✕
             </button>
+            </Tip>
           </div>
         ))}
       </div>

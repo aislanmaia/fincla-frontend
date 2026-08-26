@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -49,27 +49,50 @@ describe("facetaDoItemAtivo", () => {
 });
 
 describe("<ActiveFacetsPane> — clique no corpo", () => {
-  it("leva ao painel da faceta, e cada valor leva ao mesmo lugar", async () => {
-    const user = userEvent.setup();
+  /* `fireEvent.click`, não `userEvent`, nos testes de ROTEAMENTO: o que eles
+     afirmam é "clicar no corpo chama `onFacetChange` com a faceta", e para isso
+     a simulação de ponteiro não acrescenta nada. Acrescenta CUSTO — cada
+     movimento passa pelo `<Tip>`, que mede o alvo e avisa os outros tooltips
+     para fecharem —, e dois cliques num worker carregado estouravam os 5 s.
+     Os testes de tooltip abaixo continuam no `userEvent`, porque lá o hover É
+     o comportamento sob teste. */
+  it("leva ao painel da faceta, e cada valor leva ao mesmo lugar", () => {
     const { onFacetChange } = montar();
-    await user.click(screen.getByRole("button", { name: "Editar filtro Categoria: Transporte" }));
+    fireEvent.click(screen.getByRole("button", { name: "Editar filtro Categoria: Transporte" }));
     expect(onFacetChange).toHaveBeenCalledWith("categoria");
-    await user.click(screen.getByRole("button", { name: "Editar filtro Situação: A pagar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Editar filtro Situação: A pagar" }));
     expect(onFacetChange).toHaveBeenLastCalledWith("situacao");
   });
 
-  it("o item de busca manda o cursor para o campo, não para um painel", async () => {
-    const user = userEvent.setup();
+  it("o item de busca manda o cursor para o campo, não para um painel", () => {
     const { onFacetChange, onFocusSearch } = montar();
-    await user.click(screen.getByRole("button", { name: "Editar filtro Busca: uber" }));
+    fireEvent.click(screen.getByRole("button", { name: "Editar filtro Busca: uber" }));
     expect(onFocusSearch).toHaveBeenCalledTimes(1);
     expect(onFacetChange).not.toHaveBeenCalled();
   });
 
-  it("o ✕ segue removendo, e só ele — o corpo não remove nada", async () => {
+  it("cada ação se anuncia no hover — o corpo abre, o ✕ remove", async () => {
     const user = userEvent.setup();
+    montar();
+    /* Os dois alvos ficam colados e a outra ação DESTRÓI o filtro: sem o
+       tooltip, nada distingue "abrir" de "remover" antes do clique. */
+    await user.hover(screen.getByRole("button", { name: "Editar filtro Categoria: Transporte" }));
+    expect(await screen.findByText("Abrir Categoria")).toBeInTheDocument();
+
+    await user.hover(screen.getByRole("button", { name: "Remover filtro Categoria: Transporte" }));
+    expect(await screen.findByText("Remover Categoria")).toBeInTheDocument();
+  });
+
+  it("a busca não promete um painel que não existe", async () => {
+    const user = userEvent.setup();
+    montar();
+    await user.hover(screen.getByRole("button", { name: "Editar filtro Busca: uber" }));
+    expect(await screen.findByText("Ir para a busca")).toBeInTheDocument();
+  });
+
+  it("o ✕ segue removendo, e só ele — o corpo não remove nada", () => {
     const { onClearFacet, onFacetChange } = montar();
-    await user.click(screen.getByRole("button", { name: "Remover filtro Categoria: Alimentação" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remover filtro Categoria: Alimentação" }));
     expect(onClearFacet).toHaveBeenCalledWith("categoria:alim");
     expect(onFacetChange).not.toHaveBeenCalled();
   });
