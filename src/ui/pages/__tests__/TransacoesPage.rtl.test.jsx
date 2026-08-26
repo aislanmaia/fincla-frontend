@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 /* Sem `{ timeout: N }` por describe: o teto agora é UM só, em `vite.config.ts`
-   (20 s), com o porquê escrito lá. Os overrides locais nasceram do mesmo aperto
+   (45 s), com o porquê escrito lá. Os overrides locais nasceram do mesmo aperto
    — o orçamento cobre o `render`, e um `render` destes custa segundos quando a
    suíte divide o pool —, mas espalhados por arquivo viravam o contrário do que
    prometiam: passaram a REBAIXAR o teto global. */

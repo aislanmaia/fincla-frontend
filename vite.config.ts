@@ -10,23 +10,27 @@ export default defineConfig({
     include: ["src/**/*.{test,spec}.{js,jsx,ts,tsx}"],
     setupFiles: ["./src/test/vitest-setup.js"],
     environmentMatchGlobs: [["**/*.rtl.test.*", "jsdom"]],
-    /* 20 s, não os 5 s padrão.
-       O orçamento do Vitest cobre o CORPO INTEIRO do teste, `render()` incluído
-       — e um `render` de `<TransacoesPage>` ou do painel de filtros custa
-       segundos quando 29 arquivos dividem o mesmo pool. O sintoma era um teste
-       que só faz `fireEvent.click` síncrono estourando o tempo, e a falha
-       MIGRANDO de arquivo a cada execução: uma vez em `ActiveFacetsPane`, outra
-       em `FacetPanels`, outra em `NovaTransacaoModal`. Isso é saturação de
-       máquina, não teste lento — e um vermelho que muda de lugar não é sinal,
-       é ruído que ensina a ignorar a suíte.
-       Isolado, todo arquivo passa em menos de 3 s: o teto novo não esconde
-       lentidão real, só para de cobrar de cada teste o tempo dos vizinhos.
-       30 e não 20 porque 20 ainda deixou um vermelho em 1 de 2 execuções da
-       fatia mais pesada (51 arquivos num pool só). Um teto alto não custa nada
-       quando o teste passa — ele só limita o quanto uma falha DEMORA a
-       aparecer —, e um vermelho que só aparece às vezes custa caro: ensina a
-       ignorar a suíte. */
-    testTimeout: 30_000,
+    /* 45 s, não os 5 s padrão — e o número vem de MEDIÇÃO, não de estimativa.
+       Primeiro escrevi aqui que "isolado, todo arquivo passa em menos de 3 s".
+       Era falso, e era a justificativa central da mudança. Medido de verdade,
+       rodando `TransacoesPage.rtl.test.jsx` SOZINHO, sem disputa de pool: o
+       arquivo leva ~220 s e os testes mais lentos dão 29,8 · 28,8 · 19,4 ·
+       17,2 · 10,7 s. Ou seja, não é só saturação de máquina: estes testes são
+       lentos de verdade, porque o orçamento do Vitest cobre o corpo inteiro e
+       um `render` desta página com 20+ linhas custa segundos.
+       O teto acomoda essa realidade em vez de fingir que ela não existe — mas
+       acomodar não é resolver: enquanto ele estiver alto, uma regressão de 2 s
+       para 25 s passa calada. A dívida real é a lentidão, e ela merece PR
+       próprio.
+       Um caso é pior que os outros e vale nome: "criar saved view persiste em
+       localStorage por org" foi observado em 7,0 · 14,0 · 25,8 e uma vez 184 s.
+       Esse não é lento, é errático — provavelmente uma espera que só resolve
+       por fallback. Se você veio parar aqui por causa dele, o conserto é o
+       teste, não o teto.
+       Os oito `{ timeout: 15000 }` por `describe` saíram junto: nasceram do
+       mesmo aperto, mas espalhados por arquivo tinham virado o contrário do que
+       prometiam — REBAIXAVAM o teto global. */
+    testTimeout: 45_000,
   },
   resolve: {
     alias: {

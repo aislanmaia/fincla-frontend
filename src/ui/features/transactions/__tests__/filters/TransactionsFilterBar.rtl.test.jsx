@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /* Sem `{ timeout: N }` por describe: o teto agora é UM só, em `vite.config.ts`
-   (20 s), com o porquê escrito lá — espalhado por arquivo, o override acabava
+   (45 s), com o porquê escrito lá — espalhado por arquivo, o override acabava
    REBAIXANDO o teto global em vez de proteger o teste. */
 import React, { useState } from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";

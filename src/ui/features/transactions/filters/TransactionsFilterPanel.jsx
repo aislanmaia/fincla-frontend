@@ -443,7 +443,14 @@ function ActiveFacetsPane({ facets, onClearFacet, onFacetChange, onFocusSearch, 
                 if (destino) onFacetChange?.(destino);
                 else onFocusSearch?.();
               }}
-              aria-label={`Editar filtro ${f.label}: ${f.value}`}
+              /* MESMO verbo do balão. "Editar filtro" no `aria-label` com "Ir
+                 para o filtro" no tooltip dava dois nomes à mesma ação: quem usa
+                 controle por voz precisa dizer "clicar em Editar filtro" para um
+                 botão que promete "Ir para o filtro", e quem usa leitor de tela
+                 junto de ampliador ouve um verbo e lê outro.
+                 A faceta e o VALOR continuam aqui, ao contrário do balão: sem
+                 eles, três tags anunciariam três "Ir para o filtro" idênticos. */
+              aria-label={`Ir para o filtro ${f.label}: ${f.value}`}
               style={{
                 ...G,
                 flex: 1,
