@@ -1,6 +1,7 @@
 import React from "react";
 import { T } from "../../../tokens";
 import { G } from "../../../typography";
+import { Tip } from "../../../components/Tip.jsx";
 import { FacetPanelContent } from "./facetBar/FacetPanelContent.jsx";
 
 /**
@@ -408,7 +409,29 @@ function ActiveFacetsPane({ facets, onClearFacet, onFacetChange, onFocusSearch, 
                 nele — trocar o valor, somar outro do mesmo tipo — e até aqui
                 a única ação era destruí-lo e recomeçar pelo trilho. Precisa
                 ser um <button> irmão do ✕, não o pai: botão dentro de botão é
-                HTML inválido e o clique no ✕ dispararia os dois. */}
+                HTML inválido e o clique no ✕ dispararia os dois.
+
+                Os dois alvos ficam colados e não se anunciam: o corpo parece
+                um rótulo, não um botão, e nada distingue "abrir" de "remover"
+                antes do clique — num item cuja outra ação DESTRÓI o filtro. O
+                `aria-label` já dizia; o tooltip é o mesmo aviso para quem
+                enxerga. */}
+            {/* As propriedades de flex vão no INVÓLUCRO: é ele que é item do
+                cartão agora, não o botão. Sem isso o `flex:1` do botão passava
+                a flexionar dentro de um span que não cresce — o ✕ desencostava
+                da borda direita e sobrava um vazio no meio, e sem
+                `alignSelf:stretch` o botão deixava de cobrir os 36 px do
+                cartão: clique na folga vertical caía no `<div>` e não fazia
+                nada. */}
+            <Tip
+              label={facetaDoItemAtivo(f.key) ? `Abrir ${f.label}` : "Ir para a busca"}
+              /* `alignItems:"stretch"` além do `alignSelf`: o invólucro do Tip é
+                 `inline-flex` com os filhos CENTRALIZADOS, então esticá-lo sem
+                 esticar o filho deixava o botão com a altura do texto dentro de
+                 um cartão de 36 px — e o clique na folga de cima e de baixo
+                 continuava caindo no `<div>`. */
+              style={{ flex: 1, minWidth: 0, alignSelf: "stretch", alignItems: "stretch" }}
+            >
             <button
               type="button"
               onClick={() => {
@@ -449,6 +472,8 @@ function ActiveFacetsPane({ facets, onClearFacet, onFacetChange, onFocusSearch, 
                 {f.value}
               </span>
             </button>
+            </Tip>
+            <Tip label={`Remover ${f.label}`}>
             <button
               type="button"
               onClick={() => onClearFacet?.(f.key)}
@@ -471,6 +496,7 @@ function ActiveFacetsPane({ facets, onClearFacet, onFacetChange, onFocusSearch, 
             >
               ✕
             </button>
+            </Tip>
           </div>
         ))}
       </div>
