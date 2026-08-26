@@ -20,6 +20,12 @@ export function TransactionsSkeleton({
   isMobile = false,
   catColPx = 0,
   tagsColPx = 0,
+  /* A linha estreita tira a categoria da GRADE e põe a pílula na linha de
+     metadados. O esqueleto precisa saber disso: sem esta prop ele desenhava a
+     coluna de 141 px, o dado chegava com uma coluna a menos e a descrição
+     deslizava ~152 px de lado — exatamente o que este componente existe para
+     não deixar acontecer. */
+  catNaLinhaDeMeta = false,
 }) {
   return (
     <div aria-hidden="true" data-testid="transactions-skeleton">
@@ -39,9 +45,11 @@ export function TransactionsSkeleton({
                   "54px",
                   "30px",
                   tagsColPx > 0 ? "minmax(0,380px)" : "minmax(0,1fr)",
-                  catColPx > 0 ? `${catColPx}px` : "auto",
+                  // (categoria entra aqui, quando ainda tem coluna própria)
+                  catNaLinhaDeMeta ? null : catColPx > 0 ? `${catColPx}px` : "auto",
                   tagsColPx > 0 ? `${tagsColPx}px` : null,
-                  "1fr",
+                  // O vão cede quando a linha aperta — igual à linha de verdade.
+                  catNaLinhaDeMeta ? "0px" : "1fr",
                   "100px",
                   "18px",
                 ]
@@ -61,7 +69,7 @@ export function TransactionsSkeleton({
           {!isMobile && <Bar w={30} />}
           <Bar w={isMobile ? 22 : 22} h={isMobile ? 22 : 22} r={7} />
           <Bar w={`${52 + ((i * 13) % 34)}%`} />
-          {!isMobile && <Bar w={Math.min(64, catColPx || 64)} h={14} r={99} />}
+          {!isMobile && !catNaLinhaDeMeta && <Bar w={Math.min(64, catColPx || 64)} h={14} r={99} />}
           {!isMobile && tagsColPx > 0 && <Bar w={Math.round(tagsColPx * 0.7)} h={12} r={6} />}
           {!isMobile && <span />}
           <Bar w={isMobile ? 60 : 68} justify="end" />

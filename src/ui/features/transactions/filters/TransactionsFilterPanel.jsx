@@ -62,6 +62,7 @@ export function TransactionsFilterPanel({
   facetCounts,
   activeFacets = [],
   onClearFacet,
+  onFocusSearch,
   onClearAll,
   onApply,
   onClose,
@@ -173,6 +174,8 @@ export function TransactionsFilterPanel({
           <ActiveFacetsPane
             facets={activeFacets}
             onClearFacet={onClearFacet}
+            onFacetChange={onFacetChange}
+            onFocusSearch={onFocusSearch}
             columns={roomyPane ? 2 : 1}
           />
         ) : (
@@ -354,7 +357,21 @@ function RailButton({ icon, label, count, on, onClick, compact }) {
 }
 
 /** A aba "Ativos": tudo o que está filtrando, num lugar só, com saída. */
-function ActiveFacetsPane({ facets, onClearFacet, columns = 1 }) {
+/**
+ * Faceta de destino de um item ativo.
+ *
+ * A chave é `categoria:<id>` quando a faceta tem mais de um valor aplicado e
+ * `categoria` quando tem um só — as duas levam ao MESMO painel, porque o painel
+ * é da faceta e não do valor. `busca` é a exceção: não existe painel de busca
+ * na dock, o campo mora na barra de comando.
+ */
+export function facetaDoItemAtivo(key) {
+  if (!key || key === "busca") return null;
+  const sep = key.indexOf(":");
+  return sep > 0 ? key.slice(0, sep) : key;
+}
+
+function ActiveFacetsPane({ facets, onClearFacet, onFacetChange, onFocusSearch, columns = 1 }) {
   if (facets.length === 0) {
     return (
       <div style={{ ...G, fontSize: 12, color: T.inkLight, padding: "6px 2px" }}>
@@ -383,24 +400,55 @@ function ActiveFacetsPane({ facets, onClearFacet, columns = 1 }) {
               display: "flex",
               alignItems: "center",
               gap: 8,
-              padding: "0 10px",
+              padding: "0 4px 0 0",
             }}
           >
-            <span style={{ ...G, fontSize: 11, color: T.inkLight, flexShrink: 0 }}>{f.label}</span>
-            <span
+            {/* O CORPO leva ao painel da faceta; só o ✕ remove. Um filtro
+                aplicado é o lugar mais provável de onde alguém quer MEXER
+                nele — trocar o valor, somar outro do mesmo tipo — e até aqui
+                a única ação era destruí-lo e recomeçar pelo trilho. Precisa
+                ser um <button> irmão do ✕, não o pai: botão dentro de botão é
+                HTML inválido e o clique no ✕ dispararia os dois. */}
+            <button
+              type="button"
+              onClick={() => {
+                const destino = facetaDoItemAtivo(f.key);
+                if (destino) onFacetChange?.(destino);
+                else onFocusSearch?.();
+              }}
+              aria-label={`Editar filtro ${f.label}: ${f.value}`}
               style={{
                 ...G,
-                fontSize: 12,
-                fontWeight: 600,
-                color: T.ink,
+                flex: 1,
                 minWidth: 0,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                alignSelf: "stretch",
+                padding: "0 2px 0 10px",
+                border: "none",
+                background: "none",
+                borderRadius: 9,
+                cursor: "pointer",
+                textAlign: "left",
               }}
             >
-              {f.value}
-            </span>
+              <span style={{ ...G, fontSize: 11, color: T.inkLight, flexShrink: 0 }}>{f.label}</span>
+              <span
+                style={{
+                  ...G,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: T.ink,
+                  minWidth: 0,
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {f.value}
+              </span>
+            </button>
             <button
               type="button"
               onClick={() => onClearFacet?.(f.key)}
@@ -410,7 +458,6 @@ function ActiveFacetsPane({ facets, onClearFacet, columns = 1 }) {
               aria-label={`Remover filtro ${f.label}: ${f.value}`}
               style={{
                 ...G,
-                marginLeft: "auto",
                 width: 22,
                 height: 22,
                 borderRadius: 6,

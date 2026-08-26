@@ -96,7 +96,13 @@ export function CategoryPanel({
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: compact ? "1fr" : "repeat(3, 1fr)",
+            /* `minmax(0, 1fr)`, nunca `1fr` puro. O padrão de `1fr` é
+               `minmax(auto, 1fr)`, e `auto` NÃO encolhe abaixo do conteúdo:
+               um nome longo ("Financiamentos e empréstimos") empurrava a
+               trilha e a grade inteira transbordava na horizontal — o painel
+               ganhava barra lateral, que o shell proíbe. O rótulo já sabe
+               truncar; faltava deixá-lo poder. */
+            gridTemplateColumns: compact ? "minmax(0, 1fr)" : "repeat(3, minmax(0, 1fr))",
             gap: compact ? 6 : 8,
           }}
         >
@@ -126,6 +132,10 @@ export function CategoryPanel({
                   background: active ? `${c.color}10` : T.surface,
                   cursor: "pointer",
                   textAlign: "left",
+                  /* O card também precisa poder encolher: item de grade tem
+                     `min-width: auto`, e sem isto a trilha `minmax(0,1fr)`
+                     ainda seria esticada pelo conteúdo dele. */
+                  minWidth: 0,
                 }}
               >
                 <div

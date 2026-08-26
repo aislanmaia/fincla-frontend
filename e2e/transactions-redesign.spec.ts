@@ -204,7 +204,7 @@ test.describe("Transações — redesenho", () => {
      reproduzir o estado semeado, e enquanto ele falha os DEZ testes seguintes
      do arquivo nem chegam a rodar — dez provas do redesenho no escuro por
      causa de uma. Fica marcado, com o motivo à vista. */
-  test.fixme("abrir um filtro não faz a lista sumir", async ({ page }) => {
+  test("abrir um filtro não faz a lista sumir", async ({ page }) => {
     // O pior estado medido antes: em 1366×768 o painel da faceta abria inline,
     // empurrava 438 px e a lista ficava com altura ZERO.
     await loginAsE2EOwner(page);
@@ -230,6 +230,84 @@ test.describe("Transações — redesenho", () => {
     expect(after, "a lista sumiu ao abrir o filtro").toBeGreaterThan(0);
     // O painel flutua: não pode empurrar mais que uma linha de diferença.
     expect(Math.abs(before - after)).toBeLessThanOrEqual(1);
+  });
+
+  /* A ORDEM DE SACRIFÍCIO da grade (§32).
+     A descrição é a única coluna que pode encolher até zero — categoria, vão das
+     ações e valor se defendem com largura fixa ou piso. Sem uma ordem explícita,
+     abrir a dock levava a descrição a 0 px em 1152 E em 1600: a lista caía para
+     620, e o campo pelo qual a pessoa reconhece a transação sumia inteiro. */
+  test("abrir a dock nunca zera a descrição — as outras colunas é que cedem", async ({ page }) => {
+    await loginAsE2EOwner(page);
+    await openTransactions(page);
+
+    const colunas = () =>
+      page.evaluate(() => {
+        const l = document.querySelector<HTMLElement>(".fincla-row");
+        if (!l) return null;
+        const g = getComputedStyle(l)
+          .gridTemplateColumns.split(" ")
+          .map((x) => Math.round(parseFloat(x)));
+        /* A célula pelo MARCADOR, não pelo índice. A coluna de data é
+           condicional (some no modo agrupado), então `g[2]` deixava de ser a
+           descrição e passava a ser a coluna FIXA de categoria — o guarda
+           continuava verde medindo 141 px que nunca encolhem, e parava de
+           guardar exatamente o que foi escrito para guardar. */
+        const cel = l.querySelector<HTMLElement>('[data-fincla-cell="descricao"]');
+        return {
+          linha: Math.round(l.getBoundingClientRect().width),
+          descricao: cel ? Math.round(cel.getBoundingClientRect().width) : -1,
+          nColunas: g.length,
+          transbordo: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        };
+      });
+
+    for (const largura of [1600, 1366, 1152]) {
+      await page.setViewportSize({ width: largura, height: 900 });
+      await page.waitForTimeout(500);
+
+      const fechada = await colunas();
+      expect(fechada, `${largura}: sem linhas`).not.toBeNull();
+      expect(fechada!.descricao, `${largura}: descrição zerada com a dock fechada`).toBeGreaterThan(0);
+
+      await page.getByRole("button", { name: /^(Abrir |＋ )?Filtros/i }).first().click();
+      await expect(page.getByRole("region", { name: /^Filtros$/ })).toBeVisible();
+      await page.waitForTimeout(600);
+
+      const aberta = await colunas();
+      expect(aberta!.descricao, `${largura}: a dock zerou a descrição`).toBeGreaterThan(0);
+
+      /* E a dock não pode COBRIR a linha. Abaixo de 1280 ela flutua, e sem o
+         recuo da lista o painel ficava por cima dos pixels da direita —
+         exatamente onde moram o valor, o anel da situação e as ações. O clique
+         no valor era interceptado pelo painel, e a premissa da dock ("julgar o
+         filtro pelo resultado") morria com o resultado escondido. */
+      const cobertura = await page.evaluate(() => {
+        const l = document.querySelector<HTMLElement>(".fincla-row");
+        const dock = document.querySelector<HTMLElement>('[role="region"][aria-label="Filtros"]');
+        if (!l || !dock) return null;
+        const valor = Array.from(l.children).find((c) => /R\$/.test(c.textContent || ""));
+        if (!valor) return null;
+        const vb = valor.getBoundingClientRect();
+        const alvo = document.elementFromPoint(vb.x + vb.width / 2, vb.y + vb.height / 2);
+        return {
+          valorAtrasDaDock: vb.right > dock.getBoundingClientRect().x,
+          cliqueChegaNaLinha: l.contains(alvo),
+        };
+      });
+      expect(cobertura, `${largura}: sem linha ou sem dock`).not.toBeNull();
+      expect(cobertura!.valorAtrasDaDock, `${largura}: a dock cobre o valor`).toBe(false);
+      expect(cobertura!.cliqueChegaNaLinha, `${largura}: o painel intercepta o clique no valor`).toBe(true);
+      // Quando a linha aperta, quem sai são as OUTRAS colunas — nunca a descrição.
+      if (aberta!.linha < fechada!.linha) {
+        expect(aberta!.nColunas, `${largura}: apertou sem ceder nenhuma coluna`)
+          .toBeLessThanOrEqual(fechada!.nColunas);
+      }
+      expect(aberta!.transbordo, `${largura}: transbordo horizontal`).toBe(0);
+
+      await page.getByRole("button", { name: /Fechar filtros/i }).click();
+      await page.waitForTimeout(500);
+    }
   });
 
   test("densidade e agrupamento mudam a lista e ficam guardados", async ({ page }) => {
@@ -287,7 +365,14 @@ test.describe("Transações — redesenho", () => {
     await openTransactions(page);
 
     const firstRow = page.locator(".fincla-row").first();
-    await firstRow.click();
+    /* Clique na FAIXA DA DATA, não no centro da linha.
+       `locator.click()` mira o centro do alvo, e no centro da linha mora a
+       pílula de categoria — que é um controle de verdade: clicar nela FILTRA
+       por aquela categoria. O teste vinha aplicando "Lazer & Entretenimento",
+       ficava com 4 de 43 linhas e nunca abria sanfona nenhuma. Não era corrida
+       nem ordem: era o clique acertando outro botão. A coluna da data é o único
+       pedaço da linha que não tem controle aninhado. */
+    await firstRow.click({ position: { x: 40, y: 20 } });
 
     const detail = page.getByRole("region", { name: /^Detalhes de/i });
     await expect(detail).toBeVisible();
@@ -451,10 +536,16 @@ test.describe("Transações — redesenho", () => {
     const desc = (await dup.getAttribute("aria-label"))!.replace(/^Duplicar /i, "");
     await dup.click();
 
-    // O modal abre com a descrição do original já preenchida. Ele não tem
-    // `role="dialog"`, e o campo de descrição é um `textarea` no desktop e um
-    // `input` no mobile — então a asserção olha o VALOR em qualquer campo de
-    // texto, que é o que de fato prova o pré-preenchimento nos dois caminhos.
+    // O modal abre com a descrição do original já preenchida — e MARCADA como
+    // cópia: `Uber` → `Uber (1)` (`nextDuplicateLabel`, em App.jsx). Sem o
+    // sufixo a lista ficaria com duas linhas de nome e data idênticos e nada
+    // distinguiria a cópia do original, então exigir o texto exato do original
+    // seria cobrar o comportamento errado. O que se prova aqui é que o campo
+    // veio DO original: começa com ele.
+    //
+    // O modal não tem `role="dialog"`, e o campo de descrição é um `textarea`
+    // no desktop e um `input` no mobile — daí a asserção olhar o VALOR de
+    // qualquer campo de texto, que é o que cobre os dois caminhos.
     await expect
       .poll(
         () =>
@@ -467,7 +558,9 @@ test.describe("Transações — redesenho", () => {
           ),
         { timeout: 20_000 },
       )
-      .toContain(desc);
+      .toEqual(expect.arrayContaining([expect.stringMatching(
+        new RegExp(`^${desc.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}( \\(\\d+\\))?$`),
+      )]));
 
     // E abre em modo CRIAÇÃO: a URL não carrega o id da transação original.
     // Se carregasse, o submit salvaria por cima dela — o oposto do que o botão
@@ -491,6 +584,14 @@ test.describe("Transações — redesenho", () => {
 
     await alvo.hover();
     await alvo.getByRole("button", { name: /como pago$/i }).click();
+
+    // Liquidar passou a PEDIR CONFIRMAÇÃO antes de mexer no saldo — o ✓ da
+    // linha abre um `alertdialog` em vez de pagar direto. O teste é anterior a
+    // isso e clicava no ✓ esperando a torrada, que nunca vinha: ele estava
+    // parado no diálogo. Confirmar aqui é o passo que a pessoa real dá.
+    const confirmacao = page.getByRole("alertdialog", { name: /^Marcar como paga\?/i });
+    await expect(confirmacao).toBeVisible({ timeout: 15_000 });
+    await confirmacao.getByRole("button", { name: /Confirmar pagamento/i }).click();
 
     // `exact`: o ↺ da própria linha se chama "Desfazer pagamento de …" e casaria
     // por substring. São controles distintos — este é o da torrada.
