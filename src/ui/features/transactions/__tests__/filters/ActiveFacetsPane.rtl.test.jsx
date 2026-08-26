@@ -83,6 +83,27 @@ describe("<ActiveFacetsPane> — clique no corpo", () => {
     expect(await screen.findByText("Remover Categoria")).toBeInTheDocument();
   });
 
+  it("o corpo ocupa o cartão e o ✕ fica na borda — o Tip não pode roubar o flex", () => {
+    montar();
+    /* O `<span>` do Tip virou o item de flex no lugar do botão. Sem devolver
+       `flex`/`alignSelf` ao invólucro, o ✕ desencostava da direita e o botão
+       parava de cobrir a altura do cartão — clique na folga não fazia nada. */
+    const corpo = screen.getByRole("button", { name: "Editar filtro Categoria: Transporte" });
+    const involucro = corpo.parentElement;
+    expect(involucro).toHaveStyle({
+      flex: "1", minWidth: "0px", alignSelf: "stretch", alignItems: "stretch",
+    });
+  });
+
+  it("o rótulo aparece também para quem chega pelo teclado", () => {
+    montar();
+    const corpo = screen.getByRole("button", { name: "Editar filtro Categoria: Transporte" });
+    fireEvent.focus(corpo);
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Abrir Categoria");
+    fireEvent.blur(corpo);
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
   it("a busca não promete um painel que não existe", async () => {
     const user = userEvent.setup();
     montar();

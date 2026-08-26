@@ -9,7 +9,11 @@ const TIP_OPEN_EVENT = "fincla:tip-open";
 // comportamento de fechar não depende de nada da página, e testar via
 // `<TransacoesPage>` inteira exigiria montar uma transação com refund/parcela
 // só pra alcançar um `<Tip>`.
-export const Tip = ({ label, children, pos = "top" }) => {
+/* `style` existe porque o `<span>` do Tip vira ITEM DE FLEX no lugar de quem
+   ele envolve: um botão com `flex:1` embrulhado aqui passa a flexionar dentro
+   de um span que não cresce, e o layout do pai se desfaz em silêncio. Quem
+   envolve precisa poder devolver as propriedades de flex ao invólucro. */
+export const Tip = ({ label, children, pos = "top", style }) => {
   const [rect, setRect] = useState(null);
   const ref = useRef(null);
   const id = useId();
@@ -91,12 +95,18 @@ export const Tip = ({ label, children, pos = "top" }) => {
   ) : null;
 
   return (
-    <span ref={ref} style={{ position:"relative", display:"inline-flex", alignItems:"center" }}
+    <span ref={ref} style={{ position:"relative", display:"inline-flex", alignItems:"center", ...style }}
       onMouseEnter={show} onMouseLeave={hide}
+      /* FOCO também abre. Sem isto o rótulo é só para quem usa mouse ou toque —
+         e quem navega por teclado é justamente quem mais precisa dele, porque
+         chega no alvo sem ver o percurso. Em React `onFocus`/`onBlur` usam
+         `focusin`/`focusout`, que sobem: focar o botão lá dentro acende o
+         tooltip aqui. */
+      onFocus={show} onBlur={hide}
       onTouchStart={e => { e.stopPropagation(); rect ? hide() : show(e); }}>
       {children}
       {rect && tipStyle && (
-        <span style={{
+        <span role="tooltip" style={{
           position:"fixed",
           top: tipStyle.top, left: tipStyle.left,
           transform: tipStyle.transform,

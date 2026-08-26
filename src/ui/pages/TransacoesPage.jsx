@@ -1590,14 +1590,18 @@ function TransacoesPageBody({
        dentro da janela ia empurrando a medida para a frente indefinidamente. */
     let jaMediu = false;
     const ro = new ResizeObserver(([entry]) => {
-      /* BORDER-box, não content-box: a lista recua a largura da dock por
-         `padding-right`, e uma medida de content-box já traria esse recuo
-         embutido. Como o recuo é CONHECIDO na hora em que a dock abre, medir a
-         caixa inteira e subtrair em JS deixa as réguas de coluna reagirem no
-         mesmo quadro do clique, em vez de esperar o observer. */
-      const w = Math.round(
-        entry.borderBoxSize?.[0]?.inlineSize ?? entry.contentRect.width,
-      );
+      /* `clientWidth` do próprio nó — nem `contentRect`, nem `borderBoxSize`.
+         A lista recua a largura da dock por `padding-right`, e o que se quer
+         aqui é uma medida ESTÁVEL a esse recuo, para poder descontá-lo em JS no
+         mesmo quadro do clique em vez de esperar o observer.
+         `contentRect.width` já desconta o padding: descontar de novo tiraria a
+         dock DUAS vezes (em 1152 dava 117 px de linha numa lista de 537).
+         `borderBoxSize` não desconta, mas inclui a CALHA da barra de rolagem,
+         que o `app-shell.css` reserva permanentemente — ~10 px de largura que
+         não existem para a linha, o bastante para `wide` acender cedo demais.
+         `clientWidth` é a caixa de padding: sem calha, e imune ao recuo, porque
+         o recuo é padding e a largura externa não muda. */
+      const w = Math.round(entry.target.clientWidth);
       /* A PRIMEIRA medida vale na hora: até ela chegar a lista usa o palpite
          pela viewport, e adiar isso faria as colunas nascerem erradas. */
       if (!jaMediu) {
@@ -1672,7 +1676,11 @@ function TransacoesPageBody({
          largura ZERO enquanto o botão já dizia "Fechar filtros" — desde que a
          faixa antiga saiu, ela é o ÚNICO painel de filtros da tela, então o rAF
          que não dispara não degrada nada: tranca. Quem chegar primeiro liga a
-         largura; o outro vira no-op. */
+         largura; o outro vira no-op.
+         O que isto NÃO cobre é aba em segundo plano: lá o `setTimeout` é
+         estrangulado para ≥1 s (e para 1/min sob pressão), então 48 ms não
+         valem. Mas em aba de fundo ninguém está olhando — o caso que importa é
+         o do navegador que não compõe com a aba à vista. */
       const despertador = setTimeout(() => setDockLarga(true), 48);
       return () => { cancelAnimationFrame(raf); clearTimeout(despertador); };
     }
@@ -1834,16 +1842,30 @@ function TransacoesPageBody({
      um quadro, e ainda passa pelos 90 ms de assentamento) a linha ficava um
      instante desenhada para a largura antiga: a coluna de categoria continuava
      nos 141 px, a grade estourava e o valor escorregava para trás do painel. */
+  /* O recuo conta enquanto a dock OCUPA espaço — e ela ocupa também durante o
+     fechamento. `dockLarga` vira false na hora, mas o `padding-right` leva os
+     300 ms da animação para voltar a zero e o painel fica montado por 320.
+     Sem `dockFechando` aqui, a linha alargava instantaneamente e desenhava o
+     valor debaixo de um painel ainda visível — o mesmo defeito que este trecho
+     conserta na abertura, espelhado. */
+  const dockOcupaEspaco = dockFlutua && (dockLarga || dockFechando);
+
   const larguraVisivelDaLista = listWidth > 0
-    ? Math.max(0, listWidth - (dockFlutua && dockLarga ? dockPanelWidth : 0))
+    ? Math.max(0, listWidth - (dockOcupaEspaco ? dockPanelWidth : 0))
     /* O PALPITE também desconta a dock. Antes cada régua tinha o seu próprio
        par (limiar-de-lista, limiar-de-viewport), e o ramo da viewport ignorava
        o painel: com a dock aberta em 1152 o palpite dizia "1152, largo" enquanto
        a linha tinha 469 px. Enquanto o `ResizeObserver` não entrega — primeiro
        quadro, aba ocluída, navegador sem composição — era esse ramo que
        decidia, e ele decidia errado justamente com a dock aberta. Agora existe
-       UMA régua, sempre em pixels de linha. */
-    : Math.max(0, viewportWidth - 200 - (dockLarga ? dockPanelWidth : 0));
+       UMA régua, sempre em pixels de linha.
+       300 e não 200: o palpite tem de errar só PARA MENOS. Os pares antigos
+       (lista↔viewport) eram 800↔1035, 1000↔1200, 1300↔1600 e 1800↔2100 — o
+       maior vão é 300, então 300 reproduz `wide` e `xwide` exatos e deixa os
+       outros dois conservadores. Com 200, `wide` acendia em 1500 px de viewport
+       para uma lista de ~1265, e a descrição — a única coluna que encolhe até
+       zero — pagava a diferença até o observer chegar. */
+    : Math.max(0, viewportWidth - 300 - (dockLarga || dockFechando ? dockPanelWidth : 0));
 
   useEffect(() => {
     const onResize = () => {
@@ -4791,10 +4813,12 @@ function TransacoesPageBody({
                era interceptado pelo painel. "Cobrir a metade direita" é sobre
                por onde o painel entra, não sobre esconder o resultado — e
                esconder o valor mataria a premissa de julgar o filtro por ele.
-               O recuo vai no PRÓPRIO scroller observado, então
-               `entry.contentRect.width` (que exclui padding) já entrega a
-               largura VISÍVEL: as réguas de coluna continuam medindo o que a
-               pessoa vê, e não a faixa atrás do painel. */
+               O recuo é PADDING no scroller observado, e a medição dele
+               (`clientWidth`) é imune a padding de propósito: quem desconta o
+               recuo é `larguraVisivelDaLista`, em JS, no mesmo quadro do
+               clique. Esperar o observer descobrir custaria um quadro mais os
+               90 ms de assentamento — tempo em que a linha fica desenhada para
+               a largura que a dock já tomou. */
             paddingRight: dockFlutua && dockLarga ? dockPanelWidth : 0,
             /* A lista ANTIGA recua enquanto a nova está em voo: ela continua
                legível (quem estava lendo não perde o lugar) mas para de se

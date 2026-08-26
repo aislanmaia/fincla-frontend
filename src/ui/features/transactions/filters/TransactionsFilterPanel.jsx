@@ -416,7 +416,22 @@ function ActiveFacetsPane({ facets, onClearFacet, onFacetChange, onFocusSearch, 
                 antes do clique — num item cuja outra ação DESTRÓI o filtro. O
                 `aria-label` já dizia; o tooltip é o mesmo aviso para quem
                 enxerga. */}
-            <Tip label={facetaDoItemAtivo(f.key) ? `Abrir ${f.label}` : "Ir para a busca"}>
+            {/* As propriedades de flex vão no INVÓLUCRO: é ele que é item do
+                cartão agora, não o botão. Sem isso o `flex:1` do botão passava
+                a flexionar dentro de um span que não cresce — o ✕ desencostava
+                da borda direita e sobrava um vazio no meio, e sem
+                `alignSelf:stretch` o botão deixava de cobrir os 36 px do
+                cartão: clique na folga vertical caía no `<div>` e não fazia
+                nada. */}
+            <Tip
+              label={facetaDoItemAtivo(f.key) ? `Abrir ${f.label}` : "Ir para a busca"}
+              /* `alignItems:"stretch"` além do `alignSelf`: o invólucro do Tip é
+                 `inline-flex` com os filhos CENTRALIZADOS, então esticá-lo sem
+                 esticar o filho deixava o botão com a altura do texto dentro de
+                 um cartão de 36 px — e o clique na folga de cima e de baixo
+                 continuava caindo no `<div>`. */
+              style={{ flex: 1, minWidth: 0, alignSelf: "stretch", alignItems: "stretch" }}
+            >
             <button
               type="button"
               onClick={() => {
