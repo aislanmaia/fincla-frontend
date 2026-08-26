@@ -1,4 +1,9 @@
 /** @vitest-environment jsdom */
+/* Sem `{ timeout: N }` por describe: o teto agora é UM só, em `vite.config.ts`
+   (20 s), com o porquê escrito lá. Os overrides locais nasceram do mesmo aperto
+   — o orçamento cobre o `render`, e um `render` destes custa segundos quando a
+   suíte divide o pool —, mas espalhados por arquivo viravam o contrário do que
+   prometiam: passaram a REBAIXAR o teto global. */
 
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -303,7 +308,7 @@ async function openFilters() {
   if (btn && btn.getAttribute("aria-expanded") !== "true") await userEvent.click(btn);
 }
 
-describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }, () => {
+describe("<TransacoesPage> — integração da Variação C", () => {
   it("as ações rápidas ficam ANTES do valor na ordem do DOM", async () => {
     // O valor é o que fecha a linha lendo da esquerda para a direita. Antes as
     // ações vinham depois dele, deixando o valor no meio de quatro botões.
@@ -729,7 +734,7 @@ describe("<TransacoesPage> — integração da Variação C", { timeout: 15000 }
   });
 });
 
-describe("<TransacoesPage> — liquidação (S1)", { timeout: 15000 }, () => {
+describe("<TransacoesPage> — liquidação (S1)", () => {
   /** Uma pendente (pix), uma paga (pix) e uma de cartão. */
   function seedSettlement(setTransactionSettled = vi.fn()) {
     transactionsDataMock.mockReturnValue({
@@ -1287,7 +1292,7 @@ it("cancelar no modal NÃO liquida", async () => {
   });
 });
 
-describe("<TransacoesPage> — desambiguação de nomes (S2)", { timeout: 15000 }, () => {
+describe("<TransacoesPage> — desambiguação de nomes (S2)", () => {
   it('o card chama-se "Resultado", não "Saldo" — o nome antigo colidia com o saldo da conta', async () => {
     transactionsDataMock.mockReturnValue({
       isLoading: false, error: "",
@@ -1355,7 +1360,7 @@ describe("<TransacoesPage> — desambiguação de nomes (S2)", { timeout: 15000 
 // uma busca que nem terminou (ou que falhou). `hasLoaded` (ver
 // useTransactionsData) separa "nunca carregou com sucesso" de "carregou e
 // está mesmo vazio".
-describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { timeout: 15000 }, () => {
+describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", () => {
   it("1ª carga em voo: mostra 'Carregando…', nunca 'Nenhuma transação encontrada'", async () => {
     transactionsDataMock.mockReturnValue({
       isLoading: true, error: "", hasLoaded: false,
@@ -1631,7 +1636,7 @@ describe("<TransacoesPage> — estado de carregamento da lista (issue #106)", { 
 // `IntersectionObserver` nem roda (`if (!sentinel || !hasMore) return;`), o
 // que interrompe o mecanismo na raiz, sem depender de simular tempo real
 // nem o `IntersectionObserver` de verdade (indisponível em jsdom).
-describe("<TransacoesPage> — scroll infinito não vira tempestade de requisições (fincla-frontend#109 rodada 4, achado 1)", { timeout: 15000 }, () => {
+describe("<TransacoesPage> — scroll infinito não vira tempestade de requisições (fincla-frontend#109 rodada 4, achado 1)", () => {
   // jsdom não implementa `IntersectionObserver` — os outros testes deste
   // arquivo nunca esbarram nisso porque sempre mockam `hasMore:false`. Aqui
   // `hasMore:true` é o cenário que importa, então um stub NO-OP (nunca
@@ -1743,7 +1748,7 @@ describe("<TransacoesPage> — scroll infinito não vira tempestade de requisiç
   });
 });
 
-describe("<TransacoesPage> — lançamentos cobertos por âncora (S4)", { timeout: 15000 }, () => {
+describe("<TransacoesPage> — lançamentos cobertos por âncora (S4)", () => {
   function seed(anchors, accounts = []) {
     listOrgBalanceAdjustmentsMock.mockResolvedValue(anchors);
     if (accounts.length) listAccountsMock.mockResolvedValue(accounts);
@@ -1824,7 +1829,7 @@ describe("<TransacoesPage> — lançamentos cobertos por âncora (S4)", { timeou
   });
 });
 
-describe("<TransacoesPage> — estabilidade das linhas (issue #66)", { timeout: 15000 }, () => {
+describe("<TransacoesPage> — estabilidade das linhas (issue #66)", () => {
   it("a linha NÃO é remontada quando a página re-renderiza", async () => {
     // Semeia o próprio conjunto: `mockReturnValue` de outro describe sobrevive ao
     // clearAllMocks (ele zera chamadas, não implementações).

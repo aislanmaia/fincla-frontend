@@ -77,10 +77,10 @@ describe("<ActiveFacetsPane> — clique no corpo", () => {
     /* Os dois alvos ficam colados e a outra ação DESTRÓI o filtro: sem o
        tooltip, nada distingue "abrir" de "remover" antes do clique. */
     await user.hover(screen.getByRole("button", { name: "Editar filtro Categoria: Transporte" }));
-    expect(await screen.findByText("Abrir Categoria")).toBeInTheDocument();
+    expect(await screen.findByText("Ir para o filtro")).toBeInTheDocument();
 
     await user.hover(screen.getByRole("button", { name: "Remover filtro Categoria: Transporte" }));
-    expect(await screen.findByText("Remover Categoria")).toBeInTheDocument();
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Remover filtro");
   });
 
   it("o corpo ocupa o cartão e o ✕ fica na borda — o Tip não pode roubar o flex", () => {
@@ -99,7 +99,7 @@ describe("<ActiveFacetsPane> — clique no corpo", () => {
     montar();
     const corpo = screen.getByRole("button", { name: "Editar filtro Categoria: Transporte" });
     fireEvent.focus(corpo);
-    expect(screen.getByRole("tooltip")).toHaveTextContent("Abrir Categoria");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Ir para o filtro");
     fireEvent.blur(corpo);
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
