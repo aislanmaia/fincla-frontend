@@ -497,7 +497,15 @@ const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
        os chips de tag são botões, então o alvo de "filtrar por tag" some sob o
        de "Editar". Medido: em 1280, com a coluna de tags presente, o clique na
        tag era interceptado pela ação. */
-    quickActions ? "minmax(156px, 1fr)" : "1fr",
+    /* O piso CEDE quando a linha aperta — é o último degrau da ordem de
+       sacrifício. Ele existe para as ações (absolutas, ancoradas ao vão) não
+       transbordarem por cima da COLUNA DE TAGS, cujos chips são botões: o alvo
+       de "filtrar por tag" sumia sob o de "Editar". Quando a linha aperta essa
+       coluna já não existe (`tagsColPx` zera abaixo de 1000 px de lista), então
+       o motivo do piso também não. Sem ele, as ações passam a crescer por cima
+       da DESCRIÇÃO no hover — que não é alvo de clique próprio (a linha inteira
+       é), e só enquanto o cursor está ali. */
+    quickActions ? (catNaLinhaDeMeta ? "0px" : "minmax(156px, 1fr)") : "1fr",
     dense ? "88px" : "100px",
     // Situação: com largura, o anel ganha o rótulo. Só o anel obriga a decorar
     // o que ele significa — e há espaço de sobra aqui.
@@ -741,7 +749,7 @@ const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
 
       {/* Descrição em cima, método embaixo — a hierarquia da proposta. A
           categoria NÃO mora aqui: ela tem coluna própria à direita. */}
-      <div style={{ minWidth:0 }}>
+      <div data-fincla-cell="descricao" style={{ minWidth:0 }}>
         <div style={{ ...G, fontSize: dense ? 12 : 12.5, fontWeight:600, color:T.ink,
           lineHeight:1.25, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap",
           display:"flex", alignItems:"center", gap:6 }}>
@@ -1655,14 +1663,13 @@ function TransacoesPageBody({
        nesta faixa ele cresce ~24 px em relação aos 132 fixos de antes. Sem
        compensar, esses pixels sairiam do painel de opções — que é onde os
        cartões de escolha vivem e onde a largura faz falta de verdade. */
-    /* Abaixo de 1280 a dock FLUTUA sobre a metade direita da lista, então ela
-       não disputa largura com a linha — pode ser generosa. Metade da área de
-       conteúdo dá ~478 px em 1152: trilho 132 + painel 346, e o painel de
-       Período (que precisa de 238) para de rolar na horizontal. Era por isso
-       que a dock ancorada de 360 aparecia com barra horizontal dentro. */
-    if (viewportWidth < DESKTOP_FILTERS_EXPAND_BREAKPOINT) {
-      return Math.max(420, Math.round(content * 0.5));
-    }
+    /* Abaixo de 1280 a dock flutua, mas a lista RECUA o mesmo tanto — então
+       cada pixel dela ainda sai da linha e "metade da área de conteúdo" seria
+       caro demais. 420 é o menor valor em que o painel de opções (420 − 132 de
+       trilho = 288) comporta os 238 px que o painel de Período pede: a barra
+       horizontal que aparecia com 360 some, e a lista fica com 469 px em 1152
+       em vez de 410. */
+    if (viewportWidth < DESKTOP_FILTERS_EXPAND_BREAKPOINT) return 420;
     return viewportWidth >= 1600 ? Math.min(860, Math.round(content * 0.5)) : 420;
   }, [viewportWidth]);
 
@@ -2667,8 +2674,12 @@ function TransacoesPageBody({
      régua de viewport diria "largo" justamente onde não é.
      800 é a conta: 590 de colunas e gaps + 28 de padding + ~180 de piso para a
      descrição. */
+  /* O fallback (primeiro quadro, antes do ResizeObserver) precisa CALIBRAR com
+     a régua medida, senão o primeiro paint escolhe um layout e o segundo outro,
+     e a descrição pula de lugar em todo mount. 800 px de lista ≈ 1035 px de
+     viewport (sidebar 195 + respiros), não 1280. */
   const catNaLinhaDeMeta = !isMobile
-    && (listWidth > 0 ? listWidth < 800 : viewportWidth < DESKTOP_FILTERS_EXPAND_BREAKPOINT);
+    && (listWidth > 0 ? listWidth < 800 : viewportWidth < 1035);
 
   /* A parada de Tab que EXISTE na tela. Se a linha lembrada saiu da lista
      (excluída, filtrada, ou a página trocou), a parada volta para a primeira —
@@ -4843,13 +4854,25 @@ function TransacoesPageBody({
           className="fincla-scroll"
           style={{ flex:1, minWidth:0, minHeight:0,
             overflowY:"auto", overflowX:"hidden",
+            /* A dock flutuante ABRE ESPAÇO em vez de cobrir. Sem este recuo ela
+               ficava por cima dos 479 px da direita — exatamente onde moram o
+               VALOR, o anel da situação e as ações da linha: o clique no valor
+               era interceptado pelo painel. "Cobrir a metade direita" é sobre
+               por onde o painel entra, não sobre esconder o resultado — e
+               esconder o valor mataria a premissa de julgar o filtro por ele.
+               O recuo vai no PRÓPRIO scroller observado, então
+               `entry.contentRect.width` (que exclui padding) já entrega a
+               largura VISÍVEL: as réguas de coluna continuam medindo o que a
+               pessoa vê, e não a faixa atrás do painel. */
+            paddingRight: dockFlutua && dockLarga ? dockPanelWidth : 0,
             /* A lista ANTIGA recua enquanto a nova está em voo: ela continua
                legível (quem estava lendo não perde o lugar) mas para de se
                apresentar como resposta ao filtro que acabou de mudar.
                Recuar em vez de trocar por esqueleto é de propósito — trocar
                pisca a tela inteira a cada tecla da busca. */
             opacity: listRefiltering ? 0.55 : 1,
-            transition: "opacity var(--mo-fast, 120ms) var(--mo-fast-ease, ease-out)" }}
+            transition: "opacity var(--mo-fast, 120ms) var(--mo-fast-ease, ease-out),"
+              + " padding-right var(--mo-panel, 300ms) var(--mo-panel-ease, cubic-bezier(.32,.72,0,1))" }}
           /* SEM `pointerEvents: none`: este elemento É o scroller, e um alvo
              que não recebe evento de ponteiro também não recebe roda — rolar
              durante uma refiltragem travava no meio do gesto. O risco que a

@@ -248,10 +248,15 @@ test.describe("Transações — redesenho", () => {
         const g = getComputedStyle(l)
           .gridTemplateColumns.split(" ")
           .map((x) => Math.round(parseFloat(x)));
+        /* A célula pelo MARCADOR, não pelo índice. A coluna de data é
+           condicional (some no modo agrupado), então `g[2]` deixava de ser a
+           descrição e passava a ser a coluna FIXA de categoria — o guarda
+           continuava verde medindo 141 px que nunca encolhem, e parava de
+           guardar exatamente o que foi escrito para guardar. */
+        const cel = l.querySelector<HTMLElement>('[data-fincla-cell="descricao"]');
         return {
           linha: Math.round(l.getBoundingClientRect().width),
-          // data, ícone, DESCRIÇÃO, … — a descrição é sempre o terceiro track.
-          descricao: g[2],
+          descricao: cel ? Math.round(cel.getBoundingClientRect().width) : -1,
           nColunas: g.length,
           transbordo: document.documentElement.scrollWidth - document.documentElement.clientWidth,
         };
@@ -271,6 +276,28 @@ test.describe("Transações — redesenho", () => {
 
       const aberta = await colunas();
       expect(aberta!.descricao, `${largura}: a dock zerou a descrição`).toBeGreaterThan(0);
+
+      /* E a dock não pode COBRIR a linha. Abaixo de 1280 ela flutua, e sem o
+         recuo da lista o painel ficava por cima dos pixels da direita —
+         exatamente onde moram o valor, o anel da situação e as ações. O clique
+         no valor era interceptado pelo painel, e a premissa da dock ("julgar o
+         filtro pelo resultado") morria com o resultado escondido. */
+      const cobertura = await page.evaluate(() => {
+        const l = document.querySelector<HTMLElement>(".fincla-row");
+        const dock = document.querySelector<HTMLElement>('[role="region"][aria-label="Filtros"]');
+        if (!l || !dock) return null;
+        const valor = Array.from(l.children).find((c) => /R\$/.test(c.textContent || ""));
+        if (!valor) return null;
+        const vb = valor.getBoundingClientRect();
+        const alvo = document.elementFromPoint(vb.x + vb.width / 2, vb.y + vb.height / 2);
+        return {
+          valorAtrasDaDock: vb.right > dock.getBoundingClientRect().x,
+          cliqueChegaNaLinha: l.contains(alvo),
+        };
+      });
+      expect(cobertura, `${largura}: sem linha ou sem dock`).not.toBeNull();
+      expect(cobertura!.valorAtrasDaDock, `${largura}: a dock cobre o valor`).toBe(false);
+      expect(cobertura!.cliqueChegaNaLinha, `${largura}: o painel intercepta o clique no valor`).toBe(true);
       // Quando a linha aperta, quem sai são as OUTRAS colunas — nunca a descrição.
       if (aberta!.linha < fechada!.linha) {
         expect(aberta!.nColunas, `${largura}: apertou sem ceder nenhuma coluna`)
