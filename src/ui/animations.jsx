@@ -134,28 +134,31 @@ export const ANIM_CSS = `
 
      No toque não há hover: elas ficam sempre visíveis — a alternativa seria um
      alvo de 24 px numa linha de 56, onde o erro abre a transação vizinha. */
-  /* DISPLAY, e nao visibility — a troca foi tentada e revertida.
+  /* VISIBILITY, nao display.
 
-     Com visibility hidden o grupo ficaria posicionado o tempo todo e o hover viraria
-     trabalho de composicao, sem layout. Medido, ganhava: varrer o
-     cursor pela lista ia de 33,3 ms de pior quadro (1 perdido) para 16,8 ms
-     (nenhum).
+     Trocar "none" por "flex" no hover e uma mudanca de LAYOUT: o grupo entra e
+     sai do fluxo de posicionamento, e com ele o navegador refaz style, layout e
+     paint daquela linha. Com visibility ele ja esta posicionado o tempo todo, e
+     mostrar/esconder vira trabalho de composicao.
 
-     E quebrava o clique na linha. Com o grupo ocupando caixa, o hover que o
-     proprio clique provoca o torna visivel sobre o ponto que ia ser clicado, e
-     o clique cai no botao em vez de na linha: a sanfona parava de abrir. Pego
-     pelo e2e, que passa em main e falhava aqui.
+     Medido: varrer o cursor pela lista vai de 33,3 ms de pior quadro (1 quadro
+     perdido) para 16,8 ms (nenhum).
 
-     Um ganho de 16 ms num gesto secundario nao paga quebrar o gesto principal
-     da tela. Se um dia valer a pena, o caminho e outro: mover o grupo para
-     fora do caminho do clique, nao esconde-lo de outro jeito. */
+     Registro de um erro meu, para nao se repetir: cheguei a REVERTER isto
+     acusando-o de impedir a sanfona de abrir. A prova era um e2e que falhava na
+     minha branch e passava em main, e uma execucao isolada que ficou verde ao
+     reverter. Era coincidencia — aquele teste depende de ORDEM e falha na
+     sequencia com ou sem esta regra; isolado, ele passa 3/3 COM ela. O Owner
+     apontou a contradicao: nos dois modos o hover revela o grupo, e ninguem
+     clica sem passar o mouse antes, entao nao havia diferenca possivel para
+     quem usa. Uma amostra so nao distingue causa de acaso. */
   .fincla-quick {
-    display: none; align-items: center; gap: 4px;
+    display: flex; visibility: hidden; align-items: center; gap: 4px;
     position: absolute; right: 0; top: 50%; transform: translateY(-50%);
     margin-right: 10px; white-space: nowrap;
   }
   .fincla-row:hover .fincla-quick,
-  .fincla-row:focus-within .fincla-quick { display: flex; }
+  .fincla-row:focus-within .fincla-quick { visibility: visible; }
   /* "hover: none" sozinho pegava TABLET: "isMobile" é largura (< 768 px), então
      um iPad em paisagem renderiza a linha do DESKTOP — e a regra deixava o grupo
      permanentemente visível. Antes isso era inofensivo (ele tinha coluna
@@ -163,7 +166,10 @@ export const ANIM_CSS = `
      justamente onde o dedo toca para abrir a sanfona, com o 🗑 entre os alvos.
      Casando os dois critérios, a regra só vale onde a linha é mesmo a mobile. */
   @media (hover: none) and (max-width: 767px) {
-    .fincla-quick { display: flex; }
+    /* visibility, para casar com a base: com ela em hidden, um override que so
+       mexe em display nao revela nada — e no toque, onde nao ha hover, essas
+       acoes ficariam invisiveis para sempre. */
+    .fincla-quick { visibility: visible; }
   }
 
   /* O rótulo abre por max-width, não por display: só uma propriedade animável
