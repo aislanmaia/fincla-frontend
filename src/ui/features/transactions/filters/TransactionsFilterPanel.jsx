@@ -424,7 +424,11 @@ function ActiveFacetsPane({ facets, onClearFacet, onFacetChange, onFocusSearch, 
                 cartão: clique na folga vertical caía no `<div>` e não fazia
                 nada. */}
             <Tip
-              label={facetaDoItemAtivo(f.key) ? `Abrir ${f.label}` : "Ir para a busca"}
+              /* "Ir para o filtro", não "Abrir ${f.label}": o cartão já mostra a
+                 faceta e o valor a um centímetro do cursor, então repetir o nome
+                 no tooltip é redundante. O que o tooltip precisa fazer aqui é
+                 DISTINGUIR as duas ações — e a outra destrói o filtro. */
+              label={facetaDoItemAtivo(f.key) ? "Ir para o filtro" : "Ir para a busca"}
               /* `alignItems:"stretch"` além do `alignSelf`: o invólucro do Tip é
                  `inline-flex` com os filhos CENTRALIZADOS, então esticá-lo sem
                  esticar o filho deixava o botão com a altura do texto dentro de
@@ -439,7 +443,14 @@ function ActiveFacetsPane({ facets, onClearFacet, onFacetChange, onFocusSearch, 
                 if (destino) onFacetChange?.(destino);
                 else onFocusSearch?.();
               }}
-              aria-label={`Editar filtro ${f.label}: ${f.value}`}
+              /* MESMO verbo do balão. "Editar filtro" no `aria-label` com "Ir
+                 para o filtro" no tooltip dava dois nomes à mesma ação: quem usa
+                 controle por voz precisa dizer "clicar em Editar filtro" para um
+                 botão que promete "Ir para o filtro", e quem usa leitor de tela
+                 junto de ampliador ouve um verbo e lê outro.
+                 A faceta e o VALOR continuam aqui, ao contrário do balão: sem
+                 eles, três tags anunciariam três "Ir para o filtro" idênticos. */
+              aria-label={`Ir para o filtro ${f.label}: ${f.value}`}
               style={{
                 ...G,
                 flex: 1,
@@ -473,7 +484,15 @@ function ActiveFacetsPane({ facets, onClearFacet, onFacetChange, onFocusSearch, 
               </span>
             </button>
             </Tip>
-            <Tip label={`Remover ${f.label}`}>
+            {/* Simétrico ao corpo: os dois tooltips falam da AÇÃO, e o cartão
+                fornece o sujeito — ele já mostra faceta e valor a um centímetro
+                do cursor. Um dizendo "Ir para o filtro" e o outro "Remover
+                Situação" fazia os dois parecerem coisas de naturezas
+                diferentes, quando são as duas ações do MESMO item.
+                O `aria-label` do botão continua carregando faceta e valor: lá a
+                repetição é necessária, porque três tags dariam três "Remover
+                filtro" indistinguíveis para quem usa leitor de tela. */}
+            <Tip label="Remover filtro">
             <button
               type="button"
               onClick={() => onClearFacet?.(f.key)}

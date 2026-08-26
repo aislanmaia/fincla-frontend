@@ -58,15 +58,15 @@ describe("<ActiveFacetsPane> — clique no corpo", () => {
      o comportamento sob teste. */
   it("leva ao painel da faceta, e cada valor leva ao mesmo lugar", () => {
     const { onFacetChange } = montar();
-    fireEvent.click(screen.getByRole("button", { name: "Editar filtro Categoria: Transporte" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ir para o filtro Categoria: Transporte" }));
     expect(onFacetChange).toHaveBeenCalledWith("categoria");
-    fireEvent.click(screen.getByRole("button", { name: "Editar filtro Situação: A pagar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ir para o filtro Situação: A pagar" }));
     expect(onFacetChange).toHaveBeenLastCalledWith("situacao");
   });
 
   it("o item de busca manda o cursor para o campo, não para um painel", () => {
     const { onFacetChange, onFocusSearch } = montar();
-    fireEvent.click(screen.getByRole("button", { name: "Editar filtro Busca: uber" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ir para o filtro Busca: uber" }));
     expect(onFocusSearch).toHaveBeenCalledTimes(1);
     expect(onFacetChange).not.toHaveBeenCalled();
   });
@@ -76,11 +76,11 @@ describe("<ActiveFacetsPane> — clique no corpo", () => {
     montar();
     /* Os dois alvos ficam colados e a outra ação DESTRÓI o filtro: sem o
        tooltip, nada distingue "abrir" de "remover" antes do clique. */
-    await user.hover(screen.getByRole("button", { name: "Editar filtro Categoria: Transporte" }));
-    expect(await screen.findByText("Abrir Categoria")).toBeInTheDocument();
+    await user.hover(screen.getByRole("button", { name: "Ir para o filtro Categoria: Transporte" }));
+    expect(await screen.findByText("Ir para o filtro")).toBeInTheDocument();
 
     await user.hover(screen.getByRole("button", { name: "Remover filtro Categoria: Transporte" }));
-    expect(await screen.findByText("Remover Categoria")).toBeInTheDocument();
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Remover filtro");
   });
 
   it("o corpo ocupa o cartão e o ✕ fica na borda — o Tip não pode roubar o flex", () => {
@@ -88,7 +88,7 @@ describe("<ActiveFacetsPane> — clique no corpo", () => {
     /* O `<span>` do Tip virou o item de flex no lugar do botão. Sem devolver
        `flex`/`alignSelf` ao invólucro, o ✕ desencostava da direita e o botão
        parava de cobrir a altura do cartão — clique na folga não fazia nada. */
-    const corpo = screen.getByRole("button", { name: "Editar filtro Categoria: Transporte" });
+    const corpo = screen.getByRole("button", { name: "Ir para o filtro Categoria: Transporte" });
     const involucro = corpo.parentElement;
     expect(involucro).toHaveStyle({
       flex: "1", minWidth: "0px", alignSelf: "stretch", alignItems: "stretch",
@@ -97,9 +97,9 @@ describe("<ActiveFacetsPane> — clique no corpo", () => {
 
   it("o rótulo aparece também para quem chega pelo teclado", () => {
     montar();
-    const corpo = screen.getByRole("button", { name: "Editar filtro Categoria: Transporte" });
+    const corpo = screen.getByRole("button", { name: "Ir para o filtro Categoria: Transporte" });
     fireEvent.focus(corpo);
-    expect(screen.getByRole("tooltip")).toHaveTextContent("Abrir Categoria");
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Ir para o filtro");
     fireEvent.blur(corpo);
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
@@ -107,7 +107,7 @@ describe("<ActiveFacetsPane> — clique no corpo", () => {
   it("a busca não promete um painel que não existe", async () => {
     const user = userEvent.setup();
     montar();
-    await user.hover(screen.getByRole("button", { name: "Editar filtro Busca: uber" }));
+    await user.hover(screen.getByRole("button", { name: "Ir para o filtro Busca: uber" }));
     expect(await screen.findByText("Ir para a busca")).toBeInTheDocument();
   });
 

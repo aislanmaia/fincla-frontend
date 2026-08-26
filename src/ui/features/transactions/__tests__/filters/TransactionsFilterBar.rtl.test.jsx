@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+/* Sem `{ timeout: N }` por describe: o teto agora é UM só, em `vite.config.ts`
+   (45 s), com o porquê escrito lá — espalhado por arquivo, o override acabava
+   REBAIXANDO o teto global em vez de proteger o teste. */
 import React, { useState } from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -51,7 +54,7 @@ function Harness({ initialViews = [], filteredCount = 2, compact = false } = {})
   );
 }
 
-describe("<TransactionsFilterBar>", { timeout: 15000 }, () => {
+describe("<TransactionsFilterBar>", () => {
   it("renderiza Search + FacetBar; sem saved views se lista vazia", () => {
     render(<Harness />);
     expect(screen.getByLabelText(/Buscar transações/i)).toBeInTheDocument();
