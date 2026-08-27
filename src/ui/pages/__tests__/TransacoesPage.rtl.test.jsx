@@ -383,39 +383,59 @@ describe("<TransacoesPage> — integração da Variação C", () => {
      dispara, com largura de sobra. Sumiam por um motivo que não tem nada a ver
      com caberem, e sumiam sem saída: não há menu de estouro nem `⋯` para onde
      tivessem ido. Nenhum teste olhava para isso, então ninguém reclamou. */
-  it("densidade, agrupar e recarregar existem no desktop compacto, nessa ordem", async () => {
-    // Sem `dispatchEvent`: nada está ouvindo antes do `renderPage()`, e o
-    // estado inicial já lê `window`. Um evento disparado no vazio parece que
-    // faz o trabalho e não faz.
+  /* A BARRA POR FAIXA (§33 do artefato).
+     A barra não encolhe uniformemente: ela se especializa. Densidade,
+     agrupamento e ajuda são preferência de sessão — ajusta-se uma vez e não se
+     toca mais —, então são as primeiras a colapsar num "⋯". Recarregar NÃO
+     entra: custa 32 px e é a única ação de recuperação da tela. */
+  it("abaixo de 1600 as preferências vão para o \u22EF, e recarregar não", async () => {
     Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1366 });
-    Object.defineProperty(window, "innerHeight", { configurable: true, writable: true, value: 768 });
     renderPage();
 
-    /* Âncora do RAMO, não só dos botões. 768 é compacto por ALTURA
-       (`DESKTOP_FILTERS_EXPAND_MIN_HEIGHT` = 820), e esse limiar é justamente o
-       tipo de número que se ajusta. Se ele baixar, este teste passaria a
-       exercitar o ramo largo, continuaria verde e pararia de proteger a
-       regressão para a qual foi escrito — os quatro botões existem nos dois
-       ramos. A dock fechada em repouso é o que distingue os dois. */
-    expect(await screen.findByRole("button", { name: /^(Abrir |＋ )?Filtros/i })).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: /^Filtros$/i })).toBeNull();
+    // Recarregar continua na barra, alcançável num clique.
+    expect(await screen.findByRole("button", { name: /^Recarregar a lista$/i })).toBeInTheDocument();
+    // As três preferências saíram dela.
+    expect(screen.queryByRole("button", { name: /Densidade da lista/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Agrupar por data$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Atalhos de teclado/i })).toBeNull();
 
-    const densidade = await screen.findByRole("button", { name: /Densidade da lista/i });
-    const agrupar = screen.getByRole("button", { name: /^Agrupar por data$/i });
-    const recarregar = screen.getByRole("button", { name: /^Recarregar a lista$/i });
-    const ajuda = screen.getByRole("button", { name: /Atalhos de teclado/i });
+    // E estão TODAS atrás do "⋯" — que se chama "Exibição da lista", porque um
+    // ícone genérico com rótulo genérico é adivinhação.
+    await userEvent.click(screen.getByRole("button", { name: "Exibição da lista" }));
+    const menu = screen.getByRole("menu");
+    expect(within(menu).getByRole("menuitemcheckbox", { name: /Agrupar por data/i })).toBeInTheDocument();
+    expect(within(menu).getByRole("menuitem", { name: /Atalhos de teclado/i })).toBeInTheDocument();
+    expect(within(menu).getByRole("button", { name: /Compacto/i })).toBeInTheDocument();
+  });
 
-    // Ordem do DOM: recarregar DEPOIS do par densidade+agrupar, colado na
-    // ajuda. Entre os dois ele quebrava o par e lia como um terceiro ajuste de
-    // exibição, que não é o que ele faz.
-    const pos = (a, b) =>
-      a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING;
-    expect(pos(densidade, agrupar)).toBeTruthy();
-    expect(pos(agrupar, recarregar)).toBeTruthy();
-    expect(pos(recarregar, ajuda)).toBeTruthy();
+  it("a partir de 1600 as preferências voltam para a barra e o \u22EF some", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1600 });
+    renderPage();
+
+    expect(await screen.findByRole("button", { name: /Densidade da lista/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Agrupar por data$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Atalhos de teclado/i })).toBeInTheDocument();
+    // Dois caminhos para a mesma ajuda, um deles escondido, é pior que um só.
+    expect(screen.queryByRole("button", { name: "Exibição da lista" })).toBeNull();
+  });
+
+  /* O TETO de chips por faixa: 3 · 2 · 1 · 0. Sem ele a barra exibia três
+     chips em qualquer largura em que coubessem, espremendo a busca para 210 px
+     — e a busca é o controle que MAIS precisa de largura para funcionar. */
+  it("abaixo de 1280 não há chip na barra: o contador do funil carrega", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1152 });
+    renderPage();
+    // O botão de filtros continua existindo — é a porta do sistema inteiro —,
+    // mas sem rótulo: o `aria-label` carrega a contagem.
+    const filtros = await screen.findByRole("button", { name: /^(Abrir|Fechar) filtros/i });
+    expect(filtros).toBeInTheDocument();
+    expect(filtros).not.toHaveTextContent(/Filtros/);
   });
 
   it("a densidade alterna e fica guardada", async () => {
+    // 1600: a densidade fica solta na barra. Abaixo disso ela vive no "⋯", e
+    // o que se testa aqui é a persistência, não onde o botão mora.
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1600 });
     renderPage();
     await openFilters();
     const btn = await screen.findByRole("button", { name: /Densidade da lista/i });
@@ -428,6 +448,9 @@ describe("<TransacoesPage> — integração da Variação C", () => {
   });
 
   it("agrupar por data desliga quando a ordenação não é por data", async () => {
+    // 1600: o botão fica solto na barra. Abaixo disso ele vive no "⋯" — o que
+    // se testa aqui é a REGRA, não onde o botão mora.
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1600 });
     // Ordenado por valor, cada "grupo" viraria um item só — o pior dos dois
     // mundos. O botão fica desabilitado e diz por quê.
     renderPage();
@@ -696,6 +719,9 @@ describe("<TransacoesPage> — integração da Variação C", () => {
      Sob a suíte cheia ele estourava o padrão por margem de segundos. O limite
      maior é sobre o custo do jsdom nesta página, não sobre esperar bug passar. */
   it("view dirty: card mostra Filtros alterados; Limpar tudo desseleciona", async () => {
+    // 1600: o chip de visualizações mostra o rótulo. Abaixo disso ele é só o
+    // marcador, e o "alterada" vira um ponto — coberto pelo teste do chip.
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1600 });
     renderPage();
     await openFilters();
     const item = await salvarViewDoTipo("Receita", "receitas");

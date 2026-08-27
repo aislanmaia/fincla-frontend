@@ -27,6 +27,12 @@ export function SavedViewsChip({
   onUpdate,
   canCreate = false,
   canUpdate = false,
+  /* Abaixo de 1280 sobra o marcador. Ele é um alvo PERMANENTE da barra — é por
+     ali que se salva e se aplica uma visualização —, então vale mais mantê-lo
+     acessível em 28 px do que gastar 99 px repetindo um rótulo que o `title`
+     dá de graça. Marcador e não estrela de propósito: marcador diz "guardado
+     aqui", estrela diria "favorito", que é outra promessa. */
+  soIcone = false,
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -63,11 +69,15 @@ export function SavedViewsChip({
             ? `Visualização salva: ${label}${suffix}. Trocar.`
             : "Visualizações salvas"
         }
+        title={soIcone ? (activeItem ? `Visualização: ${label}${suffix}` : "Visualizações salvas") : undefined}
         style={{
           ...G,
           height: 28,
-          maxWidth: 190,
-          padding: "0 9px",
+          maxWidth: soIcone ? 28 : 190,
+          padding: soIcone ? 0 : "0 9px",
+          justifyContent: soIcone ? "center" : undefined,
+          width: soIcone ? 28 : undefined,
+          position: soIcone ? "relative" : undefined,
           borderRadius: 999,
           display: "inline-flex",
           alignItems: "center",
@@ -82,11 +92,34 @@ export function SavedViewsChip({
         }}
       >
         <Icon name="bookmark" size={11} color={activeItem ? T.purple : T.inkLight} />
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>
-          {label}
-          {suffix}
-        </span>
-        <DisclosureChevron open={open} size={12} style={{ opacity: 0.7 }} />
+        {/* No modo ícone o rótulo some, e com ele sumia o aviso de que a
+            visualização está ALTERADA — a informação que decide se vale salvar.
+            O ponto devolve isso em 6 px: some o texto, não o estado. O
+            `aria-label` e o `title` já carregam a palavra por extenso. */}
+        {soIcone && activeItem && dirty && (
+          <span
+            aria-hidden="true"
+            style={{
+              position: "absolute",
+              top: 2,
+              right: 2,
+              width: 6,
+              height: 6,
+              borderRadius: 99,
+              background: T.purple,
+              border: `1px solid ${T.surface}`,
+            }}
+          />
+        )}
+        {!soIcone && (
+          <>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>
+              {label}
+              {suffix}
+            </span>
+            <DisclosureChevron open={open} size={12} style={{ opacity: 0.7 }} />
+          </>
+        )}
       </button>
 
       {open && (

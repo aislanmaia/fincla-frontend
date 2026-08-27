@@ -1644,6 +1644,25 @@ function TransacoesPageBody({
      mais renderizada, a parada volta para a primeira linha. */
   const [rovingId, setRovingId] = useState(null);
   const [ajudaAberta, setAjudaAberta] = useState(false);
+  const [menuExibicaoAberto, setMenuExibicaoAberto] = useState(false);
+  const menuExibicaoRef = useRef(null);
+  /* Fecha ao clicar fora e no Esc — um menu que só fecha pelo próprio botão
+     prende quem abriu por engano. */
+  useEffect(() => {
+    if (!menuExibicaoAberto) return undefined;
+    const foraDele = (e) => {
+      if (menuExibicaoRef.current && !menuExibicaoRef.current.contains(e.target)) {
+        setMenuExibicaoAberto(false);
+      }
+    };
+    const noEsc = (e) => { if (e.key === "Escape") setMenuExibicaoAberto(false); };
+    document.addEventListener("mousedown", foraDele);
+    document.addEventListener("keydown", noEsc);
+    return () => {
+      document.removeEventListener("mousedown", foraDele);
+      document.removeEventListener("keydown", noEsc);
+    };
+  }, [menuExibicaoAberto]);
   const buscaRef = useRef(null);
   /* Qual linha pediu a edição. Ao fechar o modal, o foco volta para ela: sem
      isso o Tab recomeça do topo do documento e quem editou perde o lugar. */
@@ -3765,8 +3784,108 @@ function TransacoesPageBody({
      aparecem (isso é o painel de filtros). No artefato eles moram na ponta
      direita da barra de comando, ao lado da ordenação — junto do resto do que
      controla a apresentação, em vez de soltos na linha do título. */
+  /* AS QUATRO FAIXAS DA BARRA DE COMANDO (§33 do artefato).
+   *
+   * A barra guarda três naturezas que não podem competir como iguais:
+   *   ① sem outro caminho — busca e ＋ Filtros. Ficam sempre; o RÓTULO é que
+   *     é negociável.
+   *   ② estado, não controle — os chips do que está filtrando. Respondem "o
+   *     que estou vendo?", e o contador do botão já responde isso em
+   *     miniatura: tirá-los perde detalhe, não capacidade.
+   *   ③ preferência de sessão — densidade, agrupamento, ajuda. Ajusta-se uma
+   *     vez; nenhuma muda QUAIS transações aparecem.
+   *
+   * Daí a ordem de sacrifício: preferências → chips → rótulos → largura extra
+   * da busca → nada mais. O último degrau é o que faz a barra ESPECIALIZAR em
+   * vez de encolher: no estreito ela vira uma busca larga mais uma fileira de
+   * glifos. Medido em 1024 com os rótulos fora, a busca fica com 587 px contra
+   * os 210 a que a versão anterior a condenava — e isso é o certo, não um
+   * consolo: quanto menor a tela, mais a busca é o caminho barato de estreitar
+   * uma lista.
+   */
+  const faixaDaBarra = useMemo(() => {
+    if (viewportWidth >= 1600) {
+      return { chips: 3, rotuloDaView: true, rotuloDosBotoes: true, utilitariosSoltos: true };
+    }
+    if (viewportWidth >= 1366) {
+      return { chips: 2, rotuloDaView: false, rotuloDosBotoes: true, utilitariosSoltos: false };
+    }
+    if (viewportWidth >= DESKTOP_FILTERS_EXPAND_BREAKPOINT) {
+      return { chips: 1, rotuloDaView: false, rotuloDosBotoes: true, utilitariosSoltos: false };
+    }
+    return { chips: 0, rotuloDaView: false, rotuloDosBotoes: false, utilitariosSoltos: false };
+  }, [viewportWidth]);
+
+  /* O "⋯" é chamado de "Exibição da lista", não "Mais": um ícone genérico com
+     rótulo genérico é adivinhação — e este grupo tem um assunto só. */
+  const menuDeExibicao = (
+    <div style={{ position: "relative", flex: "none" }} ref={menuExibicaoRef}>
+      <button
+        type="button"
+        onClick={() => setMenuExibicaoAberto((v) => !v)}
+        aria-haspopup="menu"
+        aria-expanded={menuExibicaoAberto}
+        aria-label="Exibição da lista"
+        title="Exibição da lista"
+        style={{ ...G, flex: "none", width: 32, height: 32, borderRadius: 9, cursor: "pointer",
+          border: `1px solid ${menuExibicaoAberto ? T.ink : T.border}`,
+          background: menuExibicaoAberto ? T.bg : T.surface, color: T.inkMid,
+          display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>
+        ⋯
+      </button>
+      {menuExibicaoAberto && (
+        <div role="menu"
+          style={{ position: "absolute", right: 0, top: "calc(100% + 6px)", zIndex: 30,
+            width: 230, background: T.surface, border: `1px solid ${T.border}`,
+            borderRadius: 12, boxShadow: "0 14px 40px rgba(0,0,0,.16)", padding: 6,
+            display: "flex", flexDirection: "column", gap: 2 }}>
+          <div style={{ ...G, fontFamily: "'Geist Mono',monospace", fontSize: 10.5,
+            letterSpacing: "0.09em", textTransform: "uppercase", color: T.inkGhost,
+            padding: "7px 9px 3px" }}>Densidade</div>
+          <div style={{ display: "flex", gap: 4, padding: "0 4px 5px" }}>
+            {Object.entries(DENSITIES).map(([key, d]) => (
+              <button key={key} type="button"
+                onClick={() => setListPrefs({ density: key })}
+                aria-pressed={listPrefs.density === key}
+                style={{ ...G, flex: 1, height: 30, borderRadius: 8, cursor: "pointer",
+                  fontSize: 11, fontWeight: 600, whiteSpace: "nowrap",
+                  border: `1px solid ${listPrefs.density === key ? T.ink : T.border}`,
+                  background: listPrefs.density === key ? T.ink : T.surface,
+                  color: listPrefs.density === key ? "#fff" : T.inkMid }}>
+                {d.label}
+              </button>
+            ))}
+          </div>
+          <div style={{ height: 1, background: T.border, margin: "3px 4px" }} />
+          <button type="button" role="menuitemcheckbox"
+            aria-checked={isGrouped}
+            disabled={!canGroup}
+            onClick={() => setListPrefs({ grouped: !listPrefs.grouped })}
+            style={{ ...G, height: 36, borderRadius: 9, display: "flex", alignItems: "center",
+              gap: 9, padding: "0 9px", fontSize: 12.5, border: "none", textAlign: "left",
+              cursor: canGroup ? "pointer" : "not-allowed", opacity: canGroup ? 1 : 0.45,
+              background: isGrouped ? T.blueLight : "none",
+              color: isGrouped ? T.blue : T.inkMid }}>
+            ▦ Agrupar por data
+          </button>
+          <button type="button" role="menuitem"
+            onClick={() => { setMenuExibicaoAberto(false); setAjudaAberta(true); }}
+            style={{ ...G, height: 36, borderRadius: 9, display: "flex", alignItems: "center",
+              gap: 9, padding: "0 9px", fontSize: 12.5, border: "none", textAlign: "left",
+              cursor: "pointer", background: "none", color: T.inkMid }}>
+            ? Atalhos de teclado
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  /* Recarregar fica FORA do menu em toda largura: custa 32 px e é a única ação
+     de recuperação da tela — enterrá-la sob um clique a mais é o oposto do que
+     ela serve. Densidade, agrupamento e ajuda entram no "⋯" abaixo de 1600. */
   const listPrefsButtons = (
     <>
+          {faixaDaBarra.utilitariosSoltos && (
           <button
             type="button"
             onClick={() => {
@@ -3790,6 +3909,8 @@ function TransacoesPageBody({
               display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>
             ▤
           </button>
+          )}
+          {faixaDaBarra.utilitariosSoltos && (
           <button
             type="button"
             disabled={!canGroup}
@@ -3808,6 +3929,7 @@ function TransacoesPageBody({
               display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>
             ▦
           </button>
+          )}
           {/* Recarregar por ÚLTIMO, encostado no "?", e não entre os outros
               dois. Densidade e agrupamento mudam COMO a lista se apresenta e
               leem como um par; recarregar não muda apresentação nenhuma, e no
@@ -3837,6 +3959,7 @@ function TransacoesPageBody({
                 </svg>
               )}
           </button>
+          {!faixaDaBarra.utilitariosSoltos && menuDeExibicao}
     </>
   );
 
@@ -3855,6 +3978,7 @@ function TransacoesPageBody({
       onUpdate={() => openSaveViewForm("update")}
       canCreate={canSaveNewView}
       canUpdate={canUpdateSavedView}
+      soIcone={!faixaDaBarra.rotuloDaView}
     />
   );
 
@@ -3880,7 +4004,11 @@ function TransacoesPageBody({
       /* Sem escada de breakpoints: quem decide é o orçamento medido pela
          própria barra. `maxVisible` continua como piso para quem renderiza os
          chips fora dela (testes, mocks). */
-      maxVisible={2}
+      /* O TETO da faixa: 3 acima de 1600, 2 até 1366, 1 até 1280, nenhum
+         abaixo — onde o contador do próprio botão passa a ser a única resposta
+         a "quantos filtros estão aplicados". */
+      maxVisible={faixaDaBarra.chips}
+      filtrosSoIcone={!faixaDaBarra.rotuloDosBotoes}
       chipsBudget={chipsBudget}
       collapsed={viewportWidth < 1200}
       filtersOpen={wideDesktopFiltersOpen}
@@ -3898,6 +4026,7 @@ function TransacoesPageBody({
       onClearFacet={clearFacetAndResetPage}
       onClearAll={clearAll}
       collapsed
+      filtrosSoIcone={!faixaDaBarra.rotuloDosBotoes}
       /* A MESMA dock do desktop largo. Antes este toggle abria
          `compactDesktopFiltersOpen`, e esse estado só alimentava a faixa
          permanente de nove cards — o painel que o redesenho aposentou. O
@@ -4558,7 +4687,10 @@ function TransacoesPageBody({
                    precisam existir aqui também: sem o ref, "/" engolia a tecla
                    e focava um `null`. */
                 searchInputRef={buscaRef}
-                onHelp={() => setAjudaAberta(true)}
+                /* Sem "?" solto quando os utilitários viram menu: ele está
+                   DENTRO do "⋯". Dois caminhos para a mesma ajuda, um deles
+                   escondido, é pior que um só. */
+                onHelp={faixaDaBarra.utilitariosSoltos ? () => setAjudaAberta(true) : undefined}
                 /* Densidade, agrupamento e recarregar existem AQUI TAMBÉM.
                    Eram exclusivos do desktop largo, e o gate para "largo" é
                    `largura < 1280 OU altura < 820` — a altura é o que dispara
@@ -4568,6 +4700,8 @@ function TransacoesPageBody({
                    menu de estouro, nenhum ⋯, nada que diga para onde foram.
                    Um controle inalcançável é pior que um controle apertado. */
                 barTrailing={listPrefsButtons}
+            sortSoIcone={!faixaDaBarra.rotuloDosBotoes}
+                sortSoIcone={!faixaDaBarra.rotuloDosBotoes}
               />
             </div>
           </div>
@@ -4599,7 +4733,7 @@ function TransacoesPageBody({
             barLeading={savedViewsChip}
             onChipsBudget={setChipsBudget}
             searchInputRef={buscaRef}
-            onHelp={() => setAjudaAberta(true)}
+            onHelp={faixaDaBarra.utilitariosSoltos ? () => setAjudaAberta(true) : undefined}
             barChips={commandBarChips}
             barTrailing={listPrefsButtons}
           />

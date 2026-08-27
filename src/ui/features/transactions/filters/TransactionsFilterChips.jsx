@@ -104,6 +104,17 @@ function chipStyle(tone) {
  * um dígito solto num retângulo de 5 px de padding lê como texto do botão, não
  * como contagem. Com dois dígitos ele estica, o que é inevitável e continua
  * legível como badge. */
+/* Funil: a porta do sistema de filtros. Traço de 2 px como os demais ícones
+   da barra, para não destoar do recarregar nem do de ordenação. */
+function FunilIcone() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 5h18l-7 8v5l-4 2v-7z" />
+    </svg>
+  );
+}
+
 function CountBadge({ n, prefix = "" }) {
   return (
     <span
@@ -140,6 +151,11 @@ export function TransactionsFilterChips({
   onClearFacet,
   onClearAll,
   maxVisible = 3,
+  /* Abaixo de 1280 o botão vira o FUNIL com contador. Ele é a porta do sistema
+     de filtros inteiro, então não pode sumir — mas o rótulo pode, e ali o
+     contador deixa de ser redundante: sem chips na barra, ele é a ÚNICA
+     resposta a "quantos filtros estão aplicados". */
+  filtrosSoIcone = false,
   /* Orçamento medido pela barra. Quando presente, ele MANDA — `maxVisible` fica
      como piso para quem renderiza os chips fora da barra (testes, mocks). */
   chipsBudget = null,
@@ -162,6 +178,18 @@ export function TransactionsFilterChips({
     ...facets.filter((f) => f.active),
   ];
 
+  /* O contador conta VALORES aplicados, não facetas — `multi` é quantos valores
+     a faceta carrega, e é o mesmo número que já produz o rótulo do chip
+     ("2 categorias"). Contando facetas, o badge dizia "1" colado num chip
+     dizendo "2 categorias", enquanto o painel de Ativos dizia "2 filtros" para
+     o mesmo estado: três superfícies, duas respostas.
+     Abaixo de 1280 isso deixa de ser inconsistência e vira perda de informação:
+     sem chips na barra, este número é a ÚNICA resposta a "quanto está
+     filtrando".
+     Separado de `chips.length` de propósito: aquele é a lista RENDERIZADA e
+     alimenta o cálculo de quantos cabem e o "+N" de estouro. */
+  const valoresAplicados = chips.reduce((n, c) => n + (c.multi || 1), 0);
+
   useEffect(() => {
     if (!overflowOpen) return undefined;
     const onDown = (e) => {
@@ -178,10 +206,22 @@ export function TransactionsFilterChips({
     };
   }, [overflowOpen]);
 
+  /* O TETO manda; o orçamento só BAIXA dele.
+     Antes o orçamento substituía o teto, e por isso a barra exibia três chips
+     em qualquer largura em que eles coubessem — inclusive espremendo a busca
+     para 210 px. Mas só teto também não serve: o chip não tem largura fixa
+     (medido: "Tags · 2" custa 64 px e "Categoria · Lazer & Entretenimento",
+     214), então um teto de 3 truncaria os longos.
+     Os dois juntos: o teto por faixa dá PREVISIBILIDADE (a barra não se
+     rearranja sozinha quando se troca uma tag por uma categoria de nome longo),
+     e o orçamento garante que nada trunque. */
   const cabem =
     chipsBudget == null
       ? maxVisible
-      : chipsQueCabem(chips.map((c) => String(c.value ?? c.label ?? "")), chipsBudget);
+      : Math.min(
+          maxVisible,
+          chipsQueCabem(chips.map((c) => String(c.value ?? c.label ?? "")), chipsBudget),
+        );
 
   useEffect(() => {
     if (chips.length <= cabem) setOverflowOpen(false);
@@ -224,19 +264,27 @@ export function TransactionsFilterChips({
         filtersOpen
           ? "Fechar filtros"
           : chips.length > 0
-            ? `Abrir filtros — ${chips.length} aplicado${chips.length === 1 ? "" : "s"}`
+            ? `Abrir filtros — ${valoresAplicados} aplicado${valoresAplicados === 1 ? "" : "s"}`
             : "Abrir filtros"
       }
+      title={filtrosSoIcone
+        ? (filtersOpen ? "Fechar filtros" : `Filtros${valoresAplicados ? ` — ${valoresAplicados} aplicado${valoresAplicados === 1 ? "" : "s"}` : ""}`)
+        : undefined}
       style={{
         ...chipStyle(filtersOpen ? "on" : "ghost"),
         ...(filtersOpen ? {} : { borderStyle: "dashed" }),
+        ...(filtrosSoIcone
+          ? { width: 32, padding: 0, justifyContent: "center", position: "relative" }
+          : null),
       }}
     >
-      {filtersOpen ? "✕ Fechar filtros" : "＋ Filtros"}
+      {filtrosSoIcone
+        ? (filtersOpen ? "✕" : <FunilIcone />)
+        : (filtersOpen ? "✕ Fechar filtros" : "＋ Filtros")}
       {/* O contador aparece SEMPRE que há filtro, não só quando os chips
           recolhem: o destaque do botão diz *que* há filtro, o número diz
           *quantos* — e a segunda é a pergunta que decide se vale abrir. */}
-      {chips.length > 0 && <CountBadge n={chips.length} />}
+      {chips.length > 0 && <CountBadge n={valoresAplicados} />}
     </button>
   );
 

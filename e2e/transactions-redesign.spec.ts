@@ -312,7 +312,12 @@ test.describe("Transações — redesenho", () => {
 
   test("densidade e agrupamento mudam a lista e ficam guardados", async ({ page }) => {
     await loginAsE2EOwner(page);
-    await page.setViewportSize({ width: 1440, height: 900 });
+    /* 1600, não 1440: densidade e agrupamento são preferência de SESSÃO e
+       colapsam no "⋯" abaixo de 1600 — é a primeira coisa que a barra sacrifica
+       quando aperta (§33). O que este teste guarda é a REGRA (compacto é mais
+       baixo, agrupar custa linhas, a preferência sobrevive ao reload), não onde
+       o botão mora; o caminho pelo menu tem cobertura própria na unidade. */
+    await page.setViewportSize({ width: 1600, height: 900 });
     await openTransactions(page);
 
     const rowHeight = () =>

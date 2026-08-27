@@ -83,6 +83,7 @@ export function TransactionsFilterBar({
   barLeading = null,
   barChips = null,
   barTrailing = null,
+  sortSoIcone = false,
 }) {
   const [expanded, setExpanded] = useState(null);
   const panelRef = useRef(null);
@@ -233,6 +234,7 @@ export function TransactionsFilterBar({
           leading={barLeading}
           chips={barChips}
           trailing={barTrailing}
+          sortSoIcone={sortSoIcone}
           onChipsBudget={onChipsBudget}
           inputRef={searchInputRef}
           onHelp={onHelp}

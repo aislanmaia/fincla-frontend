@@ -30,7 +30,7 @@ function summary(sort) {
  * Botão "Ordenar por X" da Search bar. Abre `SortMenu` no click e mostra
  * `SortTooltip` no hover (somente com menu fechado).
  */
-export function SortButton({ sort, setSort, compact = false }) {
+export function SortButton({ sort, setSort, compact = false, soIcone = false }) {
   const [open, setOpen] = useState(false);
   const [hover, setHover] = useState(false);
   const wrapperRef = useRef(null);
@@ -91,6 +91,7 @@ export function SortButton({ sort, setSort, compact = false }) {
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={`Ordenar transações: ${summary(sort)}`}
+        title={soIcone ? `Ordenar: ${summary(sort)}` : undefined}
         style={{
           ...G,
           display: compact ? "flex" : "inline-flex",
@@ -109,7 +110,11 @@ export function SortButton({ sort, setSort, compact = false }) {
         }}
       >
         <Icon name="arrow-up-down" size={11} />
-        <span>{summary(sort)}</span>
+        {/* Abaixo de 1280 o RÓTULO sai e fica o ícone. O `aria-label` já carrega
+            o critério inteiro ("Ordenar transações: data, mais recente
+            primeiro"), então some o texto, não a informação — e é ele que o
+            `title` repete para quem enxerga. */}
+        {!soIcone && <span>{summary(sort)}</span>}
         {sort.length > 1 && (
           <span
             style={{
