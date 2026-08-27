@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import { AnimNum } from "../../components/primitives.jsx";
 import { T } from "../../tokens";
@@ -56,6 +56,31 @@ export function TransactionsStats({
   saldoLiquidado = null,
   fmt,
 }) {
+  /* A faixa mede o PRÓPRIO box e escolhe o layout a partir dele.
+     A viewport não serve de régua aqui: esta faixa divide a linha com o título,
+     então em 1024 px de tela ela fica com 440 — e `compactLabels` era decidido
+     por `viewportWidth < 1400`, que não sabe nada disso.
+     Os limiares vieram de MEDIÇÃO, não de escolha (Chromium, 1024×640):
+     três colunas com rótulo longo pedem 652 px; com rótulo curto, 560. Abaixo
+     disso não cabe, e a faixa empilha (dois em cima, resultado embaixo) — o
+     mesmo layout que o modo `stacked` já desenhava para o mobile.
+     Valores muito maiores (milhões) empurram esses números para cima, e é por
+     isso que o recorte das células abaixo existe: ele é a garantia de que nada
+     volta a pintar por cima do vizinho, mesmo fora da escada. */
+  const caixaRef = useRef(null);
+  const [larguraMedida, setLarguraMedida] = useState(0);
+  useEffect(() => {
+    const el = caixaRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver(([entry]) => {
+      setLarguraMedida(Math.round(entry.target.clientWidth));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  const empilhado = stacked || (larguraMedida > 0 && larguraMedida < 560);
+  const rotulosCurtos = compactLabels || (larguraMedida > 0 && larguraMedida < 652);
+
   const despesaPositiva = despesa >= 0;
   /* Os KPIs ANIMAM até o novo valor. É o elo que faltava: a pessoa marca uma
      transação como paga e não vê efeito nenhum, porque o número está a 400 px
@@ -217,13 +242,14 @@ export function TransactionsStats({
 
   return (
     <div
+      ref={caixaRef}
       style={{
         display: "grid",
         /* Empilhado no mobile: três colunas de `rótulo + −R$ 1.234,56` com
            nowrap somam ~500 px de largura intrínseca, e o container do app tem
            `overflowX: hidden` — os números eram CORTADOS em silêncio, sem
            rolagem e sem transbordo que um teste de scrollWidth pegasse. */
-        gridTemplateColumns: stacked
+        gridTemplateColumns: empilhado
           ? "minmax(0, 1fr) minmax(0, 1fr) auto"
           : "repeat(3, minmax(0, 1fr)) auto",
         alignItems: "center",
@@ -242,14 +268,26 @@ export function TransactionsStats({
             alignItems: "baseline",
             gap: 7,
             minWidth: 0,
+            /* RECORTE, e não vazamento. Com `minWidth: 0` a célula encolhe
+               abaixo do conteúdo, e como os dois spans são `nowrap` o texto
+               saía da caixa e era desenhado POR CIMA da célula vizinha — "DESP
+               −R$ 14.705,00RESULT" grudado, sem separação. `hidden` faz o
+               excesso sumir em vez de invadir; qual dos dois some é decidido
+               abaixo, e é sempre o rótulo. */
+            overflow: "hidden",
             ...divider,
             // Empilhado: "Resultado" ocupa a linha inteira, como a faixa de KPIs
             // que este card substituiu já fazia no mobile.
-            ...(stacked && i === 2
-              ? { gridColumn: "1 / -1", borderRight: "none", paddingRight: 0, marginRight: 0,
+            /* "1 / 3" e não "1 / -1": o chevron é o QUARTO item de uma grade
+               de três colunas, então com o Resultado ocupando as três ele era
+               empurrado para uma quarta linha, sozinho, deixando uma faixa
+               vazia embaixo do card. Ocupando duas, sobra a terceira coluna
+               para ele — que é onde ele já fica no layout de três colunas. */
+            ...(empilhado && i === 2
+              ? { gridColumn: "1 / 3", borderRight: "none", paddingRight: 0, marginRight: 0,
                   marginTop: 8, paddingTop: 8, borderTop: `1px solid ${T.border}` }
               : null),
-            ...(stacked && i === 1
+            ...(empilhado && i === 1
               ? { borderRight: "none", paddingRight: 0, marginRight: 0 }
               : null),
           }}
@@ -263,9 +301,14 @@ export function TransactionsStats({
               textTransform: "uppercase",
               color: T.inkGhost,
               whiteSpace: "nowrap",
+              /* O RÓTULO é quem cede. Ele é contexto; o número É a informação,
+                 e um valor truncado ("−R$ 14.70…") não informa, engana. */
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
             }}
           >
-            {compactLabels ? l.short : l.full}
+            {rotulosCurtos ? l.short : l.full}
           </span>
           <span
             style={{
@@ -274,6 +317,7 @@ export function TransactionsStats({
               fontSize: 13,
               fontWeight: 800,
               whiteSpace: "nowrap",
+              flexShrink: 0,
               color: unknown ? T.inkLight : values[i].color,
             }}
           >
@@ -314,6 +358,9 @@ export function TransactionsStats({
           cursor: "pointer",
           marginLeft: 12,
           flexShrink: 0,
+          // Empilhado ele divide a linha com o Resultado: alinhar embaixo o põe
+          // na altura do número, e não flutuando no meio das duas linhas.
+          ...(empilhado ? { alignSelf: "end", marginBottom: 2 } : null),
         }}
       >
         <DisclosureChevron open={expanded} size={13} />
