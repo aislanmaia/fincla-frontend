@@ -377,6 +377,44 @@ describe("<TransacoesPage> — integração da Variação C", () => {
     expect(screen.queryByRole("region", { name: /^Detalhes de/i })).toBeNull();
   });
 
+  /* Os três controles da barra existem em TODA largura de desktop, e nesta
+     ordem. Eles só eram montados no desktop largo, e o gate para "largo" é
+     `largura < 1280 OU altura < 820` — num laptop 1366×768 é a ALTURA que
+     dispara, com largura de sobra. Sumiam por um motivo que não tem nada a ver
+     com caberem, e sumiam sem saída: não há menu de estouro nem `⋯` para onde
+     tivessem ido. Nenhum teste olhava para isso, então ninguém reclamou. */
+  it("densidade, agrupar e recarregar existem no desktop compacto, nessa ordem", async () => {
+    // Sem `dispatchEvent`: nada está ouvindo antes do `renderPage()`, e o
+    // estado inicial já lê `window`. Um evento disparado no vazio parece que
+    // faz o trabalho e não faz.
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1366 });
+    Object.defineProperty(window, "innerHeight", { configurable: true, writable: true, value: 768 });
+    renderPage();
+
+    /* Âncora do RAMO, não só dos botões. 768 é compacto por ALTURA
+       (`DESKTOP_FILTERS_EXPAND_MIN_HEIGHT` = 820), e esse limiar é justamente o
+       tipo de número que se ajusta. Se ele baixar, este teste passaria a
+       exercitar o ramo largo, continuaria verde e pararia de proteger a
+       regressão para a qual foi escrito — os quatro botões existem nos dois
+       ramos. A dock fechada em repouso é o que distingue os dois. */
+    expect(await screen.findByRole("button", { name: /^(Abrir |＋ )?Filtros/i })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /^Filtros$/i })).toBeNull();
+
+    const densidade = await screen.findByRole("button", { name: /Densidade da lista/i });
+    const agrupar = screen.getByRole("button", { name: /^Agrupar por data$/i });
+    const recarregar = screen.getByRole("button", { name: /^Recarregar a lista$/i });
+    const ajuda = screen.getByRole("button", { name: /Atalhos de teclado/i });
+
+    // Ordem do DOM: recarregar DEPOIS do par densidade+agrupar, colado na
+    // ajuda. Entre os dois ele quebrava o par e lia como um terceiro ajuste de
+    // exibição, que não é o que ele faz.
+    const pos = (a, b) =>
+      a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING;
+    expect(pos(densidade, agrupar)).toBeTruthy();
+    expect(pos(agrupar, recarregar)).toBeTruthy();
+    expect(pos(recarregar, ajuda)).toBeTruthy();
+  });
+
   it("a densidade alterna e fica guardada", async () => {
     renderPage();
     await openFilters();
