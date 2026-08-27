@@ -91,6 +91,12 @@ function MonthGrid({
      dentro repetia a mesma palavra duas vezes, uma sob a outra. Com dois, a
      barra fica só com as setas e cada grade precisa dizer qual mês é. */
   showTitle = true,
+  /* As SETAS moram na linha do título, uma em cada ponta. Antes elas tinham
+     uma linha própria acima dos calendários — 34 px cobrados de todo mundo só
+     para hospedar dois botões, com o resto da linha em branco. Aqui elas
+     dividem a linha que o nome do mês já ocupava. */
+  navAnterior = null,
+  navProximo = null,
 }) {
   const weekdays = useMemo(() => weekdayLabelsShort(locale), [locale]);
   /* O dia é QUADRADO, não de altura fixa — e essa é a divergência assumida
@@ -115,15 +121,27 @@ function MonthGrid({
   return (
     <div style={{ minWidth: 0 }}>
       {showTitle ? (
-        <div
-          style={{
-            ...G,
-            ...finclaCalMonthTitleStyle,
-            textAlign: "center",
-            marginBottom: 8,
-          }}
-        >
-          {formatCalendarNavMonth(year, monthIndex, locale)}
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 8, gap: 4 }}>
+          {/* As duas pontas têm largura FIXA e igual, com ou sem seta: é o que
+              mantém o nome do mês opticamente centrado no calendário da direita,
+              que só tem a seta de um lado. Sem isso o título escorregava. */}
+          <div style={{ width: 26, flex: "none", display: "flex", justifyContent: "flex-start" }}>
+            {navAnterior}
+          </div>
+          <div
+            style={{
+              ...G,
+              ...finclaCalMonthTitleStyle,
+              flex: 1,
+              minWidth: 0,
+              textAlign: "center",
+            }}
+          >
+            {formatCalendarNavMonth(year, monthIndex, locale)}
+          </div>
+          <div style={{ width: 26, flex: "none", display: "flex", justifyContent: "flex-end" }}>
+            {navProximo}
+          </div>
         </div>
       ) : null}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", marginBottom: 4 }}>
@@ -389,6 +407,29 @@ export function RangeCalendarGrid({
     !maxD ||
     lastShown.getTime() < new Date(maxD.getFullYear(), maxD.getMonth(), 1).getTime();
 
+  const botaoAnterior = (
+    <button
+      type="button"
+      aria-label="Mês anterior"
+      disabled={!canPrev}
+      onClick={() => canPrev && onPrevMonth()}
+      style={{ ...navBase, cursor: canPrev ? "pointer" : "not-allowed", opacity: canPrev ? 1 : 0.35 }}
+    >
+      <ChevronLeft size={15} />
+    </button>
+  );
+  const botaoProximo = (
+    <button
+      type="button"
+      aria-label="Próximo mês"
+      disabled={!canNext}
+      onClick={() => canNext && onNextMonth()}
+      style={{ ...navBase, cursor: canNext ? "pointer" : "not-allowed", opacity: canNext ? 1 : 0.35 }}
+    >
+      <ChevronRight size={15} />
+    </button>
+  );
+
   return (
     <div
       onMouseLeave={touch ? undefined : () => onDayHover(null)}
@@ -399,49 +440,11 @@ export function RangeCalendarGrid({
         background: T.surface,
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 10,
-          gap: 8,
-        }}
-      >
-        <button
-          type="button"
-          aria-label="Mês anterior"
-          disabled={!canPrev}
-          onClick={() => canPrev && onPrevMonth()}
-          style={{
-            ...navBase,
-            cursor: canPrev ? "pointer" : "not-allowed",
-            opacity: canPrev ? 1 : 0.35,
-          }}
-        >
-          <ChevronLeft size={15} />
-        </button>
-        {monthCount === 1 ? (
-          <div style={{ ...G, ...finclaCalMonthTitleStyle }}>
-            {formatCalendarNavMonth(cursorYear, cursorMonth, locale)}
-          </div>
-        ) : (
-          <div style={{ flex: 1 }} />
-        )}
-        <button
-          type="button"
-          aria-label="Próximo mês"
-          disabled={!canNext}
-          onClick={() => canNext && onNextMonth()}
-          style={{
-            ...navBase,
-            cursor: canNext ? "pointer" : "not-allowed",
-            opacity: canNext ? 1 : 0.35,
-          }}
-        >
-          <ChevronRight size={15} />
-        </button>
-      </div>
+      {/* Nenhum cabeçalho de navegação aqui. Ele existia só para hospedar as
+          duas setas e, com dois meses, o miolo dele era uma DIV VAZIA — uma
+          linha inteira em branco cobrada de toda abertura do filtro. As setas
+          desceram para a linha do título de cada mês, onde já havia espaço
+          sobrando nas pontas. */}
 
       <div
         style={{
@@ -450,7 +453,7 @@ export function RangeCalendarGrid({
           gap: monthCount > 1 ? 16 : 0,
         }}
       >
-        {months.map(({ year, monthIndex }) => (
+        {months.map(({ year, monthIndex }, i) => (
           <MonthGrid
             key={`${year}-${monthIndex}`}
             year={year}
@@ -468,7 +471,13 @@ export function RangeCalendarGrid({
             touch={touch}
             grabbedEdge={grabbedEdge}
             acaoSobHover={acaoSobHover}
-            showTitle={monthCount > 1}
+            /* O título existe SEMPRE agora: é ele que hospeda a navegação.
+               Com um mês, as duas setas ficam nele; com dois, a de voltar vai
+               para o primeiro e a de avançar para o último — que é a leitura
+               natural de "para trás daqui" e "para frente dali". */
+            showTitle
+            navAnterior={i === 0 ? botaoAnterior : null}
+            navProximo={i === months.length - 1 ? botaoProximo : null}
           />
         ))}
       </div>
