@@ -3776,7 +3776,16 @@ function TransacoesPageBody({
             }}
             title={`Densidade da lista: ${DENSITIES[listPrefs.density].label}`}
             aria-label={`Densidade da lista: ${DENSITIES[listPrefs.density].label}. Clique para alternar.`}
-            style={{ ...G, width:32, height:32, borderRadius:9, cursor:"pointer",
+            /* `flex:"none"` como todo irmão de largura fixa na barra (o `Sep`,
+               o "?", o chip de visualizações). Sem isso os três entram como
+               itens encolhíveis: a busca congela no `minWidth` de 180 px e para
+               de ceder, e o que sobra para absorver a falta são justamente
+               estes 32×32 — que viram retângulos achatados com o ícone cortado.
+               Aparece no fundo da faixa (1024×640 com uma visualização salva
+               ativa, cujo chip é limitado a 190 px e não encolhe), e o guarda de
+               e2e não pega: ele afirma `scrollWidth === clientWidth`, e encolher
+               é exatamente o que impede o transbordo. */
+            style={{ ...G, flex:"none", width:32, height:32, borderRadius:9, cursor:"pointer",
               border:`1px solid ${T.border}`, background:T.surface, color:T.inkMid,
               display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>
             ▤
@@ -3790,7 +3799,7 @@ function TransacoesPageBody({
               : "Agrupar por data só vale ordenando por data"}
             aria-pressed={isGrouped}
             aria-label="Agrupar por data"
-            style={{ ...G, width:32, height:32, borderRadius:9,
+            style={{ ...G, flex:"none", width:32, height:32, borderRadius:9,
               cursor: canGroup ? "pointer" : "not-allowed",
               opacity: canGroup ? 1 : 0.4,
               border:`1px solid ${isGrouped ? "#BFD3FA" : T.border}`,
@@ -3814,7 +3823,7 @@ function TransacoesPageBody({
             disabled={listRefiltering}
             title="Recarregar a lista (R)"
             aria-label="Recarregar a lista"
-            style={{ ...G, width:32, height:32, borderRadius:9,
+            style={{ ...G, flex:"none", width:32, height:32, borderRadius:9,
               cursor: listRefiltering ? "default" : "pointer",
               border:`1px solid ${T.border}`, background:T.surface, color:T.inkMid,
               display:"flex", alignItems:"center", justifyContent:"center", padding:0 }}>
