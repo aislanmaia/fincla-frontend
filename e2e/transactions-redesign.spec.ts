@@ -277,11 +277,24 @@ test.describe("Transações — redesenho", () => {
       const aberta = await colunas();
       expect(aberta!.descricao, `${largura}: a dock zerou a descrição`).toBeGreaterThan(0);
 
-      /* E a dock não pode COBRIR a linha. Abaixo de 1280 ela flutua, e sem o
-         recuo da lista o painel ficava por cima dos pixels da direita —
-         exatamente onde moram o valor, o anel da situação e as ações. O clique
-         no valor era interceptado pelo painel, e a premissa da dock ("julgar o
-         filtro pelo resultado") morria com o resultado escondido. */
+      /* Acima de 1280 a dock é ANCORADA e não pode cobrir nada: ela comprime a
+         lista, e o valor tem de continuar visível e clicável.
+         Abaixo de 1280 ela FLUTUA e cobrir é o comportamento escolhido — com
+         medição por trás. A alternativa (recuar a lista a largura do painel)
+         foi tentada e é pior: em 1024×640 a linha caía de 761 px para 341 e a
+         descrição de 448 para 28, 20 de 20 truncadas. A descrição só para de
+         truncar com ~620 px de linha, e 620 + 420 de painel + 195 de sidebar
+         + 28 de respiro = 1263 px. Abaixo disso os dois não cabem, ponto — e
+         entre "valor coberto enquanto o painel está aberto" e "linha ilegível
+         enquanto o painel está aberto", o painel é o transitório. */
+      if (largura < 1280) {
+        // O que se exige aqui é o oposto: a linha NÃO pode encolher.
+        expect(aberta!.linha, `${largura}: a dock flutuante espremeu a linha`).toBe(fechada!.linha);
+        await page.getByRole("button", { name: /Fechar filtros/i }).click();
+        await page.waitForTimeout(500);
+        continue;
+      }
+
       const cobertura = await page.evaluate(() => {
         const l = document.querySelector<HTMLElement>(".fincla-row");
         const dock = document.querySelector<HTMLElement>('[role="region"][aria-label="Filtros"]');
