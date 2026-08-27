@@ -1867,10 +1867,15 @@ function TransacoesPageBody({
      Sem `dockFechando` aqui, a linha alargava instantaneamente e desenhava o
      valor debaixo de um painel ainda visível — o mesmo defeito que este trecho
      conserta na abertura, espelhado. */
-  const dockOcupaEspaco = dockFlutua && (dockLarga || dockFechando);
+  /* Só a dock ANCORADA tira largura da linha. A flutuante COBRE em vez de
+     recuar (ver o comentário do scroller), então não há o que descontar dela —
+     e a ancorada encolhe o container de verdade, então quem a mede é o próprio
+     `ResizeObserver`. Este desconto existe só para o PALPITE, que decide
+     enquanto a medição não chegou. */
+  const dockAncoradaOcupa = !dockFlutua && (dockLarga || dockFechando);
 
   const larguraVisivelDaLista = listWidth > 0
-    ? Math.max(0, listWidth - (dockOcupaEspaco ? dockPanelWidth : 0))
+    ? listWidth
     /* O PALPITE também desconta a dock. Antes cada régua tinha o seu próprio
        par (limiar-de-lista, limiar-de-viewport), e o ramo da viewport ignorava
        o painel: com a dock aberta em 1152 o palpite dizia "1152, largo" enquanto
@@ -1884,7 +1889,7 @@ function TransacoesPageBody({
        outros dois conservadores. Com 200, `wide` acendia em 1500 px de viewport
        para uma lista de ~1265, e a descrição — a única coluna que encolhe até
        zero — pagava a diferença até o observer chegar. */
-    : Math.max(0, viewportWidth - 300 - (dockLarga || dockFechando ? dockPanelWidth : 0));
+    : Math.max(0, viewportWidth - 300 - (dockAncoradaOcupa ? dockPanelWidth : 0));
 
   useEffect(() => {
     const onResize = () => {
@@ -4965,19 +4970,21 @@ function TransacoesPageBody({
           className="fincla-scroll"
           style={{ flex:1, minWidth:0, minHeight:0,
             overflowY:"auto", overflowX:"hidden",
-            /* A dock flutuante ABRE ESPAÇO em vez de cobrir. Sem este recuo ela
-               ficava por cima dos 479 px da direita — exatamente onde moram o
-               VALOR, o anel da situação e as ações da linha: o clique no valor
-               era interceptado pelo painel. "Cobrir a metade direita" é sobre
-               por onde o painel entra, não sobre esconder o resultado — e
-               esconder o valor mataria a premissa de julgar o filtro por ele.
-               O recuo é PADDING no scroller observado, e a medição dele
-               (`clientWidth`) é imune a padding de propósito: quem desconta o
-               recuo é `larguraVisivelDaLista`, em JS, no mesmo quadro do
-               clique. Esperar o observer descobrir custaria um quadro mais os
-               90 ms de assentamento — tempo em que a linha fica desenhada para
-               a largura que a dock já tomou. */
-            paddingRight: dockFlutua && dockLarga ? dockPanelWidth : 0,
+            /* A dock flutuante SOBREPÕE, sem recuo. Isso é uma reversão
+               deliberada, e a troca está medida.
+               Antes ela recuava a lista (padding igual à largura do painel)
+               para não cobrir o valor. Resolveu o encobrimento e trocou por
+               algo pior: em 1024×640 a linha caía de 761 px para 341 e a
+               descrição de 448 para 28 — 20 de 20 truncadas, "Ne…", "Su…",
+               "Alu…". Ou seja, "valor escondido enquanto o painel está aberto"
+               virou "linha ilegível enquanto o painel está aberto".
+               Medido: a descrição só para de truncar com ~620 px de linha
+               (623 → 0/20; 523 → 3/20; 423 → 20/20). Somando o painel mínimo
+               (420), a sidebar (195) e o respiro (28), dá 1263 px — abaixo de
+               ~1280 NÃO EXISTE arranjo em que os dois caibam. Escolhido cobrir:
+               o painel é transitório, e ao fechá-lo a lista volta inteira e
+               legível; a linha espremida, não. */
+            paddingRight: 0,
             /* A lista ANTIGA recua enquanto a nova está em voo: ela continua
                legível (quem estava lendo não perde o lugar) mas para de se
                apresentar como resposta ao filtro que acabou de mudar.

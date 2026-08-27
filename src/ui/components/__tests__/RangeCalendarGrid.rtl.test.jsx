@@ -59,6 +59,34 @@ describe("<RangeCalendarGrid>", () => {
     });
   });
 
+  /* A navegação mora na LINHA DO TÍTULO, não numa faixa própria acima.
+     A faixa antiga existia só para hospedar dois botões e, com dois meses, o
+     miolo dela era uma div vazia — 33 px (botão 23 + respiro 10) cobrados de
+     toda abertura do filtro para mostrar espaço em branco. */
+  it("as setas ficam na linha do mês, uma em cada ponta", () => {
+    render(<RangeCalendarGrid {...base} monthCount={2} />);
+    const anterior = screen.getByRole("button", { name: "Mês anterior" });
+    const proximo = screen.getByRole("button", { name: "Próximo mês" });
+
+    // Cada seta divide a linha com o título do SEU mês: a de voltar com o
+    // primeiro, a de avançar com o último.
+    const linhaAnterior = anterior.closest("div").parentElement;
+    const linhaProximo = proximo.closest("div").parentElement;
+    expect(linhaAnterior).toHaveTextContent(/de 2026$/);
+    expect(linhaProximo).toHaveTextContent(/de 2026$/);
+    expect(linhaAnterior).not.toBe(linhaProximo);
+
+    // E não existe mais uma faixa de navegação separada dos calendários.
+    expect(anterior.closest("div").parentElement).toBe(linhaAnterior);
+  });
+
+  it("com um mês só, as duas setas dividem a linha do título", () => {
+    render(<RangeCalendarGrid {...base} />);
+    const anterior = screen.getByRole("button", { name: "Mês anterior" });
+    const proximo = screen.getByRole("button", { name: "Próximo mês" });
+    expect(anterior.closest("div").parentElement).toBe(proximo.closest("div").parentElement);
+  });
+
   it("o dia sob o cursor acende fundo azul suave, não só o anel", () => {
     render(<RangeCalendarGrid {...base} hoverYmd="2026-08-15" acaoSobHover="novo início" />);
     // `blueLight` é a mesma cor da faixa: o hover prenuncia o que a seleção deixa.
