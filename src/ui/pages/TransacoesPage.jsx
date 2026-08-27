@@ -3781,7 +3781,31 @@ function TransacoesPageBody({
               display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>
             ▤
           </button>
-          {/* Recarregar. Mesmo peso visual dos vizinhos de propósito: na
+          <button
+            type="button"
+            disabled={!canGroup}
+            onClick={() => setListPrefs({ grouped: !listPrefs.grouped })}
+            title={canGroup
+              ? (isGrouped ? "Agrupado por data" : "Lista contínua")
+              : "Agrupar por data só vale ordenando por data"}
+            aria-pressed={isGrouped}
+            aria-label="Agrupar por data"
+            style={{ ...G, width:32, height:32, borderRadius:9,
+              cursor: canGroup ? "pointer" : "not-allowed",
+              opacity: canGroup ? 1 : 0.4,
+              border:`1px solid ${isGrouped ? "#BFD3FA" : T.border}`,
+              background: isGrouped ? T.blueLight : T.surface,
+              color: isGrouped ? T.blue : T.inkMid,
+              display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>
+            ▦
+          </button>
+          {/* Recarregar por ÚLTIMO, encostado no "?", e não entre os outros
+              dois. Densidade e agrupamento mudam COMO a lista se apresenta e
+              leem como um par; recarregar não muda apresentação nenhuma, e no
+              meio deles quebrava o par e se lia como um terceiro ajuste de
+              exibição. Ao lado da ajuda ele fica onde moram as ações que não
+              são sobre o recorte.
+              Mesmo peso visual dos vizinhos, isso continua de propósito: na
               esmagadora maioria das sessões ele nunca é usado, e destacá-lo
               sugeriria que a lista costuma estar errada. */}
           <button
@@ -3803,24 +3827,6 @@ function TransacoesPageBody({
                   <path d="M21 3v6h-6" />
                 </svg>
               )}
-          </button>
-          <button
-            type="button"
-            disabled={!canGroup}
-            onClick={() => setListPrefs({ grouped: !listPrefs.grouped })}
-            title={canGroup
-              ? (isGrouped ? "Agrupado por data" : "Lista contínua")
-              : "Agrupar por data só vale ordenando por data"}
-            aria-pressed={isGrouped}
-            aria-label="Agrupar por data"
-            style={{ ...G, width:32, height:32, borderRadius:9,
-              cursor: canGroup ? "pointer" : "not-allowed",
-              opacity: canGroup ? 1 : 0.4,
-              border:`1px solid ${isGrouped ? "#BFD3FA" : T.border}`,
-              background: isGrouped ? T.blueLight : T.surface,
-              color: isGrouped ? T.blue : T.inkMid,
-              display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>
-            ▦
           </button>
     </>
   );
@@ -4544,6 +4550,15 @@ function TransacoesPageBody({
                    e focava um `null`. */
                 searchInputRef={buscaRef}
                 onHelp={() => setAjudaAberta(true)}
+                /* Densidade, agrupamento e recarregar existem AQUI TAMBÉM.
+                   Eram exclusivos do desktop largo, e o gate para "largo" é
+                   `largura < 1280 OU altura < 820` — a altura é o que dispara
+                   num laptop 1366×768, onde sobra largura de sobra. O
+                   resultado: três controles sumiam por um motivo que não tem
+                   nada a ver com eles caberem, e sumiam SEM SAÍDA — não existe
+                   menu de estouro, nenhum ⋯, nada que diga para onde foram.
+                   Um controle inalcançável é pior que um controle apertado. */
+                barTrailing={listPrefsButtons}
               />
             </div>
           </div>

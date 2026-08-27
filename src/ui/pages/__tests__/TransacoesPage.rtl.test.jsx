@@ -377,6 +377,33 @@ describe("<TransacoesPage> — integração da Variação C", () => {
     expect(screen.queryByRole("region", { name: /^Detalhes de/i })).toBeNull();
   });
 
+  /* Os três controles da barra existem em TODA largura de desktop, e nesta
+     ordem. Eles só eram montados no desktop largo, e o gate para "largo" é
+     `largura < 1280 OU altura < 820` — num laptop 1366×768 é a ALTURA que
+     dispara, com largura de sobra. Sumiam por um motivo que não tem nada a ver
+     com caberem, e sumiam sem saída: não há menu de estouro nem `⋯` para onde
+     tivessem ido. Nenhum teste olhava para isso, então ninguém reclamou. */
+  it("densidade, agrupar e recarregar existem no desktop compacto, nessa ordem", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 1366 });
+    Object.defineProperty(window, "innerHeight", { configurable: true, writable: true, value: 768 });
+    window.dispatchEvent(new Event("resize"));
+    renderPage();
+
+    const densidade = await screen.findByRole("button", { name: /Densidade da lista/i });
+    const agrupar = screen.getByRole("button", { name: /^Agrupar por data$/i });
+    const recarregar = screen.getByRole("button", { name: /^Recarregar a lista$/i });
+    const ajuda = screen.getByRole("button", { name: /Atalhos de teclado/i });
+
+    // Ordem do DOM: recarregar DEPOIS do par densidade+agrupar, colado na
+    // ajuda. Entre os dois ele quebrava o par e lia como um terceiro ajuste de
+    // exibição, que não é o que ele faz.
+    const pos = (a, b) =>
+      a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING;
+    expect(pos(densidade, agrupar)).toBeTruthy();
+    expect(pos(agrupar, recarregar)).toBeTruthy();
+    expect(pos(recarregar, ajuda)).toBeTruthy();
+  });
+
   it("a densidade alterna e fica guardada", async () => {
     renderPage();
     await openFilters();
