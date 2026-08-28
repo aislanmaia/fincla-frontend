@@ -98,7 +98,14 @@ export function SortButton({ sort, setSort, compact = false, soIcone = false }) 
           alignItems: "center",
           justifyContent: compact ? "space-between" : undefined,
           gap: 5,
-          padding: compact ? "10px 14px" : "5px 10px",
+          /* No modo ícone a caixa é FIXA em 32×32, igual aos vizinhos. Com
+             `padding: 5px 10px` e sem altura, o botão nascia da altura do
+             ícone — ~23 px contra os 32 dos outros —, e uma fileira de alvos
+             desalinhados lê como defeito, não como hierarquia. */
+          ...(soIcone
+            ? { width: 32, height: 32, padding: 0, justifyContent: "center" }
+            : null),
+          padding: compact ? "10px 14px" : soIcone ? 0 : "5px 10px",
           borderRadius: compact ? 10 : 7,
           border: `1px solid ${open ? T.ink : T.border}`,
           background: open ? T.bg : T.surface,

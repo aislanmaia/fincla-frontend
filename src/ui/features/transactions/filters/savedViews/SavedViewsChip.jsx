@@ -72,11 +72,15 @@ export function SavedViewsChip({
         title={soIcone ? (activeItem ? `Visualização: ${label}${suffix}` : "Visualizações salvas") : undefined}
         style={{
           ...G,
-          height: 28,
-          maxWidth: soIcone ? 28 : 190,
+          /* 32, a mesma altura dos outros controles da barra. Estava em 28 e
+             ficava visivelmente mais baixo que ordenação, recarregar e "⋯" —
+             numa fileira única de alvos, altura diferente lê como
+             desalinhamento, não como hierarquia. */
+          height: 32,
+          maxWidth: soIcone ? 32 : 190,
           padding: soIcone ? 0 : "0 9px",
           justifyContent: soIcone ? "center" : undefined,
-          width: soIcone ? 28 : undefined,
+          width: soIcone ? 32 : undefined,
           position: soIcone ? "relative" : undefined,
           borderRadius: 999,
           display: "inline-flex",
