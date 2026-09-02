@@ -405,7 +405,9 @@ describe("<TransacoesPage> — integração da Variação C", () => {
     const menu = screen.getByRole("menu");
     expect(within(menu).getByRole("menuitemcheckbox", { name: /Agrupar por data/i })).toBeInTheDocument();
     expect(within(menu).getByRole("menuitem", { name: /Atalhos de teclado/i })).toBeInTheDocument();
-    expect(within(menu).getByRole("button", { name: /Compacto/i })).toBeInTheDocument();
+    /* `menuitemradio`: dentro de um `role="menu"`, leitores de tela expõem os
+       filhos pelo PAPEL, e um `<button>` solto ali fica inalcançável. */
+    expect(within(menu).getByRole("menuitemradio", { name: /Compacto/i })).toBeInTheDocument();
   });
 
   it("a partir de 1600 as preferências voltam para a barra e o \u22EF some", async () => {

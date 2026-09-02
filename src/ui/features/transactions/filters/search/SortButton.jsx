@@ -103,7 +103,7 @@ export function SortButton({ sort, setSort, compact = false, soIcone = false }) 
              ícone — ~23 px contra os 32 dos outros —, e uma fileira de alvos
              desalinhados lê como defeito, não como hierarquia. */
           ...(soIcone
-            ? { width: 32, height: 32, padding: 0, justifyContent: "center" }
+            ? { width: 32, height: 32, padding: 0, justifyContent: "center", gap: 2 }
             : null),
           padding: compact ? "10px 14px" : soIcone ? 0 : "5px 10px",
           borderRadius: compact ? 10 : 7,
@@ -116,7 +116,14 @@ export function SortButton({ sort, setSort, compact = false, soIcone = false }) 
           flex: compact ? 1 : undefined,
         }}
       >
-        <Icon name="arrow-up-down" size={11} />
+        {/* `flexShrink: 0`: no modo ícone a caixa é fixa em 32 e o badge de
+            múltiplos critérios tem `minWidth`, então quem cedia era o ÍCONE —
+            renderizava ~9 px e lia como um glifo espremido ao lado dos
+            vizinhos em tamanho cheio. O ícone é a identidade do controle; se
+            algo tem de apertar, é o resto. */}
+        <span style={{ display: "inline-flex", flexShrink: 0 }}>
+          <Icon name="arrow-up-down" size={11} />
+        </span>
         {/* Abaixo de 1280 o RÓTULO sai e fica o ícone. O `aria-label` já carrega
             o critério inteiro ("Ordenar transações: data, mais recente
             primeiro"), então some o texto, não a informação — e é ele que o

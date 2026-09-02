@@ -37,6 +37,32 @@ function montar(extra = {}) {
   return props;
 }
 
+/* A CONTA TEM DE FECHAR entre as duas superfícies.
+   O badge do botão soma `multi` de todas as facetas; o painel de Ativos lista
+   um item por VALOR. Se uma faceta multi-valor não for expandida na lista, o
+   badge diz um número e o painel mostra outro — e abaixo de 1280, onde não há
+   chips na barra, o badge é a única resposta a "quanto está filtrando".
+   Foi assim que `cartao` passou: expandido no badge, não expandido na lista. */
+describe("badge e painel contam a mesma coisa", () => {
+  const facetaMulti = (key, label, multi) => ({ key, label, multi, active: true });
+
+  it("toda faceta multi-valor vira N itens na lista, não um só", () => {
+    const entradas = [
+      ...["alim", "trans"].map((id) => ({ key: `categoria:${id}`, label: "Categoria", value: id })),
+      ...["nub", "itau"].map((id) => ({ key: `cartao:${id}`, label: "Cartão", value: id })),
+    ];
+    render(
+      <TransactionsFilterPanel filter={FILTER} facet="ativos" activeFacets={entradas} />,
+    );
+    // Duas categorias e dois cartões = QUATRO itens removíveis, não dois.
+    expect(screen.getAllByRole("button", { name: /^Remover filtro/ })).toHaveLength(4);
+  });
+
+  it("a faceta de cartão aponta para o painel de cartão", () => {
+    expect(facetaDoItemAtivo("cartao:nub")).toBe("cartao");
+  });
+});
+
 describe("facetaDoItemAtivo", () => {
   it("um valor ou vários, a faceta de destino é a mesma", () => {
     expect(facetaDoItemAtivo("categoria")).toBe("categoria");

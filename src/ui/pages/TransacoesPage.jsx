@@ -3062,12 +3062,28 @@ function TransacoesPageBody({
         for (const m of filter.method) {
           out.push({ ...f, key: `forma:${m}`, value: getPaymentMethodLabel([m]) });
         }
+      } else if (f.key === "cartao" && filter.cardSel.length > 1) {
+        /* CARTÃO estava de fora, e a omissão contradizia o próprio objetivo
+           desta mudança: o badge soma `multi` de TODAS as facetas, então com
+           dois cartões ele dizia "2" enquanto o painel de Ativos dizia
+           "1 filtro". Três superfícies, duas respostas — invertido, mas o mesmo
+           defeito. E abaixo de 1280 o badge é a ÚNICA resposta a "quanto está
+           filtrando", então quem tinha de ceder era a lista de valores. */
+        for (const id of filter.cardSel) {
+          const c = cardsById[id];
+          out.push({
+            ...f,
+            key: `cartao:${id}`,
+            value: c ? `${c.label}${c.last4 ? ` ••${c.last4}` : ""}` : String(id),
+          });
+        }
       } else {
         out.push(f);
       }
     }
     return out;
-  }, [allFacets, debouncedSearch, filter.cats, filter.tags, filter.method, categoryLabelById]);
+  }, [allFacets, debouncedSearch, filter.cats, filter.tags, filter.method,
+      filter.cardSel, categoryLabelById, cardsById]);
 
   const activeFacetsForSavedViews = useMemo(
     () =>
@@ -3821,6 +3837,16 @@ function TransacoesPageBody({
     return { chips: 0, rotuloDaView: false, rotuloDosBotoes: false, utilitariosSoltos: false };
   }, [viewportWidth]);
 
+  /* O menu FECHA quando deixa de ser renderizado. Acima de 1600 os utilitários
+     voltam soltos e o "⋯" some — mas o estado ficava `true`, então voltar para
+     baixo de 1600 reabria o menu sem clique nenhum.
+     Mora AQUI, e não junto do `useState`, porque depende de `faixaDaBarra`:
+     declarado antes dela, o efeito estourava `Cannot access 'faixaDaBarra'
+     before initialization` — e derrubava a página inteira, não só o menu. */
+  useEffect(() => {
+    if (faixaDaBarra.utilitariosSoltos) setMenuExibicaoAberto(false);
+  }, [faixaDaBarra.utilitariosSoltos]);
+
   /* O "⋯" é chamado de "Exibição da lista", não "Mais": um ícone genérico com
      rótulo genérico é adivinhação — e este grupo tem um assunto só. */
   const menuDeExibicao = (
@@ -3849,8 +3875,13 @@ function TransacoesPageBody({
             padding: "7px 9px 3px" }}>Densidade</div>
           <div style={{ display: "flex", gap: 4, padding: "0 4px 5px" }}>
             {Object.entries(DENSITIES).map(([key, d]) => (
-              <button key={key} type="button"
+              /* `menuitemradio`, não `button` solto: leitores de tela expõem
+                 os filhos de um `role="menu"` pelo papel, e sem ele a densidade
+                 ficava inalcançável entre 1280 e 1600 — as únicas larguras em
+                 que ela mora aqui dentro. */
+              <button key={key} type="button" role="menuitemradio"
                 onClick={() => setListPrefs({ density: key })}
+                aria-checked={listPrefs.density === key}
                 aria-pressed={listPrefs.density === key}
                 style={{ ...G, flex: 1, height: 30, borderRadius: 8, cursor: "pointer",
                   fontSize: 11, fontWeight: 600, whiteSpace: "nowrap",
@@ -4705,7 +4736,6 @@ function TransacoesPageBody({
                    menu de estouro, nenhum ⋯, nada que diga para onde foram.
                    Um controle inalcançável é pior que um controle apertado. */
                 barTrailing={listPrefsButtons}
-            sortSoIcone={!faixaDaBarra.rotuloDosBotoes}
                 sortSoIcone={!faixaDaBarra.rotuloDosBotoes}
               />
             </div>
