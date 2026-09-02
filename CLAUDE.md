@@ -64,3 +64,17 @@ npm run test:e2e       # Playwright (precisa de TEST_RESET_SECRET, E2E_TEST_OWNE
 
 ## Referências
 - `docs/finly-design-system.md`, `docs/fincla-v2-frontend-guide.md`
+
+## Agent skills
+
+### Issue tracker
+
+Issues e specs vivem nas **GitHub Issues** de `aislanmaia/fincla-frontend`, operadas pelo `gh` CLI. Ver `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+As cinco roles canônicas, com os nomes iguais aos das roles (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). Ver `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Layout **single-context**: `CONTEXT.md` na raiz deste repositório e ADRs em `docs/adr/`, criados sob demanda. O glossário do domínio monetário vive no `fincla-api` (`CONTEXT.md` de lá) — este repositório consome aquele vocabulário. Ver `docs/agents/domain.md`.
