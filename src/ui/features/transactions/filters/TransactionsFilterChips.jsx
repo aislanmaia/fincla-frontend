@@ -20,7 +20,13 @@ import { G } from "../../../typography";
  * para baixo — o problema que esta tela existe para resolver.
  */
 
-const CHIP_H = 28;
+/* 32, não 28. A barra de comando tem duas famílias de controle — pílulas
+   (Visualizações, Filtros, os chips do que está filtrando) e botões de ícone
+   (ordenação, recarregar, "⋯") — e elas estavam em alturas diferentes: 28
+   contra 32. Numa fileira única de alvos, altura diferente não lê como
+   hierarquia, lê como desalinhamento. 32 é a altura dos botões de ícone e um
+   alvo mais confortável para o ponteiro. */
+const CHIP_H = 32;
 /* Teto de chips visíveis. Acima disso o olho varre em vez de ler — e "+5" com
    dois chips informa mais que "+2" com cinco, porque admite que há um painel a
    abrir. */
@@ -104,7 +110,18 @@ function chipStyle(tone) {
  * um dígito solto num retângulo de 5 px de padding lê como texto do botão, não
  * como contagem. Com dois dígitos ele estica, o que é inevitável e continua
  * legível como badge. */
-function CountBadge({ n, prefix = "" }) {
+/* Funil: a porta do sistema de filtros. Traço de 2 px como os demais ícones
+   da barra, para não destoar do recarregar nem do de ordenação. */
+function FunilIcone() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 5h18l-7 8v5l-4 2v-7z" />
+    </svg>
+  );
+}
+
+function CountBadge({ n, prefix = "", flutuante = false }) {
   return (
     <span
       style={{
@@ -115,13 +132,39 @@ function CountBadge({ n, prefix = "" }) {
         background: T.blue,
         color: "#fff",
         borderRadius: 999,
-        minWidth: 18,
-        height: 18,
-        padding: "0 5px",
-        fontSize: 11,
-        fontWeight: 700,
         lineHeight: 1,
         flexShrink: 0,
+        /* FLUTUANTE no modo só-ícone. Ancorado, ele disputa a largura com o
+           próprio ícone dentro de um botão de 32 px: sobra menos de 14 px para
+           o funil, que deixa de ser reconhecível — o alvo vira dois símbolos
+           espremidos em vez de um ícone com um contador.
+           Flutuando no canto ele não custa largura nenhuma, e é onde a
+           convenção já o coloca (notificação sobre o alvo que ela conta).
+           Menor e sem `padding` lateral: 16 px de diâmetro sobre um botão de
+           32 é a proporção que ainda lê sem virar um segundo botão. */
+        /* Contador sobreposto fica FORA da caixa, mordendo o canto superior
+           direito — é assim em toda barra de app, e é o que o mantém legível
+           sem tapar o ícone que ele qualifica. Tentei o contrário (encostado
+           dentro do botão) para escapar de um recorte, e o resultado foi o
+           contador cobrindo o funil: resolver recorte escondendo conteúdo é
+           trocar um defeito por outro.
+           O recorte foi aberto na origem — a faixa de chips ganhou folga (ver
+           `paddingTop/Right` lá embaixo). O anel da cor do fundo separa o
+           contador do que estiver atrás dele. */
+        ...(flutuante
+          ? {
+              position: "absolute",
+              top: -5,
+              right: -5,
+              minWidth: 15,
+              height: 15,
+              padding: n > 9 ? "0 3px" : 0,
+              fontSize: 9.5,
+              fontWeight: 800,
+              border: `1.5px solid ${T.surface}`,
+              boxSizing: "content-box",
+            }
+          : { minWidth: 18, height: 18, padding: "0 5px", fontSize: 11, fontWeight: 700 }),
       }}
     >
       {prefix}
@@ -140,6 +183,11 @@ export function TransactionsFilterChips({
   onClearFacet,
   onClearAll,
   maxVisible = 3,
+  /* Abaixo de 1280 o botão vira o FUNIL com contador. Ele é a porta do sistema
+     de filtros inteiro, então não pode sumir — mas o rótulo pode, e ali o
+     contador deixa de ser redundante: sem chips na barra, ele é a ÚNICA
+     resposta a "quantos filtros estão aplicados". */
+  filtrosSoIcone = false,
   /* Orçamento medido pela barra. Quando presente, ele MANDA — `maxVisible` fica
      como piso para quem renderiza os chips fora da barra (testes, mocks). */
   chipsBudget = null,
@@ -162,6 +210,18 @@ export function TransactionsFilterChips({
     ...facets.filter((f) => f.active),
   ];
 
+  /* O contador conta VALORES aplicados, não facetas — `multi` é quantos valores
+     a faceta carrega, e é o mesmo número que já produz o rótulo do chip
+     ("2 categorias"). Contando facetas, o badge dizia "1" colado num chip
+     dizendo "2 categorias", enquanto o painel de Ativos dizia "2 filtros" para
+     o mesmo estado: três superfícies, duas respostas.
+     Abaixo de 1280 isso deixa de ser inconsistência e vira perda de informação:
+     sem chips na barra, este número é a ÚNICA resposta a "quanto está
+     filtrando".
+     Separado de `chips.length` de propósito: aquele é a lista RENDERIZADA e
+     alimenta o cálculo de quantos cabem e o "+N" de estouro. */
+  const valoresAplicados = chips.reduce((n, c) => n + (c.multi || 1), 0);
+
   useEffect(() => {
     if (!overflowOpen) return undefined;
     const onDown = (e) => {
@@ -178,10 +238,22 @@ export function TransactionsFilterChips({
     };
   }, [overflowOpen]);
 
+  /* O TETO manda; o orçamento só BAIXA dele.
+     Antes o orçamento substituía o teto, e por isso a barra exibia três chips
+     em qualquer largura em que eles coubessem — inclusive espremendo a busca
+     para 210 px. Mas só teto também não serve: o chip não tem largura fixa
+     (medido: "Tags · 2" custa 64 px e "Categoria · Lazer & Entretenimento",
+     214), então um teto de 3 truncaria os longos.
+     Os dois juntos: o teto por faixa dá PREVISIBILIDADE (a barra não se
+     rearranja sozinha quando se troca uma tag por uma categoria de nome longo),
+     e o orçamento garante que nada trunque. */
   const cabem =
     chipsBudget == null
       ? maxVisible
-      : chipsQueCabem(chips.map((c) => String(c.value ?? c.label ?? "")), chipsBudget);
+      : Math.min(
+          maxVisible,
+          chipsQueCabem(chips.map((c) => String(c.value ?? c.label ?? "")), chipsBudget),
+        );
 
   useEffect(() => {
     if (chips.length <= cabem) setOverflowOpen(false);
@@ -224,19 +296,44 @@ export function TransactionsFilterChips({
         filtersOpen
           ? "Fechar filtros"
           : chips.length > 0
-            ? `Abrir filtros — ${chips.length} aplicado${chips.length === 1 ? "" : "s"}`
+            ? `Abrir filtros — ${valoresAplicados} aplicado${valoresAplicados === 1 ? "" : "s"}`
             : "Abrir filtros"
       }
+      title={filtrosSoIcone
+        ? (filtersOpen ? "Fechar filtros" : `Filtros${valoresAplicados ? ` — ${valoresAplicados} aplicado${valoresAplicados === 1 ? "" : "s"}` : ""}`)
+        : undefined}
       style={{
         ...chipStyle(filtersOpen ? "on" : "ghost"),
         ...(filtersOpen ? {} : { borderStyle: "dashed" }),
+        ...(filtrosSoIcone
+          ? {
+              width: CHIP_H,
+              height: CHIP_H,
+              padding: 0,
+              justifyContent: "center",
+              position: "relative",
+              /* `overflow: visible` explícito: o contador flutuante mora FORA
+                 da caixa do botão (canto superior direito), e qualquer recorte
+                 no caminho o come pela metade — foi o que aconteceu. */
+              overflow: "visible",
+            }
+          : null),
       }}
     >
-      {filtersOpen ? "✕ Fechar filtros" : "＋ Filtros"}
+      {/* O FUNIL fica, aberto ou fechado. Trocar por "✕" no modo ícone
+          quebrava a permanência do alvo: o mesmo botão passava a ter dois
+          símbolos, e um "✕" com um contador azul em cima lê como "fechar o
+          quê?". O estado já é dito pelo destaque do botão e pelo `aria-label`
+          — o ícone é a IDENTIDADE do controle, não o estado dele.
+          Com rótulo há espaço para a frase inteira, e aí "✕ Fechar filtros"
+          continua sendo a leitura mais direta. */}
+      {filtrosSoIcone
+        ? <FunilIcone />
+        : (filtersOpen ? "✕ Fechar filtros" : "＋ Filtros")}
       {/* O contador aparece SEMPRE que há filtro, não só quando os chips
           recolhem: o destaque do botão diz *que* há filtro, o número diz
           *quantos* — e a segunda é a pergunta que decide se vale abrir. */}
-      {chips.length > 0 && <CountBadge n={chips.length} />}
+      {chips.length > 0 && <CountBadge n={valoresAplicados} flutuante={filtrosSoIcone} />}
     </button>
   );
 
@@ -262,6 +359,17 @@ export function TransactionsFilterChips({
         display: "flex", alignItems: "center", gap: 6, minWidth: 0, overflow: "hidden",
         transition: "max-width .34s cubic-bezier(.4,0,.2,1)",
         maxWidth: larguraNatural == null ? "none" : larguraNatural,
+        /* FOLGA para o contador sobreposto do botão de filtros.
+           `overflow: hidden` aqui é obrigatório — é ele que faz a animação de
+           largura recortar os chips que saem —, e ele corta na borda da caixa
+           de PADDING. Dando padding no topo e à direita, o badge (que mora em
+           `top:-5; right:-5` do botão) passa a cair dentro dessa caixa e para
+           de ser comido; a margem negativa devolve o espaço, então nada se
+           move na barra. */
+        paddingTop: 6,
+        paddingRight: 6,
+        marginTop: -6,
+        marginRight: -6,
       }}
     >
       {shown.map((f) => (
