@@ -25,7 +25,6 @@ export const FEATURE_COPY = {
   what_if_simulations: { label: "Simulação financeira", group: "advanced" },
   bulk_import: { label: "Importação em lote", group: "advanced" },
   excel_export: { label: "Exportação em Excel", group: "advanced" },
-  multi_currency: { label: "Múltiplas moedas", group: "advanced" },
   api_access: { label: "Acesso à API", group: "advanced" },
 
   ai_categorization: { label: "Categorização automática", group: "ai" },
