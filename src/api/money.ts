@@ -20,8 +20,38 @@
  * a significar o que promete em qualquer lugar do app que leia esse dado.
  */
 
+/**
+ * A forma canônica do backend (fincla-api ADR-0002): o valor e a moeda viajam juntos,
+ * `amount` sempre string. A família de saldo já responde assim; os demais endpoints
+ * migram em fincla-api#131-#133, então as duas formas coexistem no fio por enquanto.
+ *
+ * A fixture canônica é `src/api/__fixtures__/money.example.json`, cópia byte a byte de
+ * `fincla-api/docs/contracts/money.example.json` — um teste do backend prende esse
+ * arquivo aos modelos Pydantic, então mudar o contrato quebra os dois lados juntos.
+ */
+export interface CanonicalMoney {
+  amount: string;
+  currency: string;
+}
+
 /** Valor monetário como chega no fio, antes da normalização. */
-export type WireMoney = string | number | null | undefined;
+export type WireMoney = string | number | CanonicalMoney | null | undefined;
+
+/** `true` para o objeto canônico `{amount, currency}`, e só para ele. */
+export const isCanonicalMoney = (value: unknown): value is CanonicalMoney =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as CanonicalMoney).amount === 'string' &&
+  typeof (value as CanonicalMoney).currency === 'string';
+
+/**
+ * A moeda de um valor no fio, ou `null` quando ele ainda vem na forma antiga.
+ *
+ * Devolve `null` — e nunca `"BRL"` — para o que não declara moeda: inventar a moeda é
+ * a mesma classe de erro que somar sem olhar a unidade, só que silenciosa.
+ */
+export const toCurrency = (value: WireMoney | unknown): string | null =>
+  isCanonicalMoney(value) ? value.currency : null;
 
 /**
  * Converte para número finito, ou `null`.
@@ -31,6 +61,9 @@ export type WireMoney = string | number | null | undefined;
  * booleano, array e `NaN`/`Infinity` caem todos em `null`.
  */
 export const toFiniteNumber = (value: WireMoney | unknown): number | null => {
+  // A forma canônica primeiro: sem isto, `typeof value === 'object'` cai no `null` do
+  // fim e o saldo some da tela sem erro nenhum — foi o fincla-frontend#76 de novo.
+  if (isCanonicalMoney(value)) return toFiniteNumber(value.amount);
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
   if (typeof value === 'string' && value.trim() !== '') {
     const n = Number(value);

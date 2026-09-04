@@ -1902,6 +1902,18 @@ export interface Account {
   updated_at?: string | null;
 }
 
+/**
+ * Resposta crua de `/accounts` — use as funções de `api/accounts.ts`.
+ *
+ * `initial_balance` chega na forma canônica `{amount, currency}` (fincla-api#130);
+ * o `Raw*` existe para o compilador cobrar a normalização, do mesmo jeito que em
+ * `RawAccountBalance`. Sem ele, `apiClient.get<Account>` já declararia número na
+ * entrada e um `return response.data` cru compilaria — o tipo viraria mentira.
+ */
+export interface RawAccount extends Omit<Account, "initial_balance"> {
+  initial_balance: WireMoney;
+}
+
 export interface CreateAccountRequest {
   name: string;
   type: AccountType;
@@ -1956,7 +1968,10 @@ export interface RawRecurringSeriesListResponse
 }
 
 /** Resposta crua de `/balances/{id}` — use `getAccountBalance`, que normaliza. */
-export interface RawAccountBalance extends Omit<AccountBalance, "balance" | "initial_balance"> {
+export interface RawAccountBalance extends Omit<AccountBalance, "balance" | "initial_balance" | "currency"> {
+  // Opcional porque o backend parou de mandar o campo solto (fincla-api#130); a moeda
+  // agora vem dentro de `balance`/`initial_balance` e `normalizeAccountBalance` a extrai.
+  currency?: string;
   initial_balance: WireMoney;
   balance: WireMoney;
 }
@@ -2063,6 +2078,12 @@ export interface UpdateBalanceAdjustmentRequest {
 }
 
 /** Ajuste de saldo retornado pela API. NÃO é transação (fora de receita/despesa). */
+/** Resposta crua dos ajustes de saldo — use as funções de `api/balanceAdjustments.ts`. */
+export interface RawBalanceAdjustment extends Omit<BalanceAdjustment, "amount" | "asserted_balance"> {
+  amount: WireMoney;
+  asserted_balance: WireMoney;
+}
+
 export interface BalanceAdjustment {
   id: string;
   account_id: string;

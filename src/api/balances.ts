@@ -1,6 +1,6 @@
 // api/balances.ts
 import apiClient from './client';
-import { toFiniteNumber } from './money';
+import { toCurrency, toFiniteNumber } from './money';
 import type {
   OrgBalances,
   AccountBalance,
@@ -29,8 +29,22 @@ const normalizeBalanceSummary = (raw: RawBalanceSummary): BalanceSummary => ({
     : [],
 });
 
+/**
+ * `currency` não vem mais solto ao lado do saldo: o backend dobrou a moeda para dentro
+ * de cada valor (fincla-api#130), justamente para que ninguém pudesse somar sem olhar a
+ * unidade. Aqui a fronteira a extrai de volta para um campo, porque as telas de saldo
+ * ainda leem a moeda da conta e não do valor — a mudança de forma para no boundary.
+ *
+ * A cadeia de fallback é deliberada e nesta ordem:
+ *  - `raw.currency` cobre um backend ainda na forma antiga, e é o que torna seguro
+ *    subir este frontend ANTES do backend (o contrário quebra a tela);
+ *  - `'BRL'` no fim só existe porque o tipo promete `string`. É último recurso para
+ *    payload malformado, NÃO um padrão: chutar moeda é erro silencioso, e é por isso
+ *    que `toCurrency` devolve `null` em vez de chutar.
+ */
 const normalizeAccountBalance = (raw: RawAccountBalance): AccountBalance => ({
   ...raw,
+  currency: toCurrency(raw?.balance) ?? toCurrency(raw?.initial_balance) ?? raw?.currency ?? 'BRL',
   initial_balance: toFiniteNumber(raw?.initial_balance),
   balance: toFiniteNumber(raw?.balance),
 });
