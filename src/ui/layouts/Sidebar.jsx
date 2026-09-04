@@ -32,16 +32,10 @@ const NAV = [
   { sec: "GESTÃO" },
   { id: "accounts", label: "Contas & Saldo", Icon: Wallet },
   { id: "cards", label: "Cartões", Icon: CreditCard },
-  { id: "reports", label: "Relatórios", Icon: FileText, proFeature: "advanced_reports" },
+  { id: "reports", label: "Relatórios", Icon: FileText },
   { sec: "CONFIGURAÇÕES" },
   { id: "profile", label: "Perfil", Icon: Settings },
 ];
-
-function userHasFeature(user, featureKey) {
-  if (!featureKey) return true;
-  const features = user?.subscription?.features;
-  return Array.isArray(features) && features.includes(featureKey);
-}
 
 function SidebarInner({ page, onNav, onClose, user }) {
   return (
@@ -126,7 +120,6 @@ function SidebarInner({ page, onNav, onClose, user }) {
           }
           const active = page === item.id;
           const { Icon } = item;
-          const locked = item.proFeature && !userHasFeature(user, item.proFeature);
           return (
             <button
               type="button"
@@ -161,9 +154,7 @@ function SidebarInner({ page, onNav, onClose, user }) {
             >
               <Icon size={14} strokeWidth={active ? 2.5 : 1.8} color={active ? "#fff" : T.inkLight} />
               <span style={{ flex: 1, textAlign: "left", color: active ? "#fff" : T.inkMid }}>{item.label}</span>
-              {locked ? (
-                <PlanBadge tier="pro" />
-              ) : item.badge ? (
+              {item.badge ? (
                 <span
                   style={{
                     ...G,

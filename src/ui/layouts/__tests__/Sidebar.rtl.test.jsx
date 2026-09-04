@@ -11,58 +11,35 @@ function _user(features = [], extras = {}) {
 }
 
 describe("<Sidebar>", () => {
-  // Simulação migrou para o hub Planejamento (gating via UpgradeWall lá dentro);
-  // o único item Pro que resta no sidebar é Relatórios (/reports).
-  it("shows a Pro badge on /reports for Essential users", () => {
+  // Nenhum item do menu é trancado por plano: o assinante individual tem um
+  // plano só e ele carrega tudo. O badge de plano no rodapé é outra coisa —
+  // é diferenciação nominal, e continua.
+  it("does not lock /reports for any plan", () => {
     render(
       <Sidebar
         page="dashboard"
         onNav={vi.fn()}
         isMobile={false}
-        user={_user(["manual_transactions", "whatsapp_assistant"])}
+        user={_user(["manual_transactions"])}
       />,
     );
 
-    const reports = screen.getByRole("button", { name: /relatórios/i });
-    // PlanBadge renders an `img` role with label containing "Pro".
-    expect(
-      within(reports).getByRole("img", { name: /pro/i }),
-    ).toBeInTheDocument();
-  });
-
-  it("hides the Pro badge when the user has the corresponding feature", () => {
-    render(
-      <Sidebar
-        page="dashboard"
-        onNav={vi.fn()}
-        isMobile={false}
-        user={_user([
-          "advanced_reports",
-          "what_if_simulations",
-          "manual_transactions",
-        ])}
-      />,
-    );
     const reports = screen.getByRole("button", { name: /relatórios/i });
     expect(
       within(reports).queryByRole("img", { name: /pro/i }),
     ).not.toBeInTheDocument();
   });
 
-  it("shows the Pro badge defensively when user info is missing", () => {
-    // No subscription info → treat as locked (defensive: show badge).
+  it("does not lock /reports when there is no subscription info", () => {
+    // Antes isto era trancado por precaução; sem gating por plano, ausência de
+    // informação não pode virar um cadeado.
     render(
-      <Sidebar
-        page="dashboard"
-        onNav={vi.fn()}
-        isMobile={false}
-        user={undefined}
-      />,
+      <Sidebar page="dashboard" onNav={vi.fn()} isMobile={false} user={undefined} />,
     );
     const reports = screen.getByRole("button", { name: /relatórios/i });
     expect(
-      within(reports).getByRole("img", { name: /pro/i }),
-    ).toBeInTheDocument();
+      within(reports).queryByRole("img", { name: /pro/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("renders the user display name, initials and plan badge in the footer", () => {

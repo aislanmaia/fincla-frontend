@@ -185,7 +185,7 @@ export function moodInsightBody(moodKey, { aheadOfPace, dailyBudgetLabel, daysLe
  * exatamente o bug que este código existe para corrigir: clique sem efeito. O destino
  * certo é `planning` com a sub-área em `opts.area`.
  *
- * `reports` é rota Pro: para um usuário Essential o clique cai no `<UpgradeWall>`,
+ * `reports` não é mais rota trancada: o clique abre os relatórios para qualquer plano,
  * mesmo comportamento dos itens marcados na sidebar.
  */
 export function getMoodActions(moodKey) {

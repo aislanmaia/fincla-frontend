@@ -32,7 +32,6 @@ import {
 import { T } from "../tokens";
 import { G } from "../typography";
 import { BillingPanel } from "../features/subscription/BillingPanel.jsx";
-import { FeatureGate, UpgradePrompt } from "../features/entitlements/index.js";
 import { CategoriesTagsSettingsPanel } from "../features/settings/CategoriesTagsSettingsPanel.jsx";
 import { DragScrollTabs } from "../layouts/DragScrollTabs.jsx";
 import { CardEmptyWithCta } from "../features/shellExtras.jsx";
@@ -790,26 +789,10 @@ export function ConfiguracoesPage({
     />
   );
 
-  // Gate the WhatsApp tab on the `whatsapp_assistant` feature. Essential and
-  // higher plans have the key, so this is a no-op for paying users; the
-  // fallback only kicks in for legacy ``free`` accounts and future plans
-  // that drop the assistant.
-  const renderWhatsApp = () => (
-    <FeatureGate
-      feature="whatsapp_assistant"
-      user={currentUser}
-      fallback={
-        <UpgradePrompt
-          feature="whatsapp_assistant"
-          message="O assistente WhatsApp está disponível a partir do plano Essential."
-          ctaLabel="Ver planos"
-          onUpgradeClick={() => onNav("assinatura")}
-        />
-      }
-    >
-      {renderWhatsAppBody()}
-    </FeatureGate>
-  );
+  // Sem gate de plano: o assistente WhatsApp não é restrito por plano. O
+  // backend ainda fecha a porta para assinatura em atraso, cancelada ou
+  // vencida — isso é cobrança, não plano.
+  const renderWhatsApp = () => renderWhatsAppBody();
 
   const RENDERERS = { perfil:renderPerfil, seguranca:renderSeguranca, organizacao:renderOrganizacao, membros:renderMembros, categorias:renderCategorias, whatsapp:renderWhatsApp, assinatura:renderAssinatura };
 

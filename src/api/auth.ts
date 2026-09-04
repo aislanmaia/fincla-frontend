@@ -89,16 +89,19 @@ export const changePassword = async (
 };
 
 /**
- * Registra um novo usuário owner (público, não requer autenticação)
+ * Registra um novo usuário owner.
+ *
+ * A rota só existe quando `SIGNUP_ENABLED` está ligado no backend — em produção
+ * ela está fechada e responde 404. O plano é decisão do servidor: mandar `plan`
+ * no corpo devolve 422.
  */
 export const registerOwner = async (
   email: string,
-  password: string,
-  plan: 'free' | 'beta' | 'premium' = 'free'
+  password: string
 ): Promise<RegisterOwnerResponse> => {
   const response = await apiClient.post<RegisterOwnerResponse>(
     '/users/register/owner',
-    { email, password, plan }
+    { email, password }
   );
   return response.data;
 };

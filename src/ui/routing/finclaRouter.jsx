@@ -13,7 +13,6 @@ import { AuthenticatedPageOutlet } from "./AuthenticatedPageOutlet.jsx";
 import { BillingReturnPage } from "../pages/BillingReturnPage.jsx";
 import { FinclaNotFoundPage } from "./FinclaNotFoundPage.jsx";
 import { FinclaAuthenticatedRouteError } from "./FinclaAuthenticatedRouteError.jsx";
-import { GatedAuthenticatedPageOutlet } from "./GatedAuthenticatedPageOutlet.jsx";
 import { ConsultantShell } from "../features/consultant/ConsultantShell.jsx";
 import { ConsultantPainelPage } from "../pages/consultant/ConsultantPainelPage.jsx";
 import { ConsultantClientsPage } from "../pages/consultant/ConsultantClientsPage.jsx";
@@ -39,58 +38,15 @@ const indexRoute = createRoute({
   component: () => null,
 });
 
-/**
- * Segmentos cuja tela inteira só está disponível em planos com a feature
- * key correspondente. O backend já bloqueia os endpoints via
- * ``require_feature(...)``; aqui adicionamos UX antecipada (UpgradeWall)
- * para evitar 403 ruidoso no navegador.
- */
-const GATED_SEGMENTS = {
-  reports: {
-    feature: "advanced_reports",
-    title: "Relatórios avançados — disponível no Pro",
-    description:
-      "Veja para onde seu dinheiro está indo com gráficos detalhados, comparações entre períodos e exportação completa.",
-    benefits: [
-      "6 visualizações analíticas",
-      "Comparações entre meses e categorias",
-      "Exportação em CSV de todos os relatórios",
-    ],
-  },
-  simulation: {
-    feature: "what_if_simulations",
-    title: "Simulação financeira — disponível no Pro",
-    description:
-      "Antes de assumir um novo compromisso, simule o impacto no seu orçamento e veja se cabe no plano.",
-    benefits: [
-      "Compare cenários antes de decidir",
-      "Veja o impacto lado a lado com o real",
-      "Análise de risco automática",
-    ],
-  },
-};
-
 const segmentRoutes = AUTH_ROUTE_SEGMENTS.filter(
   (s) => s !== "profile" && s !== "transactions" && s !== "planning",
 ).map((segment) => {
-  const gate = GATED_SEGMENTS[segment];
   return createRoute({
     getParentRoute: () => rootRoute,
     path: segment,
     beforeLoad: requireSessionTokenBeforeLoad,
     errorComponent: FinclaAuthenticatedRouteError,
     component: function SegmentPage() {
-      if (gate) {
-        return (
-          <GatedAuthenticatedPageOutlet
-            segment={segment}
-            feature={gate.feature}
-            title={gate.title}
-            description={gate.description}
-            benefits={gate.benefits}
-          />
-        );
-      }
       return <AuthenticatedPageOutlet segment={segment} />;
     },
   });
