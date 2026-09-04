@@ -4,7 +4,7 @@ import { T } from "../tokens";
 import { G, NUM } from "../typography";
 import { PageTitle, Card, Btn, Badge, PageEnter } from "../components/primitives";
 import { useAccountsData } from "../features/accounts/useAccountsData.js";
-import { accountMeta, formatBRL } from "../features/accounts/accountMeta.js";
+import { accountMeta, formatDay, formatMoney } from "../features/accounts/accountMeta.js";
 import { AccountFormModal } from "../features/accounts/AccountFormModal.jsx";
 import { TransferModal } from "../features/accounts/TransferModal.jsx";
 import { AdjustBalanceModal } from "../features/accounts/AdjustBalanceModal.jsx";
@@ -173,11 +173,29 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
             Saldo disponível
           </div>
           <div style={{ ...G, ...NUM, fontSize: 32, fontWeight: 800, letterSpacing: "-0.02em", color: T.ink, marginTop: 6 }}>
-            {formatBRL(data.total)}
+            {/* Ausência é mostrada como ausência. Um zero aqui afirmaria que a
+                pessoa não tem dinheiro, quando na verdade nós é que não
+                conseguimos converter (fincla-api#138). */}
+            {formatMoney(data.total, data.consolidation?.target_currency) ?? "—"}
           </div>
           <div style={{ ...G, fontSize: 12, color: T.inkLight, marginTop: 4 }}>
             {accounts.length} {accounts.length === 1 ? "conta" : "contas"} · atualizado agora
           </div>
+          {data.consolidation?.unavailable ? (
+            <div style={{ ...G, fontSize: 11.5, color: T.amber, marginTop: 8, lineHeight: 1.45 }}>
+              Não deu para somar as moedas agora — os saldos por conta abaixo estão certos.
+            </div>
+          ) : null}
+          {data.consolidation?.rates?.length ? (
+            <div style={{ ...G, fontSize: 11.5, color: T.inkGhost, marginTop: 8, lineHeight: 1.45 }}>
+              {/* A data é o que torna uma taxa velha visivelmente velha em vez de
+                  silenciosamente errada. Nunca mostre o total convertido sem ela. */}
+              Convertido com{" "}
+              {data.consolidation.rates
+                .map((r) => `1 ${r.base} = ${formatMoney(r.rate, r.quote)} (${formatDay(r.quoted_on)})`)
+                .join(" · ")}
+            </div>
+          ) : null}
         </Card>
 
         {/* Lista de contas */}
@@ -214,7 +232,9 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
                       ) : null}
                     </div>
                     <div style={{ ...G, ...NUM, fontWeight: 700, fontSize: 14, color: a.include_in_total ? T.ink : T.inkLight }}>
-                      {formatBRL(a.balance)}
+                      {/* Na moeda DA CONTA: marcar tudo como real mostrava o número
+                          certo com a unidade errada, que parece correto e não é. */}
+                      {formatMoney(a.balance, a.currency) ?? "—"}
                     </div>
                     <button
                       onClick={(e) => {

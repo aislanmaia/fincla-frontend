@@ -3,7 +3,7 @@ import { T } from "../../tokens";
 import { G } from "../../typography";
 import { Btn } from "../../components/primitives";
 import { ModalShell } from "./ModalShell.jsx";
-import { ACCOUNT_TYPES, ACCOUNT_COLORS, ACCOUNT_ICONS, parseBRL } from "./accountMeta.js";
+import { ACCOUNT_TYPES, ACCOUNT_COLORS, ACCOUNT_ICONS, CURRENCIES, parseBRL } from "./accountMeta.js";
 
 const inputStyle = {
   ...G,
@@ -24,6 +24,7 @@ export function AccountFormModal({ account, onClose, onSubmit, isSaving, error }
   const editing = !!account;
   const [name, setName] = useState(account?.name || "");
   const [type, setType] = useState(account?.type || "checking");
+  const [currency, setCurrency] = useState(account?.currency || "BRL");
   const [initial, setInitial] = useState("");
   const [institution, setInstitution] = useState(account?.institution || "");
   const [color, setColor] = useState(account?.color || ACCOUNT_COLORS[0]);
@@ -37,6 +38,7 @@ export function AccountFormModal({ account, onClose, onSubmit, isSaving, error }
     const base = {
       name: name.trim(),
       type,
+      currency,
       institution: institution.trim() || null,
       color,
       icon_key: iconKey,
@@ -98,10 +100,55 @@ export function AccountFormModal({ account, onClose, onSubmit, isSaving, error }
         </div>
       </div>
 
+      <div style={{ marginTop: 14 }}>
+        <label style={labelStyle}>Moeda</label>
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${CURRENCIES.length}, 1fr)`, gap: 5, background: T.grayLight, borderRadius: 11, padding: 5 }}>
+          {CURRENCIES.map((c) => {
+            const active = currency === c.code;
+            return (
+              <button
+                key={c.code}
+                onClick={() => setCurrency(c.code)}
+                aria-pressed={active}
+                style={{
+                  ...G,
+                  textAlign: "center",
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  padding: "9px 6px",
+                  borderRadius: 8,
+                  border: "none",
+                  cursor: "pointer",
+                  background: active ? T.surface : "transparent",
+                  color: active ? T.ink : T.inkLight,
+                  boxShadow: active ? T.sm : "none",
+                }}
+              >
+                {c.symbol} {c.label}
+              </button>
+            );
+          })}
+        </div>
+        {editing ? (
+          <div style={{ ...G, fontSize: 11, color: T.inkGhost, marginTop: 6, lineHeight: 1.45 }}>
+            {/* Não escondemos o campo em conta com histórico: o usuário não saberia
+                que dá para corrigir. Tentar é barato e o backend explica a saída. */}
+            Só dá para trocar enquanto a conta não tem nenhum lançamento — depois disso
+            a moeda é a unidade de tudo que já foi registrado nela.
+          </div>
+        ) : null}
+      </div>
+
       {!editing ? (
         <div style={{ marginTop: 14 }}>
           <label style={labelStyle}>Saldo inicial</label>
-          <input style={{ ...inputStyle, fontVariantNumeric: "tabular-nums" }} value={initial} onChange={(e) => setInitial(e.target.value)} placeholder="R$ 0,00" inputMode="decimal" />
+          <input
+            style={{ ...inputStyle, fontVariantNumeric: "tabular-nums" }}
+            value={initial}
+            onChange={(e) => setInitial(e.target.value)}
+            placeholder={`${CURRENCIES.find((c) => c.code === currency)?.symbol || "R$"} 0,00`}
+            inputMode="decimal"
+          />
         </div>
       ) : null}
 

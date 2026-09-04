@@ -19,7 +19,10 @@ const EMPTY = {
   isSaving: false,
   error: "",
   accounts: [],
-  total: 0,
+  // `null` e não `0`: antes de carregar não sabemos o saldo, e zero afirmaria
+  // que a pessoa não tem dinheiro. A tela distingue "carregando" de "sem total".
+  total: null,
+  consolidation: null,
   asOf: null,
   hasLoaded: false,
 };
@@ -60,7 +63,13 @@ export function useAccountsData({ organizationId, enabled = true }) {
           isSaving: false,
           error: "",
           accounts: rows,
-          total: Number(balances.total || 0),
+          // NÃO coage `null` para zero. O backend devolve `total: null` quando a
+          // organização tem conta em mais de uma moeda e não houve cotação para
+          // consolidar (fincla-api#138). `Number(null || 0)` viraria "R$ 0,00" na
+          // tela, afirmando que a pessoa não tem dinheiro — o "zero inventado" que
+          // `api/money.js` proíbe. A ausência sobe até a tela, que a mostra.
+          total: balances.total,
+          consolidation: balances.consolidation || null,
           asOf: balances.as_of || null,
           hasLoaded: true,
         });
