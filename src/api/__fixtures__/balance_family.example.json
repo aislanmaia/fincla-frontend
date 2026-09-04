@@ -5,7 +5,10 @@
     "name": "Conta corrente",
     "type": "checking",
     "currency": "BRL",
-    "initial_balance": { "amount": "1000.50", "currency": "BRL" },
+    "initial_balance": {
+      "amount": "1000.50",
+      "currency": "BRL"
+    },
     "initial_date": "2025-01-01",
     "is_active": true,
     "include_in_total": true,
@@ -17,44 +20,98 @@
   },
   "org_balances": {
     "as_of": "2025-01-31T23:59:59",
-    "total": { "amount": "1500.50", "currency": "BRL" },
+    "total": {
+      "amount": "1243.32",
+      "currency": "BRL"
+    },
     "accounts": [
       {
         "account_id": "6f1b6b2e-1f4a-4a3f-9c0e-5a8f9b2c1d34",
         "name": "Conta corrente",
         "type": "checking",
-        "initial_balance": { "amount": "1000.50", "currency": "BRL" },
-        "balance": { "amount": "1500.50", "currency": "BRL" },
+        "initial_balance": {
+          "amount": "1000.50",
+          "currency": "BRL"
+        },
+        "balance": {
+          "amount": "1500.50",
+          "currency": "BRL"
+        },
         "include_in_total": true
       },
       {
         "account_id": "8c2d7a10-3b55-4e21-b7aa-90d3f2e64c78",
         "name": "Conta na Europa",
         "type": "checking",
-        "initial_balance": { "amount": "0.00", "currency": "EUR" },
-        "balance": { "amount": "-42.00", "currency": "EUR" },
-        "include_in_total": false
+        "initial_balance": {
+          "amount": "0.00",
+          "currency": "EUR"
+        },
+        "balance": {
+          "amount": "-42.00",
+          "currency": "EUR"
+        },
+        "include_in_total": true
       }
-    ]
+    ],
+    "consolidation": {
+      "target_currency": "BRL",
+      "rates": [
+        {
+          "base": "EUR",
+          "quote": "BRL",
+          "rate": "6.1234000000",
+          "quoted_on": "2025-01-31"
+        }
+      ],
+      "unavailable": null
+    }
   },
   "balance_summary": {
     "as_of": "2025-01-31T23:59:59",
-    "total_available": { "amount": "1500.50", "currency": "BRL" },
-    "total_all": { "amount": "1458.50", "currency": "BRL" },
+    "total_available": {
+      "amount": "1243.32",
+      "currency": "BRL"
+    },
+    "total_all": {
+      "amount": "1243.32",
+      "currency": "BRL"
+    },
     "account_count": 2,
     "by_type": [
       {
         "type": "checking",
-        "balance": { "amount": "1458.50", "currency": "BRL" },
+        "balance": {
+          "amount": "1243.32",
+          "currency": "BRL"
+        },
         "account_count": 2
       }
-    ]
+    ],
+    "consolidation": {
+      "target_currency": "BRL",
+      "rates": [
+        {
+          "base": "EUR",
+          "quote": "BRL",
+          "rate": "6.1234000000",
+          "quoted_on": "2025-01-31"
+        }
+      ],
+      "unavailable": null
+    }
   },
   "balance_adjustment": {
     "id": "b0a1c2d3-4e5f-4061-8a72-9b8c7d6e5f40",
     "account_id": "6f1b6b2e-1f4a-4a3f-9c0e-5a8f9b2c1d34",
-    "amount": { "amount": "499.50", "currency": "BRL" },
-    "asserted_balance": { "amount": "1500.00", "currency": "BRL" },
+    "amount": {
+      "amount": "499.50",
+      "currency": "BRL"
+    },
+    "asserted_balance": {
+      "amount": "1500.00",
+      "currency": "BRL"
+    },
     "includes_same_day": true,
     "date": "2025-01-31T12:00:00",
     "reason": "Conferi o extrato",

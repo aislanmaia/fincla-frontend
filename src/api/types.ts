@@ -2000,23 +2000,46 @@ export interface RawOrgBalances extends Omit<OrgBalances, "total" | "accounts"> 
  * ele descreve o que o CHAMADOR recebe, já normalizado. Nunca assuma que o JSON cru
  * traz número.
  */
+/** Uma taxa que entrou num total consolidado, com a data que a produziu. */
+export interface RateUsed {
+  base: string;
+  quote: string;
+  rate: string;      // string como Money, mas com MAIS casas: taxa não é dinheiro
+  quoted_on: string; // YYYY-MM-DD
+}
+
+/**
+ * O recibo que acompanha um total consolidado (fincla-api#138).
+ *
+ * `rates` vazio significa que nada foi convertido — organização com tudo na
+ * moeda-alvo. `unavailable` preenchido significa que o total veio `null`, e diz
+ * por quê: mostre a ausência, nunca um zero.
+ */
+export interface Consolidation {
+  target_currency: string;
+  rates: RateUsed[];
+  unavailable: string | null;
+}
+
 export interface OrgBalances {
   as_of: string;
-  total: number | null; // soma das contas include_in_total
+  total: number | null; // consolidado; null quando não deu para converter
+  consolidation: Consolidation;
   accounts: AccountBalance[];
 }
 
 export interface TypeBalance {
   type: AccountType;
-  balance: number | null; // ver nota em OrgBalances
+  balance: number | null; // null junto com os totais quando não houve consolidação
   account_count: number;
 }
 
 export interface BalanceSummary {
   as_of: string;
   total_available: number | null; // contas include_in_total — ver nota em OrgBalances
-  total_all: number | null;       // todas as contas ativas
+  total_all: number | null;       // soma de by_type, por construção
   account_count: number;
+  consolidation: Consolidation;
   by_type: TypeBalance[];
 }
 

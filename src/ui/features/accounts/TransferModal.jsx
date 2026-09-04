@@ -3,7 +3,7 @@ import { T } from "../../tokens";
 import { G } from "../../typography";
 import { Btn } from "../../components/primitives";
 import { ModalShell } from "./ModalShell.jsx";
-import { accountMeta, formatBRL, parseBRL } from "./accountMeta.js";
+import { accountMeta, formatMoney, parseBRL } from "./accountMeta.js";
 
 const inputStyle = {
   ...G,
@@ -48,7 +48,9 @@ export function TransferModal({ accounts, onClose, onSubmit, isSaving, error }) 
 
   function optionLabel(a) {
     const m = accountMeta(a.type);
-    return `${m.emoji}  ${a.name} — ${formatBRL(a.balance)}`;
+    // Na moeda da conta: no seletor de transferência, unidade errada é o que
+    // faz alguém mandar 100 achando que são reais.
+    return `${m.emoji}  ${a.name} — ${formatMoney(a.balance, a.currency) ?? "—"}`;
   }
 
   return (
