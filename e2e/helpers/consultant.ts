@@ -34,9 +34,29 @@ async function postJson(path: string, body: unknown, token?: string) {
 export async function createConsultant(plan: ConsultantPlan): Promise<SeededConsultant> {
   const email = `e2e-consultant-${plan}-${Date.now()}-${Math.floor(Math.random() * 1e6)}@test.com`;
 
-  const registered = await postJson("/v1/users/register/owner", { email, password: PASSWORD, plan });
+  // O cadastro não aceita mais `plan` no corpo: o servidor decide, e mandar o
+  // campo devolve 422. A rota também só existe com SIGNUP_ENABLED ligado.
+  const registered = await postJson("/v1/users/register/owner", { email, password: PASSWORD });
   if (!registered.ok) {
-    throw new Error(`register consultant: ${registered.status} ${await registered.text()}`);
+    const hint =
+      registered.status === 404
+        ? " (cadastro público fechado — ligue SIGNUP_ENABLED=true no backend local)"
+        : "";
+    throw new Error(`register consultant: ${registered.status} ${await registered.text()}${hint}`);
+  }
+
+  // O plano de consultor vem por fora, como em produção. A rota de teste só
+  // existe fora de produção e ainda exige o token de reset.
+  const assigned = await fetch(`${apiBase()}/v1/test/assign-plan`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Test-Reset-Token": process.env.TEST_RESET_SECRET ?? "",
+    },
+    body: JSON.stringify({ email, plan }),
+  });
+  if (!assigned.ok) {
+    throw new Error(`assign consultant plan: ${assigned.status} ${await assigned.text()}`);
   }
 
   const logged = await postJson("/v1/auth/login", { email, password: PASSWORD });

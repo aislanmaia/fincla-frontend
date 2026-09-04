@@ -10,7 +10,6 @@ import { CapacityPanel } from "../financialHealth/CapacityPanel.jsx";
 import { CalendarPage } from "../../pages/CalendarPage.jsx";
 import { PlannedVsActualPage } from "../../pages/PlannedVsActualPage.jsx";
 import { HealthPanelPage } from "../../pages/HealthPanelPage.jsx";
-import { UpgradeWall, useEntitlement } from "../entitlements/index.js";
 import { PLANNING_NAV, DEFAULT_PLANNING_AREA, isPlanningArea, planningAreaItem } from "./planningAreas.js";
 
 function useIsWide(bp = 1024) {
@@ -45,7 +44,6 @@ export function PlanningHub({ organizationId, dataMode = "live", isMobile = fals
   const params = useParams({ strict: false });
   const area = isPlanningArea(params?.area) ? params.area : DEFAULT_PLANNING_AREA;
   const isWide = useIsWide(1024);
-  const canSimulate = useEntitlement("what_if_simulations", user);
 
   const selectArea = (id) => navigate({ to: `/planning/${id}` });
 
@@ -80,7 +78,7 @@ export function PlanningHub({ organizationId, dataMode = "live", isMobile = fals
       case "planned":
         return <PlannedVsActualPage organizationId={organizationId} dataMode={dataMode} isMobile={isMobile} />;
       case "simulator":
-        return canSimulate ? (
+        return (
           <SimulacaoPage
             cenarios={simulation?.cenarios}
             setCenarios={simulation?.setCenarios}
@@ -89,14 +87,6 @@ export function PlanningHub({ organizationId, dataMode = "live", isMobile = fals
             isMobile={isMobile}
             organizationId={organizationId}
             dataMode={dataMode}
-          />
-        ) : (
-          <UpgradeWall
-            feature="what_if_simulations"
-            title="Simulador — disponível no plano Pro"
-            description="Faça upgrade para simular metas e cenários financeiros."
-            ctaLabel="Ver planos"
-            currentPlanId={user?.subscription?.plan}
           />
         );
       default:
