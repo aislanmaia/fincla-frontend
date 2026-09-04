@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import { T } from "../tokens";
 import { G } from "../typography";
-import { PlanBadge } from "../features/entitlements/index.js";
 import { AccountAreaSwitcher } from "../features/consultant/AccountAreaSwitcher.jsx";
 import {
   getDisplayName,
