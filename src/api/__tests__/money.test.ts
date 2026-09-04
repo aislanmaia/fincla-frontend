@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { toAmount, toFiniteNumber } from '../money';
+import { isCanonicalMoney, toAmount, toCurrency, toFiniteNumber } from '../money';
+import canonical from '../__fixtures__/money.example.json';
 
 /**
  * Dois bugs de produção nasceram de dinheiro chegar como string do backend
@@ -27,6 +28,50 @@ describe('toFiniteNumber', () => {
     for (const v of [null, undefined, '', '   ', 'abc', false, true, [], {}, Number.NaN, Number.POSITIVE_INFINITY]) {
       expect([v, toFiniteNumber(v)]).toEqual([v, null]);
     }
+  });
+});
+
+/**
+ * A forma canônica do backend (fincla-api ADR-0002 / #130): o valor e a moeda no mesmo
+ * objeto, `amount` sempre string. A família de saldo já responde assim. Sem tratá-la
+ * aqui, `toFiniteNumber` devolveria `null` para todo saldo e a Visão Geral ficaria
+ * vazia com a API respondendo 200 — o #76 outra vez, e outra vez sem erro nenhum.
+ */
+describe('forma canônica {amount, currency}', () => {
+  it('extrai o número de cada caso da fixture canônica', () => {
+    // A fixture é cópia byte a byte de `fincla-api/docs/contracts/money.example.json`,
+    // e um teste do backend quebra se as duas divergirem.
+    expect(toFiniteNumber(canonical.com_centavos)).toBe(1000.5);
+    expect(toFiniteNumber(canonical.zero)).toBe(0);
+    expect(toFiniteNumber(canonical.negativo)).toBe(-42);
+  });
+
+  it('extrai a moeda, e devolve null quando o valor não declara nenhuma', () => {
+    expect(toCurrency(canonical.negativo)).toBe('USD');
+    expect(toCurrency(canonical.zero)).toBe('BRL');
+    // Forma antiga: sem moeda declarada. `null`, nunca um "BRL" inventado — chutar a
+    // moeda é a mesma classe de erro que somar sem olhar a unidade.
+    expect(toCurrency('315.57')).toBeNull();
+    expect(toCurrency(42)).toBeNull();
+  });
+
+  it('não confunde um objeto qualquer com dinheiro', () => {
+    for (const v of [{}, { amount: 1000.5, currency: 'BRL' }, { amount: '10' }, { currency: 'BRL' }, []]) {
+      expect([v, isCanonicalMoney(v)]).toEqual([v, false]);
+      expect([v, toFiniteNumber(v)]).toEqual([v, null]);
+    }
+  });
+
+  it('um `amount` numérico é recusado, não aceito por gentileza', () => {
+    // `amount` string é o ponto do contrato: number em JSON é IEEE-754 e perde
+    // centavo. Aceitar a forma errada aqui apagaria o sinal de que ela existe.
+    expect(toFiniteNumber({ amount: 1000.5, currency: 'BRL' })).toBeNull();
+  });
+
+  it('soma sem perder centavo entre as duas formas do fio', () => {
+    // Durante o expand os dois formatos coexistem: #131-#133 ainda não migraram.
+    const itens = [canonical.com_centavos, '250.00', 42];
+    expect(itens.reduce((s, i) => s + toAmount(i), 0)).toBe(1292.5);
   });
 });
 

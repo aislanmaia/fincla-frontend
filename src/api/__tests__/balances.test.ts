@@ -130,6 +130,95 @@ describe('balances API client — dinheiro chega como string', () => {
   });
 
   /**
+   * O backend migrou a família de saldo para a forma canônica (fincla-api#130): a
+   * moeda mora dentro do valor e o campo `currency` solto sumiu do fio. Os mocks
+   * acima ficam como estão de propósito — durante o expand a fronteira tem de aceitar
+   * as duas formas, e um mock só da forma nova esconderia a regressão da antiga.
+   */
+  it('getOrgBalances lê a forma canônica e continua entregando número', async () => {
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      data: {
+        as_of: 'x',
+        total: { amount: '1000.50', currency: 'BRL' },
+        accounts: [
+          {
+            account_id: 'a1',
+            name: 'Conta',
+            type: 'checking',
+            initial_balance: { amount: '250.00', currency: 'BRL' },
+            balance: { amount: '1000.50', currency: 'BRL' },
+            include_in_total: true,
+          },
+        ],
+      },
+    });
+    const out = await getOrgBalances('org-1');
+    expect(out.total).toBe(1000.5);
+    expect(out.accounts[0].balance).toBe(1000.5);
+    expect(out.accounts[0].initial_balance).toBe(250);
+    // A moeda sobrevive à normalização: sem isto ela se perderia no boundary e a
+    // conta em EUR apareceria formatada em real.
+    expect(out.accounts[0].currency).toBe('BRL');
+  });
+
+  it('uma conta em moeda estrangeira reporta a própria moeda', async () => {
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      data: {
+        as_of: 'x',
+        total: { amount: '0.00', currency: 'BRL' },
+        accounts: [
+          {
+            account_id: 'a2',
+            name: 'Conta na Europa',
+            type: 'checking',
+            initial_balance: { amount: '0.00', currency: 'EUR' },
+            balance: { amount: '-42.00', currency: 'EUR' },
+            include_in_total: false,
+          },
+        ],
+      },
+    });
+    const out = await getOrgBalances('org-1');
+    expect(out.accounts[0].currency).toBe('EUR');
+    expect(out.accounts[0].balance).toBe(-42);
+  });
+
+  it('getBalanceSummary lê a forma canônica, inclusive no breakdown', async () => {
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      data: {
+        as_of: 'x',
+        total_available: { amount: '1500.50', currency: 'BRL' },
+        total_all: { amount: '1458.50', currency: 'BRL' },
+        account_count: 2,
+        by_type: [
+          { type: 'checking', balance: { amount: '1458.50', currency: 'BRL' }, account_count: 2 },
+        ],
+      },
+    });
+    const out = await getBalanceSummary('org-1');
+    expect(out.total_available).toBe(1500.5);
+    expect(out.total_all).toBe(1458.5);
+    expect(out.by_type[0].balance).toBe(1458.5);
+  });
+
+  it('getAccountBalance lê a forma canônica', async () => {
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      data: {
+        account_id: 'a1',
+        name: 'Conta',
+        type: 'checking',
+        initial_balance: { amount: '250.00', currency: 'BRL' },
+        balance: { amount: '315.57', currency: 'BRL' },
+        include_in_total: true,
+      },
+    });
+    const out = await getAccountBalance('a1', 'org-1');
+    expect(out.balance).toBe(315.57);
+    expect(typeof out.balance).toBe('number');
+    expect(out.currency).toBe('BRL');
+  });
+
+  /**
    * Estes casos existem porque a suíte anterior passava com uma implementação
    * ERRADA: a versão ingênua (`Number(value)` direto, sem guardas) converte `''`,
    * `false` e `[]` em zero — o "zero inventado" que a docstring proíbe — e nenhum

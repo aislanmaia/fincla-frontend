@@ -1,0 +1,65 @@
+{
+  "account": {
+    "id": "6f1b6b2e-1f4a-4a3f-9c0e-5a8f9b2c1d34",
+    "organization_id": "123e4567-e89b-12d3-a456-426614174000",
+    "name": "Conta corrente",
+    "type": "checking",
+    "currency": "BRL",
+    "initial_balance": { "amount": "1000.50", "currency": "BRL" },
+    "initial_date": "2025-01-01",
+    "is_active": true,
+    "include_in_total": true,
+    "created_at": "2025-01-01T09:00:00",
+    "institution": "Itaú",
+    "color": "#2E7D32",
+    "icon_key": "bank",
+    "updated_at": "2025-01-10T09:00:00"
+  },
+  "org_balances": {
+    "as_of": "2025-01-31T23:59:59",
+    "total": { "amount": "1500.50", "currency": "BRL" },
+    "accounts": [
+      {
+        "account_id": "6f1b6b2e-1f4a-4a3f-9c0e-5a8f9b2c1d34",
+        "name": "Conta corrente",
+        "type": "checking",
+        "initial_balance": { "amount": "1000.50", "currency": "BRL" },
+        "balance": { "amount": "1500.50", "currency": "BRL" },
+        "include_in_total": true
+      },
+      {
+        "account_id": "8c2d7a10-3b55-4e21-b7aa-90d3f2e64c78",
+        "name": "Conta na Europa",
+        "type": "checking",
+        "initial_balance": { "amount": "0.00", "currency": "EUR" },
+        "balance": { "amount": "-42.00", "currency": "EUR" },
+        "include_in_total": false
+      }
+    ]
+  },
+  "balance_summary": {
+    "as_of": "2025-01-31T23:59:59",
+    "total_available": { "amount": "1500.50", "currency": "BRL" },
+    "total_all": { "amount": "1458.50", "currency": "BRL" },
+    "account_count": 2,
+    "by_type": [
+      {
+        "type": "checking",
+        "balance": { "amount": "1458.50", "currency": "BRL" },
+        "account_count": 2
+      }
+    ]
+  },
+  "balance_adjustment": {
+    "id": "b0a1c2d3-4e5f-4061-8a72-9b8c7d6e5f40",
+    "account_id": "6f1b6b2e-1f4a-4a3f-9c0e-5a8f9b2c1d34",
+    "amount": { "amount": "499.50", "currency": "BRL" },
+    "asserted_balance": { "amount": "1500.00", "currency": "BRL" },
+    "includes_same_day": true,
+    "date": "2025-01-31T12:00:00",
+    "reason": "Conferi o extrato",
+    "created_by": "3f0e1d2c-5b4a-4938-8271-6a5b4c3d2e10",
+    "created_at": "2025-01-31T12:05:00",
+    "updated_at": null
+  }
+}

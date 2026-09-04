@@ -1,6 +1,6 @@
 // api/balances.ts
 import apiClient from './client';
-import { toFiniteNumber } from './money';
+import { toCurrency, toFiniteNumber } from './money';
 import type {
   OrgBalances,
   AccountBalance,
@@ -29,8 +29,15 @@ const normalizeBalanceSummary = (raw: RawBalanceSummary): BalanceSummary => ({
     : [],
 });
 
+/**
+ * `currency` não vem mais solto ao lado do saldo: o backend dobrou a moeda para dentro
+ * de cada valor (fincla-api#130), justamente para que ninguém pudesse somar sem olhar a
+ * unidade. Aqui a fronteira a extrai de volta para um campo, porque as telas de saldo
+ * ainda leem a moeda da conta e não do valor — a mudança de forma para no boundary.
+ */
 const normalizeAccountBalance = (raw: RawAccountBalance): AccountBalance => ({
   ...raw,
+  currency: toCurrency(raw?.balance) ?? toCurrency(raw?.initial_balance) ?? raw?.currency ?? 'BRL',
   initial_balance: toFiniteNumber(raw?.initial_balance),
   balance: toFiniteNumber(raw?.balance),
 });

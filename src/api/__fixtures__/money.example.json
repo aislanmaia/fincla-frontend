@@ -1,0 +1,5 @@
+{
+  "com_centavos": { "amount": "1000.50", "currency": "BRL" },
+  "zero": { "amount": "0.00", "currency": "BRL" },
+  "negativo": { "amount": "-42.00", "currency": "USD" }
+}
