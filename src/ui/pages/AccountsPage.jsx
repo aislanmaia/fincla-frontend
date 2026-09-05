@@ -12,6 +12,7 @@ import { ConfirmDialog } from "../features/accounts/ConfirmDialog.jsx";
 import { entriesCoveredBy } from "../features/accounts/balanceAnchors.js";
 import { fetchAllTransactionsPages, mapApiTransactionToUi } from "../data/transactionsAdapter.js";
 import { getAccountBalance } from "../../api/balances";
+import { getQuotation } from "../../api/transfers";
 
 const menuItemStyle = {
   ...G,
@@ -314,6 +315,7 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
           accounts={accounts}
           onClose={() => setShowTransfer(false)}
           onSubmit={handleTransfer}
+          onQuote={(base, quote) => getQuotation(organizationId, base, quote)}
           isSaving={data.isSaving}
           error={data.error}
         />

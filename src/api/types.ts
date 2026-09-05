@@ -2047,19 +2047,47 @@ export interface CreateTransferRequest {
   from_account_id: string;
   to_account_id: string;
   amount: number;
+  /**
+   * O valor que de fato ENTROU no destino. **Obrigatório** quando as contas estão
+   * em moedas diferentes: o backend não calcula, porque gravar a taxa de mercado
+   * deixaria o saldo errado para sempre. Omitido na mesma moeda.
+   */
+  to_amount?: number;
   date?: string | null;
   note?: string | null;
 }
 
+/**
+ * Uma transferência guarda DOIS valores: o que saiu e o que entrou. Entre moedas
+ * diferentes eles são números diferentes, porque o banco cobra spread e IOF e a
+ * taxa de mercado não é o que caiu na conta (fincla-api ADR-0001).
+ */
 export interface Transfer {
   id: string;
   organization_id: string;
   from_account_id: string;
   to_account_id: string;
-  amount: number;
+  amount: number | null;       // o que saiu, na moeda da origem
+  to_amount: number | null;    // o que entrou, na moeda do destino
+  from_currency: string;
+  to_currency: string;
   date: string;
   created_at: string;
   note?: string | null;
+}
+
+/** Resposta crua de `/transfers` — use as funções de `api/transfers.ts`. */
+export interface RawTransfer extends Omit<Transfer, "amount" | "to_amount" | "from_currency" | "to_currency"> {
+  amount: WireMoney;
+  to_amount: WireMoney;
+}
+
+/** A taxa que a tela usa para SUGERIR o valor de destino. Nunca para gravar sozinha. */
+export interface Quotation {
+  base: string;
+  quote: string;
+  rate: string;      // string: taxa tem mais casas que dinheiro
+  quoted_on: string; // YYYY-MM-DD — mostre junto do valor sugerido
 }
 
 // ===== AJUSTES DE SALDO (Balance Adjustments) =====
