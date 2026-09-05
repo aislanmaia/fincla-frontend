@@ -1,5 +1,10 @@
 // api/invoices.ts
+//
+// Fatura e histórico chegam na forma canônica (fincla-api#133).
+// `unwrapMoney` desembrulha em qualquer profundidade — enumerar campo a campo é
+// onde se esquece um, e um esquecido vira "R$ NaN" na tela.
 import apiClient from './client';
+import { unwrapMoney } from './money';
 import { Invoice, ListInvoicesResponse } from './types';
 
 export interface ListInvoicesParams {
@@ -17,7 +22,7 @@ export const listInvoices = async (
   const response = await apiClient.get<ListInvoicesResponse>('/invoices', {
     params,
   });
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -26,5 +31,5 @@ export const listInvoices = async (
  */
 export const getInvoice = async (invoiceId: string): Promise<Invoice> => {
   const response = await apiClient.get<Invoice>(`/invoices/${invoiceId}`);
-  return response.data;
+  return unwrapMoney(response.data);
 };

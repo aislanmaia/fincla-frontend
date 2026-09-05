@@ -1,4 +1,5 @@
 import apiClient from './client';
+import { unwrapMoney } from './money';
 import type { SimulateFinancialImpactRequest, SimulateFinancialImpactResponse } from './types';
 
 /**
@@ -12,6 +13,6 @@ export const simulateFinancialImpact = async (
         '/financial-impact/simulate',
         request
     );
-    return response.data;
+    return unwrapMoney(response.data);
 };
 

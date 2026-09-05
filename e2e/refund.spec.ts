@@ -104,10 +104,15 @@ test.describe("refund golden path (API)", () => {
       balance: number;
     };
 
-    expect(summary.total_expenses).toBeCloseTo(100, 2);
-    expect(summary.total_refunds).toBeCloseTo(30, 2);
+    // Este spec bate na API DIRETO, então vê a forma canônica crua
+    // (fincla-api#131): `{"amount": "100.00", "currency": "BRL"}`. Quem passa pela
+    // fronteira de `src/api` recebe número; aqui não passa.
+    const valor = (m) => Number(m?.amount ?? m);
+
+    expect(valor(summary.total_expenses)).toBeCloseTo(100, 2);
+    expect(valor(summary.total_refunds)).toBeCloseTo(30, 2);
     // balance líquido = income - expenses + refunds = 0 - 100 + 30 = -70
-    expect(summary.balance).toBeCloseTo(-70, 2);
+    expect(valor(summary.balance)).toBeCloseTo(-70, 2);
 
     // Listagem filtrada por type=refund retorna apenas o estorno
     const listRes = await fetch(
