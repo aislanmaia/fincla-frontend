@@ -1,6 +1,9 @@
 // api/recurringSeries.ts — modelo novo (guia: materialização lazy via GET /transactions)
 import apiClient from './client';
-import { toFiniteNumber } from './money';
+// Este módulo normalizava a LISTA e o resumo, mas devolvia cru os cinco endpoints
+// de série individual — normalização parcial é pior que nenhuma, porque parece
+// coberta. O `value` de série migrou no lote de movimento (fincla-api#131).
+import { toFiniteNumber, unwrapMoney } from './money';
 import type {
   RecurringSeries,
   RecurringSeriesListResponse,
@@ -20,7 +23,7 @@ export const createRecurringSeries = async (
   const response = await apiClient.post<RecurringSeries>('/recurring-series', data, {
     params: { organization_id: organizationId },
   });
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 export const listRecurringSeries = async (
@@ -112,7 +115,7 @@ export const getRecurringSeries = async (
   const response = await apiClient.get<RecurringSeries>(`/recurring-series/${seriesId}`, {
     params: { organization_id: organizationId },
   });
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 export const updateRecurringSeries = async (
@@ -125,7 +128,7 @@ export const updateRecurringSeries = async (
     data,
     { params: { organization_id: organizationId } },
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 export const deleteRecurringSeries = async (
@@ -147,7 +150,7 @@ export const toggleRecurringSeries = async (
     body,
     { params: { organization_id: organizationId } },
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 export const changeRecurringSeriesValue = async (
@@ -160,5 +163,5 @@ export const changeRecurringSeriesValue = async (
     data,
     { params: { organization_id: organizationId } },
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };

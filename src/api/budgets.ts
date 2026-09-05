@@ -1,5 +1,10 @@
 // api/budgets.ts
+//
+// Orçamento, gasto e restante chegam na forma canônica (fincla-api#132).
+// `unwrapMoney` desembrulha em qualquer profundidade — enumerar campo a campo é
+// onde se esquece um, e um esquecido vira "R$ NaN" na tela.
 import apiClient from './client';
+import { unwrapMoney } from './money';
 import type {
   Budget,
   CreateBudgetRequest,
@@ -19,7 +24,7 @@ export const createBudget = async (
   const response = await apiClient.post<Budget>('/budgets', data, {
     params: { organization_id: organizationId },
   });
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -37,7 +42,7 @@ export const listBudgets = async (
       ...(isActive !== undefined ? { is_active: isActive } : {}),
     },
   });
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -50,7 +55,7 @@ export const getBudget = async (
   const response = await apiClient.get<Budget>(`/budgets/${budgetId}`, {
     params: { organization_id: organizationId },
   });
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -66,7 +71,7 @@ export const updateBudget = async (
     data,
     { params: { organization_id: organizationId } }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -92,5 +97,5 @@ export const previewTransactionImpact = async (
     '/budgets/preview-transaction',
     body
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };

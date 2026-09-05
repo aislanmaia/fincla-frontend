@@ -1,5 +1,10 @@
 // api/financialHealth.ts
+//
+// Capacidade e índices chegam na forma canônica (fincla-api#132).
+// `unwrapMoney` desembrulha em qualquer profundidade — enumerar campo a campo é
+// onde se esquece um, e um esquecido vira "R$ NaN" na tela.
 import apiClient from './client';
+import { unwrapMoney } from './money';
 import type { EconomyCapacity, FinancialHealth } from './types';
 
 /** Capacidade de economia (sobra média mensal + tendência) por competência. */
@@ -10,7 +15,7 @@ export const getEconomyCapacity = async (
   const response = await apiClient.get<EconomyCapacity>('/financial-health/economy-capacity', {
     params: { organization_id: organizationId, months },
   });
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /** Painel de saúde financeira (M7) — ativo−passivo, métricas, score. */

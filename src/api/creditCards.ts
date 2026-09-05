@@ -1,5 +1,10 @@
 // api/creditCards.ts
+//
+// Limite, uso e compromissos chegam na forma canônica (fincla-api#132/#133).
+// `unwrapMoney` desembrulha em qualquer profundidade — enumerar campo a campo é
+// onde se esquece um, e um esquecido vira "R$ NaN" na tela.
 import apiClient from './client';
+import { unwrapMoney } from './money';
 import type {
   CreateCreditCardRequest,
   UpdateCreditCardRequest,
@@ -26,7 +31,7 @@ export const listCreditCards = async (
       params: { organization_id: organizationId },
     }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -42,7 +47,7 @@ export const getCreditCard = async (
       params: { organization_id: organizationId },
     }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -55,7 +60,7 @@ export const createCreditCard = async (
     '/credit-cards',
     card
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -73,7 +78,7 @@ export const updateCreditCard = async (
       params: { organization_id },
     }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -103,7 +108,7 @@ export const getCreditCardInvoice = async (
       params: { organization_id: organizationId },
     }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -120,7 +125,7 @@ export const getInvoiceHistory = async (
       params: { organization_id: organizationId, months },
     }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -139,7 +144,7 @@ export const markInvoicePaid = async (
     body,
     { params: { organization_id: organizationId } }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -156,7 +161,7 @@ export const unmarkInvoicePaid = async (
     {},
     { params: { organization_id: organizationId } }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -178,7 +183,7 @@ export const moveInstallmentToInvoice = async (
     }
   );
 
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -195,7 +200,7 @@ export const getFutureCommitments = async (
       params: { organization_id: organizationId, months },
     }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -211,5 +216,5 @@ export const getConsolidatedCommitments = async (
       params: { organization_id: organizationId, months },
     }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };

@@ -1,5 +1,10 @@
 // api/transactions.ts
+//
+// Os valores de transação, parcela e resumo chegam na forma canônica (fincla-api#131).
+// `unwrapMoney` desembrulha em qualquer profundidade — enumerar campo a campo é
+// onde se esquece um, e um esquecido vira "R$ NaN" na tela.
 import apiClient from './client';
+import { unwrapMoney } from './money';
 import {
   IDEMPOTENCY_KEY_HEADER,
   noteIdempotencySupportFromHeaders,
@@ -54,7 +59,7 @@ export const createTransaction = async (
     const replayed = readIdempotentReplay(response.headers);
     if (replayed != null) options?.onIdempotentReplay?.(replayed);
   }
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -68,7 +73,7 @@ export const listTransactions = async (
     '/transactions',
     { params: filters, paramsSerializer: repeatArrayParams }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -82,7 +87,7 @@ export const getTransactionsSummary = async (
     '/transactions/summary',
     { params: filters, paramsSerializer: repeatArrayParams }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -101,7 +106,7 @@ export const getTransactionsFacets = async (
     '/transactions/facets',
     { params: filters, paramsSerializer: repeatArrayParams }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -122,7 +127,7 @@ export const getTransaction = async (
     `/transactions/${transactionId}`,
     { params }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -140,7 +145,7 @@ export const updateTransaction = async (
       params: { organization_id: organizationId },
     }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -171,7 +176,7 @@ export const settleTransaction = async (
     paidAt ? { paid_at: paidAt } : {},
     { params: { organization_id: organizationId } }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -187,5 +192,5 @@ export const unsettleTransaction = async (
     {},
     { params: { organization_id: organizationId } }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };

@@ -1,5 +1,10 @@
 // api/analytics.ts
+//
+// Todos os agregados de análise chegam na forma canônica (fincla-api#133).
+// `unwrapMoney` desembrulha em qualquer profundidade — enumerar campo a campo é
+// onde se esquece um, e um esquecido vira "R$ NaN" na tela.
 import apiClient from './client';
+import { unwrapMoney } from './money';
 import { repeatArrayParams } from './paramsSerializer';
 import type {
   MonthlyEvolutionResponse,
@@ -20,7 +25,7 @@ export const getMonthlyEvolution = async (
     '/analytics/monthly-evolution',
     { params: { organization_id: organizationId, months } }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -45,7 +50,7 @@ export const getByCategory = async (
       },
     }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -59,7 +64,7 @@ export const getSpendingRhythm = async (
     '/analytics/spending-rhythm',
     { params: { organization_id: organizationId, months } }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -85,7 +90,7 @@ export const getSpendingByDay = async (
       },
     }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -110,7 +115,7 @@ export const getPeriodComparison = async (
       },
     }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -141,7 +146,7 @@ export const exportTransactionsCsv = async (
     paramsSerializer: repeatArrayParams,
     responseType: 'blob',
   });
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**

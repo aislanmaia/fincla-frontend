@@ -74,3 +74,34 @@ export const toFiniteNumber = (value: WireMoney | unknown): number | null => {
 
 /** Mesma conversão, com piso em zero — para somatórios onde ausência não deve propagar NaN. */
 export const toAmount = (value: WireMoney | unknown): number => toFiniteNumber(value) ?? 0;
+
+/**
+ * Desembrulha TODO valor canônico de uma resposta, em qualquer profundidade.
+ *
+ * Os lotes de contrato (fincla-api#131-#133) migraram ~95 campos de uma vez, em
+ * respostas aninhadas — `summary.by_category[].total`, `months[].projection.balance`,
+ * `breakdown[].items[].amount`. Enumerar campo a campo é onde se esquece um, e um
+ * campo esquecido vira `Number({…})` → `NaN` na tela, ou `0 + {…}` →
+ * `"0[object Object]"` numa soma. Este caminhar não pode falhar por omissão.
+ *
+ * Continua sendo EXPLÍCITO na fronteira — cada módulo chama esta função de
+ * propósito, e `return response.data` cru segue sendo o erro que os tipos `Raw*`
+ * pegam. O que ele dispensa é a enumeração, não a intenção.
+ *
+ * **O que ele descarta de propósito:** o rótulo da moeda. As telas destas famílias
+ * ainda formatam tudo em real, e os agregados delas somam moedas sem converter
+ * (fincla-api#170) — então exibir a moeda hoje daria ao número uma autoridade que
+ * ele não tem. Quando o #170 decidir converter ou omitir, a moeda volta por aqui.
+ * Onde a tela JÁ usa a moeda (conta, saldo, transferência, ajuste), a conversão
+ * é explícita campo a campo e não passa por esta função.
+ */
+export const unwrapMoney = <T,>(node: T): T => {
+  if (isCanonicalMoney(node)) return toFiniteNumber(node) as T;
+  if (Array.isArray(node)) return node.map((item) => unwrapMoney(item)) as T;
+  if (node !== null && typeof node === 'object') {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(node as Record<string, unknown>)) out[k] = unwrapMoney(v);
+    return out as T;
+  }
+  return node;
+};
