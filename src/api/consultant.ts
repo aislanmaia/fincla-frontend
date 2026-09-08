@@ -1,4 +1,9 @@
+// Saldo e patrimônio de cada cliente chegam na forma canônica `{amount, currency}`
+// (fincla-api#134). `unwrapMoney` desembrulha em qualquer profundidade; a moeda é
+// descartada de propósito, porque estes agregados ainda somam moedas sem converter
+// (fincla-api#170) e um rótulo daria ao número uma autoridade que ele não tem.
 import apiClient from './client';
+import { unwrapMoney } from './money';
 import type {
   ClientHealthResponse,
   ConsultantSummaryQuery,
@@ -37,14 +42,14 @@ export const getConsultantSummary = async (
     '/consultant/summary',
     { params }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 export const getConsultantClients = async (): Promise<ConsultantClientsResponse> => {
   const response = await apiClient.get<ConsultantClientsResponse>(
     '/consultant/clients'
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 export const getConsultantConsolidatedReport = async (
@@ -54,7 +59,7 @@ export const getConsultantConsolidatedReport = async (
     '/consultant/reports/consolidated',
     { params }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 export const getFinancialHealthIndex = async (
@@ -64,7 +69,7 @@ export const getFinancialHealthIndex = async (
     '/consultant/financial-health-index',
     { params }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -78,7 +83,7 @@ export const recomputeClientHealth = async (organizationId: string): Promise<Cli
   const response = await apiClient.post<ClientHealthResponse>(
     `/consultant/clients/${organizationId}/health/recompute`
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 export const getActiveGoalsCount = async (
@@ -88,7 +93,7 @@ export const getActiveGoalsCount = async (
     '/consultant/active-goals-count',
     { params }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 export const getTotalCreditCardDebt = async (
@@ -98,7 +103,7 @@ export const getTotalCreditCardDebt = async (
     '/consultant/total-credit-card-debt',
     { params }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 export const getCashFlow = async (
@@ -108,7 +113,7 @@ export const getCashFlow = async (
     '/consultant/cash-flow',
     { params }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 export const getExpensesByCategory = async (
@@ -118,7 +123,7 @@ export const getExpensesByCategory = async (
     '/consultant/expenses-by-category',
     { params }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 export const getIncomeCommitment = async (
@@ -128,7 +133,7 @@ export const getIncomeCommitment = async (
     '/consultant/income-commitment',
     { params }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 export const getGoalsProgressByType = async (
@@ -138,7 +143,7 @@ export const getGoalsProgressByType = async (
     '/consultant/goals-progress-by-type',
     { params }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 export const getClientsAtRisk = async (
@@ -148,7 +153,7 @@ export const getClientsAtRisk = async (
     '/consultant/clients-at-risk',
     { params }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 // ── Adicionar cliente (S5) ──────────────────────────────────────
@@ -185,7 +190,7 @@ export const createConsultantClient = async (
     '/consultant/clients',
     payload
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 export const regenerateClientActivationLink = async (
@@ -195,7 +200,7 @@ export const regenerateClientActivationLink = async (
     `/consultant/clients/${organizationId}/activation-link`,
     {}
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 export interface ConsultantClientProfile {
@@ -218,7 +223,7 @@ export const getConsultantClientProfile = async (
   const response = await apiClient.get<ConsultantClientProfile>(
     `/consultant/clients/${organizationId}/profile`
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 export interface ConsultantQuota {
@@ -230,7 +235,7 @@ export interface ConsultantQuota {
 /** Plan client quota: how many clients the consultant may still add. */
 export const getConsultantQuota = async (): Promise<ConsultantQuota> => {
   const response = await apiClient.get<ConsultantQuota>('/consultant/quota');
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 // ===== Consultor IA — A1 ("Avaliar com IA") =====
@@ -293,7 +298,7 @@ export const evaluateClientWithAi = async (
       ...(refresh ? { params: { refresh: true } } : {}),
     }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -315,7 +320,7 @@ export const getAiEvaluationRun = async (
   const response = await apiClient.get<AiEvaluationRunStatusResponse>(
     `/consultant/clients/${organizationId}/ai-evaluation/${runId}`
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 // ===== Consultor IA — A2 ("Resumo da base por IA") =====
@@ -346,7 +351,7 @@ export const summarizePortfolioWithAi = async (
       ...(refresh ? { params: { refresh: true } } : {}),
     }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -363,7 +368,7 @@ export const getAiPortfolioSummaryRun = async (
   const response = await apiClient.get<AiPortfolioSummaryRunStatusResponse>(
     `/consultant/ai-portfolio-summary/${runId}`
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 // ===== Consultor IA — A3 ("Tendências detectadas pela IA") =====
@@ -388,7 +393,7 @@ export const detectPortfolioTrendsWithAi = async (
       ...(refresh ? { params: { refresh: true } } : {}),
     }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -402,7 +407,7 @@ export const getAiPortfolioTrendsRun = async (
   const response = await apiClient.get<AiPortfolioTrendsRunStatusResponse>(
     `/consultant/ai-portfolio-trends/${runId}`
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 // ===== Consultor IA — A4 ("Copiloto IA") =====
@@ -434,7 +439,7 @@ export const askCopiloto = async (
       timeout: AI_EVALUATION_TIMEOUT_MS,
     }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -448,5 +453,5 @@ export const getAiCopilotoRun = async (
   const response = await apiClient.get<AiCopilotoRunStatusResponse>(
     `/consultant/ai-copiloto/${runId}`
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };

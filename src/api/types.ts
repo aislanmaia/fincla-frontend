@@ -1037,13 +1037,24 @@ export interface GoalProjectionSummary {
   months_vs_deadline: number | null; // >0 atrasado, <0 adiantado
 }
 
-/** M4: projeção detalhada (endpoint /goals/{id}/projection → modal). */
+/** M4: projeção detalhada (endpoint /goals/{id}/projection → modal).
+ *
+ * Os campos monetários chegam no fio como `{amount, currency}` (fincla-api#134) e
+ * saem de `getGoalProjection` já como `number`: `unwrapMoney` desembrulha na
+ * fronteira, e é por isso que os tipos aqui seguem numéricos. Ler `response.data`
+ * cru destas rotas devolveria objeto onde a tela faz conta.
+ */
 export interface GoalProjection {
   summary: GoalProjectionSummary;
+  /** ISO 4217 — a moeda DA META, não a da organização. Disponível antes de
+   *  percorrer a série, inclusive quando ela vem vazia. */
+  currency: string;
   monthly_contribution: number;
-  annual_return_rate: number;
+  annual_return_rate: number; // percentual (0.105 = 10,5%) — NÃO é dinheiro
+  /** `null` é "não há prazo a bater"; `0` é "o prazo existe e você já não
+   *  precisa aportar mais nada". Não são a mesma coisa. */
   required_monthly: number | null;
-  series: number[];
+  series: number[]; // saldo projetado por mês (0..horizonte, no máximo 361 pontos)
 }
 
 export interface Goal {
