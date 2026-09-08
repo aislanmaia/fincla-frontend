@@ -1,5 +1,10 @@
 // api/goals.ts
+//
+// A meta foi o ÚLTIMO campo monetário a migrar (fincla-api#134). Sem esta
+// fronteira, `Number({amount, currency}) || 0` no adaptador transforma a meta
+// em ZERO — número errado em silêncio, que é pior que a tela quebrar.
 import apiClient from './client';
+import { unwrapMoney } from './money';
 import type {
   Goal,
   GoalProjection,
@@ -17,7 +22,7 @@ export const createGoal = async (
   goal: CreateGoalRequest
 ): Promise<Goal> => {
   const response = await apiClient.post<Goal>('/goals', goal);
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -29,7 +34,7 @@ export const listGoals = async (
   const response = await apiClient.get<Goal[]>('/goals', {
     params: { organization_id: organizationId },
   });
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -42,7 +47,7 @@ export const getGoal = async (
   const response = await apiClient.get<Goal>(`/goals/${goalId}`, {
     params: { organization_id: organizationId },
   });
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -56,7 +61,7 @@ export const getGoalProjection = async (
   const response = await apiClient.get<GoalProjection>(`/goals/${goalId}/projection`, {
     params: { organization_id: organizationId, ...overrides },
   });
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -72,7 +77,7 @@ export const updateGoal = async (
     data,
     { params: { organization_id: organizationId } }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -101,7 +106,7 @@ export const contributeToGoal = async (
     data,
     { params: { organization_id: organizationId } }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -117,5 +122,5 @@ export const listGoalContributions = async (
     `/goals/${goalId}/contributions`,
     { params: { organization_id: organizationId, page, limit } }
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
