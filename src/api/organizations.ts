@@ -1,5 +1,13 @@
 // api/organizations.ts
+//
+// `monthly_income` — a renda declarada da organização — chega na forma canônica
+// `{amount, currency}` (fincla-api#134). Ela viajava ao lado de `base_currency` como
+// campo IRMÃO, que é a forma que o ADR-0002 proíbe: `total += monthly_income` nunca
+// esbarra em `base_currency`. `unwrapMoney` desembrulha as quatro rotas que devolvem
+// a organização, inclusive a de dentro de `/memberships/my-organizations`, que é a
+// primeira chamada que o app faz depois do login.
 import apiClient from './client';
+import { unwrapMoney } from './money';
 import type {
   CreateOrganizationRequest,
   CreateOrganizationResponse,
@@ -19,7 +27,7 @@ export const createOrganization = async (
   data: CreateOrganizationRequest
 ): Promise<CreateOrganizationResponse> => {
   const response = await apiClient.post<CreateOrganizationResponse>('/organizations', data);
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -29,7 +37,7 @@ export const getOrganization = async (
   orgId: string
 ): Promise<Organization> => {
   const response = await apiClient.get<Organization>(`/organizations/${orgId}`);
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -43,7 +51,7 @@ export const updateOrganization = async (
     `/organizations/${orgId}`,
     data
   );
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**
@@ -51,7 +59,7 @@ export const updateOrganization = async (
  */
 export const getMyOrganizations = async (): Promise<MyOrganizationsResponse> => {
   const response = await apiClient.get<MyOrganizationsResponse>('/memberships/my-organizations');
-  return response.data;
+  return unwrapMoney(response.data);
 };
 
 /**

@@ -1,29 +1,53 @@
 {
   "consultant_summary": {
-    "total_income": { "amount": "45000.00", "currency": "BRL" },
-    "total_expenses": { "amount": "38200.00", "currency": "BRL" },
-    "balance": { "amount": "6800.00", "currency": "BRL" },
+    "total_income": {
+      "amount": "45000.00",
+      "currency": "BRL"
+    },
+    "total_expenses": {
+      "amount": "38200.00",
+      "currency": "BRL"
+    },
+    "balance": {
+      "amount": "6800.00",
+      "currency": "BRL"
+    },
     "total_transactions": 412,
-    "organizations_count": 3,
+    "organizations_count": 2,
     "period_start": "2026-01-01",
     "period_end": "2026-06-30"
   },
   "financial_health_index": {
     "index": 61.0,
-    "clients_scored": 2,
+    "clients_scored": 1,
     "clients_pending": 1,
-    "total_income": { "amount": "45000.00", "currency": "BRL" },
-    "total_expenses": { "amount": "38200.00", "currency": "BRL" },
-    "balance": { "amount": "6800.00", "currency": "BRL" },
-    "total_debt": { "amount": "7350.00", "currency": "BRL" },
-    "organizations_count": 3,
+    "total_income": {
+      "amount": "45000.00",
+      "currency": "BRL"
+    },
+    "total_expenses": {
+      "amount": "38200.00",
+      "currency": "BRL"
+    },
+    "balance": {
+      "amount": "6800.00",
+      "currency": "BRL"
+    },
+    "total_debt": {
+      "amount": "7350.00",
+      "currency": "BRL"
+    },
+    "organizations_count": 2,
     "period_start": "2026-01-01",
     "period_end": "2026-06-30",
     "formula_info": "media aritmetica do score canonico dos clientes com snapshot"
   },
   "total_credit_card_debt": {
-    "total_debt": { "amount": "7350.00", "currency": "BRL" },
-    "organizations_count": 3,
+    "total_debt": {
+      "amount": "7350.00",
+      "currency": "BRL"
+    },
+    "organizations_count": 2,
     "as_of_date": "2026-06-30"
   },
   "cash_flow": {
@@ -32,17 +56,35 @@
         "month": "2026-05",
         "year": 2026,
         "month_number": 5,
-        "total_income": { "amount": "7600.00", "currency": "BRL" },
-        "total_expenses": { "amount": "6400.00", "currency": "BRL" },
-        "balance": { "amount": "1200.00", "currency": "BRL" }
+        "total_income": {
+          "amount": "7600.00",
+          "currency": "BRL"
+        },
+        "total_expenses": {
+          "amount": "6400.00",
+          "currency": "BRL"
+        },
+        "balance": {
+          "amount": "1200.00",
+          "currency": "BRL"
+        }
       },
       {
         "month": "2026-06",
         "year": 2026,
         "month_number": 6,
-        "total_income": { "amount": "7800.00", "currency": "BRL" },
-        "total_expenses": { "amount": "7350.00", "currency": "BRL" },
-        "balance": { "amount": "450.00", "currency": "BRL" }
+        "total_income": {
+          "amount": "7800.00",
+          "currency": "BRL"
+        },
+        "total_expenses": {
+          "amount": "7350.00",
+          "currency": "BRL"
+        },
+        "balance": {
+          "amount": "450.00",
+          "currency": "BRL"
+        }
       }
     ],
     "period_start": "2026-05-01",
@@ -50,11 +92,35 @@
   },
   "expenses_by_category": {
     "categories": [
-      { "name": "Moradia", "total": { "amount": "12000.00", "currency": "BRL" }, "percentage": 31.41 },
-      { "name": "Alimentacao", "total": { "amount": "8600.00", "currency": "BRL" }, "percentage": 22.51 },
-      { "name": "Transporte", "total": { "amount": "5200.00", "currency": "BRL" }, "percentage": 13.61 }
+      {
+        "name": "Moradia",
+        "total": {
+          "amount": "12000.00",
+          "currency": "BRL"
+        },
+        "percentage": 31.41
+      },
+      {
+        "name": "Alimentacao",
+        "total": {
+          "amount": "8600.00",
+          "currency": "BRL"
+        },
+        "percentage": 22.51
+      },
+      {
+        "name": "Transporte",
+        "total": {
+          "amount": "5200.00",
+          "currency": "BRL"
+        },
+        "percentage": 13.61
+      }
     ],
-    "total_expenses": { "amount": "38200.00", "currency": "BRL" },
+    "total_expenses": {
+      "amount": "38200.00",
+      "currency": "BRL"
+    },
     "period_start": "2026-01-01",
     "period_end": "2026-06-30"
   },
@@ -65,8 +131,14 @@
         "year": 2026,
         "month_number": 6,
         "income_commitment_percent": 50.0,
-        "total_income": { "amount": "7800.00", "currency": "BRL" },
-        "total_card_bills": { "amount": "3900.00", "currency": "BRL" }
+        "total_income": {
+          "amount": "7800.00",
+          "currency": "BRL"
+        },
+        "total_card_bills": {
+          "amount": "3900.00",
+          "currency": "BRL"
+        }
       }
     ],
     "period_start": "2026-06-01",
@@ -83,12 +155,18 @@
         "membership_created_at": "2025-11-03T14:22:09",
         "client_name": "Marina Andrade",
         "health": 61.0,
-        "balance": { "amount": "4200.00", "currency": "BRL" },
+        "balance": {
+          "amount": "4200.00",
+          "currency": "BRL"
+        },
         "savings_pct": 12.5,
         "debt_pct": 18.0,
         "trend": "up",
         "last_active": "2026-06-28",
-        "patrimonio": { "amount": "82500.00", "currency": "BRL" },
+        "patrimonio": {
+          "amount": "82500.00",
+          "currency": "BRL"
+        },
         "health_computed_at": "2026-06-30T03:12:44",
         "pending_activation": false
       },
@@ -99,7 +177,10 @@
         "membership_created_at": "2026-02-17T09:05:31",
         "client_name": "Rui Teixeira",
         "health": null,
-        "balance": { "amount": "2600.00", "currency": "EUR" },
+        "balance": {
+          "amount": "2600.00",
+          "currency": "EUR"
+        },
         "savings_pct": -4.2,
         "debt_pct": 33.1,
         "trend": "down",
@@ -117,7 +198,10 @@
         "organization_name": "Casa em Lisboa",
         "client_name": "Rui Teixeira",
         "main_situation": "gasto acima da renda ha 3 meses",
-        "current_balance": { "amount": "-1450.00", "currency": "EUR" },
+        "current_balance": {
+          "amount": "-1450.00",
+          "currency": "EUR"
+        },
         "last_invoice_status": "overdue",
         "risk_score": 78
       }

@@ -178,7 +178,13 @@ export interface Organization {
   id: string;
   name: string;
   description: string | null;
+  /** ISO 4217 — a moeda base da organização. É a unidade de `monthly_income` e de
+   *  todo agregado que a organização produz. */
+  base_currency: string;
   org_type: string | null;
+  /** Renda declarada. Chega como `{amount, currency}` e sai desembrulhada.
+   *  `null` = não declarou — NÃO é zero, e é sobre este número que o painel de
+   *  saúde compara o gasto. */
   monthly_income: number | null;
   avatar_url: string | null;
   created_at: string;
@@ -801,7 +807,9 @@ export interface CreditCard {
   closing_day: number | null;
   color: string | null;
   available_limit: number | null;
-  used_limit: number;
+  /** `null` só quando não dá para dizer a moeda do cartão (conta de liquidação
+   *  ausente). Zero usado é um FATO e chega como `0`. */
+  used_limit: number | null;
   limit_usage_percent: number | null;
 }
 
