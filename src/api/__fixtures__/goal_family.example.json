@@ -1,0 +1,105 @@
+{
+  "goal": {
+    "id": "8f5b5a1e-2b3c-4f5a-9d1e-0c2b3a4d5e6f",
+    "organization_id": "1c9a2b3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+    "name": "Reserva de emergência",
+    "currency": "BRL",
+    "target_amount": {
+      "amount": "15000.00",
+      "currency": "BRL"
+    },
+    "current_amount": {
+      "amount": "2250.00",
+      "currency": "BRL"
+    },
+    "deadline": "2027-12-31",
+    "status": "active",
+    "description": "Fundo para imprevistos",
+    "created_at": "2026-01-15T10:00:00",
+    "updated_at": null,
+    "progress": 15.0,
+    "type": "emergency_fund",
+    "term": "long",
+    "priority": 1,
+    "monthly_target": {
+      "amount": "1000.00",
+      "currency": "BRL"
+    },
+    "annual_return_rate": "0.1050",
+    "projection": {
+      "months_to_target": 12,
+      "completion_date": "2027-01-15",
+      "on_track": true,
+      "months_vs_deadline": -11
+    }
+  },
+  "goal_in_another_currency": {
+    "id": "2d4e6f8a-1b3c-4d5e-9f0a-1b2c3d4e5f60",
+    "organization_id": "1c9a2b3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+    "name": "Intercâmbio",
+    "currency": "EUR",
+    "target_amount": {
+      "amount": "8000.00",
+      "currency": "EUR"
+    },
+    "current_amount": {
+      "amount": "2000.00",
+      "currency": "EUR"
+    },
+    "deadline": null,
+    "status": "active",
+    "description": null,
+    "created_at": "2026-03-02T09:30:00",
+    "updated_at": "2026-08-11T18:45:00",
+    "progress": 25.0,
+    "type": "travel",
+    "term": null,
+    "priority": 2,
+    "monthly_target": null,
+    "annual_return_rate": null,
+    "projection": null
+  },
+  "contribution_list": {
+    "contributions": [
+      {
+        "id": "aa11bb22-cc33-4d44-8e55-ff6677889900",
+        "goal_id": "8f5b5a1e-2b3c-4f5a-9d1e-0c2b3a4d5e6f",
+        "amount": {
+          "amount": "1500.00",
+          "currency": "BRL"
+        },
+        "currency": "BRL",
+        "contributed_at": "2026-08-05",
+        "created_at": "2026-08-05T20:10:00",
+        "note": "Sobra do mês",
+        "transaction_id": null,
+        "account_id": "3f2a1b0c-9d8e-4f7a-8b6c-5d4e3f2a1b0c"
+      },
+      {
+        "id": "bb22cc33-dd44-4e55-9f66-001122334455",
+        "goal_id": "8f5b5a1e-2b3c-4f5a-9d1e-0c2b3a4d5e6f",
+        "amount": {
+          "amount": "750.00",
+          "currency": "BRL"
+        },
+        "currency": "BRL",
+        "contributed_at": "2026-07-04",
+        "created_at": "2026-07-04T08:00:00",
+        "note": null,
+        "transaction_id": null,
+        "account_id": null
+      }
+    ],
+    "total_contributed": {
+      "amount": "2250.00",
+      "currency": "BRL"
+    },
+    "currency": "BRL",
+    "page": 1,
+    "limit": 20,
+    "total": 2,
+    "pages": 1,
+    "has_next": false,
+    "has_prev": false
+  }
+}

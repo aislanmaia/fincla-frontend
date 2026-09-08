@@ -1069,12 +1069,17 @@ export interface Goal {
   created_at: string;
   updated_at: string | null;
   progress: number; // Porcentagem 0-100
+  /** ISO 4217. A meta declara a PRÓPRIA moeda — ela existe com a meta zerada e é
+   *  validada contra o registro na criação. Sobrevive ao `unwrapMoney` (que só
+   *  descarta a moeda de DENTRO do valor), então é por aqui que a tela lê a
+   *  unidade do que está mostrando. */
+  currency: string;
   // Campos de planejamento (M1):
   type: string | null;
   term: GoalTerm | null;
   priority: number | null;
   monthly_target: number | null;
-  annual_return_rate: number | null;
+  annual_return_rate: string | null; // Decimal serializado: "0.105" = 10,5%
   // Projeção (M4):
   projection: GoalProjectionSummary | null;
 }
@@ -1098,6 +1103,8 @@ export interface GoalContribution {
 export interface GoalContributionListResponse {
   contributions: GoalContribution[];
   total_contributed: number;
+  /** ISO 4217 — a moeda da meta. */
+  currency: string;
   page: number;
   limit: number;
   total: number;
@@ -1639,8 +1646,12 @@ export interface ConsultantClient {
   health: number | null;
   /** ISO 8601 timestamp of the canonical snapshot, or null when never computed. */
   health_computed_at: string | null;
-  /** income − expenses over the trailing 12-month window (decimal string). */
-  balance: string;
+  /** income − expenses over the trailing 12-month window.
+   *  Chega no fio como `{amount, currency}` e sai de `listConsultantClients` já
+   *  como número — `unwrapMoney` desembrulha na fronteira. **É rotulado, não
+   *  convertido**: a soma dos 12 meses empilha contas de moedas diferentes
+   *  (fincla-api#170), então não o apresente como valor convertido. */
+  balance: number;
   /** balance / income * 100 (can be negative). */
   savings_pct: number;
   /** unpaid card debt / income * 100. */
@@ -1649,13 +1660,15 @@ export interface ConsultantClient {
   trend: 'up' | 'down' | 'flat';
   /** date (YYYY-MM-DD) of the most recent transaction, or null. */
   last_active: string | null;
-  /** net worth: total_all (all active accounts) − unpaid card debt (decimal string). */
   /**
+   * Patrimônio: total das contas ativas − dívida de cartão em aberto, na moeda
+   * base DO CLIENTE. Chega como `{amount, currency}` e sai desembrulhado.
+   *
    * `null` quando o cliente tem conta em mais de uma moeda e não houve cotação
    * para consolidar (fincla-api#144). NÃO é zero: zero afirmaria que ele não tem
    * patrimônio, quando nós é que não sabemos lê-lo.
    */
-  patrimonio: string | null;
+  patrimonio: number | null;
   /** true = consultant-created client who hasn't set their password yet. */
   pending_activation?: boolean;
 }

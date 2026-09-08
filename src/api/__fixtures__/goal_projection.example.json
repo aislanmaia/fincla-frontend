@@ -1,0 +1,40 @@
+{
+  "summary": {
+    "months_to_target": 3,
+    "completion_date": "2026-12-01",
+    "on_track": true,
+    "months_vs_deadline": -1
+  },
+  "currency": "BRL",
+  "monthly_contribution": {
+    "amount": "1000.00",
+    "currency": "BRL"
+  },
+  "annual_return_rate": 0.0,
+  "required_monthly": {
+    "amount": "750.00",
+    "currency": "BRL"
+  },
+  "series": [
+    {
+      "amount": "2000.00",
+      "currency": "BRL"
+    },
+    {
+      "amount": "3000.00",
+      "currency": "BRL"
+    },
+    {
+      "amount": "4000.00",
+      "currency": "BRL"
+    },
+    {
+      "amount": "5000.00",
+      "currency": "BRL"
+    },
+    {
+      "amount": "6000.00",
+      "currency": "BRL"
+    }
+  ]
+}

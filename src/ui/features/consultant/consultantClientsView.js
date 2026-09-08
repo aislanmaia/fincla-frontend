@@ -142,6 +142,12 @@ function csvCell(value) {
   return String(value ?? "").replace(/[;\r\n]+/g, " ").trim();
 }
 
+/** Número finito, ou célula vazia — nunca `0` para o que não sabemos ler. */
+function numeroOuVazio(value) {
+  const n = Number.parseFloat(value);
+  return Number.isFinite(n) ? n : "";
+}
+
 export function buildClientsCsv(clients) {
   const list = Array.isArray(clients) ? clients : [];
   const header = ["Cliente", "Organização", "Saúde", "Patrimônio", "Saldo", "Poupança %", "Dívida %", "Última atividade"];
@@ -150,8 +156,11 @@ export function buildClientsCsv(clients) {
     csvCell(c?.organization_name),
     // Sem score exporta vazio, não `0`: uma planilha com 0 vira um diagnóstico falso.
     c?.health == null ? "" : Math.round(Number(c.health)),
-    Number.parseFloat(c?.patrimonio) || 0,
-    Number.parseFloat(c?.balance) || 0,
+    // A MESMA regra vale para o patrimônio, e não valia: `null` significa "o cliente
+    // tem conta em mais de uma moeda e faltou cotação", não "não tem patrimônio".
+    // A planilha sai da tela e vira decisão sem ninguém para conferir o "—".
+    numeroOuVazio(c?.patrimonio),
+    numeroOuVazio(c?.balance),
     Number(c?.savings_pct) || 0,
     Number(c?.debt_pct) || 0,
     csvCell(c?.last_active),

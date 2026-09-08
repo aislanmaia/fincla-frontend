@@ -37,12 +37,26 @@ export interface CanonicalMoney {
 /** Valor monetário como chega no fio, antes da normalização. */
 export type WireMoney = string | number | CanonicalMoney | null | undefined;
 
-/** `true` para o objeto canônico `{amount, currency}`, e só para ele. */
-export const isCanonicalMoney = (value: unknown): value is CanonicalMoney =>
-  typeof value === 'object' &&
-  value !== null &&
-  typeof (value as CanonicalMoney).amount === 'string' &&
-  typeof (value as CanonicalMoney).currency === 'string';
+/**
+ * `true` para o objeto canônico `{amount, currency}`, e só para ele.
+ *
+ * **Exatamente esses dois campos**, e é por isso que a checagem de chaves está
+ * aqui. Sem ela, qualquer objeto que por acaso tivesse `amount` e `currency` como
+ * string passaria por dinheiro e seria COLAPSADO num número por `unwrapMoney`,
+ * levando os outros campos junto — um ponto de gráfico `{label, amount, currency}`
+ * vindo da IA viraria `1500` e a série sumiria do gráfico sem erro nenhum.
+ * `MoneyResponse` tem dois campos (ADR-0002) e um teste de contrato prende isso,
+ * então a checagem exata é o que o contrato já promete, não uma restrição nova.
+ */
+export const isCanonicalMoney = (value: unknown): value is CanonicalMoney => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const chaves = Object.keys(value);
+  return (
+    chaves.length === 2 &&
+    typeof (value as CanonicalMoney).amount === 'string' &&
+    typeof (value as CanonicalMoney).currency === 'string'
+  );
+};
 
 /**
  * A moeda de um valor no fio, ou `null` quando ele ainda vem na forma antiga.
