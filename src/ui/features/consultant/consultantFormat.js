@@ -33,9 +33,18 @@ export function healthTone(health) {
   return { color: T.red, bg: T.redLight, label: "Frágil" };
 }
 
-/** Dinheiro (patrimônio/saldo cru) com sinal só quando negativo. `fmtSgn` força "+". */
+/** Dinheiro (patrimônio/saldo cru) com sinal só quando negativo. `fmtSgn` força "+".
+ *
+ * Ausência vira "—", nunca "R$ 0". O backend devolve `patrimonio: null` quando o
+ * cliente tem conta em mais de uma moeda e faltou cotação (fincla-api#144) — e ele
+ * se recusa a mostrar total parcial justamente para o consultor não decidir sobre
+ * um número incompleto. Coagir para zero aqui desfaria a garantia no último metro,
+ * e "R$ 0" é pior que "—": afirma que o cliente não tem patrimônio.
+ */
 export function fmtMoney(value) {
-  const n = Number(value) || 0;
+  if (value === null || value === undefined || value === "") return "—";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
   return (n < 0 ? "−" : "") + fmtAbs(n);
 }
 

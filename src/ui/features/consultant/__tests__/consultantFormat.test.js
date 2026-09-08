@@ -46,8 +46,16 @@ describe("fmtMoney — sinal só quando negativo", () => {
     expect(fmtMoney("-3340.00")).toBe("−R$ 3.340,00");
     expect(fmtMoney(0)).toBe("R$ 0,00");
   });
-  it("valor ausente vira R$ 0,00", () => {
-    expect(fmtMoney(null)).toBe("R$ 0,00");
+  it("valor ausente vira '—', não R$ 0,00", () => {
+    // Este caso afirmava o contrário até o backend passar a devolver
+    // `patrimonio: null` quando não dá para consolidar (fincla-api#144). "R$ 0,00"
+    // afirma que o cliente não tem patrimônio; "—" diz que nós é que não sabemos.
+    expect(fmtMoney(null)).toBe("—");
+  });
+
+  it("mas zero de verdade continua R$ 0,00", () => {
+    // Distinguir "não sei" de "é zero" é o ponto inteiro da mudança.
+    expect(fmtMoney(0)).toBe("R$ 0,00");
   });
 });
 
