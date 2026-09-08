@@ -178,7 +178,13 @@ export interface Organization {
   id: string;
   name: string;
   description: string | null;
+  /** ISO 4217 — a moeda base da organização. É a unidade de `monthly_income` e de
+   *  todo agregado que a organização produz. */
+  base_currency: string;
   org_type: string | null;
+  /** Renda declarada. Chega como `{amount, currency}` e sai desembrulhada.
+   *  `null` = não declarou — NÃO é zero, e é sobre este número que o painel de
+   *  saúde compara o gasto. */
   monthly_income: number | null;
   avatar_url: string | null;
   created_at: string;
@@ -801,7 +807,9 @@ export interface CreditCard {
   closing_day: number | null;
   color: string | null;
   available_limit: number | null;
-  used_limit: number;
+  /** `null` só quando não dá para dizer a moeda do cartão (conta de liquidação
+   *  ausente). Zero usado é um FATO e chega como `0`. */
+  used_limit: number | null;
   limit_usage_percent: number | null;
 }
 
@@ -1037,13 +1045,24 @@ export interface GoalProjectionSummary {
   months_vs_deadline: number | null; // >0 atrasado, <0 adiantado
 }
 
-/** M4: projeção detalhada (endpoint /goals/{id}/projection → modal). */
+/** M4: projeção detalhada (endpoint /goals/{id}/projection → modal).
+ *
+ * Os campos monetários chegam no fio como `{amount, currency}` (fincla-api#134) e
+ * saem de `getGoalProjection` já como `number`: `unwrapMoney` desembrulha na
+ * fronteira, e é por isso que os tipos aqui seguem numéricos. Ler `response.data`
+ * cru destas rotas devolveria objeto onde a tela faz conta.
+ */
 export interface GoalProjection {
   summary: GoalProjectionSummary;
+  /** ISO 4217 — a moeda DA META, não a da organização. Disponível antes de
+   *  percorrer a série, inclusive quando ela vem vazia. */
+  currency: string;
   monthly_contribution: number;
-  annual_return_rate: number;
+  annual_return_rate: number; // percentual (0.105 = 10,5%) — NÃO é dinheiro
+  /** `null` é "não há prazo a bater"; `0` é "o prazo existe e você já não
+   *  precisa aportar mais nada". Não são a mesma coisa. */
   required_monthly: number | null;
-  series: number[];
+  series: number[]; // saldo projetado por mês (0..horizonte, no máximo 361 pontos)
 }
 
 export interface Goal {
@@ -1058,12 +1077,17 @@ export interface Goal {
   created_at: string;
   updated_at: string | null;
   progress: number; // Porcentagem 0-100
+  /** ISO 4217. A meta declara a PRÓPRIA moeda — ela existe com a meta zerada e é
+   *  validada contra o registro na criação. Sobrevive ao `unwrapMoney` (que só
+   *  descarta a moeda de DENTRO do valor), então é por aqui que a tela lê a
+   *  unidade do que está mostrando. */
+  currency: string;
   // Campos de planejamento (M1):
   type: string | null;
   term: GoalTerm | null;
   priority: number | null;
   monthly_target: number | null;
-  annual_return_rate: number | null;
+  annual_return_rate: string | null; // Decimal serializado: "0.105" = 10,5%
   // Projeção (M4):
   projection: GoalProjectionSummary | null;
 }
@@ -1087,6 +1111,8 @@ export interface GoalContribution {
 export interface GoalContributionListResponse {
   contributions: GoalContribution[];
   total_contributed: number;
+  /** ISO 4217 — a moeda da meta. */
+  currency: string;
   page: number;
   limit: number;
   total: number;
@@ -1628,8 +1654,12 @@ export interface ConsultantClient {
   health: number | null;
   /** ISO 8601 timestamp of the canonical snapshot, or null when never computed. */
   health_computed_at: string | null;
-  /** income − expenses over the trailing 12-month window (decimal string). */
-  balance: string;
+  /** income − expenses over the trailing 12-month window.
+   *  Chega no fio como `{amount, currency}` e sai de `listConsultantClients` já
+   *  como número — `unwrapMoney` desembrulha na fronteira. **É rotulado, não
+   *  convertido**: a soma dos 12 meses empilha contas de moedas diferentes
+   *  (fincla-api#170), então não o apresente como valor convertido. */
+  balance: number;
   /** balance / income * 100 (can be negative). */
   savings_pct: number;
   /** unpaid card debt / income * 100. */
@@ -1638,13 +1668,15 @@ export interface ConsultantClient {
   trend: 'up' | 'down' | 'flat';
   /** date (YYYY-MM-DD) of the most recent transaction, or null. */
   last_active: string | null;
-  /** net worth: total_all (all active accounts) − unpaid card debt (decimal string). */
   /**
+   * Patrimônio: total das contas ativas − dívida de cartão em aberto, na moeda
+   * base DO CLIENTE. Chega como `{amount, currency}` e sai desembrulhado.
+   *
    * `null` quando o cliente tem conta em mais de uma moeda e não houve cotação
    * para consolidar (fincla-api#144). NÃO é zero: zero afirmaria que ele não tem
    * patrimônio, quando nós é que não sabemos lê-lo.
    */
-  patrimonio: string | null;
+  patrimonio: number | null;
   /** true = consultant-created client who hasn't set their password yet. */
   pending_activation?: boolean;
 }

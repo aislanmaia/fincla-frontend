@@ -1,0 +1,68 @@
+{
+  "financial_health_score": {
+    "reference_month": "2026-09-01",
+    "ativo": { "amount": "18500.00", "currency": "BRL" },
+    "passivo": { "amount": "3200.00", "currency": "BRL" },
+    "patrimonio_liquido": { "amount": "15300.00", "currency": "BRL" },
+    "avg_income": { "amount": "6200.00", "currency": "BRL" },
+    "avg_expense": { "amount": "4900.00", "currency": "BRL" },
+    "avg_surplus": { "amount": "1300.00", "currency": "BRL" },
+    "income_commitment": 0.7903,
+    "savings_rate": 0.2097,
+    "emergency_fund_months": 2.5,
+    "goals_on_track": 1,
+    "goals_total": 2,
+    "goal_progress_avg": 57.5,
+    "cash_flow_risk": "medium",
+    "score": 61
+  },
+  "monthly_plan_comparison": {
+    "year": 2026,
+    "month": 6,
+    "has_plan": true,
+    "status": "active",
+    "notes": "Junho",
+    "planned_income": { "amount": "7000.00", "currency": "BRL" },
+    "planned_expense": { "amount": "4500.00", "currency": "BRL" },
+    "actual_income": { "amount": "7500.00", "currency": "BRL" },
+    "actual_expense": { "amount": "5230.00", "currency": "BRL" },
+    "items": [
+      {
+        "tag_id": "3f1b8c2a-77d4-4a1e-9f0b-2c5a6d8e1b40",
+        "tag_name": "Alimentação",
+        "kind": "expense",
+        "planned": { "amount": "1200.00", "currency": "BRL" },
+        "actual": { "amount": "1560.00", "currency": "BRL" },
+        "variance": { "amount": "360.00", "currency": "BRL" },
+        "in_plan": true
+      },
+      {
+        "tag_id": "a4c9e5d1-0b6f-4e83-8a27-91d3b7c4f206",
+        "tag_name": "Moradia",
+        "kind": "expense",
+        "planned": { "amount": "1800.00", "currency": "BRL" },
+        "actual": { "amount": "1800.00", "currency": "BRL" },
+        "variance": { "amount": "0.00", "currency": "BRL" },
+        "in_plan": true
+      },
+      {
+        "tag_id": "c7e2f018-4d5a-49b6-b3c1-6e8f2a90d5b3",
+        "tag_name": "Lazer",
+        "kind": "expense",
+        "planned": { "amount": "0.00", "currency": "BRL" },
+        "actual": { "amount": "250.00", "currency": "BRL" },
+        "variance": { "amount": "250.00", "currency": "BRL" },
+        "in_plan": false
+      },
+      {
+        "tag_id": "5b0d3a6c-8e11-4f27-9c4d-0a7b6e2f3145",
+        "tag_name": "Salário",
+        "kind": "income",
+        "planned": { "amount": "7000.00", "currency": "BRL" },
+        "actual": { "amount": "7500.00", "currency": "BRL" },
+        "variance": { "amount": "500.00", "currency": "BRL" },
+        "in_plan": true
+      }
+    ]
+  }
+}

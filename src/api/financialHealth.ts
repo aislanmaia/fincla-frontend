@@ -23,5 +23,9 @@ export const getFinancialHealth = async (organizationId: string): Promise<Financ
   const r = await apiClient.get<FinancialHealth>('/financial-health/score', {
     params: { organization_id: organizationId },
   });
-  return r.data;
+  // `r.data`, não `response.data`: foi o nome diferente da variável que fez esta
+  // fronteira escapar da varredura quando as três irmãs foram corrigidas. Sem o
+  // desembrulho, `Number({…})` vira NaN e o painel mostra "R$ NaN" no patrimônio,
+  // enquanto `Number(health?.avg_income) || 0` mostra "R$ 0" no relatório do cliente.
+  return unwrapMoney(r.data);
 };
