@@ -65,10 +65,22 @@ export function countClientsByBand(clients) {
   return counts;
 }
 
-/** Soma o patrimônio de todos os clientes (kicker "… sob acompanhamento"). */
+/** Soma o patrimônio de todos os clientes (kicker "… sob acompanhamento").
+ *
+ * `null` quando QUALQUER cliente não consolidou: um total parcial é pior que
+ * ausência, porque o consultor decide sobre ele sem saber que falta gente dentro.
+ * É a mesma regra que o backend aplica em `consolidate_portfolio`, e mantê-la aqui
+ * é o que impede a tela de reconstruir o número que o servidor se recusou a dar.
+ */
 export function totalPatrimonio(clients) {
   const list = Array.isArray(clients) ? clients : [];
-  return list.reduce((s, c) => s + (Number.parseFloat(c?.patrimonio) || 0), 0);
+  let soma = 0;
+  for (const c of list) {
+    const valor = Number.parseFloat(c?.patrimonio);
+    if (!Number.isFinite(valor)) return null;
+    soma += valor;
+  }
+  return soma;
 }
 
 /** Normaliza para busca: minúsculas e sem acentos. */
@@ -81,7 +93,12 @@ function normalize(text) {
 
 /** Valor comparável de uma chave de ordenação. `null` em `health` vira `null`, não 0. */
 function sortValue(clientItem, sortKey) {
-  if (sortKey === "patrimonio") return Number.parseFloat(clientItem.patrimonio) || 0;
+  // `null` em `patrimonio` vira `null` (ordenado por último), não 0 — senão o
+  // cliente que não consolidou aparece como o mais pobre da carteira.
+  if (sortKey === "patrimonio") {
+    const valor = Number.parseFloat(clientItem.patrimonio);
+    return Number.isFinite(valor) ? valor : null;
+  }
   if (sortKey === "name") return normalize(clientItem.client_name || clientItem.organization_name);
   return clientItem.health == null ? null : Number(clientItem.health);
 }

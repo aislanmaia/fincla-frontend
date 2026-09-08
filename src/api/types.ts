@@ -1639,7 +1639,12 @@ export interface ConsultantClient {
   /** date (YYYY-MM-DD) of the most recent transaction, or null. */
   last_active: string | null;
   /** net worth: total_all (all active accounts) − unpaid card debt (decimal string). */
-  patrimonio: string;
+  /**
+   * `null` quando o cliente tem conta em mais de uma moeda e não houve cotação
+   * para consolidar (fincla-api#144). NÃO é zero: zero afirmaria que ele não tem
+   * patrimônio, quando nós é que não sabemos lê-lo.
+   */
+  patrimonio: string | null;
   /** true = consultant-created client who hasn't set their password yet. */
   pending_activation?: boolean;
 }

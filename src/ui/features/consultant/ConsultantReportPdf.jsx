@@ -84,7 +84,10 @@ export function ConsultantReportDoc({ data }) {
     consultantName = "",
     generatedAt = "",
     summary = {},
-    patrimonio = 0,
+    // `null` quando não deu para consolidar (fincla-api#144). Um default de 0 num
+    // PDF é pior que na tela: o relatório é levado para a reunião e não tem como
+    // ser conferido depois.
+    patrimonio = null,
     health = null,
     risk = 0,
     totalClients = 0,
@@ -110,7 +113,7 @@ export function ConsultantReportDoc({ data }) {
         <View style={st.headerRule} />
 
         <View style={st.kpiRow}>
-          <Kpi label="Patrimônio" value={fmtBRL0(patrimonio)} />
+          <Kpi label="Patrimônio" value={patrimonio == null ? "—" : fmtBRL0(patrimonio)} />
           <Kpi label="Saúde média" value={health != null ? `${Math.round(health)}/100` : "—"} color={C.green} />
           <Kpi label="Clientes em risco" value={`${risk} de ${totalClients}`} color={C.red} />
           <Kpi label="Dívida de cartão" value={cardDebt != null ? fmtBRL0(cardDebt) : "—"} color={C.red} />
