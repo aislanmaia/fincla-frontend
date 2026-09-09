@@ -137,14 +137,24 @@ const MONTH_ABBR = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set
  */
 export function selectClientEvolutionSeries(months, limit = 12) {
   const list = Array.isArray(months) ? months : [];
+  /* `Number(null) || 0` virava ZERO, e um mês sem cotação aparecia como uma
+     barra rente ao eixo — afirmando que o cliente não teve receita nem gasto
+     naquele mês, quando o que houve foi não conseguir converter as moedas dele
+     (#170). Aqui a ausência vira `null`, e o Recharts deixa a lacuna: um buraco
+     na série diz "não sabemos", uma barra zerada diz "foi zero". */
+  const numero = (v) => {
+    if (v === null || v === undefined) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
   return list.slice(-limit).map((m) => {
     const abbr = MONTH_ABBR[(Number(m?.month) || 1) - 1] ?? "";
     const yy = m?.year != null ? `/${String(m.year).slice(-2)}` : "";
     return {
       month: `${abbr}${yy}`,
-      income: Number(m?.total_income) || 0,
-      expenses: Number(m?.total_expenses) || 0,
-      balance: Number(m?.balance) || 0,
+      income: numero(m?.total_income),
+      expenses: numero(m?.total_expenses),
+      balance: numero(m?.balance),
     };
   });
 }

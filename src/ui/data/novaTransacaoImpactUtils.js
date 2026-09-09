@@ -23,6 +23,17 @@ export function buildImpactLineChartData(points, ymdInMonth, projectedEndTotal) 
   const bounds = monthBoundsFromYmd(ymdInMonth);
   if (!bounds) return [];
   const { dim } = bounds;
+
+  /* Um ponto `null` é o dia que não deu para converter — e não um dia de gasto
+     zero (#170). Aqui a curva é ACUMULADA: tratá-lo como zero não erraria só
+     aquele ponto, achataria todo o resto do mês para baixo, e a linha continuaria
+     com cara de linha. O backend apaga a série inteira quando falta uma cotação,
+     então um ponto nulo significa que nenhum deles responde: sem curva. */
+  const temPontoSemValor = (points || []).some(
+    (p) => p.total_expenses === null || p.total_expenses === undefined,
+  );
+  if (temPontoSemValor) return [];
+
   const byDay = new Map();
   for (const p of points || []) {
     const d = parseInt(String(p.date).slice(8, 10), 10);
