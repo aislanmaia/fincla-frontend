@@ -208,6 +208,8 @@ export function TransactionsFilterPanel({
             cards={cards}
             valueMin={filter.valueMin}
             valueMax={filter.valueMax}
+            valueCurrency={filter.valueCurrency}
+            setValueCurrency={filter.setValueCurrency}
             setValueMin={filter.setValueMin}
             setValueMax={filter.setValueMax}
             rec={filter.rec}

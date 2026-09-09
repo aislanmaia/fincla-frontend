@@ -585,6 +585,13 @@ export interface ListTransactionsQuery {
   date_end?: string;
   value_min?: number;
   value_max?: number;
+  /**
+   * Moeda em que a faixa acima é lida (ex.: `"EUR"`). Sem ela a faixa vale para
+   * TODA moeda — `100–249,99` traz tanto 100 reais quanto 100 euros. Mande a
+   * `currency` da barra clicada no histograma, senão a faceta promete uma
+   * seleção que a lista não entrega.
+   */
+  value_currency?: string;
   recurring?: boolean;
   page?: number;
   limit?: number;
@@ -617,6 +624,14 @@ export interface FacetOption {
  * `value_min=undefined` e a barra traria o conjunto errado.
  */
 export interface FacetValueBucket {
+  /**
+   * A moeda DESTA barra. O histograma é segmentado por moeda, nunca convertido:
+   * os limites são clicáveis e viram `value_min`/`value_max`, e um limite
+   * convertido selecionaria linhas diferentes amanhã, quando a taxa mudasse.
+   * O mesmo intervalo volta uma vez por moeda presente no filtro — mande esta
+   * moeda como `value_currency` ao clicar.
+   */
+  currency: string;
   from: number | null;
   to: number | null;
   count: number;
@@ -685,6 +700,13 @@ export interface TransactionsSummaryQuery {
   date_end?: string;
   value_min?: number;
   value_max?: number;
+  /**
+   * Moeda em que a faixa acima é lida (ex.: `"EUR"`). Sem ela a faixa vale para
+   * TODA moeda — `100–249,99` traz tanto 100 reais quanto 100 euros. Mande a
+   * `currency` da barra clicada no histograma, senão a faceta promete uma
+   * seleção que a lista não entrega.
+   */
+  value_currency?: string;
   /** `true` = só transações recorrentes; `false` = só não recorrentes */
   recurring?: boolean;
   /** Mesmo eixo de `ListTransactionsQuery.settled` — mande junto com o da lista. */

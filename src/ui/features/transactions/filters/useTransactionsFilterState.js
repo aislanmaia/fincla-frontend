@@ -23,6 +23,7 @@ import { DEFAULT_SORT, sortItems as sortItemsFn } from "./search/sortModel.js";
  *   settlement:  "todas" | "pagas" | "a-pagar"  (eixo de liquidação -> ?settled=)
  *   valueMin:    string (BRL parseável, vazio = sem mínimo)
  *   valueMax:    string
+ *   valueCurrency: string (moeda em que a faixa acima é lida; vazio = qualquer uma)
  *   sort:        Array<{ field, dir }>
  *
  * Esse hook não conhece a API: devolve o snapshot atual + setters. A página decide
@@ -44,6 +45,9 @@ export const DEFAULT_FILTER_STATE = Object.freeze({
   rec: "any",
   valueMin: "",
   valueMax: "",
+  // A faixa de valor é lida NUMA moeda. Vazio significa "qualquer uma" — que é o
+  // caso de toda organização de moeda única, e por isso nada muda para ela.
+  valueCurrency: "",
   settlement: "todas",
 });
 
@@ -145,7 +149,7 @@ export function useTransactionsFilterState({
         case "cartao":
           return { ...prev, cardSel: [] };
         case "valor":
-          return { ...prev, valueMin: "", valueMax: "" };
+          return { ...prev, valueMin: "", valueMax: "", valueCurrency: "" };
         case "recorrencia":
           return { ...prev, rec: DEFAULT_FILTER_STATE.rec };
         case "situacao":
@@ -312,6 +316,7 @@ export function useTransactionsFilterState({
     setSettlement: (v) => setField("settlement", v),
     setValueMin: (v) => setField("valueMin", v),
     setValueMax: (v) => setField("valueMax", v),
+    setValueCurrency: (v) => setField("valueCurrency", v),
     setSort,
     setField,
     // bulk

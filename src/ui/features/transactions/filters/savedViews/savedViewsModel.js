@@ -46,6 +46,7 @@ export function normalizeViewSnapshot(snapshot) {
       rec: "any",
       valueMin: "",
       valueMax: "",
+      valueCurrency: "",
       settlement: "todas",
       search: "",
       sort: JSON.stringify(DEFAULT_SORT),
@@ -66,6 +67,9 @@ export function normalizeViewSnapshot(snapshot) {
     rec: snapshot.rec ?? "any",
     valueMin: snapshot.valueMin ?? "",
     valueMax: snapshot.valueMax ?? "",
+    // A moeda viaja com a faixa: uma visão salva que restaurasse "100 a 249,99"
+    // sem ela selecionaria linhas de outra moeda quando fosse reaberta.
+    valueCurrency: snapshot.valueCurrency ?? "",
     // Sem isto `viewSnapshotsEqual` ignora a Situação: com uma view ativa, trocar
     // para "A pagar" não marcaria a view como suja, o CTA "Salvar alterações" nunca
     // apareceria e a mudança seria descartada em silêncio ao desaplicar a view.
