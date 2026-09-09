@@ -10,11 +10,28 @@ export function ValuePanel({
   valueMax,
   setValueMin,
   setValueMax,
+  valueCurrency = "",
+  setValueCurrency = () => {},
   counts,
   onClose,
   compact = false,
 }) {
-  const buckets = counts?.buckets;
+  /* O histograma vem SEGMENTADO por moeda (#170): cada faixa volta uma vez por
+     moeda presente no filtro. Empilhar as barras das duas seria a mesma soma
+     errada que o backend acabou de parar de fazer — e os limites são clicáveis,
+     então a barra tem de valer numa moeda só para o clique entregar o que ela
+     conta. Organização de moeda única vê exatamente o que via antes. */
+  const todos = counts?.buckets;
+  const moedas = Array.isArray(todos)
+    ? [...new Set(todos.map((b) => b.currency || "BRL"))].sort()
+    : [];
+  const moedaAtiva = (valueCurrency && moedas.includes(valueCurrency) ? valueCurrency : moedas[0]) || "BRL";
+  const varias = moedas.length > 1;
+  const buckets = Array.isArray(todos)
+    ? todos.filter((b) => (b.currency || "BRL") === moedaAtiva)
+    : todos;
+  const cifrao = simboloDaMoeda(moedaAtiva);
+  const rotulo = (b) => bucketLabel(b, cifrao);
   const peak = Array.isArray(buckets) ? Math.max(1, ...buckets.map((b) => b.count)) : 1;
 
   /**
@@ -32,10 +49,14 @@ export function ValuePanel({
     if (soEla) {
       setValueMin("");
       setValueMax("");
+      setValueCurrency("");
       return;
     }
     setValueMin(b.from == null ? "" : formatBrl(limiteRedondo(b.from)));
     setValueMax(b.to == null ? "" : formatBrl(limiteRedondo(b.to)));
+    // Só quando há mais de uma moeda: numa organização de moeda única a faixa
+    // já é inequívoca, e mandar a moeda seria estreitar sem ninguém ter pedido.
+    setValueCurrency(varias ? moedaAtiva : "");
   };
 
   const arrastoRef = useRef(null);
@@ -63,6 +84,7 @@ export function ValuePanel({
     return {
       min: primeiro.from == null ? "" : formatBrl(limiteRedondo(primeiro.from)),
       max: ultimo.to == null ? "" : formatBrl(limiteRedondo(ultimo.to)),
+      currency: varias ? moedaAtiva : "",
     };
   };
 
@@ -78,6 +100,7 @@ export function ValuePanel({
         if (faixa) {
           setValueMin(faixa.min);
           setValueMax(faixa.max);
+          setValueCurrency(faixa.currency || "");
         }
         return null;
       });
@@ -88,7 +111,7 @@ export function ValuePanel({
       window.removeEventListener("pointerup", solta);
       window.removeEventListener("pointercancel", solta);
     };
-  }, [setValueMin, setValueMax]);
+  }, [setValueMin, setValueMax, setValueCurrency]);
 
   const edges = Array.isArray(buckets) ? bucketEdges(buckets, min, max) : { first: -1, last: -1 };
   const temBarras = Array.isArray(buckets) && buckets.some((b) => b.count > 0);
@@ -101,9 +124,9 @@ export function ValuePanel({
      transação de exatos R$ 50,00 entrar no recorte, que é justamente o que
      "até R$ 50" promete. */
   const ATALHOS = [
-    { label: "até R$ 50", from: null, to: 50 },
-    { label: "R$ 50–250", from: 50, to: 250 },
-    { label: "acima de R$ 250", from: 250, to: null },
+    { label: `até ${cifrao} 50`, from: null, to: 50 },
+    { label: `${cifrao} 50–250`, from: 50, to: 250 },
+    { label: `acima de ${cifrao} 250`, from: 250, to: null },
   ];
   /* Quantas transações cada atalho traria. Conta só as barras INTEIRAMENTE
      dentro do intervalo, não as que ele apenas toca: com atalhos em números
@@ -126,10 +149,12 @@ export function ValuePanel({
     if (atalhoAtivo(a)) {
       setValueMin("");
       setValueMax("");
+      setValueCurrency("");
       return;
     }
     setValueMin(a.from == null ? "" : formatBrl(a.from));
     setValueMax(a.to == null ? "" : formatBrl(a.to));
+    setValueCurrency(varias ? moedaAtiva : "");
   };
 
   return (
@@ -140,6 +165,46 @@ export function ValuePanel({
         onClose={onClose}
         compact={compact}
       />
+
+      {/* Uma organização com contas em mais de uma moeda tem um histograma POR
+          moeda. As abas existem para a pessoa escolher qual está lendo — sem
+          elas, as barras das duas apareceriam lado a lado e "de 100 a 249,99"
+          descreveria dois conjuntos ao mesmo tempo. */}
+      {varias && (
+        <div
+          role="tablist"
+          aria-label="Moeda da faixa de valor"
+          style={{ display: "flex", gap: 6, marginBottom: 10 }}
+        >
+          {moedas.map((m) => {
+            const on = m === moedaAtiva;
+            return (
+              <button
+                type="button"
+                key={m}
+                role="tab"
+                aria-selected={on}
+                onClick={() => setValueCurrency(m)}
+                style={{
+                  ...G,
+                  ...MONO,
+                  height: 26,
+                  padding: "0 10px",
+                  borderRadius: 99,
+                  border: `1px solid ${on ? T.ink : T.border}`,
+                  background: on ? T.ink : T.surface,
+                  color: on ? "#fff" : T.inkMid,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                {m}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* O histograma vem ANTES dos campos. Pedir "valor mínimo" a quem não
           conhece a distribuição dos próprios gastos é pedir um chute; com as
@@ -184,7 +249,7 @@ export function ValuePanel({
           {buckets.map((b, i) => {
             const dentro = temFaixa && isBucketInRange(b, min, max);
             const ponta = dentro && (i === edges.first || i === edges.last);
-            const label = bucketLabel(b);
+            const label = rotulo(b);
             return (
               <button
                 type="button"
@@ -267,7 +332,7 @@ export function ValuePanel({
         >
           {buckets.map((b) => (
             <span
-              key={bucketLabel(b)}
+              key={rotulo(b)}
               style={{
                 ...G,
                 ...MONO,
@@ -354,13 +419,32 @@ function formatBrl(n) {
   return n.toFixed(2).replace(".", ",");
 }
 
-function bucketLabel(b) {
+export function bucketLabel(b, cifrao = "R$") {
   // Rótulos em números redondos, pelo mesmo motivo dos campos.
   const de = limiteRedondo(b.from);
   const ate = limiteRedondo(b.to);
-  if (de == null) return `Até R$ ${formatBrl(ate)}`;
-  if (ate == null) return `R$ ${formatBrl(de)} ou mais`;
-  return `R$ ${formatBrl(de)} a ${formatBrl(ate)}`;
+  if (de == null) return `Até ${cifrao} ${formatBrl(ate)}`;
+  if (ate == null) return `${cifrao} ${formatBrl(de)} ou mais`;
+  return `${cifrao} ${formatBrl(de)} a ${formatBrl(ate)}`;
+}
+
+/**
+ * O símbolo da moeda, para o rótulo da barra não dizer "R$" sobre euros.
+ *
+ * Sai do próprio `Intl` em vez de um mapa escrito à mão: o registro de moedas do
+ * backend cresce, e um mapa envelheceria calado — o código da moeda como último
+ * recurso é feio, mas nunca é mentira.
+ */
+export function simboloDaMoeda(codigo) {
+  try {
+    const partes = new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: codigo,
+    }).formatToParts(0);
+    return partes.find((p) => p.type === "currency")?.value || codigo;
+  } catch (_e) {
+    return codigo;
+  }
 }
 
 function bucketShortLabel(b) {

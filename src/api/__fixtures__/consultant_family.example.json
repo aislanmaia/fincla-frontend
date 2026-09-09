@@ -15,7 +15,12 @@
     "total_transactions": 412,
     "organizations_count": 2,
     "period_start": "2026-01-01",
-    "period_end": "2026-06-30"
+    "period_end": "2026-06-30",
+    "consolidation": {
+      "target_currency": "BRL",
+      "rates": [],
+      "unavailable": null
+    }
   },
   "financial_health_index": {
     "index": 61.0,

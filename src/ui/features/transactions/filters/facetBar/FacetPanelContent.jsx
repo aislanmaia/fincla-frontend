@@ -47,6 +47,8 @@ export function FacetPanelContent({
   // value
   valueMin,
   valueMax,
+  valueCurrency,
+  setValueCurrency,
   setValueMin,
   setValueMax,
   // recurrence
@@ -141,6 +143,8 @@ export function FacetPanelContent({
         <ValuePanel
           valueMin={valueMin}
           valueMax={valueMax}
+          valueCurrency={valueCurrency}
+          setValueCurrency={setValueCurrency}
           setValueMin={setValueMin}
           setValueMax={setValueMax}
           counts={counts}

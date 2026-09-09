@@ -159,6 +159,11 @@ export function filtersToLegacyParams(
     customTo: state.customTo,
     sortBy: mapSortToLegacy(state.sort),
     ...mapValueRangeToLegacy(state.valueMin, state.valueMax),
+    // A moeda só viaja com uma faixa: sozinha ela não estreita nada, e mandá-la
+    // mudaria o conjunto sem que ninguém tivesse pedido um recorte.
+    ...(state.valueCurrency && (state.valueMin || state.valueMax)
+      ? { valueCurrency: state.valueCurrency }
+      : {}),
     recurring: mapRecToLegacy(state.rec),
     // Só viaja quando é "all": "any" é o default do backend, e mandá-lo
     // explicitamente só engorda a query e a assinatura de cache.

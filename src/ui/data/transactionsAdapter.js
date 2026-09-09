@@ -750,6 +750,7 @@ export function buildTransactionsQuery({
   sortBy = "date-desc",
   valueMin,
   valueMax,
+  valueCurrency,
   tagMatch,
   recurring,
   settlement = "todas",
@@ -769,6 +770,10 @@ export function buildTransactionsQuery({
     ...resolveDateRange(period, customFrom, customTo),
     ...(valueMin != null ? { value_min: valueMin } : {}),
     ...(valueMax != null ? { value_max: valueMax } : {}),
+    // A faixa de valor é lida NUMA moeda (#170). Sem isto, clicar na barra "de
+    // 100 a 249,99" do histograma de euro traria também os 100 reais — a faceta
+    // prometeria uma seleção que a lista não entrega.
+    ...(valueCurrency ? { value_currency: valueCurrency } : {}),
     ...(tagMatch === "all" ? { tag_match: "all" } : {}),
     ...(recurring != null ? { recurring } : {}),
     ...resolveSettlement(settlement),
@@ -858,6 +863,7 @@ export function buildTransactionsSummaryQuery({
   customTo = "",
   valueMin,
   valueMax,
+  valueCurrency,
   tagMatch,
   recurring,
   settlement = "todas",
@@ -876,6 +882,10 @@ export function buildTransactionsSummaryQuery({
     ...resolveDateRange(period, customFrom, customTo),
     ...(valueMin != null ? { value_min: valueMin } : {}),
     ...(valueMax != null ? { value_max: valueMax } : {}),
+    // A faixa de valor é lida NUMA moeda (#170). Sem isto, clicar na barra "de
+    // 100 a 249,99" do histograma de euro traria também os 100 reais — a faceta
+    // prometeria uma seleção que a lista não entrega.
+    ...(valueCurrency ? { value_currency: valueCurrency } : {}),
     // Mesmo eixo da lista, de propósito: sem isso o card de totais somaria todas as
     // linhas enquanto a lista abaixo mostra só o subconjunto filtrado, e o usuário
     // ficaria olhando um total que nenhuma linha visível fecha.

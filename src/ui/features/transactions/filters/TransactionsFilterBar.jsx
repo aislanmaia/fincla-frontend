@@ -344,6 +344,8 @@ export function TransactionsFilterBar({
                 // value
                 valueMin={filter.valueMin}
                 valueMax={filter.valueMax}
+                valueCurrency={filter.valueCurrency}
+                setValueCurrency={filter.setValueCurrency}
                 setValueMin={filter.setValueMin}
                 setValueMax={filter.setValueMax}
                 // rec
