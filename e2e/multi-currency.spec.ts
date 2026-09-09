@@ -128,14 +128,40 @@ test.describe("organização com real e euro, SEM cotação", () => {
     ).toBeVisible();
   });
 
-  /* A tela de Simulação fica de fora deste e2e, e o motivo não é moeda: ela é
-     gated por `what_if_simulations`, e o usuário de e2e não tem o plano — a spec
-     de simulação que já existe MOCKA a resposta por isso. Um e2e que mocasse a
-     resposta do backend não provaria nada sobre a conversão, que é o que está em
-     jogo aqui.
+  test("a Simulação avisa em vez de projetar, contra o backend de verdade", async ({
+    page,
+  }) => {
+    /* Esta tela quase ficou de fora por uma afirmação minha que era FALSA: a de
+       que ela é gated por `what_if_simulations` e o usuário de e2e não teria o
+       plano. A `aa055_single_individual_plan` unificou o catálogo num plano só
+       que INCLUI essa feature — conferido chamando o endpoint, que responde 200.
+       A spec de simulação antiga mocka a resposta porque foi escrita antes dessa
+       migration; aqui o backend é o de verdade, que é o ponto. */
+    await loginAsE2EOwner(page);
+    await page.goto("/planning/simulator");
 
-     O caminho está coberto duas vezes, e as duas verificadas por mutação:
-     `test_simulation_currency_api.py` prova que o endpoint devolve valores nulos
-     e veredito `unknown` sem cotação, e `SimulacaoPage.absence.rtl.test.jsx`
-     prova que a tela avisa e para de recomendar. */
+    // A página guarda cenários só em memória, e sem um cenário ativo ela nem
+    // chama a simulação.
+    await page.getByRole("button", { name: /Criar primeiro cenário|Novo cenário/i }).first().click();
+    // O botão nasce desabilitado: o cenário precisa de nome.
+    await page.getByPlaceholder("Ex: Compra do notebook novo").fill("Cenário multi-moeda");
+    await page.getByRole("button", { name: /Criar cenário/i }).first().click();
+
+    /* A projeção sai de recorrência: o seed tem receita recorrente em real e
+       despesa recorrente em euro, então ela PRECISA converter uma na outra. Sem
+       taxa não há projeção — e o veredito, que antes vinha calculado sobre a soma
+       empilhada, agora não vem. */
+    await expect(page.getByText(/Sem projeção nesta simulação/).first()).toBeVisible({
+      timeout: 30_000,
+    });
+    // E nenhuma recomendação tirada de um cenário que ninguém calculou.
+    await expect(page.getByText(/dentro da margem segura/i)).toHaveCount(0);
+
+    /* O que ESTE caso prova é a integração: endpoint real → página real → aviso.
+       A mutação que o derruba é no BACKEND (tirar o caminho da ausência de
+       `simulate_financial_impact`), e foi conferida. Mutar a guarda do frontend
+       NÃO o derruba, e isso não é falha do teste: com o cenário vazio as
+       recomendações caem no texto padrão dos dois jeitos. A guarda do frontend
+       tem prova própria, por mutação, em `SimulacaoPage.absence.rtl.test.jsx`. */
+  });
 });
