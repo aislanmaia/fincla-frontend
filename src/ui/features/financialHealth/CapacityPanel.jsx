@@ -5,20 +5,41 @@ import { PageTitle, Card } from "../../components/primitives";
 import { useEconomyCapacityData } from "./useEconomyCapacityData.js";
 
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+
+/**
+ * Dinheiro, ou um travessão — nunca um zero de consolo.
+ *
+ * `Number(null || 0)` devolvia `0`, e a tela mostrava "R$ 0,00" para o valor que o
+ * backend deliberadamente NÃO afirmou: quando falta cotação para converter as moedas
+ * do cliente, ele manda `null` justamente para não inventar um número. Trazer o zero
+ * de volta aqui desfazia isso na última camada, e "R$ 0,00" afirma que a pessoa não
+ * tem nada — o oposto de "nós é que não sabemos ler".
+ */
 function formatBRL(v) {
-  return brl.format(Number(v || 0));
+  return v === null || v === undefined ? "—" : brl.format(Number(v));
+}
+
+/** Formata uma moeda qualquer: a quebra vem com a moeda de cada fatia. */
+function formatMoney(valor, moeda) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: moeda || "BRL" }).format(
+    Number(valor),
+  );
 }
 
 const TREND = {
   increasing: { label: "↗ crescente", color: T.green, bg: T.greenLight },
   stable: { label: "→ estável", color: T.inkMid, bg: T.grayLight },
   decreasing: { label: "↘ decrescente", color: T.red, bg: T.redLight },
+  // "estável" é uma AFIRMAÇÃO sobre a direção do gasto. Quando falta cotação, o
+  // backend manda `unknown` justamente para não afirmar — e o `|| TREND.stable` que
+  // estava aqui afirmava por ele.
+  unknown: { label: "— sem tendência", color: T.inkLight, bg: T.grayLight },
 };
 
 const cap = { ...G, fontSize: 11, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: T.inkLight };
 
 function TrendChip({ trend }) {
-  const t = TREND[trend] || TREND.stable;
+  const t = TREND[trend] || TREND.unknown;
   return (
     <span style={{ ...G, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, borderRadius: 9999, padding: "3px 9px", color: t.color, background: t.bg }}>
       {t.label}
@@ -26,8 +47,52 @@ function TrendChip({ trend }) {
   );
 }
 
+/**
+ * Debaixo do total: a taxa que o produziu, ou — quando ele não existe — o que
+ * realmente há, por moeda.
+ *
+ * O backend manda os dois lados de propósito. Sem este componente, o caso "não deu
+ * para converter" chegava à tela como um travessão sozinho, e a pessoa não tinha como
+ * saber que os números existem, só não somam.
+ */
+function BreakdownOrRate({ data }) {
+  const recibo = data.consolidation;
+  const semTotal = data.avg_expense === null || data.avg_expense === undefined;
+
+  if (!semTotal) {
+    const taxas = recibo?.rates ?? [];
+    if (taxas.length === 0) return null;
+    return (
+      <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 4 }}>
+        {taxas.map((r) => `1 ${r.base} = ${r.rate} ${r.quote} (${r.quoted_on})`).join(" · ")}
+      </div>
+    );
+  }
+
+  const fatias = data.avg_expense_by_currency ?? [];
+  return (
+    <div style={{ marginTop: 6 }}>
+      {fatias.map((f) => (
+        <div key={f.currency} style={{ ...G, ...NUM, fontSize: 15, fontWeight: 700 }}>
+          {formatMoney(f.amount, f.currency)}
+        </div>
+      ))}
+      {recibo?.unavailable ? (
+        <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 4 }}>
+          Não foi possível converter para uma moeda só.
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function MonthBars({ months }) {
-  const maxAbs = months.reduce((m, p) => Math.max(m, Math.abs(Number(p.surplus || 0))), 0) || 1;
+  // `p.surplus` pode ser `null` (sem cotação). `Number(null)` é 0, e uma barra de
+  // altura zero afirma "este mês fechou no zero" — não "não sabemos ler este mês".
+  const maxAbs = months.reduce(
+    (m, p) => (p.surplus === null || p.surplus === undefined ? m : Math.max(m, Math.abs(Number(p.surplus)))),
+    0,
+  ) || 1;
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {months.map((p) => {
@@ -88,6 +153,7 @@ export function CapacityPanel({ organizationId, dataMode = "live", months = 3 })
               <div style={{ ...G, ...NUM, fontSize: 34, fontWeight: 800, letterSpacing: "-0.02em", color: surplusColor, marginTop: 8 }}>
                 {formatBRL(data.avg_surplus)}
               </div>
+              <BreakdownOrRate data={data} />
               <div style={{ ...G, fontSize: 12, color: T.inkLight, marginTop: 4 }}>{windowCopy}</div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 16 }}>
                 <div>

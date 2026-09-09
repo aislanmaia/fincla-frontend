@@ -6,8 +6,17 @@ import { useFinancialHealthData } from "../features/health/useFinancialHealthDat
 import { shouldUseRealData } from "../dataMode.js";
 
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
-const fmt = (v) => brl.format(Number(v || 0));
-const pct = (v) => `${Math.round(Number(v || 0) * 100)}%`;
+// Dinheiro, ou um travessão — nunca um zero de consolo. `Number(null || 0)` devolvia
+// `0`, e a tela mostrava "R$ 0,00" para o valor que o backend deliberadamente NÃO
+// afirmou: sem cotação para converter as moedas do cliente, ele manda `null` para não
+// inventar um número. "R$ 0,00" diz que a pessoa não tem nada — o oposto de "nós é
+// que não sabemos ler".
+const fmt = (v) => (v === null || v === undefined ? "—" : brl.format(Number(v)));
+const pct = (v) => (v === null || v === undefined ? "—" : `${Math.round(Number(v) * 100)}%`);
+const money = (valor, moeda) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: moeda || "BRL" }).format(
+    Number(valor),
+  );
 const cap = { ...G, fontSize: 11, fontWeight: 700, letterSpacing: "0.09em", textTransform: "uppercase", color: T.inkLight };
 
 const MOCK = {
@@ -18,6 +27,12 @@ const MOCK = {
 };
 
 function scoreBand(s) {
+  // `null` = não deu para calcular. Sem esta guarda, `null >= 70` é falso e
+  // `null >= 40` também, e a tela pintava "Em risco" de VERMELHO para alguém sobre
+  // quem não sabemos nada — um diagnóstico inventado, que é o pior caso possível.
+  if (s === null || s === undefined) {
+    return { color: T.inkLight, bg: T.grayLight, label: "Sem diagnóstico" };
+  }
   if (s >= 70) return { color: T.green, bg: T.greenLight, label: "Boa saúde" };
   if (s >= 40) return { color: T.amber, bg: T.amberLight, label: "Atenção" };
   return { color: T.red, bg: T.redLight, label: "Em risco" };
@@ -25,6 +40,9 @@ function scoreBand(s) {
 function riskBadge(r) {
   if (r === "high") return { color: T.red, bg: T.redLight, label: "Fluxo em risco" };
   if (r === "medium") return { color: T.amber, bg: T.amberLight, label: "Atenção no fluxo" };
+  // "Fluxo saudável" era o `else` de tudo. Com `unknown` do backend, ele afirmaria
+  // saúde sobre um fluxo que não foi possível avaliar.
+  if (r === "unknown") return { color: T.inkLight, bg: T.grayLight, label: "Fluxo não avaliado" };
   return { color: T.green, bg: T.greenLight, label: "Fluxo saudável" };
 }
 function commitColor(c) {
@@ -37,7 +55,10 @@ function ScoreRing({ score }) {
   const band = scoreBand(score);
   const r = 54;
   const circ = 2 * Math.PI * r;
-  const off = circ * (1 - Math.max(0, Math.min(100, score)) / 100);
+  // Sem score, o anel fica vazio em vez de cheio: `Math.min(100, null)` é 0, o que
+  // desenharia o arco de um score zero — visualmente idêntico a "péssimo".
+  const semScore = score === null || score === undefined;
+  const off = semScore ? circ : circ * (1 - Math.max(0, Math.min(100, score)) / 100);
   return (
     <div style={{ position: "relative", width: 132, height: 132, flex: "0 0 auto" }}>
       <svg width="132" height="132" viewBox="0 0 132 132">
@@ -46,8 +67,10 @@ function ScoreRing({ score }) {
           strokeDasharray={circ} strokeDashoffset={off} transform="rotate(-90 66 66)" />
       </svg>
       <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-        <span style={{ ...G, ...NUM, fontSize: 34, fontWeight: 800, letterSpacing: "-0.03em", color: band.color, lineHeight: 1 }}>{score}</span>
-        <span style={{ ...G, fontSize: 11, color: T.inkLight, fontWeight: 600 }}>de 100</span>
+        <span style={{ ...G, ...NUM, fontSize: 34, fontWeight: 800, letterSpacing: "-0.03em", color: band.color, lineHeight: 1 }}>{semScore ? "—" : score}</span>
+        <span style={{ ...G, fontSize: 11, color: T.inkLight, fontWeight: 600 }}>
+          {semScore ? "sem cotação" : "de 100"}
+        </span>
       </div>
     </div>
   );
