@@ -84,6 +84,72 @@ describe("ConsultantClientOverviewTab", () => {
 });
 
 /**
+ * A renda estimada do perfil, na tela (#205).
+ *
+ * O campo chega da API como `{amount, currency}` desde a #178, sai da fronteira
+ * como número + `estimated_income_currency`, e é aqui que a unidade importa: a
+ * moeda é a base da organização DO CLIENTE. Formatar a renda de um cliente
+ * português como "R$ 3.200,00" é número certo com unidade errada — o defeito que
+ * o épico do dinheiro canônico existe para matar.
+ */
+describe("<ConsultantClientOverviewTab> — renda estimada do perfil (#205)", () => {
+  const comRenda = (over) => ({
+    loading: false,
+    error: "",
+    hasLoaded: true,
+    profile: { has_profile: true, notes: "Nota", tags: [], priority: false, ...over },
+  });
+
+  const renderizar = (profile) =>
+    render(
+      <ConsultantClientOverviewTab
+        client={client}
+        health={healthState}
+        categories={categoriesState}
+        goals={goalsState}
+        profile={profile}
+      />,
+    );
+
+  it("desenha o valor na moeda que veio com ele", () => {
+    renderizar(comRenda({ estimated_income: 8000, estimated_income_currency: "BRL" }));
+    expect(screen.getByText("Renda estimada")).toBeInTheDocument();
+    const valor = screen.getByText(/8\.000,00/);
+    expect(valor.textContent).toContain("R$");
+  });
+
+  it("cliente em euro NÃO é desenhado em real", () => {
+    renderizar(comRenda({ estimated_income: 3200, estimated_income_currency: "EUR" }));
+    const valor = screen.getByText(/3\.200,00/);
+    expect(valor.textContent).toContain("€");
+    expect(valor.textContent).not.toContain("R$");
+  });
+
+  it("renda ausente não vira R$ 0,00 — o rótulo simplesmente não aparece", () => {
+    // `null` = "não sabemos": sem renda cadastrada, OU moeda base do cliente
+    // ilegível (o backend omite o valor em vez de inventar a unidade).
+    renderizar(comRenda({ estimated_income: null, estimated_income_currency: null }));
+    expect(screen.queryByText("Renda estimada")).toBeNull();
+    expect(screen.queryByText(/0,00/)).toBeNull();
+  });
+
+  it("renda zero é um fato afirmado, e continua na tela", () => {
+    // Zero declarado não é ausência. Uma guarda por falsy apagaria este da tela.
+    renderizar(comRenda({ estimated_income: 0, estimated_income_currency: "BRL" }));
+    expect(screen.getByText("Renda estimada")).toBeInTheDocument();
+    expect(screen.getByText(/0,00/).textContent).toContain("R$");
+  });
+
+  it("nem [object Object] nem NaN chegam à tela", () => {
+    // Regressão direta da declaração falsa: quem confiasse no tipo `string` e
+    // renderizasse o campo cru desenharia isto para o consultor.
+    renderizar(comRenda({ estimated_income: 8000, estimated_income_currency: "BRL" }));
+    expect(screen.queryByText(/object Object/)).toBeNull();
+    expect(screen.queryByText(/NaN/)).toBeNull();
+  });
+});
+
+/**
  * Uma revisão provou por mutação que as mudanças de RENDERIZAÇÃO desta correção não
  * tinham cobertura nenhuma: revertendo os dois trechos de JSX, a suíte continuava
  * verde. O texto do hint estava testado; o que o usuário VÊ, não.

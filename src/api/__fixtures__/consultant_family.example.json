@@ -213,5 +213,23 @@
     ],
     "total": 1,
     "as_of_date": "2026-06-30"
+  },
+  "client_profile": {
+    "organization_id": "3f7a1b2c-8d4e-4f10-9a55-2c6b7e0d1a33",
+    "has_profile": true,
+    "notes": "Cliente novo, foco em reserva",
+    "tags": [
+      "poupador",
+      "autonomo"
+    ],
+    "experience_level": "iniciante",
+    "main_goal": "Montar reserva",
+    "priority": true,
+    "phone": "(11) 90000-0000",
+    "occupation": "Autonoma",
+    "estimated_income": {
+      "amount": "8000.00",
+      "currency": "BRL"
+    }
   }
 }
