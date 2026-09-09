@@ -96,17 +96,29 @@ function MonthBars({ months }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       {months.map((p) => {
-        const s = Number(p.surplus || 0);
-        const pct = Math.max(4, (Math.abs(s) / maxAbs) * 100);
-        const color = s >= 0 ? T.green : T.red;
+        // O mês sem cotação não tem número NENHUM: `Number(null || 0)` é 0, e
+        // "R$ 0,00" com uma barra desenhada afirma que o mês fechou no zero —
+        // quando o que houve foi não conseguir ler o mês. Aqui ele mostra o
+        // travessão e a trilha vazia.
+        const semNumero = p.surplus === null || p.surplus === undefined;
+        const s = semNumero ? null : Number(p.surplus);
+        const pct = semNumero ? 0 : Math.max(4, (Math.abs(s) / maxAbs) * 100);
+        const color = !semNumero && s >= 0 ? T.green : T.red;
         return (
           <div key={`${p.year}-${p.month}`}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, fontSize: 12, marginBottom: 6 }}>
               <span style={{ ...G, color: T.inkMid, fontWeight: 600 }}>{p.month_name}</span>
-              <span style={{ ...G, ...NUM, fontWeight: 700, color: s >= 0 ? T.ink : T.red }}>{formatBRL(s)}</span>
+              <span
+                style={{ ...G, ...NUM, fontWeight: 700, color: semNumero ? T.inkLight : s >= 0 ? T.ink : T.red }}
+                title={semNumero ? "Sem cotação para converter este mês" : undefined}
+              >
+                {semNumero ? "—" : formatBRL(s)}
+              </span>
             </div>
             <div style={{ width: "100%", height: 8, borderRadius: 99, background: T.grayLight, overflow: "hidden" }}>
-              <div style={{ width: `${pct}%`, height: "100%", borderRadius: 99, background: color }} />
+              {semNumero ? null : (
+                <div style={{ width: `${pct}%`, height: "100%", borderRadius: 99, background: color }} />
+              )}
             </div>
           </div>
         );

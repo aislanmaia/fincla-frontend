@@ -28,6 +28,7 @@ import {
 import { M_MONO } from "../features/moodV4";
 import { useReportsData } from "../features/reports/useReportsData.js";
 import { EmptyState } from "../features/shellExtras";
+import { formatMoney } from "../features/accounts/accountMeta.js";
 import { listRecurringSeries } from "../../api/recurringSeries";
 import { shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 
@@ -545,6 +546,39 @@ export function RelatoriosPage({
         <PageTitle sans="Meus" serif="Relatórios" />
         <div style={{ ...G, fontSize:14, color:T.red, background:T.redLight, border:`1px solid ${T.red}22`, borderRadius:16, padding:"28px 24px" }}>
           {reportsData.error}
+        </div>
+      </div>
+    );
+  }
+
+  /* A organização tem contas em mais de uma moeda e faltou cotação: o backend
+     devolveu os totais como `null` de propósito, em vez de somar euro com real.
+     Esta tela inteira é feita de somas e percentuais desses totais — desenhar os
+     gráficos com `Number(null)` afirmaria um período de receita e gasto zero.
+     Então ela mostra o que REALMENTE há: a quebra por moeda, que não depende de
+     cotação nenhuma. */
+  if (shouldUseRealData && reportsData.currencyUnavailable) {
+    return (
+      <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
+        <PageTitle sans="Relatórios &" serif="Análises"/>
+        <div style={{ ...G, background:T.surface, border:`1px solid ${T.border}`, borderRadius:16, padding:"24px" }}>
+          <div style={{ ...G, fontSize:14, fontWeight:700, color:T.ink, marginBottom:6 }}>
+            Não foi possível converter para uma moeda só
+          </div>
+          <div style={{ ...G, fontSize:13, color:T.inkMid, marginBottom:16 }}>
+            {reportsData.currencyUnavailable}
+          </div>
+          {reportsData.byCurrency.length ? (
+            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+              {reportsData.byCurrency.map((f) => (
+                <div key={f.currency} style={{ display:"flex", justifyContent:"space-between", gap:12, fontSize:13 }}>
+                  <span style={{ ...G, fontWeight:700, color:T.inkMid }}>{f.currency}</span>
+                  <span style={{ ...G, color:T.green }}>+{formatMoney(f.income, f.currency)}</span>
+                  <span style={{ ...G, color:T.red }}>−{formatMoney(f.expenses, f.currency)}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
     );

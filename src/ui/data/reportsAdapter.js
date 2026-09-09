@@ -225,7 +225,35 @@ export async function fetchReportsAnalytics(organizationId, periodo) {
     compositionWindowLabel: monthlyData[monthlyData.length - 1]?.mes || null,
     waterfallRows,
     velocityDaily,
+    // Quando a organização tem contas em mais de uma moeda e falta cotação, o
+    // backend devolve os totais como `null` e diz por quê aqui. Sem ler isto, o
+    // `Number(null)` desta tela viraria `0` e o relatório inteiro afirmaria que
+    // a pessoa não teve receita nem gasto nenhum no período.
+    currencyUnavailable: monthlyResponse.currency_unavailable ?? null,
+    byCurrency: sumMonthsByCurrency(monthlyResponse.months),
   };
+}
+
+/**
+ * O que os meses tiveram, por moeda, sem conversão nenhuma.
+ *
+ * Somar valores da MESMA moeda é aritmética, não conversão — é o que realmente há
+ * e não depende de cotação de terceiro. É isto que a tela mostra no lugar dos
+ * gráficos quando o total não pôde ser produzido.
+ */
+export function sumMonthsByCurrency(months) {
+  const acc = new Map();
+  for (const mes of months ?? []) {
+    for (const fatia of mes?.by_currency ?? []) {
+      const moeda = fatia?.currency;
+      if (!moeda) continue;
+      const atual = acc.get(moeda) || { currency: moeda, income: 0, expenses: 0 };
+      atual.income += num(fatia.total_income);
+      atual.expenses += num(fatia.total_expenses);
+      acc.set(moeda, atual);
+    }
+  }
+  return [...acc.values()].sort((a, b) => a.currency.localeCompare(b.currency));
 }
 
 export async function downloadReportsCsvForUi(organizationId, periodo) {

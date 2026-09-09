@@ -15,6 +15,8 @@ const EMPTY_STATE = {
   compositionWindowLabel: null,
   waterfallRows: [],
   velocityDaily: [],
+  currencyUnavailable: null,
+  byCurrency: [],
 };
 
 export function useReportsData({
@@ -50,6 +52,8 @@ export function useReportsData({
           compositionWindowLabel: result.compositionWindowLabel,
           waterfallRows: result.waterfallRows ?? [],
           velocityDaily: result.velocityDaily ?? [],
+          currencyUnavailable: result.currencyUnavailable ?? null,
+          byCurrency: result.byCurrency ?? [],
         });
       })
       .catch((error) => {
