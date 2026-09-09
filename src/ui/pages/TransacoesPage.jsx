@@ -273,6 +273,28 @@ const catBg = (label) => `${catColor(label)}18`;
 
 const fmtBRL = v => "R$\u00a0" + Math.abs(v).toLocaleString("pt-BR",{minimumFractionDigits:2});
 
+/* O valor de uma LINHA na moeda dela, não na base da organização.
+ *
+ * A lista mostra lançamentos de contas em moedas diferentes lado a lado, e cada
+ * um é o dinheiro dele mesmo — nada aqui é agregado, então não há o que
+ * converter. Formatar tudo com "R$" fazia um gasto de 100 euros aparecer como
+ * "R$ 100,00": o número certo com a unidade errada, que é pior que um número
+ * faltando porque parece conferível.
+ *
+ * Sem moeda declarada cai no real, que é o que toda organização de moeda única
+ * sempre viu. */
+const fmtValorDaLinha = (v, moeda) => {
+  if (!moeda || moeda === "BRL") return fmtBRL(v);
+  try {
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: moeda,
+    }).format(Math.abs(v));
+  } catch {
+    return `${moeda}\u00a0${Math.abs(v).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`;
+  }
+};
+
 
 /**
  * Uma linha da lista, na grade do artefato.
@@ -493,7 +515,7 @@ const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
         data-tx-row={tx.id}
         aria-busy={busy || undefined}
         aria-expanded={isSelected}
-        aria-label={`${tx.desc}, ${isReceita ? "receita" : "despesa"} de ${fmtBRL(tx.val)} em ${tx.date}`}
+        aria-label={`${tx.desc}, ${isReceita ? "receita" : "despesa"} de ${fmtValorDaLinha(tx.val, tx.currency)} em ${tx.date}`}
         style={{ display:"grid", gridTemplateColumns:"28px minmax(0,1fr) auto",
           alignItems:"center", gap:10,
           /* `minHeight` e não `height`: com a terceira linha a altura cresce e um
@@ -564,7 +586,7 @@ const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
               número que a ação vai mudar. A linha não apaga nem se move — ela é
               a única coisa na tela que ainda vale olhar. */}
           {busy && <span className="fincla-spin" aria-hidden="true" />}
-          {!busy && (isReceita ? "+" : "−")}{!busy && fmtBRL(tx.val)}
+          {!busy && (isReceita ? "+" : "−")}{!busy && fmtValorDaLinha(tx.val, tx.currency)}
           {!busy && statusRing && (
             <span style={{ color:T.amber, display:"inline-flex", alignItems:"center" }}>
               <i aria-hidden="true" style={{ display:"inline-block", width:8, height:8,
@@ -614,7 +636,7 @@ const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
       tabIndex={isRovingStop ? 0 : -1}
       aria-busy={busy || undefined}
       aria-expanded={isSelected}
-      aria-label={`${tx.desc}, ${isReceita ? "receita" : "despesa"} de ${fmtBRL(tx.val)} em ${tx.date}`}
+      aria-label={`${tx.desc}, ${isReceita ? "receita" : "despesa"} de ${fmtValorDaLinha(tx.val, tx.currency)} em ${tx.date}`}
       style={{ display:"grid", gridTemplateColumns: columns,
         alignItems:"center", gap: dense ? 9 : 11,
         height: rowHeight,
@@ -876,7 +898,7 @@ const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
             a ação vai mudar, então é nele que o "aguarde" pertence. */}
         {busy
           ? <span className="fincla-spin" aria-hidden="true" />
-          : <>{isReceita ? "+" : "−"}{fmtBRL(tx.val)}</>}
+          : <>{isReceita ? "+" : "−"}{fmtValorDaLinha(tx.val, tx.currency)}</>}
       </div>
 
       {/* Situação: anel vazado, não ampulheta. O lançamento não está
@@ -1150,7 +1172,7 @@ const DetailPanel = ({
         <div style={{ fontSize:32, marginBottom:6 }}>{tx.icon}</div>
         <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:26, fontWeight:800,
           color: isReceita ? T.green : T.red, letterSpacing:"-0.02em" }}>
-          {isReceita ? "+" : "−"}{fmtBRL(tx.val)}
+          {isReceita ? "+" : "−"}{fmtValorDaLinha(tx.val, tx.currency)}
         </div>
         <div style={{ ...G, fontSize:13, color:T.inkMid, marginTop:4 }}>{tx.desc}</div>
       </div>
@@ -2591,6 +2613,19 @@ function TransacoesPageBody({
     ? transactionsData.summary.balance
     : totalReceita - totalDespesaBruto + totalEstorno;
   const filteredCount = canUseRemoteSummary ? transactionsData.total : filtered.length;
+
+  /* O resumo veio SEM total: a organização tem contas em mais de uma moeda e
+     faltou cotação, então o backend não somou (#170). Os KPIs abaixo derivam uns
+     dos outros por subtração, e `null - 0` é `0` — sem esta guarda a tela
+     mostrava três "R$ 0,00" para quem acabou de gastar, que é a afirmação
+     oposta. `TransactionsStats` já sabe desenhar a ausência: é o `unknown`. */
+  const resumoSemConversao = Boolean(
+    canUseRemoteSummary &&
+      transactionsData.summary &&
+      (transactionsData.summary.total_income == null ||
+        transactionsData.summary.total_expenses == null ||
+        transactionsData.summary.balance == null),
+  );
 
   /* Contagens por tipo. Em modo live vêm do summary — do FILTRO INTEIRO.
      Antes eram sempre contadas nas linhas carregadas, e como os totais vêm do
@@ -4558,7 +4593,7 @@ function TransacoesPageBody({
               aPagarCount={aPagarCount}
               aPagarDespesas={aPagarDespesas}
               saldoLiquidado={saldoLiquidado}
-              unknown={tagFilterBlocked || listNeverLoaded}
+              unknown={tagFilterBlocked || listNeverLoaded || resumoSemConversao}
               expanded={statsExpanded}
               onToggleExpanded={() => setStatsExpanded((v) => !v)}
               compactLabels={viewportWidth < 1400}

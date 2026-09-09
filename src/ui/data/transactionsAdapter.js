@@ -554,6 +554,11 @@ export function mapApiTransactionToUi(transaction) {
       ? Number(cardIdFromCharge)
       : null,
     val: signedVal,
+    // A moeda DESTA linha — a da conta em que ela caiu. Sem ela a lista formata
+    // tudo em real, e um gasto de 100 euros vira "R$ 100,00": número certo,
+    // unidade errada. `null` quando a resposta não a declara, e aí a tela cai na
+    // moeda base, que é o comportamento de toda organização de moeda única.
+    currency: transaction.value_currency ?? null,
     valAbsForEdit: pickAmountAbsForTransactionEdit(transaction),
     icon: pickTransactionIcon(transaction),
     rec: transaction.recurring,

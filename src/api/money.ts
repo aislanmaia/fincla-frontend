@@ -120,6 +120,22 @@ const QUEBRA_POR_MOEDA = /by_currency$/;
 const ehQuebraPorMoeda = (chave: string, valor: unknown): boolean =>
   QUEBRA_POR_MOEDA.test(chave) && Array.isArray(valor) && valor.every(isCanonicalMoney);
 
+/**
+ * Carimba `<campo>_currency` ao lado de um campo monetário, ANTES de desembrulhar.
+ *
+ * `unwrapMoney` colapsa `{amount, currency}` num número, e para um total isso é
+ * certo: a tela formata na moeda base e o backend já converteu tudo para ela. Mas
+ * a LINHA de uma transação não é um total — ela é o dinheiro dela mesma, na moeda
+ * da conta em que caiu. Sem este carimbo, um gasto de 100 euros chegava à lista
+ * como `100` e era desenhado "R$ 100,00": número certo, unidade errada, que é o
+ * defeito que o épico inteiro existe para matar.
+ */
+export const stampCurrency = <T extends Record<string, unknown>>(row: T, field: string): T => {
+  const valor = row?.[field];
+  const moeda = toCurrency(valor);
+  return moeda ? ({ ...row, [`${field}_currency`]: moeda } as T) : row;
+};
+
 export const unwrapMoney = <T,>(node: T): T => {
   if (isCanonicalMoney(node)) return toFiniteNumber(node) as T;
   if (Array.isArray(node)) return node.map((item) => unwrapMoney(item)) as T;

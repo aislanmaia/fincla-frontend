@@ -62,6 +62,17 @@ export default defineConfig({
       dependencies: ["smoke"],
     },
     {
+      // Os dois caminhos do épico multi-moeda no navegador. Semeia a própria
+      // organização (dois perfis), então não depende do `smoke`.
+      //
+      // Exige o backend com `QUOTATION_ENABLED=false`: o perfil sem taxa precisa
+      // que ninguém saia para a internet buscar a cotação que ele omitiu de
+      // propósito — senão o provedor devolve a taxa real e o caminho da ausência
+      // nunca é alcançado.
+      name: "multi-currency",
+      testMatch: "**/multi-currency.spec.ts",
+    },
+    {
       // Provisiona o próprio consultor e cliente via API; não depende do seed
       // do owner, então roda sem `smoke`.
       name: "consultant-ai-evaluation",

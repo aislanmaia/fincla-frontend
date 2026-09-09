@@ -4,7 +4,7 @@
 // `unwrapMoney` desembrulha em qualquer profundidade — enumerar campo a campo é
 // onde se esquece um, e um esquecido vira "R$ NaN" na tela.
 import apiClient from './client';
-import { unwrapMoney } from './money';
+import { stampCurrency, unwrapMoney } from './money';
 import {
   IDEMPOTENCY_KEY_HEADER,
   noteIdempotencySupportFromHeaders,
@@ -73,7 +73,14 @@ export const listTransactions = async (
     '/transactions',
     { params: filters, paramsSerializer: repeatArrayParams }
   );
-  return unwrapMoney(response.data);
+  // A moeda de CADA linha é preservada antes do desembrulho: ela é a da conta em
+  // que o lançamento caiu, e a lista mostra linhas de moedas diferentes lado a
+  // lado. Ver `stampCurrency`.
+  const bruto = response.data as PaginatedTransactionsResponse & { data?: unknown[] };
+  const comMoeda = Array.isArray(bruto?.data)
+    ? { ...bruto, data: bruto.data.map((linha) => stampCurrency(linha as unknown as Record<string, unknown>, 'value')) }
+    : bruto;
+  return unwrapMoney(comMoeda as PaginatedTransactionsResponse);
 };
 
 /**
