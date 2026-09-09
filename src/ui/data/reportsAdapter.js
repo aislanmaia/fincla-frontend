@@ -109,8 +109,11 @@ export function buildDriftData(response) {
     for (const category of response?.categories ?? []) {
       const labelPt = analyticsCategoryLabelPt(category);
       const raw = category.monthly_totals?.[monthIndex];
-      const mt = Number(raw);
-      row[labelPt] = Number.isFinite(mt) ? mt : 0;
+      // `null` é o mês que não deu para converter, e ele NÃO é zero: uma área
+      // rente ao eixo afirma que a categoria não teve gasto nenhum (#170). Com
+      // `null`, o Recharts deixa a lacuna, que é o que de fato sabemos.
+      const mt = raw === null || raw === undefined ? null : Number(raw);
+      row[labelPt] = mt !== null && Number.isFinite(mt) ? mt : null;
     }
 
     return row;

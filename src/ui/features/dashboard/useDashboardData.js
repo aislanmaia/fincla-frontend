@@ -310,19 +310,33 @@ export function mapCategory(category, prevTotalByTagId) {
   };
 }
 
-function buildRhythmChart(transactions, summary, rangeStartYmd, rangeEndYmd) {
+const RITMO_VAZIO = {
+  series: [],
+  dim: 1,
+  today: 1,
+  showTodayMarker: false,
+  refLabel: "Hoje",
+  progressSuffix: "",
+  rhythmMode: "daily",
+};
+
+export function buildRhythmChart(transactions, summary, rangeStartYmd, rangeEndYmd) {
   const startD = parseLocalYmd(rangeStartYmd);
   const endD = parseLocalYmd(rangeEndYmd);
-  if (!startD || !endD) {
-    return {
-      series: [],
-      dim: 1,
-      today: 1,
-      showTodayMarker: false,
-      refLabel: "Hoje",
-      progressSuffix: "",
-      rhythmMode: "daily",
-    };
+  if (!startD || !endD) return { ...RITMO_VAZIO };
+
+  /* O ritmo é DESENHADO SOBRE o total do período: `targetExpenses` escala a
+     curva real e `envelope` dá o teto da projeção. Quando a organização tem
+     contas em mais de uma moeda e faltou cotação, o backend manda esses totais
+     como `null` de propósito (#170) — e `?? 0` os transformava em zero, o que
+     achatava a projeção rente ao eixo e fazia a curva "real" cair no ramo de
+     fallback: a soma NOMINAL das transações do período, com euro empilhado em
+     real. Duas linhas erradas com aparência de gráfico.
+
+     Sem os totais não há sobre o que desenhar o ritmo, então ele não é
+     desenhado. Os outros cards do painel seguem normalmente. */
+  if (summary && (summary.total_expenses == null || summary.total_income == null)) {
+    return { ...RITMO_VAZIO };
   }
 
   const D = daysInclusive(startD, endD);
