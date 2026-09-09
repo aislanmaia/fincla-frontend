@@ -7,6 +7,7 @@ import {
   buildWaterfallRowsFromCategories,
   mapMonthlyEvolutionToUi,
   resolveReportMonths,
+  sumMonthsByCurrency,
   velocityPressureVsIdealAtDay,
 } from "../reportsAdapter.js";
 
@@ -159,5 +160,36 @@ describe("reportsAdapter", () => {
       310,
     );
     expect(velocityPressureVsIdealAtDay(daily)).toBe(300);
+  });
+});
+
+describe("quebra por moeda quando o total não converte (#170)", () => {
+  it("soma cada moeda em si mesma, e ordena por código", () => {
+    const meses = [
+      {
+        year: 2026, month: 2, by_currency: [
+          { currency: "EUR", total_income: "10.00", total_expenses: "4.00" },
+          { currency: "BRL", total_income: "100.00", total_expenses: "40.00" },
+        ],
+      },
+      {
+        year: 2026, month: 3, by_currency: [
+          { currency: "EUR", total_income: "5.50", total_expenses: "1.25" },
+        ],
+      },
+    ];
+
+    // Somar valores da MESMA moeda é aritmética; o que a tela nunca faz é
+    // atravessar moedas sem cotação — que é justamente o caso em que ela mostra
+    // esta quebra.
+    expect(sumMonthsByCurrency(meses)).toEqual([
+      { currency: "BRL", income: 100, expenses: 40 },
+      { currency: "EUR", income: 15.5, expenses: 5.25 },
+    ]);
+  });
+
+  it("sem quebra nenhuma, devolve lista vazia em vez de inventar zero", () => {
+    expect(sumMonthsByCurrency([{ year: 2026, month: 2 }])).toEqual([]);
+    expect(sumMonthsByCurrency(null)).toEqual([]);
   });
 });

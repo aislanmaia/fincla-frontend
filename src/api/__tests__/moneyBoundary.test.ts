@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import apiClient from '../client';
 import { getConsultantClients } from '../consultant';
-import { getFinancialHealth } from '../financialHealth';
+import { getEconomyCapacity, getFinancialHealth } from '../financialHealth';
 import { getGoalProjection, listGoalContributions, listGoals } from '../goals';
 import { getMonthlyPlan } from '../monthlyPlans';
 
@@ -28,7 +28,11 @@ vi.mock('../client', () => ({ default: { get: vi.fn(), post: vi.fn(), put: vi.fn
 
 const responde = (data: unknown) => vi.mocked(apiClient.get).mockResolvedValueOnce({ data } as never);
 
-/** Todo valor monetário que sobrou embrulhado, em qualquer profundidade. */
+/** Todo valor monetário que sobrou embrulhado, em qualquer profundidade.
+ *
+ * A quebra por moeda (`*_by_currency`) é a exceção declarada: ali o embrulho é o
+ * ponto — sem o código, `300` seria desenhado como trezentos reais. Ver `money.ts`.
+ */
 function sobraramEmbrulhados(node: unknown, caminho = ''): string[] {
   if (Array.isArray(node)) return node.flatMap((v, i) => sobraramEmbrulhados(v, `${caminho}[${i}]`));
   if (node !== null && typeof node === 'object') {
@@ -36,7 +40,9 @@ function sobraramEmbrulhados(node: unknown, caminho = ''): string[] {
     if (chaves.length === 2 && chaves.includes('amount') && chaves.includes('currency')) {
       return [caminho];
     }
-    return Object.entries(node).flatMap(([k, v]) => sobraramEmbrulhados(v, `${caminho}.${k}`));
+    return Object.entries(node).flatMap(([k, v]) =>
+      /by_currency$/.test(k) ? [] : sobraramEmbrulhados(v, `${caminho}.${k}`),
+    );
   }
   return [];
 }
@@ -74,6 +80,37 @@ describe('nenhum módulo devolve dinheiro embrulhado', () => {
   it('carteira do consultor', async () => {
     responde(consultantFamily.clients);
     expect(sobraramEmbrulhados(await getConsultantClients())).toEqual([]);
+  });
+});
+
+describe('a quebra por moeda atravessa a fronteira inteira (#170)', () => {
+  it('a capacidade de economia mantém o código de cada fatia', async () => {
+    responde({
+      avg_income: { amount: '5000.00', currency: 'BRL' },
+      avg_expense: null,
+      avg_surplus: null,
+      savings_rate: null,
+      trend: 'unknown',
+      months: [],
+      window_months: 3,
+      months_with_data: 0,
+      avg_expense_by_currency: [
+        { amount: '300.00', currency: 'USD' },
+        { amount: '4000.00', currency: 'BRL' },
+      ],
+      consolidation: { target_currency: 'BRL', rates: [], unavailable: 'USD/BRL: sem cotação' },
+    });
+
+    const capacidade = await getEconomyCapacity('org', 3);
+
+    // Sem isto a tela recebia `[300, 4000]` e desenhava dólar formatado como real
+    // — exatamente o caso para o qual a quebra existe.
+    expect(capacidade.avg_expense_by_currency).toEqual([
+      { amount: '300.00', currency: 'USD' },
+      { amount: '4000.00', currency: 'BRL' },
+    ]);
+    // E o total continua virando número, como todo o resto.
+    expect(capacidade.avg_income).toBe(5000);
   });
 });
 

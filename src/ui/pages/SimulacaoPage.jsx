@@ -485,8 +485,16 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
   const budgetOverride = cenario?.budgetOverride || null;
   const budgetAtivo    = budgetOverride !== null ? budgetOverride : apiBudgetBase;
 
-  const apiKpis     = simResult ? deriveKpisFromResponse(simResult, budgetAtivo) : null;
-  const apiChart    = simResult ? deriveChartDataFromResponse(simResult) : [];
+  /* A projeção não pôde ser calculada: a organização tem contas em mais de uma
+     moeda e faltou cotação, então o backend mandou os valores nulos e o veredito
+     `unknown` (#170). Toda derivação desta tela — KPIs, gráfico, riscos,
+     recomendações — passa por `num()`, e `Number(null)` é `0`: sem esta guarda a
+     página mostraria margem zero, "projeção ok" em verde e recomendações de corte
+     de gasto tiradas de um cenário que ninguém calculou. */
+  const semConsolidacao = Boolean(simResult?.currency_unavailable);
+  const simUsavel   = simResult && !semConsolidacao ? simResult : null;
+  const apiKpis     = simUsavel ? deriveKpisFromResponse(simUsavel, budgetAtivo) : null;
+  const apiChart    = simUsavel ? deriveChartDataFromResponse(simUsavel) : [];
   const [budgetEditing, setBudgetEditing] = useState(false);
   const [budgetInputVal, setBudgetInputVal] = useState("");
 
@@ -521,9 +529,9 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
   const restoreBudget   = () => { setBudgetOverride(null); setBudgetEditing(false); };
 
   // Analysis: derived from API or fallbacks
-  const riscos   = simResult ? deriveRisksFromResponse(simResult, fmtAbs) : [];
-  const impactos = simResult ? deriveImpactsFromResponse(simResult, items) : [];
-  const recs     = simResult ? deriveRecsFromResponse(simResult, items) : [];
+  const riscos   = simUsavel ? deriveRisksFromResponse(simUsavel, fmtAbs) : [];
+  const impactos = simUsavel ? deriveImpactsFromResponse(simUsavel, items) : [];
+  const recs     = simUsavel ? deriveRecsFromResponse(simUsavel, items) : [];
 
   const criarCenario = ({ nome, budgetOverride: bo, items: its }) => {
     const novoId = Date.now();
@@ -842,6 +850,18 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
               <button onClick={runSimulation} style={{ ...G, fontSize: 11, fontWeight: 700, color: T.red, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Tentar</button>
             </div>
           )}
+          {semConsolidacao && (
+            <div
+              role="status"
+              style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "10px 12px", background: T.amberLight, border: `1px solid ${T.border}`, borderRadius: 10, marginBottom: 10 }}
+            >
+              <AlertTriangle size={13} color={T.inkMid} />
+              <span style={{ ...G, fontSize: 11, color: T.inkMid, flex: 1 }}>
+                <strong>Sem projeção nesta simulação.</strong> {simResult.currency_unavailable}
+                {" "}Os valores por moeda continuam abaixo, na sua própria moeda.
+              </span>
+            </div>
+          )}
           {/* ── Scenario header card ── */}
           <div style={{ background: T.darkBg, borderRadius: 16, padding: "16px 18px", marginBottom: 14, boxShadow: T.dark, position: "relative", overflow: "hidden" }}>
             {/* Purple glow */}
@@ -1079,6 +1099,19 @@ export function SimulacaoPage({ cenarios, setCenarios, cenarioId, setCenarioId, 
             <AlertTriangle size={14} color={T.red} />
             <span style={{ ...G, fontSize: 12, color: T.red, flex: 1 }}>{simError}</span>
             <button onClick={runSimulation} style={{ ...G, fontSize: 11, fontWeight: 700, color: T.red, background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>Tentar novamente</button>
+          </div>
+        )}
+
+        {semConsolidacao && (
+          <div
+            role="status"
+            style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "10px 12px", background: T.amberLight, border: `1px solid ${T.border}`, borderRadius: 10, marginBottom: 10 }}
+          >
+            <AlertTriangle size={14} color={T.inkMid} />
+            <span style={{ ...G, fontSize: 12, color: T.inkMid, flex: 1 }}>
+              <strong>Sem projeção nesta simulação.</strong> {simResult.currency_unavailable}
+              {" "}Os valores por moeda continuam abaixo, na sua própria moeda.
+            </span>
           </div>
         )}
 
