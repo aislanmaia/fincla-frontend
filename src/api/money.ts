@@ -102,19 +102,32 @@ export const toAmount = (value: WireMoney | unknown): number => toFiniteNumber(v
  * propósito, e `return response.data` cru segue sendo o erro que os tipos `Raw*`
  * pegam. O que ele dispensa é a enumeração, não a intenção.
  *
- * **O que ele descarta de propósito:** o rótulo da moeda. As telas destas famílias
- * ainda formatam tudo em real, e os agregados delas somam moedas sem converter
- * (fincla-api#170) — então exibir a moeda hoje daria ao número uma autoridade que
- * ele não tem. Quando o #170 decidir converter ou omitir, a moeda volta por aqui.
- * Onde a tela JÁ usa a moeda (conta, saldo, transferência, ajuste), a conversão
- * é explícita campo a campo e não passa por esta função.
+ * **O que ele descarta de propósito:** o rótulo da moeda. Estas telas formatam na
+ * moeda base da organização, e o backend já converte tudo para ela (fincla-api#170),
+ * então o rótulo repetido em cada campo não acrescenta nada. Onde a tela JÁ usa a
+ * moeda (conta, saldo, transferência, ajuste), a conversão é explícita campo a campo
+ * e não passa por esta função.
+ *
+ * **A exceção é a QUEBRA POR MOEDA.** Num campo `*_by_currency`, a moeda é o assunto:
+ * é a lista que responde quando o total não responde, e cada entrada só significa
+ * alguma coisa acompanhada do código dela. Colapsá-la em números deixava
+ * `[{amount:"300.00",currency:"USD"}, …]` virar `[300, …]`, e a tela que a desenha
+ * lia `undefined` na moeda — mostrando o valor em dólar formatado como real, ou
+ * `R$ NaN`. Exatamente o caso para o qual a quebra existe.
  */
+const QUEBRA_POR_MOEDA = /by_currency$/;
+
+const ehQuebraPorMoeda = (chave: string, valor: unknown): boolean =>
+  QUEBRA_POR_MOEDA.test(chave) && Array.isArray(valor) && valor.every(isCanonicalMoney);
+
 export const unwrapMoney = <T,>(node: T): T => {
   if (isCanonicalMoney(node)) return toFiniteNumber(node) as T;
   if (Array.isArray(node)) return node.map((item) => unwrapMoney(item)) as T;
   if (node !== null && typeof node === 'object') {
     const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(node as Record<string, unknown>)) out[k] = unwrapMoney(v);
+    for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+      out[k] = ehQuebraPorMoeda(k, v) ? v : unwrapMoney(v);
+    }
     return out as T;
   }
   return node;

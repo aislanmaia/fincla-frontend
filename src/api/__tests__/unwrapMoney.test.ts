@@ -69,3 +69,43 @@ describe('unwrapMoney', () => {
     expect(linhas.reduce((s, l) => s + l.total, 0)).toBe(150);
   });
 });
+
+describe("a quebra por moeda não é colapsada (#170)", () => {
+  it("mantém a lista `*_by_currency` inteira, com o código de cada fatia", () => {
+    const resposta = unwrapMoney({
+      avg_expense: { amount: "4300.00", currency: "BRL" },
+      avg_expense_by_currency: [
+        { amount: "300.00", currency: "USD" },
+        { amount: "4000.00", currency: "BRL" },
+      ],
+    });
+
+    // O total continua virando número: é ele que a tela soma e compara.
+    expect(resposta.avg_expense).toBe(4300);
+    // A quebra, não: sem o código, `300` seria desenhado como trezentos REAIS.
+    expect(resposta.avg_expense_by_currency).toEqual([
+      { amount: "300.00", currency: "USD" },
+      { amount: "4000.00", currency: "BRL" },
+    ]);
+  });
+
+  it("uma lista de dinheiro em OUTRA chave continua virando números", () => {
+    const resposta = unwrapMoney({
+      monthly_totals: [{ amount: "10.00", currency: "BRL" }],
+    });
+
+    expect(resposta.monthly_totals).toEqual([10]);
+  });
+
+  it("uma chave `by_currency` que não é lista de dinheiro segue o caminho normal", () => {
+    // A evolução mensal manda `{currency, total_income, total_expenses}` — três
+    // campos, não dinheiro canônico. Ali o valor de dentro precisa virar número.
+    const resposta = unwrapMoney({
+      by_currency: [
+        { currency: "BRL", total_income: { amount: "100.00", currency: "BRL" } },
+      ],
+    });
+
+    expect(resposta.by_currency).toEqual([{ currency: "BRL", total_income: 100 }]);
+  });
+});
