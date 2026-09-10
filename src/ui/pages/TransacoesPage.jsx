@@ -3905,7 +3905,9 @@ function TransacoesPageBody({
             width: 230, background: T.surface, border: `1px solid ${T.border}`,
             borderRadius: 12, boxShadow: "0 14px 40px rgba(0,0,0,.16)", padding: 6,
             display: "flex", flexDirection: "column", gap: 2 }}>
-          <div style={{ ...G, fontFamily: "'Geist Mono',monospace", fontSize: 10.5,
+          {/* 11 e não 10,5: o piso do app (WCAG, #86). O rótulo é caixa alta com
+              `letterSpacing`, então meio pixel a mais não muda a linha. */}
+          <div style={{ ...G, fontFamily: "'Geist Mono',monospace", fontSize: 11,
             letterSpacing: "0.09em", textTransform: "uppercase", color: T.inkGhost,
             padding: "7px 9px 3px" }}>Densidade</div>
           <div style={{ display: "flex", gap: 4, padding: "0 4px 5px" }}>
