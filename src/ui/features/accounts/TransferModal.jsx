@@ -3,7 +3,8 @@ import { T } from "../../tokens";
 import { G } from "../../typography";
 import { Btn } from "../../components/primitives";
 import { ModalShell } from "./ModalShell.jsx";
-import { CURRENCIES, accountMeta, formatDay, formatMoney, parseBRL } from "./accountMeta.js";
+import { accountMeta, formatDay, formatMoney, parseBRL } from "./accountMeta.js";
+import { currencyInfo } from "../../money/currencyRegistry.js";
 
 const inputStyle = {
   ...G,
@@ -152,7 +153,7 @@ export function TransferModal({ accounts, onClose, onSubmit, onQuote, isSaving, 
             style={{ ...inputStyle, fontVariantNumeric: "tabular-nums" }}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            placeholder={`${CURRENCIES.find((c) => c.code === fromCurrency)?.symbol || "R$"} 0,00`}
+            placeholder={`${currencyInfo(fromCurrency).symbol} 0,00`}
             inputMode="decimal"
           />
         </div>
@@ -169,7 +170,7 @@ export function TransferModal({ accounts, onClose, onSubmit, onQuote, isSaving, 
             style={{ ...inputStyle, fontVariantNumeric: "tabular-nums" }}
             value={toAmount}
             onChange={(e) => setToAmount(e.target.value)}
-            placeholder={`${CURRENCIES.find((c) => c.code === toCurrency)?.symbol || ""} 0,00`}
+            placeholder={`${toCurrency ? currencyInfo(toCurrency).symbol : ""} 0,00`}
             inputMode="decimal"
           />
           <div style={{ ...G, fontSize: 11, color: T.inkGhost, marginTop: 6, lineHeight: 1.45 }}>

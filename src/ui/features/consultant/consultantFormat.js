@@ -1,6 +1,8 @@
 import { T } from "../../tokens";
 import { fmtAbs } from "../../formatters";
 import { HEALTH_BAND_NONE, clientHealthBand } from "./consultantClientsView";
+import { formatMoney } from "../../money/formatMoney.js";
+import { currencyInfo } from "../../money/currencyRegistry.js";
 
 export const DASH = "—";
 const LOADING = "…";
@@ -50,9 +52,10 @@ export function fmtMoney(value) {
 
 /** Dinheiro pt-BR sem centavos (R$ 1.234), sinal só quando negativo. Espelha o
  * `fmtBRL0` da referência de design do consultor. */
-export function fmtBRL0(value) {
+export function fmtBRL0(value, currency = "BRL") {
   const n = Math.round(Number(value) || 0);
-  return (n < 0 ? "−" : "") + "R$ " + Math.abs(n).toLocaleString("pt-BR");
+  const { symbol } = currencyInfo(currency);
+  return (n < 0 ? "−" : "") + symbol + " " + Math.abs(n).toLocaleString("pt-BR");
 }
 
 /**
@@ -77,13 +80,7 @@ export function fmtBRL0(value) {
  * para valor rotulado, porque para esse a moeda sempre vem junto.
  */
 export function fmtMoneyIn(value, currency) {
-  if (value === null || value === undefined || value === "") return DASH;
-  const n = Number(value);
-  if (!Number.isFinite(n)) return DASH;
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: currency || "BRL",
-  }).format(n);
+  return formatMoney(value, currency || "BRL") ?? DASH;
 }
 
 /** Percentual com 1 casa, robusto a valor ausente/não-finito. */
