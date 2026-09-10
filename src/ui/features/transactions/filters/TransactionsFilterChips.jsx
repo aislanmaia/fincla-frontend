@@ -156,10 +156,14 @@ function CountBadge({ n, prefix = "", flutuante = false }) {
               position: "absolute",
               top: -5,
               right: -5,
-              minWidth: 15,
-              height: 15,
+              // 16/16 e não 15/15: o piso de 11 px do app (WCAG, #86) é o que manda
+              // no número, e o círculo é que cede — um badge de contagem ilegível
+              // não conta nada. `1.5px` de borda em `content-box` mantém o balão
+              // com o mesmo diâmetro de antes na tela.
+              minWidth: 16,
+              height: 16,
               padding: n > 9 ? "0 3px" : 0,
-              fontSize: 9.5,
+              fontSize: 11,
               fontWeight: 800,
               border: `1.5px solid ${T.surface}`,
               boxSizing: "content-box",
