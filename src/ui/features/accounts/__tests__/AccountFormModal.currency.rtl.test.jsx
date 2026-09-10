@@ -60,12 +60,16 @@ describe("AccountFormModal: moeda", () => {
     expect(screen.getByPlaceholderText("€ 0,00")).toBeInTheDocument();
   });
 
-  it("na edição, parte da moeda da conta e explica a trava", () => {
+  it("na edição sem `currency_locked`, parte da moeda da conta e explica a regra", () => {
+    // Sem o campo, a tela não sabe se esta conta tem movimento (`null` é "ninguém
+    // perguntou"): ela mostra a moeda atual e explica a regra em termos gerais,
+    // deixando o backend recusar se for o caso. A conta que SABE estar travada
+    // recebe outra copy, presa em `AccountFormModal.lock.rtl.test.jsx`.
     renderModal({ account: { name: "Conta EUR", type: "checking", currency: "EUR" } });
 
     // O campo NÃO é escondido: o usuário não saberia que dá para corrigir.
     expect(screen.getByText(/Euro/i)).toBeInTheDocument();
-    expect(screen.getByText(/não tem nenhum lançamento/i)).toBeInTheDocument();
+    expect(screen.getByText(/enquanto a conta não tiver nenhum lançamento/i)).toBeInTheDocument();
   });
 
   it("a edição envia a moeda junto, para o backend decidir", () => {

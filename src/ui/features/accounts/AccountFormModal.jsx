@@ -30,6 +30,10 @@ export function AccountFormModal({ account, onClose, onSubmit, isSaving, error }
   // ele, um registro que não respondeu deixaria o seletor VAZIO e a pessoa
   // perderia de vista a moeda da própria conta.
   const { moedas } = useCurrencyOptions(currency);
+  // `currency_locked` vem do backend: `true` = a conta já tem lançamento e a moeda
+  // não muda mais. **`null` não é "destravado"** — é "ninguém perguntou", e nesse
+  // caso a tela mostra o seletor e deixa o backend recusar, como sempre fez.
+  const travada = account?.currency_locked === true;
   const [initial, setInitial] = useState("");
   const [institution, setInstitution] = useState(account?.institution || "");
   const [color, setColor] = useState(account?.color || ACCOUNT_COLORS[0]);
@@ -92,10 +96,15 @@ export function AccountFormModal({ account, onClose, onSubmit, isSaving, error }
                   padding: "9px 6px",
                   borderRadius: 8,
                   border: "none",
-                  cursor: "pointer",
                   background: active ? T.surface : "transparent",
                   color: active ? T.ink : T.inkLight,
                   boxShadow: active ? T.sm : "none",
+                  // Travada: a moeda em uso continua legível e as outras somem de
+                  // vista. Esconder o campo inteiro faria a pessoa não saber em que
+                  // moeda a conta está — que é a informação que ela veio buscar.
+                  ...(travada
+                    ? { cursor: "not-allowed", opacity: active ? 1 : 0.35 }
+                    : { cursor: "pointer" }),
                 }}
               >
                 {t.label}
@@ -113,8 +122,9 @@ export function AccountFormModal({ account, onClose, onSubmit, isSaving, error }
             return (
               <button
                 key={c.code}
-                onClick={() => setCurrency(c.code)}
+                onClick={() => !travada && setCurrency(c.code)}
                 aria-pressed={active}
+                disabled={travada}
                 style={{
                   ...G,
                   textAlign: "center",
@@ -123,10 +133,15 @@ export function AccountFormModal({ account, onClose, onSubmit, isSaving, error }
                   padding: "9px 6px",
                   borderRadius: 8,
                   border: "none",
-                  cursor: "pointer",
                   background: active ? T.surface : "transparent",
                   color: active ? T.ink : T.inkLight,
                   boxShadow: active ? T.sm : "none",
+                  // Travada: a moeda em uso continua legível e as outras somem de
+                  // vista. Esconder o campo inteiro faria a pessoa não saber em que
+                  // moeda a conta está — que é a informação que ela veio buscar.
+                  ...(travada
+                    ? { cursor: "not-allowed", opacity: active ? 1 : 0.35 }
+                    : { cursor: "pointer" }),
                 }}
               >
                 {c.symbol} {c.label}
@@ -134,11 +149,19 @@ export function AccountFormModal({ account, onClose, onSubmit, isSaving, error }
             );
           })}
         </div>
-        {editing ? (
+        {travada ? (
           <div style={{ ...G, fontSize: 11, color: T.inkGhost, marginTop: 6, lineHeight: 1.45 }}>
-            {/* Não escondemos o campo em conta com histórico: o usuário não saberia
-                que dá para corrigir. Tentar é barato e o backend explica a saída. */}
-            Só dá para trocar enquanto a conta não tem nenhum lançamento — depois disso
+            {/* O campo NÃO some: a pessoa precisa continuar vendo em que moeda a
+                conta está — é a informação que ela veio buscar. O que sai é a
+                possibilidade de trocar, e o motivo fica escrito ao lado. */}
+            Esta conta já tem lançamento, e a moeda é a unidade de tudo que está
+            gravado nela. Para mudar de moeda, abra outra conta na moeda certa e
+            transfira o saldo — a transferência registra os dois valores reais, o que
+            saiu e o que entrou.
+          </div>
+        ) : editing ? (
+          <div style={{ ...G, fontSize: 11, color: T.inkGhost, marginTop: 6, lineHeight: 1.45 }}>
+            Dá para trocar enquanto a conta não tiver nenhum lançamento — depois disso
             a moeda é a unidade de tudo que já foi registrado nela.
           </div>
         ) : null}

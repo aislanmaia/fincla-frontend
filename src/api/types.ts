@@ -1998,6 +1998,15 @@ export interface Account {
   color?: string | null;
   icon_key?: string | null;
   updated_at?: string | null;
+  /**
+   * `true` = a conta já tem lançamento e a moeda dela não muda mais.
+   *
+   * **`null`/ausente NÃO é "destravado"** — é "ninguém perguntou". A tela que
+   * receber isso não pode prometer nem uma coisa nem outra: mostra o campo e deixa
+   * o backend recusar (`422 Moeda travada`), que é o comportamento de sempre.
+   * Só `false` autoriza prometer que dá para trocar.
+   */
+  currency_locked?: boolean | null;
 }
 
 /**
