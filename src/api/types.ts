@@ -1314,10 +1314,16 @@ export interface RecurringTransaction {
 }
 
 export interface RecurringTransactionsSummary {
-  total_monthly_income: number | null; // `null` quando o valor não é número finito — ver src/api/money.ts
+  // `null` quando o valor não é número finito (ver src/api/money.ts) **ou** quando a
+  // organização tem mais de uma moeda — aí `by_currency` é a resposta, e o total
+  // não existe. Nunca a fatia de uma das moedas rotulada como total.
+  total_monthly_income: number | null;
   total_monthly_expense: number | null;
   active_count: number;
   paused_count: number;
+  by_currency?: RecurringSeriesCurrencyTotals[];
+  /** A moeda do cabeçalho, extraída na fronteira; `null` quando não há cabeçalho. */
+  currency?: string | null;
 }
 
 export interface RecurringTransactionListResponse {
@@ -1380,18 +1386,51 @@ export interface RecurringSeries {
   interval: number;
   /** Obrigatório quando frequency='custom'; null caso contrário. */
   interval_unit: RecurringSeriesIntervalUnit | null;
+  /**
+   * A moeda de `value`, preservada na fronteira antes de o número perder o rótulo.
+   *
+   * `value` chega como `{amount, currency}` e é colapsado num número; sem este
+   * campo uma série de € 1.200 vira `1200` e a tela desenha "R$ 1.200,00".
+   */
+  value_currency?: string | null;
 }
 
 /** Resumo da lista de séries; mesmos campos que `RecurringTransactionsSummary`. */
 export type RecurringSeriesListSummary = RecurringTransactionsSummary;
 
+/** O equivalente mensal das séries ativas de UMA moeda. */
+export interface RecurringSeriesCurrencyTotals {
+  currency: string;
+  total_monthly_income: number | null;
+  total_monthly_expense: number | null;
+  active_count: number;
+}
+
+/** A projeção do intervalo para UMA moeda. */
+export interface RecurringSeriesPeriodCurrencyTotals {
+  currency: string;
+  total_expense: number | null;
+  total_income: number | null;
+  series_count_expense: number;
+  series_count_income: number;
+}
+
 /** Mesma semântica que `TransactionsSummaryResponse.recurring_in_period`. */
 export interface RecurringSeriesSummaryForPeriod {
-  total_expense: number | null; // `null` quando o valor não é número finito — ver src/api/money.ts
+  // `null` quando o valor não é número finito (ver src/api/money.ts) **ou** quando a
+  // organização tem mais de uma moeda: aí não existe um total, e a resposta é
+  // `by_currency`. O backend deixou de mandar a fatia da moeda base como se fosse o
+  // total (fincla-api, smoke de 2026-09-09).
+  total_expense: number | null;
   total_income: number | null;
   period: { start_date: string; end_date: string };
+  // As contagens NÃO ficam nulas com várias moedas: quantas séries entraram na
+  // projeção não tem moeda, e com várias elas são a soma das fatias.
   series_count_expense?: number;
   series_count_income?: number;
+  by_currency?: RecurringSeriesPeriodCurrencyTotals[];
+  /** A moeda do cabeçalho, extraída na fronteira; `null` quando não há cabeçalho. */
+  currency?: string | null;
 }
 
 export interface RecurringSeriesListResponse {

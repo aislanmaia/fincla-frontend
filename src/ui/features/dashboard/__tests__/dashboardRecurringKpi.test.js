@@ -29,8 +29,27 @@ describe("dashboardRecurringKpi", () => {
     ).toBe(2100);
   });
 
-  it("retorna 0 quando não há dados", () => {
-    expect(pickCommittedExpenseForDashboard(null, null)).toBe(0);
+  it("retorna null quando não há dados — ausência não é zero", () => {
+    // Zero afirmaria "esta pessoa não tem compromisso mensal nenhum". O painel
+    // desenha um travessão a partir daqui.
+    expect(pickCommittedExpenseForDashboard(null, null)).toBeNull();
+    expect(pickProjectedRecurringIncomeForDashboard(null, null)).toBeNull();
+  });
+
+  it("propaga o null do resumo quando a organização tem mais de uma moeda", () => {
+    // O backend manda `total_monthly_expense: null` + `by_currency` quando não
+    // existe um total numa moeda só. Colapsar isso em 0 era o defeito que o smoke
+    // de produção achou, refeito no cliente.
+    const multimoeda = {
+      total_monthly_expense: null,
+      total_monthly_income: null,
+      by_currency: [
+        { currency: "BRL", total_monthly_expense: 800, total_monthly_income: 0, active_count: 1 },
+        { currency: "EUR", total_monthly_expense: 50, total_monthly_income: 0, active_count: 1 },
+      ],
+    };
+    expect(pickCommittedExpenseForDashboard(null, multimoeda)).toBeNull();
+    expect(pickProjectedRecurringIncomeForDashboard(null, multimoeda)).toBeNull();
   });
 
   it("não retorna negativo para total_expense negativo na API", () => {

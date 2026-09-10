@@ -668,12 +668,14 @@ export function DashboardPage({
         key: "cmt",
         label: periodEnded ? "Comprometido no período" : "Comprometido a vencer",
         value: periodEnded
-          ? fmtAbs(committed)
+          ? (committed === null ? "—" : fmtAbs(committed))
           : projectedToCome.known
             ? fmtAbs(committedToCome)
             : "—",
         delta: periodEnded
-          ? "recorrências projetadas no período"
+          ? (committed === null
+              ? "sem total: mais de uma moeda"
+              : "recorrências projetadas no período")
           : projectedToCome.known
             ? (committedToCome > 0 ? "recorrências até o fim do período" : "nenhuma recorrência a vencer")
             : projectedToCome.loading

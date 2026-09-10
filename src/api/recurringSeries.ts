@@ -3,9 +3,11 @@ import apiClient from './client';
 // Este módulo normalizava a LISTA e o resumo, mas devolvia cru os cinco endpoints
 // de série individual — normalização parcial é pior que nenhuma, porque parece
 // coberta. O `value` de série migrou no lote de movimento (fincla-api#131).
-import { toFiniteNumber, unwrapMoney } from './money';
+import { toCurrency, toFiniteNumber, unwrapMoney } from './money';
 import type {
   RecurringSeries,
+  RecurringSeriesCurrencyTotals,
+  RecurringSeriesPeriodCurrencyTotals,
   RecurringSeriesListResponse,
   RawRecurringSeriesListResponse,
   ListRecurringSeriesParams,
@@ -24,6 +26,25 @@ export const createRecurringSeries = async (
     params: { organization_id: organizationId },
   });
   return unwrapMoney(response.data);
+};
+
+/**
+ * A quebra por moeda com o dinheiro em número e o código da moeda intacto.
+ *
+ * Ela é o que responde quando o total não responde — numa organização com duas
+ * moedas o cabeçalho vem `null` de propósito —, então cada linha precisa chegar
+ * pronta para desenhar: `{currency, <campos>}` com os valores já convertidos. Sem
+ * isto os campos seguem `{amount, currency}` crus e a tela imprime
+ * `[object Object]` justamente no caso em que a quebra é a única verdade.
+ */
+const normalizarQuebra = <T,>(linhas: unknown, campos: string[]): T[] | undefined => {
+  if (!Array.isArray(linhas)) return undefined;
+  return linhas.map((linha) => {
+    const crua = (linha ?? {}) as Record<string, unknown>;
+    const saida: Record<string, unknown> = { ...crua };
+    for (const campo of campos) saida[campo] = toFiniteNumber(crua[campo]);
+    return saida as T;
+  });
 };
 
 export const listRecurringSeries = async (
@@ -49,8 +70,15 @@ export const listRecurringSeries = async (
   const raw = response.data as unknown as RawRecurringSeriesListResponse;
   return {
     ...raw,
+    // `stampCurrency` ANTES de converter: `toFiniteNumber` colapsa `{amount, currency}`
+    // num número e a moeda da linha se perde. Uma série de € 1.200 chegava à tela
+    // como `1200` e era desenhada "R$ 1.200,00" — número certo, unidade errada.
     series: Array.isArray(raw?.series)
-      ? raw.series.map((s) => ({ ...s, value: toFiniteNumber(s?.value) }))
+      ? raw.series.map((s) => ({
+          ...s,
+          value: toFiniteNumber(s?.value),
+          value_currency: toCurrency(s?.value),
+        }))
       : [],
     summary: {
       // Contadores podem faltar num payload degradado. Zero aqui é CONTAGEM, não
@@ -60,12 +88,29 @@ export const listRecurringSeries = async (
       ...raw?.summary,
       total_monthly_income: toFiniteNumber(raw?.summary?.total_monthly_income),
       total_monthly_expense: toFiniteNumber(raw?.summary?.total_monthly_expense),
+      // A moeda do CABEÇALHO, preservada antes de o número perder o rótulo. `null`
+      // quando o backend não publicou total — organização com mais de uma moeda —,
+      // e aí é `by_currency` que responde.
+      currency:
+        toCurrency(raw?.summary?.total_monthly_expense) ??
+        toCurrency(raw?.summary?.total_monthly_income),
+      by_currency: normalizarQuebra<RecurringSeriesCurrencyTotals>(raw?.summary?.by_currency, [
+        'total_monthly_income',
+        'total_monthly_expense',
+      ]),
     },
     summary_for_period: raw?.summary_for_period
       ? {
           ...raw.summary_for_period,
           total_expense: toFiniteNumber(raw.summary_for_period.total_expense),
           total_income: toFiniteNumber(raw.summary_for_period.total_income),
+          currency:
+            toCurrency(raw.summary_for_period.total_expense) ??
+            toCurrency(raw.summary_for_period.total_income),
+          by_currency: normalizarQuebra<RecurringSeriesPeriodCurrencyTotals>(
+            raw.summary_for_period.by_currency,
+            ['total_expense', 'total_income'],
+          ),
         }
       : undefined,
   };

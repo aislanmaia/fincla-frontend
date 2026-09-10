@@ -4,6 +4,7 @@ import {
   listRecurringTransactionsForUi,
   mapRecurringSummaryToUi,
   mapRecurringTransactionToUi,
+  resumirRecorrenciasLocalmente,
   toggleRecurringSeriesForUi,
   deleteRecurringSeriesForUi,
 } from "../../data/recurringTransactionsAdapter.js";
@@ -18,10 +19,13 @@ const EMPTY_STATE = {
     totalRec: 0,
     totalDesp: 0,
     saldoFixo: 0,
+    moeda: null,
+    porMoeda: [],
     activeCount: 0,
     pausedCount: 0,
   },
 };
+
 
 export function useRecurringTransactionsData({
   organizationId,
@@ -81,19 +85,11 @@ export function useRecurringTransactionsData({
       const mapped = mapRecurringTransactionToUi(updated);
       setState((current) => {
         const nextList = current.list.map((row) => (row.id === seriesId ? mapped : row));
-        const totalRec = nextList.filter((row) => row.ativa && row.tipo === "receita").reduce((sum, row) => sum + row.val, 0);
-        const totalDesp = nextList.filter((row) => row.ativa && row.tipo === "despesa").reduce((sum, row) => sum + row.val, 0);
         return {
           ...current,
           isTogglingId: null,
           list: nextList,
-          summary: {
-            totalRec,
-            totalDesp,
-            saldoFixo: totalRec - totalDesp,
-            activeCount: nextList.filter((row) => row.ativa).length,
-            pausedCount: nextList.filter((row) => !row.ativa).length,
-          },
+          summary: resumirRecorrenciasLocalmente(nextList),
         };
       });
       return mapped;
@@ -118,19 +114,11 @@ export function useRecurringTransactionsData({
       await deleteRecurringSeriesForUi(seriesId, organizationId);
       setState((current) => {
         const nextList = current.list.filter((row) => row.id !== seriesId);
-        const totalRec = nextList.filter((row) => row.ativa && row.tipo === "receita").reduce((sum, row) => sum + row.val, 0);
-        const totalDesp = nextList.filter((row) => row.ativa && row.tipo === "despesa").reduce((sum, row) => sum + row.val, 0);
         return {
           ...current,
           isDeletingId: null,
           list: nextList,
-          summary: {
-            totalRec,
-            totalDesp,
-            saldoFixo: totalRec - totalDesp,
-            activeCount: nextList.filter((row) => row.ativa).length,
-            pausedCount: nextList.filter((row) => !row.ativa).length,
-          },
+          summary: resumirRecorrenciasLocalmente(nextList),
         };
       });
     } catch (error) {
