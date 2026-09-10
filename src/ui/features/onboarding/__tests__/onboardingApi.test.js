@@ -211,6 +211,36 @@ describe("submitOnboarding", () => {
     expect(profileCallOrder).toBeGreaterThan(categoryCallOrder);
   });
 
+  describe("moeda base", () => {
+    it("NÃO viaja quando é real — o backend já tem BRL como padrão", async () => {
+      // Mandar o padrão de volta seria ruído no corpo, e faria toda organização
+      // brasileira carregar um campo que não decide nada.
+      await submitOnboarding({ orgNome: "Casa", orgTipo: "couple", orgMoeda: "BRL" });
+
+      expect(mocks.createOrganization).toHaveBeenCalledWith(
+        expect.not.objectContaining({ base_currency: expect.anything() }),
+      );
+    });
+
+    it("viaja quando a pessoa escolheu outra", async () => {
+      // A moeda base é imutável depois da criação (ADR-0001): este é o ÚNICO
+      // momento em que ela pode ser dita, e perdê-la aqui é definitivo.
+      await submitOnboarding({ orgNome: "Casa", orgTipo: "couple", orgMoeda: "EUR" });
+
+      expect(mocks.createOrganization).toHaveBeenCalledWith(
+        expect.objectContaining({ base_currency: "EUR" }),
+      );
+    });
+
+    it("ausente se comporta como real", async () => {
+      await submitOnboarding({ orgNome: "Casa", orgTipo: "couple" });
+
+      expect(mocks.createOrganization).toHaveBeenCalledWith(
+        expect.not.objectContaining({ base_currency: expect.anything() }),
+      );
+    });
+  });
+
   it("envia convites por e-mail após criar a organização e antes de marcar onboarding concluído", async () => {
     await submitOnboarding({
       orgNome: "Casa",

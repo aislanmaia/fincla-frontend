@@ -232,6 +232,12 @@ export async function submitOnboarding(data) {
   if (data.orgTipo) {
     createPayload.org_type = data.orgTipo;
   }
+  // Só viaja quando a pessoa ESCOLHEU outra: o backend já tem "BRL" como padrão, e
+  // mandar o padrão de volta seria ruído no corpo. A moeda base é imutável depois
+  // (ADR-0001), então este é o único momento em que ela pode ser dita.
+  if (data.orgMoeda && data.orgMoeda !== "BRL") {
+    createPayload.base_currency = data.orgMoeda;
+  }
   if (monthlyIncome != null) {
     createPayload.monthly_income = monthlyIncome;
   }

@@ -3,6 +3,7 @@ import { T } from "../../tokens";
 import { G, S, NUM } from "../../typography";
 import { ONBOARDING_CATEGORY_ROWS } from "../../data/onboardingFlowCategories.js";
 import { CategoryLucideIcon } from "../../components/CategoryLucideIcon.jsx";
+import { useCurrencyOptions } from "../../money/useCurrencyRegistry.js";
 
 /* ─── ONBOARDING DATA & COMPONENTS ──────────────────────────── */
 
@@ -75,6 +76,11 @@ export const OnboardingFlow = ({
   const [key,setKey]     = useState(0);
   const [orgNome,setOrgNome]   = useState("");
   const [orgTipo,setOrgTipo]   = useState("couple");
+  // BRL pré-selecionado, e a escolha some da vista de quem não precisa dela: o
+  // usuário brasileiro conclui o onboarding sem um passo — nem um campo — a mais.
+  const [orgMoeda,setOrgMoeda] = useState("BRL");
+  const [moedaAberta,setMoedaAberta] = useState(false);
+  const { moedas: moedasOferecidas } = useCurrencyOptions(orgMoeda);
   const [cats,setCats]         = useState(["moradia","alimentacao","transporte"]);
   const [temCartao,setTem]     = useState(null);
   const [cardNome,setCardNome] = useState("");
@@ -267,6 +273,40 @@ export const OnboardingFlow = ({
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9}}>
                     {ORG_TIPOS.map(t=><CC key={t.id} sel={orgTipo===t.id} onClick={()=>setOrgTipo(t.id)} ic={t.ic} title={t.l} sub={t.s}accent={cfg.accent} accentBg={cfg.accentBg}/>)}
                   </div>
+                </div>
+                {/* MOEDA — a pergunta que a maioria não precisa responder.
+                    Não é passo próprio nem campo aberto: é uma linha de texto que
+                    diz o que já está escolhido, com um "trocar" ao lado. Quem é do
+                    Brasil lê e segue; quem mora fora tem por onde. Um passo a mais
+                    no funil para 100% das pessoas por causa de uma minoria seria
+                    caro do jeito errado. */}
+                <div>
+                  {!moedaAberta ? (
+                    <div style={{...G,fontSize:12,color:T.inkMid,display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+                      <span>Moeda: <strong style={{color:T.ink}}>{moedasOferecidas.find(m=>m.code===orgMoeda)?.label ?? orgMoeda}</strong></span>
+                      <button type="button" onClick={()=>setMoedaAberta(true)}
+                        style={{...G,background:"none",border:"none",padding:0,fontSize:12,fontWeight:600,
+                          color:cfg.accent,cursor:"pointer",textDecoration:"underline"}}>
+                        usar outra moeda
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <label style={{...G,fontSize:11,fontWeight:700,color:T.inkLight,
+                        textTransform:"uppercase",letterSpacing:"0.08em",display:"block",marginBottom:10}}>Moeda</label>
+                      <div style={{display:"grid",gridTemplateColumns:`repeat(${moedasOferecidas.length},1fr)`,gap:9}}>
+                        {moedasOferecidas.map(m=>(
+                          <CC key={m.code} sel={orgMoeda===m.code} onClick={()=>setOrgMoeda(m.code)}
+                            ic={m.symbol} title={m.code} sub={m.label} accent={cfg.accent} accentBg={cfg.accentBg}/>
+                        ))}
+                      </div>
+                      <div style={{...G,fontSize:11,color:T.inkGhost,marginTop:8,lineHeight:1.45}}>
+                        É a moeda em que a organização lê os próprios totais. Contas em
+                        outras moedas continuam possíveis — e o saldo consolidado mostra
+                        a cotação usada.
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -486,7 +526,7 @@ export const OnboardingFlow = ({
                 {/* summary */}
                 <div style={{background:T.surface,border:`1px solid ${T.border}`,borderRadius:13,overflow:"hidden"}}>
                   {[
-                    {ic:"🏢",l:"Organização",v:orgNome||"—",s:ORG_TIPOS.find(t=>t.id===orgTipo)?.l},
+                    {ic:"🏢",l:"Organização",v:orgNome||"—",s:`${ORG_TIPOS.find(t=>t.id===orgTipo)?.l ?? ""}${orgMoeda&&orgMoeda!=="BRL"?` · ${orgMoeda}`:""}`},
                     {ic:"🗂", l:"Categorias",v:`${cats.length} selecionadas`,s:cats.slice(0,3).map((c)=>ONBOARDING_CATEGORY_ROWS.find((x)=>x.id===c)?.labelPt).join(", ")+(cats.length>3?"…":"")},
                     {ic:"💳",l:"Cartões",v:temCartao==="sim"?(cardNome||"1 cartão"):"Não usa",s:temCartao==="sim"&&cardLim?`Limite R$ ${cardLim}`:null},
                     {ic:"💰",l:"Receita",v:temRec==="sim"?(recVal?`R$ ${recVal}/mês`:"Configurada"):"A configurar",s:temRec==="sim"?recDesc:null},
@@ -560,7 +600,7 @@ export const OnboardingFlow = ({
                       {errorMessage}
                     </div>
                   )}
-                  <button onClick={()=>onComplete({ orgNome, orgTipo, cats, temCartao, cardNome, card4, cardLim, cardVenc, temRec, recDesc, recVal, recDia, recTipo, membros: membros.filter(m=>m.trim()) })} disabled={isSubmitting} style={{
+                  <button onClick={()=>onComplete({ orgNome, orgTipo, orgMoeda, cats, temCartao, cardNome, card4, cardLim, cardVenc, temRec, recDesc, recVal, recDia, recTipo, membros: membros.filter(m=>m.trim()) })} disabled={isSubmitting} style={{
                     ...G,flex:1,padding:"14px 22px",borderRadius:11,border:"none",
                     fontSize:14,fontWeight:800,cursor:isSubmitting?"not-allowed":"pointer",
                     background:isSubmitting?T.inkFaint:T.ink,color:"#fff",
