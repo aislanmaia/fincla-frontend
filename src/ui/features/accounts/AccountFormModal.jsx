@@ -3,7 +3,8 @@ import { T } from "../../tokens";
 import { G } from "../../typography";
 import { Btn } from "../../components/primitives";
 import { ModalShell } from "./ModalShell.jsx";
-import { ACCOUNT_TYPES, ACCOUNT_COLORS, ACCOUNT_ICONS, CURRENCIES, parseBRL } from "./accountMeta.js";
+import { ACCOUNT_TYPES, ACCOUNT_COLORS, ACCOUNT_ICONS, parseBRL } from "./accountMeta.js";
+import { useCurrencyOptions } from "../../money/useCurrencyRegistry.js";
 
 const inputStyle = {
   ...G,
@@ -25,6 +26,10 @@ export function AccountFormModal({ account, onClose, onSubmit, isSaving, error }
   const [name, setName] = useState(account?.name || "");
   const [type, setType] = useState(account?.type || "checking");
   const [currency, setCurrency] = useState(account?.currency || "BRL");
+  // O registro é a autoridade sobre o que oferecer. `currency` é o fallback: sem
+  // ele, um registro que não respondeu deixaria o seletor VAZIO e a pessoa
+  // perderia de vista a moeda da própria conta.
+  const { moedas } = useCurrencyOptions(currency);
   const [initial, setInitial] = useState("");
   const [institution, setInstitution] = useState(account?.institution || "");
   const [color, setColor] = useState(account?.color || ACCOUNT_COLORS[0]);
@@ -102,8 +107,8 @@ export function AccountFormModal({ account, onClose, onSubmit, isSaving, error }
 
       <div style={{ marginTop: 14 }}>
         <label style={labelStyle}>Moeda</label>
-        <div style={{ display: "grid", gridTemplateColumns: `repeat(${CURRENCIES.length}, 1fr)`, gap: 5, background: T.grayLight, borderRadius: 11, padding: 5 }}>
-          {CURRENCIES.map((c) => {
+        <div style={{ display: "grid", gridTemplateColumns: `repeat(${moedas.length}, 1fr)`, gap: 5, background: T.grayLight, borderRadius: 11, padding: 5 }}>
+          {moedas.map((c) => {
             const active = currency === c.code;
             return (
               <button
@@ -146,7 +151,7 @@ export function AccountFormModal({ account, onClose, onSubmit, isSaving, error }
             style={{ ...inputStyle, fontVariantNumeric: "tabular-nums" }}
             value={initial}
             onChange={(e) => setInitial(e.target.value)}
-            placeholder={`${CURRENCIES.find((c) => c.code === currency)?.symbol || "R$"} 0,00`}
+            placeholder={`${moedas.find((c) => c.code === currency)?.symbol || "R$"} 0,00`}
             inputMode="decimal"
           />
         </div>

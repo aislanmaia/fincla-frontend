@@ -1,11 +1,27 @@
 // @vitest-environment jsdom
 import React from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
-
-afterEach(cleanup);
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AccountFormModal } from "../AccountFormModal.jsx";
+import {
+  clearCurrencyRegistry,
+  setCurrencyRegistry,
+} from "../../../money/currencyRegistry.js";
+
+// O registro vem do backend (`GET /v1/currencies`, #136); aqui ele é semeado com
+// o que produção tem, para o teste medir a TELA e não a requisição.
+const REGISTRO = [
+  { code: "BRL", name: "Real brasileiro", symbol: "R$", decimal_places: 2, is_active: true },
+  { code: "EUR", name: "Euro", symbol: "€", decimal_places: 2, is_active: true },
+  { code: "USD", name: "Dólar americano", symbol: "US$", decimal_places: 2, is_active: true },
+];
+
+beforeEach(() => setCurrencyRegistry(REGISTRO));
+afterEach(() => {
+  cleanup();
+  clearCurrencyRegistry();
+});
 
 /**
  * Sem seletor de moeda, a conta em dólar era inalcançável pela tela: o backend

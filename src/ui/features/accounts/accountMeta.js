@@ -1,4 +1,6 @@
 import { T } from "../../tokens";
+import { formatMoney as formatarDinheiro } from "../../money/formatMoney.js";
+import { offeredCurrencies } from "../../money/currencyRegistry.js";
 
 /** Tipos oferecidos no seletor de conta (o backend também aceita 'crypto'). */
 export const ACCOUNT_TYPES = [
@@ -24,25 +26,20 @@ export function accountMeta(type) {
 export const ACCOUNT_COLORS = [T.purple, T.blue, T.green, T.amber, T.red];
 export const ACCOUNT_ICONS = ["🏦", "🐷", "📈", "💳", "💰", "👛"];
 
-/** Moedas que o registro do backend oferece hoje (fincla-api#128). */
-export const CURRENCIES = [
-  { code: "BRL", label: "Real", symbol: "R$" },
-  { code: "USD", label: "Dólar", symbol: "US$" },
-  { code: "EUR", label: "Euro", symbol: "€" },
-];
-
-const formatters = new Map();
-function formatterFor(currency) {
-  const code = (currency || "BRL").toUpperCase();
-  if (!formatters.has(code)) {
-    formatters.set(
-      code,
-      // pt-BR de propósito: o usuário é brasileiro mesmo quando o dinheiro não é,
-      // então a separação de milhar e a vírgula decimal seguem a locale dele.
-      new Intl.NumberFormat("pt-BR", { style: "currency", currency: code }),
-    );
-  }
-  return formatters.get(code);
+/**
+ * As moedas que a interface pode OFERECER, vindas do registro do backend.
+ *
+ * Era uma lista escrita à mão aqui — três objetos que precisavam ser editados a
+ * cada moeda nova, e que ficavam mentindo no dia em que o backend desativasse uma.
+ * Agora é `GET /v1/currencies` (fincla-frontend#136): só as ativas, em ordem de
+ * código, e **vazio enquanto o registro não chegou** — oferecer uma lista chapada
+ * seria voltar a decidir no cliente o que é decisão do backend.
+ *
+ * `label` continua existindo para não quebrar quem consome; ele é o `name` do
+ * registro ("Real brasileiro" em vez do "Real" que estava escrito aqui).
+ */
+export function currencyOptions() {
+  return offeredCurrencies().map((m) => ({ code: m.code, label: m.name, symbol: m.symbol }));
 }
 
 /**
@@ -55,12 +52,7 @@ function formatterFor(currency) {
  * Ausência devolve `null`, nunca "R$ 0,00": zero inventado num saldo afirma que
  * a pessoa não tem dinheiro. Quem chama decide como mostrar a ausência.
  */
-export function formatMoney(value, currency = "BRL") {
-  if (value === null || value === undefined || value === "") return null;
-  const n = Number(value);
-  if (!Number.isFinite(n)) return null;
-  return formatterFor(currency).format(n);
-}
+export const formatMoney = formatarDinheiro;
 
 /**
  * "2026-09-03" -> "03/09". Só dia e mês: a cotação relevante é sempre recente, e
@@ -75,9 +67,9 @@ export function formatDay(iso) {
   return m ? `${m[3]}/${m[2]}` : "";
 }
 
-const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+/** @deprecated marca tudo como real — use `formatMoney(valor, moeda)`. */
 export function formatBRL(value) {
-  return brl.format(Number(value || 0));
+  return formatarDinheiro(Number(value || 0), "BRL");
 }
 
 /** Converte "R$ 1.234,56" / "1234,56" / "1234.56" em número. */

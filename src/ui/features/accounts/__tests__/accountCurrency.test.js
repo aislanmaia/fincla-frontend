@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
-import { CURRENCIES, formatDay, formatMoney } from "../accountMeta.js";
+import { currencyOptions, formatDay, formatMoney } from "../accountMeta.js";
+import {
+  clearCurrencyRegistry,
+  setCurrencyRegistry,
+} from "../../../money/currencyRegistry.js";
 
 /**
  * Antes, TODO saldo era formatado como real. Uma conta em dólar aparecia como
@@ -64,15 +68,40 @@ describe("formatDay", () => {
   });
 });
 
-describe("CURRENCIES", () => {
-  it("oferece exatamente o que o registro do backend tem ativo hoje", () => {
-    expect(CURRENCIES.map((c) => c.code)).toEqual(["BRL", "USD", "EUR"]);
+describe("currencyOptions — o que o seletor oferece", () => {
+  /**
+   * Era uma lista de três objetos escrita AQUI, que precisava ser editada a cada
+   * moeda nova e ficava mentindo no dia em que o backend desativasse uma. Agora
+   * vem de `GET /v1/currencies` (#136), e este teste passou a medir a REGRA em vez
+   * de recopiar o conteúdo.
+   */
+  afterEach(() => clearCurrencyRegistry());
+
+  it("oferece o que o registro diz, e só o que está ativo", () => {
+    setCurrencyRegistry([
+      { code: "BRL", name: "Real brasileiro", symbol: "R$", decimal_places: 2, is_active: true },
+      { code: "EUR", name: "Euro", symbol: "€", decimal_places: 2, is_active: true },
+      { code: "USD", name: "Dólar americano", symbol: "US$", decimal_places: 2, is_active: false },
+    ]);
+
+    expect(currencyOptions().map((c) => c.code)).toEqual(["BRL", "EUR"]);
   });
 
-  it("cada moeda tem símbolo e rótulo para o seletor", () => {
-    for (const c of CURRENCIES) {
+  it("cada opção tem símbolo e rótulo para o seletor", () => {
+    setCurrencyRegistry([
+      { code: "BRL", name: "Real brasileiro", symbol: "R$", decimal_places: 2, is_active: true },
+    ]);
+
+    for (const c of currencyOptions()) {
       expect(c.symbol, c.code).toBeTruthy();
       expect(c.label, c.code).toBeTruthy();
     }
+  });
+
+  it("vazio enquanto o registro não chegou — e não uma lista chapada", () => {
+    // Oferecer três moedas escritas no cliente seria voltar a decidir aqui o que
+    // é decisão do backend. Quem precisa de fallback é a TELA, que conhece a
+    // moeda em uso; este catálogo não inventa nenhuma.
+    expect(currencyOptions()).toEqual([]);
   });
 });

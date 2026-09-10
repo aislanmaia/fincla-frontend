@@ -66,6 +66,7 @@ import { useAuthRedirects } from "./routing/useAuthRedirects.js";
 
 import { resolveDataMode } from "./dataMode.js";
 import { nextDuplicateLabel } from "./features/transactions/duplicateLabel.js";
+import { ensureCurrencyRegistry } from "./money/useCurrencyRegistry.js";
 
 /* ─── APP ────────────────────────────────────────────────── */
 /**
@@ -205,6 +206,17 @@ export default function App() {
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, []);
+
+  // O registro de moedas, assim que existe sessão.
+  //
+  // Carregado no arranque e não sob demanda porque quem formata dinheiro não é só
+  // componente: adapters e seletores de dado chamam `formatMoney` em função pura,
+  // sem lugar para um hook. Enquanto ele não chega, `currencyInfo` responde pelo
+  // `Intl` — a tela nunca fica sem desenhar um valor por causa de uma requisição.
+  useEffect(() => {
+    if (!session.user) return;
+    ensureCurrencyRegistry();
+  }, [session.user]);
 
   useEffect(() => {
     const t = setTimeout(() => setMounted(true), 80);
