@@ -26,8 +26,12 @@ import {
 } from "../components/primitives";
 import { RECORRENCIAS } from "../data/mockFinance";
 import { CategoryLucideIcon } from "../components/CategoryLucideIcon.jsx";
-import { buildUpcomingRecurringSummary } from "../data/recurringTransactionsAdapter.js";
+import {
+  buildUpcomingRecurringSummary,
+  resumirRecorrenciasLocalmente,
+} from "../data/recurringTransactionsAdapter.js";
 import { useRecurringTransactionsData } from "../features/recurringTransactions/useRecurringTransactionsData.js";
+import { formatMoney } from "../features/accounts/accountMeta.js";
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { RecurringEmptyState } from "../features/recurringTransactions/RecurringEmptyState.jsx";
 import { weekdayLabelsShort, formatCalendarNavMonth } from "../components/finclaCalendarI18n.js";
@@ -36,6 +40,41 @@ import {
   finclaCalendarWeekdayCellStyle,
 } from "../components/finclaCalendarStyles.js";
 import { APP_UI_LOCALE } from "../appLocale.js";
+
+/** Ausência de dinheiro na tela: um travessão, nunca um zero. */
+const SEM_NUMERO = "—";
+
+/**
+ * Um total NA MOEDA DELE, ou um travessão quando ele não existe.
+ *
+ * `fmtAbs` fazia duas coisas erradas de uma vez com o novo contrato: carimbava
+ * "R$" em qualquer moeda, e `Math.abs(null)` é `0`, então "não existe total"
+ * (organização com mais de uma moeda) virava "R$ 0,00" — a afirmação exatamente
+ * oposta.
+ */
+const dinheiro = (valor, moeda) =>
+  valor === null || valor === undefined
+    ? SEM_NUMERO
+    : (formatMoney(Math.abs(valor), moeda || "BRL") ?? SEM_NUMERO);
+
+/** O mesmo, com sinal — para saldos, onde o sinal é a informação. */
+const dinheiroComSinal = (valor, moeda) =>
+  valor === null || valor === undefined
+    ? SEM_NUMERO
+    : (valor >= 0 ? "+" : "−") + (formatMoney(Math.abs(valor), moeda || "BRL") ?? SEM_NUMERO);
+
+/**
+ * A quebra por moeda em uma linha: "R$ 800,00 · € 50,00".
+ *
+ * É o que responde quando o cabeçalho é `—`. Sem ela a pessoa vê o travessão e
+ * conclui que não há recorrência nenhuma, quando na verdade há duas — só não
+ * existe um número que represente as duas juntas.
+ */
+const quebraEmLinha = (porMoeda, campo) =>
+  (porMoeda ?? [])
+    .map((fatia) => formatMoney(fatia[campo], fatia.currency || "BRL"))
+    .filter(Boolean)
+    .join(" · ");
 
 const MONTH_NAMES_PT = [
   "janeiro",
@@ -308,7 +347,7 @@ function RecRow({ r, isExp, onToggle, onTogglePause, onExcluir, onNav, onEditar,
 
         <div style={{ textAlign: "right", flexShrink: 0 }}>
           <div style={{ ...G, ...NUM, fontSize: 14, fontWeight: 700, color: valColor }}>
-            {sign} R$ {Math.abs(r.val).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            {sign} {dinheiro(r.val, r.moeda)}
           </div>
           <div style={{ ...G, fontSize: 11, color: r.pago ? T.green : T.inkGhost, marginTop: 1 }}>
             {r.pago ? "✓ pago" : `dia ${r.dia}`}
@@ -462,21 +501,22 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
   }, [activeTab, baseList, search]);
   const despesas = filteredList.filter((r) => r.tipo === "despesa");
   const receitas = filteredList.filter((r) => r.tipo === "receita");
-  const totalDesp = despesas.filter((r) => r.ativa).reduce((s, r) => s + r.val, 0);
-  const totalRec = receitas.filter((r) => r.ativa).reduce((s, r) => s + r.val, 0);
-  const saldoFixo = totalRec - totalDesp;
+  // A mesma regra do backend, aplicada ao recorte da tela: soma dentro de cada
+  // moeda, cabeçalho só quando existe UMA. O `reduce((s, r) => s + r.val, 0)` que
+  // estava aqui empilhava euro com real assim que o usuário filtrava ou buscava.
+  const resumoLocal = resumirRecorrenciasLocalmente(filteredList);
+  const totalDesp = resumoLocal.totalDesp;
+  const totalRec = resumoLocal.totalRec;
+  const saldoFixo = resumoLocal.saldoFixo;
   const summary = hasRealRecurringData && !search && activeTab === "todos"
     ? recurringData.summary
-    : {
-        totalDesp,
-        totalRec,
-        saldoFixo,
-        activeCount: filteredList.filter((item) => item.ativa).length,
-        pausedCount: filteredList.filter((item) => !item.ativa).length,
-      };
+    : resumoLocal;
+  const moedaLocal = resumoLocal.moeda;
+  const semSaldoFixo = saldoFixo === null || saldoFixo === undefined;
   const upcomingSummary = buildUpcomingRecurringSummary(filteredList);
   const upcomingNext7 = upcomingSummary.items.sort((a, b) => (daysUntil(a.nextOccurrenceIso) || 0) - (daysUntil(b.nextOccurrenceIso) || 0));
   const next7Amount = upcomingSummary.total;
+  const next7Moeda = upcomingSummary.moeda;
 
   // ── Derive "Próximos vencimentos" from real data ──
   const proximosVencimentos = useMemo(() => {
@@ -489,6 +529,7 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
         tipo: r.tipo,
         metodo: r.metodo,
         val: r.tipo === "receita" ? r.val : -r.val,
+        moeda: r.moeda,
       }));
     }
     const sorted = [...all].sort((a, b) => {
@@ -505,6 +546,7 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
         tipo: r.tipo,
         metodo: r.metodo,
         val: r.tipo === "receita" ? r.val : -r.val,
+        moeda: r.moeda,
       };
     });
   }, [baseList, calendarDay]);
@@ -512,12 +554,13 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
   // ── Derive "Fluxo fixo mensal" chart from real data ──
   const fluxoMensal = useMemo(() => {
     const MON = ["jan", "fev", "mar", "abr", "mai", "jun"];
-    const activeDespesas = baseList.filter((r) => r.ativa && r.tipo === "despesa");
-    const activeReceitas = baseList.filter((r) => r.ativa && r.tipo === "receita");
-    const totalD = activeDespesas.reduce((s, r) => s + r.val, 0);
-    const totalR = activeReceitas.reduce((s, r) => s + r.val, 0);
+    // Barras empilhadas exigem uma unidade só. Com mais de uma moeda a lista sai
+    // vazia e o card desenha a quebra no lugar do gráfico — uma barra que soma
+    // euro com real tem altura de coisa nenhuma.
+    const resumo = resumirRecorrenciasLocalmente(baseList);
+    if (resumo.totalDesp === null || resumo.totalRec === null) return [];
     const simVal = visibleSim.filter((it) => !it.isReceita).reduce((s, it) => s + it.valParcela, 0);
-    return MON.map((mes) => ({ mes, desp: totalD, rec: totalR, sim: simVal }));
+    return MON.map((mes) => ({ mes, desp: resumo.totalDesp, rec: resumo.totalRec, sim: simVal }));
   }, [baseList, visibleSim]);
 
   const isEmpty = !isLoading && baseList.length === 0 && simRecorrencias.length === 0;
@@ -550,9 +593,9 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
               {[
                 { label: "Custo adicional", val: `−${fmtAbs(totalSimVal)}`, color: T.darkRed },
-                { label: "Saldo fixo atual", val: fmtAbs(saldoFixo), color: T.darkText },
-                { label: "Saldo simulado", val: fmtAbs(saldoFixo - totalSimVal), color: T.darkText },
-                { label: "Redução", val: saldoFixo > 0 ? `−${((totalSimVal / saldoFixo) * 100).toFixed(1)}%` : "—", color: T.darkRed },
+                { label: "Saldo fixo atual", val: dinheiro(saldoFixo, moedaLocal), color: T.darkText },
+                { label: "Saldo simulado", val: semSaldoFixo ? SEM_NUMERO : dinheiro(saldoFixo - totalSimVal, moedaLocal), color: T.darkText },
+                { label: "Redução", val: !semSaldoFixo && saldoFixo > 0 ? `−${((totalSimVal / saldoFixo) * 100).toFixed(1)}%` : SEM_NUMERO, color: T.darkRed },
               ].map((m, i) => (
                 <div key={i} style={{ background: "rgba(255,255,255,0.06)", borderRadius: 8, padding: "8px 10px" }}>
                   <div style={{ ...G, fontSize: 11, fontWeight: 600, color: T.darkMuted, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>{m.label}</div>
@@ -563,9 +606,9 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
           ) : (
             [
               { label: "Custo mensal adicional", val: `−${fmtAbs(totalSimVal)}`, color: T.darkRed },
-              { label: "Saldo fixo atual", val: fmtAbs(saldoFixo), color: T.darkText },
-              { label: "Saldo fixo simulado", val: fmtAbs(saldoFixo - totalSimVal), color: T.darkText },
-              { label: "Redução", val: saldoFixo > 0 ? `−${((totalSimVal / saldoFixo) * 100).toFixed(1)}%` : "—", color: T.darkRed },
+              { label: "Saldo fixo atual", val: dinheiro(saldoFixo, moedaLocal), color: T.darkText },
+              { label: "Saldo fixo simulado", val: semSaldoFixo ? SEM_NUMERO : dinheiro(saldoFixo - totalSimVal, moedaLocal), color: T.darkText },
+              { label: "Redução", val: !semSaldoFixo && saldoFixo > 0 ? `−${((totalSimVal / saldoFixo) * 100).toFixed(1)}%` : SEM_NUMERO, color: T.darkRed },
             ].map((m, i) => (
               <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                 <span style={{ ...G, fontSize: 11, color: T.darkMuted }}>{m.label}</span>
@@ -576,10 +619,10 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
           <div style={{ marginTop: isMobile ? 0 : 12, marginBottom: 4 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
               <span style={{ ...G, fontSize: 11, color: T.darkMuted, textTransform: "uppercase", letterSpacing: "0.08em" }}>saldo comprometido</span>
-              <span style={{ ...G, ...NUM, fontSize: 11, color: T.darkPurple, fontWeight: 700 }}>{totalRec > 0 ? Math.round((totalDesp / totalRec) * 100) : 0}%</span>
+              <span style={{ ...G, ...NUM, fontSize: 11, color: T.darkPurple, fontWeight: 700 }}>{totalRec > 0 && totalDesp !== null ? Math.round((totalDesp / totalRec) * 100) + "%" : SEM_NUMERO}</span>
             </div>
             <div style={{ height: 6, background: "rgba(255,255,255,0.12)", borderRadius: 99, overflow: "hidden" }}>
-              <div style={{ width: `${Math.min(100, totalRec > 0 ? (totalDesp / totalRec) * 100 : 0)}%`, height: "100%", background: T.darkPurple, borderRadius: 99 }} />
+              <div style={{ width: `${Math.min(100, totalRec > 0 && totalDesp !== null ? (totalDesp / totalRec) * 100 : 0)}%`, height: "100%", background: T.darkPurple, borderRadius: 99 }} />
             </div>
           </div>
           <button onClick={() => onNav("simulation")} style={{ ...G, marginTop: 14, width: "100%", padding: "9px", background: T.purple, color: "#fff", border: "none", borderRadius: 9, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
@@ -589,7 +632,21 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
       )}
       <Card style={{ padding: 16 }}>
         <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.ink, marginBottom: 4 }}>Fluxo fixo mensal</div>
-        <div style={{ ...G, ...NUM, fontSize: 14, fontWeight: 700, color: T.green, marginBottom: 12 }}>Saldo comprometido {fmtSgn(saldoFixo)}</div>
+        <div style={{ ...G, ...NUM, fontSize: 14, fontWeight: 700, color: T.green, marginBottom: 12 }}>Saldo comprometido {dinheiroComSinal(saldoFixo, moedaLocal)}</div>
+        {fluxoMensal.length === 0 ? (
+          // Sem uma unidade comum não há barra a desenhar; o que existe são os
+          // totais de cada moeda, e é isso que o card mostra no lugar do gráfico.
+          <div style={{ marginBottom: 6 }}>
+            {(resumoLocal.porMoeda ?? []).map((fatia) => (
+              <div key={fatia.currency ?? "—"} style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ ...G, fontSize: 11, color: T.inkMid }}>{fatia.currency ?? SEM_NUMERO}</span>
+                <span style={{ ...G, ...NUM, fontSize: 12, fontWeight: 700, color: T.ink }}>
+                  {dinheiro(fatia.total_monthly_income - fatia.total_monthly_expense, fatia.currency)}
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
         <ResponsiveContainer width="100%" height={80}>
           <ReBarChart data={fluxoMensal} margin={{ top: 0, right: 0, left: -30, bottom: 0 }}>
             <XAxis dataKey="mes" tick={{ ...G, fontSize: 11, fill: T.inkLight }} axisLine={false} tickLine={false} />
@@ -602,6 +659,7 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
             <Bar dataKey="rec" fill={T.greenBar} radius={[3, 3, 0, 0]} />
           </ReBarChart>
         </ResponsiveContainer>
+        )}
         <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
           {[
             { c: T.redBar, l: "Despesas" },
@@ -641,7 +699,7 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
                     <div style={{ ...G, fontSize: 11, color: T.inkMid }}>{p.metodo}</div>
                   </div>
                   <div style={{ ...G, ...NUM, fontSize: 11, fontWeight: 700, color: p.val > 0 ? T.green : p.tipo === "simulada" ? T.purple : T.ink, flexShrink: 0 }}>
-                    {p.val > 0 ? "+" : "−"}R$ {Math.abs(p.val).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                    {p.val > 0 ? "+" : "−"}{dinheiro(p.val, p.moeda)}
                   </div>
                 </div>
               );
@@ -705,18 +763,45 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
         {[
           {
             label: "Compromissos mensais",
-            val: fmtAbs(summary.totalDesp),
-            sub: `${despesas.filter((r) => r.ativa).length} ativas · ${despesas.filter((r) => r.ativa && r.valorTipo === "estimado").length} estimadas`,
+            val: dinheiro(summary.totalDesp, summary.moeda),
+            // Com mais de uma moeda o total não existe, e o rodapé do card passa a
+            // ser a quebra: sem ela o travessão diz "não há nada", que é falso.
+            sub:
+              summary.totalDesp === null
+                ? quebraEmLinha(summary.porMoeda, "total_monthly_expense")
+                : `${despesas.filter((r) => r.ativa).length} ativas · ${despesas.filter((r) => r.ativa && r.valorTipo === "estimado").length} estimadas`,
             color: T.red,
           },
           {
             label: "Receitas recorrentes",
-            val: fmtAbs(summary.totalRec),
-            sub: `${receitas.filter((r) => r.ativa).length} ativas · ${receitas.filter((r) => r.ativa && r.valorTipo === "estimado").length} estimadas`,
+            val: dinheiro(summary.totalRec, summary.moeda),
+            sub:
+              summary.totalRec === null
+                ? quebraEmLinha(summary.porMoeda, "total_monthly_income")
+                : `${receitas.filter((r) => r.ativa).length} ativas · ${receitas.filter((r) => r.ativa && r.valorTipo === "estimado").length} estimadas`,
             color: T.green,
           },
-          { label: "Saldo fixo mensal", val: fmtSgn(summary.saldoFixo), sub: "após todos compromissos", color: summary.saldoFixo > 0 ? T.green : T.red },
-          { label: "Próximos 7 dias", val: fmtAbs(next7Amount), sub: `${upcomingNext7.length} vencimentos chegando`, color: T.amber },
+          {
+            label: "Saldo fixo mensal",
+            val: dinheiroComSinal(summary.saldoFixo, summary.moeda),
+            sub:
+              summary.saldoFixo === null
+                ? "sem total: mais de uma moeda"
+                : "após todos compromissos",
+            color: summary.saldoFixo > 0 ? T.green : T.red,
+          },
+          {
+            label: "Próximos 7 dias",
+            val: dinheiro(next7Amount, next7Moeda),
+            sub:
+              next7Amount === null
+                ? upcomingSummary.porMoeda
+                    .map((f) => formatMoney(f.total, f.currency || "BRL"))
+                    .filter(Boolean)
+                    .join(" · ")
+                : `${upcomingNext7.length} vencimentos chegando`,
+            color: T.amber,
+          },
         ].map((k, i) => (
           <Card key={i} style={{ padding: isMobile ? "12px 14px" : "14px 16px" }}>
             <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{k.label}</div>
@@ -787,7 +872,7 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
               {visibleSim.length} {visibleSim.length === 1 ? "recorrência simulada" : "recorrências simuladas"} · {simCenCount} {simCenCount === 1 ? "cenário" : "cenários"} · {fmtAbs(Math.abs(totalSimVal))}/mês
             </div>
             <div style={{ ...G, fontSize: 11, color: `${T.purple}99`, marginTop: 2 }}>
-              Impacto no saldo fixo: {fmtAbs(saldoFixo)} → {fmtAbs(saldoFixo - totalSimVal)}
+              Impacto no saldo fixo: {dinheiro(saldoFixo, moedaLocal)} → {semSaldoFixo ? SEM_NUMERO : dinheiro(saldoFixo - totalSimVal, moedaLocal)}
               {mutedItems.size > 0 && (
                 <span style={{ marginLeft: 8, color: T.inkLight }}>
                   · {mutedItems.size} muted
@@ -826,7 +911,7 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
             </>
           )}
 
-          <SectionHeader label="Despesas Fixas" count={`${despesas.filter((r) => r.ativa).length} ativas`} total={`−${fmtAbs(totalDesp)}/mês`} color={T.red} secKey="desp" open={secOpen.desp} />
+          <SectionHeader label="Despesas Fixas" count={`${despesas.filter((r) => r.ativa).length} ativas`} total={totalDesp === null ? `${quebraEmLinha(resumoLocal.porMoeda, "total_monthly_expense")}/mês` : `−${dinheiro(totalDesp, moedaLocal)}/mês`} color={T.red} secKey="desp" open={secOpen.desp} />
           <CollapsibleSection open={secOpen.desp}>
             <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingBottom: 8 }}>
               {despesas.slice(0, shown.desp).map((r) => (
@@ -836,7 +921,7 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
             </div>
           </CollapsibleSection>
 
-          <SectionHeader label="Receitas Fixas" count={`${receitas.filter((r) => r.ativa).length} ativas`} total={`+${fmtAbs(totalRec)}/mês`} color={T.green} secKey="rec" open={secOpen.rec} />
+          <SectionHeader label="Receitas Fixas" count={`${receitas.filter((r) => r.ativa).length} ativas`} total={totalRec === null ? `${quebraEmLinha(resumoLocal.porMoeda, "total_monthly_income")}/mês` : `+${dinheiro(totalRec, moedaLocal)}/mês`} color={T.green} secKey="rec" open={secOpen.rec} />
           <CollapsibleSection open={secOpen.rec}>
             <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingBottom: 8 }}>
               {receitas.slice(0, shown.rec).map((r) => (

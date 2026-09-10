@@ -135,6 +135,9 @@ export function mapRecurringSeriesToUi(series) {
     cat: pickCategoryLabelPtSeries(series),
     categoryIconKey: pickCategoryIconKeySeries(series),
     val: Number.parseFloat(series.value) || 0,
+    // A moeda da própria linha (#170). Sem ela toda série é desenhada em real, e
+    // um aluguel de € 1.200 aparece como "R$ 1.200,00".
+    moeda: series.value_currency ?? null,
     dia: series.day_of_month ?? (nextDate ? Number.parseInt(nextDate.slice(8, 10), 10) || null : null),
     ativa: series.is_active,
     proximo: formatDate(nextDate),
@@ -168,14 +171,36 @@ export function mapRecurringSeriesToUi(series) {
 /** @deprecated use mapRecurringSeriesToUi — alias histórico */
 export const mapRecurringTransactionToUi = mapRecurringSeriesToUi;
 
+/**
+ * O resumo mensal como a tela lê, **preservando a ausência**.
+ *
+ * O `|| 0` que estava aqui era o defeito: numa organização com duas moedas o
+ * backend manda `total_monthly_expense: null` — "não existe um total, olhe a
+ * quebra" — e o `|| 0` transformava isso em "você não gasta nada por mês". Um
+ * zero inventado em dinheiro afirma; `null` pergunta.
+ *
+ * `porMoeda` é a resposta nesse caso, e `moeda` é a unidade do cabeçalho quando
+ * ele existe — sem ela, uma organização inteira em euro era desenhada em real.
+ */
 export function mapRecurringSummaryToUi(summary) {
+  const totalRec = numeroOuNulo(summary?.total_monthly_income);
+  const totalDesp = numeroOuNulo(summary?.total_monthly_expense);
   return {
-    totalRec: summary?.total_monthly_income || 0,
-    totalDesp: summary?.total_monthly_expense || 0,
-    saldoFixo: (summary?.total_monthly_income || 0) - (summary?.total_monthly_expense || 0),
+    totalRec,
+    totalDesp,
+    saldoFixo: totalRec === null || totalDesp === null ? null : totalRec - totalDesp,
+    moeda: summary?.currency ?? null,
+    porMoeda: Array.isArray(summary?.by_currency) ? summary.by_currency : [],
     activeCount: summary?.active_count || 0,
     pausedCount: summary?.paused_count || 0,
   };
+}
+
+/** Número finito, ou `null`. Nunca zero — ausência de dinheiro não é zero. */
+function numeroOuNulo(valor) {
+  if (valor === null || valor === undefined || valor === "") return null;
+  const n = Number(valor);
+  return Number.isFinite(n) ? n : null;
 }
 
 export function buildUpcomingRecurringSummary(list, todayIso = null) {
@@ -189,9 +214,23 @@ export function buildUpcomingRecurringSummary(list, todayIso = null) {
     return diff >= 0 && diff <= 7;
   });
 
+  const porMoeda = new Map();
+  for (const item of items) {
+    const moeda = item.moeda || null;
+    porMoeda.set(moeda, (porMoeda.get(moeda) ?? 0) + item.val);
+  }
+  const fatias = [...porMoeda.entries()]
+    .map(([currency, total]) => ({ currency, total }))
+    .sort((a, b) => String(a.currency).localeCompare(String(b.currency)));
+
   return {
     items,
-    total: items.reduce((sum, item) => sum + item.val, 0),
+    // `total` só existe quando há UMA moeda (ou nenhum vencimento, que vale zero
+    // de verdade). Com duas, somar os valores nominais devolveria um número de
+    // moeda nenhuma — a mesma mentira do resumo mensal, um card ao lado.
+    total: fatias.length <= 1 ? (fatias[0]?.total ?? 0) : null,
+    moeda: fatias.length === 1 ? fatias[0].currency : null,
+    porMoeda: fatias,
   };
 }
 
@@ -400,3 +439,48 @@ export function formatRecurringApiError(error) {
 
 /** @deprecated */
 export const formatRecurringTransactionsApiError = formatRecurringApiError;
+
+/**
+ * O resumo recalculado NA TELA, depois de pausar ou apagar uma série.
+ *
+ * Ele existe para a lista não piscar esperando um novo GET, e por isso precisa
+ * obedecer à mesma regra do backend: somar só dentro de cada moeda, e publicar
+ * cabeçalho apenas quando existe UMA. O `reduce((s, r) => s + r.val, 0)` que
+ * estava aqui empilhava euro com real e devolvia um número de moeda nenhuma —
+ * o mesmo defeito que a API acabou de parar de cometer, refeito no cliente logo
+ * depois do primeiro clique.
+ */
+export function resumirRecorrenciasLocalmente(rows) {
+  const ativas = rows.filter((row) => row.ativa);
+  const porMoedaMap = new Map();
+  for (const row of ativas) {
+    const moeda = row.moeda || null;
+    const atual = porMoedaMap.get(moeda) ?? {
+      currency: moeda,
+      total_monthly_income: 0,
+      total_monthly_expense: 0,
+      active_count: 0,
+    };
+    if (row.tipo === "receita") atual.total_monthly_income += row.val;
+    else atual.total_monthly_expense += row.val;
+    atual.active_count += 1;
+    porMoedaMap.set(moeda, atual);
+  }
+  const porMoeda = [...porMoedaMap.values()].sort((a, b) =>
+    String(a.currency).localeCompare(String(b.currency)),
+  );
+  const unica = porMoeda.length === 1 ? porMoeda[0] : null;
+  return {
+    totalRec: unica ? unica.total_monthly_income : porMoeda.length === 0 ? 0 : null,
+    totalDesp: unica ? unica.total_monthly_expense : porMoeda.length === 0 ? 0 : null,
+    saldoFixo: unica
+      ? unica.total_monthly_income - unica.total_monthly_expense
+      : porMoeda.length === 0
+        ? 0
+        : null,
+    moeda: unica ? unica.currency : null,
+    porMoeda,
+    activeCount: ativas.length,
+    pausedCount: rows.length - ativas.length,
+  };
+}
