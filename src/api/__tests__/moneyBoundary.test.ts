@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import apiClient from '../client';
-import { getConsultantClients } from '../consultant';
+import { getConsultantClientProfile, getConsultantClients } from '../consultant';
 import { getEconomyCapacity, getFinancialHealth } from '../financialHealth';
 import { getGoalProjection, listGoalContributions, listGoals } from '../goals';
 import { getMonthlyPlan } from '../monthlyPlans';
@@ -80,6 +80,77 @@ describe('nenhum módulo devolve dinheiro embrulhado', () => {
   it('carteira do consultor', async () => {
     responde(consultantFamily.clients);
     expect(sobraramEmbrulhados(await getConsultantClients())).toEqual([]);
+  });
+
+  it('perfil privado do cliente', async () => {
+    responde(consultantFamily.client_profile);
+    expect(sobraramEmbrulhados(await getConsultantClientProfile('org'))).toEqual([]);
+  });
+});
+
+/**
+ * O perfil privado do cliente (#205).
+ *
+ * A #178 trocou `estimated_income` de string nua para `{amount, currency}` e o tipo
+ * do frontend continuou dizendo `string | null`. Nenhuma tela lia o campo, então não
+ * havia pixel quebrado — havia uma declaração falsa, e nenhum teste na ponta TS.
+ *
+ * A moeda aqui NÃO é descartável: é a base da organização DO CLIENTE, e o consultor
+ * que assessora alguém em euro tem de ler euro. Por isso ela sai num campo próprio
+ * em vez de morrer dentro de `unwrapMoney`.
+ */
+describe('perfil do cliente: a renda estimada sai com número E moeda (#205)', () => {
+  it('a fixture canônica sai como número somável, não como objeto', async () => {
+    responde(consultantFamily.client_profile);
+
+    const perfil = await getConsultantClientProfile('org');
+
+    // Sem desembrulho, `{profile.estimated_income}` desenharia `[object Object]`.
+    expect(perfil.estimated_income).toBe(8000);
+    expect(typeof perfil.estimated_income).toBe('number');
+  });
+
+  it('a moeda do cliente sobrevive à fronteira', async () => {
+    responde({ ...consultantFamily.client_profile, estimated_income: { amount: '3200.00', currency: 'EUR' } });
+
+    const perfil = await getConsultantClientProfile('org');
+
+    // `unwrapMoney` sozinho devolvia 3200 e nada mais: a tela formataria a renda
+    // de um cliente português como "R$ 3.200,00" — número certo, unidade errada.
+    expect(perfil.estimated_income_currency).toBe('EUR');
+    expect(perfil.estimated_income).toBe(3200);
+  });
+
+  it('renda ausente continua null nos dois campos, e nunca vira zero', async () => {
+    // `null` chega tanto de "não cadastrou renda" quanto de "não deu para ler a
+    // moeda base do cliente" — o backend omite o valor em vez de inventar a
+    // unidade. Zero afirmaria que a pessoa não ganha nada.
+    responde({ ...consultantFamily.client_profile, estimated_income: null });
+
+    const perfil = await getConsultantClientProfile('org');
+
+    expect(perfil.estimated_income).toBeNull();
+    expect(perfil.estimated_income_currency).toBeNull();
+  });
+
+  it('a forma antiga (string nua) ainda atravessa, sem moeda', async () => {
+    // Cobre o skew de deploy: um backend anterior à #178 no ar com este frontend.
+    // O valor tem de chegar; a moeda é que não existe para ser afirmada.
+    responde({ ...consultantFamily.client_profile, estimated_income: '8000.00' });
+
+    const perfil = await getConsultantClientProfile('org');
+
+    expect(perfil.estimated_income).toBe(8000);
+    expect(perfil.estimated_income_currency).toBeNull();
+  });
+
+  it('perfil vazio (has_profile=false) não inventa renda', async () => {
+    responde({ organization_id: 'o', has_profile: false, tags: [] });
+
+    const perfil = await getConsultantClientProfile('org');
+
+    expect(perfil.estimated_income).toBeNull();
+    expect(perfil.estimated_income_currency).toBeNull();
   });
 });
 

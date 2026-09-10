@@ -55,6 +55,37 @@ export function fmtBRL0(value) {
   return (n < 0 ? "−" : "") + "R$ " + Math.abs(n).toLocaleString("pt-BR");
 }
 
+/**
+ * Dinheiro NA MOEDA que veio com ele, ou "—" quando não veio valor.
+ *
+ * `fmtMoney`/`fmtBRL0` carimbam "R$" no que recebem, e para os agregados da
+ * carteira isso está certo: o backend já os consolida na base do cliente e a
+ * tela do consultor é pt-BR. A renda estimada do perfil é outra coisa — ela sai
+ * do backend rotulada com a base da organização DO CLIENTE, e o consultor que
+ * assessora alguém em euro precisa ler "€ 8.000,00". Formatar isso como
+ * "R$ 8.000,00" é número certo com unidade errada, que engana mais do que não
+ * mostrar nada.
+ *
+ * Ausência vira "—", nunca "R$ 0,00": o backend devolve `null` tanto quando não
+ * há renda cadastrada quanto quando não deu para ler a moeda base do cliente
+ * (aí ele omite o valor em vez de inventar a unidade). Zero afirmaria que a
+ * pessoa não ganha nada.
+ *
+ * Sem moeda MAS com valor, cai em "BRL" — mesmo último recurso de
+ * `normalizeAccountBalance`: é o que cobre um backend ainda na forma antiga
+ * (string nua, quando "R$" era a unidade implícita de toda a UI). Não é padrão
+ * para valor rotulado, porque para esse a moeda sempre vem junto.
+ */
+export function fmtMoneyIn(value, currency) {
+  if (value === null || value === undefined || value === "") return DASH;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return DASH;
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: currency || "BRL",
+  }).format(n);
+}
+
 /** Percentual com 1 casa, robusto a valor ausente/não-finito. */
 export function fmtPct(value) {
   const n = Number(value);

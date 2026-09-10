@@ -5,6 +5,7 @@ import {
   aggregateValue,
   fmtLastActive,
   fmtMoney,
+  fmtMoneyIn,
   fmtPct,
   healthTone,
   trendGlyph,
@@ -56,6 +57,48 @@ describe("fmtMoney — sinal só quando negativo", () => {
   it("mas zero de verdade continua R$ 0,00", () => {
     // Distinguir "não sei" de "é zero" é o ponto inteiro da mudança.
     expect(fmtMoney(0)).toBe("R$ 0,00");
+  });
+});
+
+/**
+ * `fmtMoneyIn` — dinheiro na moeda que veio COM ele (#205).
+ *
+ * A renda estimada do perfil sai do backend rotulada com a base da organização
+ * DO CLIENTE. `fmtMoney`/`fmtBRL0` carimbam "R$" no que recebem, e usá-los aqui
+ * desenharia a renda de um cliente português em real: número certo, unidade
+ * errada.
+ */
+describe("fmtMoneyIn — a moeda do valor, não a da tela", () => {
+  // NBSP e afins: o Intl separa símbolo e número com espaço estreito, que não é
+  // um espaço comum. Comparar com string literal falharia por invisível.
+  const semEspacos = (v) => v.replace(/\s/g, " ");
+
+  it("formata na moeda recebida", () => {
+    expect(semEspacos(fmtMoneyIn(8000, "BRL"))).toBe("R$ 8.000,00");
+    expect(semEspacos(fmtMoneyIn(3200, "EUR"))).toBe("€ 3.200,00");
+  });
+
+  it("não converte nem re-rotula: euro sai euro", () => {
+    expect(fmtMoneyIn(3200, "EUR")).not.toContain("R$");
+  });
+
+  it("ausência vira travessão, nunca zero", () => {
+    // "R$ 0,00" afirmaria que o cliente não ganha nada; `null` diz que nós é que
+    // não sabemos — o backend omite o valor quando não pode rotulá-lo.
+    expect(fmtMoneyIn(null, "BRL")).toBe(DASH);
+    expect(fmtMoneyIn(undefined, "BRL")).toBe(DASH);
+    expect(fmtMoneyIn("", "BRL")).toBe(DASH);
+    expect(fmtMoneyIn(Number.NaN, "BRL")).toBe(DASH);
+  });
+
+  it("zero declarado é um valor, e sai formatado", () => {
+    expect(semEspacos(fmtMoneyIn(0, "BRL"))).toBe("R$ 0,00");
+  });
+
+  it("sem moeda cai em BRL — cobre o backend na forma antiga", () => {
+    // Mesmo último recurso de `normalizeAccountBalance`: string nua era a forma
+    // pré-#178, em que "R$" era a unidade implícita de toda a UI.
+    expect(semEspacos(fmtMoneyIn(8000, null))).toBe("R$ 8.000,00");
   });
 });
 

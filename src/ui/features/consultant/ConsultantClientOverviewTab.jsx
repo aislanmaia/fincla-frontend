@@ -5,7 +5,7 @@ import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { fmtK } from "../../formatters";
 import { Donut, Icon, useIsNarrow } from "./consultantUi";
-import { fmtBRL0 } from "./consultantFormat";
+import { fmtBRL0, fmtMoneyIn } from "./consultantFormat";
 import { CashFlowChart } from "./ConsultantInsightsCharts.jsx";
 import {
   categorySegments,
@@ -84,6 +84,13 @@ function NotesCard({ profile }) {
   const hasProfile = Boolean(p?.has_profile);
   const goal = humanize(GOAL_LABELS, p?.main_goal);
   const level = humanize(LEVEL_LABELS, p?.experience_level);
+  // Só entra na tela quando o backend afirmou um valor. `null` chega tanto de
+  // "não cadastrou renda" quanto de "não deu para ler a moeda base do cliente",
+  // e nos dois casos o rótulo não deve aparecer: um campo vazio convida a ler
+  // ausência como zero. Ver `ConsultantClientProfile.estimated_income`.
+  const renda = p?.estimated_income == null
+    ? null
+    : fmtMoneyIn(p.estimated_income, p.estimated_income_currency);
   return (
     <Card style={{ padding: 18 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
@@ -111,13 +118,16 @@ function NotesCard({ profile }) {
               ))}
             </div>
           )}
-          {(goal || level) && (
+          {(goal || level || renda) && (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 16, borderTop: `1px solid ${T.border}`, paddingTop: 10 }}>
               {goal && (
                 <div><div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.06em" }}>Objetivo</div><div style={{ ...G, fontSize: 12, fontWeight: 600, color: T.ink, marginTop: 2 }}>{goal}</div></div>
               )}
               {level && (
                 <div><div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.06em" }}>Experiência</div><div style={{ ...G, fontSize: 12, fontWeight: 600, color: T.ink, marginTop: 2 }}>{level}</div></div>
+              )}
+              {renda && (
+                <div><div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkGhost, textTransform: "uppercase", letterSpacing: "0.06em" }}>Renda estimada</div><div style={{ ...G, ...NUM, fontSize: 12, fontWeight: 600, color: T.ink, marginTop: 2 }}>{renda}</div></div>
               )}
             </div>
           )}

@@ -3,7 +3,8 @@
 // descartada de propósito, porque estes agregados ainda somam moedas sem converter
 // (fincla-api#170) e um rótulo daria ao número uma autoridade que ele não tem.
 import apiClient from './client';
-import { unwrapMoney } from './money';
+import { toCurrency, toFiniteNumber, unwrapMoney } from './money';
+import type { WireMoney } from './money';
 import type {
   ClientHealthResponse,
   ConsultantSummaryQuery,
@@ -166,6 +167,16 @@ export interface CreateConsultantClientPayload {
   occupation?: string;
   org_name?: string;
   org_type?: string;
+  /**
+   * REQUISIÇÃO, e aqui dinheiro continua sendo decimal em string — de propósito.
+   *
+   * A assimetria com a leitura (`ConsultantClientProfile.estimated_income`, que
+   * chega `{amount, currency}`) é do contrato, não descuido: no cadastro não há
+   * moeda a escolher, porque o valor é gravado na base da organização que está
+   * sendo criada. Embrulhar isto em `{amount, currency}` faria o backend recusar
+   * o corpo (`estimated_income: str | None` no router) e o wizard quebraria no
+   * último passo, depois de o consultor ter digitado tudo.
+   */
   estimated_income?: string;
   initial_balance?: string;
   card?: { bank?: string; limit?: string; due_day?: string } | null;
@@ -213,17 +224,68 @@ export interface ConsultantClientProfile {
   priority: boolean;
   phone: string | null;
   occupation: string | null;
-  estimated_income: string | null;
+  /**
+   * Renda estimada que o consultor anotou, desembrulhada para número.
+   *
+   * Chega no fio como `{amount, currency}` (fincla-api#178) — era string nua
+   * (`"8000.00"`) e este tipo continuou declarando `string` depois da mudança.
+   * Ninguém renderizava o campo, então não houve pixel quebrado; o que havia era
+   * uma declaração falsa, e o próximo a escrever `{profile.estimated_income}`
+   * confiando nela desenharia `[object Object]` na tela do consultor.
+   *
+   * `null` é "não sabemos", NUNCA zero, e por DOIS motivos: o cliente não tem
+   * renda cadastrada, ou a moeda base da organização dele não pôde ser lida — e
+   * nesse caso o backend prefere omitir o valor a rotulá-lo com uma moeda
+   * inventada. Zero afirmaria que a pessoa não ganha nada.
+   */
+  estimated_income: number | null;
+  /**
+   * A moeda em que a renda acima está: a base da organização DO CLIENTE, não a
+   * de leitura do consultor.
+   *
+   * `unwrapMoney` descarta o rótulo da moeda de propósito, e para os agregados
+   * do consultor isso está certo. Aqui não: o consultor que assessora alguém em
+   * euro tem de ler "€ 8.000,00", e "R$ 8.000,00" seria número certo com unidade
+   * errada — o defeito que o épico do dinheiro canônico existe para matar. Por
+   * isso a conversão deste campo é explícita e não passa por `unwrapMoney`.
+   *
+   * `null` quando não veio moeda: ou não há renda a rotular, ou a resposta ainda
+   * está na forma antiga (string nua) de um backend anterior à #178.
+   */
+  estimated_income_currency: string | null;
+}
+
+/**
+ * A resposta como ela chega no fio.
+ *
+ * Existe para o compilador cobrar a normalização, como os `Raw*` de
+ * `balances.ts`: com `apiClient.get<ConsultantClientProfile>` o `return
+ * response.data` cru compilava e o tipo virava mentira em silêncio — foi
+ * exatamente assim que este campo atravessou a #178.
+ */
+export interface RawConsultantClientProfile
+  extends Omit<ConsultantClientProfile, 'estimated_income' | 'estimated_income_currency'> {
+  estimated_income?: WireMoney;
 }
 
 /** The consultant's private profile (notes/tags/…) for one client org. */
 export const getConsultantClientProfile = async (
   organizationId: string
 ): Promise<ConsultantClientProfile> => {
-  const response = await apiClient.get<ConsultantClientProfile>(
+  const response = await apiClient.get<RawConsultantClientProfile>(
     `/consultant/clients/${organizationId}/profile`
   );
-  return unwrapMoney(response.data);
+  const bruto = response.data;
+  return {
+    // `unwrapMoney` continua caminhando a resposta inteira: se amanhã o perfil
+    // ganhar outro campo monetário, ele já sai desembrulhado sem ninguém lembrar.
+    ...unwrapMoney(bruto),
+    estimated_income: toFiniteNumber(bruto?.estimated_income),
+    // Extraída ANTES de desembrulhar, senão o rótulo se perde e a tela formata a
+    // renda de um cliente português em real. `toCurrency` devolve `null` em vez
+    // de chutar "BRL" — chutar moeda é erro silencioso.
+    estimated_income_currency: toCurrency(bruto?.estimated_income),
+  };
 };
 
 export interface ConsultantQuota {
