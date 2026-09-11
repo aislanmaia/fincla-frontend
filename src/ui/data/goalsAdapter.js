@@ -62,6 +62,9 @@ export function mapGoalToUi(goal) {
     type: goal.type || "other",
     meta: Number(goal.target_amount) || 0,
     atual: Number(goal.current_amount) || 0,
+    // A moeda DA META (fincla-api#142). O progresso é medido nela: uma meta em
+    // euro com aporte em real não é uma meta adiantada, é outra conversa.
+    moeda: goal.currency ?? null,
     progress: Number(goal.progress) || 0,
     monthly_target: goal.monthly_target == null ? null : Number(goal.monthly_target),
     annual_return_rate: goal.annual_return_rate == null ? null : Number(goal.annual_return_rate),
