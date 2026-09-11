@@ -26,6 +26,44 @@ describe('balances API client', () => {
     });
   });
 
+  describe('a LENTE (target_currency)', () => {
+    /**
+     * Trocar a moeda em que se LÊ o total (#138). Ela não altera o que o backend
+     * calcula — só em que unidade ele responde.
+     *
+     * Estes testes existem porque os de cima, na tela e no hook, mockam camadas
+     * demais para ver o parâmetro: provei apagando `target_currency` daqui e os
+     * dois seguiram verdes. É aqui que a lente vira requisição.
+     */
+    it('getOrgBalances manda target_currency quando há lente', async () => {
+      vi.mocked(apiClient.get).mockResolvedValueOnce({ data: { as_of: 'x', total: 0, accounts: [] } });
+      await getOrgBalances('org-1', undefined, 'EUR');
+      expect(apiClient.get).toHaveBeenCalledWith('/balances', {
+        params: { organization_id: 'org-1', at_date: undefined, target_currency: 'EUR' },
+      });
+    });
+
+    it('getBalanceSummary manda target_currency quando há lente', async () => {
+      vi.mocked(apiClient.get).mockResolvedValueOnce({
+        data: { as_of: 'x', total_available: 0, total_all: 0, account_count: 0, by_type: [] },
+      });
+      await getBalanceSummary('org-1', undefined, 'EUR');
+      expect(apiClient.get).toHaveBeenCalledWith('/balances/summary', {
+        params: { organization_id: 'org-1', at_date: undefined, target_currency: 'EUR' },
+      });
+    });
+
+    it.each([null, undefined, ''])('%s NÃO vira parâmetro — é a moeda base', async (lente) => {
+      // Mandar `target_currency=` vazio faria o backend receber um pedido que ele
+      // não pediu, e a ausência de lente tem um significado: a moeda base.
+      vi.mocked(apiClient.get).mockResolvedValueOnce({ data: { as_of: 'x', total: 0, accounts: [] } });
+      await getOrgBalances('org-1', undefined, lente as string | null);
+      expect(apiClient.get).toHaveBeenCalledWith('/balances', {
+        params: { organization_id: 'org-1', at_date: undefined },
+      });
+    });
+  });
+
   it('getBalanceSummary usa /balances/summary', async () => {
     vi.mocked(apiClient.get).mockResolvedValueOnce({ data: { as_of: 'x', total_available: 0, total_all: 0, account_count: 0, by_type: [] } });
     await getBalanceSummary('org-1');

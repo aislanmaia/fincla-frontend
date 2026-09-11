@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { T } from "../tokens";
 import { G, NUM } from "../typography";
@@ -30,7 +30,25 @@ const menuItemStyle = {
 
 export function AccountsPage({ organizationId, dataMode = "live", isMobile = false }) {
   const enabled = !!organizationId && dataMode === "live";
-  const data = useAccountsData({ organizationId, enabled });
+  // A LENTE (#138): em que moeda ler o total. `null` = a moeda base da organização.
+  //
+  // Vive em `useState` e em lugar nenhum além dele, de propósito: o critério é
+  // "sem persistir preferência". Recarregar a página volta para a base — e é isso
+  // que impede a lente de virar, na prática, uma segunda moeda base que ninguém
+  // declarou e que relatório e IA não conhecem.
+  const [lente, setLente] = useState(null);
+  const data = useAccountsData({ organizationId, enabled, lente });
+
+  // O seletor só existe onde ele significa alguma coisa: uma organização de moeda
+  // única não tem lente para trocar, e oferecer a troca ali seria oferecer uma
+  // pergunta sem resposta. A base entra na conta porque uma conta em euro numa
+  // organização em real já são duas moedas.
+  const moedasEmUso = useMemo(() => {
+    const base = data.consolidation?.target_currency;
+    const das = (data.accounts ?? []).map((a) => a.currency).filter(Boolean);
+    return [...new Set([...(base ? [base] : []), ...das])].sort();
+  }, [data.accounts, data.consolidation?.target_currency]);
+  const temMaisDeUmaMoeda = moedasEmUso.length > 1;
 
   const [showNova, setShowNova] = useState(false);
   const [editAccount, setEditAccount] = useState(null);
@@ -179,8 +197,29 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
                 conseguimos converter (fincla-api#138). */}
             {formatMoney(data.total, data.consolidation?.target_currency) ?? "—"}
           </div>
-          <div style={{ ...G, fontSize: 12, color: T.inkLight, marginTop: 4 }}>
-            {accounts.length} {accounts.length === 1 ? "conta" : "contas"} · atualizado agora
+          <div style={{ ...G, fontSize: 12, color: T.inkLight, marginTop: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+            <span>{accounts.length} {accounts.length === 1 ? "conta" : "contas"} · atualizado agora</span>
+            {temMaisDeUmaMoeda ? (
+              <label style={{ ...G, display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: T.inkLight }}>
+                <span>ver em</span>
+                <select
+                  aria-label="Ver o total em"
+                  value={lente ?? ""}
+                  onChange={(e) => setLente(e.target.value || null)}
+                  style={{ ...G, fontSize: 12, fontWeight: 600, color: T.ink, background: T.surface,
+                    border: `1px solid ${T.border}`, borderRadius: 7, padding: "3px 6px", cursor: "pointer" }}
+                >
+                  {/* A opção vazia é a moeda BASE, e é o padrão: sair da lente tem
+                      de ser tão fácil quanto entrar nela. */}
+                  <option value="">{data.consolidation?.target_currency ?? "base"} (base)</option>
+                  {moedasEmUso
+                    .filter((m) => m !== data.consolidation?.target_currency)
+                    .map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                </select>
+              </label>
+            ) : null}
           </div>
           {data.consolidation?.unavailable ? (
             <div style={{ ...G, fontSize: 11.5, color: T.amber, marginTop: 8, lineHeight: 1.45 }}>
