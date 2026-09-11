@@ -102,7 +102,14 @@ test.describe("Consultor IA — Avaliar com IA", () => {
 
     // Veredito + resumo, vindos do contrato real.
     await expect(drawer.getByText(fixture.health_read.headline)).toBeVisible({ timeout: 20_000 });
-    await expect(drawer.getByText(String(fixture.health_read.score))).toBeVisible();
+    // `exact: true`: sem ele, `getByText("38")` casa por SUBSTRING — e o drawer
+    // mostra o id da run, um UUID. Quando o UUID sorteado contém "38" (o que
+    // acontece em boa parte das execuções), o seletor encontra dois elementos e o
+    // modo estrito derruba o teste. Falha que aparece e some sem ninguém mexer em
+    // nada, porque o UUID muda a cada execução.
+    await expect(
+      drawer.getByText(String(fixture.health_read.score), { exact: true }),
+    ).toBeVisible();
     await expect(drawer.getByText(fixture.summary)).toBeVisible();
 
     // Pontos de atenção: são objetos {metric, note} — a regressão que derrubava o drawer.
