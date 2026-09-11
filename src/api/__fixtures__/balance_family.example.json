@@ -5,6 +5,7 @@
     "name": "Conta corrente",
     "type": "checking",
     "currency": "BRL",
+    "currency_locked": false,
     "initial_balance": {
       "amount": "1000.50",
       "currency": "BRL"
