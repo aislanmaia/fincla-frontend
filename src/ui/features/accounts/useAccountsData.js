@@ -39,7 +39,7 @@ export function formatAccountsApiError(error) {
  * é dirigida pelo balance, que já traz nome/tipo/saldo/include_in_total por conta.
  * Expõe ações de criar/editar/desativar conta e transferir, que recarregam o saldo.
  */
-export function useAccountsData({ organizationId, enabled = true }) {
+export function useAccountsData({ organizationId, enabled = true, lente = null }) {
   const [state, setState] = useState(EMPTY);
   const [version, setVersion] = useState(0);
   const reload = useCallback(() => setVersion((v) => v + 1), []);
@@ -51,7 +51,13 @@ export function useAccountsData({ organizationId, enabled = true }) {
     }
     let cancelled = false;
     setState((s) => ({ ...EMPTY, isLoading: true, accounts: s.accounts, total: s.total }));
-    Promise.all([getOrgBalances(organizationId), apiListAccounts(organizationId)])
+    // `lente` é a moeda de EXIBIÇÃO escolhida na hora (#138). Ela entra na chave do
+    // efeito, então trocar a lente refaz a leitura — e não é gravada em lugar
+    // nenhum: recarregar a página volta para a moeda base da organização.
+    Promise.all([
+      getOrgBalances(organizationId, undefined, lente),
+      apiListAccounts(organizationId),
+    ])
       .then(([balances, accounts]) => {
         if (cancelled) return;
         // Merge full account metadata (institution/color/icon_key) onto each balance
@@ -81,7 +87,7 @@ export function useAccountsData({ organizationId, enabled = true }) {
     return () => {
       cancelled = true;
     };
-  }, [enabled, organizationId, version]);
+  }, [enabled, organizationId, version, lente]);
 
   const run = useCallback(
     async (fn) => {

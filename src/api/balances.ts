@@ -53,9 +53,22 @@ const normalizeAccountBalance = (raw: RawAccountBalance): AccountBalance => ({
 export const getOrgBalances = async (
   organizationId: string,
   atDate?: string,
+  /**
+   * A LENTE: em que moeda ler os totais. Omitida = a moeda base da organização.
+   *
+   * Ela não grava nada e não altera o que o backend calcula — só em que unidade
+   * ele responde. Relatório, IA e painel do consultor continuam sempre na moeda
+   * base, de propósito: dois números iguais em unidades diferentes na mesma
+   * conversa é como se perde a confiança num relatório.
+   */
+  targetCurrency?: string | null,
 ): Promise<OrgBalances> => {
   const response = await apiClient.get<RawOrgBalances>('/balances', {
-    params: { organization_id: organizationId, at_date: atDate },
+    params: {
+      organization_id: organizationId,
+      at_date: atDate,
+      ...(targetCurrency ? { target_currency: targetCurrency } : {}),
+    },
   });
   return {
     ...response.data,
@@ -70,9 +83,15 @@ export const getOrgBalances = async (
 export const getBalanceSummary = async (
   organizationId: string,
   atDate?: string,
+  /** A lente — ver `getOrgBalances`. */
+  targetCurrency?: string | null,
 ): Promise<BalanceSummary> => {
   const response = await apiClient.get<RawBalanceSummary>('/balances/summary', {
-    params: { organization_id: organizationId, at_date: atDate },
+    params: {
+      organization_id: organizationId,
+      at_date: atDate,
+      ...(targetCurrency ? { target_currency: targetCurrency } : {}),
+    },
   });
   return normalizeBalanceSummary(response.data);
 };
