@@ -47,6 +47,12 @@ describe("budgetsAdapter", () => {
       totalPct: 87,
       alertCount: 1,
       healthLabel: "Atenção",
+      // A fixture não declara `currency`, então o adapter responde `null` — ele não
+      // chuta "BRL" (fincla-frontend#140). Com uma moeda só, `porMoeda` fica vazio
+      // e os totais são os de sempre.
+      moeda: null,
+      porMoeda: [],
+      gastoPorMoeda: [],
       cats: [
         {
           id: "b1",
@@ -58,6 +64,8 @@ describe("budgetsAdapter", () => {
           emoji: "🛒",
           limite: 1200,
           gasto: 1046,
+          moeda: null,
+          foraDoOrcamento: [],
           membros: ["A", "M"],
           envelopes: [],
           navFilter: "t1",

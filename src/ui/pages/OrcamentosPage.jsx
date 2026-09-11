@@ -17,6 +17,8 @@ import { CollapsibleSection, PageTitle } from "../components/primitives";
 import { useBudgetsData } from "../features/budgets/useBudgetsData.js";
 import { BudgetHistoryChart } from "../features/budgets/BudgetHistoryChart.jsx";
 import { shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
+import { formatMoney, formatMoneyAbs } from "../money/formatMoney.js";
+import { currencyInfo } from "../money/currencyRegistry.js";
 
 /* ─── ORÇAMENTOS DATA ────────────────────────────────────── */
 const BUDGET_CONFIG = { total: 6500, modo: "top-down" };
@@ -103,12 +105,28 @@ export function OrcamentosPage({
   const currentYear = new Date().getFullYear();
   const displayMonth = shouldUseRealData ? currentMonth : month;
   const cats = shouldUseRealData ? (budgetsData.data?.cats || []) : mockCats;
-  const budget = shouldUseRealData ? (budgetsData.data?.budget || 0) : mockBudget;
+  /**
+   * `data ? data.budget : 0` e não `data?.budget ?? 0`.
+   *
+   * Os dois parecem iguais e não são: `null` é a resposta para "a organização tem
+   * orçamentos em mais de uma moeda, não existe UM total", e `?? 0` a esmaga em
+   * zero — que na tela vira "R$ 0,00" e afirma que não há orçamento nenhum. A
+   * mentira oposta, e a que o épico multi-moeda existe para matar.
+   *
+   * O `0` que fica é só o de ANTES de carregar, quando `data` é nulo inteiro.
+   */
+  const temDados = shouldUseRealData && !!budgetsData.data;
+  const budget = shouldUseRealData ? (temDados ? budgetsData.data.budget : 0) : mockBudget;
+  const moedaDoResumo = shouldUseRealData ? (budgetsData.data?.moeda ?? null) : null;
+  const orcadoPorMoeda = shouldUseRealData ? (budgetsData.data?.porMoeda ?? []) : [];
+  const gastoPorMoeda = shouldUseRealData ? (budgetsData.data?.gastoPorMoeda ?? []) : [];
+  const quebra = (fatias) =>
+    fatias.map((f) => formatMoney(f.valor, f.moeda)).filter(Boolean).join(" · ");
   const historyData = shouldUseRealData ? budgetsData.history : (dataMode === "mock" ? HIST_ORC : []);
 
-  const totalGasto  = shouldUseRealData ? (budgetsData.data?.totalGasto || 0) : cats.reduce((s, c) => s + c.gasto, 0);
-  const totalDisp   = shouldUseRealData ? (budgetsData.data?.totalDisp || 0) : budget - totalGasto;
-  const totalPct    = shouldUseRealData ? (budgetsData.data?.totalPct || 0) : (budget > 0 ? Math.round(totalGasto / budget * 100) : 0);
+  const totalGasto  = shouldUseRealData ? (temDados ? budgetsData.data.totalGasto : 0) : cats.reduce((s, c) => s + c.gasto, 0);
+  const totalDisp   = shouldUseRealData ? (temDados ? budgetsData.data.totalDisp : 0) : budget - totalGasto;
+  const totalPct    = shouldUseRealData ? (temDados ? budgetsData.data.totalPct : 0) : (budget > 0 ? Math.round(totalGasto / budget * 100) : 0);
   const alertCount  = shouldUseRealData ? (budgetsData.data?.alertCount || 0) : cats.filter(c => c.limite > 0 && c.gasto / c.limite >= 0.85).length;
   const healthLabel = shouldUseRealData ? (budgetsData.data?.healthLabel || "Saudável") : (alertCount === 0 ? "Saudável" : alertCount <= 2 ? "Atenção" : "Crítico");
   const healthColor = alertCount === 0 ? T.green : alertCount <= 2 ? T.amber : T.red;
@@ -116,7 +134,19 @@ export function OrcamentosPage({
   const pct = (g, l) => (l > 0 ? Math.min(100, Math.round(g / l * 100)) : 0);
   const barColor = (p) => p >= 100 ? T.red : p >= 75 ? T.amber : T.green;
   const barLight  = (p) => p >= 100 ? T.redLight : p >= 75 ? T.amberLight : T.greenLight;
-  const fmtBRL = (v) => "R$ " + Math.abs(v).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+  /**
+   * O nome era `fmtBRL` e o "R$" estava colado na string — é por isso que um
+   * orçamento em euro saía como real. Agora a moeda é ARGUMENTO, e o padrão segue
+   * o real: quem não passa nada escreve o que escrevia.
+   *
+   * `formatMoneyAbs` e não a montagem à mão porque esta tela sempre usou o espaço
+   * INQUEBRÁVEL (o `Intl`), e trocar por espaço comum mudaria todo valor da tela
+   * invisivelmente. Uma diferença real: o antigo deixava `maximumFractionDigits`
+   * no padrão (3 casas), então um limite de 1.234,5678 saía "1.234,568"; agora sai
+   * "1.234,57". Dinheiro tem duas casas (ADR-0003), e o valor com três nunca veio
+   * do backend — vinha de divisão feita aqui.
+   */
+  const fmtBRL = (v, moeda) => formatMoneyAbs(v, moeda || "BRL") ?? "";
   const toggleCat = (id) => setExpanded(e => ({ ...e, [id]: !e[id] }));
 
   const openEditBudget = (cat) => {
@@ -138,7 +168,7 @@ export function OrcamentosPage({
     const isExp  = !!expanded[cat.id];
     const hasEnv = cat.envelopes.length > 0;
     const AlertBadge = () => {
-      if (p >= 100) return <span style={{ ...G, fontSize: 11, fontWeight:700, background:T.redLight, color:T.red, padding:"3px 8px", borderRadius:99 }}>🔴 +{fmtBRL(cat.gasto - cat.limite)}</span>;
+      if (p >= 100) return <span style={{ ...G, fontSize: 11, fontWeight:700, background:T.redLight, color:T.red, padding:"3px 8px", borderRadius:99 }}>🔴 +{fmtBRL(cat.gasto - cat.limite, cat.moeda)}</span>;
       if (p >= 85)  return <span style={{ ...G, fontSize: 11, fontWeight:700, background:T.amberLight, color:T.amber, padding:"3px 8px", borderRadius:99 }}>⚠ {p}% usado</span>;
       return <span style={{ ...G, fontSize: 11, fontWeight:600, background:T.greenLight, color:T.green, padding:"3px 8px", borderRadius:99 }}>{p}% usado</span>;
     };
@@ -168,10 +198,23 @@ export function OrcamentosPage({
           <div style={{ height:isMobile?5:6, background:T.grayLight, borderRadius:99, overflow:"hidden", marginBottom:isMobile?6:8 }}>
             <div style={{ height:"100%", width:`${p}%`, background:bColor, borderRadius:99, transition:"width 0.5s cubic-bezier(0.4,0,0.2,1)" }} />
           </div>
+          {(cat.foraDoOrcamento ?? []).length > 0 ? (
+            /* O gasto da MESMA categoria em OUTRA moeda. Ele não entra na barra nem
+               no percentual — somar ali inventaria uma conversão que ninguém pediu.
+               Mas sumir da tela é pior que um número errado: a pessoa gastou, não
+               vê em lugar nenhum, e nem sabe que existe para procurar. */
+            <div style={{ ...G, fontSize: 11, color:T.inkMid, marginBottom:isMobile?6:8, lineHeight:1.45 }}>
+              Fora deste orçamento:{" "}
+              <strong style={{ ...NUM, color:T.ink }}>
+                {cat.foraDoOrcamento.map((f) => formatMoney(f.valor, f.moeda)).filter(Boolean).join(" · ")}
+              </strong>{" "}
+              — gasto nesta categoria em outra moeda, que o limite não mede.
+            </div>
+          ) : null}
           <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
             <div style={{ display:"flex", alignItems:"baseline", gap:4 }}>
-              <span style={{ ...G, ...NUM, fontSize:isMobile?13:14, fontWeight:800, color:bColor }}>{fmtBRL(cat.gasto)}</span>
-              <span style={{ ...G, ...NUM, fontSize: 11, color:T.inkLight }}>/ {fmtBRL(cat.limite)}</span>
+              <span style={{ ...G, ...NUM, fontSize:isMobile?13:14, fontWeight:800, color:bColor }}>{fmtBRL(cat.gasto, cat.moeda)}</span>
+              <span style={{ ...G, ...NUM, fontSize: 11, color:T.inkLight }}>/ {fmtBRL(cat.limite, cat.moeda)}</span>
             </div>
             <div style={{ display:"flex", alignItems:"center", gap:isMobile?6:8, marginLeft:isMobile?0:"auto" }}>
               <div style={{ display:"flex" }}>
@@ -212,8 +255,12 @@ export function OrcamentosPage({
                       </div>
                     </div>
                     <div style={{ ...G, ...NUM, fontSize: 11, textAlign:"right", minWidth:isMobile?80:100 }}>
-                      <span style={{ fontWeight:700, color:T.ink }}>{isMobile?`R$${env.gasto}`:fmtBRL(env.gasto)}</span>
-                      <span style={{ color:T.inkLight }}> / {isMobile?`R$${env.limite}`:fmtBRL(env.limite)}</span>
+                      {/* Envelope herda a moeda do orçamento a que pertence. Hoje só
+                          existe em modo de demonstração (`envelopes: []` sempre, no
+                          adapter), mas deixar "R$" chapado aqui seria plantar o mesmo
+                          defeito para quando ele virar dado real. */}
+                      <span style={{ fontWeight:700, color:T.ink }}>{isMobile?`${currencyInfo(cat.moeda).symbol}${env.gasto}`:fmtBRL(env.gasto, cat.moeda)}</span>
+                      <span style={{ color:T.inkLight }}> / {isMobile?`${currencyInfo(cat.moeda).symbol}${env.limite}`:fmtBRL(env.limite, cat.moeda)}</span>
                     </div>
                   </div>
                 );
@@ -231,7 +278,7 @@ export function OrcamentosPage({
       <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:14, padding:"16px 20px" }}>
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12, flexWrap:"wrap", gap:8 }}>
           <div style={{ ...G, fontSize:isMobile?12:13, fontWeight:700, color:T.ink }}>
-            Distribuição — <span style={{ ...NUM, color:T.blue }}>{fmtBRL(budget)}</span>
+            Distribuição — <span style={{ ...NUM, color:T.blue }}>{budget === null ? quebra(orcadoPorMoeda) : fmtBRL(budget, moedaDoResumo)}</span>
           </div>
           {shouldUseRealData ? (
             <span style={{ ...G, fontSize: 11, fontWeight:600, color:T.inkLight, background:T.bg, border:`1px solid ${T.border}`, borderRadius:7, padding:"4px 10px" }}
@@ -245,7 +292,7 @@ export function OrcamentosPage({
         <div style={{ height:10, background:T.grayLight, borderRadius:99, overflow:"hidden", position:"relative", marginBottom:12 }}>
           {cats.map((c, i) => {
             const w = budget > 0 ? (c.limite / budget * 100).toFixed(2) : "0";
-            const seg = <div key={c.id} style={{ position:"absolute", top:0, left:`${offset}%`, width:`${w}%`, height:"100%", background:c.color || CAT_COLORS[i], transition:"width 0.4s" }} title={`${c.nome}: ${fmtBRL(c.limite)}`} />;
+            const seg = <div key={c.id} style={{ position:"absolute", top:0, left:`${offset}%`, width:`${w}%`, height:"100%", background:c.color || CAT_COLORS[i], transition:"width 0.4s" }} title={`${c.nome}: ${fmtBRL(c.limite, c.moeda)}`} />;
             offset += parseFloat(w);
             return seg;
           })}
@@ -255,7 +302,7 @@ export function OrcamentosPage({
             <div key={c.id} style={{ display:"flex", alignItems:"center", gap:5 }}>
               <div style={{ width:8, height:8, borderRadius:2, background:c.color || CAT_COLORS[i], flexShrink:0 }} />
               <span style={{ ...G, fontSize: 11, color:T.inkMid }}>{c.nome}</span>
-              {!isMobile && <span style={{ ...G, ...NUM, fontSize: 11, fontWeight:700, color:T.ink }}>{fmtBRL(c.limite)}</span>}
+              {!isMobile && <span style={{ ...G, ...NUM, fontSize: 11, fontWeight:700, color:T.ink }}>{fmtBRL(c.limite, c.moeda)}</span>}
             </div>
           ))}
         </div>
@@ -335,9 +382,15 @@ export function OrcamentosPage({
       )}
       {cats.length > 0 && <div style={{ display:"grid", gridTemplateColumns:isMobile?"repeat(2,1fr)":"repeat(4,1fr)", gap:isMobile?10:12 }}>
         {[
-          { label:"Total orçado",   val:fmtBRL(budget),     sub:"limite do mês",             color:T.ink },
-          { label:"Gasto até hoje", val:fmtBRL(totalGasto), sub:`${totalPct}% do orçamento`, color:T.red },
-          { label:"Disponível",     val:fmtBRL(totalDisp),  sub:"saldo restante do orçamento", color:totalDisp>=0?T.green:T.red },
+          // Com mais de uma moeda não existe UM total, e o cabeçalho vira travessão
+          // com a quebra por baixo. Zero afirmaria que não há orçamento nenhum.
+          { label:"Total orçado",   val: budget === null ? "—" : fmtBRL(budget, moedaDoResumo),
+            sub: budget === null ? quebra(orcadoPorMoeda) : "limite do mês", color:T.ink },
+          { label:"Gasto até hoje", val: totalGasto === null ? "—" : fmtBRL(totalGasto, moedaDoResumo),
+            sub: totalGasto === null ? quebra(gastoPorMoeda) : `${totalPct}% do orçamento`, color:T.red },
+          { label:"Disponível",     val: totalDisp === null ? "—" : fmtBRL(totalDisp, moedaDoResumo),
+            sub: totalDisp === null ? "sem total: mais de uma moeda" : "saldo restante do orçamento",
+            color: totalDisp === null ? T.inkLight : totalDisp>=0?T.green:T.red },
           { label:"Saúde geral",    val:healthLabel,        sub:`${alertCount} no limite`,    color:healthColor },
         ].map((k, i) => (
           <div key={i} style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:12, padding:isMobile?"12px 14px":"14px 16px" }}>

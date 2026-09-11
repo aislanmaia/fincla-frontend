@@ -24,9 +24,15 @@ import {
 } from "../features/goals/goalMeta.js";
 import { resolveLocalData, shouldUseRealData } from "../dataMode.js";
 import { GoalProjectionModal } from "../features/goals/GoalProjectionModal.jsx";
+import { formatMoney } from "../money/formatMoney.js";
 
-const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
-const fmt = (v) => brl.format(Number(v || 0));
+/**
+ * O `Intl` com `currency: "BRL"` chapado era o motivo de uma meta em euro sair
+ * como real — número certo, unidade errada. A moeda passou a ser ARGUMENTO
+ * (fincla-frontend#136/#140); quem não passa nada continua escrevendo em real,
+ * byte a byte como antes.
+ */
+const fmt = (v, moeda) => formatMoney(Number(v || 0), moeda || "BRL") ?? "";
 const fmtPct = (rate) => `${Number(Number(rate) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% a.a.`;
 
 const LIFE_PROJECTS_MOCK = [
@@ -75,13 +81,13 @@ function ProjectCard({ g, onEdit, onContribuir, onProjection }) {
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 11 }}>
         <span style={{ ...G, ...NUM, fontSize: 12, color: T.inkLight }}>{Math.round(g.progress)}%</span>
-        <span style={{ ...G, ...NUM, fontSize: 12, color: T.inkLight }}>{fmt(g.meta)}</span>
+        <span style={{ ...G, ...NUM, fontSize: 12, color: T.inkLight }}>{fmt(g.meta, g.moeda)}</span>
       </div>
       <div style={{ height: 8, borderRadius: 99, background: T.grayLight, overflow: "hidden", marginTop: 6 }}>
         <div style={{ width: `${Math.max(2, Math.min(100, g.progress))}%`, height: "100%", borderRadius: 99, background: tm.bar }} />
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
-        <span style={ghost}>{g.monthly_target ? `${fmt(g.monthly_target)}/mês` : "sem aporte"} · {g.prazo}</span>
+        <span style={ghost}>{g.monthly_target ? `${fmt(g.monthly_target, g.moeda)}/mês` : "sem aporte"} · {g.prazo}</span>
         {onContribuir ? (
           <button onClick={(e) => { e.stopPropagation(); onContribuir(g); }} style={{ ...G, fontSize: 11, fontWeight: 700, color: T.green, background: "none", border: "none", cursor: "pointer", padding: 0 }}>+ Aportar</button>
         ) : null}
@@ -113,10 +119,42 @@ function EmptyLane({ term, onCreate }) {
   );
 }
 
+
+/**
+ * A soma de um conjunto de metas, escrita de um jeito que não mente.
+ *
+ * Somar `atual` de uma meta em euro com o de uma em real e carimbar "R$" é um
+ * número de moeda nenhuma — o mesmo defeito que o épico multi-moeda existe para
+ * matar. Com UMA moeda sai o total nela; com mais de uma, sai a quebra
+ * ("R$ 18.500,00 · € 5.200,00"), porque a pessoa guardou os dois e precisa ver
+ * os dois.
+ *
+ * Converter aqui seria pior: a meta RESTRINGE em vez de converter (fincla-api#142),
+ * senão o progresso oscilaria com o câmbio sem ninguém ter aportado nada.
+ */
+function somaPorMoeda(items, campo) {
+  const porMoeda = new Map();
+  for (const g of items ?? []) {
+    const moeda = g.moeda || "BRL";
+    porMoeda.set(moeda, (porMoeda.get(moeda) ?? 0) + Number(g[campo] || 0));
+  }
+  return [...porMoeda.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+/** O texto da soma: um número quando há uma moeda, a quebra quando há várias. */
+function textoDaSoma(items, campo) {
+  const fatias = somaPorMoeda(items, campo);
+  if (fatias.length === 0) return fmt(0);
+  return fatias.map(([moeda, valor]) => fmt(valor, moeda)).join(" · ");
+}
+
+/** `true` quando todas as metas do conjunto estão na mesma moeda. */
+function moedaUnica(items) {
+  return somaPorMoeda(items, "meta").length <= 1;
+}
+
 function laneSubtotal(items) {
-  const saved = items.reduce((s, g) => s + Number(g.atual || 0), 0);
-  const target = items.reduce((s, g) => s + Number(g.meta || 0), 0);
-  return `${fmt(saved)} / ${fmt(target)}`;
+  return `${textoDaSoma(items, "atual")} / ${textoDaSoma(items, "meta")}`;
 }
 
 const EMPTY_FORM = { nome: "", desc: "", type: "emergency_fund", meta: "", deadline: "", prioridade: "media", monthly_target: "", annual_return_rate: "", term: "", status: "active" };
@@ -234,8 +272,13 @@ export function LifeProjectsPage({ organizationId = null, dataMode = "live", isM
             </>
           ) : (
             <>
-              <div style={{ ...G, ...NUM, fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em", color: "#fff", marginTop: 4 }}>{fmt(totalSaved)}</div>
-              <div style={{ ...G, fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 3 }}>de {fmt(totalTarget)} · {Math.round(overallPct)}% do objetivo</div>
+              <div style={{ ...G, ...NUM, fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em", color: "#fff", marginTop: 4 }}>{textoDaSoma(goals, "atual")}</div>
+              <div style={{ ...G, fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 3 }}>
+                de {textoDaSoma(goals, "meta")}
+                {/* O percentual só existe quando há UMA moeda: 5.200 euros sobre
+                    18.000 reais não é uma fração de coisa nenhuma. */}
+                {moedaUnica(goals) ? ` · ${Math.round(overallPct)}% do objetivo` : ""}
+              </div>
               <div style={{ height: 8, borderRadius: 99, background: "rgba(255,255,255,0.15)", overflow: "hidden", marginTop: 12 }}><div style={{ width: `${overallPct}%`, height: "100%", borderRadius: 99, background: T.greenBar }} /></div>
             </>
           )}

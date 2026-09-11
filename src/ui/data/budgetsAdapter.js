@@ -58,10 +58,39 @@ function toNum(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
+/**
+ * O resumo do topo, somando DENTRO de cada moeda.
+ *
+ * `reduce` sobre `amount` de todos os orçamentos empilhava € 800 com R$ 500 e
+ * publicava 1.300 — um número de moeda nenhuma, e o defeito que o épico
+ * multi-moeda existe para matar. Agora:
+ *
+ *   uma moeda  -> o total nela, como sempre (100% das organizações de hoje)
+ *   várias     -> `null` no cabeçalho, e `porMoeda` com a quebra
+ *
+ * Converter aqui é proibido: o orçamento RESTRINGE em vez de converter
+ * (fincla-api#141), senão um limite "estouraria" por variação de câmbio.
+ */
+function somarPorMoeda(budgets, campo) {
+  const porMoeda = new Map();
+  for (const b of budgets) {
+    const moeda = b.currency || null;
+    porMoeda.set(moeda, (porMoeda.get(moeda) ?? 0) + toNum(b[campo]));
+  }
+  return [...porMoeda.entries()]
+    .map(([moeda, valor]) => ({ moeda, valor }))
+    .sort((a, b) => String(a.moeda).localeCompare(String(b.moeda)));
+}
+
 function summarizeFromBudgetRows(budgets) {
-  const total_budgeted = budgets.reduce((s, b) => s + toNum(b.amount), 0);
-  const total_spent = budgets.reduce((s, b) => s + toNum(b.spent_amount), 0);
-  const total_remaining = budgets.reduce((s, b) => s + toNum(b.remaining_amount), 0);
+  const moedas = new Set(budgets.map((b) => b.currency || null));
+  const umaMoedaSo = moedas.size <= 1;
+  const soma = (campo) =>
+    umaMoedaSo ? budgets.reduce((s, b) => s + toNum(b[campo]), 0) : null;
+
+  const total_budgeted = soma("amount");
+  const total_spent = soma("spent_amount");
+  const total_remaining = soma("remaining_amount");
   let budgets_exceeded = 0;
   let budgets_warning = 0;
   let budgets_ok = 0;
@@ -77,6 +106,9 @@ function summarizeFromBudgetRows(budgets) {
     budgets_exceeded,
     budgets_warning,
     budgets_ok,
+    moeda: umaMoedaSo ? ([...moedas][0] ?? null) : null,
+    porMoeda: umaMoedaSo ? [] : somarPorMoeda(budgets, "amount"),
+    gastoPorMoeda: umaMoedaSo ? [] : somarPorMoeda(budgets, "spent_amount"),
   };
 }
 
@@ -129,6 +161,24 @@ export function mapBudgetToUi(budget) {
     emoji: meta.emoji,
     limite: toNum(budget.amount),
     gasto: toNum(budget.spent_amount),
+    // A moeda DO ORÇAMENTO. Ele tem a sua, e o consumo é medido nela — um
+    // orçamento em euro com gasto em real não é um orçamento estourado, é outra
+    // conversa (fincla-api#141).
+    moeda: budget.currency ?? null,
+    /**
+     * O gasto da MESMA categoria em OUTRA moeda, que o orçamento não mede.
+     *
+     * Vem como lista de `{amount, currency}` — uma entrada por moeda. Ele não
+     * entra em `gasto` nem no percentual: somar ali seria inventar uma conversão
+     * que ninguém pediu. Mas também não pode SUMIR da tela: um gasto que a pessoa
+     * fez e não vê em lugar nenhum é pior que um número errado, porque ela nem
+     * sabe que existe para procurar.
+     */
+    foraDoOrcamento: Array.isArray(budget.spent_outside_budget_currency)
+      ? budget.spent_outside_budget_currency
+          .map((m) => ({ valor: toNum(m?.amount ?? m), moeda: m?.currency ?? null }))
+          .filter((m) => m.valor > 0 && m.moeda)
+      : [],
     membros: meta.membros,
     envelopes: [],
     navFilter: budget.tag_id,
@@ -148,14 +198,19 @@ export function mapBudgetsResponseToUi(response) {
       ? summarizeFromBudgetRows(monthlyActive)
       : normalizeSummary(response?.summary);
   const alertCount = summary.budgets_exceeded + summary.budgets_warning;
-  const totalPct = summary.total_budgeted > 0
+  // O percentual só existe quando há UMA moeda: 300 euros sobre 800 reais não é
+  // uma fração de coisa nenhuma.
+  const totalPct = summary.total_budgeted > 0 && summary.total_spent != null
     ? Math.round((summary.total_spent / summary.total_budgeted) * 100)
-    : 0;
+    : null;
 
   return {
     budget: summary.total_budgeted,
     totalGasto: summary.total_spent,
     totalDisp: summary.total_remaining,
+    moeda: summary.moeda ?? null,
+    porMoeda: summary.porMoeda ?? [],
+    gastoPorMoeda: summary.gastoPorMoeda ?? [],
     totalPct,
     alertCount,
     healthLabel: resolveHealthLabel(alertCount),

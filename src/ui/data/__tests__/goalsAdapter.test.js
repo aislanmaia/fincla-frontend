@@ -30,6 +30,8 @@ describe("goalsAdapter", () => {
       type: "emergency_fund",
       meta: 30000,
       atual: 18500,
+      // Sem `currency` na fixture, o adapter responde `null` — não chuta "BRL".
+      moeda: null,
       progress: 62,
       monthly_target: 1000,
       annual_return_rate: null,
