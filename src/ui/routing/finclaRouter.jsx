@@ -38,6 +38,17 @@ const indexRoute = createRoute({
   component: () => null,
 });
 
+const checkoutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/checkout",
+  validateSearch: (search) => Object.fromEntries(
+    ["persona", "billing_cycle", "mode", "seats", "package_size"]
+      .filter((key) => search[key] != null)
+      .map((key) => [key, search[key]]),
+  ),
+  component: () => null,
+});
+
 const segmentRoutes = AUTH_ROUTE_SEGMENTS.filter(
   (s) => s !== "profile" && s !== "transactions" && s !== "planning",
 ).map((segment) => {
@@ -220,6 +231,7 @@ const notFoundRoute = new NotFoundRoute({
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  checkoutRoute,
   ...segmentRoutes,
   transactionsRoute,
   profileRoute,

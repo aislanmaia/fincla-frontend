@@ -19,6 +19,7 @@ import { useSession } from "./features/auth/useSession.js";
 import { parseAuthEntryUrl, stripAuthEntryQueryAndHash } from "./features/auth/authEntryUrl.js";
 import { AcceptInvitationPage } from "./features/auth/AcceptInvitationPage.jsx";
 import { LoginPage } from "./features/auth/LoginPage.jsx";
+import { CheckoutPage } from "./pages/CheckoutPage.jsx";
 import { PasswordResetPage } from "./features/auth/PasswordResetPage.jsx";
 import { validateResetToken } from "../api/auth";
 import { ErrorBoundary } from "./features/auth/ErrorBoundary.jsx";
@@ -435,6 +436,8 @@ export default function App() {
     reports:   <RelatoriosPage onNav={(dest)=>{ if(dest==="_nova_transacao") openTxModal(); else navTo(dest); }} isMobile={isMobile} dataMode={dataMode} extraRecs={extraRecs} organizationId={session.activeOrgId} />,
     simulation:    <SimulacaoPageView cenarios={cenarios} setCenarios={setCenarios} cenarioId={cenarioId} setCenarioId={setCenarioId} isMobile={isMobile} organizationId={session.activeOrgId} dataMode={dataMode} />,
   };
+
+  if (pathname === "/checkout") return <CheckoutPage search={searchStr} />;
 
   if (session.isBootstrapping) return (
     <>

@@ -28,6 +28,7 @@ export function useAuthRedirects({
   useEffect(() => {
     if (session.isBootstrapping) return;
     if (session.isAuthenticated) return;
+    if (pathname === "/checkout") return;
     if (!firstPathSegment(pathname)) return;
     if (isReturnableFinclaPathname(pathname)) {
       capturePostLoginRedirectFromPathnameAndSearchStr(pathname, searchStr);
