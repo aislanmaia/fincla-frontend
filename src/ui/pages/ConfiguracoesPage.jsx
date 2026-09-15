@@ -32,6 +32,7 @@ import {
 import { T } from "../tokens";
 import { G } from "../typography";
 import { BillingPanel } from "../features/subscription/BillingPanel.jsx";
+import { ConsultantSubscriptionPanel } from "../features/consultant/ConsultantSubscriptionPanel.jsx";
 import { CategoriesTagsSettingsPanel } from "../features/settings/CategoriesTagsSettingsPanel.jsx";
 import { DragScrollTabs } from "../layouts/DragScrollTabs.jsx";
 import { CardEmptyWithCta } from "../features/shellExtras.jsx";
@@ -781,7 +782,7 @@ export function ConfiguracoesPage({
     </div>
   );
 
-  const renderAssinatura = () => (
+  const renderAssinatura = () => currentUser?.subscription?.checkout_selection?.persona === "consultant" ? <ConsultantSubscriptionPanel /> : (
     <BillingPanel
       SectionCard={SectionCard}
       SectionHeader={SectionHeader}

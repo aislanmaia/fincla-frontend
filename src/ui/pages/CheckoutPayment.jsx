@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
-import { currentCheckout, payCheckout } from "../../api/checkout";
-import { cancelSubscription } from "../../api/subscriptions";
+import { CheckoutRequestError, currentCheckout, payCheckout } from "../../api/checkout";
+import { CancelSubscriptionDialog } from "../features/subscription/CancelSubscriptionDialog.jsx";
+import { CheckoutBilling } from "./CheckoutBilling.jsx";
 import { Btn } from "../components/primitives.jsx";
 import { T } from "../tokens.js";
 import { CheckoutField } from "./CheckoutAccount.jsx";
 
-export function CheckoutPayment({ quote, session, onOffer }) {
+export function CheckoutPayment({ quote, session, onOffer, onRefresh }) {
+  const [offerChanged, setOfferChanged] = useState(false);
+  const [showCancel, setShowCancel] = useState(false);
   const [attempt, setAttempt] = useState(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
@@ -39,14 +42,19 @@ export function CheckoutPayment({ quote, session, onOffer }) {
     const form = event.currentTarget;
     const fields = new FormData(form);
     try {
-      const value = await payCheckout({selection:quote.selection,
+      const value = await payCheckout({selection:quote.selection,catalog_version:quote.catalog_version,
         card:{holderName:fields.get("name"),number:String(fields.get("number")).replace(/\s/g,""),expiryMonth:fields.get("month"),expiryYear:fields.get("year"),ccv:fields.get("ccv")},
         holder:{name:fields.get("name"),email:session.user.email,cpfCnpj:fields.get("cpf"),postalCode:fields.get("postal"),addressNumber:fields.get("address"),phone:fields.get("phone")}});
       setAttempt(value); onOffer(value.quote);
-    } catch {
+    } catch (failure) {
+      if (failure instanceof CheckoutRequestError && failure.code === "checkout_offer_changed") {
+        setOfferChanged(true);
+        setError("A oferta mudou. Atualize o resumo e confira o novo valor antes de confirmar o pagamento.");
+      } else {
       // Browser uncertainty cannot authorize another payment submission.
       setAttempt({status:"reconciling"});
       setError("A resposta demorou ou foi interrompida. Verifique o resultado para continuar com segurança.");
+      }
     } finally {
       form.reset(); setFormKey((value)=>value+1);
       submitting.current = false; setBusy(false);
@@ -58,11 +66,14 @@ export function CheckoutPayment({ quote, session, onOffer }) {
     <p style={{color:T.inkMid}}>Conta: {session.user?.email}</p>
     {error && <p role="alert">{error}</p>}
     {busy && <p role="status">Consultando a contratação…</p>}
-    {active ? <><h2>Seu acesso está liberado</h2><Btn variant="dark" onClick={()=>window.location.assign("/dashboard")}>Continuar para o Fincla</Btn></> : waiting ? <>
-      <h2>{attempt.status === "pending_payment" ? "Aguardando confirmação do pagamento" : "Confirmando o resultado da tentativa"}</h2>
-      <p>Você pode sair e voltar a esta página. Seu acesso será liberado quando o pagamento for confirmado.</p>
+    {active ? <><h2>Seu acesso está liberado</h2><Btn variant="dark" onClick={()=>window.location.assign(quote.selection.persona === "consultant" ? "/consultant/clients" : "/dashboard")}>Continuar para o Fincla</Btn></> : waiting ? <>
+      <h2>{attempt.status === "active" ? "Verifique a renovação da sua assinatura" : attempt.status === "pending_payment" ? "Aguardando confirmação do pagamento" : "Confirmando o resultado da tentativa"}</h2>
+      {attempt.status === "active" ? <p>O pagamento inicial já foi registrado, mas o acesso está indisponível. Consulte as faturas da assinatura e verifique a renovação para recuperar o acesso.</p> : <p>Você pode sair e voltar a esta página. Seu acesso será liberado quando o pagamento for confirmado.</p>}
       <Btn disabled={busy} onClick={check}>Verificar pagamento</Btn>
-      {attempt.status === "pending_payment" && <Btn disabled={busy} onClick={async()=>{ setBusy(true); try {await cancelSubscription(); setAttempt({status:"cancelled"});} catch {setError("Não foi possível cancelar. Tente novamente.");} finally {setBusy(false);} }}>Cancelar assinatura</Btn>}
+      {["pending_payment", "active"].includes(attempt.status) && <>
+        <CheckoutBilling />
+        <Btn disabled={busy} onClick={() => setShowCancel(true)}>Cancelar assinatura</Btn>
+      </>}
     </> : attempt?.status === "cancelled" ? <p>Assinatura cancelada. Entre em contato com o suporte para uma nova contratação.</p> : !busy && !error && <>
       {attempt?.status === "declined" && <p role="alert">Pagamento não aprovado. Confira os dados ou use outro cartão.</p>}
       <h2>Pague com cartão</h2>
@@ -82,7 +93,9 @@ export function CheckoutPayment({ quote, session, onOffer }) {
         <Btn type="submit" variant="dark" disabled={busy}>Confirmar pagamento</Btn>
       </form>
     </>}
-    {error && !waiting && <Btn disabled={busy} onClick={check}>Verificar pagamento</Btn>}
+    {offerChanged && <Btn disabled={busy} onClick={onRefresh}>Atualizar oferta</Btn>}
+    {error && !waiting && !offerChanged && <Btn disabled={busy} onClick={check}>Verificar pagamento</Btn>}
+    {showCancel && <CancelSubscriptionDialog reactivationHint="Para uma nova contratação após cancelar, entre em contato com o suporte." onClose={() => setShowCancel(false)} onCancelled={() => { setShowCancel(false); setAttempt({status:"cancelled"}); }} />}
     <div style={{marginTop:20}}><Btn disabled={busy} onClick={session.signOut}>Sair da conta</Btn></div>
   </section>;
 }

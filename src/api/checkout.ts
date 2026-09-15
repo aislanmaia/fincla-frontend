@@ -43,6 +43,10 @@ export interface CheckoutAttempt {
   quote: CheckoutQuote;
 }
 
+export class CheckoutRequestError extends Error {
+  constructor(message: string, public code: string | undefined) { super(message); }
+}
+
 async function checkoutRequest<T>(path: string, body?: unknown): Promise<T> {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), 75000);
@@ -54,12 +58,12 @@ async function checkoutRequest<T>(path: string, body?: unknown): Promise<T> {
       signal: controller.signal,
     });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload?.detail?.message || 'Não foi possível continuar. Confira os dados e tente novamente.');
+    if (!response.ok) throw new CheckoutRequestError(payload?.detail?.message || 'Não foi possível continuar. Confira os dados e tente novamente.', payload?.detail?.code);
     return payload;
   } finally { window.clearTimeout(timeout); }
 }
 
-export const registerCheckout = (body: { email: string; password: string; first_name: string; billing_cycle: string }) => checkoutRequest('register', body);
+export const registerCheckout = (body: { selection?: CheckoutQuote['selection']; persona?: 'personal' | 'consultant'; email: string; password: string; first_name: string; billing_cycle: string }) => checkoutRequest('register', body);
 export const currentCheckout = () => checkoutRequest<CheckoutAttempt | null>('current');
 /** Never retry a financial POST; the server reconciles uncertain outcomes. */
 export const payCheckout = (body: unknown) => checkoutRequest<CheckoutAttempt>('pay', body);

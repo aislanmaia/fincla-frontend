@@ -28,7 +28,7 @@ const debtColor = (v) => (v <= 30 ? T.green : v <= 50 ? T.amber : T.red);
  * inline (Avaliar com IA ativo; Mensagem = stub "em breve"). O card inteiro é clicável → abre o
  * relatório. Presentational — dados via `client` (`ConsultantClient` enriquecido).
  */
-export function ConsultantClientCard({ client, onOpenClient, onRegenerate, onEvaluate, onRecomputeHealth, riskAlert, evaluateLocked = false }) {
+export function ConsultantClientCard({ client, onOpenClient, onRelease, onRegenerate, onEvaluate, onRecomputeHealth, riskAlert, evaluateLocked = false }) {
   const savings = Number(client.savings_pct) || 0;
   const debt = Number(client.debt_pct) || 0;
   const trendUp = client.trend === "up";
@@ -80,6 +80,8 @@ export function ConsultantClientCard({ client, onOpenClient, onRegenerate, onEva
         )}
         <span style={{ ...G, fontSize: 11, color: T.inkGhost, marginLeft: "auto" }}>{fmtLastActive(client.last_active)}</span>
         <ConsultantClientActions
+          onRelease={onRelease ? () => onRelease(client) : undefined}
+          releaseLabel={`Liberar vaga de ${client.client_name}`}
           pending={!!client.pending_activation}
           onRegenerate={() => onRegenerate?.(client.organization_id)}
           onEvaluate={onEvaluate ? () => onEvaluate(client) : undefined}

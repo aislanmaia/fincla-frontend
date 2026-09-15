@@ -20,7 +20,7 @@ export function CheckoutAccount({ quote, session }) {
     const fields = new FormData(event.currentTarget);
     const email = fields.get("email"), password = fields.get("password");
     try {
-      if (!login) await registerCheckout({ email, password, first_name: fields.get("name"), billing_cycle: quote.selection.billing_cycle });
+      if (!login) await registerCheckout({ selection: quote.selection, persona: quote.selection.persona, email, password, first_name: fields.get("name"), billing_cycle: quote.selection.billing_cycle });
       await session.signIn(email, password);
     } catch (failure) { setError(failure.message); }
     finally { setBusy(false); }
@@ -28,6 +28,7 @@ export function CheckoutAccount({ quote, session }) {
   return <section style={{ marginTop: 24 }}>
     <h2>{login ? "Entre para continuar" : "Crie sua conta"}</h2>
     <p style={{ color: T.inkMid }}>Sua escolha fica preservada. O acesso será liberado após a confirmação do pagamento.</p>
+    <p style={{ color: T.inkMid, lineHeight: 1.6 }}>Pessoal e Consultor usam perfis separados. Para utilizar a outra área, crie uma conta com outro email.</p>
     <form onSubmit={submit} style={{ display: "grid", gap: 16 }}>
       {!login && <CheckoutField label="Nome" name="name" autoComplete="given-name" />}
       <CheckoutField label="Email" name="email" type="email" autoComplete="email" />

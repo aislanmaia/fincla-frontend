@@ -13,7 +13,7 @@ const TD = { ...G, fontSize: 13, color: T.ink, padding: "12px 18px", borderTop: 
 
 const debtColor = (v) => (v <= 30 ? T.green : v <= 50 ? T.amber : T.red);
 
-function Row({ client, onOpenClient, onRegenerate, onEvaluate, onRecomputeHealth, evaluateLocked }) {
+function Row({ client, onOpenClient, onRelease, onRegenerate, onEvaluate, onRecomputeHealth, evaluateLocked }) {
   const debt = Number(client.debt_pct) || 0;
   const trendUp = client.trend === "up";
   const trendDown = client.trend === "down";
@@ -57,7 +57,9 @@ function Row({ client, onOpenClient, onRegenerate, onEvaluate, onRecomputeHealth
           <ConsultantClientActions
             onOpen={() => onOpenClient?.(client.organization_id)}
             showOpen
-            pending={!!client.pending_activation}
+            onRelease={onRelease ? () => onRelease(client) : undefined}
+          releaseLabel={`Liberar vaga de ${client.client_name}`}
+          pending={!!client.pending_activation}
             onRegenerate={() => onRegenerate?.(client.organization_id)}
             onEvaluate={onEvaluate ? () => onEvaluate(client) : undefined}
             evaluateLocked={evaluateLocked}
@@ -76,7 +78,7 @@ function Row({ client, onOpenClient, onRegenerate, onEvaluate, onRecomputeHealth
  * Tendência · ações. Linha clicável → relatório. `clients` já filtrados/ordenados
  * pela página. Rola horizontalmente no mobile (largura total, sem faixas laterais).
  */
-export function ConsultantClientsTable({ clients = [], onOpenClient, onRegenerate, onEvaluate, onRecomputeHealth, evaluateLocked = false }) {
+export function ConsultantClientsTable({ clients = [], onOpenClient, onRelease, onRegenerate, onEvaluate, onRecomputeHealth, evaluateLocked = false }) {
   return (
     <Card style={{ padding: 0, overflowX: "auto" }}>
       <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 720 }}>
@@ -95,6 +97,7 @@ export function ConsultantClientsTable({ clients = [], onOpenClient, onRegenerat
             <Row
               key={client.organization_id}
               client={client}
+              onRelease={onRelease}
               onOpenClient={onOpenClient}
               onRegenerate={onRegenerate}
               onEvaluate={onEvaluate}

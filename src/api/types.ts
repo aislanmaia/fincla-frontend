@@ -1,4 +1,5 @@
 // types/api.ts
+import type { CheckoutQuote } from "./checkout";
 
 // ===== AUTENTICAÇÃO =====
 export type UserRole = 'owner' | 'member' | 'consultant';
@@ -16,8 +17,11 @@ export interface LoginRequest {
  * ``GET /v1/subscriptions/me`` (see ``Subscription`` further down).
  */
 export interface EmbeddedSubscription {
+  checkout_selection?: CheckoutQuote["selection"] | null;
   billing_cycle?: "monthly" | "yearly";
-  gateway_provider?: "manual" | "asaas";
+  gateway_provider?: "manual" | "asaas" | "sponsored";
+  sponsor_user_id?: string | null;
+  sponsor_organization_id?: string | null;
   is_entitled?: boolean;
   current_period_end?: string | null;
   /** Slug do plano (``essential``, ``pro``, ``beta``, …). */
@@ -84,11 +88,15 @@ export type SubscriptionStatus =
   | 'cancelled'
   | 'expired';
 
-export type SubscriptionGatewayProvider = 'asaas' | 'manual';
+export type SubscriptionGatewayProvider = 'asaas' | 'manual' | 'sponsored';
 
 export type BillingCycle = 'monthly' | 'yearly';
 
 export interface Subscription {
+  is_entitled?: boolean;
+  max_organizations?: number;
+  max_users_per_org?: number;
+  checkout_selection?: CheckoutQuote["selection"] | null;
   id: string;
   plan: Plan;
   status: SubscriptionStatus;

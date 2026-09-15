@@ -21,6 +21,7 @@ test('annual signup, real session bootstrap, payment and reload preserve the pen
       payments++;
       const body = route.request().postDataJSON();
       expect(body.selection.billing_cycle).toBe('yearly');
+      expect(body.catalog_version).toBe(quote.catalog_version);
       expect(body).not.toHaveProperty('total_cents');
       attempt = {id:'attempt1',status:'pending_payment',quote};
       return route.fulfill({json:attempt});
@@ -31,7 +32,7 @@ test('annual signup, real session bootstrap, payment and reload preserve the pen
     }
     return route.fulfill({status:403,json:{detail:{code:'payment_required'}}});
   });
-  await page.goto('/checkout?persona=personal&billing_cycle=yearly');
+  await page.goto('/checkout?persona=personal&billing_cycle=yearly', { waitUntil: 'domcontentloaded' });
   await page.getByLabel('Nome', {exact:true}).fill('Maria');
   await page.getByLabel('Email', {exact:true}).fill(user.email);
   await page.getByLabel('Senha', {exact:true}).fill('Password123!');
@@ -53,14 +54,14 @@ test('annual signup, real session bootstrap, payment and reload preserve the pen
   await expect(page.getByRole('heading',{name:'Aguardando confirmação do pagamento'})).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading',{name:'Aguardando confirmação do pagamento'})).toBeVisible();
-  await page.goto('/dashboard');
+  await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading',{name:'Aguardando confirmação do pagamento'})).toBeVisible();
   expect(payments).toBe(1);
   const stored = await page.evaluate(()=>JSON.stringify({...localStorage,...sessionStorage}));
   expect(stored).not.toContain('5162306219378829');
   await page.getByRole('button',{name:'Sair da conta'}).click();
   await expect(page.getByRole('button',{name:'Entrar na conta',exact:true})).toBeVisible();
-  await page.goto('/checkout?persona=personal&billing_cycle=yearly');
+  await page.goto('/checkout?persona=personal&billing_cycle=yearly', { waitUntil: 'domcontentloaded' });
   await page.getByRole('button',{name:'Já tenho uma conta'}).click();
   await page.getByLabel('Email',{exact:true}).fill(user.email);
   await page.getByLabel('Senha',{exact:true}).fill('Password123!');
