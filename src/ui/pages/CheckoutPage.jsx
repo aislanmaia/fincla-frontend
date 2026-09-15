@@ -4,7 +4,7 @@ import { CheckoutAccount } from "./CheckoutAccount.jsx";
 import { currentCheckout, quoteCheckout } from "../../api/checkout";
 import { T } from "../tokens.js";
 import { G, NUM } from "../typography.js";
-import { Card, Btn } from "../components/primitives.jsx";
+import { Card, Btn, PageTitle } from "../components/primitives.jsx";
 
 import { checkoutPersona } from "../features/auth/checkoutIdentity.js";
 
@@ -55,7 +55,7 @@ export function CheckoutPage({ search = window.location.search, session }) {
     <main className="fincla-scroll" style={{ ...G, height: "100%", overflowY: "auto", boxSizing: "border-box", background: T.bg, color: T.ink, padding: "32px 20px" }}>
       <div style={{ maxWidth: 560, margin: "0 auto" }}>
         <img src="/logo.png" alt="Fincla" width={40} height={40} />
-        <h1 style={{ fontSize: 30, letterSpacing: "-0.03em", marginTop: 32 }}>Sua escolha no Fincla</h1>
+        <div style={{ marginTop: 32 }}><PageTitle sans="Sua escolha no" serif="Fincla" /></div>
         <p style={{ color: T.inkMid, lineHeight: 1.6 }}>Confira sua oferta e o período de contratação.</p>
         {state.status === "loading" && <p role="status">Consultando sua oferta…</p>}
         {state.status === "error" && <Card style={{ padding: 24 }}>
@@ -66,7 +66,7 @@ export function CheckoutPage({ search = window.location.search, session }) {
         </Card>}
         {quote && <Card style={{ padding: 28, marginTop: 24 }}>
           <h2>{quote.selection.persona === "personal" ? "Fincla Pessoal" : "Fincla Consultor"}</h2>
-          {quote.capacity != null && <p>{quote.capacity} vagas contratadas · {quote.selection.mode === "package" ? `Pacote de ${quote.selection.package_size}` : "Preço progressivo"}</p>}
+          {quote.capacity != null && <p style={{ ...NUM }}>{quote.capacity} vagas contratadas · {quote.selection.mode === "package" ? `Pacote de ${quote.selection.package_size}` : "Preço progressivo"}</p>}
           <p style={{ ...NUM, fontSize: 38, fontWeight: 700, marginBottom: 8 }}>{money(quote.total_cents)}</p>
           {quote.capacity != null && <p style={{ color: T.inkMid, lineHeight: 1.6 }}>A capacidade é paga antecipadamente, inclusive as vagas vazias. Você pode preencher e reutilizar as vagas durante o período contratado.</p>}
           <p>{quote.selection.billing_cycle === "yearly" ? "Pagamento anual antecipado" : "Pagamento mensal antecipado"}</p>

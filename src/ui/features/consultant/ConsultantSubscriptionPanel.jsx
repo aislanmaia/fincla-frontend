@@ -25,14 +25,14 @@ export function ConsultantSubscriptionPanel() {
   return <Card style={{ padding: 24 }}>
     <h2 style={{ marginTop: 0 }}>Sua assinatura</h2>
     {quote && <>
-      <p>{subscription?.max_organizations ?? quote.capacity} vagas contratadas · {quote.selection.mode === "package" ? `Pacote de ${quote.selection.package_size}` : "Preço progressivo"}</p>
+      <p style={{ ...NUM }}>{subscription?.max_organizations ?? quote.capacity} vagas contratadas · {quote.selection.mode === "package" ? `Pacote de ${quote.selection.package_size}` : "Preço progressivo"}</p>
       <p style={{ ...NUM, fontSize: 24, fontWeight: 700 }}>{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(quote.total_cents / 100)} · {quote.selection.billing_cycle === "yearly" ? "anual" : "mensal"}</p>
       <p style={{ color: T.inkMid }}>Valor da oferta aceita na contratação.</p>
     </>}
     {quoteError && <p role="alert">{quoteError}</p>}
     {isLoading && <p role="status">Consultando a assinatura…</p>}
     {error && <div role="alert"><p>{error}</p><Btn onClick={refresh}>Atualizar assinatura</Btn></div>}
-    {subscription?.cancel_at_period_end ? <p role="status">Renovação cancelada.{subscription.current_period_end && ` Você mantém acesso até ${new Date(subscription.current_period_end).toLocaleDateString("pt-BR")}.`}</p> : subscription?.status === "cancelled" ? <p>Assinatura cancelada.</p> : subscription && !isLoading && <Btn onClick={() => setShowCancel(true)}>Cancelar renovação</Btn>}
+    {subscription?.cancel_at_period_end ? <p role="status" style={{ ...NUM }}>Renovação cancelada.{subscription.current_period_end && ` Você mantém acesso até ${new Date(subscription.current_period_end).toLocaleDateString("pt-BR")}.`}</p> : subscription?.status === "cancelled" ? <p>Assinatura cancelada.</p> : subscription && !isLoading && <Btn onClick={() => setShowCancel(true)}>Cancelar renovação</Btn>}
     <CheckoutBilling />
     {showCancel && <CancelSubscriptionDialog effectiveUntil={subscription.current_period_end} reactivationHint="Para uma nova contratação após cancelar, entre em contato com o suporte." onClose={() => setShowCancel(false)} onCancelled={() => { setShowCancel(false); refresh(); }} />}
   </Card>;

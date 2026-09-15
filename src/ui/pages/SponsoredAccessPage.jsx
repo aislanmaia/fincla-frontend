@@ -1,4 +1,4 @@
-import { Card, Btn } from "../components/primitives.jsx";
+import { Card, Btn, PageTitle } from "../components/primitives.jsx";
 import { T } from "../tokens.js";
 import { G } from "../typography.js";
 
@@ -7,7 +7,7 @@ export function SponsoredAccessPage({ session }) {
   return <main className="fincla-scroll" style={{ ...G, height: "100%", overflowY: "auto", boxSizing: "border-box", padding: "32px 20px", background: T.bg, color: T.ink }}>
     <Card style={{ maxWidth: 560, margin: "0 auto", padding: 24 }}>
       <img src="/logo.png" alt="Fincla" width={40} height={40} />
-      <h1>{hasAccess ? "Seu acesso é patrocinado pelo consultor" : "Seu acesso patrocinado está indisponível"}</h1>
+      <PageTitle sans={hasAccess ? "Seu acesso é patrocinado pelo" : "Seu acesso patrocinado está"} serif={hasAccess ? "consultor" : "indisponível"} />
       <p>Conta: {session.user?.email}</p>
       <p style={{ lineHeight: 1.6, color: T.inkMid }}>Seu acesso depende do vínculo e da capacidade contratada pelo consultor. Sua conta e seus dados permanecem preservados.</p>
       <p style={{ lineHeight: 1.6, color: T.inkMid }}>Fale com seu consultor ou com o suporte para esclarecer a situação do acesso.</p>

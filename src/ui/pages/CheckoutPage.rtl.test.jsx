@@ -142,3 +142,16 @@ it("requires a refreshed offer and new consent when the server rejects an outdat
   expect(screen.getByLabelText('Número do cartão')).toHaveValue('');
   expect(payments).toBe(1);
 });
+
+it("waits for healthy preparation and permits new card input after interrupted preparation expires", async () => {
+  const { fireEvent } = await import("@testing-library/react");
+  const quote = {selection:{persona:"personal",billing_cycle:"monthly"},total_cents:2990,capacity:null};
+  let status = "preparing";
+  vi.stubGlobal("fetch", vi.fn(async url => ({ok:true,json:async()=>url.includes('checkout-quote') ? quote : {id:"preparation",status,has_access:false,quote}})));
+  render(<CheckoutPage search="?persona=personal&billing_cycle=monthly" session={{isAuthenticated:true,user:{email:"pessoal@example.com",subscription:{status:"pending_payment"}},signOut:vi.fn()}} />);
+  expect(await screen.findByRole("heading",{name:"Confirmando o resultado da tentativa"})).toBeTruthy();
+  expect(screen.queryByLabelText("Número do cartão")).toBeNull();
+  status = "declined";
+  fireEvent.click(screen.getByRole("button",{name:"Verificar pagamento"}));
+  expect(await screen.findByLabelText("Número do cartão")).toHaveValue("");
+});

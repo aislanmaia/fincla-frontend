@@ -61,7 +61,7 @@ export function CheckoutPayment({ quote, session, onOffer, onRefresh }) {
     }
   }
   const active = attempt ? attempt.has_access === true : (session.user?.subscription?.is_entitled !== false && session.user?.subscription?.status === "active");
-  const waiting = ["processing", "reconciling", "pending_payment", "active"].includes(attempt?.status);
+  const waiting = ["preparing", "processing", "reconciling", "pending_payment", "active"].includes(attempt?.status);
   return <section style={{marginTop:24}}>
     <p style={{color:T.inkMid}}>Conta: {session.user?.email}</p>
     {error && <p role="alert">{error}</p>}
@@ -75,7 +75,7 @@ export function CheckoutPayment({ quote, session, onOffer, onRefresh }) {
         <Btn disabled={busy} onClick={() => setShowCancel(true)}>Cancelar assinatura</Btn>
       </>}
     </> : attempt?.status === "cancelled" ? <p>Assinatura cancelada. Entre em contato com o suporte para uma nova contratação.</p> : !busy && !error && <>
-      {attempt?.status === "declined" && <p role="alert">Pagamento não aprovado. Confira os dados ou use outro cartão.</p>}
+      {attempt?.status === "declined" && <p role="alert">Não foi possível concluir o pagamento. Confira os dados e tente novamente.</p>}
       <h2>Pague com cartão</h2>
       <form key={formKey} onSubmit={pay} style={{display:"grid",gap:14}}>
         <CheckoutField label="Nome do titular" name="name" autoComplete="cc-name" />

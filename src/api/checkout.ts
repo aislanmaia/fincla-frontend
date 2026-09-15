@@ -39,7 +39,7 @@ export async function quoteCheckout(search: string, signal: AbortSignal): Promis
 export interface CheckoutAttempt {
   has_access: boolean;
   id: string;
-  status: 'processing' | 'reconciling' | 'pending_payment' | 'declined' | 'active' | 'cancelled';
+  status: 'preparing' | 'processing' | 'reconciling' | 'pending_payment' | 'declined' | 'active' | 'cancelled';
   quote: CheckoutQuote;
 }
 
