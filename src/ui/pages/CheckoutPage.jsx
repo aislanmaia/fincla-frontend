@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { CheckoutPayment } from "./CheckoutPayment.jsx";
+import { CheckoutAccount } from "./CheckoutAccount.jsx";
 import { quoteCheckout } from "../../api/checkout";
 import { T } from "../tokens.js";
 import { G, NUM } from "../typography.js";
@@ -6,7 +8,7 @@ import { Card, Btn } from "../components/primitives.jsx";
 
 const money = (cents) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
 
-export function CheckoutPage({ search = window.location.search }) {
+export function CheckoutPage({ search = window.location.search, session }) {
   const [state, setState] = useState({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
@@ -24,6 +26,7 @@ export function CheckoutPage({ search = window.location.search }) {
     return () => { window.clearTimeout(timeout); controller.abort(); };
   }, [search, attempt]);
 
+  const onOffer = useCallback((acceptedOffer) => setState({status:"ready",quote:acceptedOffer}), []);
   const quote = state.status === "ready" ? state.quote : null;
   return (
     <main className="fincla-scroll" style={{ ...G, height: "100%", overflowY: "auto", background: T.bg, color: T.ink, padding: "32px 20px" }}>
@@ -41,7 +44,7 @@ export function CheckoutPage({ search = window.location.search }) {
           {quote.capacity != null && <p>{quote.capacity} vagas contratadas · {quote.selection.mode === "package" ? `Pacote de ${quote.selection.package_size}` : "Preço progressivo"}</p>}
           <p style={{ ...NUM, fontSize: 38, fontWeight: 700, marginBottom: 8 }}>{money(quote.total_cents)}</p>
           <p>{quote.selection.billing_cycle === "yearly" ? "Pagamento anual antecipado" : "Pagamento mensal antecipado"}</p>
-          <p style={{ color: T.inkMid, lineHeight: 1.6 }}>A contratação online estará disponível em breve. Nenhuma cobrança foi realizada.</p>
+          {quote.selection.persona === "personal" && session ? (session.isAuthenticated ? <CheckoutPayment quote={quote} session={session} onOffer={onOffer} /> : <CheckoutAccount quote={quote} session={session} />) : <p style={{ color: T.inkMid, lineHeight: 1.6 }}>A contratação online estará disponível em breve. Nenhuma cobrança foi realizada.</p>}
         </Card>}
       </div>
     </main>

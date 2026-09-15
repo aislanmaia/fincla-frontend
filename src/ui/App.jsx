@@ -437,7 +437,7 @@ export default function App() {
     simulation:    <SimulacaoPageView cenarios={cenarios} setCenarios={setCenarios} cenarioId={cenarioId} setCenarioId={setCenarioId} isMobile={isMobile} organizationId={session.activeOrgId} dataMode={dataMode} />,
   };
 
-  if (pathname === "/checkout") return <CheckoutPage search={searchStr} />;
+  if (pathname === "/checkout") return <CheckoutPage search={searchStr} session={session} />;
 
   if (session.isBootstrapping) return (
     <>
@@ -459,6 +459,8 @@ export default function App() {
       </div>
     </>
   );
+
+  if (session.isAuthenticated && (session.user?.subscription?.status === "pending_payment" || (session.user?.subscription?.gateway_provider === "asaas" && session.user?.subscription?.is_entitled === false))) return <CheckoutPage search={`?persona=personal&billing_cycle=${session.user.subscription.billing_cycle || "monthly"}`} session={session} />;
 
   if (session.isAuthenticated && (session.onboardingRequired || showOnboarding)) return (
     <OnboardingFlow

@@ -1,0 +1,88 @@
+import { useEffect, useRef, useState } from "react";
+import { currentCheckout, payCheckout } from "../../api/checkout";
+import { cancelSubscription } from "../../api/subscriptions";
+import { Btn } from "../components/primitives.jsx";
+import { T } from "../tokens.js";
+import { CheckoutField } from "./CheckoutAccount.jsx";
+
+export function CheckoutPayment({ quote, session, onOffer }) {
+  const [attempt, setAttempt] = useState(null);
+  const [busy, setBusy] = useState(true);
+  const [error, setError] = useState("");
+  const submitting = useRef(false);
+  const [formKey, setFormKey] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    currentCheckout().then((value) => {
+      if (!alive) return;
+      setAttempt(value);
+      if (value && value.status !== "declined") onOffer(value.quote);
+    }).catch(() => { if (alive) setError("Não foi possível retomar a contratação. Verifique o pagamento antes de continuar."); })
+      .finally(() => { if (alive) setBusy(false); });
+    return () => { alive = false; };
+  }, [session.user?.id, onOffer]);
+
+  async function check() {
+    if (submitting.current) return;
+    setBusy(true); setError("");
+    try {
+      const value = await currentCheckout();
+      setAttempt(value);
+      if (value) onOffer(value.quote);
+    } catch { setError("Não foi possível confirmar agora. Tente verificar novamente."); }
+    finally { setBusy(false); }
+  }
+  async function pay(event) {
+    event.preventDefault();
+    if (submitting.current || busy) return;
+    submitting.current = true; setBusy(true); setError("");
+    const form = event.currentTarget;
+    const fields = new FormData(form);
+    try {
+      const value = await payCheckout({selection:quote.selection,
+        card:{holderName:fields.get("name"),number:String(fields.get("number")).replace(/\s/g,""),expiryMonth:fields.get("month"),expiryYear:fields.get("year"),ccv:fields.get("ccv")},
+        holder:{name:fields.get("name"),email:session.user.email,cpfCnpj:fields.get("cpf"),postalCode:fields.get("postal"),addressNumber:fields.get("address"),phone:fields.get("phone")}});
+      setAttempt(value); onOffer(value.quote);
+    } catch {
+      // Browser uncertainty cannot authorize another payment submission.
+      setAttempt({status:"reconciling"});
+      setError("A resposta demorou ou foi interrompida. Verifique o resultado para continuar com segurança.");
+    } finally {
+      form.reset(); setFormKey((value)=>value+1);
+      submitting.current = false; setBusy(false);
+    }
+  }
+  const active = attempt ? attempt.has_access === true : (session.user?.subscription?.is_entitled !== false && session.user?.subscription?.status === "active");
+  const waiting = ["processing", "reconciling", "pending_payment", "active"].includes(attempt?.status);
+  return <section style={{marginTop:24}}>
+    <p style={{color:T.inkMid}}>Conta: {session.user?.email}</p>
+    {error && <p role="alert">{error}</p>}
+    {busy && <p role="status">Consultando a contratação…</p>}
+    {active ? <><h2>Seu acesso está liberado</h2><Btn variant="dark" onClick={()=>window.location.assign("/dashboard")}>Continuar para o Fincla</Btn></> : waiting ? <>
+      <h2>{attempt.status === "pending_payment" ? "Aguardando confirmação do pagamento" : "Confirmando o resultado da tentativa"}</h2>
+      <p>Você pode sair e voltar a esta página. Seu acesso será liberado quando o pagamento for confirmado.</p>
+      <Btn disabled={busy} onClick={check}>Verificar pagamento</Btn>
+      {attempt.status === "pending_payment" && <Btn disabled={busy} onClick={async()=>{ setBusy(true); try {await cancelSubscription(); setAttempt({status:"cancelled"});} catch {setError("Não foi possível cancelar. Tente novamente.");} finally {setBusy(false);} }}>Cancelar assinatura</Btn>}
+    </> : attempt?.status === "cancelled" ? <p>Assinatura cancelada. Entre em contato com o suporte para uma nova contratação.</p> : !busy && !error && <>
+      {attempt?.status === "declined" && <p role="alert">Pagamento não aprovado. Confira os dados ou use outro cartão.</p>}
+      <h2>Pague com cartão</h2>
+      <form key={formKey} onSubmit={pay} style={{display:"grid",gap:14}}>
+        <CheckoutField label="Nome do titular" name="name" autoComplete="cc-name" />
+        <CheckoutField label="Número do cartão" name="number" inputMode="numeric" autoComplete="cc-number" pattern="[0-9 ]{13,23}" />
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+          <CheckoutField label="Mês (MM)" name="month" inputMode="numeric" autoComplete="cc-exp-month" pattern="0[1-9]|1[0-2]" maxLength={2} />
+          <CheckoutField label="Ano (AAAA)" name="year" inputMode="numeric" autoComplete="cc-exp-year" pattern="20[0-9]{2}" maxLength={4} />
+          <CheckoutField label="CVV" name="ccv" type="password" inputMode="numeric" autoComplete="cc-csc" pattern="[0-9]{3,4}" maxLength={4} />
+        </div>
+        <CheckoutField label="CPF/CNPJ do titular (somente números)" name="cpf" inputMode="numeric" pattern="[0-9]{11}|[0-9]{14}" />
+        <CheckoutField label="CEP (somente números)" name="postal" inputMode="numeric" autoComplete="postal-code" pattern="[0-9]{8}" />
+        <CheckoutField label="Número do endereço" name="address" />
+        <CheckoutField label="Telefone com DDD (somente números)" name="phone" inputMode="tel" autoComplete="tel-national" pattern="[0-9]{10,13}" />
+        <label style={{display:"flex",gap:10,alignItems:"flex-start",lineHeight:1.5}}><input type="checkbox" required name="recurring" />Autorizo a cobrança do valor apresentado agora e a renovação automática {quote.selection.billing_cycle === "yearly" ? "anual" : "mensal"} no cartão. Posso cancelar a renovação no meu perfil.</label>
+        <Btn type="submit" variant="dark" disabled={busy}>Confirmar pagamento</Btn>
+      </form>
+    </>}
+    {error && !waiting && <Btn disabled={busy} onClick={check}>Verificar pagamento</Btn>}
+    <div style={{marginTop:20}}><Btn disabled={busy} onClick={session.signOut}>Sair da conta</Btn></div>
+  </section>;
+}

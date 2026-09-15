@@ -16,6 +16,10 @@ export interface LoginRequest {
  * ``GET /v1/subscriptions/me`` (see ``Subscription`` further down).
  */
 export interface EmbeddedSubscription {
+  billing_cycle?: "monthly" | "yearly";
+  gateway_provider?: "manual" | "asaas";
+  is_entitled?: boolean;
+  current_period_end?: string | null;
   /** Slug do plano (``essential``, ``pro``, ``beta``, …). */
   plan: string;
   status:
