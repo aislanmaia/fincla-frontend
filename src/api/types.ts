@@ -158,6 +158,26 @@ export interface ChangePlanResponse {
   checkout_url: string | null;
 }
 
+/** Server-calculated annual change. Monetary values are integer centavos. */
+export interface AnnualSettlementRequest {
+  target: CheckoutQuote["selection"];
+  strategy?: "preserve_anniversary" | "restart_year";
+}
+
+export interface AnnualSettlementOperation {
+  id: string;
+  amount_due_cents: number;
+  unused_paid_cents: number;
+  credit_cents: 0;
+  remaining_days: number;
+  period_days: number;
+  apply_at: "after_settlement" | "next_renewal";
+  preserves_anniversary: boolean;
+  provider_capability: "unavailable_tokenization" | "not_needed";
+  status: "support_required" | "scheduled_renewal";
+  message: string;
+}
+
 export interface CancelSubscriptionResponse {
   subscription_id: string;
   status: SubscriptionStatus;

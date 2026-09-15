@@ -4,6 +4,8 @@ import {
   CancelSubscriptionResponse,
   ChangePlanRequest,
   ChangePlanResponse,
+  AnnualSettlementOperation,
+  AnnualSettlementRequest,
   Subscription,
 } from './types';
 
@@ -28,6 +30,20 @@ export const changePlan = async (
   const response = await apiClient.post<ChangePlanResponse>(
     '/subscriptions/change-plan',
     data
+  );
+  return response.data;
+};
+
+/**
+ * Quotes and records an annual change request. This endpoint never receives
+ * card data and does not claim that an unavailable provider update succeeded.
+ */
+export const requestAnnualSettlement = async (
+  data: AnnualSettlementRequest,
+): Promise<AnnualSettlementOperation> => {
+  const response = await apiClient.post<AnnualSettlementOperation>(
+    "/subscriptions/annual-settlement",
+    data,
   );
   return response.data;
 };
