@@ -180,6 +180,8 @@ export interface AnnualSettlementOperation {
   message: string;
   /** Protocolo que a pessoa pode consultar e enviar ao suporte. */
   support_protocol: string | null;
+  /** Capacidade efetiva calculada no servidor para a proposta de consultor. */
+  effective_capacity: number | null;
 }
 
 export interface CancelSubscriptionResponse {

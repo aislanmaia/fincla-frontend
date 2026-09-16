@@ -9,6 +9,15 @@ function brl(cents) {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+function packageTarget(target, packageSize) {
+  return {
+    ...target,
+    mode: "package",
+    package_size: packageSize,
+    seats: Math.max(Number(target.seats) || 0, packageSize),
+  };
+}
+
 /** Shared checkout-facing annual option chooser; no payment fields exist here. */
 export function AnnualSettlementPreview({ selection }) {
   const [strategy, setStrategy] = useState("preserve_anniversary");
@@ -53,9 +62,9 @@ export function AnnualSettlementPreview({ selection }) {
     </label>
     <fieldset style={{ border: 0, padding: 0, margin: "8px 0" }}><legend style={{ ...G, fontSize: 12 }}>Modalidade</legend>
       <label><input name="annual-settlement-mode" type="radio" checked={target.mode === "progressive"} onChange={() => { setTarget((current) => ({ ...current, mode: "progressive", package_size: null })); setOperation(null); }} /> Preço progressivo</label>
-      <label style={{ marginLeft: 12 }}><input name="annual-settlement-mode" type="radio" checked={target.mode === "package"} onChange={() => { setTarget((current) => ({ ...current, mode: "package", package_size: current.package_size ?? 25 })); setOperation(null); }} /> Pacote</label>
+      <label style={{ marginLeft: 12 }}><input name="annual-settlement-mode" type="radio" checked={target.mode === "package"} onChange={() => { setTarget((current) => packageTarget(current, current.package_size ?? 25)); setOperation(null); }} /> Pacote</label>
     </fieldset>
-    {target.mode === "package" && <label>Pacote <select aria-label="Pacote" value={target.package_size ?? 25} onChange={(event) => { setTarget((current) => ({ ...current, package_size: Number(event.target.value) })); setOperation(null); }}><option value={25}>25 vagas</option><option value={50}>50 vagas</option><option value={100}>100 vagas</option></select></label>}
+    {target.mode === "package" && <label>Pacote <select aria-label="Pacote" value={target.package_size ?? 25} onChange={(event) => { const packageSize = Number(event.target.value); setTarget((current) => packageTarget(current, packageSize)); setOperation(null); }}><option value={25}>25 vagas</option><option value={50}>50 vagas</option><option value={100}>100 vagas</option></select></label>}
     <fieldset style={{ border: 0, padding: 0, margin: "8px 0" }}><legend style={{ ...G, fontSize: 12 }}>Novo período</legend>
     <label><input name="annual-settlement-strategy" type="radio" checked={strategy === "preserve_anniversary"} onChange={() => setStrategy("preserve_anniversary")} /> Manter aniversário</label>
     <label style={{ marginLeft: 12 }}><input name="annual-settlement-strategy" type="radio" checked={strategy === "restart_year"} onChange={() => setStrategy("restart_year")} /> Iniciar novo período de 12 meses</label></fieldset>
@@ -63,6 +72,7 @@ export function AnnualSettlementPreview({ selection }) {
     {error && <p role="alert">{error}</p>}
     {operation && <div role="status">
       <p>Valor calculado: {brl(operation.amount_due_cents)}.</p>
+      {operation.effective_capacity != null && <p>Capacidade resultante: {operation.effective_capacity} vagas.</p>}
       <p>{operation.message}</p>
       {operation.status === "preview" && <Btn variant="purple" onClick={() => preview(true)}>Confirmar solicitação</Btn>}
       {operation.status === "support_requested" && <p>Protocolo: <strong>{operation.support_protocol}</strong>. Envie-o para contato@fincla.com.</p>}
