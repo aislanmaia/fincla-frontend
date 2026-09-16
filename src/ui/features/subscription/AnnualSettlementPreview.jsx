@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { requestAnnualSettlement } from "../../../api/subscriptions";
+import { getAnnualSettlementRequests, requestAnnualSettlement } from "../../../api/subscriptions";
 import { T } from "../../tokens.js";
 import { G } from "../../typography.js";
 import { Btn } from "../../components/primitives.jsx";
@@ -14,6 +14,7 @@ export function AnnualSettlementPreview({ selection }) {
   const [strategy, setStrategy] = useState("preserve_anniversary");
   const [target, setTarget] = useState(null);
   const [operation, setOperation] = useState(null);
+  const [requests, setRequests] = useState([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -21,10 +22,20 @@ export function AnnualSettlementPreview({ selection }) {
     setOperation(null);
   }, [selection]);
 
+  useEffect(() => {
+    let active = true;
+    getAnnualSettlementRequests()
+      .then((items) => active && setRequests(items))
+      .catch(() => active && setRequests([]));
+    return () => { active = false; };
+  }, []);
+
   async function preview(accept = false) {
     setError("");
     try {
-      setOperation(await requestAnnualSettlement({ target, strategy, accept }));
+      const result = await requestAnnualSettlement({ target, strategy, accept });
+      setOperation(result);
+      if (accept) setRequests(await getAnnualSettlementRequests());
     } catch (err) {
       setError(err?.response?.data?.detail || "Não foi possível calcular a alteração.");
     }
@@ -54,7 +65,11 @@ export function AnnualSettlementPreview({ selection }) {
       <p>Valor calculado: {brl(operation.amount_due_cents)}.</p>
       <p>{operation.message}</p>
       {operation.status === "preview" && <Btn variant="purple" onClick={() => preview(true)}>Confirmar solicitação</Btn>}
-      {operation.apply_at === "next_renewal" && <p>Suas vagas já pagas continuam disponíveis até a renovação.</p>}
+      {operation.status === "support_requested" && <p>Protocolo: <strong>{operation.support_protocol}</strong>. Envie-o para contato@fincla.com.</p>}
+      {operation.apply_at === "next_renewal" && <p>Suas vagas já pagas continuam disponíveis até a renovação. A alteração só será efetivada depois do atendimento.</p>}
     </div>}
+    {requests.filter((item) => item.status === "support_requested").map((item) => (
+      <p key={item.id} role="status">Solicitação pendente: protocolo <strong>{item.support_protocol}</strong>. Envie-o para contato@fincla.com.</p>
+    ))}
   </section>;
 }

@@ -174,10 +174,12 @@ export interface AnnualSettlementOperation {
   period_days: number;
   apply_at: "after_settlement" | "next_renewal";
   preserves_anniversary: boolean;
-  provider_capability: "unavailable_tokenization" | "not_needed";
-  status: "preview" | "support_required" | "scheduled_renewal";
+  provider_capability: "manual_settlement_required";
+  status: "preview" | "support_requested" | "superseded";
   catalog_version: string;
   message: string;
+  /** Protocolo que a pessoa pode consultar e enviar ao suporte. */
+  support_protocol: string | null;
 }
 
 export interface CancelSubscriptionResponse {

@@ -48,6 +48,12 @@ export const requestAnnualSettlement = async (
   return response.data;
 };
 
+/** Requests are durable, including those superseded by a later choice. */
+export const getAnnualSettlementRequests = async (): Promise<AnnualSettlementOperation[]> => {
+  const response = await apiClient.get<AnnualSettlementOperation[]>("/subscriptions/annual-settlement");
+  return response.data;
+};
+
 /**
  * Cancela a assinatura. O acesso continua liberado até ``effective_until``
  * (igual a ``current_period_end``).
