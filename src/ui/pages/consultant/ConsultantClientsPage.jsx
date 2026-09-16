@@ -1,4 +1,5 @@
 import React from "react";
+import { ReleaseClientDialog } from "../../features/consultant/ReleaseClientDialog.jsx";
 import { useNavigate } from "@tanstack/react-router";
 
 import { Btn, Card, PageTitle } from "../../components/primitives";
@@ -67,7 +68,7 @@ export function ConsultantClientsPage() {
   const evaluation = useEvaluationDrawer();
   const canEvaluate = useCanEvaluateClientWithAi();
   const navigate = useNavigate();
-  const { openAddClient, clientsVersion, quota } = useAddClient();
+  const { openAddClient, clientsVersion, notifyClientsChanged, quota, quotaError } = useAddClient();
   const { clients, total, isLoading, error, hasLoaded, loadedOk, refresh } = useConsultantClients();
   const risk = useConsultantClientsAtRisk({ limit: 50 });
 
@@ -104,6 +105,7 @@ export function ConsultantClientsPage() {
     if (clientsVersion > 0) refresh();
   }, [clientsVersion, refresh]);
 
+  const [releaseClient, setReleaseClient] = React.useState(null);
   const [query, setQuery] = React.useState("");
   const [riskFilter, setRiskFilter] = React.useState("all");
   const [sortKey, setSortKey] = React.useState("health");
@@ -183,6 +185,7 @@ export function ConsultantClientsPage() {
         </div>
       </div>
 
+      {quotaError && <div role="alert"><p>{quotaError}</p><Btn onClick={notifyClientsChanged}>Atualizar vagas</Btn></div>}
       {state === "list" && (
         <>
           <ConsultantClientsToolbar
@@ -205,11 +208,11 @@ export function ConsultantClientsPage() {
               text="Nenhum cliente corresponde à busca ou ao filtro selecionado. Ajuste os critérios."
             />
           ) : view === "table" ? (
-            <ConsultantClientsTable clients={visible} onOpenClient={openClient} onRegenerate={onRegenerate} onEvaluate={canEvaluate ? evaluation.openFor : undefined} onRecomputeHealth={recomputeHealth} evaluateLocked={!canEvaluate} />
+            <ConsultantClientsTable clients={visible} onRelease={setReleaseClient} onOpenClient={openClient} onRegenerate={onRegenerate} onEvaluate={canEvaluate ? evaluation.openFor : undefined} onRecomputeHealth={recomputeHealth} evaluateLocked={!canEvaluate} />
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14, alignItems: "start" }}>
               {visible.map((client) => (
-                <ConsultantClientCard key={client.organization_id} client={client} onOpenClient={openClient} onRegenerate={onRegenerate} onEvaluate={canEvaluate ? evaluation.openFor : undefined} onRecomputeHealth={recomputeHealth} riskAlert={riskAlertByOrg[client.organization_id]} evaluateLocked={!canEvaluate} />
+                <ConsultantClientCard key={client.organization_id} client={client} onRelease={setReleaseClient} onOpenClient={openClient} onRegenerate={onRegenerate} onEvaluate={canEvaluate ? evaluation.openFor : undefined} onRecomputeHealth={recomputeHealth} riskAlert={riskAlertByOrg[client.organization_id]} evaluateLocked={!canEvaluate} />
               ))}
             </div>
           )}
@@ -232,6 +235,10 @@ export function ConsultantClientsPage() {
         <EmptyState title="Carregando…" text="Buscando a sua carteira de clientes." />
       )}
 
+      {releaseClient && <ReleaseClientDialog client={releaseClient} onClose={() => setReleaseClient(null)} onReleased={() => {
+        setReleaseClient(null);
+        notifyClientsChanged();
+      }} />}
       {linkModal && <ActivationLinkModal state={linkModal} onClose={() => setLinkModal(null)} />}
 
       {evaluation.target && (

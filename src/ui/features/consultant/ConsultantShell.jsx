@@ -29,15 +29,17 @@ export function ConsultantShell() {
   const openAddClient = React.useCallback(() => setAddClientOpen(true), []);
   // Incrementa a cada cliente criado → a carteira observa e faz refetch.
   const [clientsVersion, setClientsVersion] = React.useState(0);
-  const notifyClientsChanged = React.useCallback(() => setClientsVersion((v) => v + 1), []);
+  const notifyClientsChanged = React.useCallback(() => { setQuota(null); setClientsVersion((v) => v + 1); }, []);
   // Cota do plano (fonte autoritativa = mesma contagem do enforcement).
   // Refetch a cada cliente criado (clientsVersion) p/ manter "vagas" em dia.
   const [quota, setQuota] = React.useState(null);
+  const [quotaError, setQuotaError] = React.useState("");
   React.useEffect(() => {
     let cancelled = false;
+    setQuotaError("");
     getConsultantQuota()
       .then((q) => { if (!cancelled) setQuota(q); })
-      .catch(() => { /* silencioso: sem cota, o 402 do backend ainda protege */ });
+      .catch(() => { if (!cancelled) setQuotaError("Não foi possível atualizar as vagas."); });
     return () => { cancelled = true; };
   }, [clientsVersion]);
 
@@ -53,7 +55,7 @@ export function ConsultantShell() {
   };
 
   return (
-    <ConsultantAddClientProvider openAddClient={openAddClient} clientsVersion={clientsVersion} notifyClientsChanged={notifyClientsChanged} quota={quota}>
+    <ConsultantAddClientProvider openAddClient={openAddClient} clientsVersion={clientsVersion} notifyClientsChanged={notifyClientsChanged} quota={quota} quotaError={quotaError}>
     <div style={{ ...G, display: "flex", height: "100dvh", width: "100%", overflow: "hidden", background: T.bg }}>
       {!isMobile && <ConsultantSidebar pathname={pathname} onNav={go} user={user} />}
 
@@ -88,7 +90,7 @@ export function ConsultantShell() {
         </div>
       </div>
 
-      <ConsultantAddClientWizard open={addClientOpen} onClose={() => setAddClientOpen(false)} onCreated={notifyClientsChanged} quota={quota} />
+      <ConsultantAddClientWizard isMobile={isMobile} open={addClientOpen} onClose={() => setAddClientOpen(false)} onCreated={notifyClientsChanged} quota={quota} />
     </div>
     </ConsultantAddClientProvider>
   );

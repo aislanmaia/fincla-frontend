@@ -95,10 +95,10 @@ export function useSession() {
     }));
 
     try {
-      const [user, orgResponse] = await Promise.all([
-        getCurrentUser(),
-        getMyOrganizations(),
-      ]);
+      const user = await getCurrentUser();
+      const orgResponse = user.subscription?.is_entitled === false || user.subscription?.status === "pending_payment"
+        ? { organizations: [] }
+        : await getMyOrganizations();
 
       const organizations = orgResponse.organizations ?? [];
       const activeOrgId = pickActiveOrgId(organizations);

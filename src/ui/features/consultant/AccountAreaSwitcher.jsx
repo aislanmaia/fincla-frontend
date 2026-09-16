@@ -25,7 +25,7 @@ export function AccountAreaSwitcher({ current, user, onNavigate }) {
   const navigate = useNavigate();
   const [open, setOpen] = React.useState(false);
 
-  if (!hasConsultantArea(user)) return null;
+  if (!hasConsultantArea(user) || user?.subscription?.checkout_selection?.persona === "consultant") return null;
 
   const cur = AREAS[current] ?? AREAS.personal;
   const CurIcon = cur.Icon;

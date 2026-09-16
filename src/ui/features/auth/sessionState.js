@@ -1,6 +1,8 @@
+import { checkoutPersona } from "./checkoutIdentity.js";
+
 export function isOnboardingRequired(session) {
   if (!session.isAuthenticated || session.isBootstrapping) return false;
-  if (session.user?.onboarding_completed) return false;
+  if (session.user?.onboarding_completed || checkoutPersona(session.user) === "consultant") return false;
   return true;
 }
 

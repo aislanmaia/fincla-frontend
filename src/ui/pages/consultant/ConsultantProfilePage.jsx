@@ -1,4 +1,5 @@
 import React from "react";
+import { ConsultantSubscriptionPanel } from "../../features/consultant/ConsultantSubscriptionPanel.jsx";
 
 import { Badge, Card, PageTitle } from "../../components/primitives";
 import { T } from "../../tokens";
@@ -64,7 +65,7 @@ export function ConsultantProfilePage() {
   const name = getDisplayName(user);
   const initials = getInitials(user);
   const email = user?.email || "—";
-  const planLabel = prettyPlan(user?.subscription?.plan);
+  const planLabel = user?.subscription?.checkout_selection?.persona === "consultant" ? "Fincla Consultor" : prettyPlan(user?.subscription?.plan);
   const active = user?.subscription?.status === "active";
   const patrimonio = totalPatrimonio(clients);
 
@@ -101,6 +102,8 @@ export function ConsultantProfilePage() {
         <StatCard label="Patrimônio sob gestão" value={fmtMoney(patrimonio)} icon="wallet" />
         <StatCard label="Honorários recorrentes" value="—" icon="repeat" soon />
       </div>
+
+      {user?.subscription?.checkout_selection?.persona === "consultant" && <ConsultantSubscriptionPanel />}
 
       <Card style={{ padding: 0 }}>
         <InfoRow icon="message" label="E-mail" value={email} />

@@ -13,11 +13,8 @@ import { Icon } from "./consultantUi";
  * (`consultor/cons-adicionar.jsx`): cliente → organização → início → cartão →
  * receita → perfil privado → revisão. Coleta e valida tudo e chega à revisão.
  *
- * ⚠️ **Provisionamento (criação real) = pendente:** não existe endpoint de backend
- * "consultor cria cliente" (envolve criação de user/org + convite por e-mail +
- * migration do perfil privado — decisões do Owner, ainda em aberto). Por isso o
- * "Criar cliente" leva a um estado **honesto "em breve"** — o wizard NÃO forja
- * sucesso. Quando o endpoint existir, é só trocar `submit()` pela chamada real.
+ * A revisão envia POST /consultant/clients. A cota exibida vem do servidor,
+ * que valida novamente a disponibilidade antes de criar a conta e o vínculo.
  */
 
 const STEPS = [
@@ -109,7 +106,7 @@ function toPayload(f) {
   };
 }
 
-export function ConsultantAddClientWizard({ open, onClose, onCreated, quota = null }) {
+export function ConsultantAddClientWizard({ open, onClose, onCreated, quota = null, isMobile = false }) {
   const navigate = useNavigate();
   const [stepIdx, setStepIdx] = React.useState(0);
   const [f, setF] = React.useState(INITIAL);
@@ -327,9 +324,9 @@ export function ConsultantAddClientWizard({ open, onClose, onCreated, quota = nu
   );
 
   return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+    <div role="dialog" aria-modal="true" aria-label="Adicionar cliente" style={{ position: "fixed", inset: 0, zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div onClick={onClose} role="presentation" style={{ position: "absolute", inset: 0, background: "rgba(15,15,13,0.5)" }} />
-      <div style={{ position: "relative", width: 920, maxWidth: "100%", height: "min(640px, 92dvh)", background: T.surface, borderRadius: 18, overflow: "hidden", boxShadow: T.lg, display: "grid", gridTemplateColumns: (result || isFull) ? "1fr" : "minmax(0,300px) 1fr" }}>
+      <div style={{ position: "relative", width: 920, maxWidth: "100%", height: "min(640px, 92dvh)", background: T.surface, borderRadius: 18, overflow: "hidden", boxShadow: T.lg, display: "grid", gridTemplateColumns: (result || isFull || isMobile) ? "1fr" : "minmax(0,300px) 1fr" }}>
         {result ? (
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: 40, gap: 8 }}>
             <div style={{ width: 72, height: 72, borderRadius: 22, background: `linear-gradient(135deg, ${T.green}, #0891B2)`, display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 8, boxShadow: T.md }}><Icon name="check" size={36} color="#fff" /></div>
@@ -362,7 +359,7 @@ export function ConsultantAddClientWizard({ open, onClose, onCreated, quota = nu
           </div>
         ) : (
           <>
-            <div style={{ background: step.bg, color: "#fff", padding: "26px 24px", display: "flex", flexDirection: "column", minWidth: 0 }}>
+            <div style={{ background: step.bg, color: "#fff", padding: "26px 24px", display: isMobile ? "none" : "flex", flexDirection: "column", minWidth: 0 }}>
               <div style={{ ...G, fontSize: 13, fontWeight: 800, marginBottom: 28 }}>Novo cliente</div>
               <div style={{ ...G, fontSize: 13, color: step.acc, marginBottom: 4 }}>Etapa {step.num}</div>
               <div style={{ ...G, fontSize: 22, fontWeight: 800, lineHeight: 1.15, marginBottom: 12 }}>{step.h}</div>
@@ -388,7 +385,10 @@ export function ConsultantAddClientWizard({ open, onClose, onCreated, quota = nu
                 <button type="button" onClick={onClose} aria-label="Fechar" style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: 7, cursor: "pointer", display: "flex" }}><Icon name="x" size={15} color={T.inkMid} /></button>
               </div>
 
-              <div style={{ flex: 1, overflowY: "auto", padding: 24 }}>{body}</div>
+              <div className="fincla-scroll" style={{ flex: 1, overflowY: "auto", padding: 24 }}>
+                {isMobile && <div style={{ marginBottom: 20 }}><span style={{ color: T.inkLight, fontSize: 12 }}>Etapa {step.num}</span><h2 style={{ fontSize: 20, margin: "8px 0" }}>{step.h}</h2><p style={{ color: T.inkMid, lineHeight: 1.5, fontSize: 13 }}>{step.s}</p></div>}
+                {body}
+              </div>
 
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 24px", borderTop: `1px solid ${T.border}` }}>
                 <button type="button" onClick={stepIdx === 0 ? onClose : back} style={{ ...G, display: "inline-flex", alignItems: "center", gap: 6, background: "transparent", border: "none", color: T.inkMid, fontSize: 13, fontWeight: 600, cursor: "pointer", padding: "8px 4px" }}>

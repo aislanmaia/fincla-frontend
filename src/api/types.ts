@@ -1,4 +1,5 @@
 // types/api.ts
+import type { CheckoutQuote } from "./checkout";
 
 // ===== AUTENTICAÇÃO =====
 export type UserRole = 'owner' | 'member' | 'consultant';
@@ -16,6 +17,13 @@ export interface LoginRequest {
  * ``GET /v1/subscriptions/me`` (see ``Subscription`` further down).
  */
 export interface EmbeddedSubscription {
+  checkout_selection?: CheckoutQuote["selection"] | null;
+  billing_cycle?: "monthly" | "yearly";
+  gateway_provider?: "manual" | "asaas" | "sponsored";
+  sponsor_user_id?: string | null;
+  sponsor_organization_id?: string | null;
+  is_entitled?: boolean;
+  current_period_end?: string | null;
   /** Slug do plano (``essential``, ``pro``, ``beta``, …). */
   plan: string;
   status:
@@ -80,11 +88,15 @@ export type SubscriptionStatus =
   | 'cancelled'
   | 'expired';
 
-export type SubscriptionGatewayProvider = 'asaas' | 'manual';
+export type SubscriptionGatewayProvider = 'asaas' | 'manual' | 'sponsored';
 
 export type BillingCycle = 'monthly' | 'yearly';
 
 export interface Subscription {
+  is_entitled?: boolean;
+  max_organizations?: number;
+  max_users_per_org?: number;
+  checkout_selection?: CheckoutQuote["selection"] | null;
   id: string;
   plan: Plan;
   status: SubscriptionStatus;
@@ -144,6 +156,32 @@ export interface ChangePlanResponse {
   status: SubscriptionStatus;
   /** ASAAS hosted checkout. ``null`` quando o gateway só aplicou um update. */
   checkout_url: string | null;
+}
+
+/** Server-calculated annual change. Monetary values are integer centavos. */
+export interface AnnualSettlementRequest {
+  target: CheckoutQuote["selection"];
+  strategy?: "preserve_anniversary" | "restart_year";
+  accept?: boolean;
+}
+
+export interface AnnualSettlementOperation {
+  id: string | null;
+  amount_due_cents: number;
+  unused_paid_cents: number;
+  credit_cents: 0;
+  remaining_days: number;
+  period_days: number;
+  apply_at: "after_settlement" | "next_renewal";
+  preserves_anniversary: boolean;
+  provider_capability: "manual_settlement_required";
+  status: "preview" | "support_requested" | "superseded";
+  catalog_version: string;
+  message: string;
+  /** Protocolo que a pessoa pode consultar e enviar ao suporte. */
+  support_protocol: string | null;
+  /** Capacidade efetiva calculada no servidor para a proposta de consultor. */
+  effective_capacity: number | null;
 }
 
 export interface CancelSubscriptionResponse {
