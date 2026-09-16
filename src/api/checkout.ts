@@ -67,3 +67,4 @@ export const registerCheckout = (body: { selection?: CheckoutQuote['selection'];
 export const currentCheckout = () => checkoutRequest<CheckoutAttempt | null>('current');
 /** Never retry a financial POST; the server reconciles uncertain outcomes. */
 export const payCheckout = (body: unknown) => checkoutRequest<CheckoutAttempt>('pay', body);
+export const requestWithdrawal = () => checkoutRequest<{ id: string; requested_at: string; status: "received" }>('withdrawal', {});

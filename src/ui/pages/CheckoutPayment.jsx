@@ -7,6 +7,7 @@ import { T } from "../tokens.js";
 import { CheckoutField } from "./CheckoutAccount.jsx";
 
 export function CheckoutPayment({ quote, session, onOffer, onRefresh }) {
+  const TERMS_VERSION = "2026-09-15";
   const [offerChanged, setOfferChanged] = useState(false);
   const [showCancel, setShowCancel] = useState(false);
   const [attempt, setAttempt] = useState(null);
@@ -43,6 +44,7 @@ export function CheckoutPayment({ quote, session, onOffer, onRefresh }) {
     const fields = new FormData(form);
     try {
       const value = await payCheckout({selection:quote.selection,catalog_version:quote.catalog_version,
+        terms_version: TERMS_VERSION,
         card:{holderName:fields.get("name"),number:String(fields.get("number")).replace(/\s/g,""),expiryMonth:fields.get("month"),expiryYear:fields.get("year"),ccv:fields.get("ccv")},
         holder:{name:fields.get("name"),email:session.user.email,cpfCnpj:fields.get("cpf"),postalCode:fields.get("postal"),addressNumber:fields.get("address"),phone:fields.get("phone")}});
       setAttempt(value); onOffer(value.quote);
@@ -89,13 +91,15 @@ export function CheckoutPayment({ quote, session, onOffer, onRefresh }) {
         <CheckoutField label="CEP (somente números)" name="postal" inputMode="numeric" autoComplete="postal-code" pattern="[0-9]{8}" />
         <CheckoutField label="Número do endereço" name="address" />
         <CheckoutField label="Telefone com DDD (somente números)" name="phone" inputMode="tel" autoComplete="tel-national" pattern="[0-9]{10,13}" />
-        <label style={{display:"flex",gap:10,alignItems:"flex-start",lineHeight:1.5}}><input type="checkbox" required name="recurring" />Autorizo a cobrança do valor apresentado agora e a renovação automática {quote.selection.billing_cycle === "yearly" ? "anual" : "mensal"} no cartão. Posso cancelar a renovação no meu perfil.</label>
+        <label style={{display:"flex",gap:10,alignItems:"flex-start",lineHeight:1.5}}><input type="checkbox" required name="terms" />Li e aceito os <a href="https://fincla.com/termos" target="_blank" rel="noreferrer">Termos de contratação</a>, versão {TERMS_VERSION}.</label>
+        <label style={{display:"flex",gap:10,alignItems:"flex-start",lineHeight:1.5}}><input type="checkbox" required name="recurring" />Autorizo a cobrança do valor apresentado agora e a renovação automática {quote.selection.billing_cycle === "yearly" ? "anual" : "mensal"} no cartão. Mudanças de preço serão comunicadas antes da renovação e exigirão meu novo aceite. Posso cancelar a renovação no meu perfil.</label>
         <Btn type="submit" variant="dark" disabled={busy}>Confirmar pagamento</Btn>
       </form>
     </>}
     {offerChanged && <Btn disabled={busy} onClick={onRefresh}>Atualizar oferta</Btn>}
     {error && !waiting && !offerChanged && <Btn disabled={busy} onClick={check}>Verificar pagamento</Btn>}
     {showCancel && <CancelSubscriptionDialog reactivationHint="Para uma nova contratação após cancelar, entre em contato com o suporte." onClose={() => setShowCancel(false)} onCancelled={() => { setShowCancel(false); setAttempt({status:"cancelled"}); }} />}
+    <p style={{marginTop:20,color:T.inkMid}}>Para exercer arrependimento em até 7 dias, registre o pedido no seu perfil ou consulte os <a href="https://fincla.com/termos" target="_blank" rel="noreferrer">termos</a>.</p>
     <div style={{marginTop:20}}><Btn disabled={busy} onClick={session.signOut}>Sair da conta</Btn></div>
   </section>;
 }

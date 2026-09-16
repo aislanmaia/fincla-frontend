@@ -13,6 +13,7 @@ import { G } from "../../typography.js";
 import { useSubscriptionData } from "./useSubscriptionData.js";
 import { PlansComparisonModal } from "./PlansComparisonModal.jsx";
 import { CancelSubscriptionDialog } from "./CancelSubscriptionDialog.jsx";
+import { WithdrawalRequest } from "./WithdrawalRequest.jsx";
 import { AnnualSettlementPreview } from "./AnnualSettlementPreview.jsx";
 import { getFeatureCopy } from "../entitlements/featureCopy.js";
 
@@ -513,6 +514,11 @@ export function BillingPanel({ SectionCard, SectionHeader, dataMode = "live" }) 
           sub="Histórico de cobranças"
         />
         <InvoicesList invoices={subscription.recent_invoices ?? []} />
+      </SectionCard>
+
+      <SectionCard>
+        <SectionHeader icon={<CheckCircle2 size={16} color={T.green} />} title="Arrependimento da contratação" sub="Disponível para contratações recentes" />
+        <div style={{ padding: "0 24px 24px" }}><WithdrawalRequest /></div>
       </SectionCard>
 
       {comparingPlans && (
