@@ -4,6 +4,7 @@ import { Card, Btn } from "../../components/primitives.jsx";
 import { CheckoutBilling } from "../../pages/CheckoutBilling.jsx";
 import { CancelSubscriptionDialog } from "../subscription/CancelSubscriptionDialog.jsx";
 import { useSubscriptionData } from "../subscription/useSubscriptionData.js";
+import { AnnualSettlementPreview } from "../subscription/AnnualSettlementPreview.jsx";
 import { T } from "../../tokens.js";
 import { NUM } from "../../typography.js";
 
@@ -30,6 +31,7 @@ export function ConsultantSubscriptionPanel() {
       <p style={{ color: T.inkMid }}>Valor da oferta aceita na contratação.</p>
     </>}
     {quoteError && <p role="alert">{quoteError}</p>}
+    <AnnualSettlementPreview selection={quote?.selection} />
     {isLoading && <p role="status">Consultando a assinatura…</p>}
     {error && <div role="alert"><p>{error}</p><Btn onClick={refresh}>Atualizar assinatura</Btn></div>}
     {subscription?.cancel_at_period_end ? <p role="status" style={{ ...NUM }}>Renovação cancelada.{subscription.current_period_end && ` Você mantém acesso até ${new Date(subscription.current_period_end).toLocaleDateString("pt-BR")}.`}</p> : subscription?.status === "cancelled" ? <p>Assinatura cancelada.</p> : subscription && !isLoading && <Btn onClick={() => setShowCancel(true)}>Cancelar renovação</Btn>}

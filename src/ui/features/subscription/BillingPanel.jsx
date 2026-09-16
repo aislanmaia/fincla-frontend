@@ -13,6 +13,7 @@ import { G } from "../../typography.js";
 import { useSubscriptionData } from "./useSubscriptionData.js";
 import { PlansComparisonModal } from "./PlansComparisonModal.jsx";
 import { CancelSubscriptionDialog } from "./CancelSubscriptionDialog.jsx";
+import { AnnualSettlementPreview } from "./AnnualSettlementPreview.jsx";
 import { getFeatureCopy } from "../entitlements/featureCopy.js";
 
 const STATUS_TO_STYLE = {
@@ -498,6 +499,11 @@ export function BillingPanel({ SectionCard, SectionHeader, dataMode = "live" }) 
             )}
           </div>
         </div>
+      </SectionCard>
+
+      <SectionCard>
+        <SectionHeader icon={<CreditCard size={16} color={T.purple} />} title="Alteração do anual" sub="Calcule e confirme uma solicitação" />
+        <div style={{ padding: "0 24px" }}><AnnualSettlementPreview selection={subscription.checkout_selection} /></div>
       </SectionCard>
 
       <SectionCard>

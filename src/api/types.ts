@@ -162,10 +162,11 @@ export interface ChangePlanResponse {
 export interface AnnualSettlementRequest {
   target: CheckoutQuote["selection"];
   strategy?: "preserve_anniversary" | "restart_year";
+  accept?: boolean;
 }
 
 export interface AnnualSettlementOperation {
-  id: string;
+  id: string | null;
   amount_due_cents: number;
   unused_paid_cents: number;
   credit_cents: 0;
@@ -174,7 +175,8 @@ export interface AnnualSettlementOperation {
   apply_at: "after_settlement" | "next_renewal";
   preserves_anniversary: boolean;
   provider_capability: "unavailable_tokenization" | "not_needed";
-  status: "support_required" | "scheduled_renewal";
+  status: "preview" | "support_required" | "scheduled_renewal";
+  catalog_version: string;
   message: string;
 }
 
