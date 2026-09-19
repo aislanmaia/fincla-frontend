@@ -97,7 +97,9 @@ export function CheckoutPage({ search = window.location.search, session }) {
           <h1 style={{ fontSize: 30, letterSpacing: "-.035em", lineHeight: 1.08, margin: "9px 0 0" }}>Conclua sua contratação</h1>
           <p style={{ color: T.inkMid, lineHeight: 1.6, margin: "10px 0 0" }}>Escolha o ciclo, crie seu acesso e faça o pagamento com segurança.</p>
         </div>
-        {state.status === "loading" && <p role="status" style={{ color: T.inkMid, fontSize: 13, margin: "18px 0 0" }}>{quote ? "Atualizando o valor da sua oferta…" : "Consultando sua oferta…"}</p>}
+        {state.status === "loading" && (quote
+          ? <span role="status" style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0, 0, 0, 0)", whiteSpace: "nowrap", border: 0 }}>Atualizando o valor da sua oferta…</span>
+          : <p role="status" style={{ color: T.inkMid, fontSize: 13, margin: "18px 0 0" }}>Consultando sua oferta…</p>)}
         {state.status === "error" && <Card style={{ padding: 24 }}>
           <p role="alert">{state.message}</p>
           <Btn onClick={() => setAttempt((value) => value + 1)}>Tentar novamente</Btn>
