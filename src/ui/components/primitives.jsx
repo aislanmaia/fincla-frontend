@@ -277,7 +277,7 @@ export function CollapsibleSection({ open, children }) {
   );
 }
 
-export function Btn({ children, variant = "outline", color = T.ink, onClick, full, small }) {
+export function Btn({ children, variant = "outline", color = T.ink, onClick, full, small, disabled = false, type = "button", style, ...buttonProps }) {
   const styles = {
     dark: { bg: T.ink, txt: "#fff", brd: T.ink },
     red: { bg: T.red, txt: "#fff", brd: T.red },
@@ -291,6 +291,9 @@ export function Btn({ children, variant = "outline", color = T.ink, onClick, ful
   const s = styles[variant] || styles.outGray;
   return (
     <button
+      {...buttonProps}
+      type={type}
+      disabled={disabled}
       onClick={onClick}
       style={{
         ...G,
@@ -305,13 +308,15 @@ export function Btn({ children, variant = "outline", color = T.ink, onClick, ful
         color: s.txt,
         fontSize: small ? 11 : 12,
         fontWeight: 600,
-        cursor: "pointer",
+        cursor: disabled ? "not-allowed" : "pointer",
         whiteSpace: "nowrap",
         width: full ? "100%" : undefined,
         transition: "opacity 0.15s",
+        opacity: disabled ? 0.48 : 1,
+        ...style,
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.82")}
-      onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+      onMouseEnter={(e) => { if (!disabled) e.currentTarget.style.opacity = "0.82"; }}
+      onMouseLeave={(e) => { if (!disabled) e.currentTarget.style.opacity = "1"; }}
     >
       {children}
     </button>

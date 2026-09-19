@@ -13,6 +13,7 @@ export function CheckoutPayment({ quote, session, onOffer, onRefresh }) {
   const [attempt, setAttempt] = useState(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
+  const [readyToPay, setReadyToPay] = useState(false);
   const submitting = useRef(false);
   const [formKey, setFormKey] = useState(0);
   useEffect(() => {
@@ -64,7 +65,10 @@ export function CheckoutPayment({ quote, session, onOffer, onRefresh }) {
   }
   const active = attempt ? attempt.has_access === true : (session.user?.subscription?.is_entitled !== false && session.user?.subscription?.status === "active");
   const waiting = ["preparing", "processing", "reconciling", "pending_payment", "active"].includes(attempt?.status);
-  return <section style={{marginTop:24}}>
+  function updateReadiness(event) {
+    setReadyToPay(event.currentTarget.checkValidity());
+  }
+  return <section aria-labelledby="checkout-payment-title" style={{marginTop:24}}>
     <p style={{color:T.inkMid}}>Conta: {session.user?.email}</p>
     {error && <p role="alert">{error}</p>}
     {busy && <p role="status">Consultando a contratação…</p>}
@@ -78,8 +82,8 @@ export function CheckoutPayment({ quote, session, onOffer, onRefresh }) {
       </>}
     </> : attempt?.status === "cancelled" ? <p>Assinatura cancelada. Entre em contato com o suporte para uma nova contratação.</p> : !busy && !error && <>
       {attempt?.status === "declined" && <p role="alert">Não foi possível concluir o pagamento. Confira os dados e tente novamente.</p>}
-      <h2>Pague com cartão</h2>
-      <form key={formKey} onSubmit={pay} style={{display:"grid",gap:14}}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18 }}><span style={{ width: 26, height: 26, borderRadius: 99, display: "grid", placeItems: "center", background: "#E8F2E2", color: "#2B632A", fontSize: 12, fontWeight: 800 }}>3</span><div><div style={{ color: T.inkGhost, fontSize: 11, fontWeight: 750, letterSpacing: ".08em" }}>ETAPA 3 DE 3</div><h2 id="checkout-payment-title" style={{ margin: "2px 0 0", fontSize: 24 }}>Pague com cartão</h2></div></div>
+      <form key={formKey} onSubmit={pay} onInput={updateReadiness} onChange={updateReadiness} style={{display:"grid",gap:14}}>
         <CheckoutField label="Nome do titular" name="name" autoComplete="cc-name" />
         <CheckoutField label="Número do cartão" name="number" inputMode="numeric" autoComplete="cc-number" pattern="[0-9 ]{13,23}" />
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
@@ -93,7 +97,7 @@ export function CheckoutPayment({ quote, session, onOffer, onRefresh }) {
         <CheckoutField label="Telefone com DDD (somente números)" name="phone" inputMode="tel" autoComplete="tel-national" pattern="[0-9]{10,13}" />
         <label style={{display:"flex",gap:10,alignItems:"flex-start",lineHeight:1.5}}><input type="checkbox" required name="terms" />Li e aceito os <a href="https://fincla.com/termos" target="_blank" rel="noreferrer">Termos de contratação</a>, versão {TERMS_VERSION}.</label>
         <label style={{display:"flex",gap:10,alignItems:"flex-start",lineHeight:1.5}}><input type="checkbox" required name="recurring" />Autorizo a cobrança do valor apresentado agora e a renovação automática {quote.selection.billing_cycle === "yearly" ? "anual" : "mensal"} no cartão. Mudanças de preço serão comunicadas antes da renovação e exigirão meu novo aceite. Posso cancelar a renovação no meu perfil.</label>
-        <Btn type="submit" variant="dark" disabled={busy}>Confirmar pagamento</Btn>
+        <Btn type="submit" variant="dark" full disabled={busy || !readyToPay}>Confirmar pagamento</Btn>
       </form>
     </>}
     {offerChanged && <Btn disabled={busy} onClick={onRefresh}>Atualizar oferta</Btn>}

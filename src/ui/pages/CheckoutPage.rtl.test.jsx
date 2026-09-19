@@ -29,6 +29,21 @@ it("discards an obsolete response when the selection changes", async () => {
   await waitFor(() => expect(screen.queryByText(/29,90/)).toBeNull());
 });
 
+it("lets a visitor choose annual billing and waits for the server quote before continuing", async () => {
+  const { fireEvent } = await import("@testing-library/react");
+  const fetch = vi.fn(async (_url, options) => {
+    const selection = JSON.parse(options.body);
+    return { ok: true, json: async () => ({ selection, total_cents: selection.billing_cycle === "yearly" ? 29900 : 2990, capacity: null }) };
+  });
+  vi.stubGlobal("fetch", fetch);
+  render(<CheckoutPage search="?persona=personal&billing_cycle=monthly" session={{ isAuthenticated: false, signIn: vi.fn() }} />);
+  const continueButton = await screen.findByRole("button", { name: "Criar conta e continuar" });
+  expect(continueButton).toBeDisabled();
+  fireEvent.click(screen.getByRole("radio", { name: /Anual/ }));
+  expect(await screen.findByText(/299,00/)).toBeTruthy();
+  expect(JSON.parse(fetch.mock.calls[1][1].body)).toMatchObject({ persona: "personal", billing_cycle: "yearly" });
+});
+
 it("shows an actionable error without offering payment for an invalid selection", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ok:false,status:422}));
   render(<CheckoutPage search="?persona=invalid" />);
