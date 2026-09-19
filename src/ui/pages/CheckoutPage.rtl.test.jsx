@@ -54,10 +54,22 @@ it("keeps the selected checkout visible while an annual quote is loading", async
   const annual = await screen.findByRole("radio", { name: /Anual/ });
   fireEvent.click(annual);
   expect(screen.getByText("Fincla Pessoal")).toBeTruthy();
-  expect(screen.getByText(/29,90/)).toBeTruthy();
+  expect(screen.queryByText("Atualizando o valor da sua oferta…")).toBeNull();
+  expect(screen.getByLabelText("Atualizando valor")).toHaveAttribute("aria-busy", "true");
   expect(screen.getByRole("radio", { name: /Anual/ })).toBeDisabled();
   resolveAnnual({ ok: true, json: async () => ({ selection: { persona: "personal", billing_cycle: "yearly" }, total_cents: 29900, capacity: null }) });
   expect(await screen.findByText(/299,00/)).toBeTruthy();
+});
+
+it("lets the visitor review a previous step without losing the account draft", async () => {
+  const { fireEvent } = await import("@testing-library/react");
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ selection: { persona: "personal", billing_cycle: "monthly" }, total_cents: 2990, capacity: null }) }));
+  render(<CheckoutPage search="?persona=personal&billing_cycle=monthly" session={{ isAuthenticated: false, signIn: vi.fn() }} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Continuar" }));
+  fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "Maria" } });
+  fireEvent.click(screen.getByRole("button", { name: /Plano e ciclo/ }));
+  fireEvent.click(screen.getByRole("button", { name: /Seus dados/ }));
+  expect(screen.getByLabelText("Nome")).toHaveValue("Maria");
 });
 
 it("shows an actionable error without offering payment for an invalid selection", async () => {
