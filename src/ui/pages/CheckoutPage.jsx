@@ -52,11 +52,17 @@ export function CheckoutPage({ search = window.location.search, session }) {
   const onOffer = useCallback((acceptedOffer) => setState({status:"ready",quote:acceptedOffer}), []);
   const quote = state.status === "ready" ? state.quote : null;
   return (
-    <main className="fincla-scroll" style={{ ...G, height: "100%", overflowY: "auto", boxSizing: "border-box", background: T.bg, color: T.ink, padding: "32px 20px" }}>
-      <div style={{ maxWidth: 560, margin: "0 auto" }}>
-        <img src="/logo.png" alt="Fincla" width={40} height={40} />
-        <div style={{ marginTop: 32 }}><PageTitle sans="Sua escolha no" serif="Fincla" /></div>
-        <p style={{ color: T.inkMid, lineHeight: 1.6 }}>Confira sua oferta e o período de contratação.</p>
+    <main className="fincla-scroll" style={{ ...G, minHeight: "100%", overflowY: "auto", boxSizing: "border-box", background: "linear-gradient(135deg, #F8F7F5 0%, #F2F5EF 100%)", color: T.ink, padding: "28px 20px 56px" }}>
+      <div style={{ maxWidth: 680, margin: "0 auto" }}>
+        <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, marginBottom: 28 }}>
+          <img src="/logo.png" alt="Fincla" width={38} height={38} />
+          <span style={{ fontSize: 12, letterSpacing: ".08em", fontWeight: 700, color: T.inkGhost }}>CONTRATAÇÃO SEGURA</span>
+        </header>
+        <div style={{ maxWidth: 470 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, color: T.green, fontSize: 12, fontWeight: 750, letterSpacing: ".08em" }}><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 99, background: T.green }} /> SUA ASSINATURA</div>
+          <div style={{ marginTop: 10 }}><PageTitle sans="Sua escolha no" serif="Fincla" /></div>
+          <p style={{ color: T.inkMid, lineHeight: 1.6, margin: "10px 0 0" }}>Revise a oferta. Em seguida, crie sua conta para seguir ao pagamento.</p>
+        </div>
         {state.status === "loading" && <p role="status">Consultando sua oferta…</p>}
         {state.status === "error" && <Card style={{ padding: 24 }}>
           <p role="alert">{state.message}</p>
@@ -64,16 +70,25 @@ export function CheckoutPage({ search = window.location.search, session }) {
           {recovery && persona === "consultant" && <p><a href="https://fincla.com/para-consultores">Escolher vagas no site</a></p>}
           {session?.isAuthenticated && <Btn onClick={session.signOut}>Sair da conta</Btn>}
         </Card>}
-        {quote && <Card style={{ padding: 28, marginTop: 24 }}>
-          <h2>{quote.selection.persona === "personal" ? "Fincla Pessoal" : "Fincla Consultor"}</h2>
-          {quote.capacity != null && <p style={{ ...NUM }}>{quote.capacity} vagas contratadas · {quote.selection.mode === "package" ? `Pacote de ${quote.selection.package_size}` : "Preço progressivo"}</p>}
-          <p style={{ ...NUM, fontSize: 38, fontWeight: 700, marginBottom: 8 }}>{money(quote.total_cents)}</p>
-          {quote.capacity != null && <p style={{ color: T.inkMid, lineHeight: 1.6 }}>A capacidade é paga antecipadamente, inclusive as vagas vazias. Você pode preencher e reutilizar as vagas durante o período contratado.</p>}
-          <p>{quote.selection.billing_cycle === "yearly" ? "Pagamento anual antecipado" : "Pagamento mensal antecipado"}</p>
-          {session ? (session.isAuthenticated ? (persona !== quote.selection.persona ? <section style={{ marginTop: 24 }}>
+        {quote && <Card style={{ overflow: "hidden", marginTop: 28, border: "1px solid #DCE3D7", boxShadow: "0 18px 50px rgba(30, 43, 29, .10)" }}>
+          <section style={{ background: "#182218", color: "#F8F7F5", padding: "24px 28px", display: "grid", gridTemplateColumns: "1fr auto", gap: 20, alignItems: "end" }}>
+            <div>
+              <div style={{ color: "#B5C6A8", fontSize: 12, letterSpacing: ".08em", fontWeight: 700 }}>OFERTA SELECIONADA</div>
+              <h2 style={{ margin: "7px 0 0", fontSize: 24 }}>{quote.selection.persona === "personal" ? "Fincla Pessoal" : "Fincla Consultor"}</h2>
+              {quote.capacity != null && <p style={{ ...NUM, color: "#D5E3CE", margin: "8px 0 0", lineHeight: 1.45 }}>{quote.capacity} vagas contratadas · {quote.selection.mode === "package" ? `Pacote de ${quote.selection.package_size}` : "Preço progressivo"}</p>}
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <p style={{ ...NUM, fontSize: 32, fontWeight: 750, margin: 0, letterSpacing: "-.04em" }}>{money(quote.total_cents)}</p>
+              <p style={{ color: "#B5C6A8", fontSize: 13, margin: "4px 0 0" }}>{quote.selection.billing_cycle === "yearly" ? "cobrança anual" : "cobrança mensal"}</p>
+            </div>
+          </section>
+          <section style={{ padding: "28px", background: T.surface }}>
+          {quote.capacity != null && <p style={{ color: T.inkMid, lineHeight: 1.6, margin: "0 0 20px", padding: "12px 14px", background: "#F3F7F0", borderRadius: 10 }}>A capacidade é paga antecipadamente, inclusive vagas vazias. Você pode preenchê-las e reutilizá-las durante o período contratado.</p>}
+          {session ? (session.isAuthenticated ? (persona !== quote.selection.persona ? <section style={{ marginTop: 4 }}>
             <p role="alert">Esta conta é do Fincla {persona === "consultant" ? "Consultor" : "Pessoal"}. Para contratar a outra área, use um perfil separado com outro email.</p>
             <Btn onClick={session.signOut}>Sair da conta</Btn>
           </section> : <CheckoutPayment quote={quote} session={session} onOffer={onOffer} onRefresh={() => setAttempt(value => value + 1)} />) : <CheckoutAccount quote={quote} session={session} />) : <p style={{ color: T.inkMid, lineHeight: 1.6 }}>A contratação online estará disponível em breve. Nenhuma cobrança foi realizada.</p>}
+          </section>
         </Card>}
       </div>
     </main>

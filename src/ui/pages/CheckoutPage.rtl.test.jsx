@@ -131,14 +131,14 @@ it("requires a refreshed offer and new consent when the server rejects an outdat
   }));
   render(<CheckoutPage search="?persona=personal&billing_cycle=monthly" session={{isAuthenticated:true,user:{email:"pessoal@example.com",subscription:{status:"pending_payment"}},signOut:vi.fn()}} />);
   await screen.findByRole("heading",{name:"Pague com cartão"});
-  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByLabelText(/Termos de contratação/));
   fireEvent.submit(screen.getByRole('button',{name:'Confirmar pagamento'}).closest('form'));
   const update = await screen.findByRole('button',{name:'Atualizar oferta'});
   expect(payments).toBe(1);
   refresh = true;
   fireEvent.click(update);
   await screen.findByText(/30,90/);
-  expect(await screen.findByRole('checkbox')).not.toBeChecked();
+  expect(await screen.findByLabelText(/Termos de contratação/)).not.toBeChecked();
   expect(screen.getByLabelText('Número do cartão')).toHaveValue('');
   expect(payments).toBe(1);
 });
