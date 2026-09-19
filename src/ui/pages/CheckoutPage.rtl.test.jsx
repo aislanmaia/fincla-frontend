@@ -82,8 +82,13 @@ it("shows an actionable error without offering payment for an invalid selection"
 it("keeps the yearly offer through account creation and never uses legacy signup", async () => {
   const { fireEvent } = await import("@testing-library/react");
   const signIn = vi.fn().mockResolvedValue({});
-  const fetch = vi.fn().mockResolvedValueOnce({ok:true,json:async()=>({selection:{persona:"personal",billing_cycle:"yearly"},total_cents:29900,capacity:null})})
-    .mockResolvedValueOnce({ok:true,json:async()=>({status:"pending_payment"})});
+  const fetch = vi.fn(async (url, options) => {
+    if (url.includes("checkout-quote")) {
+      const selection = JSON.parse(options.body);
+      return {ok:true,json:async()=>({selection,total_cents:selection.billing_cycle === "yearly" ? 29900 : 2990,capacity:null})};
+    }
+    return {ok:true,json:async()=>({status:"pending_payment"})};
+  });
   vi.stubGlobal("fetch", fetch);
   render(<CheckoutPage search="?persona=personal&billing_cycle=yearly" session={{isAuthenticated:false,signIn}} />);
   await screen.findByText(/299,00/);
@@ -93,8 +98,9 @@ it("keeps the yearly offer through account creation and never uses legacy signup
   fireEvent.change(screen.getByLabelText("Senha"), {target:{value:"Password123!"}});
   fireEvent.click(screen.getByRole("button", {name:"Criar conta e continuar"}));
   await waitFor(()=>expect(signIn).toHaveBeenCalledWith("maria@example.com", "Password123!"));
-  expect(fetch.mock.calls[1][0]).toContain("/checkout/register");
-  expect(JSON.parse(fetch.mock.calls[1][1].body).billing_cycle).toBe("yearly");
+  const registration = fetch.mock.calls.find(([url]) => url.includes("/checkout/register"));
+  expect(registration[0]).toContain("/checkout/register");
+  expect(JSON.parse(registration[1].body).billing_cycle).toBe("yearly");
 });
 
 it("shows resumable pending payment without a second pay button", async () => {
@@ -113,8 +119,13 @@ it("registers a separate consultant profile while preserving the quoted package 
   const { fireEvent } = await import("@testing-library/react");
   const signIn = vi.fn().mockResolvedValue({});
   const quote = {selection:{persona:"consultant",billing_cycle:"yearly",mode:"package",seats:26,package_size:25},total_cents:517400,capacity:26};
-  const fetch = vi.fn().mockResolvedValueOnce({ok:true,json:async()=>quote})
-    .mockResolvedValueOnce({ok:true,json:async()=>({persona:"consultant",status:"pending_payment"})});
+  const fetch = vi.fn(async (url, options) => {
+    if (url.includes("checkout-quote")) {
+      const selection = JSON.parse(options.body);
+      return {ok:true,json:async()=>selection.billing_cycle === "yearly" ? quote : {...quote, selection, total_cents: 54750}};
+    }
+    return {ok:true,json:async()=>({persona:"consultant",status:"pending_payment"})};
+  });
   vi.stubGlobal("fetch", fetch);
   render(<CheckoutPage search="?persona=consultant&billing_cycle=yearly&mode=package&seats=26&package_size=25" session={{isAuthenticated:false,signIn}} />);
   await screen.findByText(/26 vagas contratadas/);
@@ -124,8 +135,23 @@ it("registers a separate consultant profile while preserving the quoted package 
   fireEvent.change(screen.getByLabelText("Senha"), {target:{value:"Password123!"}});
   fireEvent.click(screen.getByRole("button", {name:"Criar conta e continuar"}));
   await waitFor(()=>expect(signIn).toHaveBeenCalledWith("consultora@example.com", "Password123!"));
-  expect(JSON.parse(fetch.mock.calls[1][1].body)).toMatchObject({persona:"consultant",billing_cycle:"yearly"});
+  const registration = fetch.mock.calls.find(([url]) => url.includes("/checkout/register"));
+  expect(JSON.parse(registration[1].body)).toMatchObject({persona:"consultant",billing_cycle:"yearly"});
   expect(screen.getByText(/outro email/i)).toBeTruthy();
+});
+
+it("explains the monthly equivalent and savings for the annual offer", async () => {
+  const fetch = vi.fn(async (_url, options) => {
+    const selection = JSON.parse(options.body);
+    return {ok:true,json:async()=>({selection,total_cents:selection.billing_cycle === "yearly" ? 29900 : 2990,capacity:null})};
+  });
+  vi.stubGlobal("fetch", fetch);
+  render(<CheckoutPage search="?persona=personal&billing_cycle=yearly" session={{isAuthenticated:false,signIn:vi.fn()}} />);
+  expect(await screen.findByText((_, node) => node?.textContent?.replace(/\u00a0/g, " ") === "Equivale a R$ 24,92/mês")).toBeTruthy();
+  expect(await screen.findByText("2 meses grátis no anual")).toBeTruthy();
+  expect(screen.getByText((_, node) => node?.textContent?.replace(/\u00a0/g, " ") === "Economia total de R$ 59,80")).toBeTruthy();
+  expect(screen.getByText((_, node) => node?.textContent?.replace(/\u00a0/g, " ") === "R$ 24,92/mês no anual")).toBeTruthy();
+  expect(screen.getByText("2 meses grátis")).toBeTruthy();
 });
 
 it("recovers the saved consultant offer without URL parameters or a financial attempt", async () => {
