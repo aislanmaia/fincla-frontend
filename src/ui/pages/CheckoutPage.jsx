@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckoutPayment } from "./CheckoutPayment.jsx";
 import { CheckoutAccount } from "./CheckoutAccount.jsx";
 import { currentCheckout, quoteCheckout } from "../../api/checkout";
@@ -16,6 +16,7 @@ export function CheckoutPage({ search = window.location.search, session }) {
   const [selectionSearch, setSelectionSearch] = useState(search);
   const [activeSection, setActiveSection] = useState("plan");
   const [wide, setWide] = useState(() => typeof window === "undefined" || window.innerWidth >= 820);
+  const cycleChange = useRef(false);
   const effectiveSearch = selectionSearch || search;
   const recovery = !effectiveSearch || effectiveSearch === "?";
   const savedSelection = JSON.stringify(session?.user?.subscription?.checkout_selection ?? null);
@@ -35,7 +36,9 @@ export function CheckoutPage({ search = window.location.search, session }) {
       controller.abort();
       setState({ status: "error", message: "A consulta demorou mais que o esperado. Tente novamente." });
     }, 10000);
-    setState({ status: "loading" });
+    setState((current) => cycleChange.current && current.quote
+      ? { status: "loading", quote: current.quote, preserveQuote: true }
+      : { status: "loading" });
     async function loadQuote() {
       if (!recovery) return quoteCheckout(effectiveSearch, controller.signal);
       if (session?.isAuthenticated) {
@@ -53,15 +56,21 @@ export function CheckoutPage({ search = window.location.search, session }) {
       return quoteCheckout(params.toString(), controller.signal);
     }
     loadQuote().then((receivedQuote) => {
-      if (!controller.signal.aborted) setState({ status: "ready", quote: receivedQuote });
+      if (!controller.signal.aborted) {
+        cycleChange.current = false;
+        setState({ status: "ready", quote: receivedQuote });
+      }
     }).catch((error) => {
-      if (!controller.signal.aborted) setState({ status: "error", message: error.message });
+      if (!controller.signal.aborted) {
+        cycleChange.current = false;
+        setState({ status: "error", message: error.message });
+      }
     }).finally(() => window.clearTimeout(timeout));
     return () => { window.clearTimeout(timeout); controller.abort(); };
   }, [effectiveSearch, attempt, recovery, session?.isBootstrapping, session?.isAuthenticated, savedSelection, persona, cycle]);
 
   const onOffer = useCallback((acceptedOffer) => setState({status:"ready",quote:acceptedOffer}), []);
-  const quote = state.status === "ready" ? state.quote : null;
+  const quote = state.status === "ready" || state.preserveQuote ? state.quote : null;
   const canChangeCycle = !session?.isAuthenticated && state.status !== "loading";
   const changeCycle = useCallback((billingCycle) => {
     if (!quote || billingCycle === quote.selection.billing_cycle) return;
@@ -72,7 +81,8 @@ export function CheckoutPage({ search = window.location.search, session }) {
     params.set("billing_cycle", billingCycle);
     const nextSearch = `?${params.toString()}`;
     window.history.replaceState({}, "", `${window.location.pathname}${nextSearch}`);
-    setState({ status: "loading" });
+    cycleChange.current = true;
+    setState((current) => ({ status: "loading", quote: current.quote, preserveQuote: true }));
     setSelectionSearch(nextSearch);
   }, [effectiveSearch, quote]);
   return (

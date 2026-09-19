@@ -44,6 +44,22 @@ it("lets a visitor choose annual billing and waits for the server quote before c
   expect(await screen.findByRole("button", { name: "Criar conta e continuar" })).toBeDisabled();
 });
 
+it("keeps the selected checkout visible while an annual quote is loading", async () => {
+  const { fireEvent } = await import("@testing-library/react");
+  let resolveAnnual;
+  const fetch = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => ({ selection: { persona: "personal", billing_cycle: "monthly" }, total_cents: 2990, capacity: null }) })
+    .mockImplementationOnce(() => new Promise((resolve) => { resolveAnnual = resolve; }));
+  vi.stubGlobal("fetch", fetch);
+  render(<CheckoutPage search="?persona=personal&billing_cycle=monthly" session={{ isAuthenticated: false, signIn: vi.fn() }} />);
+  const annual = await screen.findByRole("radio", { name: /Anual/ });
+  fireEvent.click(annual);
+  expect(screen.getByText("Fincla Pessoal")).toBeTruthy();
+  expect(screen.getByText(/29,90/)).toBeTruthy();
+  expect(screen.getByRole("radio", { name: /Anual/ })).toBeDisabled();
+  resolveAnnual({ ok: true, json: async () => ({ selection: { persona: "personal", billing_cycle: "yearly" }, total_cents: 29900, capacity: null }) });
+  expect(await screen.findByText(/299,00/)).toBeTruthy();
+});
+
 it("shows an actionable error without offering payment for an invalid selection", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ok:false,status:422}));
   render(<CheckoutPage search="?persona=invalid" />);
