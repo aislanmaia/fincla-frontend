@@ -4,7 +4,7 @@ import { CheckoutAccount } from "./CheckoutAccount.jsx";
 import { currentCheckout, quoteCheckout } from "../../api/checkout";
 import { T } from "../tokens.js";
 import { G, NUM } from "../typography.js";
-import { Card, Btn, PageTitle } from "../components/primitives.jsx";
+import { Card, Btn } from "../components/primitives.jsx";
 
 import { checkoutPersona } from "../features/auth/checkoutIdentity.js";
 
@@ -69,18 +69,18 @@ export function CheckoutPage({ search = window.location.search, session }) {
     setSelectionSearch(nextSearch);
   }, [effectiveSearch, quote]);
   return (
-    <main className="fincla-scroll" style={{ ...G, minHeight: "100%", overflowY: "auto", boxSizing: "border-box", background: "linear-gradient(135deg, #F8F7F5 0%, #F2F5EF 100%)", color: T.ink, padding: "28px 20px 56px" }}>
-      <div style={{ maxWidth: 680, margin: "0 auto" }}>
-        <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, marginBottom: 28 }}>
-          <img src="/logo.png" alt="Fincla" width={38} height={38} />
-          <span style={{ fontSize: 12, letterSpacing: ".08em", fontWeight: 700, color: T.inkGhost }}>CONTRATAÇÃO SEGURA</span>
+    <main className="fincla-scroll" style={{ ...G, minHeight: "100%", overflowY: "auto", boxSizing: "border-box", background: "#F7F8F5", color: T.ink, padding: "0 20px 56px" }}>
+      <div style={{ maxWidth: 760, margin: "0 auto" }}>
+        <header style={{ height: 66, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, borderBottom: `1px solid ${T.border}`, marginBottom: 38 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}><img src="/logo.png" alt="Fincla" width={28} height={28} /><span style={{ fontWeight: 750, fontSize: 14 }}>Fincla</span><span aria-hidden="true" style={{ color: T.inkGhost }}>·</span><span style={{ color: T.inkMid, fontSize: 13 }}>Assinatura</span></div>
+          <a href="mailto:contato@fincla.com" style={{ color: T.inkMid, fontSize: 13, textDecoration: "none" }}>Precisa de ajuda?</a>
         </header>
-        <div style={{ maxWidth: 520 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, color: T.green, fontSize: 12, fontWeight: 750, letterSpacing: ".08em" }}><span style={{ display: "inline-block", width: 8, height: 8, borderRadius: 99, background: T.green }} /> SUA ASSINATURA</div>
-          <div style={{ marginTop: 10 }}><PageTitle sans="Sua escolha no" serif="Fincla" /></div>
-          <p style={{ color: T.inkMid, lineHeight: 1.6, margin: "10px 0 0" }}>Escolha a periodicidade, crie sua conta e confirme o pagamento com segurança.</p>
+        <div style={{ maxWidth: 530 }}>
+          <p style={{ color: T.green, fontSize: 12, fontWeight: 750, letterSpacing: ".08em", margin: 0 }}>FINALIZAR CONTRATAÇÃO</p>
+          <h1 style={{ fontSize: 32, letterSpacing: "-.035em", lineHeight: 1.08, margin: "9px 0 0" }}>Configure sua assinatura</h1>
+          <p style={{ color: T.inkMid, lineHeight: 1.6, margin: "10px 0 0" }}>Defina o período, crie seu acesso e confirme o pagamento no Fincla.</p>
         </div>
-        {state.status === "loading" && <p role="status">Consultando sua oferta…</p>}
+        {state.status === "loading" && <p role="status" style={{ color: T.inkMid, fontSize: 13, margin: "18px 0 0" }}>{quote ? "Atualizando o valor da sua oferta…" : "Consultando sua oferta…"}</p>}
         {state.status === "error" && <Card style={{ padding: 24 }}>
           <p role="alert">{state.message}</p>
           <Btn onClick={() => setAttempt((value) => value + 1)}>Tentar novamente</Btn>
