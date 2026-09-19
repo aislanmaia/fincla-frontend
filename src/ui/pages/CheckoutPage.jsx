@@ -14,12 +14,20 @@ export function CheckoutPage({ search = window.location.search, session }) {
   const [state, setState] = useState({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
   const [selectionSearch, setSelectionSearch] = useState(search);
+  const [activeSection, setActiveSection] = useState("plan");
+  const [wide, setWide] = useState(() => typeof window === "undefined" || window.innerWidth >= 820);
   const effectiveSearch = selectionSearch || search;
   const recovery = !effectiveSearch || effectiveSearch === "?";
   const savedSelection = JSON.stringify(session?.user?.subscription?.checkout_selection ?? null);
   const persona = checkoutPersona(session?.user);
   const cycle = session?.user?.subscription?.billing_cycle || "monthly";
   useEffect(() => setSelectionSearch(search), [search]);
+  useEffect(() => {
+    const sync = () => setWide(window.innerWidth >= 820);
+    window.addEventListener("resize", sync);
+    return () => window.removeEventListener("resize", sync);
+  }, []);
+  useEffect(() => { if (session?.isAuthenticated) setActiveSection("payment"); }, [session?.isAuthenticated]);
   useEffect(() => {
     if (recovery && session?.isBootstrapping) return;
     const controller = new AbortController();
@@ -54,7 +62,6 @@ export function CheckoutPage({ search = window.location.search, session }) {
 
   const onOffer = useCallback((acceptedOffer) => setState({status:"ready",quote:acceptedOffer}), []);
   const quote = state.status === "ready" ? state.quote : null;
-  const step = session?.isAuthenticated ? 3 : 2;
   const canChangeCycle = !session?.isAuthenticated && state.status !== "loading";
   const changeCycle = useCallback((billingCycle) => {
     if (!quote || billingCycle === quote.selection.billing_cycle) return;
@@ -76,9 +83,9 @@ export function CheckoutPage({ search = window.location.search, session }) {
           <a href="mailto:contato@fincla.com" style={{ color: T.inkMid, fontSize: 13, textDecoration: "none" }}>Precisa de ajuda?</a>
         </header>
         <div style={{ maxWidth: 530 }}>
-          <p style={{ color: T.green, fontSize: 12, fontWeight: 750, letterSpacing: ".08em", margin: 0 }}>FINALIZAR CONTRATAÇÃO</p>
-          <h1 style={{ fontSize: 32, letterSpacing: "-.035em", lineHeight: 1.08, margin: "9px 0 0" }}>Configure sua assinatura</h1>
-          <p style={{ color: T.inkMid, lineHeight: 1.6, margin: "10px 0 0" }}>Defina o período, crie seu acesso e confirme o pagamento no Fincla.</p>
+          <p style={{ color: T.green, fontSize: 12, fontWeight: 750, letterSpacing: ".08em", margin: 0 }}>ASSINATURA</p>
+          <h1 style={{ fontSize: 30, letterSpacing: "-.035em", lineHeight: 1.08, margin: "9px 0 0" }}>Conclua sua contratação</h1>
+          <p style={{ color: T.inkMid, lineHeight: 1.6, margin: "10px 0 0" }}>Escolha o ciclo, crie seu acesso e faça o pagamento com segurança.</p>
         </div>
         {state.status === "loading" && <p role="status" style={{ color: T.inkMid, fontSize: 13, margin: "18px 0 0" }}>{quote ? "Atualizando o valor da sua oferta…" : "Consultando sua oferta…"}</p>}
         {state.status === "error" && <Card style={{ padding: 24 }}>
@@ -87,47 +94,44 @@ export function CheckoutPage({ search = window.location.search, session }) {
           {recovery && persona === "consultant" && <p><a href="https://fincla.com/para-consultores">Escolher vagas no site</a></p>}
           {session?.isAuthenticated && <Btn onClick={session.signOut}>Sair da conta</Btn>}
         </Card>}
-        {quote && <>
-          <CheckoutSteps activeStep={step} />
-          <Card style={{ overflow: "hidden", marginTop: 18, border: "1px solid #DCE3D7", boxShadow: "0 18px 50px rgba(30, 43, 29, .10)" }}>
-          <section style={{ background: "#182218", color: "#F8F7F5", padding: "24px 28px", display: "grid", gridTemplateColumns: "1fr auto", gap: 20, alignItems: "end" }}>
-            <div>
-              <div style={{ color: "#B5C6A8", fontSize: 12, letterSpacing: ".08em", fontWeight: 700 }}>OFERTA SELECIONADA</div>
-              <h2 style={{ margin: "7px 0 0", fontSize: 24 }}>{quote.selection.persona === "personal" ? "Fincla Pessoal" : "Fincla Consultor"}</h2>
-              {quote.capacity != null && <p style={{ ...NUM, color: "#D5E3CE", margin: "8px 0 0", lineHeight: 1.45 }}>{quote.capacity} vagas contratadas · {quote.selection.mode === "package" ? `Pacote de ${quote.selection.package_size}` : "Preço progressivo"}</p>}
-            </div>
-            <div style={{ textAlign: "right" }}>
-              <p style={{ ...NUM, fontSize: 32, fontWeight: 750, margin: 0, letterSpacing: "-.04em" }}>{money(quote.total_cents)}</p>
-              <p style={{ color: "#B5C6A8", fontSize: 13, margin: "4px 0 0" }}>{quote.selection.billing_cycle === "yearly" ? "cobrança anual" : "cobrança mensal"}</p>
-            </div>
-          </section>
-          <section style={{ padding: "28px", background: T.surface }}>
-          <BillingCyclePicker value={quote.selection.billing_cycle} disabled={!canChangeCycle} onChange={changeCycle} />
-          {quote.capacity != null && <p style={{ color: T.inkMid, lineHeight: 1.6, margin: "0 0 20px", padding: "12px 14px", background: "#F3F7F0", borderRadius: 10 }}>A capacidade é paga antecipadamente, inclusive vagas vazias. Você pode preenchê-las e reutilizá-las durante o período contratado.</p>}
-          {session ? (session.isAuthenticated ? (persona !== quote.selection.persona ? <section style={{ marginTop: 4 }}>
-            <p role="alert">Esta conta é do Fincla {persona === "consultant" ? "Consultor" : "Pessoal"}. Para contratar a outra área, use um perfil separado com outro email.</p>
-            <Btn onClick={session.signOut}>Sair da conta</Btn>
-          </section> : <CheckoutPayment quote={quote} session={session} onOffer={onOffer} onRefresh={() => setAttempt(value => value + 1)} />) : <CheckoutAccount quote={quote} session={session} />) : <p style={{ color: T.inkMid, lineHeight: 1.6 }}>A contratação online estará disponível em breve. Nenhuma cobrança foi realizada.</p>}
-          </section>
+        {quote && <div style={{ display: "grid", gridTemplateColumns: wide ? "minmax(0, 1.22fr) minmax(290px, .78fr)" : "1fr", gap: 20, alignItems: "start", marginTop: 28 }}>
+          <Card style={{ overflow: "hidden", border: `1px solid ${T.border}` }}>
+            <CheckoutPanel number="1" title="Plano e ciclo" detail="Escolha como prefere pagar" open={activeSection === "plan"} complete={activeSection !== "plan"}>
+              <BillingCyclePicker value={quote.selection.billing_cycle} disabled={!canChangeCycle} onChange={changeCycle} />
+              {quote.capacity != null && <p style={{ color: T.inkMid, lineHeight: 1.6, margin: "0 0 20px", padding: "12px 14px", background: "#F3F7F0", borderRadius: 10 }}>A capacidade é paga antecipadamente, inclusive vagas vazias. Você pode preenchê-las e reutilizá-las durante o período contratado.</p>}
+              <Btn variant="dark" full onClick={() => setActiveSection("account")}>Continuar</Btn>
+            </CheckoutPanel>
+            <CheckoutPanel number="2" title="Seus dados" detail="Crie ou acesse sua conta" open={activeSection === "account"} complete={session?.isAuthenticated} locked={activeSection === "plan"}>
+              {session ? <CheckoutAccount quote={quote} session={session} /> : <p style={{ color: T.inkMid }}>A contratação online estará disponível em breve.</p>}
+            </CheckoutPanel>
+            <CheckoutPanel number="3" title="Pagamento" detail="Confirme a assinatura" open={activeSection === "payment"} locked={!session?.isAuthenticated}>
+              {session?.isAuthenticated && (persona !== quote.selection.persona ? <section style={{ marginTop: 4 }}><p role="alert">Esta conta é do Fincla {persona === "consultant" ? "Consultor" : "Pessoal"}. Para contratar a outra área, use um perfil separado com outro email.</p><Btn onClick={session.signOut}>Sair da conta</Btn></section> : <CheckoutPayment quote={quote} session={session} onOffer={onOffer} onRefresh={() => setAttempt(value => value + 1)} />)}
+            </CheckoutPanel>
           </Card>
-        </>}
+          <OrderSummary quote={quote} wide={wide} />
+        </div>}
       </div>
     </main>
   );
 }
 
-function CheckoutSteps({ activeStep }) {
-  const steps = ["Oferta", "Conta", "Pagamento"];
-  return <ol aria-label="Etapas da contratação" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", padding: 0, margin: "28px 0 0", listStyle: "none", gap: 8 }}>
-    {steps.map((label, index) => {
-      const number = index + 1;
-      const active = number === activeStep;
-      const complete = number < activeStep;
-      return <li key={label} aria-current={active ? "step" : undefined} style={{ display: "flex", alignItems: "center", gap: 8, color: active || complete ? T.ink : T.inkGhost, fontSize: 12, fontWeight: active ? 750 : 600 }}>
-        <span aria-hidden="true" style={{ width: 22, height: 22, display: "grid", placeItems: "center", borderRadius: 99, background: active ? T.ink : complete ? T.green : "#E4E7E1", color: active || complete ? "#fff" : T.inkGhost, fontSize: 11 }}>{complete ? "✓" : number}</span>{label}
-      </li>;
-    })}
-  </ol>;
+function CheckoutPanel({ number, title, detail, open, complete, locked, children }) {
+  return <section aria-labelledby={`checkout-step-${number}`} style={{ borderBottom: number === "3" ? 0 : `1px solid ${T.border}`, padding: open ? "22px 24px 26px" : "18px 24px" }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+      <span aria-hidden="true" style={{ width: 27, height: 27, borderRadius: 9, display: "grid", placeItems: "center", background: complete ? T.green : open ? T.ink : "#EEF0EC", color: complete || open ? "#fff" : T.inkGhost, fontSize: 12, fontWeight: 800 }}>{complete ? "✓" : number}</span>
+      <div><h2 id={`checkout-step-${number}`} style={{ fontSize: 16, margin: 0 }}>{title}</h2><p style={{ color: T.inkGhost, fontSize: 12, margin: "3px 0 0" }}>{locked ? "Disponível após a etapa anterior" : detail}</p></div>
+    </div>
+    {open && <div style={{ marginTop: 22 }}>{children}</div>}
+  </section>;
+}
+
+function OrderSummary({ quote, wide }) {
+  const planName = quote.selection.persona === "personal" ? "Fincla Pessoal" : "Fincla Consultor";
+  const cycle = quote.selection.billing_cycle === "yearly" ? "anual" : "mensal";
+  return <aside style={{ position: wide ? "sticky" : "static", top: 18 }}><Card style={{ overflow: "hidden", background: "#24201A", color: "#FFFDF8", border: 0 }}>
+    <div style={{ padding: "24px" }}><p style={{ color: "#C9BDAF", fontSize: 11, fontWeight: 750, letterSpacing: ".1em", margin: 0 }}>SEU PLANO</p><h2 style={{ margin: "8px 0 0", fontSize: 23 }}>{planName}</h2>{quote.capacity != null && <p style={{ color: "#D6CCC0", fontSize: 13, margin: "8px 0 0" }}>{quote.capacity} vagas contratadas</p>}<div style={{ borderTop: "1px solid #4A433B", marginTop: 22, paddingTop: 18 }}><p style={{ color: "#C9BDAF", fontSize: 12, margin: 0 }}>Você paga hoje</p><p style={{ ...NUM, fontSize: 34, fontWeight: 750, letterSpacing: "-.04em", margin: "4px 0" }}>{money(quote.total_cents)}</p><p style={{ color: "#C9BDAF", fontSize: 13, margin: 0 }}>Cobrança {cycle}</p></div></div>
+    <div style={{ padding: "20px 24px", background: "#FFFDF8", color: T.ink }}><p style={{ fontSize: 11, color: T.inkGhost, fontWeight: 750, letterSpacing: ".08em", margin: 0 }}>INCLUSO NA ASSINATURA</p><ul style={{ display: "grid", gap: 10, padding: 0, margin: "16px 0 0", listStyle: "none", fontSize: 13, color: T.inkMid }}><li>✓ Acesso liberado após a confirmação</li><li>✓ Renovação gerenciada no seu perfil</li><li>✓ Cancelamento de renovação pelo app</li></ul></div>
+  </Card></aside>;
 }
 
 function BillingCyclePicker({ value, disabled, onChange }) {

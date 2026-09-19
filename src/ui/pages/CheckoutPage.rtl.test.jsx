@@ -37,11 +37,11 @@ it("lets a visitor choose annual billing and waits for the server quote before c
   });
   vi.stubGlobal("fetch", fetch);
   render(<CheckoutPage search="?persona=personal&billing_cycle=monthly" session={{ isAuthenticated: false, signIn: vi.fn() }} />);
-  const continueButton = await screen.findByRole("button", { name: "Criar conta e continuar" });
-  expect(continueButton).toBeDisabled();
-  fireEvent.click(screen.getByRole("radio", { name: /Anual/ }));
+  fireEvent.click(await screen.findByRole("radio", { name: /Anual/ }));
   expect(await screen.findByText(/299,00/)).toBeTruthy();
   expect(JSON.parse(fetch.mock.calls[1][1].body)).toMatchObject({ persona: "personal", billing_cycle: "yearly" });
+  fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+  expect(await screen.findByRole("button", { name: "Criar conta e continuar" })).toBeDisabled();
 });
 
 it("shows an actionable error without offering payment for an invalid selection", async () => {
@@ -59,6 +59,7 @@ it("keeps the yearly offer through account creation and never uses legacy signup
   vi.stubGlobal("fetch", fetch);
   render(<CheckoutPage search="?persona=personal&billing_cycle=yearly" session={{isAuthenticated:false,signIn}} />);
   await screen.findByText(/299,00/);
+  fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
   fireEvent.change(screen.getByLabelText("Nome"), {target:{value:"Maria"}});
   fireEvent.change(screen.getByLabelText("Email"), {target:{value:"maria@example.com"}});
   fireEvent.change(screen.getByLabelText("Senha"), {target:{value:"Password123!"}});
@@ -89,6 +90,7 @@ it("registers a separate consultant profile while preserving the quoted package 
   vi.stubGlobal("fetch", fetch);
   render(<CheckoutPage search="?persona=consultant&billing_cycle=yearly&mode=package&seats=26&package_size=25" session={{isAuthenticated:false,signIn}} />);
   await screen.findByText(/26 vagas contratadas/);
+  fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
   fireEvent.change(screen.getByLabelText("Nome"), {target:{value:"Maria"}});
   fireEvent.change(screen.getByLabelText("Email"), {target:{value:"consultora@example.com"}});
   fireEvent.change(screen.getByLabelText("Senha"), {target:{value:"Password123!"}});
