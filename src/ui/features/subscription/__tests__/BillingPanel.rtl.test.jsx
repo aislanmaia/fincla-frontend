@@ -9,12 +9,14 @@ vi.mock("../../../../api/subscriptions", () => ({
   getCurrentSubscription: vi.fn(),
   cancelSubscription: vi.fn(),
   changePlan: vi.fn(),
+  getAnnualSettlementRequests: vi.fn(),
+  requestAnnualSettlement: vi.fn(),
 }));
 vi.mock("../../../../api/plans", () => ({
   listPlans: vi.fn(),
 }));
 
-import { getCurrentSubscription } from "../../../../api/subscriptions";
+import { getAnnualSettlementRequests, getCurrentSubscription } from "../../../../api/subscriptions";
 import { listPlans } from "../../../../api/plans";
 
 function SectionCard({ children }) {
@@ -72,6 +74,7 @@ const baseSubscription = {
 
 beforeEach(() => {
   vi.mocked(getCurrentSubscription).mockReset();
+  vi.mocked(getAnnualSettlementRequests).mockResolvedValue([]);
   vi.mocked(listPlans).mockReset();
 });
 afterEach(cleanup);
