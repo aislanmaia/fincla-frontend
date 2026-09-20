@@ -159,9 +159,9 @@ export function CheckoutPage({ search = window.location.search, session }) {
 
 function CheckoutPanel({ number, title, detail, open, complete, locked, keepMounted = false, onOpen, children }) {
   return <section aria-labelledby={`checkout-step-${number}`} style={{ borderBottom: number === "3" ? 0 : `1px solid ${T.border}`, padding: open ? "22px 24px 26px" : "18px 24px" }}>
-    <button type="button" disabled={locked} onClick={onOpen} style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", padding: 0, border: 0, background: "transparent", color: T.ink, textAlign: "left", cursor: locked ? "not-allowed" : "pointer" }}>
-      <span aria-hidden="true" style={{ width: 27, height: 27, borderRadius: 9, display: "grid", placeItems: "center", background: complete ? T.green : open ? T.ink : "#EEF0EC", color: complete || open ? "#fff" : T.inkGhost, fontSize: 12, fontWeight: 800 }}>{complete ? "✓" : number}</span>
-      <div><h2 id={`checkout-step-${number}`} style={{ fontSize: 16, margin: 0 }}>{title}</h2><p style={{ color: T.inkGhost, fontSize: 12, margin: "3px 0 0" }}>{locked ? "Disponível após a etapa anterior" : detail}</p></div>
+    <button type="button" disabled={locked} onClick={onOpen} style={{ display: "flex", alignItems: "center", gap: 11, width: "100%", padding: 0, border: 0, background: "transparent", color: locked ? "#AEB5BE" : T.ink, textAlign: "left", cursor: locked ? "not-allowed" : "pointer" }}>
+      <span aria-hidden="true" style={{ width: 27, height: 27, borderRadius: 9, display: "grid", placeItems: "center", background: complete ? T.green : open ? T.ink : locked ? "#F3F4F2" : "#EEF0EC", color: complete || open ? "#fff" : locked ? "#AEB5BE" : T.inkGhost, fontSize: 12, fontWeight: 800 }}>{complete ? "✓" : number}</span>
+      <div><h2 id={`checkout-step-${number}`} style={{ fontSize: 16, margin: 0, color: locked ? "#9DA5AF" : undefined }}>{title}</h2><p style={{ color: locked ? "#B5BCC4" : T.inkGhost, fontSize: 12, margin: "3px 0 0" }}>{locked ? "Disponível após a etapa anterior" : detail}</p></div>
     </button>
     {(open || keepMounted) && <div hidden={!open} style={{ display: open ? "block" : "none", marginTop: 22 }}>{children}</div>}
   </section>;
