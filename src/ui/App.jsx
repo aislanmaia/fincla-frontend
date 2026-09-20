@@ -21,6 +21,8 @@ import { parseAuthEntryUrl, stripAuthEntryQueryAndHash } from "./features/auth/a
 import { AcceptInvitationPage } from "./features/auth/AcceptInvitationPage.jsx";
 import { LoginPage } from "./features/auth/LoginPage.jsx";
 import { CheckoutPage } from "./pages/CheckoutPage.jsx";
+import { ConsultantCheckoutPage } from "./pages/ConsultantCheckoutPage.jsx";
+import { SignupChoicePage } from "./pages/SignupChoicePage.jsx";
 import { PasswordResetPage } from "./features/auth/PasswordResetPage.jsx";
 import { validateResetToken } from "../api/auth";
 import { ErrorBoundary } from "./features/auth/ErrorBoundary.jsx";
@@ -440,6 +442,8 @@ export default function App() {
 
   if (session.isAuthenticated && session.user?.subscription?.gateway_provider === "sponsored" && (session.user.subscription.is_entitled === false || pathname === "/checkout")) return <SponsoredAccessPage session={session} />;
 
+  if (pathname === "/signup") return <SignupChoicePage />;
+  if (pathname === "/consultant-checkout") return <ConsultantCheckoutPage session={session} />;
   if (pathname === "/checkout") return <CheckoutPage search={searchStr} session={session} />;
 
   if (session.isBootstrapping) return (
@@ -463,7 +467,7 @@ export default function App() {
     </>
   );
 
-  if (session.isAuthenticated && (session.user?.subscription?.status === "pending_payment" || session.user?.subscription?.is_entitled === false)) return <CheckoutPage search="" session={session} />;
+  if (session.isAuthenticated && (session.user?.subscription?.status === "pending_payment" || session.user?.subscription?.is_entitled === false)) return session.user?.subscription?.checkout_selection?.persona === "consultant" ? <ConsultantCheckoutPage session={session} /> : <CheckoutPage search="" session={session} />;
 
   if (session.isAuthenticated && (session.onboardingRequired || showOnboarding)) return (
     <OnboardingFlow

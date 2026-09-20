@@ -26,7 +26,7 @@ function formatPostalCode(value) {
   return valueDigits.length > 5 ? `${valueDigits.slice(0, 5)}-${valueDigits.slice(5)}` : valueDigits;
 }
 
-export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRefresh, onReadinessChange }) {
+export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRefresh, onReadinessChange, showStepLabel = true }) {
   const TERMS_VERSION = "2026-09-15";
   const [offerChanged, setOfferChanged] = useState(false);
   const [showCancel, setShowCancel] = useState(false);
@@ -178,7 +178,7 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
       {["pending_payment", "active"].includes(attempt.status) && <details style={{ color:T.inkMid, fontSize:12 }}><summary style={{ cursor:"pointer" }}>Gerenciar ou cancelar esta assinatura</summary><div style={{ display:"grid", gap:12, marginTop:12 }}><CheckoutBilling /><Btn disabled={busy} onClick={() => setShowCancel(true)}>Cancelar assinatura</Btn></div></details>}
     </ConfirmationCard> : attempt?.status === "cancelled" ? <p>Assinatura cancelada. Entre em contato com o suporte para uma nova contratação.</p> : !busy && !error && <>
       {attempt?.status === "declined" && <p role="alert">Não foi possível concluir o pagamento. Confira os dados e tente novamente.</p>}
-      <div style={{ marginBottom: 18 }}><div style={{ color: T.inkGhost, fontSize: 11, fontWeight: 750, letterSpacing: ".08em" }}>ETAPA 3 DE 3</div><h2 id="checkout-payment-title" style={{ margin: "2px 0 0", fontSize: 24 }}>Pague com cartão</h2></div>
+      <div style={{ marginBottom: 18 }}>{showStepLabel && <div style={{ color: T.inkGhost, fontSize: 11, fontWeight: 750, letterSpacing: ".08em" }}>ETAPA 3 DE 3</div>}<h2 id="checkout-payment-title" style={{ margin: showStepLabel ? "2px 0 0" : 0, fontSize: 24 }}>Pague com cartão</h2></div>
       <form id="checkout-payment-form" key={formKey} onSubmit={pay} onInput={updateReadiness} onChange={updateReadiness} style={{display:"grid",gap:14}}>
         <div aria-label="Forma de pagamento selecionada" style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", border: `1.5px solid ${T.green}`, borderRadius: 10, background: "#F3F8F0", color: T.ink, fontSize: 13, fontWeight: 750 }}><span aria-hidden="true" style={{ display: "grid", placeItems: "center", width: 22, height: 22, borderRadius: 7, background: T.green, color: "#fff", fontSize: 14 }}>▭</span>Cartão de crédito</div>
         <CheckoutField label="Nome do titular" name="name" autoComplete="cc-name" />

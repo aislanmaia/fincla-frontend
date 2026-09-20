@@ -28,7 +28,9 @@ export function useAuthRedirects({
   useEffect(() => {
     if (session.isBootstrapping) return;
     if (session.isAuthenticated) return;
-    if (pathname === "/checkout") return;
+    // Aquisição é pública: escolher a experiência, configurar a oferta e
+    // iniciar o checkout não pode ser tratado como deep-link privado.
+    if (["/signup", "/checkout", "/consultant-checkout"].includes(pathname)) return;
     if (!firstPathSegment(pathname)) return;
     if (isReturnableFinclaPathname(pathname)) {
       capturePostLoginRedirectFromPathnameAndSearchStr(pathname, searchStr);

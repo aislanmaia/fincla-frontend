@@ -49,6 +49,18 @@ const checkoutRoute = createRoute({
   component: () => null,
 });
 
+const signupRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/signup",
+  component: () => null,
+});
+
+const consultantCheckoutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/consultant-checkout",
+  component: () => null,
+});
+
 const segmentRoutes = AUTH_ROUTE_SEGMENTS.filter(
   (s) => s !== "profile" && s !== "transactions" && s !== "planning",
 ).map((segment) => {
@@ -232,6 +244,8 @@ const notFoundRoute = new NotFoundRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   checkoutRoute,
+  signupRoute,
+  consultantCheckoutRoute,
   ...segmentRoutes,
   transactionsRoute,
   profileRoute,
