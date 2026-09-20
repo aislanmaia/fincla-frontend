@@ -16,7 +16,7 @@ import { Icon } from "./consultantUi";
  * `evaluateLocked` distingue "o plano não inclui" de "em breve": são motivos
  * diferentes para o mesmo botão apagado, e o consultor merece saber qual é.
  */
-export function ConsultantClientActions({ onOpen, onEvaluate, evaluateLocked = false, showOpen = false, pending = false, onRegenerate, radius = 8, pad = "7px 9px" }) {
+export function ConsultantClientActions({ onOpen, onRelease, releaseLabel, onEvaluate, evaluateLocked = false, showOpen = false, pending = false, onRegenerate, radius = 8, pad = "7px 9px" }) {
   const neutral = { background: T.surface, border: `1px solid ${T.border}`, borderRadius: radius, padding: pad, display: "flex" };
   const canEvaluate = typeof onEvaluate === "function" && !evaluateLocked;
   const evaluateTitle = evaluateLocked
@@ -40,6 +40,9 @@ export function ConsultantClientActions({ onOpen, onEvaluate, evaluateLocked = f
       <button type="button" disabled title="Mensagem (em breve)" style={{ ...neutral, cursor: "default", opacity: 0.6 }}>
         <Icon name="message" size={13} color={T.inkMid} />
       </button>
+      {onRelease && <button type="button" onClick={onRelease} aria-label={releaseLabel} title={releaseLabel} style={{ ...neutral, color: T.red, cursor: "pointer" }}>
+        <Icon name="x" size={13} color={T.red} />
+      </button>}
       {showOpen && (
         <button type="button" onClick={onOpen} title="Abrir" style={{ ...neutral, cursor: "pointer" }}>
           <Icon name="arrow-right" size={13} color={T.inkMid} />

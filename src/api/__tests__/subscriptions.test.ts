@@ -4,6 +4,7 @@ import apiClient from '../client';
 import {
   cancelSubscription,
   changePlan,
+  getAnnualSettlementRequests,
   getCurrentSubscription,
 } from '../subscriptions';
 import { Subscription } from '../types';
@@ -86,5 +87,13 @@ describe('subscriptions API client', () => {
     const result = await cancelSubscription();
     expect(result.cancel_at_period_end).toBe(true);
     expect(apiClient.post).toHaveBeenCalledWith('/subscriptions/cancel');
+  });
+
+  it('getAnnualSettlementRequests recupera os protocolos anuais do usuário', async () => {
+    const requests = [{ id: 'annual_1', status: 'support_requested', support_protocol: 'annual_1' }];
+    vi.mocked(apiClient.get).mockResolvedValueOnce({ data: requests });
+
+    await expect(getAnnualSettlementRequests()).resolves.toEqual(requests);
+    expect(apiClient.get).toHaveBeenCalledWith('/subscriptions/annual-settlement');
   });
 });

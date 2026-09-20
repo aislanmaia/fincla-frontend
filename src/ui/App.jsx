@@ -1,3 +1,4 @@
+import { SponsoredAccessPage } from "./pages/SponsoredAccessPage.jsx";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { flushSync } from "react-dom";
 import { SlidersHorizontal } from "lucide-react";
@@ -437,7 +438,9 @@ export default function App() {
     simulation:    <SimulacaoPageView cenarios={cenarios} setCenarios={setCenarios} cenarioId={cenarioId} setCenarioId={setCenarioId} isMobile={isMobile} organizationId={session.activeOrgId} dataMode={dataMode} />,
   };
 
-  if (pathname === "/checkout") return <CheckoutPage search={searchStr} />;
+  if (session.isAuthenticated && session.user?.subscription?.gateway_provider === "sponsored" && (session.user.subscription.is_entitled === false || pathname === "/checkout")) return <SponsoredAccessPage session={session} />;
+
+  if (pathname === "/checkout") return <CheckoutPage search={searchStr} session={session} />;
 
   if (session.isBootstrapping) return (
     <>
@@ -459,6 +462,8 @@ export default function App() {
       </div>
     </>
   );
+
+  if (session.isAuthenticated && (session.user?.subscription?.status === "pending_payment" || session.user?.subscription?.is_entitled === false)) return <CheckoutPage search="" session={session} />;
 
   if (session.isAuthenticated && (session.onboardingRequired || showOnboarding)) return (
     <OnboardingFlow

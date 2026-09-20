@@ -19,6 +19,7 @@ function fmtDate(iso) {
  */
 export function CancelSubscriptionDialog({
   effectiveUntil,
+  reactivationHint = "Você pode reativar a qualquer momento escolhendo um plano novamente.",
   onClose,
   onCancelled,
 }) {
@@ -112,7 +113,7 @@ export function CancelSubscriptionDialog({
             marginTop: 8,
           }}
         >
-          Você pode reativar a qualquer momento escolhendo um plano novamente.
+          {reactivationHint}
         </p>
 
         {error && (

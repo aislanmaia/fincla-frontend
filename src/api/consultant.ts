@@ -53,6 +53,11 @@ export const getConsultantClients = async (): Promise<ConsultantClientsResponse>
   return unwrapMoney(response.data);
 };
 
+/** Removes only the authenticated consultant's relationship; client data remains. */
+export const releaseConsultantClient = async (organizationId: string): Promise<void> => {
+  await apiClient.delete(`/consultant/clients/${encodeURIComponent(organizationId)}`);
+};
+
 export const getConsultantConsolidatedReport = async (
   params?: ConsultantSummaryQuery
 ): Promise<ConsultantSummaryResponse> => {

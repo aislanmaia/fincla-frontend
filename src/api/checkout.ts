@@ -35,3 +35,36 @@ export async function quoteCheckout(search: string, signal: AbortSignal): Promis
     : 'Não foi possível consultar sua oferta. Tente novamente.');
   return response.json();
 }
+
+export interface CheckoutAttempt {
+  has_access: boolean;
+  id: string;
+  status: 'preparing' | 'processing' | 'reconciling' | 'pending_payment' | 'declined' | 'active' | 'cancelled';
+  quote: CheckoutQuote;
+}
+
+export class CheckoutRequestError extends Error {
+  constructor(message: string, public code: string | undefined) { super(message); }
+}
+
+async function checkoutRequest<T>(path: string, body?: unknown): Promise<T> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 75000);
+  try {
+    const response = await fetch(`${API_CONFIG.BASE_URL}/checkout/${path}`, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('auth_token') || ''}` },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: controller.signal,
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new CheckoutRequestError(payload?.detail?.message || 'Não foi possível continuar. Confira os dados e tente novamente.', payload?.detail?.code);
+    return payload;
+  } finally { window.clearTimeout(timeout); }
+}
+
+export const registerCheckout = (body: { selection?: CheckoutQuote['selection']; persona?: 'personal' | 'consultant'; email: string; password: string; first_name: string; cpf_cnpj: string; phone: string; billing_cycle: string }) => checkoutRequest('register', body);
+export const currentCheckout = () => checkoutRequest<CheckoutAttempt | null>('current');
+/** Never retry a financial POST; the server reconciles uncertain outcomes. */
+export const payCheckout = (body: unknown) => checkoutRequest<CheckoutAttempt>('pay', body);
+export const requestWithdrawal = () => checkoutRequest<{ id: string; requested_at: string; status: "received" }>('withdrawal', {});
