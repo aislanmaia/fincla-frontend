@@ -36,6 +36,7 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
   const [readyToPay, setReadyToPay] = useState(false);
   const [redirectCountdown, setRedirectCountdown] = useState(4);
   const submitting = useRef(false);
+  const paymentSection = useRef(null);
   const [formKey, setFormKey] = useState(0);
   useEffect(() => {
     if (!session?.isAuthenticated) {
@@ -101,6 +102,30 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
   const awaitingConfirmation = waiting && !active;
 
   useEffect(() => {
+    if (!awaitingConfirmation && !active) return undefined;
+    const timer = window.setTimeout(() => {
+      const section = paymentSection.current;
+      const scrollContainer = section?.closest(".fincla-scroll");
+      if (!section) return;
+      if (!scrollContainer) {
+        section.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      const sectionTop = section.getBoundingClientRect().top;
+      const containerTop = scrollContainer.getBoundingClientRect().top;
+      const top = Math.max(0, scrollContainer.scrollTop + sectionTop - containerTop - 14);
+      if (typeof scrollContainer.scrollTo === "function") {
+        scrollContainer.scrollTo({ top, behavior: "smooth" });
+      } else {
+        // JSDOM does not implement Element#scrollTo; the browser path above
+        // keeps the native smooth transition on phone and desktop.
+        scrollContainer.scrollTop = top;
+      }
+    }, 40);
+    return () => window.clearTimeout(timer);
+  }, [active, awaitingConfirmation]);
+
+  useEffect(() => {
     if (!awaitingConfirmation) return undefined;
     const timer = window.setTimeout(async () => {
       try {
@@ -134,15 +159,15 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
     onReadinessChange?.(readyToPay);
     return () => onReadinessChange?.(false);
   }, [onReadinessChange, readyToPay]);
-  return <section aria-labelledby="checkout-payment-title" style={{marginTop:24}}>
+  return <section ref={paymentSection} aria-labelledby="checkout-payment-title" style={{marginTop:24}}>
     {error && <p role="alert">{error}</p>}
-    {busy && !attempt ? <ConfirmationCard tone="waiting"><div style={{ display:"flex", alignItems:"center", gap:11 }}><span aria-hidden="true" style={{ width:24, height:24, borderRadius:99, border:`3px solid ${T.border}`, borderTopColor:T.green, animation:"checkout-confirm-spin .8s linear infinite" }} /><div><div style={{ color:T.green, fontSize:11, fontWeight:800, letterSpacing:".09em" }}>ASSINATURA</div><h2 id="checkout-payment-title" style={{ margin:"3px 0 0", fontSize:23 }}>Carregando sua contratação</h2></div></div></ConfirmationCard> : active ? <ConfirmationCard tone="success">
+    {busy && !attempt ? <ConfirmationCard tone="waiting"><div style={{ display:"flex", alignItems:"center", gap:11 }}><span aria-hidden="true" style={{ flex:"0 0 auto", width:24, height:24, borderRadius:99, border:`3px solid ${T.border}`, borderTopColor:T.green, animation:"checkout-confirm-spin .8s linear infinite" }} /><div style={{ minWidth:0 }}><div style={{ color:T.green, fontSize:11, fontWeight:800, letterSpacing:".09em" }}>ASSINATURA</div><h2 id="checkout-payment-title" style={{ margin:"3px 0 0", fontSize:23 }}>Carregando sua contratação</h2></div></div></ConfirmationCard> : active ? <ConfirmationCard tone="success">
       <div aria-hidden="true" style={{ display:"grid", placeItems:"center", width:48, height:48, borderRadius:99, background:"#DCF5E8", color:T.green, fontSize:25, fontWeight:900, boxShadow:"inset 0 0 0 1px rgba(8,151,99,.12)" }}>✓</div>
       <div><div style={{ color:T.green, fontSize:11, fontWeight:800, letterSpacing:".09em" }}>PAGAMENTO CONFIRMADO</div><h2 id="checkout-payment-title" style={{ margin:"4px 0 6px", fontSize:25 }}>Sua assinatura está ativa</h2><p style={{ margin:0, color:T.inkMid, lineHeight:1.55 }}>Tudo certo. Vamos abrir sua configuração inicial para deixar o Fincla pronto para você.</p></div>
       <div style={{ display:"grid", gap:8, marginTop:4 }}><div style={{ display:"flex", justifyContent:"space-between", color:T.inkMid, fontSize:12 }}><span>Preparando seu início</span><strong style={{ color:T.ink }}>{redirectCountdown}s</strong></div><div aria-hidden="true" style={{ height:5, overflow:"hidden", borderRadius:99, background:"#E4EEE8" }}><div style={{ height:"100%", width:`${((4 - redirectCountdown) / 4) * 100}%`, minWidth: redirectCountdown < 4 ? 8 : 0, borderRadius:"inherit", background:T.green, transition:"width .45s ease" }} /></div></div>
       <Btn variant="dark" full onClick={()=>window.location.assign("/")}>Abrir configuração inicial</Btn>
     </ConfirmationCard> : awaitingConfirmation ? <ConfirmationCard tone="waiting">
-      <div style={{ display:"flex", alignItems:"center", gap:11 }}><span aria-hidden="true" style={{ width:26, height:26, borderRadius:99, border:`3px solid ${T.border}`, borderTopColor:T.green, animation:"checkout-confirm-spin .8s linear infinite" }} /><div><div style={{ color:T.green, fontSize:11, fontWeight:800, letterSpacing:".09em" }}>PAGAMENTO ENVIADO</div><h2 id="checkout-payment-title" style={{ margin:"3px 0 0", fontSize:24 }}>Estamos confirmando seu pagamento</h2></div></div>
+      <div style={{ display:"flex", alignItems:"center", gap:11 }}><span aria-hidden="true" style={{ flex:"0 0 auto", width:26, height:26, borderRadius:99, border:`3px solid ${T.border}`, borderTopColor:T.green, animation:"checkout-confirm-spin .8s linear infinite" }} /><div style={{ minWidth:0 }}><div style={{ color:T.green, fontSize:11, fontWeight:800, letterSpacing:".09em" }}>PAGAMENTO ENVIADO</div><h2 id="checkout-payment-title" style={{ margin:"3px 0 0", fontSize:24 }}>Estamos confirmando seu pagamento</h2></div></div>
       <p style={{ margin:0, color:T.inkMid, lineHeight:1.55 }}>Isso costuma levar poucos segundos. Acompanhe esta tela: ela será atualizada automaticamente assim que o Asaas confirmar a cobrança.</p>
       <div role="status" aria-live="polite" style={{ display:"grid", gap:10, padding:"13px 14px", borderRadius:11, background:"#F4F7F3", border:`1px solid ${T.border}` }}>
         <ConfirmationRow done label="Assinatura criada com segurança" />
@@ -175,7 +200,6 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
     {offerChanged && <Btn disabled={busy} onClick={onRefresh}>Atualizar oferta</Btn>}
     {error && !waiting && !offerChanged && <Btn disabled={busy} onClick={check}>Verificar pagamento</Btn>}
     {showCancel && <CancelSubscriptionDialog reactivationHint="Para uma nova contratação após cancelar, entre em contato com o suporte." onClose={() => setShowCancel(false)} onCancelled={() => { setShowCancel(false); setAttempt({status:"cancelled"}); }} />}
-    {session?.isAuthenticated && <div style={{marginTop:20}}><Btn disabled={busy} onClick={session.signOut}>Sair da conta</Btn></div>}
   </section>;
 }
 
