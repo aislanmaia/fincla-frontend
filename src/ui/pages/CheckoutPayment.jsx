@@ -85,6 +85,7 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
   const [redirectCountdown, setRedirectCountdown] = useState(4);
   const submitting = useRef(false);
   const paymentSection = useRef(null);
+  const paymentForm = useRef(null);
   const [formKey, setFormKey] = useState(0);
   useEffect(() => {
     if (!session?.isAuthenticated) {
@@ -242,6 +243,11 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
     setReadyToPay(event.currentTarget.checkValidity());
   }
   useEffect(() => {
+    const form = paymentForm.current;
+    if (!form) return;
+    setReadyToPay(form.checkValidity());
+  }, [accountDetails?.email, attempt?.status, busy, formKey, session?.isAuthenticated]);
+  useEffect(() => {
     onReadinessChange?.(readyToPay);
     return () => onReadinessChange?.(false);
   }, [onReadinessChange, readyToPay]);
@@ -266,9 +272,9 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
     </ConfirmationCard> : attempt?.status === "cancelled" ? <p>Assinatura cancelada. Entre em contato com o suporte para uma nova contratação.</p> : !awaitingConfirmation && !active && <>
       {attempt?.status === "declined" && !error && <p role="alert">Não foi possível concluir o pagamento. Confira os dados e tente novamente.</p>}
       <div style={{ marginBottom: 18 }}>{showStepLabel && <div style={{ color: T.inkGhost, fontSize: 11, fontWeight: 750, letterSpacing: ".08em" }}>ETAPA 3 DE 3</div>}<h2 id="checkout-payment-title" style={{ margin: showStepLabel ? "2px 0 0" : 0, fontSize: 24 }}>Pague com cartão</h2></div>
-      <form id="checkout-payment-form" key={formKey} noValidate onSubmit={pay} onInput={updateReadiness} onChange={updateReadiness} style={{display:"grid",gap:14}}>
+      <form ref={paymentForm} id="checkout-payment-form" key={formKey} noValidate onSubmit={pay} onInput={updateReadiness} onChange={updateReadiness} style={{display:"grid",gap:14}}>
         <div aria-label="Forma de pagamento selecionada" style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", border: `1.5px solid ${T.green}`, borderRadius: 10, background: "#F3F8F0", color: T.ink, fontSize: 13, fontWeight: 750 }}><span aria-hidden="true" style={{ display: "grid", placeItems: "center", width: 22, height: 22, borderRadius: 7, background: T.green, color: "#fff", fontSize: 14 }}>▭</span>Cartão de crédito</div>
-        <CheckoutField label="Nome do titular" name="name" autoComplete="cc-name" error={fieldErrors.name} />
+        <CheckoutField label="Nome do titular" name="name" autoComplete="cc-name" defaultValue={accountDetails?.name || session?.user?.first_name || ""} error={fieldErrors.name} />
         <CheckoutField label="Número do cartão" name="number" error={fieldErrors.number} inputMode="numeric" autoComplete="cc-number" pattern="[0-9 ]{15,23}" maxLength={23} onInput={(event) => { event.currentTarget.value = formatCardNumber(event.currentTarget.value); }} />
         <div style={{display:"grid",gridTemplateColumns:"minmax(0, 2fr) minmax(0, 1fr)",gap:10}}>
           <CheckoutField label="Validade (MM/AA)" name="expiry" error={fieldErrors.expiry} inputMode="numeric" autoComplete="cc-exp" placeholder="MM/AA" pattern="(0[1-9]|1[0-2])/[0-9]{2}" maxLength={5} onInput={(event) => { event.currentTarget.value = formatExpiry(event.currentTarget.value); }} />
@@ -277,7 +283,7 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
         <CheckoutField label="CPF/CNPJ do titular (somente números)" name="cpf" defaultValue={accountDetails?.cpfCnpj || ""} error={fieldErrors.cpf} inputMode="numeric" pattern="[0-9]{11}|[0-9]{14}" />
         <CheckoutField label="CEP" name="postal" error={fieldErrors.postal} inputMode="numeric" autoComplete="postal-code" placeholder="00000-000" pattern="[0-9]{5}-?[0-9]{3}" maxLength={9} onInput={(event) => { event.currentTarget.value = formatPostalCode(event.currentTarget.value); }} />
         <CheckoutField label="Número do endereço" name="address" error={fieldErrors.address} type="number" inputMode="numeric" min="0" step="1" />
-        <CheckoutField label="Telefone com DDD (somente números)" name="phone" defaultValue={accountDetails?.phone || ""} error={fieldErrors.phone} inputMode="tel" autoComplete="tel-national" pattern="[0-9]{10,13}" />
+        <CheckoutField label="Telefone com DDD (somente números)" name="phone" defaultValue={accountDetails?.phone || session?.user?.phone || ""} error={fieldErrors.phone} inputMode="tel" autoComplete="tel-national" pattern="[0-9]{10,13}" />
         <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "13px 14px", borderRadius: 10, background: "#F7E8E1", color: T.inkMid, fontSize: 12, lineHeight: 1.45 }}><span aria-hidden="true" style={{ display: "grid", placeItems: "center", flex: "0 0 auto", width: 24, height: 24, borderRadius: 99, background: "#E85D3B", color: "#fff", fontSize: 14 }}>▣</span><span>Conexão <strong>criptografada</strong>. Os dados do cartão são enviados com segurança para processar o pagamento e não ficam armazenados no Fincla.</span></div>
         <label style={{display:"flex",gap:10,alignItems:"flex-start",lineHeight:1.45,fontSize:12,color:T.inkMid}}><input type="checkbox" required name="terms" />Li e aceito os <a href="https://fincla.com/termos" target="_blank" rel="noreferrer">Termos de contratação</a>, versão {TERMS_VERSION}.</label>
         <label style={{display:"flex",gap:10,alignItems:"flex-start",lineHeight:1.45,fontSize:12,color:T.inkMid}}><input type="checkbox" required name="recurring" />Autorizo a cobrança e a renovação automática {quote.selection.billing_cycle === "yearly" ? "anual" : "mensal"}. Posso cancelar a renovação no meu perfil.</label>

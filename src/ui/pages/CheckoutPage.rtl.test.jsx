@@ -328,6 +328,15 @@ it("preserves payment data when its accordion is collapsed and reopened", async 
   expect(screen.getByLabelText("Número do cartão")).toHaveValue("4242 4242 4242 4242");
 });
 
+it("prefills the resumable payment form from the authenticated account", async () => {
+  const quote = { selection: { persona: "personal", billing_cycle: "monthly" }, total_cents: 2990, capacity: null };
+  vi.stubGlobal("fetch", vi.fn(async (url) => ({ ok: true, json: async () => url.includes("checkout-quote") ? quote : null })));
+  render(<CheckoutPage search="?persona=personal&billing_cycle=monthly" session={{ isAuthenticated: true, user: { email: "maria@example.com", first_name: "Maria", phone: "4738010919", subscription: { status: "pending_payment" } }, signOut: vi.fn() }} />);
+  await screen.findByRole("heading", { name: "Pague com cartão" });
+  expect(screen.getByLabelText("Nome do titular")).toHaveValue("Maria");
+  expect(screen.getByLabelText(/Telefone com DDD/)).toHaveValue("4738010919");
+});
+
 it("keeps an uncertain card submission in reconciliation instead of reopening the form", async () => {
   const { fireEvent } = await import("@testing-library/react");
   const quote = { selection: { persona: "personal", billing_cycle: "monthly" }, total_cents: 2990, capacity: null };
