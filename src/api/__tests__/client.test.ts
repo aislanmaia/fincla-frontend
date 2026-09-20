@@ -388,4 +388,17 @@ describe('handleApiError — código de erro vindo da rede não pode indexar o p
       'Este número já está vinculado para esta ou outra conta.',
     );
   });
+
+  it('translates the E.164 phone-format rejection instead of leaking English', () => {
+    // Seen raw on the Perfil screen when the user followed the field's own
+    // "+55 11 99999-0000" example: the English sentence went straight to the UI.
+    const err = legacyError(400, {
+      error: 'INVALID_PHONE_FORMAT',
+      message: 'Phone number must be in E.164 format (e.g. +5511999999999)',
+      type: 'domain_validation',
+    });
+    expect(handleApiError(err)).toBe(
+      'Número inválido. Use o formato internacional com DDD, ex.: +55 11 99999-0000.',
+    );
+  });
 });
