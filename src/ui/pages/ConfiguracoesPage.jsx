@@ -11,7 +11,7 @@ import { changePassword as apiChangePassword } from "../../api/auth";
 import { getOrganization } from "../../api/organizations";
 import { listWhatsAppConnections, linkWhatsAppPhone, unlinkWhatsAppPhone, getAssistantInfo } from "../../api/whatsappConnections";
 import { WhatsAppPendingVerification } from "../features/settings/WhatsAppPendingVerification.jsx";
-import { phoneDigitsMatch } from "../features/settings/whatsappPhoneMatch.js";
+import { phoneDigitsMatch, normalizePhoneE164 } from "../features/settings/whatsappPhoneMatch.js";
 import { handleApiError } from "../../api/client";
 import {
   Settings,
@@ -213,7 +213,7 @@ export function ConfiguracoesPage({
         // POST returns a PENDING link with a one-time code — not an active
         // connection. Show the verification card; the poll below watches for
         // the number to activate once the user sends the code over WhatsApp.
-        const pending = await linkWhatsAppPhone({ organization_id: organizationId, phone_number: novoNum.trim() });
+        const pending = await linkWhatsAppPhone({ organization_id: organizationId, phone_number: normalizePhoneE164(novoNum) });
         setPendingLink(pending);
         setNovoNum(""); setAddNumOpen(false);
       } catch (e) { setWhatsError(handleApiError(e)); }

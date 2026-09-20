@@ -123,6 +123,11 @@ const API_MESSAGE_TRANSLATIONS = new Map<string, string>([
   ['Phone already linked', 'Este número já está vinculado para esta ou outra conta.'],
   ['phone already linked', 'Este número já está vinculado para esta ou outra conta.'],
   ['PHONE_ALREADY_LINKED', 'Este número já está vinculado para esta ou outra conta.'],
+  [
+    'Phone number must be in E.164 format (e.g. +5511999999999)',
+    'Número inválido. Use o formato internacional com DDD, ex.: +55 11 99999-0000.',
+  ],
+  ['INVALID_PHONE_FORMAT', 'Número inválido. Use o formato internacional com DDD, ex.: +55 11 99999-0000.'],
 ]);
 
 function translateApiMessage(message: string, errorCode?: string): string {

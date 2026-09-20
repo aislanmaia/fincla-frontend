@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { phoneDigitsMatch } from "../whatsappPhoneMatch.js";
+import { phoneDigitsMatch, normalizePhoneE164 } from "../whatsappPhoneMatch.js";
 
 describe("phoneDigitsMatch", () => {
   it("matches the same number across formatting", () => {
@@ -27,5 +27,34 @@ describe("phoneDigitsMatch", () => {
     expect(phoneDigitsMatch("", "+5511999999999")).toBe(false);
     expect(phoneDigitsMatch("+5511999999999", null)).toBe(false);
     expect(phoneDigitsMatch(undefined, undefined)).toBe(false);
+  });
+});
+
+describe("normalizePhoneE164", () => {
+  it("turns the placeholder layout into what the API accepts", () => {
+    // the field suggests "+55 11 99999-0000"; the backend only takes E.164
+    expect(normalizePhoneE164("+55 11 99999-0000")).toBe("+5511999990000");
+    expect(normalizePhoneE164("+55 (11) 99999-0000")).toBe("+5511999990000");
+    expect(normalizePhoneE164("  +55.11.99999.0000 ")).toBe("+5511999990000");
+  });
+
+  it("leaves an already-valid E.164 number untouched", () => {
+    expect(normalizePhoneE164("+5511999990000")).toBe("+5511999990000");
+    expect(normalizePhoneE164("+14155552671")).toBe("+14155552671");
+  });
+
+  it("assumes Brazil for a DDD + line typed without country code", () => {
+    expect(normalizePhoneE164("11 99999-0000")).toBe("+5511999990000");
+    expect(normalizePhoneE164("1133334444")).toBe("+551133334444");
+  });
+
+  it("only adds the plus when the country code was typed", () => {
+    expect(normalizePhoneE164("5511999990000")).toBe("+5511999990000");
+  });
+
+  it("never invents digits: garbage goes through for the API to reject", () => {
+    expect(normalizePhoneE164("")).toBe("");
+    expect(normalizePhoneE164("   ")).toBe("");
+    expect(normalizePhoneE164("abc")).toBe("abc");
   });
 });
