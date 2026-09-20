@@ -221,7 +221,8 @@ export function ConfiguracoesPage({
         setNovoNum(""); setAddNumOpen(false);
       } catch (e) { setWhatsError(handleApiError(e)); }
     } else {
-      setWhatsNums(prev => [...prev, { id: Date.now(), num: novoNum.trim(), nome: novoNum.trim(), status: "pendente", ultimo: "nunca" }]);
+      const demoNum = buildE164(findPhoneCountry(novoPais).dial, novoNum);
+      setWhatsNums(prev => [...prev, { id: Date.now(), num: demoNum, nome: demoNum, status: "pendente", ultimo: "nunca" }]);
       setNovoNum(""); setAddNumOpen(false);
     }
   }, [liveEnabled, organizationId, novoNum, novoPais]);

@@ -398,7 +398,7 @@ describe('handleApiError — código de erro vindo da rede não pode indexar o p
       type: 'domain_validation',
     });
     expect(handleApiError(err)).toBe(
-      'Número inválido. Use o formato internacional com DDD, ex.: +55 11 99999-0000.',
+      'Número inválido. Confira o país selecionado e digite o número com DDD, ex.: 11 99999-0000.',
     );
   });
 });
