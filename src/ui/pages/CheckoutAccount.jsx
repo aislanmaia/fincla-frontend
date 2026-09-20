@@ -6,9 +6,24 @@ export function CheckoutField({ label, hint, error, ...props }) {
   const generatedId = useId();
   const id = props.id || `checkout-field-${generatedId}`;
   return <div style={{ display: "grid", gap: 7, fontSize: 12, fontWeight: 700, letterSpacing: ".015em", color: T.inkMid }}>
-    <label htmlFor={id}>{label}</label><span style={{ position: "relative", display: "block" }}><input {...props} id={id} aria-invalid={Boolean(error) || undefined} required style={{ width: "100%", boxSizing: "border-box", padding: hint ? "13px 142px 13px 14px" : "13px 14px", border: `1px solid ${error ? T.red : T.border}`, borderRadius: 10, background: "#FCFCFB", color: T.ink, font: "inherit", outlineColor: T.green }} />{hint && <span aria-live="polite" style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", display: "inline-flex", alignItems: "center", gap: 5, color: T.green, fontSize: 11, fontWeight: 750, whiteSpace: "nowrap" }}><span aria-hidden="true" style={{ display: "grid", placeItems: "center", width: 16, height: 16, borderRadius: 99, background: T.green, color: "#fff", fontSize: 11 }}>✓</span>{hint}</span>}</span>
+    <label htmlFor={id}>{label}</label><span style={{ position: "relative", display: "block" }}><input {...props} id={id} aria-invalid={Boolean(error) || undefined} required style={{ width: "100%", boxSizing: "border-box", padding: hint ? "13px 142px 13px 14px" : "13px 14px", border: `1px solid ${error ? T.red : T.border}`, borderRadius: 10, background: error ? "#FFF9F7" : "#FCFCFB", color: T.ink, font: "inherit", outline: error ? "3px solid rgba(222, 76, 52, .15)" : undefined, outlineOffset: error ? 1 : undefined, boxShadow: error ? "0 0 0 1px rgba(222, 76, 52, .12)" : undefined, outlineColor: T.green }} />{hint && <span aria-live="polite" style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", display: "inline-flex", alignItems: "center", gap: 5, color: T.green, fontSize: 11, fontWeight: 750, whiteSpace: "nowrap" }}><span aria-hidden="true" style={{ display: "grid", placeItems: "center", width: 16, height: 16, borderRadius: 99, background: T.green, color: "#fff", fontSize: 11 }}>✓</span>{hint}</span>}</span>
     {error && <span role="alert" style={{ color: T.red, fontSize: 11, fontWeight: 600, letterSpacing: 0 }}>{error}</span>}
   </div>;
+}
+
+export function RegisteredCheckoutAccount({ details, email }) {
+  const shownEmail = email || details?.email || "";
+  return <section aria-label="Dados de acesso registrados" style={{ marginTop: 2 }}>
+    <div style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "7px 10px", borderRadius: 99, background: "#E8F6EE", color: T.green, fontSize: 12, fontWeight: 750 }}><span aria-hidden="true" style={{ display: "grid", placeItems: "center", width: 16, height: 16, borderRadius: 99, background: T.green, color: "#fff", fontSize: 11 }}>✓</span>Conta criada para {shownEmail}</div>
+    <p style={{ color: T.inkMid, margin: "14px 0 18px", lineHeight: 1.55, fontSize: 13 }}>Estes são os dados que serão usados para acessar o Fincla após a confirmação do pagamento.</p>
+    <div style={{ display: "grid", gap: 15, opacity: 0.78 }}>
+      <CheckoutField label="Nome" name="registered-name" value={details?.name || ""} disabled />
+      <CheckoutField label="Email" name="registered-email" type="email" value={shownEmail} disabled />
+      <CheckoutField label="CPF/CNPJ" name="registered-document" value={details?.cpfCnpj || ""} disabled />
+      <CheckoutField label="Celular com DDD" name="registered-phone" value={details?.phone || ""} disabled />
+      <CheckoutField label="Senha" name="registered-password" type="password" value="senha-definida" disabled />
+    </div>
+  </section>;
 }
 
 export function CheckoutAccount({ session, onContinue }) {

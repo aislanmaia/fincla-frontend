@@ -44,7 +44,7 @@ export interface CheckoutAttempt {
 }
 
 export class CheckoutRequestError extends Error {
-  constructor(message: string, public code: string | undefined) { super(message); }
+  constructor(message: string, public code: string | undefined, public fields: string[] = []) { super(message); }
 }
 
 async function checkoutRequest<T>(path: string, body?: unknown): Promise<T> {
@@ -58,7 +58,7 @@ async function checkoutRequest<T>(path: string, body?: unknown): Promise<T> {
       signal: controller.signal,
     });
     const payload = await response.json();
-    if (!response.ok) throw new CheckoutRequestError(payload?.detail?.message || 'Não foi possível continuar. Confira os dados e tente novamente.', payload?.detail?.code);
+    if (!response.ok) throw new CheckoutRequestError(payload?.detail?.message || 'Não foi possível continuar. Confira os dados e tente novamente.', payload?.detail?.code, Array.isArray(payload?.detail?.fields) ? payload.detail.fields : []);
     return payload;
   } finally { window.clearTimeout(timeout); }
 }

@@ -2,6 +2,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { CheckoutPage } from "./CheckoutPage.jsx";
+import { checkoutFieldErrors } from "./CheckoutPayment.jsx";
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -253,6 +254,14 @@ it("requires a refreshed offer and new consent when the server rejects an outdat
   }));
   render(<CheckoutPage search="?persona=personal&billing_cycle=monthly" session={{isAuthenticated:true,user:{email:"pessoal@example.com",subscription:{status:"pending_payment"}},signOut:vi.fn()}} />);
   await screen.findByRole("heading",{name:"Pague com cartão"});
+  fireEvent.change(screen.getByLabelText("Nome do titular"), { target: { value: "Maria Silva" } });
+  fireEvent.change(screen.getByLabelText("Número do cartão"), { target: { value: "4242 4242 4242 4242" } });
+  fireEvent.change(screen.getByLabelText("Validade (MM/AA)"), { target: { value: "12/30" } });
+  fireEvent.change(screen.getByLabelText("CVV"), { target: { value: "123" } });
+  fireEvent.change(screen.getByLabelText(/CPF\/CNPJ do titular/), { target: { value: "24971563792" } });
+  fireEvent.change(screen.getByLabelText("CEP"), { target: { value: "01001-000" } });
+  fireEvent.change(screen.getByLabelText("Número do endereço"), { target: { value: "10" } });
+  fireEvent.change(screen.getByLabelText(/Telefone com DDD/), { target: { value: "4738010919" } });
   fireEvent.click(screen.getByLabelText(/Termos de contratação/));
   fireEvent.submit(screen.getByLabelText('Número do cartão').closest('form'));
   const update = await screen.findByRole('button',{name:'Atualizar oferta'});
@@ -276,4 +285,63 @@ it("waits for healthy preparation and permits new card input after interrupted p
   status = "declined";
   fireEvent.click(screen.getByRole("button",{name:"Atualizar agora"}));
   expect(await screen.findByLabelText("Número do cartão")).toHaveValue("");
+});
+
+it("keeps the payment form visible when the API rejects a known validation error", async () => {
+  const { fireEvent } = await import("@testing-library/react");
+  const quote = { selection: { persona: "personal", billing_cycle: "monthly" }, total_cents: 2990, capacity: null };
+  vi.stubGlobal("fetch", vi.fn(async (url) => {
+    if (url.includes("checkout-quote")) return { ok: true, json: async () => quote };
+    if (url.includes("checkout/current")) return { ok: true, json: async () => null };
+    if (url.includes("checkout/pay")) return { ok: false, json: async () => ({ detail: { code: "invalid_checkout", message: "Confira os campos destacados.", fields: ["holder.addressNumber"] } }) };
+    return { ok: true, json: async () => ({}) };
+  }));
+  render(<CheckoutPage search="?persona=personal&billing_cycle=monthly" session={{ isAuthenticated: true, user: { email: "maria@example.com", subscription: { status: "pending_payment" } }, signOut: vi.fn() }} />);
+  await screen.findByRole("heading", { name: "Pague com cartão" });
+  fireEvent.change(screen.getByLabelText("Nome do titular"), { target: { value: "Maria Silva" } });
+  fireEvent.change(screen.getByLabelText("Número do cartão"), { target: { value: "4242 4242 4242 4242" } });
+  fireEvent.change(screen.getByLabelText("Validade (MM/AA)"), { target: { value: "12/30" } });
+  fireEvent.change(screen.getByLabelText("CVV"), { target: { value: "123" } });
+  fireEvent.change(screen.getByLabelText(/CPF\/CNPJ do titular/), { target: { value: "24971563792" } });
+  fireEvent.change(screen.getByLabelText("CEP"), { target: { value: "01001-000" } });
+  fireEvent.change(screen.getByLabelText("Número do endereço"), { target: { value: "10" } });
+  fireEvent.change(screen.getByLabelText(/Telefone com DDD/), { target: { value: "4738010919" } });
+  fireEvent.click(screen.getByLabelText(/Termos de contratação/));
+  fireEvent.click(screen.getByLabelText(/Autorizo a cobrança/));
+  fireEvent.submit(screen.getByLabelText("Número do cartão").closest("form"));
+  expect(await screen.findByText("Confira os campos destacados.")).toBeTruthy();
+  expect(screen.getByText("Informe um número válido para o endereço.")).toBeTruthy();
+  expect(screen.getByRole("heading", { name: "Pague com cartão" })).toBeTruthy();
+  expect(screen.queryByRole("heading", { name: "Estamos confirmando seu pagamento" })).toBeNull();
+  expect(screen.getByLabelText("Número do endereço")).toHaveValue(10);
+});
+
+
+it("shows every local payment validation error before sending the card", async () => {
+  const { fireEvent } = await import("@testing-library/react");
+  const quote = { selection: { persona: "personal", billing_cycle: "monthly" }, total_cents: 2990, capacity: null };
+  const fetch = vi.fn(async (url) => ({ ok: true, json: async () => url.includes("checkout-quote") ? quote : null }));
+  vi.stubGlobal("fetch", fetch);
+  render(<CheckoutPage search="?persona=personal&billing_cycle=monthly" session={{ isAuthenticated: true, user: { email: "maria@example.com", subscription: { status: "pending_payment" } }, signOut: vi.fn() }} />);
+  await screen.findByRole("heading", { name: "Pague com cartão" });
+  fireEvent.submit(screen.getByLabelText("Número do cartão").closest("form"));
+  expect(await screen.findByText("Confira o número do cartão.")).toBeTruthy();
+  expect(screen.getByText("Informe uma validade no formato MM/AA.")).toBeTruthy();
+  expect(screen.getByText("Confira o código de segurança.")).toBeTruthy();
+  expect(screen.getByText("Informe um CEP válido.")).toBeTruthy();
+  expect(screen.getByText("Informe um número válido para o endereço.")).toBeTruthy();
+  expect(fetch.mock.calls.some(([url]) => url.includes("/checkout/pay"))).toBe(false);
+});
+
+
+it("maps every safe server field path to its payment input feedback", () => {
+  expect(checkoutFieldErrors([
+    "card.holderName", "card.number", "card.expiryMonth", "card.expiryYear", "card.ccv",
+    "holder.cpfCnpj", "holder.postalCode", "holder.addressNumber", "holder.phone",
+  ])).toEqual({
+    name: "Informe o nome como aparece no cartão.", number: "Confira o número do cartão.",
+    expiry: "Informe uma validade no formato MM/AA.", ccv: "Confira o código de segurança.",
+    cpf: "Confira o CPF/CNPJ do titular.", postal: "Informe um CEP válido.",
+    address: "Informe um número válido para o endereço.", phone: "Informe um telefone com DDD válido.",
+  });
 });
