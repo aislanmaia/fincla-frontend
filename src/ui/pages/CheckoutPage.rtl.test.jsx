@@ -47,8 +47,14 @@ it("lets a visitor choose annual billing and waits for the server quote before c
 it("keeps the selected checkout visible while an annual quote is loading", async () => {
   const { fireEvent } = await import("@testing-library/react");
   let resolveAnnual;
-  const fetch = vi.fn().mockResolvedValueOnce({ ok: true, json: async () => ({ selection: { persona: "personal", billing_cycle: "monthly" }, total_cents: 2990, capacity: null }) })
-    .mockImplementationOnce(() => new Promise((resolve) => { resolveAnnual = resolve; }));
+  let annualRequests = 0;
+  const fetch = vi.fn(async (_url, options) => {
+    const selection = JSON.parse(options.body);
+    if (selection.billing_cycle === "monthly") return { ok: true, json: async () => ({ selection, total_cents: 2990, capacity: null }) };
+    annualRequests += 1;
+    if (annualRequests === 1) return { ok: true, json: async () => ({ selection, total_cents: 29900, capacity: null }) };
+    return new Promise((resolve) => { resolveAnnual = resolve; });
+  });
   vi.stubGlobal("fetch", fetch);
   render(<CheckoutPage search="?persona=personal&billing_cycle=monthly" session={{ isAuthenticated: false, signIn: vi.fn() }} />);
   const annual = await screen.findByRole("radio", { name: /Anual/ });
@@ -150,7 +156,7 @@ it("explains the monthly equivalent and savings for the annual offer", async () 
   expect(await screen.findByText((_, node) => node?.textContent?.replace(/\u00a0/g, " ") === "Equivale a R$ 24,92/mês")).toBeTruthy();
   expect(await screen.findByText("2 meses grátis no anual")).toBeTruthy();
   expect(screen.getByText((_, node) => node?.textContent?.replace(/\u00a0/g, " ") === "Economia total de R$ 59,80")).toBeTruthy();
-  expect(screen.getByText((_, node) => node?.textContent?.replace(/\u00a0/g, " ") === "R$ 24,92/mês no anual")).toBeTruthy();
+  expect(screen.getAllByText((_, node) => node?.textContent?.replace(/\u00a0/g, " ") === "R$ 24,92/mês")).toHaveLength(2);
   expect(screen.getByText("2 meses grátis")).toBeTruthy();
 });
 

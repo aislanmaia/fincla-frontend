@@ -12,7 +12,7 @@ const money = (cents) => new Intl.NumberFormat("pt-BR", { style: "currency", cur
 
 export function CheckoutPage({ search = window.location.search, session }) {
   const [state, setState] = useState({ status: "loading" });
-  const [monthlyComparison, setMonthlyComparison] = useState(null);
+  const [counterpartQuote, setCounterpartQuote] = useState(null);
   const [attempt, setAttempt] = useState(0);
   const [selectionSearch, setSelectionSearch] = useState(search);
   const [activeSection, setActiveSection] = useState("plan");
@@ -75,33 +75,34 @@ export function CheckoutPage({ search = window.location.search, session }) {
   const quote = state.status === "ready" || state.preserveQuote ? state.quote : null;
   const quoteSelectionKey = JSON.stringify(quote?.selection ?? null);
   useEffect(() => {
-    if (!quote || quote.selection.billing_cycle !== "yearly") {
-      setMonthlyComparison(null);
+    if (!quote) {
+      setCounterpartQuote(null);
       return undefined;
     }
     const controller = new AbortController();
-    const monthlySelection = { ...quote.selection, billing_cycle: "monthly" };
-    setMonthlyComparison({ selectionKey: quoteSelectionKey, totalCents: null });
+    const counterpartSelection = { ...quote.selection, billing_cycle: quote.selection.billing_cycle === "yearly" ? "monthly" : "yearly" };
+    setCounterpartQuote({ selectionKey: quoteSelectionKey, totalCents: null });
     const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(monthlySelection)) {
+    for (const [key, value] of Object.entries(counterpartSelection)) {
       if (value != null) params.set(key, String(value));
     }
-    quoteCheckout(params.toString(), controller.signal).then((monthlyQuote) => {
+    quoteCheckout(params.toString(), controller.signal).then((receivedQuote) => {
       if (!controller.signal.aborted) {
-        setMonthlyComparison({ selectionKey: quoteSelectionKey, totalCents: monthlyQuote.total_cents });
+        setCounterpartQuote({ selectionKey: quoteSelectionKey, totalCents: receivedQuote.total_cents });
       }
     }).catch(() => {
-      if (!controller.signal.aborted) setMonthlyComparison({ selectionKey: quoteSelectionKey, totalCents: null });
+      if (!controller.signal.aborted) setCounterpartQuote({ selectionKey: quoteSelectionKey, totalCents: null });
     });
     return () => controller.abort();
   }, [quoteSelectionKey, quote?.selection.billing_cycle]);
-  const annualSavingsCents = quote?.selection.billing_cycle === "yearly"
-    && monthlyComparison?.selectionKey === quoteSelectionKey
-    && monthlyComparison.totalCents != null
-    ? Math.max(0, monthlyComparison.totalCents * 12 - quote.total_cents)
+  const counterpartTotalCents = counterpartQuote?.selectionKey === quoteSelectionKey ? counterpartQuote.totalCents : null;
+  const monthlyTotalCents = quote?.selection.billing_cycle === "monthly" ? quote.total_cents : counterpartTotalCents;
+  const annualTotalCents = quote?.selection.billing_cycle === "yearly" ? quote.total_cents : counterpartTotalCents;
+  const annualSavingsCents = monthlyTotalCents != null && annualTotalCents != null
+    ? Math.max(0, monthlyTotalCents * 12 - annualTotalCents)
     : null;
-  const annualFreeMonths = annualSavingsCents != null && monthlyComparison?.totalCents
-    ? Math.floor(annualSavingsCents / monthlyComparison.totalCents)
+  const annualFreeMonths = annualSavingsCents != null && monthlyTotalCents
+    ? Math.floor(annualSavingsCents / monthlyTotalCents)
     : null;
   const canChangeCycle = !session?.isAuthenticated && state.status !== "loading";
   const changeCycle = useCallback((billingCycle) => {
@@ -139,7 +140,7 @@ export function CheckoutPage({ search = window.location.search, session }) {
         {quote && <div style={{ display: "grid", gridTemplateColumns: wide ? "minmax(0, 1.22fr) minmax(290px, .78fr)" : "1fr", gap: 20, alignItems: "start", marginTop: 28 }}>
           <Card style={{ overflow: "hidden", border: `1px solid ${T.border}` }}>
             <CheckoutPanel number="1" title="Plano e ciclo" detail="Escolha como prefere pagar" open={activeSection === "plan"} complete={activeSection !== "plan"} onOpen={() => setActiveSection("plan")}>
-              <BillingCyclePicker value={quote.selection.billing_cycle} annualTotalCents={quote.selection.billing_cycle === "yearly" ? quote.total_cents : null} annualSavingsCents={annualSavingsCents} annualFreeMonths={annualFreeMonths} disabled={!canChangeCycle} onChange={changeCycle} />
+              <BillingCyclePicker value={quote.selection.billing_cycle} monthlyTotalCents={monthlyTotalCents} annualTotalCents={annualTotalCents} annualFreeMonths={annualFreeMonths} disabled={!canChangeCycle} onChange={changeCycle} />
               {quote.capacity != null && <p style={{ color: T.inkMid, lineHeight: 1.6, margin: "0 0 20px", padding: "12px 14px", background: "#F3F7F0", borderRadius: 10 }}>A capacidade é paga antecipadamente, inclusive vagas vazias. Você pode preenchê-las e reutilizá-las durante o período contratado.</p>}
               <Btn variant="dark" full onClick={() => { setAccountVisited(true); setActiveSection("account"); }}>Continuar</Btn>
             </CheckoutPanel>
@@ -173,12 +174,12 @@ function OrderSummary({ quote, annualSavingsCents, annualFreeMonths, wide, refre
   const annual = quote.selection.billing_cycle === "yearly";
   const monthlyEquivalent = annual ? Math.round(quote.total_cents / 12) : null;
   return <aside style={{ position: wide ? "sticky" : "static", top: 18 }}><Card style={{ overflow: "hidden", background: "#24201A", color: "#FFFDF8", border: 0 }}>
-    <div style={{ padding: "24px" }}><p style={{ color: "#C9BDAF", fontSize: 11, fontWeight: 750, letterSpacing: ".1em", margin: 0 }}>SEU PLANO</p><h2 style={{ margin: "8px 0 0", fontSize: 23 }}>{planName}</h2>{quote.capacity != null && <p style={{ color: "#D6CCC0", fontSize: 13, margin: "8px 0 0" }}>{quote.capacity} vagas contratadas</p>}<div style={{ borderTop: "1px solid #4A433B", marginTop: 22, paddingTop: 18 }}><p style={{ color: "#C9BDAF", fontSize: 12, margin: 0 }}>Você paga hoje</p><p aria-busy={refreshing || undefined} aria-label={refreshing ? "Atualizando valor" : undefined} style={{ ...NUM, fontSize: 34, fontWeight: 750, letterSpacing: "-.04em", margin: "4px 0", height: 41 }}>{refreshing ? <span aria-hidden="true" style={{ display: "block", width: "68%", height: 34, borderRadius: 7, background: "#51483D" }} /> : money(quote.total_cents)}</p><p style={{ color: "#C9BDAF", fontSize: 13, margin: 0 }}>Cobrança {cycle}</p>{annual && <div style={{ minHeight: 54, marginTop: 16, padding: "11px 12px", borderRadius: 9, background: "#343027" }}><p style={{ color: "#E7DED2", fontSize: 12, margin: 0 }}>Equivale a <strong>{money(monthlyEquivalent)}/mês</strong></p>{annualFreeMonths != null && annualFreeMonths > 0 && <p style={{ color: "#BEE8A9", fontSize: 12, fontWeight: 750, margin: "5px 0 0" }}>{annualFreeMonths} {annualFreeMonths === 1 ? "mês grátis" : "meses grátis"} no anual</p>}{annualSavingsCents != null && annualSavingsCents > 0 && <p style={{ color: "#C9BDAF", fontSize: 11, margin: "4px 0 0" }}>Economia total de {money(annualSavingsCents)}</p>}</div>}</div></div>
+    <div style={{ padding: "24px" }}><p style={{ color: "#C9BDAF", fontSize: 11, fontWeight: 750, letterSpacing: ".1em", margin: 0 }}>SEU PLANO</p><h2 style={{ margin: "8px 0 0", fontSize: 23 }}>{planName}</h2>{quote.capacity != null && <p style={{ color: "#D6CCC0", fontSize: 13, margin: "8px 0 0" }}>{quote.capacity} vagas contratadas</p>}<div style={{ borderTop: "1px solid #4A433B", marginTop: 22, paddingTop: 18 }}><p style={{ color: "#C9BDAF", fontSize: 12, margin: 0 }}>Você paga hoje</p><p aria-busy={refreshing || undefined} aria-label={refreshing ? "Atualizando valor" : undefined} style={{ ...NUM, fontSize: 34, fontWeight: 750, letterSpacing: "-.04em", margin: "4px 0", height: 41 }}>{refreshing ? <span aria-hidden="true" style={{ display: "block", width: "68%", height: 34, borderRadius: 7, background: "#51483D" }} /> : money(quote.total_cents)}</p><p style={{ color: "#C9BDAF", fontSize: 13, margin: 0 }}>{annual ? "Cobrança uma vez por ano" : "Cobrança todos os meses"}</p>{annual && <div style={{ minHeight: 54, marginTop: 16, padding: "11px 12px", borderRadius: 9, background: "#343027" }}><p style={{ color: "#E7DED2", fontSize: 12, margin: 0 }}>Equivale a <strong>{money(monthlyEquivalent)}/mês</strong></p>{annualFreeMonths != null && annualFreeMonths > 0 && <p style={{ color: "#BEE8A9", fontSize: 12, fontWeight: 750, margin: "5px 0 0" }}>{annualFreeMonths} {annualFreeMonths === 1 ? "mês grátis" : "meses grátis"} no anual</p>}{annualSavingsCents != null && annualSavingsCents > 0 && <p style={{ color: "#C9BDAF", fontSize: 11, margin: "4px 0 0" }}>Economia total de {money(annualSavingsCents)}</p>}</div>}</div></div>
     <div style={{ padding: "20px 24px", background: "#FFFDF8", color: T.ink }}><p style={{ fontSize: 11, color: T.inkGhost, fontWeight: 750, letterSpacing: ".08em", margin: 0 }}>INCLUSO NA ASSINATURA</p><ul style={{ display: "grid", gap: 10, padding: 0, margin: "16px 0 0", listStyle: "none", fontSize: 13, color: T.inkMid }}><li>✓ Acesso liberado após a confirmação</li><li>✓ Renovação gerenciada no seu perfil</li><li>✓ Cancelamento de renovação pelo app</li></ul></div>
   </Card></aside>;
 }
 
-function BillingCyclePicker({ value, annualTotalCents, annualSavingsCents, annualFreeMonths, disabled, onChange }) {
+function BillingCyclePicker({ value, monthlyTotalCents, annualTotalCents, annualFreeMonths, disabled, onChange }) {
   const annualMonthlyEquivalent = annualTotalCents == null ? null : Math.round(annualTotalCents / 12);
   const annualBadge = annualFreeMonths != null && annualFreeMonths > 0 ? `${annualFreeMonths} ${annualFreeMonths === 1 ? "mês grátis" : "meses grátis"}` : undefined;
   return <section aria-labelledby="billing-cycle-heading" style={{ margin: "0 0 24px" }}>
@@ -186,14 +187,15 @@ function BillingCyclePicker({ value, annualTotalCents, annualSavingsCents, annua
       <div><h2 id="billing-cycle-heading" style={{ fontSize: 18, margin: 0 }}>Período de contratação</h2><p style={{ color: T.inkMid, fontSize: 13, margin: "4px 0 0" }}>{disabled ? "O período será alterado depois no seu perfil." : "Você pode escolher mensal ou anual antes de continuar."}</p></div>
     </div>
     <div role="radiogroup" aria-label="Período de contratação" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-      <CycleOption value="monthly" active={value === "monthly"} disabled={disabled} onChange={onChange} title="Mensal" detail="Cobrança todo mês" />
-      <CycleOption value="yearly" active={value === "yearly"} disabled={disabled} onChange={onChange} title="Anual" detail={annualMonthlyEquivalent == null ? "Cobrança uma vez por ano" : `${money(annualMonthlyEquivalent)}/mês no anual`} badge={annualBadge} />
+      <CycleOption value="monthly" active={value === "monthly"} disabled={disabled} onChange={onChange} title="Mensal" detail={monthlyTotalCents == null ? "" : `${money(monthlyTotalCents)}/mês`} />
+      <CycleOption value="yearly" active={value === "yearly"} disabled={disabled} onChange={onChange} title="Anual" detail={annualMonthlyEquivalent == null ? "" : `${money(annualMonthlyEquivalent)}/mês`} badge={annualBadge} featured />
     </div>
   </section>;
 }
 
-function CycleOption({ value, active, disabled, onChange, title, detail, badge }) {
-  return <button type="button" role="radio" aria-checked={active} disabled={disabled} onClick={() => onChange(value)} style={{ textAlign: "left", padding: "14px", borderRadius: 11, border: `1.5px solid ${active ? T.green : T.border}`, background: active ? "#F2F8EE" : "#FCFCFB", color: T.ink, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled && !active ? 0.55 : 1 }}>
+function CycleOption({ value, active, disabled, onChange, title, detail, badge, featured = false }) {
+  return <button type="button" role="radio" aria-checked={active} disabled={disabled} onClick={() => onChange(value)} style={{ position: "relative", textAlign: "left", padding: "14px", borderRadius: 11, border: `1.5px solid ${active ? T.green : T.border}`, background: active ? "#F2F8EE" : "#FCFCFB", color: T.ink, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled && !active ? 0.55 : 1 }}>
+    {featured && <span aria-hidden="true" style={{ position: "absolute", top: -10, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap", padding: "3px 8px", borderRadius: 99, background: T.green, color: "#fff", fontSize: 9, fontWeight: 800, letterSpacing: ".06em" }}>MELHOR OFERTA</span>}
     <span style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, fontSize: 14, fontWeight: 750 }}>{title}{badge && <span style={{ fontSize: 10, padding: "3px 6px", borderRadius: 99, background: "#DFF0D8", color: "#226122" }}>{badge}</span>}</span>
     <span style={{ display: "block", marginTop: 4, color: T.inkMid, fontSize: 12 }}>{detail}</span>
   </button>;
