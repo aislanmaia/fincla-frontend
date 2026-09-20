@@ -316,6 +316,18 @@ it("keeps the payment form visible when the API rejects a known validation error
   expect(screen.getByLabelText("Número do endereço")).toHaveValue(10);
 });
 
+it("preserves payment data when its accordion is collapsed and reopened", async () => {
+  const { fireEvent } = await import("@testing-library/react");
+  const quote = { selection: { persona: "personal", billing_cycle: "monthly" }, total_cents: 2990, capacity: null };
+  vi.stubGlobal("fetch", vi.fn(async (url) => ({ ok: true, json: async () => url.includes("checkout-quote") ? quote : null })));
+  render(<CheckoutPage search="?persona=personal&billing_cycle=monthly" session={{ isAuthenticated: true, user: { email: "maria@example.com", subscription: { status: "pending_payment" } }, signOut: vi.fn() }} />);
+  await screen.findByRole("heading", { name: "Pague com cartão" });
+  fireEvent.change(screen.getByLabelText("Número do cartão"), { target: { value: "4242 4242 4242 4242" } });
+  fireEvent.click(screen.getByRole("button", { name: /Pagamento/ }));
+  fireEvent.click(screen.getByRole("button", { name: /Pagamento/ }));
+  expect(screen.getByLabelText("Número do cartão")).toHaveValue("4242 4242 4242 4242");
+});
+
 
 it("shows every local payment validation error before sending the card", async () => {
   const { fireEvent } = await import("@testing-library/react");
