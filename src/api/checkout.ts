@@ -63,7 +63,7 @@ async function checkoutRequest<T>(path: string, body?: unknown): Promise<T> {
   } finally { window.clearTimeout(timeout); }
 }
 
-export const registerCheckout = (body: { selection?: CheckoutQuote['selection']; persona?: 'personal' | 'consultant'; email: string; password: string; first_name: string; billing_cycle: string }) => checkoutRequest('register', body);
+export const registerCheckout = (body: { selection?: CheckoutQuote['selection']; persona?: 'personal' | 'consultant'; email: string; password: string; first_name: string; cpf_cnpj: string; phone: string; billing_cycle: string }) => checkoutRequest('register', body);
 export const currentCheckout = () => checkoutRequest<CheckoutAttempt | null>('current');
 /** Never retry a financial POST; the server reconciles uncertain outcomes. */
 export const payCheckout = (body: unknown) => checkoutRequest<CheckoutAttempt>('pay', body);

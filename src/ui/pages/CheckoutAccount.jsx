@@ -9,13 +9,15 @@ export function CheckoutField({ label, ...props }) {
   </label>;
 }
 
-export function CheckoutAccount({ quote, session }) {
+export function CheckoutAccount({ quote, session, onAccountDetails }) {
   const [login, setLogin] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [values, setValues] = useState({ name: "", email: "", password: "" });
+  const [values, setValues] = useState({ name: "", email: "", cpfCnpj: "", phone: "", password: "", passwordConfirmation: "" });
   const validEmail = /^\S+@\S+\.\S+$/.test(values.email);
-  const canSubmit = !busy && validEmail && values.password.length >= 8 && (login || values.name.trim().length > 1);
+  const validDocument = /^\d{11}$|^\d{14}$/.test(values.cpfCnpj);
+  const validPhone = /^\d{10,13}$/.test(values.phone);
+  const canSubmit = !busy && validEmail && values.password.length >= 8 && (login || (values.name.trim().length > 1 && validDocument && validPhone && values.password === values.passwordConfirmation));
   async function submit(event) {
     event.preventDefault();
     if (busy) return;
@@ -23,7 +25,11 @@ export function CheckoutAccount({ quote, session }) {
     const fields = new FormData(event.currentTarget);
     const email = fields.get("email"), password = fields.get("password");
     try {
-      if (!login) await registerCheckout({ selection: quote.selection, persona: quote.selection.persona, email, password, first_name: fields.get("name"), billing_cycle: quote.selection.billing_cycle });
+      if (!login) {
+        const details = { name: String(fields.get("name")), email: String(email), cpfCnpj: String(fields.get("cpfCnpj")), phone: String(fields.get("phone")) };
+        await registerCheckout({ selection: quote.selection, persona: quote.selection.persona, email, password, first_name: details.name, cpf_cnpj: details.cpfCnpj, phone: details.phone, billing_cycle: quote.selection.billing_cycle });
+        onAccountDetails?.(details);
+      }
       await session.signIn(email, password);
     } catch (failure) { setError(failure.message); }
     finally { setBusy(false); }
@@ -38,7 +44,9 @@ export function CheckoutAccount({ quote, session }) {
     <form onSubmit={submit} style={{ display: "grid", gap: 15 }}>
       {!login && <CheckoutField label="Nome" name="name" autoComplete="given-name" value={values.name} onChange={(event) => setValues((current) => ({ ...current, name: event.target.value }))} />}
       <CheckoutField label="Email" name="email" type="email" autoComplete="email" value={values.email} onChange={(event) => setValues((current) => ({ ...current, email: event.target.value }))} />
+      {!login && <><CheckoutField label="CPF/CNPJ (somente números)" name="cpfCnpj" inputMode="numeric" pattern="[0-9]{11}|[0-9]{14}" value={values.cpfCnpj} onChange={(event) => setValues((current) => ({ ...current, cpfCnpj: event.target.value.replace(/\D/g, "") }))} /><CheckoutField label="Celular com DDD (somente números)" name="phone" inputMode="tel" autoComplete="tel-national" pattern="[0-9]{10,13}" value={values.phone} onChange={(event) => setValues((current) => ({ ...current, phone: event.target.value.replace(/\D/g, "") }))} /></>}
       <CheckoutField label="Senha" name="password" type="password" minLength={8} autoComplete={login ? "current-password" : "new-password"} value={values.password} onChange={(event) => setValues((current) => ({ ...current, password: event.target.value }))} />
+      {!login && <CheckoutField label="Confirme sua senha" name="passwordConfirmation" type="password" minLength={8} autoComplete="new-password" value={values.passwordConfirmation} onChange={(event) => setValues((current) => ({ ...current, passwordConfirmation: event.target.value }))} />}
       {!login && <p style={{ color: T.inkGhost, fontSize: 12, lineHeight: 1.5, margin: "-3px 0 0" }}>Use pelo menos 8 caracteres na senha.</p>}
       {error && <p role="alert" style={{ color: T.red, margin: 0 }}>{error}</p>}
       <Btn type="submit" variant="dark" full disabled={!canSubmit}>{busy ? "Aguarde…" : login ? "Entrar e continuar" : "Criar conta e continuar"}</Btn>

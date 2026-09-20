@@ -101,7 +101,10 @@ it("keeps the yearly offer through account creation and never uses legacy signup
   fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
   fireEvent.change(screen.getByLabelText("Nome"), {target:{value:"Maria"}});
   fireEvent.change(screen.getByLabelText("Email"), {target:{value:"maria@example.com"}});
+  fireEvent.change(screen.getByLabelText(/CPF\/CNPJ/), {target:{value:"24971563792"}});
+  fireEvent.change(screen.getByLabelText(/Celular com DDD/), {target:{value:"4738010919"}});
   fireEvent.change(screen.getByLabelText("Senha"), {target:{value:"Password123!"}});
+  fireEvent.change(screen.getByLabelText("Confirme sua senha"), {target:{value:"Password123!"}});
   fireEvent.click(screen.getByRole("button", {name:"Criar conta e continuar"}));
   await waitFor(()=>expect(signIn).toHaveBeenCalledWith("maria@example.com", "Password123!"));
   const registration = fetch.mock.calls.find(([url]) => url.includes("/checkout/register"));
@@ -138,7 +141,10 @@ it("registers a separate consultant profile while preserving the quoted package 
   fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
   fireEvent.change(screen.getByLabelText("Nome"), {target:{value:"Maria"}});
   fireEvent.change(screen.getByLabelText("Email"), {target:{value:"consultora@example.com"}});
+  fireEvent.change(screen.getByLabelText(/CPF\/CNPJ/), {target:{value:"24971563792"}});
+  fireEvent.change(screen.getByLabelText(/Celular com DDD/), {target:{value:"4738010919"}});
   fireEvent.change(screen.getByLabelText("Senha"), {target:{value:"Password123!"}});
+  fireEvent.change(screen.getByLabelText("Confirme sua senha"), {target:{value:"Password123!"}});
   fireEvent.click(screen.getByRole("button", {name:"Criar conta e continuar"}));
   await waitFor(()=>expect(signIn).toHaveBeenCalledWith("consultora@example.com", "Password123!"));
   const registration = fetch.mock.calls.find(([url]) => url.includes("/checkout/register"));

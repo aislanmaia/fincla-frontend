@@ -6,7 +6,7 @@ import { Btn } from "../components/primitives.jsx";
 import { T } from "../tokens.js";
 import { CheckoutField } from "./CheckoutAccount.jsx";
 
-export function CheckoutPayment({ quote, session, onOffer, onRefresh }) {
+export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRefresh }) {
   const TERMS_VERSION = "2026-09-15";
   const [offerChanged, setOfferChanged] = useState(false);
   const [showCancel, setShowCancel] = useState(false);
@@ -47,7 +47,7 @@ export function CheckoutPayment({ quote, session, onOffer, onRefresh }) {
       const value = await payCheckout({selection:quote.selection,catalog_version:quote.catalog_version,
         terms_version: TERMS_VERSION,
         card:{holderName:fields.get("name"),number:String(fields.get("number")).replace(/\s/g,""),expiryMonth:fields.get("month"),expiryYear:fields.get("year"),ccv:fields.get("ccv")},
-        holder:{name:fields.get("name"),email:session.user.email,cpfCnpj:fields.get("cpf"),postalCode:fields.get("postal"),addressNumber:fields.get("address"),phone:fields.get("phone")}});
+        holder:{name:fields.get("name"),email:session.user.email,cpfCnpj:accountDetails?.cpfCnpj || fields.get("cpf"),postalCode:fields.get("postal"),addressNumber:fields.get("address"),phone:accountDetails?.phone || fields.get("phone")}});
       setAttempt(value); onOffer(value.quote);
     } catch (failure) {
       if (failure instanceof CheckoutRequestError && failure.code === "checkout_offer_changed") {
@@ -91,10 +91,10 @@ export function CheckoutPayment({ quote, session, onOffer, onRefresh }) {
           <CheckoutField label="Ano (AAAA)" name="year" inputMode="numeric" autoComplete="cc-exp-year" pattern="20[0-9]{2}" maxLength={4} />
           <CheckoutField label="CVV" name="ccv" type="password" inputMode="numeric" autoComplete="cc-csc" pattern="[0-9]{3,4}" maxLength={4} />
         </div>
-        <CheckoutField label="CPF/CNPJ do titular (somente números)" name="cpf" inputMode="numeric" pattern="[0-9]{11}|[0-9]{14}" />
+        {!accountDetails && <CheckoutField label="CPF/CNPJ do titular (somente números)" name="cpf" inputMode="numeric" pattern="[0-9]{11}|[0-9]{14}" />}
         <CheckoutField label="CEP (somente números)" name="postal" inputMode="numeric" autoComplete="postal-code" pattern="[0-9]{8}" />
         <CheckoutField label="Número do endereço" name="address" />
-        <CheckoutField label="Telefone com DDD (somente números)" name="phone" inputMode="tel" autoComplete="tel-national" pattern="[0-9]{10,13}" />
+        {!accountDetails && <CheckoutField label="Telefone com DDD (somente números)" name="phone" inputMode="tel" autoComplete="tel-national" pattern="[0-9]{10,13}" />}
         <label style={{display:"flex",gap:10,alignItems:"flex-start",lineHeight:1.5}}><input type="checkbox" required name="terms" />Li e aceito os <a href="https://fincla.com/termos" target="_blank" rel="noreferrer">Termos de contratação</a>, versão {TERMS_VERSION}.</label>
         <label style={{display:"flex",gap:10,alignItems:"flex-start",lineHeight:1.5}}><input type="checkbox" required name="recurring" />Autorizo a cobrança do valor apresentado agora e a renovação automática {quote.selection.billing_cycle === "yearly" ? "anual" : "mensal"} no cartão. Mudanças de preço serão comunicadas antes da renovação e exigirão meu novo aceite. Posso cancelar a renovação no meu perfil.</label>
         <Btn type="submit" variant="dark" full disabled={busy || !readyToPay}>Confirmar pagamento</Btn>

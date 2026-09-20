@@ -17,6 +17,7 @@ export function CheckoutPage({ search = window.location.search, session }) {
   const [selectionSearch, setSelectionSearch] = useState(search);
   const [activeSection, setActiveSection] = useState("plan");
   const [accountVisited, setAccountVisited] = useState(false);
+  const [accountDetails, setAccountDetails] = useState(null);
   const [wide, setWide] = useState(() => typeof window === "undefined" || window.innerWidth >= 820);
   const cycleChange = useRef(false);
   const effectiveSearch = selectionSearch || search;
@@ -145,10 +146,10 @@ export function CheckoutPage({ search = window.location.search, session }) {
               <Btn variant="dark" full onClick={() => { setAccountVisited(true); setActiveSection("account"); }}>Continuar</Btn>
             </CheckoutPanel>
             <CheckoutPanel number="2" title="Seus dados" detail="Crie ou acesse sua conta" open={activeSection === "account"} complete={session?.isAuthenticated} locked={!accountVisited && activeSection === "plan"} keepMounted={accountVisited} onOpen={() => { setAccountVisited(true); setActiveSection("account"); }}>
-              {session?.isAuthenticated ? <p style={{ color: T.inkMid, margin: 0 }}>Conta criada com <strong>{session.user?.email}</strong>.</p> : session ? <CheckoutAccount quote={quote} session={session} /> : <p style={{ color: T.inkMid }}>A contratação online estará disponível em breve.</p>}
+              {session?.isAuthenticated ? <p style={{ color: T.inkMid, margin: 0 }}>Conta criada com <strong>{session.user?.email}</strong>.</p> : session ? <CheckoutAccount quote={quote} session={session} onAccountDetails={setAccountDetails} /> : <p style={{ color: T.inkMid }}>A contratação online estará disponível em breve.</p>}
             </CheckoutPanel>
             <CheckoutPanel number="3" title="Pagamento" detail="Confirme a assinatura" open={activeSection === "payment"} locked={!session?.isAuthenticated} onOpen={() => setActiveSection("payment")}>
-              {session?.isAuthenticated && (persona !== quote.selection.persona ? <section style={{ marginTop: 4 }}><p role="alert">Esta conta é do Fincla {persona === "consultant" ? "Consultor" : "Pessoal"}. Para contratar a outra área, use um perfil separado com outro email.</p><Btn onClick={session.signOut}>Sair da conta</Btn></section> : <CheckoutPayment quote={quote} session={session} onOffer={onOffer} onRefresh={() => setAttempt(value => value + 1)} />)}
+              {session?.isAuthenticated && (persona !== quote.selection.persona ? <section style={{ marginTop: 4 }}><p role="alert">Esta conta é do Fincla {persona === "consultant" ? "Consultor" : "Pessoal"}. Para contratar a outra área, use um perfil separado com outro email.</p><Btn onClick={session.signOut}>Sair da conta</Btn></section> : <CheckoutPayment quote={quote} accountDetails={accountDetails} session={session} onOffer={onOffer} onRefresh={() => setAttempt(value => value + 1)} />)}
             </CheckoutPanel>
           </Card>
           <OrderSummary quote={quote} annualSavingsCents={annualSavingsCents} annualFreeMonths={annualFreeMonths} wide={wide} refreshing={state.status === "loading" && state.preserveQuote} />
@@ -184,7 +185,7 @@ function BillingCyclePicker({ value, monthlyTotalCents, annualTotalCents, annual
   const annualBadge = annualFreeMonths != null && annualFreeMonths > 0 ? `${annualFreeMonths} ${annualFreeMonths === 1 ? "mês grátis" : "meses grátis"}` : undefined;
   return <section aria-labelledby="billing-cycle-heading" style={{ margin: "0 0 24px" }}>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 16, marginBottom: 10 }}>
-      <div><h2 id="billing-cycle-heading" style={{ fontSize: 18, margin: 0 }}>Período de contratação</h2><p style={{ color: T.inkMid, fontSize: 13, margin: "4px 0 0" }}>{disabled ? "O período será alterado depois no seu perfil." : "Você pode escolher mensal ou anual antes de continuar."}</p></div>
+      <div><h2 id="billing-cycle-heading" style={{ fontSize: 18, margin: 0 }}>Período de contratação</h2><p style={{ color: T.inkMid, fontSize: 13, margin: "4px 0 0" }}>Você pode escolher mensal ou anual antes de continuar.</p></div>
     </div>
     <div role="radiogroup" aria-label="Período de contratação" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
       <CycleOption value="monthly" active={value === "monthly"} disabled={disabled} onChange={onChange} title="Mensal" detail={monthlyTotalCents == null ? "" : `${money(monthlyTotalCents)}/mês`} />
