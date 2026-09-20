@@ -43,13 +43,12 @@ describe("normalizePhoneE164", () => {
     expect(normalizePhoneE164("+14155552671")).toBe("+14155552671");
   });
 
-  it("assumes Brazil for a DDD + line typed without country code", () => {
-    expect(normalizePhoneE164("11 99999-0000")).toBe("+5511999990000");
-    expect(normalizePhoneE164("1133334444")).toBe("+551133334444");
-  });
-
-  it("only adds the plus when the country code was typed", () => {
-    expect(normalizePhoneE164("5511999990000")).toBe("+5511999990000");
+  it("does not assume a country: without the code, the API gets it as typed", () => {
+    // Fincla will run outside Brazil — the country code stays the user's job
+    // (a country picker is the planned follow-up). The API rejects this with
+    // the translated hint instead of us guessing "+55".
+    expect(normalizePhoneE164("11 99999-0000")).toBe("11999990000");
+    expect(normalizePhoneE164("5511999990000")).toBe("5511999990000");
   });
 
   it("never invents digits: garbage goes through for the API to reject", () => {

@@ -31,19 +31,19 @@ export function phoneDigitsMatch(a, b) {
 /**
  * Normalise what the user typed into the E.164 string the API requires.
  *
- * The field's placeholder shows "+55 11 99999-0000" — the friendly Brazilian
- * layout — but the backend accepts nothing except "+5511999990000". Strip the
- * spaces, dashes, dots and parentheses here so following the example works.
- * A number typed without country code (10–11 digits, the DDD + line) is
- * assumed Brazilian, like the placeholder. Anything else is left for the API
- * to validate; this never invents digits.
+ * The field's placeholder shows "+55 11 99999-0000" — the friendly layout —
+ * but the backend accepts nothing except "+5511999990000". Strip the spaces,
+ * dashes, dots and parentheses so following the example works.
+ *
+ * The country code stays the user's job: Fincla will run outside Brazil, so
+ * nothing here assumes "+55" (a country picker is the planned follow-up).
+ * Input without a leading "+" is passed through for the API to reject with
+ * the translated hint; this never invents or drops digits.
  */
 export function normalizePhoneE164(input) {
   const raw = (input || "").trim();
   if (!raw) return "";
   const digits = raw.replace(/\D/g, "");
   if (!digits) return raw;
-  if (raw.startsWith("+")) return `+${digits}`;
-  if (digits.length === 10 || digits.length === 11) return `+55${digits}`;
-  return `+${digits}`;
+  return raw.startsWith("+") ? `+${digits}` : digits;
 }
