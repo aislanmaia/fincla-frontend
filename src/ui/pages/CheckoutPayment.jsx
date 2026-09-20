@@ -79,6 +79,7 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
   const [busy, setBusy] = useState(true);
   const [initialCheckoutLoaded, setInitialCheckoutLoaded] = useState(false);
   const [error, setError] = useState("");
+  const [validationFailure, setValidationFailure] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [readyToPay, setReadyToPay] = useState(false);
   const [redirectCountdown, setRedirectCountdown] = useState(4);
@@ -116,13 +117,15 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
     if (submitting.current || busy) return;
     const form = event.currentTarget;
     const fields = new FormData(form);
-    const clientErrors = validatePayment(fields, !accountDetails);
+    const clientErrors = validatePayment(fields, true);
     setFieldErrors(clientErrors);
     if (Object.keys(clientErrors).length) {
-      onValidationErrorChange?.(true);
+      setValidationFailure(true);
+      onValidationErrorChange?.("fields");
       setError("Confira os campos destacados.");
       return;
     }
+    setValidationFailure(false);
     onValidationErrorChange?.(false);
     submitting.current = true; setBusy(true); setError("");
     let paymentSubmitted = false;
@@ -136,7 +139,7 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
       const value = await payCheckout({selection:quote.selection,catalog_version:quote.catalog_version,
         terms_version: TERMS_VERSION,
         card:{holderName:fields.get("name"),number:digits(fields.get("number"), 19),expiryMonth:String(fields.get("expiry")).slice(0, 2),expiryYear:`20${String(fields.get("expiry")).slice(-2)}`,ccv:digits(fields.get("ccv"), 4)},
-        holder:{name:fields.get("name"),email:accountDetails?.email || session?.user?.email,cpfCnpj:accountDetails?.cpfCnpj || fields.get("cpf"),postalCode:digits(fields.get("postal"), 8),addressNumber:fields.get("address"),phone:accountDetails?.phone || fields.get("phone")}});
+        holder:{name:fields.get("name"),email:accountDetails?.email || session?.user?.email,cpfCnpj:fields.get("cpf"),postalCode:digits(fields.get("postal"), 8),addressNumber:fields.get("address"),phone:fields.get("phone")}});
       setAttempt(value); onOffer(value.quote);
     } catch (failure) {
       if (isCheckoutRequestError(failure) && failure.code === "checkout_offer_changed") {
@@ -148,7 +151,9 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
         // this card submission reached the processor.
         keepFormForCorrection = true;
         setFieldErrors(checkoutFieldErrors(failure.fields));
-        onValidationErrorChange?.(true);
+        const hasFieldErrors = failure.fields.length > 0;
+        setValidationFailure(hasFieldErrors);
+        onValidationErrorChange?.(hasFieldErrors ? "fields" : "payment");
         setError(failure.message);
       } else if (!paymentSubmitted) {
         setError(failure instanceof Error ? failure.message : "Não foi possível preparar seu acesso. Confira os dados e tente novamente.");
@@ -168,7 +173,11 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
   const waiting = ["preparing", "processing", "reconciling", "pending_payment", "active"].includes(attempt?.status);
   // `pending_payment` is also the account's initial local state. Only show the
   // confirmation view after a payment submission whose result is unknown.
-  const awaitingConfirmation = waiting && !active && !error;
+  const awaitingConfirmation = waiting && !active && !validationFailure;
+
+  useEffect(() => {
+    if (attempt?.status === "declined" && !validationFailure) onValidationErrorChange?.("payment");
+  }, [attempt?.status, validationFailure, onValidationErrorChange]);
 
   useEffect(() => {
     if (!awaitingConfirmation && !active) return undefined;
@@ -225,7 +234,9 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
     const input = event.target;
     if (input?.name && fieldErrors[input.name]) setFieldErrors((current) => {
       const next = { ...current, [input.name]: "" };
-      onValidationErrorChange?.(Object.values(next).some(Boolean));
+      const hasFieldErrors = Object.values(next).some(Boolean);
+      setValidationFailure(hasFieldErrors);
+      onValidationErrorChange?.(hasFieldErrors ? "fields" : false);
       return next;
     });
     setReadyToPay(event.currentTarget.checkValidity());
@@ -253,7 +264,7 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, color:T.inkMid, fontSize:12 }}><span>Demorou mais que o esperado?</span><button type="button" disabled={busy} onClick={check} style={{ appearance:"none", border:0, padding:0, background:"transparent", color:T.green, fontWeight:800, textDecoration:"underline", cursor:busy ? "wait" : "pointer" }}>Atualizar agora</button></div>
       {["pending_payment", "active"].includes(attempt.status) && <details style={{ color:T.inkMid, fontSize:12 }}><summary style={{ cursor:"pointer" }}>Gerenciar ou cancelar esta assinatura</summary><div style={{ display:"grid", gap:12, marginTop:12 }}><CheckoutBilling /><Btn disabled={busy} onClick={() => setShowCancel(true)}>Cancelar assinatura</Btn></div></details>}
     </ConfirmationCard> : attempt?.status === "cancelled" ? <p>Assinatura cancelada. Entre em contato com o suporte para uma nova contratação.</p> : !awaitingConfirmation && !active && <>
-      {attempt?.status === "declined" && <p role="alert">Não foi possível concluir o pagamento. Confira os dados e tente novamente.</p>}
+      {attempt?.status === "declined" && !error && <p role="alert">Não foi possível concluir o pagamento. Confira os dados e tente novamente.</p>}
       <div style={{ marginBottom: 18 }}>{showStepLabel && <div style={{ color: T.inkGhost, fontSize: 11, fontWeight: 750, letterSpacing: ".08em" }}>ETAPA 3 DE 3</div>}<h2 id="checkout-payment-title" style={{ margin: showStepLabel ? "2px 0 0" : 0, fontSize: 24 }}>Pague com cartão</h2></div>
       <form id="checkout-payment-form" key={formKey} noValidate onSubmit={pay} onInput={updateReadiness} onChange={updateReadiness} style={{display:"grid",gap:14}}>
         <div aria-label="Forma de pagamento selecionada" style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", border: `1.5px solid ${T.green}`, borderRadius: 10, background: "#F3F8F0", color: T.ink, fontSize: 13, fontWeight: 750 }}><span aria-hidden="true" style={{ display: "grid", placeItems: "center", width: 22, height: 22, borderRadius: 7, background: T.green, color: "#fff", fontSize: 14 }}>▭</span>Cartão de crédito</div>
@@ -263,10 +274,10 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
           <CheckoutField label="Validade (MM/AA)" name="expiry" error={fieldErrors.expiry} inputMode="numeric" autoComplete="cc-exp" placeholder="MM/AA" pattern="(0[1-9]|1[0-2])/[0-9]{2}" maxLength={5} onInput={(event) => { event.currentTarget.value = formatExpiry(event.currentTarget.value); }} />
           <CheckoutField label="CVV" name="ccv" error={fieldErrors.ccv} type="password" inputMode="numeric" autoComplete="cc-csc" pattern="[0-9]{3,4}" maxLength={4} onInput={(event) => { event.currentTarget.value = digits(event.currentTarget.value, 4); }} />
         </div>
-        {!accountDetails && <CheckoutField label="CPF/CNPJ do titular (somente números)" name="cpf" error={fieldErrors.cpf} inputMode="numeric" pattern="[0-9]{11}|[0-9]{14}" />}
+        <CheckoutField label="CPF/CNPJ do titular (somente números)" name="cpf" defaultValue={accountDetails?.cpfCnpj || ""} error={fieldErrors.cpf} inputMode="numeric" pattern="[0-9]{11}|[0-9]{14}" />
         <CheckoutField label="CEP" name="postal" error={fieldErrors.postal} inputMode="numeric" autoComplete="postal-code" placeholder="00000-000" pattern="[0-9]{5}-?[0-9]{3}" maxLength={9} onInput={(event) => { event.currentTarget.value = formatPostalCode(event.currentTarget.value); }} />
         <CheckoutField label="Número do endereço" name="address" error={fieldErrors.address} type="number" inputMode="numeric" min="0" step="1" />
-        {!accountDetails && <CheckoutField label="Telefone com DDD (somente números)" name="phone" error={fieldErrors.phone} inputMode="tel" autoComplete="tel-national" pattern="[0-9]{10,13}" />}
+        <CheckoutField label="Telefone com DDD (somente números)" name="phone" defaultValue={accountDetails?.phone || ""} error={fieldErrors.phone} inputMode="tel" autoComplete="tel-national" pattern="[0-9]{10,13}" />
         <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "13px 14px", borderRadius: 10, background: "#F7E8E1", color: T.inkMid, fontSize: 12, lineHeight: 1.45 }}><span aria-hidden="true" style={{ display: "grid", placeItems: "center", flex: "0 0 auto", width: 24, height: 24, borderRadius: 99, background: "#E85D3B", color: "#fff", fontSize: 14 }}>▣</span><span>Conexão <strong>criptografada</strong>. Os dados do cartão são enviados com segurança para processar o pagamento e não ficam armazenados no Fincla.</span></div>
         <label style={{display:"flex",gap:10,alignItems:"flex-start",lineHeight:1.45,fontSize:12,color:T.inkMid}}><input type="checkbox" required name="terms" />Li e aceito os <a href="https://fincla.com/termos" target="_blank" rel="noreferrer">Termos de contratação</a>, versão {TERMS_VERSION}.</label>
         <label style={{display:"flex",gap:10,alignItems:"flex-start",lineHeight:1.45,fontSize:12,color:T.inkMid}}><input type="checkbox" required name="recurring" />Autorizo a cobrança e a renovação automática {quote.selection.billing_cycle === "yearly" ? "anual" : "mensal"}. Posso cancelar a renovação no meu perfil.</label>
@@ -274,7 +285,7 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
       </form>
     </>}
     {offerChanged && <Btn disabled={busy} onClick={onRefresh}>Atualizar oferta</Btn>}
-    {error && !offerChanged && !awaitingConfirmation && <p style={{ margin: "12px 0 0", color: T.inkMid, fontSize: 12 }}>Confira o formulário e envie novamente.</p>}
+    {error && !offerChanged && !awaitingConfirmation && !validationFailure && <p style={{ margin: "12px 0 0", color: T.inkMid, fontSize: 12 }}>Confira o formulário e envie novamente.</p>}
     {showCancel && <CancelSubscriptionDialog reactivationHint="Para uma nova contratação após cancelar, entre em contato com o suporte." onClose={() => setShowCancel(false)} onCancelled={() => { setShowCancel(false); setAttempt({status:"cancelled"}); }} />}
   </section>;
 }

@@ -328,6 +328,32 @@ it("preserves payment data when its accordion is collapsed and reopened", async 
   expect(screen.getByLabelText("Número do cartão")).toHaveValue("4242 4242 4242 4242");
 });
 
+it("keeps an uncertain card submission in reconciliation instead of reopening the form", async () => {
+  const { fireEvent } = await import("@testing-library/react");
+  const quote = { selection: { persona: "personal", billing_cycle: "monthly" }, total_cents: 2990, capacity: null };
+  vi.stubGlobal("fetch", vi.fn(async (url) => {
+    if (url.includes("checkout-quote")) return { ok: true, json: async () => quote };
+    if (url.includes("checkout/current")) return { ok: true, json: async () => null };
+    if (url.includes("checkout/pay")) throw new Error("network interrupted");
+    return { ok: true, json: async () => ({}) };
+  }));
+  render(<CheckoutPage search="?persona=personal&billing_cycle=monthly" session={{ isAuthenticated: true, user: { email: "maria@example.com", subscription: { status: "pending_payment" } }, signOut: vi.fn() }} />);
+  await screen.findByRole("heading", { name: "Pague com cartão" });
+  fireEvent.change(screen.getByLabelText("Nome do titular"), { target: { value: "Maria Silva" } });
+  fireEvent.change(screen.getByLabelText("Número do cartão"), { target: { value: "4242 4242 4242 4242" } });
+  fireEvent.change(screen.getByLabelText("Validade (MM/AA)"), { target: { value: "12/30" } });
+  fireEvent.change(screen.getByLabelText("CVV"), { target: { value: "123" } });
+  fireEvent.change(screen.getByLabelText(/CPF\/CNPJ do titular/), { target: { value: "24971563792" } });
+  fireEvent.change(screen.getByLabelText("CEP"), { target: { value: "01001-000" } });
+  fireEvent.change(screen.getByLabelText("Número do endereço"), { target: { value: "10" } });
+  fireEvent.change(screen.getByLabelText(/Telefone com DDD/), { target: { value: "4738010919" } });
+  fireEvent.click(screen.getByLabelText(/Termos de contratação/));
+  fireEvent.click(screen.getByLabelText(/Autorizo a cobrança/));
+  fireEvent.submit(screen.getByLabelText("Número do cartão").closest("form"));
+  expect(await screen.findByRole("heading", { name: "Estamos confirmando seu pagamento" })).toBeTruthy();
+  expect(screen.queryByLabelText("Número do cartão")).toBeNull();
+});
+
 
 it("shows every local payment validation error before sending the card", async () => {
   const { fireEvent } = await import("@testing-library/react");
