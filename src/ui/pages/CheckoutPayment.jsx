@@ -85,6 +85,9 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
       if (failure instanceof CheckoutRequestError && failure.code === "checkout_offer_changed") {
         setOfferChanged(true);
         setError("A oferta mudou. Atualize o resumo e confira o novo valor antes de confirmar o pagamento.");
+      } else if (failure instanceof CheckoutRequestError) {
+        // A resposta HTTP chegou: this was rejected before any charge could be created.
+        setError(failure.message);
       } else if (!paymentSubmitted) {
         setError(failure instanceof Error ? failure.message : "Não foi possível preparar seu acesso. Confira os dados e tente novamente.");
       } else {
