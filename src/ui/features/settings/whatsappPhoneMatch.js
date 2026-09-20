@@ -37,13 +37,17 @@ export function phoneDigitsMatch(a, b) {
  *
  * The country code stays the user's job: Fincla will run outside Brazil, so
  * nothing here assumes "+55" (a country picker is the planned follow-up).
- * Input without a leading "+" is passed through for the API to reject with
- * the translated hint; this never invents or drops digits.
+ *
+ * Without a leading "+" the input goes to the API EXACTLY as typed, formatting
+ * included. Stripping it to bare digits is not harmless: the backend prefixes
+ * "+" to any digit-only string (its Evolution-format normalisation), so
+ * "11 99999-0000" would silently become "+1 199..." — a US number — and open a
+ * pending link that can never activate. Left intact, it is rejected with the
+ * translated hint, as it was before this helper existed.
  */
 export function normalizePhoneE164(input) {
   const raw = (input || "").trim();
-  if (!raw) return "";
+  if (!raw.startsWith("+")) return raw;
   const digits = raw.replace(/\D/g, "");
-  if (!digits) return raw;
-  return raw.startsWith("+") ? `+${digits}` : digits;
+  return digits ? `+${digits}` : raw;
 }

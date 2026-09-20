@@ -43,11 +43,13 @@ describe("normalizePhoneE164", () => {
     expect(normalizePhoneE164("+14155552671")).toBe("+14155552671");
   });
 
-  it("does not assume a country: without the code, the API gets it as typed", () => {
+  it("without a leading + the input goes to the API exactly as typed", () => {
     // Fincla will run outside Brazil — the country code stays the user's job
-    // (a country picker is the planned follow-up). The API rejects this with
-    // the translated hint instead of us guessing "+55".
-    expect(normalizePhoneE164("11 99999-0000")).toBe("11999990000");
+    // (a country picker is the planned follow-up). It must NOT be reduced to
+    // bare digits: the backend prefixes "+" to any digit-only string, so
+    // "11999990000" would become a US number and a pending link that never
+    // activates. As typed, the backend rejects it with the translated hint.
+    expect(normalizePhoneE164("11 99999-0000")).toBe("11 99999-0000");
     expect(normalizePhoneE164("5511999990000")).toBe("5511999990000");
   });
 
@@ -55,5 +57,6 @@ describe("normalizePhoneE164", () => {
     expect(normalizePhoneE164("")).toBe("");
     expect(normalizePhoneE164("   ")).toBe("");
     expect(normalizePhoneE164("abc")).toBe("abc");
+    expect(normalizePhoneE164("+")).toBe("+");
   });
 });
