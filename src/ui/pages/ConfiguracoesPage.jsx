@@ -11,7 +11,8 @@ import { changePassword as apiChangePassword } from "../../api/auth";
 import { getOrganization } from "../../api/organizations";
 import { listWhatsAppConnections, linkWhatsAppPhone, unlinkWhatsAppPhone, getAssistantInfo } from "../../api/whatsappConnections";
 import { WhatsAppPendingVerification } from "../features/settings/WhatsAppPendingVerification.jsx";
-import { phoneDigitsMatch, normalizePhoneE164 } from "../features/settings/whatsappPhoneMatch.js";
+import { phoneDigitsMatch } from "../features/settings/whatsappPhoneMatch.js";
+import { DEFAULT_PHONE_COUNTRY, PHONE_COUNTRIES, buildE164, findPhoneCountry } from "../features/settings/phoneCountries.js";
 import { handleApiError } from "../../api/client";
 import {
   Settings,
@@ -150,6 +151,8 @@ export function ConfiguracoesPage({
   const [whatsLoading, setWhatsLoading] = useState(false);
   const [whatsError, setWhatsError] = useState("");
   const [novoNum, setNovoNum] = useState("");
+  // Country picked for the new number; Brazil preselected (the code is chosen, not typed).
+  const [novoPais, setNovoPais] = useState(DEFAULT_PHONE_COUNTRY);
   const [addNumOpen, setAddNumOpen] = useState(false);
   const [assistantInfo, setAssistantInfo] = useState(null);
   const [pendingLink, setPendingLink] = useState(null);
@@ -213,7 +216,7 @@ export function ConfiguracoesPage({
         // POST returns a PENDING link with a one-time code — not an active
         // connection. Show the verification card; the poll below watches for
         // the number to activate once the user sends the code over WhatsApp.
-        const pending = await linkWhatsAppPhone({ organization_id: organizationId, phone_number: normalizePhoneE164(novoNum) });
+        const pending = await linkWhatsAppPhone({ organization_id: organizationId, phone_number: buildE164(findPhoneCountry(novoPais).dial, novoNum) });
         setPendingLink(pending);
         setNovoNum(""); setAddNumOpen(false);
       } catch (e) { setWhatsError(handleApiError(e)); }
@@ -221,7 +224,7 @@ export function ConfiguracoesPage({
       setWhatsNums(prev => [...prev, { id: Date.now(), num: novoNum.trim(), nome: novoNum.trim(), status: "pendente", ultimo: "nunca" }]);
       setNovoNum(""); setAddNumOpen(false);
     }
-  }, [liveEnabled, organizationId, novoNum]);
+  }, [liveEnabled, organizationId, novoNum, novoPais]);
 
   const handleRegenerateCode = useCallback(async () => {
     if (!pendingLink || !liveEnabled) return;
@@ -717,8 +720,13 @@ export function ConfiguracoesPage({
           <div style={{ padding:"14px 24px", borderBottom:`1px solid ${T.border}`, background:T.greenLight }}>
             <div style={{ ...G, fontSize:11, fontWeight:700, color:T.green, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:10 }}>Novo número</div>
             <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
-              <input value={novoNum} onChange={e => setNovoNum(e.target.value)} placeholder="+55 11 99999-0000"
-                style={{ ...G, flex:"1 1 220px", padding:"9px 12px", border:`1.5px solid ${T.border}`, borderRadius:9, fontSize:13, color:T.ink, background:T.surface, outline:"none" }}/>
+              <select value={novoPais} onChange={e => setNovoPais(e.target.value)} aria-label="País do número"
+                style={{ ...G, flex:"1 1 160px", padding:"9px 10px", border:`1.5px solid ${T.border}`, borderRadius:9, fontSize:13, color:T.ink, background:T.surface, outline:"none" }}>
+                {PHONE_COUNTRIES.map(c => <option key={c.code} value={c.code}>{c.flag} {c.name} (+{c.dial})</option>)}
+              </select>
+              <input value={novoNum} onChange={e => setNovoNum(e.target.value)} placeholder={findPhoneCountry(novoPais).placeholder}
+                inputMode="tel" aria-label="Número com DDD"
+                style={{ ...G, flex:"1 1 200px", padding:"9px 12px", border:`1.5px solid ${T.border}`, borderRadius:9, fontSize:13, color:T.ink, background:T.surface, outline:"none" }}/>
               <BtnPrimary small onClick={handleLinkWhats}>Vincular</BtnPrimary>
               <BtnGhost onClick={() => { setAddNumOpen(false); setNovoNum(""); }}>Cancelar</BtnGhost>
             </div>
