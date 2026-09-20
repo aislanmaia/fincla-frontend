@@ -280,6 +280,7 @@ export function CollapsibleSection({ open, children }) {
 export function Btn({ children, variant = "outline", color = T.ink, onClick, full, small, disabled = false, type = "button", style, ...buttonProps }) {
   const styles = {
     dark: { bg: T.ink, txt: "#fff", brd: T.ink },
+    green: { bg: T.green, txt: "#fff", brd: T.green },
     red: { bg: T.red, txt: "#fff", brd: T.red },
     purple: { bg: T.purple, txt: "#fff", brd: T.purple },
     outGray: { bg: "transparent", txt: T.inkMid, brd: T.border },

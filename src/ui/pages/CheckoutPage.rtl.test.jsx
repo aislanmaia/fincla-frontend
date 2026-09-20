@@ -13,7 +13,7 @@ it("preserves the consultant selection and displays the server's annual quote", 
   vi.stubGlobal("fetch", fetch);
   render(<CheckoutPage search="?persona=consultant&billing_cycle=yearly&mode=package&seats=26&package_size=25&total_cents=1" />);
   expect(await screen.findByText("Fincla Consultor")).toBeTruthy();
-  expect(screen.getByText(/5.174,00/)).toBeTruthy();
+  expect(screen.getAllByText(/5.174,00/)).toHaveLength(2);
   expect(screen.getByText(/26 vagas contratadas/)).toBeTruthy();
   expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({persona:"consultant",billing_cycle:"yearly",mode:"package",seats:26,package_size:25});
 });
@@ -24,9 +24,9 @@ it("discards an obsolete response when the selection changes", async () => {
     .mockResolvedValue({ok: true, json: async () => ({selection:{persona:"personal",billing_cycle:"yearly"},total_cents:29900,capacity:null})}));
   const view = render(<CheckoutPage search="?persona=personal&billing_cycle=monthly" />);
   view.rerender(<CheckoutPage search="?persona=personal&billing_cycle=yearly" />);
-  expect(await screen.findByText(/299,00/)).toBeTruthy();
+  expect(await screen.findByRole("button", { name: "Preencha os dados para continuar" })).toBeTruthy();
   firstResponse({ok:true,json:async () => ({selection:{persona:"personal",billing_cycle:"monthly"},total_cents:2990,capacity:null})});
-  await waitFor(() => expect(screen.queryByText(/29,90/)).toBeNull());
+  await waitFor(() => expect(screen.getByRole("button", { name: "Preencha os dados para continuar" })).toBeTruthy());
 });
 
 it("lets a visitor choose annual billing and waits for the server quote before continuing", async () => {
@@ -38,10 +38,10 @@ it("lets a visitor choose annual billing and waits for the server quote before c
   vi.stubGlobal("fetch", fetch);
   render(<CheckoutPage search="?persona=personal&billing_cycle=monthly" session={{ isAuthenticated: false, signIn: vi.fn() }} />);
   fireEvent.click(await screen.findByRole("radio", { name: /Anual/ }));
-  expect(await screen.findByText(/299,00/)).toBeTruthy();
+  expect(await screen.findByRole("button", { name: "Preencha os dados para continuar" })).toBeTruthy();
   expect(JSON.parse(fetch.mock.calls[1][1].body)).toMatchObject({ persona: "personal", billing_cycle: "yearly" });
   fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
-  expect(await screen.findByRole("button", { name: "Criar conta e continuar" })).toBeDisabled();
+  expect(await screen.findByRole("button", { name: "Preencha seus dados para continuar" })).toBeDisabled();
 });
 
 it("keeps the selected checkout visible while an annual quote is loading", async () => {
@@ -64,7 +64,7 @@ it("keeps the selected checkout visible while an annual quote is loading", async
   expect(screen.getByLabelText("Atualizando valor")).toHaveAttribute("aria-busy", "true");
   expect(screen.getByRole("radio", { name: /Anual/ })).toBeDisabled();
   resolveAnnual({ ok: true, json: async () => ({ selection: { persona: "personal", billing_cycle: "yearly" }, total_cents: 29900, capacity: null }) });
-  expect(await screen.findByText(/299,00/)).toBeTruthy();
+  expect(await screen.findByRole("button", { name: "Preencha os dados para continuar" })).toBeTruthy();
 });
 
 it("lets the visitor review a previous step without losing the account draft", async () => {
@@ -78,6 +78,20 @@ it("lets the visitor review a previous step without losing the account draft", a
   expect(screen.getByLabelText("Nome")).toHaveValue("Maria");
 });
 
+it("validates account details in place and confirms matching passwords before payment", async () => {
+  const { fireEvent } = await import("@testing-library/react");
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ selection: { persona: "personal", billing_cycle: "monthly" }, total_cents: 2990, capacity: null }) }));
+  render(<CheckoutPage search="?persona=personal&billing_cycle=monthly" session={{ isAuthenticated: false, signIn: vi.fn() }} />);
+  fireEvent.click(await screen.findByRole("button", { name: "Continuar" }));
+  fireEvent.change(screen.getByLabelText("Senha", { exact: true }), { target: { value: "Password123!" } });
+  fireEvent.change(screen.getByLabelText("Confirme sua senha", { exact: true }), { target: { value: "outra-senha" } });
+  fireEvent.blur(screen.getByLabelText("Confirme sua senha", { exact: true }));
+  expect(screen.getByText("As senhas não coincidem.")).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Preencha seus dados para continuar" })).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("Confirme sua senha", { exact: true }), { target: { value: "Password123!" } });
+  expect(screen.getAllByText("As senhas coincidem")).toHaveLength(2);
+});
+
 it("shows an actionable error without offering payment for an invalid selection", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ok:false,status:422}));
   render(<CheckoutPage search="?persona=invalid" />);
@@ -85,7 +99,7 @@ it("shows an actionable error without offering payment for an invalid selection"
   expect(screen.queryByRole("button", {name:/pagar/i})).toBeNull();
 });
 
-it("keeps the yearly offer through account creation and never uses legacy signup", async () => {
+it("keeps account details local until the final payment action", async () => {
   const { fireEvent } = await import("@testing-library/react");
   const signIn = vi.fn().mockResolvedValue({});
   const fetch = vi.fn(async (url, options) => {
@@ -97,7 +111,7 @@ it("keeps the yearly offer through account creation and never uses legacy signup
   });
   vi.stubGlobal("fetch", fetch);
   render(<CheckoutPage search="?persona=personal&billing_cycle=yearly" session={{isAuthenticated:false,signIn}} />);
-  await screen.findByText(/299,00/);
+  await screen.findByRole("button", { name: "Preencha os dados para continuar" });
   fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
   fireEvent.change(screen.getByLabelText("Nome"), {target:{value:"Maria"}});
   fireEvent.change(screen.getByLabelText("Email"), {target:{value:"maria@example.com"}});
@@ -105,7 +119,22 @@ it("keeps the yearly offer through account creation and never uses legacy signup
   fireEvent.change(screen.getByLabelText(/Celular com DDD/), {target:{value:"4738010919"}});
   fireEvent.change(screen.getByLabelText("Senha"), {target:{value:"Password123!"}});
   fireEvent.change(screen.getByLabelText("Confirme sua senha"), {target:{value:"Password123!"}});
-  fireEvent.click(screen.getByRole("button", {name:"Criar conta e continuar"}));
+  fireEvent.click(screen.getByRole("button", {name:"Continuar para o pagamento"}));
+  expect(signIn).not.toHaveBeenCalled();
+  expect(fetch.mock.calls.find(([url]) => url.includes("/checkout/register"))).toBeUndefined();
+  expect(screen.getByText(/outro email/i)).toBeTruthy();
+  await screen.findByRole("heading", { name: "Pague com cartão" });
+  fireEvent.change(screen.getByLabelText("Nome do titular"), { target: { value: "Maria Silva" } });
+  fireEvent.change(screen.getByLabelText("Número do cartão"), { target: { value: "4242 4242 4242 4242" } });
+  fireEvent.change(screen.getByLabelText("Validade (MM/AA)"), { target: { value: "12/30" } });
+  fireEvent.change(screen.getByLabelText("CVV"), { target: { value: "123" } });
+  fireEvent.change(screen.getByLabelText("CEP"), { target: { value: "01001-000" } });
+  fireEvent.change(screen.getByLabelText("Número do endereço"), { target: { value: "10" } });
+  fireEvent.click(screen.getByLabelText(/Termos de contratação/));
+  fireEvent.click(screen.getByLabelText(/Autorizo a cobrança/));
+  await waitFor(() => expect(screen.getAllByRole("button", { name: /Assinar por.*299,00/ })).toHaveLength(2));
+  expect(screen.getAllByRole("button", { name: /Assinar por.*299,00/ }).every((button) => !button.disabled)).toBe(true);
+  fireEvent.submit(screen.getByLabelText("Número do cartão").closest("form"));
   await waitFor(()=>expect(signIn).toHaveBeenCalledWith("maria@example.com", "Password123!"));
   const registration = fetch.mock.calls.find(([url]) => url.includes("/checkout/register"));
   expect(registration[0]).toContain("/checkout/register");
@@ -118,9 +147,9 @@ it("shows resumable pending payment without a second pay button", async () => {
     : {id:'attempt',status:'pending_payment',quote:{selection:{persona:"personal",billing_cycle:"monthly"},total_cents:2990,capacity:null}}}));
   vi.stubGlobal("fetch", fetch);
   render(<CheckoutPage search="?persona=personal&billing_cycle=monthly" session={{isAuthenticated:true,user:{email:'maria@example.com',subscription:{status:'pending_payment'}},signOut:vi.fn()}} />);
-  expect(await screen.findByText(/Aguardando confirmação do pagamento/)).toBeTruthy();
+  expect(await screen.findByRole("heading", { name: "Estamos confirmando seu pagamento" })).toBeTruthy();
   expect(screen.queryByLabelText("Número do cartão")).toBeNull();
-  expect(screen.getByRole("button",{name:"Verificar pagamento"})).toBeTruthy();
+  expect(screen.getByRole("button",{name:"Atualizar agora"})).toBeTruthy();
 });
 
 
@@ -145,11 +174,22 @@ it("registers a separate consultant profile while preserving the quoted package 
   fireEvent.change(screen.getByLabelText(/Celular com DDD/), {target:{value:"4738010919"}});
   fireEvent.change(screen.getByLabelText("Senha"), {target:{value:"Password123!"}});
   fireEvent.change(screen.getByLabelText("Confirme sua senha"), {target:{value:"Password123!"}});
-  fireEvent.click(screen.getByRole("button", {name:"Criar conta e continuar"}));
+  fireEvent.click(screen.getByRole("button", {name:"Continuar para o pagamento"}));
+  expect(signIn).not.toHaveBeenCalled();
+  expect(fetch.mock.calls.find(([url]) => url.includes("/checkout/register"))).toBeUndefined();
+  await screen.findByRole("heading", { name: "Pague com cartão" });
+  fireEvent.change(screen.getByLabelText("Nome do titular"), { target: { value: "Maria Silva" } });
+  fireEvent.change(screen.getByLabelText("Número do cartão"), { target: { value: "4242 4242 4242 4242" } });
+  fireEvent.change(screen.getByLabelText("Validade (MM/AA)"), { target: { value: "12/30" } });
+  fireEvent.change(screen.getByLabelText("CVV"), { target: { value: "123" } });
+  fireEvent.change(screen.getByLabelText("CEP"), { target: { value: "01001-000" } });
+  fireEvent.change(screen.getByLabelText("Número do endereço"), { target: { value: "10" } });
+  fireEvent.click(screen.getByLabelText(/Termos de contratação/));
+  fireEvent.click(screen.getByLabelText(/Autorizo a cobrança/));
+  fireEvent.submit(screen.getByLabelText("Número do cartão").closest("form"));
   await waitFor(()=>expect(signIn).toHaveBeenCalledWith("consultora@example.com", "Password123!"));
   const registration = fetch.mock.calls.find(([url]) => url.includes("/checkout/register"));
   expect(JSON.parse(registration[1].body)).toMatchObject({persona:"consultant",billing_cycle:"yearly"});
-  expect(screen.getByText(/outro email/i)).toBeTruthy();
 });
 
 it("explains the monthly equivalent and savings for the annual offer", async () => {
@@ -159,9 +199,8 @@ it("explains the monthly equivalent and savings for the annual offer", async () 
   });
   vi.stubGlobal("fetch", fetch);
   render(<CheckoutPage search="?persona=personal&billing_cycle=yearly" session={{isAuthenticated:false,signIn:vi.fn()}} />);
-  expect(await screen.findByText((_, node) => node?.textContent?.replace(/\u00a0/g, " ") === "Equivale a R$ 24,92/mês")).toBeTruthy();
-  expect(await screen.findByText("2 meses grátis no anual")).toBeTruthy();
-  expect(screen.getByText((_, node) => node?.textContent?.replace(/\u00a0/g, " ") === "Economia total de R$ 59,80")).toBeTruthy();
+  expect(await screen.findByText((_, node) => node?.textContent?.replace(/\u00a0/g, " ") === "R$ 24,92/mês equivalente · renova a cada 12 meses.")).toBeTruthy();
+  expect(await screen.findByText((_, node) => node?.textContent?.replace(/\u00a0/g, " ") === "✓ Você economiza R$ 59,80 (2 meses grátis)")).toBeTruthy();
   expect(screen.getAllByText((_, node) => node?.textContent?.replace(/\u00a0/g, " ") === "R$ 24,92/mês")).toHaveLength(2);
   expect(screen.getByText("2 meses grátis")).toBeTruthy();
 });
@@ -177,7 +216,7 @@ it("recovers the saved consultant offer without URL parameters or a financial at
   render(<CheckoutPage search="" session={{isAuthenticated:true,user:{is_consultant:true,email:"consultora@example.com",subscription:{status:"pending_payment",checkout_selection:selection}},signOut:vi.fn()}} />);
   expect(await screen.findByRole("heading",{name:"Pague com cartão"})).toBeTruthy();
   expect(screen.getByText(/26 vagas contratadas/)).toBeTruthy();
-  expect(screen.getByText(/5.174,00/)).toBeTruthy();
+  expect(screen.getAllByText(/5.174,00/)).toHaveLength(2);
 });
 
 it("prevents a personal account from paying for a consultant offer", async () => {
@@ -193,7 +232,7 @@ it("offers renewal verification and billing for a historical active attempt with
   const quote = {selection:{persona:"personal",billing_cycle:"monthly"},total_cents:2990,capacity:null};
   vi.stubGlobal("fetch", vi.fn(async url=>({ok:true,json:async()=>url.includes('checkout-quote') ? quote : {id:"old-attempt",status:"active",has_access:false,quote}})));
   render(<CheckoutPage search="?persona=personal&billing_cycle=monthly" session={{isAuthenticated:true,user:{email:"pessoal@example.com",subscription:{status:"past_due",is_entitled:false}},signOut:vi.fn()}} />);
-  expect(await screen.findByRole("heading",{name:"Verifique a renovação da sua assinatura"})).toBeTruthy();
+  expect(await screen.findByRole("heading",{name:"Estamos confirmando seu pagamento"})).toBeTruthy();
   expect(screen.getByRole("button",{name:"Consultar faturas"})).toBeTruthy();
   expect(screen.getByRole("button",{name:"Cancelar assinatura"})).toBeTruthy();
   expect(screen.queryByLabelText("Número do cartão")).toBeNull();
@@ -215,12 +254,12 @@ it("requires a refreshed offer and new consent when the server rejects an outdat
   render(<CheckoutPage search="?persona=personal&billing_cycle=monthly" session={{isAuthenticated:true,user:{email:"pessoal@example.com",subscription:{status:"pending_payment"}},signOut:vi.fn()}} />);
   await screen.findByRole("heading",{name:"Pague com cartão"});
   fireEvent.click(screen.getByLabelText(/Termos de contratação/));
-  fireEvent.submit(screen.getByRole('button',{name:'Confirmar pagamento'}).closest('form'));
+  fireEvent.submit(screen.getByLabelText('Número do cartão').closest('form'));
   const update = await screen.findByRole('button',{name:'Atualizar oferta'});
   expect(payments).toBe(1);
   refresh = true;
   fireEvent.click(update);
-  await screen.findByText(/30,90/);
+  expect((await screen.findAllByRole('button', { name: 'Preencha os dados para continuar' })).length).toBeGreaterThan(0);
   expect(await screen.findByLabelText(/Termos de contratação/)).not.toBeChecked();
   expect(screen.getByLabelText('Número do cartão')).toHaveValue('');
   expect(payments).toBe(1);
@@ -232,9 +271,9 @@ it("waits for healthy preparation and permits new card input after interrupted p
   let status = "preparing";
   vi.stubGlobal("fetch", vi.fn(async url => ({ok:true,json:async()=>url.includes('checkout-quote') ? quote : {id:"preparation",status,has_access:false,quote}})));
   render(<CheckoutPage search="?persona=personal&billing_cycle=monthly" session={{isAuthenticated:true,user:{email:"pessoal@example.com",subscription:{status:"pending_payment"}},signOut:vi.fn()}} />);
-  expect(await screen.findByRole("heading",{name:"Confirmando o resultado da tentativa"})).toBeTruthy();
+  expect(await screen.findByRole("heading",{name:"Estamos confirmando seu pagamento"})).toBeTruthy();
   expect(screen.queryByLabelText("Número do cartão")).toBeNull();
   status = "declined";
-  fireEvent.click(screen.getByRole("button",{name:"Verificar pagamento"}));
+  fireEvent.click(screen.getByRole("button",{name:"Atualizar agora"}));
   expect(await screen.findByLabelText("Número do cartão")).toHaveValue("");
 });
