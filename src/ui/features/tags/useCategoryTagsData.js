@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   formatTagsApiError,
-  listCategoryTagsForUi,
-  mapCategoryTagsForUi,
-  mapCategoryTagsToOptions,
+  mapCategoryCatalogForUi,
 } from "../../data/tagsAdapter.js";
+import { getCategoryCatalog } from "../../../api/tags";
+import { APP_UI_LOCALE } from "../../appLocale.js";
 
 const EMPTY_STATE = {
   isLoading: false,
@@ -13,7 +13,7 @@ const EMPTY_STATE = {
   categories: [],
 };
 
-export function useCategoryTagsData({ organizationId, enabled = true }) {
+export function useCategoryTagsData({ organizationId, transactionType = "expense", enabled = true }) {
   const [state, setState] = useState(EMPTY_STATE);
 
   useEffect(() => {
@@ -29,15 +29,15 @@ export function useCategoryTagsData({ organizationId, enabled = true }) {
       error: "",
     }));
 
-    listCategoryTagsForUi(organizationId)
+    getCategoryCatalog(organizationId, transactionType, APP_UI_LOCALE)
       .then((response) => {
         if (cancelled) return;
-        const raw = response.tags ?? [];
+        const categories = mapCategoryCatalogForUi(response.categories ?? []);
         setState({
           isLoading: false,
           error: "",
-          categories: mapCategoryTagsForUi(raw),
-          options: mapCategoryTagsToOptions(raw),
+          categories,
+          options: categories.map((category) => category.labelPt),
         });
       })
       .catch((error) => {
@@ -53,7 +53,7 @@ export function useCategoryTagsData({ organizationId, enabled = true }) {
     return () => {
       cancelled = true;
     };
-  }, [enabled, organizationId]);
+  }, [enabled, organizationId, transactionType]);
 
   return useMemo(() => state, [state]);
 }

@@ -4,6 +4,22 @@ import type { CheckoutQuote } from "./checkout";
 // ===== AUTENTICAÇÃO =====
 export type UserRole = 'owner' | 'member' | 'consultant';
 
+export interface ConsultantCategoryTemplate {
+  id: string;
+  name: string;
+  version: number;
+  definition: Record<string, unknown>;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SaveConsultantCategoryTemplateRequest {
+  name: string;
+  definition: Record<string, unknown>;
+  is_default?: boolean;
+}
+
 export interface LoginRequest {
   email: string;
   password: string;
@@ -477,6 +493,11 @@ export interface Tag {
   icon_key: string | null;
   /** Tipo `detalhe`: UUID da categoria pai; `null` para categorias */
   parent_category_tag_id: string | null;
+  system_key: string | null;
+  custom_name: string | null;
+  custom_icon_key: string | null;
+  allowed_transaction_types: Array<'income' | 'expense' | 'refund'> | null;
+  is_fallback: boolean;
 }
 
 export interface CreateTagRequest {
@@ -487,6 +508,7 @@ export interface CreateTagRequest {
   is_onboarding_highlight?: boolean;
   icon_key?: string | null;
   parent_category_tag_id?: string | null;
+  allowed_transaction_types?: Array<'income' | 'expense' | 'refund'> | null;
 }
 
 export interface UpdateTagRequest {
@@ -497,10 +519,35 @@ export interface UpdateTagRequest {
   is_onboarding_highlight?: boolean;
   icon_key?: string | null;
   parent_category_tag_id?: string | null;
+  allowed_transaction_types?: Array<'income' | 'expense' | 'refund'> | null;
+  custom_name?: string | null;
+  custom_icon_key?: string | null;
 }
 
 export interface TagsResponse {
   tags: Tag[];
+}
+
+export interface CategoryCatalogDetail {
+  id: string;
+  system_key: string | null;
+  label: string;
+  icon_key: string | null;
+}
+
+export interface CategoryCatalogItem {
+  id: string;
+  system_key: string | null;
+  label: string;
+  icon_key: string | null;
+  color: string | null;
+  allowed_transaction_types: Array<'income' | 'expense' | 'refund'>;
+  is_fallback: boolean;
+  details: CategoryCatalogDetail[];
+}
+
+export interface CategoryCatalogResponse {
+  categories: CategoryCatalogItem[];
 }
 
 // ===== TRANSAÇÕES =====

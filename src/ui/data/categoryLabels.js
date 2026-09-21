@@ -20,10 +20,10 @@ function normalizeCategoryLookupKey(value) {
 /**
  * Unifica campos da tag (ou fragmento) vindos da API.
  * @param {Record<string, unknown> | null | undefined} raw
- * @returns {{ name: string | null; icon_key: string | null; is_default: boolean | null }}
+ * @returns {{ name: string | null; icon_key: string | null; custom_name: string | null; system_key: string | null; is_default: boolean | null }}
  */
 export function coerceCategoryTagShape(raw) {
-  if (!raw || typeof raw !== "object") return { name: null, icon_key: null, is_default: null };
+  if (!raw || typeof raw !== "object") return { name: null, icon_key: null, custom_name: null, system_key: null, is_default: null };
   const o = raw;
   const name =
     (typeof o.name === "string" && o.name.trim()) ||
@@ -47,7 +47,15 @@ export function coerceCategoryTagShape(raw) {
       : typeof o.isDefault === "boolean"
         ? o.isDefault
         : null;
-  return { name, icon_key, is_default };
+  const custom_name =
+    (typeof o.custom_name === "string" && o.custom_name.trim()) ||
+    (typeof o.customName === "string" && o.customName.trim()) ||
+    null;
+  const system_key =
+    (typeof o.system_key === "string" && o.system_key.trim()) ||
+    (typeof o.systemKey === "string" && o.systemKey.trim()) ||
+    null;
+  return { name, icon_key, custom_name, system_key, is_default };
 }
 
 export const CATEGORY_LABEL_PT_BY_ICON_KEY = {
@@ -178,11 +186,12 @@ function labelPtFromPortugueseCategoryName(name) {
  */
 export function categoryLabelPtForTag(tag) {
   if (!tag) return "Categoria";
-  const { name, icon_key: rawIk, is_default } = coerceCategoryTagShape(
+  const { name, icon_key: rawIk, custom_name: customName, system_key: systemKey, is_default } = coerceCategoryTagShape(
     /** @type {Record<string, unknown>} */ (tag),
   );
   const isConfirmedSeedRow = is_default === true;
   const isConfirmedUserTag = is_default === false;
+  if (customName) return customName;
   if (!name) {
     if (isConfirmedSeedRow) {
       const ikNorm = normalizeCategoryIconKey(rawIk);
@@ -197,7 +206,7 @@ export function categoryLabelPtForTag(tag) {
   if (fromEn) return fromEn;
   const fromPt = labelPtFromPortugueseCategoryName(name);
   if (fromPt) return fromPt;
-  if (isConfirmedSeedRow) {
+  if (isConfirmedSeedRow && !systemKey) {
     const ikNorm = normalizeCategoryIconKey(rawIk);
     if (ikNorm && CATEGORY_LABEL_PT_BY_ICON_KEY[ikNorm]) {
       return CATEGORY_LABEL_PT_BY_ICON_KEY[ikNorm];

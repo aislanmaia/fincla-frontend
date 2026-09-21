@@ -5,7 +5,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const navigate = vi.fn();
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => navigate }));
 
-vi.mock("../../../../api/consultant", () => ({ createConsultantClient: vi.fn() }));
+vi.mock("../../../../api/consultant", () => ({
+  createConsultantClient: vi.fn(),
+  listConsultantCategoryTemplates: vi.fn().mockResolvedValue([]),
+}));
 
 import { createConsultantClient } from "../../../../api/consultant";
 import { ConsultantAddClientWizard } from "../ConsultantAddClientWizard.jsx";

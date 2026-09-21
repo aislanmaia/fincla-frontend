@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mapCategoryTagsForUi, mapCategoryTagsToOptions } from "../tagsAdapter.js";
+import { mapCategoryCatalogForUi, mapCategoryTagsForUi, mapCategoryTagsToOptions } from "../tagsAdapter.js";
 
 describe("tagsAdapter", () => {
   it("mapeia tags de categoria para opções únicas ordenadas por sort_order e nome", () => {
@@ -47,5 +47,9 @@ describe("tagsAdapter", () => {
         color: "#059669",
       }),
     );
+  });
+
+  it("uses the localized catalog label and preserves the fallback identity", () => {
+    expect(mapCategoryCatalogForUi([{ id: "u1", system_key: "uncategorized", label: "Não classificado", icon_key: "circle-help", color: "#6B7280", is_fallback: true }])).toEqual([expect.objectContaining({ labelPt: "Não classificado", isFallback: true })]);
   });
 });

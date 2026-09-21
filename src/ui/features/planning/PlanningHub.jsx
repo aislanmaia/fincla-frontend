@@ -9,6 +9,7 @@ import { SimulacaoPage } from "../../pages/SimulacaoPage.jsx";
 import { CapacityPanel } from "../financialHealth/CapacityPanel.jsx";
 import { CalendarPage } from "../../pages/CalendarPage.jsx";
 import { PlannedVsActualPage } from "../../pages/PlannedVsActualPage.jsx";
+import { CategoriesTagsSettingsPanel } from "../settings/CategoriesTagsSettingsPanel.jsx";
 import { HealthPanelPage } from "../../pages/HealthPanelPage.jsx";
 import { PLANNING_NAV, DEFAULT_PLANNING_AREA, isPlanningArea, planningAreaItem } from "./planningAreas.js";
 
@@ -89,6 +90,8 @@ export function PlanningHub({ organizationId, dataMode = "live", isMobile = fals
             dataMode={dataMode}
           />
         );
+      case "categories":
+        return <CategoriesTagsSettingsPanel isMobile={isMobile} dataMode={dataMode} organizationId={organizationId} SectionCard={({ children }) => <Card>{children}</Card>} />;
       default:
         return <Placeholder label={planningAreaItem(area)?.label || "Em breve"} />;
     }

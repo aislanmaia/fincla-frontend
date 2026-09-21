@@ -2,6 +2,7 @@
 import apiClient from './client';
 import {
   TagsResponse,
+  CategoryCatalogResponse,
   Tag,
   TagType,
   TagTypesResponse,
@@ -10,6 +11,21 @@ import {
   CreateTagTypeRequest,
   UpdateTagTypeRequest,
 } from './types';
+
+export const getCategoryCatalog = async (
+  organizationId: string,
+  transactionType: 'income' | 'expense' | 'refund',
+  locale = 'pt-BR',
+): Promise<CategoryCatalogResponse> => {
+  const response = await apiClient.get<CategoryCatalogResponse>('/tags/catalog', {
+    params: {
+      organization_id: organizationId,
+      transaction_type: transactionType,
+      locale,
+    },
+  });
+  return response.data;
+};
 
 /**
  * Cria um novo tipo de tag no sistema.

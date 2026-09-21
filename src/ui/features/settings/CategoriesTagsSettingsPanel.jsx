@@ -11,6 +11,7 @@ import {
 import { CardEmptyWithCta } from "../shellExtras.jsx";
 import { T } from "../../tokens";
 import { G } from "../../typography";
+import { CATEGORY_ICON_KEYS } from "../../data/categoryLucideIcons.js";
 
 function normalizeLabel(value) {
   return String(value || "")
@@ -96,6 +97,8 @@ export function CategoriesTagsSettingsPanel({
   const [editCat, setEditCat] = useState(null);
   const [newCatName, setNewCatName] = useState("");
   const [newCatColor, setNewCatColor] = useState("#2563EB");
+  const [newCatIconKey, setNewCatIconKey] = useState("tag");
+  const [newCatScopes, setNewCatScopes] = useState(["income", "expense", "refund"]);
   const [catsLoading, setCatsLoading] = useState(false);
   const [catsError, setCatsError] = useState("");
   /** Id da tag existente destacada por ~1.5s quando `addTag` acha duplicata. */
@@ -127,6 +130,10 @@ export function CategoriesTagsSettingsPanel({
           // organização nova, e o backend não muda (fora do escopo do frontend).
           name: tag.name,
           labelPt: categoryLabelPtForTag(tag),
+          systemKey: tag.system_key ?? null,
+          customName: tag.custom_name ?? null,
+          iconKey: tag.custom_icon_key || tag.icon_key || null,
+          allowedTransactionTypes: tag.allowed_transaction_types ?? ["income", "expense", "refund"],
           color: resolveCategoryColorForTag(tag),
           tags: detailTags.filter(
             (detailTag) => String(detailTag.parent_category_tag_id ?? "") === String(tag.id),
@@ -150,7 +157,7 @@ export function CategoriesTagsSettingsPanel({
         const typesResp = await listTagTypes();
         const catType = (typesResp.tag_types ?? []).find(t => t.name === "categoria");
         if (!catType) return;
-        await createTag(organizationId, { name: newCatName.trim(), tag_type_id: catType.id, color: newCatColor });
+        await createTag(organizationId, { name: newCatName.trim(), tag_type_id: catType.id, color: newCatColor, icon_key: newCatIconKey, allowed_transaction_types: newCatScopes });
         await refreshCats();
       } catch (e) { setCatsError(handleApiError(e)); }
     } else {
@@ -168,10 +175,21 @@ export function CategoriesTagsSettingsPanel({
     // mudou o que via na tela — senão salvar só a cor (sem tocar o nome)
     // reenviaria o rótulo traduzido como se fosse o nome real e destruiria o
     // nome canônico do seed (ou um nome custom do usuário, ex. "Renda").
-    const nameForPayload = trimmed && trimmed !== displayedBefore ? trimmed : cat?.name;
+    const isSystemCategory = Boolean(cat?.systemKey);
+    const nameForPayload = isSystemCategory || !trimmed || trimmed === displayedBefore ? cat?.name : trimmed;
+    const customName = isSystemCategory
+      ? (trimmed && trimmed !== displayedBefore ? trimmed : null)
+      : undefined;
     if (liveEnabled) {
       try {
-        await apiUpdateTag(catId, { name: nameForPayload, color: newCatColor, tag_type_id: cat?._tagTypeId });
+        await apiUpdateTag(catId, {
+          name: nameForPayload,
+          color: newCatColor,
+          tag_type_id: cat?._tagTypeId,
+          ...(isSystemCategory ? { custom_icon_key: newCatIconKey } : { icon_key: newCatIconKey }),
+          allowed_transaction_types: newCatScopes,
+          ...(isSystemCategory ? { custom_name: customName } : {}),
+        });
         await refreshCats();
       } catch (e) { setCatsError(handleApiError(e)); }
     } else {
@@ -267,6 +285,20 @@ export function CategoriesTagsSettingsPanel({
     );
   }, [liveEnabled, refreshCats]);
 
+  const updateDetailIcon = useCallback(async (cat, tag, iconKey) => {
+    if (!liveEnabled || typeof tag === "string") return;
+    try {
+      await apiUpdateTag(tag.id, {
+        name: tag.name,
+        tag_type_id: tag.tag_type.id,
+        ...(tag.system_key ? { custom_icon_key: iconKey } : { icon_key: iconKey }),
+      });
+      await refreshCats();
+    } catch (error) {
+      setCatsError(handleApiError(error));
+    }
+  }, [liveEnabled, refreshCats]);
+
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
       <SectionCard>
@@ -282,7 +314,7 @@ export function CategoriesTagsSettingsPanel({
               {!isMobile && <div style={{ ...G, fontSize:12, color:T.inkMid }}>Personalize como suas transações são organizadas</div>}
             </div>
           </div>
-          <button onClick={() => { setNewCatName(""); setNewCatColor("#2563EB"); setEditCat("new"); }}
+          <button onClick={() => { setNewCatName(""); setNewCatColor("#2563EB"); setNewCatIconKey("tag"); setNewCatScopes(["income", "expense", "refund"]); setEditCat("new"); }}
             style={{ ...G, flexShrink:0, background:T.ink, color:"#fff", border:"none", borderRadius:9,
               padding: isMobile ? "7px 12px" : "7px 14px", fontSize: isMobile ? 11 : 12,
               fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}>
@@ -324,6 +356,7 @@ export function CategoriesTagsSettingsPanel({
                     borderRadius:9, padding:"8px 12px", fontSize:12, fontWeight:600, cursor:"pointer", flexShrink:0 }}>Cancelar</button>
               </div>
             </div>
+            <CategoryOptions iconKey={newCatIconKey} onIconKeyChange={setNewCatIconKey} scopes={newCatScopes} onScopesChange={setNewCatScopes} />
           </div>
         )}
 
@@ -349,6 +382,7 @@ export function CategoriesTagsSettingsPanel({
                       style={{ ...G, background:"none", color:T.inkMid, border:`1px solid ${T.border}`,
                         borderRadius:8, padding:"6px 10px", fontSize:12, cursor:"pointer" }}>×</button>
                   </div>
+                  <CategoryOptions iconKey={newCatIconKey} onIconKeyChange={setNewCatIconKey} scopes={newCatScopes} onScopesChange={setNewCatScopes} compact />
                 </div>
               ) : (
                 <>
@@ -363,7 +397,7 @@ export function CategoriesTagsSettingsPanel({
                     <Hash size={10}/>
                     {(cat.tags||[]).length}
                   </button>
-                  <button onClick={() => { setEditCat(cat.id); setNewCatName(cat.labelPt || cat.name); setNewCatColor(cat.color); }} aria-label={`Editar categoria ${cat.labelPt || cat.name}`}
+                  <button onClick={() => { setEditCat(cat.id); setNewCatName(cat.labelPt || cat.name); setNewCatColor(cat.color); setNewCatIconKey(cat.iconKey || "tag"); setNewCatScopes(cat.allowedTransactionTypes || ["income", "expense", "refund"]); }} aria-label={`Editar categoria ${cat.labelPt || cat.name}`}
                     style={{ background:"none", border:"none", cursor:"pointer", padding:5, borderRadius:7, display:"flex", flexShrink:0 }}
                     onMouseEnter={e=>e.currentTarget.style.background=T.grayLight}
                     onMouseLeave={e=>e.currentTarget.style.background="none"}>
@@ -397,6 +431,16 @@ export function CategoriesTagsSettingsPanel({
                         border:`1px solid ${isHighlighted ? cat.color : T.border}`, borderRadius:99,
                         padding:"4px 10px", color:T.inkMid, transition:"all 0.15s" }}>
                         #{getTagLabelPt(tag)}
+                        {typeof tag !== "string" && (
+                          <select
+                            aria-label={`Ícone da tag ${getTagLabelPt(tag)}`}
+                            value={tag.custom_icon_key || tag.icon_key || "tag"}
+                            onChange={(event) => void updateDetailIcon(cat, tag, event.target.value)}
+                            style={{ border: "none", background: "transparent", color: T.inkLight, fontSize: 10, maxWidth: 112 }}
+                          >
+                            {[...new Set([tag.custom_icon_key || tag.icon_key || "tag", "tag", "shopping-cart", "receipt", "heart-pulse", "monitor-smartphone", "wallet", "briefcase", "circle-help", "car", "house", "pill"])].map((key) => <option key={key} value={key}>{key}</option>)}
+                          </select>
+                        )}
                         <button onClick={() => void removeTag(cat, ti)}
                           aria-label={`Remover tag ${getTagLabelPt(tag)}`}
                           style={{ background:"none", border:"none", cursor:"pointer", padding:0, lineHeight:1,
@@ -450,6 +494,23 @@ export function CategoriesTagsSettingsPanel({
           />
         )}
       </SectionCard>
+    </div>
+  );
+}
+
+function CategoryOptions({ iconKey, onIconKeyChange, scopes, onScopesChange, compact = false }) {
+  const preferredKeys = ["tag", "shopping-cart", "house", "car", "heart-pulse", "monitor-smartphone", "wallet", "briefcase", "circle-help"];
+  const choices = [...new Set([iconKey, ...preferredKeys, ...CATEGORY_ICON_KEYS])];
+  const toggleScope = (scope) => {
+    const next = scopes.includes(scope) ? scopes.filter((item) => item !== scope) : [...scopes, scope];
+    if (next.length) onScopesChange(next);
+  };
+  return (
+    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: compact ? 0 : 10 }}>
+      <label style={{ ...G, fontSize: 12, color: T.inkMid }}>Ícone <select value={iconKey} onChange={(event) => onIconKeyChange(event.target.value)} aria-label="Ícone da categoria" style={{ marginLeft: 5, maxWidth: 180 }}>
+        {choices.map((key) => <option key={key} value={key}>{key}</option>)}
+      </select></label>
+      {[["income", "Receita"], ["expense", "Despesa"], ["refund", "Estorno"]].map(([scope, label]) => <label key={scope} style={{ ...G, fontSize: 12, color: T.inkMid }}><input type="checkbox" checked={scopes.includes(scope)} onChange={() => toggleScope(scope)} /> {label}</label>)}
     </div>
   );
 }

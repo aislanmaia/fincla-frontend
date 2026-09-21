@@ -14,6 +14,10 @@ describe("categoryLabels", () => {
     ).toBe("Alimentação");
   });
 
+  it("keeps a system category custom name instead of deriving a label from its icon", () => {
+    expect(categoryLabelPtForTag({ name: "Food & Groceries", custom_name: "Mercado da semana", system_key: "food_groceries", icon_key: "shopping-cart", is_default: true })).toBe("Mercado da semana");
+  });
+
   it("usa mapa EN por nome quando não há icon_key", () => {
     expect(categoryLabelPtForTag({ name: "Income", icon_key: null })).toBe("Receita");
   });

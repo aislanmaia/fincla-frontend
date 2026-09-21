@@ -8,12 +8,13 @@ import { getCategoryLucideIcon } from "../data/categoryLucideIcons.js";
  */
 export function CategoryLucideIcon({
   iconKey = null,
+  customIconKey = null,
   labelPt = "",
   size = 14,
   color,
   strokeWidth = 2,
 }) {
-  const resolved = resolveCategoryIconKey(iconKey, labelPt);
+  const resolved = resolveCategoryIconKey(customIconKey || iconKey, labelPt);
   const IconComp = getCategoryLucideIcon(resolved) || Tag;
   return <IconComp size={size} color={color} strokeWidth={strokeWidth} />;
 }

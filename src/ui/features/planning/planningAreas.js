@@ -26,6 +26,10 @@ export const PLANNING_NAV = [
       { id: "calendar", label: "Calendário" },
     ],
   },
+  {
+    group: "Organização",
+    items: [{ id: "categories", label: "Categorias e tags" }],
+  },
 ];
 
 export const DEFAULT_PLANNING_AREA = "capacity";

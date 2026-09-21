@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { createTag, listTags, listTagTypes } from "../../../api/tags";
+import { createTag, getCategoryCatalog, listTagTypes } from "../../../api/tags";
 import { detailLabelPtForTag } from "../../data/categoryLabels.js";
+import { APP_UI_LOCALE } from "../../appLocale.js";
 
 function normalizeLabel(value) {
   return String(value || "")
@@ -30,6 +31,7 @@ async function resolveDetailTagTypeId() {
 export function useNovaTransacaoDetailTags({
   organizationId,
   categoryTagId,
+  transactionType = "expense",
   enabled,
 }) {
   const [allDetail, setAllDetail] = useState([]);
@@ -70,9 +72,18 @@ export function useNovaTransacaoDetailTags({
         // save. Sem `status`, digitar o nome arquivado cai em `createTag`,
         // que reativa e devolve a tag ativa de verdade — comportamento
         // correto original, preservado.
-        const { tags } = await listTags(organizationId, "detalhe");
+        const catalog = await getCategoryCatalog(organizationId, transactionType, APP_UI_LOCALE);
         if (cancelled) return;
-        setAllDetail(tags ?? []);
+        setAllDetail(
+          (catalog.categories ?? []).flatMap((category) =>
+            (category.details ?? []).map((detail) => ({
+              ...detail,
+              name: detail.label,
+              parent_category_tag_id: category.id,
+              is_default: Boolean(detail.system_key),
+            })),
+          ),
+        );
       } catch (e) {
         if (!cancelled) {
           setError(
@@ -87,7 +98,7 @@ export function useNovaTransacaoDetailTags({
     return () => {
       cancelled = true;
     };
-  }, [enabled, organizationId]);
+  }, [enabled, organizationId, transactionType]);
 
   const rowsForCategory = useMemo(() => {
     if (!categoryTagId) return [];

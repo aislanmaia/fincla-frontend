@@ -100,3 +100,5 @@ docs/mockups/
 
 # Vite config temp artifacts
 vite.config.ts.timestamp-*.mjs
+
+graphify-out/

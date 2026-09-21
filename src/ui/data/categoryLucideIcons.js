@@ -1,32 +1,14 @@
-import {
-  BookOpen,
-  Car,
-  Home,
-  PartyPopper,
-  Pill,
-  Receipt,
-  ShoppingBag,
-  ShoppingCart,
-  Smartphone,
-  Wallet,
-  Wrench,
-} from "lucide-react";
+import * as Lucide from "lucide-react";
 
-const BY_KEY = {
-  "shopping-cart": ShoppingCart,
-  car: Car,
-  pill: Pill,
-  "book-open": BookOpen,
-  "party-popper": PartyPopper,
-  "shopping-bag": ShoppingBag,
-  wrench: Wrench,
-  smartphone: Smartphone,
-  receipt: Receipt,
-  home: Home,
-  wallet: Wallet,
-};
+function toPascalCase(iconKey) {
+  return iconKey.split("-").filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join("");
+}
 
-const KNOWN_ICON_KEYS = new Set(Object.keys(BY_KEY));
+/** Lucide is the supported icon library; the catalog stores kebab-case keys. */
+export const CATEGORY_ICON_KEYS = Object.keys(Lucide)
+  .filter((name) => /^[A-Z][A-Za-z0-9]+$/.test(name) && typeof Lucide[name] === "object")
+  .map((name) => name.replace(/([a-z\d])([A-Z])/g, "$1-$2").toLowerCase())
+  .sort();
 
 /**
  * Converte `icon_key` da API (kebab, snake, PascalCase) para chave canônica do mapa Lucide.
@@ -35,20 +17,12 @@ const KNOWN_ICON_KEYS = new Set(Object.keys(BY_KEY));
  */
 export function normalizeCategoryIconKey(raw) {
   if (raw == null || raw === "") return null;
-  const s = String(raw).trim();
-  if (!s) return null;
-  if (KNOWN_ICON_KEYS.has(s)) return s;
-  const lower = s.toLowerCase();
-  if (KNOWN_ICON_KEYS.has(lower)) return lower;
-  const fromSnake = lower.replace(/_/g, "-");
-  if (KNOWN_ICON_KEYS.has(fromSnake)) return fromSnake;
-  const kebab = s
+  const kebab = String(raw).trim()
     .replace(/_/g, "-")
     .replace(/([a-z\d])([A-Z])/g, "$1-$2")
     .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
     .toLowerCase();
-  if (KNOWN_ICON_KEYS.has(kebab)) return kebab;
-  return null;
+  return Lucide[toPascalCase(kebab)] ? kebab : null;
 }
 
 /**
@@ -58,5 +32,5 @@ export function normalizeCategoryIconKey(raw) {
 export function getCategoryLucideIcon(iconKey) {
   const k = normalizeCategoryIconKey(iconKey);
   if (!k) return null;
-  return BY_KEY[k] ?? null;
+  return k ? Lucide[toPascalCase(k)] ?? null : null;
 }

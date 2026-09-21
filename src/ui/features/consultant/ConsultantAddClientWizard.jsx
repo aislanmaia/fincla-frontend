@@ -4,7 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { Btn } from "../../components/primitives";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
-import { createConsultantClient } from "../../../api/consultant";
+import { createConsultantClient, listConsultantCategoryTemplates } from "../../../api/consultant";
 import { handleApiError } from "../../../api/client";
 import { Icon } from "./consultantUi";
 
@@ -54,7 +54,7 @@ const INITIAL = {
   saldo: "", categorias: ["moradia", "alimentacao", "transporte"],
   temCartao: false, cardBanco: "", cardLimite: "", cardVenc: "10",
   temReceita: true, recDesc: "Salário", recValor: "", recDia: "5",
-  notas: "", tags: [], nivel: "iniciante", objetivo: "Montar reserva", prioridade: false,
+  notas: "", tags: [], nivel: "iniciante", objetivo: "Montar reserva", prioridade: false, categoryTemplateId: "",
 };
 
 const inputBase = { ...G, width: "100%", border: `1px solid ${T.border}`, borderRadius: 10, padding: "11px 13px", fontSize: 14, color: T.ink, background: "#fff", outline: "none", boxSizing: "border-box" };
@@ -103,6 +103,7 @@ function toPayload(f) {
     experience_level: f.nivel,
     main_goal: f.objetivo,
     priority: f.prioridade,
+    category_template_id: f.categoryTemplateId || undefined,
   };
 }
 
@@ -113,10 +114,16 @@ export function ConsultantAddClientWizard({ open, onClose, onCreated, quota = nu
   const [submitting, setSubmitting] = React.useState(false);
   const [error, setError] = React.useState("");
   const [result, setResult] = React.useState(null); // { organization_id, client_name, set_password_link }
+  const [templates, setTemplates] = React.useState([]);
   const [copied, setCopied] = React.useState(false);
 
   React.useEffect(() => {
     if (open) { setStepIdx(0); setF(INITIAL); setSubmitting(false); setError(""); setResult(null); setCopied(false); }
+  }, [open]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    void listConsultantCategoryTemplates().then(setTemplates).catch(() => setTemplates([]));
   }, [open]);
 
   if (!open) return null;
@@ -198,6 +205,12 @@ export function ConsultantAddClientWizard({ open, onClose, onCreated, quota = nu
         </div>
       </Field>
       <Field label="Renda mensal estimada" hint="Base para metas e índice de comprometimento."><TextInput value={f.renda} onChange={(v) => set("renda", v.replace(/[^0-9.,]/g, ""))} placeholder="0,00" pre="R$" /></Field>
+      <Field label="Modelo de categorias" hint="Opcional. O modelo é copiado para esta nova organização.">
+        <select value={f.categoryTemplateId} onChange={(event) => set("categoryTemplateId", event.target.value)} style={inputBase}>
+          <option value="">Usar catálogo padrão do Fincla</option>
+          {templates.map((template) => <option key={template.id} value={template.id}>{template.name}{template.is_default ? " · padrão" : ""}</option>)}
+        </select>
+      </Field>
     </div>
   );
   else if (step.id === "inicio") body = (

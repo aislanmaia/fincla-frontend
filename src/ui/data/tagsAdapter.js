@@ -40,6 +40,27 @@ export function mapCategoryTagsForUi(tags) {
     }));
 }
 
+/**
+ * Maps the localized catalog contract to the transaction selector shape.
+ * Labels come from the API locale resolver, never from an icon heuristic.
+ * @param {import("../../api/types").CategoryCatalogItem[] | undefined | null} categories
+ * @returns {{ id: string; apiName: string; labelPt: string; iconKey: string | null; color: string; sortOrder: number; details: object[]; isFallback: boolean }[]}
+ */
+export function mapCategoryCatalogForUi(categories) {
+  return [...(categories ?? [])]
+    .filter((category) => category?.id && category?.label)
+    .map((category, index) => ({
+      id: category.id,
+      apiName: category.system_key ?? category.label,
+      labelPt: category.label,
+      iconKey: category.icon_key ?? null,
+      color: category.color ?? resolveCategoryColorForTag(category),
+      sortOrder: index,
+      details: category.details ?? [],
+      isFallback: category.is_fallback === true,
+    }));
+}
+
 /** @deprecated Prefer {@link mapCategoryTagsForUi} — mantido para testes e rótulos simples */
 export function mapCategoryTagsToOptions(tags) {
   return mapCategoryTagsForUi(tags).map((c) => c.labelPt);

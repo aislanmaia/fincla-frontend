@@ -480,6 +480,7 @@ export const NovaTransacaoModal = ({
   const useLiveCategoryTags = Boolean(organizationId && dataMode === "live");
   const categoryTagsData = useCategoryTagsData({
     organizationId,
+    transactionType: isRefund ? "refund" : tipo === "receita" ? "income" : "expense",
     enabled: open && useLiveCategoryTags,
   });
 
@@ -495,6 +496,7 @@ export const NovaTransacaoModal = ({
   } = useNovaTransacaoDetailTags({
     organizationId,
     categoryTagId,
+    transactionType: isRefund ? "refund" : tipo === "receita" ? "income" : "expense",
     enabled: open && useLiveDetailTags,
   });
 

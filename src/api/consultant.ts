@@ -34,7 +34,39 @@ import type {
   AiPortfolioTrendsRunStatusResponse,
   AiCopilotoResponse,
   AiCopilotoRunStatusResponse,
+  ConsultantCategoryTemplate,
+  SaveConsultantCategoryTemplateRequest,
 } from './types';
+
+export const listConsultantCategoryTemplates = async (): Promise<ConsultantCategoryTemplate[]> => {
+  const response = await apiClient.get<ConsultantCategoryTemplate[]>('/consultant/category-templates');
+  return response.data;
+};
+
+export const saveConsultantCategoryTemplate = async (
+  templateId: string,
+  data: SaveConsultantCategoryTemplateRequest,
+): Promise<ConsultantCategoryTemplate> => {
+  const response = await apiClient.put<ConsultantCategoryTemplate>(
+    `/consultant/category-templates/${encodeURIComponent(templateId)}`,
+    data,
+  );
+  return response.data;
+};
+
+export const deleteConsultantCategoryTemplate = async (templateId: string): Promise<void> => {
+  await apiClient.delete(`/consultant/category-templates/${encodeURIComponent(templateId)}`);
+};
+
+export const previewConsultantCategoryTemplate = async (
+  templateId: string,
+  organizationId: string,
+): Promise<{ additions: string[]; updates: string[]; conflicts: string[] }> => {
+  const response = await apiClient.get(
+    `/consultant/category-templates/${encodeURIComponent(templateId)}/preview/${encodeURIComponent(organizationId)}`,
+  );
+  return response.data;
+};
 
 export const getConsultantSummary = async (
   params?: ConsultantSummaryQuery
