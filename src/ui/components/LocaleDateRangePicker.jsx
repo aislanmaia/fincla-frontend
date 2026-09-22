@@ -218,7 +218,6 @@ function RangeDateInput({
             ...G,
             flexShrink: 0,
             fontSize: 11,
-            fontWeight: 600,
             color: hovered ? "#0F8A5F" : active ? T.ink : T.inkLight,
             fontWeight: hovered ? 700 : 600,
           }}
