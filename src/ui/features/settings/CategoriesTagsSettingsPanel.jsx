@@ -191,12 +191,13 @@ export function CategoriesTagsSettingsPanel({
           ...(isSystemCategory ? { custom_name: customName } : {}),
         });
         await refreshCats();
+        setExpandedCat(catId);
       } catch (e) { setCatsError(handleApiError(e)); }
     } else {
       setCats(prev => prev.map(c => c.id === catId ? {...c, name: nameForPayload, color: newCatColor} : c));
     }
     setEditCat(null);
-  }, [liveEnabled, cats, newCatName, newCatColor, refreshCats]);
+  }, [liveEnabled, cats, newCatName, newCatColor, newCatIconKey, newCatScopes, refreshCats]);
 
   const handleDeleteCat = useCallback(async (catId) => {
     if (liveEnabled) {
@@ -294,6 +295,7 @@ export function CategoriesTagsSettingsPanel({
         ...(tag.system_key ? { custom_icon_key: iconKey } : { icon_key: iconKey }),
       });
       await refreshCats();
+      setExpandedCat(cat.id);
     } catch (error) {
       setCatsError(handleApiError(error));
     }
