@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   Users,
+  Tags,
   BarChart3,
   MessageSquare,
   Sparkles,
@@ -22,6 +23,7 @@ export const CONSULTANT_NAV = [
   { sec: "PRINCIPAL" },
   { id: "painel", label: "Painel da base", Icon: LayoutDashboard, to: "/consultant" },
   { id: "clients", label: "Clientes", Icon: Users, to: "/consultant/clients" },
+  { id: "category-templates", label: "Modelos de categorias", Icon: Tags, to: "/consultant/category-templates" },
   { sec: "ANÁLISE" },
   { id: "insights", label: "Insights", Icon: BarChart3, to: "/consultant/insights" },
   { sec: "RELACIONAMENTO" },

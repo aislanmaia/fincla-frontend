@@ -12,6 +12,24 @@ import {
   UpdateTagTypeRequest,
 } from './types';
 
+export type SystemCategoryCatalog = {
+  categories: Array<{
+    system_key: string;
+    label: string;
+    icon_key: string;
+    color: string;
+    allowed_transaction_types: string[];
+    is_onboarding_highlight: boolean;
+    is_fallback: boolean;
+    details: Array<{ system_key: string; label: string; icon_key: string }>;
+  }>;
+};
+
+export const getSystemCategoryCatalog = async (locale = 'pt-BR'): Promise<SystemCategoryCatalog> => {
+  const response = await apiClient.get<SystemCategoryCatalog>('/tags/system-catalog', { params: { locale } });
+  return response.data;
+};
+
 export const getCategoryCatalog = async (
   organizationId: string,
   transactionType: 'income' | 'expense' | 'refund',

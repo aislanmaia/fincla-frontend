@@ -1,6 +1,5 @@
 import React from "react";
 import { ConsultantSubscriptionPanel } from "../../features/consultant/ConsultantSubscriptionPanel.jsx";
-import { ConsultantCategoryTemplatesPanel } from "../../features/consultant/ConsultantCategoryTemplatesPanel.jsx";
 
 import { Badge, Card, PageTitle } from "../../components/primitives";
 import { T } from "../../tokens";
@@ -106,7 +105,6 @@ export function ConsultantProfilePage() {
 
       {user?.subscription?.checkout_selection?.persona === "consultant" && <ConsultantSubscriptionPanel />}
 
-      <ConsultantCategoryTemplatesPanel />
 
       <Card style={{ padding: 0 }}>
         <InfoRow icon="message" label="E-mail" value={email} />

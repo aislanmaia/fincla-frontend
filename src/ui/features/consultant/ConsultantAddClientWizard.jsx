@@ -7,6 +7,7 @@ import { G, NUM } from "../../typography";
 import { createConsultantClient, listConsultantCategoryTemplates } from "../../../api/consultant";
 import { handleApiError } from "../../../api/client";
 import { Icon } from "./consultantUi";
+import { CategoryLucideIcon } from "../../components/CategoryLucideIcon";
 
 /**
  * Wizard "Adicionar cliente" (S5) — modal de 7 passos fiel à referência
@@ -33,17 +34,17 @@ const ORG_TYPES = [
   { id: "business", label: "Negócio / PJ", sub: "Empresa ou autônomo", icon: "wallet" },
 ];
 const CATEGORIES = [
-  { id: "housing", label: "Moradia", color: T.blue, icon: "card" },
-  { id: "food_groceries", label: "Alimentação", color: T.green, icon: "wallet" },
-  { id: "transport", label: "Transporte", color: T.amber, icon: "target" },
-  { id: "health", label: "Saúde", color: T.red, icon: "check-circle" },
-  { id: "leisure_entertainment", label: "Lazer", color: T.purple, icon: "sparkles" },
-  { id: "education", label: "Educação", color: "#0891B2", icon: "file" },
-  { id: "work_salary", label: "Trabalho e salário", color: T.green, icon: "wallet" },
-  { id: "services_provided", label: "Serviços prestados", color: "#0F766E", icon: "card" },
-  { id: "sales", label: "Vendas", color: "#15803D", icon: "target" },
-  { id: "received_transfers", label: "Transferências recebidas", color: T.blue, icon: "repeat" },
-  { id: "received_reimbursements", label: "Reembolsos recebidos", color: T.purple, icon: "repeat" },
+  { id: "housing", label: "Moradia", color: T.blue, iconKey: "house" },
+  { id: "food_groceries", label: "Alimentação", color: T.green, iconKey: "shopping-cart" },
+  { id: "transport", label: "Transporte", color: T.amber, iconKey: "car" },
+  { id: "health", label: "Saúde", color: T.red, iconKey: "heart-pulse" },
+  { id: "leisure_entertainment", label: "Lazer", color: T.purple, iconKey: "party-popper" },
+  { id: "education", label: "Educação", color: "#0891B2", iconKey: "graduation-cap" },
+  { id: "work_salary", label: "Trabalho e salário", color: T.green, iconKey: "briefcase-business" },
+  { id: "services_provided", label: "Serviços prestados", color: "#0F766E", iconKey: "handshake" },
+  { id: "sales", label: "Vendas", color: "#15803D", iconKey: "store" },
+  { id: "received_transfers", label: "Transferências recebidas", color: T.blue, iconKey: "arrow-down-left" },
+  { id: "received_reimbursements", label: "Reembolsos recebidos", color: T.purple, iconKey: "rotate-ccw" },
 ];
 const EXPERIENCE_LEVELS = [
   { id: "iniciante", l: "Iniciante", s: "Primeira vez organizando finanças" },
@@ -186,7 +187,7 @@ export function ConsultantAddClientWizard({ open, onClose, onCreated, quota = nu
     id: `custom:${category.name}`,
     label: category.name,
     color: category.color || T.blue,
-    icon: category.icon_key || "tag",
+    iconKey: category.icon_key || "tag",
   }));
   const visibleCategories = [...CATEGORIES, ...customCategories];
   const initials = f.nome.trim().split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
@@ -246,7 +247,7 @@ export function ConsultantAddClientWizard({ open, onClose, onCreated, quota = nu
             return (
               <button key={cat.id} type="button" onClick={() => toggleArr("categorias", cat.id)}
                 style={{ ...G, display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 13px", borderRadius: 10, border: `1.5px solid ${active ? cat.color : T.border}`, background: active ? cat.color + "12" : "#fff", color: active ? cat.color : T.inkMid, fontSize: 12.5, fontWeight: 700, cursor: "pointer" }}>
-                <Icon name={cat.icon} size={14} color={active ? cat.color : T.inkLight} />{cat.label}
+                <CategoryLucideIcon iconKey={cat.iconKey} labelPt={cat.label} size={14} color={active ? cat.color : T.inkLight} />{cat.label}
                 {active && <Icon name="check" size={12} color={cat.color} />}
               </button>
             );

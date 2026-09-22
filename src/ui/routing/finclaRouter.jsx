@@ -20,6 +20,7 @@ import { ConsultantClientReportPage } from "../pages/consultant/ConsultantClient
 import { ConsultantInsightsPage } from "../pages/consultant/ConsultantInsightsPage.jsx";
 import { ConsultantCopilotoPage } from "../pages/consultant/ConsultantCopilotoPage.jsx";
 import { ConsultantProfilePage } from "../pages/consultant/ConsultantProfilePage.jsx";
+import { ConsultantCategoryTemplatesPage } from "../pages/consultant/ConsultantCategoryTemplatesPage.jsx";
 import { AUTH_ROUTE_SEGMENTS } from "./appSegments.js";
 import { isPlanningArea, DEFAULT_PLANNING_AREA } from "../features/planning/planningAreas.js";
 import { finclaRootSearchSchema } from "./finclaRootSearchSchema.js";
@@ -213,6 +214,11 @@ const consultantProfileRoute = createRoute({
   path: "profile",
   component: ConsultantProfilePage,
 });
+const consultantCategoryTemplatesRoute = createRoute({
+  getParentRoute: () => consultantRoute,
+  path: "category-templates",
+  component: ConsultantCategoryTemplatesPage,
+});
 consultantRoute.addChildren([
   consultantIndexRoute,
   consultantClientsRoute,
@@ -220,6 +226,7 @@ consultantRoute.addChildren([
   consultantInsightsRoute,
   consultantCopilotoRoute,
   consultantProfileRoute,
+  consultantCategoryTemplatesRoute,
 ]);
 
 /** Rotas antigas → hub (back-compat de bookmarks/links). */
