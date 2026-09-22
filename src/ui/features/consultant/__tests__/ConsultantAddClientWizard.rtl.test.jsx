@@ -49,6 +49,18 @@ describe("<ConsultantAddClientWizard>", () => {
     expect(screen.queryByText("Limite de clientes atingido")).not.toBeInTheDocument();
   });
 
+  it("oferece categorias de receita e negócio no ponto de partida", () => {
+    render(<ConsultantAddClientWizard open onClose={() => {}} />);
+    fillStep1();
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/ }));
+    fireEvent.change(screen.getByPlaceholderText("Ex.: Finanças de Mariana"), { target: { value: "Finanças da Marina" } });
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/ }));
+
+    expect(screen.getByRole("button", { name: /Trabalho e salário/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Serviços prestados/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Transferências recebidas/ })).toBeInTheDocument();
+  });
+
   it("cria o cliente pela API e mostra o link de definir senha", async () => {
     vi.mocked(createConsultantClient).mockResolvedValue({
       organization_id: "org-1",

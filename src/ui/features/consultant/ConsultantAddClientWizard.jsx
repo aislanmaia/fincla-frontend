@@ -39,6 +39,11 @@ const CATEGORIES = [
   { id: "health", label: "Saúde", color: T.red, icon: "check-circle" },
   { id: "leisure_entertainment", label: "Lazer", color: T.purple, icon: "sparkles" },
   { id: "education", label: "Educação", color: "#0891B2", icon: "file" },
+  { id: "work_salary", label: "Trabalho e salário", color: T.green, icon: "wallet" },
+  { id: "services_provided", label: "Serviços prestados", color: "#0F766E", icon: "card" },
+  { id: "sales", label: "Vendas", color: "#15803D", icon: "target" },
+  { id: "received_transfers", label: "Transferências recebidas", color: T.blue, icon: "repeat" },
+  { id: "received_reimbursements", label: "Reembolsos recebidos", color: T.purple, icon: "repeat" },
 ];
 const EXPERIENCE_LEVELS = [
   { id: "iniciante", l: "Iniciante", s: "Primeira vez organizando finanças" },
