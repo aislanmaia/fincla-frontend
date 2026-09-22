@@ -45,7 +45,7 @@ function getTagName(tag) {
  */
 function getTagLabelPt(tag) {
   if (typeof tag === "string") return tag;
-  return detailLabelPtForTag(tag) || tag?.name || "";
+  return tag?.label || detailLabelPtForTag(tag) || tag?.name || "";
 }
 
 function getTagId(tag, fallback) {
@@ -135,7 +135,7 @@ export function CategoriesTagsSettingsPanel({
           // o seed cria categorias em inglês (`Food & Groceries`...) pra toda
           // organização nova, e o backend não muda (fora do escopo do frontend).
           name: tag.name,
-          labelPt: categoryLabelPtForTag(tag),
+          labelPt: tag.label || categoryLabelPtForTag(tag),
           systemKey: tag.system_key ?? null,
           customName: tag.custom_name ?? null,
           iconKey: tag.custom_icon_key || tag.icon_key || null,
