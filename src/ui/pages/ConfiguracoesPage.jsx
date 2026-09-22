@@ -19,7 +19,6 @@ import {
   Lock,
   Building2,
   Users,
-  Tag,
   MessageCircle,
   CreditCard,
   LogOut,
@@ -34,7 +33,6 @@ import { T } from "../tokens";
 import { G } from "../typography";
 import { BillingPanel } from "../features/subscription/BillingPanel.jsx";
 import { ConsultantSubscriptionPanel } from "../features/consultant/ConsultantSubscriptionPanel.jsx";
-import { CategoriesTagsSettingsPanel } from "../features/settings/CategoriesTagsSettingsPanel.jsx";
 import { DragScrollTabs } from "../layouts/DragScrollTabs.jsx";
 import { CardEmptyWithCta } from "../features/shellExtras.jsx";
 import {
@@ -323,7 +321,6 @@ export function ConfiguracoesPage({
     { group: "Workspace", items: [
       { id:"organizacao",label:"Organização",        Icon: Building2 },
       { id:"membros",    label:"Membros",            Icon: Users },
-      { id:"categorias", label:"Categorias e Tags",  Icon: Tag },
     ]},
     { group: "Integrações", items: [
       { id:"whatsapp",   label:"Assistente WhatsApp",Icon: MessageCircle },
@@ -336,7 +333,7 @@ export function ConfiguracoesPage({
   const fmtS = (id) => {
     const titles = {
       perfil:"Meu Perfil", seguranca:"Segurança", organizacao:"Organização",
-      membros:"Membros", categorias:"Categorias e Tags",
+      membros:"Membros",
       whatsapp:"Assistente WhatsApp", assinatura:"Assinatura",
     };
     return titles[id] || id;
@@ -647,15 +644,6 @@ export function ConfiguracoesPage({
     );
   };
 
-  const renderCategorias = () => (
-    <CategoriesTagsSettingsPanel
-      isMobile={isMobile}
-      dataMode={dataMode}
-      organizationId={organizationId}
-      SectionCard={SectionCard}
-    />
-  );
-
   const renderWhatsAppBody = () => (
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
       {/* Hero informativo */}
@@ -804,7 +792,7 @@ export function ConfiguracoesPage({
   // vencida — isso é cobrança, não plano.
   const renderWhatsApp = () => renderWhatsAppBody();
 
-  const RENDERERS = { perfil:renderPerfil, seguranca:renderSeguranca, organizacao:renderOrganizacao, membros:renderMembros, categorias:renderCategorias, whatsapp:renderWhatsApp, assinatura:renderAssinatura };
+  const RENDERERS = { perfil:renderPerfil, seguranca:renderSeguranca, organizacao:renderOrganizacao, membros:renderMembros, whatsapp:renderWhatsApp, assinatura:renderAssinatura };
 
   return (
     <div style={{ display:"flex", flexDirection: isMobile ? "column" : "row", gap:20, alignItems:"flex-start", width:"100%" }}>
