@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { Hash, Pencil, Plus, Search, Tag, Trash2 } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Hash, Pencil, Plus, Search, Tag, Trash2, X } from "lucide-react";
 
 import { createTag, deleteTag, listTags, listTagTypes, updateTag as apiUpdateTag } from "../../../api/tags";
 import { handleApiError } from "../../../api/client";
@@ -12,6 +12,8 @@ import { CardEmptyWithCta } from "../shellExtras.jsx";
 import { T } from "../../tokens";
 import { G } from "../../typography";
 import { CATEGORY_ICON_KEYS } from "../../data/categoryLucideIcons.js";
+import { getCategoryLucideIcon } from "../../data/categoryLucideIcons.js";
+import { CategoryLucideIcon } from "../../components/CategoryLucideIcon.jsx";
 
 function normalizeLabel(value) {
   return String(value || "")
@@ -103,6 +105,7 @@ export function CategoriesTagsSettingsPanel({
   const [catsError, setCatsError] = useState("");
   /** Id da tag existente destacada por ~1.5s quando `addTag` acha duplicata. */
   const [highlightedTagId, setHighlightedTagId] = useState(null);
+  const editingCategory = cats.find((category) => category.id === editCat) ?? null;
 
   const filteredCats = cats.filter((c) => {
     const q = catSearch.toLowerCase();
@@ -368,7 +371,7 @@ export function CategoriesTagsSettingsPanel({
               padding: isMobile ? "11px 16px" : "11px 24px" }}>
               <div style={{ width:10, height:10, borderRadius:"50%", background:cat.color, flexShrink:0 }}/>
 
-              {editCat === cat.id ? (
+              {false ? (
                 <div style={{ flex:1, display:"flex", flexDirection: isMobile ? "column" : "row",
                   gap:8, alignItems: isMobile ? "stretch" : "center", minWidth:0 }}>
                   <input value={newCatName} onChange={e => setNewCatName(e.target.value)} aria-label={`Editar categoria ${cat.labelPt || cat.name}`} autoFocus
@@ -388,6 +391,7 @@ export function CategoriesTagsSettingsPanel({
                 </div>
               ) : (
                 <>
+                  <CategoryLucideIcon iconKey={cat.iconKey} labelPt={cat.labelPt || cat.name} size={17} color={cat.color} />
                   <span style={{ ...G, fontSize:13, color:T.ink, flex:1, minWidth:0 }}>{cat.labelPt || cat.name}</span>
                   <button onClick={() => setExpandedCat(expandedCat === cat.id ? null : cat.id)} aria-label={`Expandir tags de ${cat.labelPt || cat.name}`}
                     style={{ ...G, display:"flex", alignItems:"center", gap:4, padding:"3px 8px", borderRadius:99,
@@ -399,7 +403,7 @@ export function CategoriesTagsSettingsPanel({
                     <Hash size={10}/>
                     {(cat.tags||[]).length}
                   </button>
-                  <button onClick={() => { setEditCat(cat.id); setNewCatName(cat.labelPt || cat.name); setNewCatColor(cat.color); setNewCatIconKey(cat.iconKey || "tag"); setNewCatScopes(cat.allowedTransactionTypes || ["income", "expense", "refund"]); }} aria-label={`Editar categoria ${cat.labelPt || cat.name}`}
+                  <button onClick={() => { setEditCat(cat.id); setNewCatName(cat.labelPt || cat.name); setNewCatColor(cat.color); setNewCatIconKey(cat.iconKey || "tag"); setNewCatScopes(cat.allowedTransactionTypes || ["income", "expense", "refund"]); }} aria-label={editCat === cat.id ? "Edição aberta" : `Editar categoria ${cat.labelPt || cat.name}`}
                     style={{ background:"none", border:"none", cursor:"pointer", padding:5, borderRadius:7, display:"flex", flexShrink:0 }}
                     onMouseEnter={e=>e.currentTarget.style.background=T.grayLight}
                     onMouseLeave={e=>e.currentTarget.style.background="none"}>
@@ -496,9 +500,53 @@ export function CategoriesTagsSettingsPanel({
           />
         )}
       </SectionCard>
+      {editingCategory && editingCategory !== "new" && (
+        <CategoryEditModal
+          category={editingCategory}
+          name={newCatName}
+          color={newCatColor}
+          iconKey={newCatIconKey}
+          scopes={newCatScopes}
+          onNameChange={setNewCatName}
+          onColorChange={setNewCatColor}
+          onIconChange={setNewCatIconKey}
+          onScopesChange={setNewCatScopes}
+          onCancel={() => setEditCat(null)}
+          onSave={() => void handleUpdateCat(editingCategory.id)}
+        />
+      )}
     </div>
   );
 }
+
+function CategoryEditModal({ category, name, color, iconKey, scopes, onNameChange, onColorChange, onIconChange, onScopesChange, onCancel, onSave }) {
+  return <div role="dialog" aria-modal="true" aria-label="Edição de categoria" style={{ position:"fixed", inset:0, zIndex:60, background:"rgba(15,15,13,.42)", display:"grid", placeItems:"center", padding:16 }}>
+    <div style={{ width:"min(680px, 100%)", maxHeight:"min(760px, calc(100vh - 32px))", overflow:"auto", background:T.surface, borderRadius:16, boxShadow:T.xl, border:`1px solid ${T.border}` }}>
+      <header style={{ padding:"18px 22px", borderBottom:`1px solid ${T.border}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+        <div><div style={{ ...G, fontSize:11, fontWeight:700, color:T.blue, letterSpacing:".08em", textTransform:"uppercase" }}>Categoria</div><h2 style={{ ...G, margin:"3px 0 0", fontSize:18, color:T.ink }}>Editar categoria</h2></div>
+        <button onClick={onCancel} aria-label="Fechar edição" style={{ border:"none", background:T.grayLight, borderRadius:8, padding:7, cursor:"pointer", display:"flex" }}><X size={18} /></button>
+      </header>
+      <div style={{ padding:22, display:"grid", gap:20 }}>
+        <label style={{ ...G, display:"grid", gap:7, fontSize:12, fontWeight:700, color:T.inkMid }}>Nome
+          <input aria-label={`Editar categoria ${category.labelPt || category.name}`} value={name} onChange={(event)=>onNameChange(event.target.value)} style={{ ...G, padding:"10px 12px", border:`1.5px solid ${T.border}`, borderRadius:9, fontSize:14, color:T.ink }} />
+        </label>
+        <div style={{ display:"flex", gap:12, alignItems:"center" }}><div style={{ width:42, height:42, borderRadius:10, background:`${color}18`, display:"grid", placeItems:"center" }}><CategoryLucideIcon iconKey={iconKey} size={22} color={color} /></div><label style={{ ...G, fontSize:12, fontWeight:700, color:T.inkMid }}>Cor <input type="color" value={color} onChange={(event)=>onColorChange(event.target.value)} aria-label="Cor da categoria" style={{ verticalAlign:"middle", marginLeft:8, width:34, height:30 }} /></label></div>
+        <IconPicker value={iconKey} onChange={onIconChange} color={color} />
+        <ScopePicker scopes={scopes} onChange={onScopesChange} />
+      </div>
+      <footer style={{ padding:"14px 22px", borderTop:`1px solid ${T.border}`, display:"flex", justifyContent:"flex-end", gap:8 }}><button onClick={onCancel} style={{ ...G, background:T.surface, border:`1px solid ${T.border}`, borderRadius:9, padding:"9px 14px", fontWeight:700, cursor:"pointer" }}>Cancelar</button><button onClick={onSave} style={{ ...G, background:T.ink, color:"#fff", border:"none", borderRadius:9, padding:"9px 16px", fontWeight:700, cursor:"pointer" }}>OK</button></footer>
+    </div>
+  </div>;
+}
+
+function IconPicker({ value, onChange, color }) {
+  const [query, setQuery] = useState(""); const [page, setPage] = useState(0); const pageSize = 24;
+  const icons = useMemo(() => CATEGORY_ICON_KEYS.filter((key) => key.includes(query.toLowerCase())), [query]);
+  const visible = icons.slice(page * pageSize, (page + 1) * pageSize);
+  return <section><div style={{ ...G, display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}><strong style={{ fontSize:12, color:T.inkMid }}>Ícone</strong><input value={query} onChange={(event)=>{setQuery(event.target.value);setPage(0);}} placeholder="Buscar ícone" aria-label="Buscar ícone" style={{ ...G, padding:"7px 9px", border:`1px solid ${T.border}`, borderRadius:7, width:170 }} /></div><div style={{ display:"grid", gridTemplateColumns:"repeat(8, 1fr)", gap:6 }}>{visible.map((key)=>{const Icon=getCategoryLucideIcon(key);const selected=key===value;return <button key={key} onClick={()=>onChange(key)} title={key} aria-label={`Ícone ${key}`} style={{ height:38, border:`1.5px solid ${selected?color:T.border}`, background:selected?`${color}12`:T.surface, borderRadius:8, cursor:"pointer", display:"grid", placeItems:"center" }}>{Icon && <Icon size={17} color={selected?color:T.inkMid}/>}</button>;})}</div><div style={{ display:"flex", justifyContent:"space-between", marginTop:10 }}><span style={{ ...G, fontSize:11, color:T.inkGhost }}>{icons.length} ícones</span><div style={{ display:"flex", gap:6 }}><button disabled={!page} onClick={()=>setPage(page-1)}>Anterior</button><button disabled={(page+1)*pageSize>=icons.length} onClick={()=>setPage(page+1)}>Próxima</button></div></div></section>;
+}
+
+function ScopePicker({ scopes, onChange }) { const rows=[["income","Receita","Entradas como salário, vendas e reembolsos recebidos."],["expense","Despesa","Saídas e gastos pagos pela conta."],["refund","Estorno","Entrada vinculada a uma devolução ou correção."]]; return <section><strong style={{ ...G, fontSize:12, color:T.inkMid }}>Tipos de lançamento</strong><div style={{ display:"grid", gap:7, marginTop:8 }}>{rows.map(([key,label,description])=>{const active=scopes.includes(key);return <button key={key} onClick={()=>onChange(active?scopes.filter((item)=>item!==key):[...scopes,key])} style={{ ...G, textAlign:"left", padding:"10px 12px", border:`1.5px solid ${active?T.blue:T.border}`, borderRadius:9, background:active?T.blueLight:T.surface, cursor:"pointer" }}><b>{active?"✓ ":""}{label}</b><span style={{ display:"block", fontSize:12, color:T.inkGhost, marginTop:2 }}>{description}</span></button>;})}</div></section>; }
 
 function CategoryOptions({ iconKey, onIconKeyChange, scopes, onScopesChange, compact = false }) {
   const preferredKeys = ["tag", "shopping-cart", "house", "car", "heart-pulse", "monitor-smartphone", "wallet", "briefcase", "circle-help"];
