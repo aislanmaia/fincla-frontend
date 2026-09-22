@@ -51,7 +51,14 @@ export function ConsultantCategoryTemplatesPanel() {
 
   const reload = React.useCallback(async () => {
     try { setTemplates(await listConsultantCategoryTemplates()); setError(""); }
-    catch (cause) { setError(handleApiError(cause)); }
+    catch (cause) {
+      if (cause?.response?.status === 404) {
+        setTemplates([]);
+        setError("");
+        return;
+      }
+      setError("Não foi possível carregar os modelos agora. Tente novamente.");
+    }
   }, []);
   React.useEffect(() => { void reload(); }, [reload]);
 
