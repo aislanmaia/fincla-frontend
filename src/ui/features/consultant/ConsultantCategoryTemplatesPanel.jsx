@@ -162,7 +162,18 @@ export function ConsultantCategoryTemplatesPanel() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}><div><div style={sectionTitle}>Categorias próprias</div><div style={sectionHint}>Crie agrupadores exclusivos para a carteira deste consultor.</div></div><Btn variant="outGray" small onClick={addCustom}><Plus size={14} />Adicionar categoria</Btn></div>
         {customCategories.length === 0 ? <div style={emptyStyle}>Nenhuma categoria própria neste modelo.</div> : <div style={stackStyle}>{customCategories.map((category) => <CategoryRow key={category.id} category={category} onEdit={() => setCategoryEditor({ kind: "custom", id: category.id })} onRemove={() => setCustomCategories((items) => items.filter((item) => item.id !== category.id))} />)}</div>}
       </div>
-      <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 9, cursor: "pointer" }}><input type="checkbox" checked={isDefault} onChange={(event) => setIsDefault(event.target.checked)} style={{ accentColor: T.ink }} />Usar como modelo padrão</label>
+      <div style={{ display: "grid", gap: 6 }}>
+        <Btn
+          variant={isDefault ? "dark" : "outGray"}
+          aria-pressed={isDefault}
+          onClick={() => setIsDefault((current) => !current)}
+          style={{ justifyContent: "flex-start" }}
+        >
+          <Check size={15} style={{ opacity: isDefault ? 1 : 0 }} />
+          {isDefault ? "Este é o modelo padrão" : "Usar como modelo padrão"}
+        </Btn>
+        <div style={sectionHint}>Ele será selecionado inicialmente ao adicionar um cliente.</div>
+      </div>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}><Btn variant="outGray" onClick={() => setEditing(null)}>Cancelar</Btn><Btn variant="dark" disabled={!name.trim() || busy} onClick={() => void save()}>{busy ? "Salvando…" : "Salvar modelo"}</Btn></div>
     </div> : <div>{templates.length === 0 ? <div style={emptyStyle}>Nenhum modelo salvo. Crie um para repetir sua configuração ao adicionar clientes.</div> : templates.map((template, index) => <div key={template.id} style={{ padding: "14px 20px", display: "flex", alignItems: "center", gap: 10, borderBottom: index === templates.length - 1 ? "none" : `1px solid ${T.border}` }}><div style={{ flex: 1, minWidth: 0 }}><div style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink }}>{template.name}{template.is_default && <span style={{ marginLeft: 8, color: T.purple, fontSize: 11 }}>Padrão</span>}</div><div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 3 }}>{templateHighlightCount(template)} categorias em destaque</div></div><Btn variant="ghost" small aria-label={`Editar ${template.name}`} onClick={() => begin(template)}><Pencil size={14} /></Btn><Btn variant="ghost" small aria-label={`Excluir ${template.name}`} onClick={() => void remove(template.id)}><Trash2 size={14} color={T.red} /></Btn></div>)}</div>}
     {editorCategory && <CategoryTemplateModal category={editorCategory} onCancel={() => setCategoryEditor(null)} onSave={saveCategory} />}
