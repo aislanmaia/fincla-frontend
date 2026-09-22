@@ -482,6 +482,8 @@ export interface TagTypeInfo {
 export interface Tag {
   id: string;
   name: string;
+  /** Localized display label resolved by the API for the requested locale. */
+  label: string;
   tag_type: TagTypeInfo;
   color: string | null;
   is_default: boolean;

@@ -26,6 +26,7 @@ export function coerceCategoryTagShape(raw) {
   if (!raw || typeof raw !== "object") return { name: null, icon_key: null, custom_name: null, system_key: null, is_default: null };
   const o = raw;
   const name =
+    (typeof o.label === "string" && o.label.trim()) ||
     (typeof o.name === "string" && o.name.trim()) ||
     (typeof o.tag_name === "string" && o.tag_name.trim()) ||
     (typeof o.category_name === "string" && o.category_name.trim()) ||
