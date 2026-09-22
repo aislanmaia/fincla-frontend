@@ -109,7 +109,8 @@ function toPayload(f) {
     main_goal: f.objetivo,
     priority: f.prioridade,
     category_template_id: f.categoryTemplateId || undefined,
-    onboarding_category_system_keys: f.categorias,
+    onboarding_category_system_keys: f.categorias.filter((key) => !key.startsWith("custom:")),
+    onboarding_custom_category_names: f.categorias.filter((key) => key.startsWith("custom:")).map((key) => key.slice(7)),
   };
 }
 
@@ -180,6 +181,14 @@ export function ConsultantAddClientWizard({ open, onClose, onCreated, quota = nu
   };
 
   const orgTypeMeta = ORG_TYPES.find((o) => o.id === f.orgTipo);
+  const selectedTemplate = templates.find((template) => template.id === f.categoryTemplateId);
+  const customCategories = (selectedTemplate?.definition?.custom_categories ?? []).map((category) => ({
+    id: `custom:${category.name}`,
+    label: category.name,
+    color: category.color || T.blue,
+    icon: category.icon_key || "tag",
+  }));
+  const visibleCategories = [...CATEGORIES, ...customCategories];
   const initials = f.nome.trim().split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
 
   let body = null;
@@ -217,7 +226,8 @@ export function ConsultantAddClientWizard({ open, onClose, onCreated, quota = nu
           const template = templates.find((item) => item.id === templateId);
           const highlighted = (template?.definition?.categories ?? [])
             .filter((item) => item?.is_onboarding_highlight && typeof item.system_key === "string")
-            .map((item) => item.system_key);
+            .map((item) => item.system_key)
+            .concat((template?.definition?.custom_categories ?? []).filter((item) => item?.is_onboarding_highlight && typeof item.name === "string").map((item) => `custom:${item.name}`));
           setF((current) => ({ ...current, categoryTemplateId: templateId, categorias: highlighted.length ? highlighted : current.categorias }));
         }} style={inputBase}>
           <option value="">Usar catálogo padrão do Fincla</option>
@@ -231,7 +241,7 @@ export function ConsultantAddClientWizard({ open, onClose, onCreated, quota = nu
       <Field label="Saldo inicial em conta" hint="Quanto o cliente tem hoje somando contas e dinheiro."><TextInput value={f.saldo} onChange={(v) => set("saldo", v.replace(/[^0-9.,]/g, ""))} placeholder="0,00" pre="R$" /></Field>
       <Field label="Categorias em destaque" hint="As selecionadas aparecem primeiro ao lançar transações.">
         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {CATEGORIES.map((cat) => {
+          {visibleCategories.map((cat) => {
             const active = f.categorias.includes(cat.id);
             return (
               <button key={cat.id} type="button" onClick={() => toggleArr("categorias", cat.id)}

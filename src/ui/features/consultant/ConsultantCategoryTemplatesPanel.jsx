@@ -10,6 +10,7 @@ import {
   saveConsultantCategoryTemplate,
 } from "../../../api/consultant";
 import { handleApiError } from "../../../api/client";
+import { Icon } from "./consultantUi";
 
 const CATEGORIES = [
   ["housing", "Moradia"],
@@ -24,9 +25,16 @@ const CATEGORIES = [
   ["received_transfers", "Transferências recebidas"],
   ["received_reimbursements", "Reembolsos recebidos"],
 ];
+const CUSTOM_CATEGORY_ICONS = ["tag", "briefcase", "heart", "home", "star"];
 
-function definitionFrom(selected) {
-  return { categories: CATEGORIES.map(([system_key]) => ({ system_key, is_onboarding_highlight: selected.includes(system_key) })) };
+function definitionFrom(selected, customCategories) {
+  return {
+    categories: CATEGORIES.map(([system_key]) => ({ system_key, is_onboarding_highlight: selected.includes(system_key) })),
+    custom_categories: customCategories.map(({ name, color, icon_key, allowed_transaction_types, is_onboarding_highlight, details }) => ({
+      name: name.trim(), color, icon_key, allowed_transaction_types, is_onboarding_highlight,
+      details: details.filter((detail) => detail.name.trim()).map((detail) => ({ name: detail.name.trim(), icon_key: detail.icon_key })),
+    })).filter((category) => category.name),
+  };
 }
 
 function selectedFrom(template) {
@@ -46,6 +54,7 @@ export function ConsultantCategoryTemplatesPanel() {
   const [name, setName] = React.useState("");
   const [selected, setSelected] = React.useState(["housing", "food_groceries", "transport"]);
   const [isDefault, setIsDefault] = React.useState(false);
+  const [customCategories, setCustomCategories] = React.useState([]);
   const [error, setError] = React.useState("");
   const [busy, setBusy] = React.useState(false);
 
@@ -66,6 +75,7 @@ export function ConsultantCategoryTemplatesPanel() {
     setEditing(template?.id ?? "new");
     setName(template?.name ?? "");
     setSelected(template ? selectedFrom(template) : ["housing", "food_groceries", "transport"]);
+    setCustomCategories(template?.definition?.custom_categories ?? []);
     setIsDefault(template?.is_default ?? templates.length === 0);
     setError("");
   };
@@ -75,7 +85,7 @@ export function ConsultantCategoryTemplatesPanel() {
     setBusy(true);
     try {
       await saveConsultantCategoryTemplate(editing === "new" ? newId() : editing, {
-        name: name.trim(), definition: definitionFrom(selected), is_default: isDefault,
+        name: name.trim(), definition: definitionFrom(selected, customCategories), is_default: isDefault,
       });
       setEditing(null);
       await reload();
@@ -89,6 +99,9 @@ export function ConsultantCategoryTemplatesPanel() {
     catch (cause) { setError(handleApiError(cause)); }
     finally { setBusy(false); }
   };
+  const addCustomCategory = () => setCustomCategories((items) => [...items, { name: "", color: "#2563EB", icon_key: "tag", allowed_transaction_types: ["income", "expense"], is_onboarding_highlight: true, details: [] }]);
+  const updateCustomCategory = (index, update) => setCustomCategories((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, ...update } : item));
+  const removeCustomCategory = (index) => setCustomCategories((items) => items.filter((_, itemIndex) => itemIndex !== index));
 
   return <Card style={{ padding: 0 }}>
     <div style={{ padding: "18px 20px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, borderBottom: `1px solid ${T.border}` }}>
@@ -99,6 +112,7 @@ export function ConsultantCategoryTemplatesPanel() {
     {editing ? <div style={{ padding: 20, display: "grid", gap: 16 }}>
       <label style={{ ...G, fontSize: 12, fontWeight: 600, color: T.inkMid }}>Nome do modelo<input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Ex.: Família com filhos" style={{ ...G, width: "100%", boxSizing: "border-box", marginTop: 7, padding: "10px 12px", border: `1.5px solid ${T.border}`, borderRadius: 10, fontSize: 14, color: T.ink }} /></label>
       <div><div style={{ ...G, fontSize: 12, fontWeight: 600, color: T.inkMid, marginBottom: 8 }}>Categorias em destaque no onboarding</div><div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>{CATEGORIES.map(([key, label]) => { const active = selected.includes(key); return <button key={key} type="button" onClick={() => toggle(key)} style={{ ...G, display: "inline-flex", alignItems: "center", gap: 5, border: `1.5px solid ${active ? T.ink : T.border}`, background: active ? T.grayLight : T.surface, color: active ? T.ink : T.inkMid, borderRadius: 99, padding: "7px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>{active && <Check size={13} />}{label}</button>; })}</div></div>
+      <div style={{ display: "grid", gap: 9 }}><div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}><div style={{ ...G, fontSize: 12, fontWeight: 600, color: T.inkMid }}>Categorias e etiquetas próprias</div><Btn variant="outGray" small onClick={addCustomCategory}><Plus size={13} />Adicionar</Btn></div>{customCategories.map((category, index) => <div key={index} style={{ border: `1px solid ${T.border}`, borderRadius: 10, padding: 11, display: "grid", gap: 8 }}><div style={{ display: "grid", gridTemplateColumns: "1fr 38px 38px", gap: 8 }}><input value={category.name} onChange={(event) => updateCustomCategory(index, { name: event.target.value })} placeholder="Ex.: Projeto especial" style={{ ...G, minWidth: 0, padding: "8px 10px", border: `1px solid ${T.border}`, borderRadius: 8 }} /><Btn variant="ghost" small aria-label={`Trocar ícone da categoria personalizada ${index + 1}`} onClick={() => updateCustomCategory(index, { icon_key: CUSTOM_CATEGORY_ICONS[(CUSTOM_CATEGORY_ICONS.indexOf(category.icon_key) + 1) % CUSTOM_CATEGORY_ICONS.length] })}><Icon name={category.icon_key} size={15} color={T.inkMid} /></Btn><Btn variant="ghost" small aria-label={`Remover categoria personalizada ${index + 1}`} onClick={() => removeCustomCategory(index)}><Trash2 size={14} color={T.red} /></Btn></div><div style={{ display: "flex", alignItems: "center", gap: 7 }}><input type="color" value={category.color} aria-label={`Cor da categoria personalizada ${index + 1}`} onChange={(event) => updateCustomCategory(index, { color: event.target.value })} />{[["income", "Receita"], ["expense", "Despesa"], ["refund", "Estorno"]].map(([value, label]) => <Btn key={value} small variant={category.allowed_transaction_types.includes(value) ? "dark" : "outGray"} onClick={() => { const allowed = category.allowed_transaction_types.includes(value) ? category.allowed_transaction_types.filter((item) => item !== value) : [...category.allowed_transaction_types, value]; if (allowed.length) updateCustomCategory(index, { allowed_transaction_types: allowed }); }}>{label}</Btn>)}</div><input value={(category.details ?? []).map((detail) => detail.name).join(", ")} onChange={(event) => updateCustomCategory(index, { details: event.target.value.split(",").map((name) => ({ name: name.trim(), icon_key: "tag" })) })} placeholder="Etiquetas separadas por vírgula: ex. fornecedor, equipe" style={{ ...G, padding: "8px 10px", border: `1px solid ${T.border}`, borderRadius: 8 }} /></div>)}</div>
       <label style={{ ...G, display: "inline-flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 600, color: T.inkMid }}><input type="checkbox" checked={isDefault} onChange={(event) => setIsDefault(event.target.checked)} />Usar como modelo padrão</label>
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}><Btn variant="outGray" onClick={() => setEditing(null)}>Cancelar</Btn><Btn variant="dark" disabled={!name.trim() || busy} onClick={() => void save()}>{busy ? "Salvando…" : "Salvar modelo"}</Btn></div>
     </div> : <div>{templates.length === 0 ? <div style={{ ...G, padding: "18px 20px", fontSize: 12, color: T.inkLight }}>Nenhum modelo salvo. Crie um para repetir sua configuração ao adicionar clientes.</div> : templates.map((template, index) => <div key={template.id} style={{ padding: "13px 20px", display: "flex", alignItems: "center", gap: 10, borderBottom: index === templates.length - 1 ? "none" : `1px solid ${T.border}` }}><div style={{ flex: 1, minWidth: 0 }}><div style={{ ...G, fontSize: 13, fontWeight: 700, color: T.ink }}>{template.name}{template.is_default && <span style={{ marginLeft: 7, color: T.purple, fontSize: 11 }}>Padrão</span>}</div><div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 3 }}>{selectedFrom(template).length} categorias em destaque</div></div><Btn variant="ghost" small aria-label={`Editar ${template.name}`} onClick={() => begin(template)}><Pencil size={14} /></Btn><Btn variant="ghost" small aria-label={`Excluir ${template.name}`} onClick={() => void remove(template.id)}><Trash2 size={14} color={T.red} /></Btn></div>)}</div>}
