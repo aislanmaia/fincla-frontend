@@ -105,6 +105,7 @@ export function CategoriesTagsSettingsPanel({
   const [catsError, setCatsError] = useState("");
   /** Id da tag existente destacada por ~1.5s quando `addTag` acha duplicata. */
   const [highlightedTagId, setHighlightedTagId] = useState(null);
+  const [editingDetail, setEditingDetail] = useState(null);
   const editingCategory = cats.find((category) => category.id === editCat) ?? null;
 
   const filteredCats = cats.filter((c) => {
@@ -304,6 +305,21 @@ export function CategoriesTagsSettingsPanel({
     }
   }, [liveEnabled, refreshCats]);
 
+  const saveDetail = useCallback(async () => {
+    if (!editingDetail) return;
+    const { cat, tag, name, iconKey } = editingDetail;
+    try {
+      await apiUpdateTag(tag.id, {
+        name: tag.system_key ? tag.name : (name.trim() || tag.name),
+        tag_type_id: tag.tag_type.id,
+        ...(tag.system_key ? { custom_name: name.trim() || null, custom_icon_key: iconKey } : { icon_key: iconKey }),
+      });
+      await refreshCats();
+      setExpandedCat(cat.id);
+      setEditingDetail(null);
+    } catch (error) { setCatsError(handleApiError(error)); }
+  }, [editingDetail, refreshCats]);
+
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
       <SectionCard>
@@ -436,17 +452,7 @@ export function CategoriesTagsSettingsPanel({
                         background: isHighlighted ? `${cat.color}18` : T.surface,
                         border:`1px solid ${isHighlighted ? cat.color : T.border}`, borderRadius:99,
                         padding:"4px 10px", color:T.inkMid, transition:"all 0.15s" }}>
-                        #{getTagLabelPt(tag)}
-                        {typeof tag !== "string" && (
-                          <select
-                            aria-label={`Ícone da tag ${getTagLabelPt(tag)}`}
-                            value={tag.custom_icon_key || tag.icon_key || "tag"}
-                            onChange={(event) => void updateDetailIcon(cat, tag, event.target.value)}
-                            style={{ border: "none", background: "transparent", color: T.inkLight, fontSize: 10, maxWidth: 112 }}
-                          >
-                            {[...new Set([tag.custom_icon_key || tag.icon_key || "tag", "tag", "shopping-cart", "receipt", "heart-pulse", "monitor-smartphone", "wallet", "briefcase", "circle-help", "car", "house", "pill"])].map((key) => <option key={key} value={key}>{key}</option>)}
-                          </select>
-                        )}
+                        <button onClick={() => typeof tag !== "string" && setEditingDetail({ cat, tag, name:getTagLabelPt(tag), iconKey:tag.custom_icon_key || tag.icon_key || "tag" })} style={{ ...G, display:"flex", alignItems:"center", gap:4, padding:0, border:"none", background:"transparent", color:T.inkMid, cursor:"pointer" }} aria-label={`Editar tag ${getTagLabelPt(tag)}`}><CategoryLucideIcon iconKey={tag.custom_icon_key || tag.icon_key} labelPt={getTagLabelPt(tag)} size={13} color={cat.color} />#{getTagLabelPt(tag)}</button>
                         <button onClick={() => void removeTag(cat, ti)}
                           aria-label={`Remover tag ${getTagLabelPt(tag)}`}
                           style={{ background:"none", border:"none", cursor:"pointer", padding:0, lineHeight:1,
@@ -515,16 +521,23 @@ export function CategoriesTagsSettingsPanel({
           onSave={() => void handleUpdateCat(editingCategory.id)}
         />
       )}
+      {editingDetail && <DetailEditModal value={editingDetail} onChange={setEditingDetail} onCancel={() => setEditingDetail(null)} onSave={() => void saveDetail()} />}
     </div>
   );
 }
+
+const modalSecondaryButton = { ...G, background:T.surface, border:`1px solid ${T.border}`, borderRadius:9, padding:"9px 14px", fontSize:12, fontWeight:700, color:T.inkMid, cursor:"pointer" };
+const modalPrimaryButton = { ...G, background:T.ink, color:"#fff", border:"none", borderRadius:9, padding:"9px 16px", fontSize:12, fontWeight:700, cursor:"pointer" };
+const modalCloseButton = { border:"none", background:T.grayLight, borderRadius:8, padding:7, cursor:"pointer", display:"flex", color:T.inkMid };
+
+function DetailEditModal({ value, onChange, onCancel, onSave }) { return <div role="dialog" aria-modal="true" aria-label="Editar etiqueta" style={{ position:"fixed", inset:0, zIndex:61, background:"rgba(15,15,13,.42)", display:"grid", placeItems:"center", padding:16 }}><div style={{ width:"min(620px,100%)", maxHeight:"calc(100vh - 32px)", overflow:"auto", background:T.surface, borderRadius:16, boxShadow:T.xl, border:`1px solid ${T.border}` }}><header style={{ padding:"18px 22px", borderBottom:`1px solid ${T.border}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}><div><div style={{ ...G, fontSize:11, fontWeight:700, color:T.blue, letterSpacing:".08em" }}>ETIQUETA</div><h2 style={{ ...G, margin:"3px 0 0", fontSize:18, color:T.ink }}>Editar etiqueta</h2></div><button onClick={onCancel} aria-label="Fechar edição" style={modalCloseButton}><X size={18}/></button></header><div style={{ padding:22, display:"grid", gap:18 }}><label style={{ ...G, fontSize:12, fontWeight:700, color:T.inkMid }}>Nome<input value={value.name} onChange={e=>onChange({...value,name:e.target.value})} style={{ ...G, display:"block", width:"100%", boxSizing:"border-box", marginTop:7, padding:"10px 12px", border:`1.5px solid ${T.border}`, borderRadius:9, fontSize:14, color:T.ink }}/></label><IconPicker value={value.iconKey} onChange={iconKey=>onChange({...value,iconKey})} color={value.cat.color}/></div><footer style={{ padding:"14px 22px", borderTop:`1px solid ${T.border}`, display:"flex", justifyContent:"flex-end", gap:8 }}><button onClick={onCancel} style={modalSecondaryButton}>Cancelar</button><button onClick={onSave} style={modalPrimaryButton}>OK</button></footer></div></div>; }
 
 function CategoryEditModal({ category, name, color, iconKey, scopes, onNameChange, onColorChange, onIconChange, onScopesChange, onCancel, onSave }) {
   return <div role="dialog" aria-modal="true" aria-label="Edição de categoria" style={{ position:"fixed", inset:0, zIndex:60, background:"rgba(15,15,13,.42)", display:"grid", placeItems:"center", padding:16 }}>
     <div style={{ width:"min(680px, 100%)", maxHeight:"min(760px, calc(100vh - 32px))", overflow:"auto", background:T.surface, borderRadius:16, boxShadow:T.xl, border:`1px solid ${T.border}` }}>
       <header style={{ padding:"18px 22px", borderBottom:`1px solid ${T.border}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
         <div><div style={{ ...G, fontSize:11, fontWeight:700, color:T.blue, letterSpacing:".08em", textTransform:"uppercase" }}>Categoria</div><h2 style={{ ...G, margin:"3px 0 0", fontSize:18, color:T.ink }}>Editar categoria</h2></div>
-        <button onClick={onCancel} aria-label="Fechar edição" style={{ border:"none", background:T.grayLight, borderRadius:8, padding:7, cursor:"pointer", display:"flex" }}><X size={18} /></button>
+        <button onClick={onCancel} aria-label="Fechar edição" style={modalCloseButton}><X size={18} /></button>
       </header>
       <div style={{ padding:22, display:"grid", gap:20 }}>
         <label style={{ ...G, display:"grid", gap:7, fontSize:12, fontWeight:700, color:T.inkMid }}>Nome
@@ -534,7 +547,7 @@ function CategoryEditModal({ category, name, color, iconKey, scopes, onNameChang
         <IconPicker value={iconKey} onChange={onIconChange} color={color} />
         <ScopePicker scopes={scopes} onChange={onScopesChange} />
       </div>
-      <footer style={{ padding:"14px 22px", borderTop:`1px solid ${T.border}`, display:"flex", justifyContent:"flex-end", gap:8 }}><button onClick={onCancel} style={{ ...G, background:T.surface, border:`1px solid ${T.border}`, borderRadius:9, padding:"9px 14px", fontWeight:700, cursor:"pointer" }}>Cancelar</button><button onClick={onSave} style={{ ...G, background:T.ink, color:"#fff", border:"none", borderRadius:9, padding:"9px 16px", fontWeight:700, cursor:"pointer" }}>OK</button></footer>
+      <footer style={{ padding:"14px 22px", borderTop:`1px solid ${T.border}`, display:"flex", justifyContent:"flex-end", gap:8 }}><button onClick={onCancel} style={modalSecondaryButton}>Cancelar</button><button onClick={onSave} style={modalPrimaryButton}>OK</button></footer>
     </div>
   </div>;
 }
