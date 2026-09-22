@@ -2071,7 +2071,7 @@ function TransacoesPageBody({
      usuário passa intacta. */
   const tagRowsPt = useMemo(
     () => (tagCatalog.rows || []).map((row) => {
-      const pt = detailLabelPtForTag(row);
+      const pt = row?.label || detailLabelPtForTag(row);
       /* `rawName` sobrevive à tradução: é por ele que uma visualização salva
          ANTES desta mudança — que guardou "doctor" no localStorage — continua
          resolvendo. Sem ele, abrir a view travaria a lista alegando que a tag

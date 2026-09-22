@@ -33,7 +33,7 @@ export function mapCategoryTagsForUi(tags) {
     .map((t) => ({
       id: t.id,
       apiName: t.name,
-      labelPt: categoryLabelPtForTag(t),
+      labelPt: t.label || categoryLabelPtForTag(t),
       iconKey: t.icon_key ?? null,
       color: resolveCategoryColorForTag(t),
       sortOrder: t.sort_order ?? 1e9,

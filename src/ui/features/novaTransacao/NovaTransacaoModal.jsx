@@ -117,7 +117,7 @@ import {
  */
 export function resolveDetailTagRowLabel(row) {
   if (!row) return "";
-  return detailLabelPtForTag(row) || (row.name != null ? String(row.name).trim() : "");
+  return row.label || detailLabelPtForTag(row) || (row.name != null ? String(row.name).trim() : "");
 }
 
 /**
