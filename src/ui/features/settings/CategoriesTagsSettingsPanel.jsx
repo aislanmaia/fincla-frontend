@@ -337,12 +337,9 @@ export function CategoriesTagsSettingsPanel({
               {!isMobile && <div style={{ ...G, fontSize:12, color:T.inkMid }}>Personalize como suas transações são organizadas</div>}
             </div>
           </div>
-          <button onClick={() => { setNewCatName(""); setNewCatColor("#2563EB"); setNewCatIconKey("tag"); setNewCatScopes(["income", "expense", "refund"]); setEditCat("new"); }}
-            style={{ ...G, flexShrink:0, background:T.ink, color:"#fff", border:"none", borderRadius:9,
-              padding: isMobile ? "7px 12px" : "7px 14px", fontSize: isMobile ? 11 : 12,
-              fontWeight:700, cursor:"pointer", display:"flex", alignItems:"center", gap:5 }}>
+          <Btn variant="dark" small={isMobile} onClick={() => { setNewCatName(""); setNewCatColor("#2563EB"); setNewCatIconKey("tag"); setNewCatScopes(["income", "expense", "refund"]); setEditCat("new"); }} style={{ flexShrink: 0 }}>
             <Plus size={12}/>{isMobile ? "Nova" : "Nova categoria"}
-          </button>
+          </Btn>
         </div>
 
         {catsLoading && <div style={{ padding:"12px 24px", ...G, fontSize:13, color:T.inkLight }}>Carregando categorias…</div>}
@@ -369,7 +366,7 @@ export function CategoriesTagsSettingsPanel({
               <>
                   <CategoryLucideIcon iconKey={cat.iconKey} labelPt={cat.labelPt || cat.name} size={17} color={cat.color} />
                   <span style={{ ...G, fontSize:13, color:T.ink, flex:1, minWidth:0 }}>{cat.labelPt || cat.name}</span>
-                  <button onClick={() => setExpandedCat(expandedCat === cat.id ? null : cat.id)} aria-label={`Expandir tags de ${cat.labelPt || cat.name}`}
+                  <Btn variant="ghost" small onClick={() => setExpandedCat(expandedCat === cat.id ? null : cat.id)} aria-label={`Expandir tags de ${cat.labelPt || cat.name}`}
                     style={{ ...G, display:"flex", alignItems:"center", gap:4, padding:"3px 8px", borderRadius:99,
                       background: expandedCat===cat.id ? `${cat.color}18` : T.grayLight,
                       border:`1px solid ${expandedCat===cat.id ? cat.color+"44" : T.border}`,
@@ -378,19 +375,13 @@ export function CategoriesTagsSettingsPanel({
                       transition:"all 0.15s" }}>
                     <Hash size={10}/>
                     {(cat.tags||[]).length}
-                  </button>
-                  <button onClick={() => { setEditCat(cat.id); setNewCatName(cat.labelPt || cat.name); setNewCatColor(cat.color); setNewCatIconKey(cat.iconKey || "tag"); setNewCatScopes(cat.allowedTransactionTypes || ["income", "expense", "refund"]); }} aria-label={editCat === cat.id ? "Edição aberta" : `Editar categoria ${cat.labelPt || cat.name}`}
-                    style={{ background:"none", border:"none", cursor:"pointer", padding:5, borderRadius:7, display:"flex", flexShrink:0 }}
-                    onMouseEnter={e=>e.currentTarget.style.background=T.grayLight}
-                    onMouseLeave={e=>e.currentTarget.style.background="none"}>
+                  </Btn>
+                  <Btn variant="ghost" small onClick={() => { setEditCat(cat.id); setNewCatName(cat.labelPt || cat.name); setNewCatColor(cat.color); setNewCatIconKey(cat.iconKey || "tag"); setNewCatScopes(cat.allowedTransactionTypes || ["income", "expense", "refund"]); }} aria-label={editCat === cat.id ? "Edição aberta" : `Editar categoria ${cat.labelPt || cat.name}`} style={{ padding:5, flexShrink:0 }}>
                     <Pencil size={13} color={T.inkLight}/>
-                  </button>
-                  <button onClick={() => handleDeleteCat(cat.id)} aria-label={`Excluir categoria ${cat.labelPt || cat.name}`}
-                    style={{ background:"none", border:"none", cursor:"pointer", padding:5, borderRadius:7, display:"flex", flexShrink:0 }}
-                    onMouseEnter={e=>e.currentTarget.style.color=T.red}
-                    onMouseLeave={e=>e.currentTarget.style.color=T.red+"66"}>
+                  </Btn>
+                  <Btn variant="ghost" small onClick={() => handleDeleteCat(cat.id)} aria-label={`Excluir categoria ${cat.labelPt || cat.name}`} style={{ padding:5, flexShrink:0 }}>
                     <Trash2 size={13} color={T.red+"66"}/>
-                  </button>
+                  </Btn>
                 </>
             </div>
 
@@ -411,11 +402,10 @@ export function CategoriesTagsSettingsPanel({
                         background: isHighlighted ? `${cat.color}18` : T.surface,
                         border:`1px solid ${isHighlighted ? cat.color : T.border}`, borderRadius:99,
                         padding:"4px 10px", color:T.inkMid, transition:"all 0.15s" }}>
-                        <button onClick={() => typeof tag !== "string" && setEditingDetail({ cat, tag, name:getTagLabelPt(tag), iconKey:tag.custom_icon_key || tag.icon_key || "tag" })} style={{ ...G, display:"flex", alignItems:"center", gap:4, padding:0, border:"none", background:"transparent", color:T.inkMid, cursor:"pointer" }} aria-label={`Editar tag ${getTagLabelPt(tag)}`}><CategoryLucideIcon iconKey={tag.custom_icon_key || tag.icon_key} labelPt={getTagLabelPt(tag)} size={13} color={cat.color} />#{getTagLabelPt(tag)}</button>
-                        <button onClick={() => void removeTag(cat, ti)}
+                        <Btn variant="ghost" small onClick={() => typeof tag !== "string" && setEditingDetail({ cat, tag, name:getTagLabelPt(tag), iconKey:tag.custom_icon_key || tag.icon_key || "tag" })} style={{ padding:0, color:T.inkMid }} aria-label={`Editar tag ${getTagLabelPt(tag)}`}><CategoryLucideIcon iconKey={tag.custom_icon_key || tag.icon_key} labelPt={getTagLabelPt(tag)} size={13} color={cat.color} />#{getTagLabelPt(tag)}</Btn>
+                        <Btn variant="ghost" small onClick={() => void removeTag(cat, ti)}
                           aria-label={`Remover tag ${getTagLabelPt(tag)}`}
-                          style={{ background:"none", border:"none", cursor:"pointer", padding:0, lineHeight:1,
-                            color:T.inkGhost, fontSize:14, display:"flex", alignItems:"center" }}>×</button>
+                          style={{ padding:0, minWidth:14, lineHeight:1, color:T.inkGhost, fontSize:14 }}>×</Btn>
                       </span>
                     );
                   })}
@@ -442,12 +432,11 @@ export function CategoriesTagsSettingsPanel({
                       style={{ ...G, flex:1, minWidth:0, border:"none", outline:"none",
                         background:"transparent", fontSize:12, color:T.ink }}/>
                   </div>
-                   <button
+                   <Btn variant="dark" small
                      onClick={() => void addTag(cat)}
-                     style={{ ...G, flexShrink:0, background:cat.color, color:"#fff", border:"none",
-                       borderRadius:9, padding:"8px 14px", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+                     style={{ flexShrink:0 }}>
                      + Tag
-                  </button>
+                  </Btn>
                 </div>
               </div>
             )}
@@ -492,7 +481,7 @@ function EditorModal({ eyebrow, title, children, onCancel, onSave, saveLabel = "
       <div onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-label={title} style={{ width:"min(680px, 100%)", maxHeight:"90dvh", display:"flex", flexDirection:"column", background:T.surface, border:`1px solid ${T.border}`, borderRadius:16, boxShadow:T.lg }}>
         <header style={{ padding:"16px 20px", borderBottom:`1px solid ${T.border}`, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div><div style={{ ...G, fontSize:11, fontWeight:700, color:T.blue, letterSpacing:".08em", textTransform:"uppercase" }}>{eyebrow}</div><h2 style={{ ...G, margin:"3px 0 0", fontSize:18, fontWeight:800, color:T.ink }}>{title}</h2></div>
-          <button onClick={onCancel} aria-label="Fechar" style={{ border:"none", background:"none", cursor:"pointer", color:T.inkGhost, fontSize:18, lineHeight:1, padding:4 }}><X size={18}/></button>
+          <Btn variant="ghost" small onClick={onCancel} aria-label="Fechar" style={{ width:32, height:32, padding:0 }}><X size={18}/></Btn>
         </header>
         <div style={{ padding:"18px 20px", overflowY:"auto" }}>{children}</div>
         <footer style={{ display:"flex", justifyContent:"flex-end", gap:9, padding:"14px 20px", borderTop:`1px solid ${T.border}` }}><Btn variant="outGray" onClick={onCancel}>Cancelar</Btn><Btn variant="dark" onClick={onSave}>{saveLabel}</Btn></footer>
@@ -505,7 +494,7 @@ function DetailEditModal({ value, onChange, onCancel, onSave }) {
   return <EditorModal eyebrow="Etiqueta" title="Editar etiqueta" onCancel={onCancel} onSave={onSave}>
     <div style={{ display:"grid", gap:18 }}>
       <label style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid }}>Nome<input value={value.name} onChange={e=>onChange({...value,name:e.target.value})} style={{ ...G, display:"block", width:"100%", boxSizing:"border-box", marginTop:7, padding:"11px 12px", border:`1.5px solid ${T.border}`, borderRadius:10, fontSize:14, color:T.ink }}/></label>
-      <IconPicker value={value.iconKey} onChange={iconKey=>onChange({...value,iconKey})} color={value.cat.color}/>
+      <IconPicker value={value.iconKey} onChange={iconKey=>onChange({...value,iconKey})}/>
     </div>
   </EditorModal>;
 }
@@ -517,17 +506,17 @@ function CategoryEditModal({ category, isNew, name, color, iconKey, scopes, onNa
         <input aria-label={isNew ? "Nome da categoria" : `Editar categoria ${category.labelPt || category.name}`} autoFocus value={name} onChange={(event)=>onNameChange(event.target.value)} style={{ ...G, padding:"11px 12px", border:`1.5px solid ${T.border}`, borderRadius:10, fontSize:14, color:T.ink }} />
       </label>
       <div style={{ display:"flex", gap:12, alignItems:"center" }}><div style={{ width:42, height:42, borderRadius:10, background:`${color}18`, display:"grid", placeItems:"center" }}><CategoryLucideIcon iconKey={iconKey} size={22} color={color} /></div><label style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid }}>Cor <input type="color" value={color} onChange={(event)=>onColorChange(event.target.value)} aria-label="Cor da categoria" style={{ verticalAlign:"middle", marginLeft:8, width:34, height:30 }} /></label></div>
-      <IconPicker value={iconKey} onChange={onIconChange} color={color} />
+      <IconPicker value={iconKey} onChange={onIconChange} />
       <ScopePicker scopes={scopes} onChange={onScopesChange} />
     </div>
   </EditorModal>;
 }
 
-function IconPicker({ value, onChange, color }) {
+function IconPicker({ value, onChange }) {
   const [query, setQuery] = useState(""); const [page, setPage] = useState(0); const pageSize = 24;
   const icons = useMemo(() => CATEGORY_ICON_KEYS.filter((key) => key.includes(query.toLowerCase())), [query]);
   const visible = icons.slice(page * pageSize, (page + 1) * pageSize);
-  return <section><div style={{ ...G, display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}><strong style={{ fontSize:12, color:T.inkMid }}>Ícone</strong><input value={query} onChange={(event)=>{setQuery(event.target.value);setPage(0);}} placeholder="Buscar ícone" aria-label="Buscar ícone" style={{ ...G, padding:"7px 9px", border:`1px solid ${T.border}`, borderRadius:7, width:170 }} /></div><div style={{ display:"grid", gridTemplateColumns:"repeat(8, 1fr)", gap:6 }}>{visible.map((key)=>{const Icon=getCategoryLucideIcon(key);const selected=key===value;return <button key={key} onClick={()=>onChange(key)} aria-label={`Selecionar ícone ${key.replaceAll("-", " ")}`} style={{ height:38, border:`1.5px solid ${selected?color:T.border}`, background:selected?`${color}12`:T.surface, borderRadius:8, cursor:"pointer", display:"grid", placeItems:"center" }}><Icon size={17} color={selected?color:T.inkMid}/></button>;})}</div><div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:10 }}><span style={{ ...G, fontSize:11, color:T.inkGhost }}>{icons.length} ícones</span><div style={{ display:"flex", gap:6 }}><Btn variant="outGray" small disabled={!page} onClick={()=>setPage(page-1)}>Anterior</Btn><Btn variant="outGray" small disabled={(page+1)*pageSize>=icons.length} onClick={()=>setPage(page+1)}>Próxima</Btn></div></div></section>;
+  return <section><div style={{ ...G, display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}><strong style={{ fontSize:12, color:T.inkMid }}>Ícone</strong><input value={query} onChange={(event)=>{setQuery(event.target.value);setPage(0);}} placeholder="Buscar ícone" aria-label="Buscar ícone" style={{ ...G, padding:"7px 9px", border:`1px solid ${T.border}`, borderRadius:7, width:170 }} /></div><div style={{ display:"grid", gridTemplateColumns:"repeat(8, 1fr)", gap:6 }}>{visible.map((key)=>{const Icon=getCategoryLucideIcon(key);const selected=key===value;return <Btn key={key} variant={selected ? "dark" : "outGray"} small onClick={()=>onChange(key)} aria-label={`Selecionar ícone ${key.replaceAll("-", " ")}`} style={{ height:38, padding:0 }}><Icon size={17} color={selected?"#fff":T.inkMid}/></Btn>;})}</div><div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:10 }}><span style={{ ...G, fontSize:11, color:T.inkGhost }}>{icons.length} ícones</span><div style={{ display:"flex", gap:6 }}><Btn variant="outGray" small disabled={!page} onClick={()=>setPage(page-1)}>Anterior</Btn><Btn variant="outGray" small disabled={(page+1)*pageSize>=icons.length} onClick={()=>setPage(page+1)}>Próxima</Btn></div></div></section>;
 }
 
-function ScopePicker({ scopes, onChange }) { const rows=[["income","Receita","Entradas como salário, vendas e reembolsos recebidos."],["expense","Despesa","Saídas e gastos pagos pela conta."],["refund","Estorno","Entrada vinculada a uma devolução ou correção."]]; return <section><strong style={{ ...G, fontSize:12, color:T.inkMid }}>Está disponível para</strong><div style={{ display:"grid", gap:7, marginTop:8 }}>{rows.map(([key,label,description])=>{const active=scopes.includes(key);return <button key={key} onClick={()=>onChange(active?scopes.filter((item)=>item!==key):[...scopes,key])} style={{ ...G, textAlign:"left", padding:"10px 12px", border:`1.5px solid ${active?T.blue:T.border}`, borderRadius:9, background:active?T.blueLight:T.surface, cursor:"pointer" }}><b>{active?"✓ ":""}{label}</b><span style={{ display:"block", fontSize:12, color:T.inkGhost, marginTop:2 }}>{description}</span></button>;})}</div></section>; }
+function ScopePicker({ scopes, onChange }) { const rows=[["income","Receita","Entradas como salário, vendas e reembolsos recebidos."],["expense","Despesa","Saídas e gastos pagos pela conta."],["refund","Estorno","Entrada vinculada a uma devolução ou correção."]]; return <section><strong style={{ ...G, fontSize:12, color:T.inkMid }}>Está disponível para</strong><div style={{ display:"grid", gap:7, marginTop:8 }}>{rows.map(([key,label,description])=>{const active=scopes.includes(key);return <Btn key={key} variant={active ? "dark" : "outGray"} onClick={()=>onChange(active?scopes.filter((item)=>item!==key):[...scopes,key])} style={{ minHeight:60, whiteSpace:"normal", textAlign:"left", alignItems:"flex-start", flexDirection:"column", padding:"10px 12px" }}><b>{active?"✓ ":""}{label}</b><span style={{ display:"block", fontSize:12, fontWeight:500, color:active?"rgba(255,255,255,.72)":T.inkGhost, marginTop:2 }}>{description}</span></Btn>;})}</div></section>; }
