@@ -207,7 +207,14 @@ export function ConsultantAddClientWizard({ open, onClose, onCreated, quota = nu
       </Field>
       <Field label="Renda mensal estimada" hint="Base para metas e índice de comprometimento."><TextInput value={f.renda} onChange={(v) => set("renda", v.replace(/[^0-9.,]/g, ""))} placeholder="0,00" pre="R$" /></Field>
       <Field label="Modelo de categorias" hint="Opcional. O modelo é copiado para esta nova organização.">
-        <select value={f.categoryTemplateId} onChange={(event) => set("categoryTemplateId", event.target.value)} style={inputBase}>
+        <select value={f.categoryTemplateId} onChange={(event) => {
+          const templateId = event.target.value;
+          const template = templates.find((item) => item.id === templateId);
+          const highlighted = (template?.definition?.categories ?? [])
+            .filter((item) => item?.is_onboarding_highlight && typeof item.system_key === "string")
+            .map((item) => item.system_key);
+          setF((current) => ({ ...current, categoryTemplateId: templateId, categorias: highlighted.length ? highlighted : current.categorias }));
+        }} style={inputBase}>
           <option value="">Usar catálogo padrão do Fincla</option>
           {templates.map((template) => <option key={template.id} value={template.id}>{template.name}{template.is_default ? " · padrão" : ""}</option>)}
         </select>
