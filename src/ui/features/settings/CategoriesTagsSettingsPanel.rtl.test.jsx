@@ -268,7 +268,7 @@ describe("CategoriesTagsSettingsPanel — categoria/tag do seed em inglês (regr
     await waitForSingleFetchedCategory();
     fireEvent.click(screen.getByRole("button", { name: /Editar categoria Alimentação/i }));
     // Não mexe no nome — só clica em OK (fluxo "só quero trocar a cor").
-    fireEvent.click(screen.getByRole("button", { name: /^OK$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Salvar alterações/i }));
 
     await waitFor(() => {
       expect(tagsApi.updateTag).toHaveBeenCalledWith(
@@ -287,7 +287,7 @@ describe("CategoriesTagsSettingsPanel — categoria/tag do seed em inglês (regr
     fireEvent.click(screen.getByRole("button", { name: /Editar categoria Alimentação/i }));
     const nameInput = screen.getByLabelText(/Editar categoria Alimentação/i);
     fireEvent.change(nameInput, { target: { value: "Mercado do Zé" } });
-    fireEvent.click(screen.getByRole("button", { name: /^OK$/i }));
+    fireEvent.click(screen.getByRole("button", { name: /Salvar alterações/i }));
 
     await waitFor(() => {
       expect(tagsApi.updateTag).toHaveBeenCalledWith(
