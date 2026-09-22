@@ -33,12 +33,12 @@ const ORG_TYPES = [
   { id: "business", label: "Negócio / PJ", sub: "Empresa ou autônomo", icon: "wallet" },
 ];
 const CATEGORIES = [
-  { id: "moradia", label: "Moradia", color: T.blue, icon: "card" },
-  { id: "alimentacao", label: "Alimentação", color: T.green, icon: "wallet" },
-  { id: "transporte", label: "Transporte", color: T.amber, icon: "target" },
-  { id: "saude", label: "Saúde", color: T.red, icon: "check-circle" },
-  { id: "lazer", label: "Lazer", color: T.purple, icon: "sparkles" },
-  { id: "educacao", label: "Educação", color: "#0891B2", icon: "file" },
+  { id: "housing", label: "Moradia", color: T.blue, icon: "card" },
+  { id: "food_groceries", label: "Alimentação", color: T.green, icon: "wallet" },
+  { id: "transport", label: "Transporte", color: T.amber, icon: "target" },
+  { id: "health", label: "Saúde", color: T.red, icon: "check-circle" },
+  { id: "leisure_entertainment", label: "Lazer", color: T.purple, icon: "sparkles" },
+  { id: "education", label: "Educação", color: "#0891B2", icon: "file" },
 ];
 const EXPERIENCE_LEVELS = [
   { id: "iniciante", l: "Iniciante", s: "Primeira vez organizando finanças" },
@@ -51,7 +51,7 @@ const PROFILE_TAGS = ["renda variável", "endividado", "poupador", "autônomo", 
 const INITIAL = {
   nome: "", email: "", telefone: "", ocupacao: "",
   orgNome: "", orgTipo: "personal", renda: "",
-  saldo: "", categorias: ["moradia", "alimentacao", "transporte"],
+  saldo: "", categorias: ["housing", "food_groceries", "transport"],
   temCartao: false, cardBanco: "", cardLimite: "", cardVenc: "10",
   temReceita: true, recDesc: "Salário", recValor: "", recDia: "5",
   notas: "", tags: [], nivel: "iniciante", objetivo: "Montar reserva", prioridade: false, categoryTemplateId: "",
@@ -104,6 +104,7 @@ function toPayload(f) {
     main_goal: f.objetivo,
     priority: f.prioridade,
     category_template_id: f.categoryTemplateId || undefined,
+    onboarding_category_system_keys: f.categorias,
   };
 }
 
