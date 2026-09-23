@@ -48,7 +48,15 @@ it("lets a visitor choose annual billing and waits for the server quote before c
 it("sends the selected annual installment count to the server quote", async () => {
   const fetch = vi.fn(async (_url, options) => {
     const selection = JSON.parse(options.body);
-    return { ok: true, json: async () => ({ selection, total_cents: 31194, installment_fee_cents: 1294, capacity: null }) };
+    const installment_options = Array.from({ length: 12 }, (_, index) => {
+      const installments = index + 1;
+      return {
+        installments,
+        total_cents: installments >= 7 ? 31194 : 29900,
+        installment_fee_cents: installments >= 7 ? 1294 : 0,
+      };
+    });
+    return { ok: true, json: async () => ({ selection, total_cents: 31194, installment_fee_cents: 1294, installment_options, capacity: null }) };
   });
   vi.stubGlobal("fetch", fetch);
 
@@ -60,6 +68,9 @@ it("sends the selected annual installment count to the server quote", async () =
     billing_cycle: "yearly",
     installments: 12,
   });
+  const labels = Array.from(screen.getByLabelText("Parcelas do plano anual").options).map((option) => option.text);
+  expect(labels).toContainEqual(expect.stringMatching(/^6x de R\$\s*49,83$/));
+  expect(labels).toContainEqual(expect.stringMatching(/^12x de R\$\s*25,99 · \+R\$\s*12,94 de taxas$/));
 });
 
 it("keeps the selected checkout visible while an annual quote is loading", async () => {

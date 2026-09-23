@@ -229,22 +229,24 @@ function MobileIncludedBenefits({ benefits }) {
 }
 
 function InstallmentPicker({ value, quote, disabled, onChange }) {
-  const total = quote.total_cents;
-  const fee = quote.installment_fee_cents || 0;
+  const options = quote.installment_options || [];
+  const selectedOption = options.find((item) => item.installments === value) || quote;
+  const selectedFee = selectedOption.installment_fee_cents || 0;
   return <label style={{ display: "grid", gap: 7, margin: "-8px 0 24px", color: T.ink, fontSize: 13, fontWeight: 750 }}>
     Em quantas vezes?
     <select aria-label="Parcelas do plano anual" value={value} disabled={disabled} onChange={(event) => onChange(Number(event.target.value))} style={{ ...G, width: "100%", padding: "12px 13px", border: `1px solid ${T.border}`, borderRadius: 10, background: "#FCFCFB", color: T.ink, fontSize: 14 }}>
       {Array.from({ length: 12 }, (_, index) => index + 1).map((count) => {
+        const option = options.find((item) => item.installments === count) || (count === value ? quote : null);
+        if (!option) return null;
+        const total = option.total_cents;
+        const fee = option.installment_fee_cents || 0;
         const baseInstallment = Math.floor(total / count);
-        const remainder = total - baseInstallment * count;
-        const installmentLabel = remainder === 0 || count === 1
-          ? `${count}x de ${money(baseInstallment)}`
-          : `${count - 1}x de ${money(baseInstallment)} + 1x de ${money(baseInstallment + remainder)}`;
-        const surcharge = count >= 7 && fee > 0 ? ` · total ${money(total)} (taxas: ${money(fee)})` : "";
+        const installmentLabel = `${count}x de ${money(baseInstallment)}`;
+        const surcharge = count >= 7 && fee > 0 ? ` · +${money(fee)} de taxas` : "";
         return <option key={count} value={count}>{installmentLabel}{surcharge}</option>;
       })}
     </select>
-    <span style={{ color: T.inkMid, fontSize: 12, fontWeight: 500, lineHeight: 1.45 }}>{value <= 6 ? "Sem acréscimo: você paga R$ 299,00 no total." : `O total inclui ${money(fee)} de taxas do cartão; o Fincla recebe R$ 299,00.`}</span>
+    <span style={{ color: T.inkMid, fontSize: 12, fontWeight: 500, lineHeight: 1.45 }}>{value <= 6 ? "Sem acréscimo: você paga R$ 299,00 no total." : `O total inclui ${money(selectedFee)} de taxas do cartão; o Fincla recebe R$ 299,00.`}</span>
   </label>;
 }
 
