@@ -72,7 +72,7 @@ function isCheckoutRequestError(failure) {
 }
 
 export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRefresh, onReadinessChange, onValidationErrorChange, showStepLabel = true }) {
-  const TERMS_VERSION = "2026-09-15";
+  const TERMS_VERSION = "2026-09-23";
   const [offerChanged, setOfferChanged] = useState(false);
   const [showCancel, setShowCancel] = useState(false);
   const [attempt, setAttempt] = useState(null);
@@ -286,7 +286,7 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
         <CheckoutField label="Telefone com DDD (somente números)" name="phone" defaultValue={accountDetails?.phone || session?.user?.phone || ""} error={fieldErrors.phone} inputMode="tel" autoComplete="tel-national" pattern="[0-9]{10,13}" />
         <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "13px 14px", borderRadius: 10, background: "#F7E8E1", color: T.inkMid, fontSize: 12, lineHeight: 1.45 }}><span aria-hidden="true" style={{ display: "grid", placeItems: "center", flex: "0 0 auto", width: 24, height: 24, borderRadius: 99, background: "#E85D3B", color: "#fff", fontSize: 14 }}>▣</span><span>Conexão <strong>criptografada</strong>. Os dados do cartão são enviados com segurança para processar o pagamento e não ficam armazenados no Fincla.</span></div>
         <label style={{display:"flex",gap:10,alignItems:"flex-start",lineHeight:1.45,fontSize:12,color:T.inkMid}}><input type="checkbox" required name="terms" />Li e aceito os <a href="https://fincla.com/termos" target="_blank" rel="noreferrer">Termos de contratação</a>, versão {TERMS_VERSION}.</label>
-        <label style={{display:"flex",gap:10,alignItems:"flex-start",lineHeight:1.45,fontSize:12,color:T.inkMid}}><input type="checkbox" required name="recurring" />Autorizo a cobrança e a renovação automática {quote.selection.billing_cycle === "yearly" ? "anual" : "mensal"}. Posso cancelar a renovação no meu perfil.</label>
+        <label style={{display:"flex",gap:10,alignItems:"flex-start",lineHeight:1.45,fontSize:12,color:T.inkMid}}><input type="checkbox" required name="recurring" />{quote.selection.billing_cycle === "yearly" && (quote.selection.installments || 1) > 1 ? `Autorizo a cobrança das ${quote.selection.installments} parcelas deste período anual e a renovação automática anual. Posso cancelar a renovação no meu perfil.` : `Autorizo a cobrança e a renovação automática ${quote.selection.billing_cycle === "yearly" ? "anual" : "mensal"}. Posso cancelar a renovação no meu perfil.`}</label>
         <Btn type="submit" variant="green" full disabled={busy || !readyToPay} style={{ minHeight: 44, fontSize: 14, boxShadow: readyToPay ? "0 7px 16px rgba(5, 150, 105, .20)" : "none" }}>{readyToPay ? `Assinar por ${money(quote.total_cents)}` : "Preencha os dados para continuar"}</Btn>
       </form>
     </>}

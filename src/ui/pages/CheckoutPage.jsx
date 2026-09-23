@@ -89,7 +89,12 @@ export function CheckoutPage({ search = window.location.search, session }) {
       return undefined;
     }
     const controller = new AbortController();
-    const counterpartSelection = { ...quote.selection, billing_cycle: quote.selection.billing_cycle === "yearly" ? "monthly" : "yearly" };
+    const counterpartCycle = quote.selection.billing_cycle === "yearly" ? "monthly" : "yearly";
+    const counterpartSelection = {
+      ...quote.selection,
+      billing_cycle: counterpartCycle,
+      installments: counterpartCycle === "monthly" ? 1 : (quote.selection.installments || 1),
+    };
     setCounterpartQuote({ selectionKey: quoteSelectionKey, totalCents: null });
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(counterpartSelection)) {
@@ -116,6 +121,19 @@ export function CheckoutPage({ search = window.location.search, session }) {
   const canChangeCycle = !session?.isAuthenticated && state.status !== "loading";
   const planName = quote?.selection.persona === "consultant" ? "Fincla Consultor" : "Fincla Pessoal";
   const cycleName = quote?.selection.billing_cycle === "yearly" ? "Anual" : "Mensal";
+  const changeInstallments = useCallback((installments) => {
+    if (!quote || installments === quote.selection.installments) return;
+    const params = new URLSearchParams(effectiveSearch || "");
+    for (const [key, value] of Object.entries(quote.selection)) {
+      if (value != null) params.set(key, String(value));
+    }
+    params.set("installments", String(installments));
+    const nextSearch = `?${params.toString()}`;
+    window.history.replaceState({}, "", `${window.location.pathname}${nextSearch}`);
+    cycleChange.current = true;
+    setState((current) => ({ status: "loading", quote: current.quote, preserveQuote: true }));
+    setSelectionSearch(nextSearch);
+  }, [effectiveSearch, quote]);
   const changeCycle = useCallback((billingCycle) => {
     if (!quote || billingCycle === quote.selection.billing_cycle) return;
     const params = new URLSearchParams(effectiveSearch || "");
@@ -123,6 +141,7 @@ export function CheckoutPage({ search = window.location.search, session }) {
       if (value != null) params.set(key, String(value));
     }
     params.set("billing_cycle", billingCycle);
+    if (billingCycle === "monthly") params.set("installments", "1");
     const nextSearch = `?${params.toString()}`;
     window.history.replaceState({}, "", `${window.location.pathname}${nextSearch}`);
     cycleChange.current = true;
@@ -157,6 +176,7 @@ export function CheckoutPage({ search = window.location.search, session }) {
           <Card style={{ height: wide && ((activeSection && activeSection !== "plan") || constrainedViewport) ? "100%" : "auto", minHeight: 0, display: wide ? "flex" : "block", flexDirection: "column", overflow: "hidden", border: `1px solid ${T.border}`, order: wide ? 0 : 1 }}>
             <CheckoutPanel mobile={!wide} scrollable={wide && compactViewport} number="1" title="Plano e ciclo" detail="Escolha como prefere pagar" summary={`${planName} · ${cycleName} · ${money(quote.total_cents)}`} open={activeSection === "plan"} complete={accountVisited || Boolean(accountDetails) || session?.isAuthenticated} keepMounted onOpen={() => toggleSection("plan")}>
               <BillingCyclePicker value={quote.selection.billing_cycle} monthlyTotalCents={monthlyTotalCents} annualTotalCents={annualTotalCents} annualFreeMonths={annualFreeMonths} disabled={!canChangeCycle} onChange={changeCycle} />
+              {quote.selection.persona === "personal" && quote.selection.billing_cycle === "yearly" && <InstallmentPicker value={quote.selection.installments || 1} quote={quote} disabled={!canChangeCycle} onChange={changeInstallments} />}
               {quote.capacity != null && <p style={{ color: T.inkMid, lineHeight: 1.6, margin: "0 0 20px", padding: "12px 14px", background: "#F3F7F0", borderRadius: 10 }}>A capacidade é paga antecipadamente, inclusive vagas vazias. Você pode preenchê-las e reutilizá-las durante o período contratado.</p>}
               <div style={{ marginBottom: 18 }}><Btn variant="dark" full onClick={() => { setAccountVisited(true); setActiveSection("account"); }}>Continuar</Btn></div>
             </CheckoutPanel>
@@ -206,6 +226,26 @@ function MobileIncludedBenefits({ benefits }) {
       <p style={{ margin: "13px 0 0", fontSize: 12, color: T.inkMid }}>… e <a href="https://fincla.com/recursos" target="_blank" rel="noreferrer" style={{ color: T.green, fontWeight: 750 }}>muito mais</a>.</p>
     </div>
   </details>;
+}
+
+function InstallmentPicker({ value, quote, disabled, onChange }) {
+  const total = quote.total_cents;
+  const fee = quote.installment_fee_cents || 0;
+  return <label style={{ display: "grid", gap: 7, margin: "-8px 0 24px", color: T.ink, fontSize: 13, fontWeight: 750 }}>
+    Em quantas vezes?
+    <select aria-label="Parcelas do plano anual" value={value} disabled={disabled} onChange={(event) => onChange(Number(event.target.value))} style={{ ...G, width: "100%", padding: "12px 13px", border: `1px solid ${T.border}`, borderRadius: 10, background: "#FCFCFB", color: T.ink, fontSize: 14 }}>
+      {Array.from({ length: 12 }, (_, index) => index + 1).map((count) => {
+        const baseInstallment = Math.floor(total / count);
+        const remainder = total - baseInstallment * count;
+        const installmentLabel = remainder === 0 || count === 1
+          ? `${count}x de ${money(baseInstallment)}`
+          : `${count - 1}x de ${money(baseInstallment)} + 1x de ${money(baseInstallment + remainder)}`;
+        const surcharge = count >= 7 && fee > 0 ? ` · total ${money(total)} (taxas: ${money(fee)})` : "";
+        return <option key={count} value={count}>{installmentLabel}{surcharge}</option>;
+      })}
+    </select>
+    <span style={{ color: T.inkMid, fontSize: 12, fontWeight: 500, lineHeight: 1.45 }}>{value <= 6 ? "Sem acréscimo: você paga R$ 299,00 no total." : `O total inclui ${money(fee)} de taxas do cartão; o Fincla recebe R$ 299,00.`}</span>
+  </label>;
 }
 
 function BillingCyclePicker({ value, monthlyTotalCents, annualTotalCents, annualFreeMonths, disabled, onChange }) {

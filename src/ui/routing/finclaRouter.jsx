@@ -43,7 +43,7 @@ const checkoutRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/checkout",
   validateSearch: (search) => Object.fromEntries(
-    ["persona", "billing_cycle", "mode", "seats", "package_size"]
+    ["persona", "billing_cycle", "mode", "seats", "package_size", "installments"]
       .filter((key) => search[key] != null)
       .map((key) => [key, search[key]]),
   ),

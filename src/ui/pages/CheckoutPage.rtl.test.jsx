@@ -45,6 +45,23 @@ it("lets a visitor choose annual billing and waits for the server quote before c
   expect(await screen.findByRole("button", { name: "Preencha seus dados para continuar" })).toBeDisabled();
 });
 
+it("sends the selected annual installment count to the server quote", async () => {
+  const fetch = vi.fn(async (_url, options) => {
+    const selection = JSON.parse(options.body);
+    return { ok: true, json: async () => ({ selection, total_cents: 31194, installment_fee_cents: 1294, capacity: null }) };
+  });
+  vi.stubGlobal("fetch", fetch);
+
+  render(<CheckoutPage search="?persona=personal&billing_cycle=yearly&installments=12" session={{ isAuthenticated: false, signIn: vi.fn() }} />);
+
+  expect(await screen.findByLabelText("Parcelas do plano anual")).toHaveValue("12");
+  expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({
+    persona: "personal",
+    billing_cycle: "yearly",
+    installments: 12,
+  });
+});
+
 it("keeps the selected checkout visible while an annual quote is loading", async () => {
   const { fireEvent } = await import("@testing-library/react");
   let resolveAnnual;

@@ -8,9 +8,12 @@ export interface CheckoutQuote {
     mode: 'progressive' | 'package' | null;
     seats: number | null;
     package_size: number | null;
+    installments: number;
   };
   total_cents: number;
   capacity: number | null;
+  installments: number;
+  installment_fee_cents: number;
   currency: 'BRL';
 }
 
@@ -24,6 +27,7 @@ export async function quoteCheckout(search: string, signal: AbortSignal): Promis
   for (const key of ['mode', 'seats', 'package_size']) {
     if (params.has(key)) selection[key] = key === 'mode' ? params.get(key) : Number(params.get(key));
   }
+  if (params.has('installments')) selection.installments = Number(params.get('installments'));
   const response = await fetch(`${API_CONFIG.BASE_URL}/plans/checkout-quote`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
