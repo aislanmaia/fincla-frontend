@@ -121,6 +121,36 @@ describe("transactionsAdapter", () => {
     expect(mapped.detailTagDisplayById["det-mercado-custom"]).toBe("mercado");
   });
 
+  it("prefere o rótulo localizado da API para categorias personalizadas", () => {
+    const mapped = mapApiTransactionToUi({
+      id: 100,
+      organization_id: "org-1",
+      type: "expense",
+      description: "Almoço",
+      category: "Food & Groceries",
+      tags: {
+        categoria: [
+          {
+            id: "cat-food",
+            name: "Food & Groceries",
+            label: "Mercado e Refeições",
+            icon_key: "lucide-utensils",
+            is_default: true,
+          },
+        ],
+      },
+      value: 50,
+      payment_method: "pix",
+      date: "2026-09-23T00:00:00",
+      status: "paid",
+      recurring: false,
+      created_at: "2026-09-23T00:00:00",
+      updated_at: "2026-09-23T00:00:00",
+    });
+
+    expect(mapped.cat).toBe("Mercado e Refeições");
+  });
+
   it("crédito à vista 1/1x: coluna de data usa a data da compra (não o vencimento da fatura)", () => {
     const mapped = mapApiTransactionToUi({
       id: 493,
