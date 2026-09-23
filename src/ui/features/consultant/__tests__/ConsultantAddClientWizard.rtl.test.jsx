@@ -10,7 +10,7 @@ vi.mock("../../../../api/consultant", () => ({
   listConsultantCategoryTemplates: vi.fn().mockResolvedValue([]),
 }));
 
-import { createConsultantClient } from "../../../../api/consultant";
+import { createConsultantClient, listConsultantCategoryTemplates } from "../../../../api/consultant";
 import { ConsultantAddClientWizard } from "../ConsultantAddClientWizard.jsx";
 
 afterEach(() => {
@@ -59,6 +59,42 @@ describe("<ConsultantAddClientWizard>", () => {
     expect(screen.getByRole("button", { name: /Trabalho e salário/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Serviços prestados/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Transferências recebidas/ })).toBeInTheDocument();
+  });
+
+  it("mostra a personalização do modelo no seletor de categorias em destaque", async () => {
+    vi.mocked(listConsultantCategoryTemplates).mockResolvedValue([
+      {
+        id: "template-1",
+        name: "Família personalizada",
+        definition: {
+          categories: [{
+            system_key: "food_groceries",
+            custom_name: "Mercado e Refeições",
+            custom_icon_key: "utensils",
+            color: "#0F766E",
+            is_onboarding_highlight: true,
+          }],
+          custom_categories: [{
+            name: "Projeto Especial",
+            icon_key: "briefcase",
+            color: "#2563EB",
+            is_onboarding_highlight: true,
+          }],
+        },
+      },
+    ]);
+
+    render(<ConsultantAddClientWizard open onClose={() => {}} />);
+    fillStep1();
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/ }));
+    await screen.findByRole("option", { name: "Família personalizada" });
+    fireEvent.change(screen.getByPlaceholderText("Ex.: Finanças de Mariana"), { target: { value: "Finanças da Marina" } });
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "template-1" } });
+    fireEvent.click(screen.getByRole("button", { name: /Continuar/ }));
+
+    expect(screen.getByRole("button", { name: /Mercado e Refeições/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Alimentação$/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Projeto Especial/ })).toBeInTheDocument();
   });
 
   it("cria o cliente pela API e mostra o link de definir senha", async () => {

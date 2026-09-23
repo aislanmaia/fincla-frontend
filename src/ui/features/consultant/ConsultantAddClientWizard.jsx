@@ -46,6 +46,24 @@ const CATEGORIES = [
   { id: "received_transfers", label: "Transferências recebidas", color: T.blue, iconKey: "arrow-down-left" },
   { id: "received_reimbursements", label: "Reembolsos recebidos", color: T.purple, iconKey: "rotate-ccw" },
 ];
+
+function categoriesForTemplate(template) {
+  const overridesBySystemKey = new Map(
+    (template?.definition?.categories ?? [])
+      .filter((category) => typeof category?.system_key === "string")
+      .map((category) => [category.system_key, category])
+  );
+
+  return CATEGORIES.map((category) => {
+    const override = overridesBySystemKey.get(category.id);
+    return {
+      ...category,
+      label: override?.custom_name?.trim() || category.label,
+      iconKey: override?.custom_icon_key || category.iconKey,
+      color: override?.color || category.color,
+    };
+  });
+}
 const EXPERIENCE_LEVELS = [
   { id: "iniciante", l: "Iniciante", s: "Primeira vez organizando finanças" },
   { id: "intermediario", l: "Intermediário", s: "Já controla, quer evoluir" },
@@ -189,7 +207,7 @@ export function ConsultantAddClientWizard({ open, onClose, onCreated, quota = nu
     color: category.color || T.blue,
     iconKey: category.icon_key || "tag",
   }));
-  const visibleCategories = [...CATEGORIES, ...customCategories];
+  const visibleCategories = [...categoriesForTemplate(selectedTemplate), ...customCategories];
   const initials = f.nome.trim().split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase() || "?";
 
   let body = null;
