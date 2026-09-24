@@ -231,7 +231,6 @@ function MobileIncludedBenefits({ benefits }) {
 function InstallmentPicker({ value, quote, disabled, onChange }) {
   const options = quote.installment_options || [];
   const selectedOption = options.find((item) => item.installments === value) || quote;
-  const selectedFee = selectedOption.installment_fee_cents || 0;
   const selectedRegularInstallment = selectedOption.regular_installment_cents ?? Math.floor(selectedOption.total_cents / value);
   const selectedFinalInstallment = selectedOption.final_installment_cents ?? selectedOption.total_cents - selectedRegularInstallment * (value - 1);
   const hasFinalAdjustment = selectedFinalInstallment !== selectedRegularInstallment;
@@ -244,10 +243,10 @@ function InstallmentPicker({ value, quote, disabled, onChange }) {
         const total = option.total_cents;
         const regularInstallment = option.regular_installment_cents ?? Math.floor(total / count);
         const installmentLabel = `${count}x de ${money(regularInstallment)}`;
-        return <option key={count} value={count}>{installmentLabel}</option>;
+        return <option key={count} value={count}>{installmentLabel} · total ${money(total)}</option>;
       })}
     </select>
-    <span style={{ color: T.inkMid, fontSize: 12, fontWeight: 500, lineHeight: 1.45 }}>{value <= 6 ? "Total no cartão: R$ 299,00, sem acréscimo." : `Total no cartão: ${money(selectedOption.total_cents)}, incluindo ${money(selectedFee)} de taxa de parcelamento.`}{hasFinalAdjustment ? " A última parcela pode variar alguns centavos por arredondamento." : ""}</span>
+    {hasFinalAdjustment && <span style={{ color: T.inkMid, fontSize: 12, fontWeight: 500, lineHeight: 1.45 }}>A última parcela pode variar alguns centavos por arredondamento.</span>}
   </label>;
 }
 

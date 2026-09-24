@@ -71,9 +71,8 @@ it("sends the selected annual installment count to the server quote", async () =
     installments: 12,
   });
   const labels = Array.from(screen.getByLabelText("Parcelas do plano anual").options).map((option) => option.text);
-  expect(labels).toContainEqual(expect.stringMatching(/^6x de \$?R\$\s*49,83$/));
-  expect(labels).toContainEqual(expect.stringMatching(/^12x de \$?R\$\s*25,99$/));
-  expect(await screen.findByText(/Total no cartão: \$?R\$\s*311,94, incluindo \$?R\$\s*12,94 de taxa de parcelamento/)).toBeTruthy();
+  expect(labels).toContainEqual(expect.stringMatching(/^6x de \$?R\$\s*49,83 · total \$?R\$\s*299,00$/));
+  expect(labels).toContainEqual(expect.stringMatching(/^12x de \$?R\$\s*25,99 · total \$?R\$\s*311,94$/));
   expect(await screen.findByText(/A última parcela pode variar alguns centavos por arredondamento/)).toBeTruthy();
 });
 
