@@ -243,7 +243,7 @@ function InstallmentPicker({ value, quote, disabled, onChange }) {
         const total = option.total_cents;
         const regularInstallment = option.regular_installment_cents ?? Math.floor(total / count);
         const installmentLabel = `${count}x de ${money(regularInstallment)}`;
-        return <option key={count} value={count}>{installmentLabel} · total ${money(total)}</option>;
+        return <option key={count} value={count}>{installmentLabel} · total {money(total)}</option>;
       })}
     </select>
     {hasFinalAdjustment && <span style={{ color: T.inkMid, fontSize: 12, fontWeight: 500, lineHeight: 1.45 }}>A última parcela pode variar alguns centavos por arredondamento.</span>}
