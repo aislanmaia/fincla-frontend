@@ -242,14 +242,12 @@ function InstallmentPicker({ value, quote, disabled, onChange }) {
         const option = options.find((item) => item.installments === count) || (count === value ? quote : null);
         if (!option) return null;
         const total = option.total_cents;
-        const fee = option.installment_fee_cents || 0;
         const regularInstallment = option.regular_installment_cents ?? Math.floor(total / count);
         const installmentLabel = `${count}x de ${money(regularInstallment)}`;
-        const surcharge = count >= 7 && fee > 0 ? ` · +${money(fee)} de taxas` : "";
-        return <option key={count} value={count}>{installmentLabel}{surcharge}</option>;
+        return <option key={count} value={count}>{installmentLabel}</option>;
       })}
     </select>
-    <span style={{ color: T.inkMid, fontSize: 12, fontWeight: 500, lineHeight: 1.45 }}>{value <= 6 ? "Sem acréscimo: você paga R$ 299,00 no total." : `O total inclui ${money(selectedFee)} de taxas do cartão; o Fincla recebe R$ 299,00.`}{hasFinalAdjustment ? " A última parcela pode variar alguns centavos por arredondamento." : ""}</span>
+    <span style={{ color: T.inkMid, fontSize: 12, fontWeight: 500, lineHeight: 1.45 }}>{value <= 6 ? "Total no cartão: R$ 299,00, sem acréscimo." : `Total no cartão: ${money(selectedOption.total_cents)}, incluindo ${money(selectedFee)} de taxa de parcelamento.`}{hasFinalAdjustment ? " A última parcela pode variar alguns centavos por arredondamento." : ""}</span>
   </label>;
 }
 
