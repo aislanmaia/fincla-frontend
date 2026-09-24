@@ -50,15 +50,16 @@ it("sends the selected annual installment count to the server quote", async () =
     const selection = JSON.parse(options.body);
     const installment_options = Array.from({ length: 12 }, (_, index) => {
       const installments = index + 1;
+      const total_cents = installments === 12 ? 35880 : installments >= 7 ? 31194 : 29900;
       return {
         installments,
-        total_cents: installments >= 7 ? 31194 : 29900,
-        installment_fee_cents: installments >= 7 ? 1294 : 0,
-        regular_installment_cents: Math.floor((installments >= 7 ? 31194 : 29900) / installments),
-        final_installment_cents: (installments >= 7 ? 31194 : 29900) - Math.floor((installments >= 7 ? 31194 : 29900) / installments) * (installments - 1),
+        total_cents,
+        installment_fee_cents: installments >= 7 && installments < 12 ? 1294 : 0,
+        regular_installment_cents: Math.floor(total_cents / installments),
+        final_installment_cents: total_cents - Math.floor(total_cents / installments) * (installments - 1),
       };
     });
-    return { ok: true, json: async () => ({ selection, total_cents: 31194, installment_fee_cents: 1294, installment_options, capacity: null }) };
+    return { ok: true, json: async () => ({ selection, total_cents: 35880, installment_fee_cents: 0, installment_options, capacity: null }) };
   });
   vi.stubGlobal("fetch", fetch);
 
@@ -72,8 +73,8 @@ it("sends the selected annual installment count to the server quote", async () =
   });
   const labels = Array.from(screen.getByLabelText("Parcelas do plano anual").options).map((option) => option.text);
   expect(labels).toContainEqual(expect.stringMatching(/^6x de \$?R\$\s*49,83 · total \$?R\$\s*299,00$/));
-  expect(labels).toContainEqual(expect.stringMatching(/^12x de \$?R\$\s*25,99 · total \$?R\$\s*311,94$/));
-  expect(await screen.findByText(/A última parcela pode variar alguns centavos por arredondamento/)).toBeTruthy();
+  expect(labels).toContainEqual(expect.stringMatching(/^12x de \$?R\$\s*29,90 · total \$?R\$\s*358,80$/));
+  expect(screen.queryByText(/A última parcela pode variar alguns centavos por arredondamento/)).toBeNull();
 });
 
 it("keeps the selected checkout visible while an annual quote is loading", async () => {
