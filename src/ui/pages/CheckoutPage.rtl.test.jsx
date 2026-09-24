@@ -69,8 +69,8 @@ it("sends the selected annual installment count to the server quote", async () =
     installments: 12,
   });
   const labels = Array.from(screen.getByLabelText("Parcelas do plano anual").options).map((option) => option.text);
-  expect(labels).toContainEqual(expect.stringMatching(/^6x de R\$\s*49,83$/));
-  expect(labels).toContainEqual(expect.stringMatching(/^12x de R\$\s*25,99 · \+R\$\s*12,94 de taxas$/));
+  expect(labels).toContainEqual(expect.stringMatching(/^6x no cartão · total de \$?R\$\s*299,00$/));
+  expect(labels).toContainEqual(expect.stringMatching(/^12x no cartão · total de \$?R\$\s*311,94 · \+\$?R\$\s*12,94 de taxas$/));
 });
 
 it("keeps the selected checkout visible while an annual quote is loading", async () => {

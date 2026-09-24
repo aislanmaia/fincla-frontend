@@ -240,10 +240,8 @@ function InstallmentPicker({ value, quote, disabled, onChange }) {
         if (!option) return null;
         const total = option.total_cents;
         const fee = option.installment_fee_cents || 0;
-        const baseInstallment = Math.floor(total / count);
-        const installmentLabel = `${count}x de ${money(baseInstallment)}`;
         const surcharge = count >= 7 && fee > 0 ? ` · +${money(fee)} de taxas` : "";
-        return <option key={count} value={count}>{installmentLabel}{surcharge}</option>;
+        return <option key={count} value={count}>{count}x no cartão · total de ${money(total)}{surcharge}</option>;
       })}
     </select>
     <span style={{ color: T.inkMid, fontSize: 12, fontWeight: 500, lineHeight: 1.45 }}>{value <= 6 ? "Sem acréscimo: você paga R$ 299,00 no total." : `O total inclui ${money(selectedFee)} de taxas do cartão; o Fincla recebe R$ 299,00.`}</span>
