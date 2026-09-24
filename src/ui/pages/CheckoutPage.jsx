@@ -240,8 +240,10 @@ function InstallmentPicker({ value, quote, disabled, onChange }) {
         if (!option) return null;
         const total = option.total_cents;
         const fee = option.installment_fee_cents || 0;
-        const baseInstallment = Math.floor(total / count);
-        const installmentLabel = `${count}x de ${money(baseInstallment)}`;
+        const regularInstallment = option.regular_installment_cents ?? Math.floor(total / count);
+        const finalInstallment = option.final_installment_cents ?? total - regularInstallment * (count - 1);
+        const finalAdjustment = finalInstallment !== regularInstallment ? ` (última de ${money(finalInstallment)})` : "";
+        const installmentLabel = `${count}x de ${money(regularInstallment)}${finalAdjustment}`;
         const surcharge = count >= 7 && fee > 0 ? ` · +${money(fee)} de taxas` : "";
         return <option key={count} value={count}>{installmentLabel}{surcharge}</option>;
       })}

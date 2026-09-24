@@ -54,6 +54,8 @@ it("sends the selected annual installment count to the server quote", async () =
         installments,
         total_cents: installments >= 7 ? 31194 : 29900,
         installment_fee_cents: installments >= 7 ? 1294 : 0,
+        regular_installment_cents: Math.floor((installments >= 7 ? 31194 : 29900) / installments),
+        final_installment_cents: (installments >= 7 ? 31194 : 29900) - Math.floor((installments >= 7 ? 31194 : 29900) / installments) * (installments - 1),
       };
     });
     return { ok: true, json: async () => ({ selection, total_cents: 31194, installment_fee_cents: 1294, installment_options, capacity: null }) };
@@ -69,8 +71,8 @@ it("sends the selected annual installment count to the server quote", async () =
     installments: 12,
   });
   const labels = Array.from(screen.getByLabelText("Parcelas do plano anual").options).map((option) => option.text);
-  expect(labels).toContainEqual(expect.stringMatching(/^6x de R\$\s*49,83$/));
-  expect(labels).toContainEqual(expect.stringMatching(/^12x de R\$\s*25,99 · \+R\$\s*12,94 de taxas$/));
+  expect(labels).toContainEqual(expect.stringMatching(/^6x de \$?R\$\s*49,83 \(última de \$?R\$\s*49,85\)$/));
+  expect(labels).toContainEqual(expect.stringMatching(/^12x de \$?R\$\s*25,99 \(última de \$?R\$\s*26,05\) · \+\$?R\$\s*12,94 de taxas$/));
 });
 
 it("keeps the selected checkout visible while an annual quote is loading", async () => {
