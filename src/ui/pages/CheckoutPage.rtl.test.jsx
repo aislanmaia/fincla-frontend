@@ -71,8 +71,9 @@ it("sends the selected annual installment count to the server quote", async () =
     installments: 12,
   });
   const labels = Array.from(screen.getByLabelText("Parcelas do plano anual").options).map((option) => option.text);
-  expect(labels).toContainEqual(expect.stringMatching(/^6x de \$?R\$\s*49,83 \(última de \$?R\$\s*49,85\)$/));
-  expect(labels).toContainEqual(expect.stringMatching(/^12x de \$?R\$\s*25,99 \(última de \$?R\$\s*26,05\) · \+\$?R\$\s*12,94 de taxas$/));
+  expect(labels).toContainEqual(expect.stringMatching(/^6x de \$?R\$\s*49,83$/));
+  expect(labels).toContainEqual(expect.stringMatching(/^12x de \$?R\$\s*25,99 · \+\$?R\$\s*12,94 de taxas$/));
+  expect(await screen.findByText(/A última parcela pode variar alguns centavos por arredondamento/)).toBeTruthy();
 });
 
 it("keeps the selected checkout visible while an annual quote is loading", async () => {

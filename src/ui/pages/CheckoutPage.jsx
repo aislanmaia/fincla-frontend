@@ -232,6 +232,9 @@ function InstallmentPicker({ value, quote, disabled, onChange }) {
   const options = quote.installment_options || [];
   const selectedOption = options.find((item) => item.installments === value) || quote;
   const selectedFee = selectedOption.installment_fee_cents || 0;
+  const selectedRegularInstallment = selectedOption.regular_installment_cents ?? Math.floor(selectedOption.total_cents / value);
+  const selectedFinalInstallment = selectedOption.final_installment_cents ?? selectedOption.total_cents - selectedRegularInstallment * (value - 1);
+  const hasFinalAdjustment = selectedFinalInstallment !== selectedRegularInstallment;
   return <label style={{ display: "grid", gap: 7, margin: "-8px 0 24px", color: T.ink, fontSize: 13, fontWeight: 750 }}>
     Em quantas vezes?
     <select aria-label="Parcelas do plano anual" value={value} disabled={disabled} onChange={(event) => onChange(Number(event.target.value))} style={{ ...G, width: "100%", padding: "12px 13px", border: `1px solid ${T.border}`, borderRadius: 10, background: "#FCFCFB", color: T.ink, fontSize: 14 }}>
@@ -241,14 +244,12 @@ function InstallmentPicker({ value, quote, disabled, onChange }) {
         const total = option.total_cents;
         const fee = option.installment_fee_cents || 0;
         const regularInstallment = option.regular_installment_cents ?? Math.floor(total / count);
-        const finalInstallment = option.final_installment_cents ?? total - regularInstallment * (count - 1);
-        const finalAdjustment = finalInstallment !== regularInstallment ? ` (última de ${money(finalInstallment)})` : "";
-        const installmentLabel = `${count}x de ${money(regularInstallment)}${finalAdjustment}`;
+        const installmentLabel = `${count}x de ${money(regularInstallment)}`;
         const surcharge = count >= 7 && fee > 0 ? ` · +${money(fee)} de taxas` : "";
         return <option key={count} value={count}>{installmentLabel}{surcharge}</option>;
       })}
     </select>
-    <span style={{ color: T.inkMid, fontSize: 12, fontWeight: 500, lineHeight: 1.45 }}>{value <= 6 ? "Sem acréscimo: você paga R$ 299,00 no total." : `O total inclui ${money(selectedFee)} de taxas do cartão; o Fincla recebe R$ 299,00.`}</span>
+    <span style={{ color: T.inkMid, fontSize: 12, fontWeight: 500, lineHeight: 1.45 }}>{value <= 6 ? "Sem acréscimo: você paga R$ 299,00 no total." : `O total inclui ${money(selectedFee)} de taxas do cartão; o Fincla recebe R$ 299,00.`}{hasFinalAdjustment ? " A última parcela pode variar alguns centavos por arredondamento." : ""}</span>
   </label>;
 }
 
