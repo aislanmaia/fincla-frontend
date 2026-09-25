@@ -19,6 +19,7 @@ export function CardsInvoiceHeader({
   usageColor,
   isCurrent,
   isPaid,
+  canMarkPaid,
   markingPaid,
   formatBRL,
   onPrevInvoice,
@@ -75,7 +76,7 @@ export function CardsInvoiceHeader({
         <InvoiceNav compact={isMobile} invoice={invoice} previousInvoice={previousInvoice} nextInvoice={nextInvoice}
           onPrev={onPrevInvoice} onNext={onNextInvoice} />
         <div style={isMobile ? { textAlign: "right" } : { display: "flex", alignItems: "center", gap: 10 }}>
-          {invoice?.atual && (
+          {canMarkPaid && (
             <div style={{ ...G, fontSize: dims.labelFontSize, fontWeight: 700, color: T.blue, textTransform: "uppercase", letterSpacing: isMobile ? "0.09em" : "0.08em", marginBottom: dims.labelMb }}>
               Fatura aberta
             </div>
@@ -103,7 +104,7 @@ export function CardsInvoiceHeader({
               <Download size={dims.btnIconSize} /> CSV
             </button>
           )}
-          {isCurrent && !isPaid && (
+          {canMarkPaid && (
             <button onClick={onMarkPaid}
               style={{ ...G, display: "flex", alignItems: "center", gap: dims.btnGap, padding: dims.btnPadGreen, borderRadius: 8, border: `1.5px solid ${T.green}`, background: T.greenLight, color: T.green, fontSize: dims.btnFontSize, fontWeight: 700, cursor: "pointer" }}>
               {markingPaid

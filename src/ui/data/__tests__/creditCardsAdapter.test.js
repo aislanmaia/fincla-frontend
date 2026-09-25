@@ -198,6 +198,76 @@ describe("creditCardsAdapter", () => {
     expect(card.parcelas_ativas).toHaveLength(1);
   });
 
+  it("preserva o status real de uma fatura passada que continua 'open' (não é a 'atual')", () => {
+    // Regressão: uma fatura cujo fechamento já passou sem ninguém marcar como
+    // paga deixa de ser "a corrente" (o front avança pro mês seguinte), mas
+    // continua `open` de verdade no backend. Antes, toda fatura do histórico
+    // que não fosse a `currentInvoice` virava `atual:false` sem carregar seu
+    // `status` real — a UI não tinha como diferenciar isso de "vencida sem
+    // jeito de pagar" e escondia o botão de marcar como paga.
+    const card = mapCreditCardToUi({
+      card: {
+        id: 3,
+        organization_id: "org-1",
+        last4: "7112",
+        brand: "Visa",
+        due_day: 10,
+        description: "Azul Itau",
+        credit_limit: 49000,
+        closing_day: 3,
+        color: "#2563EB",
+        available_limit: 40000,
+        used_limit: 9000,
+        limit_usage_percent: 18,
+      },
+      currentInvoice: {
+        // Heurística avançou pra outubro; setembro ficou pra trás no `history`.
+        month: "2026-10",
+        due_date: "2026-10-10",
+        total_amount: 7481.83,
+        status: "open",
+        items: [],
+        closing_date: "2026-10-03",
+        days_until_due: 15,
+        is_overdue: false,
+        paid_date: null,
+        previous_month_total: 8217.04,
+        month_over_month_change: -9,
+        limit_usage_percent: 18,
+        items_count: 0,
+        category_breakdown: [],
+      },
+      history: {
+        card_id: 3,
+        card_name: "Azul Itau",
+        period_start: "2026-08-01",
+        period_end: "2026-09-30",
+        summary: { total_spent: 8217.04, average_monthly: 8217.04, highest_month: null, lowest_month: null },
+        monthly_data: [
+          { year: 2026, month: 9, month_name: "September", total_amount: 8217.04, status: "open", items_count: 72, top_category: "Diversos" },
+        ],
+      },
+      futureCommitments: {
+        card_id: 3,
+        card_name: "Azul Itau",
+        card_last4: "7112",
+        credit_limit: 49000,
+        current_available_limit: 40000,
+        summary: { total_committed: 0, average_monthly: 0, lowest_month: null, highest_month: null },
+        monthly_breakdown: [],
+        ending_soon: [],
+        insights: [],
+      },
+    });
+
+    const setembro = card.faturas.find((f) => f.year === 2026 && f.month === 9);
+    expect(setembro).toMatchObject({
+      status: "open",
+      atual: false,
+      pago: false,
+    });
+  });
+
   it("monta payload de criação de cartão a partir do formulário da UI", () => {
     expect(buildCreateCreditCardPayload({
       organizationId: "org-1",

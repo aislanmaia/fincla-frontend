@@ -214,6 +214,10 @@ function appendFutureCommitmentMonthsToFaturas(faturas, futureCommitments, dueDa
       mes: formatInvoiceLabel(item.year, item.month),
       val: item.total_amount,
       pago: false,
+      // Mês futuro projetado, ainda sem fatura real no backend — não é "open"
+      // (não há o que marcar como paga ainda), então fica `null` em vez de
+      // reusar "open" e habilitar por engano um botão de ação sem invoice real.
+      status: null,
       venc: dueLabel,
       atual: false,
       year: item.year,
@@ -448,6 +452,13 @@ function mapInvoiceHistoryToUi(card, history, currentInvoice) {
     mes: formatInvoiceLabel(item.year, item.month),
     val: item.total_amount,
     pago: item.status === "paid",
+    // Status real do backend ('open'/'paid') — não pode ser derivado de `atual`,
+    // que é só a heurística de "qual mês o front decidiu tratar como corrente".
+    // Uma fatura `open` cujo fechamento já passou (ex.: due date vencido sem
+    // ninguém marcar como paga) vira `atual:false` aqui, mas continua `open` de
+    // verdade — sem este campo, a UI não tinha como diferenciar isso de "paga"
+    // ou saber que a ação de marcar como paga ainda cabe nela.
+    status: item.status,
     venc: `dia ${card.due_day}`,
     atual: false,
     year: item.year,
@@ -464,6 +475,7 @@ function mapInvoiceHistoryToUi(card, history, currentInvoice) {
     mes: formatInvoiceLabel(currentMonth.year, currentMonth.month),
     val: currentInvoice.total_amount,
     pago: currentInvoice.status === "paid",
+    status: currentInvoice.status,
     venc: currentInvoice.due_date
       ? formatLongDate(currentInvoice.due_date)
       : `dia ${card.due_day}`,

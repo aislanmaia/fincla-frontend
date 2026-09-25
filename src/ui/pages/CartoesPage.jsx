@@ -236,6 +236,11 @@ export const CartoesPage = ({
   const nextInvoice     = invoiceIdx < invoices.length-1 ? invoices[invoiceIdx+1] : null;
   const isCurrent       = !!invoice?.atual;
   const isPaid          = markedPaid[invoice?.id] || invoice?.pago;
+  // Gate de "pode marcar como paga" pelo status REAL do backend, não pela
+  // heurística de "é o mês corrente" (`isCurrent`/`atual`): uma fatura `open`
+  // cujo fechamento já passou vira `atual:false` (o front avança pra próxima),
+  // mas continua aberta de verdade e precisa poder ser paga navegando até ela.
+  const canMarkPaid     = !isPaid && invoice?.status === "open";
 
   const usagePercent = card ? safe(card.limite - card.disponivel, card.limite) : 0;
   const usageColor   = usagePercent >= 90 ? T.red : usagePercent >= 70 ? T.amber : T.green;
@@ -731,7 +736,7 @@ export const CartoesPage = ({
         variant="mobile"
         card={card} invoice={invoice} previousInvoice={previousInvoice} nextInvoice={nextInvoice}
         diffPercent={diffPercent} usagePercent={usagePercent} usageColor={usageColor}
-        isCurrent={isCurrent} isPaid={isPaid} markingPaid={markingPaid}
+        isCurrent={isCurrent} isPaid={isPaid} canMarkPaid={canMarkPaid} markingPaid={markingPaid}
         formatBRL={formatBRL}
         onPrevInvoice={()=>previousInvoice&&setInvoiceIdx(i=>i-1)}
         onNextInvoice={()=>nextInvoice&&setInvoiceIdx(i=>i+1)}
@@ -795,7 +800,7 @@ export const CartoesPage = ({
         variant="desktop"
         card={card} invoice={invoice} previousInvoice={previousInvoice} nextInvoice={nextInvoice}
         diffPercent={diffPercent} usagePercent={usagePercent} usageColor={usageColor}
-        isCurrent={isCurrent} isPaid={isPaid} markingPaid={markingPaid}
+        isCurrent={isCurrent} isPaid={isPaid} canMarkPaid={canMarkPaid} markingPaid={markingPaid}
         formatBRL={formatBRL}
         onPrevInvoice={()=>previousInvoice&&setInvoiceIdx(i=>i-1)}
         onNextInvoice={()=>nextInvoice&&setInvoiceIdx(i=>i+1)}
