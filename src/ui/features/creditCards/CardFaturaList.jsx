@@ -80,7 +80,10 @@ export function TxRow({ item, card, invoice, categoryColor, formatBRL, onLaunchR
       : "Abrir lançamento";
   const canLaunchRefund =
     !item.isRefund && item.transactionId != null && !!onLaunchRefund && !hasLinkedRefunds;
-  const expandable = !!(item.method || isInstallment || hasLinkedRefunds || canLaunchRefund);
+  // Uma linha de estorno nunca é parcela, nunca lança outro estorno e não tem
+  // `refunds_summary` próprio (não existe "estorno de estorno") — nenhuma das
+  // outras condições vale pra ela, por isso a cláusula própria.
+  const expandable = !!(item.method || isInstallment || hasLinkedRefunds || canLaunchRefund || (isRefund && canOpenTransaction));
 
   return (
     <div style={{ borderBottom: `1px solid ${T.border}` }}>
@@ -155,7 +158,7 @@ export function TxRow({ item, card, invoice, categoryColor, formatBRL, onLaunchR
           isInstallment && { label: "Total compra", val: formatBRL(installmentTotal), mono: true },
           isInstallment && { label: "Restante", val: formatBRL(installmentTotal - item.parcela.n * installmentValue), mono: true, color: T.blue },
         ].filter(Boolean);
-        if (detailChips.length === 0 && !isInstallment && !hasLinkedRefunds && !canLaunchRefund) return null;
+        if (detailChips.length === 0 && !isInstallment && !hasLinkedRefunds && !canLaunchRefund && !(isRefund && canOpenTransaction)) return null;
         return (
           <div style={{ padding: "0 20px 14px 71px", background: `${cc}06`, animation: "fadeIn 0.15s ease" }}>
             {detailChips.length > 0 && (

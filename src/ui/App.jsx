@@ -50,12 +50,15 @@ import { PlanningHub } from "./features/planning/PlanningHub.jsx";
 import { acceptOrganizationInvitation } from "./data/invitationAdapter.js";
 import {
   buildEditBaselineFromUi,
+  buildRefundLinkedTxFromUi,
   isUuidString,
+  mapApiTransactionToUi,
   modalPaymentKeyFromTransactionUi,
   transactionDateIsoFromBrDisplay,
   transactionUiValAbsForEdit,
 } from "./data/transactionsAdapter.js";
 import { SIM_CENARIOS_INIT } from "./data/simulationMockData.js";
+import { getTransaction } from "../api/transactions";
 
 import { NovaTransacaoModal } from "./features/novaTransacao/NovaTransacaoModal.jsx";
 import { useTransactionModalController } from "./features/novaTransacao/useTransactionModalController.js";
@@ -333,6 +336,19 @@ export default function App() {
       onEditTx={(tx) => {
         flushSync(() => setModalPreConfig(buildTxModalPreConfig(tx)));
         openTxModal({ [FC.TX]: String(tx.id) });
+        // A lista só traz o estorno; sem buscar a compra original, o card
+        // "Estornando a compra" nasce vazio.
+        if (tx.type === "refund" && tx.refundOfTransactionId != null && dataMode === "live" && session.activeOrgId) {
+          getTransaction(tx.refundOfTransactionId, session.activeOrgId)
+            .then((originalRaw) => {
+              const originalUi = mapApiTransactionToUi(originalRaw);
+              setModalPreConfig((p) => ({
+                ...(p || {}),
+                refundLinkedTx: buildRefundLinkedTxFromUi(originalUi),
+              }));
+            })
+            .catch(() => {});
+        }
       }}
       /**
        * Duplicar: o MESMO pré-preenchimento da edição, menos a identidade.

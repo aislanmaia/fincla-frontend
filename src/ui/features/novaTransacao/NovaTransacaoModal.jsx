@@ -476,6 +476,12 @@ export const NovaTransacaoModal = ({
    * revertia pro primeiro cartão da lista antes da recarga terminar.
    */
   const pendingQuickAddCardIdRef = useRef(null);
+  /**
+   * `preConfig.refundLinkedTx` pode chegar depois da hidratação inicial (fetch
+   * assíncrono da compra original). Uma trava por sessão aplica esse valor
+   * tardio uma vez só, sem reagir de novo se o usuário desvincular manualmente.
+   */
+  const refundLateHydrateAppliedRef = useRef(false);
 
   const useLiveCategoryTags = Boolean(organizationId && dataMode === "live");
   const categoryTagsData = useCategoryTagsData({
@@ -513,6 +519,14 @@ export const NovaTransacaoModal = ({
     setMethod,
     setCardId,
   });
+
+  useEffect(() => {
+    if (!open || !preConfig?.refundLinkedTx) return;
+    if (refundLateHydrateAppliedRef.current) return;
+    refundLateHydrateAppliedRef.current = true;
+    refund.hydrateFromPreConfig(preConfig);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, preConfig?.refundLinkedTx]);
 
   const {
     mStep,
@@ -727,6 +741,7 @@ export const NovaTransacaoModal = ({
     // Novo stamp = nova intenção de preConfig.cartaoId (ou nenhuma) — ainda
     // não reconciliada com a lista de cartões carregada.
     preConfigCardWantAppliedRef.current = false;
+    refundLateHydrateAppliedRef.current = false;
     // Reset roda com o drawer ainda ABERTO quando só o preConfig troca (ex.:
     // "novo lançamento" disparado de novo enquanto o drawer já estava
     // montado) — o efeito que zera `drawerSessionRef` só olha `open`, então

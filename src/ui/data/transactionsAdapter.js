@@ -795,6 +795,11 @@ export function buildTransactionsQuery({
  * payment_method e — quando o usuário já escolheu cartão — por cardId
  * client-side (a API atual não suporta filtro por card_id direto).
  *
+ * `date_end` vai bem além de hoje: o backend filtra cartão PARCELADO pelo
+ * `due_date` de cada parcela, não pela data da compra — uma compra feita
+ * hoje em 3x só teria parcela vencendo daqui a 1-3 faturas, e um corte em
+ * "hoje" a esconderia da busca até a última parcela vencer.
+ *
  * Retorna array de objetos no formato de UI (mapApiTransactionToUi) ordenado
  * por data desc, máximo `limit` itens.
  */
@@ -808,11 +813,12 @@ export async function fetchRefundCandidates({
   if (!organizationId) return [];
   const today = new Date();
   const since = new Date(today.getTime() - 365 * 86400000);
+  const until = new Date(today.getTime() + 3 * 365 * 86400000);
   const params = {
     organization_id: organizationId,
     type: "expense",
     date_start: formatLocalIsoDate(since),
-    date_end: formatLocalIsoDate(today),
+    date_end: formatLocalIsoDate(until),
     page: 1,
     limit: cardId != null ? Math.max(limit * 3, 24) : limit,
     sort_by: "date",
@@ -1148,6 +1154,26 @@ export function buildEditBaselineFromUi(ui) {
     modality: isCard ? (isParcelado ? "installment" : "cash") : null,
     installmentsCount: isParcelado ? ui.parcela.total : null,
     recurring: !!ui.rec,
+  };
+}
+
+/**
+ * Forma do card "Estornando a compra" (`RefundLinkPanel`) a partir de uma
+ * transação-UI já mapeada (a compra original de um estorno). Construtor único
+ * porque os dois caminhos que hidratam o modal de edição de um estorno
+ * precisam do mesmo formato.
+ */
+export function buildRefundLinkedTxFromUi(ui) {
+  if (!ui) return null;
+  return {
+    id: ui.id,
+    desc: ui.desc,
+    dateLabel: ui.date,
+    val: Math.abs(Number(ui.val) || 0),
+    cat: ui.cat,
+    categoryTagId: ui.categoryTagId ?? null,
+    paymentMethodKey: modalPaymentKeyFromTransactionUi(ui),
+    cardId: ui.cartaoId != null ? Number(ui.cartaoId) : null,
   };
 }
 

@@ -71,6 +71,7 @@ export const CATEGORY_LABEL_PT_BY_ICON_KEY = {
   receipt: "Impostos & Taxas",
   home: "Moradia",
   wallet: "Receita",
+  "circle-help": "Não classificado",
 };
 
 /** Nomes canônicos em inglês retornados pelo seed (variações comuns). */
@@ -86,6 +87,7 @@ export const CATEGORY_LABEL_PT_BY_EN_NAME = {
   "Taxes & Fees": "Impostos & Taxas",
   Housing: "Moradia",
   Income: "Receita",
+  Uncategorized: "Não classificado",
 };
 
 const CATEGORY_LABEL_PT_BY_EN_NAME_NORMALIZED = Object.fromEntries(

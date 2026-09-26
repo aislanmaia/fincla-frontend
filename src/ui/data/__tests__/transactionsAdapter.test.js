@@ -1,4 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("../../../api/transactions", () => ({
+  listTransactions: vi.fn(),
+}));
+
+import { listTransactions } from "../../../api/transactions";
 import {
   buildCreateTransactionPayload,
   buildUpdateTransactionPayload,
@@ -6,8 +12,13 @@ import {
   buildTransactionsSummaryQuery,
   buildTransactionsQuery,
   expandExpenseTxToAttributedParts,
+  fetchRefundCandidates,
   mapApiTransactionToUi,
 } from "../transactionsAdapter.js";
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
 
 describe("transactionsAdapter", () => {
   it("mapeia transacao parcelada da API para o formato usado na UI", () => {
@@ -623,5 +634,49 @@ describe("transactionsAdapter", () => {
       installments_count: 6,
       payment_method: "credit_card",
     });
+  });
+});
+
+describe("fetchRefundCandidates", () => {
+  it("pede uma janela de date_end no futuro, não 'hoje' — compra parcelada vence em faturas futuras", async () => {
+    listTransactions.mockResolvedValue({ data: [] });
+    const before = new Date();
+
+    await fetchRefundCandidates({ organizationId: "org-1", query: "teste" });
+
+    const params = listTransactions.mock.calls[0][0];
+    const dateEnd = new Date(`${params.date_end}T00:00:00`);
+    // Compra parcelada é filtrada pelo backend por due_date, não pela data da
+    // compra — uma 3x feita hoje só tem parcela vencendo daqui a 1-3 faturas.
+    // Um date_end raso demais (ex.: hoje) escondia a compra da busca até a
+    // última parcela vencer.
+    const oneYearOut = new Date(before.getTime() + 365 * 86400000);
+    expect(dateEnd.getTime()).toBeGreaterThan(oneYearOut.getTime());
+  });
+
+  it("compra parcelada com due_date no futuro aparece como candidata", async () => {
+    listTransactions.mockResolvedValue({
+      data: [
+        {
+          id: 21191,
+          type: "expense",
+          description: "teste",
+          value: 33.34,
+          payment_method: "credit_card",
+          date: "2026-12-10T00:00:00",
+          credit_card_id: 1,
+          tags: { categoria: [{ id: "cat-1", name: "Food & Groceries" }] },
+        },
+      ],
+    });
+
+    const candidates = await fetchRefundCandidates({
+      organizationId: "org-1",
+      query: "teste",
+      cardId: 1,
+    });
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].desc).toBe("teste");
   });
 });

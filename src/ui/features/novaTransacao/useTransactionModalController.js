@@ -5,6 +5,7 @@ import { getTransaction } from "../../../api/transactions";
 import { TRANSACTIONS } from "../../data/mockFinance.js";
 import {
   buildEditBaselineFromUi,
+  buildRefundLinkedTxFromUi,
   isUuidString,
   mapApiTransactionToUi,
   modalPaymentKeyFromTransactionUi,
@@ -37,6 +38,15 @@ export function useTransactionModalController({
   const [modalPreConfig, setModalPreConfig] = useState(null);
   const urlHydratedRef = useRef(false);
   const editTxHydrateKeyRef = useRef(null);
+  /**
+   * Chave da compra original em voo pro card "Estornando a compra". Dedicada
+   * (não reaproveita `cancelled`/`editTxHydrateKeyRef` do efeito principal):
+   * o próprio `setModalPreConfig` do fetch primário muda `modalPreConfig`, que
+   * é dependência desse efeito — ele reexecuta, a cleanup roda e marca
+   * `cancelled = true` antes do fetch aninhado responder, descartando o
+   * resultado sempre, mesmo sem nenhuma edição concorrente de verdade.
+   */
+  const refundLinkFetchKeyRef = useRef(null);
 
   const transactionRouteEditId = transactionEditIdFromPathname(pathname);
 
@@ -279,9 +289,13 @@ export function useTransactionModalController({
         const ui = mapApiTransactionToUi(raw);
         const txMethod = modalPaymentKeyFromTransactionUi(ui);
         const isParcelado = ui.parcela && ui.parcela.total > 1;
+        const isRefund = ui.type === "refund";
         setModalPreConfig((p) => ({
           ...(p || {}),
-          tipo: ui.val > 0 ? "receita" : "despesa",
+          // Estorno é dinheiro voltando — `ui.val` vem positivo (mesmo sinal
+          // de receita) — mas o toggle/aba de estorno só existe dentro da
+          // aba Despesa, então o tipo tem que ser forçado aqui.
+          tipo: isRefund ? "despesa" : ui.val > 0 ? "receita" : "despesa",
           desc: ui.desc,
           cat: ui.cat,
           categoryTagId: ui.categoryTagId ?? null,
@@ -310,7 +324,27 @@ export function useTransactionModalController({
           // Sem isso o backend recebe o pacote inteiro e precisa adivinhar o que mudou —
           // comparando contra valores que chegam derivados (fincla-api#90).
           editBaseline: buildEditBaselineFromUi(ui),
+          isEstorno: isRefund,
+          refundOfTransactionId: ui.refundOfTransactionId ?? null,
         }));
+
+        // O vínculo existe (`refundOfTransactionId`), mas a compra original
+        // não vem no payload do estorno — precisa de um segundo fetch pra
+        // popular o card "Estornando a compra".
+        if (isRefund && ui.refundOfTransactionId != null) {
+          const refundLinkKey = dedupeKey;
+          refundLinkFetchKeyRef.current = refundLinkKey;
+          getTransaction(ui.refundOfTransactionId, orgId)
+            .then((originalRaw) => {
+              if (refundLinkFetchKeyRef.current !== refundLinkKey) return;
+              const originalUi = mapApiTransactionToUi(originalRaw);
+              setModalPreConfig((p) => ({
+                ...(p || {}),
+                refundLinkedTx: buildRefundLinkedTxFromUi(originalUi),
+              }));
+            })
+            .catch(() => {});
+        }
       })
       .catch(() => {
         editTxHydrateKeyRef.current = null;
