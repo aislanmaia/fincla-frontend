@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, ChevronLeft, ChevronRight, Search } from "lucide-react";
-import { getAdminOrganization, getAdminOrganizations, getAdminPlans, getAdminUser, getAdminUsers } from "../api/admin";
+import { changeAdminUserAccess, getAdminOrganization, getAdminOrganizations, getAdminPlans, getAdminUser, getAdminUserAudit, getAdminUsers } from "../api/admin";
 import { handleApiError } from "../api/client";
 
 const PAGE_SIZE = 20;
@@ -17,9 +17,13 @@ export function AdminDirectory({ section }) {
   const [detail, setDetail] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [accessAction, setAccessAction] = useState(null);
+  const [accessReason, setAccessReason] = useState("");
+  const [audit, setAudit] = useState([]);
+  const [savingAccess, setSavingAccess] = useState(false);
 
   useEffect(() => {
-    setQuery(""); setSubmittedQuery(""); setStatus(""); setOffset(0); setDetail(null); setPage(null);
+    setQuery(""); setSubmittedQuery(""); setStatus(""); setOffset(0); setDetail(null); setPage(null); setAudit([]);
   }, [section]);
 
   useEffect(() => {
@@ -40,10 +44,27 @@ export function AdminDirectory({ section }) {
     setLoading(true); setError("");
     try {
       setDetail(section === "users" ? await getAdminUser(id) : await getAdminOrganization(id));
+      if (section === "users") setAudit((await getAdminUserAudit(id)).items);
     } catch (nextError) {
       setError(handleApiError(nextError));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function changeAccess(event) {
+    event.preventDefault();
+    if (!accessAction || accessReason.trim().length < 3) return;
+    setSavingAccess(true); setError("");
+    try {
+      await changeAdminUserAccess(detail.id, accessAction, accessReason.trim());
+      setDetail(await getAdminUser(detail.id));
+      setAudit((await getAdminUserAudit(detail.id)).items);
+      setAccessAction(null); setAccessReason("");
+    } catch (nextError) {
+      setError(handleApiError(nextError));
+    } finally {
+      setSavingAccess(false);
     }
   }
 
@@ -67,7 +88,7 @@ export function AdminDirectory({ section }) {
     {!detail && !loading && section === "users" && <div className="admin-directory-list">{page?.items.map((user) => <button type="button" className="admin-directory-row" key={user.id} onClick={() => openDetail(user.id)}><span><strong>{displayName(user)}</strong><small>{user.email}</small></span><span>{user.subscription?.plan || "Sem plano"}</span><span className="admin-pill">{user.subscription?.status || "Sem assinatura"}</span><ChevronRight size={18} /></button>)}{!page?.items.length && <p className="admin-empty">Nenhuma conta encontrada.</p>}</div>}
     {!detail && !loading && section === "organizations" && <div className="admin-directory-list">{page?.items.map((org) => <button type="button" className="admin-directory-row" key={org.id} onClick={() => openDetail(org.id)}><span><strong>{org.name}</strong><small>{org.id}</small></span><span>{org.org_type || "—"}</span><span>{date(org.created_at)}</span><ChevronRight size={18} /></button>)}{!page?.items.length && <p className="admin-empty">Nenhuma organização encontrada.</p>}</div>}
     {!detail && !loading && section === "plans" && <div className="admin-plan-grid">{page?.items.map((plan) => <article className="admin-plan-card" key={plan.id}><span className="admin-plan-audience">{plan.audience === "consultant" ? "CONSULTOR" : "PESSOAL"}</span><h2>{plan.name}</h2><p>{plan.id}</p><div><strong>{money(plan.monthly_price_cents)}</strong><small> / mês</small></div><p>Anual: {money(plan.yearly_price_cents)}</p><p>Até {plan.max_organizations} organizações · {plan.max_users_per_org} pessoas por organização</p><span className="admin-pill">{plan.is_active ? "Ativo" : "Inativo"}</span></article>)}</div>}
-    {detail && section === "users" && <div className="admin-detail-grid"><section className="admin-detail-card"><h2>Conta</h2><dl><dt>E-mail</dt><dd>{detail.email}</dd><dt>ID</dt><dd>{detail.id}</dd><dt>Criada em</dt><dd>{date(detail.created_at)}</dd><dt>Onboarding</dt><dd>{detail.onboarding_completed ? "Concluído" : "Pendente"}</dd><dt>Senha</dt><dd>{detail.password_pending ? "Aguardando definição" : "Definida"}</dd></dl></section><section className="admin-detail-card"><h2>Assinatura</h2>{detail.subscription ? <dl><dt>Plano</dt><dd>{detail.subscription.plan}</dd><dt>Estado</dt><dd>{detail.subscription.status}</dd><dt>Ciclo</dt><dd>{detail.subscription.billing_cycle}</dd><dt>Provedor</dt><dd>{detail.subscription.gateway_provider}</dd><dt>Período</dt><dd>{date(detail.subscription.current_period_start)} a {date(detail.subscription.current_period_end)}</dd><dt>Cancelamento</dt><dd>{detail.subscription.cancel_at_period_end ? "Ao fim do período" : detail.subscription.cancelled_at ? date(detail.subscription.cancelled_at) : "Não agendado"}</dd></dl> : <p>Sem assinatura.</p>}</section><section className="admin-detail-card"><h2>Organizações</h2>{detail.organizations.length ? detail.organizations.map((org) => <p key={org.id}>{org.name} <span className="admin-pill">{org.role}</span></p>) : <p>Nenhuma organização.</p>}</section><section className="admin-detail-card"><h2>Faturas</h2>{detail.invoices.length ? detail.invoices.map((invoice) => <p key={invoice.id}>{date(invoice.due_date)} · {money(invoice.amount_cents)} · {invoice.status} {invoice.invoice_url && <a href={invoice.invoice_url} target="_blank" rel="noreferrer">Abrir</a>}</p>) : <p>Nenhuma fatura.</p>}</section></div>}
+    {detail && section === "users" && <div className="admin-detail-grid"><section className="admin-detail-card"><h2>Conta</h2><dl><dt>E-mail</dt><dd>{detail.email}</dd><dt>ID</dt><dd>{detail.id}</dd><dt>Criada em</dt><dd>{date(detail.created_at)}</dd><dt>Onboarding</dt><dd>{detail.onboarding_completed ? "Concluído" : "Pendente"}</dd><dt>Senha</dt><dd>{detail.password_pending ? "Aguardando definição" : "Definida"}</dd><dt>Acesso</dt><dd>{detail.blocked_at ? `Bloqueado em ${date(detail.blocked_at)}` : "Liberado"}</dd></dl><div className="admin-access-controls"><button type="button" onClick={() => { setAccessAction(detail.blocked_at ? "unblock" : "block"); setAccessReason(""); }}>{detail.blocked_at ? "Desbloquear conta" : "Bloquear conta"}</button></div>{accessAction && <form className="admin-access-form" onSubmit={changeAccess}><strong>Confirmar {accessAction === "block" ? "bloqueio" : "desbloqueio"}</strong><p>Esta ação altera imediatamente o acesso ao aplicativo e será registrada no histórico.</p><label htmlFor="admin-access-reason">Motivo</label><textarea id="admin-access-reason" value={accessReason} onChange={(event) => setAccessReason(event.target.value)} minLength={3} maxLength={2000} required /><div><button type="button" onClick={() => setAccessAction(null)}>Cancelar</button><button type="submit" disabled={savingAccess || accessReason.trim().length < 3}>{savingAccess ? "Salvando…" : "Confirmar"}</button></div></form>}</section><section className="admin-detail-card"><h2>Assinatura</h2>{detail.subscription ? <dl><dt>Plano</dt><dd>{detail.subscription.plan}</dd><dt>Estado</dt><dd>{detail.subscription.status}</dd><dt>Ciclo</dt><dd>{detail.subscription.billing_cycle}</dd><dt>Provedor</dt><dd>{detail.subscription.gateway_provider}</dd><dt>Período</dt><dd>{date(detail.subscription.current_period_start)} a {date(detail.subscription.current_period_end)}</dd><dt>Cancelamento</dt><dd>{detail.subscription.cancel_at_period_end ? "Ao fim do período" : detail.subscription.cancelled_at ? date(detail.subscription.cancelled_at) : "Não agendado"}</dd></dl> : <p>Sem assinatura.</p>}</section><section className="admin-detail-card"><h2>Organizações</h2>{detail.organizations.length ? detail.organizations.map((org) => <p key={org.id}>{org.name} <span className="admin-pill">{org.role}</span></p>) : <p>Nenhuma organização.</p>}</section><section className="admin-detail-card"><h2>Faturas</h2>{detail.invoices.length ? detail.invoices.map((invoice) => <p key={invoice.id}>{date(invoice.due_date)} · {money(invoice.amount_cents)} · {invoice.status} {invoice.invoice_url && <a href={invoice.invoice_url} target="_blank" rel="noreferrer">Abrir</a>}</p>) : <p>Nenhuma fatura.</p>}</section><section className="admin-detail-card"><h2>Histórico de acesso</h2>{audit.length ? audit.map((event) => <p key={event.id}>{date(event.created_at)} · {event.action === "block" ? "Bloqueio" : "Desbloqueio"} · {event.reason}</p>) : <p>Nenhuma ação registrada.</p>}</section></div>}
     {detail && section === "organizations" && <div className="admin-detail-grid"><section className="admin-detail-card"><h2>Organização</h2><dl><dt>ID</dt><dd>{detail.id}</dd><dt>Tipo</dt><dd>{detail.org_type || "—"}</dd><dt>Criada em</dt><dd>{date(detail.created_at)}</dd></dl></section><section className="admin-detail-card"><h2>Membros e proprietário</h2>{detail.members.length ? detail.members.map((member) => <p key={member.id}>{displayName(member)} <span className="admin-pill">{member.role}</span><br /><small>{member.email}</small></p>) : <p>Nenhum membro.</p>}</section></div>}
     {!detail && section !== "plans" && !loading && page?.total > PAGE_SIZE && <div className="admin-pagination"><button type="button" disabled={!offset} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}><ChevronLeft size={16} /> Anterior</button><span>{offset + 1}–{Math.min(offset + PAGE_SIZE, page.total)} de {page.total}</span><button type="button" disabled={offset + PAGE_SIZE >= page.total} onClick={() => setOffset(offset + PAGE_SIZE)}>Próxima <ChevronRight size={16} /></button></div>}
   </div>;

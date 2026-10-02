@@ -38,6 +38,7 @@ export interface AdminUser {
   created_at: string;
   onboarding_completed: boolean;
   password_pending: boolean;
+  blocked_at: string | null;
   subscription: AdminSubscription | null;
 }
 
@@ -75,3 +76,9 @@ export const getAdminOrganization = async (id: string) =>
 
 export const getAdminPlans = async () =>
   (await apiClient.get<{ items: AdminPlan[] }>('/admin/plans')).data;
+
+export const changeAdminUserAccess = async (id: string, action: 'block' | 'unblock', reason: string) =>
+  (await apiClient.post<{ blocked_at: string | null; audit_event_id: string }>(`/admin/users/${id}/${action}`, { reason })).data;
+
+export const getAdminUserAudit = async (id: string) =>
+  (await apiClient.get<{ items: Array<{ id: string; actor_user_id: string; action: string; reason: string; created_at: string }> }>(`/admin/users/${id}/audit`)).data;

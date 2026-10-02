@@ -9,11 +9,13 @@ const mocks = vi.hoisted(() => ({
   getAdminOrganizations: vi.fn(),
   getAdminOrganization: vi.fn(),
   getAdminPlans: vi.fn(),
+  getAdminUserAudit: vi.fn(),
+  changeAdminUserAccess: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
 }));
 
-vi.mock("../api/admin", () => ({ getAdminMe: mocks.getAdminMe, getAdminUsers: mocks.getAdminUsers, getAdminUser: mocks.getAdminUser, getAdminOrganizations: mocks.getAdminOrganizations, getAdminOrganization: mocks.getAdminOrganization, getAdminPlans: mocks.getAdminPlans }));
+vi.mock("../api/admin", () => ({ getAdminMe: mocks.getAdminMe, getAdminUsers: mocks.getAdminUsers, getAdminUser: mocks.getAdminUser, getAdminOrganizations: mocks.getAdminOrganizations, getAdminOrganization: mocks.getAdminOrganization, getAdminPlans: mocks.getAdminPlans, getAdminUserAudit: mocks.getAdminUserAudit, changeAdminUserAccess: mocks.changeAdminUserAccess }));
 vi.mock("../api/auth", () => ({ login: mocks.login, logout: mocks.logout }));
 
 import { AdminApp } from "./AdminApp.jsx";
@@ -25,6 +27,7 @@ beforeEach(() => {
   mocks.getAdminUsers.mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 });
   mocks.getAdminOrganizations.mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 });
   mocks.getAdminPlans.mockResolvedValue({ items: [] });
+  mocks.getAdminUserAudit.mockResolvedValue({ items: [] });
 });
 
 describe("painel do administrador Fincla", () => {
@@ -89,5 +92,9 @@ describe("painel do administrador Fincla", () => {
     fireEvent.click(screen.getByRole("button", { name: /Cliente/ }));
     expect(await screen.findByText("Assinatura")).toBeInTheDocument();
     expect(mocks.getAdminUser).toHaveBeenCalledWith("user-1");
+    fireEvent.click(screen.getByRole("button", { name: "Bloquear conta" }));
+    fireEvent.change(screen.getByLabelText("Motivo"), { target: { value: "Solicitação de suporte" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+    await waitFor(() => expect(mocks.changeAdminUserAccess).toHaveBeenCalledWith("user-1", "block", "Solicitação de suporte"));
   });
 });
