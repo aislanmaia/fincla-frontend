@@ -13,11 +13,14 @@ const mocks = vi.hoisted(() => ({
   changeAdminUserAccess: vi.fn(),
   createAdminAccount: vi.fn(),
   sendAdminPasswordReset: vi.fn(),
+  changeAdminBeta: vi.fn(),
+  grantAdminCourtesy: vi.fn(),
+  endAdminCourtesy: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
 }));
 
-vi.mock("../api/admin", () => ({ getAdminMe: mocks.getAdminMe, getAdminUsers: mocks.getAdminUsers, getAdminUser: mocks.getAdminUser, getAdminOrganizations: mocks.getAdminOrganizations, getAdminOrganization: mocks.getAdminOrganization, getAdminPlans: mocks.getAdminPlans, getAdminUserAudit: mocks.getAdminUserAudit, changeAdminUserAccess: mocks.changeAdminUserAccess, createAdminAccount: mocks.createAdminAccount, sendAdminPasswordReset: mocks.sendAdminPasswordReset }));
+vi.mock("../api/admin", () => ({ getAdminMe: mocks.getAdminMe, getAdminUsers: mocks.getAdminUsers, getAdminUser: mocks.getAdminUser, getAdminOrganizations: mocks.getAdminOrganizations, getAdminOrganization: mocks.getAdminOrganization, getAdminPlans: mocks.getAdminPlans, getAdminUserAudit: mocks.getAdminUserAudit, changeAdminUserAccess: mocks.changeAdminUserAccess, createAdminAccount: mocks.createAdminAccount, sendAdminPasswordReset: mocks.sendAdminPasswordReset, changeAdminBeta: mocks.changeAdminBeta, grantAdminCourtesy: mocks.grantAdminCourtesy, endAdminCourtesy: mocks.endAdminCourtesy }));
 vi.mock("../api/auth", () => ({ login: mocks.login, logout: mocks.logout }));
 
 import { AdminApp } from "./AdminApp.jsx";
@@ -31,6 +34,7 @@ beforeEach(() => {
   mocks.getAdminPlans.mockResolvedValue({ items: [] });
   mocks.getAdminUserAudit.mockResolvedValue({ items: [] });
   mocks.sendAdminPasswordReset.mockResolvedValue({ email_sent: true });
+  mocks.changeAdminBeta.mockResolvedValue({ beta_enabled: true });
 });
 
 describe("painel do administrador Fincla", () => {
@@ -103,6 +107,10 @@ describe("painel do administrador Fincla", () => {
     fireEvent.change(screen.getByLabelText("Motivo", { selector: "textarea#admin-reset-reason" }), { target: { value: "Usuário esqueceu a senha" } });
     fireEvent.click(screen.getByRole("button", { name: "Confirmar envio" }));
     await waitFor(() => expect(mocks.sendAdminPasswordReset).toHaveBeenCalledWith("user-1", "Usuário esqueceu a senha"));
+    fireEvent.click(screen.getByRole("button", { name: "Ativar beta" }));
+    fireEvent.change(screen.getByLabelText("Motivo", { selector: "textarea#admin-grant-reason" }), { target: { value: "Acesso para teste" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
+    await waitFor(() => expect(mocks.changeAdminBeta).toHaveBeenCalledWith("user-1", true, "Acesso para teste"));
   });
 
   it("cria conta assistida sem exigir campos opcionais", async () => {

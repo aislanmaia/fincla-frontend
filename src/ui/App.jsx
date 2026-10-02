@@ -483,7 +483,7 @@ export default function App() {
     </>
   );
 
-  if (session.isAuthenticated && (session.user?.subscription?.status === "pending_payment" || session.user?.subscription?.is_entitled === false)) return session.user?.subscription?.checkout_selection?.persona === "consultant" ? <ConsultantCheckoutPage session={session} /> : <CheckoutPage search="" session={session} />;
+  if (session.isAuthenticated && ((session.user?.subscription?.status === "pending_payment" && session.user?.subscription?.is_entitled !== true) || session.user?.subscription?.is_entitled === false)) return session.user?.subscription?.checkout_selection?.persona === "consultant" ? <ConsultantCheckoutPage session={session} /> : <CheckoutPage search="" session={session} />;
 
   if (session.isAuthenticated && (session.onboardingRequired || showOnboarding)) return (
     <OnboardingFlow

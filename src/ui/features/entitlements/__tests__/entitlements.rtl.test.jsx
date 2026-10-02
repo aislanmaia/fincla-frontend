@@ -77,6 +77,15 @@ describe("useEntitlement", () => {
       ).toBe(false);
     }
   });
+
+  it("honors an active beta or courtesy grant over pending payment", () => {
+    expect(useEntitlement("advanced_reports", {
+      subscription: { status: "pending_payment", is_entitled: true, features: ["advanced_reports"] },
+    })).toBe(true);
+    expect(useEntitlement("advanced_reports", {
+      subscription: { status: "active", is_entitled: false, features: ["advanced_reports"] },
+    })).toBe(false);
+  });
 });
 
 describe("<FeatureGate>", () => {

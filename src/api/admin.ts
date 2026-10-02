@@ -28,6 +28,9 @@ export interface AdminSubscription {
   current_period_end: string | null;
   cancel_at_period_end: boolean;
   cancelled_at: string | null;
+  beta_enabled: boolean;
+  courtesy_plan: string | null;
+  courtesy_until: string | null;
 }
 
 export interface AdminUser {
@@ -88,3 +91,12 @@ export const createAdminAccount = async (data: { email: string; first_name: stri
 
 export const sendAdminPasswordReset = async (id: string, reason: string) =>
   (await apiClient.post<{ email_sent: boolean }>(`/admin/users/${id}/password-reset-email`, { reason })).data;
+
+export const changeAdminBeta = async (id: string, enabled: boolean, reason: string) =>
+  (await apiClient.post(`/admin/users/${id}/beta${enabled ? '' : '/end'}`, { reason })).data;
+
+export const grantAdminCourtesy = async (id: string, plan: string, expires_at: string, reason: string) =>
+  (await apiClient.post(`/admin/users/${id}/courtesy`, { plan, expires_at, reason })).data;
+
+export const endAdminCourtesy = async (id: string, reason: string) =>
+  (await apiClient.post(`/admin/users/${id}/courtesy/end`, { reason })).data;

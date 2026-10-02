@@ -96,7 +96,7 @@ export function useSession() {
 
     try {
       const user = await getCurrentUser();
-      const orgResponse = user.subscription?.is_entitled === false || user.subscription?.status === "pending_payment"
+      const orgResponse = user.subscription?.is_entitled === false || (user.subscription?.status === "pending_payment" && user.subscription?.is_entitled !== true)
         ? { organizations: [] }
         : await getMyOrganizations();
 

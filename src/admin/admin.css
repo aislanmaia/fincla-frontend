@@ -117,3 +117,11 @@
 @media (max-width: 760px) { .admin-create-fields { grid-template-columns: 1fr; } }
 .admin-reset-card { margin-top: 16px; }
 .admin-reset-card > p { max-width: 600px; }
+.admin-grants-card { margin-top: 16px; }
+.admin-grant-states { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.admin-grant-states p { display: grid; gap: 6px; }
+.admin-grant-states strong { color: #24382c; }
+.admin-grant-buttons { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 16px; }
+.admin-grant-buttons button { border: 1px solid #b7cbb8; border-radius: 7px; background: #f2f8f0; color: #365b41; padding: 9px 12px; font: inherit; font-size: 12px; cursor: pointer; }
+.admin-grant-buttons button:disabled { opacity: .45; cursor: default; }
+.admin-grants-card .admin-access-form input, .admin-grants-card .admin-access-form select { border: 1px solid #dce0d9; border-radius: 7px; padding: 10px; font: inherit; }
