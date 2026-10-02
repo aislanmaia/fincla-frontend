@@ -125,3 +125,8 @@
 .admin-grant-buttons button { border: 1px solid #b7cbb8; border-radius: 7px; background: #f2f8f0; color: #365b41; padding: 9px 12px; font: inherit; font-size: 12px; cursor: pointer; }
 .admin-grant-buttons button:disabled { opacity: .45; cursor: default; }
 .admin-grants-card .admin-access-form input, .admin-grants-card .admin-access-form select { border: 1px solid #dce0d9; border-radius: 7px; padding: 10px; font: inherit; }
+.admin-billing-card { margin-top: 16px; }
+.admin-billing-card .admin-access-form select { border: 1px solid #dce0d9; border-radius: 7px; padding: 10px; font: inherit; }
+.admin-billing-pending { margin-top: 18px; padding: 15px; border: 1px solid #e5d6ac; background: #fff9ec; border-radius: 8px; }
+.admin-billing-pending strong { font-size: 13px; }
+.admin-billing-pending button { border: 0; background: none; color: #6e5523; padding: 0; font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }

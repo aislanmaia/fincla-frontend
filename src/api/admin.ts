@@ -24,6 +24,7 @@ export interface AdminSubscription {
   status: string;
   billing_cycle: string;
   gateway_provider: string;
+  gateway_subscription_id: string | null;
   current_period_start: string | null;
   current_period_end: string | null;
   cancel_at_period_end: boolean;
@@ -100,3 +101,25 @@ export const grantAdminCourtesy = async (id: string, plan: string, expires_at: s
 
 export const endAdminCourtesy = async (id: string, reason: string) =>
   (await apiClient.post(`/admin/users/${id}/courtesy/end`, { reason })).data;
+
+export interface AdminPlanChangeRequest {
+  id: string;
+  current_plan: string;
+  target_plan: string;
+  target_cycle: 'monthly' | 'yearly';
+  state: string;
+  reason: string;
+  created_at: string;
+}
+
+export const getAdminPlanRequests = async (id: string) =>
+  (await apiClient.get<{ items: AdminPlanChangeRequest[] }>(`/admin/users/${id}/plan-change-requests`)).data;
+
+export const requestAdminPlanChange = async (id: string, target_plan: string, target_cycle: 'monthly' | 'yearly', reason: string) =>
+  (await apiClient.post<AdminPlanChangeRequest>(`/admin/users/${id}/plan-change-requests`, { target_plan, target_cycle, reason })).data;
+
+export const withdrawAdminPlanChange = async (id: string, requestId: string, reason: string) =>
+  (await apiClient.post<AdminPlanChangeRequest>(`/admin/users/${id}/plan-change-requests/${requestId}/withdraw`, { reason })).data;
+
+export const cancelAdminRenewal = async (id: string, reason: string) =>
+  (await apiClient.post<{ status: string; cancel_at_period_end: boolean; effective_until: string }>(`/admin/users/${id}/cancel-renewal`, { reason })).data;

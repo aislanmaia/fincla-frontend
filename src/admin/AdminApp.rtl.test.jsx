@@ -16,11 +16,15 @@ const mocks = vi.hoisted(() => ({
   changeAdminBeta: vi.fn(),
   grantAdminCourtesy: vi.fn(),
   endAdminCourtesy: vi.fn(),
+  getAdminPlanRequests: vi.fn(),
+  requestAdminPlanChange: vi.fn(),
+  withdrawAdminPlanChange: vi.fn(),
+  cancelAdminRenewal: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
 }));
 
-vi.mock("../api/admin", () => ({ getAdminMe: mocks.getAdminMe, getAdminUsers: mocks.getAdminUsers, getAdminUser: mocks.getAdminUser, getAdminOrganizations: mocks.getAdminOrganizations, getAdminOrganization: mocks.getAdminOrganization, getAdminPlans: mocks.getAdminPlans, getAdminUserAudit: mocks.getAdminUserAudit, changeAdminUserAccess: mocks.changeAdminUserAccess, createAdminAccount: mocks.createAdminAccount, sendAdminPasswordReset: mocks.sendAdminPasswordReset, changeAdminBeta: mocks.changeAdminBeta, grantAdminCourtesy: mocks.grantAdminCourtesy, endAdminCourtesy: mocks.endAdminCourtesy }));
+vi.mock("../api/admin", () => ({ getAdminMe: mocks.getAdminMe, getAdminUsers: mocks.getAdminUsers, getAdminUser: mocks.getAdminUser, getAdminOrganizations: mocks.getAdminOrganizations, getAdminOrganization: mocks.getAdminOrganization, getAdminPlans: mocks.getAdminPlans, getAdminUserAudit: mocks.getAdminUserAudit, changeAdminUserAccess: mocks.changeAdminUserAccess, createAdminAccount: mocks.createAdminAccount, sendAdminPasswordReset: mocks.sendAdminPasswordReset, changeAdminBeta: mocks.changeAdminBeta, grantAdminCourtesy: mocks.grantAdminCourtesy, endAdminCourtesy: mocks.endAdminCourtesy, getAdminPlanRequests: mocks.getAdminPlanRequests, requestAdminPlanChange: mocks.requestAdminPlanChange, withdrawAdminPlanChange: mocks.withdrawAdminPlanChange, cancelAdminRenewal: mocks.cancelAdminRenewal }));
 vi.mock("../api/auth", () => ({ login: mocks.login, logout: mocks.logout }));
 
 import { AdminApp } from "./AdminApp.jsx";
@@ -32,6 +36,7 @@ beforeEach(() => {
   mocks.getAdminUsers.mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 });
   mocks.getAdminOrganizations.mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 });
   mocks.getAdminPlans.mockResolvedValue({ items: [] });
+  mocks.getAdminPlanRequests.mockResolvedValue({ items: [] });
   mocks.getAdminUserAudit.mockResolvedValue({ items: [] });
   mocks.sendAdminPasswordReset.mockResolvedValue({ email_sent: true });
   mocks.changeAdminBeta.mockResolvedValue({ beta_enabled: true });
@@ -129,5 +134,21 @@ describe("painel do administrador Fincla", () => {
     fireEvent.click(screen.getByRole("button", { name: "Criar e enviar convite" }));
     expect(await screen.findByText("Conta criada e convite enviado por e-mail.")).toBeInTheDocument();
     expect(mocks.createAdminAccount).toHaveBeenCalledWith(expect.objectContaining({ email: "nova@example.com", first_name: "Nova", organization_name: "Família Nova" }));
+  });
+
+  it("mostra mudança paga como pendente sem trocar o plano exibido", async () => {
+    localStorage.setItem("auth_token", "admin-token");
+    mocks.getAdminMe.mockResolvedValue({ id: "admin-1", email: "aislan.sousamaia@gmail.com", is_admin: true });
+    mocks.getAdminUsers.mockResolvedValue({ items: [{ id: "paid-1", email: "paga@example.com", first_name: null, last_name: null, subscription: { plan: "pro", status: "active" } }], total: 1, limit: 20, offset: 0 });
+    mocks.getAdminUser.mockResolvedValue({ id: "paid-1", email: "paga@example.com", first_name: null, last_name: null, created_at: "2026-01-01", onboarding_completed: true, password_pending: false, blocked_at: null, organizations: [], invoices: [], subscription: { plan: "pro", status: "active", billing_cycle: "monthly", gateway_provider: "asaas", gateway_subscription_id: "sub_test", current_period_start: "2026-09-01", current_period_end: "2026-11-01", cancel_at_period_end: false, cancelled_at: null, beta_enabled: false, courtesy_plan: null, courtesy_until: null } });
+    mocks.getAdminPlanRequests.mockResolvedValue({ items: [{ id: "change-1", current_plan: "pro", target_plan: "essential", target_cycle: "monthly", state: "pending_manual", reason: "Cliente solicitou", created_at: "2026-10-01" }] });
+
+    render(<AdminApp />);
+    expect(await screen.findByText("Acesso administrativo ativo")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Contas" })[0]);
+    fireEvent.click(await screen.findByRole("button", { name: /paga@example.com/ }));
+    expect(await screen.findByText("Mudança pendente de execução")).toBeInTheDocument();
+    expect(screen.getByText(/O plano atual continua ativo/)).toBeInTheDocument();
+    expect(screen.getByText("pro", { selector: "strong" })).toBeInTheDocument();
   });
 });
