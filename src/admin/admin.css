@@ -102,3 +102,16 @@
 .admin-access-form > div { display: flex; gap: 12px; justify-content: flex-end; }
 .admin-access-form button[type="button"] { border: 0; background: none; color: #536455; font: inherit; font-size: 12px; cursor: pointer; }
 .admin-access-form button:disabled { opacity: .5; cursor: default; }
+.admin-create-trigger, .admin-create-actions button[type="submit"] { border: 0; border-radius: 7px; background: #294335; color: #fff; padding: 11px 16px; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.admin-create-form { background: #fff; border: 1px solid #e0e4dd; border-radius: 11px; padding: clamp(22px, 4vw, 36px); }
+.admin-create-form h2 { margin: 0 0 8px; font-size: 20px; }
+.admin-create-form > p { color: #6f7c70; font-size: 13px; margin-bottom: 25px; }
+.admin-create-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.admin-create-fields label { display: grid; gap: 8px; color: #405548; font-size: 12px; font-weight: 600; }
+.admin-create-fields label small { color: #89968b; font-weight: 400; }
+.admin-create-fields input, .admin-create-fields select { min-width: 0; border: 1px solid #dce0d9; border-radius: 7px; padding: 11px; background: #fff; font: inherit; font-size: 13px; }
+.admin-create-actions { display: flex; justify-content: end; gap: 15px; margin-top: 28px; }
+.admin-create-actions button[type="button"] { border: 0; background: none; color: #536455; font: inherit; font-size: 12px; cursor: pointer; }
+.admin-create-actions button:disabled { opacity: .5; cursor: default; }
+.admin-notice { border: 1px solid #c7dfc1; background: #f0f8ed; color: #365b41; padding: 12px 15px; border-radius: 7px; margin-bottom: 18px; font-size: 13px; }
+@media (max-width: 760px) { .admin-create-fields { grid-template-columns: 1fr; } }

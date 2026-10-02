@@ -82,3 +82,6 @@ export const changeAdminUserAccess = async (id: string, action: 'block' | 'unblo
 
 export const getAdminUserAudit = async (id: string) =>
   (await apiClient.get<{ items: Array<{ id: string; actor_user_id: string; action: string; reason: string; created_at: string }> }>(`/admin/users/${id}/audit`)).data;
+
+export const createAdminAccount = async (data: { email: string; first_name: string; last_name?: string; organization_name: string; organization_type?: string; monthly_income?: string }) =>
+  (await apiClient.post<{ user_id: string; organization_id: string; email_sent: boolean }>('/admin/users', data)).data;

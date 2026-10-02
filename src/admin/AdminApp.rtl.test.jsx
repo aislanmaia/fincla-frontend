@@ -11,11 +11,12 @@ const mocks = vi.hoisted(() => ({
   getAdminPlans: vi.fn(),
   getAdminUserAudit: vi.fn(),
   changeAdminUserAccess: vi.fn(),
+  createAdminAccount: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
 }));
 
-vi.mock("../api/admin", () => ({ getAdminMe: mocks.getAdminMe, getAdminUsers: mocks.getAdminUsers, getAdminUser: mocks.getAdminUser, getAdminOrganizations: mocks.getAdminOrganizations, getAdminOrganization: mocks.getAdminOrganization, getAdminPlans: mocks.getAdminPlans, getAdminUserAudit: mocks.getAdminUserAudit, changeAdminUserAccess: mocks.changeAdminUserAccess }));
+vi.mock("../api/admin", () => ({ getAdminMe: mocks.getAdminMe, getAdminUsers: mocks.getAdminUsers, getAdminUser: mocks.getAdminUser, getAdminOrganizations: mocks.getAdminOrganizations, getAdminOrganization: mocks.getAdminOrganization, getAdminPlans: mocks.getAdminPlans, getAdminUserAudit: mocks.getAdminUserAudit, changeAdminUserAccess: mocks.changeAdminUserAccess, createAdminAccount: mocks.createAdminAccount }));
 vi.mock("../api/auth", () => ({ login: mocks.login, logout: mocks.logout }));
 
 import { AdminApp } from "./AdminApp.jsx";
@@ -96,5 +97,23 @@ describe("painel do administrador Fincla", () => {
     fireEvent.change(screen.getByLabelText("Motivo"), { target: { value: "Solicitação de suporte" } });
     fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
     await waitFor(() => expect(mocks.changeAdminUserAccess).toHaveBeenCalledWith("user-1", "block", "Solicitação de suporte"));
+  });
+
+  it("cria conta assistida sem exigir campos opcionais", async () => {
+    localStorage.setItem("auth_token", "admin-token");
+    mocks.getAdminMe.mockResolvedValue({ id: "admin-1", email: "aislan.sousamaia@gmail.com", is_admin: true });
+    mocks.createAdminAccount.mockResolvedValue({ user_id: "user-2", organization_id: "org-2", email_sent: true });
+    mocks.getAdminUser.mockResolvedValue({ id: "user-2", email: "nova@example.com", first_name: "Nova", last_name: null, created_at: "2026-01-01", onboarding_completed: true, password_pending: true, blocked_at: null, subscription: null, organizations: [], invoices: [] });
+
+    render(<AdminApp />);
+    expect(await screen.findByText("Acesso administrativo ativo")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Contas" })[0]);
+    fireEvent.click(await screen.findByRole("button", { name: "Criar conta" }));
+    fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "Nova" } });
+    fireEvent.change(screen.getByLabelText("E-mail"), { target: { value: "nova@example.com" } });
+    fireEvent.change(screen.getByLabelText("Organização"), { target: { value: "Família Nova" } });
+    fireEvent.click(screen.getByRole("button", { name: "Criar e enviar convite" }));
+    expect(await screen.findByText("Conta criada e convite enviado por e-mail.")).toBeInTheDocument();
+    expect(mocks.createAdminAccount).toHaveBeenCalledWith(expect.objectContaining({ email: "nova@example.com", first_name: "Nova", organization_name: "Família Nova" }));
   });
 });
