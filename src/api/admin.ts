@@ -85,3 +85,6 @@ export const getAdminUserAudit = async (id: string) =>
 
 export const createAdminAccount = async (data: { email: string; first_name: string; last_name?: string; organization_name: string; organization_type?: string; monthly_income?: string }) =>
   (await apiClient.post<{ user_id: string; organization_id: string; email_sent: boolean }>('/admin/users', data)).data;
+
+export const sendAdminPasswordReset = async (id: string, reason: string) =>
+  (await apiClient.post<{ email_sent: boolean }>(`/admin/users/${id}/password-reset-email`, { reason })).data;

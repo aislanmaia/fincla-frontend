@@ -115,3 +115,5 @@
 .admin-create-actions button:disabled { opacity: .5; cursor: default; }
 .admin-notice { border: 1px solid #c7dfc1; background: #f0f8ed; color: #365b41; padding: 12px 15px; border-radius: 7px; margin-bottom: 18px; font-size: 13px; }
 @media (max-width: 760px) { .admin-create-fields { grid-template-columns: 1fr; } }
+.admin-reset-card { margin-top: 16px; }
+.admin-reset-card > p { max-width: 600px; }

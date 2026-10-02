@@ -12,11 +12,12 @@ const mocks = vi.hoisted(() => ({
   getAdminUserAudit: vi.fn(),
   changeAdminUserAccess: vi.fn(),
   createAdminAccount: vi.fn(),
+  sendAdminPasswordReset: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
 }));
 
-vi.mock("../api/admin", () => ({ getAdminMe: mocks.getAdminMe, getAdminUsers: mocks.getAdminUsers, getAdminUser: mocks.getAdminUser, getAdminOrganizations: mocks.getAdminOrganizations, getAdminOrganization: mocks.getAdminOrganization, getAdminPlans: mocks.getAdminPlans, getAdminUserAudit: mocks.getAdminUserAudit, changeAdminUserAccess: mocks.changeAdminUserAccess, createAdminAccount: mocks.createAdminAccount }));
+vi.mock("../api/admin", () => ({ getAdminMe: mocks.getAdminMe, getAdminUsers: mocks.getAdminUsers, getAdminUser: mocks.getAdminUser, getAdminOrganizations: mocks.getAdminOrganizations, getAdminOrganization: mocks.getAdminOrganization, getAdminPlans: mocks.getAdminPlans, getAdminUserAudit: mocks.getAdminUserAudit, changeAdminUserAccess: mocks.changeAdminUserAccess, createAdminAccount: mocks.createAdminAccount, sendAdminPasswordReset: mocks.sendAdminPasswordReset }));
 vi.mock("../api/auth", () => ({ login: mocks.login, logout: mocks.logout }));
 
 import { AdminApp } from "./AdminApp.jsx";
@@ -29,6 +30,7 @@ beforeEach(() => {
   mocks.getAdminOrganizations.mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 });
   mocks.getAdminPlans.mockResolvedValue({ items: [] });
   mocks.getAdminUserAudit.mockResolvedValue({ items: [] });
+  mocks.sendAdminPasswordReset.mockResolvedValue({ email_sent: true });
 });
 
 describe("painel do administrador Fincla", () => {
@@ -97,6 +99,10 @@ describe("painel do administrador Fincla", () => {
     fireEvent.change(screen.getByLabelText("Motivo"), { target: { value: "Solicitação de suporte" } });
     fireEvent.click(screen.getByRole("button", { name: "Confirmar" }));
     await waitFor(() => expect(mocks.changeAdminUserAccess).toHaveBeenCalledWith("user-1", "block", "Solicitação de suporte"));
+    fireEvent.click(screen.getByRole("button", { name: "Enviar link de redefinição" }));
+    fireEvent.change(screen.getByLabelText("Motivo", { selector: "textarea#admin-reset-reason" }), { target: { value: "Usuário esqueceu a senha" } });
+    fireEvent.click(screen.getByRole("button", { name: "Confirmar envio" }));
+    await waitFor(() => expect(mocks.sendAdminPasswordReset).toHaveBeenCalledWith("user-1", "Usuário esqueceu a senha"));
   });
 
   it("cria conta assistida sem exigir campos opcionais", async () => {
