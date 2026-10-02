@@ -9,12 +9,17 @@ export interface CheckoutQuote {
     seats: number | null;
     package_size: number | null;
     installments: number;
+    coupon_code?: string | null;
   };
   total_cents: number;
   capacity: number | null;
   installments: number;
   installment_fee_cents: number;
   currency: 'BRL';
+  regular_total_cents?: number | null;
+  coupon_code?: string | null;
+  coupon_percent_off?: number | null;
+  discounted_charges?: number | null;
 }
 
 /** Only selection fields leave the browser; the server owns all pricing. */
@@ -28,15 +33,19 @@ export async function quoteCheckout(search: string, signal: AbortSignal): Promis
     if (params.has(key)) selection[key] = key === 'mode' ? params.get(key) : Number(params.get(key));
   }
   if (params.has('installments')) selection.installments = Number(params.get('installments'));
+  if (params.has('coupon_code')) selection.coupon_code = params.get('coupon_code');
   const response = await fetch(`${API_CONFIG.BASE_URL}/plans/checkout-quote`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(selection),
     signal,
   });
-  if (!response.ok) throw new Error(response.status === 400 || response.status === 422
-    ? 'A seleção de plano é inválida. Volte ao site e escolha sua oferta.'
-    : 'Não foi possível consultar sua oferta. Tente novamente.');
+  if (!response.ok) {
+    const payload = await response.json?.().catch(() => null);
+    throw new Error(typeof payload?.detail === 'string' ? payload.detail : response.status === 400 || response.status === 422
+      ? 'A seleção de plano é inválida. Confira sua oferta e tente novamente.'
+      : 'Não foi possível consultar sua oferta. Tente novamente.');
+  }
   return response.json();
 }
 

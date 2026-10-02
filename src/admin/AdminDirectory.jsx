@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, ChevronLeft, ChevronRight, Search } from "lucide-react";
-import { changeAdminUserAccess, getAdminOrganization, getAdminOrganizations, getAdminPlans, getAdminUser, getAdminUserAudit, getAdminUsers, sendAdminPasswordReset } from "../api/admin";
+import { changeAdminUserAccess, getAdminOrganization, getAdminOrganizations, getAdminPlans, getAdminUser, getAdminUserAudit, getAdminUsers, retryAdminCouponReprice, sendAdminPasswordReset } from "../api/admin";
 import { handleApiError } from "../api/client";
 import { AdminCreateAccount } from "./AdminCreateAccount";
 import { AdminGrants } from "./AdminGrants";
@@ -10,7 +10,7 @@ const PAGE_SIZE = 20;
 const money = (cents) => cents == null ? "—" : new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
 const date = (value) => value ? new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(value)) : "—";
 const displayName = (user) => [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
-const auditLabels = { block: "Bloqueio", unblock: "Desbloqueio", password_reset_email: "E-mail de senha", create_account: "Criação assistida", beta_enable: "Beta ativado", beta_end: "Beta encerrado", courtesy_grant: "Cortesia concedida", courtesy_end: "Cortesia encerrada", cancel_renewal: "Renovação cancelada", plan_change_requested: "Mudança solicitada", plan_change_withdrawn: "Solicitação retirada" };
+const auditLabels = { block: "Bloqueio", unblock: "Desbloqueio", password_reset_email: "E-mail de senha", create_account: "Criação assistida", beta_enable: "Beta ativado", beta_end: "Beta encerrado", courtesy_grant: "Cortesia concedida", courtesy_end: "Cortesia encerrada", cancel_renewal: "Renovação cancelada", plan_change_requested: "Mudança solicitada", plan_change_withdrawn: "Solicitação retirada", coupon_reprice_retry: "Reajuste de cupom" };
 
 export function AdminDirectory({ section }) {
   const [query, setQuery] = useState("");
@@ -31,6 +31,8 @@ export function AdminDirectory({ section }) {
   const [resetOpen, setResetOpen] = useState(false);
   const [resetReason, setResetReason] = useState("");
   const [savingReset, setSavingReset] = useState(false);
+  const [repriceReason, setRepriceReason] = useState("");
+  const [savingReprice, setSavingReprice] = useState(false);
 
   useEffect(() => {
     setQuery(""); setSubmittedQuery(""); setStatus(""); setOffset(0); setDetail(null); setPage(null); setAudit([]); setCreating(false); setNotice(""); setResetOpen(false);
@@ -102,6 +104,21 @@ export function AdminDirectory({ section }) {
     }
   }
 
+  async function retryCouponReprice(event) {
+    event.preventDefault();
+    if (repriceReason.trim().length < 3) return;
+    setSavingReprice(true); setError("");
+    try {
+      await retryAdminCouponReprice(detail.id, repriceReason.trim());
+      setDetail(await getAdminUser(detail.id));
+      setAudit((await getAdminUserAudit(detail.id)).items);
+      setRepriceReason(""); setNotice("Preço normal atualizado no provedor.");
+    } catch (nextError) {
+      setError(handleApiError(nextError));
+      setAudit((await getAdminUserAudit(detail.id)).items);
+    } finally { setSavingReprice(false); }
+  }
+
   const title = section === "users" ? "Contas" : section === "organizations" ? "Organizações" : "Planos";
   return <div className="admin-directory">
     <div className="admin-page-number">{section === "users" ? "02" : section === "organizations" ? "03" : "04"} / DIRETÓRIO</div>
@@ -126,6 +143,7 @@ export function AdminDirectory({ section }) {
     {!detail && !creating && !loading && section === "organizations" && <div className="admin-directory-list">{page?.items.map((org) => <button type="button" className="admin-directory-row" key={org.id} onClick={() => openDetail(org.id)}><span><strong>{org.name}</strong><small>{org.id}</small></span><span>{org.org_type || "—"}</span><span>{date(org.created_at)}</span><ChevronRight size={18} /></button>)}{!page?.items.length && <p className="admin-empty">Nenhuma organização encontrada.</p>}</div>}
     {!detail && !creating && !loading && section === "plans" && <div className="admin-plan-grid">{page?.items.map((plan) => <article className="admin-plan-card" key={plan.id}><span className="admin-plan-audience">{plan.audience === "consultant" ? "CONSULTOR" : "PESSOAL"}</span><h2>{plan.name}</h2><p>{plan.id}</p><div><strong>{money(plan.monthly_price_cents)}</strong><small> / mês</small></div><p>Anual: {money(plan.yearly_price_cents)}</p><p>Até {plan.max_organizations} organizações · {plan.max_users_per_org} pessoas por organização</p><span className="admin-pill">{plan.is_active ? "Ativo" : "Inativo"}</span></article>)}</div>}
     {detail && section === "users" && <div className="admin-detail-grid"><section className="admin-detail-card"><h2>Conta</h2><dl><dt>E-mail</dt><dd>{detail.email}</dd><dt>ID</dt><dd>{detail.id}</dd><dt>Criada em</dt><dd>{date(detail.created_at)}</dd><dt>Onboarding</dt><dd>{detail.onboarding_completed ? "Concluído" : "Pendente"}</dd><dt>Senha</dt><dd>{detail.password_pending ? "Aguardando definição" : "Definida"}</dd><dt>Acesso</dt><dd>{detail.blocked_at ? `Bloqueado em ${date(detail.blocked_at)}` : "Liberado"}</dd></dl><div className="admin-access-controls"><button type="button" onClick={() => { setAccessAction(detail.blocked_at ? "unblock" : "block"); setAccessReason(""); }}>{detail.blocked_at ? "Desbloquear conta" : "Bloquear conta"}</button></div>{accessAction && <form className="admin-access-form" onSubmit={changeAccess}><strong>Confirmar {accessAction === "block" ? "bloqueio" : "desbloqueio"}</strong><p>Esta ação altera imediatamente o acesso ao aplicativo e será registrada no histórico.</p><label htmlFor="admin-access-reason">Motivo</label><textarea id="admin-access-reason" value={accessReason} onChange={(event) => setAccessReason(event.target.value)} minLength={3} maxLength={2000} required /><div><button type="button" onClick={() => setAccessAction(null)}>Cancelar</button><button type="submit" disabled={savingAccess || accessReason.trim().length < 3}>{savingAccess ? "Salvando…" : "Confirmar"}</button></div></form>}</section><section className="admin-detail-card"><h2>Assinatura</h2>{detail.subscription ? <dl><dt>Plano</dt><dd>{detail.subscription.plan}</dd><dt>Estado</dt><dd>{detail.subscription.status}</dd><dt>Ciclo</dt><dd>{detail.subscription.billing_cycle}</dd><dt>Provedor</dt><dd>{detail.subscription.gateway_provider}</dd><dt>Período</dt><dd>{date(detail.subscription.current_period_start)} a {date(detail.subscription.current_period_end)}</dd><dt>Cancelamento</dt><dd>{detail.subscription.cancel_at_period_end ? "Ao fim do período" : detail.subscription.cancelled_at ? date(detail.subscription.cancelled_at) : "Não agendado"}</dd></dl> : <p>Sem assinatura.</p>}</section><section className="admin-detail-card"><h2>Organizações</h2>{detail.organizations.length ? detail.organizations.map((org) => <p key={org.id}>{org.name} <span className="admin-pill">{org.role}</span></p>) : <p>Nenhuma organização.</p>}</section><section className="admin-detail-card"><h2>Faturas</h2>{detail.invoices.length ? detail.invoices.map((invoice) => <p key={invoice.id}>{date(invoice.due_date)} · {money(invoice.amount_cents)} · {invoice.status} {invoice.invoice_url && <a href={invoice.invoice_url} target="_blank" rel="noreferrer">Abrir</a>}</p>) : <p>Nenhuma fatura.</p>}</section><section className="admin-detail-card"><h2>Histórico de acesso</h2>{audit.length ? audit.map((event) => <p key={event.id}>{date(event.created_at)} · {auditLabels[event.action] || event.action} · {event.reason} {event.result === "failed" ? "(falhou)" : ""}</p>) : <p>Nenhuma ação registrada.</p>}</section></div>}
+    {detail?.subscription?.coupon_reprice_due && <section className="admin-detail-card admin-billing-card"><h2>Atualização de preço pendente</h2><p>O desconto terminou, mas o preço normal ainda não foi confirmado no provedor. Tente novamente antes da próxima cobrança.</p><form className="admin-access-form" onSubmit={retryCouponReprice}><label htmlFor="admin-reprice-reason">Motivo</label><textarea id="admin-reprice-reason" value={repriceReason} onChange={(event) => setRepriceReason(event.target.value)} minLength={3} maxLength={2000} required /><div><button type="submit" disabled={savingReprice || repriceReason.trim().length < 3}>{savingReprice ? "Atualizando…" : "Atualizar preço normal"}</button></div></form></section>}
     {detail && section === "users" && <section className="admin-detail-card admin-reset-card"><h2>Ajuda com a senha</h2><p>Envie um link de uso único para o e-mail cadastrado. A senha atual não será exibida nem alterada aqui.</p><button type="button" className="admin-create-trigger" onClick={() => { setResetOpen(true); setResetReason(""); }}>Enviar link de redefinição</button>{resetOpen && <form className="admin-access-form" onSubmit={requestPasswordReset}><strong>Confirmar envio para {detail.email}</strong><label htmlFor="admin-reset-reason">Motivo</label><textarea id="admin-reset-reason" value={resetReason} onChange={(event) => setResetReason(event.target.value)} minLength={3} maxLength={2000} required /><div><button type="button" onClick={() => setResetOpen(false)}>Cancelar</button><button type="submit" disabled={savingReset || resetReason.trim().length < 3}>{savingReset ? "Enviando…" : "Confirmar envio"}</button></div></form>}</section>}
     {detail && section === "users" && <AdminGrants userId={detail.id} subscription={detail.subscription} onChanged={async () => { setDetail(await getAdminUser(detail.id)); setAudit((await getAdminUserAudit(detail.id)).items); }} />}
     {detail && section === "users" && <AdminBillingActions userId={detail.id} subscription={detail.subscription} onChanged={async () => { setDetail(await getAdminUser(detail.id)); setAudit((await getAdminUserAudit(detail.id)).items); }} />}

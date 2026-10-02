@@ -130,3 +130,17 @@
 .admin-billing-pending { margin-top: 18px; padding: 15px; border: 1px solid #e5d6ac; background: #fff9ec; border-radius: 8px; }
 .admin-billing-pending strong { font-size: 13px; }
 .admin-billing-pending button { border: 0; background: none; color: #6e5523; padding: 0; font: inherit; font-size: 12px; text-decoration: underline; cursor: pointer; }
+.admin-coupon-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.admin-coupon-grid .admin-plan-card h2 { margin-top: 8px; }
+.admin-coupon-disable { border: 1px solid #ca977e; border-radius: 7px; background: #fff8f3; color: #98513b; padding: 9px 12px; font: inherit; font-size: 12px; cursor: pointer; }
+.admin-create-fields fieldset { display: flex; gap: 15px; border: 1px solid #dce0d9; border-radius: 7px; margin: 0; padding: 12px; }
+.admin-create-fields fieldset legend { color: #405548; font-size: 12px; font-weight: 600; }
+.admin-create-fields fieldset label { display: flex; align-items: center; gap: 5px; }
+.admin-coupon-reason { grid-column: 1 / -1; }
+@media (max-width: 760px) { .admin-coupon-grid { grid-template-columns: 1fr; } .admin-coupon-reason { grid-column: auto; } }
+.checkout-coupon-form { display: grid; gap: 8px; margin: 0 0 24px; font: 13px 'DM Sans', sans-serif; color: #24382c; }
+.checkout-coupon-form > label { font-weight: 700; }
+.checkout-coupon-form > div { display: flex; gap: 8px; }
+.checkout-coupon-form input { flex: 1; min-width: 0; border: 1px solid #dce0d9; border-radius: 8px; padding: 11px 12px; font: inherit; }
+.checkout-coupon-form button { border: 0; border-radius: 8px; background: #294335; color: #fff; padding: 0 15px; font: inherit; font-weight: 700; cursor: pointer; }
+.checkout-coupon-form p { margin: 0; color: #387544; font-size: 12px; }

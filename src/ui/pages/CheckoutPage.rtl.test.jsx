@@ -6,6 +6,22 @@ import { checkoutFieldErrors } from "./CheckoutPayment.jsx";
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
+it("shows coupon duration and ordinary renewal price from the server quote", async () => {
+  const fetch = vi.fn(async (_url, options) => {
+    const selection = JSON.parse(options.body);
+    return { ok: true, json: async () => ({
+      selection, total_cents: 2691, regular_total_cents: 2990,
+      coupon_code: "PRIMEIRA10", coupon_percent_off: 10, discounted_charges: 1,
+      capacity: null, currency: "BRL",
+    }) };
+  });
+  vi.stubGlobal("fetch", fetch);
+  render(<CheckoutPage search="?persona=personal&billing_cycle=monthly&coupon_code=PRIMEIRA10" />);
+  expect(await screen.findByText(/Cupom PRIMEIRA10 aplicado/)).toBeInTheDocument();
+  expect(screen.getByText(/Depois,.*29,90 por mês/)).toBeInTheDocument();
+  expect(JSON.parse(fetch.mock.calls[0][1].body).coupon_code).toBe("PRIMEIRA10");
+});
+
 it("preserves the consultant selection and displays the server's annual quote", async () => {
   const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({
     selection: { persona: "consultant", billing_cycle: "yearly", mode: "package", package_size: 25 },

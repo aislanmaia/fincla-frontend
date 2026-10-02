@@ -32,6 +32,10 @@ export interface AdminSubscription {
   beta_enabled: boolean;
   courtesy_plan: string | null;
   courtesy_until: string | null;
+  coupon_id: string | null;
+  coupon_discounted_charges: number | null;
+  coupon_reprice_due: boolean;
+  coupon_repriced_at: string | null;
 }
 
 export interface AdminUser {
@@ -123,3 +127,31 @@ export const withdrawAdminPlanChange = async (id: string, requestId: string, rea
 
 export const cancelAdminRenewal = async (id: string, reason: string) =>
   (await apiClient.post<{ status: string; cancel_at_period_end: boolean; effective_until: string }>(`/admin/users/${id}/cancel-renewal`, { reason })).data;
+
+export interface AdminCoupon {
+  id: string;
+  code: string;
+  percent_off: number;
+  eligible_plans: Array<'pro' | 'consultant_pro'>;
+  eligible_cycles: Array<'monthly' | 'yearly'>;
+  valid_from: string;
+  valid_until: string | null;
+  max_uses: number | null;
+  uses: number;
+  discounted_charges: number;
+  is_active: boolean;
+}
+
+export type AdminCouponInput = Omit<AdminCoupon, 'id' | 'uses' | 'is_active'> & { reason: string };
+
+export const getAdminCoupons = async () =>
+  (await apiClient.get<{ items: AdminCoupon[] }>('/admin/coupons')).data;
+
+export const createAdminCoupon = async (body: AdminCouponInput) =>
+  (await apiClient.post<AdminCoupon>('/admin/coupons', body)).data;
+
+export const disableAdminCoupon = async (id: string, reason: string) =>
+  (await apiClient.post<AdminCoupon>(`/admin/coupons/${id}/disable`, { reason })).data;
+
+export const retryAdminCouponReprice = async (userId: string, reason: string) =>
+  (await apiClient.post<{ completed: number; failed: number }>(`/admin/users/${userId}/retry-coupon-reprice`, { reason })).data;
