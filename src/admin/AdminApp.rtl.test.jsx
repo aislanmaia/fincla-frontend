@@ -156,6 +156,38 @@ describe("painel do administrador Fincla", () => {
     expect(mocks.createAdminAccount).toHaveBeenCalledWith(expect.objectContaining({ email: "nova@example.com", first_name: "Nova", organization_name: "Família Nova" }));
   });
 
+  it("cria conta e organização com um mês gratuito na mesma operação", async () => {
+    localStorage.setItem("auth_token", "admin-token");
+    mocks.getAdminMe.mockResolvedValue({ id: "admin-1", email: "aislan.sousamaia@gmail.com", is_admin: true });
+    mocks.getAdminPlans.mockResolvedValue({ items: [{ id: "pro", name: "Pro", is_active: true }] });
+    mocks.createAdminAccount.mockResolvedValue({
+      user_id: "user-3", organization_id: "org-3", email_sent: true,
+      initial_access: "courtesy", courtesy_until: "2026-11-03T12:00:00",
+    });
+    mocks.getAdminUser.mockResolvedValue({
+      id: "user-3", email: "cortesia@example.com", first_name: "Cortesia", last_name: null,
+      created_at: "2026-10-03", onboarding_completed: true, password_pending: true,
+      blocked_at: null, subscription: null, organizations: [], invoices: [],
+    });
+
+    render(<AdminApp />);
+    fireEvent.click(await screen.findByRole("button", { name: "Criar conta" }));
+    fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "Cortesia" } });
+    fireEvent.change(screen.getByLabelText("E-mail"), { target: { value: "cortesia@example.com" } });
+    fireEvent.change(screen.getByLabelText("Organização"), { target: { value: "Org Cortesia" } });
+    fireEvent.click(screen.getByRole("combobox", { name: "Tipo de acesso inicial" }));
+    fireEvent.click(screen.getByRole("option", { name: "Cortesia com prazo" }));
+    fireEvent.click(screen.getByRole("combobox", { name: "Plano da cortesia" }));
+    fireEvent.click(await screen.findByRole("option", { name: "Pro" }));
+    fireEvent.click(screen.getByRole("button", { name: "Criar e enviar convite" }));
+
+    await waitFor(() => expect(mocks.createAdminAccount).toHaveBeenCalledWith(expect.objectContaining({
+      email: "cortesia@example.com", organization_name: "Org Cortesia",
+      initial_access: "courtesy", courtesy_plan: "pro", courtesy_months: 1,
+    })));
+    expect(await screen.findByText(/Cortesia ativa até/)).toBeInTheDocument();
+  });
+
   it("mostra mudança paga como pendente sem trocar o plano exibido", async () => {
     localStorage.setItem("auth_token", "admin-token");
     mocks.getAdminMe.mockResolvedValue({ id: "admin-1", email: "aislan.sousamaia@gmail.com", is_admin: true });

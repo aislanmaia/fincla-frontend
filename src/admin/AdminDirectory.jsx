@@ -10,6 +10,7 @@ import { AdminSelect } from "./AdminSelect";
 const PAGE_SIZE = 20;
 const money = (cents) => cents == null ? "—" : new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
 const date = (value) => value ? new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(value)) : "—";
+const courtesyDate = (value) => value ? value.slice(0, 10).split("-").reverse().join("/") : "—";
 const displayName = (user) => [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
 const auditLabels = { block: "Bloqueio", unblock: "Desbloqueio", password_reset_email: "E-mail de senha", create_account: "Criação assistida", beta_enable: "Beta ativado", beta_end: "Beta encerrado", courtesy_grant: "Cortesia concedida", courtesy_end: "Cortesia encerrada", cancel_renewal: "Renovação cancelada", plan_change_requested: "Mudança solicitada", plan_change_withdrawn: "Solicitação retirada", coupon_reprice_retry: "Reajuste de cupom" };
 
@@ -84,7 +85,12 @@ export function AdminDirectory({ section, initialAction = "" }) {
 
   async function createdAccount(result) {
     setCreating(false);
-    setNotice(result.email_sent ? "Conta criada e convite enviado por e-mail." : "Conta criada, mas o e-mail do convite não foi enviado. Envie um novo link pelo detalhe da conta.");
+    const access = result.initial_access === "courtesy" && result.courtesy_until
+      ? ` Cortesia ativa até ${courtesyDate(result.courtesy_until)}.`
+      : result.initial_access === "beta" ? " Acesso beta ativo." : "";
+    setNotice(result.email_sent
+      ? `Conta criada e convite enviado por e-mail.${access}`
+      : `Conta criada, mas o e-mail do convite não foi enviado. Envie um novo link pelo detalhe da conta.${access}`);
     setReload((value) => value + 1);
     await openDetail(result.user_id);
   }
@@ -127,7 +133,7 @@ export function AdminDirectory({ section, initialAction = "" }) {
     <div className="admin-directory-heading">
       <div>{(detail || creating) && <button className="admin-back" type="button" onClick={() => { setDetail(null); setCreating(false); }}><ArrowLeft size={16} /> Voltar para {title.toLowerCase()}</button>}
         <h1>{creating ? "Nova conta" : detail ? (section === "users" ? displayName(detail) : detail.name) : title}</h1>
-        <p>{detail ? "Dados de acesso e vínculos desta conta." : section === "plans" ? "Catálogo de planos do Fincla." : `Consulte ${title.toLowerCase()} cadastradas no Fincla.`}</p>
+        <p>{creating ? "Crie a conta, a organização e o acesso inicial em uma etapa." : detail ? "Dados de acesso e vínculos desta conta." : section === "plans" ? "Catálogo de planos do Fincla." : `Consulte ${title.toLowerCase()} cadastradas no Fincla.`}</p>
       </div>
       {!detail && !creating && section === "users" && <button className="admin-create-trigger" type="button" onClick={() => { setCreating(true); setNotice(""); }}>Criar conta</button>}
       {!detail && !creating && section === "organizations" && <span className="admin-directory-count">{page?.total ?? 0} registros</span>}
