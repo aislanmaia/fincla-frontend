@@ -56,6 +56,13 @@ const signupRoute = createRoute({
   component: () => null,
 });
 
+const accessRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/access",
+  beforeLoad: requireSessionTokenBeforeLoad,
+  component: () => null,
+});
+
 const consultantCheckoutRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/consultant-checkout",
@@ -250,6 +257,7 @@ const notFoundRoute = new NotFoundRoute({
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  accessRoute,
   checkoutRoute,
   signupRoute,
   consultantCheckoutRoute,

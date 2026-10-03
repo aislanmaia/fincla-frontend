@@ -48,6 +48,7 @@ export function useAuthRedirects({
     if (session.isBootstrapping) return;
     if (!session.isAuthenticated) return;
     if (showOnboarding || session.onboardingRequired) return;
+    if (session.user?.subscription?.is_entitled === false || (session.user?.subscription?.status === "pending_payment" && session.user?.subscription?.is_entitled !== true)) return;
     if (pathname !== "/" && pathname !== "") return;
     const next = consumePostLoginNavigateArgs();
     if (next) {

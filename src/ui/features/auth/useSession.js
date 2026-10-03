@@ -125,6 +125,23 @@ export function useSession() {
     }
   }, [resetSession]);
 
+  const refreshAccess = useCallback(async () => {
+    if (!isAuthenticated()) return null;
+    try {
+      const user = await getCurrentUser();
+      const entitled = user.subscription?.is_entitled === true;
+      const organizations = entitled ? (await getMyOrganizations()).organizations ?? [] : [];
+      const activeOrgId = entitled ? pickActiveOrgId(organizations) : null;
+      persistActiveOrgId(activeOrgId);
+      setSession((current) => ({ ...current, user, organizations, activeOrgId }));
+      return user;
+    } catch {
+      // A failed refresh must not log out a valid user. An expired JWT is
+      // already handled by fincla:auth-expired in the API client.
+      return null;
+    }
+  }, []);
+
   useEffect(() => {
     bootstrap();
 
@@ -139,6 +156,22 @@ export function useSession() {
       window.removeEventListener("fincla:auth-expired", handleAuthExpired);
     };
   }, [bootstrap, resetSession]);
+
+  useEffect(() => {
+    if (!session.isAuthenticated) return undefined;
+    const onVisible = () => { if (document.visibilityState === "visible") void refreshAccess(); };
+    document.addEventListener("visibilitychange", onVisible);
+    const subscription = session.user?.subscription;
+    const deadlines = [subscription?.courtesy_until, subscription?.current_period_end]
+      .map((value) => value ? new Date(value).getTime() : NaN)
+      .filter((value) => Number.isFinite(value) && value > Date.now());
+    const next = deadlines.length ? Math.min(...deadlines) : null;
+    const timer = next == null ? null : window.setTimeout(() => { void refreshAccess(); }, Math.min(next - Date.now() + 1000, 2147483647));
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      if (timer != null) window.clearTimeout(timer);
+    };
+  }, [session.isAuthenticated, session.user?.subscription?.courtesy_until, session.user?.subscription?.current_period_end, refreshAccess]);
 
   const signIn = useCallback(
     async (email, password) => {
@@ -221,6 +254,7 @@ export function useSession() {
     ...session,
     onboardingRequired,
     bootstrap,
+    refreshAccess,
     completeOnboarding,
     signIn,
     signOut,

@@ -287,6 +287,23 @@ it("offers renewal verification and billing for a historical active attempt with
   expect(screen.queryByLabelText("Número do cartão")).toBeNull();
 });
 
+it("lets a cancelled subscriber choose a new cycle and enter a card", async () => {
+  const { fireEvent } = await import("@testing-library/react");
+  const oldQuote = { selection: { persona: "personal", billing_cycle: "monthly" }, total_cents: 2990, capacity: null };
+  const fetch = vi.fn(async (url, options) => ({ ok: true, json: async () => {
+    if (url.includes("checkout/current")) return { id: "old", status: "cancelled", has_access: false, quote: oldQuote };
+    const selection = JSON.parse(options.body);
+    return { selection, total_cents: selection.billing_cycle === "yearly" ? 29900 : 2990, capacity: null };
+  } }));
+  vi.stubGlobal("fetch", fetch);
+  render(<CheckoutPage search="" session={{ isAuthenticated: true, user: { email: "maria@example.com", subscription: { status: "cancelled", is_entitled: false, billing_cycle: "monthly", checkout_selection: oldQuote.selection } }, signOut: vi.fn() }} />);
+  expect(await screen.findByRole("heading", { name: "Reative sua assinatura" })).toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("radio", { name: /Anual/ }));
+  expect(await screen.findByLabelText("Número do cartão")).toBeInTheDocument();
+  expect(fetch.mock.calls.some(([url, options]) => url.includes("checkout-quote") && JSON.parse(options.body).billing_cycle === "yearly")).toBe(true);
+  expect(screen.queryByText(/Entre em contato com o suporte para uma nova contratação/)).toBeNull();
+});
+
 it("requires a refreshed offer and new consent when the server rejects an outdated catalog", async () => {
   const { fireEvent } = await import("@testing-library/react");
   const firstQuote = {catalog_version:"old",selection:{persona:"personal",billing_cycle:"monthly"},total_cents:2990,capacity:null};

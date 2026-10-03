@@ -14,6 +14,7 @@ export function CheckoutPage({ search = window.location.search, session }) {
   const [state, setState] = useState({ status: "loading" });
   const [counterpartQuote, setCounterpartQuote] = useState(null);
   const [attempt, setAttempt] = useState(0);
+  const [existingAttempt, setExistingAttempt] = useState(null);
   const [selectionSearch, setSelectionSearch] = useState(search);
   const [couponInput, setCouponInput] = useState(() => new URLSearchParams(search).get("coupon_code") || "");
   const [activeSection, setActiveSection] = useState("plan");
@@ -32,6 +33,13 @@ export function CheckoutPage({ search = window.location.search, session }) {
   const cycle = session?.user?.subscription?.billing_cycle || "monthly";
   useEffect(() => setSelectionSearch(search), [search]);
   useEffect(() => {
+    if (!session?.isAuthenticated) return;
+    const subscription = session.user?.subscription;
+    const returning = ["cancelled", "expired"].includes(subscription?.status) ||
+      Boolean(subscription?.courtesy_until && new Date(subscription.courtesy_until) <= new Date());
+    setActiveSection(returning ? "plan" : "payment");
+  }, [session?.isAuthenticated, session?.user?.subscription?.status, session?.user?.subscription?.courtesy_until]);
+  useEffect(() => {
     const sync = () => {
       setWide(window.innerWidth >= 820);
       setCompactViewport(window.innerHeight < 1000);
@@ -40,7 +48,6 @@ export function CheckoutPage({ search = window.location.search, session }) {
     window.addEventListener("resize", sync);
     return () => window.removeEventListener("resize", sync);
   }, []);
-  useEffect(() => { if (session?.isAuthenticated) setActiveSection("payment"); }, [session?.isAuthenticated]);
   useEffect(() => {
     if (recovery && session?.isBootstrapping) return;
     const controller = new AbortController();
@@ -55,7 +62,11 @@ export function CheckoutPage({ search = window.location.search, session }) {
       if (!recovery) return quoteCheckout(effectiveSearch, controller.signal);
       if (session?.isAuthenticated) {
         const existing = await currentCheckout();
-        if (existing) return existing.quote;
+        setExistingAttempt(existing);
+        if (existing && !["cancelled", "declined"].includes(existing.status)) {
+          setActiveSection("payment");
+          return existing.quote;
+        }
       }
       const selection = JSON.parse(savedSelection);
       if (!selection && persona === "consultant") {
@@ -119,7 +130,7 @@ export function CheckoutPage({ search = window.location.search, session }) {
   const annualFreeMonths = annualSavingsCents != null && monthlyTotalCents
     ? Math.floor(annualSavingsCents / monthlyTotalCents)
     : null;
-  const canChangeCycle = !session?.isAuthenticated && state.status !== "loading";
+  const canChangeCycle = (!session?.isAuthenticated || !existingAttempt || ["cancelled", "declined"].includes(existingAttempt.status)) && state.status !== "loading";
   const applyCoupon = useCallback((event) => {
     event.preventDefault();
     const params = new URLSearchParams(effectiveSearch || "");
@@ -130,6 +141,8 @@ export function CheckoutPage({ search = window.location.search, session }) {
     setSelectionSearch(nextSearch);
   }, [couponInput, effectiveSearch]);
   const planName = quote?.selection.persona === "consultant" ? "Fincla Consultor" : "Fincla Pessoal";
+  const reactivating = ["cancelled", "expired"].includes(session?.user?.subscription?.status);
+  const courtesyEnded = Boolean(session?.user?.subscription?.courtesy_plan && session?.user?.subscription?.courtesy_until && new Date(session.user.subscription.courtesy_until) <= new Date());
   const cycleName = quote?.selection.billing_cycle === "yearly" ? "Anual" : "Mensal";
   const changeInstallments = useCallback((installments) => {
     if (!quote || installments === quote.selection.installments) return;
@@ -171,8 +184,9 @@ export function CheckoutPage({ search = window.location.search, session }) {
           </header>
           <div style={{ maxWidth: 530, padding: wide ? (compactViewport ? "14px 0 12px" : "26px 0 18px") : "24px 0 20px" }}>
             <p style={{ color: T.green, fontSize: 12, fontWeight: 750, letterSpacing: ".08em", margin: 0 }}>ASSINATURA</p>
-            <h1 style={{ fontSize: wide ? (compactViewport ? 26 : 30) : 27, letterSpacing: "-.035em", lineHeight: 1.08, margin: "8px 0 0" }}>Conclua sua contratação</h1>
-            <p style={{ color: T.inkMid, lineHeight: 1.55, margin: "8px 0 0", fontSize: wide ? (compactViewport ? 14 : undefined) : 14 }}>Escolha o ciclo, informe seus dados e faça o pagamento com segurança.</p>
+            <h1 style={{ fontSize: wide ? (compactViewport ? 26 : 30) : 27, letterSpacing: "-.035em", lineHeight: 1.08, margin: "8px 0 0" }}>{reactivating ? "Reative sua assinatura" : courtesyEnded ? "Continue após sua cortesia" : "Conclua sua contratação"}</h1>
+            <p style={{ color: T.inkMid, lineHeight: 1.55, margin: "8px 0 0", fontSize: wide ? (compactViewport ? 14 : undefined) : 14 }}>{reactivating ? "Escolha o ciclo e confirme uma nova assinatura para esta conta." : courtesyEnded ? "Sua cortesia terminou sem cobrança automática. Escolha um plano para continuar." : "Escolha o ciclo, informe seus dados e faça o pagamento com segurança."}</p>
+            {session?.isAuthenticated && <a href="/access" style={{ display: "inline-block", marginTop: 10, color: T.green, fontSize: 12, fontWeight: 750 }}>← Voltar ao plano e acesso</a>}
           </div>
         </div>
         {state.status === "loading" && !quote && <p role="status" style={{ color: T.inkMid, fontSize: 13, margin: "18px 0 0" }}>Consultando sua oferta…</p>}
