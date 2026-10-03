@@ -5,6 +5,7 @@ import { login, logout } from "../api/auth";
 import { handleApiError } from "../api/client";
 import { AdminDirectory } from "./AdminDirectory";
 import { AdminCoupons } from "./AdminCoupons";
+import { AdminDashboard } from "./AdminDashboard";
 import "./admin.css";
 
 const ACCESS_DENIED = "Esta conta não tem acesso ao painel administrativo.";
@@ -22,6 +23,12 @@ export function AdminApp() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [section, setSection] = useState("home");
+  const [directoryAction, setDirectoryAction] = useState("");
+
+  function navigate(nextSection, action = "") {
+    setDirectoryAction(action);
+    setSection(nextSection);
+  }
 
   useEffect(() => {
     if (!localStorage.getItem("auth_token")) return;
@@ -59,7 +66,7 @@ export function AdminApp() {
     setIdentity(null);
     setPassword("");
     setError("");
-    setSection("home");
+    navigate("home");
   }
 
   if (checking) {
@@ -105,19 +112,14 @@ export function AdminApp() {
         <div className="admin-brand"><img src="/logo.png" alt="" /><span>fincla<span className="admin-brand-dot">.</span></span><small>ADMIN</small></div>
         <div className="admin-sidebar-section">ESPAÇO DE TRABALHO</div>
         <nav className="admin-sidebar-nav" aria-label="Administração">
-          {[["home", "Visão geral"], ["users", "Contas"], ["organizations", "Organizações"], ["plans", "Planos"], ["coupons", "Cupons"]].map(([key, label]) => <button key={key} type="button" className={section === key ? "admin-sidebar-current" : ""} onClick={() => setSection(key)}>{section === key && <span className="admin-sidebar-current-mark" />}{label}</button>)}
+          {[["home", "Visão geral"], ["users", "Contas"], ["organizations", "Organizações"], ["plans", "Planos"], ["coupons", "Cupons"]].map(([key, label]) => <button key={key} type="button" className={section === key ? "admin-sidebar-current" : ""} onClick={() => navigate(key)}>{section === key && <span className="admin-sidebar-current-mark" />}{label}</button>)}
         </nav>
         <div className="admin-sidebar-bottom"><span>ADMINISTRADOR FINCLA</span><strong>{identity.email}</strong><button type="button" onClick={signOut}><LogOut size={16} aria-hidden="true" /> Sair</button></div>
       </aside>
       <section className="admin-content">
         <header className="admin-topbar"><span>Administração <span className="admin-breadcrumb-slash">/</span> {section === "home" ? "Visão geral" : section === "users" ? "Contas" : section === "organizations" ? "Organizações" : section === "coupons" ? "Cupons" : "Planos"}</span><span className="admin-topbar-secure"><ShieldCheck size={16} aria-hidden="true" /> Sessão protegida</span><button type="button" className="admin-mobile-signout" onClick={signOut}><LogOut size={16} aria-hidden="true" /> Sair</button></header>
-        <div className="admin-mobile-nav"><button type="button" onClick={() => setSection("home")}>Início</button><button type="button" onClick={() => setSection("users")}>Contas</button><button type="button" onClick={() => setSection("organizations")}>Organizações</button><button type="button" onClick={() => setSection("plans")}>Planos</button><button type="button" onClick={() => setSection("coupons")}>Cupons</button></div>
-        {section === "home" ? <div className="admin-content-inner">
-          <div className="admin-page-number">01 / VISÃO GERAL</div>
-          <h1>Boas-vindas ao <em>controle</em> do Fincla.</h1>
-          <p className="admin-intro">Seu acesso administrativo está confirmado. Consulte contas, organizações e planos no menu.</p>
-          <div className="admin-status-card"><div className="admin-status-icon"><ShieldCheck size={26} aria-hidden="true" /></div><div><span className="admin-status-eyebrow">PERMISSÃO CONFIRMADA</span><h2>Acesso administrativo ativo</h2><p>{identity.email}</p></div><span className="admin-status-indicator" aria-label="Ativo" /></div>
-        </div> : section === "coupons" ? <AdminCoupons /> : <AdminDirectory section={section} />}
+        <div className="admin-mobile-nav"><button type="button" onClick={() => navigate("home")}>Início</button><button type="button" onClick={() => navigate("users")}>Contas</button><button type="button" onClick={() => navigate("organizations")}>Organizações</button><button type="button" onClick={() => navigate("plans")}>Planos</button><button type="button" onClick={() => navigate("coupons")}>Cupons</button></div>
+        {section === "home" ? <AdminDashboard onNavigate={navigate} /> : section === "coupons" ? <AdminCoupons /> : <AdminDirectory section={section} initialAction={directoryAction} />}
       </section>
     </main>
   );

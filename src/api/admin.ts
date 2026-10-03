@@ -11,6 +11,24 @@ export async function getAdminMe(): Promise<AdminIdentity> {
   return response.data;
 }
 
+export interface AdminOverview {
+  accounts: number;
+  organizations: number;
+  paid_active: number;
+  past_due: number;
+  blocked_accounts: number;
+  password_pending: number;
+  beta_active: number;
+  courtesy_active: number;
+  pending_plan_changes: number;
+  coupon_reprice_due: number;
+  coupons_active: number;
+  recent_accounts: AdminUser[];
+}
+
+export const getAdminOverview = async () =>
+  (await apiClient.get<AdminOverview>('/admin/overview')).data;
+
 export interface AdminPage<T> {
   items: T[];
   total: number;
@@ -70,7 +88,7 @@ export interface AdminPlan {
   is_public: boolean;
 }
 
-export const getAdminUsers = async (params: { q?: string; status?: string; limit?: number; offset?: number }) =>
+export const getAdminUsers = async (params: { q?: string; status?: string; flag?: string; limit?: number; offset?: number }) =>
   (await apiClient.get<AdminPage<AdminUser>>('/admin/users', { params })).data;
 
 export const getAdminUser = async (id: string) =>

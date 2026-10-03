@@ -5,6 +5,7 @@ import { handleApiError } from "../api/client";
 import { AdminCreateAccount } from "./AdminCreateAccount";
 import { AdminGrants } from "./AdminGrants";
 import { AdminBillingActions } from "./AdminBillingActions";
+import { AdminSelect } from "./AdminSelect";
 
 const PAGE_SIZE = 20;
 const money = (cents) => cents == null ? "—" : new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
@@ -12,10 +13,11 @@ const date = (value) => value ? new Intl.DateTimeFormat("pt-BR", { timeZone: "UT
 const displayName = (user) => [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
 const auditLabels = { block: "Bloqueio", unblock: "Desbloqueio", password_reset_email: "E-mail de senha", create_account: "Criação assistida", beta_enable: "Beta ativado", beta_end: "Beta encerrado", courtesy_grant: "Cortesia concedida", courtesy_end: "Cortesia encerrada", cancel_renewal: "Renovação cancelada", plan_change_requested: "Mudança solicitada", plan_change_withdrawn: "Solicitação retirada", coupon_reprice_retry: "Reajuste de cupom" };
 
-export function AdminDirectory({ section }) {
+export function AdminDirectory({ section, initialAction = "" }) {
   const [query, setQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
   const [status, setStatus] = useState("");
+  const [flag, setFlag] = useState("");
   const [offset, setOffset] = useState(0);
   const [page, setPage] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -35,14 +37,14 @@ export function AdminDirectory({ section }) {
   const [savingReprice, setSavingReprice] = useState(false);
 
   useEffect(() => {
-    setQuery(""); setSubmittedQuery(""); setStatus(""); setOffset(0); setDetail(null); setPage(null); setAudit([]); setCreating(false); setNotice(""); setResetOpen(false);
-  }, [section]);
+    setQuery(""); setSubmittedQuery(""); setStatus(initialAction === "past_due" ? "past_due" : ""); setFlag(["password_pending", "pending_plan_changes", "coupon_reprice_due", "blocked", "beta", "courtesy"].includes(initialAction) ? initialAction : ""); setOffset(0); setDetail(null); setPage(null); setAudit([]); setCreating(initialAction === "create"); setNotice(""); setResetOpen(false);
+  }, [section, initialAction]);
 
   useEffect(() => {
     let active = true;
     setLoading(true); setError("");
     const request = section === "users"
-      ? getAdminUsers({ q: submittedQuery || undefined, status: status || undefined, limit: PAGE_SIZE, offset })
+      ? getAdminUsers({ q: submittedQuery || undefined, status: status || undefined, flag: flag || undefined, limit: PAGE_SIZE, offset })
       : section === "organizations"
         ? getAdminOrganizations({ q: submittedQuery || undefined, limit: PAGE_SIZE, offset })
         : getAdminPlans();
@@ -50,7 +52,7 @@ export function AdminDirectory({ section }) {
       .catch((nextError) => { if (active) setError(handleApiError(nextError)); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [section, submittedQuery, status, offset, reload]);
+  }, [section, submittedQuery, status, flag, offset, reload]);
 
   async function openDetail(id) {
     setLoading(true); setError("");
@@ -136,7 +138,8 @@ export function AdminDirectory({ section }) {
     {loading && <p role="status">Carregando…</p>}
     {!detail && !creating && section !== "plans" && <form className="admin-directory-filters" onSubmit={(event) => { event.preventDefault(); setOffset(0); setSubmittedQuery(query.trim()); }}>
       <label className="admin-search"><Search size={17} aria-hidden="true" /><input aria-label={`Buscar ${title.toLowerCase()}`} placeholder={section === "users" ? "Nome, e-mail ou ID" : "Nome ou ID"} value={query} onChange={(event) => setQuery(event.target.value)} /></label>
-      {section === "users" && <select aria-label="Filtrar por assinatura" value={status} onChange={(event) => { setStatus(event.target.value); setOffset(0); }}><option value="">Todas as assinaturas</option><option value="active">Ativa</option><option value="past_due">Em atraso</option><option value="cancelled">Cancelada</option><option value="suspended">Suspensa</option></select>}
+      {section === "users" && <AdminSelect ariaLabel="Filtrar por assinatura" value={status} onChange={(nextStatus) => { setStatus(nextStatus); setOffset(0); }} options={[{ value: "", label: "Todas as assinaturas" }, { value: "active", label: "Ativa" }, { value: "past_due", label: "Em atraso" }, { value: "cancelled", label: "Cancelada" }, { value: "suspended", label: "Suspensa" }]} />}
+      {section === "users" && <AdminSelect ariaLabel="Filtrar por atenção" value={flag} onChange={(nextFlag) => { setFlag(nextFlag); setOffset(0); }} options={[{ value: "", label: "Todas as contas" }, { value: "password_pending", label: "Convite pendente" }, { value: "pending_plan_changes", label: "Mudança de plano" }, { value: "coupon_reprice_due", label: "Reajuste de cupom" }, { value: "blocked", label: "Bloqueadas" }, { value: "beta", label: "Beta" }, { value: "courtesy", label: "Cortesia" }]} />}
       <button type="submit">Buscar</button>
     </form>}
     {!detail && !creating && !loading && section === "users" && <div className="admin-directory-list">{page?.items.map((user) => <button type="button" className="admin-directory-row" key={user.id} onClick={() => openDetail(user.id)}><span><strong>{displayName(user)}</strong><small>{user.email}</small></span><span>{user.subscription?.plan || "Sem plano"}</span><span className="admin-pill">{user.subscription?.status || "Sem assinatura"}</span><ChevronRight size={18} /></button>)}{!page?.items.length && <p className="admin-empty">Nenhuma conta encontrada.</p>}</div>}

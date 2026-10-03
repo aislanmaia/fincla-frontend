@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createAdminAccount } from "../api/admin";
 import { handleApiError } from "../api/client";
+import { AdminSelect } from "./AdminSelect";
 
 export function AdminCreateAccount({ onCreated, onCancel }) {
   const [form, setForm] = useState({ email: "", first_name: "", last_name: "", organization_name: "", organization_type: "", monthly_income: "" });
@@ -36,7 +37,7 @@ export function AdminCreateAccount({ onCreated, onCancel }) {
       <label>Sobrenome <small>opcional</small><input name="last_name" value={form.last_name} onChange={change} maxLength={100} /></label>
       <label>E-mail<input name="email" type="email" value={form.email} onChange={change} maxLength={255} required /></label>
       <label>Organização<input name="organization_name" value={form.organization_name} onChange={change} maxLength={255} required /></label>
-      <label>Tipo de organização <small>opcional</small><select name="organization_type" value={form.organization_type} onChange={change}><option value="">Selecionar</option><option value="family">Família</option><option value="individual">Individual</option><option value="business">Empresa</option></select></label>
+      <label>Tipo de organização <small>opcional</small><AdminSelect name="organization_type" ariaLabel="Tipo de organização" value={form.organization_type} onChange={(value) => setForm((current) => ({ ...current, organization_type: value }))} options={[{ value: "", label: "Selecionar" }, { value: "family", label: "Família" }, { value: "individual", label: "Individual" }, { value: "business", label: "Empresa" }]} /></label>
       <label>Renda mensal estimada <small>opcional</small><input name="monthly_income" type="number" min="0" step="0.01" value={form.monthly_income} onChange={change} /></label>
     </div>
     {error && <div className="admin-error" role="alert">{error}</div>}

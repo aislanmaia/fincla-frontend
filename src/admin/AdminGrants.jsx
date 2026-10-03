@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { changeAdminBeta, endAdminCourtesy, getAdminPlans, grantAdminCourtesy } from "../api/admin";
 import { handleApiError } from "../api/client";
+import { AdminSelect } from "./AdminSelect";
 
 const formattedDate = (value) => value ? new Intl.DateTimeFormat("pt-BR").format(new Date(value)) : "—";
 
@@ -23,7 +24,7 @@ export function AdminGrants({ userId, subscription, onChanged }) {
 
   async function submit(event) {
     event.preventDefault();
-    if (reason.trim().length < 3) return;
+    if (reason.trim().length < 3 || (action === "courtesy-grant" && !plan)) return;
     setBusy(true); setError("");
     try {
       if (action === "beta-enable") await changeAdminBeta(userId, true, reason.trim());
@@ -45,6 +46,6 @@ export function AdminGrants({ userId, subscription, onChanged }) {
     {paidActive && <p>Há uma assinatura paga ativa. Resolva a cobrança antes de conceder novo acesso.</p>}
     <div className="admin-grant-buttons"><button type="button" disabled={paidActive && !subscription?.beta_enabled} onClick={() => setAction(subscription?.beta_enabled ? "beta-end" : "beta-enable")}>{subscription?.beta_enabled ? "Encerrar beta" : "Ativar beta"}</button><button type="button" disabled={paidActive} onClick={() => setAction("courtesy-grant")}>{courtesyActive ? "Alterar cortesia" : "Conceder cortesia"}</button>{subscription?.courtesy_plan && <button type="button" onClick={() => setAction("courtesy-end")}>Encerrar cortesia</button>}</div>
     {error && <div className="admin-error" role="alert">{error}</div>}
-    {action && <form className="admin-access-form" onSubmit={submit}><strong>{action === "beta-enable" ? "Ativar beta" : action === "beta-end" ? "Encerrar beta" : action === "courtesy-grant" ? "Conceder cortesia" : "Encerrar cortesia"}</strong>{action === "courtesy-grant" && <><label htmlFor="admin-courtesy-plan">Plano</label><select id="admin-courtesy-plan" value={plan} onChange={(event) => setPlan(event.target.value)} required><option value="">Selecione o plano</option>{plans.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><label htmlFor="admin-courtesy-until">Data final</label><input id="admin-courtesy-until" type="date" value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} required /></>}<label htmlFor="admin-grant-reason">Motivo</label><textarea id="admin-grant-reason" value={reason} onChange={(event) => setReason(event.target.value)} minLength={3} maxLength={2000} required /><div><button type="button" onClick={() => setAction("")}>Cancelar</button><button type="submit" disabled={busy || reason.trim().length < 3}>{busy ? "Salvando…" : "Confirmar"}</button></div></form>}
+    {action && <form className="admin-access-form" onSubmit={submit}><strong>{action === "beta-enable" ? "Ativar beta" : action === "beta-end" ? "Encerrar beta" : action === "courtesy-grant" ? "Conceder cortesia" : "Encerrar cortesia"}</strong>{action === "courtesy-grant" && <><label htmlFor="admin-courtesy-plan">Plano</label><AdminSelect id="admin-courtesy-plan" value={plan} onChange={setPlan} required options={[{ value: "", label: "Selecione o plano" }, ...plans.map((item) => ({ value: item.id, label: item.name }))]} /><label htmlFor="admin-courtesy-until">Data final</label><input id="admin-courtesy-until" type="date" value={expiresAt} onChange={(event) => setExpiresAt(event.target.value)} required /></>}<label htmlFor="admin-grant-reason">Motivo</label><textarea id="admin-grant-reason" value={reason} onChange={(event) => setReason(event.target.value)} minLength={3} maxLength={2000} required /><div><button type="button" onClick={() => setAction("")}>Cancelar</button><button type="submit" disabled={busy || reason.trim().length < 3 || (action === "courtesy-grant" && !plan)}>{busy ? "Salvando…" : "Confirmar"}</button></div></form>}
   </section>;
 }
