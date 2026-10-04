@@ -68,14 +68,15 @@ const key = (y, m) => `${y}-${m}`;
  * cima). `invoices` mapeia cartão -> lista de faturas (o mês vem de `invoice.month`). Histórico e
  * future-commitments são derivados das faturas para ficarem coerentes entre si,
  * como no backend; `breakdownTotals` força o total de um mês no
- * future-commitments mesmo sem fatura; `hiddenFromFuture` omite do future-commitments um mês que TEM fatura (compra à vista
+ * future-commitments mesmo sem fatura; `invoiceFailures` ({ [cardId]: status }, mutável) faz o detalhe da fatura daquele cartão
+ * falhar; `hiddenFromFuture` omite do future-commitments um mês que TEM fatura (compra à vista
  * não aparece lá); `historyStatus` faz o histórico dizer
  * outro status que o detalhe (dado dessincronizado).
  *
  * `today` ancora as janelas (histórico: 6 meses até o mês corrente; future: 6
  * meses a partir do mês corrente).
  */
-export function installFakeCardsApi({ cards, invoices = {}, breakdownTotals = {}, historyStatus = {}, hiddenFromFuture = [], hiddenFromHistory = [], latencyMs = 0, failInvoiceWith = null, today }) {
+export function installFakeCardsApi({ cards, invoices = {}, breakdownTotals = {}, historyStatus = {}, hiddenFromFuture = [], hiddenFromHistory = [], latencyMs = 0, failInvoiceWith = null, invoiceFailures = {}, today }) {
   const calls = [];
   const original = apiClient.defaults.adapter;
 
@@ -177,6 +178,7 @@ export function installFakeCardsApi({ cards, invoices = {}, breakdownTotals = {}
     const inv = /^\/invoices\/(\d{4})\/(\d{1,2})$/.exec(rest);
     if (inv) {
       if (failInvoiceWith) return done(failInvoiceWith, { detail: "boom" });
+      if (invoiceFailures[cardId]) return done(invoiceFailures[cardId], { detail: "boom" });
       const found = byMonth[key(Number(inv[1]), Number(inv[2]))];
       return found ? done(200, found) : done(404, { detail: "Invoice not found" });
     }

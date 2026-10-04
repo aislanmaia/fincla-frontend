@@ -271,6 +271,7 @@ export const CartoesPage = ({
   const cardIdRef = useRef(cardId);
   cardIdRef.current = cardId;
   const [switchError, setSwitchError] = useState("");
+  const detailFailed = Boolean(shouldUseRealData && creditCardsData.detailError && creditCardsData.detailError.cardId === (CARDS.find((c) => c.id === cardId) || CARDS[0])?.id);
   const switchCard = async (id) => {
     // Cartão ainda sem detalhe (a carga só traz o do selecionado): busca antes de
     // trocar, para a tela nunca mostrar um cartão pela metade.
@@ -764,9 +765,15 @@ export const CartoesPage = ({
         onAddCard={openAddCardSheet}
       />
 
-      {(switchError || (creditCardsData.loadError && CARDS.length > 0)) && (
+      {(switchError || detailFailed || (creditCardsData.loadError && CARDS.length > 0)) && (
         <div role="alert" style={{ ...G, fontSize:13, color:T.red, background:T.redLight, border:`1px solid ${T.red}22`, borderRadius:12, padding:"10px 14px" }}>
-          {switchError || creditCardsData.loadError}
+          {switchError || (detailFailed ? "Não foi possível carregar a fatura deste cartão." : creditCardsData.loadError)}
+          {detailFailed && (
+            <button type="button" onClick={() => creditCardsData.retryCardDetail(creditCardsData.detailError.cardId)}
+              style={{ ...G, marginLeft:12, background:T.surface, color:T.ink, border:`1px solid ${T.border}`, borderRadius:8, padding:"4px 12px", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+              Tentar de novo
+            </button>
+          )}
         </div>
       )}
       <CardsCarousel
@@ -834,9 +841,15 @@ export const CartoesPage = ({
         onAddCard={openAddCardSheet}
       />
 
-      {(switchError || (creditCardsData.loadError && CARDS.length > 0)) && (
+      {(switchError || detailFailed || (creditCardsData.loadError && CARDS.length > 0)) && (
         <div role="alert" style={{ ...G, fontSize:13, color:T.red, background:T.redLight, border:`1px solid ${T.red}22`, borderRadius:12, padding:"10px 14px" }}>
-          {switchError || creditCardsData.loadError}
+          {switchError || (detailFailed ? "Não foi possível carregar a fatura deste cartão." : creditCardsData.loadError)}
+          {detailFailed && (
+            <button type="button" onClick={() => creditCardsData.retryCardDetail(creditCardsData.detailError.cardId)}
+              style={{ ...G, marginLeft:12, background:T.surface, color:T.ink, border:`1px solid ${T.border}`, borderRadius:8, padding:"4px 12px", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+              Tentar de novo
+            </button>
+          )}
         </div>
       )}
       <CardsCarousel

@@ -103,3 +103,59 @@ describe("CartoesPage em dados reais: mês seguinte com fatura real", () => {
     expect(await screen.findByText("A parcelado nov-jan")).toBeInTheDocument();
   });
 });
+
+describe("CartoesPage em dados reais: falha no detalhe do cartão selecionado", () => {
+  function setupFailing() {
+    const cards = [
+      fakeCard({ id: 1, last4: "4580", description: "Primeiro" }),
+      fakeCard({ id: 2, last4: "1234", description: "Segundo" }),
+    ];
+    const invoiceFailures = { 1: 500 };
+    api = installFakeCardsApi({
+      cards,
+      today: TODAY,
+      invoiceFailures,
+      invoices: {
+        1: [fakeInvoice({ year: 2026, month: 10, status: "open", closingDate: "2026-10-20", total: 65, items: [fakeItem({ id: 1, year: 2026, month: 10, amount: 65, description: "Compra do primeiro" })] })],
+        2: [fakeInvoice({ year: 2026, month: 10, status: "open", closingDate: "2026-10-20", total: 20, items: [fakeItem({ id: 2, year: 2026, month: 10, amount: 20, description: "Compra do segundo" })] })],
+      },
+    });
+    render(
+      <CartoesPage onNav={vi.fn()} onNewItem={vi.fn()} isMobile={false} dataMode="live" organizationId="org-1" transactionsRefreshToken={0} />,
+    );
+    return { invoiceFailures };
+  }
+
+  it("a lista aparece, o aviso aparece e o retry refaz só o detalhe", async () => {
+    const { invoiceFailures } = setupFailing();
+    const user = userEvent.setup({ advanceTimers: () => {} });
+
+    expect(await screen.findByText(/Não foi possível carregar a fatura deste cartão/)).toBeInTheDocument();
+    expect(screen.getAllByText(/4580/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/1234/).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Compra do primeiro")).not.toBeInTheDocument();
+
+    invoiceFailures[1] = null;
+    api.calls.length = 0;
+    await user.click(screen.getByRole("button", { name: "Tentar de novo" }));
+
+    expect(await screen.findByText("Compra do primeiro")).toBeInTheDocument();
+    expect(screen.queryByText(/Não foi possível carregar a fatura deste cartão/)).not.toBeInTheDocument();
+    const paths = api.calls.map((c) => c.path).sort();
+    expect(paths).toEqual([
+      "/credit-cards/1/future-commitments",
+      "/credit-cards/1/invoices/2026/10",
+      "/credit-cards/1/invoices/history",
+    ]);
+  });
+
+  it("trocar para outro cartão funciona normalmente com o primeiro em falha", async () => {
+    setupFailing();
+    const user = userEvent.setup({ advanceTimers: () => {} });
+    await screen.findByText(/Não foi possível carregar a fatura deste cartão/);
+
+    await user.click(screen.getAllByText(/1234/)[0]);
+    expect(await screen.findByText("Compra do segundo")).toBeInTheDocument();
+    expect(screen.queryByText(/Não foi possível carregar a fatura deste cartão/)).not.toBeInTheDocument();
+  });
+});

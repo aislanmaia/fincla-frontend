@@ -74,6 +74,19 @@ describe("useCreditCardsData: carga com custo fixo", () => {
     expect(result.current.cards[0].itens).toHaveLength(1);
   });
 
+  it("500 na fatura do cartão selecionado: a lista fica de pé, com erro só do detalhe, no mesmo orçamento", async () => {
+    const cards = [fakeCard({ id: 1 }), fakeCard({ id: 2, last4: "2222" })];
+    api = installFakeCardsApi({ cards, invoices: { 1: [fakeInvoice({ year: 2026, month: 10, status: "open" })] }, invoiceFailures: { 1: 500 }, today: TODAY });
+    const { result } = renderData();
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.cards.map((c) => c.id)).toEqual(["1", "2"]);
+    expect(result.current.detailError).toMatchObject({ cardId: "1" });
+    expect(cardsCalls()).toHaveLength(4);
+    await act(async () => {});
+    expect(cardsCalls()).toHaveLength(4);
+  });
+
   it("a carga custa o mesmo com 1 e com 8 cartões", async () => {
     setup(1);
     const one = renderData();
