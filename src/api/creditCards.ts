@@ -112,6 +112,23 @@ export const getCreditCardInvoice = async (
 };
 
 /**
+ * Fatura em aberto do cartão (a que ainda aceita lançamentos), sem informar ano e mês.
+ * `404` também significa "a fatura aberta ainda não tem lançamentos": quem chama decide.
+ */
+export const getCurrentCreditCardInvoice = async (
+  cardId: number,
+  organizationId: string
+): Promise<InvoiceResponse> => {
+  const response = await apiClient.get<InvoiceResponse>(
+    `/credit-cards/${cardId}/invoices/current`,
+    {
+      params: { organization_id: organizationId },
+    }
+  );
+  return unwrapMoney(response.data);
+};
+
+/**
  * Obtém o histórico de faturas de um cartão
  */
 export const getInvoiceHistory = async (

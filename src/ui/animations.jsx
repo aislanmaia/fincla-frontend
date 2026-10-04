@@ -362,6 +362,9 @@ export const ANIM_CSS = `
   /* DragScrollTabs — mantém o arrasto por toque; a barra já é oculta pelo
      padrão global de app-shell.css. */
   .dstabs-scroll { -webkit-overflow-scrolling: touch; }
+  /* Carrossel nativo do Hub do cartão: sem barra de rolagem visível (indicador é por pontos). */
+  .hub-carousel { scrollbar-width: none; -ms-overflow-style: none; }
+  .hub-carousel::-webkit-scrollbar { display: none; height: 0; width: 0; }
   /* .fincla-scroll-y foi absorvida por .fincla-scroll (app-shell.css):
      uma convenção só para região rolável em todo o app. */
 `;

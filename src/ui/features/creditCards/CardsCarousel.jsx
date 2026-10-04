@@ -17,6 +17,7 @@ export function CardsCarousel({
   selectedCardId,
   onSwitchCard,
   onAddCard,
+  hideAddTile = false,
 }) {
   const isMobile = variant === "mobile";
 
@@ -76,7 +77,7 @@ export function CardsCarousel({
               <CardVisual c={c} selected={c.id === selectedCardId} size={dims.cardSize} onClick={onSwitchCard} />
             </div>
           ))}
-          {addTile}
+          {!hideAddTile && addTile}
         </DragScrollTabs>
       </div>
     );
@@ -88,7 +89,7 @@ export function CardsCarousel({
         {cards.map((c) => (
           <CardVisual key={c.id} c={c} selected={c.id === selectedCardId} size={dims.cardSize} onClick={onSwitchCard} />
         ))}
-        {addTile}
+        {!hideAddTile && addTile}
       </div>
     </div>
   );

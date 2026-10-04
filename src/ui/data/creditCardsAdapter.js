@@ -57,7 +57,7 @@ function startOfLocalDay(ref) {
   return new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
 }
 
-function closingDayForInvoiceAnchor(card) {
+export function closingDayForInvoiceAnchor(card) {
   const c = card?.closing_day;
   if (c != null && Number.isFinite(Number(c))) return Number(c);
   const d = card?.due_day;
@@ -70,7 +70,7 @@ function daysInCalendarMonth(year, month) {
 }
 
 /** Ano/mês da fatura aberta pelo calendário de fechamento (dia no `closingDayRaw`). */
-function yearMonthOfOpenInvoiceByClosingDay(refDate, closingDayRaw) {
+export function yearMonthOfOpenInvoiceByClosingDay(refDate, closingDayRaw) {
   const closingDay = Math.min(Math.max(1, Number(closingDayRaw) || 1), 31);
   const ty = refDate.getFullYear();
   const tm0 = refDate.getMonth();
