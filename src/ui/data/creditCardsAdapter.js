@@ -168,8 +168,9 @@ function knownInvoiceMonths(history, futureCommitments) {
  * `facts` diz, por mês, `{ status, closingPassed }` ou `{ missing: true }`. Histórico
  * e compromissos futuros NÃO enxergam toda fatura (compra à vista no mês seguinte
  * não aparece em nenhum dos dois), então mês desconhecido não é mês vazio: se
- * `allowProbe`, o plano devolve `{ probe }` para o chamador confirmar aquele mês.
- * Só se sonda quando não há fato conhecido adiante que resolva o caso sozinho.
+ * `allowProbe`, o plano devolve `{ probe }` para o chamador confirmar aquele mês
+ * (inclusive o mês-âncora, mesmo que existam fatos posteriores). Só se pula uma
+ * consulta quando o mês é provadamente sem fatura (404 já observado).
  */
 function planCurrentInvoice(card, now, facts, allowProbe) {
   const start = yearMonthOfOpenInvoiceByClosingDay(now, closingDayForInvoiceAnchor(card));
@@ -181,18 +182,9 @@ function planCurrentInvoice(card, now, facts, allowProbe) {
     year = next.year;
     month = next.month;
   };
-  const hasLaterFact = () => {
-    for (const [key, fact] of facts) {
-      if (fact.missing) continue;
-      const [y, m] = key.split("-").map(Number);
-      if (y > year || (y === year && m > month)) return true;
-    }
-    return false;
-  };
-
   for (let attempt = 0; attempt < MAX_INVOICE_WALK; attempt += 1) {
     const fact = facts.get(yearMonthKey(year, month));
-    if (fact && !fact.missing) {
+    if (fact && !fact.missing && !fact.failed) {
       lastOk = { year, month, status: fact.status, closingPassed: fact.closingPassed };
       if (fact.status === "paid" || (fact.status === "open" && fact.closingPassed)) {
         advance();
@@ -200,7 +192,7 @@ function planCurrentInvoice(card, now, facts, allowProbe) {
       }
       return lastOk;
     }
-    if (!fact && allowProbe && (lastOk || !hasLaterFact())) return { probe: { year, month } };
+    if (!fact && allowProbe) return { probe: { year, month } };
     if (lastOk && lastOk.status === "open" && lastOk.closingPassed) return lastOk;
     advance();
   }
@@ -237,6 +229,8 @@ async function resolveCurrentInvoice({ card, organizationId, history, futureComm
   const fetched = new Map();
   let probing = true;
   let fetches = 0;
+  let lastFailure = null;
+  let lastTargetKey = null;
 
   const buildFacts = () => {
     const merged = new Map();
@@ -253,7 +247,10 @@ async function resolveCurrentInvoice({ card, organizationId, history, futureComm
   const sameAsPredicted = (predicted, real) =>
     predicted && predicted.status === real.status && predicted.closingPassed === real.closingPassed;
 
-  /** Consulta o mês; `false` quando a fatura não existe (404) ou a rede falha. */
+  /**
+   * Consulta o mês. Devolve `"ok"`, `"missing"` (404: sem fatura) ou `"error"`
+   * (500, timeout, rede: dado DESCONHECIDO, nunca confundido com "sem fatura").
+   */
   const fetchMonth = async (year, month) => {
     fetches += 1;
     const key = yearMonthKey(year, month);
@@ -264,10 +261,15 @@ async function resolveCurrentInvoice({ card, organizationId, history, futureComm
         status: invoice.status,
         closingPassed: isInvoiceClosingBeforeToday(invoice, now),
       });
-      return true;
-    } catch {
-      observed.set(key, { missing: true });
-      return false;
+      return "ok";
+    } catch (error) {
+      if (error?.response?.status === 404) {
+        observed.set(key, { missing: true });
+        return "missing";
+      }
+      observed.set(key, { failed: true });
+      lastFailure = error;
+      return "error";
     }
   };
 
@@ -278,7 +280,7 @@ async function resolveCurrentInvoice({ card, organizationId, history, futureComm
 
     if (plan.probe) {
       if (fetches >= MAX_INVOICE_FETCHES) break;
-      if (!(await fetchMonth(plan.probe.year, plan.probe.month))) probing = false;
+      if ((await fetchMonth(plan.probe.year, plan.probe.month)) === "missing") probing = false;
       continue;
     }
 
@@ -289,16 +291,21 @@ async function resolveCurrentInvoice({ card, organizationId, history, futureComm
     }
 
     const key = yearMonthKey(plan.year, plan.month);
+    lastTargetKey = key;
     if (fetched.has(key)) return fetched.get(key);
     if (fetches >= MAX_INVOICE_FETCHES) break;
     const predicted = facts.get(key);
-    if (!(await fetchMonth(plan.year, plan.month))) {
-      probing = false;
-      continue;
-    }
-    if (sameAsPredicted(predicted, observed.get(key))) return fetched.get(key);
+    const outcome = await fetchMonth(plan.year, plan.month);
+    if (outcome === "missing") probing = false;
+    if (outcome === "error") throw lastFailure;
+    if (outcome === "ok" && sameAsPredicted(predicted, observed.get(key))) return fetched.get(key);
   }
 
+  // Teto estourado: usa o que já foi buscado em vez de jogar fora.
+  if (lastTargetKey && fetched.has(lastTargetKey)) return fetched.get(lastTargetKey);
+
+  // Falha de rede/servidor não é "sem fatura": o sintético mostraria R$ 0,00 calado.
+  if (lastFailure) throw lastFailure;
   const anchor = yearMonthOfOpenInvoiceByClosingDay(now, closingDayForInvoiceAnchor(card));
   return syntheticInvoiceForMonth(futureCommitments, anchor.year, anchor.month);
 }

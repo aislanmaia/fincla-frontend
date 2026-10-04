@@ -325,9 +325,9 @@ export const CartoesPage = ({
   const [pastItemsLoading, setPastItemsLoading] = useState(false);
 
   useEffect(() => {
-    // Mês projetado (status null) ainda não tem fatura no backend: não há itens a buscar.
+    // Mês projetado (status null) também pode ter fatura real (ex.: só compra à vista): busca.
     const awaitingSync = shouldUseRealData && syncedCardId !== card?.id;
-    if (isCurrent || !shouldUseRealData || !card || !invoice?.year || !invoice?.month || !organizationId || awaitingSync || invoice.status == null) {
+    if (isCurrent || !shouldUseRealData || !card || !invoice?.year || !invoice?.month || !organizationId || awaitingSync) {
       setPastItems([]);
       setPastItemsLoading(false);
       return;
@@ -347,7 +347,6 @@ export const CartoesPage = ({
     syncedCardId,
     invoice?.year,
     invoice?.month,
-    invoice?.status,
     organizationId,
     transactionsRefreshToken,
   ]);
@@ -765,9 +764,9 @@ export const CartoesPage = ({
         onAddCard={openAddCardSheet}
       />
 
-      {switchError && (
+      {(switchError || (creditCardsData.loadError && CARDS.length > 0)) && (
         <div role="alert" style={{ ...G, fontSize:13, color:T.red, background:T.redLight, border:`1px solid ${T.red}22`, borderRadius:12, padding:"10px 14px" }}>
-          {switchError}
+          {switchError || creditCardsData.loadError}
         </div>
       )}
       <CardsCarousel
@@ -835,9 +834,9 @@ export const CartoesPage = ({
         onAddCard={openAddCardSheet}
       />
 
-      {switchError && (
+      {(switchError || (creditCardsData.loadError && CARDS.length > 0)) && (
         <div role="alert" style={{ ...G, fontSize:13, color:T.red, background:T.redLight, border:`1px solid ${T.red}22`, borderRadius:12, padding:"10px 14px" }}>
-          {switchError}
+          {switchError || creditCardsData.loadError}
         </div>
       )}
       <CardsCarousel

@@ -75,7 +75,7 @@ const key = (y, m) => `${y}-${m}`;
  * `today` ancora as janelas (histórico: 6 meses até o mês corrente; future: 6
  * meses a partir do mês corrente).
  */
-export function installFakeCardsApi({ cards, invoices = {}, breakdownTotals = {}, historyStatus = {}, hiddenFromFuture = [], latencyMs = 0, today }) {
+export function installFakeCardsApi({ cards, invoices = {}, breakdownTotals = {}, historyStatus = {}, hiddenFromFuture = [], hiddenFromHistory = [], latencyMs = 0, failInvoiceWith = null, today }) {
   const calls = [];
   const original = apiClient.defaults.adapter;
 
@@ -123,7 +123,7 @@ export function installFakeCardsApi({ cards, invoices = {}, breakdownTotals = {}
     if (rest === "/invoices/history") {
       const start = new Date(today.getFullYear(), today.getMonth() - 5, 1);
       const monthly_data = monthsFrom(start, 6)
-        .filter(({ year, month }) => byMonth[key(year, month)])
+        .filter(({ year, month }) => byMonth[key(year, month)] && !hiddenFromHistory.includes(key(year, month)))
         .map(({ year, month }) => {
           const inv = byMonth[key(year, month)];
           return {
@@ -176,6 +176,7 @@ export function installFakeCardsApi({ cards, invoices = {}, breakdownTotals = {}
     }
     const inv = /^\/invoices\/(\d{4})\/(\d{1,2})$/.exec(rest);
     if (inv) {
+      if (failInvoiceWith) return done(failInvoiceWith, { detail: "boom" });
       const found = byMonth[key(Number(inv[1]), Number(inv[2]))];
       return found ? done(200, found) : done(404, { detail: "Invoice not found" });
     }

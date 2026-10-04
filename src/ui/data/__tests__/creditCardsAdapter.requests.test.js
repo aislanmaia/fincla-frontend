@@ -53,12 +53,37 @@ describe("custo da fatura atual", () => {
       [inv(2026, 10, "open", { closingDate: "2026-10-13" }), inv(2026, 11, "open", { closingDate: "2026-11-13" })],
     ],
     ["fechada não paga", fakeCard(), [inv(2026, 10, "closed"), inv(2026, 11, "open")]],
-    ["só parcelas no mês seguinte", fakeCard(), [inv(2026, 11, "open")]],
   ])("%s: histórico + futuro + exatamente 1 detalhe, nenhum 404", async (_name, card, invoices) => {
     const { calls } = await detailFor(card, invoices);
     expect(invoiceCalls(calls)).toHaveLength(1);
     expect(calls).toHaveLength(3);
     expect(calls.filter((c) => c.status >= 400)).toEqual([]);
+  });
+
+  it("só parcelas no mês seguinte: o mês-âncora é confirmado (um 404) e a de novembro é a atual", async () => {
+    const { calls, ui } = await detailFor(fakeCard(), [inv(2026, 11, "open")]);
+    expect(invoiceCalls(calls).map((c) => [c.path.slice(-7), c.status])).toEqual([
+      ["2026/10", 404],
+      ["2026/11", 200],
+    ]);
+    expect(ui.analytics.currentInvoice.month).toBe("2026-11");
+  });
+
+  it("mês-âncora invisível para histórico e futuro, com fato conhecido adiante: o âncora é confirmado", async () => {
+    // Outubro só tem compra à vista (nenhuma fonte o vê); novembro tem parcelas (futuro o vê).
+    const { calls, ui } = await detailFor(
+      fakeCard({ closing_day: 20, due_day: 25 }),
+      [inv(2026, 10, "open", { closingDate: "2026-10-20" }), inv(2026, 11, "open", { closingDate: "2026-11-20" })],
+      { hiddenFromHistory: ["2026-10"], hiddenFromFuture: ["2026-10"] },
+    );
+    expect(ui.analytics.currentInvoice.month).toBe("2026-10");
+    expect(invoiceCalls(calls).map((c) => [c.path.slice(-7), c.status])).toEqual([["2026/10", 200]]);
+  });
+
+  it("erro de servidor na consulta NÃO vira \"sem fatura\": a carga falha em vez de mostrar R$ 0,00", async () => {
+    api = installFakeCardsApi({ cards: [fakeCard()], invoices: { 1: [inv(2026, 10, "open")] }, failInvoiceWith: 500, today: TODAY });
+    const { rawCards } = await listCreditCardsBasicForUi("org-1");
+    await expect(loadCreditCardDetailForUi(rawCards[0], "org-1")).rejects.toBeTruthy();
   });
 
   it("paga e a seguinte ainda vazia: confirma o mês seguinte (um 404) e mostra a paga", async () => {

@@ -74,3 +74,32 @@ describe("CartoesPage em dados reais: troca de cartão", () => {
     expect(screen.queryAllByText("ATUAL")).toEqual([]);
   });
 });
+
+describe("CartoesPage em dados reais: mês seguinte com fatura real", () => {
+  it("navegar para o mês seguinte (sem status no histórico) lista os itens da fatura real", async () => {
+    // Cartão com fechamento 15: outubro só com compra à vista; novembro (parcelado)
+    // aparece nos compromissos futuros SEM status, mas a fatura existe e tem item.
+    const card = fakeCard({ id: 1, last4: "1001", closing_day: 15, due_day: 25 });
+    api = installFakeCardsApi({
+      cards: [card],
+      today: TODAY,
+      latencyMs: 10,
+      invoices: {
+        1: [
+          fakeInvoice({ year: 2026, month: 10, status: "open", closingDate: "2026-10-15", total: 120, items: [fakeItem({ id: 1, year: 2026, month: 10, amount: 120, description: "A cash out" })] }),
+          fakeInvoice({ year: 2026, month: 11, status: "open", closingDate: "2026-11-15", total: 100, items: [fakeItem({ id: 2, year: 2026, month: 11, amount: 100, description: "A parcelado nov-jan", installment: 1, total: 3 })] }),
+        ],
+      },
+    });
+    render(
+      <CartoesPage onNav={vi.fn()} onNewItem={vi.fn()} isMobile={false} dataMode="live" organizationId="org-1" transactionsRefreshToken={0} />,
+    );
+    await screen.findByText("A cash out");
+
+    const user = userEvent.setup({ advanceTimers: () => {} });
+    const next = screen.getAllByText("Atual")[0].parentElement.nextElementSibling;
+    await user.click(next);
+
+    expect(await screen.findByText("A parcelado nov-jan")).toBeInTheDocument();
+  });
+});

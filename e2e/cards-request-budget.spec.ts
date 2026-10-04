@@ -251,7 +251,7 @@ test.describe("carga de /cards: orçamento de requisições", () => {
   }
 });
 
-test("selecionar outro cartão busca só o detalhe dele, uma vez, sem 404", async ({ page }) => {
+test("selecionar outro cartão busca só o detalhe dele, uma vez", async ({ page }) => {
   const organizationId = await seedOrganizationWithCards(5);
   await page.setViewportSize(viewports[0].size);
   await login(page, organizationId);
@@ -265,9 +265,12 @@ test("selecionar outro cartão busca só o detalhe dele, uma vez, sem 404", asyn
   await page.waitForTimeout(1000);
 
   const added = liveCards().slice(before);
-  // histórico + compromissos futuros + fatura atual, todos do cartão escolhido
-  expect(added.length).toBeLessThanOrEqual(3);
-  expect(added.every((c) => c.status != null && c.status < 400)).toBe(true);
+  // histórico + compromissos futuros + fatura atual do cartão escolhido, mais, no
+  // pior caso, UMA confirmação de mês sem fatura (o único 404 tolerado)
+  expect(added.length).toBeLessThanOrEqual(4);
+  const failed = added.filter((c) => c.status == null || c.status >= 400);
+  expect(failed.length).toBeLessThanOrEqual(1);
+  expect(failed.every((c) => c.status === 404 && /\/invoices\/\d{4}\/\d+/.test(c.path))).toBe(true);
   const cardIds = new Set(added.map((c) => /\/credit-cards\/(\d+)\//.exec(c.path)?.[1]));
   expect(cardIds.size).toBe(1);
 
@@ -276,4 +279,64 @@ test("selecionar outro cartão busca só o detalhe dele, uma vez, sem 404", asyn
   await page.getByText(/1111/).first().click();
   await page.waitForTimeout(1000);
   expect(liveCards().length).toBe(afterSwitch);
+});
+
+test("mês seguinte só com parcelas (compra à vista no ciclo atual): a fatura real lista o item", async ({ page }) => {
+  // Fechamento daqui a ~10 dias: a compra à vista de hoje fica na fatura atual e o
+  // parcelado, lançado NO dia do fechamento, só cai na do mês seguinte. O histórico
+  // não enxerga essa fatura futura e os compromissos futuros a mostram sem status.
+  const today = new Date();
+  test.skip(today.getDate() >= 27, "o cenário precisa de um fechamento no mesmo mês, depois de hoje");
+  const closingDay = Math.min(today.getDate() + 10, 28);
+  const organizationId = await createFreshOrganization();
+  const bearer = await loginOwnerBearer();
+  const tagId = await fetchFirstCategoriaTagId(bearer, organizationId);
+  const cardRes = await fetch(`${apiBase()}/v1/credit-cards`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${bearer}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      organization_id: organizationId,
+      last4: "1001",
+      brand: "Visa",
+      due_day: 25,
+      closing_day: closingDay,
+      description: "Cartão Formato A",
+      credit_limit: 5000,
+    }),
+  });
+  expect(cardRes.status).toBe(201);
+  const card = (await cardRes.json()) as { id: number };
+  const purchase = (description: string, value: number, date: string, installments?: number) =>
+    postTransaction(bearer, {
+      type: "expense",
+      description,
+      value,
+      payment_method: "credit_card",
+      card_id: card.id,
+      modality: installments ? "installment" : "cash",
+      ...(installments ? { installments_count: installments } : {}),
+      date,
+      organization_id: organizationId,
+      tag_ids: [tagId],
+      status: "confirmed",
+      recurring: false,
+    });
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const ym = `${today.getFullYear()}-${pad(today.getMonth() + 1)}`;
+  await purchase("Compra à vista A", 120, `${ym}-${pad(today.getDate())}T12:00:00`);
+  await purchase("Parcelado A", 300, `${ym}-${pad(closingDay)}T12:00:00`, 3);
+
+  await page.setViewportSize(viewports[0].size);
+  await login(page, organizationId);
+  await page.goto("/cards");
+  await expect(page.getByText("Compra à vista A").first()).toBeVisible({ timeout: 30_000 });
+
+  await page
+    .getByText("Atual", { exact: true })
+    .first()
+    .locator("xpath=..")
+    .locator("xpath=following-sibling::button")
+    .click();
+  await expect(page.getByText("Parcelado A").first()).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/Nenhum lançamento encontrado/)).toHaveCount(0);
 });

@@ -18,6 +18,7 @@ const EMPTY_STATE = {
   isMovingInstallment: false,
   isDeletingInvoiceItem: false,
   error: "",
+  loadError: "",
   cards: [],
   consolidatedCommitments: null,
 };
@@ -87,6 +88,7 @@ export function useCreditCardsData({
       ...current,
       isLoading: false,
       error: "",
+      loadError: "",
       cards: cards.map((c) => (detailed && c.id === detailed.id ? detailed : c)),
     }));
   }, []);
@@ -100,10 +102,13 @@ export function useCreditCardsData({
       if (seq === loadSeqRef.current) applyOverview(result);
     } catch (error) {
       if (seq !== loadSeqRef.current) return;
+      const message = formatCreditCardsApiError(error);
       setState((current) => ({
         ...current,
         isLoading: false,
-        error: formatCreditCardsApiError(error),
+        error: message,
+        // Com cartões na tela o erro de recarga não pode sumir calado: a tela mostra um aviso.
+        loadError: message,
       }));
     }
   }, [organizationId, startOverview, applyOverview]);
