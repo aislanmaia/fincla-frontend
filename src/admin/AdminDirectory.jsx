@@ -56,6 +56,8 @@ export function AdminDirectory({ section, initialAction = "" }) {
   }, [section, submittedQuery, status, flag, offset, reload]);
 
   async function openDetail(id) {
+    const content = document.querySelector(".admin-content");
+    if (content) content.scrollTop = 0;
     setLoading(true); setError("");
     try {
       setDetail(section === "users" ? await getAdminUser(id) : await getAdminOrganization(id));

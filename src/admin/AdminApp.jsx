@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { ArrowRight, LockKeyhole, LogOut, ShieldCheck } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowRight, Building2, CreditCard, LayoutDashboard, LockKeyhole, LogOut, ShieldCheck, TicketPercent, UsersRound } from "lucide-react";
 import { getAdminMe } from "../api/admin";
 import { login, logout } from "../api/auth";
 import { handleApiError } from "../api/client";
@@ -24,8 +24,10 @@ export function AdminApp() {
   const [error, setError] = useState("");
   const [section, setSection] = useState("home");
   const [directoryAction, setDirectoryAction] = useState("");
+  const contentRef = useRef(null);
 
   function navigate(nextSection, action = "") {
+    if (contentRef.current) contentRef.current.scrollTop = 0;
     setDirectoryAction(action);
     setSection(nextSection);
   }
@@ -116,11 +118,13 @@ export function AdminApp() {
         </nav>
         <div className="admin-sidebar-bottom"><span>ADMINISTRADOR FINCLA</span><strong>{identity.email}</strong><button type="button" onClick={signOut}><LogOut size={16} aria-hidden="true" /> Sair</button></div>
       </aside>
-      <section className="admin-content">
+      <section className="admin-content" ref={contentRef}>
         <header className="admin-topbar"><span>Administração <span className="admin-breadcrumb-slash">/</span> {section === "home" ? "Visão geral" : section === "users" ? "Contas" : section === "organizations" ? "Organizações" : section === "coupons" ? "Cupons" : "Planos"}</span><span className="admin-topbar-secure"><ShieldCheck size={16} aria-hidden="true" /> Sessão protegida</span><button type="button" className="admin-mobile-signout" onClick={signOut}><LogOut size={16} aria-hidden="true" /> Sair</button></header>
-        <div className="admin-mobile-nav"><button type="button" onClick={() => navigate("home")}>Início</button><button type="button" onClick={() => navigate("users")}>Contas</button><button type="button" onClick={() => navigate("organizations")}>Organizações</button><button type="button" onClick={() => navigate("plans")}>Planos</button><button type="button" onClick={() => navigate("coupons")}>Cupons</button></div>
         {section === "home" ? <AdminDashboard onNavigate={navigate} /> : section === "coupons" ? <AdminCoupons /> : <AdminDirectory section={section} initialAction={directoryAction} />}
       </section>
+      <nav className="admin-mobile-nav" aria-label="Administração">
+        {[["home", "Início", LayoutDashboard], ["users", "Contas", UsersRound], ["organizations", "Organizações", Building2], ["plans", "Planos", CreditCard], ["coupons", "Cupons", TicketPercent]].map(([key, label, Icon]) => <button key={key} type="button" aria-current={section === key ? "page" : undefined} onClick={() => navigate(key)}><Icon size={19} aria-hidden="true" /><span>{label}</span></button>)}
+      </nav>
     </main>
   );
 }
