@@ -16,7 +16,7 @@ const TILE_STYLE = {
  */
 export function CardHeuristicTiles({ kpis, formatBRL, isMobile }) {
   const {
-    monthProgressPercent, spentPercent, onPace, projection,
+    cycleProgressPercent, spentPercent, hasPaceData, onPace, projection,
     healthScore, healthColor, healthLabel, bestPurchaseDay, closingDay,
   } = kpis;
   return (
@@ -25,20 +25,22 @@ export function CardHeuristicTiles({ kpis, formatBRL, isMobile }) {
         <div style={LABEL_STYLE}>Velocidade de gasto</div>
         <div style={{ marginBottom: 10 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
-            <span style={{ ...G, fontSize: 11, color: T.inkMid }}>Avançamos {monthProgressPercent}% do mês</span>
-            <span style={{ ...G, fontSize: 11, fontWeight: 700, color: onPace ? T.green : T.red }}>
+            <span style={{ ...G, fontSize: 11, color: T.inkMid }}>Avançamos {cycleProgressPercent}% do ciclo</span>
+            <span style={{ ...G, fontSize: 11, fontWeight: 700, color: !hasPaceData ? T.inkMid : onPace ? T.green : T.red }}>
               {spentPercent}% do limite gasto
             </span>
           </div>
           <div style={{ height: 8, background: T.grayLight, borderRadius: 99, overflow: "hidden", position: "relative" }}>
-            <div style={{ height: "100%", width: `${monthProgressPercent}%`, background: T.border, borderRadius: 99 }} />
-            <div style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${spentPercent}%`, background: `linear-gradient(90deg,${onPace ? T.green : T.red}99,${onPace ? T.green : T.red})`, borderRadius: 99, transition: "width 0.8s" }} />
+            <div style={{ height: "100%", width: `${cycleProgressPercent}%`, background: T.border, borderRadius: 99 }} />
+            <div style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${spentPercent}%`, background: !hasPaceData ? T.inkFaint : `linear-gradient(90deg,${onPace ? T.green : T.red}99,${onPace ? T.green : T.red})`, borderRadius: 99, transition: "width 0.8s" }} />
           </div>
         </div>
         <div style={{ ...G, fontSize: 11, color: T.inkMid, lineHeight: 1.6 }}>
-          {onPace
-            ? <>✅ Ritmo controlado. Projeção de fechamento: <strong>{formatBRL(projection)}</strong>.</>
-            : <>🔴 Gasto acelerado. Projeção: <strong style={{ color: T.red }}>{formatBRL(projection)}</strong> — acima do ritmo.</>}
+          {!hasPaceData
+            ? <>Poucos dados ainda neste ciclo: a projeção de fechamento aparece quando houver lançamentos e mais de um dia de ciclo.</>
+            : onPace
+              ? <>✅ Ritmo controlado. Projeção de fechamento: <strong>{formatBRL(projection)}</strong>.</>
+              : <>🔴 Gasto acelerado. Projeção: <strong style={{ color: T.red }}>{formatBRL(projection)}</strong> — acima do ritmo.</>}
         </div>
       </div>
       <div style={TILE_STYLE}>
@@ -47,14 +49,14 @@ export function CardHeuristicTiles({ kpis, formatBRL, isMobile }) {
           <svg width={60} height={60} viewBox="0 0 60 60">
             <circle cx={30} cy={30} r={24} fill="none" stroke={T.grayLight} strokeWidth={6} />
             <circle cx={30} cy={30} r={24} fill="none" stroke={healthColor} strokeWidth={6}
-              strokeDasharray={`${(healthScore / 100) * 150.8} 150.8`}
+              strokeDasharray={`${((healthScore ?? 0) / 100) * 150.8} 150.8`}
               strokeLinecap="round" transform="rotate(-90 30 30)"
               style={{ transition: "stroke-dasharray 0.9s cubic-bezier(0.4,0,0.2,1)" }} />
-            <text x={30} y={35} textAnchor="middle" fontSize={14} fontWeight={800} fill={healthColor} fontFamily="Geist Mono,monospace">{Math.round(healthScore)}</text>
+            <text x={30} y={35} textAnchor="middle" fontSize={14} fontWeight={800} fill={healthColor} fontFamily="Geist Mono,monospace">{healthScore === null ? "—" : Math.round(healthScore)}</text>
           </svg>
           <div>
             <div style={{ ...G, fontSize: 14, fontWeight: 700, color: healthColor }}>{healthLabel}</div>
-            <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 2 }}>de 100 pontos</div>
+            <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 2 }}>{healthScore === null ? "fatura aberta indisponível" : "de 100 pontos"}</div>
           </div>
         </div>
         <div style={{ ...G, fontSize: 11, color: T.inkMid, lineHeight: 1.6 }}>

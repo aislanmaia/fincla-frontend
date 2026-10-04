@@ -115,3 +115,13 @@ describe("defaultInvoiceKey / summarizeInvoiceCounts / describeDue", () => {
     expect(describeDue("2026-10-01", NOW)).toBe("venceu há 3 dias (01/10)");
   });
 });
+
+describe("linha do histórico 'open' fora do mês aberto", () => {
+  it("posterior à fatura aberta é Prevista, e nunca existem duas abertas", () => {
+    const history = { monthly_data: [hist(2026, 9, "paid", 1), hist(2026, 10, "open", 8129.51), hist(2026, 11, "open", 50)] };
+    const cards = build({ history, future: null });
+    expect(cards.find((c) => c.key === "2026-11").status).toBe("forecast");
+    expect(cards.filter((c) => c.status === "open")).toHaveLength(1);
+    expect(defaultInvoiceKey(cards)).toBe("2026-10");
+  });
+});

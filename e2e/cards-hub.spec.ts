@@ -161,6 +161,10 @@ for (const vp of VIEWPORTS) {
       await closed.click();
       await expect(closed).toHaveAttribute("data-selected", "true");
       await expect(open).toHaveAttribute("data-selected", "false");
+      // A rolagem suave do toque não pode reescolher o card antigo (seleção que "alterna").
+      await page.waitForTimeout(1800);
+      await expect(closed).toHaveAttribute("data-selected", "true");
+      await expect(open).toHaveAttribute("data-selected", "false");
 
       if (vp.mobile) {
         await expect(page.getByTestId("invoice-dots")).toBeVisible();
@@ -223,6 +227,19 @@ for (const vp of VIEWPORTS) {
     });
   });
 }
+
+test("o link do dashboard da fatura abre dentro do shell do app", async ({ page }) => {
+  await loginAsE2EOwner(page);
+  await page.goto("/cards");
+  await expect(page.getByTestId("invoice-carousel")).toBeVisible({ timeout: 30_000 });
+  await selectCardByName(page, "Hub Azul");
+  await page.locator('[data-testid^="invoice-card-"][data-status="open"]').getByTestId("invoice-dashboard-link").click();
+  await expect(page).toHaveURL(new RegExp(`/cards/${busyCardId}/invoices/\\d{4}/\\d{1,2}$`));
+  await expect(page.getByText(/em construção/i)).toBeVisible();
+  // Barra lateral e topo do app continuam presentes: a página não saiu do shell.
+  await expect(page.getByRole("navigation").getByRole("button", { name: "Cartões" })).toBeVisible();
+  await expect(page.locator("[data-fincla-main-scroll]")).toBeVisible();
+});
 
 test("a tela anterior continua em /cards?view=classic", async ({ page }) => {
   await loginAsE2EOwner(page);

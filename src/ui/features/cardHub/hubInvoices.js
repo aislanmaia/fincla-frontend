@@ -55,8 +55,11 @@ function historyStatus(raw, key, openKey) {
   if (raw === "paid") return INVOICE_STATUS.PAID;
   if (raw === "closed") return INVOICE_STATUS.CLOSED;
   // O histórico devolve "open" também para mês sem registro de fatura; só a fatura
-  // aberta de verdade (a mais recente) merece o rótulo, as anteriores já fecharam.
-  return key < openKey ? INVOICE_STATUS.CLOSED : INVOICE_STATUS.OPEN;
+  // aberta de verdade merece o rótulo: as anteriores já fecharam e as posteriores
+  // ainda nem abriram (nunca duas "abertas").
+  if (key < openKey) return INVOICE_STATUS.CLOSED;
+  if (key > openKey) return INVOICE_STATUS.FORECAST;
+  return INVOICE_STATUS.OPEN;
 }
 
 /**

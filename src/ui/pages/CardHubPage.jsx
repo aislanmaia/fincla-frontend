@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Lightbulb, Pin, Plus } from "lucide-react";
 
@@ -25,6 +25,7 @@ import { InvoiceCarousel } from "../features/cardHub/InvoiceCarousel.jsx";
 import { NotesDialog } from "../features/cardHub/NotesDialog.jsx";
 import { INVOICE_STATUS, summarizeInvoiceCounts } from "../features/cardHub/hubInvoices.js";
 import { useCardHubData } from "../features/cardHub/useCardHubData.js";
+import { useToday } from "../features/cardHub/useToday.js";
 
 const OUTLINE_BTN = {
   ...G, display: "flex", alignItems: "center", gap: 6, background: T.surface, border: `1px solid ${T.border}`,
@@ -57,12 +58,13 @@ export function CardHubPage({
   });
   const { selectedCard, selectedCardId, invoiceCards, detail } = hub;
 
-  const [pickedKey, setPickedKey] = useState(null);
+  const [picked, setPicked] = useState(null);
   const [dialog, setDialog] = useState(null);
-  const now = useMemo(() => new Date(), []);
+  const now = useToday();
 
-  useEffect(() => { setPickedKey(null); }, [selectedCardId]);
-
+  // A escolha é do cartão em que foi feita: ao trocar de cartão ela deixa de valer sem render intermediário.
+  const setPickedKey = (key) => setPicked({ cardId: selectedCardId, key });
+  const pickedKey = picked?.cardId === selectedCardId ? picked.key : null;
   const selectedKey = invoiceCards.some((i) => i.key === pickedKey) ? pickedKey : hub.initialInvoiceKey;
   const currency = selectedCard?.currency || undefined;
   const uiCard = hub.uiCards.find((c) => c.cardId === selectedCardId) ?? null;
@@ -70,16 +72,20 @@ export function CardHubPage({
   const insights = detail.future?.insights ?? [];
 
   const kpis = useMemo(() => {
-    if (!uiCard) return null;
+    if (!uiCard || detail.loading) return null;
     const invoice = { val: openInvoice?.total ?? 0 };
+    // As parcelas ativas vêm da fatura aberta: se ela não pôde ser lida, a exposição é
+    // desconhecida (null) e o score não é afirmado. 404 (sem lançamentos) é dado: zero parcelas.
+    const exposureKnown = detail.currentState !== "unavailable";
     return computeCardKpis({
       card: uiCard,
       invoice,
       usagePercent: computeUsagePercent(uiCard),
-      totalInstallments: computeInstallmentsExposure(uiCard.parcelas_ativas).net,
-      projection: computeSpendProjection({ card: uiCard, invoice, isCurrent: true }),
+      totalInstallments: exposureKnown ? computeInstallmentsExposure(uiCard.parcelas_ativas).net : null,
+      projection: computeSpendProjection({ card: uiCard, invoice, isCurrent: true, today: now }),
+      today: now,
     });
-  }, [uiCard, openInvoice]);
+  }, [uiCard, openInvoice, detail.currentState, detail.loading, now]);
 
   const goClassic = () => navigate({ to: "/cards", search: (prev) => ({ ...prev, [FC.VIEW]: "classic" }) });
   const goTo = (href) => navigate({ to: href });
@@ -145,21 +151,21 @@ export function CardHubPage({
         <DragScrollTabs bg={T.bg}>
           {hub.uiCards.map((c) => (
             <div key={c.id} style={{ paddingTop: 8 }}>
-              <CardVisual c={c} selected={c.cardId === selectedCardId} size="sm" onClick={() => hub.selectCard(c.cardId)} />
+              <CardVisual c={c} selected={c.cardId === selectedCardId} size="sm" onClick={() => { setPicked(null); hub.selectCard(c.cardId); }} />
             </div>
           ))}
         </DragScrollTabs>
       ) : (
         <div style={{ display: "flex", gap: 14, overflowX: "auto", padding: "6px 4px 8px", scrollbarWidth: "none" }}>
           {hub.uiCards.map((c) => (
-            <CardVisual key={c.id} c={c} selected={c.cardId === selectedCardId} size="md" onClick={() => hub.selectCard(c.cardId)} />
+            <CardVisual key={c.id} c={c} selected={c.cardId === selectedCardId} size="md" onClick={() => { setPicked(null); hub.selectCard(c.cardId); }} />
           ))}
         </div>
       )}
     </div>
   );
 
-  const degraded = detail.historyFailed || detail.futureFailed || detail.currentState === "unavailable";
+  const degraded = !detail.loading && (detail.historyFailed || detail.futureFailed || detail.currentState === "unavailable");
   const cardName = selectedCard.description?.trim() || `${selectedCard.brand} •• ${selectedCard.last4}`;
 
   return (
@@ -195,6 +201,8 @@ export function CardHubPage({
           </span>
         )}
       </div>
+
+      {hub.refreshFailed && <Notice tone="warn">Não foi possível atualizar agora. Mostrando os dados anteriores.</Notice>}
 
       {degraded && <Notice tone="warn">Algumas informações das faturas não puderam ser carregadas. Os dados abaixo podem estar incompletos.</Notice>}
 

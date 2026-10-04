@@ -105,15 +105,20 @@ const futureFixture = (over = {}) => ({
 
 /** Backend de mentira na camada HTTP: o cliente, o adapter e o hook reais rodam por cima. */
 function mockApi({ cards = [cardFixture()], history, current, future, patch } = {}) {
+
   const patched = [];
   server.use(
-    http.get("*/v1/credit-cards", () => HttpResponse.json(cards)),
+    http.get("*/v1/credit-cards", () => (cards === "fail"
+      ? HttpResponse.json({ detail: "boom" }, { status: 500 })
+      : HttpResponse.json(cards))),
     http.get("*/v1/credit-cards/:id/invoices/history", () => (history === "fail"
       ? HttpResponse.json({ detail: "boom" }, { status: 500 })
       : HttpResponse.json(history ?? historyFixture()))),
     http.get("*/v1/credit-cards/:id/invoices/current", () => (current === "empty"
       ? HttpResponse.json({ detail: "Invoice not found" }, { status: 404 })
-      : HttpResponse.json(current ?? currentFixture()))),
+      : current === "fail"
+        ? HttpResponse.json({ detail: "boom" }, { status: 500 })
+        : HttpResponse.json(current ?? currentFixture()))),
     http.get("*/v1/credit-cards/:id/future-commitments", () => HttpResponse.json(future ?? futureFixture())),
     http.patch("*/v1/credit-cards/:id", async ({ request }) => {
       const body = await request.json();
@@ -216,7 +221,7 @@ describe("CardHubPage — carrossel de faturas", () => {
 });
 
 describe("CardHubPage — KPIs e insights", () => {
-  it("exibe Score de saúde, Velocidade de gasto e Melhor dia calculados pela heurística existente", async () => {
+  it("exibe Score de saúde, Velocidade de gasto (do ciclo real) e Melhor dia", async () => {
     mockApi();
     renderHub();
     await waitForCarousel();
@@ -226,10 +231,29 @@ describe("CardHubPage — KPIs e insights", () => {
     expect(screen.getByText("65")).toBeInTheDocument();
     expect(screen.getByText("Regular")).toBeInTheDocument();
     expect(screen.getByText("Velocidade de gasto")).toBeInTheDocument();
-    expect(screen.getByText(/Avançamos 60% do mês/)).toBeInTheDocument();
+    // hoje 04/10, fechamento dia 15: ciclo 15/09-15/10 (30 dias), 19 decorridos = 63%
+    expect(screen.getByText(/Avançamos 63% do ciclo/)).toBeInTheDocument();
     expect(screen.getByText(/81% do limite gasto/)).toBeInTheDocument();
+    // 8129,51 / 19 * 30 = 12.836
+    expect(screen.getByText(/Gasto acelerado/)).toHaveTextContent("12.836,00");
     expect(screen.getByText("Melhor dia para compras")).toBeInTheDocument();
     expect(screen.getByText("Dia 16")).toBeInTheDocument();
+  });
+
+  it("primeiro dia do ciclo ou fatura sem lançamentos: 'poucos dados', sem projeção inventada", async () => {
+    mockApi({ current: "empty", history: { ...historyFixture(), monthly_data: [histRow(2026, 9, "paid", "6940.00", 58)] } });
+    renderHub();
+    await waitForCarousel();
+    expect(screen.getByText(/Poucos dados ainda neste ciclo/)).toBeInTheDocument();
+    expect(screen.queryByText(/Projeção/)).toBeNull();
+  });
+
+  it("fatura aberta ilegível: o score não é afirmado (sem parcelas, ele sairia inflado)", async () => {
+    mockApi({ current: "fail" });
+    renderHub();
+    await waitForCarousel();
+    expect(screen.getByText("Sem dados ainda")).toBeInTheDocument();
+    expect(screen.queryByText("Regular")).toBeNull();
   });
 
   it("só mostra Insights quando o backend os entrega, com o texto dele", async () => {
@@ -364,5 +388,75 @@ describe("CardHubPage — sem cartões", () => {
     mockApi({ cards: [] });
     renderHub();
     expect(await screen.findByText(/ainda não cadastrou nenhum cartão/i)).toBeInTheDocument();
+  });
+});
+
+describe("CardHubPage — atualização sem perder o que está na tela (stale-while-revalidate)", () => {
+  const countRequests = () => {
+    const seen = [];
+    const onStart = ({ request }) => {
+      const u = new URL(request.url);
+      if (u.pathname.includes("/credit-cards")) seen.push(`${request.method} ${u.pathname.replace(/\/credit-cards\/\d+/, "/credit-cards/:id")}`);
+    };
+    server.events.on("request:start", onStart);
+    return { seen, stop: () => server.events.removeListener("request:start", onStart) };
+  };
+
+  it("o refresh mantém o diálogo de anotação aberto e o rascunho digitado", async () => {
+    mockApi();
+    const user = userEvent.setup();
+    const { rerender } = renderHub({ transactionsRefreshToken: 0 });
+    await waitForCarousel();
+
+    await user.click(screen.getByTestId("card-notes-open"));
+    await user.clear(screen.getByTestId("card-notes-textarea"));
+    await user.type(screen.getByTestId("card-notes-textarea"), "rascunho não salvo");
+
+    const carouselBefore = screen.getByTestId("invoice-carousel");
+    const counter = countRequests();
+    rerender(<CardHubPage organizationId={ORG} dataMode="live" onNewItem={vi.fn()} transactionsRefreshToken={1} />);
+    await waitFor(() => expect(counter.seen).toHaveLength(4));
+    await new Promise((r) => setTimeout(r, 100));
+    counter.stop();
+
+    expect(screen.getByTestId("card-notes-textarea")).toHaveValue("rascunho não salvo");
+    expect(screen.queryByText(/Carregando seus cartões/)).toBeNull();
+    expect(screen.getByTestId("invoice-carousel")).toBe(carouselBefore);
+    // um refresh = exatamente as 4 chamadas do Hub, sem duplicar
+    expect(counter.seen.slice().sort()).toEqual([
+      "GET /v1/credit-cards",
+      "GET /v1/credit-cards/:id/future-commitments",
+      "GET /v1/credit-cards/:id/invoices/current",
+      "GET /v1/credit-cards/:id/invoices/history",
+    ]);
+  });
+
+  it("refetch que falha com 500 mantém cartões e faturas e avisa discretamente", async () => {
+    mockApi();
+    const { rerender } = renderHub({ transactionsRefreshToken: 0 });
+    await waitForCarousel();
+
+    mockApi({ cards: "fail", history: "fail", current: "fail" });
+    rerender(<CardHubPage organizationId={ORG} dataMode="live" onNewItem={vi.fn()} transactionsRefreshToken={1} />);
+
+    expect(await screen.findByText(/Mostrando os dados anteriores/)).toBeInTheDocument();
+    expect(cardsInOrder().map(statusOf)).toEqual(["paid", "closed", "open", "forecast", "forecast"]);
+    expect(screen.getByText("Cartão selecionado:")).toHaveTextContent("Azul");
+  });
+
+  it("trocar de cartão descarta a fatura escolhida no cartão anterior", async () => {
+    const cards = [cardFixture(), cardFixture({ id: 2, last4: "4420", description: "Roxo" })];
+    mockApi({ cards });
+    const user = userEvent.setup();
+    renderHub();
+    await waitForCarousel();
+
+    await user.click(screen.getByTestId("invoice-card-2026-12"));
+    expect(screen.getByTestId("invoice-card-2026-12")).toHaveAttribute("data-selected", "true");
+    await user.click(screen.getByText("Roxo"));
+    await waitFor(() => expect(screen.getByText("Cartão selecionado:")).toHaveTextContent("Roxo"));
+    await waitForCarousel();
+    expect(screen.getByTestId("invoice-card-2026-10")).toHaveAttribute("data-selected", "true");
+    expect(screen.getByTestId("invoice-card-2026-12")).toHaveAttribute("data-selected", "false");
   });
 });

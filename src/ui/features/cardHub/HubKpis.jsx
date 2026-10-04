@@ -34,8 +34,8 @@ export function LimitTiles({ card, currency, isMobile }) {
 
 /** Versão compacta (mobile) das três heurísticas: um número por coluna, sem texto explicativo. */
 export function CompactKpiStrip({ kpis }) {
-  const { spentPercent, onPace, healthScore, healthColor, healthLabel, bestPurchaseDay } = kpis;
-  const paceColor = onPace ? T.green : T.red;
+  const { spentPercent, hasPaceData, onPace, healthScore, healthColor, healthLabel, bestPurchaseDay } = kpis;
+  const paceColor = !hasPaceData ? T.inkMid : onPace ? T.green : T.red;
   const col = { flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 };
   const caption = { ...G, fontSize: 11, color: T.inkLight, textAlign: "center", lineHeight: 1.2 };
   return (
@@ -43,17 +43,17 @@ export function CompactKpiStrip({ kpis }) {
       <div style={col}>
         <span aria-hidden="true" style={{ fontSize: 15 }}>⚡</span>
         <div style={{ ...G, ...NUM, fontSize: 15, fontWeight: 800, color: paceColor }}>{spentPercent}%</div>
-        <div style={caption}>{onPace ? "ritmo controlado" : "gasto acelerado"}</div>
+        <div style={caption}>{!hasPaceData ? "poucos dados no ciclo" : onPace ? "ritmo controlado" : "gasto acelerado"}</div>
       </div>
       <div style={{ width: 1, height: 40, background: T.border, flexShrink: 0 }} />
       <div style={col}>
         <svg width="26" height="26" viewBox="0 0 60 60" aria-hidden="true">
           <circle cx="30" cy="30" r="24" fill="none" stroke={T.grayLight} strokeWidth="9" />
           <circle cx="30" cy="30" r="24" fill="none" stroke={healthColor} strokeWidth="9"
-            strokeDasharray={`${(healthScore / 100) * 150.8} 150.8`} strokeLinecap="round" transform="rotate(-90 30 30)" />
+            strokeDasharray={`${((healthScore ?? 0) / 100) * 150.8} 150.8`} strokeLinecap="round" transform="rotate(-90 30 30)" />
         </svg>
-        <div style={{ ...G, ...NUM, fontSize: 15, fontWeight: 800, color: healthColor }}>{Math.round(healthScore)}</div>
-        <div style={caption}>score {healthLabel.toLowerCase()}</div>
+        <div style={{ ...G, ...NUM, fontSize: 15, fontWeight: 800, color: healthColor }}>{healthScore === null ? "—" : Math.round(healthScore)}</div>
+        <div style={caption}>{healthScore === null ? "score sem dados" : `score ${healthLabel.toLowerCase()}`}</div>
       </div>
       <div style={{ width: 1, height: 40, background: T.border, flexShrink: 0 }} />
       <div style={col}>

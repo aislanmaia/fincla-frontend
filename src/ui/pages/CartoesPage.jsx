@@ -385,7 +385,7 @@ export const CartoesPage = ({
   }, [displayItems]);
 
   const projection = computeSpendProjection({ card, invoice, isCurrent });
-  const projectionRisk = (card?.disponivel||0) > 0 && projection > (card.disponivel + ((invoice?.val||0)||0));
+  const projectionRisk = (card?.disponivel||0) > 0 && projection != null && projection > (card.disponivel + ((invoice?.val||0)||0));
 
   const filtered = useMemo(() => {
     let items = displayItems;
