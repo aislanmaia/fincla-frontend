@@ -78,6 +78,12 @@ export default defineConfig({
       name: "consultant-ai-evaluation",
       testMatch: "**/consultant-ai-evaluation.spec.ts",
     },
+    {
+      // Navegador real para o Copiloto agregado; a run da IA é determinística no
+      // boundary HTTP, enquanto a composição/ordem das tools é coberta na API.
+      name: "consultant-copiloto",
+      testMatch: "**/consultant-copiloto.spec.ts",
+    },
   ],
   use: {
     baseURL,

@@ -19,6 +19,7 @@ import {
   __resetStore,
   getSnapshot,
   newConversation,
+  retryMessage,
   sendMessage,
 } from "../copilotoStore.js";
 
@@ -119,6 +120,38 @@ describe("copilotoStore — falhas nunca destroem a conversa", () => {
     expect(messages[1]).toMatchObject({ role: "assistant", output });
     expect(messages[3]).toHaveProperty("error");
     expect(messages[3].output).toBeUndefined();
+  });
+
+  it("retenta a pergunta que falhou sem duplicar a mensagem do usuário", async () => {
+    vi.mocked(askCopiloto).mockRejectedValueOnce(httpError(422)).mockResolvedValueOnce(okResponse);
+
+    await sendMessage("onde gastam?", { scopeClientName: "Mariana Costa" });
+    const errorId = getSnapshot().messages.at(-1)?.id;
+    await retryMessage(errorId);
+
+    const { messages, sending } = getSnapshot();
+    expect(sending).toBe(false);
+    expect(messages).toHaveLength(2);
+    expect(messages.filter((message) => message.role === "user")).toHaveLength(1);
+    expect(messages[0].text).toBe("onde gastam?");
+    expect(vi.mocked(askCopiloto)).toHaveBeenLastCalledWith(
+      expect.any(String),
+      "Sobre o cliente Mariana Costa: onde gastam?",
+      "test-thread",
+      "dashboard",
+    );
+    expect(messages[1]).toMatchObject({ id: errorId, role: "assistant", output });
+  });
+
+  it("não expõe detalhes técnicos da resposta do servidor na mensagem de erro", async () => {
+    vi.mocked(askCopiloto).mockRejectedValue(httpError(500, { message: "temporary failure" }));
+
+    await sendMessage("onde gastam?");
+
+    expect(getSnapshot().messages.at(-1)).toMatchObject({
+      error: "Não foi possível responder agora. Tente novamente em instantes.",
+      retryable: true,
+    });
   });
 
   it("o 429 de quota vira um banner (é sobre a CONTA), não uma bolha", async () => {

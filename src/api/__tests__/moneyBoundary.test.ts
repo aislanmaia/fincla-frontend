@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import apiClient from '../client';
-import { getConsultantClientProfile, getConsultantClients } from '../consultant';
+import { askCopiloto, getConsultantClientProfile, getConsultantClients, getConsultantPortfolioExpenseDistribution } from '../consultant';
 import { getEconomyCapacity, getFinancialHealth } from '../financialHealth';
 import { getGoalProjection, listGoalContributions, listGoals } from '../goals';
 import { getMonthlyPlan } from '../monthlyPlans';
@@ -49,6 +49,52 @@ function sobraramEmbrulhados(node: unknown, caminho = ''): string[] {
 
 beforeEach(() => {
   vi.mocked(apiClient.get).mockReset();
+  vi.mocked(apiClient.post).mockReset();
+});
+
+describe('Copiloto: valores multimoeda mantêm montante e unidade', () => {
+  it('preserva o dinheiro canônico dentro do bloco agregado', async () => {
+    const response = {
+      correlation_id: 'run-1', session_id: 'session-1', run_id: 'run-1',
+      output: {
+        answer: 'Resumo agregado.',
+        blocks: [{
+          type: 'portfolio_expense_distribution',
+          total_expenses: { amount: '1200.00', currency: 'BRL' },
+          original_currency_slices: [{
+            amount: { amount: '100.00', currency: 'EUR' },
+            included_in_converted_total: false,
+          }],
+        }],
+        suggested_actions: [], disclaimers: ['Apoio ao consultor.'],
+      },
+    };
+    vi.mocked(apiClient.post).mockResolvedValueOnce({ data: response } as never);
+
+    const result = await askCopiloto('run-1', 'Onde gasta mais?', 'session-1');
+
+    const report = result.output.blocks[0];
+    expect(report.type).toBe('portfolio_expense_distribution');
+    if (report.type !== 'portfolio_expense_distribution') throw new Error('wrong block type');
+    expect(report.total_expenses).toEqual({ amount: '1200.00', currency: 'BRL' });
+    expect(report.original_currency_slices[0].amount).toEqual({ amount: '100.00', currency: 'EUR' });
+  });
+
+  it('preserva as moedas e envia o intervalo ao endpoint do relatório agregado', async () => {
+    const payload = {
+      period_start: '2026-01-01', period_end: '2026-01-31', reading_currency: 'BRL',
+      total_expenses: { amount: '1200.00', currency: 'BRL' },
+      original_currency_slices: [{ amount: { amount: '100.00', currency: 'EUR' } }],
+    };
+    responde(payload);
+
+    const result = await getConsultantPortfolioExpenseDistribution({ date_start: '2026-01-01', date_end: '2026-01-31' });
+
+    expect(result).toEqual(payload);
+    expect(apiClient.get).toHaveBeenCalledWith('/consultant/expenses-distribution', {
+      params: { date_start: '2026-01-01', date_end: '2026-01-31' },
+    });
+  });
 });
 
 describe('nenhum módulo devolve dinheiro embrulhado', () => {

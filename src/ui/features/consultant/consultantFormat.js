@@ -83,6 +83,17 @@ export function fmtMoneyIn(value, currency) {
   return formatMoney(value, currency || "BRL") ?? DASH;
 }
 
+/** Evidência comparativa compartilhada entre o painel e o PDF. */
+export function portfolioExpenseInsightCopy(insight, comparison, readingCurrency) {
+  if (insight.kind !== "growth" || insight.evidence_amount == null || Number(comparison?.delta?.amount) <= 0) {
+    return insight.description;
+  }
+  const amount = insight.evidence_amount.amount ?? insight.evidence_amount;
+  const share = Number(amount) / Number(comparison.delta.amount) * 100;
+  const percentage = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(share);
+  return `Juntas, cresceram ${fmtMoneyIn(amount, readingCurrency)} ante o período anterior — ${percentage}% do aumento líquido da carteira comparável.`;
+}
+
 /** Percentual com 1 casa, robusto a valor ausente/não-finito. */
 export function fmtPct(value) {
   const n = Number(value);

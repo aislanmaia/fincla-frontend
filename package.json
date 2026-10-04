@@ -12,6 +12,7 @@
     "check": "npm run lint && tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:e2e:copiloto": "playwright test --config=playwright.copiloto.config.ts",
     "test:e2e:repeat": "sh -c 'for i in 1 2 3 4 5; do echo \"=== E2E $i/5 ===\" && npm run test:e2e || exit 1; done'",
     "test:e2e:install": "playwright install chromium"
   },

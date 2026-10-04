@@ -2703,8 +2703,117 @@ export interface CopilotoClientRefBlock {
   client_name: string;
 }
 
-/** União discriminada por `type` — o backend garante um id de escopo real em cada. */
-export type CopilotoBlock = CopilotoChartBlock | CopilotoClientRefBlock;
+export interface CopilotoMoney {
+  amount: string;
+  currency: string;
+}
+
+export interface CopilotoPortfolioExpenseDistributionBlock {
+  type: 'portfolio_expense_distribution';
+  version: 1;
+  period_start: string;
+  period_end: string;
+  reading_currency: string;
+  total_expenses: CopilotoMoney | null;
+  client_count: number;
+  clients_with_expenses: number;
+  clients_without_expenses: number;
+  clients_converted: number;
+  clients_not_converted: number;
+  categories: {
+    name: string;
+    total: CopilotoMoney;
+    percentage: number;
+    client_count: number;
+  }[];
+  original_currency_slices: {
+    organization_id: string;
+    category_id: string;
+    category_name: string;
+    amount: CopilotoMoney;
+    included_in_converted_total: boolean;
+  }[];
+  conversion_issues: { organization_id: string; reason: string }[];
+  conversion_rates: { base: string; quote: string; rate: string; quoted_on: string }[];
+  converted_cohorts?: {
+    base_currency: string;
+    reading_currency: string;
+    client_count: number;
+    original_total: CopilotoMoney;
+    converted_total: CopilotoMoney;
+  }[];
+  highlights: {
+    top_categories: { name: string; percentage: number; client_count: number }[];
+    combined_percentage: number;
+  } | null;
+}
+
+/** Resposta REST do mesmo relatório tipado, sem o discriminador do Copiloto. */
+export type ConsultantPortfolioExpenseDistributionResponse = Omit<
+  CopilotoPortfolioExpenseDistributionBlock,
+  'type' | 'version'
+>;
+
+export interface ConsultantPortfolioExpenseAnalysisResponse {
+  report: ConsultantPortfolioExpenseDistributionResponse;
+  comparison: {
+    period_start: string;
+    period_end: string;
+    current_total: CopilotoMoney;
+    previous_total: CopilotoMoney;
+    delta: CopilotoMoney;
+    delta_percentage: number | null;
+    comparable_client_count: number;
+    current_client_count: number;
+    excluded_from_comparison: number;
+    quotation_policy: 'same_reading_quotation';
+  };
+  categories: {
+    name: string;
+    current_total: CopilotoMoney;
+    previous_total: CopilotoMoney;
+    delta: CopilotoMoney;
+    delta_percentage: number | null;
+    share_delta_pp: number;
+    client_count: number;
+    top_client_share: number;
+  }[];
+  monthly_trend: {
+    period_start: string;
+    period_end: string;
+    total: CopilotoMoney;
+    categories: Record<string, CopilotoMoney>;
+  }[];
+  insights: {
+    kind: string;
+    title: string;
+    description: string;
+    evidence_amount: CopilotoMoney | null;
+  }[];
+}
+
+export interface ConsultantPortfolioCategoryContributorsResponse {
+  category_name: string;
+  category_total: CopilotoMoney;
+  reading_currency: string;
+  period_start: string;
+  period_end: string;
+  client_count: number;
+  clients_not_converted: number;
+  clients: {
+    organization_id: string;
+    client_name: string;
+    total: CopilotoMoney;
+    percentage_of_category: number;
+  }[];
+  truncated: boolean;
+}
+
+/** União discriminada por `type` — dados financeiros estruturados pelo backend. */
+export type CopilotoBlock =
+  | CopilotoChartBlock
+  | CopilotoClientRefBlock
+  | CopilotoPortfolioExpenseDistributionBlock;
 
 /**
  * Um hand-off que a UI vira botão ("Avaliar {cliente} com IA"). Hoje só

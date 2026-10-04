@@ -61,12 +61,23 @@ export function DashboardPeriodSelector({
     if (!el) return;
     const r = el.getBoundingClientRect();
     const w = Math.min(340, Math.max(292, r.width));
-    let left = Math.max(12, Math.min(r.left, window.innerWidth - w - 12));
-    let top = r.bottom + 10;
-    const estH = menuTab === "personalizado" ? 520 : 420;
-    if (top + estH > window.innerHeight - 12) {
-      top = Math.max(12, r.top - estH - 10);
-    }
+    const edge = 12;
+    const gap = 10;
+    const panelHeight = panelRootRef.current?.getBoundingClientRect().height
+      || (menuTab === "personalizado" ? 520 : 420);
+    const belowTop = r.bottom + gap;
+    const roomBelow = window.innerHeight - edge - belowTop;
+    const roomAbove = r.top - gap - edge;
+    const maxTop = Math.max(edge, window.innerHeight - panelHeight - edge);
+    const preferredTop = panelHeight <= roomBelow
+      ? belowTop
+      : panelHeight <= roomAbove
+        ? r.top - gap - panelHeight
+        : roomBelow >= roomAbove
+          ? belowTop
+          : r.top - gap - panelHeight;
+    const top = Math.max(edge, Math.min(preferredTop, maxTop));
+    const left = Math.max(edge, Math.min(r.left, window.innerWidth - w - edge));
     setPopoverPos({ top, left, width: w });
   }, [menuTab]);
 
@@ -384,7 +395,9 @@ export function DashboardPeriodSelector({
               flexDirection: "column",
               overflow: "hidden",
               maxHeight:
-                menuTab === "personalizado" ? "min(92dvh, 720px)" : "min(85dvh, 480px)",
+                menuTab === "personalizado"
+                  ? "min(calc(100dvh - 24px), 720px)"
+                  : "min(calc(100dvh - 24px), 480px)",
             }
       }
     >

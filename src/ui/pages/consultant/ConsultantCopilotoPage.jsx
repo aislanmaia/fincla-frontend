@@ -10,6 +10,9 @@ import { useCopiloto } from "../../features/consultant/useCopiloto.js";
 import { useCanUseCopilotoAi } from "../../features/consultant/consultantAiAccess.js";
 import { useEvaluationDrawer } from "../../features/consultant/useEvaluationDrawer.js";
 import { ConsultantEvaluationDrawer } from "../../features/consultant/ConsultantEvaluationDrawer.jsx";
+import { PortfolioExpenseDistribution } from "../../features/consultant/PortfolioExpenseDistribution.jsx";
+import { fmtBRL0 } from "../../features/consultant/consultantFormat";
+import "./consultant-copiloto.css";
 
 /**
  * Copiloto IA (Consultor IA — A4): o chat escopado à carteira do consultor.
@@ -250,19 +253,111 @@ function ClientRefChip({ block, onOpenClient }) {
   );
 }
 
-function AnswerRenderer({ output, onOpenClient, onEvaluate }) {
+function ClientCategoriesCard({ block, onOpenClient }) {
+  const [expanded, setExpanded] = useState(false);
+  const categories = [...(block.categories || [])].sort((a, b) => Number(b.total) - Number(a.total));
+  const visible = expanded ? categories : categories.slice(0, 5);
+  const period = block.period_start && block.period_end
+    ? `${new Date(`${block.period_start}T00:00:00`).toLocaleDateString("pt-BR")} – ${new Date(`${block.period_end}T00:00:00`).toLocaleDateString("pt-BR")}`
+    : null;
+  return (
+    <section aria-label={`Gastos de ${block.client_name}`} style={{ border: `1px solid ${T.border}`, background: T.surface, borderRadius: 13, padding: 16, minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 13 }}>
+        <Avatar name={block.client_name} size={34} />
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <button type="button" onClick={() => onOpenClient?.(block.organization_id, block.client_name)} style={{ ...G, display: "block", border: 0, padding: 0, background: "transparent", color: T.ink, fontWeight: 750, fontSize: 13, cursor: "pointer", textAlign: "left" }}>
+            {block.client_name} <Icon name="arrow-right" size={11} color={T.inkLight} />
+          </button>
+          {period && <span style={{ ...G, fontSize: 10.5, color: T.inkLight }}>Gastos · {period}</span>}
+        </div>
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <div style={{ ...G, fontSize: 10, color: T.inkLight }}>Total no período</div>
+          <strong style={{ ...G, fontSize: 14, color: T.ink }}>{fmtBRL0(block.total)}</strong>
+        </div>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {visible.map((category) => (
+          <div key={category.name}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginBottom: 4 }}>
+              <span style={{ ...G, fontSize: 11.5, color: T.inkMid, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{category.name}</span>
+              <span style={{ ...G, fontSize: 11, fontWeight: 650, color: T.ink, whiteSpace: "nowrap" }}>{fmtBRL0(category.total)} <span style={{ color: T.inkLight, fontWeight: 500 }}>· {Number(category.pct).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%</span></span>
+            </div>
+            <div style={{ height: 5, borderRadius: 99, background: T.bg, overflow: "hidden" }}>
+              <div style={{ width: `${Math.max(0, Math.min(100, Number(category.pct) || 0))}%`, height: "100%", background: T.purple, borderRadius: 99 }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      {categories.length > 5 && <button type="button" onClick={() => setExpanded((value) => !value)} style={{ ...G, border: 0, padding: "10px 0 0", background: "transparent", color: T.purple, fontWeight: 700, fontSize: 11.5, cursor: "pointer" }}>{expanded ? "Mostrar menos" : `Ver mais ${categories.length - 5} categorias`}</button>}
+    </section>
+  );
+}
+
+function CopilotoLoadingState() {
+  const [takingLonger, setTakingLonger] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setTakingLonger(true), 12_000);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  return (
+    <div className="copiloto-loading" role="status" aria-live="polite" aria-busy="true">
+      <div className="copiloto-loading__avatar" aria-hidden="true">
+        <Icon name="sparkles" size={15} color="#fff" />
+      </div>
+      <div className="copiloto-loading__card">
+        <div className="copiloto-loading__heading" style={G}>
+          <span className="copiloto-loading__indicator" aria-hidden="true" />
+          {takingLonger ? "Ainda estou trabalhando na resposta" : "Preparando sua análise"}
+        </div>
+        <p className="copiloto-loading__copy" style={G}>
+          {takingLonger
+            ? "Esta consulta está levando um pouco mais de tempo. Você não precisa reenviar a pergunta."
+            : "Estou consultando os dados necessários e organizando as informações para você."}
+        </p>
+        <div className="copiloto-loading__track" aria-hidden="true" />
+        <div className="copiloto-loading__skeleton" aria-hidden="true">
+          <span /><span /><span />
+        </div>
+        <div className="copiloto-loading__note" style={G}>A resposta aparecerá nesta conversa.</div>
+      </div>
+    </div>
+  );
+}
+
+function AnswerRenderer({ output, onOpenClient, onEvaluate, onFollowUp, clients }) {
   // Defesa: um `output` ausente (violação de contrato do backend — 200/ok sem
   // corpo) não pode virar o crash "Objects are not valid as a React child" que
   // já mordeu o drawer da A1. Falha suave em vez de derrubar a conversa toda.
   if (!output) return null;
-  const clientRefs = (output.blocks || []).filter((b) => b.type === "client_ref");
+  const clientCategories = (output.blocks || []).filter((b) => b.type === "client_categories");
+  const categoryClientIds = new Set(clientCategories.map((b) => b.organization_id));
+  const clientRefs = (output.blocks || []).filter((b) => b.type === "client_ref" && !categoryClientIds.has(b.organization_id));
   const charts = (output.blocks || []).filter((b) => b.type === "chart");
+  const portfolioExpenseReports = (output.blocks || []).filter((b) => b.type === "portfolio_expense_distribution");
   const actions = output.suggested_actions || [];
   const disclaimers = output.disclaimers || [];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-      <Markdown text={output.answer} />
+      {portfolioExpenseReports.length === 0 && <Markdown text={output.answer} />}
+
+      {portfolioExpenseReports.map((block, i) => (
+        <PortfolioExpenseDistribution key={`portfolio-expenses-${i}`} block={block} clients={clients} onFollowUp={onFollowUp} />
+      ))}
+
+      {clientCategories.length > 0 && (
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, marginBottom: 9 }}>
+            <strong style={{ ...G, fontSize: 12, color: T.ink }}>Distribuição por cliente</strong>
+            <span style={{ ...G, fontSize: 10.5, color: T.inkLight }}>Valores e período dos dados consultados</span>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 310px), 1fr))", gap: 10 }}>
+            {clientCategories.map((block) => <ClientCategoriesCard key={block.organization_id} block={block} onOpenClient={onOpenClient} />)}
+          </div>
+        </div>
+      )}
 
       {charts.map((block, i) => (
         <AiChart key={`chart${i}`} spec={block.spec} />
@@ -337,7 +432,7 @@ function CopilotoProTeaser() {
 
 export function ConsultantCopilotoPage() {
   const canUse = useCanUseCopilotoAi();
-  const { messages, sending, banner, send, startNew } = useCopiloto();
+  const { messages, sending, banner, send, retry, startNew } = useCopiloto();
   const { clients } = useConsultantClients({ enabled: canUse });
   const evaluation = useEvaluationDrawer();
 
@@ -353,16 +448,30 @@ export function ConsultantCopilotoPage() {
   const scopeName = scopeClient?.client_name || "";
 
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const container = scrollRef.current;
+    if (!container) return;
+
+    const latest = messages[messages.length - 1];
+    const isAggregateReport = !sending && latest?.role === "assistant"
+      && latest.output?.blocks?.some((block) => block.type === "portfolio_expense_distribution");
+    const report = isAggregateReport ? container.querySelector(".portfolio-expense") : null;
+    if (report) {
+      const turn = report.closest(".copiloto-message--report");
+      const anchor = turn?.previousElementSibling || turn || report;
+      const offset = anchor.getBoundingClientRect().top - container.getBoundingClientRect().top;
+      container.scrollTop = Math.max(0, container.scrollTop + offset - 12);
+      return;
+    }
+    container.scrollTop = container.scrollHeight;
   }, [messages, sending]);
 
   if (!canUse) return <CopilotoProTeaser />;
 
-  const ask = (text) => {
+  const ask = (text, presentationStyle = "dashboard") => {
     const q = (text ?? input).trim();
     if (!q || sending) return;
     setInput("");
-    send(q, { scopeClientName: scopeName });
+    send(q, { scopeClientName: scopeName, presentationStyle });
   };
 
   // Resolve o nome REAL do cliente pela carteira (o consultor vê nomes completos
@@ -376,6 +485,7 @@ export function ConsultantCopilotoPage() {
   };
 
   const empty = messages.length === 0;
+  const retrying = messages.some((message) => message.role === "assistant" && message.retrying);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, height: "100%", minHeight: 0, boxSizing: "border-box", padding: "clamp(18px, 3.5vw, 32px) clamp(16px, 3.5vw, 40px) clamp(18px, 3.5vw, 32px)" }}>
@@ -452,28 +562,42 @@ export function ConsultantCopilotoPage() {
                   <div key={m.id} style={{ display: "flex", justifyContent: "flex-end" }}>
                     <div style={{ ...G, fontSize: 13, lineHeight: 1.5, padding: "10px 14px", borderRadius: 14, borderBottomRightRadius: 4, background: T.ink, color: "#fff", maxWidth: "78%" }}>{m.text}</div>
                   </div>
+                ) : m.retrying ? (
+                  <CopilotoLoadingState key={m.id} />
                 ) : (
-                  <div key={m.id} style={{ display: "flex", gap: 11, alignItems: "flex-start" }}>
-                    <div style={{ width: 28, height: 28, borderRadius: 8, background: T.purple, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <div key={m.id} className={m.output?.blocks?.some((block) => block.type === "portfolio_expense_distribution") ? "copiloto-message--report" : undefined} style={{ display: "flex", gap: 11, alignItems: "flex-start" }}>
+                    <div className="copiloto-message__avatar" style={{ width: 28, height: 28, borderRadius: 8, background: T.purple, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                       <Icon name="sparkles" size={15} color="#fff" />
                     </div>
-                    <div style={{ flex: 1, minWidth: 0, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 14, borderTopLeftRadius: 4, padding: "15px 16px" }}>
+                    <div className="copiloto-message__body" style={{ flex: 1, minWidth: 0, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 14, borderTopLeftRadius: 4, padding: "15px 16px" }}>
                       {m.error ? (
-                        <div style={{ ...G, fontSize: 13, color: T.red, lineHeight: 1.55 }}>{m.error}</div>
+                        <div role="alert" style={{ background: T.redLight, border: `1px solid ${T.red}22`, borderRadius: 10, padding: "12px 14px" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5 }}>
+                            <Icon name="alert" size={14} color={T.red} />
+                            <strong style={{ ...G, fontSize: 12.5, color: T.red }}>Não foi possível responder</strong>
+                          </div>
+                          <p style={{ ...G, fontSize: 12.5, color: T.inkMid, lineHeight: 1.55, margin: "0 0 11px" }}>{m.error}</p>
+                          {m.retryable && (
+                            <button
+                              type="button"
+                              onClick={() => retry(m.id)}
+                              disabled={sending || m.retrying}
+                              style={{ ...G, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "8px 14px", borderRadius: 8, border: "none", background: T.ink, color: "#fff", fontSize: 12, fontWeight: 700, cursor: sending || m.retrying ? "default" : "pointer", opacity: sending || m.retrying ? 0.65 : 1 }}
+                            >
+                              <Icon name="refresh" size={13} color="#fff" />
+                              {m.retrying ? "Tentando novamente…" : "Tentar novamente"}
+                            </button>
+                          )}
+                        </div>
                       ) : (
-                        <AnswerRenderer output={m.output} onOpenClient={openClientEval} onEvaluate={openClientEval} />
+                        <AnswerRenderer output={m.output} onOpenClient={openClientEval} onEvaluate={openClientEval} onFollowUp={(prompt) => ask(prompt, "explanation")} clients={clients || []} />
                       )}
                     </div>
                   </div>
                 )
               )}
-              {sending && (
-                <div style={{ display: "flex", gap: 11, alignItems: "center" }}>
-                  <div style={{ width: 28, height: 28, borderRadius: 8, background: T.purple, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                    <Icon name="sparkles" size={15} color="#fff" />
-                  </div>
-                  <div style={{ ...G, fontSize: 12.5, color: T.inkLight, fontWeight: 600 }}>Analisando sua base…</div>
-                </div>
+              {sending && !retrying && (
+                <CopilotoLoadingState />
               )}
             </div>
           )}

@@ -3,6 +3,7 @@ import { useCallback, useSyncExternalStore } from "react";
 import {
   getSnapshot,
   newConversation,
+  retryMessage,
   sendMessage,
   subscribe,
 } from "./copilotoStore.js";
@@ -19,6 +20,7 @@ export function useCopiloto() {
     (text, options) => sendMessage(text, options),
     []
   );
+  const retry = useCallback((messageId) => retryMessage(messageId), []);
   const startNew = useCallback(() => newConversation(), []);
-  return { ...state, send, startNew };
+  return { ...state, send, retry, startNew };
 }

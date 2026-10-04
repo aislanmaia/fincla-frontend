@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -24,6 +24,8 @@ vi.mock("../../../features/consultant/useConsultantClients", () => ({
 vi.mock("../../../../api/consultant", () => ({
   askCopiloto: vi.fn(),
   getAiCopilotoRun: vi.fn(),
+  getConsultantPortfolioExpenseAnalysis: vi.fn(),
+  getConsultantPortfolioCategoryContributors: vi.fn(),
   newEvaluationRequestId: vi.fn(() => "11111111-1111-4111-8111-111111111111"),
 }));
 vi.mock("../../../../api/client", () => ({ handleApiError: vi.fn(() => "erro generico") }));
@@ -34,7 +36,7 @@ vi.mock("../../../features/consultant/ConsultantEvaluationDrawer.jsx", () => ({
   ConsultantEvaluationDrawer: ({ clientName }) => <div data-testid="eval-drawer">{clientName}</div>,
 }));
 
-import { askCopiloto } from "../../../../api/consultant";
+import { askCopiloto, getConsultantPortfolioExpenseAnalysis } from "../../../../api/consultant";
 import { __resetStore } from "../../../features/consultant/copilotoStore.js";
 import { ConsultantCopilotoPage } from "../ConsultantCopilotoPage.jsx";
 
@@ -70,6 +72,20 @@ describe("ConsultantCopilotoPage", () => {
     expect(screen.getByLabelText("Mensagem para o Copiloto")).toBeInTheDocument();
   });
 
+  it("mostra estado de carregamento acessível enquanto prepara a resposta", async () => {
+    const user = userEvent.setup();
+    vi.mocked(askCopiloto).mockReturnValue(new Promise(() => {}));
+
+    render(<ConsultantCopilotoPage />);
+    await user.type(screen.getByLabelText("Mensagem para o Copiloto"), "onde gastam?");
+    await user.click(screen.getByLabelText("Enviar mensagem"));
+
+    expect(screen.getByRole("status")).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByText("Preparando sua análise")).toBeInTheDocument();
+    expect(screen.getByText(/consultando os dados necessários/i)).toBeInTheDocument();
+    expect(screen.getByLabelText("Mensagem para o Copiloto")).toBeDisabled();
+  });
+
   it("envia uma mensagem e renderiza a resposta (markdown em negrito + chip do cliente)", async () => {
     const user = userEvent.setup();
     vi.mocked(askCopiloto).mockResolvedValue({
@@ -91,6 +107,86 @@ describe("ConsultantCopilotoPage", () => {
     expect(mentions.some((el) => el.closest("button"))).toBe(true);
     // O disclaimer é mostrado.
     expect(screen.getByText(/não é recomendação de investimento/)).toBeInTheDocument();
+  });
+
+  it("oferece retentar a mesma pergunta diretamente na mensagem de erro", async () => {
+    const user = userEvent.setup();
+    vi.mocked(askCopiloto)
+      .mockRejectedValueOnce(Object.assign(new Error("falha"), { response: { status: 422, data: {} } }))
+      .mockResolvedValueOnce({ correlation_id: "c2", session_id: "s", run_id: "r2", output });
+
+    render(<ConsultantCopilotoPage />);
+    await user.type(screen.getByLabelText("Mensagem para o Copiloto"), "onde gastam?");
+    await user.click(screen.getByLabelText("Enviar mensagem"));
+
+    const retry = await screen.findByRole("button", { name: "Tentar novamente" });
+    expect(screen.getAllByText("onde gastam?")).toHaveLength(1);
+    await user.click(retry);
+
+    await waitFor(() => expect(screen.getByText(/Um cliente está em risco/)).toBeInTheDocument());
+    expect(vi.mocked(askCopiloto)).toHaveBeenCalledTimes(2);
+    expect(screen.getAllByText("onde gastam?")).toHaveLength(1);
+  });
+
+  it("apresenta categorias do cliente com período e barras proporcionais", async () => {
+    const user = userEvent.setup();
+    vi.mocked(askCopiloto).mockResolvedValue({
+      correlation_id: "c", session_id: "s", run_id: "r",
+      output: {
+        answer: "Veja a distribuição por cliente.",
+        blocks: [
+          { type: "client_ref", organization_id: "o1", client_name: "Mariana Costa" },
+          { type: "client_categories", organization_id: "o1", client_name: "Mariana Costa", total: 1000,
+            period_start: "2025-09-24", period_end: "2026-09-24",
+            categories: [{ name: "Alimentação", total: 600, pct: 60 }, { name: "Transporte", total: 400, pct: 40 }] },
+        ],
+        suggested_actions: [], disclaimers: ["Dados para apoio ao consultor."],
+      },
+    });
+    render(<ConsultantCopilotoPage />);
+    await user.type(screen.getByLabelText("Mensagem para o Copiloto"), "onde gastam?");
+    await user.click(screen.getByLabelText("Enviar mensagem"));
+    expect(await screen.findByText("Distribuição por cliente")).toBeInTheDocument();
+    expect(screen.getByText("Alimentação")).toBeInTheDocument();
+    expect(screen.getByText(/60%/)).toBeInTheDocument();
+    expect(screen.getByText(/24\/09\/2025/)).toBeInTheDocument();
+  });
+
+  it("renderiza a distribuição agregada de carteira com cobertura e moedas não convertidas", async () => {
+    const user = userEvent.setup();
+    const reportBlock = {
+      type: "portfolio_expense_distribution",
+      period_start: "2026-01-01", period_end: "2026-01-31", reading_currency: "BRL",
+      total_expenses: { amount: "1200.00", currency: "BRL" },
+      client_count: 4, clients_with_expenses: 3, clients_without_expenses: 1, clients_converted: 2, clients_not_converted: 1,
+      categories: [{ name: "Alimentação", total: { amount: "1200.00", currency: "BRL" }, percentage: 100, client_count: 2 }],
+      original_currency_slices: [{ organization_id: "org-eur", category_id: "food-eur", category_name: "Alimentação", amount: { amount: "100.00", currency: "EUR" }, included_in_converted_total: false }],
+      conversion_issues: [{ organization_id: "org-eur", reason: "Cotação indisponível" }],
+      conversion_rates: [{ base: "USD", quote: "BRL", rate: "5.00", quoted_on: "2026-01-30" }],
+      converted_cohorts: [],
+    };
+    vi.mocked(getConsultantPortfolioExpenseAnalysis).mockResolvedValue({
+      report: reportBlock,
+      comparison: { period_start: "2025-12-01", period_end: "2025-12-31", current_total: { amount: "1200.00", currency: "BRL" }, previous_total: { amount: "0", currency: "BRL" }, delta: { amount: "1200.00", currency: "BRL" }, delta_percentage: null, comparable_client_count: 3, current_client_count: 3, excluded_from_comparison: 1, quotation_policy: "same_reading_quotation" },
+      categories: [], monthly_trend: [], insights: [],
+    });
+    vi.mocked(askCopiloto).mockResolvedValue({
+      correlation_id: "c", session_id: "s", run_id: "r",
+      output: {
+        answer: "Aqui está uma visão agregada.",
+        blocks: [reportBlock],
+        suggested_actions: [], disclaimers: ["Dados para apoio ao consultor."],
+      },
+    });
+    render(<ConsultantCopilotoPage />);
+    await user.type(screen.getByLabelText("Mensagem para o Copiloto"), "onde gastam no agregado?");
+    await user.click(screen.getByLabelText("Enviar mensagem"));
+
+    expect(await screen.findByRole("region", { name: "Distribuição agregada de gastos da carteira" })).toBeInTheDocument();
+    expect(within((await screen.findByText(/Gastos no período/)).closest("article")).getByText((text) => text.includes("1.200,00"))).toBeInTheDocument();
+    expect(screen.getByText("Conversão aplicada com cobertura parcial")).toBeInTheDocument();
+    expect(screen.getByText((text) => text.includes("100,00"))).toBeInTheDocument();
+    expect(screen.queryByText("org-eur")).not.toBeInTheDocument();
   });
 
   it("descarta imagem markdown (base64) da prosa, sem despejar o blob cru", async () => {
