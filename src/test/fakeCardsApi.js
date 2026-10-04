@@ -68,12 +68,13 @@ const key = (y, m) => `${y}-${m}`;
  * cima). `invoices` mapeia cartão -> lista de faturas (o mês vem de `invoice.month`). Histórico e
  * future-commitments são derivados das faturas para ficarem coerentes entre si,
  * como no backend; `breakdownTotals` força o total de um mês no
- * future-commitments mesmo sem fatura.
+ * future-commitments mesmo sem fatura; `historyStatus` faz o histórico dizer
+ * outro status que o detalhe (dado dessincronizado).
  *
  * `today` ancora as janelas (histórico: 6 meses até o mês corrente; future: 6
  * meses a partir do mês corrente).
  */
-export function installFakeCardsApi({ cards, invoices = {}, breakdownTotals = {}, today }) {
+export function installFakeCardsApi({ cards, invoices = {}, breakdownTotals = {}, historyStatus = {}, today }) {
   const calls = [];
   const original = apiClient.defaults.adapter;
 
@@ -128,7 +129,7 @@ export function installFakeCardsApi({ cards, invoices = {}, breakdownTotals = {}
             month,
             month_name: `${month}/${year}`,
             total_amount: inv.total_amount,
-            status: inv.status,
+            status: historyStatus[key(year, month)] ?? inv.status,
             items_count: inv.items_count,
             top_category: null,
           };
@@ -174,6 +175,14 @@ export function installFakeCardsApi({ cards, invoices = {}, breakdownTotals = {}
     if (inv) {
       const found = byMonth[key(Number(inv[1]), Number(inv[2]))];
       return found ? done(200, found) : done(404, { detail: "Invoice not found" });
+    }
+    const pay = /^\/invoices\/(\d{4})\/(\d{1,2})\/mark-paid$/.exec(rest);
+    if (pay && (config.method || "get").toLowerCase() === "patch") {
+      const found = byMonth[key(Number(pay[1]), Number(pay[2]))];
+      if (!found) return done(404, {});
+      found.status = "paid";
+      found.paid_date = `${found.month}-21`;
+      return done(200, { message: "ok" });
     }
     if (rest === "/invoices/current") {
       return done(404, { detail: "Invoice not found" });

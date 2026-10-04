@@ -73,10 +73,12 @@ export const CartoesPage = ({
   const urlSearch = useSearch({ strict: false });
   const navigate = useNavigate();
   const shouldUseRealData = shouldUseRealDataForMode(organizationId, dataMode);
+  const [cardId, setCardId] = useState(() => (cardsProp && cardsProp.length > 0 ? cardsProp[0].id : "nubank"));
   const creditCardsData = useCreditCardsData({
     organizationId,
     enabled: shouldUseRealData,
     transactionsRefreshToken,
+    selectedCardId: cardId,
   });
   const hasSeededCards = cardsProp !== undefined;
   const localCards = (cardsProp && cardsProp.length > 0)
@@ -87,7 +89,6 @@ export const CartoesPage = ({
     : localCards;
   const isEmptyCards = (dataMode === "empty" && hasSeededCards && CARDS.length === 0) || (shouldUseRealData && !creditCardsData.isLoading && CARDS.length === 0);
   /* ── State ───────────────────────────────────────────────── */
-  const [cardId,             setCardId]             = useState(() => (cardsProp && cardsProp.length > 0 ? cardsProp[0].id : "nubank"));
   const [tab,                setTab]                = useState("invoice");
   const [invoiceIdx,         setInvoiceIdx]         = useState(5);
   const invoiceIdxRef = useRef(invoiceIdx);
@@ -252,13 +253,22 @@ export const CartoesPage = ({
   const formatBRL = v => "R$ " + Math.abs(v).toLocaleString("pt-BR",{minimumFractionDigits:2});
   const formatK   = v => Math.abs(v)>=1000 ? (Math.abs(v)/1000).toFixed(1)+"k" : String(Math.abs(v));
 
-  const switchCard = (id) => {
+  const switchSeqRef = useRef(0);
+  const switchCard = async (id) => {
     const fromCard = CARDS.find((x) => x.id === cardId) || CARDS[0];
     const fromList = fromCard?.faturas || [];
     const viewedInvoice = fromList[invoiceIdx];
 
+    // Cartão ainda sem detalhe (a carga só traz o do selecionado): busca antes de
+    // trocar, para a tela nunca mostrar um cartão pela metade.
+    const seq = (switchSeqRef.current += 1);
+    let c = CARDS.find((x) => x.id === id) || CARDS[0];
+    if (shouldUseRealData && c?.detailLoaded === false) {
+      const loaded = await creditCardsData.ensureCardDetail(c.id);
+      if (switchSeqRef.current !== seq) return;
+      if (loaded) c = loaded;
+    }
     setCardId(id);
-    const c = CARDS.find((x) => x.id === id) || CARDS[0];
     setInvoiceIdx(faturaIdxMatchingInvoiceRef(c?.faturas || [], viewedInvoice));
     setSearch(""); setFilterCategory(null); setTab("invoice"); setVisibleGroups(8);
   };
