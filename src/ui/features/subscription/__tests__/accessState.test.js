@@ -8,10 +8,13 @@ function account(subscription, extra = {}) {
 }
 
 describe("subscription access journey", () => {
-  it("distinguishes an expired courtesy from an unpaid first purchase", () => {
+  it("distinguishes an expired courtesy from an account ready for checkout", () => {
     const courtesy = account({ status: "pending_payment", is_entitled: false, courtesy_plan: "pro", courtesy_until: "2026-10-02T12:00:00Z" });
     expect(accessState(courtesy, null, now)).toBe("courtesy_ended");
-    expect(accessState(account({ status: "pending_payment", is_entitled: false }), null, now)).toBe("first_purchase");
+    expect(accessState(account({ status: "pending_payment", is_entitled: false }), null, now)).toBe("checkout_required");
+    expect(accessState(account({ status: "pending_payment", is_entitled: false }), { status: "pending_payment" }, now)).toBe("processing");
+    expect(accessState(account({ status: "pending_payment", is_entitled: false }), { status: "declined" }, now)).toBe("payment_not_completed");
+    expect(accessState(courtesy, { status: "declined" }, now)).toBe("payment_not_completed");
   });
 
   it("routes an ended paid subscription to reactivation, but a late charge to its existing invoice", () => {

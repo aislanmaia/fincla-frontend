@@ -304,6 +304,17 @@ it("lets a cancelled subscriber choose a new cycle and enter a card", async () =
   expect(screen.queryByText(/Entre em contato com o suporte para uma nova contratação/)).toBeNull();
 });
 
+it("starts an unpaid account without a checkout attempt at plan selection", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (url, options) => ({ ok: true, json: async () => {
+    if (url.includes("checkout/current")) return null;
+    const selection = JSON.parse(options.body);
+    return { selection, total_cents: selection.billing_cycle === "yearly" ? 29900 : 2990, capacity: null };
+  } })));
+  render(<CheckoutPage search="" session={{ isAuthenticated: true, user: { email: "maria@example.com", subscription: { status: "pending_payment", is_entitled: false, billing_cycle: "monthly" } }, signOut: vi.fn() }} />);
+  expect(await screen.findByRole("radio", { name: /Anual/ })).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Pague com cartão" })).toBeNull();
+});
+
 it("requires a refreshed offer and new consent when the server rejects an outdated catalog", async () => {
   const { fireEvent } = await import("@testing-library/react");
   const firstQuote = {catalog_version:"old",selection:{persona:"personal",billing_cycle:"monthly"},total_cents:2990,capacity:null};

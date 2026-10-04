@@ -14,7 +14,7 @@ const formatMoney = (value) => new Intl.NumberFormat("pt-BR", { style: "currency
 
 const COPY = {
   courtesy_ended: { eyebrow: "CORTESIA ENCERRADA", title: "Sua cortesia chegou ao fim.", body: "Entre na assinatura com a mesma conta para continuar de onde parou.", cta: "Escolher um plano" },
-  first_purchase: { eyebrow: "PRIMEIRA ASSINATURA", title: "Sua conta está pronta para continuar.", body: "Escolha o plano e confirme o pagamento para liberar o uso do Fincla.", cta: "Escolher um plano" },
+  payment_not_completed: { eyebrow: "PAGAMENTO NÃO CONCLUÍDO", title: "Seu pagamento não foi concluído.", body: "A tentativa anterior não liberou o acesso. Revise os dados e tente novamente no checkout.", cta: "Tentar novamente" },
   ended: { eyebrow: "ASSINATURA ENCERRADA", title: "Seu período de acesso terminou.", body: "Você pode contratar novamente usando esta conta.", cta: "Reativar assinatura" },
   past_due: { eyebrow: "PAGAMENTO PENDENTE", title: "Vamos regularizar sua assinatura.", body: "Confira a cobrança existente antes de iniciar outro pagamento.", cta: "Abrir fatura" },
   processing: { eyebrow: "PAGAMENTO EM CONFIRMAÇÃO", title: "Estamos verificando seu pagamento.", body: "A confirmação pode levar alguns instantes. Verifique o resultado antes de tentar pagar novamente.", cta: "Verificar novamente" },
@@ -83,6 +83,10 @@ export function AccessPage({ session }) {
   const invoiceUrl = outstandingInvoice?.invoice_url;
   const checkoutPath = accessCheckoutPath(user);
 
+  useEffect(() => {
+    if (!loading && situation === "checkout_required") navigate({ to: checkoutPath, replace: true });
+  }, [checkoutPath, loading, navigate, situation]);
+
   function primaryAction() {
     if (situation === "active") { navigate({ to: user?.is_consultant ? "/consultant" : "/dashboard" }); return; }
     if (situation === "processing" || situation === "unknown") { void refresh(); return; }
@@ -110,7 +114,9 @@ export function AccessPage({ session }) {
   }
 
   const actionAllowed = canPay || ["active", "processing", "unknown", "sponsored"].includes(situation);
-  const actionLabel = situation === "past_due" && !invoiceUrl ? "Ver faturas" : copy.cta;
+  const actionLabel = situation === "past_due" && !invoiceUrl ? "Ver faturas" : copy?.cta;
+
+  if (situation === "checkout_required") return <main style={{ ...G, minHeight: "100%", display: "grid", placeItems: "center", background: "#F6F7F3", color: T.inkMid }}>Preparando seus planos…</main>;
 
   return <main className="fincla-scroll" style={{ ...G, height: "100%", overflowY: "auto", background: "#F6F7F3", color: T.ink }}>
     <div style={{ minHeight: "100%", display: "flex", flexDirection: "column" }}>
@@ -145,7 +151,7 @@ export function AccessPage({ session }) {
         {error && <div role="alert" style={{ padding: "13px 16px", borderRadius: 10, background: "#FFF1E8", color: "#8B422A", fontSize: 13 }}>{error} <button type="button" onClick={refresh} style={{ border: 0, background: "transparent", color: "inherit", fontWeight: 800, textDecoration: "underline", cursor: "pointer" }}>Tentar novamente</button></div>}
 
         {tab === "access" && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: 16 }}>
-          {card(<><div style={{ fontSize: 11, letterSpacing: ".1em", fontWeight: 800, color: T.inkLight }}>PLANO</div><h2 style={{ fontSize: 20, margin: "9px 0 7px" }}>{detail?.plan?.name || (user?.is_consultant ? "Fincla Consultor" : "Fincla Pessoal")}</h2><p style={{ color: T.inkMid, lineHeight: 1.6, fontSize: 13, margin: "0 0 14px" }}>{subscription?.beta_enabled ? "Acesso beta administrado pelo Fincla." : courtesyActive ? `Cortesia sem cobrança até ${formatDate(subscription.courtesy_until)}. A contratação fica disponível ao término.` : situation === "courtesy_ended" ? "Sua cortesia terminou. Você pode iniciar uma assinatura nesta conta." : situation === "processing" ? "Aguardando confirmação do pagamento." : situation === "past_due" ? "Há uma cobrança a regularizar." : subscription?.cancel_at_period_end ? `Renovação cancelada. Acesso até ${formatDate(subscription.current_period_end)}.` : situation === "active" ? "Sua assinatura está em dia." : "Sua assinatura precisa ser ativada."}</p><button type="button" onClick={refresh} disabled={loading} style={{ ...G, display: "inline-flex", alignItems: "center", gap: 6, padding: 0, border: 0, background: "transparent", color: "#245E41", fontSize: 12, fontWeight: 800, cursor: loading ? "wait" : "pointer" }}><RefreshCw size={14} /> Atualizar situação</button></>)}
+          {card(<><div style={{ fontSize: 11, letterSpacing: ".1em", fontWeight: 800, color: T.inkLight }}>PLANO</div><h2 style={{ fontSize: 20, margin: "9px 0 7px" }}>{detail?.plan?.name || (user?.is_consultant ? "Fincla Consultor" : "Fincla Pessoal")}</h2><p style={{ color: T.inkMid, lineHeight: 1.6, fontSize: 13, margin: "0 0 14px" }}>{subscription?.beta_enabled ? "Acesso beta administrado pelo Fincla." : courtesyActive ? `Cortesia sem cobrança até ${formatDate(subscription.courtesy_until)}. A contratação fica disponível ao término.` : situation === "courtesy_ended" ? "Sua cortesia terminou. Você pode iniciar uma assinatura nesta conta." : situation === "processing" ? "Aguardando confirmação do pagamento." : situation === "payment_not_completed" ? "Revise a tentativa anterior e tente novamente." : situation === "past_due" ? "Há uma cobrança a regularizar." : subscription?.cancel_at_period_end ? `Renovação cancelada. Acesso até ${formatDate(subscription.current_period_end)}.` : situation === "active" ? "Sua assinatura está em dia." : "Sua assinatura precisa ser ativada."}</p><button type="button" onClick={refresh} disabled={loading} style={{ ...G, display: "inline-flex", alignItems: "center", gap: 6, padding: 0, border: 0, background: "transparent", color: "#245E41", fontSize: 12, fontWeight: 800, cursor: loading ? "wait" : "pointer" }}><RefreshCw size={14} /> Atualizar situação</button></>)}
           {card(<><CircleHelp size={19} color="#345E84" /><h2 style={{ fontSize: 17, margin: "14px 0 7px" }}>Precisa de ajuda?</h2><p style={{ color: T.inkMid, lineHeight: 1.6, fontSize: 13, margin: "0 0 14px" }}>Informe o e-mail da conta ao falar com a equipe Fincla. Podemos verificar o pagamento e o acesso.</p><a href="mailto:contato@fincla.com" style={{ color: "#245E41", fontWeight: 800, fontSize: 13 }}>Falar com o suporte ↗</a></>)}
         </div>}
 

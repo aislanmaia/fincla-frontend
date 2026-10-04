@@ -34,8 +34,9 @@ export function accessState(user, attempt, now = Date.now()) {
   }
   if (subscription.status === "active" && subscription.current_period_end && new Date(subscription.current_period_end).getTime() <= now) return "past_due";
   if (attempt && ["preparing", "processing", "reconciling", "pending_payment"].includes(attempt.status)) return "processing";
+  if (attempt?.status === "declined" || attempt?.status === "cancelled") return "payment_not_completed";
   if (subscription.courtesy_plan && subscription.courtesy_until && new Date(subscription.courtesy_until).getTime() <= now) return "courtesy_ended";
-  if (subscription.status === "pending_payment") return "first_purchase";
+  if (subscription.status === "pending_payment") return "checkout_required";
   return "unknown";
 }
 

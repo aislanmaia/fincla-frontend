@@ -36,9 +36,10 @@ export function CheckoutPage({ search = window.location.search, session }) {
     if (!session?.isAuthenticated) return;
     const subscription = session.user?.subscription;
     const returning = ["cancelled", "expired"].includes(subscription?.status) ||
+      (recovery && persona === "personal" && subscription?.status === "pending_payment") ||
       Boolean(subscription?.courtesy_until && new Date(subscription.courtesy_until) <= new Date());
     setActiveSection(returning ? "plan" : "payment");
-  }, [session?.isAuthenticated, session?.user?.subscription?.status, session?.user?.subscription?.courtesy_until]);
+  }, [recovery, persona, session?.isAuthenticated, session?.user?.subscription?.status, session?.user?.subscription?.courtesy_until]);
   useEffect(() => {
     const sync = () => {
       setWide(window.innerWidth >= 820);

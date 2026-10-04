@@ -39,6 +39,20 @@ it("takes an expired courtesy to a first explicit subscription", async () => {
   await waitFor(() => expect(activeSession.refreshAccess).toHaveBeenCalled());
 });
 
+it("opens checkout directly for an account without access or a payment attempt", async () => {
+  render(<AccessPage session={session({ status: "pending_payment", is_entitled: false })} />);
+  await waitFor(() => expect(navigate).toHaveBeenCalledWith({ to: "/checkout", replace: true }));
+  expect(screen.queryByRole("heading", { name: /Primeira assinatura/i })).toBeNull();
+});
+
+it("describes a declined checkout as an unfinished payment and offers another attempt", async () => {
+  vi.mocked(currentCheckout).mockResolvedValue({ status: "declined" });
+  render(<AccessPage session={session({ status: "pending_payment", is_entitled: false })} />);
+  expect(await screen.findByRole("heading", { name: "Seu pagamento não foi concluído." })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /Tentar novamente/ }));
+  expect(navigate).toHaveBeenCalledWith({ to: "/checkout" });
+});
+
 it("sends an overdue account to its existing invoice instead of a new checkout", async () => {
   vi.mocked(getCurrentSubscription).mockResolvedValue({
     plan: { name: "Fincla Pessoal" }, status: "past_due", recent_invoices: [{ id: "invoice-1", status: "overdue", amount_cents: 2990, due_date: "2026-09-01", invoice_url: "https://example.test/fatura" }],
