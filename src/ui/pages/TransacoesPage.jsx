@@ -50,6 +50,7 @@ import { TransactionsFilterPanel } from "../features/transactions/filters/Transa
    (página → painel → página). Re-exportado para não quebrar quem já
    importava deste arquivo. */
 export { Tip };
+export { TxRow, fmtBRL, fmtValorDaLinha, catColor };
 import { SavedViewsChip } from "../features/transactions/filters/savedViews/SavedViewsChip.jsx";
 import { useFilterHistory } from "../features/transactions/filters/useFilterHistory.js";
 import {
