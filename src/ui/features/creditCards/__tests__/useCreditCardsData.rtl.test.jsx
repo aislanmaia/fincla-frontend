@@ -174,7 +174,9 @@ describe("useCreditCardsData: detalhe sob demanda e cache", () => {
       [
         "GET /credit-cards",
         "GET /credit-cards/1/future-commitments",
+        // Paga e sem seguinte: confirma novembro (404, "ainda sem lançamentos") e mostra a paga.
         "GET /credit-cards/1/invoices/2026/10",
+        "GET /credit-cards/1/invoices/2026/11",
         "GET /credit-cards/1/invoices/history",
       ].sort(),
     );

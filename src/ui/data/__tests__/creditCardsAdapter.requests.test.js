@@ -9,7 +9,7 @@ import {
 /**
  * Quantas chamadas custa achar a fatura atual. As escolhas de QUAL fatura é a
  * atual estão em `creditCardsAdapter.characterization.test.js`; aqui o que se
- * prende é o custo: no máximo um detalhe de fatura e nunca um 404 de passagem.
+ * prende é o custo: no máximo uma consulta por mês confirmado e, no pior caso, um único 404.
  */
 const TODAY = new Date(2026, 9, 15, 12, 0, 0);
 
@@ -33,6 +33,7 @@ const inv = (year, month, status, extra = {}) =>
   fakeInvoice({ year, month, status, items: [item(year * 100 + month, year, month)], ...extra });
 
 async function detailFor(card, invoices, extra = {}) {
+  if (extra.today) vi.setSystemTime(extra.today);
   api = installFakeCardsApi({ cards: [card], invoices: { [card.id]: invoices }, today: TODAY, ...extra });
   const { rawCards } = await listCreditCardsBasicForUi("org-1");
   api.calls.length = 0;
@@ -46,7 +47,6 @@ describe("custo da fatura atual", () => {
   it.each([
     ["aberta com fechamento futuro", fakeCard(), [inv(2026, 10, "open")]],
     ["paga, avança para a seguinte", fakeCard(), [inv(2026, 10, "paid"), inv(2026, 11, "open")]],
-    ["paga sem seguinte", fakeCard(), [inv(2026, 10, "paid")]],
     [
       "aberta vencida, avança",
       fakeCard({ closing_day: null, due_day: 20 }),
@@ -61,19 +61,37 @@ describe("custo da fatura atual", () => {
     expect(calls.filter((c) => c.status >= 400)).toEqual([]);
   });
 
-  it("cartão sem fatura: nenhum detalhe pedido (sintético), nenhum 404", async () => {
-    const { calls } = await detailFor(fakeCard(), []);
-    expect(invoiceCalls(calls)).toEqual([]);
-    expect(calls.map((c) => c.path).sort()).toEqual(
-      ["/credit-cards/1/future-commitments", "/credit-cards/1/invoices/history"].sort(),
-    );
+  it("paga e a seguinte ainda vazia: confirma o mês seguinte (um 404) e mostra a paga", async () => {
+    const { calls, ui } = await detailFor(fakeCard(), [inv(2026, 10, "paid")]);
+    expect(invoiceCalls(calls).map((c) => [c.path.slice(-7), c.status])).toEqual([
+      ["2026/11", 404],
+      ["2026/10", 200],
+    ]);
+    expect(ui.analytics.currentInvoice.status).toBe("paid");
   });
 
-  it("aberta vencida sem a seguinte: sintético do mês seguinte sem pedir nenhuma fatura", async () => {
+  it("cartão sem fatura: UMA confirmação (404) e cai no sintético, sem andar meses", async () => {
+    const { calls } = await detailFor(fakeCard(), []);
+    expect(invoiceCalls(calls)).toHaveLength(1);
+    expect(calls.filter((c) => c.status >= 400)).toHaveLength(1);
+    expect(calls).toHaveLength(3);
+  });
+
+  it("aberta vencida sem a seguinte: uma confirmação do mês seguinte e sintético dele", async () => {
     const { calls, ui } = await detailFor(fakeCard({ closing_day: null, due_day: 20 }), [
       inv(2026, 10, "open", { closingDate: "2026-10-13" }),
     ]);
-    expect(invoiceCalls(calls)).toEqual([]);
+    expect(invoiceCalls(calls).map((c) => [c.path.slice(-7), c.status])).toEqual([["2026/11", 404]]);
+    expect(ui.analytics.currentInvoice.month).toBe("2026-11");
+  });
+
+  it("fatura do mês seguinte invisível para histórico e futuro (só à vista): 1 consulta a acha", async () => {
+    const { calls, ui } = await detailFor(
+      fakeCard({ closing_day: null, due_day: 10 }),
+      [inv(2026, 10, "open", { closingDate: "2026-10-03" }), inv(2026, 11, "open", { closingDate: "2026-11-03" })],
+      { hiddenFromFuture: ["2026-11"], today: new Date(2026, 9, 4, 12) },
+    );
+    expect(invoiceCalls(calls).map((c) => [c.path.slice(-7), c.status])).toEqual([["2026/11", 200]]);
     expect(ui.analytics.currentInvoice.month).toBe("2026-11");
   });
 

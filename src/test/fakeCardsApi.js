@@ -68,13 +68,14 @@ const key = (y, m) => `${y}-${m}`;
  * cima). `invoices` mapeia cartão -> lista de faturas (o mês vem de `invoice.month`). Histórico e
  * future-commitments são derivados das faturas para ficarem coerentes entre si,
  * como no backend; `breakdownTotals` força o total de um mês no
- * future-commitments mesmo sem fatura; `historyStatus` faz o histórico dizer
+ * future-commitments mesmo sem fatura; `hiddenFromFuture` omite do future-commitments um mês que TEM fatura (compra à vista
+ * não aparece lá); `historyStatus` faz o histórico dizer
  * outro status que o detalhe (dado dessincronizado).
  *
  * `today` ancora as janelas (histórico: 6 meses até o mês corrente; future: 6
  * meses a partir do mês corrente).
  */
-export function installFakeCardsApi({ cards, invoices = {}, breakdownTotals = {}, historyStatus = {}, today }) {
+export function installFakeCardsApi({ cards, invoices = {}, breakdownTotals = {}, historyStatus = {}, hiddenFromFuture = [], latencyMs = 0, today }) {
   const calls = [];
   const original = apiClient.defaults.adapter;
 
@@ -94,6 +95,7 @@ export function installFakeCardsApi({ cards, invoices = {}, breakdownTotals = {}
   };
 
   apiClient.defaults.adapter = async (config) => {
+    if (latencyMs) await new Promise((resolve) => setTimeout(resolve, latencyMs));
     const url = String(config.url).replace(/^https?:\/\/[^/]+/, "").replace(/^\/v1/, "");
     calls.push({ method: (config.method || "get").toUpperCase(), path: url, status: null });
     const record = calls[calls.length - 1];
@@ -148,13 +150,14 @@ export function installFakeCardsApi({ cards, invoices = {}, breakdownTotals = {}
       const monthly_breakdown = monthsFrom(start, 6).map(({ year, month }) => {
         const inv = byMonth[key(year, month)];
         const forced = breakdownTotals[key(year, month)];
-        const total = forced != null ? forced : inv ? Number(inv.total_amount.amount) : 0;
+        const hidden = hiddenFromFuture.includes(key(year, month));
+        const total = hidden ? 0 : forced != null ? forced : inv ? Number(inv.total_amount.amount) : 0;
         return {
           year,
           month,
           month_name: `${month}/${year}`,
           total_amount: money(total),
-          installments_count: inv ? inv.items_count || 1 : forced != null ? 1 : 0,
+          installments_count: hidden ? 0 : inv ? inv.items_count || 1 : forced != null ? 1 : 0,
           limit_usage_percent: 7,
           top_installments: [],
         };

@@ -52,6 +52,8 @@ export function useCreditCardsData({
   const overviewInFlightRef = useRef(null);
   /** Sobe a cada carga aplicada: detalhe pedido antes dela não pode entrar no cache depois. */
   const generationRef = useRef(0);
+  /** Cada carga pedida ganha um número; só a mais recente pode aplicar o resultado. */
+  const loadSeqRef = useRef(0);
 
   const fetchOverview = useCallback(async (orgId) => {
     const { rawCards, cards } = await listCreditCardsBasicForUi(orgId);
@@ -91,10 +93,13 @@ export function useCreditCardsData({
 
   const reload = useCallback(async () => {
     if (!organizationId) return;
+    const seq = (loadSeqRef.current += 1);
     setState((current) => ({ ...current, isLoading: true, error: "" }));
     try {
-      applyOverview(await startOverview(organizationId, null));
+      const result = await startOverview(organizationId, null);
+      if (seq === loadSeqRef.current) applyOverview(result);
     } catch (error) {
+      if (seq !== loadSeqRef.current) return;
       setState((current) => ({
         ...current,
         isLoading: false,
@@ -105,6 +110,7 @@ export function useCreditCardsData({
 
   useEffect(() => {
     if (!enabled || !organizationId) {
+      loadSeqRef.current += 1;
       generationRef.current += 1;
       rawCardsRef.current = new Map();
       detailCacheRef.current = new Map();
@@ -113,14 +119,15 @@ export function useCreditCardsData({
       return;
     }
     let cancelled = false;
+    const seq = (loadSeqRef.current += 1);
     setState((current) => ({ ...current, isLoading: true, error: "" }));
     startOverview(organizationId, `${organizationId}:${transactionsRefreshToken}`)
       .then((result) => {
-        if (cancelled) return;
+        if (cancelled || seq !== loadSeqRef.current) return;
         applyOverview(result);
       })
       .catch((error) => {
-        if (cancelled) return;
+        if (cancelled || seq !== loadSeqRef.current) return;
         setState((current) => ({
           ...current,
           isLoading: false,

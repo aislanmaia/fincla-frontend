@@ -165,9 +165,13 @@ function knownInvoiceMonths(history, futureCommitments) {
  * Mês sem fatura não avança por si só, a não ser que a anterior já seja uma
  * `open` vencida (aí fica ela, e depois vira o sintético do mês seguinte).
  *
- * `facts` diz, por mês, `{ status, closingPassed }` ou `{ missing: true }`.
+ * `facts` diz, por mês, `{ status, closingPassed }` ou `{ missing: true }`. Histórico
+ * e compromissos futuros NÃO enxergam toda fatura (compra à vista no mês seguinte
+ * não aparece em nenhum dos dois), então mês desconhecido não é mês vazio: se
+ * `allowProbe`, o plano devolve `{ probe }` para o chamador confirmar aquele mês.
+ * Só se sonda quando não há fato conhecido adiante que resolva o caso sozinho.
  */
-function planCurrentInvoice(card, now, facts) {
+function planCurrentInvoice(card, now, facts, allowProbe) {
   const start = yearMonthOfOpenInvoiceByClosingDay(now, closingDayForInvoiceAnchor(card));
   let { year, month } = start;
   let lastOk = null;
@@ -176,6 +180,14 @@ function planCurrentInvoice(card, now, facts) {
     const next = shiftYearMonth(year, month, 1);
     year = next.year;
     month = next.month;
+  };
+  const hasLaterFact = () => {
+    for (const [key, fact] of facts) {
+      if (fact.missing) continue;
+      const [y, m] = key.split("-").map(Number);
+      if (y > year || (y === year && m > month)) return true;
+    }
+    return false;
   };
 
   for (let attempt = 0; attempt < MAX_INVOICE_WALK; attempt += 1) {
@@ -188,6 +200,7 @@ function planCurrentInvoice(card, now, facts) {
       }
       return lastOk;
     }
+    if (!fact && allowProbe && (lastOk || !hasLaterFact())) return { probe: { year, month } };
     if (lastOk && lastOk.status === "open" && lastOk.closingPassed) return lastOk;
     advance();
   }
@@ -207,17 +220,24 @@ function syntheticInvoiceForMonth(futureCommitments, year, month) {
 }
 
 /**
- * Fatura "atual" do cartão: a que a tela mostra como corrente. No caso comum custa
- * UMA chamada (o detalhe dessa fatura); se o cartão ainda não tem lançamento, zero
- * (cai no sintético do breakdown). O mês-alvo sai de histórico + compromissos
- * futuros; o detalhe real é pedido só para ele e, se contrariar o que foi
- * deduzido (status diferente, ou a fatura nem existe), o fato real entra na conta e
- * o alvo é recalculado, com teto de `MAX_INVOICE_FETCHES` chamadas.
+ * Fatura "atual" do cartão: a que a tela mostra como corrente. O mês-alvo sai da
+ * regra antiga aplicada sobre o que histórico + compromissos futuros já dizem; um
+ * mês que nenhum dos dois cobre é confirmado com UMA consulta daquele mês. Depois
+ * de uma consulta sem fatura (o único 404 tolerado: "ainda sem lançamentos") nada
+ * mais é sondado. O fato real sempre vence a dedução e o alvo é recalculado, com
+ * teto de `MAX_INVOICE_FETCHES` consultas, nunca um laço de meses.
+ *
+ * Caso comum: 1 consulta (o detalhe da fatura mostrada). Sem lançamento nenhum:
+ * 1 consulta com 404 e cai no sintético do breakdown.
  */
 async function resolveCurrentInvoice({ card, organizationId, history, futureCommitments }) {
   const now = new Date();
   const known = knownInvoiceMonths(history, futureCommitments);
   const observed = new Map();
+  const fetched = new Map();
+  let probing = true;
+  let fetches = 0;
+
   const buildFacts = () => {
     const merged = new Map();
     for (const [key, value] of known) {
@@ -233,35 +253,50 @@ async function resolveCurrentInvoice({ card, organizationId, history, futureComm
   const sameAsPredicted = (predicted, real) =>
     predicted && predicted.status === real.status && predicted.closingPassed === real.closingPassed;
 
-  for (let fetches = 0; fetches < MAX_INVOICE_FETCHES; fetches += 1) {
-    const facts = buildFacts();
-    const target = planCurrentInvoice(card, now, facts);
-    if (!target) break;
-
-    // Aberta vencida sem a seguinte: a tela mostra o mês seguinte, não a vencida.
-    if (target.status === "open" && target.closingPassed) {
-      const next = shiftYearMonth(target.year, target.month, 1);
-      const nextFact = facts.get(yearMonthKey(next.year, next.month));
-      if (!nextFact || nextFact.missing) {
-        return syntheticInvoiceForMonth(futureCommitments, next.year, next.month);
-      }
-    }
-
-    const key = yearMonthKey(target.year, target.month);
-    let invoice;
+  /** Consulta o mês; `false` quando a fatura não existe (404) ou a rede falha. */
+  const fetchMonth = async (year, month) => {
+    fetches += 1;
+    const key = yearMonthKey(year, month);
     try {
-      invoice = await getCreditCardInvoice(card.id, target.year, target.month, organizationId);
+      const invoice = await getCreditCardInvoice(card.id, year, month, organizationId);
+      fetched.set(key, invoice);
+      observed.set(key, {
+        status: invoice.status,
+        closingPassed: isInvoiceClosingBeforeToday(invoice, now),
+      });
+      return true;
     } catch {
       observed.set(key, { missing: true });
+      return false;
+    }
+  };
+
+  while (fetches <= MAX_INVOICE_FETCHES) {
+    const facts = buildFacts();
+    const plan = planCurrentInvoice(card, now, facts, probing);
+    if (!plan) break;
+
+    if (plan.probe) {
+      if (fetches >= MAX_INVOICE_FETCHES) break;
+      if (!(await fetchMonth(plan.probe.year, plan.probe.month))) probing = false;
       continue;
     }
-    const real = {
-      status: invoice.status,
-      closingPassed: isInvoiceClosingBeforeToday(invoice, now),
-    };
-    if (sameAsPredicted(facts.get(key), real)) return invoice;
-    observed.set(key, real);
-    if (fetches === MAX_INVOICE_FETCHES - 1) return invoice;
+
+    // Aberta vencida sem a seguinte: a tela mostra o mês seguinte, não a vencida.
+    if (plan.status === "open" && plan.closingPassed) {
+      const next = shiftYearMonth(plan.year, plan.month, 1);
+      return syntheticInvoiceForMonth(futureCommitments, next.year, next.month);
+    }
+
+    const key = yearMonthKey(plan.year, plan.month);
+    if (fetched.has(key)) return fetched.get(key);
+    if (fetches >= MAX_INVOICE_FETCHES) break;
+    const predicted = facts.get(key);
+    if (!(await fetchMonth(plan.year, plan.month))) {
+      probing = false;
+      continue;
+    }
+    if (sameAsPredicted(predicted, observed.get(key))) return fetched.get(key);
   }
 
   const anchor = yearMonthOfOpenInvoiceByClosingDay(now, closingDayForInvoiceAnchor(card));
