@@ -91,6 +91,9 @@ export const CartoesPage = ({
   /* ── State ───────────────────────────────────────────────── */
   const [tab,                setTab]                = useState("invoice");
   const [invoiceIdx,         setInvoiceIdx]         = useState(5);
+  // Cartão cujo índice de fatura já foi acertado: antes disso `invoiceIdx` é o
+  // chute inicial e buscar os itens dele seria uma chamada jogada fora.
+  const [syncedCardId,       setSyncedCardId]       = useState(null);
   const invoiceIdxRef = useRef(invoiceIdx);
   const prevCardsSnapshotRef = useRef(null);
   invoiceIdxRef.current = invoiceIdx;
@@ -223,6 +226,7 @@ export const CartoesPage = ({
     }
 
     prevCardsSnapshotRef.current = CARDS;
+    setSyncedCardId(nextCard.id);
   }, [CARDS, cardId]);
 
   const card =
@@ -269,6 +273,7 @@ export const CartoesPage = ({
       if (loaded) c = loaded;
     }
     setCardId(id);
+    setSyncedCardId(id);
     setInvoiceIdx(faturaIdxMatchingInvoiceRef(c?.faturas || [], viewedInvoice));
     setSearch(""); setFilterCategory(null); setTab("invoice"); setVisibleGroups(8);
   };
@@ -298,7 +303,9 @@ export const CartoesPage = ({
   const [pastItemsLoading, setPastItemsLoading] = useState(false);
 
   useEffect(() => {
-    if (isCurrent || !shouldUseRealData || !card || !invoice?.year || !invoice?.month || !organizationId) {
+    // Mês projetado (status null) ainda não tem fatura no backend: não há itens a buscar.
+    const awaitingSync = shouldUseRealData && syncedCardId !== card?.id;
+    if (isCurrent || !shouldUseRealData || !card || !invoice?.year || !invoice?.month || !organizationId || awaitingSync || invoice.status == null) {
       setPastItems([]);
       setPastItemsLoading(false);
       return;
@@ -314,8 +321,11 @@ export const CartoesPage = ({
     isCurrent,
     shouldUseRealData,
     card?.cardId,
+    card?.id,
+    syncedCardId,
     invoice?.year,
     invoice?.month,
+    invoice?.status,
     organizationId,
     transactionsRefreshToken,
   ]);

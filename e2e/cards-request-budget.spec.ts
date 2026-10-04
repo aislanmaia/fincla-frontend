@@ -213,13 +213,19 @@ test.describe("carga de /cards: orçamento de requisições", () => {
     for (const cardCount of [1, 5]) {
       test(`${cardCount} cartão(ões), ${viewport.name}`, async ({ page }) => {
         const organizationId = await seedOrganizationWithCards(cardCount);
-        await page.setViewportSize(viewport.size);
+        // O helper de login espera a sidebar, que só existe no desktop: entra larga e
+        // estreita a janela antes de medir (a carga de /cards recarrega a página).
+        await page.setViewportSize(viewports[0].size);
         await login(page, organizationId);
+        await page.setViewportSize(viewport.size);
 
         const m = await measureCardsLoad(page);
         report(`${cardCount} cartão(ões), ${viewport.name}`, m);
 
-        expect(m.cardsCalls.length, "chamadas a /credit-cards*").toBeLessThanOrEqual(CREDIT_CARDS_BUDGET);
+        expect(
+          m.cardsCalls.length,
+          `chamadas a /credit-cards*: ${m.cardsCalls.map((c) => `${c.url} [${c.status}]`).join(", ")}`,
+        ).toBeLessThanOrEqual(CREDIT_CARDS_BUDGET);
 
         const failed = m.calls.filter((c) => c.status != null && c.status >= 400);
         expect(failed, "respostas 4xx/5xx na carga").toEqual([]);
@@ -243,4 +249,31 @@ test.describe("carga de /cards: orçamento de requisições", () => {
       });
     }
   }
+});
+
+test("selecionar outro cartão busca só o detalhe dele, uma vez, sem 404", async ({ page }) => {
+  const organizationId = await seedOrganizationWithCards(5);
+  await page.setViewportSize(viewports[0].size);
+  await login(page, organizationId);
+  const m = await measureCardsLoad(page);
+  const liveCards = () => m.calls.filter((c) => c.path.startsWith("/credit-cards"));
+  const before = liveCards().length;
+
+  await page.getByText(/2222/).first().click();
+  await expect.poll(() => liveCards().length, { timeout: 15_000 }).toBeGreaterThan(before);
+  await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(1000);
+
+  const added = liveCards().slice(before);
+  // histórico + compromissos futuros + fatura atual, todos do cartão escolhido
+  expect(added.length).toBeLessThanOrEqual(3);
+  expect(added.every((c) => c.status != null && c.status < 400)).toBe(true);
+  const cardIds = new Set(added.map((c) => /\/credit-cards\/(\d+)\//.exec(c.path)?.[1]));
+  expect(cardIds.size).toBe(1);
+
+  // Voltar ao primeiro cartão vem do cache: nenhuma chamada nova.
+  const afterSwitch = liveCards().length;
+  await page.getByText(/1111/).first().click();
+  await page.waitForTimeout(1000);
+  expect(liveCards().length).toBe(afterSwitch);
 });
