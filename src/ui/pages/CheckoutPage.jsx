@@ -209,10 +209,13 @@ export function CheckoutPage({ search = window.location.search, session }) {
             <CheckoutPanel mobile={!wide} scrollable={wide && compactViewport} number="1" title="Plano e ciclo" detail="Escolha como prefere pagar" summary={`${planName} · ${cycleName} · ${money(quote.total_cents)}`} open={activeSection === "plan"} complete={accountVisited || Boolean(accountDetails) || session?.isAuthenticated} keepMounted onOpen={() => toggleSection("plan")}>
               <BillingCyclePicker value={quote.selection.billing_cycle} monthlyTotalCents={monthlyTotalCents} annualTotalCents={annualTotalCents} annualFreeMonths={annualFreeMonths} disabled={!canChangeCycle} onChange={changeCycle} />
               {quote.selection.persona === "personal" && quote.selection.billing_cycle === "yearly" && <InstallmentPicker value={quote.selection.installments || 1} quote={quote} disabled={!canChangeCycle} onChange={changeInstallments} />}
-              <form className="checkout-coupon-form" onSubmit={applyCoupon}>
-                <label htmlFor="checkout-coupon">Cupom de desconto</label>
-                <div><input id="checkout-coupon" value={couponInput} onChange={(event) => setCouponInput(event.target.value)} maxLength={40} placeholder="Digite seu código" /><button type="submit" disabled={state.status === "loading"}>Aplicar</button></div>
-                {quote.coupon_code && <p role="status">Cupom {quote.coupon_code} aplicado: {quote.coupon_percent_off}% de desconto por {quote.discounted_charges} {quote.discounted_charges === 1 ? "cobrança" : "cobranças"}.</p>}
+              <form onSubmit={applyCoupon} style={{ display: "grid", gap: 8, margin: "0 0 24px" }}>
+                <label htmlFor="checkout-coupon" style={{ color: T.ink, fontSize: 13, fontWeight: 750 }}>Cupom de desconto</label>
+                <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+                  <input id="checkout-coupon" value={couponInput} onChange={(event) => setCouponInput(event.target.value)} maxLength={40} placeholder="Digite seu código" autoComplete="off" style={{ ...G, flex: 1, minWidth: 0, boxSizing: "border-box", padding: "11px 14px", border: `1px solid ${T.border}`, borderRadius: 10, background: "#FCFCFB", color: T.ink, fontSize: 14, outlineColor: T.green }} />
+                  <Btn type="submit" variant="dark" disabled={state.status === "loading"} style={{ minHeight: 44, padding: "10px 18px", fontSize: 13, fontWeight: 750 }}>Aplicar</Btn>
+                </div>
+                {quote.coupon_code && <p role="status" style={{ margin: 0, color: T.green, fontSize: 12, lineHeight: 1.5 }}>Cupom {quote.coupon_code} aplicado: {quote.coupon_percent_off}% de desconto por {quote.discounted_charges} {quote.discounted_charges === 1 ? "cobrança" : "cobranças"}.</p>}
               </form>
               {quote.capacity != null && <p style={{ color: T.inkMid, lineHeight: 1.6, margin: "0 0 20px", padding: "12px 14px", background: "#F3F7F0", borderRadius: 10 }}>A capacidade é paga antecipadamente, inclusive vagas vazias. Você pode preenchê-las e reutilizá-las durante o período contratado.</p>}
               <div style={{ marginBottom: 18 }}><Btn variant="dark" full onClick={() => { setAccountVisited(true); setActiveSection("account"); }}>Continuar</Btn></div>
