@@ -9,11 +9,17 @@ import { PayControls } from "./PayControls.jsx";
 import { topCategoryLabel, timelineProgress } from "./invoiceDashboardModel.js";
 import { dayMonth, dueText, plural, previousMonthName } from "./invoiceFormat.js";
 
+/** Linha de future-commitments que de fato traz compromisso (valor ou parcelas). */
+export function hasCommitments(row) {
+  return Boolean(row) && (Number(row.installments_count) > 0 || Number(row.total_amount) > 0);
+}
+
 const mutedText = { ...G, fontSize: 12, color: T.inkMid };
 
 export function Headline({ invoice, detail, state, futureRow, currency, centered = false }) {
   const money = (v) => formatMoney(v, currency) ?? "—";
   const total = state === "forecast" ? (futureRow ? futureRow.total_amount : null) : invoice.total;
+  const emptyForecast = state === "forecast" && !hasCommitments(futureRow);
   const change = detail?.month_over_month_change;
   const prevName = previousMonthName(invoice.key);
   const hasComparison = Number.isFinite(Number(change)) && change !== null && prevName;
@@ -21,7 +27,7 @@ export function Headline({ invoice, detail, state, futureRow, currency, centered
   return (
     <div style={{ textAlign: centered ? "center" : "right" }}>
       <div data-testid="invoice-total" style={{ ...G, ...NUM, fontSize: centered ? 26 : 28, fontWeight: 800, color: T.ink }}>
-        {invoice.isEmpty ? "Sem lançamentos" : money(total)}
+        {invoice.isEmpty || emptyForecast ? "Sem lançamentos" : money(total)}
       </div>
       {hasComparison && (
         <div data-testid="invoice-comparison"
@@ -91,9 +97,9 @@ function ForecastBody({ invoice, futureRow, card, currency }) {
   return (
     <>
       <div style={{ ...mutedText, textAlign: "center" }}>
-        {futureRow
+        {hasCommitments(futureRow)
           ? "Fatura ainda não aberta: o valor é a soma do que já está assumido em parcelas."
-          : "Fatura ainda não aberta e sem compromissos assumidos até agora."}
+          : "Fatura ainda não aberta e sem lançamentos até agora."}
       </div>
       {parts.length > 0 && <div style={{ ...mutedText, textAlign: "center" }}>{parts.join(" · ")}</div>}
       <LimitUsage percent={futureRow?.limit_usage_percent} card={card} currency={currency} />

@@ -23,7 +23,9 @@ const detailId = (orgId, cardId, year, month) => `${orgId}:${cardId}:${year}-${m
  * Dados do dashboard de UMA fatura. Carga limitada e independente do número de
  * cartões e de meses: lista de cartões, histórico, compromissos futuros e o detalhe
  * da fatura SELECIONADA. O detalhe de outra fatura só é buscado quando ela é
- * selecionada (cacheado por fatura) e fatura prevista nunca chama o detalhe.
+ * selecionada (cacheado por fatura). Fatura posterior à aberta também consulta o
+ * detalhe: compra com data futura e parcelas já formam fatura real no servidor, e
+ * future-commitments nem sempre concorda com ela; sem detalhe (404) vale a previsão.
  *
  * `404` do detalhe é "fatura sem lançamentos", nunca erro. Stale-while-revalidate:
  * só a primeira carga mostra carregamento; refetch e mutações mantêm a tela.
@@ -116,11 +118,11 @@ export function useInvoiceDashboardData({ organizationId, cardId, year, month, e
   }), [numericCardId, year, month, organizationId, once]);
 
   useEffect(() => {
-    if (!active || numericCardId == null || forecast) return;
+    if (!active || numericCardId == null) return;
     const entry = detailsRef.current[selectedId];
     if (entry && !entry.stale && entry.state !== "error") return;
     fetchDetail(selectedId);
-  }, [active, numericCardId, forecast, selectedId, selectedStale, fetchDetail]);
+  }, [active, numericCardId, selectedId, selectedStale, fetchDetail]);
 
   const firstToken = useRef(refreshToken);
   useEffect(() => {
@@ -129,7 +131,7 @@ export function useInvoiceDashboardData({ organizationId, cardId, year, month, e
     setDetails((prev) => Object.fromEntries(Object.entries(prev).map(([k, v]) => [k, { ...v, stale: true }])));
   }, [refreshToken]);
 
-  const detailState = !card ? "loading" : forecast ? "forecast" : selectedEntry ? selectedEntry.state : "loading";
+  const detailState = !card ? "loading" : !selectedEntry ? "loading" : selectedEntry.state === "empty" && forecast ? "forecast" : selectedEntry.state;
   const detail = selectedEntry?.state === "ok" ? selectedEntry.data : null;
 
   const invoices = useMemo(() => buildDashboardInvoices({

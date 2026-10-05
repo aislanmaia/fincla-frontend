@@ -104,7 +104,7 @@ const DETAILS = {
 };
 
 /** Backend de mentira na camada HTTP: cliente, adapter, hook e tela reais rodam por cima. */
-function mockApi({ cards = [cardFixture()], detail = DETAILS, patch, listStatus = 200 } = {}) {
+function mockApi({ cards = [cardFixture()], detail = DETAILS, patch, listStatus = 200, future = futureFixture() } = {}) {
   const calls = [];
   const paidOverride = {};
   server.use(
@@ -118,7 +118,7 @@ function mockApi({ cards = [cardFixture()], detail = DETAILS, patch, listStatus 
     }),
     http.get("*/v1/credit-cards/:id/future-commitments", ({ request }) => {
       calls.push(`GET ${new URL(request.url).pathname}`);
-      return HttpResponse.json(futureFixture());
+      return HttpResponse.json(future);
     }),
     http.get("*/v1/credit-cards/:id/invoices/:year/:month", ({ request, params }) => {
       calls.push(`GET ${new URL(request.url).pathname}`);
@@ -215,7 +215,7 @@ describe("InvoiceDashboardPage — card da fatura", () => {
     expect(screen.queryByTestId("mark-paid")).toBeNull();
   });
 
-  it("fatura prevista usa future-commitments, não chama o detalhe e não oferece pagar", async () => {
+  it("fatura prevista sem fatura real (404 do detalhe) usa future-commitments e não oferece pagar", async () => {
     const calls = mockApi();
     routeParams = { cardId: "1", year: "2026", month: "11" };
     renderPage();
@@ -226,7 +226,34 @@ describe("InvoiceDashboardPage — card da fatura", () => {
     expect(screen.getByTestId("forecast-installments")).toHaveTextContent("Celular");
     expect(screen.queryByTestId("pay-controls")).toBeNull();
     expect(screen.queryByTestId("export-csv")).toBeNull();
-    expect(calls.some((c) => /invoices\/2026\/11$/.test(c))).toBe(false);
+    expect(calls.filter((c) => /invoices\/2026\/11$/.test(c))).toHaveLength(1);
+  });
+
+  it("fatura posterior à aberta que já existe no servidor (compra futura/parcelas) mostra a fatura real, ainda como Prevista", async () => {
+    mockApi({ detail: { ...DETAILS, "2026/11": () => detailFixture({ month: "2026-11", due_date: "2026-11-10", total_amount: money("35.00"), items_count: 1, closing_date: "2026-11-03", days_until_due: 37, previous_month_total: null, month_over_month_change: null, limit_usage_percent: null, items: [item(9, "Padaria", "35.00", "2026-10-13")], category_breakdown: [] }) } });
+    routeParams = { cardId: "1", year: "2026", month: "11" };
+    renderPage();
+    await screen.findByTestId("invoice-count");
+
+    expect(screen.getByTestId("invoice-card-2026-11")).toHaveAttribute("data-status", "forecast");
+    expect(screen.getByTestId("invoice-total")).toHaveTextContent("35,00");
+    expect(screen.getByTestId("invoice-total")).not.toHaveTextContent("6.050,28");
+    expect(screen.getByTestId("recent-items")).toHaveTextContent("Padaria");
+    expect(screen.queryByTestId("pay-controls")).toBeNull();
+  });
+
+  it("fatura prevista que future-commitments zera e o servidor desconhece é 'Sem lançamentos', nunca R$ 0,00", async () => {
+    mockApi({
+      future: {
+        ...futureFixture(),
+        monthly_breakdown: [{ year: 2026, month: 11, month_name: "novembro", total_amount: money("0.00"), limit_usage_percent: null, installments_count: 0, top_installments: [] }],
+      },
+    });
+    routeParams = { cardId: "1", year: "2026", month: "11" };
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("invoice-total")).toHaveTextContent("Sem lançamentos"));
+    expect(screen.getByTestId("invoice-total")).not.toHaveTextContent("R$");
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 });
 
