@@ -37,5 +37,9 @@ export function finclaMainOutletRemountKey(pathname) {
   if (p === "/planning" || /^\/planning\/[^/]+$/.test(p)) {
     return "/planning";
   }
+  // Dashboard da fatura: trocar de fatura (/cards/:id/invoices/:ano/:mes) mantém a tela
+  // montada, senão cada troca refaria a carga e perderia o cache por fatura.
+  const invoice = /^\/cards\/[^/]+\/invoices\/\d+\/\d+$/.exec(p);
+  if (invoice) return p.replace(/\/\d+\/\d+$/, "");
   return p;
 }
