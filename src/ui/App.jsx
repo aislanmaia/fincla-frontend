@@ -46,6 +46,8 @@ import { OrcamentosPage } from "./pages/OrcamentosPage.jsx";
 import { RelatoriosPage } from "./pages/RelatoriosPage.jsx";
 import { SimulacaoPage as SimulacaoPageView } from "./pages/SimulacaoPage.jsx";
 import { CartoesPage } from "./pages/CartoesPage.jsx";
+import { CardsEntryPage } from "./pages/CardsEntryPage.jsx";
+import { CardHubPage } from "./pages/CardHubPage.jsx";
 import { AccountsPage } from "./pages/AccountsPage.jsx";
 import { PlanningHub } from "./features/planning/PlanningHub.jsx";
 
@@ -329,6 +331,17 @@ export default function App() {
     [openTxModal, setModalPreConfig],
   );
 
+  const onNewCardItem = (cartaoId) => {
+    const id = String(cartaoId);
+    setModalPreConfig((p) => ({
+      ...(p || {}),
+      tipo: "despesa",
+      method: "credito",
+      cartaoId: id,
+    }));
+    openTxModal(isUuidString(id) ? { [FC.CARD]: id } : {});
+  };
+
   const pages = {
     dashboard:    <DashboardPageView onNav={navTo} stateCtrl={stateCtrl} dataMode={dataMode} onboardingData={onboardingData} extraRecs={extraRecs} onNewTx={()=>openTxModal()} organizationId={session.activeOrgId} />,
     rhythm: <RitmoPageView
@@ -422,16 +435,9 @@ export default function App() {
               });
               openTxModal();
             }} />,
-    cards:      <CartoesPage    onNav={navTo} isMobile={isMobile} cards={dataMode==="empty" ? extraCards : undefined} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onTransactionsInvalidate={bumpTransactionsList} onOpenTransaction={(transactionId) => { navigate({ search: (prev) => ({ ...prev, [FC.TX]: String(transactionId), [FC.MODAL]: FC_MODAL.EDIT_TRANSACTION }) }); }} onNewItem={(cartaoId) => {
-      const id = String(cartaoId);
-      setModalPreConfig((p) => ({
-        ...(p || {}),
-        tipo: "despesa",
-        method: "credito",
-        cartaoId: id,
-      }));
-      openTxModal(isUuidString(id) ? { [FC.CARD]: id } : {});
-    }} onLaunchRefund={(item, fromCard) => {
+    cards:      <CardsEntryPage dataMode={dataMode} organizationId={session.activeOrgId}
+      hub={<CardHubPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onNewItem={onNewCardItem} />}
+      classic={<CartoesPage    onNav={navTo} isMobile={isMobile} cards={dataMode==="empty" ? extraCards : undefined} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onTransactionsInvalidate={bumpTransactionsList} onOpenTransaction={(transactionId) => { navigate({ search: (prev) => ({ ...prev, [FC.TX]: String(transactionId), [FC.MODAL]: FC_MODAL.EDIT_TRANSACTION }) }); }} onNewItem={onNewCardItem} onLaunchRefund={(item, fromCard) => {
       // Abre o drawer já configurado pra estorno linkado à compra original (transaction_id pai).
       if (!item || item.transactionId == null) return;
       const cardIdNum = fromCard?.cardId != null && Number.isFinite(Number(fromCard.cardId))
@@ -461,7 +467,7 @@ export default function App() {
         valorInicial: Math.abs(totalCompraOriginal),
       });
       openTxModal({ [FC.MODAL]: FC_MODAL.NEW_REFUND, [FC.TX]: String(item.transactionId) });
-    }} />,
+    }} />} />,
     budgets:   <OrcamentosPage onNav={navTo} isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} />,
     accounts:     <AccountsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} />,
     planning:     <PlanningHub organizationId={session.activeOrgId} dataMode={dataMode} isMobile={isMobile} navTo={navTo} user={session.user} initialMetas={dataMode==="empty" ? [] : undefined} simulation={{ cenarios, setCenarios, cenarioId, setCenarioId }} onContribuir={(meta) => { setModalPreConfig({ tipo:"receita", desc:`Aporte — ${meta.nome}`, cat:"Poupança" }); openTxModal(); }} onNewTransaction={onNewTransaction} transactionsRefreshToken={transactionsListVersion} />,

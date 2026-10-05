@@ -79,6 +79,12 @@ export default defineConfig({
       testMatch: "**/cards-request-budget.spec.ts",
     },
     {
+      // Hub do cartão (desktop e mobile). Semeia os próprios cartões e faturas
+      // via API sobre a organização de e2e, então não depende do `smoke`.
+      name: "cards-hub",
+      testMatch: "**/cards-hub.spec.ts",
+    },
+    {
       // Provisiona o próprio consultor e cliente via API; não depende do seed
       // do owner, então roda sem `smoke`.
       name: "consultant-ai-evaluation",

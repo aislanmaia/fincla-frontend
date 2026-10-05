@@ -911,6 +911,8 @@ export interface UpdateCreditCardRequest {
   credit_limit?: number;
   closing_day?: number;
   color?: string;
+  /** Anotação livre (até 2000 caracteres). `""` limpa; omitir ou `null` mantém. */
+  notes?: string | null;
 }
 
 export interface CreditCard {
@@ -923,6 +925,9 @@ export interface CreditCard {
   credit_limit: number | null;
   closing_day: number | null;
   color: string | null;
+  notes?: string | null;
+  /** ISO 4217, herdada da conta em que o cartão liquida. */
+  currency?: string | null;
   available_limit: number | null;
   /** `null` só quando não dá para dizer a moeda do cartão (conta de liquidação
    *  ausente). Zero usado é um FATO e chega como `0`. */

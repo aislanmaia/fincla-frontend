@@ -57,7 +57,7 @@ function startOfLocalDay(ref) {
   return new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
 }
 
-function closingDayForInvoiceAnchor(card) {
+export function closingDayForInvoiceAnchor(card) {
   const c = card?.closing_day;
   if (c != null && Number.isFinite(Number(c))) return Number(c);
   const d = card?.due_day;
@@ -70,7 +70,7 @@ function daysInCalendarMonth(year, month) {
 }
 
 /** Ano/mês da fatura aberta pelo calendário de fechamento (dia no `closingDayRaw`). */
-function yearMonthOfOpenInvoiceByClosingDay(refDate, closingDayRaw) {
+export function yearMonthOfOpenInvoiceByClosingDay(refDate, closingDayRaw) {
   const closingDay = Math.min(Math.max(1, Number(closingDayRaw) || 1), 31);
   const ty = refDate.getFullYear();
   const tm0 = refDate.getMonth();
@@ -678,6 +678,7 @@ export function mapCreditCardToUi({ card, currentInvoice, history, futureCommitm
     bandeira: card.brand,
     vencimento: card.due_day,
     fechamento: card.closing_day || 1,
+    closingDayEffective: closingDayForInvoiceAnchor(card),
     limite: card.credit_limit || 0,
     disponivel: card.available_limit ?? Math.max(0, (card.credit_limit || 0) - (card.used_limit || 0)),
     faturas,

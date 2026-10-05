@@ -21,6 +21,8 @@ export const FC = {
   CAL_HIDE: "fc_cal_hide", // tipos ocultos: "income" | "expense" | "income,expense"
   CAL_PAY: "fc_cal_pay", // formas de pagamento ocultas (csv)
   DATE: "fc_date", // "YYYY-MM-DD" — filtro de dia no /transactions
+  // Sem prefixo `fc_` de propósito: é o contrato público `/cards?view=classic` da tela anterior de Cartões.
+  VIEW: "view",
 };
 
 /** Valores de `fc_modal` (inglês, partilháveis). */
@@ -70,6 +72,7 @@ export function mergeNavSearch(previous, _targetSegment, opts = {}) {
   delete next[FC.MODAL];
   delete next[FC.TX];
   delete next[FC.CARD];
+  delete next[FC.VIEW];
 
   if (opts.filterCat != null && String(opts.filterCat).trim() !== "") {
     next[FC.CATEGORY] = String(opts.filterCat).trim();

@@ -19,6 +19,11 @@ import {
   PlanningTab,
   RecurringTab,
 } from "../features/creditCards/CartoesTabs.jsx";
+import {
+  computeInstallmentsExposure,
+  computeSpendProjection,
+  computeUsagePercent,
+} from "../features/creditCards/cardKpis.js";
 import { shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { FC } from "../routing/searchContract.js";
 import {
@@ -255,7 +260,7 @@ export const CartoesPage = ({
   // mas continua aberta de verdade e precisa poder ser paga navegando até ela.
   const canMarkPaid     = !isPaid && invoice?.status === "open";
 
-  const usagePercent = card ? safe(card.limite - card.disponivel, card.limite) : 0;
+  const usagePercent = computeUsagePercent(card);
   const usageColor   = usagePercent >= 90 ? T.red : usagePercent >= 70 ? T.amber : T.green;
   const averageValue = invoices.length > 0 ? Math.round(invoices.reduce((s,f) => s+f.val, 0) / invoices.length) : 0;
   const diffPercent  = previousInvoice && previousInvoice.val > 0
@@ -363,13 +368,10 @@ export const CartoesPage = ({
   // Total comprometido em parcelas futuras (LÍQUIDO — descontando estornos).
   // Usa `card.limite − card.disponivel` que reflete o `used_limit` do backend,
   // já calculado como (Σ parcelas futuras − Σ estornos futuros), clamp em 0.
-  const grossInstallmentsTotal = cardInstallments.reduce((s,p) => s+p.vParcela*(p.total-p.pago), 0);
-  const totalRefunds           = cardInstallments.reduce(
-    (s,p) => s + (p.refundsSummary ? Number(p.refundsSummary.totalValue) : 0),
-    0,
-  );
-  const totalInstallments       = Math.max(0, grossInstallmentsTotal - totalRefunds);
-  const hasRefundedInstallments = totalRefunds > 0;
+  const installmentsExposure   = computeInstallmentsExposure(cardInstallments);
+  const totalRefunds            = installmentsExposure.refunds;
+  const totalInstallments       = installmentsExposure.net;
+  const hasRefundedInstallments = installmentsExposure.hasRefunds;
 
   const categoryColor = (it) => it.catColor || CAT_COLORS_CARD[it.cat] || T.inkMid;
 
@@ -382,17 +384,8 @@ export const CartoesPage = ({
     return Array.from(m.entries());
   }, [displayItems]);
 
-  const TODAY_DAY = 18;
-  const projection =
-    card && isCurrent && TODAY_DAY > 0 && ((invoice?.val || 0) || 0) > 0
-      ? Math.round(
-          (((invoice?.val || 0) || 0) / TODAY_DAY) *
-            (card.vencimento > card.fechamento
-              ? card.vencimento - card.fechamento
-              : 30 + card.vencimento - card.fechamento),
-        )
-      : 0;
-  const projectionRisk = (card?.disponivel||0) > 0 && projection > (card.disponivel + ((invoice?.val||0)||0));
+  const projection = computeSpendProjection({ card, invoice, isCurrent });
+  const projectionRisk = (card?.disponivel||0) > 0 && projection != null && projection > (card.disponivel + ((invoice?.val||0)||0));
 
   const filtered = useMemo(() => {
     let items = displayItems;
