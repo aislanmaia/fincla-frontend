@@ -40,6 +40,10 @@ export interface EmbeddedSubscription {
   sponsor_organization_id?: string | null;
   is_entitled?: boolean;
   current_period_end?: string | null;
+  cancel_at_period_end?: boolean;
+  beta_enabled?: boolean;
+  courtesy_plan?: string | null;
+  courtesy_until?: string | null;
   /** Slug do plano (``essential``, ``pro``, ``beta``, …). */
   plan: string;
   status:
@@ -110,6 +114,10 @@ export type BillingCycle = 'monthly' | 'yearly';
 
 export interface Subscription {
   is_entitled?: boolean;
+  beta_enabled?: boolean;
+  courtesy_plan?: string | null;
+  courtesy_until?: string | null;
+  billed_plan?: string;
   max_organizations?: number;
   max_users_per_org?: number;
   checkout_selection?: CheckoutQuote["selection"] | null;

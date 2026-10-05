@@ -6,6 +6,22 @@ import { checkoutFieldErrors } from "./CheckoutPayment.jsx";
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
+it("shows coupon duration and ordinary renewal price from the server quote", async () => {
+  const fetch = vi.fn(async (_url, options) => {
+    const selection = JSON.parse(options.body);
+    return { ok: true, json: async () => ({
+      selection, total_cents: 2691, regular_total_cents: 2990,
+      coupon_code: "PRIMEIRA10", coupon_percent_off: 10, discounted_charges: 1,
+      capacity: null, currency: "BRL",
+    }) };
+  });
+  vi.stubGlobal("fetch", fetch);
+  render(<CheckoutPage search="?persona=personal&billing_cycle=monthly&coupon_code=PRIMEIRA10" />);
+  expect(await screen.findByText(/Cupom PRIMEIRA10 aplicado/)).toBeInTheDocument();
+  expect(screen.getByText(/Depois,.*29,90 por mês/)).toBeInTheDocument();
+  expect(JSON.parse(fetch.mock.calls[0][1].body).coupon_code).toBe("PRIMEIRA10");
+});
+
 it("preserves the consultant selection and displays the server's annual quote", async () => {
   const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({
     selection: { persona: "consultant", billing_cycle: "yearly", mode: "package", package_size: 25 },
@@ -269,6 +285,34 @@ it("offers renewal verification and billing for a historical active attempt with
   expect(screen.getByRole("button",{name:"Consultar faturas"})).toBeTruthy();
   expect(screen.getByRole("button",{name:"Cancelar assinatura"})).toBeTruthy();
   expect(screen.queryByLabelText("Número do cartão")).toBeNull();
+});
+
+it("lets a cancelled subscriber choose a new cycle and enter a card", async () => {
+  const { fireEvent } = await import("@testing-library/react");
+  const oldQuote = { selection: { persona: "personal", billing_cycle: "monthly" }, total_cents: 2990, capacity: null };
+  const fetch = vi.fn(async (url, options) => ({ ok: true, json: async () => {
+    if (url.includes("checkout/current")) return { id: "old", status: "cancelled", has_access: false, quote: oldQuote };
+    const selection = JSON.parse(options.body);
+    return { selection, total_cents: selection.billing_cycle === "yearly" ? 29900 : 2990, capacity: null };
+  } }));
+  vi.stubGlobal("fetch", fetch);
+  render(<CheckoutPage search="" session={{ isAuthenticated: true, user: { email: "maria@example.com", subscription: { status: "cancelled", is_entitled: false, billing_cycle: "monthly", checkout_selection: oldQuote.selection } }, signOut: vi.fn() }} />);
+  expect(await screen.findByRole("heading", { name: "Reative sua assinatura" })).toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("radio", { name: /Anual/ }));
+  expect(await screen.findByLabelText("Número do cartão")).toBeInTheDocument();
+  expect(fetch.mock.calls.some(([url, options]) => url.includes("checkout-quote") && JSON.parse(options.body).billing_cycle === "yearly")).toBe(true);
+  expect(screen.queryByText(/Entre em contato com o suporte para uma nova contratação/)).toBeNull();
+});
+
+it("starts an unpaid account without a checkout attempt at plan selection", async () => {
+  vi.stubGlobal("fetch", vi.fn(async (url, options) => ({ ok: true, json: async () => {
+    if (url.includes("checkout/current")) return null;
+    const selection = JSON.parse(options.body);
+    return { selection, total_cents: selection.billing_cycle === "yearly" ? 29900 : 2990, capacity: null };
+  } })));
+  render(<CheckoutPage search="" session={{ isAuthenticated: true, user: { email: "maria@example.com", subscription: { status: "pending_payment", is_entitled: false, billing_cycle: "monthly" } }, signOut: vi.fn() }} />);
+  expect(await screen.findByRole("radio", { name: /Anual/ })).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Pague com cartão" })).toBeNull();
 });
 
 it("requires a refreshed offer and new consent when the server rejects an outdated catalog", async () => {

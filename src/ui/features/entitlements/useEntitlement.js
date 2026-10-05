@@ -21,7 +21,8 @@ export function useEntitlement(featureKey, user) {
   if (!featureKey) return false;
   const subscription = user?.subscription;
   if (!subscription) return false;
-  if (subscription.status !== "active") return false;
+  if (subscription.is_entitled === false) return false;
+  if (subscription.status !== "active" && subscription.is_entitled !== true) return false;
   const features = subscription.features;
   if (!Array.isArray(features)) return false;
   return features.includes(featureKey);

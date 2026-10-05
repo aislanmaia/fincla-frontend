@@ -19,7 +19,7 @@ function fmtDate(iso) {
  */
 export function CancelSubscriptionDialog({
   effectiveUntil,
-  reactivationHint = "Você pode reativar a qualquer momento escolhendo um plano novamente.",
+  reactivationHint = "Quando o período pago terminar, você poderá contratar novamente usando esta conta.",
   onClose,
   onCancelled,
 }) {

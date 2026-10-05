@@ -8,6 +8,8 @@ import { ConsultantTopbar } from "./ConsultantTopbar.jsx";
 import { ConsultantAddClientWizard } from "./ConsultantAddClientWizard.jsx";
 import { ConsultantAddClientProvider } from "./ConsultantAddClientContext.jsx";
 import { getConsultantQuota } from "../../../api/consultant";
+import { AccessNotice } from "../subscription/AccessNotice.jsx";
+import { expiringAccess } from "../subscription/accessState.js";
 
 /**
  * Shell da área do Consultor (A0.3) — layout próprio (independente do app do
@@ -86,6 +88,7 @@ export function ConsultantShell() {
             cliente, tabela gerada pela IA) continua alcançável por rolagem
             lateral em vez de ser cortado sem saída. */}
         <div className="fincla-scroll" style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+          {expiringAccess(user?.subscription) && <div style={{ padding: "14px 20px 0" }}><AccessNotice user={user} /></div>}
           <Outlet />
         </div>
       </div>

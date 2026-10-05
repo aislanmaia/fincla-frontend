@@ -22,6 +22,8 @@ import { AcceptInvitationPage } from "./features/auth/AcceptInvitationPage.jsx";
 import { LoginPage } from "./features/auth/LoginPage.jsx";
 import { CheckoutPage } from "./pages/CheckoutPage.jsx";
 import { ConsultantCheckoutPage } from "./pages/ConsultantCheckoutPage.jsx";
+import { AccessPage } from "./pages/AccessPage.jsx";
+import { AccessNotice } from "./features/subscription/AccessNotice.jsx";
 import { SignupChoicePage } from "./pages/SignupChoicePage.jsx";
 import { PasswordResetPage } from "./features/auth/PasswordResetPage.jsx";
 import { validateResetToken } from "../api/auth";
@@ -260,6 +262,18 @@ export default function App() {
 
   useAuthRedirects({ session, pathname, searchStr, showOnboarding });
 
+  useEffect(() => {
+    const subscription = session.user?.subscription;
+    const locked = session.isAuthenticated && subscription?.gateway_provider !== "sponsored" &&
+      (subscription?.is_entitled === false || (subscription?.status === "pending_payment" && subscription?.is_entitled !== true));
+    if (locked && !["/access", "/checkout", "/consultant-checkout"].includes(pathname)) {
+      navigate({ to: "/access", replace: true });
+    }
+    if (locked && subscription?.status === "past_due" && ["/checkout", "/consultant-checkout"].includes(pathname)) {
+      navigate({ to: "/access", replace: true });
+    }
+  }, [session.isAuthenticated, session.user?.subscription, pathname, navigate]);
+
   // Área do Consultor: usuário autenticado sem perfil de consultor é mandado de volta ao app.
   useEffect(() => {
     if (session.isAuthenticated && consultantAreaDecision(pathname, session.user) === "redirect") {
@@ -459,6 +473,8 @@ export default function App() {
   if (session.isAuthenticated && session.user?.subscription?.gateway_provider === "sponsored" && (session.user.subscription.is_entitled === false || pathname === "/checkout")) return <SponsoredAccessPage session={session} />;
 
   if (pathname === "/signup") return <SignupChoicePage />;
+  if (session.isAuthenticated && pathname === "/access") return <AccessPage session={session} />;
+  if (session.isAuthenticated && session.user?.subscription?.status === "past_due" && ["/checkout", "/consultant-checkout"].includes(pathname)) return <AccessPage session={session} />;
   if (pathname === "/consultant-checkout") return <ConsultantCheckoutPage session={session} />;
   if (pathname === "/checkout") return <CheckoutPage search={searchStr} session={session} />;
 
@@ -483,7 +499,7 @@ export default function App() {
     </>
   );
 
-  if (session.isAuthenticated && (session.user?.subscription?.status === "pending_payment" || session.user?.subscription?.is_entitled === false)) return session.user?.subscription?.checkout_selection?.persona === "consultant" ? <ConsultantCheckoutPage session={session} /> : <CheckoutPage search="" session={session} />;
+  if (session.isAuthenticated && ((session.user?.subscription?.status === "pending_payment" && session.user?.subscription?.is_entitled !== true) || session.user?.subscription?.is_entitled === false)) return <AccessPage session={session} />;
 
   if (session.isAuthenticated && (session.onboardingRequired || showOnboarding)) return (
     <OnboardingFlow
@@ -596,6 +612,7 @@ export default function App() {
           user={session.user}
         />
 
+
         {/* Mood top border on dashboard */}
         {activeSegment === "dashboard" && mood.topBorder !== "transparent" && (
           <div style={{ height:2, background:mood.topBorder, transition:"background 0.18s", flexShrink:0 }} />
@@ -627,6 +644,7 @@ export default function App() {
             padding: selfScrollingScreen
               ? "14px 14px 0"
               : isMobile ? "14px 14px 40px" : "20px 28px 40px" }}>
+          <AccessNotice user={session.user} />
           {activeSegment === "dashboard" && onboardingWarnings.length > 0 && (
             <div style={{ display:"flex", alignItems:"flex-start", gap:10, background:T.amberLight, border:`1px solid ${T.amberBorder}`, borderRadius:11, padding:"12px 14px", marginBottom:14 }}>
               <span style={{ color:T.amber, flexShrink:0, lineHeight:1.5 }}>⚠</span>

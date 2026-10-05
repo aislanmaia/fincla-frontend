@@ -1,0 +1,130 @@
+import { useEffect, useRef, useState } from "react";
+import { ArrowRight, Building2, CreditCard, LayoutDashboard, LockKeyhole, LogOut, ShieldCheck, TicketPercent, UsersRound } from "lucide-react";
+import { getAdminMe } from "../api/admin";
+import { login, logout } from "../api/auth";
+import { handleApiError } from "../api/client";
+import { AdminDirectory } from "./AdminDirectory";
+import { AdminCoupons } from "./AdminCoupons";
+import { AdminDashboard } from "./AdminDashboard";
+import "./admin.css";
+
+const ACCESS_DENIED = "Esta conta não tem acesso ao painel administrativo.";
+
+function accessError(error) {
+  if (error?.response?.status === 403) return ACCESS_DENIED;
+  return handleApiError(error);
+}
+
+export function AdminApp() {
+  const [identity, setIdentity] = useState(null);
+  const [checking, setChecking] = useState(Boolean(localStorage.getItem("auth_token")));
+  const [busy, setBusy] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [section, setSection] = useState("home");
+  const [directoryAction, setDirectoryAction] = useState("");
+  const contentRef = useRef(null);
+
+  function navigate(nextSection, action = "") {
+    if (contentRef.current) contentRef.current.scrollTop = 0;
+    setDirectoryAction(action);
+    setSection(nextSection);
+  }
+
+  useEffect(() => {
+    if (!localStorage.getItem("auth_token")) return;
+    let active = true;
+    getAdminMe()
+      .then((admin) => { if (active) setIdentity(admin); })
+      .catch((nextError) => {
+        if (!active) return;
+        logout();
+        setError(accessError(nextError));
+      })
+      .finally(() => { if (active) setChecking(false); });
+    return () => { active = false; };
+  }, []);
+
+  async function submit(event) {
+    event.preventDefault();
+    setError("");
+    setBusy(true);
+    try {
+      await login(email.trim(), password);
+      const admin = await getAdminMe();
+      setIdentity(admin);
+      setPassword("");
+    } catch (nextError) {
+      logout();
+      setError(accessError(nextError));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function signOut() {
+    logout();
+    setIdentity(null);
+    setPassword("");
+    setError("");
+    navigate("home");
+  }
+
+  if (checking) {
+    return <main className="admin-loading" role="status">Verificando acesso administrativo…</main>;
+  }
+
+  if (!identity) {
+    return (
+      <main className="admin-login">
+        <section className="admin-login-story" aria-label="Fincla Administração">
+          <div className="admin-brand"><img src="/logo.png" alt="" /><span>fincla<span className="admin-brand-dot">.</span></span><small>ADMIN</small></div>
+          <div className="admin-login-story-copy">
+            <span className="admin-eyebrow">ESPAÇO DE OPERAÇÃO</span>
+            <h1>O cuidado com cada conta começa aqui.</h1>
+            <p>Uma visão central para acompanhar pessoas, organizações e acesso ao Fincla.</p>
+          </div>
+          <div className="admin-login-story-foot"><ShieldCheck size={18} aria-hidden="true" /> Acesso reservado à administração Fincla</div>
+        </section>
+        <section className="admin-login-form-area">
+          <div className="admin-login-form-wrap">
+            <div className="admin-login-mark"><LockKeyhole size={21} aria-hidden="true" /></div>
+            <span className="admin-eyebrow admin-eyebrow-dark">PAINEL ADMINISTRATIVO</span>
+            <h2>Entrar no painel</h2>
+            <p>Use suas credenciais do Fincla para continuar.</p>
+            <form onSubmit={submit}>
+              <label htmlFor="admin-email">E-mail</label>
+              <input id="admin-email" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required />
+              <label htmlFor="admin-password">Senha</label>
+              <input id="admin-password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+              {error && <div className="admin-error" role="alert">{error}</div>}
+              <button type="submit" disabled={busy}>{busy ? "Verificando…" : "Entrar no painel"}<ArrowRight size={17} aria-hidden="true" /></button>
+            </form>
+            <div className="admin-login-foot">Acesso protegido pela sua conta Fincla.</div>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <main className="admin-shell">
+      <aside className="admin-sidebar">
+        <div className="admin-brand"><img src="/logo.png" alt="" /><span>fincla<span className="admin-brand-dot">.</span></span><small>ADMIN</small></div>
+        <div className="admin-sidebar-section">ESPAÇO DE TRABALHO</div>
+        <nav className="admin-sidebar-nav" aria-label="Administração">
+          {[["home", "Visão geral"], ["users", "Contas"], ["organizations", "Organizações"], ["plans", "Planos"], ["coupons", "Cupons"]].map(([key, label]) => <button key={key} type="button" className={section === key ? "admin-sidebar-current" : ""} onClick={() => navigate(key)}>{section === key && <span className="admin-sidebar-current-mark" />}{label}</button>)}
+        </nav>
+        <div className="admin-sidebar-bottom"><span>ADMINISTRADOR FINCLA</span><strong>{identity.email}</strong><button type="button" onClick={signOut}><LogOut size={16} aria-hidden="true" /> Sair</button></div>
+      </aside>
+      <section className="admin-content" ref={contentRef}>
+        <header className="admin-topbar"><span>Administração <span className="admin-breadcrumb-slash">/</span> {section === "home" ? "Visão geral" : section === "users" ? "Contas" : section === "organizations" ? "Organizações" : section === "coupons" ? "Cupons" : "Planos"}</span><span className="admin-topbar-secure"><ShieldCheck size={16} aria-hidden="true" /> Sessão protegida</span><button type="button" className="admin-mobile-signout" onClick={signOut}><LogOut size={16} aria-hidden="true" /> Sair</button></header>
+        {section === "home" ? <AdminDashboard onNavigate={navigate} /> : section === "coupons" ? <AdminCoupons /> : <AdminDirectory section={section} initialAction={directoryAction} />}
+      </section>
+      <nav className="admin-mobile-nav" aria-label="Administração">
+        {[["home", "Início", LayoutDashboard], ["users", "Contas", UsersRound], ["organizations", "Organizações", Building2], ["plans", "Planos", CreditCard], ["coupons", "Cupons", TicketPercent]].map(([key, label, Icon]) => <button key={key} type="button" aria-current={section === key ? "page" : undefined} onClick={() => navigate(key)}><Icon size={19} aria-hidden="true" /><span>{label}</span></button>)}
+      </nav>
+    </main>
+  );
+}

@@ -320,6 +320,8 @@ export function BillingPanel({ SectionCard, SectionHeader, dataMode = "live" }) 
   }
 
   const { plan, status, cancel_at_period_end: cancelling } = subscription;
+  const courtesyActive = subscription.courtesy_plan && subscription.courtesy_until && new Date(subscription.courtesy_until) > new Date();
+  const grantActive = subscription.beta_enabled || courtesyActive;
   const monthlyPrice =
     plan.monthly_price_cents > 0
       ? `${fmtBRL(plan.monthly_price_cents)}/mês`
@@ -368,7 +370,7 @@ export function BillingPanel({ SectionCard, SectionHeader, dataMode = "live" }) 
                 {plan.description || monthlyPrice}
               </div>
             </div>
-            <StatusBadge status={status} />
+            {grantActive ? <span style={{ ...G, color: T.green, fontSize: 12, fontWeight: 700 }}>{subscription.beta_enabled ? "Beta ativo" : "Cortesia ativa"}</span> : <StatusBadge status={status} />}
           </div>
 
           <div
@@ -440,7 +442,7 @@ export function BillingPanel({ SectionCard, SectionHeader, dataMode = "live" }) 
         >
           <div>
             <div style={{ ...G, fontSize: 13, color: T.inkMid }}>
-              {plan.monthly_price_cents > 0
+              {grantActive ? "Acesso concedido" : plan.monthly_price_cents > 0
                 ? "Próxima cobrança"
                 : "Cobrança"}
             </div>
@@ -452,7 +454,7 @@ export function BillingPanel({ SectionCard, SectionHeader, dataMode = "live" }) 
                 color: T.ink,
               }}
             >
-              {plan.monthly_price_cents > 0
+              {subscription.beta_enabled ? "Sem prazo ou cobrança; gerenciado pelo Fincla" : courtesyActive ? `Sem cobrança até ${fmtDate(subscription.courtesy_until)}` : plan.monthly_price_cents > 0
                 ? subscription.current_period_end
                   ? `${fmtBRL(plan.monthly_price_cents)} em ${fmtDate(
                       subscription.current_period_end,
@@ -461,7 +463,7 @@ export function BillingPanel({ SectionCard, SectionHeader, dataMode = "live" }) 
                 : monthlyPrice}
             </div>
           </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {!grantActive && <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button
               type="button"
               onClick={() => setComparingPlans(true)}
@@ -498,14 +500,14 @@ export function BillingPanel({ SectionCard, SectionHeader, dataMode = "live" }) 
                 Cancelar assinatura
               </button>
             )}
-          </div>
+          </div>}
         </div>
       </SectionCard>
 
-      <SectionCard>
+      {!grantActive && <SectionCard>
         <SectionHeader icon={<CreditCard size={16} color={T.purple} />} title="Alteração do anual" sub="Calcule e confirme uma solicitação" />
         <div style={{ padding: "0 24px" }}><AnnualSettlementPreview selection={subscription.checkout_selection} /></div>
-      </SectionCard>
+      </SectionCard>}
 
       <SectionCard>
         <SectionHeader

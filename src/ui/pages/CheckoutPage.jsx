@@ -14,7 +14,9 @@ export function CheckoutPage({ search = window.location.search, session }) {
   const [state, setState] = useState({ status: "loading" });
   const [counterpartQuote, setCounterpartQuote] = useState(null);
   const [attempt, setAttempt] = useState(0);
+  const [existingAttempt, setExistingAttempt] = useState(null);
   const [selectionSearch, setSelectionSearch] = useState(search);
+  const [couponInput, setCouponInput] = useState(() => new URLSearchParams(search).get("coupon_code") || "");
   const [activeSection, setActiveSection] = useState("plan");
   const [accountVisited, setAccountVisited] = useState(false);
   const [accountDetails, setAccountDetails] = useState(null);
@@ -31,6 +33,14 @@ export function CheckoutPage({ search = window.location.search, session }) {
   const cycle = session?.user?.subscription?.billing_cycle || "monthly";
   useEffect(() => setSelectionSearch(search), [search]);
   useEffect(() => {
+    if (!session?.isAuthenticated) return;
+    const subscription = session.user?.subscription;
+    const returning = ["cancelled", "expired"].includes(subscription?.status) ||
+      (recovery && persona === "personal" && subscription?.status === "pending_payment") ||
+      Boolean(subscription?.courtesy_until && new Date(subscription.courtesy_until) <= new Date());
+    setActiveSection(returning ? "plan" : "payment");
+  }, [recovery, persona, session?.isAuthenticated, session?.user?.subscription?.status, session?.user?.subscription?.courtesy_until]);
+  useEffect(() => {
     const sync = () => {
       setWide(window.innerWidth >= 820);
       setCompactViewport(window.innerHeight < 1000);
@@ -39,7 +49,6 @@ export function CheckoutPage({ search = window.location.search, session }) {
     window.addEventListener("resize", sync);
     return () => window.removeEventListener("resize", sync);
   }, []);
-  useEffect(() => { if (session?.isAuthenticated) setActiveSection("payment"); }, [session?.isAuthenticated]);
   useEffect(() => {
     if (recovery && session?.isBootstrapping) return;
     const controller = new AbortController();
@@ -54,7 +63,11 @@ export function CheckoutPage({ search = window.location.search, session }) {
       if (!recovery) return quoteCheckout(effectiveSearch, controller.signal);
       if (session?.isAuthenticated) {
         const existing = await currentCheckout();
-        if (existing) return existing.quote;
+        setExistingAttempt(existing);
+        if (existing && !["cancelled", "declined"].includes(existing.status)) {
+          setActiveSection("payment");
+          return existing.quote;
+        }
       }
       const selection = JSON.parse(savedSelection);
       if (!selection && persona === "consultant") {
@@ -118,8 +131,19 @@ export function CheckoutPage({ search = window.location.search, session }) {
   const annualFreeMonths = annualSavingsCents != null && monthlyTotalCents
     ? Math.floor(annualSavingsCents / monthlyTotalCents)
     : null;
-  const canChangeCycle = !session?.isAuthenticated && state.status !== "loading";
+  const canChangeCycle = (!session?.isAuthenticated || !existingAttempt || ["cancelled", "declined"].includes(existingAttempt.status)) && state.status !== "loading";
+  const applyCoupon = useCallback((event) => {
+    event.preventDefault();
+    const params = new URLSearchParams(effectiveSearch || "");
+    if (couponInput.trim()) params.set("coupon_code", couponInput.trim().toUpperCase());
+    else params.delete("coupon_code");
+    const nextSearch = `?${params.toString()}`;
+    window.history.replaceState({}, "", `${window.location.pathname}${nextSearch}`);
+    setSelectionSearch(nextSearch);
+  }, [couponInput, effectiveSearch]);
   const planName = quote?.selection.persona === "consultant" ? "Fincla Consultor" : "Fincla Pessoal";
+  const reactivating = ["cancelled", "expired"].includes(session?.user?.subscription?.status);
+  const courtesyEnded = Boolean(session?.user?.subscription?.courtesy_plan && session?.user?.subscription?.courtesy_until && new Date(session.user.subscription.courtesy_until) <= new Date());
   const cycleName = quote?.selection.billing_cycle === "yearly" ? "Anual" : "Mensal";
   const changeInstallments = useCallback((installments) => {
     if (!quote || installments === quote.selection.installments) return;
@@ -161,14 +185,23 @@ export function CheckoutPage({ search = window.location.search, session }) {
           </header>
           <div style={{ maxWidth: 530, padding: wide ? (compactViewport ? "14px 0 12px" : "26px 0 18px") : "24px 0 20px" }}>
             <p style={{ color: T.green, fontSize: 12, fontWeight: 750, letterSpacing: ".08em", margin: 0 }}>ASSINATURA</p>
-            <h1 style={{ fontSize: wide ? (compactViewport ? 26 : 30) : 27, letterSpacing: "-.035em", lineHeight: 1.08, margin: "8px 0 0" }}>Conclua sua contratação</h1>
-            <p style={{ color: T.inkMid, lineHeight: 1.55, margin: "8px 0 0", fontSize: wide ? (compactViewport ? 14 : undefined) : 14 }}>Escolha o ciclo, informe seus dados e faça o pagamento com segurança.</p>
+            <h1 style={{ fontSize: wide ? (compactViewport ? 26 : 30) : 27, letterSpacing: "-.035em", lineHeight: 1.08, margin: "8px 0 0" }}>{reactivating ? "Reative sua assinatura" : courtesyEnded ? "Continue após sua cortesia" : "Conclua sua contratação"}</h1>
+            <p style={{ color: T.inkMid, lineHeight: 1.55, margin: "8px 0 0", fontSize: wide ? (compactViewport ? 14 : undefined) : 14 }}>{reactivating ? "Escolha o ciclo e confirme uma nova assinatura para esta conta." : courtesyEnded ? "Sua cortesia terminou sem cobrança automática. Escolha um plano para continuar." : "Escolha o ciclo, informe seus dados e faça o pagamento com segurança."}</p>
+            {session?.isAuthenticated && <a href="/access" style={{ display: "inline-block", marginTop: 10, color: T.green, fontSize: 12, fontWeight: 750 }}>← Voltar ao plano e acesso</a>}
           </div>
         </div>
         {state.status === "loading" && !quote && <p role="status" style={{ color: T.inkMid, fontSize: 13, margin: "18px 0 0" }}>Consultando sua oferta…</p>}
         {state.status === "error" && <Card style={{ padding: 24 }}>
           <p role="alert">{state.message}</p>
           <Btn onClick={() => setAttempt((value) => value + 1)}>Tentar novamente</Btn>
+          {new URLSearchParams(effectiveSearch).has("coupon_code") && <Btn onClick={() => {
+            const params = new URLSearchParams(effectiveSearch);
+            params.delete("coupon_code");
+            setCouponInput("");
+            const nextSearch = `?${params.toString()}`;
+            window.history.replaceState({}, "", `${window.location.pathname}${nextSearch}`);
+            setSelectionSearch(nextSearch);
+          }}>Remover cupom</Btn>}
           {recovery && persona === "consultant" && <p><a href="https://fincla.com/para-consultores">Escolher vagas no site</a></p>}
           {session?.isAuthenticated && <Btn onClick={session.signOut}>Sair da conta</Btn>}
         </Card>}
@@ -177,6 +210,14 @@ export function CheckoutPage({ search = window.location.search, session }) {
             <CheckoutPanel mobile={!wide} scrollable={wide && compactViewport} number="1" title="Plano e ciclo" detail="Escolha como prefere pagar" summary={`${planName} · ${cycleName} · ${money(quote.total_cents)}`} open={activeSection === "plan"} complete={accountVisited || Boolean(accountDetails) || session?.isAuthenticated} keepMounted onOpen={() => toggleSection("plan")}>
               <BillingCyclePicker value={quote.selection.billing_cycle} monthlyTotalCents={monthlyTotalCents} annualTotalCents={annualTotalCents} annualFreeMonths={annualFreeMonths} disabled={!canChangeCycle} onChange={changeCycle} />
               {quote.selection.persona === "personal" && quote.selection.billing_cycle === "yearly" && <InstallmentPicker value={quote.selection.installments || 1} quote={quote} disabled={!canChangeCycle} onChange={changeInstallments} />}
+              <form onSubmit={applyCoupon} style={{ display: "grid", gap: 8, margin: "0 0 24px" }}>
+                <label htmlFor="checkout-coupon" style={{ color: T.ink, fontSize: 13, fontWeight: 750 }}>Cupom de desconto</label>
+                <div style={{ display: "flex", gap: 8, alignItems: "stretch" }}>
+                  <input id="checkout-coupon" value={couponInput} onChange={(event) => setCouponInput(event.target.value)} maxLength={40} placeholder="Digite seu código" autoComplete="off" style={{ ...G, flex: 1, minWidth: 0, boxSizing: "border-box", padding: "11px 14px", border: `1px solid ${T.border}`, borderRadius: 10, background: "#FCFCFB", color: T.ink, fontSize: 14, outlineColor: T.green }} />
+                  <Btn type="submit" variant="dark" disabled={state.status === "loading"} style={{ minHeight: 44, padding: "10px 18px", fontSize: 13, fontWeight: 750 }}>Aplicar</Btn>
+                </div>
+                {quote.coupon_code && <p role="status" style={{ margin: 0, color: T.green, fontSize: 12, lineHeight: 1.5 }}>Cupom {quote.coupon_code} aplicado: {quote.coupon_percent_off}% de desconto por {quote.discounted_charges} {quote.discounted_charges === 1 ? "cobrança" : "cobranças"}.</p>}
+              </form>
               {quote.capacity != null && <p style={{ color: T.inkMid, lineHeight: 1.6, margin: "0 0 20px", padding: "12px 14px", background: "#F3F7F0", borderRadius: 10 }}>A capacidade é paga antecipadamente, inclusive vagas vazias. Você pode preenchê-las e reutilizá-las durante o período contratado.</p>}
               <div style={{ marginBottom: 18 }}><Btn variant="dark" full onClick={() => { setAccountVisited(true); setActiveSection("account"); }}>Continuar</Btn></div>
             </CheckoutPanel>
@@ -214,7 +255,8 @@ function OrderSummary({ quote, annualSavingsCents, annualFreeMonths, constrained
   const benefits = quote.selection.persona === "personal" ? ["Assistente no WhatsApp para registro rápido de receitas e despesas, com áudio", "Lançamentos, recorrências e parcelamentos ilimitados", "Contas, saldo e cartões com gerenciamento e análise de faturas", "Relatórios e acompanhamento do fluxo de gastos", "Orçamentos, metas e projetos de vida", "Exportação dos seus dados quando quiser"] : ["Gestão da sua carteira de clientes", "Vagas contratadas para usar durante o período", "Acompanhamento financeiro por cliente", "Renovação e ajuste pelo seu perfil", "Suporte para sua operação"];
   return <aside style={{ order: compact ? 0 : 1, alignSelf: "start", height: constrained ? "100%" : "auto", minHeight: 0, overflowY: constrained ? "auto" : "visible", paddingRight: constrained ? 2 : 0 }}><Card style={{ overflow: "hidden", background: "#24201A", color: "#FFFDF8", border: 0, boxShadow: compact ? "0 8px 22px rgba(38, 31, 22, .12)" : undefined }}>
     <div style={{ padding: compact ? "16px" : "24px" }}><div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}><div><p style={{ color: "#C9BDAF", fontSize: 11, fontWeight: 750, letterSpacing: ".1em", margin: 0 }}>SEU PLANO</p><div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 5 }}><h2 style={{ margin: 0, fontSize: compact ? 17 : 23 }}>{planName}</h2><span style={{ padding: "4px 8px", borderRadius: 99, background: "#4B443C", color: "#F0E6D9", fontSize: 11, fontWeight: 750, textTransform: "capitalize" }}>{cycle}</span></div></div><div style={{ textAlign: "right" }}><p style={{ color: "#C9BDAF", fontSize: 11, margin: 0 }}>Hoje</p><p aria-busy={refreshing || undefined} aria-label={refreshing ? "Atualizando valor" : undefined} style={{ ...NUM, fontSize: compact ? 23 : 34, fontWeight: 750, letterSpacing: "-.04em", margin: "2px 0 0", minHeight: compact ? 28 : 41 }}>{refreshing ? <span aria-hidden="true" style={{ display: "block", width: compact ? 82 : "68%", height: compact ? 24 : 34, borderRadius: 7, background: "#51483D" }} /> : money(quote.total_cents)}</p></div></div>{quote.capacity != null && <p style={{ color: "#D6CCC0", fontSize: 13, margin: "8px 0 0" }}>{quote.capacity} vagas contratadas</p>}{!compact && <div style={{ borderTop: "1px solid #4A433B", marginTop: 22, paddingTop: 18 }}><p style={{ color: "#C9BDAF", fontSize: 12, margin: 0 }}>{annual ? twelveInstallments ? <><strong style={{ color: "#FFFDF8" }}>12x de {money(monthlyEquivalent)}</strong> · renovação anual.</> : <><strong style={{ color: "#FFFDF8" }}>{money(monthlyEquivalent)}/mês</strong> equivalente · renova a cada 12 meses.</> : "Cobrança mensal recorrente no cartão."}</p>{" "}</div>}</div>
-    {annual && annualSavingsCents != null && annualSavingsCents > 0 && <div style={{ padding: "10px 24px", background: "#DFF0D8", color: "#17653A", fontSize: 12, fontWeight: 750 }}>✓ Você economiza {money(annualSavingsCents)}{annualFreeMonths ? ` (${annualFreeMonths} ${annualFreeMonths === 1 ? "mês grátis" : "meses grátis"})` : ""}</div>}
+    {quote.coupon_code && <div style={{ padding: "13px 24px", background: "#DFF0D8", color: "#17653A", fontSize: 12, lineHeight: 1.5 }}><strong>{quote.coupon_percent_off}% com {quote.coupon_code}</strong> por {quote.discounted_charges} {quote.discounted_charges === 1 ? "cobrança" : "cobranças"}. Depois, {money(quote.regular_total_cents)} por {cycle === "anual" ? "ano" : "mês"}. {twelveInstallments && "As 12 parcelas compõem uma única cobrança anual."}</div>}
+    {!quote.coupon_code && annual && annualSavingsCents != null && annualSavingsCents > 0 && <div style={{ padding: "10px 24px", background: "#DFF0D8", color: "#17653A", fontSize: 12, fontWeight: 750 }}>✓ Você economiza {money(annualSavingsCents)}{annualFreeMonths ? ` (${annualFreeMonths} ${annualFreeMonths === 1 ? "mês grátis" : "meses grátis"})` : ""}</div>}
     <div style={{ padding: compact ? "12px 16px" : "20px 24px", background: "#FFFDF8", color: T.ink }}>{compact ? <MobileIncludedBenefits benefits={benefits} /> : <><p style={{ fontSize: 11, color: T.inkGhost, fontWeight: 750, letterSpacing: ".08em", margin: 0 }}>INCLUSO NO SEU PLANO</p><ul style={{ display: "grid", gap: 10, padding: 0, margin: "16px 0 0", listStyle: "none", fontSize: 13, color: T.inkMid }}>{benefits.map((benefit) => <li key={benefit} style={{ display: "flex", gap: 9 }}><span aria-hidden="true" style={{ color: T.green, fontWeight: 800 }}>✓</span>{benefit}</li>)}</ul><p style={{ margin: "14px 0 0", fontSize: 12, color: T.inkMid }}>… e <a href="https://fincla.com/recursos" target="_blank" rel="noreferrer" style={{ color: T.green, fontWeight: 750 }}>muito mais</a>.</p><button type={readyToSubmit ? "submit" : "button"} form={readyToSubmit ? "checkout-payment-form" : undefined} disabled={!readyToSubmit} style={{ ...G, width: "100%", marginTop: 20, padding: "13px 16px", border: 0, borderRadius: 10, background: readyToSubmit ? T.green : "#D9DEDA", color: readyToSubmit ? "#fff" : "#7D8580", fontSize: 14, fontWeight: 750, cursor: readyToSubmit ? "pointer" : "not-allowed", boxShadow: readyToSubmit ? "0 7px 16px rgba(5, 150, 105, .20)" : "none" }}>{readyToSubmit ? `Assinar por ${money(quote.total_cents)}` : "Preencha os dados para continuar"} <span aria-hidden="true" style={{ marginLeft: 4 }}>→</span></button><div style={{ display: "grid", gap: 9, marginTop: 20, paddingTop: 18, borderTop: `1px solid ${T.border}`, color: T.inkMid, fontSize: 12, lineHeight: 1.4 }}><p style={{ margin: 0 }}>♧ <strong style={{ color: T.ink }}>Garantia de 7 dias.</strong> Reembolso integral se não fizer sentido para você.</p></div><div aria-label="Informações de segurança" style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "8px 14px", marginTop: 20, paddingTop: 16, borderTop: `1px solid ${T.border}`, color: T.inkGhost, fontSize: 11 }}><span>♙ Ambiente seguro</span><span>♢ Dados protegidos</span><span>✓ Compra garantida</span></div></>}</div>
   </Card></aside>;
 }

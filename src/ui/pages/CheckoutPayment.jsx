@@ -97,7 +97,7 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
     currentCheckout().then((value) => {
       if (!alive) return;
       setAttempt(value);
-      if (value && value.status !== "declined") onOffer(value.quote);
+      if (value && !["declined", "cancelled"].includes(value.status)) onOffer(value.quote);
     }).catch(() => { if (alive) setError("Não foi possível retomar a contratação. Verifique o pagamento antes de continuar."); })
       .finally(() => { if (alive) { setBusy(false); setInitialCheckoutLoaded(true); } });
     return () => { alive = false; };
@@ -109,7 +109,7 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
     try {
       const value = await currentCheckout();
       setAttempt(value);
-      if (value) onOffer(value.quote);
+      if (value && !["declined", "cancelled"].includes(value.status)) onOffer(value.quote);
     } catch { setError("Não foi possível confirmar agora. Tente verificar novamente."); }
     finally { setBusy(false); }
   }
@@ -256,9 +256,9 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
     {error && <p role="alert">{error}</p>}
     {busy && !attempt && !initialCheckoutLoaded ? <ConfirmationCard tone="waiting"><div style={{ display:"flex", alignItems:"center", gap:11 }}><span aria-hidden="true" style={{ flex:"0 0 auto", width:24, height:24, borderRadius:99, border:`3px solid ${T.border}`, borderTopColor:T.green, animation:"checkout-confirm-spin .8s linear infinite" }} /><div style={{ minWidth:0 }}><div style={{ color:T.green, fontSize:11, fontWeight:800, letterSpacing:".09em" }}>ASSINATURA</div><h2 id="checkout-payment-title" style={{ margin:"3px 0 0", fontSize:23 }}>Carregando sua contratação</h2></div></div></ConfirmationCard> : active ? <ConfirmationCard tone="success">
       <div aria-hidden="true" style={{ display:"grid", placeItems:"center", width:48, height:48, borderRadius:99, background:"#DCF5E8", color:T.green, fontSize:25, fontWeight:900, boxShadow:"inset 0 0 0 1px rgba(8,151,99,.12)" }}>✓</div>
-      <div><div style={{ color:T.green, fontSize:11, fontWeight:800, letterSpacing:".09em" }}>PAGAMENTO CONFIRMADO</div><h2 id="checkout-payment-title" style={{ margin:"4px 0 6px", fontSize:25 }}>Sua assinatura está ativa</h2><p style={{ margin:0, color:T.inkMid, lineHeight:1.55 }}>Tudo certo. Vamos abrir sua configuração inicial para deixar o Fincla pronto para você.</p></div>
+      <div><div style={{ color:T.green, fontSize:11, fontWeight:800, letterSpacing:".09em" }}>PAGAMENTO CONFIRMADO</div><h2 id="checkout-payment-title" style={{ margin:"4px 0 6px", fontSize:25 }}>Sua assinatura está ativa</h2><p style={{ margin:0, color:T.inkMid, lineHeight:1.55 }}>{session?.user?.onboarding_completed ? "Tudo certo. Vamos abrir sua conta Fincla." : "Tudo certo. Vamos abrir sua configuração inicial para deixar o Fincla pronto para você."}</p></div>
       <div style={{ display:"grid", gap:8, marginTop:4 }}><div style={{ display:"flex", justifyContent:"space-between", color:T.inkMid, fontSize:12 }}><span>Preparando seu início</span><strong style={{ color:T.ink }}>{redirectCountdown}s</strong></div><div aria-hidden="true" style={{ height:5, overflow:"hidden", borderRadius:99, background:"#E4EEE8" }}><div style={{ height:"100%", width:`${((4 - redirectCountdown) / 4) * 100}%`, minWidth: redirectCountdown < 4 ? 8 : 0, borderRadius:"inherit", background:T.green, transition:"width .45s ease" }} /></div></div>
-      <Btn variant="dark" full onClick={()=>window.location.assign("/")}>Abrir configuração inicial</Btn>
+      <Btn variant="dark" full onClick={()=>window.location.assign("/")}>{session?.user?.onboarding_completed ? "Abrir Fincla" : "Abrir configuração inicial"}</Btn>
     </ConfirmationCard> : awaitingConfirmation ? <ConfirmationCard tone="waiting">
       <div style={{ display:"flex", alignItems:"center", gap:11 }}><span aria-hidden="true" style={{ flex:"0 0 auto", width:26, height:26, borderRadius:99, border:`3px solid ${T.border}`, borderTopColor:T.green, animation:"checkout-confirm-spin .8s linear infinite" }} /><div style={{ minWidth:0 }}><div style={{ color:T.green, fontSize:11, fontWeight:800, letterSpacing:".09em" }}>PAGAMENTO ENVIADO</div><h2 id="checkout-payment-title" style={{ margin:"3px 0 0", fontSize:24 }}>Estamos confirmando seu pagamento</h2></div></div>
       <p style={{ margin:0, color:T.inkMid, lineHeight:1.55 }}>Isso costuma levar poucos segundos. Acompanhe esta tela: ela será atualizada automaticamente assim que o Asaas confirmar a cobrança.</p>
@@ -269,7 +269,7 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
       </div>
       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:12, color:T.inkMid, fontSize:12 }}><span>Demorou mais que o esperado?</span><button type="button" disabled={busy} onClick={check} style={{ appearance:"none", border:0, padding:0, background:"transparent", color:T.green, fontWeight:800, textDecoration:"underline", cursor:busy ? "wait" : "pointer" }}>Atualizar agora</button></div>
       {["pending_payment", "active"].includes(attempt.status) && <details style={{ color:T.inkMid, fontSize:12 }}><summary style={{ cursor:"pointer" }}>Gerenciar ou cancelar esta assinatura</summary><div style={{ display:"grid", gap:12, marginTop:12 }}><CheckoutBilling /><Btn disabled={busy} onClick={() => setShowCancel(true)}>Cancelar assinatura</Btn></div></details>}
-    </ConfirmationCard> : attempt?.status === "cancelled" ? <p>Assinatura cancelada. Entre em contato com o suporte para uma nova contratação.</p> : !awaitingConfirmation && !active && <>
+    </ConfirmationCard> : !awaitingConfirmation && !active && <>
       {attempt?.status === "declined" && !error && <p role="alert">Não foi possível concluir o pagamento. Confira os dados e tente novamente.</p>}
       <div style={{ marginBottom: 18 }}>{showStepLabel && <div style={{ color: T.inkGhost, fontSize: 11, fontWeight: 750, letterSpacing: ".08em" }}>ETAPA 3 DE 3</div>}<h2 id="checkout-payment-title" style={{ margin: showStepLabel ? "2px 0 0" : 0, fontSize: 24 }}>Pague com cartão</h2></div>
       <form ref={paymentForm} id="checkout-payment-form" key={formKey} noValidate onSubmit={pay} onInput={updateReadiness} onChange={updateReadiness} style={{display:"grid",gap:14}}>
@@ -287,12 +287,12 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
         <div style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "13px 14px", borderRadius: 10, background: "#F7E8E1", color: T.inkMid, fontSize: 12, lineHeight: 1.45 }}><span aria-hidden="true" style={{ display: "grid", placeItems: "center", flex: "0 0 auto", width: 24, height: 24, borderRadius: 99, background: "#E85D3B", color: "#fff", fontSize: 14 }}>▣</span><span>Conexão <strong>criptografada</strong>. Os dados do cartão são enviados com segurança para processar o pagamento e não ficam armazenados no Fincla.</span></div>
         <label style={{display:"flex",gap:10,alignItems:"flex-start",lineHeight:1.45,fontSize:12,color:T.inkMid}}><input type="checkbox" required name="terms" />Li e aceito os <a href="https://fincla.com/termos" target="_blank" rel="noreferrer">Termos de contratação</a>, versão {TERMS_VERSION}.</label>
         <label style={{display:"flex",gap:10,alignItems:"flex-start",lineHeight:1.45,fontSize:12,color:T.inkMid}}><input type="checkbox" required name="recurring" />{quote.selection.billing_cycle === "yearly" && (quote.selection.installments || 1) > 1 ? `Autorizo a cobrança das ${quote.selection.installments} parcelas deste período anual e a renovação automática anual. Posso cancelar a renovação no meu perfil.` : `Autorizo a cobrança e a renovação automática ${quote.selection.billing_cycle === "yearly" ? "anual" : "mensal"}. Posso cancelar a renovação no meu perfil.`}</label>
-        <Btn type="submit" variant="green" full disabled={busy || !readyToPay} style={{ minHeight: 44, fontSize: 14, boxShadow: readyToPay ? "0 7px 16px rgba(5, 150, 105, .20)" : "none" }}>{readyToPay ? `Assinar por ${money(quote.total_cents)}` : "Preencha os dados para continuar"}</Btn>
+        <Btn type="submit" variant="green" full disabled={busy || !readyToPay} style={{ minHeight: 44, fontSize: 14, boxShadow: readyToPay ? "0 7px 16px rgba(5, 150, 105, .20)" : "none" }}>{readyToPay ? `${["cancelled", "expired"].includes(session?.user?.subscription?.status) ? "Reativar" : "Assinar"} por ${money(quote.total_cents)}` : "Preencha os dados para continuar"}</Btn>
       </form>
     </>}
     {offerChanged && <Btn disabled={busy} onClick={onRefresh}>Atualizar oferta</Btn>}
     {error && !offerChanged && !awaitingConfirmation && !validationFailure && <p style={{ margin: "12px 0 0", color: T.inkMid, fontSize: 12 }}>Confira o formulário e envie novamente.</p>}
-    {showCancel && <CancelSubscriptionDialog reactivationHint="Para uma nova contratação após cancelar, entre em contato com o suporte." onClose={() => setShowCancel(false)} onCancelled={() => { setShowCancel(false); setAttempt({status:"cancelled"}); }} />}
+    {showCancel && <CancelSubscriptionDialog onClose={() => setShowCancel(false)} onCancelled={() => { setShowCancel(false); setAttempt({status:"cancelled"}); }} />}
   </section>;
 }
 
