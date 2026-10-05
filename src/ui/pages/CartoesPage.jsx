@@ -73,10 +73,12 @@ export const CartoesPage = ({
   const urlSearch = useSearch({ strict: false });
   const navigate = useNavigate();
   const shouldUseRealData = shouldUseRealDataForMode(organizationId, dataMode);
+  const [cardId, setCardId] = useState(() => (cardsProp && cardsProp.length > 0 ? cardsProp[0].id : "nubank"));
   const creditCardsData = useCreditCardsData({
     organizationId,
     enabled: shouldUseRealData,
     transactionsRefreshToken,
+    selectedCardId: cardId,
   });
   const hasSeededCards = cardsProp !== undefined;
   const localCards = (cardsProp && cardsProp.length > 0)
@@ -87,11 +89,14 @@ export const CartoesPage = ({
     : localCards;
   const isEmptyCards = (dataMode === "empty" && hasSeededCards && CARDS.length === 0) || (shouldUseRealData && !creditCardsData.isLoading && CARDS.length === 0);
   /* ── State ───────────────────────────────────────────────── */
-  const [cardId,             setCardId]             = useState(() => (cardsProp && cardsProp.length > 0 ? cardsProp[0].id : "nubank"));
   const [tab,                setTab]                = useState("invoice");
   const [invoiceIdx,         setInvoiceIdx]         = useState(5);
+  // Cartão cujo índice de fatura já foi acertado: antes disso `invoiceIdx` é o
+  // chute inicial e buscar os itens dele seria uma chamada jogada fora.
+  const [syncedCardId,       setSyncedCardId]       = useState(null);
   const invoiceIdxRef = useRef(invoiceIdx);
   const prevCardsSnapshotRef = useRef(null);
+  const pendingSwitchRef = useRef(null);
   invoiceIdxRef.current = invoiceIdx;
   const [search,             setSearch]             = useState("");
   const [filterCategory,     setFilterCategory]     = useState(null);
@@ -213,15 +218,23 @@ export const CartoesPage = ({
     const refresh = prevCards != null && prevCards !== CARDS;
     const firstSync = prevCards == null;
 
+    // Troca para um cartão que acabou de carregar o detalhe: o snapshot anterior só
+    // tinha a versão "básica" dele (sem faturas), então a competência em vista vem
+    // do que `switchCard` guardou, não do snapshot.
+    const pendingSwitch = pendingSwitchRef.current;
     if (refresh) {
       setInvoiceIdx(
-        faturaIdxAfterCardsRefresh(nextCard, prevCards, invoiceIdxRef.current),
+        pendingSwitch && pendingSwitch.cardId === nextCard.id
+          ? faturaIdxMatchingInvoiceRef(nextCard.faturas || [], pendingSwitch.invoice)
+          : faturaIdxAfterCardsRefresh(nextCard, prevCards, invoiceIdxRef.current),
       );
     } else if (fixCardId || firstSync) {
       setInvoiceIdx(defaultFaturaIndexForCard(nextCard.faturas || []));
     }
 
     prevCardsSnapshotRef.current = CARDS;
+    if (pendingSwitch && pendingSwitch.cardId === nextCard.id) pendingSwitchRef.current = null;
+    if (nextCard.detailLoaded !== false) setSyncedCardId(nextCard.id);
   }, [CARDS, cardId]);
 
   const card =
@@ -252,13 +265,38 @@ export const CartoesPage = ({
   const formatBRL = v => "R$ " + Math.abs(v).toLocaleString("pt-BR",{minimumFractionDigits:2});
   const formatK   = v => Math.abs(v)>=1000 ? (Math.abs(v)/1000).toFixed(1)+"k" : String(Math.abs(v));
 
-  const switchCard = (id) => {
-    const fromCard = CARDS.find((x) => x.id === cardId) || CARDS[0];
-    const fromList = fromCard?.faturas || [];
-    const viewedInvoice = fromList[invoiceIdx];
+  const switchSeqRef = useRef(0);
+  const cardsRef = useRef(CARDS);
+  cardsRef.current = CARDS;
+  const cardIdRef = useRef(cardId);
+  cardIdRef.current = cardId;
+  const [switchError, setSwitchError] = useState("");
+  const detailFailed = Boolean(shouldUseRealData && creditCardsData.detailError && creditCardsData.detailError.cardId === (CARDS.find((c) => c.id === cardId) || CARDS[0])?.id);
+  const switchCard = async (id) => {
+    // Cartão ainda sem detalhe (a carga só traz o do selecionado): busca antes de
+    // trocar, para a tela nunca mostrar um cartão pela metade.
+    const seq = (switchSeqRef.current += 1);
+    setSwitchError("");
+    let c = cardsRef.current.find((x) => x.id === id) || cardsRef.current[0];
+    if (shouldUseRealData && c?.detailLoaded === false) {
+      try {
+        const loaded = await creditCardsData.ensureCardDetail(c.id);
+        if (loaded) c = loaded;
+      } catch {
+        if (switchSeqRef.current === seq) {
+          setSwitchError("Não foi possível carregar este cartão. Tente novamente.");
+        }
+        return;
+      }
+      if (switchSeqRef.current !== seq) return;
+    }
+    // O índice da fatura em vista é lido DEPOIS da espera, do cartão que está na tela agora.
+    const fromCard = cardsRef.current.find((x) => x.id === cardIdRef.current) || cardsRef.current[0];
+    const viewedInvoice = (fromCard?.faturas || [])[invoiceIdxRef.current];
 
+    pendingSwitchRef.current = { cardId: id, invoice: viewedInvoice };
     setCardId(id);
-    const c = CARDS.find((x) => x.id === id) || CARDS[0];
+    setSyncedCardId(id);
     setInvoiceIdx(faturaIdxMatchingInvoiceRef(c?.faturas || [], viewedInvoice));
     setSearch(""); setFilterCategory(null); setTab("invoice"); setVisibleGroups(8);
   };
@@ -288,7 +326,9 @@ export const CartoesPage = ({
   const [pastItemsLoading, setPastItemsLoading] = useState(false);
 
   useEffect(() => {
-    if (isCurrent || !shouldUseRealData || !card || !invoice?.year || !invoice?.month || !organizationId) {
+    // Mês projetado (status null) também pode ter fatura real (ex.: só compra à vista): busca.
+    const awaitingSync = shouldUseRealData && syncedCardId !== card?.id;
+    if (isCurrent || !shouldUseRealData || !card || !invoice?.year || !invoice?.month || !organizationId || awaitingSync) {
       setPastItems([]);
       setPastItemsLoading(false);
       return;
@@ -304,6 +344,8 @@ export const CartoesPage = ({
     isCurrent,
     shouldUseRealData,
     card?.cardId,
+    card?.id,
+    syncedCardId,
     invoice?.year,
     invoice?.month,
     organizationId,
@@ -723,6 +765,17 @@ export const CartoesPage = ({
         onAddCard={openAddCardSheet}
       />
 
+      {(switchError || detailFailed || (creditCardsData.loadError && CARDS.length > 0)) && (
+        <div role="alert" style={{ ...G, fontSize:13, color:T.red, background:T.redLight, border:`1px solid ${T.red}22`, borderRadius:12, padding:"10px 14px" }}>
+          {switchError || (detailFailed ? "Não foi possível carregar a fatura deste cartão." : creditCardsData.loadError)}
+          {detailFailed && (
+            <button type="button" onClick={() => creditCardsData.retryCardDetail(creditCardsData.detailError.cardId)}
+              style={{ ...G, marginLeft:12, background:T.surface, color:T.ink, border:`1px solid ${T.border}`, borderRadius:8, padding:"4px 12px", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+              Tentar de novo
+            </button>
+          )}
+        </div>
+      )}
       <CardsCarousel
         variant="mobile"
         cards={CARDS}
@@ -788,6 +841,17 @@ export const CartoesPage = ({
         onAddCard={openAddCardSheet}
       />
 
+      {(switchError || detailFailed || (creditCardsData.loadError && CARDS.length > 0)) && (
+        <div role="alert" style={{ ...G, fontSize:13, color:T.red, background:T.redLight, border:`1px solid ${T.red}22`, borderRadius:12, padding:"10px 14px" }}>
+          {switchError || (detailFailed ? "Não foi possível carregar a fatura deste cartão." : creditCardsData.loadError)}
+          {detailFailed && (
+            <button type="button" onClick={() => creditCardsData.retryCardDetail(creditCardsData.detailError.cardId)}
+              style={{ ...G, marginLeft:12, background:T.surface, color:T.ink, border:`1px solid ${T.border}`, borderRadius:8, padding:"4px 12px", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+              Tentar de novo
+            </button>
+          )}
+        </div>
+      )}
       <CardsCarousel
         variant="desktop"
         cards={CARDS}

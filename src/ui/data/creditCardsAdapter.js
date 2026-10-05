@@ -1,6 +1,5 @@
 import {
   createCreditCard,
-  getConsolidatedCommitments,
   getCreditCardInvoice,
   getFutureCommitments,
   getInvoiceHistory,
@@ -102,50 +101,6 @@ function isInvoiceClosingBeforeToday(invoice, today = new Date()) {
   return close < startOfLocalDay(today);
 }
 
-/**
- * Busca a fatura corrente: inicia no mês de fechamento esperado; avança só com
- * `paid` ou `open` com fechamento já passado. `closed` não avança (fatura em aberto para pagamento).
- */
-async function fetchOpenCreditCardInvoiceForList(cardId, organizationId, card) {
-  const now = new Date();
-  const start = yearMonthOfOpenInvoiceByClosingDay(now, closingDayForInvoiceAnchor(card));
-  let y = start.year;
-  let m = start.month;
-  let lastOk = null;
-
-  for (let attempt = 0; attempt < 14; attempt += 1) {
-    try {
-      const inv = await getCreditCardInvoice(cardId, y, m, organizationId);
-      lastOk = inv;
-
-      if (inv.status === "paid") {
-        const n = shiftYearMonth(y, m, 1);
-        y = n.year;
-        m = n.month;
-        continue;
-      }
-
-      if (inv.status === "open" && isInvoiceClosingBeforeToday(inv, now)) {
-        const n = shiftYearMonth(y, m, 1);
-        y = n.year;
-        m = n.month;
-        continue;
-      }
-
-      return inv;
-    } catch {
-      if (lastOk && lastOk.status === "open" && isInvoiceClosingBeforeToday(lastOk, now)) {
-        return lastOk;
-      }
-      const n = shiftYearMonth(y, m, 1);
-      y = n.year;
-      m = n.month;
-    }
-  }
-
-  return lastOk;
-}
-
 function syntheticInvoiceFromBreakdownRow(row) {
   return {
     month: `${row.year}-${String(row.month).padStart(2, "0")}`,
@@ -165,43 +120,194 @@ function syntheticInvoiceFromBreakdownRow(row) {
   };
 }
 
-/** Ciclo `open` com fechamento passado: tenta o mês seguinte sequencial (não o 1º mês do breakdown). */
-async function resolveStaleOpenInvoiceWithPlanning(
-  cardId,
-  organizationId,
-  invoice,
-  futureCommitments,
-) {
-  if (
-    !invoice ||
-    invoice.status !== "open" ||
-    !isInvoiceClosingBeforeToday(invoice)
-  ) {
-    return invoice;
+const MAX_INVOICE_WALK = 14;
+const MAX_INVOICE_FETCHES = 4;
+
+const yearMonthKey = (year, month) => `${year}-${month}`;
+
+/**
+ * Fechamento da fatura de um mês, pela mesma regra que o backend usa ao montar
+ * `closing_date`: sem dia de fechamento, 7 dias antes do vencimento.
+ */
+function closingDateOfInvoiceMonth(card, year, month) {
+  let closingDay = card?.closing_day;
+  if (closingDay == null) {
+    closingDay = Number(card?.due_day) - 7;
+    if (closingDay <= 0) closingDay += 28;
   }
-  const ref = monthFromApiString(invoice?.month);
-  if (!ref) return invoice;
-  const nextYm = shiftYearMonth(ref.year, ref.month, 1);
-  try {
-    const nextInv = await getCreditCardInvoice(
-      cardId,
-      nextYm.year,
-      nextYm.month,
-      organizationId,
-    );
-    return nextInv;
-  } catch {
-    const breakdown = futureCommitments?.monthly_breakdown || [];
-    const row = breakdown.find(
-      (r) => r.year === nextYm.year && r.month === nextYm.month,
-    );
-    return syntheticInvoiceFromBreakdownRow({
-      year: nextYm.year,
-      month: nextYm.month,
-      total_amount: row?.total_amount ?? 0,
-      limit_usage_percent: row?.limit_usage_percent ?? null,
-    });
+  return new Date(year, month - 1, Math.min(Number(closingDay), daysInCalendarMonth(year, month)));
+}
+
+/**
+ * O que já se sabe das faturas SEM pedir cada uma: o histórico traz o status real
+ * dos meses com fatura e os compromissos futuros mostram os meses seguintes com
+ * parcelas. Mês fora dos dois é mês sem fatura (o que antes aparecia como 404).
+ */
+function knownInvoiceMonths(history, futureCommitments) {
+  const known = new Map();
+  for (const row of history?.monthly_data || []) {
+    known.set(yearMonthKey(row.year, row.month), { status: row.status });
   }
+  for (const row of futureCommitments?.monthly_breakdown || []) {
+    const key = yearMonthKey(row.year, row.month);
+    if (known.has(key)) continue;
+    if (Number(row.installments_count) > 0 || Number(row.total_amount) !== 0) {
+      known.set(key, { status: "open" });
+    }
+  }
+  return known;
+}
+
+/**
+ * A mesma regra de antes, sem caminhar pela rede: começa no mês de fechamento
+ * esperado e AVANÇA se a fatura está `paid` ou `open` com fechamento já passado;
+ * `closed` não avança (fatura fechada aguardando pagamento segue sendo a atual).
+ * Mês sem fatura não avança por si só, a não ser que a anterior já seja uma
+ * `open` vencida (aí fica ela, e depois vira o sintético do mês seguinte).
+ *
+ * `facts` diz, por mês, `{ status, closingPassed }` ou `{ missing: true }`. Histórico
+ * e compromissos futuros NÃO enxergam toda fatura (compra à vista no mês seguinte
+ * não aparece em nenhum dos dois), então mês desconhecido não é mês vazio: se
+ * `allowProbe`, o plano devolve `{ probe }` para o chamador confirmar aquele mês
+ * (inclusive o mês-âncora, mesmo que existam fatos posteriores). Só se pula uma
+ * consulta quando o mês é provadamente sem fatura (404 já observado).
+ */
+function planCurrentInvoice(card, now, facts, allowProbe) {
+  const start = yearMonthOfOpenInvoiceByClosingDay(now, closingDayForInvoiceAnchor(card));
+  let { year, month } = start;
+  let lastOk = null;
+
+  const advance = () => {
+    const next = shiftYearMonth(year, month, 1);
+    year = next.year;
+    month = next.month;
+  };
+  for (let attempt = 0; attempt < MAX_INVOICE_WALK; attempt += 1) {
+    const fact = facts.get(yearMonthKey(year, month));
+    if (fact && !fact.missing && !fact.failed) {
+      lastOk = { year, month, status: fact.status, closingPassed: fact.closingPassed };
+      if (fact.status === "paid" || (fact.status === "open" && fact.closingPassed)) {
+        advance();
+        continue;
+      }
+      return lastOk;
+    }
+    if (!fact && allowProbe) return { probe: { year, month } };
+    if (lastOk && lastOk.status === "open" && lastOk.closingPassed) return lastOk;
+    advance();
+  }
+  return lastOk;
+}
+
+function syntheticInvoiceForMonth(futureCommitments, year, month) {
+  const row = (futureCommitments?.monthly_breakdown || []).find(
+    (r) => r.year === year && r.month === month,
+  );
+  return syntheticInvoiceFromBreakdownRow({
+    year,
+    month,
+    total_amount: row?.total_amount ?? 0,
+    limit_usage_percent: row?.limit_usage_percent ?? null,
+  });
+}
+
+/**
+ * Fatura "atual" do cartão: a que a tela mostra como corrente. O mês-alvo sai da
+ * regra antiga aplicada sobre o que histórico + compromissos futuros já dizem; um
+ * mês que nenhum dos dois cobre é confirmado com UMA consulta daquele mês. Depois
+ * de uma consulta sem fatura (o único 404 tolerado: "ainda sem lançamentos") nada
+ * mais é sondado. O fato real sempre vence a dedução e o alvo é recalculado, com
+ * teto de `MAX_INVOICE_FETCHES` consultas, nunca um laço de meses.
+ *
+ * Caso comum: 1 consulta (o detalhe da fatura mostrada). Sem lançamento nenhum:
+ * 1 consulta com 404 e cai no sintético do breakdown.
+ */
+async function resolveCurrentInvoice({ card, organizationId, history, futureCommitments }) {
+  const now = new Date();
+  const known = knownInvoiceMonths(history, futureCommitments);
+  const observed = new Map();
+  const fetched = new Map();
+  let probing = true;
+  let fetches = 0;
+  let lastFailure = null;
+  let lastTargetKey = null;
+
+  const buildFacts = () => {
+    const merged = new Map();
+    for (const [key, value] of known) {
+      const [y, m] = key.split("-").map(Number);
+      merged.set(key, {
+        status: value.status,
+        closingPassed: closingDateOfInvoiceMonth(card, y, m) < startOfLocalDay(now),
+      });
+    }
+    for (const [key, value] of observed) merged.set(key, value);
+    return merged;
+  };
+  const sameAsPredicted = (predicted, real) =>
+    predicted && predicted.status === real.status && predicted.closingPassed === real.closingPassed;
+
+  /**
+   * Consulta o mês. Devolve `"ok"`, `"missing"` (404: sem fatura) ou `"error"`
+   * (500, timeout, rede: dado DESCONHECIDO, nunca confundido com "sem fatura").
+   */
+  const fetchMonth = async (year, month) => {
+    fetches += 1;
+    const key = yearMonthKey(year, month);
+    try {
+      const invoice = await getCreditCardInvoice(card.id, year, month, organizationId);
+      fetched.set(key, invoice);
+      observed.set(key, {
+        status: invoice.status,
+        closingPassed: isInvoiceClosingBeforeToday(invoice, now),
+      });
+      return "ok";
+    } catch (error) {
+      if (error?.response?.status === 404) {
+        observed.set(key, { missing: true });
+        return "missing";
+      }
+      observed.set(key, { failed: true });
+      lastFailure = error;
+      return "error";
+    }
+  };
+
+  while (fetches <= MAX_INVOICE_FETCHES) {
+    const facts = buildFacts();
+    const plan = planCurrentInvoice(card, now, facts, probing);
+    if (!plan) break;
+
+    if (plan.probe) {
+      if (fetches >= MAX_INVOICE_FETCHES) break;
+      if ((await fetchMonth(plan.probe.year, plan.probe.month)) === "missing") probing = false;
+      continue;
+    }
+
+    // Aberta vencida sem a seguinte: a tela mostra o mês seguinte, não a vencida.
+    if (plan.status === "open" && plan.closingPassed) {
+      const next = shiftYearMonth(plan.year, plan.month, 1);
+      return syntheticInvoiceForMonth(futureCommitments, next.year, next.month);
+    }
+
+    const key = yearMonthKey(plan.year, plan.month);
+    lastTargetKey = key;
+    if (fetched.has(key)) return fetched.get(key);
+    if (fetches >= MAX_INVOICE_FETCHES) break;
+    const predicted = facts.get(key);
+    const outcome = await fetchMonth(plan.year, plan.month);
+    if (outcome === "missing") probing = false;
+    if (outcome === "error") throw lastFailure;
+    if (outcome === "ok" && sameAsPredicted(predicted, observed.get(key))) return fetched.get(key);
+  }
+
+  // Teto estourado: usa o que já foi buscado em vez de jogar fora.
+  if (lastTargetKey && fetched.has(lastTargetKey)) return fetched.get(lastTargetKey);
+
+  // Falha de rede/servidor não é "sem fatura": o sintético mostraria R$ 0,00 calado.
+  if (lastFailure) throw lastFailure;
+  const anchor = yearMonthOfOpenInvoiceByClosingDay(now, closingDayForInvoiceAnchor(card));
+  return syntheticInvoiceForMonth(futureCommitments, anchor.year, anchor.month);
 }
 
 function appendFutureCommitmentMonthsToFaturas(faturas, futureCommitments, dueDay) {
@@ -668,104 +774,86 @@ export function mapCreditCardToModalPickerRow(card) {
   };
 }
 
-export async function listCreditCardsForUi(organizationId) {
-  const cards = await listCreditCards(organizationId);
-  let consolidatedCommitments = null;
-  try {
-    consolidatedCommitments = await getConsolidatedCommitments(organizationId);
-  } catch {
-    consolidatedCommitments = null;
-  }
-
-  const detailed = await Promise.all(cards.map(async (card) => {
-    let history = {
-      card_id: card.id,
-      card_name: card.description || `${card.brand} •• ${card.last4}`,
-      period_start: "",
-      period_end: "",
-      summary: {
-        total_spent: 0,
-        average_monthly: 0,
-        highest_month: null,
-        lowest_month: null,
-      },
-      monthly_data: [],
-    };
-    let futureCommitments = {
-      card_id: card.id,
-      card_name: card.description || `${card.brand} •• ${card.last4}`,
-      card_last4: card.last4,
-      credit_limit: card.credit_limit,
-      current_available_limit: card.available_limit,
-      summary: {
-        total_committed: 0,
-        average_monthly: 0,
-        lowest_month: null,
-        highest_month: null,
-      },
-      monthly_breakdown: [],
-      ending_soon: [],
-      insights: [],
-    };
-
-    try {
-      history = await getInvoiceHistory(card.id, organizationId);
-    } catch {}
-
-    try {
-      futureCommitments = await getFutureCommitments(card.id, organizationId);
-    } catch {}
-
-    let currentInvoice = null;
-    try {
-      currentInvoice = await fetchOpenCreditCardInvoiceForList(
-        card.id,
-        organizationId,
-        card,
-      );
-    } catch {
-      currentInvoice = null;
-    }
-
-    if (currentInvoice) {
-      currentInvoice = await resolveStaleOpenInvoiceWithPlanning(
-        card.id,
-        organizationId,
-        currentInvoice,
-        futureCommitments,
-      );
-    }
-
-    if (!currentInvoice) {
-      const anchor = yearMonthOfOpenInvoiceByClosingDay(
-        new Date(),
-        closingDayForInvoiceAnchor(card),
-      );
-      const breakdown = futureCommitments?.monthly_breakdown || [];
-      const row = breakdown.find(
-        (r) => r.year === anchor.year && r.month === anchor.month,
-      );
-      currentInvoice = syntheticInvoiceFromBreakdownRow({
-        year: anchor.year,
-        month: anchor.month,
-        total_amount: row?.total_amount ?? 0,
-        limit_usage_percent: row?.limit_usage_percent ?? null,
-      });
-    }
-
-    return mapCreditCardToUi({
-      card,
-      currentInvoice,
-      history,
-      futureCommitments,
-      consolidatedCommitments,
-    });
-  }));
-
+function emptyHistoryFor(card) {
   return {
-    cards: detailed,
-    consolidatedCommitments,
+    card_id: card.id,
+    card_name: card.description || `${card.brand} •• ${card.last4}`,
+    period_start: "",
+    period_end: "",
+    summary: {
+      total_spent: 0,
+      average_monthly: 0,
+      highest_month: null,
+      lowest_month: null,
+    },
+    monthly_data: [],
   };
+}
+
+function emptyFutureCommitmentsFor(card) {
+  return {
+    card_id: card.id,
+    card_name: card.description || `${card.brand} •• ${card.last4}`,
+    card_last4: card.last4,
+    credit_limit: card.credit_limit,
+    current_available_limit: card.available_limit,
+    summary: {
+      total_committed: 0,
+      average_monthly: 0,
+      lowest_month: null,
+      highest_month: null,
+    },
+    monthly_breakdown: [],
+    ending_soon: [],
+    insights: [],
+  };
+}
+
+/**
+ * Só a lista de cartões (UMA chamada): campos do cartão, sem fatura nem
+ * histórico. `rawCards` guarda a resposta crua para quem for pedir o detalhe de
+ * um cartão depois (`loadCreditCardDetailForUi`).
+ */
+export async function listCreditCardsBasicForUi(organizationId) {
+  const rawCards = await listCreditCards(organizationId);
+  return {
+    rawCards,
+    cards: rawCards.map((card) => ({ ...mapCreditCardToUi({ card }), detailLoaded: false })),
+  };
+}
+
+/**
+ * Detalhe de UM cartão: histórico + compromissos futuros (em paralelo) e a fatura
+ * atual. Custo fixo, independente de quantos meses o cartão tem de histórico.
+ */
+export async function loadCreditCardDetailForUi(card, organizationId) {
+  const [history, futureCommitments] = await Promise.all([
+    getInvoiceHistory(card.id, organizationId).catch(() => emptyHistoryFor(card)),
+    getFutureCommitments(card.id, organizationId).catch(() => emptyFutureCommitmentsFor(card)),
+  ]);
+  const currentInvoice = await resolveCurrentInvoice({
+    card,
+    organizationId,
+    history,
+    futureCommitments,
+  });
+  return {
+    ...mapCreditCardToUi({ card, currentInvoice, history, futureCommitments }),
+    detailLoaded: true,
+  };
+}
+
+/**
+ * Todos os cartões JÁ com detalhe. Custa lista + 3 chamadas por cartão: serve a
+ * quem precisa de todos de uma vez (relatório do consultor), nunca à tela de
+ * Cartões, que carrega o detalhe só do cartão selecionado.
+ */
+export async function listCreditCardsForUi(organizationId) {
+  const { rawCards } = await listCreditCardsBasicForUi(organizationId);
+  const cards = await Promise.all(
+    rawCards.map((card) => loadCreditCardDetailForUi(card, organizationId)),
+  );
+  return { cards, consolidatedCommitments: null };
 }
 
 export async function createCreditCardForUi(payload) {

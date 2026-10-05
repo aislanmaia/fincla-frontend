@@ -36,7 +36,39 @@ import type {
   AiCopilotoRunStatusResponse,
   ConsultantCategoryTemplate,
   SaveConsultantCategoryTemplateRequest,
+  ConsultantPortfolioExpenseDistributionResponse,
+  ConsultantPortfolioExpenseAnalysisResponse,
+  ConsultantPortfolioCategoryContributorsResponse,
 } from './types';
+
+export const getConsultantPortfolioExpenseDistribution = async (
+  params: { date_start: string; date_end: string },
+): Promise<ConsultantPortfolioExpenseDistributionResponse> => {
+  const response = await apiClient.get<ConsultantPortfolioExpenseDistributionResponse>(
+    '/consultant/expenses-distribution',
+    { params },
+  );
+  // MoneyResponse deve atravessar a fronteira intacta: a moeda é parte do valor.
+  return response.data;
+};
+
+export const getConsultantPortfolioExpenseAnalysis = async (
+  params: { date_start: string; date_end: string },
+): Promise<ConsultantPortfolioExpenseAnalysisResponse> => {
+  const response = await apiClient.get<ConsultantPortfolioExpenseAnalysisResponse>(
+    '/consultant/expenses-distribution/analysis', { params },
+  );
+  return response.data;
+};
+
+export const getConsultantPortfolioCategoryContributors = async (
+  params: { category_name: string; date_start: string; date_end: string; limit?: number; offset?: number },
+): Promise<ConsultantPortfolioCategoryContributorsResponse> => {
+  const response = await apiClient.get<ConsultantPortfolioCategoryContributorsResponse>(
+    '/consultant/expenses-distribution/contributors', { params },
+  );
+  return response.data;
+};
 
 export const listConsultantCategoryTemplates = async (): Promise<ConsultantCategoryTemplate[]> => {
   const response = await apiClient.get<ConsultantCategoryTemplate[]>('/consultant/category-templates');
@@ -528,17 +560,21 @@ export const getAiPortfolioTrendsRun = async (
 export const askCopiloto = async (
   requestId: string,
   message: string,
-  sessionId: string
+  sessionId: string,
+  presentationStyle: 'dashboard' | 'explanation' = 'dashboard'
 ): Promise<AiCopilotoResponse> => {
   const response = await apiClient.post<AiCopilotoResponse>(
     '/consultant/ai-copiloto',
-    { message, session_id: sessionId },
+    { message, session_id: sessionId, presentation_style: presentationStyle },
     {
       headers: { 'X-Request-Id': requestId },
       timeout: AI_EVALUATION_TIMEOUT_MS,
     }
   );
-  return unwrapMoney(response.data);
+  // Os valores do relatório agregado são deliberadamente {amount, currency}:
+  // ao contrário de métricas pessoais já normalizadas, o Copiloto apresenta
+  // mais de uma moeda e precisa manter cada unidade junto ao valor.
+  return response.data;
 };
 
 /**
@@ -552,5 +588,5 @@ export const getAiCopilotoRun = async (
   const response = await apiClient.get<AiCopilotoRunStatusResponse>(
     `/consultant/ai-copiloto/${runId}`
   );
-  return unwrapMoney(response.data);
+  return response.data;
 };

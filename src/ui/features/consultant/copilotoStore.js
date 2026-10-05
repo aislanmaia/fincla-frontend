@@ -80,6 +80,14 @@ function appendMessage(message) {
   messages = [...messages, { id: `m${(msgSeq += 1)}`, ...message }];
 }
 
+function updateAssistantMessage(id, patch) {
+  if (!id) {
+    appendMessage({ role: "assistant", ...patch });
+    return;
+  }
+  messages = messages.map((message) => message.id === id ? { ...message, ...patch } : message);
+}
+
 /**
  * Prefixo de escopo: quando o consultor foca um cliente pelo seletor, o NOME dele
  * entra na mensagem enviada. É a decisão de PII do A4 — o backend só deixa a IA
@@ -93,27 +101,55 @@ function composeMessage(text, scopeClientName) {
   return `Sobre o cliente ${name}: ${text}`;
 }
 
+function getCopilotoErrorMessage(err) {
+  const status = err?.response?.status;
+  if (ERROR_BY_STATUS[status]) return ERROR_BY_STATUS[status];
+  if (status == null || status >= 500) return RUN_FAILED_MESSAGE;
+  return handleApiError(err);
+}
+
 /**
  * Envia um turno do chat. Idempotente contra duplo-clique pelo guard `sending`.
  * `scopeClientName` (opcional) ancora o filtro por nome na mensagem enviada.
  */
-export async function sendMessage(rawText, { scopeClientName = "" } = {}) {
+export async function sendMessage(rawText, { scopeClientName = "", presentationStyle = "dashboard" } = {}) {
   const text = String(rawText ?? "").trim();
   if (!text || sending) return;
 
-  appendMessage({ role: "user", text });
+  const userMessage = { role: "user", text, scopeClientName, presentationStyle };
+  appendMessage(userMessage);
   sending = true;
   banner = null;
   emit();
 
   const myEpoch = epoch;
+  await requestAnswer(userMessage, null, myEpoch);
+}
+
+/** Retry a failed assistant turn using its adjacent user message and original scope. */
+export async function retryMessage(errorMessageId) {
+  if (sending) return;
+  const errorIndex = messages.findIndex((message) => message.id === errorMessageId);
+  const errorMessage = messages[errorIndex];
+  if (!errorMessage?.error || !errorMessage.retryable) return;
+  const userMessage = messages.slice(0, errorIndex).reverse().find((message) => message.role === "user");
+  if (!userMessage) return;
+
+  sending = true;
+  banner = null;
+  updateAssistantMessage(errorMessageId, { retrying: true });
+  emit();
+  await requestAnswer(userMessage, errorMessageId, epoch);
+}
+
+async function requestAnswer(userMessage, errorMessageId, myEpoch) {
   const correlationId = newEvaluationRequestId();
-  const payload = composeMessage(text, scopeClientName);
+  const payload = composeMessage(userMessage.text, userMessage.scopeClientName);
 
   try {
-    const response = await askCopiloto(correlationId, payload, sessionId);
+    const response = await askCopiloto(correlationId, payload, sessionId, userMessage.presentationStyle || "dashboard");
     if (myEpoch !== epoch) return;
-    appendMessage({ role: "assistant", output: response.output });
+    updateAssistantMessage(errorMessageId, { role: "assistant", output: response.output, error: null, retryable: false, retrying: false });
   } catch (err) {
     if (myEpoch !== epoch) return;
     const status = err?.response?.status;
@@ -121,17 +157,20 @@ export async function sendMessage(rawText, { scopeClientName = "" } = {}) {
     const code = detail?.code ?? "";
 
     if (status === 409 && code === ERROR_COPILOT_IN_PROGRESS && detail?.run_id) {
-      await followRun(detail.run_id, myEpoch);
+      await followRun(detail.run_id, myEpoch, errorMessageId);
       return;
     }
 
-    const message = ERROR_BY_STATUS[status] || handleApiError(err);
+    const message = getCopilotoErrorMessage(err);
     // 429/403 viram banner (é sobre a CONTA, não sobre a pergunta); os demais
     // viram uma bolha de erro no fim da conversa.
     if (status === 429 || status === 403) {
       banner = { message, code: String(status) };
+      if (errorMessageId) {
+        updateAssistantMessage(errorMessageId, { error: message, retryable: false, retrying: false });
+      }
     } else {
-      appendMessage({ role: "assistant", error: message });
+      updateAssistantMessage(errorMessageId, { error: message, retryable: true, retrying: false });
     }
   } finally {
     if (myEpoch === epoch) {
@@ -141,7 +180,7 @@ export async function sendMessage(rawText, { scopeClientName = "" } = {}) {
   }
 }
 
-async function followRun(runId, myEpoch) {
+async function followRun(runId, myEpoch, errorMessageId = null) {
   const startedAt = Date.now();
 
   while (Date.now() - startedAt < POLL_TIMEOUT_MS) {
@@ -154,11 +193,8 @@ async function followRun(runId, myEpoch) {
     } catch (err) {
       if (myEpoch !== epoch) return;
       const failedStatus = err?.response?.status;
-      const message =
-        failedStatus === 404
-          ? RUN_NOT_FOUND_MESSAGE
-          : ERROR_BY_STATUS[failedStatus] || handleApiError(err);
-      appendMessage({ role: "assistant", error: message });
+      const message = failedStatus === 404 ? RUN_NOT_FOUND_MESSAGE : getCopilotoErrorMessage(err);
+      updateAssistantMessage(errorMessageId, { error: message, retryable: failedStatus !== 403 && failedStatus !== 429, retrying: false });
       return;
     }
     if (myEpoch !== epoch) return;
@@ -166,16 +202,16 @@ async function followRun(runId, myEpoch) {
     if (run.status === "running") continue;
 
     if (run.status === "ok" && run.output) {
-      appendMessage({ role: "assistant", output: run.output });
+      updateAssistantMessage(errorMessageId, { role: "assistant", output: run.output, error: null, retryable: false, retrying: false });
       return;
     }
 
-    appendMessage({ role: "assistant", error: RUN_FAILED_MESSAGE });
+    updateAssistantMessage(errorMessageId, { error: RUN_FAILED_MESSAGE, retryable: true, retrying: false });
     return;
   }
 
   if (myEpoch !== epoch) return;
-  appendMessage({ role: "assistant", error: TOOK_TOO_LONG_MESSAGE });
+  updateAssistantMessage(errorMessageId, { error: TOOK_TOO_LONG_MESSAGE, retryable: true, retrying: false });
 }
 
 /** Começa uma conversa nova: thread novo (contexto zerado no backend) + tela limpa. */
