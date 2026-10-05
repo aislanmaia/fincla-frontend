@@ -120,6 +120,7 @@ apiClient.interceptors.response.use(
 // valid as a React child"; `"hasOwnProperty"` devolvia uma função. `Map.get`
 // só enxerga o que foi posto nele.
 const API_MESSAGE_TRANSLATIONS = new Map<string, string>([
+  ['An unexpected error occurred', 'Algo deu errado. Tente novamente mais tarde.'],
   ['Phone already linked', 'Este número já está vinculado para esta ou outra conta.'],
   ['phone already linked', 'Este número já está vinculado para esta ou outra conta.'],
   ['PHONE_ALREADY_LINKED', 'Este número já está vinculado para esta ou outra conta.'],

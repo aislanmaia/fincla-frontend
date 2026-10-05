@@ -50,6 +50,21 @@ describe('API Client Configuration', () => {
 });
 
 describe('handleApiError — envelope seguro e UX', () => {
+  it('traduz a falha genérica recebida ao pedir recuperação de senha', () => {
+    const err = new axios.AxiosError('fail');
+    err.response = {
+      status: 500,
+      data: {
+        detail: {
+          error: 'INTERNAL_SERVER_ERROR',
+          message: 'An unexpected error occurred',
+          type: 'internal_error',
+        },
+      },
+    } as typeof err.response;
+    expect(handleApiError(err)).toBe('Algo deu errado. Tente novamente mais tarde.');
+  });
+
   it('usa message do envelope sanitizado (safe-errors)', () => {
     const err = new axios.AxiosError('fail');
     err.response = {
