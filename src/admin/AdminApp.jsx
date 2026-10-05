@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Building2, CreditCard, LayoutDashboard, LockKeyhole, LogOut, ShieldCheck, TicketPercent, UsersRound } from "lucide-react";
 import { getAdminMe } from "../api/admin";
-import { login, logout } from "../api/auth";
+import { login, logout, resetPassword, validateResetToken } from "../api/auth";
 import { handleApiError } from "../api/client";
+import { PasswordResetPage } from "../ui/features/auth/PasswordResetPage.jsx";
+import { parseAuthEntryUrl, stripAuthEntryQueryAndHash } from "../ui/features/auth/authEntryUrl.js";
 import { AdminDirectory } from "./AdminDirectory";
 import { AdminCoupons } from "./AdminCoupons";
 import { AdminDashboard } from "./AdminDashboard";
@@ -16,8 +18,11 @@ function accessError(error) {
 }
 
 export function AdminApp() {
+  const [resetComplete, setResetComplete] = useState(false);
+  const resetEntry = parseAuthEntryUrl();
+  const isResettingPassword = !resetComplete && resetEntry.kind === "reset" && Boolean(resetEntry.token);
   const [identity, setIdentity] = useState(null);
-  const [checking, setChecking] = useState(Boolean(localStorage.getItem("auth_token")));
+  const [checking, setChecking] = useState(Boolean(localStorage.getItem("auth_token")) && !isResettingPassword);
   const [busy, setBusy] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -33,6 +38,7 @@ export function AdminApp() {
   }
 
   useEffect(() => {
+    if (isResettingPassword) return;
     if (!localStorage.getItem("auth_token")) return;
     let active = true;
     getAdminMe()
@@ -44,7 +50,15 @@ export function AdminApp() {
       })
       .finally(() => { if (active) setChecking(false); });
     return () => { active = false; };
-  }, []);
+  }, [isResettingPassword]);
+
+  async function submitResetPassword(token, newPassword) {
+    try {
+      await resetPassword(token, newPassword);
+    } catch (nextError) {
+      throw new Error(handleApiError(nextError));
+    }
+  }
 
   async function submit(event) {
     event.preventDefault();
@@ -69,6 +83,16 @@ export function AdminApp() {
     setPassword("");
     setError("");
     navigate("home");
+  }
+
+  if (isResettingPassword) {
+    return <PasswordResetPage token={resetEntry.token} onValidateToken={validateResetToken} onResetPassword={submitResetPassword} onComplete={() => {
+      stripAuthEntryQueryAndHash();
+      logout();
+      setIdentity(null);
+      setChecking(false);
+      setResetComplete(true);
+    }} />;
   }
 
   if (checking) {

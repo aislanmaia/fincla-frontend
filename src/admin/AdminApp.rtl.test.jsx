@@ -27,14 +27,19 @@ const mocks = vi.hoisted(() => ({
   retryAdminCouponReprice: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
+  resetPassword: vi.fn(),
+  validateResetToken: vi.fn(),
 }));
 
 vi.mock("../api/admin", () => ({ getAdminMe: mocks.getAdminMe, getAdminOverview: mocks.getAdminOverview, getAdminUsers: mocks.getAdminUsers, getAdminUser: mocks.getAdminUser, getAdminOrganizations: mocks.getAdminOrganizations, getAdminOrganization: mocks.getAdminOrganization, getAdminPlans: mocks.getAdminPlans, getAdminUserAudit: mocks.getAdminUserAudit, changeAdminUserAccess: mocks.changeAdminUserAccess, createAdminAccount: mocks.createAdminAccount, sendAdminPasswordReset: mocks.sendAdminPasswordReset, changeAdminBeta: mocks.changeAdminBeta, grantAdminCourtesy: mocks.grantAdminCourtesy, endAdminCourtesy: mocks.endAdminCourtesy, getAdminPlanRequests: mocks.getAdminPlanRequests, requestAdminPlanChange: mocks.requestAdminPlanChange, withdrawAdminPlanChange: mocks.withdrawAdminPlanChange, cancelAdminRenewal: mocks.cancelAdminRenewal, getAdminCoupons: mocks.getAdminCoupons, createAdminCoupon: mocks.createAdminCoupon, disableAdminCoupon: mocks.disableAdminCoupon, retryAdminCouponReprice: mocks.retryAdminCouponReprice }));
-vi.mock("../api/auth", () => ({ login: mocks.login, logout: mocks.logout }));
+vi.mock("../api/auth", () => ({ login: mocks.login, logout: mocks.logout, resetPassword: mocks.resetPassword, validateResetToken: mocks.validateResetToken }));
 
 import { AdminApp } from "./AdminApp.jsx";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  window.history.replaceState(null, "", "/");
+});
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
@@ -50,6 +55,25 @@ beforeEach(() => {
 });
 
 describe("painel do administrador Fincla", () => {
+  it("redefine a senha no domínio admin e volta ao login administrativo", async () => {
+    window.history.replaceState(null, "", "/?reset_token=admin-reset-token");
+    mocks.validateResetToken.mockResolvedValue({ valid: true });
+    mocks.resetPassword.mockResolvedValue({ message: "Senha redefinida com sucesso." });
+
+    render(<AdminApp />);
+    expect(await screen.findByText("Nova senha")).toBeInTheDocument();
+    const [password, confirmation] = screen.getAllByPlaceholderText("••••••••");
+    fireEvent.change(password, { target: { value: "NewPassword123!" } });
+    fireEvent.change(confirmation, { target: { value: "NewPassword123!" } });
+    fireEvent.click(screen.getByRole("button", { name: "Salvar nova senha" }));
+
+    expect(await screen.findByText("Senha atualizada")).toBeInTheDocument();
+    expect(mocks.resetPassword).toHaveBeenCalledWith("admin-reset-token", "NewPassword123!");
+    fireEvent.click(screen.getByRole("button", { name: "Ir para o login" }));
+    expect(screen.getByRole("heading", { name: "Entrar no painel" })).toBeInTheDocument();
+    expect(window.location.search).toBe("");
+  });
+
   it("mostra o painel somente após a API confirmar a permissão administrativa", async () => {
     mocks.login.mockImplementation(async () => {
       localStorage.setItem("auth_token", "admin-token");
