@@ -90,6 +90,7 @@ function startOfLocalDay(dt) {
  */
 export function LocaleDatePicker({
   id,
+  ariaLabel,
   value,
   onChange,
   min = "2000-01-01",
@@ -580,6 +581,8 @@ export function LocaleDatePicker({
           <input
             ref={inputRef}
             id={id}
+            aria-label={ariaLabel}
+            data-date-value={value}
             type="text"
             inputMode="numeric"
             autoComplete="off"
@@ -657,6 +660,8 @@ export function LocaleDatePicker({
         ref={buttonRef}
         type="button"
         id={id}
+        aria-label={ariaLabel ? `${ariaLabel}: ${formatYmdToLocaleDisplay(value, locale)}` : undefined}
+        data-date-value={value}
         disabled={disabled}
         onClick={() => !disabled && setOpen((o) => !o)}
         style={{

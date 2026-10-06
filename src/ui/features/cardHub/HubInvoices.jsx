@@ -1,6 +1,8 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { T } from "../../tokens";
 import { Btn, Card, ProgBar } from "../../components/primitives.jsx";
+import { LocaleDatePicker } from "../../components/LocaleDatePicker.jsx";
+import { APP_UI_LOCALE } from "../../appLocale.js";
 import { G, NUM } from "../../typography";
 import { formatMoney } from "../../money/formatMoney.js";
 import { InvoiceDashboardLink, StatusBadge } from "./InvoiceCard.jsx";
@@ -100,9 +102,19 @@ export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, 
         </div>}
         {current.itemsCount > 0 && <span style={{ ...G, ...NUM, fontSize: 11, color: T.inkMid }}>{current.itemsCount} lançamentos{current.topCategory ? ` · maior categoria: ${current.topCategory}` : ""}</span>}
         {payable && <>
-          <label style={{ ...G, display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: T.inkMid }}>
-            Paga em <input type="date" aria-label="Data do pagamento" value={paidDate} max={dateKey(now)} onChange={(event) => setPaidDate(event.target.value)} style={{ ...G, border: `1px solid ${T.border}`, borderRadius: 8, padding: 6, color: T.ink }} />
-          </label>
+          <div style={{ ...G, display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: T.inkMid }}>
+            <span>Paga em</span>
+            <div style={{ width: isMobile ? 164 : 156, maxWidth: "100%" }}>
+              <LocaleDatePicker
+                value={paidDate}
+                onChange={setPaidDate}
+                max={dateKey(now)}
+                locale={APP_UI_LOCALE}
+                variant={isMobile ? "mobile" : "desktop"}
+                ariaLabel="Data do pagamento"
+              />
+            </div>
+          </div>
           <Btn variant="green" disabled={saving || !paidDate} onClick={pay}>{saving ? "Salvando…" : "✓ Marcar como paga"}</Btn>
         </>}
         {error && <div role="alert" style={{ ...G, fontSize: 11, color: T.red }}>{error}</div>}

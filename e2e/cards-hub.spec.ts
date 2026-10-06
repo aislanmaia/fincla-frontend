@@ -275,7 +275,7 @@ test("marca fatura do Hub como paga e confirma status e data na API real", async
   await expect(page.getByTestId("hub-current-invoice")).toBeVisible({ timeout: 30_000 });
   await selectCardByName(page, "Hub Pagamento");
   const current = page.getByTestId("hub-current-invoice");
-  const paidDate = await current.getByLabel("Data do pagamento").inputValue();
+  const paidDate = await current.getByRole("button", { name: /Data do pagamento/ }).getAttribute("data-date-value");
   await current.getByRole("button", { name: /Marcar como paga/ }).click();
   await expect(current).toHaveAttribute("data-status", "paid");
   await expect(current.getByRole("button", { name: /Marcar como paga/ })).toHaveCount(0);

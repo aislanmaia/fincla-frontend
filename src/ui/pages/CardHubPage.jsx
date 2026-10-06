@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, Lightbulb, Pin, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lightbulb, Pencil, Pin, Plus } from "lucide-react";
 
 import { T } from "../tokens";
 import { G } from "../typography";
@@ -23,6 +23,7 @@ import { AllInvoicesDialog } from "../features/cardHub/AllInvoicesDialog.jsx";
 import { CategoryTrendChart, InvoiceHistoryChart } from "../features/cardHub/HubCharts.jsx";
 import { HubDialog } from "../features/cardHub/HubDialog.jsx";
 import { CreateCardDialog } from "../features/cardHub/CreateCardDialog.jsx";
+import { EditCardDialog } from "../features/cardHub/EditCardDialog.jsx";
 import { CompactKpiStrip, LimitTiles } from "../features/cardHub/HubKpis.jsx";
 import { InsightsList } from "../features/cardHub/InsightsList.jsx";
 
@@ -191,6 +192,11 @@ export function CardHubPage({
           </button>
         )}
         {selectedCard && (
+          <button type="button" onClick={() => setDialog("edit-card")} style={OUTLINE_BTN}>
+            <Pencil size={14} /> {isMobile ? "Editar" : "Editar cartão"}
+          </button>
+        )}
+        {selectedCard && (
           <button type="button" onClick={() => setDialog("notes")} data-testid="card-notes-open" style={OUTLINE_BTN}>
             <Pin size={14} /> Anotações
           </button>
@@ -282,7 +288,7 @@ export function CardHubPage({
         Cartão selecionado: <strong style={{ color: T.ink }}>{cardName} •{selectedCard.last4}</strong>
       </div>
 
-      <LimitTiles card={selectedCard} currency={currency} isMobile={isMobile} />
+      <LimitTiles card={selectedCard} currency={currency} isMobile={isMobile} onEdit={() => setDialog("edit-card")} />
 
       {!isMobile && insights.length > 0 && (
         <div style={{ background: T.surface, border: `1px solid ${T.amber}`, borderRadius: 14, padding: "14px 18px" }}>
@@ -377,6 +383,10 @@ export function CardHubPage({
           onSave={hub.saveNotes}
           onClose={closeDialog}
         />
+      )}
+      {dialog === "edit-card" && (
+        <EditCardDialog key={`${organizationId}:${selectedCard.id}`} card={selectedCard} organizationId={organizationId}
+          isMobile={isMobile} onSave={hub.updateCard} onClose={closeDialog} />
       )}
       {dialog === "create-card" && (
         <CreateCardDialog organizationId={organizationId} isMobile={isMobile} onCreate={async (payload) => {

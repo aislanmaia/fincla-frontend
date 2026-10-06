@@ -165,6 +165,16 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
     return updated.notes ?? "";
   }, [organizationId, selectedCardId]);
 
+  const updateCard = useCallback(async (payload) => {
+    const updated = await updateCreditCard(selectedCardId, payload);
+    setCardsState((state) => ({
+      ...state,
+      cards: state.cards.map((card) => card.id === updated.id ? updated : card),
+    }));
+    setInvoiceRefresh((value) => value + 1);
+    return updated;
+  }, [selectedCardId]);
+
   const payInvoice = useCallback(async (invoice, paidDate) => {
     await markInvoicePaid(selectedCardId, invoice.year, invoice.month, organizationId, paidDate);
     setDetail((prev) => prev.cardId === selectedCardId && prev.orgId === organizationId ? {
@@ -199,6 +209,7 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
     invoiceCards,
     initialInvoiceKey,
     saveNotes,
+    updateCard,
     payInvoice,
     createCard,
   };

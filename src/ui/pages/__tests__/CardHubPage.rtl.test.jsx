@@ -146,11 +146,19 @@ function mockApi({ cards = [cardFixture()], history, current, future, patch, tra
       const rows = transactions.filter((row) => row.credit_card_id === cardId);
       return HttpResponse.json({ data: rows.slice(0, 4), pagination: { total: rows.length } });
     }),
-    http.patch("*/v1/credit-cards/:id", async ({ request }) => {
+    http.patch("*/v1/credit-cards/:id", async ({ request, params }) => {
       const body = await request.json();
       patched.push({ url: new URL(request.url), body });
       if (patch === "fail") return HttpResponse.json({ detail: "falha no servidor" }, { status: 500 });
-      return HttpResponse.json({ ...cards[0], notes: body.notes === "" ? null : body.notes });
+      const existing = currentCards.find((card) => card.id === Number(params.id));
+      const updated = { ...existing, ...body, notes: body.notes === "" ? null : body.notes ?? existing.notes };
+      if (body.credit_limit !== undefined) {
+        updated.credit_limit = money(String(body.credit_limit));
+        updated.available_limit = money(String(body.credit_limit));
+        updated.limit_usage_percent = 0;
+      }
+      currentCards = currentCards.map((card) => card.id === updated.id ? updated : card);
+      return HttpResponse.json(updated);
     }),
   );
   patched.posted = posted;
@@ -407,8 +415,8 @@ describe("CardHubPage — faturas do Hub", () => {
     const user = userEvent.setup();
     renderHub();
     await screen.findByTestId("hub-current-invoice");
-    await user.clear(screen.getByLabelText("Data do pagamento"));
-    await user.type(screen.getByLabelText("Data do pagamento"), "2026-10-03");
+    await user.click(screen.getByRole("button", { name: /Data do pagamento/ }));
+    await user.click(within(screen.getByRole("dialog", { name: "Calendário" })).getByRole("button", { name: "3" }));
     await user.click(screen.getByRole("button", { name: /Marcar como paga/ }));
     await waitFor(() => expect(currentPanel()).toHaveAttribute("data-status", "paid"));
     expect(requests).toHaveLength(1);
@@ -450,7 +458,7 @@ describe("CardHubPage — faturas do Hub", () => {
     await user.click(screen.getByRole("button", { name: /Marcar como paga/ }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível marcar");
     expect(currentPanel()).toHaveAttribute("data-status", "open");
-    expect(screen.getByLabelText("Data do pagamento")).toHaveValue("2026-10-04");
+    expect(screen.getByRole("button", { name: /Data do pagamento/ })).toHaveAttribute("data-date-value", "2026-10-04");
   });
 
   it("fatura atual paga não oferece pagamento; fechada não paga oferece", async () => {
@@ -530,6 +538,57 @@ describe("CardHubPage — faturas do Hub", () => {
 });
 
 describe("CardHubPage — KPIs e insights", () => {
+  it("explica o limite disponível com o total e o percentual livre", async () => {
+    mockApi();
+    renderHub();
+    const tile = await screen.findByTestId("kpi-available");
+    expect(tile).toHaveTextContent("Limite disponível");
+    expect(tile).toHaveTextContent("R$ 6.500,00");
+    expect(tile).toHaveTextContent("de R$ 10.000,00 de limite total");
+    expect(within(tile).getByRole("meter", { name: "Percentual do limite disponível" })).toHaveAttribute("aria-valuenow", "65");
+  });
+
+  it("explica a ausência de limite sem representar desconhecido como zero", async () => {
+    mockApi({ cards: [cardFixture({ credit_limit: null, available_limit: null, limit_usage_percent: null })] });
+    renderHub();
+    const tile = await screen.findByTestId("kpi-available");
+    expect(tile).toHaveTextContent("Sem limite cadastrado");
+    expect(tile).toHaveTextContent("Cadastre o limite do cartão");
+    expect(within(tile).queryByRole("meter")).toBeNull();
+  });
+
+  it("permite editar o cartão selecionado e cadastrar o limite pelo próprio card", async () => {
+    const patched = mockApi({ cards: [cardFixture({ credit_limit: null, available_limit: null, limit_usage_percent: null })] });
+    renderHub();
+    const user = userEvent.setup();
+    const tile = await screen.findByTestId("kpi-available");
+    await user.click(within(tile).getByRole("button", { name: "Definir limite" }));
+    const dialog = screen.getByRole("dialog", { name: "Editar cartão" });
+    expect(within(dialog).getByRole("textbox", { name: "Nome do cartão" })).toHaveValue("Azul");
+    await user.clear(within(dialog).getByRole("textbox", { name: "Nome do cartão" }));
+    await user.type(within(dialog).getByRole("textbox", { name: "Nome do cartão" }), "Azul Platinum");
+    await user.type(within(dialog).getByRole("textbox", { name: /Limite total/ }), "5000,00");
+    await user.click(within(dialog).getByRole("button", { name: "Salvar alterações" }));
+    await waitFor(() => expect(patched).toHaveLength(1));
+    expect(patched[0].body).toMatchObject({ description: "Azul Platinum", credit_limit: 5000 });
+    await waitFor(() => expect(screen.getByTestId("kpi-available")).toHaveTextContent("R$ 5.000,00"));
+    expect(screen.queryByRole("dialog", { name: "Editar cartão" })).toBeNull();
+  });
+
+  it("abre a edição também pelo cabeçalho e preserva o formulário após erro", async () => {
+    mockApi({ patch: "fail" });
+    renderHub();
+    const user = userEvent.setup();
+    await screen.findByTestId("kpi-available");
+    await user.click(screen.getByRole("button", { name: "Editar cartão" }));
+    const dialog = screen.getByRole("dialog", { name: "Editar cartão" });
+    await user.clear(within(dialog).getByRole("textbox", { name: "Nome do cartão" }));
+    await user.type(within(dialog).getByRole("textbox", { name: "Nome do cartão" }), "Cartão editado");
+    await user.click(within(dialog).getByRole("button", { name: "Salvar alterações" }));
+    expect(await within(dialog).findByRole("alert")).toBeInTheDocument();
+    expect(within(dialog).getByRole("textbox", { name: "Nome do cartão" })).toHaveValue("Cartão editado");
+  });
+
   it("exibe Score de saúde, Velocidade de gasto (do ciclo real) e Melhor dia", async () => {
     mockApi();
     renderHub();

@@ -5,21 +5,37 @@ import { formatMoney } from "../../money/formatMoney.js";
 const LABEL = { ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.09em" };
 
 /** Disponível e Comprometido em parcelas: os dois números de limite que o backend entrega. */
-export function LimitTiles({ card, currency, isMobile }) {
-  const available = formatMoney(card.available_limit, currency) ?? "—";
+export function LimitTiles({ card, currency, isMobile, onEdit }) {
+  const hasLimit = card.credit_limit !== null && card.credit_limit !== undefined && Number(card.credit_limit) > 0;
+  const available = hasLimit ? formatMoney(card.available_limit, currency) : null;
+  const totalLimit = hasLimit ? formatMoney(card.credit_limit, currency) : null;
   const used = formatMoney(card.used_limit, currency) ?? "—";
   const usage = Number.isFinite(Number(card.limit_usage_percent)) && card.limit_usage_percent !== null
     ? Math.round(Number(card.limit_usage_percent))
     : null;
+  const availablePercent = usage === null ? null : Math.min(100, Math.max(0, 100 - usage));
   const barColor = usage === null ? T.inkFaint : usage >= 90 ? T.red : usage >= 70 ? T.amber : T.green;
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: isMobile ? 10 : 12 }}>
       <div data-testid="kpi-available" style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: isMobile ? "12px 14px" : "14px 16px", boxShadow: T.sm }}>
-        <div style={{ ...LABEL, marginBottom: 5 }}>Disponível</div>
-        <div style={{ ...G, ...NUM, fontSize: isMobile ? 16 : 19, fontWeight: 800, color: T.ink }}>{available}</div>
-        <div style={{ height: 4, background: T.grayLight, borderRadius: 99, overflow: "hidden", marginTop: 8 }}>
-          <div style={{ height: "100%", width: `${usage === null ? 0 : Math.min(100, Math.max(0, 100 - usage))}%`, background: T.green, borderRadius: 99 }} />
+        <div style={{ ...LABEL, marginBottom: 5 }}>Limite disponível</div>
+        <div style={{ ...G, ...NUM, fontSize: isMobile ? 16 : 19, fontWeight: 800, color: T.ink }}>
+          {available ?? (hasLimit ? "Não calculado" : "Sem limite cadastrado")}
         </div>
+        {available && totalLimit ? <>
+          <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 5 }}>de {totalLimit} de limite total</div>
+          {availablePercent !== null && <>
+            <div role="meter" aria-label="Percentual do limite disponível" aria-valuemin={0} aria-valuemax={100}
+              aria-valuenow={availablePercent}
+              style={{ height: 5, background: T.grayLight, borderRadius: 99, overflow: "hidden", marginTop: 9 }}>
+              <div style={{ height: "100%", width: `${availablePercent}%`, background: T.green, borderRadius: 99 }} />
+            </div>
+            <div style={{ ...G, fontSize: 10, color: T.inkMid, marginTop: 5 }}>{availablePercent}% do limite ainda livre</div>
+          </>}
+        </> : <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 7, lineHeight: 1.45 }}>
+          {hasLimit ? "Não foi possível calcular o valor disponível deste cartão." : "Cadastre o limite do cartão para acompanhar quanto ainda pode usar."}
+        </div>}
+        {!hasLimit && onEdit && <button type="button" onClick={onEdit} style={{ ...G, background: "none", border: 0, color: T.blue, padding: "8px 0 0", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Definir limite</button>}
       </div>
       <div data-testid="kpi-committed" style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: isMobile ? "12px 14px" : "14px 16px", boxShadow: T.sm }}>
         <div style={{ ...LABEL, marginBottom: 5 }}>{isMobile ? "Comprometido" : "Comprometido em parcelas"}</div>
