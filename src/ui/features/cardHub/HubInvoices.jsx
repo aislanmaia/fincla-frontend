@@ -18,7 +18,10 @@ export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const current = invoices.find((invoice) => invoice.key === currentKey) ?? null;
-  const others = [...invoices].reverse().filter((invoice) => invoice.key !== currentKey);
+  const others = [
+    ...invoices.filter((invoice) => invoice.key < currentKey).reverse(),
+    ...invoices.filter((invoice) => invoice.key > currentKey),
+  ];
   const visible = expanded ? others : others.slice(0, 4);
   const payable = current && !current.isEmpty && current.total !== null
     && (current.status === INVOICE_STATUS.OPEN || current.status === INVOICE_STATUS.CLOSED);

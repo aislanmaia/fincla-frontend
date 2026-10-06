@@ -149,6 +149,10 @@ describe("CardHubPage — faturas do Hub", () => {
     expect(otherRows()).toHaveTextContent("Fechada");
     expect(otherRows()).toHaveTextContent("Paga");
     expect(otherRows()).toHaveTextContent("Prevista");
+    expect([...otherRows().querySelectorAll("a")].map((row) => row.getAttribute("href"))).toEqual([
+      "/cards/1/invoices/2026/9", "/cards/1/invoices/2026/8",
+      "/cards/1/invoices/2026/11", "/cards/1/invoices/2026/12",
+    ]);
     expect(screen.getByTestId("invoice-counts")).toHaveTextContent("1 paga · 1 fechada · 1 aberta · 2 previstas");
     expect(screen.queryByRole("dialog", { name: "Todas as faturas" })).toBeNull();
   });
