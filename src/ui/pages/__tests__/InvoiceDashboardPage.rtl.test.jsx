@@ -179,6 +179,8 @@ describe("InvoiceDashboardPage — card da fatura", () => {
     expect(within(section).getByText(/Novo compromisso/)).toBeVisible();
     expect(within(section).getByText("Saiu da fatura")).toBeVisible();
     expect(within(section).getByText("Valor alterado")).toBeVisible();
+    expect(within(section).getByText("Ocorrências: 1 → 1")).toBeVisible();
+    expect(within(section).getByText(/por ocorrência/)).toBeVisible();
     expect(calls.filter((call) => call.startsWith("GET /v1/credit-cards"))).toHaveLength(4);
     expect(calls.queries).toContainEqual(expect.stringMatching(/include_metrics=true.*include_changes=true|include_changes=true.*include_metrics=true/));
   });

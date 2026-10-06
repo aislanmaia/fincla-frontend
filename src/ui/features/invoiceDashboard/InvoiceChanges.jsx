@@ -16,6 +16,7 @@ function signedMoney(value, currency) {
 
 function ItemChange({ item, currency }) {
   const amount = item.change_type === "removed" ? item.previous_amount : item.current_amount;
+  const hasOccurrences = item.commitment_type === "recurring" && (item.occurrences_previous != null || item.occurrences_current != null);
   return (
     <li style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 12, padding: "10px 0", borderTop: `1px solid ${T.border}` }}>
       <div style={{ minWidth: 0 }}>
@@ -25,13 +26,16 @@ function ItemChange({ item, currency }) {
           {item.commitment_type === "installment" && item.installment_number != null && item.total_installments != null
             ? ` · parcela ${item.installment_number}/${item.total_installments}` : ""}
         </div>
+        {hasOccurrences && <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 3 }}>
+          Ocorrências: {item.occurrences_previous ?? "—"} → {item.occurrences_current ?? "—"}
+        </div>}
       </div>
       <div style={{ ...G, ...NUM, textAlign: "right", fontSize: 12, fontWeight: 700, color: T.ink, whiteSpace: "nowrap" }}>
         {item.change_type === "changed_value"
           ? `${formatMoney(item.previous_amount, currency)} → ${formatMoney(item.current_amount, currency)}`
           : formatMoney(amount, currency) ?? "—"}
         {item.change_type === "changed_value" && <div style={{ fontSize: 11, color: Number(item.change_amount) > 0 ? T.red : T.green }}>
-          {signedMoney(item.change_amount, currency)}
+          {signedMoney(item.change_amount, currency)} por ocorrência
         </div>}
       </div>
     </li>
