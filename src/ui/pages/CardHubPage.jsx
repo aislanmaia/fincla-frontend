@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Lightbulb, Pin, Plus } from "lucide-react";
 
 import { T } from "../tokens";
@@ -78,10 +78,12 @@ export function CardHubPage({
   transactionsRefreshToken = 0,
 }) {
   const navigate = useNavigate();
+  const search = useSearch({ strict: false });
   const hub = useCardHubData({
     organizationId,
     enabled: shouldUseRealData(organizationId, dataMode),
     refreshToken: transactionsRefreshToken,
+    selectedIdFromUrl: search?.[FC.HUB_CARD] ?? null,
   });
   const { selectedCard, selectedCardId, invoiceCards, detail } = hub;
 
@@ -145,9 +147,14 @@ export function CardHubPage({
   const goClassic = () => navigate({ to: "/cards", search: (prev) => {
     const next = { ...prev };
     delete next[FC.VIEW];
+    delete next[FC.HUB_CARD];
     return next;
   } });
   const goTo = (href) => navigate({ to: href });
+  const selectCard = (cardId) => {
+    if (cardId === selectedCardId) return;
+    navigate({ to: "/cards", search: (prev) => ({ ...prev, [FC.VIEW]: "new", [FC.HUB_CARD]: cardId }) });
+  };
   const formatMoneyForCard = (v) => formatMoneyAbs(v, currency) ?? "—";
   const closeDialog = () => setDialog(null);
   const scrollCards = (direction) => {
@@ -214,14 +221,14 @@ export function CardHubPage({
       {isMobile ? (
         <DragScrollTabs bg={T.bg}>
           {hub.uiCards.map((c) => (
-            <HubCardOption key={c.id} card={c} selected={c.cardId === selectedCardId} mobile onSelect={hub.selectCard} />
+            <HubCardOption key={c.id} card={c} selected={c.cardId === selectedCardId} mobile onSelect={selectCard} />
           ))}
         </DragScrollTabs>
       ) : (
         <div style={{ position: "relative", minWidth: 0 }}>
           <div ref={desktopCardsRef} data-testid="hub-card-carousel" style={{ display: "flex", gap: 14, overflowX: "auto", padding: "6px 44px 8px", scrollbarWidth: "none", scrollBehavior: "smooth" }}>
             {hub.uiCards.map((c) => (
-              <HubCardOption key={c.id} card={c} selected={c.cardId === selectedCardId} onSelect={hub.selectCard} />
+              <HubCardOption key={c.id} card={c} selected={c.cardId === selectedCardId} onSelect={selectCard} />
             ))}
           </div>
           <button type="button" aria-label="Ver cartões anteriores" disabled={!cardScroll.left} onClick={() => scrollCards(-1)}

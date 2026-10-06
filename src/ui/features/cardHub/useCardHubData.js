@@ -39,7 +39,7 @@ const settle = (promise) => promise.then((value) => ({ ok: true, value }), (erro
  * mostra carregamento. Um refetch mantém a UI e os dados atuais e só os troca
  * quando chega dado novo; se falha, o dado antigo fica e `refreshFailed` avisa.
  */
-export function useCardHubData({ organizationId, enabled = true, refreshToken = 0 }) {
+export function useCardHubData({ organizationId, enabled = true, refreshToken = 0, selectedIdFromUrl = undefined }) {
   const active = Boolean(enabled && organizationId);
   const listInFlightRef = useRef(null);
   const [cardsState, setCardsState] = useState({ orgId: null, error: "", cards: [] });
@@ -86,8 +86,9 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
 
   const selectedCard = useMemo(() => {
     if (cards.length === 0) return null;
-    return cards.find((c) => c.id === selectedId) ?? cards[0];
-  }, [cards, selectedId]);
+    const requestedId = selectedIdFromUrl === undefined ? selectedId : selectedIdFromUrl;
+    return cards.find((c) => String(c.id) === String(requestedId)) ?? cards[0];
+  }, [cards, selectedId, selectedIdFromUrl]);
   const selectedCardId = selectedCard?.id ?? null;
 
   useEffect(() => {
