@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 import { getFutureCommitments, getInvoiceHistory, listCreditCards, moveInstallmentToInvoice } from "../../api/creditCards";
@@ -9,6 +9,7 @@ import { Card, PageTitle } from "../components/primitives";
 import { formatMoney } from "../money/formatMoney";
 import { FC } from "../routing/searchContract";
 import { shouldUseRealData } from "../dataMode";
+import { useFocusTrap } from "../features/transactions/useFocusTrap";
 
 const cardStyle = { padding: 18, minWidth: 0 };
 const label = { ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: ".07em" };
@@ -136,6 +137,17 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
   const [refresh, setRefresh] = useState(0);
   const [historyMonths, setHistoryMonths] = useState(3);
   const [futureMonths, setFutureMonths] = useState(6);
+  const moveDialogRef = useRef(null);
+  useFocusTrap(moveDialogRef, Boolean(moveItem));
+  useEffect(() => {
+    if (!moveItem) return undefined;
+    moveDialogRef.current?.querySelector("select")?.focus();
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") { event.preventDefault(); setMoveItem(null); }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [moveItem]);
   const enabled = shouldUseRealData(organizationId, dataMode);
 
   useEffect(() => {
@@ -335,7 +347,7 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
       {!allKnown && <p role="status" style={{ margin: 0, color: T.amber }}>O inventário de alguns meses está incompleto. Os itens disponíveis continuam listados abaixo.</p>}
       <Inventory rows={browsableRows} remainingSeries={balanceKnown ? balance.series : []} currency={currency} groupBy={groupBy} sortBy={sortBy} onMove={handleInventory} isMobile={isMobile} />
       {mutation.error && <p role="alert">{mutation.error}</p>}
-      {moveItem && <div role="dialog" aria-modal="true" aria-label={`Mover ${moveItem.description}`} style={{ position: "fixed", inset: 0, background: "#0008", zIndex: 100, display: "flex", alignItems: isMobile ? "flex-end" : "center", justifyContent: "center" }}><Card style={{ ...cardStyle, width: isMobile ? "100%" : 420, display: "flex", flexDirection: "column", gap: 12 }}><h2 style={{ margin: 0, fontSize: 18 }}>Mover {moveItem.description}</h2><p style={{ margin: 0, fontSize: 12 }}>As demais parcelas da compra serão reposicionadas automaticamente.</p><label>Fatura de destino <select aria-label="Fatura de destino" value={targetMonth} onChange={(event) => setTargetMonth(event.target.value)} style={{ ...buttonStyle, width: "100%" }}><option value="">Selecione o mês</option>{moveOptions.map((row) => <option key={keyOf(row)} value={keyOf(row)}>{period(row)}</option>)}</select></label><div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}><button type="button" style={buttonStyle} onClick={() => setMoveItem(null)}>Cancelar</button><button type="button" style={{ ...buttonStyle, background: T.blue, color: "white" }} disabled={!targetMonth || mutation.pending} onClick={confirmMove}>Confirmar mudança</button></div></Card></div>}
+      {moveItem && <div ref={moveDialogRef} role="dialog" aria-modal="true" aria-label={`Mover ${moveItem.description}`} style={{ position: "fixed", inset: 0, background: "#0008", zIndex: 100, display: "flex", alignItems: isMobile ? "flex-end" : "center", justifyContent: "center" }}><Card style={{ ...cardStyle, width: isMobile ? "100%" : 420, display: "flex", flexDirection: "column", gap: 12 }}><h2 style={{ margin: 0, fontSize: 18 }}>Mover {moveItem.description}</h2><p style={{ margin: 0, fontSize: 12 }}>As demais parcelas da compra serão reposicionadas automaticamente.</p><label>Fatura de destino <select aria-label="Fatura de destino" value={targetMonth} onChange={(event) => setTargetMonth(event.target.value)} style={{ ...buttonStyle, width: "100%" }}><option value="">Selecione o mês</option>{moveOptions.map((row) => <option key={keyOf(row)} value={keyOf(row)}>{period(row)}</option>)}</select></label><div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}><button type="button" style={buttonStyle} onClick={() => setMoveItem(null)}>Cancelar</button><button type="button" style={{ ...buttonStyle, background: T.blue, color: "white" }} disabled={!targetMonth || mutation.pending} onClick={confirmMove}>Confirmar mudança</button></div></Card></div>}
     </>}
   </div>;
 }

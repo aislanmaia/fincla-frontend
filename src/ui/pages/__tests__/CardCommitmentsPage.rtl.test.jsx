@@ -107,6 +107,18 @@ it("marca baixo uso e move parcela pelo contrato", async () => {
   await waitFor(() => expect(calls).toContain('move:{"target_year":2026,"target_month":11}'));
 });
 
+it("mantém o foco no diálogo de mover parcela e o devolve ao fechar com Escape", async () => {
+  const user = userEvent.setup();
+  render(<CardCommitmentsPage organizationId={ORG} />);
+  const trigger = await screen.findByRole("button", { name: /Mover Notebook/i });
+  await user.click(trigger);
+  const dialog = screen.getByRole("dialog", { name: "Mover Notebook" });
+  expect(within(dialog).getByLabelText("Fatura de destino")).toHaveFocus();
+  await user.keyboard("{Escape}");
+  expect(screen.queryByRole("dialog", { name: "Mover Notebook" })).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
+});
+
 it("alterna histórico e projeção sem novas chamadas e não inventa zero em mês sem fatura", async () => {
   const user = userEvent.setup();
   render(<CardCommitmentsPage organizationId={ORG} />);

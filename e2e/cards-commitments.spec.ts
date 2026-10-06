@@ -86,6 +86,18 @@ for (const viewport of [
     expect(requests.filter((url) => url.includes("future-commitments"))).toHaveLength(1);
     expect(requests.filter((url) => url.includes("/invoices/history"))).toHaveLength(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+    const moveTrigger = page.getByRole("button", { name: "Mover Notebook parcelado" }).first();
+    await moveTrigger.focus();
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name: "Mover Notebook parcelado" });
+    await expect(dialog.getByLabel("Fatura de destino")).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(dialog.getByRole("button", { name: "Cancelar" })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(dialog.getByLabel("Fatura de destino")).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(moveTrigger).toBeFocused();
     await page.screenshot({ path: `e2e/screenshots/cards-commitments-${viewport.name}.png`, fullPage: true });
   });
 }
