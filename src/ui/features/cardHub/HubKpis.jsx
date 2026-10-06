@@ -42,7 +42,7 @@ export function CompactKpiStrip({ kpis }) {
     <div data-testid="compact-kpis" style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: "12px 8px", display: "flex", alignItems: "center", boxShadow: T.sm }}>
       <div style={col}>
         <span aria-hidden="true" style={{ fontSize: 15 }}>⚡</span>
-        <div style={{ ...G, ...NUM, fontSize: 15, fontWeight: 800, color: paceColor }}>{spentPercent}%</div>
+        <div style={{ ...G, ...NUM, fontSize: 15, fontWeight: 800, color: paceColor }}>{spentPercent === null ? "—" : `${spentPercent}%`}</div>
         <div style={caption}>{!hasPaceData ? "poucos dados no ciclo" : onPace ? "ritmo controlado" : "gasto acelerado"}</div>
       </div>
       <div style={{ width: 1, height: 40, background: T.border, flexShrink: 0 }} />

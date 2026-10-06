@@ -294,6 +294,12 @@ test.describe("orçamento de chamadas ao abrir /cards", () => {
         await purchase(id, tagId, `Compra ${i}`, 50, new Date());
       }
       const five = await measureLoad(page, "/cards?view=new", ready);
+      if (!vp.mobile) {
+        const nextCard = page.getByRole("button", { name: "Ver próximos cartões" });
+        await expect(nextCard).toBeEnabled();
+        await nextCard.click();
+        await expect.poll(() => page.getByTestId("hub-card-carousel").evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+      }
       const classicFive = await measureLoad(page, "/cards", async () => { await expect(page.getByRole("heading", { name: "Meus Cartões" })).toBeVisible({ timeout: 30_000 }); await page.waitForTimeout(4000); });
 
       const hubCards = (seen: Seen[]) => seen.filter((r) => r.path.startsWith("/v1/credit-cards"));

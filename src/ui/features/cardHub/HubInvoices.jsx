@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { T } from "../../tokens";
 import { Btn, Card, ProgBar } from "../../components/primitives.jsx";
 import { G, NUM } from "../../typography";
@@ -7,6 +7,8 @@ import { InvoiceDashboardLink, StatusBadge } from "./InvoiceCard.jsx";
 import { INVOICE_STATUS, describeDue, describePaidDate, monthName, monthShort } from "./hubInvoices.js";
 
 const panel = { padding: 16, minWidth: 0 };
+const INITIAL_ROWS = 6;
+const LOAD_BATCH = 4;
 const dateKey = (date) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 };
@@ -16,16 +18,63 @@ export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, 
   const [paidDate, setPaidDate] = useState(() => dateKey(now));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [visibleCount, setVisibleCount] = useState(INITIAL_ROWS);
+  const [listHeight, setListHeight] = useState(null);
+  const currentRef = useRef(null);
+  const listRef = useRef(null);
+  const previousCount = useRef(INITIAL_ROWS);
+  const userScrollRef = useRef(false);
   const current = invoices.find((invoice) => invoice.key === currentKey) ?? null;
   const past = invoices.filter((invoice) => invoice.key < currentKey).reverse();
   const future = invoices.filter((invoice) => invoice.key > currentKey);
   const others = [...past, ...future];
-  const initial = [...past.slice(0, 2), ...future.slice(0, 2)];
+  const initial = [...past.slice(0, 3), ...future.slice(0, 3)];
   for (const invoice of others) {
-    if (initial.length >= 4) break;
+    if (initial.length >= INITIAL_ROWS) break;
     if (!initial.includes(invoice)) initial.push(invoice);
   }
-  const visible = expanded ? others : initial;
+  const ordered = [...initial, ...others.filter((invoice) => !initial.includes(invoice))];
+  const visible = ordered.slice(0, visibleCount);
+
+  useLayoutEffect(() => {
+    if (isMobile || !currentRef.current) return undefined;
+    const currentCard = currentRef.current;
+    const measure = () => {
+      const height = currentCard.getBoundingClientRect().height;
+      if (height > 0) setListHeight(height);
+    };
+    measure();
+    if (typeof ResizeObserver !== "function") return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(currentCard);
+    return () => observer.disconnect();
+  }, [isMobile, current?.key]);
+
+  useLayoutEffect(() => {
+    const before = previousCount.current;
+    previousCount.current = visibleCount;
+    if (visibleCount <= before) {
+      if (visibleCount === INITIAL_ROWS) listRef.current?.scrollTo?.({ top: 0 });
+      return;
+    }
+    const list = listRef.current;
+    const firstNew = list?.children[before];
+    if (list && firstNew) {
+      const top = firstNew.offsetTop - list.offsetTop;
+      if (typeof list.scrollTo === "function") list.scrollTo({ top, behavior: "smooth" });
+      else list.scrollTop = top;
+    }
+  }, [visibleCount]);
+
+  const showMore = () => setVisibleCount((count) => Math.min(count + LOAD_BATCH, ordered.length));
+  const onListScroll = (event) => {
+    if (!expanded || !userScrollRef.current || visibleCount >= ordered.length) return;
+    const list = event.currentTarget;
+    if (list.scrollTop + list.clientHeight >= list.scrollHeight - 32) {
+      userScrollRef.current = false;
+      showMore();
+    }
+  };
   const payable = current && !current.isEmpty && current.total !== null
     && (current.status === INVOICE_STATUS.OPEN || current.status === INVOICE_STATUS.CLOSED);
   const money = (invoice) => invoice.isEmpty ? "Sem lançamentos" : formatMoney(invoice.total, currency) ?? "—";
@@ -44,7 +93,7 @@ export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, 
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : "minmax(280px, 340px) minmax(0, 1fr)", gap: 16, alignItems: "start" }}>
-      {current && <Card data-testid="hub-current-invoice" data-status={current.status} style={{ ...panel, borderColor: T.blue, display: "flex", flexDirection: "column", gap: 12 }}>
+      {current && <div ref={currentRef}><Card data-testid="hub-current-invoice" data-status={current.status} style={{ ...panel, borderColor: T.blue, display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 8 }}>
           <div><div style={{ ...G, color: T.inkLight, fontSize: 10, fontWeight: 700, textTransform: "uppercase" }}>Fatura atual</div>
             <strong style={{ ...G, ...NUM, fontSize: 15 }}>{monthName(current.month)} {current.year}</strong></div>
@@ -73,11 +122,16 @@ export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, 
         </>}
         {error && <div role="alert" style={{ ...G, fontSize: 11, color: T.red }}>{error}</div>}
         <InvoiceDashboardLink cardId={cardId} invoice={current} onNavigate={onNavigate}>Abrir dashboard da fatura →</InvoiceDashboardLink>
-      </Card>}
-      {!isMobile && <Card role="region" aria-label="Outras faturas" style={{ ...panel, padding: 8 }}>
+      </Card></div>}
+      {!isMobile && <Card role="region" aria-label="Outras faturas" data-testid="hub-invoices-list-card"
+        style={{ ...panel, padding: 8, display: "flex", flexDirection: "column", overflow: "hidden", minHeight: 0,
+          height: listHeight ?? undefined, boxSizing: "border-box" }}>
         {visible.length === 0 && <div style={{ ...G, padding: 10, color: T.inkMid, fontSize: 12 }}>Nenhuma outra fatura.</div>}
-        <div data-testid="hub-other-invoices" style={{ maxHeight: isMobile ? undefined : 330, overflowY: "auto" }} className="fincla-scroll">
-          {visible.map((invoice) => <InvoiceDashboardLink key={invoice.key} cardId={cardId} invoice={invoice} onNavigate={onNavigate}
+        <div ref={listRef} data-testid="hub-other-invoices" onScroll={onListScroll}
+          onWheel={() => { userScrollRef.current = true; }} onTouchMove={() => { userScrollRef.current = true; }}
+          onKeyDown={() => { userScrollRef.current = true; }} tabIndex={0} aria-label="Lista de outras faturas"
+          style={{ flex: 1, minHeight: 0, overflowY: "auto" }} className="fincla-scroll">
+          {visible.map((invoice) => <InvoiceDashboardLink key={invoice.key} cardId={cardId} invoice={invoice} onNavigate={onNavigate} className="hub-invoice-row"
             style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", borderBottom: `1px solid ${T.border}`, color: T.ink }}>
             <span style={{ ...NUM, width: 38, flexShrink: 0, textAlign: "center", fontWeight: 800 }}>{monthShort(invoice.month)}<small style={{ display: "block", fontWeight: 400 }}>{invoice.year}</small></span>
             <StatusBadge status={invoice.status} />
@@ -89,9 +143,12 @@ export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, 
             <span style={{ color: T.blue }}>→</span>
           </InvoiceDashboardLink>)}
         </div>
-        {others.length > 4 && <Btn variant="ghost" full aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}
+        {others.length > INITIAL_ROWS && <Btn variant="ghost" full aria-expanded={expanded} onClick={() => {
+          if (expanded && visibleCount >= ordered.length) { setExpanded(false); setVisibleCount(INITIAL_ROWS); }
+          else { userScrollRef.current = false; setExpanded(true); showMore(); }
+        }}
           style={{ ...NUM, color: T.blue }}>
-          {expanded ? "Mostrar menos" : `+ ${others.length - 4} outras faturas`}
+          {expanded && visibleCount >= ordered.length ? "Mostrar menos" : `+ ${ordered.length - visibleCount} outras faturas`}
         </Btn>}
       </Card>}
     </div>

@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Lightbulb, Pin, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lightbulb, Pin, Plus } from "lucide-react";
 
 import { T } from "../tokens";
 import { G } from "../typography";
@@ -28,10 +28,17 @@ import { NotesDialog } from "../features/cardHub/NotesDialog.jsx";
 import { INVOICE_STATUS, summarizeInvoiceCounts } from "../features/cardHub/hubInvoices.js";
 import { useCardHubData } from "../features/cardHub/useCardHubData.js";
 import { useToday } from "../features/cardHub/useToday.js";
+import "../features/cardHub/cardHub.css";
 
 const OUTLINE_BTN = {
   ...G, display: "flex", alignItems: "center", gap: 6, background: T.surface, border: `1px solid ${T.border}`,
   borderRadius: 10, padding: "9px 14px", fontSize: 12, fontWeight: 700, color: T.ink, cursor: "pointer", flexShrink: 0,
+};
+const CAROUSEL_ARROW = {
+  position: "absolute", top: "50%", transform: "translateY(-50%)", zIndex: 1,
+  width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center",
+  border: `1px solid ${T.border}`, borderRadius: 9999, background: T.surface, color: T.ink,
+  boxShadow: T.md, transition: "opacity 0.18s, background-color 0.18s",
 };
 
 function Notice({ children, tone = "neutral" }) {
@@ -42,6 +49,24 @@ function Notice({ children, tone = "neutral" }) {
     <div role="status" style={{ ...G, fontSize: 12, lineHeight: 1.5, color: palette.fg, background: palette.bg, border: `1px solid ${palette.bd}`, borderRadius: 10, padding: "10px 12px" }}>
       {children}
     </div>
+  );
+}
+
+function HubCardOption({ card, selected, mobile = false, onSelect }) {
+  return (
+    <button type="button" aria-pressed={selected} aria-label={`${card.nome || card.banco}, final ${card.dig}${selected ? ", selecionado" : ""}`}
+      onClick={() => onSelect(card.cardId)}
+      data-card-id={card.cardId}
+      style={{ all: "unset", display: "flex", flexDirection: "column", alignItems: "center", flexShrink: 0, cursor: "pointer", padding: 3 }}>
+      <div style={{ border: `3px solid ${selected ? T.blue : "transparent"}`, borderRadius: mobile ? 15 : 19, padding: 3,
+        background: selected ? T.blueLight : "transparent", transition: "border-color 0.2s, background 0.2s" }}>
+        <CardVisual c={card} selected={selected} size={mobile ? "sm" : "md"} />
+      </div>
+      <span style={{ ...G, minHeight: 19, marginTop: 3, padding: "2px 8px", borderRadius: 9999,
+        background: selected ? T.blue : "transparent", color: selected ? "#fff" : "transparent", fontSize: 11, fontWeight: 800 }}>
+        ✓ Selecionado
+      </span>
+    </button>
   );
 }
 
@@ -62,7 +87,36 @@ export function CardHubPage({
 
   const [dialog, setDialog] = useState(null);
   const [mobileInvoiceKey, setMobileInvoiceKey] = useState(null);
+  const desktopCardsRef = useRef(null);
+  const [cardScroll, setCardScroll] = useState({ left: false, right: false });
   const now = useToday();
+
+  useEffect(() => {
+    if (isMobile) return undefined;
+    const scroller = desktopCardsRef.current;
+    if (!scroller) return undefined;
+    const measure = () => {
+      const left = scroller.scrollLeft > 2;
+      const right = scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 2;
+      setCardScroll((prev) => prev.left === left && prev.right === right ? prev : { left, right });
+    };
+    measure();
+    scroller.addEventListener("scroll", measure, { passive: true });
+    window.addEventListener("resize", measure);
+    return () => {
+      scroller.removeEventListener("scroll", measure);
+      window.removeEventListener("resize", measure);
+    };
+  }, [isMobile, hub.uiCards.length]);
+
+  useEffect(() => {
+    if (isMobile || !selectedCardId) return;
+    const scroller = desktopCardsRef.current;
+    const selected = [...(scroller?.children ?? [])].find((child) => child.dataset.cardId === String(selectedCardId));
+    if (!scroller || !selected) return;
+    const left = selected.getBoundingClientRect().left - scroller.getBoundingClientRect().left + scroller.scrollLeft;
+    scroller.scrollTo?.({ left: Math.max(0, left - (scroller.clientWidth - selected.clientWidth) / 2), behavior: "smooth" });
+  }, [isMobile, selectedCardId, hub.uiCards.length]);
 
   const currency = selectedCard?.currency || undefined;
   const uiCard = hub.uiCards.find((c) => c.cardId === selectedCardId) ?? null;
@@ -74,7 +128,7 @@ export function CardHubPage({
 
   const kpis = useMemo(() => {
     if (!uiCard || detail.loading) return null;
-    const invoice = { val: openInvoice?.total ?? 0 };
+    const invoice = { val: openInvoice?.total ?? (detail.currentState === "empty" ? 0 : null) };
     // As parcelas ativas vêm da fatura aberta: se ela não pôde ser lida, a exposição é
     // desconhecida (null) e o score não é afirmado. 404 (sem lançamentos) é dado: zero parcelas.
     const exposureKnown = detail.currentState !== "unavailable";
@@ -96,6 +150,11 @@ export function CardHubPage({
   const goTo = (href) => navigate({ to: href });
   const formatMoneyForCard = (v) => formatMoneyAbs(v, currency) ?? "—";
   const closeDialog = () => setDialog(null);
+  const scrollCards = (direction) => {
+    const scroller = desktopCardsRef.current;
+    const step = (scroller?.firstElementChild?.getBoundingClientRect().width ?? 218) + 14;
+    scroller?.scrollBy?.({ left: direction * step, behavior: "smooth" });
+  };
 
   const header = (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: isMobile ? 12 : 16 }}>
@@ -155,16 +214,24 @@ export function CardHubPage({
       {isMobile ? (
         <DragScrollTabs bg={T.bg}>
           {hub.uiCards.map((c) => (
-            <div key={c.id} style={{ paddingTop: 8 }}>
-              <CardVisual c={c} selected={c.cardId === selectedCardId} size="sm" onClick={() => { hub.selectCard(c.cardId); }} />
-            </div>
+            <HubCardOption key={c.id} card={c} selected={c.cardId === selectedCardId} mobile onSelect={hub.selectCard} />
           ))}
         </DragScrollTabs>
       ) : (
-        <div style={{ display: "flex", gap: 14, overflowX: "auto", padding: "6px 4px 8px", scrollbarWidth: "none" }}>
-          {hub.uiCards.map((c) => (
-            <CardVisual key={c.id} c={c} selected={c.cardId === selectedCardId} size="md" onClick={() => { hub.selectCard(c.cardId); }} />
-          ))}
+        <div style={{ position: "relative", minWidth: 0 }}>
+          <div ref={desktopCardsRef} data-testid="hub-card-carousel" style={{ display: "flex", gap: 14, overflowX: "auto", padding: "6px 44px 8px", scrollbarWidth: "none", scrollBehavior: "smooth" }}>
+            {hub.uiCards.map((c) => (
+              <HubCardOption key={c.id} card={c} selected={c.cardId === selectedCardId} onSelect={hub.selectCard} />
+            ))}
+          </div>
+          <button type="button" aria-label="Ver cartões anteriores" disabled={!cardScroll.left} onClick={() => scrollCards(-1)}
+            style={{ ...CAROUSEL_ARROW, left: 4, opacity: cardScroll.left ? 1 : 0.4, cursor: cardScroll.left ? "pointer" : "default" }}>
+            <ChevronLeft size={18} />
+          </button>
+          <button type="button" aria-label="Ver próximos cartões" disabled={!cardScroll.right} onClick={() => scrollCards(1)}
+            style={{ ...CAROUSEL_ARROW, right: 4, opacity: cardScroll.right ? 1 : 0.4, cursor: cardScroll.right ? "pointer" : "default" }}>
+            <ChevronRight size={18} />
+          </button>
         </div>
       )}
     </div>
@@ -194,7 +261,7 @@ export function CardHubPage({
 
       {kpis && (isMobile
         ? <CompactKpiStrip kpis={kpis} />
-        : <CardHeuristicTiles kpis={kpis} formatBRL={formatMoneyForCard} isMobile={false} />)}
+        : <CardHeuristicTiles kpis={kpis} formatBRL={formatMoneyForCard} isMobile={false} emphasizeProgress />)}
 
       <div style={{ height: 1, background: T.border }} />
 

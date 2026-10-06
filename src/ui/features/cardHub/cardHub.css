@@ -1,0 +1,21 @@
+.hub-invoice-row {
+  border-radius: 8px;
+  transition: background-color 160ms ease, transform 160ms ease;
+}
+
+.hub-invoice-row:hover {
+  background-color: #eff6ff;
+  transform: translateX(2px);
+}
+
+.hub-invoice-row:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+  background-color: #eff6ff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-invoice-row {
+    transition: none;
+  }
+}

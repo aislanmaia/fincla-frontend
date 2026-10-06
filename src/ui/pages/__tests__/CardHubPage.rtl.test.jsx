@@ -2,7 +2,7 @@
 
 import React from "react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -14,6 +14,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 import { CardHubPage } from "../CardHubPage.jsx";
+import { T } from "../../tokens";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 const server = setupServer();
@@ -159,23 +160,48 @@ describe("CardHubPage — faturas do Hub", () => {
 
   it("expande e recolhe a lista no card e cada linha abre o dashboard", async () => {
     const history = { ...historyFixture(), monthly_data: [
-      histRow(2026, 5, "paid", "100", 1), histRow(2026, 6, "paid", "200", 1),
+      histRow(2026, 4, "paid", "100", 1), histRow(2026, 5, "paid", "100", 1),
+      histRow(2026, 6, "paid", "200", 1), histRow(2026, 7, "paid", "200", 1),
       ...historyFixture().monthly_data,
     ] };
     mockApi({ history });
     const user = userEvent.setup();
     renderHub();
     await screen.findByTestId("hub-current-invoice");
-    expect(otherRows().querySelectorAll("a")).toHaveLength(4);
-    await user.click(screen.getByRole("button", { name: /outras faturas/ }));
     expect(otherRows().querySelectorAll("a")).toHaveLength(6);
+    await user.click(screen.getByRole("button", { name: /outras faturas/ }));
+    expect(otherRows().querySelectorAll("a")).toHaveLength(8);
     const link = otherRows().querySelector('a[href="/cards/1/invoices/2026/9"]');
     expect(link).not.toBeNull();
     await user.click(link);
     expect(navigateMock).toHaveBeenCalledWith({ to: "/cards/1/invoices/2026/9" });
     await user.click(screen.getByRole("button", { name: "Mostrar menos" }));
-    expect(otherRows().querySelectorAll("a")).toHaveLength(4);
+    expect(otherRows().querySelectorAll("a")).toHaveLength(6);
     expect([...otherRows().querySelectorAll("a")].map((row) => row.getAttribute("href"))).toContain("/cards/1/invoices/2026/11");
+  });
+
+  it("revela mais faturas em lotes ao clicar e ao chegar ao fim da rolagem", async () => {
+    const history = { ...historyFixture(), monthly_data: [
+      ...Array.from({ length: 8 }, (_, index) => histRow(index === 0 ? 2025 : 2026, index === 0 ? 12 : index, "paid", "100", 1)),
+      ...historyFixture().monthly_data,
+    ] };
+    mockApi({ history });
+    const user = userEvent.setup();
+    renderHub();
+    await screen.findByTestId("hub-current-invoice");
+    const list = otherRows();
+    expect(list.querySelectorAll("a")).toHaveLength(6);
+    await user.click(screen.getByRole("button", { name: /outras faturas/ }));
+    expect(list.querySelectorAll("a")).toHaveLength(10);
+    Object.defineProperties(list, {
+      scrollHeight: { configurable: true, value: 800 },
+      clientHeight: { configurable: true, value: 300 },
+      scrollTop: { configurable: true, writable: true, value: 500 },
+    });
+    fireEvent.wheel(list);
+    fireEvent.scroll(list);
+    expect(list.querySelectorAll("a")).toHaveLength(12);
+    expect(screen.getByRole("button", { name: "Mostrar menos" })).toBeInTheDocument();
   });
 
   it("marca fatura pagável com data escolhida e atualiza status e histórico sem nova lista de cartões", async () => {
@@ -308,6 +334,7 @@ describe("CardHubPage — faturas do Hub", () => {
     expect(screen.getByTestId("invoice-carousel").querySelectorAll('[data-testid^="invoice-card-"]')).toHaveLength(4);
     expect(screen.getByTestId("invoice-carousel")).not.toHaveTextContent("Fatura atual");
     expect(screen.getByTestId("all-invoices-open-button")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Azul, final 7112, selecionado/ })).toHaveAttribute("aria-pressed", "true");
     await user.click(screen.getByTestId("invoice-card-2026-11"));
     expect(navigateMock).toHaveBeenCalledWith({ to: "/cards/1/invoices/2026/11" });
     await user.click(screen.getByTestId("all-invoices-open-button"));
@@ -329,6 +356,7 @@ describe("CardHubPage — KPIs e insights", () => {
     expect(screen.getByText("Velocidade de gasto")).toBeInTheDocument();
     // hoje 04/10, fechamento dia 15: ciclo 15/09-15/10 (30 dias), 19 decorridos = 63%
     expect(screen.getByText(/Avançamos 63% do ciclo/)).toBeInTheDocument();
+    expect(screen.getByTestId("pace-cycle-fill")).toHaveStyle({ background: T.blue });
     expect(screen.getByText(/81% do limite gasto/)).toBeInTheDocument();
     // 8129,51 / 19 * 30 = 12.836
     expect(screen.getByText(/Gasto acelerado/)).toHaveTextContent("12.836,00");

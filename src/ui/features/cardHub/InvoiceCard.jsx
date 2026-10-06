@@ -37,10 +37,10 @@ function plural(n, one, many) {
  * Link para o dashboard da fatura. `<a>` de verdade (abre em nova aba, copia
  * link); o clique simples navega pelo router sem recarregar.
  */
-export function InvoiceDashboardLink({ cardId, invoice, onNavigate, children, style }) {
+export function InvoiceDashboardLink({ cardId, invoice, onNavigate, children, style, className }) {
   const href = invoiceDashboardPath(cardId, invoice.year, invoice.month);
   return (
-    <a href={href} data-testid="invoice-dashboard-link"
+    <a href={href} className={className} data-testid="invoice-dashboard-link"
       onClick={(e) => {
         if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
         e.preventDefault();
