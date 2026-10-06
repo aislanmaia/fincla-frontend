@@ -203,16 +203,34 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
       if (bucket) { bucket.value += Number(item.amount); bucket.count += 1; }
     }
   }
-  const projectedCategoryTotals = new Map();
-  if (rows.length === 12 && allKnown) {
-    for (const row of rows) for (const item of [...installments(row), ...row.recurrences]) {
-      const name = item.category_name || "Sem categoria";
-      projectedCategoryTotals.set(name, (projectedCategoryTotals.get(name) || 0) + Number(item.amount));
-    }
-  }
-  const projectedCategories = [...projectedCategoryTotals].sort((a, b) => b[1] - a[1]).slice(0, 5);
   const historyByMonth = new Map((history?.monthly_data || []).map((row) => [keyOf(row), row]));
   const futureByMonth = new Map(rows.map((row) => [keyOf(row), row]));
+  const periodHistory = Array.from({ length: historyMonths }, (_, index) =>
+    historyByMonth.get(keyOf(shiftMonth(index - historyMonths))));
+  const periodFuture = Array.from({ length: futureMonths }, (_, index) =>
+    futureByMonth.get(keyOf(shiftMonth(index))));
+  const categoryAverageKnown = periodHistory.every((row) => historyKnown(row, currency)
+    && Array.isArray(row.commitments_category_breakdown)
+    && row.commitments_category_breakdown.every((item) => item.installments_amount_currency === currency
+      && item.recurrences_amount_currency === currency
+      && Number.isFinite(Number(item.installments_amount)) && Number.isFinite(Number(item.recurrences_amount))))
+    && periodFuture.every((row) => inventoryKnown(row, currency));
+  const periodCategoryTotals = new Map();
+  const addCategory = (id, name, amount) => {
+    const key = id || "__uncategorized__";
+    const previous = periodCategoryTotals.get(key);
+    periodCategoryTotals.set(key, { name: name || previous?.name || "Sem categoria", amount: (previous?.amount || 0) + amount });
+  };
+  if (categoryAverageKnown) {
+    for (const row of periodHistory) for (const item of row.commitments_category_breakdown) {
+      addCategory(item.category_id, item.category_name, Number(item.installments_amount) + Number(item.recurrences_amount));
+    }
+    for (const row of periodFuture) for (const item of [...installments(row), ...row.recurrences]) {
+      addCategory(item.category_id, item.category_name, Number(item.amount));
+    }
+  }
+  const periodCategories = [...periodCategoryTotals.values()].sort((a, b) => b.amount - a.amount).slice(0, 5);
+  const categoryPeriodLabel = `${historyMonths ? `${historyMonths}m histórico + ` : ""}${futureMonths}m projeção`;
   const timeline = Array.from({ length: historyMonths + futureMonths }, (_, index) => {
     const offset = index - historyMonths;
     const ref = shiftMonth(offset);
@@ -311,7 +329,7 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
       </div>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap }}>
         <Card style={cardStyle}><h2 style={{ ...G, margin: "0 0 10px", fontSize: 16 }}>Quando vence o compromisso do mês</h2>{inventoryKnown(monthNow, currency) ? dayBuckets.map((bucket) => <div key={bucket.label} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "7px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}><span>{bucket.label} · {bucket.count} itens</span><strong>{moneyValue(bucket.value, currency)}</strong></div>) : <p style={{ fontSize: 12 }}>Datas indisponíveis neste mês.</p>}</Card>
-        <Card style={cardStyle}><h2 style={{ ...G, margin: "0 0 10px", fontSize: 16 }}>Média projetada por categoria · próximos 12 meses</h2>{projectedCategories.map(([name, value]) => <div key={name} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "7px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}><span>{name}</span><strong>{moneyValue(value / 12, currency)}/mês</strong></div>)}{projectedCategories.length === 0 && <p style={{ fontSize: 12 }}>Média indisponível ou sem compromissos no período.</p>}</Card>
+        <Card style={cardStyle}><h2 style={{ ...G, margin: "0 0 10px", fontSize: 16 }}>Média por categoria · {categoryPeriodLabel}</h2>{periodCategories.map(({ name, amount }) => <div key={name} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "7px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}><span>{name}</span><strong>{moneyValue(amount / (historyMonths + futureMonths), currency)}/mês</strong></div>)}{periodCategories.length === 0 && <p style={{ fontSize: 12 }}>{categoryAverageKnown ? "Sem compromissos no período." : "Média indisponível: faltam dados de um ou mais meses do período."}</p>}</Card>
       </div>
       {currencyMismatch && <p role="alert" style={{ margin: 0, color: T.amber }}>A moeda dos compromissos recebidos não corresponde à moeda do cartão. Valores desses meses estão indisponíveis.</p>}
       {!allKnown && <p role="status" style={{ margin: 0, color: T.amber }}>O inventário de alguns meses está incompleto. Os itens disponíveis continuam listados abaixo.</p>}

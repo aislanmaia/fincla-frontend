@@ -14,6 +14,7 @@ const ORG = "org";
 const money = (amount) => ({ amount, currency: "BRL" });
 const calls = [];
 let futureOverride = null;
+let historyOverride = null;
 let historyCurrency = "BRL";
 const server = setupServer(
   http.get("*/v1/credit-cards", ({ request }) => {
@@ -45,7 +46,7 @@ const server = setupServer(
     calls.push(new URL(request.url).pathname);
     const params = new URL(request.url).searchParams;
     if (params.get("include_commitments") !== "true" || params.get("months") !== "13") return HttpResponse.json({}, { status: 400 });
-    return HttpResponse.json({ monthly_data: [
+    return HttpResponse.json(historyOverride ?? { monthly_data: [
       { year: 2026, month: 9, month_name: "setembro", total_amount: money("500"), installments_amount: money("60"), recurrences_amount: { amount: "10", currency: historyCurrency } },
       { year: 2026, month: 10, month_name: "outubro", total_amount: money("400"), installments_amount: money("20"), recurrences_amount: money("10") },
       { year: 2026, month: 7, month_name: "julho", total_amount: money("75") },
@@ -64,7 +65,7 @@ const server = setupServer(
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterAll(() => server.close());
 beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(2026, 9, 6, 12)); });
-afterEach(() => { cleanup(); calls.length = 0; futureOverride = null; historyCurrency = "BRL"; server.resetHandlers(); navigate.mockReset(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); calls.length = 0; futureOverride = null; historyOverride = null; historyCurrency = "BRL"; server.resetHandlers(); navigate.mockReset(); vi.useRealTimers(); });
 
 for (const isMobile of [false, true]) {
   describe(isMobile ? "mobile" : "desktop", () => {
@@ -118,6 +119,37 @@ it("alterna histórico e projeção sem novas chamadas e não inventa zero em m�
   await user.click(within(screen.getByRole("group", { name: "Projeção" })).getByRole("button", { name: "3 meses" }));
   expect(within(timeline).queryByText("janeiro 2027")).not.toBeInTheDocument();
   expect(calls.filter((c) => c.startsWith("/v1/credit-cards"))).toHaveLength(3);
+});
+
+it("calcula a média por categoria no período histórico e futuro selecionado", async () => {
+  const user = userEvent.setup();
+  const installment = (month) => ({
+    transaction_id: month, series_id: "a", description: "Notebook", amount: money("100"),
+    installment_number: month - 9, total_installments: 6, due_date: `2026-${month}-10`,
+    category_id: "tech", category_name: "Tecnologia",
+  });
+  futureOverride = { monthly_breakdown: [10, 11, 12].map((month) => ({
+    year: 2026, month, month_name: "mês", installments: [installment(month)], recurrences: month === 10
+      ? [{ series_id: "r", description: "Assinatura", amount: money("50"), due_date: "2026-10-10", category_id: "service", category_name: "Serviços" }]
+      : [],
+  })) };
+  historyOverride = { monthly_data: [7, 8, 9].map((month) => ({
+    year: 2026, month, month_name: "mês", total_amount: money("30"),
+    installments_amount: money("30"), recurrences_amount: money("0"),
+    commitments_category_breakdown: [{ category_id: "tech", category_name: "Tecnologia",
+      installments_amount: money("30"), recurrences_amount: money("0") }],
+  })) };
+  render(<CardCommitmentsPage organizationId={ORG} />);
+  await screen.findAllByText("Notebook");
+  const historyButtons = screen.getByRole("group", { name: "Histórico" });
+  const futureButtons = screen.getByRole("group", { name: "Projeção" });
+  await user.click(within(futureButtons).getByRole("button", { name: "3 meses" }));
+  expect(screen.getByText("Média por categoria · 3m histórico + 3m projeção")).toBeInTheDocument();
+  expect(screen.getByText("R$ 65,00/mês")).toBeInTheDocument();
+  await user.click(within(historyButtons).getByRole("button", { name: "Sem histórico" }));
+  expect(screen.getByText("Média por categoria · 3m projeção")).toBeInTheDocument();
+  expect(screen.getByText("R$ 100,00/mês")).toBeInTheDocument();
+  expect(calls.filter((call) => call.startsWith("/v1/credit-cards"))).toHaveLength(3);
 });
 
 it("não soma moedas diferentes no histórico", async () => {

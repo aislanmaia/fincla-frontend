@@ -150,6 +150,11 @@ export const getInvoiceHistory = async (
       total_amount_currency: toCurrency(row.total_amount),
       installments_amount_currency: toCurrency(row.installments_amount),
       recurrences_amount_currency: toCurrency(row.recurrences_amount),
+      commitments_category_breakdown: row.commitments_category_breakdown?.map((category) => ({
+        ...category,
+        installments_amount_currency: toCurrency(category.installments_amount),
+        recurrences_amount_currency: toCurrency(category.recurrences_amount),
+      })),
     })) }
     : response.data;
   return unwrapMoney(data);

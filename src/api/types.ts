@@ -1004,6 +1004,14 @@ export interface InvoiceHistoryItem {
   installments_amount_currency?: string | null;
   recurrences_amount?: number | null;
   recurrences_amount_currency?: string | null;
+  commitments_category_breakdown?: {
+    category_id: string | null;
+    category_name: string;
+    installments_amount: number | { amount: string; currency: string };
+    installments_amount_currency?: string | null;
+    recurrences_amount: number | { amount: string; currency: string };
+    recurrences_amount_currency?: string | null;
+  }[] | null;
 }
 
 export interface InvoiceHistorySummary {

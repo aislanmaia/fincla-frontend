@@ -77,6 +77,11 @@ for (const viewport of [
       .format(Number(balance.net_amount.amount));
     await expect(page.getByTestId("committed-total")).toContainText(formatted);
     await expect(page.getByText("Notebook parcelado").first()).toBeVisible();
+    await expect(page.getByText(/Média indisponível: faltam dados/)).toBeVisible();
+    await page.getByRole("group", { name: "Histórico" }).getByRole("button", { name: "Sem histórico" }).click();
+    await page.getByRole("group", { name: "Projeção" }).getByRole("button", { name: "3 meses" }).click();
+    await expect(page.getByText("Média por categoria · 3m projeção")).toBeVisible();
+    await expect(page.getByText(/10,01\/mês/).first()).toBeVisible();
     expect(requests.length, requests.join("\n")).toBeLessThanOrEqual(4);
     expect(requests.filter((url) => url.includes("future-commitments"))).toHaveLength(1);
     expect(requests.filter((url) => url.includes("/invoices/history"))).toHaveLength(1);
