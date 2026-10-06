@@ -363,7 +363,7 @@ test.describe("orçamento de chamadas ao abrir /cards", () => {
       }
       const classicFive = await measureLoad(page, "/cards", async () => {
         try {
-          await expect(page.getByText("Meus Cartões").first()).toBeVisible({ timeout: 30_000 });
+          await expect(page.getByText("Budget 5").first()).toBeVisible({ timeout: 30_000 });
         } catch (error) {
           throw new Error(`Classic view at ${page.url()}: ${(await page.locator("body").innerText()).slice(0, 700)}`, { cause: error });
         }

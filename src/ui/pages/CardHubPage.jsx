@@ -164,9 +164,9 @@ export function CardHubPage({
   } });
   const goTo = (href) => navigate({ to: href });
   const selectCard = (cardId) => {
-    if (cardId === selectedCardId) return;
     const publicId = hub.cards.find((card) => card.id === cardId)?.public_id;
     if (!publicId) return;
+    if (cardId === selectedCardId && search?.[FC.HUB_CARD] === publicId) return;
     navigate({ to: "/cards", search: (prev) => ({ ...prev, [FC.VIEW]: "new", [FC.HUB_CARD]: publicId }) });
   };
   const formatMoneyForCard = (v) => formatMoneyAbs(v, currency) ?? "—";
