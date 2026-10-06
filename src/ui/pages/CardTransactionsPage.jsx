@@ -111,8 +111,8 @@ export function CardTransactionsPage({ isMobile = false, organizationId = null, 
       try {
         const detail = await getCreditCardInvoice(card.id, year, month, organizationId);
         return { status: "ok", card, detail };
-      } catch (error) {
-        return { status: error?.response?.status === 404 ? "empty" : "error", card, detail: null };
+      } catch {
+        return { status: "error", card, detail: null };
       }
       }).catch(() => ({ status: "error", card: null, detail: null }))
         .finally(() => inFlight.current.delete(key));
@@ -146,7 +146,6 @@ export function CardTransactionsPage({ isMobile = false, organizationId = null, 
       {enabled && state.status === "loading" && <Notice>Carregando lançamentos…</Notice>}
       {enabled && state.status === "missing" && <Notice>Cartão não encontrado ou sem acesso.</Notice>}
       {enabled && state.status === "error" && <Notice>Não foi possível carregar a fatura.</Notice>}
-      {enabled && state.status === "empty" && <Notice>Esta fatura ainda não tem lançamentos.</Notice>}
       {enabled && state.status === "ok" && detail && <>
         <Card style={{ ...panel, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
           <span style={{ ...G, color: T.inkMid, fontSize: 12 }}>Total da fatura · {detail.items_count} lançamentos</span>

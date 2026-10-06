@@ -163,6 +163,18 @@ describe("Lançamentos de um cartão", () => {
     expect(calls).toEqual(["/v1/credit-cards"]);
   });
 
+  it("trata 404 do detalhe como falha de carregamento, sem inventar fatura vazia", async () => {
+    const calls = serve();
+    server.use(http.get("*/v1/credit-cards/:id/invoices/:year/:month", ({ request }) => {
+      calls.push(new URL(request.url).pathname);
+      return new HttpResponse(null, { status: 404 });
+    }));
+    render(<CardTransactionsPage organizationId={ORG_ID} />);
+    expect(await screen.findByText("Não foi possível carregar a fatura.")).toBeInTheDocument();
+    expect(screen.queryByText("Esta fatura ainda não tem lançamentos.")).not.toBeInTheDocument();
+    expect(calls).toHaveLength(2);
+  });
+
   it("deduplica as requisições durante o replay de efeitos do React", async () => {
     const calls = serve();
     render(<React.StrictMode><CardTransactionsPage organizationId={ORG_ID} /></React.StrictMode>);
