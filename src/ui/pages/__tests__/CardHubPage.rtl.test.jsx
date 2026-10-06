@@ -34,9 +34,11 @@ afterEach(() => {
 });
 
 const money = (amount, currency = "BRL") => ({ amount, currency });
+const publicIdFor = (id) => `00000000-0000-4000-8000-${String(id).padStart(12, "0")}`;
 
 const cardFixture = (over = {}) => ({
-  id: 1,
+  id: over.id ?? 1,
+  public_id: publicIdFor(over.id ?? 1),
   organization_id: ORG,
   last4: "7112",
   brand: "Visa",
@@ -331,8 +333,8 @@ describe("CardHubPage — faturas do Hub", () => {
     expect(otherRows()).toHaveTextContent("Paga");
     expect(otherRows()).toHaveTextContent("Prevista");
     expect([...otherRows().querySelectorAll("a")].map((row) => row.getAttribute("href"))).toEqual([
-      "/cards/1/invoices/2026/9", "/cards/1/invoices/2026/8",
-      "/cards/1/invoices/2026/11", "/cards/1/invoices/2026/12",
+      `/cards/${publicIdFor(1)}/invoices/2026/9`, `/cards/${publicIdFor(1)}/invoices/2026/8`,
+      `/cards/${publicIdFor(1)}/invoices/2026/11`, `/cards/${publicIdFor(1)}/invoices/2026/12`,
     ]);
     expect(screen.getByTestId("invoice-counts")).toHaveTextContent("1 paga · 1 fechada · 1 aberta · 2 previstas");
     expect(screen.queryByRole("dialog", { name: "Todas as faturas" })).toBeNull();
@@ -356,11 +358,11 @@ describe("CardHubPage — faturas do Hub", () => {
     });
     fireEvent.scroll(otherRows());
     expect(otherRows().querySelectorAll("a")).toHaveLength(8);
-    const link = otherRows().querySelector('a[href="/cards/1/invoices/2026/9"]');
+    const link = otherRows().querySelector(`a[href="/cards/${publicIdFor(1)}/invoices/2026/9"]`);
     expect(link).not.toBeNull();
     await user.click(link);
-    expect(navigateMock).toHaveBeenCalledWith({ to: "/cards/1/invoices/2026/9" });
-    expect([...otherRows().querySelectorAll("a")].map((row) => row.getAttribute("href"))).toContain("/cards/1/invoices/2026/11");
+    expect(navigateMock).toHaveBeenCalledWith({ to: `/cards/${publicIdFor(1)}/invoices/2026/9` });
+    expect([...otherRows().querySelectorAll("a")].map((row) => row.getAttribute("href"))).toContain(`/cards/${publicIdFor(1)}/invoices/2026/11`);
   });
 
   it("revela mais faturas em lotes sucessivos ao chegar ao fim da rolagem", async () => {
@@ -430,7 +432,7 @@ describe("CardHubPage — faturas do Hub", () => {
     await waitFor(() => expect(finishPayment).toBeTypeOf("function"));
     await user.click(screen.getByText("Roxo"));
     expect(navigateMock).toHaveBeenCalledWith(expect.objectContaining({ to: "/cards" }));
-    searchMock.value = { view: "new", card: "2" };
+    searchMock.value = { view: "new", card: publicIdFor(2) };
     view.rerender(<CardHubPage organizationId={ORG} dataMode="live" onNewItem={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("Cartão selecionado:")).toHaveTextContent("Roxo"));
     finishPayment();
@@ -520,10 +522,10 @@ describe("CardHubPage — faturas do Hub", () => {
     expect(screen.getByTestId("all-invoices-open-button")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Azul, final 7112, selecionado/ })).toHaveAttribute("aria-pressed", "true");
     await user.click(screen.getByTestId("invoice-card-2026-11"));
-    expect(navigateMock).toHaveBeenCalledWith({ to: "/cards/1/invoices/2026/11" });
+    expect(navigateMock).toHaveBeenCalledWith({ to: `/cards/${publicIdFor(1)}/invoices/2026/11` });
     await user.click(screen.getByTestId("all-invoices-open-button"));
     await user.click(screen.getByTestId("all-invoices-row-2026-09"));
-    expect(navigateMock).toHaveBeenCalledWith({ to: "/cards/1/invoices/2026/9" });
+    expect(navigateMock).toHaveBeenCalledWith({ to: `/cards/${publicIdFor(1)}/invoices/2026/9` });
   });
 });
 
@@ -647,18 +649,18 @@ const countRequests = () => {
 describe("CardHubPage — navegação e atualização", () => {
   it("seleciona pelo URL e restaura o cartão quando o histórico volta", async () => {
     mockApi({ cards: [cardFixture(), cardFixture({ id: 2, last4: "4420", description: "Roxo" })] });
-    searchMock.value = { view: "new", card: "2" };
+    searchMock.value = { view: "new", card: publicIdFor(2) };
     const user = userEvent.setup();
     const view = renderHub();
     await waitFor(() => expect(screen.getByText("Cartão selecionado:")).toHaveTextContent("Roxo"));
     await user.click(screen.getByText("Azul"));
     const arg = navigateMock.mock.calls.at(-1)[0];
     expect(arg.to).toBe("/cards");
-    expect(arg.search({ view: "new", card: 2 })).toEqual({ view: "new", card: 1 });
-    searchMock.value = { view: "new", card: "1" };
+    expect(arg.search({ view: "new", card: publicIdFor(2) })).toEqual({ view: "new", card: publicIdFor(1) });
+    searchMock.value = { view: "new", card: publicIdFor(1) };
     view.rerender(<CardHubPage organizationId={ORG} dataMode="live" onNewItem={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("Cartão selecionado:")).toHaveTextContent("Azul"));
-    searchMock.value = { view: "new", card: "2" };
+    searchMock.value = { view: "new", card: publicIdFor(2) };
     view.rerender(<CardHubPage organizationId={ORG} dataMode="live" onNewItem={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("Cartão selecionado:")).toHaveTextContent("Roxo"));
   });

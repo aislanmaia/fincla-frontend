@@ -231,14 +231,17 @@ for (const vp of VIEWPORTS) {
 test("a URL restaura o cartão selecionado ao voltar do dashboard", async ({ page }) => {
   await openHub(page, VIEWPORTS[0]);
   await page.getByText("Hub Vazio").first().click();
-  await expect(page).toHaveURL(new RegExp(`card=${emptyCardId}`));
+  await expect(page).toHaveURL(/card=[0-9a-f]{8}-[0-9a-f-]{27}/);
+  const emptyUrl = page.url();
   await expect(page.getByText("Cartão selecionado:")).toContainText("Hub Vazio");
   await page.getByText("Hub Azul").first().click();
-  await expect(page).toHaveURL(new RegExp(`card=${busyCardId}`));
+  await expect(page).toHaveURL(/card=[0-9a-f]{8}-[0-9a-f-]{27}/);
+  const busyUrl = page.url();
+  expect(busyUrl).not.toBe(emptyUrl);
   await page.getByRole("link", { name: /Abrir dashboard da fatura/ }).click();
-  await expect(page).toHaveURL(/\/cards\/\d+\/invoices\/\d+\/\d+/);
+  await expect(page).toHaveURL(/\/cards\/[0-9a-f-]{36}\/invoices\/\d+\/\d+/);
   await page.goBack();
-  await expect(page).toHaveURL(new RegExp(`card=${busyCardId}`));
+  await expect(page).toHaveURL(busyUrl);
   await expect(page.getByText("Cartão selecionado:")).toContainText("Hub Azul");
 });
 

@@ -921,6 +921,8 @@ export interface UpdateCreditCardRequest {
 
 export interface CreditCard {
   id: number;
+  /** Stable opaque identifier for browser routes; the numeric id stays internal to API requests. */
+  public_id: string;
   organization_id: string;
   last4: string;
   brand: string;

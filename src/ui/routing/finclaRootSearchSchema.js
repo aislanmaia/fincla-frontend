@@ -91,13 +91,8 @@ const viewSchema = z.preprocess((val) => {
   return s === "new" ? s : undefined;
 }, z.literal("new").optional());
 
-/** ID numérico positivo do cartão selecionado no Hub. */
-const hubCardSchema = z.preprocess((val) => {
-  const s = val == null ? "" : String(val).trim();
-  if (!/^\d+$/.test(s)) return undefined;
-  const id = Number(s);
-  return Number.isSafeInteger(id) && id > 0 ? id : undefined;
-}, z.number().optional());
+/** Identificador público opaco do cartão selecionado no Hub. */
+const hubCardSchema = optionalUuidParam();
 
 /**
  * Allowlist de query na raiz (`/` e rotas filhas herdam o mesmo search validado).

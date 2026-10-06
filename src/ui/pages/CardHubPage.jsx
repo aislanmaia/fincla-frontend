@@ -87,7 +87,7 @@ export function CardHubPage({
     organizationId,
     enabled: shouldUseRealData(organizationId, dataMode),
     refreshToken: transactionsRefreshToken,
-    selectedIdFromUrl: search?.[FC.HUB_CARD] ?? null,
+    selectedPublicIdFromUrl: search?.[FC.HUB_CARD] ?? null,
   });
   const { selectedCard, selectedCardId, invoiceCards, detail } = hub;
   const recent = useRecentCardTransactions({
@@ -164,7 +164,9 @@ export function CardHubPage({
   const goTo = (href) => navigate({ to: href });
   const selectCard = (cardId) => {
     if (cardId === selectedCardId) return;
-    navigate({ to: "/cards", search: (prev) => ({ ...prev, [FC.VIEW]: "new", [FC.HUB_CARD]: cardId }) });
+    const publicId = hub.cards.find((card) => card.id === cardId)?.public_id;
+    if (!publicId) return;
+    navigate({ to: "/cards", search: (prev) => ({ ...prev, [FC.VIEW]: "new", [FC.HUB_CARD]: publicId }) });
   };
   const formatMoneyForCard = (v) => formatMoneyAbs(v, currency) ?? "—";
   const closeDialog = () => setDialog(null);
@@ -228,7 +230,11 @@ export function CardHubPage({
         <button type="button" onClick={() => setDialog("create-card")} disabled={!canCreateCard} style={{ ...OUTLINE_BTN, background: T.ink, color: "#fff", border: "none" }}>
           Cadastrar cartão
         </button>
-        {dialog === "create-card" && <CreateCardDialog organizationId={organizationId} isMobile={isMobile} onCreate={async (payload) => { const created = await hub.createCard(payload); selectCard(created.id); return created; }} onClose={closeDialog} />}
+        {dialog === "create-card" && <CreateCardDialog organizationId={organizationId} isMobile={isMobile} onCreate={async (payload) => {
+          const created = await hub.createCard(payload);
+          navigate({ to: "/cards", search: (prev) => ({ ...prev, [FC.VIEW]: "new", [FC.HUB_CARD]: created.public_id }) });
+          return created;
+        }} onClose={closeDialog} />}
       </div>
     );
   }
@@ -316,7 +322,7 @@ export function CardHubPage({
             key={`${organizationId}:${selectedCard.id}:${hub.initialInvoiceKey}`}
             invoices={invoiceCards}
             currentKey={hub.initialInvoiceKey}
-            cardId={selectedCard.id}
+            cardId={selectedCard.public_id}
             currency={currency}
             isMobile={isMobile}
             now={now}
@@ -324,7 +330,7 @@ export function CardHubPage({
             onMarkPaid={hub.payInvoice}
           />
           {isMobile && <>
-            {mobileOtherInvoices.length > 0 && <InvoiceCarousel invoices={mobileOtherInvoices} cardId={selectedCard.id} currency={currency}
+            {mobileOtherInvoices.length > 0 && <InvoiceCarousel invoices={mobileOtherInvoices} cardId={selectedCard.public_id} currency={currency}
               selectedKey={mobileOtherInvoices.some((invoice) => invoice.key === mobileInvoiceKey) ? mobileInvoiceKey : nearestOtherInvoice?.key}
               onSelect={setMobileInvoiceKey} onNavigate={goTo} isMobile now={now} openOnCard />}
             <button type="button" onClick={() => setDialog("invoices")} data-testid="all-invoices-open-button"
@@ -375,11 +381,11 @@ export function CardHubPage({
       {dialog === "create-card" && (
         <CreateCardDialog organizationId={organizationId} isMobile={isMobile} onCreate={async (payload) => {
           const created = await hub.createCard(payload);
-          selectCard(created.id);
+          navigate({ to: "/cards", search: (prev) => ({ ...prev, [FC.VIEW]: "new", [FC.HUB_CARD]: created.public_id }) });
           return created;
         }} onClose={closeDialog} />
       )}
-      {dialog === "invoices" && <AllInvoicesDialog invoices={invoiceCards} cardId={selectedCard.id} currency={currency}
+      {dialog === "invoices" && <AllInvoicesDialog invoices={invoiceCards} cardId={selectedCard.public_id} currency={currency}
         isMobile
         onNavigate={(href) => { closeDialog(); goTo(href); }} onClose={closeDialog} />}
       {dialog === "insights" && (

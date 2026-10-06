@@ -16,7 +16,7 @@ export function InvoiceDashboardPage() {
         Fatura {String(month).padStart(2, "0")}/{year}: em construção.
       </div>
       <div>
-        <button type="button" onClick={() => navigate({ to: "/cards", search: { [FC.VIEW]: "new", [FC.HUB_CARD]: Number(cardId) } })}
+        <button type="button" onClick={() => navigate({ to: "/cards", search: { [FC.VIEW]: "new", [FC.HUB_CARD]: cardId } })}
           style={{ ...G, fontSize: 12, fontWeight: 700, color: T.blue, background: "none", border: "none", padding: 0, cursor: "pointer" }}>
           ← Voltar para os cartões
         </button>

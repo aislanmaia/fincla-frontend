@@ -15,7 +15,7 @@ afterAll(() => server.close());
 
 const m = (a) => ({ amount: a, currency: "BRL" });
 const card = (id, closing, due) => ({
-  id, organization_id: ORG, last4: String(1000 + id), brand: "Visa", due_day: due, closing_day: closing,
+  id, public_id: `00000000-0000-4000-8000-${String(id).padStart(12, "0")}`, organization_id: ORG, last4: String(1000 + id), brand: "Visa", due_day: due, closing_day: closing,
   description: `C${id}`, color: null, notes: null, currency: "BRL",
   credit_limit: m("1000.00"), available_limit: m("900.00"), used_limit: m("100.00"), limit_usage_percent: 10,
 });
