@@ -252,7 +252,8 @@ test("o link do dashboard da fatura abre dentro do shell do app", async ({ page 
   await selectCardByName(page, "Hub Azul");
   await page.getByTestId("hub-current-invoice").getByText("Abrir dashboard da fatura").click();
   await expect(page).toHaveURL(new RegExp(`/cards/${busyCardId}/invoices/\\d{4}/\\d{1,2}$`));
-  await expect(page.getByText(/em construção/i)).toBeVisible();
+  await expect(page.getByTestId("card-name-label")).toContainText("Hub Azul");
+  await expect(page.locator('[data-testid^="invoice-card-"][data-selected="true"]')).toHaveAttribute("data-status", "open");
   // Barra lateral e topo do app continuam presentes: a página não saiu do shell.
   await expect(page.getByRole("navigation").getByRole("button", { name: "Cartões" })).toBeVisible();
   await expect(page.locator("[data-fincla-main-scroll]")).toBeVisible();

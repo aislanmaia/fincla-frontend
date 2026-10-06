@@ -26,6 +26,7 @@ import {
 } from "../features/creditCards/cardKpis.js";
 import { shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { FC } from "../routing/searchContract.js";
+import { buildInvoiceCsv, downloadCsv } from "../features/creditCards/invoiceCsv.js";
 import {
   CARTOES_DATA,
   CAT_COLORS_CARD,
@@ -621,21 +622,14 @@ export const CartoesPage = ({
   };
 
   const handleExportCSV = () => {
-    let rows = ["Descrição,Categoria,Valor,Data,Parcela,Recorrente"];
     let items = displayItems;
     const activeCats = Object.entries(exportCategories).filter(([,v])=>v).map(([k])=>k);
     if (activeCats.length>0)  items = items.filter(i=>activeCats.includes(i.cat));
     if (!exportInstallments)  items = items.filter(i=>!i.parcela);
     if (!exportRecurring)     items = items.filter(i=>!i.rec);
     if (!exportOneTime)       items = items.filter(i=>i.rec||i.parcela);
-    items.forEach(i => rows.push(
-      `"${i.desc}","${i.cat}","${i.val.toFixed(2).replace(".",",")}","${i.data}","${i.parcela?`${i.parcela.n}/${i.parcela.t}`:"-"}","${i.rec?"Sim":"Não"}"`
-    ));
-    const a = Object.assign(document.createElement("a"),{
-      href:URL.createObjectURL(new Blob([rows.join("\n")],{type:"text/csv"})),
-      download:`fatura-${card.nome}-${invoice?.mes}.csv`
-    });
-    a.click(); setExportModalOpen(false);
+    downloadCsv(`fatura-${card.nome}-${invoice?.mes}.csv`, buildInvoiceCsv(items));
+    setExportModalOpen(false);
   };
 
   const TABS = [

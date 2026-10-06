@@ -51,7 +51,7 @@ function topCategoryOf(breakdown) {
   return top?.category_name ? categoryLabelPtForTag({ name: top.category_name }) : null;
 }
 
-function historyStatus(raw, key, openKey) {
+export function historyStatus(raw, key, openKey) {
   if (raw === "paid") return INVOICE_STATUS.PAID;
   if (raw === "closed") return INVOICE_STATUS.CLOSED;
   // O histórico devolve "open" também para mês sem registro de fatura; só a fatura
@@ -70,10 +70,12 @@ function historyStatus(raw, key, openKey) {
  * @param {"ok"|"empty"|"unavailable"} args.currentState   `empty` = 404 (sem lançamentos)
  * @param {object|null} args.future   resposta de `/future-commitments`
  * @param {Date} [args.now]
+ * @param {{year:number, month:number}} [args.openRef]   mês da fatura aberta, quando já conhecido sem `/current`
  */
-export function buildInvoiceCards({ card, history, current, currentState, future, now = new Date() }) {
+export function buildInvoiceCards({ card, history, current, currentState, future, now = new Date(), openRef: knownOpenRef = null }) {
   const currentRef = currentState === "ok" ? parseInvoiceKey(current?.month) : null;
   const openRef = currentRef
+    ?? knownOpenRef
     ?? yearMonthOfOpenInvoiceByClosingDay(now, closingDayForInvoiceAnchor(card));
   const openKey = invoiceKey(openRef.year, openRef.month);
   const dueDay = card?.due_day;

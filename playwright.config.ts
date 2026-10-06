@@ -85,6 +85,12 @@ export default defineConfig({
       testMatch: "**/cards-hub.spec.ts",
     },
     {
+      // Dashboard de uma fatura (desktop e mobile). Semeia a própria organização
+      // (id novo), então não depende do `smoke`. Inclui a medição do orçamento de chamadas.
+      name: "cards-invoice-dashboard",
+      testMatch: "**/cards-invoice-dashboard.spec.ts",
+    },
+    {
       // Provisiona o próprio consultor e cliente via API; não depende do seed
       // do owner, então roda sem `smoke`.
       name: "consultant-ai-evaluation",
