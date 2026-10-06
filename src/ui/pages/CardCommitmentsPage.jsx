@@ -140,6 +140,7 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
       : inventoryKnown(row) ? committed(row) : null;
     return { ...ref, key: keyOf(ref), label: period(ref), value, phase: offset < 0 ? "history" : offset === 0 ? "current" : "forecast" };
   });
+  const largestCommitment = Math.max(0, ...timeline.map((entry) => entry.value > 0 ? entry.value : 0));
   const seriesById = new Map(series.map((item) => [item.id, item]));
   const back = () => navigate({ to: "/cards", search: { [FC.VIEW]: "new", [FC.HUB_CARD]: cardId } });
   const handleInventory = (change) => {
@@ -186,8 +187,12 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
           <PeriodPicker title="Projeção" options={[3, 6, 12]} selected={futureMonths} onChange={setFutureMonths} />
         </div>
         {state.historyError && historyMonths > 0 && <p role="alert" style={{ fontSize: 12 }}>Não foi possível carregar o histórico de compromissos.</p>}
-        <div style={{ display: "flex", gap: 10, overflowX: "auto", minWidth: 0 }} className="fincla-scroll">{timeline.map((entry) =>
-          <div key={entry.key} data-testid={`timeline-${entry.key}`} style={{ minWidth: 110, padding: 10, background: entry.phase === "current" ? T.blueLight : T.grayLight, borderRadius: 9 }}>
+        <div style={{ display: "flex", gap: 10, overflowX: "auto", minWidth: 0, alignItems: "end" }} className="fincla-scroll">{timeline.map((entry) =>
+          <div key={entry.key} data-testid={`timeline-${entry.key}`} style={{ minWidth: 110, padding: 10, background: entry.phase === "current" ? T.blueLight : T.grayLight, borderRadius: 9, border: entry.phase === "current" ? `1px solid ${T.blue}` : "1px solid transparent" }}>
+            <div aria-hidden="true" style={{ height: 98, display: "flex", alignItems: "end", justifyContent: "center", marginBottom: 8 }}>
+              {entry.value > 0 && largestCommitment > 0 && currency && <div data-testid={`timeline-bar-${entry.key}`}
+                style={{ width: 30, height: `${Math.max(4, Math.round(entry.value / largestCommitment * 94))}px`, borderRadius: "5px 5px 0 0", background: entry.phase === "history" ? T.inkFaint : entry.phase === "current" ? T.blue : T.blueBar }} />}
+            </div>
             <div style={label}>{entry.label}</div>
             <strong style={{ ...G, ...NUM, fontSize: 13 }}>{entry.value === null || !currency ? "Sem dados" : moneyValue(entry.value, currency)}</strong>
             <div style={{ ...G, fontSize: 10, color: T.inkLight }}>{entry.phase === "history" ? "Histórico" : entry.phase === "current" ? "Atual" : "Projeção"}</div>

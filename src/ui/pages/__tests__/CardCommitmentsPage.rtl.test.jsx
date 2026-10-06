@@ -77,6 +77,8 @@ for (const isMobile of [false, true]) {
       expect(within(timeline).getByText("R$ 70,00")).toBeInTheDocument();
       expect(within(timeline).getAllByText("Sem dados").length).toBeGreaterThan(0);
       expect(within(timeline).getByText("R$ 150,00")).toBeInTheDocument();
+      expect(Number.parseInt(screen.getByTestId("timeline-bar-2026-09").style.height)).toBeLessThan(Number.parseInt(screen.getByTestId("timeline-bar-2026-10").style.height));
+      expect(screen.queryByTestId("timeline-bar-2026-08")).not.toBeInTheDocument();
       const monthlyDetail = screen.getByRole("region", { name: "Detalhe por mês" });
       expect(within(monthlyDetail).getAllByText(/Histórico · parcelas/).some((item) => item.textContent.includes("60,00") && item.textContent.includes("10,00"))).toBe(true);
       expect(within(monthlyDetail).getAllByText("Sem dados").length).toBeGreaterThan(0);
