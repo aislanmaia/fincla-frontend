@@ -3,6 +3,8 @@ import { useState } from "react";
 import { T } from "../../tokens";
 import { G } from "../../typography";
 import { Btn } from "../../components/primitives";
+import { LocaleDatePicker } from "../../components/LocaleDatePicker.jsx";
+import { APP_UI_LOCALE } from "../../appLocale.js";
 import { dayMonth, localYmd } from "./invoiceFormat.js";
 
 /**
@@ -41,17 +43,13 @@ export function PayControls({ status, paidDate, mutation, onMarkPaid, onUnmarkPa
   return (
     <div style={wrap} data-testid="pay-controls">
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: stacked ? "space-between" : "flex-end" }}>
-        <label style={{ ...G, fontSize: 11, color: T.inkMid, display: "flex", alignItems: "center", gap: 6 }}>
-          Paga em
-          <input
-            type="date"
-            value={date}
-            max={today}
-            onChange={(e) => setDate(e.target.value)}
-            data-testid="paid-date-input"
-            style={{ ...G, border: `1.5px solid ${T.border}`, borderRadius: 8, padding: "5px 8px", fontSize: 12, color: T.inkMid, background: T.surface }}
-          />
-        </label>
+        <div style={{ ...G, fontSize: 11, color: T.inkMid, display: "flex", alignItems: "center", gap: 6 }}>
+          <span>Paga em</span>
+          <div style={{ width: 156, maxWidth: "100%" }}>
+            <LocaleDatePicker value={date} onChange={setDate} max={today} disabled={pending}
+              locale={APP_UI_LOCALE} variant={stacked ? "mobile" : "desktop"} ariaLabel="Data do pagamento" />
+          </div>
+        </div>
         <Btn variant="green" small disabled={pending || !date || date > today} onClick={() => onMarkPaid(date)} data-testid="mark-paid">
           {pending ? "Salvando…" : "✓ Marcar como paga"}
         </Btn>

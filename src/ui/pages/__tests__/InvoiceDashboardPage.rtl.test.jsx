@@ -2,7 +2,7 @@
 
 import React from "react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within, fireEvent } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -336,7 +336,8 @@ describe("InvoiceDashboardPage — marcar como paga", () => {
     });
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
 
-    fireEvent.change(screen.getByTestId("paid-date-input"), { target: { value: "2026-10-03" } });
+    await user.click(screen.getByRole("button", { name: /Data do pagamento/ }));
+    await user.click(within(screen.getByRole("dialog", { name: "Calendário" })).getByRole("button", { name: "3", exact: true }));
     await user.click(screen.getByTestId("mark-paid"));
 
     await screen.findByTestId("paid-note");
@@ -361,10 +362,11 @@ describe("InvoiceDashboardPage — marcar como paga", () => {
     renderPage();
     await screen.findByTestId("invoice-count");
 
-    expect(screen.getByTestId("paid-date-input")).toHaveAttribute("max", "2026-10-04");
-    fireEvent.change(screen.getByTestId("paid-date-input"), { target: { value: "2026-10-09" } });
-    expect(screen.getByTestId("mark-paid")).toBeDisabled();
-    fireEvent.change(screen.getByTestId("paid-date-input"), { target: { value: "2026-10-02" } });
+    await user.click(screen.getByRole("button", { name: /Data do pagamento/ }));
+    const calendar = screen.getByRole("dialog", { name: "Calendário" });
+    expect(within(calendar).getByRole("button", { name: "9", exact: true })).toHaveAttribute("aria-disabled", "true");
+    await user.click(within(calendar).getByRole("button", { name: "2", exact: true }));
+    expect(screen.getByRole("button", { name: /Data do pagamento/ })).toHaveAttribute("data-date-value", "2026-10-02");
     await user.click(screen.getByTestId("mark-paid"));
     await waitFor(() => expect(body).toEqual({ paid_date: "2026-10-02" }));
   });

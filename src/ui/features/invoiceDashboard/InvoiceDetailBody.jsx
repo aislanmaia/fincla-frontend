@@ -2,7 +2,7 @@ import { Download } from "lucide-react";
 
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
-import { Btn } from "../../components/primitives";
+import { Btn, ProgBar } from "../../components/primitives";
 import { formatMoney } from "../../money/formatMoney.js";
 import { INVOICE_STATUS, monthNameLower } from "../cardHub/hubInvoices.js";
 import { PayControls } from "./PayControls.jsx";
@@ -59,8 +59,8 @@ function Timeline({ detail, status, now }) {
         </span>
       </div>
       {pct !== null && pct !== undefined && (
-        <div style={{ position: "relative", height: 6, background: T.grayLight, borderRadius: 99 }}>
-          <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${pct}%`, background: paid ? T.green : `linear-gradient(90deg, ${T.green}, ${T.amber})`, borderRadius: 99 }} />
+        <div style={{ position: "relative" }}>
+          <ProgBar pct={pct} color={paid ? T.green : `linear-gradient(90deg, ${T.green}, ${T.amber})`} h={6} />
           {!paid && (
             <div style={{ position: "absolute", left: `${pct}%`, top: -4, width: 14, height: 14, borderRadius: "50%", background: T.ink, border: "2.5px solid #fff", boxShadow: "0 1px 4px rgba(0,0,0,0.3)", transform: "translateX(-50%)" }} />
           )}
@@ -84,9 +84,7 @@ export function LimitUsage({ percent, card, currency }) {
         <span style={mutedText}>Limite utilizado</span>
         <span style={{ ...G, ...NUM, fontSize: 11, fontWeight: 700, color }}>{Math.round(Number(percent))}%{limit ? ` de ${limit}` : ""}</span>
       </div>
-      <div style={{ height: 6, background: T.grayLight, borderRadius: 99, overflow: "hidden" }}>
-        <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 99 }} />
-      </div>
+      <ProgBar pct={pct} color={color} h={6} />
     </div>
   );
 }

@@ -48,7 +48,7 @@ const CAROUSEL_ARROW = {
 
 function Notice({ children, tone = "neutral" }) {
   const palette = tone === "warn"
-    ? { bg: T.amberLight, fg: "#92400E", bd: T.amberBorder }
+    ? { bg: T.amberLight, fg: T.inkMid, bd: T.amberBorder }
     : { bg: T.grayLight, fg: T.inkMid, bd: T.border };
   return (
     <div role="status" style={{ ...G, fontSize: 12, lineHeight: 1.5, color: palette.fg, background: palette.bg, border: `1px solid ${palette.bd}`, borderRadius: 10, padding: "10px 12px" }}>

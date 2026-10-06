@@ -35,7 +35,7 @@ export function RecentCardTransactions({ transactions, cardCurrency, loading, er
         </div>
       ))}
       <button type="button" onClick={onViewAll} style={{ ...G, alignSelf: "flex-start", marginTop: "auto", padding: "6px 0 0", border: 0, background: "none", color: T.blue, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
-        Ver todos os lançamentos →
+        Ver todas as transações →
       </button>
     </section>
   );

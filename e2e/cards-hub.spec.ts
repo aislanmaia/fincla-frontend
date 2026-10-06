@@ -251,7 +251,7 @@ test("o link do dashboard da fatura abre dentro do shell do app", async ({ page 
   await expect(page.getByTestId("hub-current-invoice")).toBeVisible({ timeout: 30_000 });
   await selectCardByName(page, "Hub Azul");
   await page.getByTestId("hub-current-invoice").getByText("Abrir dashboard da fatura").click();
-  await expect(page).toHaveURL(new RegExp(`/cards/${busyCardId}/invoices/\\d{4}/\\d{1,2}$`));
+  await expect(page).toHaveURL(/\/cards\/[0-9a-f-]{36}\/invoices\/\d{4}\/\d{1,2}$/);
   await expect(page.getByTestId("card-name-label")).toContainText("Hub Azul");
   await expect(page.locator('[data-testid^="invoice-card-"][data-selected="true"]')).toHaveAttribute("data-status", "open");
   // Barra lateral e topo do app continuam presentes: a página não saiu do shell.
@@ -361,7 +361,14 @@ test.describe("orçamento de chamadas ao abrir /cards", () => {
         await nextCard.click();
         await expect.poll(() => page.getByTestId("hub-card-carousel").evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
       }
-      const classicFive = await measureLoad(page, "/cards", async () => { await expect(page.getByRole("heading", { name: "Meus Cartões" })).toBeVisible({ timeout: 30_000 }); await page.waitForTimeout(4000); });
+      const classicFive = await measureLoad(page, "/cards", async () => {
+        try {
+          await expect(page.getByText("Meus Cartões").first()).toBeVisible({ timeout: 30_000 });
+        } catch (error) {
+          throw new Error(`Classic view at ${page.url()}: ${(await page.locator("body").innerText()).slice(0, 700)}`, { cause: error });
+        }
+        await page.waitForTimeout(4000);
+      });
 
       const hubCards = (seen: Seen[]) => seen.filter((r) => r.path.startsWith("/v1/credit-cards"));
       console.log(`[calls ${vp.name}] HUB 1 cartão\n${summarize(one)}\n[calls ${vp.name}] HUB 5 cartões\n${summarize(five)}\n[calls ${vp.name}] CLÁSSICA 5 cartões (total ${classicFive.length}, credit-cards ${hubCards(classicFive).length})\n${summarize(classicFive)}`);

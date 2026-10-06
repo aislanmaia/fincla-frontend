@@ -4,7 +4,7 @@ import { formatMoney } from "../../money/formatMoney.js";
 
 const LABEL = { ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.09em" };
 
-/** Disponível e Comprometido em parcelas: os dois números de limite que o backend entrega. */
+/** Disponível e usado: os dois números de limite que o backend entrega. */
 export function LimitTiles({ card, currency, isMobile, onEdit }) {
   const hasLimit = card.credit_limit !== null && card.credit_limit !== undefined && Number(card.credit_limit) > 0;
   const available = hasLimit ? formatMoney(card.available_limit, currency) : null;
@@ -38,10 +38,10 @@ export function LimitTiles({ card, currency, isMobile, onEdit }) {
         {!hasLimit && onEdit && <button type="button" onClick={onEdit} style={{ ...G, background: "none", border: 0, color: T.blue, padding: "8px 0 0", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Definir limite</button>}
       </div>
       <div data-testid="kpi-committed" style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: isMobile ? "12px 14px" : "14px 16px", boxShadow: T.sm }}>
-        <div style={{ ...LABEL, marginBottom: 5 }}>{isMobile ? "Comprometido" : "Comprometido em parcelas"}</div>
+        <div style={{ ...LABEL, marginBottom: 5 }}>Limite usado</div>
         <div style={{ ...G, ...NUM, fontSize: isMobile ? 16 : 19, fontWeight: 800, color: T.blue }}>{used}</div>
         <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 8 }}>
-          {usage === null ? "Limite não informado" : `${usage}% do limite`}
+          {usage === null ? "Limite não informado" : `${usage}% do limite · fatura e parcelas futuras`}
         </div>
       </div>
     </div>

@@ -46,8 +46,7 @@ let bearer = "";
 let tagId = "";
 let busyCardId = 0;
 let emptyCardId = 0;
-let busyCardPublicId = "";
-let emptyCardPublicId = "";
+const publicIdByCard = new Map<number, string>();
 const keyOf = (ym: string) => ym.slice(0, 7);
 
 async function api(path: string, init: RequestInit = {}) {
@@ -69,11 +68,12 @@ async function freshOrg(): Promise<void> {
   tagId = await fetchFirstCategoriaTagId(bearer, orgId);
 }
 
-async function createCard(body: Record<string, unknown>): Promise<{ id: number; publicId: string }> {
+async function createCard(body: Record<string, unknown>): Promise<number> {
   const res = await api("/v1/credit-cards", { method: "POST", body: JSON.stringify({ organization_id: orgId, ...body }) });
   expect(res.status, await res.clone().text()).toBe(201);
   const card = (await res.json()) as { id: number; public_id: string };
-  return { id: card.id, publicId: card.public_id };
+  publicIdByCard.set(card.id, card.public_id);
+  return card.id;
 }
 
 async function purchase(cardId: number, description: string, value: number, date: string, installments = 0) {
@@ -95,7 +95,10 @@ const shift = (ref: { year: number; month: number }, delta: number) => {
   const idx = ref.year * 12 + ref.month - 1 + delta;
   return { year: Math.floor(idx / 12), month: (idx % 12) + 1 };
 };
-const url = (cardId: number, ref: { year: number; month: number }) => `/cards/${cardId === busyCardId ? busyCardPublicId : emptyCardPublicId}/invoices/${ref.year}/${ref.month}`;
+const url = (cardId: number, ref: { year: number; month: number }) => {
+  const publicId = publicIdByCard.get(cardId) ?? "00000000-0000-4000-8000-000000999999";
+  return `/cards/${publicId}/invoices/${ref.year}/${ref.month}`;
+};
 const keyFor = (ref: { year: number; month: number }) => `${ref.year}-${pad(ref.month)}`;
 const parseBRL = (t: string | null) => {
   const m = /(-?[\d.]+,\d{2})/.exec(t ?? "");
@@ -118,8 +121,8 @@ test.describe.configure({ mode: "serial", retries: 1 });
 test.beforeAll(async ({ browser }) => {
   if (!e2eReady) return;
   await freshOrg();
-  ({ id: busyCardId, publicId: busyCardPublicId } = await createCard({ last4: "7112", brand: "Visa", due_day: 10, closing_day: 31, description: "Dash Azul", credit_limit: 10000 }));
-  ({ id: emptyCardId, publicId: emptyCardPublicId } = await createCard({ last4: "4420", brand: "Mastercard", due_day: 12, closing_day: 31, description: "Dash Vazio", credit_limit: 3000 }));
+  busyCardId = await createCard({ last4: "7112", brand: "Visa", due_day: 10, closing_day: 31, description: "Dash Azul", credit_limit: 10000 });
+  emptyCardId = await createCard({ last4: "4420", brand: "Mastercard", due_day: 12, closing_day: 31, description: "Dash Vazio", credit_limit: 3000 });
   await purchase(busyCardId, "Compra paga", 300, ymdAt(2));
   await purchase(busyCardId, "Compra fechada", 450, ymdAt(1));
   await api(`/v1/credit-cards/${busyCardId}/invoices/${new Date(ymdAt(2)).getFullYear()}/${new Date(ymdAt(2)).getMonth() + 1}/mark-paid?organization_id=${orgId}`, { method: "PATCH", body: JSON.stringify({}) });
@@ -267,7 +270,7 @@ for (const vp of VIEWPORTS) {
       await expect(page.getByTestId("invoice-dashboard-error")).toBeVisible({ timeout: 30_000 });
       await expect(page.getByRole("alert")).toContainText("Cartão não encontrado ou sem acesso");
       await page.getByTestId("back-to-cards").click();
-      await expect(page).toHaveURL(/\/cards$/);
+      await expect(page).toHaveURL(/\/cards\?view=new&card=/);
     });
   });
 }

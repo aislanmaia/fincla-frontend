@@ -323,7 +323,7 @@ describe("CardHubPage — lançamentos recentes", () => {
     view.rerender(<CardHubPage organizationId={ORG} dataMode="live" onNewItem={vi.fn()} transactionsRefreshToken={1} />);
     await within(section).findByText("Farmácia");
     expect(requests).toHaveLength(2);
-    await userEvent.setup().click(within(section).getByRole("button", { name: /Ver todos os lançamentos/ }));
+    await userEvent.setup().click(within(section).getByRole("button", { name: /Ver todas as transações/ }));
     expect(navigateMock).toHaveBeenCalledWith({ to: "/transactions" });
   });
 });
@@ -547,6 +547,9 @@ describe("CardHubPage — KPIs e insights", () => {
     expect(tile).toHaveTextContent("de R$ 10.000,00 de limite total");
     expect(within(tile).getByRole("meter", { name: "Percentual do limite usado" })).toHaveAttribute("aria-valuenow", "35");
     expect(tile).toHaveTextContent("35% do limite usado");
+    const usedTile = screen.getByTestId("kpi-committed");
+    expect(usedTile).toHaveTextContent("Limite usado");
+    expect(usedTile).toHaveTextContent("fatura e parcelas futuras");
   });
 
   it("explica a ausência de limite sem representar desconhecido como zero", async () => {

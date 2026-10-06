@@ -20,6 +20,7 @@ export const T = {
   // escurecer aqui fazia um botão desabilitado ler como "quase habilitado".
   // Nunca use para texto: reprova 1.4.3 (é o #9CA3AF original).
   inkFaint: "#9CA3AF",
+  categoryNeutral: "#6B7280",
   blue: "#2563EB",
   blueLight: "#EFF6FF",
   blueBar: "#60A5FA",

@@ -5,7 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { T } from "../tokens";
 import { G } from "../typography";
 import { FC } from "../routing/searchContract.js";
-import { Btn } from "../components/primitives";
+import { Btn, Card } from "../components/primitives";
 import { shouldUseRealData } from "../dataMode.js";
 import { mapInvoiceItemToUi } from "../data/creditCardsAdapter.js";
 import { invoiceDashboardPath, isValidInvoiceParams } from "../routing/invoiceRoute.js";
@@ -24,7 +24,7 @@ const CAROUSEL_ITEM_WIDTH = 330;
 
 function Notice({ children, tone = "neutral", role = "status" }) {
   const palette = tone === "warn"
-    ? { bg: T.amberLight, fg: "#92400E", bd: T.amberBorder }
+    ? { bg: T.amberLight, fg: T.inkMid, bd: T.amberBorder }
     : { bg: T.grayLight, fg: T.inkMid, bd: T.border };
   return (
     <div role={role} style={{ ...G, fontSize: 12, lineHeight: 1.5, color: palette.fg, background: palette.bg, border: `1px solid ${palette.bd}`, borderRadius: 10, padding: "10px 12px" }}>
@@ -162,8 +162,8 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
         </>
       ) : invoice && (
         <>
-          <section data-testid={`invoice-card-${invoice.key}`} data-status={invoice.status} data-selected="true" aria-label="Fatura selecionada"
-            style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, boxShadow: T.sm, padding: 20, display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
+           <Card data-testid={`invoice-card-${invoice.key}`} data-status={invoice.status} data-selected="true" aria-label="Fatura selecionada"
+             style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <InvoiceNavigator invoices={invoices} selectedKey={selectedKey} onSelect={selectInvoice} currency={currency} />
@@ -172,7 +172,7 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
               <Headline invoice={invoice} detail={detail} state={detailState} futureRow={data.futureRow} currency={currency} />
             </div>
             <InvoiceDetailBody invoice={invoice} currency={currency} {...detailProps} />
-          </section>
+           </Card>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: 16, alignItems: "start" }}>{lower}</div>
         </>
       )}

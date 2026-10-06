@@ -1,4 +1,5 @@
 import { categoryLabelPtForTag } from "../../data/categoryLabels.js";
+import { T } from "../../tokens";
 import {
   INVOICE_STATUS,
   buildInvoiceCards,
@@ -95,8 +96,8 @@ export function buildDashboardInvoices({ card, history, future, selected, now })
   return [...byKey.values()].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
 }
 
-const FALLBACK_COLORS = ["#2563EB", "#059669", "#D97706", "#7C3AED", "#DC2626", "#0891B2", "#DB2777", "#65A30D"];
-const NO_CATEGORY_COLOR = "#6B7280";
+const FALLBACK_COLORS = [T.blue, T.green, T.amber, T.purple, T.red, T.blueBar, T.redBar, T.greenBar];
+const NO_CATEGORY_COLOR = T.categoryNeutral;
 
 /** Linhas do breakdown já com rótulo PT-BR, cor estável e fração para o donut. */
 export function buildCategoryRows(breakdown) {
@@ -124,7 +125,7 @@ export function groupCategoryRows(rows, max = 5) {
   const sum = (xs) => (xs.every((x) => x !== null) ? xs.reduce((a, b) => a + b, 0) : null);
   return {
     visible: [...visible, {
-      key: "others", name: "Outras", color: "#9CA3AF", total: sum(restTotals), percentage: sum(restPcts),
+      key: "others", name: "Outras", color: T.inkFaint, total: sum(restTotals), percentage: sum(restPcts),
       count: sum(rest.map((r) => r.count)), isOthers: true,
     }],
     rest,

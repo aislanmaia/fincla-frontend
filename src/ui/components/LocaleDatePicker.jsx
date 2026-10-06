@@ -431,6 +431,7 @@ export function LocaleDatePicker({
             <div
               key={day}
               role="button"
+              aria-disabled={dis}
               tabIndex={dis ? -1 : 0}
               onClick={() => !dis && pick(day)}
               onKeyDown={(e) => {
