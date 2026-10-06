@@ -128,7 +128,7 @@ for (const vp of VIEWPORTS) {
   test(`gráficos do Hub usam dados reais e alternam Barras/Linhas — ${vp.name}`, async ({ page }) => {
     await openHub(page, vp);
     await selectCardByName(page, "Hub Azul");
-    const history = page.getByRole("heading", { name: "Histórico de faturas" }).locator("..");
+    const history = page.getByRole("heading", { name: "Histórico de faturas" }).locator("../..");
     const trend = page.getByRole("heading", { name: "Tendência por categoria" }).locator("..");
 
     await expect(history.getByRole("button", { name: "Barras" })).toHaveAttribute("aria-pressed", "true");
