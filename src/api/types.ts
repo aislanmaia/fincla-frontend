@@ -611,6 +611,8 @@ export interface Transaction {
   description: string;
   tags: Record<string, Tag[]>;
   value: number;
+  /** Moeda original da linha, preservada pelo cliente antes de desembrulhar value. */
+  value_currency?: string | null;
   payment_method: string;
   date: string;
   /**
@@ -658,6 +660,8 @@ export type SortOrder = 'asc' | 'desc';
 
 export interface ListTransactionsQuery {
   organization_id: string;
+  /** Apenas lançamentos vinculados a este cartão; combina com os outros filtros. */
+  credit_card_id?: number;
   type?: 'income' | 'expense' | 'refund';
   /** Um valor, ou vários (casa com qualquer um) — serializado como param repetido. */
   category?: string | string[];

@@ -135,6 +135,9 @@ for (const vp of VIEWPORTS) {
 
       // O Hub é a tela padrão de /cards.
       await selectCardByName(page, "Hub Azul");
+      const recent = page.getByRole("region", { name: "Lançamentos recentes" });
+      await expect(recent).toContainText("Compra aberta");
+      await expect(recent).not.toContainText("Não foi possível carregar");
       await expect(page.locator('[data-testid^="invoice-card-"][data-status="paid"]')).toHaveCount(1);
 
       // Quatro status, em ordem cronológica: passada paga, fechada, aberta, previstas.
@@ -216,6 +219,7 @@ for (const vp of VIEWPORTS) {
 
       await page.getByText("Hub Vazio").first().click();
       await expect(page.getByText("Cartão selecionado:")).toContainText("Hub Vazio");
+      await expect(page.getByRole("region", { name: "Lançamentos recentes" })).toContainText("Este cartão ainda não tem lançamentos.");
 
       const open = page.locator('[data-testid^="invoice-card-"][data-status="open"]');
       await expect(open).toHaveCount(1);
