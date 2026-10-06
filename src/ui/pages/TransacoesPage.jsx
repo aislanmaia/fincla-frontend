@@ -102,6 +102,7 @@ import {
   fmtValorDaLinha,
   rotuloDeData,
   shortDateLabel,
+  transactionStatus,
 } from "../features/transactions/shared/transactionFormat.js";
 import {
   MICRO_PX,
@@ -371,6 +372,7 @@ const DetailPanel = ({
 
   if (!tx) return null;
   const isReceita = tx.val > 0;
+  const statusPresentation = transactionStatus(tx.status);
   return (
     <div style={ inline
       ? { display:"flex", flexDirection:"column" }
@@ -446,9 +448,9 @@ const DetailPanel = ({
           { label:"Data",      val: tx.date },
           { label:"Método",    val: tx.method + (tx.parcela?.cartao ? ` · ${tx.parcela.cartao}` : "") },
           { label:"Status",    val: <span style={{ ...G, fontSize:12, fontWeight:700, padding:"2px 8px", borderRadius:99,
-              background: tx.status==="confirmado" ? T.greenLight : T.amberLight,
-              color:       tx.status==="confirmado" ? T.green       : T.amber }}>
-              {tx.status === "confirmado" ? "✓ Confirmado" : "⏳ Pendente"}
+              background: statusPresentation.background,
+              color: statusPresentation.color }}>
+              {statusPresentation.label}
             </span>},
           { label:"Recorrente",val: tx.rec ? "Sim" : "Não" },
           ...(tx.parcela ? [

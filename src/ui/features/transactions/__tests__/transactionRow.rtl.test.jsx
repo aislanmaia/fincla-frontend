@@ -13,6 +13,7 @@ import {
   catColor,
   shortDateLabel,
 } from "../../../pages/TransacoesPage.jsx";
+import { transactionStatus } from "../shared/transactionFormat.js";
 
 afterEach(cleanup);
 
@@ -43,6 +44,10 @@ function row(props = {}) {
 }
 
 describe("formatação de valor, cor e data", () => {
+  it("preserva os rótulos e cores do status nos detalhes", () => {
+    expect(transactionStatus("confirmado")).toEqual({ label: "✓ Confirmado", background: "#ECFDF5", color: "#059669" });
+    expect(transactionStatus("pendente")).toEqual({ label: "⏳ Pendente", background: "#FFFBEB", color: "#D97706" });
+  });
   it("fmtBRL usa valor absoluto, R$ + nbsp e vírgula decimal", () => {
     expect(fmtBRL(-1234.5)).toBe(`R$${nbsp}1.234,50`);
     expect(fmtBRL(0)).toBe(`R$${nbsp}0,00`);

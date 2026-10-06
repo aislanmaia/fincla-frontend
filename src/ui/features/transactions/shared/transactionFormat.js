@@ -72,6 +72,12 @@ export function shortDateLabel(raw, today = new Date()) {
 }
 export const catBg = (label) => `${catColor(label)}18`;
 
+export function transactionStatus(status) {
+  return status === "confirmado"
+    ? { label: "✓ Confirmado", background: T.greenLight, color: T.green }
+    : { label: "⏳ Pendente", background: T.amberLight, color: T.amber };
+}
+
 export const fmtBRL = v => "R$\u00a0" + Math.abs(v).toLocaleString("pt-BR",{minimumFractionDigits:2});
 
 /* O valor de uma LINHA na moeda dela, não na base da organização.
