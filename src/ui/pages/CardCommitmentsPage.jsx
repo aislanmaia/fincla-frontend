@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
-import { getFutureCommitments, listCreditCards, moveInstallmentToInvoice } from "../../api/creditCards";
+import { getFutureCommitments, getInvoiceHistory, listCreditCards, moveInstallmentToInvoice } from "../../api/creditCards";
 import { listRecurringSeries, updateRecurringSeries } from "../../api/recurringSeries";
 import { T } from "../tokens";
 import { G, NUM } from "../typography";
@@ -23,6 +23,26 @@ const committed = (row) => sum(installments(row)) + sum(row.recurrences || []);
 const inventoryKnown = (row) => Array.isArray(row?.installments) && Array.isArray(row?.recurrences)
   && [...row.installments, ...row.recurrences].every((item) => item.amount !== null && item.amount !== undefined && Number.isFinite(Number(item.amount)))
   && !row.installments_truncated && !row.recurrences_truncated;
+const historyKnown = (row, currency) => Boolean(currency)
+  && row?.installments_amount_currency === currency && row?.recurrences_amount_currency === currency
+  && row?.installments_amount !== null && row?.installments_amount !== undefined
+  && row?.recurrences_amount !== null && row?.recurrences_amount !== undefined
+  && Number.isFinite(Number(row.installments_amount)) && Number.isFinite(Number(row.recurrences_amount));
+const shiftMonth = (offset) => {
+  const now = new Date();
+  const date = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+  return { year: date.getFullYear(), month: date.getMonth() + 1 };
+};
+
+function PeriodPicker({ title, options, selected, onChange }) {
+  return <div role="group" aria-label={title} style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+    <span style={label}>{title}</span>
+    {options.map((count) => <button key={count} type="button" aria-pressed={selected === count} onClick={() => onChange(count)}
+      style={{ ...buttonStyle, background: selected === count ? T.blue : T.surface, color: selected === count ? "white" : T.ink, padding: "6px 9px" }}>
+      {count === 0 ? "Sem histórico" : `${count} meses`}
+    </button>)}
+  </div>;
+}
 
 function Metric({ title, value, detail, testId }) {
   return <Card style={cardStyle}><div style={label}>{title}</div><div data-testid={testId} style={{ ...G, ...NUM, fontSize: 22, fontWeight: 800, marginTop: 5 }}>{value}</div>{detail && <div style={{ ...G, fontSize: 12, color: T.inkLight, marginTop: 5 }}>{detail}</div>}</Card>;
@@ -65,30 +85,36 @@ function Inventory({ rows, currency, groupBy, sortBy, onMove, isMobile }) {
 export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobile = false }) {
   const { cardId } = useParams({ strict: false });
   const navigate = useNavigate();
-  const [state, setState] = useState({ loading: true, card: null, future: null, series: [], error: "", seriesError: false });
+  const [state, setState] = useState({ loading: true, card: null, future: null, history: null, series: [], error: "", seriesError: false, historyError: false });
   const [mutation, setMutation] = useState({ pending: false, error: "" });
   const [groupBy, setGroupBy] = useState("purchase");
   const [sortBy, setSortBy] = useState("value");
   const [moveItem, setMoveItem] = useState(null);
   const [targetMonth, setTargetMonth] = useState("");
   const [refresh, setRefresh] = useState(0);
+  const [historyMonths, setHistoryMonths] = useState(3);
+  const [futureMonths, setFutureMonths] = useState(6);
   const enabled = shouldUseRealData(organizationId, dataMode);
 
   useEffect(() => {
-    if (!enabled) { setState({ loading: false, card: null, future: null, series: [], error: "Organização indisponível.", seriesError: false }); return; }
+    if (!enabled) { setState({ loading: false, card: null, future: null, history: null, series: [], error: "Organização indisponível.", seriesError: false, historyError: false }); return; }
     let cancelled = false;
     setState((old) => ({ ...old, loading: true }));
     listCreditCards(organizationId).then(async (cards) => {
       const card = cards.find((item) => item.public_id === cardId);
       if (!card) throw new Error("Cartão não encontrado ou sem acesso.");
-      const [future, series] = await Promise.allSettled([getFutureCommitments(card.id, organizationId, 12, true), listRecurringSeries(organizationId)]);
+      const [future, history, series] = await Promise.allSettled([
+        getFutureCommitments(card.id, organizationId, 12, true),
+        getInvoiceHistory(card.id, organizationId, 13, false, true),
+        listRecurringSeries(organizationId),
+      ]);
       if (future.status === "rejected") throw future.reason;
-      if (!cancelled) setState({ loading: false, card, future: future.value, series: series.status === "fulfilled" ? series.value.series || [] : [], seriesError: series.status === "rejected", error: "" });
-    }).catch(() => { if (!cancelled) setState({ loading: false, card: null, future: null, series: [], seriesError: false, error: "Não foi possível carregar os compromissos deste cartão." }); });
+      if (!cancelled) setState({ loading: false, card, future: future.value, history: history.status === "fulfilled" ? history.value : null, historyError: history.status === "rejected", series: series.status === "fulfilled" ? series.value.series || [] : [], seriesError: series.status === "rejected", error: "" });
+    }).catch(() => { if (!cancelled) setState({ loading: false, card: null, future: null, history: null, series: [], seriesError: false, historyError: false, error: "Não foi possível carregar os compromissos deste cartão." }); });
     return () => { cancelled = true; };
   }, [enabled, organizationId, cardId, refresh]);
 
-  const { card, future, series } = state;
+  const { card, future, history, series } = state;
   const rows = future?.monthly_breakdown || [];
   const currency = card?.currency || null;
   const nowKey = currentKey();
@@ -103,6 +129,17 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
   const nextTotal = inventoryKnown(nextRow) ? committed(nextRow) : null;
   const reduction = monthly !== null && nextTotal !== null ? monthly - nextTotal : null;
   const recurring = monthNow?.recurrences || [];
+  const historyByMonth = new Map((history?.monthly_data || []).map((row) => [keyOf(row), row]));
+  const futureByMonth = new Map(rows.map((row) => [keyOf(row), row]));
+  const timeline = Array.from({ length: historyMonths + futureMonths }, (_, index) => {
+    const offset = index - historyMonths;
+    const ref = shiftMonth(offset);
+    const row = offset < 0 ? historyByMonth.get(keyOf(ref)) : futureByMonth.get(keyOf(ref));
+    const value = offset < 0
+      ? historyKnown(row, currency) ? Number(row.installments_amount) + Number(row.recurrences_amount) : null
+      : inventoryKnown(row) ? committed(row) : null;
+    return { ...ref, key: keyOf(ref), label: period(ref), value, phase: offset < 0 ? "history" : offset === 0 ? "current" : "forecast" };
+  });
   const seriesById = new Map(series.map((item) => [item.id, item]));
   const back = () => navigate({ to: "/cards", search: { [FC.VIEW]: "new", [FC.HUB_CARD]: cardId } });
   const handleInventory = (change) => {
@@ -138,18 +175,31 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
     {!state.loading && future && <>
       <p style={{ margin: 0, fontSize: 12, color: T.inkLight }}>{card.brand} •{card.last4} · {card.description}</p>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))", gap }}>
-        <Metric title="Total comprometido no período" value={moneyValue(total, currency)} testId="committed-total" detail={!currency ? "Moeda do cartão indisponível" : allKnown ? `${rows.length} meses consultados` : "Inventário incompleto; total indisponível"} />
+        <Metric title="Total comprometido na projeção" value={moneyValue(total, currency)} testId="committed-total" detail={!currency ? "Moeda do cartão indisponível" : allKnown ? `${rows.length} meses futuros, incluindo o atual` : "Inventário incompleto; total indisponível"} />
         <Metric title="Comprometimento mensal" value={moneyValue(monthly, currency)} testId="monthly-committed" detail={monthNow ? period(monthNow) : "Sem dados mensais"} />
         <Metric title="Percentual do limite" value={usage === null ? "—" : `${Math.round(usage)}%`} detail={card.credit_limit == null ? "Limite não informado" : `de ${moneyValue(card.credit_limit, currency)} de limite`} />
       </div>
       {usage !== null && usage >= 30 && <p role="status" style={{ margin: 0, color: T.amber }}>Comprometimento elevado: {Math.round(usage)}% do limite está comprometido neste mês.</p>}
-      <Card style={cardStyle}><h2 style={{ ...G, margin: "0 0 12px", fontSize: 17 }}>Linha do tempo do compromisso</h2><div style={{ display: "flex", gap: 10, overflowX: "auto", minWidth: 0 }} className="fincla-scroll">{rows.map((row) => {
-        const value = inventoryKnown(row) ? committed(row) : null;
-        return <div key={keyOf(row)} style={{ minWidth: 110, padding: 10, background: keyOf(row) === nowKey ? T.blueLight : T.grayLight, borderRadius: 9 }}><div style={label}>{period(row)}</div><strong style={{ ...G, ...NUM, fontSize: 13 }}>{moneyValue(value, currency)}</strong></div>;
-      })}</div></Card>
-      <Card style={cardStyle}><h2 style={{ ...G, margin: "0 0 12px", fontSize: 17 }}>Detalhe por mês</h2><div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))", gap: 10 }}>
-        {rows.map((row) => <div key={keyOf(row)} style={{ border: `1px solid ${T.border}`, borderRadius: 10, padding: 12 }}><div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><strong>{period(row)}</strong><strong>{moneyValue(inventoryKnown(row) ? committed(row) : null, currency)}</strong></div>{inventoryKnown(row) ? <div style={{ marginTop: 8, fontSize: 12, color: T.inkLight }}>{installments(row).length} parcelas · {row.recurrences.length} recorrências</div> : <div style={{ marginTop: 8, fontSize: 12, color: T.inkLight }}>Inventário indisponível</div>}</div>)}
-      </div></Card>
+      <Card style={cardStyle}><section role="region" aria-label="Linha do tempo do compromisso"><h2 style={{ ...G, margin: "0 0 12px", fontSize: 17 }}>Linha do tempo do compromisso</h2>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+          <PeriodPicker title="Histórico" options={[0, 3, 6, 12]} selected={historyMonths} onChange={setHistoryMonths} />
+          <PeriodPicker title="Projeção" options={[3, 6, 12]} selected={futureMonths} onChange={setFutureMonths} />
+        </div>
+        {state.historyError && historyMonths > 0 && <p role="alert" style={{ fontSize: 12 }}>Não foi possível carregar o histórico de compromissos.</p>}
+        <div style={{ display: "flex", gap: 10, overflowX: "auto", minWidth: 0 }} className="fincla-scroll">{timeline.map((entry) =>
+          <div key={entry.key} data-testid={`timeline-${entry.key}`} style={{ minWidth: 110, padding: 10, background: entry.phase === "current" ? T.blueLight : T.grayLight, borderRadius: 9 }}>
+            <div style={label}>{entry.label}</div>
+            <strong style={{ ...G, ...NUM, fontSize: 13 }}>{entry.value === null || !currency ? "Sem dados" : moneyValue(entry.value, currency)}</strong>
+            <div style={{ ...G, fontSize: 10, color: T.inkLight }}>{entry.phase === "history" ? "Histórico" : entry.phase === "current" ? "Atual" : "Projeção"}</div>
+          </div>)}</div>
+      </section></Card>
+      <Card style={cardStyle}><section role="region" aria-label="Detalhe por mês"><h2 style={{ ...G, margin: "0 0 12px", fontSize: 17 }}>Detalhe por mês</h2><div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))", gap: 10 }}>
+        {timeline.filter((entry) => entry.phase === "history").map((entry) => {
+          const row = historyByMonth.get(entry.key);
+          return <div key={entry.key} style={{ border: `1px solid ${T.border}`, borderRadius: 10, padding: 12 }}><div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><strong>{entry.label}</strong><strong>{entry.value === null ? "Sem dados" : moneyValue(entry.value, currency)}</strong></div><div style={{ marginTop: 8, fontSize: 12, color: T.inkLight }}>Histórico · parcelas {moneyValue(historyKnown(row, currency) ? row.installments_amount : null, currency)} · recorrências {moneyValue(historyKnown(row, currency) ? row.recurrences_amount : null, currency)}</div></div>;
+        })}
+        {rows.slice(0, futureMonths).map((row) => <div key={keyOf(row)} style={{ border: `1px solid ${T.border}`, borderRadius: 10, padding: 12 }}><div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><strong>{period(row)}</strong><strong>{moneyValue(inventoryKnown(row) ? committed(row) : null, currency)}</strong></div>{inventoryKnown(row) ? <div style={{ marginTop: 8, fontSize: 12, color: T.inkLight }}>{installments(row).length} parcelas · {row.recurrences.length} recorrências</div> : <div style={{ marginTop: 8, fontSize: 12, color: T.inkLight }}>Inventário indisponível</div>}</div>)}
+      </div></section></Card>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap }}>
         <Card style={cardStyle}><h2 style={{ ...G, margin: "0 0 12px", fontSize: 17 }}>Assinaturas & recorrências</h2>{state.seriesError && <p role="alert">Não foi possível carregar as marcações de baixo uso.</p>}{recurring.map((item, index) => <div key={`${item.series_id}:${item.due_date}:${index}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: `1px solid ${T.border}` }}><span>{item.description} · {moneyValue(item.amount, currency)}</span>{typeof seriesById.get(item.series_id)?.is_low_usage === "boolean" ? <label style={{ fontSize: 11 }}><input type="checkbox" aria-label={`Baixo uso: ${item.description}`} checked={seriesById.get(item.series_id).is_low_usage} disabled={mutation.pending} onChange={() => toggleLowUsage(item)} /> baixo uso</label> : <span style={{ fontSize: 11, color: T.inkLight }}>Baixo uso indisponível</span>}</div>)}{recurring.length === 0 && <p style={{ fontSize: 12 }}>Sem recorrências neste mês.</p>}</Card>
         <Card style={cardStyle}><h2 style={{ ...G, margin: "0 0 12px", fontSize: 17 }}>Variação na próxima fatura</h2><div style={{ ...G, ...NUM, fontSize: 24, fontWeight: 800, color: reduction > 0 ? T.green : reduction < 0 ? T.amber : T.ink }}>{reduction === null || !currency ? "—" : reduction > 0 ? `Redução de ${moneyValue(reduction, currency)}` : reduction < 0 ? `Aumento de ${moneyValue(-reduction, currency)}` : "Sem variação prevista"}</div><p style={{ fontSize: 12, color: T.inkLight }}>{nextRow ? `Comparação com ${period(nextRow)} para as parcelas e recorrências conhecidas.` : "Ainda não há um próximo mês para comparar."}</p></Card>

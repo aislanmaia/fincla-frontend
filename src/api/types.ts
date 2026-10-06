@@ -999,6 +999,10 @@ export interface InvoiceHistoryItem {
   items_count: number;
   top_category: string | null;
   category_breakdown?: Record<string, number>;
+  installments_amount?: number | null;
+  installments_amount_currency?: string | null;
+  recurrences_amount?: number | null;
+  recurrences_amount_currency?: string | null;
 }
 
 export interface InvoiceHistorySummary {

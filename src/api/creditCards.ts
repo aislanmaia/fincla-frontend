@@ -4,7 +4,7 @@
 // `unwrapMoney` desembrulha em qualquer profundidade — enumerar campo a campo é
 // onde se esquece um, e um esquecido vira "R$ NaN" na tela.
 import apiClient from './client';
-import { unwrapMoney } from './money';
+import { toCurrency, unwrapMoney } from './money';
 import type {
   CreateCreditCardRequest,
   UpdateCreditCardRequest,
@@ -135,15 +135,23 @@ export const getInvoiceHistory = async (
   cardId: number,
   organizationId: string,
   months: number = 6,
-  includeCategorySeries: boolean = false
+  includeCategorySeries: boolean = false,
+  includeCommitments: boolean = false
 ): Promise<InvoiceHistoryResponse> => {
   const response = await apiClient.get<InvoiceHistoryResponse>(
     `/credit-cards/${cardId}/invoices/history`,
     {
-      params: { organization_id: organizationId, months, ...(includeCategorySeries ? { include_category_series: true } : {}) },
+      params: { organization_id: organizationId, months, ...(includeCategorySeries ? { include_category_series: true } : {}), ...(includeCommitments ? { include_commitments: true } : {}) },
     }
   );
-  return unwrapMoney(response.data);
+  const data = includeCommitments
+    ? { ...response.data, monthly_data: response.data.monthly_data.map((row) => ({
+      ...row,
+      installments_amount_currency: toCurrency(row.installments_amount),
+      recurrences_amount_currency: toCurrency(row.recurrences_amount),
+    })) }
+    : response.data;
+  return unwrapMoney(data);
 };
 
 /**

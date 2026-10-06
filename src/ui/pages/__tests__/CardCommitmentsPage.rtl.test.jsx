@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -14,6 +14,7 @@ const ORG = "org";
 const money = (amount) => ({ amount, currency: "BRL" });
 const calls = [];
 let futureOverride = null;
+let historyCurrency = "BRL";
 const server = setupServer(
   http.get("*/v1/credit-cards", ({ request }) => {
     calls.push(new URL(request.url).pathname);
@@ -37,6 +38,16 @@ const server = setupServer(
       ], ending_soon: [], insights: [],
     });
   }),
+  http.get("*/v1/credit-cards/7/invoices/history", ({ request }) => {
+    calls.push(new URL(request.url).pathname);
+    const params = new URL(request.url).searchParams;
+    if (params.get("include_commitments") !== "true" || params.get("months") !== "13") return HttpResponse.json({}, { status: 400 });
+    return HttpResponse.json({ monthly_data: [
+      { year: 2026, month: 9, month_name: "setembro", total_amount: money("500"), installments_amount: money("60"), recurrences_amount: { amount: "10", currency: historyCurrency } },
+      { year: 2026, month: 10, month_name: "outubro", total_amount: money("400"), installments_amount: money("20"), recurrences_amount: money("10") },
+      { year: 2026, month: 7, month_name: "julho", total_amount: money("75") },
+    ] });
+  }),
   http.get("*/v1/recurring-series", () => HttpResponse.json({ series: [{ id: "r", is_low_usage: false }], summary: {} })),
   http.patch("*/v1/recurring-series/r", async ({ request }) => {
     calls.push(`low:${JSON.stringify(await request.json())}`);
@@ -50,7 +61,7 @@ const server = setupServer(
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterAll(() => server.close());
 beforeEach(() => { vi.useFakeTimers({ toFake: ["Date"] }); vi.setSystemTime(new Date(2026, 9, 6, 12)); });
-afterEach(() => { cleanup(); calls.length = 0; futureOverride = null; server.resetHandlers(); navigate.mockReset(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); calls.length = 0; futureOverride = null; historyCurrency = "BRL"; server.resetHandlers(); navigate.mockReset(); vi.useRealTimers(); });
 
 for (const isMobile of [false, true]) {
   describe(isMobile ? "mobile" : "desktop", () => {
@@ -61,7 +72,14 @@ for (const isMobile of [false, true]) {
       expect(screen.getByTestId("monthly-committed")).toHaveTextContent("R$ 150,00");
       expect(screen.getByTestId("committed-total")).toHaveTextContent("R$ 200,00");
       expect(screen.queryByText("À vista")).not.toBeInTheDocument();
-      expect(calls.filter((c) => c.startsWith("/v1/credit-cards"))).toHaveLength(2);
+      expect(calls.filter((c) => c.startsWith("/v1/credit-cards"))).toHaveLength(3);
+      const timeline = screen.getByRole("region", { name: "Linha do tempo do compromisso" });
+      expect(within(timeline).getByText("R$ 70,00")).toBeInTheDocument();
+      expect(within(timeline).getAllByText("Sem dados").length).toBeGreaterThan(0);
+      expect(within(timeline).getByText("R$ 150,00")).toBeInTheDocument();
+      const monthlyDetail = screen.getByRole("region", { name: "Detalhe por mês" });
+      expect(within(monthlyDetail).getAllByText(/Histórico · parcelas/).some((item) => item.textContent.includes("60,00") && item.textContent.includes("10,00"))).toBe(true);
+      expect(within(monthlyDetail).getAllByText("Sem dados").length).toBeGreaterThan(0);
     });
   });
 }
@@ -75,6 +93,27 @@ it("marca baixo uso e move parcela pelo contrato", async () => {
   await user.selectOptions(screen.getByLabelText("Fatura de destino"), "2026-11");
   await user.click(screen.getByRole("button", { name: /Confirmar mudança/i }));
   await waitFor(() => expect(calls).toContain('move:{"target_year":2026,"target_month":11}'));
+});
+
+it("alterna histórico e projeção sem novas chamadas e não inventa zero em mês sem fatura", async () => {
+  const user = userEvent.setup();
+  render(<CardCommitmentsPage organizationId={ORG} />);
+  const timeline = await screen.findByRole("region", { name: "Linha do tempo do compromisso" });
+  await user.click(within(screen.getByRole("group", { name: "Histórico" })).getByRole("button", { name: "Sem histórico" }));
+  expect(within(timeline).queryByText("setembro 2026")).not.toBeInTheDocument();
+  await user.click(within(screen.getByRole("group", { name: "Histórico" })).getByRole("button", { name: "6 meses" }));
+  expect(within(timeline).getByText("setembro 2026")).toBeInTheDocument();
+  expect(within(timeline).getAllByText("Sem dados").length).toBeGreaterThan(0);
+  await user.click(within(screen.getByRole("group", { name: "Projeção" })).getByRole("button", { name: "3 meses" }));
+  expect(within(timeline).queryByText("janeiro 2027")).not.toBeInTheDocument();
+  expect(calls.filter((c) => c.startsWith("/v1/credit-cards"))).toHaveLength(3);
+});
+
+it("não soma moedas diferentes no histórico", async () => {
+  historyCurrency = "EUR";
+  render(<CardCommitmentsPage organizationId={ORG} />);
+  expect(await screen.findByTestId("timeline-2026-09")).toHaveTextContent("Sem dados");
+  expect(screen.queryByText("R$ 70,00")).not.toBeInTheDocument();
 });
 
 it("não converte ausência de limite e inventário em zero", async () => {
