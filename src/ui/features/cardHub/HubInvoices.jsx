@@ -1,0 +1,86 @@
+import { useState } from "react";
+import { T } from "../../tokens";
+import { G, NUM } from "../../typography";
+import { formatMoney } from "../../money/formatMoney.js";
+import { InvoiceDashboardLink, StatusBadge } from "./InvoiceCard.jsx";
+import { INVOICE_STATUS, describeDue, describePaidDate, monthName, monthShort } from "./hubInvoices.js";
+
+const panel = { background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 16, minWidth: 0 };
+const button = { ...G, border: 0, borderRadius: 9, padding: "9px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700 };
+const today = () => {
+  const date = new Date();
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+};
+
+export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, now, onNavigate, onMarkPaid }) {
+  const [expanded, setExpanded] = useState(false);
+  const [paidDate, setPaidDate] = useState(today);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const current = invoices.find((invoice) => invoice.key === currentKey) ?? null;
+  const others = [...invoices].reverse().filter((invoice) => invoice.key !== currentKey);
+  const visible = expanded ? others : others.slice(0, 4);
+  const payable = current && !current.isEmpty && current.total !== null
+    && (current.status === INVOICE_STATUS.OPEN || current.status === INVOICE_STATUS.CLOSED);
+  const money = (invoice) => invoice.isEmpty ? "Sem lançamentos" : formatMoney(invoice.total, currency) ?? "—";
+
+  const pay = async () => {
+    setSaving(true);
+    setError("");
+    try {
+      await onMarkPaid(current, paidDate);
+    } catch {
+      setError("Não foi possível marcar a fatura como paga. Tente novamente.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : "minmax(280px, 340px) minmax(0, 1fr)", gap: 16, alignItems: "start" }}>
+      {current && <section data-testid="hub-current-invoice" data-status={current.status} style={{ ...panel, borderColor: T.blue, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 8 }}>
+          <div><div style={{ ...G, color: T.inkLight, fontSize: 10, fontWeight: 700, textTransform: "uppercase" }}>Fatura atual</div>
+            <strong style={{ ...G, fontSize: 15 }}>{monthName(current.month)} {current.year}</strong></div>
+          <StatusBadge status={current.status} />
+        </div>
+        <InvoiceDashboardLink cardId={cardId} invoice={current} onNavigate={onNavigate} style={{ color: T.ink, ...NUM, fontSize: 26, fontWeight: 800 }}>
+          {money(current)}
+        </InvoiceDashboardLink>
+        {(current.status === INVOICE_STATUS.OPEN || current.status === INVOICE_STATUS.CLOSED) && describeDue(current.dueDate, now) &&
+          <span style={{ ...G, fontSize: 11, color: T.inkMid }}>🗓 {describeDue(current.dueDate, now)}</span>}
+        {current.status === INVOICE_STATUS.PAID && describePaidDate(current.paidDate) &&
+          <span style={{ ...G, fontSize: 11, color: T.inkMid }}>{describePaidDate(current.paidDate)}</span>}
+        {current.itemsCount > 0 && <span style={{ ...G, fontSize: 11, color: T.inkMid }}>{current.itemsCount} lançamentos{current.topCategory ? ` · maior categoria: ${current.topCategory}` : ""}</span>}
+        {payable && <>
+          <label style={{ ...G, display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: T.inkMid }}>
+            Paga em <input type="date" aria-label="Data do pagamento" value={paidDate} max={today()} onChange={(event) => setPaidDate(event.target.value)} style={{ ...G, border: `1px solid ${T.border}`, borderRadius: 8, padding: 6, color: T.ink }} />
+          </label>
+          <button type="button" disabled={saving || !paidDate} onClick={pay} style={{ ...button, background: T.green, color: "white" }}>{saving ? "Salvando…" : "✓ Marcar como paga"}</button>
+        </>}
+        {error && <div role="alert" style={{ ...G, fontSize: 11, color: T.red }}>{error}</div>}
+        <InvoiceDashboardLink cardId={cardId} invoice={current} onNavigate={onNavigate}>Abrir dashboard da fatura →</InvoiceDashboardLink>
+      </section>}
+      <section aria-label="Outras faturas" style={{ ...panel, padding: 8 }}>
+        {visible.length === 0 && <div style={{ ...G, padding: 10, color: T.inkMid, fontSize: 12 }}>Nenhuma outra fatura.</div>}
+        <div data-testid="hub-other-invoices" style={{ maxHeight: isMobile ? undefined : 330, overflowY: "auto" }} className="fincla-scroll">
+          {visible.map((invoice) => <InvoiceDashboardLink key={invoice.key} cardId={cardId} invoice={invoice} onNavigate={onNavigate}
+            style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", borderBottom: `1px solid ${T.border}`, color: T.ink }}>
+            <span style={{ ...NUM, width: 38, flexShrink: 0, textAlign: "center", fontWeight: 800 }}>{monthShort(invoice.month)}<small style={{ display: "block", fontWeight: 400 }}>{invoice.year}</small></span>
+            <StatusBadge status={invoice.status} />
+            <span style={{ flex: 1, minWidth: 0, color: T.inkMid, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {invoice.status === INVOICE_STATUS.PAID ? describePaidDate(invoice.paidDate) : null}
+              {invoice.itemsCount > 0 ? `${invoice.paidDate ? " · " : ""}${invoice.itemsCount} lanç.` : ""}
+            </span>
+            <strong style={{ ...NUM, whiteSpace: "nowrap", fontSize: 13 }}>{money(invoice)}</strong>
+            <span style={{ color: T.blue }}>→</span>
+          </InvoiceDashboardLink>)}
+        </div>
+        {others.length > 4 && <button type="button" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}
+          style={{ ...button, width: "100%", background: "transparent", color: T.blue }}>
+          {expanded ? "Mostrar menos" : `+ ${others.length - 4} outras faturas`}
+        </button>}
+      </section>
+    </div>
+  );
+}

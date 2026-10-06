@@ -17,11 +17,11 @@ import {
   computeSpendProjection,
   computeUsagePercent,
 } from "../features/creditCards/cardKpis.js";
-import { AllInvoicesDialog } from "../features/cardHub/AllInvoicesDialog.jsx";
+import { HubInvoices } from "../features/cardHub/HubInvoices.jsx";
 import { HubDialog } from "../features/cardHub/HubDialog.jsx";
 import { CompactKpiStrip, LimitTiles } from "../features/cardHub/HubKpis.jsx";
 import { InsightsList } from "../features/cardHub/InsightsList.jsx";
-import { InvoiceCarousel } from "../features/cardHub/InvoiceCarousel.jsx";
+
 import { NotesDialog } from "../features/cardHub/NotesDialog.jsx";
 import { INVOICE_STATUS, summarizeInvoiceCounts } from "../features/cardHub/hubInvoices.js";
 import { useCardHubData } from "../features/cardHub/useCardHubData.js";
@@ -58,14 +58,9 @@ export function CardHubPage({
   });
   const { selectedCard, selectedCardId, invoiceCards, detail } = hub;
 
-  const [picked, setPicked] = useState(null);
   const [dialog, setDialog] = useState(null);
   const now = useToday();
 
-  // A escolha é do cartão em que foi feita: ao trocar de cartão ela deixa de valer sem render intermediário.
-  const setPickedKey = (key) => setPicked({ cardId: selectedCardId, key });
-  const pickedKey = picked?.cardId === selectedCardId ? picked.key : null;
-  const selectedKey = invoiceCards.some((i) => i.key === pickedKey) ? pickedKey : hub.initialInvoiceKey;
   const currency = selectedCard?.currency || undefined;
   const uiCard = hub.uiCards.find((c) => c.cardId === selectedCardId) ?? null;
   const openInvoice = invoiceCards.find((i) => i.status === INVOICE_STATUS.OPEN) ?? null;
@@ -155,14 +150,14 @@ export function CardHubPage({
         <DragScrollTabs bg={T.bg}>
           {hub.uiCards.map((c) => (
             <div key={c.id} style={{ paddingTop: 8 }}>
-              <CardVisual c={c} selected={c.cardId === selectedCardId} size="sm" onClick={() => { setPicked(null); hub.selectCard(c.cardId); }} />
+              <CardVisual c={c} selected={c.cardId === selectedCardId} size="sm" onClick={() => { hub.selectCard(c.cardId); }} />
             </div>
           ))}
         </DragScrollTabs>
       ) : (
         <div style={{ display: "flex", gap: 14, overflowX: "auto", padding: "6px 4px 8px", scrollbarWidth: "none" }}>
           {hub.uiCards.map((c) => (
-            <CardVisual key={c.id} c={c} selected={c.cardId === selectedCardId} size="md" onClick={() => { setPicked(null); hub.selectCard(c.cardId); }} />
+            <CardVisual key={c.id} c={c} selected={c.cardId === selectedCardId} size="md" onClick={() => { hub.selectCard(c.cardId); }} />
           ))}
         </div>
       )}
@@ -216,21 +211,17 @@ export function CardHubPage({
         <Notice>Este cartão ainda não tem faturas.</Notice>
       ) : (
         <>
-          <InvoiceCarousel
+          <HubInvoices
+            key={selectedCard.id}
             invoices={invoiceCards}
+            currentKey={hub.initialInvoiceKey}
             cardId={selectedCard.id}
             currency={currency}
-            selectedKey={selectedKey}
-            onSelect={setPickedKey}
-            onNavigate={goTo}
             isMobile={isMobile}
             now={now}
+            onNavigate={goTo}
+            onMarkPaid={hub.payInvoice}
           />
-          <button type="button" onClick={() => setDialog("invoices")} data-testid="all-invoices-open-button"
-            style={{ ...OUTLINE_BTN, justifyContent: "space-between", width: isMobile ? "100%" : "auto", alignSelf: isMobile ? "stretch" : "flex-start" }}>
-            <span>📋 Ver todas as faturas</span>
-            <span style={{ fontSize: 11, color: T.blue }}>{invoiceCards.length} faturas →</span>
-          </button>
         </>
       )}
 
@@ -240,17 +231,6 @@ export function CardHubPage({
           initialNotes={selectedCard.notes ?? ""}
           isMobile={isMobile}
           onSave={hub.saveNotes}
-          onClose={closeDialog}
-        />
-      )}
-      {dialog === "invoices" && (
-        <AllInvoicesDialog
-          invoices={invoiceCards}
-          cardId={selectedCard.id}
-          currency={currency}
-          isMobile={isMobile}
-          onPick={(key) => { setPickedKey(key); closeDialog(); }}
-          onNavigate={(href) => { closeDialog(); goTo(href); }}
           onClose={closeDialog}
         />
       )}
