@@ -8,7 +8,7 @@ import { FC } from "../routing/searchContract.js";
 import { Btn, Card } from "../components/primitives";
 import { shouldUseRealData } from "../dataMode.js";
 import { mapInvoiceItemToUi } from "../data/creditCardsAdapter.js";
-import { invoiceDashboardPath, isValidInvoiceParams } from "../routing/invoiceRoute.js";
+import { cardTransactionsPath, invoiceDashboardPath, isValidInvoiceParams } from "../routing/invoiceRoute.js";
 import { StatusBadge } from "../features/cardHub/InvoiceCard.jsx";
 import { InvoiceCarousel } from "../features/cardHub/InvoiceCarousel.jsx";
 import { invoiceKey, parseInvoiceKey } from "../features/cardHub/hubInvoices.js";
@@ -131,7 +131,7 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
   const lower = (
     <>
       {showBreakdown && <CategoryBreakdown breakdown={detail.category_breakdown} total={invoice?.total} currency={currency} isMobile={isMobile} />}
-      {showBreakdown && <RecentItems items={detail.items} totalCount={detail.items_count} currency={currency} isMobile={isMobile} />}
+      {showBreakdown && <RecentItems items={detail.items} totalCount={detail.items_count} currency={currency} isMobile={isMobile} onViewAll={() => navigate({ to: cardTransactionsPath(cardId, year, month) })} />}
       {detailState === "forecast" && <ForecastInstallments installments={data.futureRow?.top_installments} currency={currency} isMobile={isMobile} />}
     </>
   );

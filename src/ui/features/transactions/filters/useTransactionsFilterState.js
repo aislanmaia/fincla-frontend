@@ -66,6 +66,7 @@ export function useTransactionsFilterState({
   initial,
   initialSort = DEFAULT_SORT,
   onChange,
+  clearToInitial = false,
 } = {}) {
   const [state, setState] = useState(() => normalizeInitial(initial));
   const [sort, setSort] = useState(initialSort);
@@ -118,9 +119,9 @@ export function useTransactionsFilterState({
   const snapshot = useMemo(() => ({ ...state, sort }), [state, sort]);
 
   const clearAll = useCallback(() => {
-    setState(normalizeInitial());
+    setState(normalizeInitial(clearToInitial ? initial : undefined));
     setSort(DEFAULT_SORT);
-  }, []);
+  }, [clearToInitial, initial]);
 
   /**
    * Volta UMA facet ao default, pela mesma `key` que `buildFacets` usa.

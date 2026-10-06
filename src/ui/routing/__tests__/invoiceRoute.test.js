@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { invoiceDashboardPath, isValidInvoiceParams } from "../invoiceRoute.js";
+import { cardTransactionsPath, invoiceDashboardPath, isValidInvoiceParams } from "../invoiceRoute.js";
 import { parseFinclaRootSearch } from "../finclaRootSearchSchema.js";
 import { mergeNavSearch } from "../searchContract.js";
 
@@ -8,6 +8,7 @@ describe("rota do dashboard da fatura", () => {
   const cardId = "00000000-0000-4000-8000-000000000007";
   it("monta /cards/<cardId>/invoices/<year>/<month>", () => {
     expect(invoiceDashboardPath(cardId, 2026, 10)).toBe(`/cards/${cardId}/invoices/2026/10`);
+    expect(cardTransactionsPath(cardId, 2026, 10)).toBe(`/cards/${cardId}/invoices/2026/10/transactions`);
   });
 
   it("só aceita ano e mês inteiros e plausíveis", () => {

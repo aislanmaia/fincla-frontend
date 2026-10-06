@@ -73,6 +73,8 @@ export function TransactionsFilterBar({
   onAfterApply,
   hideSavedViews = false,
   hideFacets = false,
+  visibleFacetKeys = null,
+  visibleSortFields = null,
   onSaveViewCreate,
   onSaveViewUpdate,
   saveViewUpdateLabel = "",
@@ -174,7 +176,8 @@ export function TransactionsFilterBar({
     return map;
   }, [cards]);
 
-  const facets = filter.buildFacets({ categoriesById, cardsById });
+  const facets = filter.buildFacets({ categoriesById, cardsById })
+    .filter((facet) => !visibleFacetKeys || visibleFacetKeys.includes(facet.key));
 
   const activeFacets = facets
     .filter((f) => f.active)
@@ -235,6 +238,7 @@ export function TransactionsFilterBar({
           chips={barChips}
           trailing={barTrailing}
           sortSoIcone={sortSoIcone}
+          visibleSortFields={visibleSortFields}
           onChipsBudget={onChipsBudget}
           inputRef={searchInputRef}
           onHelp={onHelp}
@@ -252,6 +256,7 @@ export function TransactionsFilterBar({
           setSort={filter.setSort}
           compact
           hideSearchField
+          visibleSortFields={visibleSortFields}
         />
       )}
 

@@ -968,6 +968,7 @@ export interface InvoiceItemResponse {
   amount: number;
   installment_number: number;
   total_installments: number;
+  modality: 'cash' | 'installment' | 'refund';
   tags: Record<string, Tag[]>;
   purchase_info?: PurchaseInfo;
 }
