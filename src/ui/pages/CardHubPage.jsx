@@ -9,7 +9,7 @@ import { DragScrollTabs } from "../layouts/DragScrollTabs.jsx";
 import { shouldUseRealData } from "../dataMode.js";
 import { FC } from "../routing/searchContract.js";
 import { formatMoneyAbs } from "../money/formatMoney.js";
-import { CardVisual } from "../features/creditCards/cartoesPanels.jsx";
+import { CARD_VISUAL_WIDTH, CardVisual } from "../features/creditCards/cartoesPanels.jsx";
 import { CardHeuristicTiles } from "../features/creditCards/CardHeuristicTiles.jsx";
 import {
   computeCardKpis,
@@ -21,6 +21,7 @@ import { HubInvoices } from "../features/cardHub/HubInvoices.jsx";
 import { InvoiceCarousel } from "../features/cardHub/InvoiceCarousel.jsx";
 import { AllInvoicesDialog } from "../features/cardHub/AllInvoicesDialog.jsx";
 import { HubDialog } from "../features/cardHub/HubDialog.jsx";
+import { CreateCardDialog } from "../features/cardHub/CreateCardDialog.jsx";
 import { CompactKpiStrip, LimitTiles } from "../features/cardHub/HubKpis.jsx";
 import { InsightsList } from "../features/cardHub/InsightsList.jsx";
 
@@ -99,6 +100,7 @@ export function CardHubPage({
   const [mobileInvoiceKey, setMobileInvoiceKey] = useState(null);
   const desktopCardsRef = useRef(null);
   const [cardScroll, setCardScroll] = useState({ left: false, right: false });
+  const canCreateCard = shouldUseRealData(organizationId, dataMode);
   const now = useToday();
 
   useEffect(() => {
@@ -175,6 +177,11 @@ export function CardHubPage({
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: isMobile ? 12 : 16 }}>
       <PageTitle sans="Meus" serif="Cartões" />
       <div style={{ display: "flex", gap: isMobile ? 6 : 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+        {canCreateCard && !hub.isLoading && !hub.error && (
+          <button type="button" onClick={() => setDialog("create-card")} style={OUTLINE_BTN}>
+            <Plus size={14} /> Cartão
+          </button>
+        )}
         {selectedCard && insights.length > 0 && isMobile && (
           <button type="button" onClick={() => setDialog("insights")} aria-label="Insights" style={OUTLINE_BTN}>
             <Lightbulb size={14} />
@@ -217,9 +224,10 @@ export function CardHubPage({
       <div style={{ padding: isMobile ? 16 : 28 }}>
         {header}
         <div style={{ ...G, fontSize: 14, color: T.inkMid, marginBottom: 12 }}>Você ainda não cadastrou nenhum cartão.</div>
-        <button type="button" onClick={goClassic} style={{ ...OUTLINE_BTN, background: T.ink, color: "#fff", border: "none" }}>
+        <button type="button" onClick={() => setDialog("create-card")} disabled={!canCreateCard} style={{ ...OUTLINE_BTN, background: T.ink, color: "#fff", border: "none" }}>
           Cadastrar cartão
         </button>
+        {dialog === "create-card" && <CreateCardDialog organizationId={organizationId} isMobile={isMobile} onCreate={async (payload) => { const created = await hub.createCard(payload); selectCard(created.id); return created; }} onClose={closeDialog} />}
       </div>
     );
   }
@@ -231,6 +239,7 @@ export function CardHubPage({
           {hub.uiCards.map((c) => (
             <HubCardOption key={c.id} card={c} selected={c.cardId === selectedCardId} mobile onSelect={selectCard} />
           ))}
+          {canCreateCard && <NewCardTile isMobile onClick={() => setDialog("create-card")} />}
         </DragScrollTabs>
       ) : (
         <div style={{ position: "relative", minWidth: 0 }}>
@@ -238,6 +247,7 @@ export function CardHubPage({
             {hub.uiCards.map((c) => (
               <HubCardOption key={c.id} card={c} selected={c.cardId === selectedCardId} onSelect={selectCard} />
             ))}
+            {canCreateCard && <NewCardTile onClick={() => setDialog("create-card")} />}
           </div>
           <button type="button" aria-label="Ver cartões anteriores" disabled={!cardScroll.left} onClick={() => scrollCards(-1)}
             style={{ ...CAROUSEL_ARROW, left: 4, opacity: cardScroll.left ? 1 : 0.4, cursor: cardScroll.left ? "pointer" : "default" }}>
@@ -343,6 +353,13 @@ export function CardHubPage({
           onClose={closeDialog}
         />
       )}
+      {dialog === "create-card" && (
+        <CreateCardDialog organizationId={organizationId} isMobile={isMobile} onCreate={async (payload) => {
+          const created = await hub.createCard(payload);
+          selectCard(created.id);
+          return created;
+        }} onClose={closeDialog} />
+      )}
       {dialog === "invoices" && <AllInvoicesDialog invoices={invoiceCards} cardId={selectedCard.id} currency={currency}
         isMobile
         onNavigate={(href) => { closeDialog(); goTo(href); }} onClose={closeDialog} />}
@@ -352,5 +369,20 @@ export function CardHubPage({
         </HubDialog>
       )}
     </div>
+  );
+}
+
+function NewCardTile({ isMobile = false, onClick }) {
+  return (
+    <button type="button" onClick={onClick} aria-label="Novo cartão" style={{
+      ...G, width: isMobile ? CARD_VISUAL_WIDTH.sm - 10 : CARD_VISUAL_WIDTH.md - 50,
+      height: isMobile ? 94 : Math.round(CARD_VISUAL_WIDTH.md / 1.586),
+      marginTop: isMobile ? 8 : 0, borderRadius: isMobile ? 12 : 16,
+      border: `2px dashed ${T.border}`, background: T.surface, color: T.inkMid,
+      flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center",
+      justifyContent: "center", gap: 6, cursor: "pointer", fontSize: 11,
+    }}>
+      <Plus size={isMobile ? 18 : 22} /> Novo cartão
+    </button>
   );
 }
