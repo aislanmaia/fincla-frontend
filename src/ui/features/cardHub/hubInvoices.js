@@ -107,6 +107,7 @@ export function buildInvoiceCards({ card, history, current, currentState, future
       dueDate: current.due_date || dueDateFor(currentRef.year, currentRef.month, dueDay),
       paidDate: current.paid_date || null,
       limitUsagePercent: toFiniteOrNull(current.limit_usage_percent),
+      apiVsPercent: toFiniteOrNull(current.month_over_month_change),
       topCategory: topCategoryOf(current.category_breakdown),
       isEmpty: false,
     });
@@ -155,7 +156,7 @@ export function buildInvoiceCards({ card, history, current, currentState, future
     const vsPercent = adjacent && entry.total !== null && prev.total !== null && prev.total > 0
       ? Math.round(((entry.total - prev.total) / prev.total) * 100)
       : null;
-    return { ...entry, vsPercent, prevKey: adjacent ? prev.key : null };
+    return { ...entry, vsPercent: entry.apiVsPercent ?? vsPercent, prevKey: adjacent ? prev.key : null };
   });
 }
 

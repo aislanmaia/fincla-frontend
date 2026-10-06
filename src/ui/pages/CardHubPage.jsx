@@ -231,7 +231,7 @@ export function CardHubPage({
           {isMobile && <>
             {mobileOtherInvoices.length > 0 && <InvoiceCarousel invoices={mobileOtherInvoices} cardId={selectedCard.id} currency={currency}
               selectedKey={mobileOtherInvoices.some((invoice) => invoice.key === mobileInvoiceKey) ? mobileInvoiceKey : nearestOtherInvoice?.key}
-              onSelect={setMobileInvoiceKey} onNavigate={goTo} isMobile now={now} />}
+              onSelect={setMobileInvoiceKey} onNavigate={goTo} isMobile now={now} openOnCard />}
             <button type="button" onClick={() => setDialog("invoices")} data-testid="all-invoices-open-button"
               style={{ ...OUTLINE_BTN, width: "100%", justifyContent: "space-between" }}>
               <span>📋 Ver todas as faturas</span><span>{invoiceCards.length} faturas →</span>
@@ -242,7 +242,7 @@ export function CardHubPage({
 
       {dialog === "notes" && (
         <NotesDialog
-          key={`${organizationId}:${selectedCard.id}:${hub.initialInvoiceKey}`}
+          key={`${organizationId}:${selectedCard.id}`}
           initialNotes={selectedCard.notes ?? ""}
           isMobile={isMobile}
           onSave={hub.saveNotes}
@@ -250,7 +250,7 @@ export function CardHubPage({
         />
       )}
       {dialog === "invoices" && <AllInvoicesDialog invoices={invoiceCards} cardId={selectedCard.id} currency={currency}
-        isMobile onPick={(key) => { setMobileInvoiceKey(key); closeDialog(); }}
+        isMobile
         onNavigate={(href) => { closeDialog(); goTo(href); }} onClose={closeDialog} />}
       {dialog === "insights" && (
         <HubDialog title="Insights" isMobile={isMobile} onClose={closeDialog}>

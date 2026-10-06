@@ -91,6 +91,11 @@ describe("buildInvoiceCards", () => {
     expect(all.find((c) => c.key === "2026-09").prevKey).toBe("2026-08");
   });
 
+  it("usa a variação informada pela fatura atual mesmo quando o histórico falha", () => {
+    const cards = build({ history: null, current: { ...CURRENT, month_over_month_change: 17.1 } });
+    expect(cards.find((c) => c.key === "2026-10").vsPercent).toBe(17.1);
+  });
+
   it("valor ausente fica null (não zero)", () => {
     const cards = build({ history: { monthly_data: [{ ...hist(2026, 9, "paid", null) }] }, current: null, currentState: "unavailable", future: null });
     expect(cards[0].total).toBeNull();

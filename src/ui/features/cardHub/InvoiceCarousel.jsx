@@ -23,7 +23,7 @@ export function dotWindow(total, activeIndex, max = MAX_DOTS) {
  * selecionada centralizada. Rolagem nativa com scroll-snap e barra oculta; no
  * mobile a fatura mais próxima do centro passa a ser a selecionada ao soltar o dedo.
  */
-export function InvoiceCarousel({ invoices, cardId, currency, selectedKey, onSelect, onNavigate, isMobile, now }) {
+export function InvoiceCarousel({ invoices, cardId, currency, selectedKey, onSelect, onNavigate, isMobile, now, openOnCard = false }) {
   const scrollerRef = useRef(null);
   const settleTimer = useRef(null);
   const programmatic = useRef(false);
@@ -97,7 +97,7 @@ export function InvoiceCarousel({ invoices, cardId, currency, selectedKey, onSel
         {invoices.map((invoice) => (
           <InvoiceCard key={invoice.key} invoice={invoice} cardId={cardId} currency={currency}
             selected={invoice.key === selectedKey} width={width}
-            onSelect={onSelect} onNavigate={onNavigate} now={now} />
+            onSelect={onSelect} onNavigate={onNavigate} now={now} openOnCard={openOnCard} />
         ))}
       </div>
       {isMobile && invoices.length > 1 && (

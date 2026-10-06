@@ -143,7 +143,7 @@ describe("CardHubPage — faturas do Hub", () => {
     renderHub();
     expect(await screen.findByTestId("hub-current-invoice")).toHaveAttribute("data-status", "open");
     expect(currentPanel()).toHaveTextContent("Outubro 2026");
-    expect(currentPanel()).toHaveTextContent("17% vs mês anterior");
+    expect(currentPanel()).toHaveTextContent("17.1% vs mês anterior");
     expect(currentPanel()).toHaveTextContent("Limite utilizado");
     expect(currentPanel()).toHaveTextContent("65%");
     expect(otherRows()).toHaveTextContent("Fechada");
@@ -175,6 +175,7 @@ describe("CardHubPage — faturas do Hub", () => {
     expect(navigateMock).toHaveBeenCalledWith({ to: "/cards/1/invoices/2026/9" });
     await user.click(screen.getByRole("button", { name: "Mostrar menos" }));
     expect(otherRows().querySelectorAll("a")).toHaveLength(4);
+    expect([...otherRows().querySelectorAll("a")].map((row) => row.getAttribute("href"))).toContain("/cards/1/invoices/2026/11");
   });
 
   it("marca fatura pagável com data escolhida e atualiza status e histórico sem nova lista de cartões", async () => {
@@ -298,6 +299,7 @@ describe("CardHubPage — faturas do Hub", () => {
 
   it("mobile mantém resumo e lista navegável", async () => {
     mockApi();
+    const user = userEvent.setup();
     renderHub({ isMobile: true });
     await screen.findByTestId("hub-current-invoice");
     expect(screen.getByTestId("compact-kpis")).toBeInTheDocument();
@@ -306,6 +308,11 @@ describe("CardHubPage — faturas do Hub", () => {
     expect(screen.getByTestId("invoice-carousel").querySelectorAll('[data-testid^="invoice-card-"]')).toHaveLength(4);
     expect(screen.getByTestId("invoice-carousel")).not.toHaveTextContent("Fatura atual");
     expect(screen.getByTestId("all-invoices-open-button")).toBeInTheDocument();
+    await user.click(screen.getByTestId("invoice-card-2026-11"));
+    expect(navigateMock).toHaveBeenCalledWith({ to: "/cards/1/invoices/2026/11" });
+    await user.click(screen.getByTestId("all-invoices-open-button"));
+    await user.click(screen.getByTestId("all-invoices-row-2026-09"));
+    expect(navigateMock).toHaveBeenCalledWith({ to: "/cards/1/invoices/2026/9" });
   });
 });
 
