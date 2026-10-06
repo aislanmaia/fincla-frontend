@@ -13,6 +13,27 @@ import { shouldUseRealData } from "../dataMode";
 const cardStyle = { padding: 18, minWidth: 0 };
 const label = { ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: ".07em" };
 const buttonStyle = { ...G, border: `1px solid ${T.border}`, background: T.surface, borderRadius: 8, padding: "8px 11px", color: T.ink, cursor: "pointer", fontSize: 12 };
+const pendingSnapshots = new Map();
+const loadSnapshot = (organizationId, cardId, refresh) => {
+  const key = `${organizationId}:${cardId}:${refresh}`;
+  if (pendingSnapshots.has(key)) return pendingSnapshots.get(key);
+  const request = listCreditCards(organizationId).then(async (cards) => {
+    const card = cards.find((item) => item.public_id === cardId);
+    if (!card) throw new Error("Cartão não encontrado ou sem acesso.");
+    const [future, history, series] = await Promise.allSettled([
+      getFutureCommitments(card.id, organizationId, 12, true, true),
+      getInvoiceHistory(card.id, organizationId, 13, false, true),
+      listRecurringSeries(organizationId),
+    ]);
+    if (future.status === "rejected") throw future.reason;
+    return { loading: false, card, future: future.value, history: history.status === "fulfilled" ? history.value : null,
+      historyError: history.status === "rejected", series: series.status === "fulfilled" ? series.value.series || [] : [],
+      seriesError: series.status === "rejected", error: "" };
+  });
+  pendingSnapshots.set(key, request);
+  request.finally(() => { if (pendingSnapshots.get(key) === request) pendingSnapshots.delete(key); }).catch(() => {});
+  return request;
+};
 const moneyValue = (value, currency) => currency ? formatMoney(value, currency) ?? "—" : "—";
 const keyOf = (row) => `${row.year}-${String(row.month).padStart(2, "0")}`;
 const period = (row) => `${row.month_name || new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(new Date(row.year, row.month - 1, 1))} ${row.year}`;
@@ -121,17 +142,9 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
     if (!enabled) { setState({ loading: false, card: null, future: null, history: null, series: [], error: "Organização indisponível.", seriesError: false, historyError: false }); return; }
     let cancelled = false;
     setState((old) => ({ ...old, loading: true }));
-    listCreditCards(organizationId).then(async (cards) => {
-      const card = cards.find((item) => item.public_id === cardId);
-      if (!card) throw new Error("Cartão não encontrado ou sem acesso.");
-      const [future, history, series] = await Promise.allSettled([
-        getFutureCommitments(card.id, organizationId, 12, true, true),
-        getInvoiceHistory(card.id, organizationId, 13, false, true),
-        listRecurringSeries(organizationId),
-      ]);
-      if (future.status === "rejected") throw future.reason;
-      if (!cancelled) setState({ loading: false, card, future: future.value, history: history.status === "fulfilled" ? history.value : null, historyError: history.status === "rejected", series: series.status === "fulfilled" ? series.value.series || [] : [], seriesError: series.status === "rejected", error: "" });
-    }).catch(() => { if (!cancelled) setState({ loading: false, card: null, future: null, history: null, series: [], seriesError: false, historyError: false, error: "Não foi possível carregar os compromissos deste cartão." }); });
+    loadSnapshot(organizationId, cardId, refresh)
+      .then((snapshot) => { if (!cancelled) setState(snapshot); })
+      .catch(() => { if (!cancelled) setState({ loading: false, card: null, future: null, history: null, series: [], seriesError: false, historyError: false, error: "Não foi possível carregar os compromissos deste cartão." }); });
     return () => { cancelled = true; };
   }, [enabled, organizationId, cardId, refresh]);
 

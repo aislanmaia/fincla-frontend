@@ -91,6 +91,10 @@ export default defineConfig({
       testMatch: "**/cards-invoice-dashboard.spec.ts",
     },
     {
+      name: "cards-commitments",
+      testMatch: "**/cards-commitments.spec.ts",
+    },
+    {
       // Provisiona o próprio consultor e cliente via API; não depende do seed
       // do owner, então roda sem `smoke`.
       name: "consultant-ai-evaluation",
