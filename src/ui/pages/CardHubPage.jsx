@@ -18,6 +18,7 @@ import {
   computeUsagePercent,
 } from "../features/creditCards/cardKpis.js";
 import { AllInvoicesDialog } from "../features/cardHub/AllInvoicesDialog.jsx";
+import { CategoryTrendChart, InvoiceHistoryChart } from "../features/cardHub/HubCharts.jsx";
 import { HubDialog } from "../features/cardHub/HubDialog.jsx";
 import { CompactKpiStrip, LimitTiles } from "../features/cardHub/HubKpis.jsx";
 import { InsightsList } from "../features/cardHub/InsightsList.jsx";
@@ -231,6 +232,24 @@ export function CardHubPage({
             <span>📋 Ver todas as faturas</span>
             <span style={{ fontSize: 11, color: T.blue }}>{invoiceCards.length} faturas →</span>
           </button>
+        </>
+      )}
+
+      {!detail.loading && invoiceCards.length > 0 && (
+        <>
+          <div style={{ height: 1, background: T.border }} />
+          <InvoiceHistoryChart
+            invoices={invoiceCards}
+            anchorKey={openInvoice?.key ?? hub.initialInvoiceKey}
+            currency={currency}
+            isMobile={isMobile}
+          />
+          <CategoryTrendChart
+            history={detail.history}
+            anchorKey={detail.history?.period_end?.slice(0, 7) ?? openInvoice?.key ?? hub.initialInvoiceKey}
+            currency={currency}
+            isMobile={isMobile}
+          />
         </>
       )}
 

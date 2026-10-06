@@ -81,7 +81,7 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
     if (!active || selectedCardId == null) return undefined;
     let cancelled = false;
     Promise.all([
-      settle(getInvoiceHistory(selectedCardId, organizationId, HISTORY_MONTHS)),
+      settle(getInvoiceHistory(selectedCardId, organizationId, HISTORY_MONTHS, true)),
       settle(getCurrentCreditCardInvoice(selectedCardId, organizationId)),
       settle(getFutureCommitments(selectedCardId, organizationId, FUTURE_MONTHS)),
     ]).then(([history, current, future]) => {
