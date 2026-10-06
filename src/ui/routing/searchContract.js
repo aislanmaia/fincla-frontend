@@ -21,7 +21,7 @@ export const FC = {
   CAL_HIDE: "fc_cal_hide", // tipos ocultos: "income" | "expense" | "income,expense"
   CAL_PAY: "fc_cal_pay", // formas de pagamento ocultas (csv)
   DATE: "fc_date", // "YYYY-MM-DD" — filtro de dia no /transactions
-  // Sem prefixo `fc_` de propósito: é o contrato público `/cards?view=classic` da tela anterior de Cartões.
+  // Sem prefixo `fc_` de propósito: é o contrato público `/cards?view=new` do Hub de Cartões.
   VIEW: "view",
 };
 

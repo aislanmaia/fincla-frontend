@@ -112,7 +112,7 @@ const VIEWPORTS = [
 async function openHub(page: Page, vp: (typeof VIEWPORTS)[number]) {
   await loginAsE2EOwner(page);
   await page.setViewportSize({ width: vp.width, height: vp.height });
-  await page.goto("/cards");
+  await page.goto("/cards?view=new");
   await expect(page.getByTestId("invoice-carousel")).toBeVisible({ timeout: 30_000 });
 }
 
@@ -230,7 +230,7 @@ for (const vp of VIEWPORTS) {
 
 test("o link do dashboard da fatura abre dentro do shell do app", async ({ page }) => {
   await loginAsE2EOwner(page);
-  await page.goto("/cards");
+  await page.goto("/cards?view=new");
   await expect(page.getByTestId("invoice-carousel")).toBeVisible({ timeout: 30_000 });
   await selectCardByName(page, "Hub Azul");
   await page.locator('[data-testid^="invoice-card-"][data-status="open"]').getByTestId("invoice-dashboard-link").click();
@@ -241,12 +241,12 @@ test("o link do dashboard da fatura abre dentro do shell do app", async ({ page 
   await expect(page.locator("[data-fincla-main-scroll]")).toBeVisible();
 });
 
-test("a tela anterior continua em /cards?view=classic", async ({ page }) => {
+test("a tela clássica volta a ser o padrão de /cards", async ({ page }) => {
   await loginAsE2EOwner(page);
-  await page.goto("/cards");
+  await page.goto("/cards?view=new");
   await expect(page.getByTestId("invoice-carousel")).toBeVisible({ timeout: 30_000 });
   await page.getByTestId("classic-view-link").click();
-  await expect(page).toHaveURL(/\/cards\?view=classic/);
+  await expect(page).toHaveURL(/\/cards(?:\?.*)?$/);
   await expect(page.getByTestId("invoice-carousel")).toHaveCount(0);
   await expect(page.getByText("Cartões").first()).toBeVisible();
 });
@@ -296,14 +296,14 @@ test.describe("orçamento de chamadas ao abrir /cards", () => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       const ready = async () => { await expect(page.getByTestId("invoice-carousel")).toBeVisible({ timeout: 30_000 }); };
 
-      const one = await measureLoad(page, "/cards", ready);
+      const one = await measureLoad(page, "/cards?view=new", ready);
 
       for (let i = 2; i <= 5; i += 1) {
         const id = await createCard({ last4: String(1000 + i), brand: "Visa", due_day: 10, closing_day: 15, description: `Budget ${i}`, credit_limit: 5000 });
         await purchase(id, tagId, `Compra ${i}`, 50, new Date());
       }
-      const five = await measureLoad(page, "/cards", ready);
-      const classicFive = await measureLoad(page, "/cards?view=classic", async () => { await expect(page.getByText("Meus").first()).toBeVisible({ timeout: 30_000 }); await page.waitForTimeout(4000); });
+      const five = await measureLoad(page, "/cards?view=new", ready);
+      const classicFive = await measureLoad(page, "/cards", async () => { await expect(page.getByText("Meus").first()).toBeVisible({ timeout: 30_000 }); await page.waitForTimeout(4000); });
 
       const hubCards = (seen: Seen[]) => seen.filter((r) => r.path.startsWith("/v1/credit-cards"));
       console.log(`[calls ${vp.name}] HUB 1 cartão\n${summarize(one)}\n[calls ${vp.name}] HUB 5 cartões\n${summarize(five)}\n[calls ${vp.name}] CLÁSSICA 5 cartões (total ${classicFive.length}, credit-cards ${hubCards(classicFive).length})\n${summarize(classicFive)}`);

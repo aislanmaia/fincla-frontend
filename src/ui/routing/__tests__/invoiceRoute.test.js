@@ -17,13 +17,14 @@ describe("rota do dashboard da fatura", () => {
   });
 });
 
-describe("?view=classic", () => {
-  it("sobrevive ao schema só com o valor classic", () => {
-    expect(parseFinclaRootSearch({ view: "classic" }).view).toBe("classic");
+describe("?view=new", () => {
+  it("sobrevive ao schema só com o valor new", () => {
+    expect(parseFinclaRootSearch({ view: "new" }).view).toBe("new");
+    expect(parseFinclaRootSearch({ view: "classic" }).view).toBeUndefined();
     expect(parseFinclaRootSearch({ view: "outro" }).view).toBeUndefined();
   });
 
   it("não vaza para outras telas ao navegar", () => {
-    expect(mergeNavSearch({ view: "classic" }, "dashboard").view).toBeUndefined();
+    expect(mergeNavSearch({ view: "new" }, "dashboard").view).toBeUndefined();
   });
 });

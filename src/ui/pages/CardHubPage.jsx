@@ -87,7 +87,11 @@ export function CardHubPage({
     });
   }, [uiCard, openInvoice, detail.currentState, detail.loading, now]);
 
-  const goClassic = () => navigate({ to: "/cards", search: (prev) => ({ ...prev, [FC.VIEW]: "classic" }) });
+  const goClassic = () => navigate({ to: "/cards", search: (prev) => {
+    const next = { ...prev };
+    delete next[FC.VIEW];
+    return next;
+  } });
   const goTo = (href) => navigate({ to: href });
   const formatMoneyForCard = (v) => formatMoneyAbs(v, currency) ?? "—";
   const closeDialog = () => setDialog(null);

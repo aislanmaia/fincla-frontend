@@ -85,11 +85,11 @@ const fcCalViewSchema = z.preprocess((val) => {
   return s === "week" || s === "month" ? s : undefined;
 }, z.enum(["week", "month"]).optional());
 
-/** `classic` (tela anterior de Cartões) ou `undefined`. */
+/** `new` (Hub de Cartões em desenvolvimento) ou `undefined`. */
 const viewSchema = z.preprocess((val) => {
   const s = val == null ? "" : String(val).trim();
-  return s === "classic" ? s : undefined;
-}, z.literal("classic").optional());
+  return s === "new" ? s : undefined;
+}, z.literal("new").optional());
 
 /**
  * Allowlist de query na raiz (`/` e rotas filhas herdam o mesmo search validado).

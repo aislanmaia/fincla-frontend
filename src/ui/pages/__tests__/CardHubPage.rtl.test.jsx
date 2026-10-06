@@ -343,7 +343,7 @@ describe("CardHubPage — todas as faturas e tela anterior", () => {
     expect(screen.getByTestId("invoice-card-2026-08")).toHaveAttribute("data-selected", "true");
   });
 
-  it("o link discreto leva para /cards?view=classic", async () => {
+  it("o link discreto leva para /cards sem view", async () => {
     mockApi();
     const user = userEvent.setup();
     renderHub();
@@ -352,7 +352,7 @@ describe("CardHubPage — todas as faturas e tela anterior", () => {
     await user.click(screen.getByTestId("classic-view-link"));
     const arg = navigateMock.mock.calls[0][0];
     expect(arg.to).toBe("/cards");
-    expect(arg.search({ fc_tx: "9" })).toEqual({ fc_tx: "9", view: "classic" });
+    expect(arg.search({ fc_tx: "9", view: "new" })).toEqual({ fc_tx: "9" });
   });
 });
 
