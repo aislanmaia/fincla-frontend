@@ -3,7 +3,7 @@
  *
  * Semeia a própria organização pela API (dois cartões: um com fatura paga,
  * fechada, aberta e parcelas futuras; outro sem nenhum lançamento) e prova o
- * que os testes de tela não alcançam: o carrossel nativo no layout de verdade
+ * que os testes de tela não alcançam: o resumo e lista inline no layout de verdade
  * (sem rolagem horizontal da página), as quatro fases da fatura e a anotação
  * relida do servidor depois de um reload.
  *
@@ -113,7 +113,7 @@ async function openHub(page: Page, vp: (typeof VIEWPORTS)[number]) {
   await loginAsE2EOwner(page);
   await page.setViewportSize({ width: vp.width, height: vp.height });
   await page.goto("/cards?view=new");
-  await expect(page.getByTestId("invoice-carousel")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("hub-current-invoice")).toBeVisible({ timeout: 30_000 });
 }
 
 async function selectCardByName(page: Page, name: string) {
@@ -124,87 +124,37 @@ async function selectCardByName(page: Page, name: string) {
   }
 }
 
-const statuses = (page: Page) =>
-  page.locator('[data-testid^="invoice-card-"]').evaluateAll((els) => els.map((e) => e.getAttribute("data-status")));
-
 for (const vp of VIEWPORTS) {
   test.describe(`Hub do cartão — ${vp.name}`, () => {
-    test("caminho feliz: carrossel com os 4 status, seleção e anotação relida do servidor", async ({ page }) => {
-      page.on("pageerror", (err) => console.log("[browser error]", err.message));
+    test("caminho feliz: fatura atual, quatro status, lista inline e anotação", async ({ page }) => {
       await openHub(page, vp);
-
-      // O Hub é a tela padrão de /cards.
       await selectCardByName(page, "Hub Azul");
-      await expect(page.locator('[data-testid^="invoice-card-"][data-status="paid"]')).toHaveCount(1);
-
-      // Quatro status, em ordem cronológica: passada paga, fechada, aberta, previstas.
-      const list = await statuses(page);
-      expect(list).toContain("paid");
-      expect(list).toContain("closed");
-      expect(list).toContain("open");
-      expect(list).toContain("forecast");
-      expect(list.indexOf("paid")).toBeLessThan(list.indexOf("closed"));
-      expect(list.indexOf("closed")).toBeLessThan(list.indexOf("open"));
-      expect(list.indexOf("open")).toBeLessThan(list.indexOf("forecast"));
-      expect(list.filter((s) => s === "open")).toHaveLength(1);
-
-      const closed = page.locator('[data-testid^="invoice-card-"][data-status="closed"]').first();
-      const open = page.locator('[data-testid^="invoice-card-"][data-status="open"]');
-      await expect(closed.getByTestId("invoice-status")).toHaveText("Fechada");
-      await expect(open.getByTestId("invoice-status")).toHaveText("Aberta");
-      await expect(open).toHaveAttribute("data-selected", "true");
-
-      await page.screenshot({ path: `${SHOTS}/cards-hub-${vp.name}-carousel.png`, fullPage: false });
-
-      // Selecionar a fatura fechada.
-      await closed.scrollIntoViewIfNeeded();
-      await closed.click();
-      await expect(closed).toHaveAttribute("data-selected", "true");
-      await expect(open).toHaveAttribute("data-selected", "false");
-      // A rolagem suave do toque não pode reescolher o card antigo (seleção que "alterna").
-      await page.waitForTimeout(1800);
-      await expect(closed).toHaveAttribute("data-selected", "true");
-      await expect(open).toHaveAttribute("data-selected", "false");
-
+      const current = page.getByTestId("hub-current-invoice");
+      const others = page.getByTestId("hub-other-invoices");
+      await expect(current).toHaveAttribute("data-status", "open");
+      await expect(current.getByTestId("invoice-status")).toHaveText("Aberta");
+      await expect(others.getByTestId("invoice-status").filter({ hasText: "Paga" })).toHaveCount(1);
+      await expect(others.getByTestId("invoice-status").filter({ hasText: "Fechada" })).toHaveCount(1);
+      await expect(others.getByTestId("invoice-status").filter({ hasText: "Prevista" }).first()).toBeVisible();
+      await expect(current.getByRole("button", { name: /Marcar como paga/ })).toBeVisible();
+      await page.screenshot({ path: `${SHOTS}/cards-hub-${vp.name}-invoices.png`, fullPage: false });
       if (vp.mobile) {
-        await expect(page.getByTestId("invoice-dots")).toBeVisible();
-        // O carrossel nativo não pode dar rolagem horizontal à página inteira.
         const overflow = await page.evaluate(() => {
           const main = document.querySelector("[data-fincla-main-scroll]") as HTMLElement | null;
-          return {
-            doc: document.documentElement.scrollWidth - window.innerWidth,
-            main: main ? main.scrollWidth - main.clientWidth : 0,
-          };
+          return { doc: document.documentElement.scrollWidth - window.innerWidth, main: main ? main.scrollWidth - main.clientWidth : 0 };
         });
         expect(overflow.doc).toBeLessThanOrEqual(0);
         expect(overflow.main).toBeLessThanOrEqual(0);
-        await page.screenshot({ path: `${SHOTS}/cards-hub-${vp.name}-selected-closed.png`, fullPage: false });
-      } else {
-        await page.screenshot({ path: `${SHOTS}/cards-hub-${vp.name}-selected-closed.png`, fullPage: true });
       }
-
-      // Todas as faturas: painel no desktop, bottom sheet no mobile.
-      await page.getByTestId("all-invoices-open-button").click();
-      const dialog = page.getByRole("dialog", { name: "Todas as faturas" });
-      await expect(dialog).toBeVisible();
-      await expect(dialog.locator('[data-testid^="all-invoices-row-"]')).toHaveCount((await statuses(page)).length);
-      await page.screenshot({ path: `${SHOTS}/cards-hub-${vp.name}-all-invoices.png`, fullPage: false });
-      await dialog.getByRole("button", { name: "Fechar" }).click();
-      await expect(dialog).toBeHidden();
-
-      // Anotação: salva, confere no servidor e relê depois de recarregar a página.
       const note = `Nota e2e ${vp.name} ${Date.now()}`;
       await page.getByTestId("card-notes-open").click();
       await page.getByTestId("card-notes-textarea").fill(note);
-      await page.screenshot({ path: `${SHOTS}/cards-hub-${vp.name}-notes.png`, fullPage: false });
       await page.getByTestId("card-notes-save").click();
       await expect(page.getByTestId("card-notes-textarea")).toBeHidden();
-
       const saved = await api(`/v1/credit-cards/${busyCardId}?organization_id=${orgId}`);
       expect(((await saved.json()) as { notes: string | null }).notes).toBe(note);
-
       await page.reload();
-      await expect(page.getByTestId("invoice-carousel")).toBeVisible({ timeout: 30_000 });
+      await expect(page.getByTestId("hub-current-invoice")).toBeVisible({ timeout: 30_000 });
       await selectCardByName(page, "Hub Azul");
       await page.getByTestId("card-notes-open").click();
       await expect(page.getByTestId("card-notes-textarea")).toHaveValue(note);
@@ -217,9 +167,9 @@ for (const vp of VIEWPORTS) {
       await page.getByText("Hub Vazio").first().click();
       await expect(page.getByText("Cartão selecionado:")).toContainText("Hub Vazio");
 
-      const open = page.locator('[data-testid^="invoice-card-"][data-status="open"]');
-      await expect(open).toHaveCount(1);
-      await expect(open).toContainText("Sem lançamentos ainda");
+      const open = page.getByTestId("hub-current-invoice");
+      await expect(open).toHaveAttribute("data-status", "open");
+      await expect(open).toContainText("Sem lançamentos");
       await expect(open).not.toContainText("R$");
       await expect(page.getByText(/não puderam ser carregadas/i)).toHaveCount(0);
 
@@ -231,9 +181,9 @@ for (const vp of VIEWPORTS) {
 test("o link do dashboard da fatura abre dentro do shell do app", async ({ page }) => {
   await loginAsE2EOwner(page);
   await page.goto("/cards?view=new");
-  await expect(page.getByTestId("invoice-carousel")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("hub-current-invoice")).toBeVisible({ timeout: 30_000 });
   await selectCardByName(page, "Hub Azul");
-  await page.locator('[data-testid^="invoice-card-"][data-status="open"]').getByTestId("invoice-dashboard-link").click();
+  await page.getByTestId("hub-current-invoice").getByText("Abrir dashboard da fatura").click();
   await expect(page).toHaveURL(new RegExp(`/cards/${busyCardId}/invoices/\\d{4}/\\d{1,2}$`));
   await expect(page.getByText(/em construção/i)).toBeVisible();
   // Barra lateral e topo do app continuam presentes: a página não saiu do shell.
@@ -244,10 +194,10 @@ test("o link do dashboard da fatura abre dentro do shell do app", async ({ page 
 test("a tela clássica volta a ser o padrão de /cards", async ({ page }) => {
   await loginAsE2EOwner(page);
   await page.goto("/cards?view=new");
-  await expect(page.getByTestId("invoice-carousel")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId("hub-current-invoice")).toBeVisible({ timeout: 30_000 });
   await page.getByTestId("classic-view-link").click();
   await expect(page).toHaveURL(/\/cards(?:\?.*)?$/);
-  await expect(page.getByTestId("invoice-carousel")).toHaveCount(0);
+  await expect(page.getByTestId("hub-current-invoice")).toHaveCount(0);
   await expect(page.getByText("Cartões").first()).toBeVisible();
 });
 
@@ -294,7 +244,7 @@ test.describe("orçamento de chamadas ao abrir /cards", () => {
 
       await loginAsE2EOwner(page);
       await page.setViewportSize({ width: vp.width, height: vp.height });
-      const ready = async () => { await expect(page.getByTestId("invoice-carousel")).toBeVisible({ timeout: 30_000 }); };
+      const ready = async () => { await expect(page.getByTestId("hub-current-invoice")).toBeVisible({ timeout: 30_000 }); };
 
       const one = await measureLoad(page, "/cards?view=new", ready);
 

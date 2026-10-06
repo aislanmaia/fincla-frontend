@@ -212,7 +212,7 @@ export function CardHubPage({
       ) : (
         <>
           <HubInvoices
-            key={selectedCard.id}
+            key={`${organizationId}:${selectedCard.id}:${hub.initialInvoiceKey}`}
             invoices={invoiceCards}
             currentKey={hub.initialInvoiceKey}
             cardId={selectedCard.id}
@@ -227,7 +227,7 @@ export function CardHubPage({
 
       {dialog === "notes" && (
         <NotesDialog
-          key={selectedCard.id}
+          key={`${organizationId}:${selectedCard.id}:${hub.initialInvoiceKey}`}
           initialNotes={selectedCard.notes ?? ""}
           isMobile={isMobile}
           onSave={hub.saveNotes}

@@ -201,6 +201,25 @@ describe("CardHubPage — faturas do Hub", () => {
     expect(screen.getByTestId("invoice-counts")).toHaveTextContent("2 pagas");
   });
 
+  it("pagamento pendente não altera o cartão selecionado depois da troca", async () => {
+    let finishPayment;
+    mockApi({ cards: [cardFixture(), cardFixture({ id: 2, last4: "4420", description: "Roxo" })] });
+    server.use(http.patch("*/v1/credit-cards/:id/invoices/:year/:month/mark-paid", async () => {
+      await new Promise((resolve) => { finishPayment = resolve; });
+      return HttpResponse.json({ card_id: 1, year: 2026, month: 10, status: "paid", paid_date: "2026-10-04" });
+    }));
+    const user = userEvent.setup();
+    renderHub();
+    await screen.findByTestId("hub-current-invoice");
+    await user.click(screen.getByRole("button", { name: /Marcar como paga/ }));
+    await waitFor(() => expect(finishPayment).toBeTypeOf("function"));
+    await user.click(screen.getByText("Roxo"));
+    await waitFor(() => expect(screen.getByText("Cartão selecionado:")).toHaveTextContent("Roxo"));
+    finishPayment();
+    await waitFor(() => expect(currentPanel()).toHaveAttribute("data-status", "open"));
+    expect(screen.getByRole("button", { name: /Marcar como paga/ })).toBeInTheDocument();
+  });
+
   it("falha do pagamento preserva fatura e data para nova tentativa", async () => {
     mockApi();
     server.use(http.patch("*/v1/credit-cards/:id/invoices/:year/:month/mark-paid", () => HttpResponse.json({ detail: "error" }, { status: 500 })));
@@ -375,3 +394,77 @@ describe("CardHubPage — anotação do cartão", () => {
   });
 });
 
+
+const countRequests = () => {
+  const seen = [];
+  const onStart = ({ request }) => {
+    const url = new URL(request.url);
+    if (url.pathname.includes("/credit-cards")) seen.push(`${request.method} ${url.pathname.replace(/\/credit-cards\/\d+/, "/credit-cards/:id")}`);
+  };
+  server.events.on("request:start", onStart);
+  return { seen, stop: () => server.events.removeListener("request:start", onStart) };
+};
+
+describe("CardHubPage — navegação e atualização", () => {
+  it("o link discreto leva para /cards sem view", async () => {
+    mockApi();
+    const user = userEvent.setup();
+    renderHub();
+    await screen.findByTestId("hub-current-invoice");
+
+    await user.click(screen.getByTestId("classic-view-link"));
+    const arg = navigateMock.mock.calls[0][0];
+    expect(arg.to).toBe("/cards");
+    expect(arg.search({ fc_tx: "9", view: "new" })).toEqual({ fc_tx: "9" });
+  });describe("CardHubPage — sem cartões", () => {
+  it("convida a cadastrar o primeiro cartão (na tela anterior)", async () => {
+    mockApi({ cards: [] });
+    renderHub();
+    expect(await screen.findByText(/ainda não cadastrou nenhum cartão/i)).toBeInTheDocument();
+  });
+});
+
+  it("o refresh mantém o diálogo de anotação aberto e o rascunho digitado", async () => {
+    mockApi();
+    const user = userEvent.setup();
+    const { rerender } = renderHub({ transactionsRefreshToken: 0 });
+    await screen.findByTestId("hub-current-invoice");
+
+    await user.click(screen.getByTestId("card-notes-open"));
+    await user.clear(screen.getByTestId("card-notes-textarea"));
+    await user.type(screen.getByTestId("card-notes-textarea"), "rascunho não salvo");
+
+    const currentBefore = screen.getByTestId("hub-current-invoice");
+    const counter = countRequests();
+    rerender(<CardHubPage organizationId={ORG} dataMode="live" onNewItem={vi.fn()} transactionsRefreshToken={1} />);
+    await waitFor(() => expect(counter.seen).toHaveLength(4));
+    await new Promise((r) => setTimeout(r, 100));
+    counter.stop();
+
+    expect(screen.getByTestId("card-notes-textarea")).toHaveValue("rascunho não salvo");
+    expect(screen.queryByText(/Carregando seus cartões/)).toBeNull();
+    expect(screen.getByTestId("hub-current-invoice")).toBe(currentBefore);
+    // um refresh = exatamente as 4 chamadas do Hub, sem duplicar
+    expect(counter.seen.slice().sort()).toEqual([
+      "GET /v1/credit-cards",
+      "GET /v1/credit-cards/:id/future-commitments",
+      "GET /v1/credit-cards/:id/invoices/current",
+      "GET /v1/credit-cards/:id/invoices/history",
+    ]);
+  });
+
+  it("refetch que falha com 500 mantém cartões e faturas e avisa discretamente", async () => {
+    mockApi();
+    const { rerender } = renderHub({ transactionsRefreshToken: 0 });
+    await screen.findByTestId("hub-current-invoice");
+
+    mockApi({ cards: "fail", history: "fail", current: "fail" });
+    rerender(<CardHubPage organizationId={ORG} dataMode="live" onNewItem={vi.fn()} transactionsRefreshToken={1} />);
+
+    expect(await screen.findByText(/Mostrando os dados anteriores/)).toBeInTheDocument();
+    expect(screen.getByTestId("hub-current-invoice")).toHaveAttribute("data-status", "open");
+    expect(screen.getByText("Cartão selecionado:")).toHaveTextContent("Azul");
+  });
+
+
+});

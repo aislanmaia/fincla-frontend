@@ -46,7 +46,7 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
   const [selectedId, setSelectedId] = useState(null);
   const [invoiceRefresh, setInvoiceRefresh] = useState(0);
   const [paidDates, setPaidDates] = useState({});
-  const [detail, setDetail] = useState({ ...LOADING_DETAIL, cardId: null, refreshFailed: false });
+  const [detail, setDetail] = useState({ ...LOADING_DETAIL, cardId: null, orgId: null, refreshFailed: false });
 
   useEffect(() => {
     if (!active) {
@@ -95,6 +95,7 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
         const currentState = current.ok ? "ok" : isNotFound(current.error) ? "empty" : sameCard ? prev.currentState : "unavailable";
         return {
           cardId: selectedCardId,
+          orgId: organizationId,
           loading: false,
           history: keep(history, prev, "history"),
           historyFailed: sameCard ? (history.ok ? false : prev.historyFailed) : !history.ok,
@@ -111,8 +112,8 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
 
   // Detalhe de OUTRO cartão (troca em andamento) conta como carregando: nunca se
   // mistura com o `closing_day`/`due_day` do cartão recém-selecionado.
-  const detailReady = detail.cardId === selectedCardId && !detail.loading;
-  const viewDetail = detailReady ? detail : { ...LOADING_DETAIL, cardId: selectedCardId, refreshFailed: false };
+  const detailReady = detail.cardId === selectedCardId && detail.orgId === organizationId && !detail.loading;
+  const viewDetail = detailReady ? detail : { ...LOADING_DETAIL, cardId: selectedCardId, orgId: organizationId, refreshFailed: false };
 
   const invoiceCards = useMemo(() => {
     if (!selectedCard || !detailReady) return [];
@@ -122,8 +123,8 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
       current: detail.current,
       currentState: detail.currentState,
       future: detail.future,
-    }).map((invoice) => ({ ...invoice, paidDate: invoice.paidDate ?? (invoice.status === "paid" ? paidDates[`${selectedCardId}:${invoice.key}`] ?? null : null) }));
-  }, [selectedCard, selectedCardId, detail, detailReady, paidDates]);
+    }).map((invoice) => ({ ...invoice, paidDate: invoice.paidDate ?? (invoice.status === "paid" ? paidDates[`${organizationId}:${selectedCardId}:${invoice.key}`] ?? null : null) }));
+  }, [selectedCard, selectedCardId, detail, detailReady, paidDates, organizationId]);
 
   const initialInvoiceKey = useMemo(() => defaultInvoiceKey(invoiceCards), [invoiceCards]);
 
@@ -152,13 +153,13 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
 
   const payInvoice = useCallback(async (invoice, paidDate) => {
     await markInvoicePaid(selectedCardId, invoice.year, invoice.month, organizationId, paidDate);
-    setDetail((prev) => prev.cardId === selectedCardId ? {
+    setDetail((prev) => prev.cardId === selectedCardId && prev.orgId === organizationId ? {
       ...prev,
       history: prev.history ? { ...prev.history, monthly_data: prev.history.monthly_data.map((row) =>
         row.year === invoice.year && row.month === invoice.month ? { ...row, status: "paid" } : row) } : prev.history,
       current: prev.current?.month === invoice.key ? { ...prev.current, status: "paid", paid_date: paidDate } : prev.current,
     } : prev);
-    setPaidDates((dates) => ({ ...dates, [`${selectedCardId}:${invoice.key}`]: paidDate }));
+    setPaidDates((dates) => ({ ...dates, [`${organizationId}:${selectedCardId}:${invoice.key}`]: paidDate }));
     setInvoiceRefresh((value) => value + 1);
   }, [organizationId, selectedCardId]);
 

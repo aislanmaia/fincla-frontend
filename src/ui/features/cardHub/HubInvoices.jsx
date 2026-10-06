@@ -7,14 +7,13 @@ import { INVOICE_STATUS, describeDue, describePaidDate, monthName, monthShort } 
 
 const panel = { background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: 16, minWidth: 0 };
 const button = { ...G, border: 0, borderRadius: 9, padding: "9px 12px", cursor: "pointer", fontSize: 12, fontWeight: 700 };
-const today = () => {
-  const date = new Date();
+const dateKey = (date) => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 };
 
 export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, now, onNavigate, onMarkPaid }) {
   const [expanded, setExpanded] = useState(false);
-  const [paidDate, setPaidDate] = useState(today);
+  const [paidDate, setPaidDate] = useState(() => dateKey(now));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const current = invoices.find((invoice) => invoice.key === currentKey) ?? null;
@@ -54,7 +53,7 @@ export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, 
         {current.itemsCount > 0 && <span style={{ ...G, fontSize: 11, color: T.inkMid }}>{current.itemsCount} lançamentos{current.topCategory ? ` · maior categoria: ${current.topCategory}` : ""}</span>}
         {payable && <>
           <label style={{ ...G, display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: T.inkMid }}>
-            Paga em <input type="date" aria-label="Data do pagamento" value={paidDate} max={today()} onChange={(event) => setPaidDate(event.target.value)} style={{ ...G, border: `1px solid ${T.border}`, borderRadius: 8, padding: 6, color: T.ink }} />
+            Paga em <input type="date" aria-label="Data do pagamento" value={paidDate} max={dateKey(now)} onChange={(event) => setPaidDate(event.target.value)} style={{ ...G, border: `1px solid ${T.border}`, borderRadius: 8, padding: 6, color: T.ink }} />
           </label>
           <button type="button" disabled={saving || !paidDate} onClick={pay} style={{ ...button, background: T.green, color: "white" }}>{saving ? "Salvando…" : "✓ Marcar como paga"}</button>
         </>}
