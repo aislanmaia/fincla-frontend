@@ -39,9 +39,10 @@ describe("searchContract", () => {
   });
 
   it("mergeNavSearch limpa fc_modal ao navegar", () => {
-    const prev = { [FC.MODAL]: FC_MODAL.NEW_TRANSACTION, [FC.TX]: "550e8400-e29b-41d4-a716-446655440000" };
+    const prev = { [FC.MODAL]: FC_MODAL.NEW_TRANSACTION, [FC.TX]: "550e8400-e29b-41d4-a716-446655440000", [FC.HUB_CARD]: "2" };
     const out = mergeNavSearch(prev, "dashboard", {});
     expect(out[FC.MODAL]).toBeUndefined();
     expect(out[FC.TX]).toBeUndefined();
+    expect(out[FC.HUB_CARD]).toBeUndefined();
   });
 });

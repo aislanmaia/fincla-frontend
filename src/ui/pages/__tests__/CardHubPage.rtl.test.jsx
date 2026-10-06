@@ -7,10 +7,10 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
-const navigateMock = vi.fn();
+const { navigateMock, searchMock } = vi.hoisted(() => ({ navigateMock: vi.fn(), searchMock: { value: {} } }));
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => navigateMock,
-  useSearch: () => ({}),
+  useSearch: () => searchMock.value,
 }));
 
 import { CardHubPage } from "../CardHubPage.jsx";
@@ -25,6 +25,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date(2026, 9, 4, 12, 0, 0));
   navigateMock.mockReset();
+  searchMock.value = {};
 });
 afterEach(() => {
   server.resetHandlers();
@@ -221,7 +222,7 @@ describe("CardHubPage — faturas do Hub", () => {
     expect(screen.queryByRole("dialog", { name: "Todas as faturas" })).toBeNull();
   });
 
-  it("expande e recolhe a lista no card e cada linha abre o dashboard", async () => {
+  it("carrega outras faturas ao rolar a lista e cada linha abre o dashboard", async () => {
     const history = { ...historyFixture(), monthly_data: [
       histRow(2026, 4, "paid", "100", 1), histRow(2026, 5, "paid", "100", 1),
       histRow(2026, 6, "paid", "200", 1), histRow(2026, 7, "paid", "200", 1),
@@ -232,39 +233,40 @@ describe("CardHubPage — faturas do Hub", () => {
     renderHub();
     await screen.findByTestId("hub-current-invoice");
     expect(otherRows().querySelectorAll("a")).toHaveLength(6);
-    await user.click(screen.getByRole("button", { name: /outras faturas/ }));
+    Object.defineProperties(otherRows(), {
+      scrollHeight: { configurable: true, value: 800 },
+      clientHeight: { configurable: true, value: 300 },
+      scrollTop: { configurable: true, writable: true, value: 500 },
+    });
+    fireEvent.scroll(otherRows());
     expect(otherRows().querySelectorAll("a")).toHaveLength(8);
     const link = otherRows().querySelector('a[href="/cards/1/invoices/2026/9"]');
     expect(link).not.toBeNull();
     await user.click(link);
     expect(navigateMock).toHaveBeenCalledWith({ to: "/cards/1/invoices/2026/9" });
-    await user.click(screen.getByRole("button", { name: "Mostrar menos" }));
-    expect(otherRows().querySelectorAll("a")).toHaveLength(6);
     expect([...otherRows().querySelectorAll("a")].map((row) => row.getAttribute("href"))).toContain("/cards/1/invoices/2026/11");
   });
 
-  it("revela mais faturas em lotes ao clicar e ao chegar ao fim da rolagem", async () => {
+  it("revela mais faturas em lotes sucessivos ao chegar ao fim da rolagem", async () => {
     const history = { ...historyFixture(), monthly_data: [
       ...Array.from({ length: 8 }, (_, index) => histRow(index === 0 ? 2025 : 2026, index === 0 ? 12 : index, "paid", "100", 1)),
       ...historyFixture().monthly_data,
     ] };
     mockApi({ history });
-    const user = userEvent.setup();
     renderHub();
     await screen.findByTestId("hub-current-invoice");
     const list = otherRows();
     expect(list.querySelectorAll("a")).toHaveLength(6);
-    await user.click(screen.getByRole("button", { name: /outras faturas/ }));
-    expect(list.querySelectorAll("a")).toHaveLength(10);
     Object.defineProperties(list, {
       scrollHeight: { configurable: true, value: 800 },
       clientHeight: { configurable: true, value: 300 },
       scrollTop: { configurable: true, writable: true, value: 500 },
     });
-    fireEvent.wheel(list);
+    fireEvent.scroll(list);
+    expect(list.querySelectorAll("a")).toHaveLength(10);
     fireEvent.scroll(list);
     expect(list.querySelectorAll("a")).toHaveLength(12);
-    expect(screen.getByRole("button", { name: "Mostrar menos" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /outras faturas|Mostrar menos/ })).toBeNull();
   });
 
   it("marca fatura pagável com data escolhida e atualiza status e histórico sem nova lista de cartões", async () => {
@@ -306,11 +308,14 @@ describe("CardHubPage — faturas do Hub", () => {
       return HttpResponse.json({ card_id: 1, year: 2026, month: 10, status: "paid", paid_date: "2026-10-04" });
     }));
     const user = userEvent.setup();
-    renderHub();
+    const view = renderHub();
     await screen.findByTestId("hub-current-invoice");
     await user.click(screen.getByRole("button", { name: /Marcar como paga/ }));
     await waitFor(() => expect(finishPayment).toBeTypeOf("function"));
     await user.click(screen.getByText("Roxo"));
+    expect(navigateMock).toHaveBeenCalledWith(expect.objectContaining({ to: "/cards" }));
+    searchMock.value = { view: "new", card: "2" };
+    view.rerender(<CardHubPage organizationId={ORG} dataMode="live" onNewItem={vi.fn()} />);
     await waitFor(() => expect(screen.getByText("Cartão selecionado:")).toHaveTextContent("Roxo"));
     finishPayment();
     await waitFor(() => expect(currentPanel()).toHaveAttribute("data-status", "open"));
@@ -524,6 +529,24 @@ const countRequests = () => {
 };
 
 describe("CardHubPage — navegação e atualização", () => {
+  it("seleciona pelo URL e restaura o cartão quando o histórico volta", async () => {
+    mockApi({ cards: [cardFixture(), cardFixture({ id: 2, last4: "4420", description: "Roxo" })] });
+    searchMock.value = { view: "new", card: "2" };
+    const user = userEvent.setup();
+    const view = renderHub();
+    await waitFor(() => expect(screen.getByText("Cartão selecionado:")).toHaveTextContent("Roxo"));
+    await user.click(screen.getByText("Azul"));
+    const arg = navigateMock.mock.calls.at(-1)[0];
+    expect(arg.to).toBe("/cards");
+    expect(arg.search({ view: "new", card: 2 })).toEqual({ view: "new", card: 1 });
+    searchMock.value = { view: "new", card: "1" };
+    view.rerender(<CardHubPage organizationId={ORG} dataMode="live" onNewItem={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Cartão selecionado:")).toHaveTextContent("Azul"));
+    searchMock.value = { view: "new", card: "2" };
+    view.rerender(<CardHubPage organizationId={ORG} dataMode="live" onNewItem={vi.fn()} />);
+    await waitFor(() => expect(screen.getByText("Cartão selecionado:")).toHaveTextContent("Roxo"));
+  });
+
   it("o link discreto leva para /cards sem view", async () => {
     mockApi();
     const user = userEvent.setup();
@@ -533,7 +556,7 @@ describe("CardHubPage — navegação e atualização", () => {
     await user.click(screen.getByTestId("classic-view-link"));
     const arg = navigateMock.mock.calls[0][0];
     expect(arg.to).toBe("/cards");
-    expect(arg.search({ fc_tx: "9", view: "new" })).toEqual({ fc_tx: "9" });
+    expect(arg.search({ fc_tx: "9", view: "new", card: "2" })).toEqual({ fc_tx: "9" });
   });
 
   it("convida a cadastrar o primeiro cartão (na tela anterior)", async () => {

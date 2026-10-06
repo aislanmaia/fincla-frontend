@@ -14,7 +14,6 @@ const dateKey = (date) => {
 };
 
 export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, now, onNavigate, onMarkPaid }) {
-  const [expanded, setExpanded] = useState(false);
   const [paidDate, setPaidDate] = useState(() => dateKey(now));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -22,8 +21,6 @@ export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, 
   const [listHeight, setListHeight] = useState(null);
   const currentRef = useRef(null);
   const listRef = useRef(null);
-  const previousCount = useRef(INITIAL_ROWS);
-  const userScrollRef = useRef(false);
   const current = invoices.find((invoice) => invoice.key === currentKey) ?? null;
   const past = invoices.filter((invoice) => invoice.key < currentKey).reverse();
   const future = invoices.filter((invoice) => invoice.key > currentKey);
@@ -51,29 +48,17 @@ export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, 
   }, [isMobile, current?.key]);
 
   useLayoutEffect(() => {
-    const before = previousCount.current;
-    previousCount.current = visibleCount;
-    if (visibleCount <= before) {
-      if (visibleCount === INITIAL_ROWS) listRef.current?.scrollTo?.({ top: 0 });
-      return;
-    }
     const list = listRef.current;
-    const firstNew = list?.children[before];
-    if (list && firstNew) {
-      const top = firstNew.offsetTop - list.offsetTop;
-      if (typeof list.scrollTo === "function") list.scrollTo({ top, behavior: "smooth" });
-      else list.scrollTop = top;
+    if (!isMobile && list?.clientHeight > 0 && list.scrollHeight <= list.clientHeight + 1 && visibleCount < ordered.length) {
+      setVisibleCount((count) => Math.min(count + LOAD_BATCH, ordered.length));
     }
-  }, [visibleCount]);
+  }, [isMobile, listHeight, ordered.length, visibleCount]);
 
   const showMore = () => setVisibleCount((count) => Math.min(count + LOAD_BATCH, ordered.length));
   const onListScroll = (event) => {
-    if (!expanded || !userScrollRef.current || visibleCount >= ordered.length) return;
+    if (visibleCount >= ordered.length) return;
     const list = event.currentTarget;
-    if (list.scrollTop + list.clientHeight >= list.scrollHeight - 32) {
-      userScrollRef.current = false;
-      showMore();
-    }
+    if (list.scrollTop + list.clientHeight >= list.scrollHeight - 32) showMore();
   };
   const payable = current && !current.isEmpty && current.total !== null
     && (current.status === INVOICE_STATUS.OPEN || current.status === INVOICE_STATUS.CLOSED);
@@ -92,7 +77,7 @@ export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, 
   };
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : "minmax(280px, 340px) minmax(0, 1fr)", gap: 16, alignItems: "start" }}>
+    <div className="hub-invoices-grid" style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : "minmax(280px, 340px) minmax(0, 1fr)", gap: 16, alignItems: "start" }}>
       {current && <div ref={currentRef}><Card data-testid="hub-current-invoice" data-status={current.status} style={{ ...panel, borderColor: T.blue, display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 8 }}>
           <div><div style={{ ...G, color: T.inkLight, fontSize: 10, fontWeight: 700, textTransform: "uppercase" }}>Fatura atual</div>
@@ -128,28 +113,20 @@ export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, 
           height: listHeight ?? undefined, boxSizing: "border-box" }}>
         {visible.length === 0 && <div style={{ ...G, padding: 10, color: T.inkMid, fontSize: 12 }}>Nenhuma outra fatura.</div>}
         <div ref={listRef} data-testid="hub-other-invoices" onScroll={onListScroll}
-          onWheel={() => { userScrollRef.current = true; }} onTouchMove={() => { userScrollRef.current = true; }}
-          onKeyDown={() => { userScrollRef.current = true; }} tabIndex={0} aria-label="Lista de outras faturas"
-          style={{ flex: 1, minHeight: 0, overflowY: "auto" }} className="fincla-scroll">
+          tabIndex={0} aria-label="Lista de outras faturas"
+          style={{ flex: 1, minHeight: 0, overflowY: "auto", overflowX: "hidden" }} className="fincla-scroll">
           {visible.map((invoice) => <InvoiceDashboardLink key={invoice.key} cardId={cardId} invoice={invoice} onNavigate={onNavigate} className="hub-invoice-row"
-            style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", borderBottom: `1px solid ${T.border}`, color: T.ink }}>
+            style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", borderBottom: `1px solid ${T.border}`, color: T.ink, minWidth: 0 }}>
             <span style={{ ...NUM, width: 38, flexShrink: 0, textAlign: "center", fontWeight: 800 }}>{monthShort(invoice.month)}<small style={{ display: "block", fontWeight: 400 }}>{invoice.year}</small></span>
             <StatusBadge status={invoice.status} />
             <span style={{ ...NUM, flex: 1, minWidth: 0, color: T.inkMid, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {invoice.status === INVOICE_STATUS.PAID ? describePaidDate(invoice.paidDate) : null}
               {invoice.itemsCount > 0 ? `${invoice.paidDate ? " · " : ""}${invoice.itemsCount} ${invoice.status === INVOICE_STATUS.FORECAST ? "parcelas" : "lanç."}` : ""}
             </span>
-            <strong style={{ ...NUM, whiteSpace: "nowrap", fontSize: 13 }}>{money(invoice)}</strong>
+            <strong style={{ ...NUM, whiteSpace: "nowrap", fontSize: 13, overflow: "hidden", textOverflow: "ellipsis" }}>{money(invoice)}</strong>
             <span style={{ color: T.blue }}>→</span>
           </InvoiceDashboardLink>)}
         </div>
-        {others.length > INITIAL_ROWS && <Btn variant="ghost" full aria-expanded={expanded} onClick={() => {
-          if (expanded && visibleCount >= ordered.length) { setExpanded(false); setVisibleCount(INITIAL_ROWS); }
-          else { userScrollRef.current = false; setExpanded(true); showMore(); }
-        }}
-          style={{ ...NUM, color: T.blue }}>
-          {expanded && visibleCount >= ordered.length ? "Mostrar menos" : `+ ${ordered.length - visibleCount} outras faturas`}
-        </Btn>}
       </Card>}
     </div>
   );

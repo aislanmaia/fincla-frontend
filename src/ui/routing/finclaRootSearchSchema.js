@@ -91,6 +91,14 @@ const viewSchema = z.preprocess((val) => {
   return s === "new" ? s : undefined;
 }, z.literal("new").optional());
 
+/** ID numérico positivo do cartão selecionado no Hub. */
+const hubCardSchema = z.preprocess((val) => {
+  const s = val == null ? "" : String(val).trim();
+  if (!/^\d+$/.test(s)) return undefined;
+  const id = Number(s);
+  return Number.isSafeInteger(id) && id > 0 ? id : undefined;
+}, z.number().optional());
+
 /**
  * Allowlist de query na raiz (`/` e rotas filhas herdam o mesmo search validado).
  * - Auth por e-mail: sem prefixo `fc_` (ver `authEntryUrl.js`).
@@ -118,6 +126,7 @@ export const finclaRootSearchSchema = z.object({
   [FC.CAL_PAY]: optionalTrimmedString(256),
   [FC.DATE]: fcYmdSchema,
   [FC.VIEW]: viewSchema,
+  [FC.HUB_CARD]: hubCardSchema,
 });
 
 /** Para testes e uso fora do router (parse puro). */

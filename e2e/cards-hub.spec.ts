@@ -189,6 +189,20 @@ for (const vp of VIEWPORTS) {
   });
 }
 
+test("a URL restaura o cartão selecionado ao voltar do dashboard", async ({ page }) => {
+  await openHub(page, VIEWPORTS[0]);
+  await page.getByText("Hub Vazio").first().click();
+  await expect(page).toHaveURL(new RegExp(`card=${emptyCardId}`));
+  await expect(page.getByText("Cartão selecionado:")).toContainText("Hub Vazio");
+  await page.getByText("Hub Azul").first().click();
+  await expect(page).toHaveURL(new RegExp(`card=${busyCardId}`));
+  await page.getByRole("link", { name: /Abrir dashboard da fatura/ }).click();
+  await expect(page).toHaveURL(/\/cards\/\d+\/invoices\/\d+\/\d+/);
+  await page.goBack();
+  await expect(page).toHaveURL(new RegExp(`card=${busyCardId}`));
+  await expect(page.getByText("Cartão selecionado:")).toContainText("Hub Azul");
+});
+
 test("o link do dashboard da fatura abre dentro do shell do app", async ({ page }) => {
   await loginAsE2EOwner(page);
   await page.goto("/cards?view=new");

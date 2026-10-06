@@ -3,6 +3,11 @@ import { FC, FC_MODAL } from "../searchContract.js";
 import { parseFinclaRootSearch } from "../finclaRootSearchSchema.js";
 
 describe("finclaRootSearchSchema", () => {
+  it("aceita o cartão do Hub na URL e descarta IDs inválidos", () => {
+    expect(parseFinclaRootSearch({ view: "new", card: " 2 " })).toEqual({ view: "new", card: 2 });
+    expect(parseFinclaRootSearch({ view: "new", card: "2abc" })).toEqual({ view: "new" });
+    expect(parseFinclaRootSearch({ view: "new", card: "0" })).toEqual({ view: "new" });
+  });
   it("remove chaves fora da allowlist", () => {
     const out = parseFinclaRootSearch({
       invite_token: "abc",
