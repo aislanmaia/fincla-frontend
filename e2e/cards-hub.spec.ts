@@ -126,17 +126,23 @@ async function selectCardByName(page: Page, name: string) {
 
 for (const vp of VIEWPORTS) {
   test.describe(`Hub do cartão — ${vp.name}`, () => {
-    test("caminho feliz: fatura atual, quatro status, lista inline e anotação", async ({ page }) => {
+    test("caminho feliz: fatura atual, quatro status, lista desktop/carrossel mobile e anotação", async ({ page }) => {
       await openHub(page, vp);
       await selectCardByName(page, "Hub Azul");
       const current = page.getByTestId("hub-current-invoice");
-      const others = page.getByTestId("hub-other-invoices");
+      const others = vp.mobile ? page.getByTestId("invoice-carousel") : page.getByTestId("hub-other-invoices");
       await expect(current).toHaveAttribute("data-status", "open");
       await expect(current.getByTestId("invoice-status")).toHaveText("Aberta");
       await expect(others.getByTestId("invoice-status").filter({ hasText: "Paga" })).toHaveCount(1);
       await expect(others.getByTestId("invoice-status").filter({ hasText: "Fechada" })).toHaveCount(1);
       await expect(others.getByTestId("invoice-status").filter({ hasText: "Prevista" }).first()).toBeVisible();
       await expect(current.getByRole("button", { name: /Marcar como paga/ })).toBeVisible();
+      if (vp.mobile) {
+        await expect(page.getByTestId("invoice-dots")).toBeVisible();
+        await page.getByTestId("all-invoices-open-button").click();
+        await expect(page.getByRole("dialog", { name: "Todas as faturas" })).toBeVisible();
+        await page.getByRole("dialog", { name: "Todas as faturas" }).getByRole("button", { name: "Fechar" }).click();
+      }
       await page.screenshot({ path: `${SHOTS}/cards-hub-${vp.name}-invoices.png`, fullPage: false });
       if (vp.mobile) {
         const overflow = await page.evaluate(() => {

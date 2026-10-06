@@ -18,6 +18,8 @@ import {
   computeUsagePercent,
 } from "../features/creditCards/cardKpis.js";
 import { HubInvoices } from "../features/cardHub/HubInvoices.jsx";
+import { InvoiceCarousel } from "../features/cardHub/InvoiceCarousel.jsx";
+import { AllInvoicesDialog } from "../features/cardHub/AllInvoicesDialog.jsx";
 import { HubDialog } from "../features/cardHub/HubDialog.jsx";
 import { CompactKpiStrip, LimitTiles } from "../features/cardHub/HubKpis.jsx";
 import { InsightsList } from "../features/cardHub/InsightsList.jsx";
@@ -59,6 +61,7 @@ export function CardHubPage({
   const { selectedCard, selectedCardId, invoiceCards, detail } = hub;
 
   const [dialog, setDialog] = useState(null);
+  const [mobileInvoiceKey, setMobileInvoiceKey] = useState(null);
   const now = useToday();
 
   const currency = selectedCard?.currency || undefined;
@@ -222,6 +225,15 @@ export function CardHubPage({
             onNavigate={goTo}
             onMarkPaid={hub.payInvoice}
           />
+          {isMobile && <>
+            <InvoiceCarousel invoices={invoiceCards} cardId={selectedCard.id} currency={currency}
+              selectedKey={invoiceCards.some((invoice) => invoice.key === mobileInvoiceKey) ? mobileInvoiceKey : hub.initialInvoiceKey}
+              onSelect={setMobileInvoiceKey} onNavigate={goTo} isMobile now={now} />
+            <button type="button" onClick={() => setDialog("invoices")} data-testid="all-invoices-open-button"
+              style={{ ...OUTLINE_BTN, width: "100%", justifyContent: "space-between" }}>
+              <span>📋 Ver todas as faturas</span><span>{invoiceCards.length} faturas →</span>
+            </button>
+          </>}
         </>
       )}
 
@@ -234,6 +246,9 @@ export function CardHubPage({
           onClose={closeDialog}
         />
       )}
+      {dialog === "invoices" && <AllInvoicesDialog invoices={invoiceCards} cardId={selectedCard.id} currency={currency}
+        isMobile onPick={(key) => { setMobileInvoiceKey(key); closeDialog(); }}
+        onNavigate={(href) => { closeDialog(); goTo(href); }} onClose={closeDialog} />}
       {dialog === "insights" && (
         <HubDialog title="Insights" isMobile={isMobile} onClose={closeDialog}>
           <div style={{ padding: "16px 20px" }}><InsightsList insights={insights} /></div>

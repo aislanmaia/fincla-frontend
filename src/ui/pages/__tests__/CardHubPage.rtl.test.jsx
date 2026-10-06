@@ -143,6 +143,9 @@ describe("CardHubPage — faturas do Hub", () => {
     renderHub();
     expect(await screen.findByTestId("hub-current-invoice")).toHaveAttribute("data-status", "open");
     expect(currentPanel()).toHaveTextContent("Outubro 2026");
+    expect(currentPanel()).toHaveTextContent("17% vs mês anterior");
+    expect(currentPanel()).toHaveTextContent("Limite utilizado");
+    expect(currentPanel()).toHaveTextContent("65%");
     expect(otherRows()).toHaveTextContent("Fechada");
     expect(otherRows()).toHaveTextContent("Paga");
     expect(otherRows()).toHaveTextContent("Prevista");
@@ -217,6 +220,7 @@ describe("CardHubPage — faturas do Hub", () => {
     await waitFor(() => expect(screen.getByText("Cartão selecionado:")).toHaveTextContent("Roxo"));
     finishPayment();
     await waitFor(() => expect(currentPanel()).toHaveAttribute("data-status", "open"));
+    await waitFor(() => expect(screen.queryByText("Carregando faturas…")).toBeNull());
     expect(screen.getByRole("button", { name: /Marcar como paga/ })).toBeInTheDocument();
   });
 
@@ -285,7 +289,9 @@ describe("CardHubPage — faturas do Hub", () => {
     renderHub({ isMobile: true });
     await screen.findByTestId("hub-current-invoice");
     expect(screen.getByTestId("compact-kpis")).toBeInTheDocument();
-    expect(otherRows().querySelectorAll("a")).toHaveLength(4);
+    expect(screen.getByTestId("invoice-carousel")).toBeInTheDocument();
+    expect(screen.getByTestId("invoice-dots")).toBeInTheDocument();
+    expect(screen.getByTestId("all-invoices-open-button")).toBeInTheDocument();
   });
 });
 
@@ -416,13 +422,13 @@ describe("CardHubPage — navegação e atualização", () => {
     const arg = navigateMock.mock.calls[0][0];
     expect(arg.to).toBe("/cards");
     expect(arg.search({ fc_tx: "9", view: "new" })).toEqual({ fc_tx: "9" });
-  });describe("CardHubPage — sem cartões", () => {
+  });
+
   it("convida a cadastrar o primeiro cartão (na tela anterior)", async () => {
     mockApi({ cards: [] });
     renderHub();
     expect(await screen.findByText(/ainda não cadastrou nenhum cartão/i)).toBeInTheDocument();
   });
-});
 
   it("o refresh mantém o diálogo de anotação aberto e o rascunho digitado", async () => {
     mockApi();
@@ -465,6 +471,4 @@ describe("CardHubPage — navegação e atualização", () => {
     expect(screen.getByTestId("hub-current-invoice")).toHaveAttribute("data-status", "open");
     expect(screen.getByText("Cartão selecionado:")).toHaveTextContent("Azul");
   });
-
-
 });
