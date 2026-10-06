@@ -105,7 +105,7 @@ const futureFixture = (over = {}) => ({
 });
 
 /** Backend de mentira na camada HTTP: o cliente, o adapter e o hook reais rodam por cima. */
-function mockApi({ cards = [cardFixture()], history, current, future, patch } = {}) {
+function mockApi({ cards = [cardFixture()], history, current, future, patch, transactions = [] } = {}) {
 
   const patched = [];
   server.use(
@@ -121,6 +121,12 @@ function mockApi({ cards = [cardFixture()], history, current, future, patch } = 
         ? HttpResponse.json({ detail: "boom" }, { status: 500 })
         : HttpResponse.json(current ?? currentFixture()))),
     http.get("*/v1/credit-cards/:id/future-commitments", () => HttpResponse.json(future ?? futureFixture())),
+    http.get("*/v1/transactions", ({ request }) => {
+      if (transactions === "fail") return HttpResponse.json({ detail: "boom" }, { status: 500 });
+      const cardId = Number(new URL(request.url).searchParams.get("credit_card_id"));
+      const rows = transactions.filter((row) => row.credit_card_id === cardId);
+      return HttpResponse.json({ data: rows.slice(0, 4), pagination: { total: rows.length } });
+    }),
     http.patch("*/v1/credit-cards/:id", async ({ request }) => {
       const body = await request.json();
       patched.push({ url: new URL(request.url), body });
@@ -137,6 +143,63 @@ const renderHub = (props = {}) => render(
 
 const currentPanel = () => screen.getByTestId("hub-current-invoice");
 const otherRows = () => screen.getByTestId("hub-other-invoices");
+
+describe("CardHubPage — lançamentos recentes", () => {
+  const row = (id, cardId, description, type = "expense", currency = "BRL") => ({
+    id, credit_card_id: cardId, description, type, value: money("42.50", currency),
+    date: "2026-10-04T12:00:00Z", tags: { categoria: [{ name: "Compras" }] },
+  });
+
+  it("mostra apenas lançamentos reais do cartão selecionado, com estorno e moeda própria", async () => {
+    mockApi({
+      cards: [cardFixture(), cardFixture({ id: 2, last4: "2222", description: "Verde" })],
+      transactions: [row(1, 1, "Mercado"), row(2, 1, "Estorno loja", "refund", "EUR"), row(3, 2, "Outro cartão")],
+    });
+    const user = userEvent.setup();
+    renderHub();
+    const section = await screen.findByRole("region", { name: "Lançamentos recentes" });
+    await within(section).findByText("Mercado");
+    expect(section).toHaveTextContent("Compras");
+    expect(section).toHaveTextContent("+€");
+    expect(section).not.toHaveTextContent("Outro cartão");
+    await user.click(screen.getByText("Verde"));
+    await within(section).findByText("Outro cartão");
+    expect(section).not.toHaveTextContent("Mercado");
+  });
+
+  it("mostra vazio e erro da fonte sem inventar lançamentos", async () => {
+    mockApi({ transactions: [] });
+    const view = renderHub();
+    const section = await screen.findByRole("region", { name: "Lançamentos recentes" });
+    await within(section).findByText("Este cartão ainda não tem lançamentos.");
+    view.unmount();
+    server.resetHandlers();
+    mockApi({ transactions: "fail" });
+    renderHub();
+    await within(await screen.findByRole("region", { name: "Lançamentos recentes" })).findByRole("alert");
+  });
+
+  it("consulta uma página limitada e recarrega após alteração de transações", async () => {
+    const requests = [];
+    mockApi({ transactions: [row(1, 1, "Mercado")] });
+    server.use(http.get("*/v1/transactions", ({ request }) => {
+      requests.push(new URL(request.url));
+      return HttpResponse.json({ data: [row(requests.length, 1, requests.length === 1 ? "Mercado" : "Farmácia")], pagination: { total: 1 } });
+    }));
+    const view = renderHub();
+    const section = await screen.findByRole("region", { name: "Lançamentos recentes" });
+    await within(section).findByText("Mercado");
+    expect(requests).toHaveLength(1);
+    expect(requests[0].searchParams.get("credit_card_id")).toBe("1");
+    expect(requests[0].searchParams.get("limit")).toBe("4");
+    expect(requests[0].searchParams.get("date_end")).toBe("2026-10-04");
+    view.rerender(<CardHubPage organizationId={ORG} dataMode="live" onNewItem={vi.fn()} transactionsRefreshToken={1} />);
+    await within(section).findByText("Farmácia");
+    expect(requests).toHaveLength(2);
+    await userEvent.setup().click(within(section).getByRole("button", { name: /Ver todos os lançamentos/ }));
+    expect(navigateMock).toHaveBeenCalledWith({ to: "/transactions" });
+  });
+});
 
 describe("CardHubPage — faturas do Hub", () => {
   it("destaca a aberta, mostra quatro estados reais e expande outras faturas inline", async () => {

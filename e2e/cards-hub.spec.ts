@@ -137,6 +137,9 @@ for (const vp of VIEWPORTS) {
       await expect(others.getByTestId("invoice-status").filter({ hasText: "Fechada" })).toHaveCount(1);
       await expect(others.getByTestId("invoice-status").filter({ hasText: "Prevista" }).first()).toBeVisible();
       await expect(current.getByRole("button", { name: /Marcar como paga/ })).toBeVisible();
+      const recent = page.getByRole("region", { name: "Lançamentos recentes" });
+      await expect(recent).toContainText("Compra aberta");
+      await expect(recent).not.toContainText("Não foi possível carregar");
       if (vp.mobile) {
         await expect(page.getByTestId("invoice-dots")).toBeVisible();
         await expect(others).not.toContainText("Fatura atual");
@@ -173,6 +176,7 @@ for (const vp of VIEWPORTS) {
 
       await page.getByText("Hub Vazio").first().click();
       await expect(page.getByText("Cartão selecionado:")).toContainText("Hub Vazio");
+      await expect(page.getByRole("region", { name: "Lançamentos recentes" })).toContainText("Este cartão ainda não tem lançamentos.");
 
       const open = page.getByTestId("hub-current-invoice");
       await expect(open).toHaveAttribute("data-status", "open");

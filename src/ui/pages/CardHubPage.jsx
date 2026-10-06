@@ -25,8 +25,10 @@ import { CompactKpiStrip, LimitTiles } from "../features/cardHub/HubKpis.jsx";
 import { InsightsList } from "../features/cardHub/InsightsList.jsx";
 
 import { NotesDialog } from "../features/cardHub/NotesDialog.jsx";
+import { RecentCardTransactions } from "../features/cardHub/RecentCardTransactions.jsx";
 import { INVOICE_STATUS, summarizeInvoiceCounts } from "../features/cardHub/hubInvoices.js";
 import { useCardHubData } from "../features/cardHub/useCardHubData.js";
+import { useRecentCardTransactions } from "../features/cardHub/useRecentCardTransactions.js";
 import { useToday } from "../features/cardHub/useToday.js";
 import "../features/cardHub/cardHub.css";
 
@@ -84,6 +86,12 @@ export function CardHubPage({
     refreshToken: transactionsRefreshToken,
   });
   const { selectedCard, selectedCardId, invoiceCards, detail } = hub;
+  const recent = useRecentCardTransactions({
+    organizationId,
+    cardId: selectedCardId,
+    enabled: shouldUseRealData(organizationId, dataMode),
+    refreshToken: transactionsRefreshToken,
+  });
 
   const [dialog, setDialog] = useState(null);
   const [mobileInvoiceKey, setMobileInvoiceKey] = useState(null);
@@ -278,6 +286,8 @@ export function CardHubPage({
 
       {degraded && <Notice tone="warn">Algumas informações das faturas não puderam ser carregadas. Os dados abaixo podem estar incompletos.</Notice>}
 
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : "minmax(0, 2fr) minmax(0, 1fr)", gap: 14, alignItems: "stretch", minWidth: 0 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
       {detail.loading ? (
         <Notice>Carregando faturas…</Notice>
       ) : invoiceCards.length === 0 ? (
@@ -306,6 +316,16 @@ export function CardHubPage({
           </>}
         </>
       )}
+      </div>
+
+      <RecentCardTransactions
+        transactions={recent.rows}
+        cardCurrency={currency}
+        loading={recent.loading}
+        error={recent.error}
+        onViewAll={() => goTo("/transactions")}
+      />
+      </div>
 
       {dialog === "notes" && (
         <NotesDialog
