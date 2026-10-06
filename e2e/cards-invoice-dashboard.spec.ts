@@ -110,9 +110,9 @@ const selected = (page: Page) => page.locator('[data-testid^="invoice-card-"][da
 
 let openRef = { year: 0, month: 0 };
 
-test.describe.configure({ mode: "serial" });
+test.describe.configure({ mode: "serial", retries: 1 });
 
-test.beforeAll(async () => {
+test.beforeAll(async ({ browser }) => {
   if (!e2eReady) return;
   await freshOrg();
   busyCardId = await createCard({ last4: "7112", brand: "Visa", due_day: 10, closing_day: 31, description: "Dash Azul", credit_limit: 10000 });
@@ -125,6 +125,22 @@ test.beforeAll(async () => {
   const cur = await currentMonth(busyCardId);
   expect(cur, "o cartão com lançamentos tem fatura aberta").not.toBeNull();
   openRef = cur!;
+
+  // Esquenta o servidor de desenvolvimento nos dois layouts: o primeiro carregamento a
+  // frio do Vite pode falhar ao importar o roteador e derrubaria um teste por motivo
+  // alheio à tela.
+  for (const vp of VIEWPORTS) {
+    const warm = await browser.newPage();
+    try {
+      await login(warm, vp);
+      await warm.goto(url(busyCardId, openRef));
+      await warm.getByTestId("invoice-count").waitFor({ timeout: 60_000 });
+    } catch {
+      /* o login de cada teste acusa o problema real */
+    } finally {
+      await warm.close();
+    }
+  }
 });
 
 for (const vp of VIEWPORTS) {

@@ -12,7 +12,8 @@ import { plural } from "./invoiceFormat.js";
  * (total, status, nº de lançamentos), sem nenhuma chamada extra.
  */
 export function MobileInvoiceItem({ invoice, selected, width, onSelect, currency, detailProps }) {
-  const summary = invoice.isEmpty ? "Sem lançamentos" : formatMoney(invoice.total, currency) ?? "—";
+  const emptyForecast = invoice.status === INVOICE_STATUS.FORECAST && invoice.total === 0 && !invoice.itemsCount;
+  const summary = invoice.isEmpty || emptyForecast ? "Sem lançamentos" : formatMoney(invoice.total, currency) ?? "—";
   return (
     <div
       role="group"
