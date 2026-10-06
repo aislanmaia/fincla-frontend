@@ -168,8 +168,8 @@ async function measureCardsLoad(page: Page): Promise<Measurement> {
     if (call) call.failure = req.failure()?.errorText ?? "failed";
   });
 
-  // A tela atual vive em ?view=classic desde que o Hub virou a padrão de /cards.
-  await page.goto("/cards?view=classic");
+  // A tela clássica é o padrão de /cards.
+  await page.goto("/cards");
   // O tile "Novo cartão" fecha o carrossel nas duas larguras e só existe com a lista
   // montada (o nome do cartão não aparece no mobile).
   await expect(page.getByText("Novo cartão").first()).toBeVisible({ timeout: 30_000 });
@@ -329,7 +329,7 @@ test("mês seguinte só com parcelas (compra à vista no ciclo atual): a fatura 
 
   await page.setViewportSize(viewports[0].size);
   await login(page, organizationId);
-  await page.goto("/cards?view=classic");
+  await page.goto("/cards");
   await expect(page.getByText("Compra à vista A").first()).toBeVisible({ timeout: 30_000 });
 
   await page
