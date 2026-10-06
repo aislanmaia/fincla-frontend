@@ -107,6 +107,7 @@ const DETAILS = {
 /** Backend de mentira na camada HTTP: cliente, adapter, hook e tela reais rodam por cima. */
 function mockApi({ cards = [cardFixture()], detail = DETAILS, patch, listStatus = 200, future = futureFixture() } = {}) {
   const calls = [];
+  calls.queries = [];
   const paidOverride = {};
   server.use(
     http.get("*/v1/credit-cards", ({ request }) => {
@@ -123,6 +124,7 @@ function mockApi({ cards = [cardFixture()], detail = DETAILS, patch, listStatus 
     }),
     http.get("*/v1/credit-cards/:id/invoices/:year/:month", ({ request, params }) => {
       calls.push(`GET ${new URL(request.url).pathname}`);
+      calls.queries.push(new URL(request.url).search);
       const make = detail[`${params.year}/${params.month}`];
       if (detail === "fail") return HttpResponse.json({ detail: "boom" }, { status: 500 });
       if (!make) return HttpResponse.json({ detail: "Invoice not found for the specified card/month" }, { status: 404 });
@@ -151,6 +153,50 @@ const renderPage = (props = {}) => render(
 const readyDesktop = () => screen.findByTestId("invoice-title");
 
 describe("InvoiceDashboardPage — card da fatura", () => {
+  it.each([false, true])("exibe média e velocidade reais no layout mobile=%s com opt-in", async (isMobile) => {
+    const calls = mockApi({ detail: {
+      ...DETAILS,
+      "2026/10": () => detailFixture({
+        six_month_average: money("5000.00"), six_month_average_change: 62.6,
+        six_month_average_invoices_count: 2,
+        spending_pace: {
+          cycle_start: "2026-09-15", cycle_end: "2026-10-14",
+          current: [{ day: 1, date: "2026-09-15", cumulative: money("0.00") }, { day: 2, date: "2026-09-16", cumulative: money("150.00") }],
+          previous: { cycle_start: "2026-08-15", cycle_end: "2026-09-14", points: [{ day: 1, date: "2026-08-15", cumulative: money("0.00") }, { day: 2, date: "2026-08-16", cumulative: money("80.00") }] },
+        },
+      }),
+    } });
+    renderPage({ isMobile });
+    expect(await screen.findByTestId("six-month-average")).toHaveTextContent("5.000,00");
+    expect(screen.getByTestId("six-month-average")).toHaveTextContent("2 faturas");
+    expect(screen.getByTestId("spending-pace")).toHaveTextContent("Ciclo atual");
+    expect(screen.getByTestId("spending-pace")).toHaveTextContent("Ciclo anterior");
+    const chart = within(screen.getByTestId("spending-pace")).getByRole("img");
+    chart.focus();
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(within(screen.getByTestId("spending-pace")).getByRole("status")).toHaveTextContent("Dia 1");
+    expect(calls.filter((call) => call.startsWith("GET /v1/credit-cards"))).toHaveLength(4);
+    expect(calls.queries).toContainEqual(expect.stringContaining("include_metrics=true"));
+  });
+
+  it("não transforma falta de histórico em média zero ou ciclo anterior inventado", async () => {
+    mockApi({ detail: {
+      ...DETAILS,
+      "2026/10": () => detailFixture({
+        six_month_average: null, six_month_average_change: null,
+        six_month_average_invoices_count: 0,
+        spending_pace: { cycle_start: "2026-09-15", cycle_end: "2026-10-14", current: [{ day: 1, date: "2026-09-15", cumulative: money("0.00") }], previous: null },
+      }),
+    } });
+    renderPage();
+    expect(await screen.findByTestId("six-month-average")).toHaveTextContent("Sem faturas anteriores");
+    expect(screen.getByTestId("six-month-average")).not.toHaveTextContent("R$ 0,00");
+    expect(screen.getByTestId("spending-pace")).not.toHaveTextContent("Ciclo anterior");
+    expect(within(screen.getByTestId("spending-pace")).getByTestId("pace-current-point")).toBeVisible();
+    expect(within(screen.getByTestId("spending-pace")).getByTestId("pace-tooltip")).toHaveTextContent("R$ 0,00");
+    expect(within(screen.getByTestId("spending-pace")).getByTestId("pace-tooltip").querySelector("div:last-child")).toHaveStyle({ fontSize: "12px" });
+  });
+
   it("mostra a fatura aberta com total, comparação, lançamentos, timeline, limite, categorias e itens", async () => {
     mockApi();
     renderPage();

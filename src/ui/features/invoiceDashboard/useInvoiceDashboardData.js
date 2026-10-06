@@ -105,7 +105,7 @@ export function useInvoiceDashboardData({ organizationId, cardId, year, month, e
   const selectedStale = selectedEntry?.stale === true;
 
   const fetchDetail = useCallback((id) => once(`detail:${id}`, () => settle(
-    getCreditCardInvoice(numericCardId, year, month, organizationId),
+    getCreditCardInvoice(numericCardId, year, month, organizationId, true),
   )).then((res) => {
     setDetails((prev) => {
       const old = prev[id];
