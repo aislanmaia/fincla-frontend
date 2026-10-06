@@ -72,7 +72,11 @@ describe("Lançamentos de um cartão", () => {
     expect((await screen.findAllByText("R$ 140,00")).length).toBeGreaterThan(0);
     expect(calls).toHaveLength(2);
     expect(calls[1]).toBe("/v1/credit-cards/1/invoices/2026/10");
-    expect(within(screen.getByRole("region", { name: "Lançamentos da fatura" })).getByText(/Transporte · 12\/10\/2026/)).toBeInTheDocument();
+    const list = within(screen.getByRole("region", { name: "Lançamentos da fatura" })).getByRole("list");
+    expect(within(list).getByRole("listitem", { name: /Posto, compra de R\$.*60,00 em 12\/10\/2026/ })).toBeInTheDocument();
+    expect(within(list).queryByRole("button", { name: /Posto/ })).not.toBeInTheDocument();
+    expect(within(list).queryByText("A pagar")).not.toBeInTheDocument();
+    expect(within(list).queryByRole("button", { name: /Editar|Excluir|Pagar/ })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Categoria: Todas/ }));
     await user.click(screen.getByRole("button", { name: "Alimentação" }));
     expect(within(screen.getByRole("region", { name: "Lançamentos da fatura" })).getByText("Mercado")).toBeInTheDocument();
@@ -91,7 +95,10 @@ describe("Lançamentos de um cartão", () => {
     await user.click(screen.getByRole("checkbox", { name: "Agrupar por data" }));
     expect(screen.getByText("28 de setembro de 2026")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: /Semana de 28\/09: R\$\s*100,00/ })).toBeInTheDocument();
-    expect(screen.getByText("Mercado").closest("[style*='min-height']")).toHaveStyle({ minHeight: "48px" });
+    expect(screen.getByText("Mercado").closest(".fincla-row")).toHaveStyle({ minHeight: "48px" });
+    const mobileList = within(screen.getByRole("region", { name: "Lançamentos da fatura" })).getByRole("list");
+    expect(within(mobileList).getByRole("listitem", { name: /Mercado, compra de R\$.*100,00/ })).not.toHaveAttribute("tabindex");
+    expect(within(mobileList).queryByRole("button")).not.toBeInTheDocument();
     expect(JSON.parse(localStorage.getItem("fincla:transactions:list-prefs"))).toMatchObject({ density: "compacto", grouped: true });
   });
 
@@ -101,7 +108,8 @@ describe("Lançamentos de um cartão", () => {
     render(<CardTransactionsPage organizationId={ORG_ID} />);
     await screen.findByText("Mercado");
     await user.selectOptions(screen.getByRole("combobox", { name: "Densidade da lista" }), "confortavel");
-    expect(screen.getByText("Mercado").closest("[style*='min-height']")).toHaveStyle({ minHeight: "56px" });
+    expect(screen.getByText("Mercado").closest(".fincla-row")).toHaveStyle({ height: "56px" });
+    expect(within(screen.getByRole("region", { name: "Lançamentos da fatura" })).getAllByRole("listitem")).toHaveLength(3);
   });
 
   it("aplica a faceta Período localmente e mantém o total agregado da fatura", async () => {

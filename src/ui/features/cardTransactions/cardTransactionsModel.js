@@ -1,4 +1,4 @@
-import { mapInvoiceItemToUi } from "../../data/creditCardsAdapter.js";
+import { invoiceItemTagNames, mapInvoiceItemToUi } from "../../data/creditCardsAdapter.js";
 import { matchesValueRange } from "../transactions/filters/filtersToLegacyParams.js";
 
 const amountOf = (value) => {
@@ -19,7 +19,6 @@ export function invoiceRows(items, { search = "", cats = [], tags = [], tagMode 
         dataKey: date,
         purchaseDate: item.purchase_info?.purchase_date ?? null,
         categoryId: item.tags?.categoria?.[0]?.id ?? "uncategorized",
-        tags: Object.entries(item.tags ?? {}).flatMap(([key, values]) => key === "categoria" ? [] : (values ?? []).map((value) => value.name)),
         date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date.slice(8, 10)}/${date.slice(5, 7)}/${date.slice(0, 4)}` : "",
         transactionDate: date,
       };
@@ -30,7 +29,7 @@ export function invoiceRows(items, { search = "", cats = [], tags = [], tagMode 
       (tags.length === 0 || (tagMode === "all" ? tags.every((tag) => row.tags.includes(tag)) : tags.some((tag) => row.tags.includes(tag)))) &&
       (modality === "all" || row.modality === modality) &&
       (!from || row.transactionDate >= from) && (!to || row.transactionDate <= to) &&
-      matchesValueRange(Math.abs(row.val), valueMin, valueMax)
+      (row.val == null ? !valueMin && !valueMax : matchesValueRange(Math.abs(row.val), valueMin, valueMax))
     ));
 }
 
@@ -40,7 +39,7 @@ export function categoryOptions(breakdown) {
 }
 
 export function tagOptions(items) {
-  return [...new Set((items ?? []).flatMap((item) => Object.entries(item.tags ?? {}).flatMap(([key, values]) => key === "categoria" ? [] : (values ?? []).map((value) => value.name))).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  return [...new Set((items ?? []).flatMap(invoiceItemTagNames))].sort((a, b) => a.localeCompare(b, "pt-BR"));
 }
 
 export function weeklySpending(items) {

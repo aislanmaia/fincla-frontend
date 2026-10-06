@@ -6,16 +6,19 @@ import { getCreditCardInvoice, listCreditCards } from "../../api/creditCards";
 import { T } from "../tokens";
 import { G, NUM } from "../typography";
 import { formatMoney } from "../money/formatMoney.js";
+import { Card, PageTitle } from "../components/primitives.jsx";
 import { shouldUseRealData } from "../dataMode.js";
 import { invoiceDashboardPath, isValidInvoiceParams } from "../routing/invoiceRoute.js";
 import { CategoryBreakdown } from "../features/invoiceDashboard/CategoryBreakdown.jsx";
 import { DENSITIES, readListPrefs, writeListPrefs } from "../features/transactions/listPrefs.js";
+import { TxRow } from "../features/transactions/shared/TransactionRow.jsx";
+import { shortDateLabel } from "../features/transactions/shared/transactionFormat.js";
 import { TransactionsFilterBar } from "../features/transactions/filters/TransactionsFilterBar.jsx";
 import { useTransactionsFilterState } from "../features/transactions/filters/useTransactionsFilterState.js";
 import { resolvePeriodDisplayBounds } from "../features/transactions/periodDateBounds.js";
 import { categoryOptions, invoiceRows, tagOptions, weeklySpending } from "../features/cardTransactions/cardTransactionsModel.js";
 
-const panel = { background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, boxShadow: T.sm, padding: 18, minWidth: 0 };
+const panel = { padding: 18, minWidth: 0 };
 const input = { ...G, minHeight: 38, border: `1px solid ${T.border}`, borderRadius: 9, background: T.surface, color: T.ink, padding: "7px 10px" };
 const INVOICE_FILTER_INITIAL = { period: "tudo" };
 const INVOICE_FACETS = ["periodo", "categoria", "tag", "valor"];
@@ -23,14 +26,14 @@ const INVOICE_SORT_FIELDS = ["date", "val", "desc", "cat"];
 const money = (value, currency) => currency ? formatMoney(value, currency) : null;
 
 function Notice({ children }) {
-  return <div role="status" style={{ ...panel, ...G, color: T.inkMid, fontSize: 13 }}>{children}</div>;
+  return <Card role="status" style={{ ...panel, ...G, color: T.inkMid, fontSize: 13 }}>{children}</Card>;
 }
 
 function WeeklyChart({ rows, currency }) {
   const hasData = rows.some((row) => row.hasData);
   const ceiling = Math.max(1, ...rows.map((row) => Math.abs(row.amount)));
   return (
-    <section aria-label="Saídas por semana" style={{ ...panel, display: "flex", flexDirection: "column", gap: 14 }}>
+    <Card as="section" aria-label="Saídas por semana" style={{ ...panel, display: "flex", flexDirection: "column", gap: 14 }}>
       <h2 style={{ ...G, fontSize: 15, margin: 0 }}>Saídas por semana</h2>
       <span style={{ ...G, fontSize: 11, color: T.inkLight }}>Semanas com datas de cobrança observadas nesta fatura</span>
       {!hasData ? <span style={{ ...G, fontSize: 12, color: T.inkMid }}>Sem lançamentos com data nesta fatura.</span> : (
@@ -46,7 +49,7 @@ function WeeklyChart({ rows, currency }) {
           ))}
         </div>
       )}
-    </section>
+    </Card>
   );
 }
 
@@ -54,26 +57,31 @@ function TransactionList({ rows, grouped, density, isMobile, currency }) {
   let lastDate = null;
   const rowHeight = DENSITIES[density]?.[isMobile ? "mobile" : "desktop"] ?? 48;
   return (
-    <section aria-label="Lançamentos da fatura" style={panel}>
+    <Card as="section" aria-label="Lançamentos da fatura" style={panel}>
       <h2 style={{ ...G, fontSize: 15, margin: "0 0 10px" }}>Lançamentos</h2>
       {rows.length === 0 && <p style={{ ...G, color: T.inkMid, fontSize: 12 }}>Nenhum lançamento corresponde aos filtros.</p>}
+      <div role="list">
       {rows.map((row) => {
         const heading = grouped && row.transactionDate !== lastDate;
         lastDate = row.transactionDate;
+        const tx = {
+          ...row,
+          type: row.isRefund ? "refund" : "expense",
+          method: "Crédito",
+          paymentMethodKey: "credito",
+          parcela: row.parcela ? { atual: row.parcela.n, total: row.parcela.t, valParcela: row.parcela.val } : null,
+          refundsSummary: null,
+        };
         return (
           <div key={row.id}>
-            {heading && <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, padding: "12px 0 4px" }}>{row.transactionDate ? new Date(`${row.transactionDate}T12:00:00`).toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" }) : "Sem data"}</div>}
-            <div style={{ display: "flex", alignItems: "center", minHeight: rowHeight, gap: 10, borderBottom: `1px solid ${T.border}` }}>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.desc}</div>
-                <div style={{ ...G, fontSize: 11, color: T.inkLight }}>{[row.cat, row.parcela ? `${row.parcela.n}/${row.parcela.t}` : null, grouped ? null : row.date].filter(Boolean).join(" · ")}</div>
-              </div>
-              <span style={{ ...G, ...NUM, fontSize: 13, fontWeight: 700, color: row.isRefund ? T.green : T.ink, whiteSpace: "nowrap" }}>{row.isRefund ? "− " : ""}{money(row.val == null ? null : Math.abs(row.val), currency) ?? "—"}</span>
-            </div>
+            {heading && <div style={{ ...G, ...NUM, fontSize: 11, fontWeight: 700, color: T.inkLight, padding: "12px 0 4px" }}>{row.transactionDate ? new Date(`${row.transactionDate}T12:00:00`).toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" }) : "Sem data"}</div>}
+            <TxRow tx={tx} readOnly displayValue={money(row.val == null ? null : Math.abs(row.val), currency) ?? "—"}
+              isMobile={isMobile} rowHeight={rowHeight} showDate={!grouped} dateLabel={shortDateLabel(row.date)} />
           </div>
         );
       })}
-    </section>
+      </div>
+    </Card>
   );
 }
 
@@ -131,8 +139,8 @@ export function CardTransactionsPage({ isMobile = false, organizationId = null, 
     <div style={{ padding: isMobile ? 16 : 28, display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
       <button type="button" onClick={goBack} style={{ ...G, alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 5, border: 0, background: "none", color: T.blue, fontSize: 12, fontWeight: 700, cursor: "pointer" }}><ArrowLeft size={14} /> Voltar para a fatura</button>
       <div>
-        <h1 style={{ ...G, margin: 0, fontSize: isMobile ? 23 : 29 }}>Lançamentos da fatura</h1>
-        {state.card && <p style={{ ...G, margin: "5px 0 0", color: T.inkMid, fontSize: 12 }}>{state.card.description || state.card.brand} •{state.card.last4} · {new Date(year, month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</p>}
+        <PageTitle sans="Lançamentos da" serif="fatura" />
+        {state.card && <p style={{ ...G, ...NUM, margin: "5px 0 0", color: T.inkMid, fontSize: 12 }}>{state.card.description || state.card.brand} •{state.card.last4} · {new Date(year, month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</p>}
       </div>
       {!enabled && <Notice>Selecione uma organização para ver os lançamentos.</Notice>}
       {enabled && state.status === "loading" && <Notice>Carregando lançamentos…</Notice>}
@@ -140,16 +148,16 @@ export function CardTransactionsPage({ isMobile = false, organizationId = null, 
       {enabled && state.status === "error" && <Notice>Não foi possível carregar a fatura.</Notice>}
       {enabled && state.status === "empty" && <Notice>Esta fatura ainda não tem lançamentos.</Notice>}
       {enabled && state.status === "ok" && detail && <>
-        <div style={{ ...panel, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+        <Card style={{ ...panel, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
           <span style={{ ...G, color: T.inkMid, fontSize: 12 }}>Total da fatura · {detail.items_count} lançamentos</span>
           <strong style={{ ...G, ...NUM, fontSize: 22 }}>{money(detail.total_amount, currency) ?? "—"}</strong>
-        </div>
+        </Card>
         {!currency && <Notice>Moeda da fatura indisponível; os valores não podem ser exibidos com segurança.</Notice>}
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(2,minmax(0,1fr))", gap: 14 }}>
           {currency && <CategoryBreakdown breakdown={detail.category_breakdown} total={detail.total_amount} currency={currency} isMobile={isMobile} />}
           <WeeklyChart rows={weeks} currency={currency} />
         </div>
-        <div style={{ ...panel, display: "flex", flexDirection: "column", gap: 12 }}>
+        <Card style={{ ...panel, display: "flex", flexDirection: "column", gap: 12 }}>
           <TransactionsFilterBar filter={filter} categories={categories.map((row) => ({ id: row.id, label: row.name, color: row.color }))}
             allTags={tags} visibleFacetKeys={INVOICE_FACETS} visibleSortFields={INVOICE_SORT_FIELDS} compact={isMobile} filteredCount={rows.length}
             filterToolbarActive={Boolean(filter.search || filter.period !== "tudo" || filter.cats.length || filter.tags.length || filter.valueMin || filter.valueMax || modality !== "all")}
@@ -163,8 +171,8 @@ export function CardTransactionsPage({ isMobile = false, organizationId = null, 
           </label>
           <label style={{ ...G, display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: T.inkMid, minHeight: 38 }}><input type="checkbox" checked={prefs.grouped && filter.sort[0]?.field === "date"} disabled={filter.sort[0]?.field !== "date"} onChange={(event) => setPreference({ grouped: event.target.checked })} /> Agrupar por data</label>
           </div>
-        </div>
-        <div style={{ ...G, fontSize: 11, color: T.inkLight }}>Exibindo {rows.length} de {detail.items_count} lançamentos. Os filtros não alteram o resumo da fatura.</div>
+        </Card>
+        <div style={{ ...G, ...NUM, fontSize: 11, color: T.inkLight }}>Exibindo {rows.length} de {detail.items_count} lançamentos. Os filtros não alteram o resumo da fatura.</div>
         <TransactionList rows={rows} grouped={prefs.grouped && filter.sort[0]?.field === "date"} density={prefs.density} isMobile={isMobile} currency={currency} />
       </>}
     </div>

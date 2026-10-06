@@ -106,6 +106,7 @@ const QuickAction = ({ label, text, tone, onClick, showText = true, children }) 
    `null`, nunca um objeto novo. */
 export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
   rowHeight = 48, showDate = true, dateLabel = "", quickActions = null,
+  readOnly = false, displayValue = null,
   onFilterByCategory = null, onFilterByTag = null, wide = false, xwide = false,
   /* Largura da coluna de tags, em px, IGUAL para todas as linhas da página.
      Zero = ninguém tem tag e a coluna não existe. */
@@ -207,7 +208,7 @@ export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
     dense ? "88px" : "100px",
     // Situação: com largura, o anel ganha o rótulo. Só o anel obriga a decorar
     // o que ele significa — e há espaço de sobra aqui.
-    wide ? "76px" : "18px",
+    readOnly ? null : wide ? "76px" : "18px",
     // Não há mais coluna de ações. Elas eram uma coluna DEPOIS do valor —
     // reservada mesmo vazia, para nada se mover no hover —, mas isso punha o
     // valor no meio de quatro botões quando o valor é o que fecha a linha na
@@ -218,10 +219,12 @@ export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
     // botão pode crescer para a ESQUERDA ao abrir o rótulo porque cresce para
     // dentro do vazio. Pôr as ações no fluxo antes do valor empurraria a linha
     // inteira sob o cursor — pior ainda com o rótulo expandindo.
-    "14px",
+    readOnly ? null : "14px",
   ].filter(Boolean).join(" ");
 
-  const statusRing = tx.settleable && !tx.settled;
+  const statusRing = !readOnly && tx.settleable && !tx.settled;
+  const shownValue = readOnly ? (displayValue ?? "—") : fmtValorDaLinha(tx.val, tx.currency);
+  const valuePrefix = readOnly ? (isRefund ? "− " : "") : (isReceita ? "+" : "−");
 
   /* MOBILE tem grade própria: três colunas (ícone · descrição sobre
      data·categoria·método · valor). A grade do desktop tem nove — em 390 px
@@ -279,23 +282,23 @@ export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
           leaving ? "fincla-tx-leaving-cor" : "",
           born ? "fincla-tx-born-cor" : "",
         ].filter(Boolean).join(" ")}
-        onClick={() => (swipeOpen ? swipe.close() : onSelect(tx))}
-        onKeyDown={(e) => {
+        onClick={readOnly ? undefined : () => (swipeOpen ? swipe.close() : onSelect(tx))}
+        onKeyDown={readOnly ? undefined : (e) => {
           if (e.target !== e.currentTarget) return;
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
             onSelect(tx);
           }
         }}
-        role="button"
-        tabIndex={0}
+        role={readOnly ? "listitem" : "button"}
+        tabIndex={readOnly ? undefined : 0}
         /* Mesma marca da linha do desktop: é por ela que o foco volta depois de
            editar. Sem isso o `querySelector` não achava nada no toque e o foco
            ficava no `body` — o defeito só não aparecia porque ninguém o via. */
         data-tx-row={tx.id}
         aria-busy={busy || undefined}
-        aria-expanded={isSelected}
-        aria-label={`${tx.desc}, ${isReceita ? "receita" : "despesa"} de ${fmtValorDaLinha(tx.val, tx.currency)} em ${tx.date}`}
+        aria-expanded={readOnly ? undefined : isSelected}
+        aria-label={readOnly ? `${tx.desc}, ${isRefund ? "estorno" : "compra"} de ${shownValue} em ${tx.date}` : `${tx.desc}, ${isReceita ? "receita" : "despesa"} de ${shownValue} em ${tx.date}`}
         style={{ display:"grid", gridTemplateColumns:"28px minmax(0,1fr) auto",
           alignItems:"center", gap:10,
           /* `minHeight` e não `height`: com a terceira linha a altura cresce e um
@@ -318,7 +321,7 @@ export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
             ? `linear-gradient(${catCol}08, ${catCol}08)`
             : "none",
           borderLeft: isSelected ? `3px solid ${catCol}` : "3px solid transparent",
-          cursor:"pointer", position:"relative",
+          cursor:readOnly ? "default" : "pointer", position:"relative",
           transform: swipeOpen ? `translateX(-${SWIPE_WIDTH}px)` : "translateX(0)",
           transition:"transform 0.22s cubic-bezier(0.32,0.72,0,1)" }}>
         <div style={{ width:28, height:28, borderRadius:8, background:avatarBg,
@@ -366,7 +369,7 @@ export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
               número que a ação vai mudar. A linha não apaga nem se move — ela é
               a única coisa na tela que ainda vale olhar. */}
           {busy && <span className="fincla-spin" aria-hidden="true" />}
-          {!busy && (isReceita ? "+" : "−")}{!busy && fmtValorDaLinha(tx.val, tx.currency)}
+          {!busy && valuePrefix}{!busy && shownValue}
           {!busy && statusRing && (
             <span style={{ color:T.amber, display:"inline-flex", alignItems:"center" }}>
               <i aria-hidden="true" style={{ display:"inline-block", width:8, height:8,
@@ -383,8 +386,8 @@ export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
 
   return (
     <div
-      onClick={() => onSelect(tx)}
-      onKeyDown={(e) => {
+      onClick={readOnly ? undefined : () => onSelect(tx)}
+      onKeyDown={readOnly ? undefined : (e) => {
         // Só a própria linha. Os botões de ação rápida são descendentes: sem
         // esta guarda, o `preventDefault` cancelava o clique sintetizado deles e
         // Enter numa ação abria a sanfona em vez de executar a ação.
@@ -408,22 +411,22 @@ export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
       /* A linha era um `div` com onClick: invisível para teclado e para leitor
          de tela. Um único ponto de parada no Tab (a lista inteira seriam 15
          paradas × 3 ações) e Enter/Espaço abrem o detalhe. */
-      role="button"
+      role={readOnly ? "listitem" : "button"}
       data-tx-row={tx.id}
       /* `roving tabindex`: UMA parada no Tab para a lista inteira, e ↑↓ andam
          entre as linhas. Com `tabIndex=0` em todas, 20 linhas × 4 ações rápidas
          viravam ~100 paradas entre a busca e o rodapé. */
-      tabIndex={isRovingStop ? 0 : -1}
+      tabIndex={readOnly ? undefined : isRovingStop ? 0 : -1}
       aria-busy={busy || undefined}
-      aria-expanded={isSelected}
-      aria-label={`${tx.desc}, ${isReceita ? "receita" : "despesa"} de ${fmtValorDaLinha(tx.val, tx.currency)} em ${tx.date}`}
+      aria-expanded={readOnly ? undefined : isSelected}
+      aria-label={readOnly ? `${tx.desc}, ${isRefund ? "estorno" : "compra"} de ${shownValue} em ${tx.date}` : `${tx.desc}, ${isReceita ? "receita" : "despesa"} de ${shownValue} em ${tx.date}`}
       style={{ display:"grid", gridTemplateColumns: columns,
         alignItems:"center", gap: dense ? 9 : 11,
         height: rowHeight,
         padding:"0 14px",
         background: isSelected ? `${catCol}08` : "transparent",
         borderLeft: isSelected ? `3px solid ${catCol}` : "3px solid transparent",
-        cursor:"pointer", transition:"background 0.12s, border-color 0.12s" }}>
+        cursor:readOnly ? "default" : "pointer", transition:"background 0.12s, border-color 0.12s" }}>
 
       {/* Data em coluna. Ela sai do cabeçalho de grupo porque, com um lançamento
           por dia — o caso normal —, o cabeçalho custava 48 px por transação só
@@ -494,7 +497,7 @@ export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
             {accountLabel ? ` · ${accountLabel}` : ""}
           </span>
           {hasParcela && (
-            <Tip label={`${tx.parcela.atual}ª de ${tx.parcela.total} parcelas · ${fmtBRL(tx.parcela.valParcela)}/mês`}>
+            <Tip label={`${tx.parcela.atual}ª de ${tx.parcela.total} parcelas · ${readOnly ? shownValue : fmtBRL(tx.parcela.valParcela)}/mês`}>
               <span style={{ ...G, fontFamily:"'Geist Mono',monospace", color:T.blue,
                 fontWeight:600, whiteSpace:"nowrap" }}>
                 {tx.parcela.atual}/{tx.parcela.total}×
@@ -678,12 +681,12 @@ export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
             a ação vai mudar, então é nele que o "aguarde" pertence. */}
         {busy
           ? <span className="fincla-spin" aria-hidden="true" />
-          : <>{isReceita ? "+" : "−"}{fmtValorDaLinha(tx.val, tx.currency)}</>}
+          : <>{valuePrefix}{shownValue}</>}
       </div>
 
       {/* Situação: anel vazado, não ampulheta. O lançamento não está
           "processando" — ele existe e só ainda não entrou no saldo. */}
-      {statusRing ? (
+      {!readOnly && (statusRing ? (
         <Tip label="Ainda não entrou no saldo da conta">
           <span style={{ ...G, color:T.amber, display:"flex", alignItems:"center",
             gap:5, fontSize:MICRO_PX, fontWeight:700, whiteSpace:"nowrap",
@@ -693,14 +696,14 @@ export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
             <span style={wide ? undefined : SR_ONLY}>A pagar</span>
           </span>
         </Tip>
-      ) : <span />}
+      ) : <span />)}
 
-      <span style={{ display:"flex", justifyContent:"center", color: isSelected ? catCol : T.inkGhost,
+      {!readOnly && <span style={{ display:"flex", justifyContent:"center", color: isSelected ? catCol : T.inkGhost,
         transition:"color 0.12s" }}>
         {isSelected
           ? <ChevronDown size={12} color={catCol}/>
           : <ChevronRight size={12} color={T.inkGhost}/>}
-      </span>
+      </span>}
     </div>
   );
 });

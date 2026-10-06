@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { invoiceRows, weeklySpending } from "../cardTransactionsModel.js";
+import { invoiceRows, tagOptions, weeklySpending } from "../cardTransactionsModel.js";
 import { sortItems } from "../../transactions/filters/search/sortModel.js";
 
 describe("saídas observadas na fatura inteira", () => {
@@ -31,6 +31,7 @@ describe("facetas sobre todos os itens da fatura", () => {
   ];
 
   it("combina período, categoria, tag E, modalidade e faixa de valor", () => {
+    expect(tagOptions(items)).toEqual(["mercado", "trabalho"]);
     expect(invoiceRows(items, { from: "2026-12-01", to: "2026-12-31", cats: ["c1"], tags: ["trabalho", "mercado"], tagMode: "all", valueMin: "50" }).map((row) => row.id)).toEqual([1]);
     expect(invoiceRows(items, { from: "2027-01-01", tags: ["mercado"], modality: "refund", valueMax: "30" }).map((row) => row.id)).toEqual([3]);
     expect(invoiceRows(items, { search: "transporte" }).map((row) => row.id)).toEqual([2]);
@@ -44,5 +45,11 @@ describe("facetas sobre todos os itens da fatura", () => {
     const rows = invoiceRows(crossed);
     expect(rows[0]).toMatchObject({ data: "30/12", date: "30/12/2026", purchaseDate: "2026-08-01" });
     expect(sortItems(rows, [{ field: "date", dir: "desc" }]).map((row) => row.id)).toEqual([2, 1]);
+  });
+
+  it("não trata valor ausente como zero ao aplicar faixa", () => {
+    const missing = { ...items[0], id: 4, amount: null };
+    expect(invoiceRows([missing], {}).map((row) => row.id)).toEqual([4]);
+    expect(invoiceRows([missing], { valueMax: "1" })).toEqual([]);
   });
 });
