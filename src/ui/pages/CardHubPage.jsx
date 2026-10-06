@@ -67,6 +67,9 @@ export function CardHubPage({
   const currency = selectedCard?.currency || undefined;
   const uiCard = hub.uiCards.find((c) => c.cardId === selectedCardId) ?? null;
   const openInvoice = invoiceCards.find((i) => i.status === INVOICE_STATUS.OPEN) ?? null;
+  const mobileOtherInvoices = invoiceCards.filter((invoice) => invoice.key !== hub.initialInvoiceKey);
+  const nearestOtherInvoice = mobileOtherInvoices.find((invoice) => invoice.key > hub.initialInvoiceKey)
+    ?? mobileOtherInvoices[mobileOtherInvoices.length - 1];
   const insights = detail.future?.insights ?? [];
 
   const kpis = useMemo(() => {
@@ -226,9 +229,9 @@ export function CardHubPage({
             onMarkPaid={hub.payInvoice}
           />
           {isMobile && <>
-            <InvoiceCarousel invoices={invoiceCards} cardId={selectedCard.id} currency={currency}
-              selectedKey={invoiceCards.some((invoice) => invoice.key === mobileInvoiceKey) ? mobileInvoiceKey : hub.initialInvoiceKey}
-              onSelect={setMobileInvoiceKey} onNavigate={goTo} isMobile now={now} />
+            {mobileOtherInvoices.length > 0 && <InvoiceCarousel invoices={mobileOtherInvoices} cardId={selectedCard.id} currency={currency}
+              selectedKey={mobileOtherInvoices.some((invoice) => invoice.key === mobileInvoiceKey) ? mobileInvoiceKey : nearestOtherInvoice?.key}
+              onSelect={setMobileInvoiceKey} onNavigate={goTo} isMobile now={now} />}
             <button type="button" onClick={() => setDialog("invoices")} data-testid="all-invoices-open-button"
               style={{ ...OUTLINE_BTN, width: "100%", justifyContent: "space-between" }}>
               <span>📋 Ver todas as faturas</span><span>{invoiceCards.length} faturas →</span>

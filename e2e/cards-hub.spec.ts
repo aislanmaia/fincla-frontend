@@ -139,6 +139,7 @@ for (const vp of VIEWPORTS) {
       await expect(current.getByRole("button", { name: /Marcar como paga/ })).toBeVisible();
       if (vp.mobile) {
         await expect(page.getByTestId("invoice-dots")).toBeVisible();
+        await expect(others).not.toContainText("Fatura atual");
         await page.getByTestId("all-invoices-open-button").click();
         await expect(page.getByRole("dialog", { name: "Todas as faturas" })).toBeVisible();
         await page.getByRole("dialog", { name: "Todas as faturas" }).getByRole("button", { name: "Fechar" }).click();
@@ -195,6 +196,40 @@ test("o link do dashboard da fatura abre dentro do shell do app", async ({ page 
   // Barra lateral e topo do app continuam presentes: a página não saiu do shell.
   await expect(page.getByRole("navigation").getByRole("button", { name: "Cartões" })).toBeVisible();
   await expect(page.locator("[data-fincla-main-scroll]")).toBeVisible();
+});
+
+test("marca fatura do Hub como paga e confirma status e data na API real", async ({ page }) => {
+  const tagId = await fetchFirstCategoriaTagId(bearer, orgId);
+  const payCardId = await createCard({
+    last4: "9881", brand: "Visa", due_day: 10, closing_day: 15,
+    description: "Hub Pagamento", credit_limit: 5000,
+  });
+  await purchase(payCardId, tagId, "Compra a pagar", 120, new Date());
+  const before = await api(`/v1/credit-cards/${payCardId}/invoices/current?organization_id=${orgId}`);
+  expect(before.ok, await before.clone().text()).toBeTruthy();
+  const invoice = (await before.json()) as { month: string; status: string };
+  expect(invoice.status).toBe("open");
+
+  await loginAsE2EOwner(page);
+  await page.goto("/cards?view=new");
+  await expect(page.getByTestId("hub-current-invoice")).toBeVisible({ timeout: 30_000 });
+  await selectCardByName(page, "Hub Pagamento");
+  const current = page.getByTestId("hub-current-invoice");
+  const paidDate = await current.getByLabel("Data do pagamento").inputValue();
+  await current.getByRole("button", { name: /Marcar como paga/ }).click();
+  await expect(current).toHaveAttribute("data-status", "paid");
+  await expect(current.getByRole("button", { name: /Marcar como paga/ })).toHaveCount(0);
+
+  const [year, month] = invoice.month.split("-").map(Number);
+  const saved = await api(`/v1/credit-cards/${payCardId}/invoices/${year}/${month}?organization_id=${orgId}`);
+  expect(saved.ok, await saved.clone().text()).toBeTruthy();
+  const savedInvoice = (await saved.json()) as { status: string; paid_date: string | null };
+  expect(savedInvoice.status).toBe("paid");
+  expect(savedInvoice.paid_date).toBe(paidDate);
+  const history = await api(`/v1/credit-cards/${payCardId}/invoices/history?organization_id=${orgId}&months=12`);
+  expect(history.ok, await history.clone().text()).toBeTruthy();
+  const historyRows = (await history.json()) as { monthly_data: Array<{ year: number; month: number; status: string }> };
+  expect(historyRows.monthly_data.find((row) => row.year === year && row.month === month)?.status).toBe("paid");
 });
 
 test("a tela clássica volta a ser o padrão de /cards", async ({ page }) => {

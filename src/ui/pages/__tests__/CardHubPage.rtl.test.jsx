@@ -288,13 +288,23 @@ describe("CardHubPage — faturas do Hub", () => {
     }
   });
 
+  it("mobile sem outras faturas não renderiza carrossel vazio", async () => {
+    mockApi({ history: { ...historyFixture(), monthly_data: [] }, future: futureFixture({ monthly_breakdown: [] }) });
+    renderHub({ isMobile: true });
+    await screen.findByTestId("hub-current-invoice");
+    expect(screen.queryByTestId("invoice-carousel")).toBeNull();
+    expect(screen.queryByTestId("invoice-dots")).toBeNull();
+  });
+
   it("mobile mantém resumo e lista navegável", async () => {
     mockApi();
     renderHub({ isMobile: true });
     await screen.findByTestId("hub-current-invoice");
     expect(screen.getByTestId("compact-kpis")).toBeInTheDocument();
     expect(screen.getByTestId("invoice-carousel")).toBeInTheDocument();
-    expect(screen.getByTestId("invoice-dots")).toBeInTheDocument();
+    expect(screen.getByTestId("invoice-dots").children).toHaveLength(4);
+    expect(screen.getByTestId("invoice-carousel").querySelectorAll('[data-testid^="invoice-card-"]')).toHaveLength(4);
+    expect(screen.getByTestId("invoice-carousel")).not.toHaveTextContent("Fatura atual");
     expect(screen.getByTestId("all-invoices-open-button")).toBeInTheDocument();
   });
 });
