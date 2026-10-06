@@ -28,7 +28,6 @@ import { requireSessionTokenBeforeLoad } from "./requireSessionTokenBeforeLoad.j
 import { isProfileSettingsTabSlug } from "./profileSettingsTabs.js";
 import { isTransactionEditPathId } from "./transactionPathId.js";
 import { INVOICE_ROUTE_PATTERN, isValidInvoiceParams } from "./invoiceRoute.js";
-import { InvoiceDashboardPage } from "../pages/InvoiceDashboardPage.jsx";
 
 const rootRoute = createRootRoute({
   validateSearch: zodValidator(finclaRootSearchSchema),
@@ -114,7 +113,9 @@ const invoiceDashboardRoute = createRoute({
     if (!isValidInvoiceParams(ctx.params ?? {})) throw notFound();
   },
   errorComponent: FinclaAuthenticatedRouteError,
-  component: InvoiceDashboardPage,
+  component: function InvoiceDashboardRoute() {
+    return <AuthenticatedPageOutlet segment="invoiceDashboard" />;
+  },
 });
 
 const profileRoute = createRoute({

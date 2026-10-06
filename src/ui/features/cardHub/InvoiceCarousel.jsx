@@ -22,13 +22,15 @@ export function dotWindow(total, activeIndex, max = MAX_DOTS) {
  * Carrossel cronológico de faturas (passadas à esquerda, futuras à direita), com a
  * selecionada centralizada. Rolagem nativa com scroll-snap e barra oculta; no
  * mobile a fatura mais próxima do centro passa a ser a selecionada ao soltar o dedo.
+ * `renderItem({ invoice, selected, width })` troca o card padrão (o dashboard da fatura
+ * usa o card de detalhe completo); o item devolvido precisa de `key` e ocupar `width`.
  */
-export function InvoiceCarousel({ invoices, cardId, currency, selectedKey, onSelect, onNavigate, isMobile, now }) {
+export function InvoiceCarousel({ invoices, cardId, currency, selectedKey, onSelect, onNavigate, isMobile, now, openOnCard = false, renderItem = null, itemWidth = null }) {
   const scrollerRef = useRef(null);
   const settleTimer = useRef(null);
   const programmatic = useRef(false);
   const programmaticTimer = useRef(null);
-  const width = isMobile ? CARD_WIDTH_MOBILE : CARD_WIDTH_DESKTOP;
+  const width = itemWidth ?? (isMobile ? CARD_WIDTH_MOBILE : CARD_WIDTH_DESKTOP);
   const selectedIndex = Math.max(0, invoices.findIndex((i) => i.key === selectedKey));
 
   useEffect(() => {
@@ -94,11 +96,13 @@ export function InvoiceCarousel({ invoices, cardId, currency, selectedKey, onSel
           WebkitOverflowScrolling: "touch",
           padding: `6px calc(50% - ${width / 2}px) 8px`,
         }}>
-        {invoices.map((invoice) => (
-          <InvoiceCard key={invoice.key} invoice={invoice} cardId={cardId} currency={currency}
-            selected={invoice.key === selectedKey} width={width}
-            onSelect={onSelect} onNavigate={onNavigate} now={now} />
-        ))}
+        {invoices.map((invoice) => (renderItem
+          ? renderItem({ invoice, selected: invoice.key === selectedKey, width })
+          : (
+            <InvoiceCard key={invoice.key} invoice={invoice} cardId={cardId} currency={currency}
+              selected={invoice.key === selectedKey} width={width}
+              onSelect={onSelect} onNavigate={onNavigate} now={now} openOnCard={openOnCard} />
+          )))}
       </div>
       {isMobile && invoices.length > 1 && (
         <div data-testid="invoice-dots" style={{ display: "flex", justifyContent: "center", gap: 5, marginTop: 6 }}>

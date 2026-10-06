@@ -74,7 +74,7 @@ export function computeSpendProjection({ card, invoice, isCurrent, today = new D
 export function computeCardKpis({ card, invoice, usagePercent, totalInstallments, projection, today = new Date() }) {
   const { elapsedDays, cycleLength } = computeCycle({ closingDay: effectiveClosingDay(card), today });
   const cycleProgressPercent = safe(elapsedDays, cycleLength);
-  const spentPercent = safe((invoice?.val || 0), card.limite);
+  const spentPercent = invoice?.val == null ? null : safe(invoice.val, card.limite);
   const hasPaceData = elapsedDays >= MIN_ELAPSED_DAYS_FOR_PACE && Number(invoice?.val) > 0;
   const onPace = hasPaceData ? spentPercent <= cycleProgressPercent : null;
   // `totalInstallments: null` = exposição de parcelas desconhecida (fatura aberta

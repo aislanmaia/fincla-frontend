@@ -14,11 +14,12 @@ const TILE_STYLE = {
  * para compras). Compartilhado pela aba Análises e pelo Hub; os números vêm
  * de `computeCardKpis` (cardKpis.js).
  */
-export function CardHeuristicTiles({ kpis, formatBRL, isMobile }) {
+export function CardHeuristicTiles({ kpis, formatBRL, isMobile, emphasizeProgress = false }) {
   const {
     cycleProgressPercent, spentPercent, hasPaceData, onPace, projection,
     healthScore, healthColor, healthLabel, bestPurchaseDay, closingDay,
   } = kpis;
+  const spentLabel = spentPercent === null ? "—" : `${spentPercent}%`;
   return (
     <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3,1fr)", gap: 12 }}>
       <div style={TILE_STYLE}>
@@ -27,12 +28,14 @@ export function CardHeuristicTiles({ kpis, formatBRL, isMobile }) {
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 5 }}>
             <span style={{ ...G, fontSize: 11, color: T.inkMid }}>Avançamos {cycleProgressPercent}% do ciclo</span>
             <span style={{ ...G, fontSize: 11, fontWeight: 700, color: !hasPaceData ? T.inkMid : onPace ? T.green : T.red }}>
-              {spentPercent}% do limite gasto
+              {spentLabel} do limite gasto
             </span>
           </div>
-          <div style={{ height: 8, background: T.grayLight, borderRadius: 99, overflow: "hidden", position: "relative" }}>
-            <div style={{ height: "100%", width: `${cycleProgressPercent}%`, background: T.border, borderRadius: 99 }} />
-            <div style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${spentPercent}%`, background: !hasPaceData ? T.inkFaint : `linear-gradient(90deg,${onPace ? T.green : T.red}99,${onPace ? T.green : T.red})`, borderRadius: 99, transition: "width 0.8s" }} />
+          <div data-testid="pace-progress" role="img" aria-label={`${cycleProgressPercent}% do ciclo; ${spentLabel} do limite gasto`}
+            style={{ height: 8, background: T.grayLight, borderRadius: 99, overflow: "hidden", position: "relative" }}>
+            <div data-testid="pace-cycle-fill" style={{ height: "100%", width: `${cycleProgressPercent}%`, background: emphasizeProgress ? T.blue : T.border, borderRadius: 99 }} />
+            <div data-testid="pace-spend-fill" style={{ position: "absolute", top: 0, left: 0, height: "100%", width: `${spentPercent ?? 0}%`, background: !hasPaceData ? (emphasizeProgress ? T.amber : T.inkFaint) : `linear-gradient(90deg,${onPace ? T.green : T.red}99,${onPace ? T.green : T.red})`, borderRadius: 99, transition: "width 0.8s" }} />
+            {emphasizeProgress && <div aria-hidden="true" style={{ position: "absolute", top: 0, left: `calc(${cycleProgressPercent}% - 2px)`, width: 4, height: "100%", background: T.blue, borderRadius: 2 }} />}
           </div>
         </div>
         <div style={{ ...G, fontSize: 11, color: T.inkMid, lineHeight: 1.6 }}>

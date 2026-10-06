@@ -37,10 +37,10 @@ function plural(n, one, many) {
  * Link para o dashboard da fatura. `<a>` de verdade (abre em nova aba, copia
  * link); o clique simples navega pelo router sem recarregar.
  */
-export function InvoiceDashboardLink({ cardId, invoice, onNavigate, children, style }) {
+export function InvoiceDashboardLink({ cardId, invoice, onNavigate, children, style, className }) {
   const href = invoiceDashboardPath(cardId, invoice.year, invoice.month);
   return (
-    <a href={href} data-testid="invoice-dashboard-link"
+    <a href={href} className={className} data-testid="invoice-dashboard-link"
       onClick={(e) => {
         if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
         e.preventDefault();
@@ -53,7 +53,7 @@ export function InvoiceDashboardLink({ cardId, invoice, onNavigate, children, st
   );
 }
 
-export function InvoiceCard({ invoice, cardId, currency, selected, width, onSelect, onNavigate, now }) {
+export function InvoiceCard({ invoice, cardId, currency, selected, width, onSelect, onNavigate, now, openOnCard = false }) {
   const { status } = invoice;
   const money = (v) => formatMoney(v, currency) ?? "—";
   const isOpenLike = status === INVOICE_STATUS.OPEN || status === INVOICE_STATUS.CLOSED;
@@ -63,20 +63,29 @@ export function InvoiceCard({ invoice, cardId, currency, selected, width, onSele
     ? <div style={{ ...G, fontSize: 14, fontWeight: 700, color: T.inkMid }}>Sem lançamentos ainda</div>
     : <div style={{ ...G, ...NUM, fontSize: isOpenLike ? 24 : 20, fontWeight: 800, color: T.ink }}>{money(invoice.total)}</div>;
 
+  const Root = openOnCard ? "a" : "div";
+  const href = openOnCard ? invoiceDashboardPath(cardId, invoice.year, invoice.month) : undefined;
   return (
-    <div
+    <Root
+      href={href}
       role="group"
       aria-label={`Fatura de ${monthNameLower(invoice.month)} de ${invoice.year}, ${INVOICE_STATUS_LABEL[status]}`}
       aria-current={selected ? "true" : undefined}
       data-testid={`invoice-card-${invoice.key}`}
       data-status={status}
       data-selected={selected ? "true" : "false"}
-      onClick={() => onSelect(invoice.key)}
+      onClick={(event) => {
+        if (!openOnCard) { onSelect(invoice.key); return; }
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.button === 1) return;
+        event.preventDefault();
+        onNavigate(href);
+      }}
       style={{
         width, flexShrink: 0, boxSizing: "border-box", scrollSnapAlign: "center", cursor: "pointer",
         background: T.surface, border: `1px solid ${selected ? T.ink : T.border}`, borderRadius: 14,
         boxShadow: selected ? T.md : T.sm, outline: selected ? `2px solid ${T.ink}` : "none", outlineOffset: 2,
         padding: "16px 18px", display: "flex", flexDirection: "column", gap: 10,
+        textDecoration: "none", color: T.ink,
         opacity: status === INVOICE_STATUS.FORECAST && !selected ? 0.8 : 1,
       }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
@@ -138,9 +147,9 @@ export function InvoiceCard({ invoice, cardId, currency, selected, width, onSele
         </div>
       )}
 
-      <InvoiceDashboardLink cardId={cardId} invoice={invoice} onNavigate={onNavigate}>
-        ver dashboard da fatura →
-      </InvoiceDashboardLink>
-    </div>
+      {openOnCard
+        ? <span style={{ ...G, fontSize: 11, color: T.blue }}>ver dashboard da fatura →</span>
+        : <InvoiceDashboardLink cardId={cardId} invoice={invoice} onNavigate={onNavigate}>ver dashboard da fatura →</InvoiceDashboardLink>}
+    </Root>
   );
 }

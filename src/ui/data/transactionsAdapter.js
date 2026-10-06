@@ -123,7 +123,7 @@ function pickCategoryTag(transaction) {
  * que coincide de texto com um nome canônico do seed (ex. "Health") de uma
  * linha do seed de verdade — sequestra o nome pela tradução por engano.
  * @param {import("../../api/types").Transaction} transaction
- * @returns {{ id: string | null; name: string | null; icon_key: string | null; color: string | null; is_default: boolean | null } | null}
+ * @returns {{ id: string | null; name: string | null; label: string | null; icon_key: string | null; color: string | null; is_default: boolean | null } | null}
  */
 export function pickCategoryTagFromApiTransaction(transaction) {
   const t = pickCategoryTag(transaction);
@@ -131,6 +131,7 @@ export function pickCategoryTagFromApiTransaction(transaction) {
   return {
     id: t.id != null && t.id !== "" ? t.id : null,
     name: t.name ?? null,
+    label: t.label ?? null,
     icon_key: t.icon_key ?? null,
     is_active: t.is_active !== false,
     color:

@@ -23,6 +23,7 @@ export const FC = {
   DATE: "fc_date", // "YYYY-MM-DD" — filtro de dia no /transactions
   // Sem prefixo `fc_` de propósito: é o contrato público `/cards?view=new` do Hub de Cartões.
   VIEW: "view",
+  HUB_CARD: "card",
 };
 
 /** Valores de `fc_modal` (inglês, partilháveis). */
@@ -73,6 +74,7 @@ export function mergeNavSearch(previous, _targetSegment, opts = {}) {
   delete next[FC.TX];
   delete next[FC.CARD];
   delete next[FC.VIEW];
+  delete next[FC.HUB_CARD];
 
   if (opts.filterCat != null && String(opts.filterCat).trim() !== "") {
     next[FC.CATEGORY] = String(opts.filterCat).trim();

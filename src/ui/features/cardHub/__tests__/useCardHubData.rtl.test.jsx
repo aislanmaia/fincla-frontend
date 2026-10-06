@@ -1,4 +1,5 @@
 /** @vitest-environment jsdom */
+import { StrictMode } from "react";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
@@ -14,7 +15,7 @@ afterAll(() => server.close());
 
 const m = (a) => ({ amount: a, currency: "BRL" });
 const card = (id, closing, due) => ({
-  id, organization_id: ORG, last4: String(1000 + id), brand: "Visa", due_day: due, closing_day: closing,
+  id, public_id: `00000000-0000-4000-8000-${String(id).padStart(12, "0")}`, organization_id: ORG, last4: String(1000 + id), brand: "Visa", due_day: due, closing_day: closing,
   description: `C${id}`, color: null, notes: null, currency: "BRL",
   credit_limit: m("1000.00"), available_limit: m("900.00"), used_limit: m("100.00"), limit_usage_percent: 10,
 });
@@ -59,5 +60,24 @@ describe("useCardHubData — troca de cartão", () => {
     }
     // e o intervalo de carregamento existiu (a troca não foi instantânea com dado velho)
     expect(renders.some((x) => x.selected === 2 && x.totals.length === 0 && x.loading)).toBe(true);
+  });
+});
+
+
+describe("useCardHubData — StrictMode", () => {
+  it("compartilha apenas a lista inicial em voo e mantém refetch explícito", async () => {
+    let lists = 0;
+    server.use(
+      http.get("*/v1/credit-cards", () => { lists += 1; return HttpResponse.json([card(1, 10, 5)]); }),
+      http.get("*/v1/credit-cards/:id/invoices/history", () => HttpResponse.json({ monthly_data: [row("111.00")] })),
+      http.get("*/v1/credit-cards/:id/invoices/current", () => HttpResponse.json({ detail: "x" }, { status: 404 })),
+      http.get("*/v1/credit-cards/:id/future-commitments", () => HttpResponse.json({ monthly_breakdown: [], insights: [] })),
+    );
+    const { result, rerender } = renderHook(({ refreshToken }) => useCardHubData({ organizationId: ORG, refreshToken }),
+      { initialProps: { refreshToken: 0 }, wrapper: StrictMode });
+    await waitFor(() => expect(result.current.invoiceCards.length).toBeGreaterThan(0));
+    expect(lists).toBe(1);
+    rerender({ refreshToken: 1 });
+    await waitFor(() => expect(lists).toBe(2));
   });
 });

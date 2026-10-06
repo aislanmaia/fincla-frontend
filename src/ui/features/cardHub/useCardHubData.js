@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  createCreditCard,
   getCurrentCreditCardInvoice,
   getFutureCommitments,
   getInvoiceHistory,
+  markInvoicePaid,
   listCreditCards,
   updateCreditCard,
 } from "../../../api/creditCards";
@@ -38,12 +40,15 @@ const settle = (promise) => promise.then((value) => ({ ok: true, value }), (erro
  * mostra carregamento. Um refetch mantém a UI e os dados atuais e só os troca
  * quando chega dado novo; se falha, o dado antigo fica e `refreshFailed` avisa.
  */
-export function useCardHubData({ organizationId, enabled = true, refreshToken = 0 }) {
+export function useCardHubData({ organizationId, enabled = true, refreshToken = 0, selectedPublicIdFromUrl = undefined }) {
   const active = Boolean(enabled && organizationId);
+  const listInFlightRef = useRef(null);
   const [cardsState, setCardsState] = useState({ orgId: null, error: "", cards: [] });
   const [refreshFailedCards, setRefreshFailedCards] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
-  const [detail, setDetail] = useState({ ...LOADING_DETAIL, cardId: null, refreshFailed: false });
+  const [invoiceRefresh, setInvoiceRefresh] = useState(0);
+  const [paidDates, setPaidDates] = useState({});
+  const [detail, setDetail] = useState({ ...LOADING_DETAIL, cardId: null, orgId: null, refreshFailed: false });
 
   useEffect(() => {
     if (!active) {
@@ -51,8 +56,17 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
       return undefined;
     }
     let cancelled = false;
-    listCreditCards(organizationId)
-      .then((list) => {
+    const key = `${organizationId}:${refreshToken}`;
+    const inFlight = listInFlightRef.current;
+    const request = inFlight?.key === key ? inFlight.promise : listCreditCards(organizationId);
+    if (request !== inFlight?.promise) {
+      listInFlightRef.current = { key, promise: request };
+      const clear = () => {
+        if (listInFlightRef.current?.promise === request) listInFlightRef.current = null;
+      };
+      request.then(clear, clear);
+    }
+    request.then((list) => {
         if (cancelled) return;
         setCardsState({ orgId: organizationId, error: "", cards: list });
         setRefreshFailedCards(false);
@@ -73,15 +87,18 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
 
   const selectedCard = useMemo(() => {
     if (cards.length === 0) return null;
+    if (selectedPublicIdFromUrl !== undefined && selectedPublicIdFromUrl !== null) {
+      return cards.find((c) => c.public_id === selectedPublicIdFromUrl) ?? cards[0];
+    }
     return cards.find((c) => c.id === selectedId) ?? cards[0];
-  }, [cards, selectedId]);
+  }, [cards, selectedId, selectedPublicIdFromUrl]);
   const selectedCardId = selectedCard?.id ?? null;
 
   useEffect(() => {
     if (!active || selectedCardId == null) return undefined;
     let cancelled = false;
     Promise.all([
-      settle(getInvoiceHistory(selectedCardId, organizationId, HISTORY_MONTHS)),
+      settle(getInvoiceHistory(selectedCardId, organizationId, HISTORY_MONTHS, true)),
       settle(getCurrentCreditCardInvoice(selectedCardId, organizationId)),
       settle(getFutureCommitments(selectedCardId, organizationId, FUTURE_MONTHS)),
     ]).then(([history, current, future]) => {
@@ -92,6 +109,7 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
         const currentState = current.ok ? "ok" : isNotFound(current.error) ? "empty" : sameCard ? prev.currentState : "unavailable";
         return {
           cardId: selectedCardId,
+          orgId: organizationId,
           loading: false,
           history: keep(history, prev, "history"),
           historyFailed: sameCard ? (history.ok ? false : prev.historyFailed) : !history.ok,
@@ -104,12 +122,12 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
       });
     });
     return () => { cancelled = true; };
-  }, [active, organizationId, selectedCardId, refreshToken]);
+  }, [active, organizationId, selectedCardId, refreshToken, invoiceRefresh]);
 
   // Detalhe de OUTRO cartão (troca em andamento) conta como carregando: nunca se
   // mistura com o `closing_day`/`due_day` do cartão recém-selecionado.
-  const detailReady = detail.cardId === selectedCardId && !detail.loading;
-  const viewDetail = detailReady ? detail : { ...LOADING_DETAIL, cardId: selectedCardId, refreshFailed: false };
+  const detailReady = detail.cardId === selectedCardId && detail.orgId === organizationId && !detail.loading;
+  const viewDetail = detailReady ? detail : { ...LOADING_DETAIL, cardId: selectedCardId, orgId: organizationId, refreshFailed: false };
 
   const invoiceCards = useMemo(() => {
     if (!selectedCard || !detailReady) return [];
@@ -119,8 +137,8 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
       current: detail.current,
       currentState: detail.currentState,
       future: detail.future,
-    });
-  }, [selectedCard, detail, detailReady]);
+    }).map((invoice) => ({ ...invoice, paidDate: invoice.paidDate ?? (invoice.status === "paid" ? paidDates[`${organizationId}:${selectedCardId}:${invoice.key}`] ?? null : null) }));
+  }, [selectedCard, selectedCardId, detail, detailReady, paidDates, organizationId]);
 
   const initialInvoiceKey = useMemo(() => defaultInvoiceKey(invoiceCards), [invoiceCards]);
 
@@ -147,6 +165,37 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
     return updated.notes ?? "";
   }, [organizationId, selectedCardId]);
 
+  const updateCard = useCallback(async (payload) => {
+    const updated = await updateCreditCard(selectedCardId, payload);
+    setCardsState((state) => ({
+      ...state,
+      cards: state.cards.map((card) => card.id === updated.id ? updated : card),
+    }));
+    setInvoiceRefresh((value) => value + 1);
+    return updated;
+  }, [selectedCardId]);
+
+  const payInvoice = useCallback(async (invoice, paidDate) => {
+    await markInvoicePaid(selectedCardId, invoice.year, invoice.month, organizationId, paidDate);
+    setDetail((prev) => prev.cardId === selectedCardId && prev.orgId === organizationId ? {
+      ...prev,
+      history: prev.history ? { ...prev.history, monthly_data: prev.history.monthly_data.map((row) =>
+        row.year === invoice.year && row.month === invoice.month ? { ...row, status: "paid" } : row) } : prev.history,
+      current: prev.current?.month === invoice.key ? { ...prev.current, status: "paid", paid_date: paidDate } : prev.current,
+    } : prev);
+    setPaidDates((dates) => ({ ...dates, [`${organizationId}:${selectedCardId}:${invoice.key}`]: paidDate }));
+    setInvoiceRefresh((value) => value + 1);
+  }, [organizationId, selectedCardId]);
+  const createCard = useCallback(async (payload) => {
+    const created = await createCreditCard(payload);
+    setCardsState((state) => ({
+      ...state,
+      cards: [...state.cards, created],
+    }));
+    setSelectedId(created.id);
+    return created;
+  }, []);
+
   return {
     isLoading,
     error,
@@ -160,5 +209,8 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
     invoiceCards,
     initialInvoiceKey,
     saveNotes,
+    updateCard,
+    payInvoice,
+    createCard,
   };
 }

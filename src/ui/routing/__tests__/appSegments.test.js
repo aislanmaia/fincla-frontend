@@ -41,4 +41,14 @@ describe("appSegments", () => {
     expect(finclaMainOutletRemountKey("/dashboard")).toBe("/dashboard");
     expect(finclaMainOutletRemountKey("/rhythm")).toBe("/rhythm");
   });
+
+  it("finclaMainOutletRemountKey não remonta ao trocar de fatura no mesmo cartão", () => {
+    expect(finclaMainOutletRemountKey("/cards/7/invoices/2026/9")).toBe(
+      finclaMainOutletRemountKey("/cards/7/invoices/2026/10"),
+    );
+    expect(finclaMainOutletRemountKey("/cards/7/invoices/2026/9")).not.toBe(
+      finclaMainOutletRemountKey("/cards/8/invoices/2026/9"),
+    );
+    expect(finclaMainOutletRemountKey("/cards")).toBe("/cards");
+  });
 });

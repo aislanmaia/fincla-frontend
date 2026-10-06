@@ -134,12 +134,13 @@ export const getCurrentCreditCardInvoice = async (
 export const getInvoiceHistory = async (
   cardId: number,
   organizationId: string,
-  months: number = 6
+  months: number = 6,
+  includeCategorySeries: boolean = false
 ): Promise<InvoiceHistoryResponse> => {
   const response = await apiClient.get<InvoiceHistoryResponse>(
     `/credit-cards/${cardId}/invoices/history`,
     {
-      params: { organization_id: organizationId, months },
+      params: { organization_id: organizationId, months, ...(includeCategorySeries ? { include_category_series: true } : {}) },
     }
   );
   return unwrapMoney(response.data);

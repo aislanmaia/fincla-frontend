@@ -504,7 +504,7 @@ function invoiceDateKey(raw) {
   return m ? m[1] : null;
 }
 
-function mapInvoiceItemToUi(item) {
+export function mapInvoiceItemToUi(item) {
   const category = pickCategory(item);
   const isRefund = item.modality === "refund";
   const displayDateRaw = isRefund

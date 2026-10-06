@@ -8,7 +8,11 @@ export async function loginAsE2EOwner(page: Page): Promise<void> {
   }
 
   await page.goto("/");
-  await expect(page.getByText("Bom ver você de volta")).toBeVisible();
+  try {
+    await expect(page.getByText("Bom ver você de volta")).toBeVisible({ timeout: 30_000 });
+  } catch (error) {
+    throw new Error(`Login page at ${page.url()}: ${(await page.locator("body").innerText()).slice(0, 700)}`, { cause: error });
+  }
   await page.getByPlaceholder("seu@email.com").fill(email);
   await page.getByPlaceholder("••••••••").fill(password);
   await page.getByRole("button", { name: /Entrar na conta/i }).click();
