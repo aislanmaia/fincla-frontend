@@ -16,7 +16,7 @@ function numberOrNull(value) {
 export function historyPoints(invoices, anchorKey, isMobile) {
   const start = isMobile ? -2 : -5;
   const byKey = new Map(invoices.map((invoice) => [invoice.key, invoice]));
-  return Array.from({ length: isMobile ? 6 : 9 }, (_, index) => {
+  const window = Array.from({ length: isMobile ? 6 : 9 }, (_, index) => {
     const key = offsetMonth(anchorKey, start + index);
     const invoice = byKey.get(key);
     return {
@@ -27,6 +27,8 @@ export function historyPoints(invoices, anchorKey, isMobile) {
       current: key === anchorKey,
     };
   });
+  const firstInvoice = window.findIndex((point) => point.total !== null);
+  return firstInvoice < 0 ? [] : window.slice(firstInvoice);
 }
 
 export function categoryTrend(history, anchorKey) {
@@ -49,5 +51,6 @@ export function categoryTrend(history, anchorKey) {
     }
     return { key, month: parseInvoiceKey(key)?.month, available: Boolean(row), values };
   });
-  return { months, categories };
+  const firstInvoice = months.findIndex((month) => month.available);
+  return { months: firstInvoice < 0 ? [] : months.slice(firstInvoice), categories };
 }

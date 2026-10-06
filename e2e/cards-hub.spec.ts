@@ -135,11 +135,11 @@ for (const vp of VIEWPORTS) {
     await history.getByRole("button", { name: "Linhas" }).click();
     await expect(history.getByRole("img", { name: "Evolução das faturas" })).toBeVisible();
     await history.getByRole("button", { name: /: R\$/ }).first().click();
-    await expect(history.getByRole("status")).toContainText("R$");
+    await expect(history.getByRole("tooltip")).toContainText("R$");
 
     await expect(trend.getByText("Dados por categoria indisponíveis para este cartão.")).toHaveCount(0);
-    await trend.locator('button[aria-label*="ver categorias"]').first().click();
-    await expect(trend.getByRole("status")).toContainText("R$");
+    await trend.locator('button.hub-chart-point').first().hover();
+    await expect(trend.getByRole("tooltip").first()).toContainText("R$");
   });
 }
 

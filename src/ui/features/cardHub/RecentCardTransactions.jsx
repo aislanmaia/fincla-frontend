@@ -6,7 +6,8 @@ import { pickCategoryTagFromApiTransaction } from "../../data/transactionsAdapte
 const dateFormat = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", timeZone: "UTC" });
 
 function categoryOf(row) {
-  return pickCategoryTagFromApiTransaction(row)?.name?.trim() || "Sem categoria";
+  const tag = pickCategoryTagFromApiTransaction(row);
+  return tag?.label?.trim() || tag?.name?.trim() || "Sem categoria";
 }
 
 function dateOf(row) {

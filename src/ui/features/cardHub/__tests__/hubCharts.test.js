@@ -9,13 +9,13 @@ const invoices = [
 ];
 
 describe("Hub charts", () => {
-  it("keeps missing months distinct from a real zero and uses 6 plus 3 months", () => {
+  it("trims months before the first invoice, while preserving gaps and real zero forecasts", () => {
     const points = historyPoints(invoices, "2026-10", false);
     expect(points.map((p) => p.key)).toEqual([
-      "2026-05", "2026-06", "2026-07", "2026-08", "2026-09", "2026-10", "2026-11", "2026-12", "2027-01",
+      "2026-08", "2026-09", "2026-10", "2026-11", "2026-12", "2027-01",
     ]);
-    expect(points[4].total).toBeNull();
-    expect(points[5].total).toBe(70);
+    expect(points[1].total).toBeNull();
+    expect(points[2].total).toBe(70);
     expect(historyPoints(invoices, "2026-10", true).map((p) => p.key)).toEqual([
       "2026-08", "2026-09", "2026-10", "2026-11", "2026-12", "2027-01",
     ]);
@@ -29,6 +29,7 @@ describe("Hub charts", () => {
     expect(data.categories).toEqual(["Food", "Travel"]);
     expect(data.months.find((m) => m.key === "2026-09").available).toBe(false);
     expect(data.months.find((m) => m.key === "2026-08").values).toEqual({ Food: 70, Travel: -10 });
+    expect(data.months.map((m) => m.key)).toEqual(["2026-08", "2026-09", "2026-10"]);
   });
 
   it("does not claim a trend when the optional series is unavailable", () => {

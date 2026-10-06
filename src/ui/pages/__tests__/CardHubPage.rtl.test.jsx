@@ -200,8 +200,8 @@ describe("CardHubPage — gráficos do Hub", () => {
     expect(screen.getByText("Realizado")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /AGO 2026: R\$/i }));
     expect(screen.getByText(/AGO 2026 · Paga/)).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "2026-08: ver categorias, com estorno" }));
-    expect(screen.getByText(/Transporte.*-R\$/)).toBeInTheDocument();
+    await user.hover(screen.getByRole("button", { name: /AGO 2026:.*Transporte -R\$/ }));
+    expect(screen.getByRole("tooltip", { name: /Transporte: -R\$/ })).toBeInTheDocument();
   });
 
 });
@@ -265,13 +265,17 @@ describe("CardHubPage — lançamentos recentes", () => {
   it("mostra apenas lançamentos reais do cartão selecionado, com estorno e moeda própria", async () => {
     mockApi({
       cards: [cardFixture(), cardFixture({ id: 2, last4: "2222", description: "Verde" })],
-      transactions: [row(1, 1, "Mercado"), row(2, 1, "Estorno loja", "refund", "EUR"), row(3, 2, "Outro cartão")],
+      transactions: [
+        { ...row(1, 1, "Mercado"), tags: { categoria: [{ name: "Food & Groceries", label: "Alimentação" }] } },
+        row(2, 1, "Estorno loja", "refund", "EUR"), row(3, 2, "Outro cartão"),
+      ],
     });
     const user = userEvent.setup();
     const view = renderHub();
     const section = await screen.findByRole("region", { name: "Lançamentos recentes" });
     await within(section).findByText("Mercado");
-    expect(section).toHaveTextContent("Compras");
+    expect(section).toHaveTextContent("Alimentação");
+    expect(section).not.toHaveTextContent("Food & Groceries");
     expect(section).toHaveTextContent("+€");
     expect(section).not.toHaveTextContent("Outro cartão");
     await user.click(screen.getByText("Verde"));

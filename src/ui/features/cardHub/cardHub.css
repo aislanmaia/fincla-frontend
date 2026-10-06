@@ -14,6 +14,49 @@
   background-color: #eff6ff;
 }
 
+.hub-chart-point {
+  outline-offset: 3px;
+}
+
+.hub-chart-point:focus-visible {
+  outline: 2px solid #2563eb;
+  border-radius: 7px;
+}
+
+.hub-chart-tooltip {
+  position: absolute;
+  left: 50%;
+  z-index: 5;
+  box-sizing: border-box;
+  min-width: 132px;
+  max-width: min(240px, 80vw);
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 13%);
+  text-align: left;
+  transform: translateX(-50%);
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 120ms ease;
+  pointer-events: auto;
+  white-space: normal;
+}
+
+.hub-chart-point:hover .hub-chart-tooltip,
+.hub-chart-point:focus-visible .hub-chart-tooltip,
+.hub-chart-point[data-open="true"] .hub-chart-tooltip,
+.hub-chart-tooltip-open {
+  visibility: visible;
+  opacity: 1;
+}
+
+.hub-chart-point[data-dismissed="true"] .hub-chart-tooltip {
+  visibility: hidden;
+  opacity: 0;
+}
+
 @media (min-width: 769px) and (max-width: 900px) {
   .hub-invoices-grid {
     grid-template-columns: minmax(0, 1fr) !important;
