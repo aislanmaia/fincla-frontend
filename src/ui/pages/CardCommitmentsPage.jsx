@@ -219,7 +219,7 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
   const addCategory = (id, name, amount) => {
     const key = id || "__uncategorized__";
     const previous = periodCategoryTotals.get(key);
-    periodCategoryTotals.set(key, { name: name || previous?.name || "Sem categoria", amount: (previous?.amount || 0) + amount });
+    periodCategoryTotals.set(key, { id: key, name: name || previous?.name || "Sem categoria", amount: (previous?.amount || 0) + amount });
   };
   if (categoryAverageKnown) {
     for (const row of periodHistory) for (const item of row.commitments_category_breakdown) {
@@ -329,7 +329,7 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
       </div>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap }}>
         <Card style={cardStyle}><h2 style={{ ...G, margin: "0 0 10px", fontSize: 16 }}>Quando vence o compromisso do mês</h2>{inventoryKnown(monthNow, currency) ? dayBuckets.map((bucket) => <div key={bucket.label} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "7px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}><span>{bucket.label} · {bucket.count} itens</span><strong>{moneyValue(bucket.value, currency)}</strong></div>) : <p style={{ fontSize: 12 }}>Datas indisponíveis neste mês.</p>}</Card>
-        <Card style={cardStyle}><h2 style={{ ...G, margin: "0 0 10px", fontSize: 16 }}>Média por categoria · {categoryPeriodLabel}</h2>{periodCategories.map(({ name, amount }) => <div key={name} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "7px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}><span>{name}</span><strong>{moneyValue(amount / (historyMonths + futureMonths), currency)}/mês</strong></div>)}{periodCategories.length === 0 && <p style={{ fontSize: 12 }}>{categoryAverageKnown ? "Sem compromissos no período." : "Média indisponível: faltam dados de um ou mais meses do período."}</p>}</Card>
+        <Card style={cardStyle}><h2 style={{ ...G, margin: "0 0 10px", fontSize: 16 }}>Média por categoria · {categoryPeriodLabel}</h2>{periodCategories.map(({ id, name, amount }) => <div key={id} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "7px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}><span>{name}</span><strong>{moneyValue(amount / (historyMonths + futureMonths), currency)}/mês</strong></div>)}{periodCategories.length === 0 && <p style={{ fontSize: 12 }}>{categoryAverageKnown ? "Sem compromissos no período." : "Média indisponível: faltam dados de um ou mais meses do período."}</p>}</Card>
       </div>
       {currencyMismatch && <p role="alert" style={{ margin: 0, color: T.amber }}>A moeda dos compromissos recebidos não corresponde à moeda do cartão. Valores desses meses estão indisponíveis.</p>}
       {!allKnown && <p role="status" style={{ margin: 0, color: T.amber }}>O inventário de alguns meses está incompleto. Os itens disponíveis continuam listados abaixo.</p>}
