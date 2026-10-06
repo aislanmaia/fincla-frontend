@@ -161,4 +161,36 @@ describe("Lançamentos de um cartão", () => {
     await screen.findByText("Mercado");
     await waitFor(() => expect(calls).toHaveLength(2));
   });
+
+  it("usa a moeda do agregado para cartão em EUR", async () => {
+    const euro = (amount) => ({ amount, currency: "EUR" });
+    const invoice = {
+      ...detail,
+      total_amount: euro("140.00"),
+      items: detail.items.map((entry) => ({ ...entry, amount: euro(entry.amount.amount) })),
+      category_breakdown: detail.category_breakdown.map((entry) => ({ ...entry, total: euro(entry.total.amount) })),
+    };
+    serve({ invoice, cardList: [{ ...cards[0], currency: "EUR" }] });
+    render(<CardTransactionsPage organizationId={ORG_ID} />);
+    expect((await screen.findAllByText(/140,00/))[0].textContent).toContain("€");
+    expect(screen.queryByText(/R\$/)).not.toBeInTheDocument();
+  });
+
+  it("recupera a moeda do agregado quando cartão não a informa e mostra ausência se ambos faltam", async () => {
+    serve({ cardList: [{ ...cards[0], currency: null }] });
+    const view = render(<CardTransactionsPage organizationId={ORG_ID} />);
+    expect((await screen.findAllByText("R$ 140,00")).length).toBeGreaterThan(0);
+    view.unmount();
+    server.resetHandlers();
+    const unknown = {
+      ...detail,
+      total_amount: 140,
+      items: detail.items.map((entry) => ({ ...entry, amount: Number(entry.amount.amount) })),
+      category_breakdown: detail.category_breakdown.map((entry) => ({ ...entry, total: Number(entry.total.amount) })),
+    };
+    serve({ invoice: unknown, cardList: [{ ...cards[0], currency: null }] });
+    render(<CardTransactionsPage organizationId={ORG_ID} />);
+    expect(await screen.findByText("Moeda da fatura indisponível; os valores não podem ser exibidos com segurança.")).toBeInTheDocument();
+    expect(screen.queryByText(/R\$/)).not.toBeInTheDocument();
+  });
 });

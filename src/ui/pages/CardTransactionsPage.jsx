@@ -20,6 +20,7 @@ const input = { ...G, minHeight: 38, border: `1px solid ${T.border}`, borderRadi
 const INVOICE_FILTER_INITIAL = { period: "tudo" };
 const INVOICE_FACETS = ["periodo", "categoria", "tag", "valor"];
 const INVOICE_SORT_FIELDS = ["date", "val", "desc", "cat"];
+const money = (value, currency) => currency ? formatMoney(value, currency) : null;
 
 function Notice({ children }) {
   return <div role="status" style={{ ...panel, ...G, color: T.inkMid, fontSize: 13 }}>{children}</div>;
@@ -36,9 +37,9 @@ function WeeklyChart({ rows, currency }) {
         <div style={{ display: "flex", alignItems: "end", gap: 12, height: 126 }}>
           {rows.map((row) => (
             <div key={row.label} style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", justifyContent: "end", alignItems: "center", gap: 5 }}>
-              {row.hasData && <span style={{ ...G, ...NUM, fontSize: 10, color: T.inkMid }}>{formatMoney(row.amount, currency) ?? "—"}</span>}
+              {row.hasData && <span style={{ ...G, ...NUM, fontSize: 10, color: T.inkMid }}>{money(row.amount, currency) ?? "—"}</span>}
               {!row.hasData && <span style={{ ...G, fontSize: 10, color: T.inkGhost }}>sem dados</span>}
-              <div role="img" aria-label={`Semana de ${row.label}: ${row.hasData ? formatMoney(row.amount, currency) ?? "valor indisponível" : "sem dados registrados"}`}
+              <div role="img" aria-label={`Semana de ${row.label}: ${row.hasData ? money(row.amount, currency) ?? "valor indisponível" : "sem dados registrados"}`}
                 style={{ width: "100%", maxWidth: 58, minHeight: row.hasData ? 3 : 0, height: row.hasData ? `${Math.max(3, Math.abs(row.amount) / ceiling * 76)}px` : 0, background: row.amount < 0 ? T.green : T.blue, borderRadius: "5px 5px 0 0" }} />
               <span style={{ ...G, fontSize: 10, color: T.inkLight }}>{row.label}</span>
             </div>
@@ -67,7 +68,7 @@ function TransactionList({ rows, grouped, density, isMobile, currency }) {
                 <div style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.desc}</div>
                 <div style={{ ...G, fontSize: 11, color: T.inkLight }}>{[row.cat, row.parcela ? `${row.parcela.n}/${row.parcela.t}` : null, grouped ? null : row.date].filter(Boolean).join(" · ")}</div>
               </div>
-              <span style={{ ...G, ...NUM, fontSize: 13, fontWeight: 700, color: row.isRefund ? T.green : T.ink, whiteSpace: "nowrap" }}>{row.isRefund ? "− " : ""}{formatMoney(Math.abs(row.val), currency) ?? "—"}</span>
+              <span style={{ ...G, ...NUM, fontSize: 13, fontWeight: 700, color: row.isRefund ? T.green : T.ink, whiteSpace: "nowrap" }}>{row.isRefund ? "− " : ""}{money(row.val == null ? null : Math.abs(row.val), currency) ?? "—"}</span>
             </div>
           </div>
         );
@@ -124,7 +125,7 @@ export function CardTransactionsPage({ isMobile = false, organizationId = null, 
   const weeks = useMemo(() => weeklySpending(detail?.items), [detail]);
   const setPreference = (patch) => setPrefs((before) => { const next = { ...before, ...patch }; writeListPrefs(next); return next; });
   const goBack = () => navigate({ to: invoiceDashboardPath(cardId, year, month) });
-  const currency = state.card?.currency;
+  const currency = detail?.currency || state.card?.currency || null;
 
   return (
     <div style={{ padding: isMobile ? 16 : 28, display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
@@ -141,10 +142,11 @@ export function CardTransactionsPage({ isMobile = false, organizationId = null, 
       {enabled && state.status === "ok" && detail && <>
         <div style={{ ...panel, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
           <span style={{ ...G, color: T.inkMid, fontSize: 12 }}>Total da fatura · {detail.items_count} lançamentos</span>
-          <strong style={{ ...G, ...NUM, fontSize: 22 }}>{formatMoney(detail.total_amount, currency) ?? "—"}</strong>
+          <strong style={{ ...G, ...NUM, fontSize: 22 }}>{money(detail.total_amount, currency) ?? "—"}</strong>
         </div>
+        {!currency && <Notice>Moeda da fatura indisponível; os valores não podem ser exibidos com segurança.</Notice>}
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0,1fr)" : "repeat(2,minmax(0,1fr))", gap: 14 }}>
-          <CategoryBreakdown breakdown={detail.category_breakdown} total={detail.total_amount} currency={currency} isMobile={isMobile} />
+          {currency && <CategoryBreakdown breakdown={detail.category_breakdown} total={detail.total_amount} currency={currency} isMobile={isMobile} />}
           <WeeklyChart rows={weeks} currency={currency} />
         </div>
         <div style={{ ...panel, display: "flex", flexDirection: "column", gap: 12 }}>

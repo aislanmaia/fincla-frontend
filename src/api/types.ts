@@ -974,6 +974,8 @@ export interface InvoiceItemResponse {
 }
 
 export interface InvoiceResponse {
+  /** Capturada pelo cliente do MoneyResponse antes de desembrulhar os valores. */
+  currency?: string | null;
   month: string;
   due_date: string;
   total_amount: number;

@@ -4,7 +4,7 @@
 // `unwrapMoney` desembrulha em qualquer profundidade — enumerar campo a campo é
 // onde se esquece um, e um esquecido vira "R$ NaN" na tela.
 import apiClient from './client';
-import { unwrapMoney } from './money';
+import { toCurrency, unwrapMoney } from './money';
 import type {
   CreateCreditCardRequest,
   UpdateCreditCardRequest,
@@ -108,7 +108,8 @@ export const getCreditCardInvoice = async (
       params: { organization_id: organizationId },
     }
   );
-  return unwrapMoney(response.data);
+  const currency = toCurrency(response.data.total_amount);
+  return { ...unwrapMoney(response.data), currency };
 };
 
 /**
