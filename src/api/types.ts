@@ -995,6 +995,7 @@ export interface InvoiceHistoryItem {
   month: number;
   month_name: string;
   total_amount: number;
+  total_amount_currency?: string | null;
   status: string;
   items_count: number;
   top_category: string | null;
@@ -1056,6 +1057,7 @@ export interface MonthSummary {
 export interface FutureInstallmentItem {
   description: string;
   amount: number;
+  amount_currency?: string | null;
   installment_number: number;
   total_installments: number;
   category_name: string | null;
@@ -1082,6 +1084,7 @@ export interface MonthlyBreakdown {
     transaction_id: number | null;
     description: string;
     amount: number;
+    amount_currency?: string | null;
     due_date: string;
     projected: boolean;
     category_id: string | null;

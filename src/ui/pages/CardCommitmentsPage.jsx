@@ -20,14 +20,32 @@ const currentKey = () => { const now = new Date(); return `${now.getFullYear()}-
 const sum = (items) => items.reduce((total, item) => total + Number(item.amount), 0);
 const installments = (row) => (row?.installments || []).filter((item) => Number(item.total_installments) >= 2);
 const committed = (row) => sum(installments(row)) + sum(row.recurrences || []);
-const inventoryKnown = (row) => Array.isArray(row?.installments) && Array.isArray(row?.recurrences)
-  && [...row.installments, ...row.recurrences].every((item) => item.amount !== null && item.amount !== undefined && Number.isFinite(Number(item.amount)))
+const inventoryCurrencyKnown = (row, currency) => Boolean(currency)
+  && Array.isArray(row?.installments) && Array.isArray(row?.recurrences)
+  && [...row.installments, ...row.recurrences].every((item) => item.amount_currency === currency
+    && item.amount !== null && item.amount !== undefined && Number.isFinite(Number(item.amount)));
+const inventoryKnown = (row, currency) => inventoryCurrencyKnown(row, currency)
   && !row.installments_truncated && !row.recurrences_truncated;
 const historyKnown = (row, currency) => Boolean(currency)
   && row?.installments_amount_currency === currency && row?.recurrences_amount_currency === currency
   && row?.installments_amount !== null && row?.installments_amount !== undefined
   && row?.recurrences_amount !== null && row?.recurrences_amount !== undefined
   && Number.isFinite(Number(row.installments_amount)) && Number.isFinite(Number(row.recurrences_amount));
+const inventorySeries = (rows) => {
+  const series = new Map();
+  for (const row of rows) {
+    for (const item of installments(row)) {
+      const key = `installment:${item.series_id ?? item.transaction_id}`;
+      if (!series.has(key)) series.set(key, { ...item, type: "installment", firstYear: row.year, firstMonth: row.month, finish: null });
+      if (item.installment_number === item.total_installments) series.get(key).finish = period(row);
+    }
+    for (const item of row.recurrences || []) {
+      const key = `recurring:${item.series_id}`;
+      if (!series.has(key)) series.set(key, { ...item, type: "recurring", firstYear: row.year, firstMonth: row.month, finish: null });
+    }
+  }
+  return [...series.values()];
+};
 const shiftMonth = (offset) => {
   const now = new Date();
   const date = new Date(now.getFullYear(), now.getMonth() + offset, 1);
@@ -49,37 +67,34 @@ function Metric({ title, value, detail, testId }) {
 }
 
 function Inventory({ rows, currency, groupBy, sortBy, onMove, isMobile }) {
-  const items = useMemo(() => rows.flatMap((row) => [
-    ...installments(row).map((item) => ({ ...item, type: "installment", month: period(row), year: row.year, invoiceMonth: row.month })),
-    ...(row.recurrences || []).map((item) => ({ ...item, type: "recurring", month: period(row), year: row.year, invoiceMonth: row.month })),
-  ]), [rows]);
+  const items = useMemo(() => inventorySeries(rows), [rows]);
   const grouped = useMemo(() => {
-    const sorted = [...items].sort((a, b) => sortBy === "value" ? Number(b.amount) - Number(a.amount) : sortBy === "month" ? `${a.year}-${String(a.invoiceMonth).padStart(2, "0")}`.localeCompare(`${b.year}-${String(b.invoiceMonth).padStart(2, "0")}`) : (a.category_name || "Sem categoria").localeCompare(b.category_name || "Sem categoria", "pt-BR"));
+    const sorted = [...items].sort((a, b) => sortBy === "value" ? Number(b.amount) - Number(a.amount) : sortBy === "month" ? `${a.firstYear}-${String(a.firstMonth).padStart(2, "0")}`.localeCompare(`${b.firstYear}-${String(b.firstMonth).padStart(2, "0")}`) : (a.category_name || "Sem categoria").localeCompare(b.category_name || "Sem categoria", "pt-BR"));
     const groups = new Map();
     for (const item of sorted) {
-      const key = groupBy === "category" ? item.category_name || "Sem categoria" : groupBy === "month" ? item.month : groupBy === "value" ? moneyValue(item.amount, currency) : item.description;
+      const key = groupBy === "category" ? item.category_name || "Sem categoria" : groupBy === "month" ? item.type === "recurring" ? "Recorrências" : item.finish ? `Termina em ${item.finish}` : "Termina após o período consultado" : groupBy === "value" ? moneyValue(item.amount, currency) : "";
       if (!groups.has(key)) groups.set(key, []);
       groups.get(key).push(item);
     }
     return [...groups].map(([name, list]) => ({ name, list }));
   }, [items, groupBy, sortBy, currency]);
-  return <Card style={cardStyle}>
+  return <Card style={cardStyle}><section role="region" aria-label="Inventário de compromissos">
     <h2 style={{ ...G, margin: "0 0 14px", fontSize: 17 }}>Inventário de compromissos</h2>
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
       <label style={{ ...G, fontSize: 12 }}>Agrupar por <select aria-label="Agrupar por" value={groupBy} onChange={(event) => onMove({ groupBy: event.target.value })} style={buttonStyle}><option value="purchase">Compra</option><option value="category">Categoria</option><option value="month">Mês</option><option value="value">Valor</option></select></label>
       <label style={{ ...G, fontSize: 12 }}>Ordenar por <select aria-label="Ordenar por" value={sortBy} onChange={(event) => onMove({ sortBy: event.target.value })} style={buttonStyle}><option value="value">Valor</option><option value="category">Categoria</option><option value="month">Mês</option></select></label>
     </div>
     <div className="fincla-scroll" style={{ maxHeight: isMobile ? 420 : 480, overflowY: "auto", minWidth: 0 }}>
-      {grouped.map(({ name, list }) => <section key={name} style={{ marginBottom: 12 }}>
-        <div style={{ ...G, background: T.grayLight, borderRadius: 8, padding: "8px 10px", fontSize: 12, fontWeight: 700, display: "flex", justifyContent: "space-between" }}><span>{name} · {list.length} {list.length === 1 ? "item" : "itens"}</span><span>{moneyValue(sum(list), currency)}</span></div>
+      {grouped.map(({ name, list }) => <div key={name} style={{ marginBottom: 12 }}>
+        {name && <div style={{ ...G, background: T.grayLight, borderRadius: 8, padding: "8px 10px", fontSize: 12, fontWeight: 700, display: "flex", justifyContent: "space-between" }}><span>{name} · {list.length} {list.length === 1 ? "item" : "itens"}</span><span>{moneyValue(sum(list), currency)}</span></div>}
         {list.map((item, index) => <div key={`${item.type}:${item.series_id}:${item.due_date}:${index}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "11px 4px", borderBottom: `1px solid ${T.border}` }}>
-          <div style={{ minWidth: 0 }}><div style={{ ...G, fontSize: 13, fontWeight: 650 }}>{item.description}</div><div style={{ ...G, fontSize: 11, color: T.inkLight }}>{item.type === "recurring" ? "Recorrência" : `Parcela ${item.installment_number}/${item.total_installments}`} · {item.month}{item.category_name ? ` · ${item.category_name}` : ""}</div></div>
+          <div style={{ minWidth: 0 }}><div style={{ ...G, fontSize: 13, fontWeight: 650 }}>{item.description}</div><div style={{ ...G, fontSize: 11, color: T.inkLight }}>{item.type === "recurring" ? "Recorrência" : `Parcela ${item.installment_number}/${item.total_installments}`} · {item.finish ? `termina em ${item.finish}` : "término fora do período"}{item.category_name ? ` · ${item.category_name}` : ""}</div></div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}><strong style={{ ...G, ...NUM, fontSize: 12, whiteSpace: "nowrap" }}>{moneyValue(item.amount, currency)}</strong>{item.type === "installment" && <button type="button" onClick={() => onMove({ item })} aria-label={`Mover ${item.description}`} style={buttonStyle}>Mover</button>}</div>
         </div>)}
-      </section>)}
+      </div>)}
       {items.length === 0 && <p style={{ ...G, fontSize: 12, color: T.inkLight }}>Nenhum compromisso neste período.</p>}
     </div>
-  </Card>;
+  </section></Card>;
 }
 
 export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobile = false }) {
@@ -118,17 +133,57 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
   const rows = future?.monthly_breakdown || [];
   const currency = card?.currency || null;
   const nowKey = currentKey();
-  const monthNow = rows.find((row) => keyOf(row) === nowKey) ?? rows[0] ?? null;
-  const knownRows = rows.filter(inventoryKnown);
-  const browsableRows = rows.filter((row) => Array.isArray(row.installments) && Array.isArray(row.recurrences));
+  const monthNow = rows.find((row) => keyOf(row) === nowKey) ?? null;
+  const knownRows = rows.filter((row) => inventoryKnown(row, currency));
+  const browsableRows = rows.filter((row) => inventoryCurrencyKnown(row, currency));
+  const currencyMismatch = rows.some((row) => [...(row.installments || []), ...(row.recurrences || [])]
+    .some((item) => item.amount_currency !== currency));
   const allKnown = rows.length > 0 && knownRows.length === rows.length;
   const total = allKnown ? knownRows.reduce((value, row) => value + committed(row), 0) : null;
-  const monthly = inventoryKnown(monthNow) ? committed(monthNow) : null;
+  const monthly = inventoryKnown(monthNow, currency) ? committed(monthNow) : null;
   const usage = monthly !== null && card?.credit_limit != null && card.credit_limit > 0 ? monthly / card.credit_limit * 100 : null;
-  const nextRow = rows.find((row) => keyOf(row) > keyOf(monthNow || { year: 9999, month: 12 })) ?? null;
-  const nextTotal = inventoryKnown(nextRow) ? committed(nextRow) : null;
-  const reduction = monthly !== null && nextTotal !== null ? monthly - nextTotal : null;
-  const recurring = monthNow?.recurrences || [];
+  const finishing = inventoryKnown(monthNow, currency) ? installments(monthNow).filter((item) => item.installment_number === item.total_installments) : null;
+  const reduction = finishing ? sum(finishing) : null;
+  const recurring = inventoryCurrencyKnown(monthNow, currency) ? monthNow.recurrences : [];
+  const activeSeries = inventorySeries(browsableRows).filter((item) => item.type === "installment");
+  const largestInstallments = [...activeSeries].sort((a, b) => Number(b.amount) - Number(a.amount)).slice(0, 5);
+  const nearestToEnd = [...activeSeries].sort((a, b) => (a.total_installments - a.installment_number) - (b.total_installments - b.installment_number)).slice(0, 4);
+  const recurringMonthly = inventoryKnown(monthNow, currency) ? sum(recurring) : null;
+  const recurringNextYear = rows.length === 12 && allKnown ? rows.reduce((value, row) => value + sum(row.recurrences), 0) : null;
+  const currentHistory = (history?.monthly_data || []).find((row) => keyOf(row) === nowKey);
+  const recurringInvoicePercent = recurringMonthly !== null && currency && currentHistory?.total_amount_currency === currency
+    && Number(currentHistory.total_amount) > 0 ? Math.round(recurringMonthly / Number(currentHistory.total_amount) * 100) : null;
+  const lowUsageKnown = recurring.every((item) => typeof series.find((entry) => entry.id === item.series_id)?.is_low_usage === "boolean");
+  const lowUsageMonthly = lowUsageKnown && inventoryKnown(monthNow, currency)
+    ? sum(recurring.filter((item) => series.find((entry) => entry.id === item.series_id)?.is_low_usage)) : null;
+  const categoryTotals = new Map();
+  if (inventoryKnown(monthNow, currency)) {
+    for (const item of [...installments(monthNow), ...recurring]) {
+      const name = item.category_name || "Sem categoria";
+      categoryTotals.set(name, (categoryTotals.get(name) || 0) + Number(item.amount));
+    }
+  }
+  const categories = [...categoryTotals].sort((a, b) => b[1] - a[1]);
+  const dayBuckets = [
+    { label: "Dias 1–10", from: 1, to: 10, value: 0, count: 0 },
+    { label: "Dias 11–20", from: 11, to: 20, value: 0, count: 0 },
+    { label: "Dias 21–31", from: 21, to: 31, value: 0, count: 0 },
+  ];
+  if (inventoryKnown(monthNow, currency)) {
+    for (const item of [...installments(monthNow), ...recurring]) {
+      const day = Number(item.due_date?.slice(8, 10));
+      const bucket = dayBuckets.find((entry) => day >= entry.from && day <= entry.to);
+      if (bucket) { bucket.value += Number(item.amount); bucket.count += 1; }
+    }
+  }
+  const projectedCategoryTotals = new Map();
+  if (rows.length === 12 && allKnown) {
+    for (const row of rows) for (const item of [...installments(row), ...row.recurrences]) {
+      const name = item.category_name || "Sem categoria";
+      projectedCategoryTotals.set(name, (projectedCategoryTotals.get(name) || 0) + Number(item.amount));
+    }
+  }
+  const projectedCategories = [...projectedCategoryTotals].sort((a, b) => b[1] - a[1]).slice(0, 5);
   const historyByMonth = new Map((history?.monthly_data || []).map((row) => [keyOf(row), row]));
   const futureByMonth = new Map(rows.map((row) => [keyOf(row), row]));
   const timeline = Array.from({ length: historyMonths + futureMonths }, (_, index) => {
@@ -137,7 +192,7 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
     const row = offset < 0 ? historyByMonth.get(keyOf(ref)) : futureByMonth.get(keyOf(ref));
     const value = offset < 0
       ? historyKnown(row, currency) ? Number(row.installments_amount) + Number(row.recurrences_amount) : null
-      : inventoryKnown(row) ? committed(row) : null;
+      : inventoryKnown(row, currency) ? committed(row) : null;
     return { ...ref, key: keyOf(ref), label: period(ref), value, phase: offset < 0 ? "history" : offset === 0 ? "current" : "forecast" };
   });
   const largestCommitment = Math.max(0, ...timeline.map((entry) => entry.value > 0 ? entry.value : 0));
@@ -166,7 +221,7 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
       setMoveItem(null); setMutation({ pending: false, error: "" }); setRefresh((value) => value + 1);
     } catch { setMutation({ pending: false, error: "Não foi possível mover a parcela." }); }
   };
-  const moveOptions = rows.filter((row) => keyOf(row) > nowKey && keyOf(row) !== `${moveItem?.year}-${String(moveItem?.invoiceMonth).padStart(2, "0")}`);
+  const moveOptions = rows.filter((row) => keyOf(row) > nowKey && keyOf(row) !== `${moveItem?.firstYear}-${String(moveItem?.firstMonth).padStart(2, "0")}`);
   const gap = isMobile ? 12 : 16;
   return <div style={{ ...G, padding: isMobile ? 16 : 28, display: "flex", flexDirection: "column", gap, minWidth: 0 }}>
     <button type="button" onClick={back} style={{ ...buttonStyle, alignSelf: "flex-start", border: 0, color: T.blue, paddingLeft: 0 }}><ArrowLeft size={14} /> Voltar ao cartão</button>
@@ -176,7 +231,7 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
     {!state.loading && future && <>
       <p style={{ margin: 0, fontSize: 12, color: T.inkLight }}>{card.brand} •{card.last4} · {card.description}</p>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))", gap }}>
-        <Metric title="Total comprometido na projeção" value={moneyValue(total, currency)} testId="committed-total" detail={!currency ? "Moeda do cartão indisponível" : allKnown ? `${rows.length} meses futuros, incluindo o atual` : "Inventário incompleto; total indisponível"} />
+        <Metric title="Compromissos dos próximos 12 meses" value={moneyValue(total, currency)} testId="committed-total" detail={!currency ? "Moeda do cartão indisponível" : allKnown ? "Soma das parcelas e recorrências no período, incluindo o mês atual" : "Inventário incompleto; total do período indisponível"} />
         <Metric title="Comprometimento mensal" value={moneyValue(monthly, currency)} testId="monthly-committed" detail={monthNow ? period(monthNow) : "Sem dados mensais"} />
         <Metric title="Percentual do limite" value={usage === null ? "—" : `${Math.round(usage)}%`} detail={card.credit_limit == null ? "Limite não informado" : `de ${moneyValue(card.credit_limit, currency)} de limite`} />
       </div>
@@ -203,12 +258,34 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
           const row = historyByMonth.get(entry.key);
           return <div key={entry.key} style={{ border: `1px solid ${T.border}`, borderRadius: 10, padding: 12 }}><div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><strong>{entry.label}</strong><strong>{entry.value === null ? "Sem dados" : moneyValue(entry.value, currency)}</strong></div><div style={{ marginTop: 8, fontSize: 12, color: T.inkLight }}>Histórico · parcelas {moneyValue(historyKnown(row, currency) ? row.installments_amount : null, currency)} · recorrências {moneyValue(historyKnown(row, currency) ? row.recurrences_amount : null, currency)}</div></div>;
         })}
-        {rows.slice(0, futureMonths).map((row) => <div key={keyOf(row)} style={{ border: `1px solid ${T.border}`, borderRadius: 10, padding: 12 }}><div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><strong>{period(row)}</strong><strong>{moneyValue(inventoryKnown(row) ? committed(row) : null, currency)}</strong></div>{inventoryKnown(row) ? <div style={{ marginTop: 8, fontSize: 12, color: T.inkLight }}>{installments(row).length} parcelas · {row.recurrences.length} recorrências</div> : <div style={{ marginTop: 8, fontSize: 12, color: T.inkLight }}>Inventário indisponível</div>}</div>)}
+        {rows.slice(0, futureMonths).map((row) => <div key={keyOf(row)} style={{ border: `1px solid ${T.border}`, borderRadius: 10, padding: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><strong>{period(row)} {keyOf(row) === nowKey && <span style={{ color: T.blue, fontSize: 11 }}>Próximo</span>}</strong><strong>{moneyValue(inventoryKnown(row, currency) ? committed(row) : null, currency)}</strong></div>
+          {inventoryKnown(row, currency) ? <>
+            <div style={{ marginTop: 8, fontSize: 12, color: T.inkLight }}>{installments(row).length} parcelas · {row.recurrences.length} recorrências</div>
+            {installments(row).length === 0 ? <p style={{ ...G, fontSize: 11, color: T.inkLight }}>Sem parcelas previstas</p> : [...installments(row)].sort((a, b) => Number(b.amount) - Number(a.amount)).slice(0, 3).map((item) => <div key={item.transaction_id} style={{ display: "flex", justifyContent: "space-between", gap: 7, marginTop: 6, fontSize: 11 }}><span>{item.description}</span><span>{moneyValue(item.amount, currency)}</span></div>)}
+            <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 7 }}>+ {moneyValue(sum(row.recurrences), currency)} em assinaturas</div>
+          </> : <div style={{ marginTop: 8, fontSize: 12, color: T.inkLight }}>Inventário indisponível</div>}
+        </div>)}
       </div></section></Card>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap }}>
-        <Card style={cardStyle}><h2 style={{ ...G, margin: "0 0 12px", fontSize: 17 }}>Assinaturas & recorrências</h2>{state.seriesError && <p role="alert">Não foi possível carregar as marcações de baixo uso.</p>}{recurring.map((item, index) => <div key={`${item.series_id}:${item.due_date}:${index}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: `1px solid ${T.border}` }}><span>{item.description} · {moneyValue(item.amount, currency)}</span>{typeof seriesById.get(item.series_id)?.is_low_usage === "boolean" ? <label style={{ fontSize: 11 }}><input type="checkbox" aria-label={`Baixo uso: ${item.description}`} checked={seriesById.get(item.series_id).is_low_usage} disabled={mutation.pending} onChange={() => toggleLowUsage(item)} /> baixo uso</label> : <span style={{ fontSize: 11, color: T.inkLight }}>Baixo uso indisponível</span>}</div>)}{recurring.length === 0 && <p style={{ fontSize: 12 }}>Sem recorrências neste mês.</p>}</Card>
-        <Card style={cardStyle}><h2 style={{ ...G, margin: "0 0 12px", fontSize: 17 }}>Variação na próxima fatura</h2><div style={{ ...G, ...NUM, fontSize: 24, fontWeight: 800, color: reduction > 0 ? T.green : reduction < 0 ? T.amber : T.ink }}>{reduction === null || !currency ? "—" : reduction > 0 ? `Redução de ${moneyValue(reduction, currency)}` : reduction < 0 ? `Aumento de ${moneyValue(-reduction, currency)}` : "Sem variação prevista"}</div><p style={{ fontSize: 12, color: T.inkLight }}>{nextRow ? `Comparação com ${period(nextRow)} para as parcelas e recorrências conhecidas.` : "Ainda não há um próximo mês para comparar."}</p></Card>
+        <Card style={cardStyle}><h2 style={{ ...G, margin: "0 0 12px", fontSize: 17 }}>Assinaturas & recorrências</h2>
+          <div data-testid="recurring-monthly" style={{ ...G, ...NUM, fontSize: 21, fontWeight: 800 }}>{moneyValue(recurringMonthly, currency)} <span style={{ fontSize: 12, color: T.inkLight }}>/mês atual</span></div>
+          <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 5 }}>Próximos 12 meses: {moneyValue(recurringNextYear, currency)} · da fatura atual registrada: {recurringInvoicePercent === null ? "—" : `${recurringInvoicePercent}%`}</div>
+          {state.seriesError && <p role="alert">Não foi possível carregar as marcações de baixo uso.</p>}{recurring.map((item, index) => <div key={`${item.series_id}:${item.due_date}:${index}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "8px 0", borderBottom: `1px solid ${T.border}` }}><span>{item.description} · {moneyValue(item.amount, currency)}</span>{typeof seriesById.get(item.series_id)?.is_low_usage === "boolean" ? <label style={{ fontSize: 11 }}><input type="checkbox" aria-label={`Baixo uso: ${item.description}`} checked={seriesById.get(item.series_id).is_low_usage} disabled={mutation.pending} onChange={() => toggleLowUsage(item)} /> baixo uso</label> : <span style={{ fontSize: 11, color: T.inkLight }}>Baixo uso indisponível</span>}</div>)}{recurring.length === 0 && <p style={{ fontSize: 12 }}>{inventoryCurrencyKnown(monthNow, currency) ? "Sem recorrências neste mês." : "Recorrências indisponíveis neste mês."}</p>}
+          <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 8 }}>Marcadas como baixo uso neste mês: {moneyValue(lowUsageMonthly, currency)}</div>
+        </Card>
+        <Card style={cardStyle}><h2 style={{ ...G, margin: "0 0 12px", fontSize: 17 }}>Redução na próxima fatura</h2><div style={{ ...G, ...NUM, fontSize: 24, fontWeight: 800, color: reduction > 0 ? T.green : T.ink }}>{reduction === null || !currency ? "—" : reduction > 0 ? `Redução de ${moneyValue(reduction, currency)}` : "Nenhuma parcela termina neste ciclo"}</div><p style={{ fontSize: 12, color: T.inkLight }}>{finishing === null ? "Inventário atual indisponível." : `${finishing.length} ${finishing.length === 1 ? "parcela termina" : "parcelas terminam"} neste ciclo`}</p></Card>
       </div>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))", gap }}>
+        <Card style={cardStyle}><h2 style={{ ...G, margin: "0 0 10px", fontSize: 16 }}>Maiores parcelas ativas</h2>{largestInstallments.map((item) => <div key={item.series_id ?? item.transaction_id} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "7px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}><span>{item.description} · {item.total_installments - item.installment_number + 1} restam</span><strong>{moneyValue(item.amount, currency)}</strong></div>)}{largestInstallments.length === 0 && <p style={{ fontSize: 12 }}>Sem parcelas ativas no período.</p>}</Card>
+        <Card style={cardStyle}><h2 style={{ ...G, margin: "0 0 10px", fontSize: 16 }}>Parcelas mais próximas do fim</h2>{nearestToEnd.map((item) => <div key={item.series_id ?? item.transaction_id} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "7px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}><span>{item.description} · {item.total_installments - item.installment_number + 1} restam</span><strong>{moneyValue(item.amount, currency)}</strong></div>)}{nearestToEnd.length === 0 && <p style={{ fontSize: 12 }}>Sem parcelas ativas no período.</p>}</Card>
+        <Card style={cardStyle}><h2 style={{ ...G, margin: "0 0 10px", fontSize: 16 }}>Onde você mais se compromete no mês</h2>{categories.map(([name, value]) => <div key={name} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "7px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}><span>{name}</span><strong>{moneyValue(value, currency)}</strong></div>)}{categories.length === 0 && <p style={{ fontSize: 12 }}>Sem dados de categorias neste mês.</p>}</Card>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2, minmax(0, 1fr))", gap }}>
+        <Card style={cardStyle}><h2 style={{ ...G, margin: "0 0 10px", fontSize: 16 }}>Quando vence o compromisso do mês</h2>{inventoryKnown(monthNow, currency) ? dayBuckets.map((bucket) => <div key={bucket.label} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "7px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}><span>{bucket.label} · {bucket.count} itens</span><strong>{moneyValue(bucket.value, currency)}</strong></div>) : <p style={{ fontSize: 12 }}>Datas indisponíveis neste mês.</p>}</Card>
+        <Card style={cardStyle}><h2 style={{ ...G, margin: "0 0 10px", fontSize: 16 }}>Média projetada por categoria · próximos 12 meses</h2>{projectedCategories.map(([name, value]) => <div key={name} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "7px 0", borderBottom: `1px solid ${T.border}`, fontSize: 12 }}><span>{name}</span><strong>{moneyValue(value / 12, currency)}/mês</strong></div>)}{projectedCategories.length === 0 && <p style={{ fontSize: 12 }}>Média indisponível ou sem compromissos no período.</p>}</Card>
+      </div>
+      {currencyMismatch && <p role="alert" style={{ margin: 0, color: T.amber }}>A moeda dos compromissos recebidos não corresponde à moeda do cartão. Valores desses meses estão indisponíveis.</p>}
       {!allKnown && <p role="status" style={{ margin: 0, color: T.amber }}>O inventário de alguns meses está incompleto. Os itens disponíveis continuam listados abaixo.</p>}
       <Inventory rows={browsableRows} currency={currency} groupBy={groupBy} sortBy={sortBy} onMove={handleInventory} isMobile={isMobile} />
       {mutation.error && <p role="alert">{mutation.error}</p>}

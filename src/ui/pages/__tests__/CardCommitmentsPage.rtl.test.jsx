@@ -67,10 +67,13 @@ for (const isMobile of [false, true]) {
   describe(isMobile ? "mobile" : "desktop", () => {
     it("soma parcelas e recorrências do mês, mostra detalhe e limita as chamadas", async () => {
       render(<CardCommitmentsPage organizationId={ORG} isMobile={isMobile} />);
-      expect(await screen.findByText("Notebook")).toBeInTheDocument();
+      expect((await screen.findAllByText("Notebook")).length).toBeGreaterThan(0);
       expect(screen.getAllByText("Assinatura").length).toBeGreaterThan(0);
       expect(screen.getByTestId("monthly-committed")).toHaveTextContent("R$ 150,00");
       expect(screen.getByTestId("committed-total")).toHaveTextContent("R$ 200,00");
+      expect(screen.getByTestId("recurring-monthly")).toHaveTextContent("R$ 50,00");
+      expect(screen.getByText("Dias 1–10 · 2 itens")).toBeInTheDocument();
+      expect(screen.getAllByText("Serviços").length).toBeGreaterThan(0);
       expect(screen.queryByText("À vista")).not.toBeInTheDocument();
       expect(calls.filter((c) => c.startsWith("/v1/credit-cards"))).toHaveLength(3);
       const timeline = screen.getByRole("region", { name: "Linha do tempo do compromisso" });
@@ -118,17 +121,30 @@ it("não soma moedas diferentes no histórico", async () => {
   expect(screen.queryByText("R$ 70,00")).not.toBeInTheDocument();
 });
 
+it("não formata compromisso futuro com a moeda errada do cartão", async () => {
+  futureOverride = { monthly_breakdown: [
+    { year: 2026, month: 10, month_name: "outubro", installments: [
+      { transaction_id: 11, series_id: "a", description: "Notebook", amount: { amount: "100", currency: "EUR" }, installment_number: 2, total_installments: 3, due_date: "2026-10-10", category_name: "Tecnologia" },
+    ], recurrences: [] },
+  ] };
+  render(<CardCommitmentsPage organizationId={ORG} />);
+  expect(await screen.findByText(/A moeda dos compromissos recebidos não corresponde/)).toBeInTheDocument();
+  expect(screen.getByTestId("committed-total")).toHaveTextContent("—");
+  expect(screen.getByTestId("monthly-committed")).toHaveTextContent("—");
+  expect(screen.queryByText("R$ 100,00")).not.toBeInTheDocument();
+});
+
 it("não converte ausência de limite e inventário em zero", async () => {
   server.use(http.get("*/v1/credit-cards", () => HttpResponse.json([{ id: 7, public_id: "public-card", description: "Azul", brand: "Visa", last4: "7112", currency: "BRL", credit_limit: null }])));
   render(<CardCommitmentsPage organizationId={ORG} />);
-  expect(await screen.findByText("Notebook")).toBeInTheDocument();
+  expect((await screen.findAllByText("Notebook")).length).toBeGreaterThan(0);
   expect(screen.getByText("Limite não informado")).toBeInTheDocument();
 });
 
 it("não presume que uma recorrência é de baixo uso quando o catálogo falha", async () => {
   server.use(http.get("*/v1/recurring-series", () => HttpResponse.json({}, { status: 500 })));
   render(<CardCommitmentsPage organizationId={ORG} />);
-  expect(await screen.findByText("Notebook")).toBeInTheDocument();
+  expect((await screen.findAllByText("Notebook")).length).toBeGreaterThan(0);
   expect(screen.getByText("Baixo uso indisponível")).toBeInTheDocument();
   expect(screen.queryByRole("checkbox", { name: /baixo uso/i })).not.toBeInTheDocument();
 });
@@ -136,12 +152,11 @@ it("não presume que uma recorrência é de baixo uso quando o catálogo falha",
 it("não assume BRL quando a moeda do cartão falta", async () => {
   server.use(http.get("*/v1/credit-cards", () => HttpResponse.json([{ id: 7, public_id: "public-card", description: "Azul", brand: "Visa", last4: "7112", currency: null, credit_limit: money("1000") }])));
   render(<CardCommitmentsPage organizationId={ORG} />);
-  expect(await screen.findByText("Notebook")).toBeInTheDocument();
-  expect(screen.getByText("Moeda do cartão indisponível")).toBeInTheDocument();
+  expect(await screen.findByText("Moeda do cartão indisponível")).toBeInTheDocument();
   expect(screen.getByTestId("committed-total")).toHaveTextContent("—");
 });
 
-it("agrupa por categoria e valor, ordena por categoria e revela aumento", async () => {
+it("agrupa por categoria e valor e ordena por categoria", async () => {
   const user = userEvent.setup();
   futureOverride = {
     monthly_breakdown: [
@@ -150,7 +165,7 @@ it("agrupa por categoria e valor, ordena por categoria e revela aumento", async 
     ],
   };
   render(<CardCommitmentsPage organizationId={ORG} />);
-  expect(await screen.findByText("Aumento de R$ 50,00")).toBeInTheDocument();
+  expect(await screen.findByText("Nenhuma parcela termina neste ciclo")).toBeInTheDocument();
   await user.selectOptions(screen.getByLabelText("Agrupar por"), "category");
   expect(screen.getByText("Tecnologia · 2 itens")).toBeInTheDocument();
   await user.selectOptions(screen.getByLabelText("Agrupar por"), "value");
@@ -158,6 +173,38 @@ it("agrupa por categoria e valor, ordena por categoria e revela aumento", async 
   await user.selectOptions(screen.getByLabelText("Ordenar por"), "category");
   expect(screen.getByLabelText("Ordenar por")).toHaveValue("category");
   await user.selectOptions(screen.getByLabelText("Agrupar por"), "month");
-  expect(screen.getByText("outubro 2026 · 1 item")).toBeInTheDocument();
-  expect(screen.getByText("novembro 2026 · 1 item")).toBeInTheDocument();
+  expect(screen.getByText("Termina após o período consultado · 1 item")).toBeInTheDocument();
+  expect(screen.getByText("Termina em novembro 2026 · 1 item")).toBeInTheDocument();
+});
+
+it("mostra alívio por parcela que termina, mesmo quando outros compromissos aumentam", async () => {
+  futureOverride = { monthly_breakdown: [
+    { year: 2026, month: 10, month_name: "outubro", installments: [
+      { transaction_id: 11, series_id: "a", description: "Notebook", amount: money("100"), installment_number: 3, total_installments: 3, due_date: "2026-10-10", category_name: "Tecnologia" },
+    ], recurrences: [{ series_id: "r", description: "Assinatura", amount: money("50"), due_date: "2026-10-10", projected: true, category_name: "Serviços" }] },
+    { year: 2026, month: 11, month_name: "novembro", installments: [
+      { transaction_id: 12, series_id: "b", description: "Geladeira", amount: money("300"), installment_number: 1, total_installments: 6, due_date: "2026-11-10", category_name: "Casa" },
+    ], recurrences: [{ series_id: "r", description: "Assinatura", amount: money("50"), due_date: "2026-11-10", projected: true, category_name: "Serviços" }] },
+  ] };
+  render(<CardCommitmentsPage organizationId={ORG} />);
+  expect((await screen.findAllByText("Notebook")).length).toBeGreaterThan(0);
+  expect(screen.getByText("Redução de R$ 100,00")).toBeInTheDocument();
+  expect(screen.getByText("1 parcela termina neste ciclo")).toBeInTheDocument();
+  const detail = screen.getByRole("region", { name: "Detalhe por mês" });
+  expect(within(detail).getByText("Próximo")).toBeInTheDocument();
+  expect(within(detail).getByText("Geladeira")).toBeInTheDocument();
+  expect(within(detail).getAllByText(/em assinaturas/).length).toBeGreaterThan(0);
+});
+
+it("inventário mostra cada compra uma vez e agrupa pelo mês de término", async () => {
+  futureOverride = { monthly_breakdown: [
+    { year: 2026, month: 10, month_name: "outubro", installments: [{ transaction_id: 11, series_id: "a", description: "Notebook", amount: money("100"), installment_number: 2, total_installments: 3, due_date: "2026-10-10", category_name: "Tecnologia" }], recurrences: [] },
+    { year: 2026, month: 11, month_name: "novembro", installments: [{ transaction_id: 12, series_id: "a", description: "Notebook", amount: money("100"), installment_number: 3, total_installments: 3, due_date: "2026-11-10", category_name: "Tecnologia" }], recurrences: [] },
+  ] };
+  const user = userEvent.setup();
+  render(<CardCommitmentsPage organizationId={ORG} />);
+  const inventory = await screen.findByRole("region", { name: "Inventário de compromissos" });
+  expect(within(inventory).getAllByText("Notebook")).toHaveLength(1);
+  await user.selectOptions(screen.getByLabelText("Agrupar por"), "month");
+  expect(within(inventory).getByText("Termina em novembro 2026 · 1 item")).toBeInTheDocument();
 });

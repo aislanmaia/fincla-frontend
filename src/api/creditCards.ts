@@ -147,6 +147,7 @@ export const getInvoiceHistory = async (
   const data = includeCommitments
     ? { ...response.data, monthly_data: response.data.monthly_data.map((row) => ({
       ...row,
+      total_amount_currency: toCurrency(row.total_amount),
       installments_amount_currency: toCurrency(row.installments_amount),
       recurrences_amount_currency: toCurrency(row.recurrences_amount),
     })) }
@@ -227,7 +228,15 @@ export const getFutureCommitments = async (
       params: { organization_id: organizationId, months, ...(includeInventory ? { include_inventory: true } : {}) },
     }
   );
-  return unwrapMoney(response.data);
+  const data = includeInventory ? {
+    ...response.data,
+    monthly_breakdown: response.data.monthly_breakdown.map((row) => ({
+      ...row,
+      installments: row.installments?.map((item) => ({ ...item, amount_currency: toCurrency(item.amount) })),
+      recurrences: row.recurrences?.map((item) => ({ ...item, amount_currency: toCurrency(item.amount) })),
+    })),
+  } : response.data;
+  return unwrapMoney(data);
 };
 
 /**
