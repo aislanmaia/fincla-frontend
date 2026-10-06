@@ -171,6 +171,17 @@ for (const vp of VIEWPORTS) {
       await expect(page.getByTestId("recent-items")).toContainText("Compra aberta");
       await expect(page.getByTestId("invoice-timeline")).toBeVisible();
       await expect(page.getByTestId("invoice-limit")).toBeVisible();
+      const metrics = (await (await api(`/v1/credit-cards/${busyCardId}/invoices/${openRef.year}/${openRef.month}?organization_id=${orgId}&include_metrics=true`)).json()) as {
+        six_month_average: { amount: string } | null;
+        spending_pace: { current: unknown[]; previous: { points: unknown[] } | null } | null;
+      };
+      expect(metrics.six_month_average).not.toBeNull();
+      expect(parseBRL(await page.getByTestId("six-month-average").textContent()))
+        .toBe(Number(metrics.six_month_average!.amount));
+      await expect(page.getByTestId("spending-pace")).toBeVisible();
+      expect(metrics.spending_pace?.current.length).toBeGreaterThan(0);
+      expect(metrics.spending_pace?.previous?.points.length).toBeGreaterThan(0);
+      await expect(page.getByTestId("spending-pace").locator("polyline")).toHaveCount(2);
       await page.screenshot({ path: `${SHOTS}/dashboard-${vp.name}-open.png`, fullPage: !vp.mobile });
 
       // Faturas vizinhas: anterior (fechada) e seguinte (prevista).
