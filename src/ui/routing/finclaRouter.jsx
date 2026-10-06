@@ -118,6 +118,16 @@ const invoiceDashboardRoute = createRoute({
   },
 });
 
+const cardCommitmentsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "cards/$cardId/commitments",
+  beforeLoad: requireSessionTokenBeforeLoad,
+  errorComponent: FinclaAuthenticatedRouteError,
+  component: function CardCommitmentsRoute() {
+    return <AuthenticatedPageOutlet segment="cardCommitments" />;
+  },
+});
+
 const profileRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "profile",
@@ -279,6 +289,7 @@ const routeTree = rootRoute.addChildren([
   ...segmentRoutes,
   transactionsRoute,
   invoiceDashboardRoute,
+  cardCommitmentsRoute,
   profileRoute,
   planningRoute,
   consultantRoute,

@@ -1066,6 +1066,26 @@ export interface MonthlyBreakdown {
   limit_usage_percent: number | null;
   installments_count: number;
   top_installments: FutureInstallmentItem[];
+  installments?: Array<FutureInstallmentItem & {
+    transaction_id: number;
+    series_id: string | null;
+    due_date: string;
+    purchase_date: string;
+    category_id: string | null;
+  }> | null;
+  recurrences?: Array<{
+    series_id: string;
+    transaction_id: number | null;
+    description: string;
+    amount: number;
+    due_date: string;
+    projected: boolean;
+    category_id: string | null;
+    category_name: string | null;
+    category_color: string | null;
+  }> | null;
+  installments_truncated?: boolean | null;
+  recurrences_truncated?: boolean | null;
 }
 
 export interface EndingInstallment {
@@ -1480,6 +1500,7 @@ export interface RecurringSeries {
   start_date: string;
   next_occurrence: string;
   is_active: boolean;
+  is_low_usage?: boolean;
   created_at: string;
   updated_at: string;
   tags: SeriesTag[];
@@ -1588,6 +1609,7 @@ export interface UpdateRecurringSeriesRequest {
   end_date?: string | null;
   credit_card_id?: number | null;
   notes?: string | null;
+  is_low_usage?: boolean;
   tag_ids?: string[] | null;
   interval?: number | null;
   interval_unit?: RecurringSeriesIntervalUnit | null;

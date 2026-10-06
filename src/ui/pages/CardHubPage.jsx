@@ -196,6 +196,11 @@ export function CardHubPage({
             <Pencil size={14} /> {isMobile ? "Editar" : "Editar cartão"}
           </button>
         )}
+        {selectedCard?.public_id && (
+          <button type="button" onClick={() => navigate({ to: "/cards/$cardId/commitments", params: { cardId: selectedCard.public_id } })} style={OUTLINE_BTN}>
+            Parcelas & Compromissos
+          </button>
+        )}
         {selectedCard && (
           <button type="button" onClick={() => setDialog("notes")} data-testid="card-notes-open" style={OUTLINE_BTN}>
             <Pin size={14} /> Anotações

@@ -210,12 +210,13 @@ export const moveInstallmentToInvoice = async (
 export const getFutureCommitments = async (
   cardId: number,
   organizationId: string,
-  months: number = 6
+  months: number = 6,
+  includeInventory: boolean = false
 ): Promise<FutureCommitmentsResponse> => {
   const response = await apiClient.get<FutureCommitmentsResponse>(
     `/credit-cards/${cardId}/future-commitments`,
     {
-      params: { organization_id: organizationId, months },
+      params: { organization_id: organizationId, months, ...(includeInventory ? { include_inventory: true } : {}) },
     }
   );
   return unwrapMoney(response.data);
