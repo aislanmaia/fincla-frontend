@@ -996,6 +996,40 @@ export interface InvoiceResponse {
     current: { day: number; date: string; cumulative: number }[];
     previous: { cycle_start: string; cycle_end: string; points: { day: number; date: string; cumulative: number }[] } | null;
   } | null;
+  changes?: {
+    previous_available: boolean;
+    previous_month: string | null;
+    categories: {
+      category_id: string | null;
+      category_name: string;
+      category_color: string | null;
+      current_total: number;
+      previous_total: number;
+      change: number;
+      change_percent: number | null;
+    }[];
+    items: {
+      change_type: 'new' | 'removed' | 'changed_value';
+      commitment_type: 'installment' | 'recurring';
+      series_id: string;
+      description: string;
+      category_id: string | null;
+      category_name: string | null;
+      current_amount: number | null;
+      previous_amount: number | null;
+      change_amount: number | null;
+      installment_number: number | null;
+      total_installments: number | null;
+      occurrences_current: number | null;
+      occurrences_previous: number | null;
+    }[];
+    one_off: {
+      current_count: number;
+      current_total: number;
+      previous_count: number;
+      previous_total: number;
+    } | null;
+  } | null;
 }
 
 // ===== HISTÓRICO DE FATURAS =====

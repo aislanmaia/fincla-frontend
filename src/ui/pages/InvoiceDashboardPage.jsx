@@ -18,6 +18,7 @@ import { Headline, InvoiceDetailBody } from "../features/invoiceDashboard/Invoic
 import { InvoiceNavigator } from "../features/invoiceDashboard/InvoiceNavigator.jsx";
 import { MobileInvoiceItem } from "../features/invoiceDashboard/MobileInvoiceItem.jsx";
 import { InvoiceMetrics } from "../features/invoiceDashboard/SpendingPace.jsx";
+import { InvoiceChanges } from "../features/invoiceDashboard/InvoiceChanges.jsx";
 import { ForecastInstallments, RecentItems } from "../features/invoiceDashboard/RecentItems.jsx";
 import { useInvoiceDashboardData } from "../features/invoiceDashboard/useInvoiceDashboardData.js";
 
@@ -160,6 +161,7 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
             )}
           />
           {showBreakdown && <InvoiceMetrics detail={detail} currency={currency} isMobile />}
+          {showBreakdown && <InvoiceChanges changes={detail.changes} currency={currency} isMobile />}
           {lower}
         </>
       ) : invoice && (
@@ -176,6 +178,7 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
             <InvoiceDetailBody invoice={invoice} currency={currency} {...detailProps} />
            </Card>
           {showBreakdown && <InvoiceMetrics detail={detail} currency={currency} />}
+          {showBreakdown && <InvoiceChanges changes={detail.changes} currency={currency} />}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: 16, alignItems: "start" }}>{lower}</div>
         </>
       )}
