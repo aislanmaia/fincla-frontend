@@ -20,6 +20,7 @@ import {
 import { HubInvoices } from "../features/cardHub/HubInvoices.jsx";
 import { InvoiceCarousel } from "../features/cardHub/InvoiceCarousel.jsx";
 import { AllInvoicesDialog } from "../features/cardHub/AllInvoicesDialog.jsx";
+import { CategoryTrendChart, InvoiceHistoryChart } from "../features/cardHub/HubCharts.jsx";
 import { HubDialog } from "../features/cardHub/HubDialog.jsx";
 import { CreateCardDialog } from "../features/cardHub/CreateCardDialog.jsx";
 import { CompactKpiStrip, LimitTiles } from "../features/cardHub/HubKpis.jsx";
@@ -343,6 +344,24 @@ export function CardHubPage({
         onViewAll={() => goTo("/transactions")}
       />
       </div>
+
+      {!detail.loading && invoiceCards.length > 0 && (
+        <>
+          <div style={{ height: 1, background: T.border }} />
+          <InvoiceHistoryChart
+            invoices={invoiceCards}
+            anchorKey={openInvoice?.key ?? hub.initialInvoiceKey}
+            currency={currency}
+            isMobile={isMobile}
+          />
+          <CategoryTrendChart
+            history={detail.history}
+            anchorKey={detail.history?.period_end?.slice(0, 7) ?? openInvoice?.key ?? hub.initialInvoiceKey}
+            currency={currency}
+            isMobile={isMobile}
+          />
+        </>
+      )}
 
       {dialog === "notes" && (
         <NotesDialog

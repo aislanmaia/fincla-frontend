@@ -176,6 +176,35 @@ async function fillCardForm(user) {
   await user.type(screen.getByPlaceholderText("ex: 10"), "12");
 }
 
+describe("CardHubPage — gráficos do Hub", () => {
+  it("mostra os gráficos com a série opt-in real e alterna Barras/Linhas", async () => {
+    const requests = [];
+    const history = historyFixture();
+    history.monthly_data[0].category_breakdown = { Alimentação: money("100.00"), Transporte: money("-20.00") };
+    history.monthly_data[1].category_breakdown = { Alimentação: money("80.00") };
+    history.monthly_data[2].category_breakdown = { Alimentação: money("70.00") };
+    mockApi({ history });
+    server.use(http.get("*/v1/credit-cards/:id/invoices/history", ({ request }) => {
+      requests.push(new URL(request.url));
+      return HttpResponse.json(history);
+    }));
+    const user = userEvent.setup();
+    renderHub();
+    await screen.findByText("Histórico de faturas");
+
+    expect(requests[0].searchParams.get("include_category_series")).toBe("true");
+    expect(screen.getByText("Histórico de faturas")).toBeInTheDocument();
+    expect(screen.getByText("Tendência por categoria")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Linhas" }));
+    expect(screen.getByRole("img", { name: "Evolução das faturas" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /AGO 2026: R\$/i }));
+    expect(screen.getByText(/AGO 2026 · Paga/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "2026-08: ver categorias, com estorno" }));
+    expect(screen.getByText(/Transporte.*-R\$/)).toBeInTheDocument();
+  });
+
+});
+
 describe("CardHubPage — cadastro de cartão", () => {
   it("cria pelo tile, aceita fechamento ausente, atualiza a lista e seleciona o criado", async () => {
     const requests = mockApi();

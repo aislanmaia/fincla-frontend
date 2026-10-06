@@ -125,6 +125,25 @@ async function selectCardByName(page: Page, name: string) {
 }
 
 for (const vp of VIEWPORTS) {
+  test(`gráficos do Hub usam dados reais e alternam Barras/Linhas — ${vp.name}`, async ({ page }) => {
+    await openHub(page, vp);
+    await selectCardByName(page, "Hub Azul");
+    const history = page.getByRole("heading", { name: "Histórico de faturas" }).locator("..");
+    const trend = page.getByRole("heading", { name: "Tendência por categoria" }).locator("..");
+
+    await expect(history.getByRole("button", { name: "Barras" })).toHaveAttribute("aria-pressed", "true");
+    await history.getByRole("button", { name: "Linhas" }).click();
+    await expect(history.getByRole("img", { name: "Evolução das faturas" })).toBeVisible();
+    await history.getByRole("button", { name: /: R\$/ }).first().click();
+    await expect(history.getByRole("status")).toContainText("R$");
+
+    await expect(trend.getByText("Dados por categoria indisponíveis para este cartão.")).toHaveCount(0);
+    await trend.locator('button[aria-label*="ver categorias"]').first().click();
+    await expect(trend.getByRole("status")).toContainText("R$");
+  });
+}
+
+for (const vp of VIEWPORTS) {
   test.describe(`Hub do cartão — ${vp.name}`, () => {
     test("cadastra pelo tile e seleciona o cartão criado sem dia de fechamento", async ({ page }) => {
       await openHub(page, vp);

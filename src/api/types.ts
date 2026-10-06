@@ -996,6 +996,7 @@ export interface InvoiceHistoryItem {
   status: string;
   items_count: number;
   top_category: string | null;
+  category_breakdown?: Record<string, number>;
 }
 
 export interface InvoiceHistorySummary {
