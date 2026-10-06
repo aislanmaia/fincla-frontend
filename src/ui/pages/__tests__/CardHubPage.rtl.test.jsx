@@ -197,6 +197,7 @@ describe("CardHubPage — gráficos do Hub", () => {
     expect(screen.getByText("Tendência por categoria")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Linhas" }));
     expect(screen.getByRole("img", { name: "Evolução das faturas" })).toBeInTheDocument();
+    expect(screen.getByText("Realizado")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /AGO 2026: R\$/i }));
     expect(screen.getByText(/AGO 2026 · Paga/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "2026-08: ver categorias, com estorno" }));

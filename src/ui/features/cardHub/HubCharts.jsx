@@ -87,8 +87,15 @@ export function InvoiceHistoryChart({ invoices, anchorKey, currency, isMobile, o
       : <HistoryLines points={points} currency={currency} activeKey={activeKey} onPick={setActiveKey} />}
     {active && <div role="status" style={{ ...G, ...NUM, fontSize: 11, color: T.ink, marginTop: 8 }}>{monthShort(active.month)} {active.key.slice(0, 4)} · {active.total === null ? "Sem fatura" : `${LABEL[active.status] ?? "Fatura"} · ${formatMoney(active.total, currency)}`}</div>}
     {hasData && <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 12 }}>
-      <LegendItem color={T.grayLight} label="Paga" /><LegendItem color={T.amber} label="Fechada" />
-      <LegendItem color={T.blue} label="Atual" /><LegendItem color={T.blueBar} label="Comprometido" dashed />
+      {mode === "lines" ? <>
+        <LegendItem color={T.blue} label="Realizado" />
+        <LegendItem color={T.blue} label="Comprometido" dashed />
+      </> : <>
+        <LegendItem color={T.grayLight} label="Paga" />
+        <LegendItem color={T.amber} label="Fechada" />
+        <LegendItem color={T.blue} label="Atual" />
+        <LegendItem color={T.blueBar} label="Comprometido" />
+      </>}
     </div>}
   </Card>;
 }
