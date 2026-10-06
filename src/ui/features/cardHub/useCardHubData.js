@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   getCurrentCreditCardInvoice,
@@ -41,6 +41,7 @@ const settle = (promise) => promise.then((value) => ({ ok: true, value }), (erro
  */
 export function useCardHubData({ organizationId, enabled = true, refreshToken = 0 }) {
   const active = Boolean(enabled && organizationId);
+  const listInFlightRef = useRef(null);
   const [cardsState, setCardsState] = useState({ orgId: null, error: "", cards: [] });
   const [refreshFailedCards, setRefreshFailedCards] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
@@ -54,8 +55,17 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
       return undefined;
     }
     let cancelled = false;
-    listCreditCards(organizationId)
-      .then((list) => {
+    const key = `${organizationId}:${refreshToken}`;
+    const inFlight = listInFlightRef.current;
+    const request = inFlight?.key === key ? inFlight.promise : listCreditCards(organizationId);
+    if (request !== inFlight?.promise) {
+      listInFlightRef.current = { key, promise: request };
+      const clear = () => {
+        if (listInFlightRef.current?.promise === request) listInFlightRef.current = null;
+      };
+      request.then(clear, clear);
+    }
+    request.then((list) => {
         if (cancelled) return;
         setCardsState({ orgId: organizationId, error: "", cards: list });
         setRefreshFailedCards(false);
