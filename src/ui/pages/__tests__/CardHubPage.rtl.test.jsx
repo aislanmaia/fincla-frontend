@@ -674,7 +674,7 @@ describe("CardHubPage — navegação e atualização", () => {
     await user.click(screen.getByTestId("classic-view-link"));
     const arg = navigateMock.mock.calls[0][0];
     expect(arg.to).toBe("/cards");
-    expect(arg.search({ fc_tx: "9", view: "new", card: "2" })).toEqual({ fc_tx: "9" });
+    expect(arg.search({ fc_tx: "9", view: "new", card: publicIdFor(2) })).toEqual({ fc_tx: "9" });
   });
 
   it("convida a cadastrar o primeiro cartão (na tela anterior)", async () => {
