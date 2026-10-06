@@ -220,21 +220,34 @@ export const getFutureCommitments = async (
   cardId: number,
   organizationId: string,
   months: number = 6,
-  includeInventory: boolean = false
+  includeInventory: boolean = false,
+  includeRemaining: boolean = false
 ): Promise<FutureCommitmentsResponse> => {
   const response = await apiClient.get<FutureCommitmentsResponse>(
     `/credit-cards/${cardId}/future-commitments`,
     {
-      params: { organization_id: organizationId, months, ...(includeInventory ? { include_inventory: true } : {}) },
+      params: { organization_id: organizationId, months, ...(includeInventory ? { include_inventory: true } : {}), ...(includeRemaining ? { include_remaining: true } : {}) },
     }
   );
-  const data = includeInventory ? {
+  const data = includeInventory || includeRemaining ? {
     ...response.data,
-    monthly_breakdown: response.data.monthly_breakdown.map((row) => ({
+    monthly_breakdown: includeInventory ? response.data.monthly_breakdown.map((row) => ({
       ...row,
       installments: row.installments?.map((item) => ({ ...item, amount_currency: toCurrency(item.amount) })),
       recurrences: row.recurrences?.map((item) => ({ ...item, amount_currency: toCurrency(item.amount) })),
-    })),
+    })) : response.data.monthly_breakdown,
+    remaining_balance: includeRemaining && response.data.remaining_balance ? {
+      ...response.data.remaining_balance,
+      gross_amount_currency: toCurrency(response.data.remaining_balance.gross_amount),
+      linked_refunds_amount_currency: toCurrency(response.data.remaining_balance.linked_refunds_amount),
+      net_amount_currency: toCurrency(response.data.remaining_balance.net_amount),
+      series: response.data.remaining_balance.series.map((item) => ({
+        ...item,
+        remaining_amount_currency: toCurrency(item.remaining_amount),
+        linked_refunds_amount_currency: toCurrency(item.linked_refunds_amount),
+        next_amount_currency: toCurrency(item.next_amount),
+      })),
+    } : response.data.remaining_balance,
   } : response.data;
   return unwrapMoney(data);
 };

@@ -22,9 +22,12 @@ const server = setupServer(
   }),
   http.get("*/v1/credit-cards/7/future-commitments", ({ request }) => {
     calls.push(new URL(request.url).pathname);
-    if (new URL(request.url).searchParams.get("include_inventory") !== "true") return HttpResponse.json({}, { status: 400 });
+    if (new URL(request.url).searchParams.get("include_inventory") !== "true" || new URL(request.url).searchParams.get("include_remaining") !== "true") return HttpResponse.json({}, { status: 400 });
     return HttpResponse.json(futureOverride ?? {
       card_id: 7, card_name: "Azul", card_last4: "7112", summary: { total_committed: money("999") },
+      remaining_balance: { complete: true, gross_amount: money("350"), linked_refunds_amount: money("50"), net_amount: money("300"), series: [
+        { series_id: "a", description: "Notebook", category_name: "Tecnologia", remaining_installments: 14, remaining_amount: money("350"), linked_refunds_amount: money("50"), last_due_date: "2027-12-10", next_amount: money("100") },
+      ] },
       monthly_breakdown: [
         { year: 2026, month: 10, month_name: "outubro", total_amount: money("150"), installments: [
           { transaction_id: 11, series_id: "a", description: "Notebook", amount: money("100"), installment_number: 2, total_installments: 3, due_date: "2026-10-10", purchase_date: "2026-09-10", category_name: "Tecnologia", category_id: "tech" },
@@ -70,7 +73,10 @@ for (const isMobile of [false, true]) {
       expect((await screen.findAllByText("Notebook")).length).toBeGreaterThan(0);
       expect(screen.getAllByText("Assinatura").length).toBeGreaterThan(0);
       expect(screen.getByTestId("monthly-committed")).toHaveTextContent("R$ 150,00");
-      expect(screen.getByTestId("committed-total")).toHaveTextContent("R$ 200,00");
+      expect(screen.getByTestId("committed-total")).toHaveTextContent("R$ 300,00");
+      expect(screen.getByText(/Projeção de parcelas e recorrências nos próximos 12 meses: R\$ 200,00/)).toBeInTheDocument();
+      expect(screen.getByText(/estornos vinculados R\$ 50,00/)).toBeInTheDocument();
+      expect(screen.getByText(/termina em dezembro 2027.*saldo R\$ 350,00/)).toBeInTheDocument();
       expect(screen.getByTestId("recurring-monthly")).toHaveTextContent("R$ 50,00");
       expect(screen.getByText("Dias 1–10 · 2 itens")).toBeInTheDocument();
       expect(screen.getAllByText("Serviços").length).toBeGreaterThan(0);
@@ -132,6 +138,29 @@ it("não formata compromisso futuro com a moeda errada do cartão", async () => 
   expect(screen.getByTestId("committed-total")).toHaveTextContent("—");
   expect(screen.getByTestId("monthly-committed")).toHaveTextContent("—");
   expect(screen.queryByText("R$ 100,00")).not.toBeInTheDocument();
+});
+
+it("não mostra saldo remanescente em moeda divergente nem usa a soma limitada como total exato", async () => {
+  futureOverride = {
+    remaining_balance: { complete: true, gross_amount: money("350"), linked_refunds_amount: money("50"), net_amount: { amount: "300", currency: "EUR" }, series: [] },
+    monthly_breakdown: [{ year: 2026, month: 10, month_name: "outubro", installments: [], recurrences: [] }],
+  };
+  render(<CardCommitmentsPage organizationId={ORG} />);
+  expect(await screen.findByTestId("committed-total")).toHaveTextContent("—");
+  expect(screen.getByText(/Saldo exato indisponível/)).toBeInTheDocument();
+  expect(screen.queryByText(/Saldo restante de parcelas.*R\$ 300,00/)).not.toBeInTheDocument();
+});
+
+it("não apresenta saldo parcial de séries legadas como total exato", async () => {
+  futureOverride = {
+    remaining_balance: { complete: false, gross_amount: null, linked_refunds_amount: null, net_amount: null, series: [
+      { series_id: "a", description: "Conhecida", category_name: null, remaining_installments: 2, remaining_amount: money("100"), linked_refunds_amount: money("0"), last_due_date: "2026-12-10", next_amount: money("50") },
+    ] },
+    monthly_breakdown: [{ year: 2026, month: 10, month_name: "outubro", installments: [], recurrences: [] }],
+  };
+  render(<CardCommitmentsPage organizationId={ORG} />);
+  expect(await screen.findByTestId("committed-total")).toHaveTextContent("—");
+  expect(screen.getByText(/Saldo exato indisponível/)).toBeInTheDocument();
 });
 
 it("não converte ausência de limite e inventário em zero", async () => {

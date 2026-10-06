@@ -31,12 +31,18 @@ const historyKnown = (row, currency) => Boolean(currency)
   && row?.installments_amount !== null && row?.installments_amount !== undefined
   && row?.recurrences_amount !== null && row?.recurrences_amount !== undefined
   && Number.isFinite(Number(row.installments_amount)) && Number.isFinite(Number(row.recurrences_amount));
-const inventorySeries = (rows) => {
+const finishFromDate = (date) => {
+  const [year, month] = String(date || "").split("-").map(Number);
+  return year > 0 && month >= 1 && month <= 12 ? period({ year, month }) : null;
+};
+const inventorySeries = (rows, remainingSeries = []) => {
   const series = new Map();
+  const exactById = new Map(remainingSeries.map((item) => [item.series_id, item]));
   for (const row of rows) {
     for (const item of installments(row)) {
       const key = `installment:${item.series_id ?? item.transaction_id}`;
-      if (!series.has(key)) series.set(key, { ...item, type: "installment", firstYear: row.year, firstMonth: row.month, finish: null });
+      const exact = exactById.get(item.series_id);
+      if (!series.has(key)) series.set(key, { ...item, type: "installment", firstYear: row.year, firstMonth: row.month, finish: finishFromDate(exact?.last_due_date), remainingAmount: exact?.remaining_amount ?? null });
       if (item.installment_number === item.total_installments) series.get(key).finish = period(row);
     }
     for (const item of row.recurrences || []) {
@@ -66,8 +72,8 @@ function Metric({ title, value, detail, testId }) {
   return <Card style={cardStyle}><div style={label}>{title}</div><div data-testid={testId} style={{ ...G, ...NUM, fontSize: 22, fontWeight: 800, marginTop: 5 }}>{value}</div>{detail && <div style={{ ...G, fontSize: 12, color: T.inkLight, marginTop: 5 }}>{detail}</div>}</Card>;
 }
 
-function Inventory({ rows, currency, groupBy, sortBy, onMove, isMobile }) {
-  const items = useMemo(() => inventorySeries(rows), [rows]);
+function Inventory({ rows, remainingSeries, currency, groupBy, sortBy, onMove, isMobile }) {
+  const items = useMemo(() => inventorySeries(rows, remainingSeries), [rows, remainingSeries]);
   const grouped = useMemo(() => {
     const sorted = [...items].sort((a, b) => sortBy === "value" ? Number(b.amount) - Number(a.amount) : sortBy === "month" ? `${a.firstYear}-${String(a.firstMonth).padStart(2, "0")}`.localeCompare(`${b.firstYear}-${String(b.firstMonth).padStart(2, "0")}`) : (a.category_name || "Sem categoria").localeCompare(b.category_name || "Sem categoria", "pt-BR"));
     const groups = new Map();
@@ -88,7 +94,7 @@ function Inventory({ rows, currency, groupBy, sortBy, onMove, isMobile }) {
       {grouped.map(({ name, list }) => <div key={name} style={{ marginBottom: 12 }}>
         {name && <div style={{ ...G, background: T.grayLight, borderRadius: 8, padding: "8px 10px", fontSize: 12, fontWeight: 700, display: "flex", justifyContent: "space-between" }}><span>{name} · {list.length} {list.length === 1 ? "item" : "itens"}</span><span>{moneyValue(sum(list), currency)}</span></div>}
         {list.map((item, index) => <div key={`${item.type}:${item.series_id}:${item.due_date}:${index}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "11px 4px", borderBottom: `1px solid ${T.border}` }}>
-          <div style={{ minWidth: 0 }}><div style={{ ...G, fontSize: 13, fontWeight: 650 }}>{item.description}</div><div style={{ ...G, fontSize: 11, color: T.inkLight }}>{item.type === "recurring" ? "Recorrência" : `Parcela ${item.installment_number}/${item.total_installments}`} · {item.finish ? `termina em ${item.finish}` : "término fora do período"}{item.category_name ? ` · ${item.category_name}` : ""}</div></div>
+          <div style={{ minWidth: 0 }}><div style={{ ...G, fontSize: 13, fontWeight: 650 }}>{item.description}</div><div style={{ ...G, fontSize: 11, color: T.inkLight }}>{item.type === "recurring" ? "Recorrência" : `Parcela ${item.installment_number}/${item.total_installments}`} · {item.finish ? `termina em ${item.finish}` : "término fora do período"}{item.category_name ? ` · ${item.category_name}` : ""}{item.remainingAmount !== null && item.remainingAmount !== undefined ? ` · saldo ${moneyValue(item.remainingAmount, currency)}` : ""}</div></div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}><strong style={{ ...G, ...NUM, fontSize: 12, whiteSpace: "nowrap" }}>{moneyValue(item.amount, currency)}</strong>{item.type === "installment" && <button type="button" onClick={() => onMove({ item })} aria-label={`Mover ${item.description}`} style={buttonStyle}>Mover</button>}</div>
         </div>)}
       </div>)}
@@ -119,7 +125,7 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
       const card = cards.find((item) => item.public_id === cardId);
       if (!card) throw new Error("Cartão não encontrado ou sem acesso.");
       const [future, history, series] = await Promise.allSettled([
-        getFutureCommitments(card.id, organizationId, 12, true),
+        getFutureCommitments(card.id, organizationId, 12, true, true),
         getInvoiceHistory(card.id, organizationId, 13, false, true),
         listRecurringSeries(organizationId),
       ]);
@@ -140,12 +146,20 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
     .some((item) => item.amount_currency !== currency));
   const allKnown = rows.length > 0 && knownRows.length === rows.length;
   const total = allKnown ? knownRows.reduce((value, row) => value + committed(row), 0) : null;
+  const balance = future?.remaining_balance;
+  const balanceKnown = Boolean(currency && balance?.complete === true
+    && ["gross_amount", "linked_refunds_amount", "net_amount"].every((field) =>
+      balance[field] !== null && balance[field] !== undefined && Number.isFinite(Number(balance[field]))
+      && balance[`${field}_currency`] === currency)
+    && Array.isArray(balance.series) && balance.series.every((item) =>
+      ["remaining_amount", "linked_refunds_amount", "next_amount"].every((field) =>
+        item[`${field}_currency`] === currency && Number.isFinite(Number(item[field])))));
   const monthly = inventoryKnown(monthNow, currency) ? committed(monthNow) : null;
   const usage = monthly !== null && card?.credit_limit != null && card.credit_limit > 0 ? monthly / card.credit_limit * 100 : null;
   const finishing = inventoryKnown(monthNow, currency) ? installments(monthNow).filter((item) => item.installment_number === item.total_installments) : null;
   const reduction = finishing ? sum(finishing) : null;
   const recurring = inventoryCurrencyKnown(monthNow, currency) ? monthNow.recurrences : [];
-  const activeSeries = inventorySeries(browsableRows).filter((item) => item.type === "installment");
+  const activeSeries = inventorySeries(browsableRows, balanceKnown ? balance.series : []).filter((item) => item.type === "installment");
   const largestInstallments = [...activeSeries].sort((a, b) => Number(b.amount) - Number(a.amount)).slice(0, 5);
   const nearestToEnd = [...activeSeries].sort((a, b) => (a.total_installments - a.installment_number) - (b.total_installments - b.installment_number)).slice(0, 4);
   const recurringMonthly = inventoryKnown(monthNow, currency) ? sum(recurring) : null;
@@ -231,10 +245,11 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
     {!state.loading && future && <>
       <p style={{ margin: 0, fontSize: 12, color: T.inkLight }}>{card.brand} •{card.last4} · {card.description}</p>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))", gap }}>
-        <Metric title="Compromissos dos próximos 12 meses" value={moneyValue(total, currency)} testId="committed-total" detail={!currency ? "Moeda do cartão indisponível" : allKnown ? "Soma das parcelas e recorrências no período, incluindo o mês atual" : "Inventário incompleto; total do período indisponível"} />
+        <Metric title="Saldo restante de parcelas" value={moneyValue(balanceKnown ? balance.net_amount : null, currency)} testId="committed-total" detail={!currency ? "Moeda do cartão indisponível" : balanceKnown ? `Parcelas pendentes ${moneyValue(balance.gross_amount, currency)} − estornos vinculados ${moneyValue(balance.linked_refunds_amount, currency)}. Recorrências à parte.` : "Saldo exato indisponível; confira a moeda e tente atualizar os dados."} />
         <Metric title="Comprometimento mensal" value={moneyValue(monthly, currency)} testId="monthly-committed" detail={monthNow ? period(monthNow) : "Sem dados mensais"} />
         <Metric title="Percentual do limite" value={usage === null ? "—" : `${Math.round(usage)}%`} detail={card.credit_limit == null ? "Limite não informado" : `de ${moneyValue(card.credit_limit, currency)} de limite`} />
       </div>
+      <p style={{ ...G, fontSize: 12, color: T.inkLight, margin: 0 }}>Projeção de parcelas e recorrências nos próximos 12 meses: {moneyValue(total, currency)}.</p>
       {usage !== null && usage >= 30 && <p role="status" style={{ margin: 0, color: T.amber }}>Comprometimento elevado: {Math.round(usage)}% do limite está comprometido neste mês.</p>}
       <Card style={cardStyle}><section role="region" aria-label="Linha do tempo do compromisso"><h2 style={{ ...G, margin: "0 0 12px", fontSize: 17 }}>Linha do tempo do compromisso</h2>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
@@ -287,7 +302,7 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
       </div>
       {currencyMismatch && <p role="alert" style={{ margin: 0, color: T.amber }}>A moeda dos compromissos recebidos não corresponde à moeda do cartão. Valores desses meses estão indisponíveis.</p>}
       {!allKnown && <p role="status" style={{ margin: 0, color: T.amber }}>O inventário de alguns meses está incompleto. Os itens disponíveis continuam listados abaixo.</p>}
-      <Inventory rows={browsableRows} currency={currency} groupBy={groupBy} sortBy={sortBy} onMove={handleInventory} isMobile={isMobile} />
+      <Inventory rows={browsableRows} remainingSeries={balanceKnown ? balance.series : []} currency={currency} groupBy={groupBy} sortBy={sortBy} onMove={handleInventory} isMobile={isMobile} />
       {mutation.error && <p role="alert">{mutation.error}</p>}
       {moveItem && <div role="dialog" aria-modal="true" aria-label={`Mover ${moveItem.description}`} style={{ position: "fixed", inset: 0, background: "#0008", zIndex: 100, display: "flex", alignItems: isMobile ? "flex-end" : "center", justifyContent: "center" }}><Card style={{ ...cardStyle, width: isMobile ? "100%" : 420, display: "flex", flexDirection: "column", gap: 12 }}><h2 style={{ margin: 0, fontSize: 18 }}>Mover {moveItem.description}</h2><p style={{ margin: 0, fontSize: 12 }}>As demais parcelas da compra serão reposicionadas automaticamente.</p><label>Fatura de destino <select aria-label="Fatura de destino" value={targetMonth} onChange={(event) => setTargetMonth(event.target.value)} style={{ ...buttonStyle, width: "100%" }}><option value="">Selecione o mês</option>{moveOptions.map((row) => <option key={keyOf(row)} value={keyOf(row)}>{period(row)}</option>)}</select></label><div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}><button type="button" style={buttonStyle} onClick={() => setMoveItem(null)}>Cancelar</button><button type="button" style={{ ...buttonStyle, background: T.blue, color: "white" }} disabled={!targetMonth || mutation.pending} onClick={confirmMove}>Confirmar mudança</button></div></Card></div>}
     </>}

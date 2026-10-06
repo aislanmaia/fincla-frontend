@@ -1128,6 +1128,28 @@ export interface FutureCommitmentsResponse {
   monthly_breakdown: MonthlyBreakdown[];
   ending_soon: EndingInstallment[];
   insights: FutureCommitmentsInsight[];
+  remaining_balance?: {
+    complete: boolean;
+    gross_amount: number | null;
+    gross_amount_currency?: string | null;
+    linked_refunds_amount: number | null;
+    linked_refunds_amount_currency?: string | null;
+    net_amount: number | null;
+    net_amount_currency?: string | null;
+    series: Array<{
+      series_id: string;
+      description: string;
+      category_name: string | null;
+      remaining_installments: number;
+      remaining_amount: number;
+      remaining_amount_currency?: string | null;
+      linked_refunds_amount: number;
+      linked_refunds_amount_currency?: string | null;
+      last_due_date: string;
+      next_amount: number;
+      next_amount_currency?: string | null;
+    }>;
+  };
 }
 
 export interface CardCommitmentSummary {
