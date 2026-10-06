@@ -545,7 +545,8 @@ describe("CardHubPage — KPIs e insights", () => {
     expect(tile).toHaveTextContent("Limite disponível");
     expect(tile).toHaveTextContent("R$ 6.500,00");
     expect(tile).toHaveTextContent("de R$ 10.000,00 de limite total");
-    expect(within(tile).getByRole("meter", { name: "Percentual do limite disponível" })).toHaveAttribute("aria-valuenow", "65");
+    expect(within(tile).getByRole("meter", { name: "Percentual do limite usado" })).toHaveAttribute("aria-valuenow", "35");
+    expect(tile).toHaveTextContent("35% do limite usado");
   });
 
   it("explica a ausência de limite sem representar desconhecido como zero", async () => {

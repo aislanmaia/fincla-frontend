@@ -13,7 +13,7 @@ export function LimitTiles({ card, currency, isMobile, onEdit }) {
   const usage = Number.isFinite(Number(card.limit_usage_percent)) && card.limit_usage_percent !== null
     ? Math.round(Number(card.limit_usage_percent))
     : null;
-  const availablePercent = usage === null ? null : Math.min(100, Math.max(0, 100 - usage));
+  const usedPercent = usage === null ? null : Math.min(100, Math.max(0, usage));
   const barColor = usage === null ? T.inkFaint : usage >= 90 ? T.red : usage >= 70 ? T.amber : T.green;
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: isMobile ? 10 : 12 }}>
@@ -24,13 +24,13 @@ export function LimitTiles({ card, currency, isMobile, onEdit }) {
         </div>
         {available && totalLimit ? <>
           <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 5 }}>de {totalLimit} de limite total</div>
-          {availablePercent !== null && <>
-            <div role="meter" aria-label="Percentual do limite disponível" aria-valuemin={0} aria-valuemax={100}
-              aria-valuenow={availablePercent}
+          {usedPercent !== null && <>
+            <div role="meter" aria-label="Percentual do limite usado" aria-valuemin={0} aria-valuemax={100}
+              aria-valuenow={usedPercent}
               style={{ height: 5, background: T.grayLight, borderRadius: 99, overflow: "hidden", marginTop: 9 }}>
-              <div style={{ height: "100%", width: `${availablePercent}%`, background: T.green, borderRadius: 99 }} />
+              <div style={{ height: "100%", width: `${usedPercent}%`, background: barColor, borderRadius: 99 }} />
             </div>
-            <div style={{ ...G, fontSize: 10, color: T.inkMid, marginTop: 5 }}>{availablePercent}% do limite ainda livre</div>
+            <div style={{ ...G, fontSize: 10, color: T.inkMid, marginTop: 5 }}>{usedPercent}% do limite usado</div>
           </>}
         </> : <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 7, lineHeight: 1.45 }}>
           {hasLimit ? "Não foi possível calcular o valor disponível deste cartão." : "Cadastre o limite do cartão para acompanhar quanto ainda pode usar."}
