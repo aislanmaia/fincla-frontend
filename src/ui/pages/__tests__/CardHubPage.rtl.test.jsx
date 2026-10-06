@@ -104,13 +104,29 @@ const futureFixture = (over = {}) => ({
 });
 
 /** Backend de mentira na camada HTTP: o cliente, o adapter e o hook reais rodam por cima. */
-function mockApi({ cards = [cardFixture()], history, current, future, patch } = {}) {
+function mockApi({ cards = [cardFixture()], history, current, future, patch, create, createCurrency = "BRL" } = {}) {
 
   const patched = [];
+  const posted = [];
+  let currentCards = cards;
   server.use(
     http.get("*/v1/credit-cards", () => (cards === "fail"
       ? HttpResponse.json({ detail: "boom" }, { status: 500 })
-      : HttpResponse.json(cards))),
+      : HttpResponse.json(currentCards))),
+    http.post("*/v1/credit-cards", async ({ request }) => {
+      const body = await request.json();
+      posted.push(body);
+      if (create === "fail") return HttpResponse.json({ detail: "Não foi possível cadastrar." }, { status: 500 });
+      const created = cardFixture({
+        ...body, id: 9, currency: createCurrency,
+        credit_limit: money(String(body.credit_limit), createCurrency),
+        available_limit: money(String(body.credit_limit), createCurrency),
+        used_limit: money("0", createCurrency),
+        limit_usage_percent: 0,
+      });
+      currentCards = [...currentCards, created];
+      return HttpResponse.json(created);
+    }),
     http.get("*/v1/credit-cards/:id/invoices/history", () => (history === "fail"
       ? HttpResponse.json({ detail: "boom" }, { status: 500 })
       : HttpResponse.json(history ?? historyFixture()))),
@@ -127,12 +143,68 @@ function mockApi({ cards = [cardFixture()], history, current, future, patch } = 
       return HttpResponse.json({ ...cards[0], notes: body.notes === "" ? null : body.notes });
     }),
   );
+  patched.posted = posted;
   return patched;
 }
 
 const renderHub = (props = {}) => render(
   <CardHubPage organizationId={ORG} dataMode="live" onNewItem={vi.fn()} {...props} />,
 );
+
+async function fillCardForm(user) {
+  await user.type(screen.getByPlaceholderText(/Nubank, Itaú/), "Banco Azul");
+  await user.type(screen.getByPlaceholderText(/Nubank Roxinho/), "Cartão Novo");
+  await user.type(screen.getByPlaceholderText("1234"), "4321");
+  await user.type(screen.getByPlaceholderText("0,00"), "5000");
+  await user.type(screen.getByPlaceholderText("ex: 10"), "12");
+}
+
+describe("CardHubPage — cadastro de cartão", () => {
+  it("cria pelo tile, aceita fechamento ausente, atualiza a lista e seleciona o criado", async () => {
+    const requests = mockApi();
+    const user = userEvent.setup();
+    renderHub();
+    await waitForCarousel();
+    await user.click(screen.getByRole("button", { name: "Novo cartão" }));
+    await fillCardForm(user);
+    await user.click(screen.getByRole("button", { name: "Adicionar cartão" }));
+
+    await waitFor(() => expect(screen.getByText(/Cartão selecionado:/)).toHaveTextContent("Cartão Novo •4321"));
+    expect(requests.posted).toHaveLength(1);
+    expect(requests.posted[0]).toMatchObject({ organization_id: ORG, last4: "4321", due_day: 12 });
+    expect(requests.posted[0]).not.toHaveProperty("closing_day");
+    expect(screen.getAllByRole("button", { name: "Novo cartão" })).toHaveLength(1);
+  });
+
+  it("mostra o erro da API e mantém o rascunho para correção", async () => {
+    const requests = mockApi({ create: "fail" });
+    const user = userEvent.setup();
+    renderHub({ isMobile: true });
+    await waitForCarousel();
+    await user.click(screen.getByRole("button", { name: "Cartão" }));
+    await fillCardForm(user);
+    await user.click(screen.getByRole("button", { name: "Adicionar cartão" }));
+
+    expect(await screen.findByText(/Não foi possível cadastrar/)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("1234")).toHaveValue("4321");
+    expect(requests.posted).toHaveLength(1);
+  });
+
+  it("permite cadastro sem cartões prévios e mantém a moeda informada pela API", async () => {
+    const requests = mockApi({ cards: [], createCurrency: "EUR" });
+    const user = userEvent.setup();
+    renderHub();
+    await screen.findByText(/Você ainda não cadastrou nenhum cartão/);
+    await user.click(screen.getByRole("button", { name: "Cadastrar cartão" }));
+    await fillCardForm(user);
+    await user.click(screen.getByRole("button", { name: "Adicionar cartão" }));
+
+    await waitForCarousel();
+    expect(requests.posted).toHaveLength(1);
+    expect(screen.getByText(/Cartão selecionado:/)).toHaveTextContent("Cartão Novo •4321");
+    expect(screen.getByTestId("kpi-available")).toHaveTextContent("€");
+  });
+});
 
 const cardsInOrder = () => Array.from(document.querySelectorAll('[data-testid^="invoice-card-"]'));
 const statusOf = (el) => el.getAttribute("data-status");

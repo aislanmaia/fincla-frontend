@@ -129,6 +129,26 @@ const statuses = (page: Page) =>
 
 for (const vp of VIEWPORTS) {
   test.describe(`Hub do cartão — ${vp.name}`, () => {
+    test("cadastra pelo tile e seleciona o cartão criado sem dia de fechamento", async ({ page }) => {
+      await openHub(page, vp);
+      const tile = page.getByRole("button", { name: "Novo cartão" });
+      await tile.scrollIntoViewIfNeeded();
+      await tile.click();
+      await page.getByPlaceholder("ex: Nubank, Itaú, Bradesco…").fill("Banco E2E");
+      await page.getByPlaceholder("ex: Nubank Roxinho, Personnalité…").fill(`Criado ${vp.name}`);
+      await page.getByPlaceholder("1234").fill(vp.mobile ? "9091" : "9090");
+      await page.getByPlaceholder("0,00").fill("2500,00");
+      await page.getByPlaceholder("ex: 10").fill("11");
+      await page.getByRole("button", { name: "Adicionar cartão" }).click();
+
+      await expect(page.getByText("Cartão selecionado:")).toContainText(`Criado ${vp.name}`);
+      const response = await api(`/v1/credit-cards?organization_id=${orgId}`);
+      expect(response.ok).toBeTruthy();
+      const cards = await response.json() as Array<{ description: string; closing_day: number | null }>;
+      const created = cards.find((card) => card.description === `Criado ${vp.name}`);
+      expect(created?.closing_day).toBeNull();
+    });
+
     test("caminho feliz: carrossel com os 4 status, seleção e anotação relida do servidor", async ({ page }) => {
       page.on("pageerror", (err) => console.log("[browser error]", err.message));
       await openHub(page, vp);
