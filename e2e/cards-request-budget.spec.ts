@@ -258,9 +258,17 @@ test("selecionar outro cartão busca só o detalhe dele, uma vez", async ({ page
   await login(page, organizationId);
   const m = await measureCardsLoad(page);
   const liveCards = () => m.calls.filter((c) => c.path.startsWith("/credit-cards"));
+  // A API não promete uma ordem inicial: visite o cartão que será usado para
+  // verificar o cache antes de medir a troca para outro.
+  const firstCard = page.getByText(/1111/).first().locator('xpath=ancestor::*[@data-selected][1]');
+  await firstCard.click();
+  await expect(firstCard).toHaveAttribute("data-selected", "true");
+  await page.waitForLoadState("networkidle");
   const before = liveCards().length;
 
-  await page.getByText(/2222/).first().click();
+  const secondCard = page.getByText(/2222/).first().locator('xpath=ancestor::*[@data-selected][1]');
+  await secondCard.click();
+  await expect(secondCard).toHaveAttribute("data-selected", "true");
   await expect.poll(() => liveCards().length, { timeout: 15_000 }).toBeGreaterThan(before);
   await page.waitForLoadState("networkidle");
   await page.waitForTimeout(1000);
@@ -277,7 +285,8 @@ test("selecionar outro cartão busca só o detalhe dele, uma vez", async ({ page
 
   // Voltar ao primeiro cartão vem do cache: nenhuma chamada nova.
   const afterSwitch = liveCards().length;
-  await page.getByText(/1111/).first().click();
+  await firstCard.click();
+  await expect(firstCard).toHaveAttribute("data-selected", "true");
   await page.waitForTimeout(1000);
   expect(liveCards().length).toBe(afterSwitch);
 });

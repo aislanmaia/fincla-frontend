@@ -20,7 +20,7 @@ export function CardVisual({ c, selected, size = "md", onClick }) {
   const H = size === "sm" ? 94 : Math.round(W / 1.586);
   const pct = safe(c.limite - c.disponivel, c.limite);
   return (
-    <div onClick={() => onClick?.(c.id)} style={{
+    <div data-selected={selected} onClick={() => onClick?.(c.id)} style={{
       width: W, height: H, borderRadius: size === "sm" ? 12 : 16, flexShrink: 0, cursor: "pointer",
       position: "relative", overflow: "hidden",
       background: `linear-gradient(135deg, ${c.cor1} 0%, ${c.cor2} 100%)`,
