@@ -153,6 +153,71 @@ const renderPage = (props = {}) => render(
 const readyDesktop = () => screen.findByTestId("invoice-title");
 
 describe("InvoiceDashboardPage — card da fatura", () => {
+  it.each([false, true])("mostra mudanças por categoria e item no layout mobile=%s sem nova chamada", async (isMobile) => {
+    const calls = mockApi({ detail: {
+      ...DETAILS,
+      "2026/10": () => detailFixture({ changes: {
+        previous_available: true, previous_month: "2026-09",
+        categories: [
+          { category_id: "c1", category_name: "Alimentação", category_color: "#22C55E", current_total: money("300.00"), previous_total: money("100.00"), change: money("200.00"), change_percent: 200 },
+          { category_id: "c2", category_name: "Moradia", category_color: null, current_total: money("0.00"), previous_total: money("50.00"), change: money("-50.00"), change_percent: -100 },
+        ],
+        items: [
+          { change_type: "new", commitment_type: "installment", series_id: "s1", description: "Notebook", category_id: "c1", category_name: "Alimentação", current_amount: money("200.00"), previous_amount: null, change_amount: null, installment_number: 1, total_installments: 3, occurrences_current: 1, occurrences_previous: null },
+          { change_type: "removed", commitment_type: "recurring", series_id: "s2", description: "Aluguel", category_id: "c2", category_name: "Moradia", current_amount: null, previous_amount: money("50.00"), change_amount: null, installment_number: null, total_installments: null, occurrences_current: null, occurrences_previous: 1 },
+          { change_type: "changed_value", commitment_type: "recurring", series_id: "s3", description: "Streaming", category_id: "c1", category_name: "Alimentação", current_amount: money("100.00"), previous_amount: money("90.00"), change_amount: money("10.00"), installment_number: null, total_installments: null, occurrences_current: 1, occurrences_previous: 1 },
+        ], one_off: null,
+      } }),
+    } });
+    renderPage({ isMobile });
+    const section = await screen.findByRole("region", { name: "O que mudou" });
+    expect(within(section).getByText("Alimentação")).toBeVisible();
+    expect(within(section).getByText("Moradia")).toBeVisible();
+    expect(within(section).getByText("Notebook")).toBeVisible();
+    expect(within(section).getByText("Aluguel")).toBeVisible();
+    expect(within(section).getByText("Streaming")).toBeVisible();
+    expect(within(section).getByText(/Novo compromisso/)).toBeVisible();
+    expect(within(section).getByText("Saiu da fatura")).toBeVisible();
+    expect(within(section).getByText("Valor alterado")).toBeVisible();
+    expect(within(section).getByText("Ocorrências: 1 → 1")).toBeVisible();
+    expect(within(section).getByText(/por ocorrência/)).toBeVisible();
+    expect(calls.filter((call) => call.startsWith("GET /v1/credit-cards"))).toHaveLength(4);
+    expect(calls.queries).toContainEqual(expect.stringMatching(/include_metrics=true.*include_changes=true|include_changes=true.*include_metrics=true/));
+  });
+
+  it("esconde a comparação quando a fatura anterior não existe", async () => {
+    mockApi({ detail: { ...DETAILS, "2026/10": () => detailFixture({ changes: {
+      previous_available: false, previous_month: null, categories: [], items: [], one_off: null,
+    } }) } });
+    renderPage();
+    await readyDesktop();
+    expect(screen.queryByRole("region", { name: "O que mudou" })).not.toBeInTheDocument();
+  });
+
+  it("agrupa item cuja categoria não variou e mostra mudança em compras avulsas", async () => {
+    mockApi({ detail: { ...DETAILS, "2026/10": () => detailFixture({ changes: {
+      previous_available: true, previous_month: "2026-09", categories: [],
+      items: [{ change_type: "new", commitment_type: "installment", series_id: "s9", description: "Fone", category_id: "c9", category_name: "Eletrônicos", current_amount: money("50.00"), previous_amount: null, change_amount: null, installment_number: 1, total_installments: 2, occurrences_current: 1, occurrences_previous: null }],
+      one_off: { current_count: 2, current_total: money("30.00"), previous_count: 1, previous_total: money("20.00") },
+    } }) } });
+    renderPage();
+    const section = await screen.findByRole("region", { name: "O que mudou" });
+    expect(within(section).getByText("Eletrônicos")).toBeVisible();
+    expect(within(section).getByText("Fone")).toBeVisible();
+    expect(within(section).getByText("Compras avulsas e estornos")).toBeVisible();
+    expect(within(section).queryByText(/Sem mudanças/)).not.toBeInTheDocument();
+  });
+
+  it("não chama compras avulsas alteradas de ausência de mudanças", async () => {
+    mockApi({ detail: { ...DETAILS, "2026/10": () => detailFixture({ changes: {
+      previous_available: true, previous_month: "2026-09", categories: [], items: [],
+      one_off: { current_count: 1, current_total: money("40.00"), previous_count: 1, previous_total: money("20.00") },
+    } }) } });
+    renderPage();
+    const section = await screen.findByRole("region", { name: "O que mudou" });
+    expect(within(section).getByText("Compras avulsas e estornos")).toBeVisible();
+    expect(within(section).queryByText(/Sem mudanças/)).not.toBeInTheDocument();
+  });
   it.each([false, true])("exibe média e velocidade reais no layout mobile=%s com opt-in", async (isMobile) => {
     const calls = mockApi({ detail: {
       ...DETAILS,

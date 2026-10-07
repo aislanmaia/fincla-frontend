@@ -182,6 +182,18 @@ for (const vp of VIEWPORTS) {
       expect(metrics.spending_pace?.current.length).toBeGreaterThan(0);
       expect(metrics.spending_pace?.previous?.points.length).toBeGreaterThan(0);
       await expect(page.getByTestId("spending-pace").locator("polyline")).toHaveCount(2);
+      const changesResponse = await api(`/v1/credit-cards/${busyCardId}/invoices/${openRef.year}/${openRef.month}?organization_id=${orgId}&include_changes=true`);
+      expect(changesResponse.ok).toBeTruthy();
+      const changes = ((await changesResponse.json()) as {
+        changes: { previous_available: boolean; items: { description: string; change_type: string }[]; one_off: unknown };
+      }).changes;
+      expect(changes.previous_available).toBe(true);
+      const changesSection = page.getByRole("region", { name: "O que mudou" });
+      await expect(changesSection).toBeVisible();
+      const newInstallment = changes.items.find((item) => item.description === "Compra parcelada");
+      expect(newInstallment?.change_type).toBe("new");
+      await expect(changesSection).toContainText(newInstallment!.description);
+      if (changes.one_off) await expect(changesSection).toContainText("Compras avulsas e estornos");
       await page.screenshot({ path: `${SHOTS}/dashboard-${vp.name}-open.png`, fullPage: !vp.mobile });
 
       // Faturas vizinhas: anterior (fechada) e seguinte (prevista).
