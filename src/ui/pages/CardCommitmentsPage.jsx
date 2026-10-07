@@ -5,7 +5,7 @@ import { getFutureCommitments, getInvoiceHistory, listCreditCards, moveInstallme
 import { listRecurringSeries, updateRecurringSeries } from "../../api/recurringSeries";
 import { T } from "../tokens";
 import { G, NUM } from "../typography";
-import { Card, PageTitle } from "../components/primitives";
+import { Btn, Card, PageTitle, Select } from "../components/primitives";
 import { formatMoney } from "../money/formatMoney";
 import { FC } from "../routing/searchContract";
 import { shouldUseRealData } from "../dataMode";
@@ -13,7 +13,6 @@ import { useFocusTrap } from "../features/transactions/useFocusTrap";
 
 const cardStyle = { padding: 18, minWidth: 0 };
 const label = { ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: ".07em" };
-const buttonStyle = { ...G, border: `1px solid ${T.border}`, background: T.surface, borderRadius: 8, padding: "8px 11px", color: T.ink, cursor: "pointer", fontSize: 12 };
 const pendingSnapshots = new Map();
 const loadSnapshot = (organizationId, cardId, refresh) => {
   const key = `${organizationId}:${cardId}:${refresh}`;
@@ -83,10 +82,9 @@ const shiftMonth = (offset) => {
 function PeriodPicker({ title, options, selected, onChange }) {
   return <div role="group" aria-label={title} style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
     <span style={label}>{title}</span>
-    {options.map((count) => <button key={count} type="button" aria-pressed={selected === count} onClick={() => onChange(count)}
-      style={{ ...buttonStyle, background: selected === count ? T.blue : T.surface, color: selected === count ? "white" : T.ink, padding: "6px 9px" }}>
+    {options.map((count) => <Btn key={count} small variant={selected === count ? "blue" : "outGray"} aria-pressed={selected === count} onClick={() => onChange(count)}>
       {count === 0 ? "Sem histórico" : `${count} meses`}
-    </button>)}
+    </Btn>)}
   </div>;
 }
 
@@ -109,15 +107,15 @@ function Inventory({ rows, remainingSeries, currency, groupBy, sortBy, onMove, i
   return <Card style={cardStyle}><section role="region" aria-label="Inventário de compromissos">
     <h2 style={{ ...G, margin: "0 0 14px", fontSize: 17 }}>Inventário de compromissos</h2>
     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-      <label style={{ ...G, fontSize: 12 }}>Agrupar por <select aria-label="Agrupar por" value={groupBy} onChange={(event) => onMove({ groupBy: event.target.value })} style={buttonStyle}><option value="purchase">Compra</option><option value="category">Categoria</option><option value="month">Mês</option><option value="value">Valor</option></select></label>
-      <label style={{ ...G, fontSize: 12 }}>Ordenar por <select aria-label="Ordenar por" value={sortBy} onChange={(event) => onMove({ sortBy: event.target.value })} style={buttonStyle}><option value="value">Valor</option><option value="category">Categoria</option><option value="month">Mês</option></select></label>
+      <label style={{ ...G, fontSize: 12 }}>Agrupar por <Select aria-label="Agrupar por" value={groupBy} onChange={(event) => onMove({ groupBy: event.target.value })}><option value="purchase">Compra</option><option value="category">Categoria</option><option value="month">Mês</option><option value="value">Valor</option></Select></label>
+      <label style={{ ...G, fontSize: 12 }}>Ordenar por <Select aria-label="Ordenar por" value={sortBy} onChange={(event) => onMove({ sortBy: event.target.value })}><option value="value">Valor</option><option value="category">Categoria</option><option value="month">Mês</option></Select></label>
     </div>
     <div className="fincla-scroll" style={{ maxHeight: isMobile ? 420 : 480, overflowY: "auto", minWidth: 0 }}>
       {grouped.map(({ name, list }) => <div key={name} style={{ marginBottom: 12 }}>
         {name && <div style={{ ...G, background: T.grayLight, borderRadius: 8, padding: "8px 10px", fontSize: 12, fontWeight: 700, display: "flex", justifyContent: "space-between" }}><span>{name} · {list.length} {list.length === 1 ? "item" : "itens"}</span><span>{moneyValue(sum(list), currency)}</span></div>}
         {list.map((item, index) => <div key={`${item.type}:${item.series_id}:${item.due_date}:${index}`} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, padding: "11px 4px", borderBottom: `1px solid ${T.border}` }}>
           <div style={{ minWidth: 0 }}><div style={{ ...G, fontSize: 13, fontWeight: 650 }}>{item.description}</div><div style={{ ...G, fontSize: 11, color: T.inkLight }}>{item.type === "recurring" ? "Recorrência" : `Parcela ${item.installment_number}/${item.total_installments}`} · {item.finish ? `termina em ${item.finish}` : "término fora do período"}{item.category_name ? ` · ${item.category_name}` : ""}{item.remainingAmount !== null && item.remainingAmount !== undefined ? ` · saldo ${moneyValue(item.remainingAmount, currency)}` : ""}</div></div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}><strong style={{ ...G, ...NUM, fontSize: 12, whiteSpace: "nowrap" }}>{moneyValue(item.amount, currency)}</strong>{item.type === "installment" && <button type="button" onClick={() => onMove({ item })} aria-label={`Mover ${item.description}`} style={buttonStyle}>Mover</button>}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}><strong style={{ ...G, ...NUM, fontSize: 12, whiteSpace: "nowrap" }}>{moneyValue(item.amount, currency)}</strong>{item.type === "installment" && <Btn small variant="outGray" onClick={() => onMove({ item })} aria-label={`Mover ${item.description}`}>Mover</Btn>}</div>
         </div>)}
       </div>)}
       {items.length === 0 && <p style={{ ...G, fontSize: 12, color: T.inkLight }}>Nenhum compromisso neste período.</p>}
@@ -281,7 +279,7 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
   const moveOptions = rows.filter((row) => keyOf(row) > nowKey && keyOf(row) !== `${moveItem?.firstYear}-${String(moveItem?.firstMonth).padStart(2, "0")}`);
   const gap = isMobile ? 12 : 16;
   return <div style={{ ...G, padding: isMobile ? 16 : 28, display: "flex", flexDirection: "column", gap, minWidth: 0 }}>
-    <button type="button" onClick={back} style={{ ...buttonStyle, alignSelf: "flex-start", border: 0, color: T.blue, paddingLeft: 0 }}><ArrowLeft size={14} /> Voltar ao cartão</button>
+    <Btn variant="ghost" onClick={back} style={{ alignSelf: "flex-start", color: T.blue, paddingLeft: 0 }}><ArrowLeft size={14} /> Voltar ao cartão</Btn>
     <PageTitle sans="Parcelas &" serif="Compromissos" />
     {state.loading && <p role="status">Carregando compromissos…</p>}
     {state.error && <p role="alert">{state.error}</p>}
@@ -347,7 +345,7 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
       {!allKnown && <p role="status" style={{ margin: 0, color: T.amber }}>O inventário de alguns meses está incompleto. Os itens disponíveis continuam listados abaixo.</p>}
       <Inventory rows={browsableRows} remainingSeries={balanceKnown ? balance.series : []} currency={currency} groupBy={groupBy} sortBy={sortBy} onMove={handleInventory} isMobile={isMobile} />
       {mutation.error && <p role="alert">{mutation.error}</p>}
-      {moveItem && <div ref={moveDialogRef} role="dialog" aria-modal="true" aria-label={`Mover ${moveItem.description}`} style={{ position: "fixed", inset: 0, background: "#0008", zIndex: 100, display: "flex", alignItems: isMobile ? "flex-end" : "center", justifyContent: "center" }}><Card style={{ ...cardStyle, width: isMobile ? "100%" : 420, display: "flex", flexDirection: "column", gap: 12 }}><h2 style={{ margin: 0, fontSize: 18 }}>Mover {moveItem.description}</h2><p style={{ margin: 0, fontSize: 12 }}>As demais parcelas da compra serão reposicionadas automaticamente.</p><label>Fatura de destino <select aria-label="Fatura de destino" value={targetMonth} onChange={(event) => setTargetMonth(event.target.value)} style={{ ...buttonStyle, width: "100%" }}><option value="">Selecione o mês</option>{moveOptions.map((row) => <option key={keyOf(row)} value={keyOf(row)}>{period(row)}</option>)}</select></label><div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}><button type="button" style={buttonStyle} onClick={() => setMoveItem(null)}>Cancelar</button><button type="button" style={{ ...buttonStyle, background: T.blue, color: "white" }} disabled={!targetMonth || mutation.pending} onClick={confirmMove}>Confirmar mudança</button></div></Card></div>}
+      {moveItem && <div ref={moveDialogRef} role="dialog" aria-modal="true" aria-label={`Mover ${moveItem.description}`} style={{ position: "fixed", inset: 0, background: "#0008", zIndex: 100, display: "flex", alignItems: isMobile ? "flex-end" : "center", justifyContent: "center" }}><Card style={{ ...cardStyle, width: isMobile ? "100%" : 420, display: "flex", flexDirection: "column", gap: 12 }}><h2 style={{ margin: 0, fontSize: 18 }}>Mover {moveItem.description}</h2><p style={{ margin: 0, fontSize: 12 }}>As demais parcelas da compra serão reposicionadas automaticamente.</p><label>Fatura de destino <Select aria-label="Fatura de destino" value={targetMonth} onChange={(event) => setTargetMonth(event.target.value)} style={{ width: "100%" }}><option value="">Selecione o mês</option>{moveOptions.map((row) => <option key={keyOf(row)} value={keyOf(row)}>{period(row)}</option>)}</Select></label><div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}><Btn variant="outGray" onClick={() => setMoveItem(null)}>Cancelar</Btn><Btn variant="blue" disabled={!targetMonth || mutation.pending} onClick={confirmMove}>Confirmar mudança</Btn></div></Card></div>}
     </>}
   </div>;
 }

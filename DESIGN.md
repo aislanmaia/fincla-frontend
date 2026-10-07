@@ -31,8 +31,9 @@
 
 ## Componentes base (de `primitives.jsx`) — use sempre estes
 - `Card` — `borderRadius 14`, `border 1px T.border`, `boxShadow T.sm`; hover (se clicável) → `md` + `translateY(-1px)`.
-- `Btn` — `borderRadius 9`, `border 1.5px`; variantes: `dark` (CTA primário), `outGray` (default),
+- `Btn` — `borderRadius 9`, `border 1.5px`; variantes: `dark` (CTA primário), `blue` (seleção/ação contextual), `outGray` (default),
   `outPurp`/`outRed`/`outAmber`, `ghost`; props `full`, `small`.
+- `Select` — seletor nativo com tipografia, cores, borda e raio do sistema; aceita props nativas e `style` para largura.
 - `Badge` — pill (`radius 9999`), 10px/600, `grayLight` por padrão (use `*Light` + cor p/ status).
 - `SectionDiv` — label uppercase 10px/700, `letterSpacing .09em`, com barrinha; aceita `count`/`total`.
 - `ProgBar` / `AnimBar` — trilho `grayLight`, fill animado; altura 3–4px.

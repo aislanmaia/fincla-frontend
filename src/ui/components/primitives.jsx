@@ -280,6 +280,7 @@ export function CollapsibleSection({ open, children }) {
 export function Btn({ children, variant = "outline", color = T.ink, onClick, full, small, disabled = false, type = "button", style, ...buttonProps }) {
   const styles = {
     dark: { bg: T.ink, txt: "#fff", brd: T.ink },
+    blue: { bg: T.blue, txt: "#fff", brd: T.blue },
     green: { bg: T.green, txt: "#fff", brd: T.green },
     red: { bg: T.red, txt: "#fff", brd: T.red },
     purple: { bg: T.purple, txt: "#fff", brd: T.purple },
@@ -322,4 +323,23 @@ export function Btn({ children, variant = "outline", color = T.ink, onClick, ful
       {children}
     </button>
   );
+}
+
+export function Select({ children, style, disabled = false, ...selectProps }) {
+  return <select
+    {...selectProps}
+    disabled={disabled}
+    style={{
+      ...G,
+      border: `1px solid ${T.border}`,
+      borderRadius: 9,
+      background: T.surface,
+      color: T.ink,
+      padding: "8px 10px",
+      fontSize: 12,
+      cursor: disabled ? "not-allowed" : "pointer",
+      opacity: disabled ? 0.48 : 1,
+      ...style,
+    }}
+  >{children}</select>;
 }
