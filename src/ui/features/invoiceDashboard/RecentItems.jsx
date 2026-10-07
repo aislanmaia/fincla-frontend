@@ -14,7 +14,7 @@ export function recentItems(items, limit = LIMIT) {
     .slice(0, limit);
 }
 
-export function RecentItems({ items, totalCount, currency, isMobile }) {
+export function RecentItems({ items, totalCount, currency, isMobile, onViewAll }) {
   const rows = recentItems(items);
   return (
     <section data-testid="recent-items" aria-label="Itens recentes"
@@ -39,6 +39,11 @@ export function RecentItems({ items, totalCount, currency, isMobile }) {
             </div>
           ))}
         </div>
+      )}
+      {onViewAll && (
+        <button type="button" onClick={onViewAll} style={{ ...G, alignSelf: "flex-start", border: 0, background: "none", color: T.blue, fontSize: 12, fontWeight: 700, padding: "6px 0", cursor: "pointer" }}>
+          Ver todos os lançamentos →
+        </button>
       )}
       {totalCount > rows.length && (
         <div style={{ ...G, fontSize: 11, color: T.inkLight, textAlign: "center", paddingTop: 2 }}>

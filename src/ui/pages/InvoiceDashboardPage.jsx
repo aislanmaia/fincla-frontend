@@ -8,7 +8,7 @@ import { FC } from "../routing/searchContract.js";
 import { Btn, Card } from "../components/primitives";
 import { shouldUseRealData } from "../dataMode.js";
 import { mapInvoiceItemToUi } from "../data/creditCardsAdapter.js";
-import { invoiceDashboardPath, isValidInvoiceParams } from "../routing/invoiceRoute.js";
+import { cardTransactionsPath, invoiceDashboardPath, isValidInvoiceParams } from "../routing/invoiceRoute.js";
 import { StatusBadge } from "../features/cardHub/InvoiceCard.jsx";
 import { InvoiceCarousel } from "../features/cardHub/InvoiceCarousel.jsx";
 import { invoiceKey, parseInvoiceKey } from "../features/cardHub/hubInvoices.js";
@@ -17,6 +17,8 @@ import { CategoryBreakdown } from "../features/invoiceDashboard/CategoryBreakdow
 import { Headline, InvoiceDetailBody } from "../features/invoiceDashboard/InvoiceDetailBody.jsx";
 import { InvoiceNavigator } from "../features/invoiceDashboard/InvoiceNavigator.jsx";
 import { MobileInvoiceItem } from "../features/invoiceDashboard/MobileInvoiceItem.jsx";
+import { InvoiceMetrics } from "../features/invoiceDashboard/SpendingPace.jsx";
+import { InvoiceChanges } from "../features/invoiceDashboard/InvoiceChanges.jsx";
 import { ForecastInstallments, RecentItems } from "../features/invoiceDashboard/RecentItems.jsx";
 import { useInvoiceDashboardData } from "../features/invoiceDashboard/useInvoiceDashboardData.js";
 
@@ -131,7 +133,7 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
   const lower = (
     <>
       {showBreakdown && <CategoryBreakdown breakdown={detail.category_breakdown} total={invoice?.total} currency={currency} isMobile={isMobile} />}
-      {showBreakdown && <RecentItems items={detail.items} totalCount={detail.items_count} currency={currency} isMobile={isMobile} />}
+      {showBreakdown && <RecentItems items={detail.items} totalCount={detail.items_count} currency={currency} isMobile={isMobile} onViewAll={() => navigate({ to: cardTransactionsPath(cardId, year, month) })} />}
       {detailState === "forecast" && <ForecastInstallments installments={data.futureRow?.top_installments} currency={currency} isMobile={isMobile} />}
     </>
   );
@@ -158,6 +160,8 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
                 onSelect={selectInvoice} currency={currency} detailProps={detailProps} />
             )}
           />
+          {showBreakdown && <InvoiceMetrics detail={detail} currency={currency} isMobile />}
+          {showBreakdown && <InvoiceChanges changes={detail.changes} currency={currency} isMobile />}
           {lower}
         </>
       ) : invoice && (
@@ -173,6 +177,8 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
             </div>
             <InvoiceDetailBody invoice={invoice} currency={currency} {...detailProps} />
            </Card>
+          {showBreakdown && <InvoiceMetrics detail={detail} currency={currency} />}
+          {showBreakdown && <InvoiceChanges changes={detail.changes} currency={currency} />}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: 16, alignItems: "start" }}>{lower}</div>
         </>
       )}

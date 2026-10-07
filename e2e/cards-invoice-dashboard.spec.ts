@@ -171,6 +171,29 @@ for (const vp of VIEWPORTS) {
       await expect(page.getByTestId("recent-items")).toContainText("Compra aberta");
       await expect(page.getByTestId("invoice-timeline")).toBeVisible();
       await expect(page.getByTestId("invoice-limit")).toBeVisible();
+      const metrics = (await (await api(`/v1/credit-cards/${busyCardId}/invoices/${openRef.year}/${openRef.month}?organization_id=${orgId}&include_metrics=true`)).json()) as {
+        six_month_average: { amount: string } | null;
+        spending_pace: { current: unknown[]; previous: { points: unknown[] } | null } | null;
+      };
+      expect(metrics.six_month_average).not.toBeNull();
+      expect(parseBRL(await page.getByTestId("six-month-average").textContent()))
+        .toBe(Number(metrics.six_month_average!.amount));
+      await expect(page.getByTestId("spending-pace")).toBeVisible();
+      expect(metrics.spending_pace?.current.length).toBeGreaterThan(0);
+      expect(metrics.spending_pace?.previous?.points.length).toBeGreaterThan(0);
+      await expect(page.getByTestId("spending-pace").locator("polyline")).toHaveCount(2);
+      const changesResponse = await api(`/v1/credit-cards/${busyCardId}/invoices/${openRef.year}/${openRef.month}?organization_id=${orgId}&include_changes=true`);
+      expect(changesResponse.ok).toBeTruthy();
+      const changes = ((await changesResponse.json()) as {
+        changes: { previous_available: boolean; items: { description: string; change_type: string }[]; one_off: unknown };
+      }).changes;
+      expect(changes.previous_available).toBe(true);
+      const changesSection = page.getByRole("region", { name: "O que mudou" });
+      await expect(changesSection).toBeVisible();
+      const newInstallment = changes.items.find((item) => item.description === "Compra parcelada");
+      expect(newInstallment?.change_type).toBe("new");
+      await expect(changesSection).toContainText(newInstallment!.description);
+      if (changes.one_off) await expect(changesSection).toContainText("Compras avulsas e estornos");
       await page.screenshot({ path: `${SHOTS}/dashboard-${vp.name}-open.png`, fullPage: !vp.mobile });
 
       // Faturas vizinhas: anterior (fechada) e seguinte (prevista).
@@ -212,6 +235,24 @@ for (const vp of VIEWPORTS) {
         await expect(page.getByRole("dialog", { name: "Por categoria" })).toBeVisible();
         await page.screenshot({ path: `${SHOTS}/dashboard-${vp.name}-category-sheet.png` });
       }
+    });
+
+    test("lançamentos do cartão usam a fatura inteira e carga limitada", async ({ page }) => {
+      await login(page, vp);
+      const target = `${url(busyCardId, openRef)}/transactions`;
+      const seen = await measure(page, target, async () => {
+        await expect(page.getByRole("heading", { name: "Lançamentos da fatura" })).toBeVisible({ timeout: 30_000 });
+        await expect(page.getByRole("region", { name: "Lançamentos da fatura" })).toContainText("Compra aberta");
+      });
+      const detailResponse = await api(`/v1/credit-cards/${busyCardId}/invoices/${openRef.year}/${openRef.month}?organization_id=${orgId}`);
+      expect(detailResponse.ok).toBeTruthy();
+      const detail = (await detailResponse.json()) as { total_amount: { amount: string }; items_count: number };
+      expect(parseBRL(await page.getByText(/Total da fatura/).locator("..").textContent())).toBe(Number(detail.total_amount.amount));
+      await expect(page.getByText(/Total da fatura/)).toContainText(`${detail.items_count} lançamentos`);
+      await expect(page.getByText("Sem lançamentos com data nesta fatura.")).toHaveCount(0);
+      expect(cardsCalls(seen).length, table(seen)).toBeLessThanOrEqual(CREDIT_CARDS_BUDGET);
+      expect(cardsCalls(seen).filter((entry) => /\/invoices\/\d+\/\d+/.test(entry.path))).toHaveLength(1);
+      await page.screenshot({ path: `${SHOTS}/card-transactions-${vp.name}.png`, fullPage: !vp.mobile });
     });
 
     test("pagar e desfazer: o status muda na tela e no servidor, sem voltar para 'Carregando'", async ({ page }) => {

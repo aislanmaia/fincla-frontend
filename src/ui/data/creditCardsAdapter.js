@@ -504,6 +504,10 @@ function invoiceDateKey(raw) {
   return m ? m[1] : null;
 }
 
+export function invoiceItemTagNames(item) {
+  return Object.entries(item.tags ?? {}).flatMap(([key, values]) => key === "categoria" ? [] : (values ?? []).map((value) => value.name).filter(Boolean));
+}
+
 export function mapInvoiceItemToUi(item) {
   const category = pickCategory(item);
   const isRefund = item.modality === "refund";
@@ -527,6 +531,7 @@ export function mapInvoiceItemToUi(item) {
     desc: cleanDesc,
     cat: category,
     catColor: pickCategoryColor(item),
+    tags: invoiceItemTagNames(item),
     val: item.amount,
     data: formatShortDate(displayDateRaw),
     dataKey: dk || undefined,

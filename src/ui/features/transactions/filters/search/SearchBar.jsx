@@ -41,6 +41,7 @@ export function SearchBar({
   /* Abaixo de 1280 a ordenação vira só o ícone — o `aria-label` e o `title`
      seguem carregando o critério. */
   sortSoIcone = false,
+  visibleSortFields = null,
   /* Quanto de largura sobra para os chips depois de a busca ficar com o piso
      dela. Quem sabe disso é ESTA barra — ela é a única que enxerga ao mesmo
      tempo a largura total, a busca e os outros controles. Os chips recebem o
@@ -169,7 +170,7 @@ export function SearchBar({
             />
           </div>
         )}
-        <SortButton sort={sort} setSort={setSort} compact />
+        <SortButton sort={sort} setSort={setSort} compact visibleFields={visibleSortFields} />
       </div>
     );
   }
@@ -259,7 +260,7 @@ export function SearchBar({
       <span ref={vaoRef} style={{ flex: 1, minWidth: 0 }} />
       <span ref={chipsRef} style={{ display: "contents" }}>{chips}</span>
       <Sep />
-      <SortButton sort={sort} setSort={setSort} soIcone={sortSoIcone} />
+      <SortButton sort={sort} setSort={setSort} soIcone={sortSoIcone} visibleFields={visibleSortFields} />
       {trailing}
       {onHelp && (
         <button

@@ -27,7 +27,7 @@ import { finclaRootSearchSchema } from "./finclaRootSearchSchema.js";
 import { requireSessionTokenBeforeLoad } from "./requireSessionTokenBeforeLoad.js";
 import { isProfileSettingsTabSlug } from "./profileSettingsTabs.js";
 import { isTransactionEditPathId } from "./transactionPathId.js";
-import { INVOICE_ROUTE_PATTERN, isValidInvoiceParams } from "./invoiceRoute.js";
+import { CARD_TRANSACTIONS_ROUTE_PATTERN, INVOICE_ROUTE_PATTERN, isValidInvoiceParams } from "./invoiceRoute.js";
 
 const rootRoute = createRootRoute({
   validateSearch: zodValidator(finclaRootSearchSchema),
@@ -115,6 +115,19 @@ const invoiceDashboardRoute = createRoute({
   errorComponent: FinclaAuthenticatedRouteError,
   component: function InvoiceDashboardRoute() {
     return <AuthenticatedPageOutlet segment="invoiceDashboard" />;
+  },
+});
+
+const cardTransactionsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: CARD_TRANSACTIONS_ROUTE_PATTERN,
+  beforeLoad: (ctx) => {
+    requireSessionTokenBeforeLoad(ctx);
+    if (!isValidInvoiceParams(ctx.params ?? {})) throw notFound();
+  },
+  errorComponent: FinclaAuthenticatedRouteError,
+  component: function CardTransactionsRoute() {
+    return <AuthenticatedPageOutlet segment="cardTransactions" />;
   },
 });
 
@@ -289,6 +302,7 @@ const routeTree = rootRoute.addChildren([
   ...segmentRoutes,
   transactionsRoute,
   invoiceDashboardRoute,
+  cardTransactionsRoute,
   cardCommitmentsRoute,
   profileRoute,
   planningRoute,

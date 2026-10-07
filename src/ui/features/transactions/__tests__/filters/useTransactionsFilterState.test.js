@@ -7,6 +7,22 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+it("usa o período inicial da tela como baseline ao marcar e limpar a faceta", () => {
+  const { result } = renderHook(() => useTransactionsFilterState({ initial: { period: "tudo" }, clearToInitial: true }));
+  const periodFacet = () => result.current.buildFacets().find((facet) => facet.key === "periodo");
+  expect(periodFacet()).toMatchObject({ value: "Todo período", active: false });
+  expect(result.current.hasAnyActive).toBe(false);
+
+  act(() => result.current.setPeriod("mes"));
+  expect(periodFacet()).toMatchObject({ value: "Este mês", active: true });
+  expect(result.current.hasAnyActive).toBe(true);
+
+  act(() => result.current.clearFacet("periodo"));
+  expect(result.current.period).toBe("tudo");
+  expect(periodFacet().active).toBe(false);
+  expect(result.current.hasAnyActive).toBe(false);
+});
+
 // fincla-frontend#96 — revisão adversarial da PR #96, achado 2: Categoria e
 // Tags disputam o MESMO slot de filtro no backend (`tag_id`); antes desta
 // correção era possível marcar as duas ao mesmo tempo e a tag ficava "acesa"

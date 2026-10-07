@@ -148,9 +148,9 @@ export function InfoTip({ text, width = 220 }) {
   );
 }
 
-export function Card({ children, style = {}, onClick, ...rest }) {
+export function Card({ children, style = {}, onClick, as: Element = "div", ...rest }) {
   return (
-    <div
+    <Element
       {...rest}
       onClick={onClick}
       style={{
@@ -174,7 +174,7 @@ export function Card({ children, style = {}, onClick, ...rest }) {
       }}
     >
       {children}
-    </div>
+    </Element>
   );
 }
 
@@ -211,7 +211,7 @@ export function PageTitle({ sans, serif: serifWord }) {
   return (
     <h1 style={{ margin: 0, lineHeight: 1.1, display: "flex", alignItems: "baseline", flexWrap: "wrap", gap: 7 }}>
       <span style={{ ...G, fontSize: 30, fontWeight: 800, color: T.ink, letterSpacing: "-0.025em" }}>{sans}</span>
-      {serifWord && <span style={{ ...S, fontSize: 32, color: T.ink }}>{serifWord}</span>}
+      {serifWord && <>{" "}<span style={{ ...S, fontSize: 32, color: T.ink }}>{serifWord}</span></>}
     </h1>
   );
 }
