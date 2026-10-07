@@ -17,6 +17,7 @@ import { CategoryBreakdown } from "../features/invoiceDashboard/CategoryBreakdow
 import { Headline, InvoiceDetailBody } from "../features/invoiceDashboard/InvoiceDetailBody.jsx";
 import { InvoiceNavigator } from "../features/invoiceDashboard/InvoiceNavigator.jsx";
 import { MobileInvoiceItem } from "../features/invoiceDashboard/MobileInvoiceItem.jsx";
+import { InvoiceMetrics } from "../features/invoiceDashboard/SpendingPace.jsx";
 import { ForecastInstallments, RecentItems } from "../features/invoiceDashboard/RecentItems.jsx";
 import { useInvoiceDashboardData } from "../features/invoiceDashboard/useInvoiceDashboardData.js";
 
@@ -158,6 +159,7 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
                 onSelect={selectInvoice} currency={currency} detailProps={detailProps} />
             )}
           />
+          {showBreakdown && <InvoiceMetrics detail={detail} currency={currency} isMobile />}
           {lower}
         </>
       ) : invoice && (
@@ -173,6 +175,7 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
             </div>
             <InvoiceDetailBody invoice={invoice} currency={currency} {...detailProps} />
            </Card>
+          {showBreakdown && <InvoiceMetrics detail={detail} currency={currency} />}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: 16, alignItems: "start" }}>{lower}</div>
         </>
       )}

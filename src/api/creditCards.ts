@@ -100,12 +100,13 @@ export const getCreditCardInvoice = async (
   cardId: number,
   year: number,
   month: number,
-  organizationId: string
+  organizationId: string,
+  includeMetrics = false
 ): Promise<InvoiceResponse> => {
   const response = await apiClient.get<InvoiceResponse>(
     `/credit-cards/${cardId}/invoices/${year}/${month}`,
     {
-      params: { organization_id: organizationId },
+      params: { organization_id: organizationId, ...(includeMetrics ? { include_metrics: true } : {}) },
     }
   );
   return unwrapMoney(response.data);

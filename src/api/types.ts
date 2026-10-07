@@ -987,6 +987,15 @@ export interface InvoiceResponse {
   limit_usage_percent: number | null;
   items_count: number;
   category_breakdown: CategoryBreakdown[];
+  six_month_average?: number | null;
+  six_month_average_change?: number | null;
+  six_month_average_invoices_count?: number;
+  spending_pace?: {
+    cycle_start: string;
+    cycle_end: string;
+    current: { day: number; date: string; cumulative: number }[];
+    previous: { cycle_start: string; cycle_end: string; points: { day: number; date: string; cumulative: number }[] } | null;
+  } | null;
 }
 
 // ===== HISTÓRICO DE FATURAS =====
