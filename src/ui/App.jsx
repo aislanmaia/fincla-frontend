@@ -48,6 +48,7 @@ import { SimulacaoPage as SimulacaoPageView } from "./pages/SimulacaoPage.jsx";
 import { CartoesPage } from "./pages/CartoesPage.jsx";
 import { CardsEntryPage } from "./pages/CardsEntryPage.jsx";
 import { CardHubPage } from "./pages/CardHubPage.jsx";
+import { CardCommitmentsPage } from "./pages/CardCommitmentsPage.jsx";
 import { InvoiceDashboardPage } from "./pages/InvoiceDashboardPage.jsx";
 import { CardTransactionsPage } from "./pages/CardTransactionsPage.jsx";
 import { AccountsPage } from "./pages/AccountsPage.jsx";
@@ -439,6 +440,7 @@ export default function App() {
             }} />,
     invoiceDashboard: <InvoiceDashboardPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} />,
     cardTransactions: <CardTransactionsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} />,
+    cardCommitments: <CardCommitmentsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} />,
     cards:      <CardsEntryPage dataMode={dataMode} organizationId={session.activeOrgId}
       hub={<CardHubPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onNewItem={onNewCardItem} />}
       classic={<CartoesPage    onNav={navTo} isMobile={isMobile} cards={dataMode==="empty" ? extraCards : undefined} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onTransactionsInvalidate={bumpTransactionsList} onOpenTransaction={(transactionId) => { navigate({ search: (prev) => ({ ...prev, [FC.TX]: String(transactionId), [FC.MODAL]: FC_MODAL.EDIT_TRANSACTION }) }); }} onNewItem={onNewCardItem} onLaunchRefund={(item, fromCard) => {

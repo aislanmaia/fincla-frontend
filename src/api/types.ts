@@ -1041,10 +1041,23 @@ export interface InvoiceHistoryItem {
   month: number;
   month_name: string;
   total_amount: number;
+  total_amount_currency?: string | null;
   status: string;
   items_count: number;
   top_category: string | null;
   category_breakdown?: Record<string, number>;
+  installments_amount?: number | null;
+  installments_amount_currency?: string | null;
+  recurrences_amount?: number | null;
+  recurrences_amount_currency?: string | null;
+  commitments_category_breakdown?: {
+    category_id: string | null;
+    category_name: string;
+    installments_amount: number | { amount: string; currency: string };
+    installments_amount_currency?: string | null;
+    recurrences_amount: number | { amount: string; currency: string };
+    recurrences_amount_currency?: string | null;
+  }[] | null;
 }
 
 export interface InvoiceHistorySummary {
@@ -1098,6 +1111,7 @@ export interface MonthSummary {
 export interface FutureInstallmentItem {
   description: string;
   amount: number;
+  amount_currency?: string | null;
   installment_number: number;
   total_installments: number;
   category_name: string | null;
@@ -1112,6 +1126,27 @@ export interface MonthlyBreakdown {
   limit_usage_percent: number | null;
   installments_count: number;
   top_installments: FutureInstallmentItem[];
+  installments?: Array<FutureInstallmentItem & {
+    transaction_id: number;
+    series_id: string | null;
+    due_date: string;
+    purchase_date: string;
+    category_id: string | null;
+  }> | null;
+  recurrences?: Array<{
+    series_id: string;
+    transaction_id: number | null;
+    description: string;
+    amount: number;
+    amount_currency?: string | null;
+    due_date: string;
+    projected: boolean;
+    category_id: string | null;
+    category_name: string | null;
+    category_color: string | null;
+  }> | null;
+  installments_truncated?: boolean | null;
+  recurrences_truncated?: boolean | null;
 }
 
 export interface EndingInstallment {
@@ -1147,6 +1182,28 @@ export interface FutureCommitmentsResponse {
   monthly_breakdown: MonthlyBreakdown[];
   ending_soon: EndingInstallment[];
   insights: FutureCommitmentsInsight[];
+  remaining_balance?: {
+    complete: boolean;
+    gross_amount: number | null;
+    gross_amount_currency?: string | null;
+    linked_refunds_amount: number | null;
+    linked_refunds_amount_currency?: string | null;
+    net_amount: number | null;
+    net_amount_currency?: string | null;
+    series: Array<{
+      series_id: string;
+      description: string;
+      category_name: string | null;
+      remaining_installments: number;
+      remaining_amount: number;
+      remaining_amount_currency?: string | null;
+      linked_refunds_amount: number;
+      linked_refunds_amount_currency?: string | null;
+      last_due_date: string;
+      next_amount: number;
+      next_amount_currency?: string | null;
+    }>;
+  };
 }
 
 export interface CardCommitmentSummary {
@@ -1526,6 +1583,7 @@ export interface RecurringSeries {
   start_date: string;
   next_occurrence: string;
   is_active: boolean;
+  is_low_usage?: boolean;
   created_at: string;
   updated_at: string;
   tags: SeriesTag[];
@@ -1634,6 +1692,7 @@ export interface UpdateRecurringSeriesRequest {
   end_date?: string | null;
   credit_card_id?: number | null;
   notes?: string | null;
+  is_low_usage?: boolean;
   tag_ids?: string[] | null;
   interval?: number | null;
   interval_unit?: RecurringSeriesIntervalUnit | null;
