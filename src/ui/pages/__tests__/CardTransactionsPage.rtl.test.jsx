@@ -119,10 +119,14 @@ describe("Lançamentos de um cartão", () => {
     const user = userEvent.setup();
     render(<CardTransactionsPage organizationId={ORG_ID} />);
     await screen.findByText("Mercado");
+    expect(screen.queryByRole("button", { name: "Limpar todos os filtros" })).not.toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Período: Todo período/ }));
     await user.click(screen.getByRole("button", { name: "Preset: Este mês" }));
     expect(within(screen.getByRole("region", { name: "Lançamentos da fatura" })).queryByText("Mercado")).not.toBeInTheDocument();
     expect(screen.getByText("Exibindo 2 de 3 lançamentos. Os filtros não alteram o resumo da fatura.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Limpar todos os filtros" }));
+    expect(within(screen.getByRole("region", { name: "Lançamentos da fatura" })).getByText("Mercado")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Limpar todos os filtros" })).not.toBeInTheDocument();
     expect(screen.getAllByText("R$ 140,00").length).toBeGreaterThan(0);
     expect(calls).toHaveLength(2);
   });

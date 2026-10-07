@@ -30,6 +30,14 @@ describe("facetas sobre todos os itens da fatura", () => {
     item(3, "2027-01-06", "c1", "Alimentação", 20, ["mercado"], "refund"),
   ];
 
+  it("aceita o timestamp ISO retornado pela API nas linhas e no gráfico semanal", () => {
+    const withTime = { ...items[0], transaction_date: "2026-12-30T12:00:00" };
+    expect(invoiceRows([withTime], { from: "2026-12-30", to: "2026-12-30" })[0]).toMatchObject({
+      transactionDate: "2026-12-30", date: "30/12/2026",
+    });
+    expect(weeklySpending([withTime])).toMatchObject([{ hasData: true, amount: 100 }]);
+  });
+
   it("combina período, categoria, tag E, modalidade e faixa de valor", () => {
     expect(tagOptions(items)).toEqual(["mercado", "trabalho"]);
     expect(invoiceRows(items, { from: "2026-12-01", to: "2026-12-31", cats: ["c1"], tags: ["trabalho", "mercado"], tagMode: "all", valueMin: "50" }).map((row) => row.id)).toEqual([1]);

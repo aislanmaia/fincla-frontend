@@ -68,6 +68,7 @@ export function useTransactionsFilterState({
   onChange,
   clearToInitial = false,
 } = {}) {
+  const defaultPeriod = clearToInitial ? initial?.period ?? DEFAULT_FILTER_STATE.period : DEFAULT_FILTER_STATE.period;
   const [state, setState] = useState(() => normalizeInitial(initial));
   const [sort, setSort] = useState(initialSort);
 
@@ -135,7 +136,7 @@ export function useTransactionsFilterState({
     setState((prev) => {
       switch (key) {
         case "periodo":
-          return { ...prev, period: DEFAULT_FILTER_STATE.period, customFrom: "", customTo: "" };
+          return { ...prev, period: defaultPeriod, customFrom: "", customTo: "" };
         case "tipo":
           // Junto com o tipo cai a forma de pagamento incompatível — a mesma
           // regra que `setType` aplica; sem isso "Todos os tipos" poderia
@@ -161,7 +162,7 @@ export function useTransactionsFilterState({
           return prev;
       }
     });
-  }, []);
+  }, [defaultPeriod]);
 
   /** Lista canônica de facets para a FacetBar, derivada do estado. */
   const buildFacets = useCallback(
@@ -188,7 +189,7 @@ export function useTransactionsFilterState({
           label: "Período",
           value: periodLabel || "Este mês",
           icon: "calendar",
-          active: state.period !== "mes",
+          active: state.period !== defaultPeriod,
         },
         {
           key: "tipo",
@@ -277,14 +278,14 @@ export function useTransactionsFilterState({
         },
       ];
     },
-    [state],
+    [state, defaultPeriod],
   );
 
   /** Ordena uma lista in-memory aplicando o sort atual. */
   const sortItems = useCallback((arr) => sortItemsFn(arr, sort), [sort]);
 
   const hasAnyActive = useMemo(() => {
-    if (state.period !== DEFAULT_FILTER_STATE.period) return true;
+    if (state.period !== defaultPeriod) return true;
     if (state.type !== DEFAULT_FILTER_STATE.type) return true;
     if (state.method.length) return true;
     if (state.cats.length) return true;
@@ -295,7 +296,7 @@ export function useTransactionsFilterState({
     if (state.valueMin || state.valueMax) return true;
     if (state.search) return true;
     return false;
-  }, [state]);
+  }, [state, defaultPeriod]);
 
   return {
     // estado

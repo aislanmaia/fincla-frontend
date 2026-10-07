@@ -7,12 +7,14 @@ const amountOf = (value) => {
   return Number.isFinite(amount) ? amount : null;
 };
 
+const transactionDateKey = (value) => /^(\d{4}-\d{2}-\d{2})(?:T.*)?$/.exec(value ?? "")?.[1] ?? "";
+
 export function invoiceRows(items, { search = "", cats = [], tags = [], tagMode = "any", modality = "all", from = "", to = "", valueMin = "", valueMax = "" } = {}) {
   const query = search.trim().toLocaleLowerCase("pt-BR");
   return (items ?? [])
     .map((item) => {
       const row = mapInvoiceItemToUi(item);
-      const date = item.transaction_date ?? "";
+      const date = transactionDateKey(item.transaction_date);
       return {
         ...row,
         data: /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date.slice(8, 10)}/${date.slice(5, 7)}` : "—",
@@ -43,7 +45,7 @@ export function tagOptions(items) {
 }
 
 export function weeklySpending(items) {
-  const dates = (items ?? []).map((item) => /^\d{4}-\d{2}-\d{2}$/.test(item.transaction_date ?? "") ? item.transaction_date : null).filter(Boolean).sort();
+  const dates = (items ?? []).map((item) => transactionDateKey(item.transaction_date)).filter(Boolean).sort();
   if (dates.length === 0) return [];
   const start = new Date(`${dates[0]}T12:00:00`);
   start.setDate(start.getDate() - (start.getDay() + 6) % 7);
@@ -54,9 +56,9 @@ export function weeklySpending(items) {
     buckets.push({ key, label: day.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }), amount: 0, hasData: false });
   }
   for (const item of items ?? []) {
-    const match = /^\d{4}-\d{2}-\d{2}$/.exec(item.transaction_date ?? "");
-    if (!match) continue;
-    const date = new Date(`${item.transaction_date}T12:00:00`);
+    const dateKey = transactionDateKey(item.transaction_date);
+    if (!dateKey) continue;
+    const date = new Date(`${dateKey}T12:00:00`);
     date.setDate(date.getDate() - (date.getDay() + 6) % 7);
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
     const bucket = buckets.find((row) => row.key === key);

@@ -226,6 +226,7 @@ for (const vp of VIEWPORTS) {
       const detail = (await detailResponse.json()) as { total_amount: { amount: string }; items_count: number };
       expect(parseBRL(await page.getByText(/Total da fatura/).locator("..").textContent())).toBe(Number(detail.total_amount.amount));
       await expect(page.getByText(/Total da fatura/)).toContainText(`${detail.items_count} lançamentos`);
+      await expect(page.getByText("Sem lançamentos com data nesta fatura.")).toHaveCount(0);
       expect(cardsCalls(seen).length, table(seen)).toBeLessThanOrEqual(CREDIT_CARDS_BUDGET);
       expect(cardsCalls(seen).filter((entry) => /\/invoices\/\d+\/\d+/.test(entry.path))).toHaveLength(1);
       await page.screenshot({ path: `${SHOTS}/card-transactions-${vp.name}.png`, fullPage: !vp.mobile });
