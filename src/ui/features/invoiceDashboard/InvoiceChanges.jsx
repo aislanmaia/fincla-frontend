@@ -30,7 +30,7 @@ function ItemChange({ item, currency }) {
           Ocorrências: {item.occurrences_previous ?? "—"} → {item.occurrences_current ?? "—"}
         </div>}
       </div>
-      <div style={{ ...G, ...NUM, textAlign: "right", fontSize: 12, fontWeight: 700, color: T.ink, whiteSpace: "nowrap" }}>
+      <div style={{ ...G, ...NUM, minWidth: 0, textAlign: "right", fontSize: 12, fontWeight: 700, color: T.ink, overflowWrap: "anywhere" }}>
         {item.change_type === "changed_value"
           ? `${formatMoney(item.previous_amount, currency)} → ${formatMoney(item.current_amount, currency)}`
           : formatMoney(amount, currency) ?? "—"}
@@ -51,7 +51,7 @@ function CategoryChange({ category, items, currency }) {
           <span aria-hidden="true" style={{ width: 9, height: 9, borderRadius: "50%", background: category.category_color || T.inkGhost, flexShrink: 0 }} />
           <h4 style={{ ...G, fontSize: 13, fontWeight: 800, color: T.ink, margin: 0, overflowWrap: "anywhere" }}>{category.category_name}</h4>
         </div>
-        <div style={{ ...G, ...NUM, textAlign: "right", whiteSpace: "nowrap", fontSize: 12, fontWeight: 700, color: delta > 0 ? T.red : delta < 0 ? T.green : T.inkMid }}>
+        <div style={{ ...G, ...NUM, minWidth: 0, textAlign: "right", overflowWrap: "anywhere", fontSize: 12, fontWeight: 700, color: delta > 0 ? T.red : delta < 0 ? T.green : T.inkMid }}>
           {signedMoney(category.change, currency)}
         </div>
       </div>
