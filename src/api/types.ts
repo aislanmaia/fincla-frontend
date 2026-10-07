@@ -968,11 +968,14 @@ export interface InvoiceItemResponse {
   amount: number;
   installment_number: number;
   total_installments: number;
+  modality: 'cash' | 'installment' | 'refund';
   tags: Record<string, Tag[]>;
   purchase_info?: PurchaseInfo;
 }
 
 export interface InvoiceResponse {
+  /** Capturada pelo cliente do MoneyResponse antes de desembrulhar os valores. */
+  currency?: string | null;
   month: string;
   due_date: string;
   total_amount: number;

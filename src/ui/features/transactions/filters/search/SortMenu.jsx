@@ -18,8 +18,8 @@ import {
  * Popover de edição da ordenação multi-nível.
  * `sort` é o array de regras `[{ field, dir }]` controlado externamente.
  */
-export function SortMenu({ sort, setSort, onClose, compact = false }) {
-  const inactive = availableFields(sort);
+export function SortMenu({ sort, setSort, onClose, compact = false, visibleFields = null }) {
+  const inactive = availableFields(sort).filter((field) => !visibleFields || visibleFields.includes(field));
   const isDefault = isDefaultSort(sort);
 
   const resetDefault = () => setSort(DEFAULT_SORT);

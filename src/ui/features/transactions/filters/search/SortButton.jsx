@@ -30,7 +30,7 @@ function summary(sort) {
  * Botão "Ordenar por X" da Search bar. Abre `SortMenu` no click e mostra
  * `SortTooltip` no hover (somente com menu fechado).
  */
-export function SortButton({ sort, setSort, compact = false, soIcone = false }) {
+export function SortButton({ sort, setSort, compact = false, soIcone = false, visibleFields = null }) {
   const [open, setOpen] = useState(false);
   const [hover, setHover] = useState(false);
   const wrapperRef = useRef(null);
@@ -152,7 +152,7 @@ export function SortButton({ sort, setSort, compact = false, soIcone = false }) 
         )}
       </button>
       {open && (
-        <SortMenu sort={sort} setSort={setSort} onClose={() => setOpen(false)} compact={compact} />
+        <SortMenu sort={sort} setSort={setSort} onClose={() => setOpen(false)} compact={compact} visibleFields={visibleFields} />
       )}
       {hover && !open && sort.length > 0 && !compact && <SortTooltip rules={sort} />}
     </div>

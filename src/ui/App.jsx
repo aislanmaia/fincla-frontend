@@ -49,6 +49,7 @@ import { CartoesPage } from "./pages/CartoesPage.jsx";
 import { CardsEntryPage } from "./pages/CardsEntryPage.jsx";
 import { CardHubPage } from "./pages/CardHubPage.jsx";
 import { InvoiceDashboardPage } from "./pages/InvoiceDashboardPage.jsx";
+import { CardTransactionsPage } from "./pages/CardTransactionsPage.jsx";
 import { AccountsPage } from "./pages/AccountsPage.jsx";
 import { PlanningHub } from "./features/planning/PlanningHub.jsx";
 
@@ -437,6 +438,7 @@ export default function App() {
               openTxModal();
             }} />,
     invoiceDashboard: <InvoiceDashboardPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} />,
+    cardTransactions: <CardTransactionsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} />,
     cards:      <CardsEntryPage dataMode={dataMode} organizationId={session.activeOrgId}
       hub={<CardHubPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onNewItem={onNewCardItem} />}
       classic={<CartoesPage    onNav={navTo} isMobile={isMobile} cards={dataMode==="empty" ? extraCards : undefined} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onTransactionsInvalidate={bumpTransactionsList} onOpenTransaction={(transactionId) => { navigate({ search: (prev) => ({ ...prev, [FC.TX]: String(transactionId), [FC.MODAL]: FC_MODAL.EDIT_TRANSACTION }) }); }} onNewItem={onNewCardItem} onLaunchRefund={(item, fromCard) => {
