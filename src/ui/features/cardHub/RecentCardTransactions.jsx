@@ -16,15 +16,17 @@ function dateOf(row) {
   return Number.isNaN(date.getTime()) ? "Data indisponível" : dateFormat.format(date);
 }
 
-export function RecentCardTransactions({ transactions, cardCurrency, loading, error, onViewAll, title = "🧾 Lançamentos recentes" }) {
+export function RecentCardTransactions({ transactions, cardCurrency, loading, error, onViewAll, title = "🧾 Lançamentos recentes", grouped = false, density = "padrao" }) {
   return (
     <section aria-label={title === "🧾 Lançamentos recentes" ? "Lançamentos recentes" : title} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, boxShadow: T.sm, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
       <h3 style={{ ...G, margin: 0, fontSize: 13, fontWeight: 700, color: T.ink }}>{title}</h3>
       {loading && <p role="status" style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>Carregando lançamentos…</p>}
       {error && <p role="alert" style={{ ...G, margin: 0, fontSize: 12, color: T.red }}>Não foi possível carregar os lançamentos deste cartão.</p>}
       {!loading && !error && transactions.length === 0 && <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>Este cartão ainda não tem lançamentos.</p>}
-      {!loading && transactions.map((row) => (
-        <div key={row.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "6px 0", borderBottom: `1px solid ${T.border}`, minWidth: 0 }}>
+      {!loading && transactions.map((row, index) => (
+        <div key={row.id}>
+        {grouped && (index === 0 || row.date?.slice(0, 10) !== transactions[index - 1]?.date?.slice(0, 10)) && <div style={{ ...G, padding: "10px 0 4px", color: T.inkMid, fontSize: 11, fontWeight: 700 }}>{dateOf(row)}</div>}
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: density === "compacto" ? "3px 0" : density === "confortavel" ? "10px 0" : "6px 0", borderBottom: `1px solid ${T.border}`, minWidth: 0 }}>
           <div style={{ minWidth: 0 }}>
             <div style={{ ...G, fontSize: 12, fontWeight: 600, color: T.ink, overflowWrap: "anywhere" }}>{row.description}</div>
             <div style={{ ...G, fontSize: 11, color: T.inkMid }}>{row.type === "refund" ? "Estorno · " : ""}{categoryOf(row)} · {dateOf(row)}</div>
@@ -32,6 +34,7 @@ export function RecentCardTransactions({ transactions, cardCurrency, loading, er
           <div style={{ ...G, fontSize: 12, fontWeight: 700, color: row.type === "refund" ? T.green : T.ink, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}>
             {row.type === "refund" ? "+" : ""}{formatMoneyAbs(row.value, row.value_currency ?? cardCurrency) ?? "—"}
           </div>
+        </div>
         </div>
       ))}
       {onViewAll && <button type="button" onClick={onViewAll} style={{ ...G, alignSelf: "flex-start", marginTop: "auto", padding: "6px 0 0", border: 0, background: "none", color: T.blue, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
