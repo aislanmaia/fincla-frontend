@@ -73,10 +73,12 @@ export function TransactionsFilterPanel({
   visibleFacetKeys = null,
   hideRail = false,
   defaultPeriod = "mes",
+  cardScopePanel = null,
+  selectionOverrides = null,
   /** Largura real do painel — decide se as opções cabem em mais de uma coluna. */
   width = 396,
 }) {
-  const counts = facetSelectionCounts(filter, defaultPeriod);
+  const counts = { ...facetSelectionCounts(filter, defaultPeriod), ...selectionOverrides };
   // Acima de ~560 px o pane comporta as opções em grade. Abaixo disso duas
   // colunas espremem os rótulos das categorias, que são longos ("Lazer &
   // Entretenimento"), e cada opção passa a truncar.
@@ -174,7 +176,7 @@ export function TransactionsFilterPanel({
           overflowY: "auto",
         }}
       >
-        {facet === "ativos" ? (
+        {facet === "cartao" && cardScopePanel ? cardScopePanel : facet === "ativos" ? (
           <ActiveFacetsPane
             facets={activeFacets}
             onClearFacet={onClearFacet}

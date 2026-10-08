@@ -4,7 +4,7 @@
 // `unwrapMoney` desembrulha em qualquer profundidade — enumerar campo a campo é
 // onde se esquece um, e um esquecido vira "R$ NaN" na tela.
 import apiClient from './client';
-import { stampCurrency, unwrapMoney } from './money';
+import { stampCurrency, toCurrency, unwrapMoney } from './money';
 import {
   IDEMPOTENCY_KEY_HEADER,
   noteIdempotencySupportFromHeaders,
@@ -94,7 +94,15 @@ export const getTransactionsSummary = async (
     '/transactions/summary',
     { params: filters, paramsSerializer: repeatArrayParams }
   );
-  return unwrapMoney(response.data);
+  const raw = response.data;
+  const withBreakdownCurrencies = raw.breakdown ? {
+    ...raw,
+    breakdown: {
+      by_category: raw.breakdown.by_category.map((row) => ({ ...row, amount_currency: toCurrency(row.amount) ?? row.amount_currency ?? null })),
+      by_month: raw.breakdown.by_month.map((row) => ({ ...row, amount_currency: toCurrency(row.amount) ?? row.amount_currency ?? null })),
+    },
+  } : raw;
+  return unwrapMoney(withBreakdownCurrencies);
 };
 
 /**
