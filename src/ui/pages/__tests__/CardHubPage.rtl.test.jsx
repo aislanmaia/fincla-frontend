@@ -134,8 +134,10 @@ function mockApi({ cards = [cardFixture()], history, current, future, patch, tra
     http.get("*/v1/credit-cards/:id/invoices/history", () => (history === "fail"
       ? HttpResponse.json({ detail: "boom" }, { status: 500 })
       : HttpResponse.json(history ?? historyFixture()))),
-    http.get("*/v1/credit-cards/:id/invoices/current", () => (current === "empty"
-      ? HttpResponse.json({ detail: "Invoice not found" }, { status: 404 })
+    http.get("*/v1/credit-cards/:id/invoices/current", ({ request }) => (current === "empty"
+      ? new URL(request.url).searchParams.get("empty_as_null") === "true"
+        ? HttpResponse.json(null)
+        : HttpResponse.json({ detail: "Opt in to empty invoice response" }, { status: 400 })
       : current === "fail"
         ? HttpResponse.json({ detail: "boom" }, { status: 500 })
         : HttpResponse.json(current ?? currentFixture()))),
@@ -228,6 +230,8 @@ describe("CardHubPage — cadastro de cartão", () => {
     await waitFor(() => expect(navigateMock).toHaveBeenCalled());
     applyCardNavigation(view);
     await waitFor(() => expect(screen.getByText(/Cartão selecionado:/)).toHaveTextContent("Cartão Novo •4321"));
+    expect(screen.getByTestId("kpi-available")).toHaveTextContent("R$ 5.000,00");
+    expect(screen.getByTestId("kpi-available")).not.toHaveTextContent("Não calculado");
     expect(requests.posted).toHaveLength(1);
     expect(requests.posted[0]).toMatchObject({ organization_id: ORG, last4: "4321", due_day: 12 });
     expect(requests.posted[0]).not.toHaveProperty("closing_day");

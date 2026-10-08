@@ -29,7 +29,8 @@ describe("useCardHubData — troca de cartão", () => {
         if (params.id === "2") await new Promise((r) => setTimeout(r, 60));
         return HttpResponse.json({ card_id: Number(params.id), monthly_data: [row(params.id === "1" ? "111.00" : "222.00")] });
       }),
-      http.get("*/v1/credit-cards/:id/invoices/current", () => HttpResponse.json({ detail: "x" }, { status: 404 })),
+      http.get("*/v1/credit-cards/:id/invoices/current", ({ request }) => new URL(request.url).searchParams.get("empty_as_null") === "true"
+        ? HttpResponse.json(null) : HttpResponse.json({ detail: "missing opt in" }, { status: 400 })),
       http.get("*/v1/credit-cards/:id/future-commitments", () => HttpResponse.json({ monthly_breakdown: [], insights: [] })),
     );
 
@@ -70,7 +71,8 @@ describe("useCardHubData — StrictMode", () => {
     server.use(
       http.get("*/v1/credit-cards", () => { lists += 1; return HttpResponse.json([card(1, 10, 5)]); }),
       http.get("*/v1/credit-cards/:id/invoices/history", () => HttpResponse.json({ monthly_data: [row("111.00")] })),
-      http.get("*/v1/credit-cards/:id/invoices/current", () => HttpResponse.json({ detail: "x" }, { status: 404 })),
+      http.get("*/v1/credit-cards/:id/invoices/current", ({ request }) => new URL(request.url).searchParams.get("empty_as_null") === "true"
+        ? HttpResponse.json(null) : HttpResponse.json({ detail: "missing opt in" }, { status: 400 })),
       http.get("*/v1/credit-cards/:id/future-commitments", () => HttpResponse.json({ monthly_breakdown: [], insights: [] })),
     );
     const { result, rerender } = renderHook(({ refreshToken }) => useCardHubData({ organizationId: ORG, refreshToken }),
