@@ -8,6 +8,7 @@ import { PageTitle } from "../components/primitives";
 import { DragScrollTabs } from "../layouts/DragScrollTabs.jsx";
 import { shouldUseRealData } from "../dataMode.js";
 import { FC } from "../routing/searchContract.js";
+import { cardAllTransactionsPath } from "../routing/invoiceRoute.js";
 import { formatMoneyAbs } from "../money/formatMoney.js";
 import { CARD_VISUAL_WIDTH, CardVisual } from "../features/creditCards/cartoesPanels.jsx";
 import { CardHeuristicTiles } from "../features/creditCards/CardHeuristicTiles.jsx";
@@ -358,7 +359,7 @@ export function CardHubPage({
         cardCurrency={currency}
         loading={recent.loading}
         error={recent.error}
-        onViewAll={() => goTo("/transactions")}
+        onViewAll={() => navigate({ to: cardAllTransactionsPath(selectedCard.public_id) })}
       />
       </div>
 
