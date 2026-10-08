@@ -226,10 +226,10 @@ describe("CardAllTransactionsPage", () => {
     expect(screen.queryByText("Reserva futura")).not.toBeInTheDocument();
     expect(requests.at(-1).searchParams.get("description")).toBe("Farmácia");
     expect(requests.at(-1).searchParams.get("credit_card_id")).toBe("7");
-    await userEvent.setup().selectOptions(screen.getByRole("combobox", { name: "Densidade da lista" }), "compacto");
-    expect(screen.getByRole("combobox", { name: "Densidade da lista" })).toHaveValue("compacto");
-    await userEvent.setup().click(screen.getByRole("checkbox", { name: "Agrupar" }));
-    expect(screen.getByRole("checkbox", { name: "Agrupar" })).toBeChecked();
+    await userEvent.setup().click(screen.getByRole("button", { name: /Densidade da lista: Padrão/i }));
+    expect(screen.getByRole("button", { name: /Densidade da lista: Compacto/i })).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Agrupar por data" }));
+    expect(screen.getByRole("button", { name: "Agrupar por data" })).toHaveAttribute("aria-pressed", "true");
     await userEvent.setup().click(screen.getByRole("button", { name: /Abrir filtros/ }));
     await userEvent.setup().click(screen.getByRole("button", { name: "Preset: Este mês" }));
     await waitFor(() => expect(requests.at(-1).searchParams.has("date_start")).toBe(true));

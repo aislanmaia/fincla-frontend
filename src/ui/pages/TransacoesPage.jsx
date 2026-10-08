@@ -29,6 +29,7 @@ import { useNarrowestFilter } from "../features/transactions/useNarrowestFilter.
 import { resolveLocalData, shouldUseRealData as shouldUseRealDataForMode } from "../dataMode.js";
 import { TransactionsEmptyState } from "../features/transactions/TransactionsEmptyState.jsx";
 import { TransactionsSkeleton } from "../features/transactions/TransactionsSkeleton.jsx";
+import { TransactionsListDisplayControls } from "../features/transactions/TransactionsListDisplayControls.jsx";
 import { ConfirmActionInline, ConfirmActionModal } from "../features/transactions/ConfirmAction.jsx";
 import { ShortcutsModal } from "../features/transactions/ShortcutsModal.jsx";
 import { useTransactionsKeyboard } from "../features/transactions/useTransactionsKeyboard.js";
@@ -3185,51 +3186,10 @@ function TransacoesPageBody({
      ela serve. Densidade, agrupamento e ajuda entram no "⋯" abaixo de 1600. */
   const listPrefsButtons = (
     <>
-          {faixaDaBarra.utilitariosSoltos && (
-          <button
-            type="button"
-            onClick={() => {
-              const order = Object.keys(DENSITIES);
-              const next = order[(order.indexOf(listPrefs.density) + 1) % order.length];
-              setListPrefs({ density: next });
-            }}
-            title={`Densidade da lista: ${DENSITIES[listPrefs.density].label}`}
-            aria-label={`Densidade da lista: ${DENSITIES[listPrefs.density].label}. Clique para alternar.`}
-            /* `flex:"none"` como todo irmão de largura fixa na barra (o `Sep`,
-               o "?", o chip de visualizações). Sem isso os três entram como
-               itens encolhíveis: a busca congela no `minWidth` de 180 px e para
-               de ceder, e o que sobra para absorver a falta são justamente
-               estes 32×32 — que viram retângulos achatados com o ícone cortado.
-               Aparece no fundo da faixa (1024×640 com uma visualização salva
-               ativa, cujo chip é limitado a 190 px e não encolhe), e o guarda de
-               e2e não pega: ele afirma `scrollWidth === clientWidth`, e encolher
-               é exatamente o que impede o transbordo. */
-            style={{ ...G, flex:"none", width:32, height:32, borderRadius:9, cursor:"pointer",
-              border:`1px solid ${T.border}`, background:T.surface, color:T.inkMid,
-              display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>
-            ▤
-          </button>
-          )}
-          {faixaDaBarra.utilitariosSoltos && (
-          <button
-            type="button"
-            disabled={!canGroup}
-            onClick={() => setListPrefs({ grouped: !listPrefs.grouped })}
-            title={canGroup
-              ? (isGrouped ? "Agrupado por data" : "Lista contínua")
-              : "Agrupar por data só vale ordenando por data"}
-            aria-pressed={isGrouped}
-            aria-label="Agrupar por data"
-            style={{ ...G, flex:"none", width:32, height:32, borderRadius:9,
-              cursor: canGroup ? "pointer" : "not-allowed",
-              opacity: canGroup ? 1 : 0.4,
-              border:`1px solid ${isGrouped ? "#BFD3FA" : T.border}`,
-              background: isGrouped ? T.blueLight : T.surface,
-              color: isGrouped ? T.blue : T.inkMid,
-              display:"flex", alignItems:"center", justifyContent:"center", fontSize:12 }}>
-            ▦
-          </button>
-          )}
+          {faixaDaBarra.utilitariosSoltos && <TransactionsListDisplayControls
+            density={listPrefs.density} grouped={isGrouped} canGroup={canGroup}
+            onDensityChange={(density) => setListPrefs({ density })}
+            onGroupChange={() => setListPrefs({ grouped: !listPrefs.grouped })} />}
           {/* Recarregar por ÚLTIMO, encostado no "?", e não entre os outros
               dois. Densidade e agrupamento mudam COMO a lista se apresenta e
               leem como um par; recarregar não muda apresentação nenhuma, e no
