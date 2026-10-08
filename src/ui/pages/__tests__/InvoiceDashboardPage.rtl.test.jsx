@@ -2,7 +2,7 @@
 
 import React from "react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -16,7 +16,8 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 import { InvoiceDashboardPage } from "../InvoiceDashboardPage.jsx";
-import { InvoiceSummaryTiles } from "../../features/invoiceDashboard/InvoiceBottomSections.jsx";
+import { InvoiceSummaryTiles, useInvoiceBudgetContext } from "../../features/invoiceDashboard/InvoiceBottomSections.jsx";
+import { BUDGETS_CHANGED_EVENT } from "../../../api/budgets";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 const server = setupServer();
@@ -164,6 +165,34 @@ const renderPage = (props = {}) => render(
 const readyDesktop = () => screen.findByTestId("invoice-title");
 
 describe("InvoiceDashboardPage — card da fatura", () => {
+  it.each([false, true])("inclui orçamento sem gasto e gasto sem teto no layout mobile=%s", async (isMobile) => {
+    mockApi({ budgets: [
+      { id: "budget-1", tag_id: "c1", tag_name: "Alimentação", period_type: "monthly", is_active: true, amount: money("5000.00"), spent_amount: money("1000.00"), remaining_amount: money("4000.00"), usage_percent: 20 },
+      { id: "budget-2", tag_id: "c9", tag_name: "Vestuário", period_type: "monthly", is_active: true, amount: money("800.00"), spent_amount: money("0.00"), remaining_amount: money("800.00"), usage_percent: 0 },
+    ] });
+    renderPage({ isMobile });
+    const budget = await screen.findByTestId("invoice-budget");
+    await waitFor(() => expect(within(budget).getByText("Vestuário")).toBeVisible());
+    expect(within(budget).getByText("Vestuário").parentElement).toHaveTextContent("0,00");
+    expect(within(budget).getByText("Moradia").parentElement).toHaveTextContent("Sem teto");
+    expect(within(budget).getByText("Moradia").parentElement).toHaveTextContent("2.000,00");
+  });
+
+  it("recarrega orçamento quando o mês civil vira ou um orçamento muda", async () => {
+    const calls = mockApi();
+    function Probe({ now }) {
+      const budget = useInvoiceBudgetContext(ORG, true, now);
+      return <span>{budget.status}</span>;
+    }
+    const view = render(<Probe now={new Date(2026, 9, 31)} />);
+    await screen.findByText("ok");
+    expect(calls.filter((call) => call === "GET /v1/budgets")).toHaveLength(1);
+    view.rerender(<Probe now={new Date(2026, 10, 1)} />);
+    await waitFor(() => expect(calls.filter((call) => call === "GET /v1/budgets")).toHaveLength(2));
+    await act(async () => { window.dispatchEvent(new Event(BUDGETS_CHANGED_EVENT)); });
+    await waitFor(() => expect(calls.filter((call) => call === "GET /v1/budgets")).toHaveLength(3));
+  });
+
   it("soma estornos Money só quando a moeda é compatível", () => {
     const base = { card: cardFixture(), organizationId: ORG, currency: "BRL", isMobile: false, onFilter: vi.fn() };
     const view = render(<InvoiceSummaryTiles {...base} detail={{ items: [{ modality: "refund", amount: money("-38.90") }] }} />);
@@ -210,13 +239,28 @@ describe("InvoiceDashboardPage — card da fatura", () => {
   });
 
   it("mostra teto em EUR e gasto da fatura em BRL com as moedas próprias", async () => {
-    mockApi({ budgets: [{ id: "budget-eur", tag_id: "c1", tag_name: "Alimentação", period_type: "monthly", is_active: true,
-      amount: money("5000.00", "EUR"), spent_amount: money("1000.00", "EUR"), remaining_amount: money("4000.00", "EUR"), usage_percent: 20 }] });
+    mockApi({ budgets: [
+      { id: "budget-eur", tag_id: "c1", tag_name: "Alimentação", period_type: "monthly", is_active: true,
+        amount: money("5000.00", "EUR"), spent_amount: money("1000.00", "EUR"), remaining_amount: money("4000.00", "EUR"), usage_percent: 20 },
+      { id: "budget-eur-empty", tag_id: "c9", tag_name: "Vestuário", period_type: "monthly", is_active: true,
+        amount: money("800.00", "EUR"), spent_amount: money("0.00", "EUR"), remaining_amount: money("800.00", "EUR"), usage_percent: 0 },
+    ] });
     renderPage();
     const budget = await screen.findByTestId("invoice-budget");
     await waitFor(() => expect(budget).toHaveTextContent("€"));
     expect(budget).toHaveTextContent("5.000,00");
     expect(budget).toHaveTextContent("3.000,00");
+    expect(within(budget).getByText("Vestuário").parentElement.children[4]).toHaveTextContent("—");
+  });
+
+  it("não inventa zero para orçamento sem match quando há gasto sem categoria identificável", async () => {
+    mockApi({ budgets: [{ id: "budget-2", tag_id: "c9", tag_name: "Vestuário", period_type: "monthly", is_active: true,
+      amount: money("800.00"), spent_amount: money("0.00"), remaining_amount: money("800.00"), usage_percent: 0 }],
+    detail: { ...DETAILS, "2026/10": () => detailFixture({ category_breakdown: [{ category_id: null, category_name: "Sem categoria", category_color: null, total: money("100.00"), percentage: 100, transaction_count: 1 }] }) } });
+    renderPage();
+    const budget = await screen.findByTestId("invoice-budget");
+    await waitFor(() => expect(within(budget).getByText("Vestuário")).toBeVisible());
+    expect(within(budget).getByText("Vestuário").parentElement.children[4]).toHaveTextContent("—");
   });
 
   it("rotula a nota como dado do cartão e salva sem criar uma anotação fictícia da fatura", async () => {
@@ -346,6 +390,7 @@ describe("InvoiceDashboardPage — card da fatura", () => {
     expect(await screen.findByTestId("six-month-average")).toHaveTextContent("Sem faturas anteriores");
     expect(screen.getByTestId("six-month-average")).not.toHaveTextContent("R$ 0,00");
     expect(screen.getByTestId("spending-pace")).not.toHaveTextContent("Ciclo anterior");
+    expect(within(screen.getByTestId("spending-pace")).getByRole("img")).toHaveStyle({ height: "170px" });
     expect(within(screen.getByTestId("spending-pace")).getByTestId("pace-current-point")).toBeVisible();
     expect(within(screen.getByTestId("spending-pace")).getByTestId("pace-tooltip")).toHaveTextContent("R$ 0,00");
     expect(within(screen.getByTestId("spending-pace")).getByTestId("pace-tooltip").querySelector("div:last-child")).toHaveStyle({ fontSize: "12px" });
@@ -639,7 +684,7 @@ describe("InvoiceDashboardPage — exportar CSV", () => {
 
 describe("InvoiceDashboardPage — estados de borda", () => {
   it("fatura sem lançamentos (200 com null) é estado vazio, nunca erro", async () => {
-    mockApi({ detail: {} });
+    const calls = mockApi({ detail: {} });
     renderPage();
     await screen.findByTestId("invoice-empty");
 
@@ -648,6 +693,10 @@ describe("InvoiceDashboardPage — estados de borda", () => {
     expect(screen.queryByTestId("pay-controls")).toBeNull();
     expect(screen.getByTestId("invoice-total")).toHaveTextContent("Sem lançamentos");
     expect(screen.getByTestId("invoice-total")).not.toHaveTextContent("R$");
+    const budget = await screen.findByTestId("invoice-budget");
+    await waitFor(() => expect(budget).toHaveTextContent("Alimentação"));
+    expect(within(budget).getByText("Alimentação").parentElement.children[4]).toHaveTextContent("0,00");
+    expect(calls.filter((call) => call === "GET /v1/budgets")).toHaveLength(1);
   });
 
   it("falha do detalhe mostra erro e permite tentar de novo", async () => {

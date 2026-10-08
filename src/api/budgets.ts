@@ -14,6 +14,11 @@ import type {
   PreviewTransactionResponse,
 } from './types';
 
+export const BUDGETS_CHANGED_EVENT = 'fincla:budgets-changed';
+const notifyBudgetsChanged = () => {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(BUDGETS_CHANGED_EVENT));
+};
+
 /**
  * Cria um novo orçamento para uma tag/categoria
  */
@@ -24,6 +29,7 @@ export const createBudget = async (
   const response = await apiClient.post<Budget>('/budgets', data, {
     params: { organization_id: organizationId },
   });
+  notifyBudgetsChanged();
   return unwrapMoney(response.data);
 };
 
@@ -78,6 +84,7 @@ export const updateBudget = async (
     data,
     { params: { organization_id: organizationId } }
   );
+  notifyBudgetsChanged();
   return unwrapMoney(response.data);
 };
 
@@ -91,6 +98,7 @@ export const deleteBudget = async (
   await apiClient.delete(`/budgets/${budgetId}`, {
     params: { organization_id: organizationId },
   });
+  notifyBudgetsChanged();
 };
 
 /**

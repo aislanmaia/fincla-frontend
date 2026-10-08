@@ -78,7 +78,7 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
 
   const currency = card?.currency || undefined;
   const invoice = invoices.find((i) => i.key === selectedKey) ?? null;
-  const budget = useInvoiceBudgetContext(organizationId, detailState === "ok" && invoice?.status === "open");
+  const budget = useInvoiceBudgetContext(organizationId, (detailState === "ok" || detailState === "empty") && invoice?.status === "open", now, transactionsRefreshToken);
   const pad = isMobile ? 16 : 28;
 
   const exportCsv = () => {
@@ -132,6 +132,9 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
   );
 
   const showBreakdown = detailState === "ok" && detail;
+  const emptyOpenBudget = detailState === "empty" && invoice?.status === "open"
+    ? <InvoiceBudgetContext detail={null} invoice={invoice} budget={budget} currency={currency} isMobile={isMobile} now={now} />
+    : null;
   const lower = (
     <>
       {detailState === "forecast" && <ForecastInstallments installments={data.futureRow?.top_installments} currency={currency} isMobile={isMobile} />}
@@ -173,6 +176,7 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
             )}
           />
           {analysis}
+          {emptyOpenBudget}
           {lower}
         </>
       ) : invoice && (
@@ -189,6 +193,7 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
             <InvoiceDetailBody invoice={invoice} currency={currency} {...detailProps} />
            </Card>
           {analysis}
+          {emptyOpenBudget}
           {lower}
         </>
       )}

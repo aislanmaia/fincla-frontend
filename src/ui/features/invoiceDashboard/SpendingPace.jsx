@@ -86,16 +86,13 @@ export function SpendingPace({ pace, currency }) {
               const position = ((event.clientX - rect.left) / rect.width) * 580;
               setFocusDay(Math.min(days, Math.max(1, Math.round(((position - 28) / 524) * (days - 1)) + 1)));
             }}
-            viewBox="0 0 580 220" style={{ width: "100%", height: "auto", display: "block" }}>
+            viewBox="0 0 580 220" preserveAspectRatio="none" style={{ width: "100%", height: 170, display: "block" }}>
             {[32, 106, 180].map((gridY) => <line key={gridY} x1="28" y1={gridY} x2="552" y2={gridY} stroke={T.grayLight} />)}
             {previous.length > 1 && <polyline points={points(previous)} fill="none" stroke={T.inkGhost} strokeWidth="2.5" strokeDasharray="5 4" strokeLinejoin="round" />}
             {current.length > 1 && <polyline points={points(current)} fill="none" stroke={T.blue} strokeWidth="3" strokeLinejoin="round" />}
-            {previous.length === 1 && <circle data-testid="pace-previous-point" cx={x(previous[0].day)} cy={y(valueOf(previous[0].cumulative))} r="5" fill={T.inkGhost} />}
-            {current.length === 1 && <circle data-testid="pace-current-point" cx={x(current[0].day)} cy={y(valueOf(current[0].cumulative))} r="5" fill={T.blue} />}
-            <text x="28" y="207" style={{ ...G, fontSize: 11, fill: T.inkMid }}>Dia 1</text>
-            <text x="290" y="207" textAnchor="middle" style={{ ...G, fontSize: 11, fill: T.inkMid }}>Dia {Math.ceil(days / 2)}</text>
-            <text x="552" y="207" textAnchor="end" style={{ ...G, fontSize: 11, fill: T.inkMid }}>Dia {days}</text>
           </svg>
+          {previous.length > 0 && valueOf(previous.at(-1).cumulative) !== null && <span data-testid="pace-previous-point" aria-hidden="true" style={{ position: "absolute", left: `${x(previous.at(-1).day) / 580 * 100}%`, top: `${y(valueOf(previous.at(-1).cumulative)) / 220 * 100}%`, width: 7, height: 7, borderRadius: "50%", background: T.inkGhost, transform: "translate(-50%, -50%)", pointerEvents: "none" }} />}
+          {current.length > 0 && valueOf(current.at(-1).cumulative) !== null && <span data-testid="pace-current-point" aria-hidden="true" style={{ position: "absolute", left: `${x(current.at(-1).day) / 580 * 100}%`, top: `${y(valueOf(current.at(-1).cumulative)) / 220 * 100}%`, width: 9, height: 9, borderRadius: "50%", background: T.blue, transform: "translate(-50%, -50%)", pointerEvents: "none" }} />}
           {activeValue && <div data-testid="pace-tooltip" style={{
             position: "absolute", left: `clamp(0px, ${x(activeDay) / 580 * 100}%, calc(100% - 180px))`,
             top: `clamp(48px, ${y(valueOf(activeValue.cumulative)) / 220 * 100}%, 100%)`,
@@ -106,6 +103,9 @@ export function SpendingPace({ pace, currency }) {
             <div style={{ ...G, fontSize: 11, lineHeight: 1.3 }}>Dia {activeDay} · {pace.previous ? "atual / anterior" : "ciclo atual"}</div>
             <div style={{ ...G, ...NUM, fontSize: 12, fontWeight: 700, lineHeight: 1.3, whiteSpace: "nowrap" }}>{tooltip}</div>
           </div>}
+          </div>
+          <div aria-hidden="true" style={{ ...G, ...NUM, display: "flex", justifyContent: "space-between", fontSize: 11, color: T.inkMid, padding: "0 4px" }}>
+            <span>Dia 1</span><span>Dia {Math.ceil(days / 2)}</span><span>Dia {days}</span>
           </div>
           {activeDay != null && <div role="status" style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0, 0, 0, 0)", whiteSpace: "nowrap", border: 0 }}>
             Dia {activeDay}: {currentPoint ? `atual ${formatMoney(currentPoint.cumulative, currency)}` : "atual ainda sem dados"}
