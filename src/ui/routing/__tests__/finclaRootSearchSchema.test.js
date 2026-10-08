@@ -3,10 +3,16 @@ import { FC, FC_MODAL } from "../searchContract.js";
 import { parseFinclaRootSearch } from "../finclaRootSearchSchema.js";
 
 describe("finclaRootSearchSchema", () => {
-  it("aceita o cartão do Hub na URL e descarta IDs inválidos", () => {
-    expect(parseFinclaRootSearch({ view: "new", card: " 2 " })).toEqual({ view: "new", card: 2 });
-    expect(parseFinclaRootSearch({ view: "new", card: "2abc" })).toEqual({ view: "new" });
-    expect(parseFinclaRootSearch({ view: "new", card: "0" })).toEqual({ view: "new" });
+  it("aceita somente modalidade de fatura suportada no deep link", () => {
+    expect(parseFinclaRootSearch({ fc_invoice_modality: "refund" }).fc_invoice_modality).toBe("refund");
+    expect(parseFinclaRootSearch({ fc_invoice_modality: "installment" }).fc_invoice_modality).toBe("installment");
+    expect(parseFinclaRootSearch({ fc_invoice_modality: "recurring" }).fc_invoice_modality).toBeUndefined();
+  });
+  it("aceita o identificador público do cartão no Hub e descarta IDs inválidos", () => {
+    const publicId = "00000000-0000-4000-8000-000000000001";
+    expect(parseFinclaRootSearch({ view: "new", card: ` ${publicId} ` })).toMatchObject({ view: "new", card: publicId });
+    expect(parseFinclaRootSearch({ view: "new", card: "2abc" }).card).toBeUndefined();
+    expect(parseFinclaRootSearch({ view: "new", card: "2" }).card).toBeUndefined();
   });
   it("remove chaves fora da allowlist", () => {
     const out = parseFinclaRootSearch({

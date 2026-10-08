@@ -122,6 +122,7 @@ export const finclaRootSearchSchema = z.object({
   [FC.DATE]: fcYmdSchema,
   [FC.VIEW]: viewSchema,
   [FC.HUB_CARD]: hubCardSchema,
+  [FC.INVOICE_MODALITY]: z.preprocess((value) => value === "installment" || value === "refund" ? value : undefined, z.enum(["installment", "refund"]).optional()),
 });
 
 /** Para testes e uso fora do router (parse puro). */

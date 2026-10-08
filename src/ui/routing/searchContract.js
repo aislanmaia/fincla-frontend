@@ -24,6 +24,7 @@ export const FC = {
   // Sem prefixo `fc_` de propósito: é o contrato público `/cards?view=new` do Hub de Cartões.
   VIEW: "view",
   HUB_CARD: "card",
+  INVOICE_MODALITY: "fc_invoice_modality",
 };
 
 /** Valores de `fc_modal` (inglês, partilháveis). */

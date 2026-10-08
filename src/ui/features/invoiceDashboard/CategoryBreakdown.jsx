@@ -58,7 +58,7 @@ function Legend({ rows, currency, detailed = false }) {
 export function CategoryBreakdown({ breakdown, total, currency, isMobile }) {
   const [open, setOpen] = useState(false);
   const rows = buildCategoryRows(breakdown);
-  const { visible } = groupCategoryRows(rows);
+  const { visible } = groupCategoryRows(rows, 4);
   const hasMore = visible.some((r) => r.isOthers);
   const centerLabel = formatMoney(total, currency) ?? "—";
 

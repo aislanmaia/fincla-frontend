@@ -1009,7 +1009,6 @@ export interface InvoiceResponse {
       current_total: number;
       previous_total: number;
       change: number;
-      change_percent: number | null;
     }[];
     items: {
       change_type: 'new' | 'removed' | 'changed_value';
@@ -1381,6 +1380,8 @@ export interface Budget {
   /** Quando o backend enviar, alinha ícone à UI (Lucide `icon_key`) */
   tag_icon_key?: string | null;
   tag_color: string | null;
+  /** Preserved from the canonical amount before unwrapMoney for mixed-currency organizations. */
+  currency?: string | null;
   amount: number;
   period_type: BudgetPeriodType;
   is_active: boolean;
