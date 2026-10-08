@@ -36,9 +36,9 @@ const RAIL = [
 ];
 
 /** Quantos valores estão escolhidos em cada faceta — o badge do trilho. */
-export function facetSelectionCounts(filter) {
+export function facetSelectionCounts(filter, defaultPeriod = "mes") {
   return {
-    periodo: filter.period !== "mes" ? 1 : 0,
+    periodo: filter.period !== defaultPeriod ? 1 : 0,
     tipo: filter.type !== "todos" ? 1 : 0,
     categoria: filter.cats.length,
     tag: filter.tags.length,
@@ -70,10 +70,15 @@ export function TransactionsFilterPanel({
   resultCount = 0,
   resultsLoading = false,
   compact = false,
+  visibleFacetKeys = null,
+  hideRail = false,
+  defaultPeriod = "mes",
+  cardScopePanel = null,
+  selectionOverrides = null,
   /** Largura real do painel — decide se as opções cabem em mais de uma coluna. */
   width = 396,
 }) {
-  const counts = facetSelectionCounts(filter);
+  const counts = { ...facetSelectionCounts(filter, defaultPeriod), ...selectionOverrides };
   // Acima de ~560 px o pane comporta as opções em grade. Abaixo disso duas
   // colunas espremem os rótulos das categorias, que são longos ("Lazer &
   // Entretenimento"), e cada opção passa a truncar.
@@ -103,7 +108,7 @@ export function TransactionsFilterPanel({
            (`maxWidth`), porque é o item que o `max-content` mede — assim o
            trilho não pode comer o painel se algum idioma trouxer um rótulo
            absurdo, e aí o `ellipsis` volta a ser a última linha de defesa. */
-        gridTemplateColumns: compact ? "minmax(0,1fr)" : "minmax(132px, max-content) minmax(0,1fr)",
+        gridTemplateColumns: compact || hideRail ? "minmax(0,1fr)" : "minmax(132px, max-content) minmax(0,1fr)",
         gridTemplateRows: "minmax(0,1fr) auto",
         height: "100%",
         minHeight: 0,
@@ -115,7 +120,7 @@ export function TransactionsFilterPanel({
     >
       {/* Trilho. No mobile ele deita e rola na horizontal — uma coluna de 132px
           numa tela de 360 comeria mais de um terço da largura. */}
-      <div
+      {!hideRail && <div
         className={compact ? "fincla-scroll" : undefined}
         style={{
           background: "#FBFBFC",
@@ -145,7 +150,7 @@ export function TransactionsFilterPanel({
               : { height: 1, background: T.border, margin: "5px 4px", flex: "none" }
           }
         />
-        {RAIL.map((r) => (
+        {RAIL.filter((r) => !visibleFacetKeys || visibleFacetKeys.includes(r.key)).map((r) => (
           <RailButton
             key={r.key}
             icon={r.icon}
@@ -156,7 +161,7 @@ export function TransactionsFilterPanel({
             onClick={() => onFacetChange(r.key)}
           />
         ))}
-      </div>
+      </div>}
 
       {/* Painel da faceta escolhida. */}
       <div
@@ -171,7 +176,7 @@ export function TransactionsFilterPanel({
           overflowY: "auto",
         }}
       >
-        {facet === "ativos" ? (
+        {facet === "cartao" && cardScopePanel ? cardScopePanel : facet === "ativos" ? (
           <ActiveFacetsPane
             facets={activeFacets}
             onClearFacet={onClearFacet}

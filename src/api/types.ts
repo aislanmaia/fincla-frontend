@@ -662,6 +662,7 @@ export interface ListTransactionsQuery {
   organization_id: string;
   /** Apenas lançamentos vinculados a este cartão; combina com os outros filtros. */
   credit_card_id?: number;
+  invoice_id?: number;
   type?: 'income' | 'expense' | 'refund';
   /** Um valor, ou vários (casa com qualquer um) — serializado como param repetido. */
   category?: string | string[];
@@ -680,6 +681,7 @@ export interface ListTransactionsQuery {
    * então as duas facets podem estar ativas ao mesmo tempo.
    */
   tag_id?: string | string[];
+  tag_match?: 'any' | 'all';
   date_start?: string;
   date_end?: string;
   value_min?: number;
@@ -748,6 +750,8 @@ export interface TransactionsFacetsQuery
   extends Omit<ListTransactionsQuery, 'page' | 'limit' | 'sort_by' | 'sort_order'> {
   /** Facets a calcular. Omita para receber todas. */
   facets?: TransactionFacetName[];
+  localize_labels?: boolean;
+  locale?: string;
 }
 
 /**
@@ -788,10 +792,15 @@ export interface PaginatedTransactionsResponse {
 
 export interface TransactionsSummaryQuery {
   organization_id: string;
+  credit_card_id?: number;
+  invoice_id?: number;
+  include_breakdown?: boolean;
+  locale?: string;
   type?: 'income' | 'expense' | 'refund';
-  category?: string;
+  category?: string | string[];
   /** Quando o filtro da UI usa UUID da tag categoria (alinhado a GET /transactions) */
-  tag_id?: string;
+  tag_id?: string | string[];
+  tag_match?: 'any' | 'all';
   /** Um valor, ou vários (casa com qualquer um) — serializado como param repetido. */
   payment_method?: string | string[];
   description?: string;
@@ -851,6 +860,8 @@ export interface LargestTransaction {
 
 export interface TransactionsSummaryResponse {
   total_transactions: number;
+  /** Total movimentado no recorte, por moeda original; preservado como Money. */
+  by_currency?: Array<{ amount: string; currency: string }>;
   total_value: number;
   total_income: number;
   /** Bruto — soma absoluta de transações type='expense' (não desconta estornos). */
@@ -892,6 +903,11 @@ export interface TransactionsSummaryResponse {
   unsettled_refunds: number;
   /** Mesma fórmula de `balance`, restrita a status = 'paid'. */
   settled_balance: number;
+  /** Opt-in, full filtered result. Values remain separate by currency. */
+  breakdown?: {
+    by_category: Array<{ category: string; amount: number; amount_currency?: string | null }>;
+    by_month: Array<{ year: number; month: number; amount: number; amount_currency?: string | null }>;
+  } | null;
 }
 
 // ===== CARTÕES DE CRÉDITO =====

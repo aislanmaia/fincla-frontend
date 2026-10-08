@@ -65,6 +65,7 @@ export function TransactionsFilterBar({
   savedViews,
   searchInput,
   setSearchInput,
+  searchPlaceholder,
   hideSearch = false,
   compact = false,
   onClearAll,
@@ -231,6 +232,7 @@ export function TransactionsFilterBar({
         <SearchBar
           search={search}
           setSearch={setSearch}
+          placeholder={searchPlaceholder}
           sort={filter.sort}
           setSort={filter.setSort}
           compact={compact}
