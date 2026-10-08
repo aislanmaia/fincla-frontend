@@ -39,7 +39,7 @@ export function AverageComparison({ detail, currency }) {
   );
 }
 
-export function SpendingPace({ pace, currency }) {
+export function SpendingPace({ pace, currency, isMobile = false }) {
   const [focusDay, setFocusDay] = useState(null);
   const [focusSeries, setFocusSeries] = useState("current");
   const current = pace.current ?? [];
@@ -49,12 +49,14 @@ export function SpendingPace({ pace, currency }) {
   const values = all.map((point) => valueOf(point.cumulative)).filter((value) => value !== null);
   const max = Math.max(1, ...values);
   const min = Math.min(0, ...values);
-  const x = (day) => 28 + (day / days) * 524;
+  const x = (day) => 28 + ((day - 1) / Math.max(1, days - 1)) * 524;
   const y = (value) => 180 - ((value - min) / (max - min || 1)) * 148;
-  const points = (series) => [
-    `${x(0)},${y(0)}`,
-    ...series.filter((point) => valueOf(point.cumulative) !== null).map((point) => `${x(point.day)},${y(valueOf(point.cumulative))}`),
-  ].join(" ");
+  const points = (series) => series.filter((point) => valueOf(point.cumulative) !== null).map((point) => `${x(point.day)},${y(valueOf(point.cumulative))}`).join(" ");
+  const axisTicks = [max, (max + min) / 2, min];
+  const axisLabel = (value) => {
+    if (!currency) return value.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+    return new Intl.NumberFormat("pt-BR", { style: "currency", currency, notation: "compact", maximumFractionDigits: 1 }).format(value);
+  };
   const activeDay = focusDay ?? current.at(-1)?.day ?? previous.at(-1)?.day;
   const currentPoint = current.find((point) => point.day === activeDay);
   const previousPoint = previous.find((point) => point.day === activeDay);
@@ -82,7 +84,11 @@ export function SpendingPace({ pace, currency }) {
             <span><span style={{ color: T.blue }}>●</span> Ciclo atual</span>
             {pace.previous && <span><span style={{ color: T.inkGhost }}>●</span> Ciclo anterior</span>}
           </div>
-          <div style={{ position: "relative", minWidth: 0, marginTop: 8 }}>
+          <div style={{ display: "flex", alignItems: "stretch", gap: isMobile ? 4 : 8, minWidth: 0, marginTop: 8 }}>
+          <div role="group" aria-label="Escala de valores" style={{ position: "relative", width: isMobile ? 60 : 82, height: 170, flexShrink: 0, ...G, ...NUM, fontSize: isMobile ? 9 : 10, color: T.inkMid }}>
+            {axisTicks.map((value, index) => <span key={index} style={{ position: "absolute", top: `${[32, 106, 180][index] / 220 * 100}%`, right: 0, transform: "translateY(-50%)", whiteSpace: "nowrap" }}>{axisLabel(value)}</span>)}
+          </div>
+          <div style={{ position: "relative", minWidth: 0, flex: 1 }}>
           <svg role="img" aria-label="Gráfico de gasto acumulado por dia do ciclo. Use as setas para explorar os valores." tabIndex="0"
             onKeyDown={(event) => {
               if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
@@ -92,7 +98,7 @@ export function SpendingPace({ pace, currency }) {
             onMouseMove={(event) => {
               const rect = event.currentTarget.getBoundingClientRect();
               const position = ((event.clientX - rect.left) / rect.width) * 580;
-              const day = Math.min(days, Math.max(1, Math.round(((position - 28) / 524) * days)));
+              const day = Math.min(days, Math.max(1, Math.round(((position - 28) / 524) * (days - 1)) + 1));
               const currentAtDay = current.find((point) => point.day === day);
               const previousAtDay = previous.find((point) => point.day === day);
               const pointerY = ((event.clientY - rect.top) / rect.height) * 220;
@@ -105,8 +111,8 @@ export function SpendingPace({ pace, currency }) {
             }}
             viewBox="0 0 580 220" preserveAspectRatio="none" style={{ width: "100%", height: 170, display: "block" }}>
             {[32, 106, 180].map((gridY) => <line key={gridY} x1="28" y1={gridY} x2="552" y2={gridY} stroke={T.grayLight} />)}
-            {previous.length > 0 && <polyline points={points(previous)} fill="none" stroke={T.inkGhost} strokeWidth="2.5" strokeDasharray="5 4" strokeLinejoin="round" />}
-            {current.length > 0 && <polyline points={points(current)} fill="none" stroke={T.blue} strokeWidth="3" strokeLinejoin="round" />}
+            {previous.length > 1 && <polyline points={points(previous)} fill="none" stroke={T.inkGhost} strokeWidth="2.5" strokeDasharray="5 4" strokeLinejoin="round" />}
+            {current.length > 1 && <polyline points={points(current)} fill="none" stroke={T.blue} strokeWidth="3" strokeLinejoin="round" />}
           </svg>
           {previous.length > 0 && valueOf(previous.at(-1).cumulative) !== null && <span data-testid="pace-previous-point" aria-hidden="true" style={{ position: "absolute", left: `${x(previous.at(-1).day) / 580 * 100}%`, top: `${y(valueOf(previous.at(-1).cumulative)) / 220 * 100}%`, width: 7, height: 7, borderRadius: "50%", background: T.inkGhost, transform: "translate(-50%, -50%)", pointerEvents: "none" }} />}
           {current.length > 0 && valueOf(current.at(-1).cumulative) !== null && <span data-testid="pace-current-point" aria-hidden="true" style={{ position: "absolute", left: `${x(current.at(-1).day) / 580 * 100}%`, top: `${y(valueOf(current.at(-1).cumulative)) / 220 * 100}%`, width: 9, height: 9, borderRadius: "50%", background: T.blue, transform: "translate(-50%, -50%)", pointerEvents: "none" }} />}
@@ -121,8 +127,12 @@ export function SpendingPace({ pace, currency }) {
             {tooltipValues.map(([label, value]) => <div key={label} style={{ ...G, ...NUM, fontSize: 12, fontWeight: 700, lineHeight: 1.3, whiteSpace: "nowrap" }}>{label}: {value}</div>)}
           </div>}
           </div>
-          <div aria-hidden="true" style={{ ...G, ...NUM, display: "flex", justifyContent: "space-between", fontSize: 11, color: T.inkMid, padding: "0 4px" }}>
-            <span>Início ({formatMoney(0, currency) ?? "0"})</span><span>Dia {Math.ceil(days / 2)}</span><span>Dia {days}</span>
+          </div>
+          <div aria-hidden="true" style={{ display: "flex", gap: isMobile ? 4 : 8 }}>
+            <span style={{ width: isMobile ? 60 : 82, flexShrink: 0 }} />
+            <div style={{ ...G, ...NUM, display: "flex", flex: 1, justifyContent: "space-between", fontSize: 11, color: T.inkMid, padding: "0 4px" }}>
+              <span>Dia 1</span><span>Dia {Math.ceil(days / 2)}</span><span>Dia {days}</span>
+            </div>
           </div>
           {activeDay != null && <div role="status" style={{ position: "absolute", width: 1, height: 1, padding: 0, margin: -1, overflow: "hidden", clip: "rect(0, 0, 0, 0)", whiteSpace: "nowrap", border: 0 }}>
             Dia {activeDay}: {currentPoint ? `atual ${formatMoney(currentPoint.cumulative, currency)}` : "atual ainda sem dados"}
