@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { updateCreditCard } from "../../../api/creditCards";
-import { listBudgets } from "../../../api/budgets";
+import { BUDGETS_CHANGED_EVENT, listBudgets } from "../../../api/budgets";
 import { Card, Btn } from "../../components/primitives";
 import { categoryLabelPtForTag } from "../../data/categoryLabels.js";
 import { formatMoney } from "../../money/formatMoney.js";
@@ -14,37 +14,45 @@ const title = { ...G, fontSize: 18, fontWeight: 800, margin: 0, color: T.ink };
 const caption = { ...G, fontSize: 12, color: T.inkMid };
 const budgetRequests = new Map();
 
-function getBudgetOnce(organizationId) {
-  if (!budgetRequests.has(organizationId)) {
-    const request = listBudgets(organizationId, "monthly", true).finally(() => budgetRequests.delete(organizationId));
-    budgetRequests.set(organizationId, request);
+function getBudgetOnce(organizationId, requestKey) {
+  if (!budgetRequests.has(requestKey)) {
+    const request = listBudgets(organizationId, "monthly", true).finally(() => budgetRequests.delete(requestKey));
+    budgetRequests.set(requestKey, request);
   }
-  return budgetRequests.get(organizationId);
+  return budgetRequests.get(requestKey);
 }
 
-export function useInvoiceBudgetContext(organizationId, enabled) {
-  const [state, setState] = useState({ organizationId: null, status: "idle", budgets: [] });
+export function useInvoiceBudgetContext(organizationId, enabled, now, refreshToken = 0) {
+  const [state, setState] = useState({ requestKey: null, status: "idle", budgets: [] });
+  const [revision, setRevision] = useState(0);
   const loaded = useRef(new Map());
+  const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const requestKey = `${organizationId}:${monthKey}:${refreshToken}:${revision}`;
+  useEffect(() => {
+    const invalidate = () => { loaded.current.clear(); setRevision((value) => value + 1); };
+    window.addEventListener(BUDGETS_CHANGED_EVENT, invalidate);
+    return () => window.removeEventListener(BUDGETS_CHANGED_EVENT, invalidate);
+  }, []);
   useEffect(() => {
     if (!enabled || !organizationId) return;
-    if (loaded.current.has(organizationId)) {
-      setState({ organizationId, status: "ok", budgets: loaded.current.get(organizationId) });
+    if (loaded.current.has(requestKey)) {
+      setState({ requestKey, status: "ok", budgets: loaded.current.get(requestKey) });
       return;
     }
     let active = true;
-    setState({ organizationId, status: "loading", budgets: [] });
-    getBudgetOnce(organizationId).then((result) => {
+    setState({ requestKey, status: "loading", budgets: [] });
+    getBudgetOnce(organizationId, requestKey).then((result) => {
       if (active) {
         const budgets = result.budgets ?? [];
-        loaded.current.set(organizationId, budgets);
-        setState({ organizationId, status: "ok", budgets });
+        loaded.current.set(requestKey, budgets);
+        setState({ requestKey, status: "ok", budgets });
       }
     }).catch(() => {
-      if (active) setState({ organizationId, status: "error", budgets: [] });
+      if (active) setState({ requestKey, status: "error", budgets: [] });
     });
     return () => { active = false; };
-  }, [organizationId, enabled]);
-  return state;
+  }, [organizationId, enabled, requestKey]);
+  return state.requestKey === requestKey ? state : { requestKey, status: "idle", budgets: [] };
 }
 
 export function InvoiceBudgetContext({ detail, invoice, budget, currency, isMobile, now }) {
@@ -57,9 +65,15 @@ export function InvoiceBudgetContext({ detail, invoice, budget, currency, isMobi
     : "ciclo desta fatura";
   const activeBudgets = budget.budgets.filter((row) => row.period_type === "monthly" && row.is_active);
   const byTag = new Map(activeBudgets.map((row) => [row.tag_id, row]));
-  const categories = detail?.category_breakdown ?? [];
-  const rows = categories.map((category) => ({ category, budget: byTag.get(category.category_id) ?? null }));
-  const format = (value, code) => formatMoney(value, code) ?? "—";
+  const categories = Array.isArray(detail?.category_breakdown) ? detail.category_breakdown : [];
+  const breakdownComplete = Array.isArray(detail?.category_breakdown) || invoice?.isEmpty === true;
+  const categoriesIdentified = categories.every((category) => category.category_id != null);
+  const categoryById = new Map(categories.filter((category) => category.category_id).map((category) => [category.category_id, category]));
+  const rows = [
+    ...activeBudgets.map((row) => ({ category: categoryById.get(row.tag_id) ?? null, budget: row })),
+    ...categories.filter((category) => !byTag.has(category.category_id)).map((category) => ({ category, budget: null })),
+  ];
+  const format = (value, code) => code ? formatMoney(value, code) ?? "—" : "—";
   const col = isMobile ? "1fr" : "minmax(120px,1.2fr) repeat(4,minmax(90px,1fr))";
   return <section aria-label="Orçamentos atuais da organização" data-testid="invoice-budget" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
     <h3 style={title}>Orçamentos atuais da organização · {month}</h3>
@@ -67,8 +81,7 @@ export function InvoiceBudgetContext({ detail, invoice, budget, currency, isMobi
     {!current ? <Card style={{ padding: isMobile ? 16 : 20 }}><p style={{ ...caption, margin: 0 }}>O saldo dos orçamentos atuais não representa esta fatura histórica ou prevista. A API ainda não oferece um retrato do orçamento daquele período.</p></Card>
       : budget.status === "loading" || budget.status === "idle" ? <Card style={{ padding: isMobile ? 16 : 20, ...caption }}>Carregando orçamentos atuais…</Card>
         : budget.status === "error" ? <Card role="alert" style={{ padding: isMobile ? 16 : 20, ...caption }}>Não foi possível carregar os orçamentos atuais.</Card>
-          : activeBudgets.length === 0 ? <Card style={{ padding: isMobile ? 16 : 20, ...caption }}>Nenhum orçamento mensal ativo nesta organização.</Card>
-            : rows.length === 0 ? <Card style={{ padding: isMobile ? 16 : 20, ...caption }}>Esta fatura ainda não tem gastos por categoria para comparar ao contexto dos orçamentos atuais.</Card>
+          : rows.length === 0 ? <Card style={{ padding: isMobile ? 16 : 20, ...caption }}>Nenhum orçamento mensal ativo nem gasto por categoria nesta fatura.</Card>
               : <Card style={{ padding: isMobile ? 4 : 0, overflow: "hidden" }}>
                 {!isMobile && <div style={{ display: "grid", gridTemplateColumns: col, gap: 12, padding: "12px 16px", borderBottom: `2px solid ${T.ink}`, ...G, fontSize: 10, fontWeight: 800, color: T.inkMid, textTransform: "uppercase" }}>
                   <span>Categoria</span><span>Teto org.</span><span>Gasto org.</span><span>Sobra org.</span><span>Gasto na fatura</span>
@@ -78,12 +91,16 @@ export function InvoiceBudgetContext({ detail, invoice, budget, currency, isMobi
                   const amount = knownBudgetCurrency ? format(row.amount, row.currency) : row ? "Moeda indisponível" : "Sem teto";
                   const spent = knownBudgetCurrency ? format(row.spent_amount, row.currency) : "—";
                   const remaining = knownBudgetCurrency ? format(row.remaining_amount, row.currency) : "—";
-                  return <div key={category.category_id ?? `${category.category_name}:${index}`} style={{ display: "grid", gridTemplateColumns: col, gap: isMobile ? 5 : 12, padding: isMobile ? "12px" : "14px 16px", borderBottom: index < rows.length - 1 ? `1px solid ${T.border}` : "none", alignItems: "center", ...G, fontSize: 12 }}>
-                    <strong style={{ color: T.ink }}>{categoryLabelPtForTag({ name: category.category_name })}</strong>
+                  const invoiceSpend = category
+                    ? format(category.total, currency)
+                    : row?.currency && row.currency === currency && breakdownComplete && categoriesIdentified ? format(0, currency) : "—";
+                  const categoryName = category?.category_name ?? row?.tag_name ?? "Sem categoria";
+                  return <div key={row?.id ?? category?.category_id ?? `${categoryName}:${index}`} style={{ display: "grid", gridTemplateColumns: col, gap: isMobile ? 5 : 12, padding: isMobile ? "12px" : "14px 16px", borderBottom: index < rows.length - 1 ? `1px solid ${T.border}` : "none", alignItems: "center", ...G, fontSize: 12 }}>
+                    <strong style={{ color: T.ink }}>{categoryLabelPtForTag({ name: categoryName })}</strong>
                     <span style={NUM}>{isMobile ? `Teto org.: ${amount}` : amount}</span>
                     <span style={NUM}>{isMobile ? `Gasto org.: ${spent}` : spent}</span>
                     <span style={{ ...NUM, color: knownBudgetCurrency && Number(row.remaining_amount) < 0 ? T.red : T.green }}>{isMobile ? `Sobra org.: ${remaining}` : remaining}</span>
-                    <span style={{ ...NUM, fontWeight: 700 }}>{isMobile ? `Gasto nesta fatura: ${format(category.total, currency)}` : format(category.total, currency)}</span>
+                    <span style={{ ...NUM, fontWeight: 700 }}>{isMobile ? `Gasto nesta fatura: ${invoiceSpend}` : invoiceSpend}</span>
                     {knownBudgetCurrency && Number.isFinite(Number(row.usage_percent)) && <div style={{ gridColumn: "1 / -1", height: 4, background: T.grayLight, borderRadius: 99 }}><div style={{ width: `${Math.min(100, Math.max(0, Number(row.usage_percent)))}%`, height: "100%", background: Number(row.usage_percent) >= 100 ? T.red : Number(row.usage_percent) >= 80 ? T.amber : T.green, borderRadius: 99 }} /></div>}
                   </div>;
                 })}
