@@ -124,7 +124,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     if (inspected) detailCloseRef.current?.focus();
     else if (filtersOpen && isMobile) filterCloseRef.current?.focus();
     else if (summarySheetOpen && isMobile) summaryCloseRef.current?.focus();
-  }, [inspected, filtersOpen, summarySheetOpen, isMobile]);
+  }, [inspected, filtersOpen, summarySheetOpen, isMobile, mobileFacetOpen]);
 
   useEffect(() => {
     if (!filtersOpen && !inspected && !summarySheetOpen) return undefined;
@@ -288,6 +288,22 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const currentSummaryLoading = summaryState.key !== summaryKey || summaryState.loading;
   const currentSummaryError = summaryState.key === summaryKey && summaryState.error;
   const currentFacets = facetState.key === summaryKey ? facetState.data : null;
+  const facetCounts = {
+    counts: currentFacets,
+    total: currentFacets?.total ?? null,
+    buckets: currentFacets?.value_bucket ?? null,
+    optionCount: (facet, value) => {
+      const rows = currentFacets?.[facet];
+      if (!Array.isArray(rows)) return null;
+      return rows.find((row) => row.value === String(value))?.count ?? 0;
+    },
+    optionCountByLabel: (facet, label) => {
+      const rows = currentFacets?.[facet];
+      if (!Array.isArray(rows)) return null;
+      return rows.find((row) => row.label === label)?.count ?? 0;
+    },
+    binaryCount: (facet, key) => currentFacets?.[facet]?.[key] ?? null,
+  };
   const filterChips = <TransactionsFilterChips facets={activeFacets} searchActive={Boolean(debouncedSearch)} searchLabel={debouncedSearch} onOpenFacet={openFacet} onAbrirAtivos={() => openFacet("ativos")} onClearFacet={clearFacet} onClearAll={clearAll} maxVisible={viewportWidth >= 1600 ? 3 : viewportWidth >= 1366 ? 2 : 1} chipsBudget={chipsBudget} collapsed={viewportWidth < 1200} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen((open) => !open)} />;
   const dockFloating = !isMobile && viewportWidth < 1280;
   const cardScopePanel = <CardScopePanel card={card} scope={cardScope} onScope={(value) => { setCardScope(value); setSummarySheetOpen(false); }} />;
@@ -323,7 +339,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
         <div style={{ flex: 1, minWidth: 0 }}>
         <CardTransactionsTable rows={state.rows} total={state.total} cardCurrency={cardScope === "current" ? card.currency : null} loading={state.loading} error={state.error} hasMore={hasMore} onMore={onMore} selected={selectedRows} onSelected={setSelectedRows} onExportSelected={() => exportLoadedRows(state.rows.filter((row) => selectedRows.includes(row.id)), cardScope === "current" ? card.currency : null)} inspected={inspected} onInspect={setInspected} grouped={prefs.grouped && sortField === "date"} density={prefs.density} isMobile={isMobile} maxHeight={filtersOpen && !isMobile ? ledgerHeight : undefined} />
         </div>
-        {filtersOpen && !isMobile && <div style={{ ...(dockFloating ? { position: "absolute", top: 0, right: 0, zIndex: 5, boxShadow: "-8px 0 24px rgba(15,15,13,.1)" } : { flex: "none" }), width: Math.min(420, Math.max(320, viewportWidth * .28)), height: ledgerHeight, minWidth: 0 }}><TransactionsFilterPanel filter={filter} facet={activeFacet} onFacetChange={setActiveFacet} categories={categories} allTags={tagOptions.map((tag) => tag.displayLabel)} allTagsLoading={tagCatalog.loading} allTagsError={Boolean(tagCatalog.error)} tagIdByLabel={tagIdByLabel} facetCounts={currentFacets} activeFacets={activeFacets} onClearFacet={clearFacet} onClearAll={clearAll} onApply={closeFilters} onClose={closeFilters} resultCount={state.total ?? 0} resultsLoading={state.loading} visibleFacetKeys={FACETS} defaultPeriod="tudo" cardScopePanel={cardScopePanel} selectionOverrides={{ cartao: cardScope === "all" ? 1 : 0 }} /></div>}
+        {filtersOpen && !isMobile && <div style={{ ...(dockFloating ? { position: "absolute", top: 0, right: 0, zIndex: 5, boxShadow: "-8px 0 24px rgba(15,15,13,.1)" } : { flex: "none" }), width: Math.min(420, Math.max(320, viewportWidth * .28)), height: ledgerHeight, minWidth: 0 }}><TransactionsFilterPanel filter={filter} facet={activeFacet} onFacetChange={setActiveFacet} categories={categories} allTags={tagOptions.map((tag) => tag.displayLabel)} allTagsLoading={tagCatalog.loading} allTagsError={Boolean(tagCatalog.error)} tagIdByLabel={tagIdByLabel} facetCounts={facetCounts} activeFacets={activeFacets} onClearFacet={clearFacet} onClearAll={clearAll} onApply={closeFilters} onClose={closeFilters} resultCount={state.total ?? 0} resultsLoading={state.loading} visibleFacetKeys={FACETS} defaultPeriod="tudo" cardScopePanel={cardScopePanel} selectionOverrides={{ cartao: cardScope === "all" ? 1 : 0 }} /></div>}
       </div>
       {state.error && <Card role="alert" style={{ display: "flex", alignItems: "center", gap: 12, padding: 14 }}>Não foi possível carregar os lançamentos. <Btn variant="outGray" onClick={() => { setState((current) => ({ ...current, loading: true, error: false })); setRetry((value) => value + 1); }}>Tentar novamente</Btn></Card>}
     </>}
@@ -359,7 +375,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
           {FACETS.map((key) => <button key={key} type="button" onClick={() => { setActiveFacet(key); setMobileFacetOpen(true); }} style={{ ...G, minHeight: 64, border: `1px solid ${T.border}`, borderRadius: 10, background: activeFacets.some((facet) => facet.key === key) ? T.blueLight : T.surface, color: T.ink, textAlign: "left", padding: 12, fontWeight: 700 }}>{FACET_LABELS[key]} {activeFacets.some((facet) => facet.key === key) ? "●" : ""}</button>)}
           <button type="button" onClick={clearAll} style={{ ...G, gridColumn: "1 / -1", border: 0, background: "none", color: T.red, padding: 12 }}>Limpar tudo</button>
         </div>}
-        {mobileFacetOpen && <div style={{ minHeight: 0, flex: 1 }}><TransactionsFilterPanel filter={filter} facet={activeFacet} onFacetChange={setActiveFacet} categories={categories} allTags={tagOptions.map((tag) => tag.displayLabel)} allTagsLoading={tagCatalog.loading} allTagsError={Boolean(tagCatalog.error)} tagIdByLabel={tagIdByLabel} facetCounts={currentFacets} activeFacets={activeFacets} onClearFacet={clearFacet} onClearAll={clearAll} onApply={closeFilters} onClose={() => setMobileFacetOpen(false)} resultCount={state.total ?? 0} resultsLoading={state.loading} compact hideRail visibleFacetKeys={FACETS} defaultPeriod="tudo" cardScopePanel={cardScopePanel} selectionOverrides={{ cartao: cardScope === "all" ? 1 : 0 }} /></div>}
+        {mobileFacetOpen && <div style={{ minHeight: 0, flex: 1 }}><TransactionsFilterPanel filter={filter} facet={activeFacet} onFacetChange={setActiveFacet} categories={categories} allTags={tagOptions.map((tag) => tag.displayLabel)} allTagsLoading={tagCatalog.loading} allTagsError={Boolean(tagCatalog.error)} tagIdByLabel={tagIdByLabel} facetCounts={facetCounts} activeFacets={activeFacets} onClearFacet={clearFacet} onClearAll={clearAll} onApply={closeFilters} onClose={() => setMobileFacetOpen(false)} resultCount={state.total ?? 0} resultsLoading={state.loading} compact hideRail visibleFacetKeys={FACETS} defaultPeriod="tudo" cardScopePanel={cardScopePanel} selectionOverrides={{ cartao: cardScope === "all" ? 1 : 0 }} /></div>}
         {!mobileFacetOpen && <Btn variant="dark" onClick={closeFilters} style={{ width: "100%", flex: "none" }}>Ver {state.total ?? "—"} lançamentos</Btn>}
       </div>
     </div>}
