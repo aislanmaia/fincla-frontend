@@ -230,8 +230,8 @@ describe("CardHubPage — cadastro de cartão", () => {
     await waitFor(() => expect(navigateMock).toHaveBeenCalled());
     applyCardNavigation(view);
     await waitFor(() => expect(screen.getByText(/Cartão selecionado:/)).toHaveTextContent("Cartão Novo •4321"));
-    expect(screen.getByTestId("kpi-available")).toHaveTextContent("R$ 5.000,00");
-    expect(screen.getByTestId("kpi-available")).not.toHaveTextContent("Não calculado");
+    expect(screen.getByText("R$ 5.000,00")).toBeInTheDocument();
+    expect(screen.queryByText("Não calculado")).toBeNull();
     expect(requests.posted).toHaveLength(1);
     expect(requests.posted[0]).toMatchObject({ organization_id: ORG, last4: "4321", due_day: 12 });
     expect(requests.posted[0]).not.toHaveProperty("closing_day");
