@@ -148,19 +148,22 @@ export const getInvoiceHistory = async (
       params: { organization_id: organizationId, months, ...(includeCategorySeries ? { include_category_series: true } : {}), ...(includeCommitments ? { include_commitments: true } : {}) },
     }
   );
-  const data = includeCommitments
-    ? { ...response.data, monthly_data: response.data.monthly_data.map((row) => ({
+  const data = {
+    ...response.data,
+    monthly_data: response.data.monthly_data.map((row) => ({
       ...row,
-      total_amount_currency: toCurrency(row.total_amount),
-      installments_amount_currency: toCurrency(row.installments_amount),
-      recurrences_amount_currency: toCurrency(row.recurrences_amount),
-      commitments_category_breakdown: row.commitments_category_breakdown?.map((category) => ({
-        ...category,
-        installments_amount_currency: toCurrency(category.installments_amount),
-        recurrences_amount_currency: toCurrency(category.recurrences_amount),
-      })),
-    })) }
-    : response.data;
+      total_amount_currency: toCurrency(row.total_amount) ?? row.total_amount_currency ?? null,
+      ...(includeCommitments ? {
+        installments_amount_currency: toCurrency(row.installments_amount),
+        recurrences_amount_currency: toCurrency(row.recurrences_amount),
+        commitments_category_breakdown: row.commitments_category_breakdown?.map((category) => ({
+          ...category,
+          installments_amount_currency: toCurrency(category.installments_amount),
+          recurrences_amount_currency: toCurrency(category.recurrences_amount),
+        })),
+      } : {}),
+    })),
+  };
   return unwrapMoney(data);
 };
 
