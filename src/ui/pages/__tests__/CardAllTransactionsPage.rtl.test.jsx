@@ -38,6 +38,15 @@ afterEach(() => { cleanup(); server.resetHandlers(); requests.length = 0; cardRe
 
 describe("CardAllTransactionsPage", () => {
   it("filtra pelo cartão, pagina sem laço por mês e retorna ao Hub selecionado", async () => {
+    server.use(http.get("*/v1/transactions", ({ request }) => {
+      const url = new URL(request.url);
+      requests.push(url);
+      const page = Number(url.searchParams.get("page"));
+      const rows = page === 1
+        ? Array.from({ length: 30 }, (_, index) => ({ id: index + 1, date: "2026-09-01", description: index === 0 ? "Mercado" : `Compra ${index}`, value: 12, value_currency: "BRL", type: "expense" }))
+        : [{ id: 31, date: "2026-08-01", description: "Farmácia", value: 12, value_currency: "BRL", type: "expense" }];
+      return HttpResponse.json({ data: rows, pagination: { total: 31, page, limit: 30, pages: 2, has_next: page === 1, has_prev: page > 1 } });
+    }));
     render(<CardAllTransactionsPage organizationId={ORG_ID} />);
     expect(await screen.findByText("Mercado")).toBeInTheDocument();
     expect(requests).toHaveLength(1);
@@ -46,6 +55,7 @@ describe("CardAllTransactionsPage", () => {
     expect(await screen.findByText("Farmácia")).toBeInTheDocument();
     expect(requests).toHaveLength(2);
     expect(cardRequests).toBe(1);
+    expect(screen.queryByRole("button", { name: "Carregar mais lançamentos" })).not.toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole("button", { name: "Voltar para o cartão" }));
     expect(navigate).toHaveBeenCalledWith({ to: "/cards", search: { view: "new", card: CARD_ID } });
   });
@@ -59,5 +69,12 @@ describe("CardAllTransactionsPage", () => {
     expect(await screen.findByText("Este cartão ainda não tem lançamentos.")).toBeInTheDocument();
     await waitFor(() => expect(requests).toHaveLength(1));
     expect(screen.queryByRole("button", { name: "Carregar mais lançamentos" })).not.toBeInTheDocument();
+  });
+
+  it("deduplica a carga inicial no StrictMode", async () => {
+    render(<React.StrictMode><CardAllTransactionsPage organizationId={ORG_ID} /></React.StrictMode>);
+    expect(await screen.findByText("Mercado")).toBeInTheDocument();
+    expect(cardRequests).toBe(1);
+    expect(requests).toHaveLength(1);
   });
 });

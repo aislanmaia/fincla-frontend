@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { listCreditCards } from "../../api/creditCards";
 import { listTransactions } from "../../api/transactions";
-import { Card, PageTitle } from "../components/primitives.jsx";
+import { Btn, Card, PageTitle } from "../components/primitives.jsx";
 import { shouldUseRealData } from "../dataMode.js";
 import { RecentCardTransactions } from "../features/cardHub/RecentCardTransactions.jsx";
 import { FC } from "../routing/searchContract.js";
@@ -12,6 +12,13 @@ import { G } from "../typography.js";
 import { T } from "../tokens.js";
 
 const PAGE_SIZE = 30;
+const pendingCards = new Map();
+const pendingPages = new Map();
+
+function sharePending(map, key, request) {
+  if (!map.has(key)) map.set(key, request().finally(() => map.delete(key)));
+  return map.get(key);
+}
 
 export function CardAllTransactionsPage({ organizationId = null, dataMode = "live", isMobile = false }) {
   const { cardId } = useParams({ strict: false });
@@ -26,7 +33,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     let active = true;
     setState({ card: null, rows: [], total: null, page: 0, loading: true, error: false, missing: false });
     setNextPage(1);
-    listCreditCards(organizationId).then((cards) => {
+    sharePending(pendingCards, organizationId, () => listCreditCards(organizationId)).then((cards) => {
       if (!active) return;
       const card = cards.find((entry) => entry.public_id === cardId);
       setState((current) => ({ ...current, card: card ?? null, missing: !card, loading: Boolean(card) }));
@@ -41,7 +48,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     let active = true;
     const today = new Date();
     const dateEnd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-    listTransactions({
+    const query = {
       organization_id: organizationId,
       credit_card_id: state.card.id,
       page: nextPage,
@@ -49,7 +56,9 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
       date_end: dateEnd,
       sort_by: "date",
       sort_order: "desc",
-    }).then((response) => {
+    };
+    const key = `${organizationId}:${state.card.id}:${nextPage}:${dateEnd}`;
+    sharePending(pendingPages, key, () => listTransactions(query)).then((response) => {
       if (!active) return;
       setState((current) => ({
         ...current,
@@ -77,12 +86,12 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
       {!enabled && <Card role="status">Selecione uma organização para ver os lançamentos.</Card>}
       {state.missing && <Card role="status">Cartão não encontrado ou sem acesso.</Card>}
       {state.card && <RecentCardTransactions transactions={state.rows} cardCurrency={state.card.currency} loading={state.loading && state.page === 0} error={state.error && state.page === 0} title="Lançamentos do cartão" />}
-      {state.error && state.card && <Card role="alert">Não foi possível carregar os lançamentos. <button type="button" onClick={() => { setState((current) => ({ ...current, loading: true, error: false })); setRetry((value) => value + 1); }}>Tentar novamente</button></Card>}
+      {state.error && state.card && <Card role="alert" style={{ display: "flex", alignItems: "center", gap: 12 }}>Não foi possível carregar os lançamentos. <Btn variant="outGray" onClick={() => { setState((current) => ({ ...current, loading: true, error: false })); setRetry((value) => value + 1); }}>Tentar novamente</Btn></Card>}
       {state.error && !state.card && <Card role="alert">Não foi possível carregar o cartão.</Card>}
       {state.card && hasMore && !state.error && (
-        <button type="button" disabled={state.loading} onClick={() => { setState((current) => ({ ...current, loading: true })); setNextPage((page) => page + 1); }}>
+        <Btn variant="outGray" disabled={state.loading} style={{ alignSelf: "center" }} onClick={() => { setState((current) => ({ ...current, loading: true })); setNextPage((page) => page + 1); }}>
           {state.loading ? "Carregando…" : "Carregar mais lançamentos"}
-        </button>
+        </Btn>
       )}
     </div>
   );
