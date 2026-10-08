@@ -9,7 +9,8 @@ import { shouldUseRealData } from "../dataMode.js";
 import { CardTransactionsHistory } from "../features/cardTransactions/CardTransactionsHistory.jsx";
 import { CardTransactionsSummary } from "../features/cardTransactions/CardTransactionsSummary.jsx";
 import { CardTransactionsTable } from "../features/cardTransactions/CardTransactionsTable.jsx";
-import { DENSITIES, readListPrefs, writeListPrefs } from "../features/transactions/listPrefs.js";
+import { readListPrefs, writeListPrefs } from "../features/transactions/listPrefs.js";
+import { TransactionsListDisplayControls } from "../features/transactions/TransactionsListDisplayControls.jsx";
 import { TransactionsFilterPanel } from "../features/transactions/filters/TransactionsFilterPanel.jsx";
 import { TransactionsFilterBar } from "../features/transactions/filters/TransactionsFilterBar.jsx";
 import { TransactionsFilterChips } from "../features/transactions/filters/TransactionsFilterChips.jsx";
@@ -336,7 +337,10 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
       </div>}
       {cardScope === "current" && isMobile && <Card as="button" type="button" onClick={() => setSummarySheetOpen(true)} style={{ ...G, padding: 16, width: "100%", textAlign: "left", cursor: "pointer", color: T.ink }}><strong>Resumo filtrado e histórico do cartão</strong><span style={{ display: "block", fontSize: 11, color: T.inkMid, marginTop: 4 }}>Gastos do recorte e faturas do cartão · tocar para ver</span></Card>}
       {cardScope === "all" && <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} />}
-      {!isMobile && <TransactionsFilterBar filter={filter} hideSavedViews hideFacets searchInput={filter.search} setSearchInput={filter.setSearch} searchPlaceholder="Buscar por descrição…" searchInputRef={searchInputRef} barChips={filterChips} onChipsBudget={setChipsBudget} barTrailing={<div style={{ display: "flex", alignItems: "center", gap: 7 }}><Select aria-label="Densidade da lista" value={prefs.density} onChange={(event) => setPreference({ density: event.target.value })}>{Object.entries(DENSITIES).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</Select><label style={{ ...G, display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: T.inkMid, whiteSpace: "nowrap" }}><input type="checkbox" checked={prefs.grouped && sortField === "date"} disabled={sortField !== "date"} onChange={(event) => setPreference({ grouped: event.target.checked })} /> Agrupar</label></div>} />}
+      {!isMobile && <TransactionsFilterBar filter={filter} hideSavedViews hideFacets searchInput={filter.search} setSearchInput={filter.setSearch} searchPlaceholder="Buscar por descrição…" searchInputRef={searchInputRef} barChips={filterChips} onChipsBudget={setChipsBudget} barTrailing={<TransactionsListDisplayControls
+        density={prefs.density} grouped={prefs.grouped && sortField === "date"} canGroup={sortField === "date"}
+        onDensityChange={(density) => setPreference({ density })}
+        onGroupChange={() => setPreference({ grouped: !prefs.grouped })} />} />}
       {isMobile && <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <label onFocusCapture={() => setSearchFocused(true)} onBlurCapture={() => setSearchFocused(false)} style={{ ...G, flex: "1 1 180px", minWidth: 0, display: "flex", alignItems: "center", gap: 8, border: `1px solid ${searchFocused ? T.blue : T.border}`, boxShadow: searchFocused ? `0 0 0 2px ${T.blueLight}` : "none", background: T.surface, borderRadius: 9, padding: "8px 10px" }}><Search size={14} color={T.inkMid} /><input aria-label="Buscar lançamentos" placeholder="Buscar por descrição…" value={filter.search} onChange={(event) => filter.setSearch(event.target.value)} style={{ ...G, flex: 1, minWidth: 0, border: 0, outline: "none", background: "transparent", fontSize: 12 }} /></label>
         {activeFacets.map((facet) => <div key={facet.key} style={{ display: "flex", border: `1px solid ${T.border}`, borderRadius: 8, background: T.blueLight, overflow: "hidden" }}>
