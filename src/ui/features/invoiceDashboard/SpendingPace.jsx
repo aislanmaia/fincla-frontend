@@ -71,13 +71,18 @@ export function SpendingPace({ pace, currency, isMobile = false }) {
   const lastCurrent = current.at(-1);
   const sameDayPrevious = lastCurrent ? previous.find((point) => point.day === lastCurrent.day) : null;
   const hasPaceComparison = lastCurrent?.cumulative != null && sameDayPrevious?.cumulative != null;
-  const faster = hasPaceComparison && Number(lastCurrent.cumulative) > Number(sameDayPrevious.cumulative);
+  const paceDifference = hasPaceComparison ? Math.round((Number(lastCurrent.cumulative) - Number(sameDayPrevious.cumulative)) * 100) / 100 : null;
+  const comparisonLabel = paceDifference === null ? null : paceDifference > 0
+    ? `Acima do ciclo anterior · ${formatMoney(paceDifference, currency)} a mais no dia ${lastCurrent.day}`
+    : paceDifference < 0
+      ? `Abaixo do ciclo anterior · ${formatMoney(Math.abs(paceDifference), currency)} a menos no dia ${lastCurrent.day}`
+      : `Igual ao ciclo anterior · mesmo valor no dia ${lastCurrent.day}`;
 
   return (
     <Card data-testid="spending-pace" style={{ padding: 18, minWidth: 0 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
         <h3 style={{ ...G, fontSize: 14, color: T.ink, margin: 0 }}>Velocidade de gasto</h3>
-        {hasPaceComparison && <span style={{ ...G, fontSize: 10, fontWeight: 700, color: faster ? T.amber : T.green }}>{faster ? "Acima do ciclo anterior" : "Abaixo do ciclo anterior"}</span>}
+        {comparisonLabel && <span style={{ ...G, fontSize: 10, fontWeight: 700, color: paceDifference > 0 ? T.amber : paceDifference < 0 ? T.green : T.inkMid }}>{comparisonLabel}</span>}
       </div>
       <p style={{ ...G, fontSize: 12, color: T.inkMid, margin: "4px 0 12px" }}>Acumulado por dia do ciclo da fatura</p>
       {all.length === 0 ? <p style={{ ...G, fontSize: 12, color: T.inkMid }}>O ciclo ainda não começou.</p> : (

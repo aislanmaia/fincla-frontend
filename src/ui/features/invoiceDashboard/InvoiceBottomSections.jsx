@@ -113,13 +113,14 @@ function SummaryTile({ label, value, detail, color, onOpen }) {
     <strong style={{ ...G, fontSize: 13, color: T.ink }}>{label}</strong>
     <span style={{ ...G, ...NUM, fontSize: 17, fontWeight: 800, color }}>{value}</span>
     <span style={caption}>{detail}</span>
-    {onOpen && <button type="button" onClick={onOpen} style={{ ...G, border: 0, background: "none", color: T.blue, padding: "4px 0", textAlign: "left", cursor: "pointer", fontSize: 11, fontWeight: 700 }}>ver {label.toLowerCase().replace(/^[^a-zà-ú]+/i, "")} →</button>}
+    {onOpen && <Btn variant="ghost" small onClick={onOpen} style={{ alignSelf: "flex-start", padding: "4px 0", fontSize: 11, color: T.blue }}>ver {label.toLowerCase().replace(/^[^a-zà-ú]+/i, "")} →</Btn>}
   </Card>;
 }
 
 export function InvoiceSummaryTiles({ detail, card, organizationId, currency, isMobile, onFilter }) {
   const [notes, setNotes] = useState(card?.notes ?? "");
   const [notesOpen, setNotesOpen] = useState(false);
+  useEffect(() => { setNotes(card?.notes ?? ""); }, [card?.notes]);
   const items = detail?.items ?? [];
   const installments = items.filter((item) => item.modality === "installment");
   const refunds = items.filter((item) => item.modality === "refund");

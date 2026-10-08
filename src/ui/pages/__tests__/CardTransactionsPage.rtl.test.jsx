@@ -76,6 +76,21 @@ describe("Lançamentos de um cartão", () => {
     expect(calls).toHaveLength(2);
   });
 
+  it("sincroniza a modalidade ao voltar para outra query da mesma rota", async () => {
+    routeSearch = { fc_invoice_modality: "refund" };
+    const calls = serve();
+    const view = render(<CardTransactionsPage organizationId={ORG_ID} />);
+    const list = within(await screen.findByRole("region", { name: "Lançamentos da fatura" })).getByRole("list");
+    expect(within(list).getByText("Estorno Posto")).toBeVisible();
+    routeSearch = { fc_invoice_modality: "installment" };
+    view.rerender(<CardTransactionsPage organizationId={ORG_ID} />);
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Filtrar modalidade" })).toHaveValue("installment"));
+    routeSearch = { fc_invoice_modality: "refund" };
+    view.rerender(<CardTransactionsPage organizationId={ORG_ID} />);
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Filtrar modalidade" })).toHaveValue("refund"));
+    expect(calls).toHaveLength(2);
+  });
+
   it("usa o public_id na rota, carrega duas chamadas e mantém o resumo da fatura inteira ao filtrar", async () => {
     const calls = serve();
     const user = userEvent.setup();

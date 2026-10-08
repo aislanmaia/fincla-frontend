@@ -97,6 +97,7 @@ export function CardTransactionsPage({ isMobile = false, organizationId = null, 
   const inFlight = useRef(new Map());
   const filter = useTransactionsFilterState({ initial: INVOICE_FILTER_INITIAL, clearToInitial: true });
   const [modality, setModality] = useState(search[FC.INVOICE_MODALITY] || "all");
+  useEffect(() => { setModality(search[FC.INVOICE_MODALITY] || "all"); }, [search[FC.INVOICE_MODALITY]]);
   const [prefs, setPrefs] = useState(readListPrefs);
   const enabled = valid && shouldUseRealData(organizationId, dataMode);
 
