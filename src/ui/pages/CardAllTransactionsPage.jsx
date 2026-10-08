@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { listCreditCards } from "../../api/creditCards";
 import { listTransactions } from "../../api/transactions";
-import { Btn, Card, PageTitle } from "../components/primitives.jsx";
+import { Btn, Card, PageTitle, Select } from "../components/primitives.jsx";
 import { shouldUseRealData } from "../dataMode.js";
 import { RecentCardTransactions } from "../features/cardHub/RecentCardTransactions.jsx";
 import { DENSITIES, readListPrefs, writeListPrefs } from "../features/transactions/listPrefs.js";
@@ -121,7 +121,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
           compact={isMobile} filteredCount={state.total ?? 0} resultsLoading={state.loading}
           filterToolbarActive={Boolean(filter.search || filter.period !== "tudo" || filter.valueMin || filter.valueMax)} />
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-          <label style={{ ...G, fontSize: 11, color: T.inkMid }}>Densidade <select aria-label="Densidade da lista" value={prefs.density} onChange={(event) => setPreference({ density: event.target.value })}>{Object.entries(DENSITIES).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</select></label>
+          <label style={{ ...G, fontSize: 11, color: T.inkMid }}>Densidade <Select aria-label="Densidade da lista" value={prefs.density} onChange={(event) => setPreference({ density: event.target.value })}>{Object.entries(DENSITIES).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</Select></label>
           <label style={{ ...G, fontSize: 11, color: T.inkMid }}><input type="checkbox" checked={prefs.grouped && sortField === "date"} disabled={sortField !== "date"} onChange={(event) => setPreference({ grouped: event.target.checked })} /> Agrupar por data</label>
         </div>
       </Card>}
