@@ -396,7 +396,7 @@ describe("<TransacoesPage> — integração da Variação C", () => {
     expect(await screen.findByRole("button", { name: /^Recarregar a lista$/i })).toBeInTheDocument();
     // As três preferências saíram dela.
     expect(screen.queryByRole("button", { name: /Densidade da lista/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /^Agrupar por data$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Agrupamento da lista/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /Atalhos de teclado/i })).toBeNull();
 
     // E estão TODAS atrás do "⋯" — que se chama "Exibição da lista", porque um
@@ -415,7 +415,7 @@ describe("<TransacoesPage> — integração da Variação C", () => {
     renderPage();
 
     expect(await screen.findByRole("button", { name: /Densidade da lista/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /^Agrupar por data$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Agrupamento da lista/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Atalhos de teclado/i })).toBeInTheDocument();
     // Dois caminhos para a mesma ajuda, um deles escondido, é pior que um só.
     expect(screen.queryByRole("button", { name: "Exibição da lista" })).toBeNull();
@@ -460,11 +460,14 @@ describe("<TransacoesPage> — integração da Variação C", () => {
     // mundos. O botão fica desabilitado e diz por quê.
     renderPage();
     await openFilters();
-    const group = await screen.findByRole("button", { name: /Agrupar por data/i });
+    const group = await screen.findByRole("button", { name: /Agrupamento da lista/i });
     expect(group).toBeEnabled();
-    expect(group).toHaveAttribute("aria-pressed", "false");
     await userEvent.click(group);
-    expect(group).toHaveAttribute("aria-pressed", "true");
+    const menu = screen.getByRole("menu", { name: "Agrupamento da lista" });
+    expect(within(menu).getByRole("menuitemradio", { name: "Lista contínua" })).toHaveAttribute("aria-checked", "true");
+    await userEvent.click(within(menu).getByRole("menuitemradio", { name: "Agrupar por data" }));
+    expect(screen.queryByRole("menu", { name: "Agrupamento da lista" })).toBeNull();
+    expect(JSON.parse(localStorage.getItem("fincla:transactions:list-prefs")).grouped).toBe(true);
   });
 
   it("1366x768 recebe a barra compacta, não a completa", async () => {
