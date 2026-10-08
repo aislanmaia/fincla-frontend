@@ -23,6 +23,8 @@ const server = setupServer(
     return HttpResponse.json([{ id: 7, public_id: CARD_ID, description: "Azul", last4: "7112", currency: "BRL" }]);
   }),
   http.get("*/v1/credit-cards/:id/invoices/history", () => HttpResponse.json({ monthly_data: [] })),
+  http.get("*/v1/transactions/summary", () => HttpResponse.json({ total_transactions: 2, breakdown: { by_category: [], by_month: [] } })),
+  http.get("*/v1/transactions/facets", () => HttpResponse.json({ total: 2, category: [], type: [], tag: [], payment_method: [], settlement: null, recurring: null, value_bucket: [] })),
   http.get("*/v1/tags/catalog", () => HttpResponse.json({ categories: [] })),
   http.get("*/v1/tags", () => HttpResponse.json({ tags: [] })),
   http.get("*/v1/transactions", ({ request }) => {
@@ -40,10 +42,24 @@ afterAll(() => server.close());
 afterEach(() => { cleanup(); server.resetHandlers(); requests.length = 0; cardRequests = 0; navigate.mockReset(); vi.unstubAllGlobals(); });
 
 describe("CardAllTransactionsPage", () => {
+  it("mostra gasto por categoria do recorte completo na moeda recebida da API", async () => {
+    server.use(http.get("*/v1/transactions/summary", ({ request }) => {
+      const url = new URL(request.url);
+      expect(url.searchParams.get("credit_card_id")).toBe("7");
+      expect(url.searchParams.get("include_breakdown")).toBe("true");
+      return HttpResponse.json({ total_transactions: 45, breakdown: { by_category: [{ category: "Alimentação", amount: { amount: "25.50", currency: "USD" } }], by_month: [] } });
+    }));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const summary = await screen.findByRole("region", { name: "Resumo dos lançamentos filtrados" });
+    expect(await within(summary).findByText("45 lançamentos")).toBeInTheDocument();
+    expect(within(summary).getByText(/25,50/)).toBeInTheDocument();
+    expect(within(summary).queryByText(/R\$\s*25,50/)).not.toBeInTheDocument();
+  });
+
   it("preserva valor e moeda reais do histórico de faturas", async () => {
     server.use(http.get("*/v1/credit-cards/:id/invoices/history", () => HttpResponse.json({ monthly_data: [{ year: 2026, month: 9, total_amount: { amount: "25.00", currency: "USD" }, status: "paid" }] })));
     render(<CardAllTransactionsPage organizationId={ORG_ID} />);
-    const chart = await screen.findByRole("img", { name: "Valores das últimas faturas do cartão" });
+    const chart = await screen.findByRole("img", { name: /Valores das últimas faturas do cartão em USD/ });
     const bar = chart.querySelector("[title]");
     expect(bar?.title).toMatch(/25,00/);
     expect(bar?.title).not.toContain("R$");
@@ -63,6 +79,32 @@ describe("CardAllTransactionsPage", () => {
     await waitFor(() => expect(requests.at(-1).searchParams.has("category")).toBe(false));
   });
 
+  it("filtra todos os cartões pela faceta Cartão sem reutilizar o id selecionado", async () => {
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    expect(await screen.findByText("Mercado")).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: /\+ Filtros/ }));
+    await userEvent.setup().click(screen.getByRole("button", { name: "Cartão" }));
+    await userEvent.setup().click(screen.getByRole("button", { name: "Todos os cartões" }));
+    await waitFor(() => expect(requests.at(-1).searchParams.get("payment_method")).toBe("credit_card"));
+    expect(requests.at(-1).searchParams.has("credit_card_id")).toBe(false);
+    expect(screen.getByRole("region", { name: "Resumo dos lançamentos filtrados" })).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Limpar filtro Cartão" }));
+    await waitFor(() => expect(requests.at(-1).searchParams.get("credit_card_id")).toBe("7"));
+  });
+
+  it("abre detalhes de uma linha desktop com Enter e devolve o foco ao fechar", async () => {
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const row = await screen.findByRole("button", { name: "Ver detalhes de Mercado" });
+    row.focus();
+    await userEvent.setup().keyboard("{Enter}");
+    const dialog = screen.getByRole("dialog", { name: "Detalhes do lançamento" });
+    expect(dialog).toHaveTextContent("Mercado");
+    expect(screen.getByRole("button", { name: "Fechar detalhes" })).toHaveFocus();
+    await userEvent.setup().keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Detalhes do lançamento" })).not.toBeInTheDocument();
+    expect(row).toHaveFocus();
+  });
+
   it("usa grade de facetas no sheet mobile", async () => {
     render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
     expect(await screen.findByRole("button", { name: "Filtros" })).toBeInTheDocument();
@@ -72,6 +114,7 @@ describe("CardAllTransactionsPage", () => {
     await userEvent.setup().click(within(sheet).getByRole("button", { name: "Categoria" }));
     expect(within(sheet).getByRole("button", { name: "← Voltar" })).toBeInTheDocument();
     expect(await screen.findByRole("listitem")).toHaveTextContent("Mercado");
+    expect(within(sheet).getByRole("button", { name: "Fechar filtros" })).toHaveFocus();
     await userEvent.setup().click(within(sheet).getByRole("button", { name: "Fechar filtros" }));
     await userEvent.setup().click(screen.getByRole("button", { name: /Mercado/ }));
     expect(screen.getByRole("dialog", { name: "Detalhes do lançamento" })).toHaveTextContent("Mercado");
