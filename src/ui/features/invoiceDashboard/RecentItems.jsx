@@ -19,7 +19,10 @@ export function RecentItems({ items, totalCount, currency, isMobile, onViewAll }
   return (
     <section data-testid="recent-items" aria-label="Itens recentes"
       style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, boxShadow: T.sm, padding: isMobile ? 16 : 20, display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-      <h3 style={{ ...G, margin: 0, fontSize: 14, fontWeight: 800, color: T.ink }}>Itens recentes</h3>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <h3 style={{ ...G, margin: 0, fontSize: 14, fontWeight: 800, color: T.ink }}>🧾 Itens recentes</h3>
+        {onViewAll && <button type="button" onClick={onViewAll} style={{ ...G, border: 0, background: "none", color: T.blue, fontSize: 11, fontWeight: 700, padding: "6px 0", cursor: "pointer", whiteSpace: "nowrap" }}>ver os {totalCount ?? rows.length} →</button>}
+      </div>
       {rows.length === 0 ? (
         <div style={{ ...G, fontSize: 12, color: T.inkMid }}>Nenhum lançamento nesta fatura.</div>
       ) : (
@@ -39,11 +42,6 @@ export function RecentItems({ items, totalCount, currency, isMobile, onViewAll }
             </div>
           ))}
         </div>
-      )}
-      {onViewAll && (
-        <button type="button" onClick={onViewAll} style={{ ...G, alignSelf: "flex-start", border: 0, background: "none", color: T.blue, fontSize: 12, fontWeight: 700, padding: "6px 0", cursor: "pointer" }}>
-          Ver todos os lançamentos →
-        </button>
       )}
       {totalCount > rows.length && (
         <div style={{ ...G, fontSize: 11, color: T.inkLight, textAlign: "center", paddingTop: 2 }}>

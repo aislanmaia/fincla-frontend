@@ -10,9 +10,11 @@ import { setupServer } from "msw/node";
 const CARD_ID = "00000000-0000-4000-8000-000000000001";
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
 const navigate = vi.fn();
+let routeSearch = {};
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => navigate,
   useParams: () => ({ cardId: CARD_ID, year: "2026", month: "10" }),
+  useSearch: () => routeSearch,
 }));
 
 import { CardTransactionsPage } from "../CardTransactionsPage.jsx";
@@ -43,7 +45,7 @@ const server = setupServer();
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterAll(() => server.close());
-beforeEach(() => { navigate.mockReset(); localStorage.clear(); });
+beforeEach(() => { navigate.mockReset(); localStorage.clear(); routeSearch = {}; });
 afterEach(() => { server.resetHandlers(); cleanup(); vi.useRealTimers(); });
 
 function serve({ invoice = detail, cardList = cards } = {}) {
@@ -64,6 +66,16 @@ function serve({ invoice = detail, cardList = cards } = {}) {
 }
 
 describe("Lançamentos de um cartão", () => {
+  it("abre filtrado por modalidade ao vir do resumo da fatura", async () => {
+    routeSearch = { fc_invoice_modality: "refund" };
+    const calls = serve();
+    render(<CardTransactionsPage organizationId={ORG_ID} />);
+    const list = within(await screen.findByRole("region", { name: "Lançamentos da fatura" })).getByRole("list");
+    expect(await within(list).findByText("Estorno Posto")).toBeVisible();
+    expect(within(list).queryByText("Mercado")).not.toBeInTheDocument();
+    expect(calls).toHaveLength(2);
+  });
+
   it("usa o public_id na rota, carrega duas chamadas e mantém o resumo da fatura inteira ao filtrar", async () => {
     const calls = serve();
     const user = userEvent.setup();
