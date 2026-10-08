@@ -89,7 +89,8 @@ describe("CardAllTransactionsPage", () => {
     await waitFor(() => expect(requests.at(-1).searchParams.get("payment_method")).toBe("credit_card"));
     expect(requests.at(-1).searchParams.has("credit_card_id")).toBe(false);
     expect(screen.getByRole("region", { name: "Resumo dos lançamentos filtrados" })).toBeInTheDocument();
-    await userEvent.setup().click(screen.getByRole("button", { name: "Remover filtro Cartão" }));
+    await userEvent.setup().click(screen.getByRole("button", { name: /Ativos 1/ }));
+    await userEvent.setup().click(screen.getByRole("button", { name: /Remover filtro Cartão:/ }));
     await waitFor(() => expect(requests.at(-1).searchParams.get("credit_card_id")).toBe("7"));
   });
 
@@ -207,15 +208,15 @@ describe("CardAllTransactionsPage", () => {
     render(<CardAllTransactionsPage organizationId={ORG_ID} />);
     expect(await screen.findByText("Reserva futura")).toBeInTheDocument();
     expect(requests[0].searchParams.has("date_end")).toBe(false);
-    await userEvent.setup().type(screen.getByRole("textbox", { name: "Buscar lançamentos" }), "Farmácia");
+    await userEvent.setup().type(screen.getByRole("textbox", { name: "Buscar transações" }), "Farmácia");
     expect(await screen.findByText("Farmácia futura")).toBeInTheDocument();
     expect(screen.queryByText("Reserva futura")).not.toBeInTheDocument();
     expect(requests.at(-1).searchParams.get("description")).toBe("Farmácia");
     expect(requests.at(-1).searchParams.get("credit_card_id")).toBe("7");
     await userEvent.setup().selectOptions(screen.getByRole("combobox", { name: "Densidade da lista" }), "compacto");
     expect(screen.getByRole("combobox", { name: "Densidade da lista" })).toHaveValue("compacto");
-    await userEvent.setup().click(screen.getByRole("checkbox", { name: "Agrupar por data" }));
-    expect(screen.getByRole("checkbox", { name: "Agrupar por data" })).toBeChecked();
+    await userEvent.setup().click(screen.getByRole("checkbox", { name: "Agrupar" }));
+    expect(screen.getByRole("checkbox", { name: "Agrupar" })).toBeChecked();
     await userEvent.setup().click(screen.getByRole("button", { name: /Abrir filtros/ }));
     await userEvent.setup().click(screen.getByRole("button", { name: "Preset: Este mês" }));
     await waitFor(() => expect(requests.at(-1).searchParams.has("date_start")).toBe(true));
