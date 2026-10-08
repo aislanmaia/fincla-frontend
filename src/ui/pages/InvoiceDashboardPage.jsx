@@ -17,9 +17,10 @@ import { CategoryBreakdown } from "../features/invoiceDashboard/CategoryBreakdow
 import { Headline, InvoiceDetailBody } from "../features/invoiceDashboard/InvoiceDetailBody.jsx";
 import { InvoiceNavigator } from "../features/invoiceDashboard/InvoiceNavigator.jsx";
 import { MobileInvoiceItem } from "../features/invoiceDashboard/MobileInvoiceItem.jsx";
-import { InvoiceMetrics } from "../features/invoiceDashboard/SpendingPace.jsx";
+import { AverageComparison, InvoiceMetrics } from "../features/invoiceDashboard/SpendingPace.jsx";
 import { InvoiceChanges } from "../features/invoiceDashboard/InvoiceChanges.jsx";
 import { ForecastInstallments, RecentItems } from "../features/invoiceDashboard/RecentItems.jsx";
+import { InvoiceBudgetContext, InvoiceSummaryTiles, useInvoiceBudgetContext } from "../features/invoiceDashboard/InvoiceBottomSections.jsx";
 import { useInvoiceDashboardData } from "../features/invoiceDashboard/useInvoiceDashboardData.js";
 
 const CAROUSEL_ITEM_WIDTH = 330;
@@ -77,6 +78,7 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
 
   const currency = card?.currency || undefined;
   const invoice = invoices.find((i) => i.key === selectedKey) ?? null;
+  const budget = useInvoiceBudgetContext(organizationId, detailState === "ok" && invoice?.status === "open");
   const pad = isMobile ? 16 : 28;
 
   const exportCsv = () => {
@@ -132,11 +134,21 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
   const showBreakdown = detailState === "ok" && detail;
   const lower = (
     <>
-      {showBreakdown && <CategoryBreakdown breakdown={detail.category_breakdown} total={invoice?.total} currency={currency} isMobile={isMobile} />}
-      {showBreakdown && <RecentItems items={detail.items} totalCount={detail.items_count} currency={currency} isMobile={isMobile} onViewAll={() => navigate({ to: cardTransactionsPath(cardId, year, month) })} />}
       {detailState === "forecast" && <ForecastInstallments installments={data.futureRow?.top_installments} currency={currency} isMobile={isMobile} />}
     </>
   );
+  const analysis = showBreakdown && <>
+    {invoice?.status === "open" && <InvoiceMetrics detail={detail} currency={currency} isMobile={isMobile} />}
+    <RecentItems items={detail.items} totalCount={detail.items_count} currency={currency} isMobile={isMobile} onViewAll={() => navigate({ to: cardTransactionsPath(cardId, year, month) })} />
+    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1.2fr", gap: 16, minWidth: 0 }}>
+      <CategoryBreakdown breakdown={detail.category_breakdown} total={invoice?.total} currency={currency} isMobile={isMobile} />
+      <AverageComparison detail={detail} currency={currency} />
+    </div>
+    <InvoiceBudgetContext detail={detail} invoice={invoice} budget={budget} currency={currency} isMobile={isMobile} now={now} />
+    <InvoiceChanges changes={detail.changes} currency={currency} isMobile={isMobile} />
+    <InvoiceSummaryTiles key={card?.id} detail={detail} card={card} organizationId={organizationId} currency={currency} isMobile={isMobile}
+      onFilter={(modality) => navigate({ to: cardTransactionsPath(cardId, year, month), search: { [FC.INVOICE_MODALITY]: modality } })} />
+  </>;
 
   return (
     <div style={{ padding: pad, display: "flex", flexDirection: "column", gap: isMobile ? 14 : 16, minWidth: 0 }}>
@@ -160,8 +172,7 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
                 onSelect={selectInvoice} currency={currency} detailProps={detailProps} />
             )}
           />
-          {showBreakdown && <InvoiceMetrics detail={detail} currency={currency} isMobile />}
-          {showBreakdown && <InvoiceChanges changes={detail.changes} currency={currency} isMobile />}
+          {analysis}
           {lower}
         </>
       ) : invoice && (
@@ -177,9 +188,8 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
             </div>
             <InvoiceDetailBody invoice={invoice} currency={currency} {...detailProps} />
            </Card>
-          {showBreakdown && <InvoiceMetrics detail={detail} currency={currency} />}
-          {showBreakdown && <InvoiceChanges changes={detail.changes} currency={currency} />}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: 16, alignItems: "start" }}>{lower}</div>
+          {analysis}
+          {lower}
         </>
       )}
     </div>

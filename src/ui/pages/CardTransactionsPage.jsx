@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "@tanstack/react-router";
+import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 
 import { getCreditCardInvoice, listCreditCards } from "../../api/creditCards";
@@ -9,6 +9,7 @@ import { formatMoney } from "../money/formatMoney.js";
 import { Card, PageTitle } from "../components/primitives.jsx";
 import { shouldUseRealData } from "../dataMode.js";
 import { invoiceDashboardPath, isValidInvoiceParams } from "../routing/invoiceRoute.js";
+import { FC } from "../routing/searchContract.js";
 import { CategoryBreakdown } from "../features/invoiceDashboard/CategoryBreakdown.jsx";
 import { DENSITIES, readListPrefs, writeListPrefs } from "../features/transactions/listPrefs.js";
 import { TxRow } from "../features/transactions/shared/TransactionRow.jsx";
@@ -87,6 +88,7 @@ function TransactionList({ rows, grouped, density, isMobile, currency }) {
 
 export function CardTransactionsPage({ isMobile = false, organizationId = null, dataMode = "live", transactionsRefreshToken = 0 }) {
   const navigate = useNavigate();
+  const search = useSearch({ strict: false });
   const { cardId, year: yearRaw, month: monthRaw } = useParams({ strict: false });
   const valid = isValidInvoiceParams({ cardId, year: yearRaw, month: monthRaw });
   const year = Number(yearRaw);
@@ -94,7 +96,7 @@ export function CardTransactionsPage({ isMobile = false, organizationId = null, 
   const [state, setState] = useState({ status: "loading", card: null, detail: null });
   const inFlight = useRef(new Map());
   const filter = useTransactionsFilterState({ initial: INVOICE_FILTER_INITIAL, clearToInitial: true });
-  const [modality, setModality] = useState("all");
+  const [modality, setModality] = useState(search[FC.INVOICE_MODALITY] || "all");
   const [prefs, setPrefs] = useState(readListPrefs);
   const enabled = valid && shouldUseRealData(organizationId, dataMode);
 

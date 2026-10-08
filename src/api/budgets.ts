@@ -4,7 +4,7 @@
 // `unwrapMoney` desembrulha em qualquer profundidade — enumerar campo a campo é
 // onde se esquece um, e um esquecido vira "R$ NaN" na tela.
 import apiClient from './client';
-import { unwrapMoney } from './money';
+import { toCurrency, unwrapMoney } from './money';
 import type {
   Budget,
   CreateBudgetRequest,
@@ -42,7 +42,14 @@ export const listBudgets = async (
       ...(isActive !== undefined ? { is_active: isActive } : {}),
     },
   });
-  return unwrapMoney(response.data);
+  const unwrapped = unwrapMoney(response.data);
+  return {
+    ...unwrapped,
+    budgets: unwrapped.budgets.map((budget, index) => ({
+      ...budget,
+      currency: toCurrency(response.data.budgets[index]?.amount),
+    })),
+  };
 };
 
 /**

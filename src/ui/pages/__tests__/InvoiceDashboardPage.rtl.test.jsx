@@ -16,6 +16,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 import { InvoiceDashboardPage } from "../InvoiceDashboardPage.jsx";
+import { InvoiceSummaryTiles } from "../../features/invoiceDashboard/InvoiceBottomSections.jsx";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 const server = setupServer();
@@ -105,11 +106,19 @@ const DETAILS = {
 };
 
 /** Backend de mentira na camada HTTP: cliente, adapter, hook e tela reais rodam por cima. */
-function mockApi({ cards = [cardFixture()], detail = DETAILS, patch, listStatus = 200, future = futureFixture() } = {}) {
+function mockApi({ cards = [cardFixture()], detail = DETAILS, patch, listStatus = 200, future = futureFixture(), budgets = [{
+  id: "budget-1", tag_id: "c1", tag_name: "Alimentação", period_type: "monthly", is_active: true,
+  amount: money("5000.00"), spent_amount: money("1000.00"), remaining_amount: money("4000.00"), usage_percent: 20,
+}] } = {}) {
   const calls = [];
   calls.queries = [];
   const paidOverride = {};
   server.use(
+    http.get("*/v1/budgets", ({ request }) => {
+      calls.push(`GET ${new URL(request.url).pathname}`);
+      expect(new URL(request.url).searchParams.get("period_type")).toBe("monthly");
+      return HttpResponse.json({ budgets, summary: {} });
+    }),
     http.get("*/v1/credit-cards", ({ request }) => {
       calls.push(`GET ${new URL(request.url).pathname}`);
       return listStatus === 200 ? HttpResponse.json(cards) : HttpResponse.json({ detail: "x" }, { status: listStatus });
@@ -155,14 +164,90 @@ const renderPage = (props = {}) => render(
 const readyDesktop = () => screen.findByTestId("invoice-title");
 
 describe("InvoiceDashboardPage — card da fatura", () => {
+  it("soma estornos Money só quando a moeda é compatível", () => {
+    const base = { card: cardFixture(), organizationId: ORG, currency: "BRL", isMobile: false, onFilter: vi.fn() };
+    const view = render(<InvoiceSummaryTiles {...base} detail={{ items: [{ modality: "refund", amount: money("-38.90") }] }} />);
+    expect(screen.getByRole("region", { name: "Resumo da fatura" })).toHaveTextContent("38,90");
+    view.rerender(<InvoiceSummaryTiles {...base} detail={{ items: [{ modality: "refund", amount: money("-38.90", "EUR") }] }} />);
+    expect(screen.getByRole("region", { name: "Resumo da fatura" })).not.toHaveTextContent("38,90");
+  });
+
+  it("segue a hierarquia da Direção C com resumos fundamentados e filtro por modalidade", async () => {
+    const calls = mockApi();
+    const user = userEvent.setup();
+    renderPage();
+    await screen.findByTestId("recent-items");
+    const recent = screen.getByTestId("recent-items");
+    const category = screen.getByTestId("category-breakdown");
+    const budget = screen.getByTestId("invoice-budget");
+    const footer = screen.getByRole("region", { name: "Resumo da fatura" });
+    expect(Boolean(recent.compareDocumentPosition(category) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(Boolean(category.compareDocumentPosition(budget) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    await waitFor(() => expect(budget).toHaveTextContent("Teto org."));
+    expect(budget).toHaveTextContent("Orçamentos atuais da organização");
+    expect(budget).toHaveTextContent("5.000,00");
+    expect(budget).toHaveTextContent("4.000,00");
+    expect(budget).toHaveTextContent("3.000,00");
+    expect(budget).toHaveTextContent("os períodos podem ser diferentes");
+    expect(footer).toHaveTextContent("1 nesta fatura");
+    expect(footer).toHaveTextContent("38,90");
+    expect(footer).toHaveTextContent("Resumo de recorrências indisponível");
+    expect(footer).toHaveTextContent("Anotação do cartão");
+    await user.click(within(footer).getByRole("button", { name: /ver parcelas/i }));
+    expect(navigateMock).toHaveBeenLastCalledWith({ to: `/cards/${CARD_PUBLIC_ID}/invoices/2026/10/transactions`, search: { fc_invoice_modality: "installment" } });
+    expect(calls.filter((call) => call.startsWith("GET /v1/credit-cards"))).toHaveLength(4);
+    expect(calls.filter((call) => call === "GET /v1/budgets")).toHaveLength(1);
+  });
+
+  it("não atribui orçamento atual da organização a uma fatura histórica", async () => {
+    routeParams = { cardId: CARD_PUBLIC_ID, year: "2026", month: "9" };
+    const calls = mockApi();
+    renderPage();
+    const budget = await screen.findByTestId("invoice-budget");
+    expect(budget).toHaveTextContent("não representa esta fatura histórica ou prevista");
+    expect(budget).not.toHaveTextContent("5.000,00");
+    expect(calls.filter((call) => call === "GET /v1/budgets")).toHaveLength(0);
+  });
+
+  it("mostra teto em EUR e gasto da fatura em BRL com as moedas próprias", async () => {
+    mockApi({ budgets: [{ id: "budget-eur", tag_id: "c1", tag_name: "Alimentação", period_type: "monthly", is_active: true,
+      amount: money("5000.00", "EUR"), spent_amount: money("1000.00", "EUR"), remaining_amount: money("4000.00", "EUR"), usage_percent: 20 }] });
+    renderPage();
+    const budget = await screen.findByTestId("invoice-budget");
+    await waitFor(() => expect(budget).toHaveTextContent("€"));
+    expect(budget).toHaveTextContent("5.000,00");
+    expect(budget).toHaveTextContent("3.000,00");
+  });
+
+  it("rotula a nota como dado do cartão e salva sem criar uma anotação fictícia da fatura", async () => {
+    const patched = [];
+    mockApi({ cards: [cardFixture({ notes: "Confirmar estorno" })] });
+    server.use(http.patch("*/v1/credit-cards/1", async ({ request }) => {
+      const body = await request.json();
+      patched.push(body);
+      return HttpResponse.json(cardFixture({ notes: body.notes }));
+    }));
+    const user = userEvent.setup();
+    renderPage();
+    const footer = await screen.findByRole("region", { name: "Resumo da fatura" });
+    expect(footer).toHaveTextContent("Anotação do cartão");
+    expect(footer).toHaveTextContent("Confirmar estorno");
+    await user.click(within(footer).getByRole("button", { name: "Editar anotação" }));
+    await user.clear(screen.getByRole("textbox", { name: "Anotação do cartão" }));
+    await user.type(screen.getByRole("textbox", { name: "Anotação do cartão" }), "Ligar para o banco");
+    await user.click(screen.getByTestId("card-notes-save"));
+    await waitFor(() => expect(patched).toEqual([{ notes: "Ligar para o banco" }]));
+    expect(footer).toHaveTextContent("Ligar para o banco");
+  });
+
   it.each([false, true])("mostra mudanças por categoria e item no layout mobile=%s sem nova chamada", async (isMobile) => {
     const calls = mockApi({ detail: {
       ...DETAILS,
       "2026/10": () => detailFixture({ changes: {
         previous_available: true, previous_month: "2026-09",
         categories: [
-          { category_id: "c1", category_name: "Alimentação", category_color: "#22C55E", current_total: money("300.00"), previous_total: money("100.00"), change: money("200.00"), change_percent: 200 },
-          { category_id: "c2", category_name: "Moradia", category_color: null, current_total: money("0.00"), previous_total: money("50.00"), change: money("-50.00"), change_percent: -100 },
+          { category_id: "c1", category_name: "Alimentação", category_color: "#22C55E", current_total: money("300.00"), previous_total: money("100.00"), change: money("200.00") },
+          { category_id: "c2", category_name: "Moradia", category_color: null, current_total: money("0.00"), previous_total: money("50.00"), change: money("-50.00") },
         ],
         items: [
           { change_type: "new", commitment_type: "installment", series_id: "s1", description: "Notebook", category_id: "c1", category_name: "Alimentação", current_amount: money("200.00"), previous_amount: null, change_amount: null, installment_number: 1, total_installments: 3, occurrences_current: 1, occurrences_previous: null },
@@ -173,14 +258,16 @@ describe("InvoiceDashboardPage — card da fatura", () => {
     } });
     renderPage({ isMobile });
     const section = await screen.findByRole("region", { name: "O que mudou" });
-    expect(within(section).getByText("Alimentação")).toBeVisible();
-    expect(within(section).getByText("Moradia")).toBeVisible();
+    expect(within(section).getAllByText(/Alimentação/).length).toBeGreaterThan(0);
+    expect(within(section).getAllByText(/Moradia/).length).toBeGreaterThan(0);
+    expect(within(section).getByText(/Alimentação 200%/)).toBeVisible();
+    expect(within(section).getByText(/Moradia 100%/)).toBeVisible();
     expect(within(section).getByText("Notebook")).toBeVisible();
     expect(within(section).getByText("Aluguel")).toBeVisible();
     expect(within(section).getByText("Streaming")).toBeVisible();
-    expect(within(section).getByText(/Novo compromisso/)).toBeVisible();
-    expect(within(section).getByText("Saiu da fatura")).toBeVisible();
-    expect(within(section).getByText("Valor alterado")).toBeVisible();
+    expect(within(section).getByText("Novo")).toBeVisible();
+    expect(within(section).getByText("Não apareceu mais")).toBeVisible();
+    expect(within(section).getByText("Mudou de valor")).toBeVisible();
     expect(within(section).getByText("Ocorrências: 1 → 1")).toBeVisible();
     expect(within(section).getByText(/por ocorrência/)).toBeVisible();
     expect(calls.filter((call) => call.startsWith("GET /v1/credit-cards"))).toHaveLength(4);
@@ -204,7 +291,7 @@ describe("InvoiceDashboardPage — card da fatura", () => {
     } }) } });
     renderPage();
     const section = await screen.findByRole("region", { name: "O que mudou" });
-    expect(within(section).getByText("Eletrônicos")).toBeVisible();
+    expect(within(section).getByText(/Eletrônicos/)).toBeVisible();
     expect(within(section).getByText("Fone")).toBeVisible();
     expect(within(section).getByText("Compras avulsas e estornos")).toBeVisible();
     expect(within(section).queryByText(/Sem mudanças/)).not.toBeInTheDocument();
@@ -285,7 +372,7 @@ describe("InvoiceDashboardPage — card da fatura", () => {
     expect(screen.getByTestId("invoice-limit")).toHaveTextContent("10.000,00");
 
     const breakdown = screen.getByTestId("category-breakdown");
-    expect(within(breakdown).getAllByTestId("category-row")).toHaveLength(6);
+    expect(within(breakdown).getAllByTestId("category-row")).toHaveLength(5);
     expect(breakdown).toHaveTextContent("Alimentação");
     expect(breakdown).toHaveTextContent("Outras");
 

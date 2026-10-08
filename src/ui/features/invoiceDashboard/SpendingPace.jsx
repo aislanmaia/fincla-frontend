@@ -7,19 +7,27 @@ import { G, NUM } from "../../typography";
 
 const valueOf = (value) => value == null || value === "" ? null : Number(value);
 
-function Average({ detail, currency }) {
+export function AverageComparison({ detail, currency }) {
   const average = valueOf(detail.six_month_average);
   const count = detail.six_month_average_invoices_count ?? 0;
   const change = valueOf(detail.six_month_average_change);
   return (
     <Card data-testid="six-month-average" style={{ padding: 18, minWidth: 0 }}>
-      <h3 style={{ ...G, fontSize: 14, color: T.ink, margin: 0 }}>Média dos últimos 6 meses</h3>
+      <h3 style={{ ...G, fontSize: 14, color: T.ink, margin: 0 }}>Comparado à sua média (6 meses)</h3>
       {average === null ? (
         <p style={{ ...G, color: T.inkMid, fontSize: 12 }}>Sem faturas anteriores para comparar.</p>
       ) : (
         <>
-          <div style={{ ...G, ...NUM, fontSize: 25, fontWeight: 800, color: T.ink, marginTop: 12 }}>{formatMoney(average, currency)}</div>
-          <div style={{ ...G, color: T.inkMid, fontSize: 12, marginTop: 4 }}>Baseada em {count} {count === 1 ? "fatura" : "faturas"} com lançamentos</div>
+          <div style={{ display: "flex", gap: 12, alignItems: "end", height: 110, marginTop: 12 }}>
+            {[{ label: "Média", value: average, color: T.grayLight }, { label: "Esta fatura", value: Number(detail.total_amount), color: T.amber }].map((bar) => (
+              <div key={bar.label} style={{ flex: 1, textAlign: "center", minWidth: 0 }}>
+                <div style={{ ...G, ...NUM, fontSize: 11, fontWeight: 700, color: T.ink }}>{formatMoney(bar.value, currency)}</div>
+                <div style={{ height: `${Math.max(3, Math.min(76, bar.value / Math.max(average, Number(detail.total_amount), 1) * 76))}px`, marginTop: 4, background: bar.color, borderRadius: "4px 4px 0 0" }} />
+                <div style={{ ...G, fontSize: 10, color: T.inkMid, marginTop: 4 }}>{bar.label}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ ...G, color: T.inkMid, fontSize: 12, marginTop: 8 }}>Baseada em {count} {count === 1 ? "fatura" : "faturas"} com lançamentos</div>
           {change !== null && (
             <div style={{ ...G, ...NUM, fontSize: 12, color: change > 0 ? T.red : change < 0 ? T.green : T.inkMid, marginTop: 10 }}>
               Esta fatura está {Math.abs(change).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% {change > 0 ? "acima" : change < 0 ? "abaixo" : "igual à"} {change === 0 ? "média" : "da média"}.
@@ -31,7 +39,7 @@ function Average({ detail, currency }) {
   );
 }
 
-function PaceChart({ pace, currency }) {
+export function SpendingPace({ pace, currency }) {
   const [focusDay, setFocusDay] = useState(null);
   const current = pace.current ?? [];
   const previous = pace.previous?.points ?? [];
@@ -48,10 +56,17 @@ function PaceChart({ pace, currency }) {
   const previousPoint = previous.find((point) => point.day === activeDay);
   const activeValue = currentPoint ?? previousPoint;
   const tooltip = activeValue ? `${currentPoint ? formatMoney(currentPoint.cumulative, currency) : "—"}${pace.previous ? ` / ${previousPoint ? formatMoney(previousPoint.cumulative, currency) : "—"}` : ""}` : "";
+  const lastCurrent = current.at(-1);
+  const sameDayPrevious = lastCurrent ? previous.find((point) => point.day === lastCurrent.day) : null;
+  const hasPaceComparison = lastCurrent?.cumulative != null && sameDayPrevious?.cumulative != null;
+  const faster = hasPaceComparison && Number(lastCurrent.cumulative) > Number(sameDayPrevious.cumulative);
 
   return (
     <Card data-testid="spending-pace" style={{ padding: 18, minWidth: 0 }}>
-      <h3 style={{ ...G, fontSize: 14, color: T.ink, margin: 0 }}>Velocidade de gasto</h3>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+        <h3 style={{ ...G, fontSize: 14, color: T.ink, margin: 0 }}>Velocidade de gasto</h3>
+        {hasPaceComparison && <span style={{ ...G, fontSize: 10, fontWeight: 700, color: faster ? T.amber : T.green }}>{faster ? "Acima do ciclo anterior" : "Abaixo do ciclo anterior"}</span>}
+      </div>
       <p style={{ ...G, fontSize: 12, color: T.inkMid, margin: "4px 0 12px" }}>Acumulado por dia do ciclo da fatura</p>
       {all.length === 0 ? <p style={{ ...G, fontSize: 12, color: T.inkMid }}>O ciclo ainda não começou.</p> : (
         <>
@@ -72,12 +87,13 @@ function PaceChart({ pace, currency }) {
               setFocusDay(Math.min(days, Math.max(1, Math.round(((position - 28) / 524) * (days - 1)) + 1)));
             }}
             viewBox="0 0 580 220" style={{ width: "100%", height: "auto", display: "block" }}>
-            <line x1="28" y1="180" x2="552" y2="180" stroke={T.border} />
+            {[32, 106, 180].map((gridY) => <line key={gridY} x1="28" y1={gridY} x2="552" y2={gridY} stroke={T.grayLight} />)}
             {previous.length > 1 && <polyline points={points(previous)} fill="none" stroke={T.inkGhost} strokeWidth="2.5" strokeDasharray="5 4" strokeLinejoin="round" />}
             {current.length > 1 && <polyline points={points(current)} fill="none" stroke={T.blue} strokeWidth="3" strokeLinejoin="round" />}
             {previous.length === 1 && <circle data-testid="pace-previous-point" cx={x(previous[0].day)} cy={y(valueOf(previous[0].cumulative))} r="5" fill={T.inkGhost} />}
             {current.length === 1 && <circle data-testid="pace-current-point" cx={x(current[0].day)} cy={y(valueOf(current[0].cumulative))} r="5" fill={T.blue} />}
             <text x="28" y="207" style={{ ...G, fontSize: 11, fill: T.inkMid }}>Dia 1</text>
+            <text x="290" y="207" textAnchor="middle" style={{ ...G, fontSize: 11, fill: T.inkMid }}>Dia {Math.ceil(days / 2)}</text>
             <text x="552" y="207" textAnchor="end" style={{ ...G, fontSize: 11, fill: T.inkMid }}>Dia {days}</text>
           </svg>
           {activeValue && <div data-testid="pace-tooltip" style={{
@@ -104,9 +120,8 @@ function PaceChart({ pace, currency }) {
 export function InvoiceMetrics({ detail, currency, isMobile }) {
   if (!detail) return null;
   return (
-    <section aria-label="Média e velocidade de gasto" style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : "minmax(0, 0.75fr) minmax(0, 1.25fr)", gap: 16, minWidth: 0 }}>
-      <Average detail={detail} currency={currency} />
-      {detail.spending_pace && <PaceChart key={detail.month} pace={detail.spending_pace} currency={currency} />}
+    <section aria-label="Velocidade de gasto" style={{ minWidth: 0 }}>
+      {detail.spending_pace && <SpendingPace key={detail.month} pace={detail.spending_pace} currency={currency} isMobile={isMobile} />}
     </section>
   );
 }
