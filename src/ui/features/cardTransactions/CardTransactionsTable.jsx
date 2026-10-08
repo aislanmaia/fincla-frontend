@@ -12,6 +12,7 @@ function parsedDate(value) {
   const date = new Date(`${String(value || "").slice(0, 10)}T12:00:00Z`);
   return Number.isNaN(date.getTime()) ? null : date;
 }
+const dateLabel = (date) => shortDate.format(date).replace(" de ", " ");
 function category(row) {
   const tag = pickCategoryTagFromApiTransaction(row);
   return tag?.label || tag?.name || row.category || "Sem categoria";
@@ -66,18 +67,18 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
     <div ref={scrollerRef} className="fincla-scroll" style={{ maxHeight: isMobile ? "min(60dvh, 680px)" : maxHeight == null ? 560 : Math.max(100, maxHeight - 82), overflowY: "auto", overflowX: "hidden" }}>
       <div role="list">
         {groups.map((group) => <div key={group.key}>
-          {grouped && <div style={{ ...G, ...NUM, position: "sticky", top: 0, zIndex: 2, background: T.bg, borderBottom: `1px solid ${T.border}`, padding: "7px 14px", fontSize: 11, color: T.inkMid }}>{parsedDate(group.key) ? shortDate.format(parsedDate(group.key)) : "Sem data"} · {group.rows.length} itens carregados</div>}
+          {grouped && <div style={{ ...G, ...NUM, position: "sticky", top: 0, zIndex: 2, background: T.bg, borderBottom: `1px solid ${T.border}`, padding: "7px 14px", fontSize: 11, color: T.inkMid }}>{parsedDate(group.key) ? dateLabel(parsedDate(group.key)) : "Sem data"} · {group.rows.length} itens carregados</div>}
           {group.rows.map((row) => {
             const date = parsedDate(row.date);
             const part = installment(row);
             const info = status(row);
             return <div key={row.id} role="listitem" style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 11, padding: rowPadding, borderBottom: `1px solid ${T.border}`, background: inspected?.id === row.id ? T.blueLight : T.surface, minWidth: 0 }}>
               <input type="checkbox" aria-label={`Selecionar ${row.description}`} checked={selected.includes(row.id)} onChange={() => onSelected(selected.includes(row.id) ? selected.filter((id) => id !== row.id) : [...selected, row.id])} />
-              {!isMobile && <div style={{ ...G, ...NUM, width: 46, flex: "none", fontSize: 10, lineHeight: 1.25, color: T.inkMid, textAlign: "center" }}><strong style={{ display: "block", color: T.ink, fontSize: 12 }}>{date ? shortDate.format(date) : "—"}</strong>{date ? weekDate.format(date) : ""}</div>}
+              {!isMobile && <div style={{ ...G, ...NUM, width: 46, flex: "none", fontSize: 10, lineHeight: 1.25, color: T.inkMid, textAlign: "center" }}><strong style={{ display: "block", color: T.ink, fontSize: 12, whiteSpace: "nowrap" }}>{date ? dateLabel(date) : "—"}</strong>{date ? weekDate.format(date) : ""}</div>}
               <div aria-hidden="true" style={{ width: 28, height: 28, borderRadius: 8, background: row.type === "refund" ? T.greenLight : T.blueLight, display: "grid", placeItems: "center", flex: "none", color: row.type === "refund" ? T.green : T.blue, fontSize: 13 }}>{row.type === "refund" ? "↩" : "▤"}</div>
               <button type="button" onClick={() => onInspect(row)} aria-label={`Ver detalhes de ${row.description}`} style={{ ...G, flex: 1, minWidth: 0, border: 0, background: "none", textAlign: "left", padding: 0, cursor: "pointer" }}>
                 <strong style={{ display: "block", fontSize: 12, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.description}</strong>
-                <span style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap", marginTop: 2, fontSize: 10, color: T.inkMid }}><Badge bg={T.greenLight} color={T.green}>{category(row)}</Badge>{part ? `Crédito ${part.installment_number}/${part.total_installments}×` : row.recurring ? "Recorrente" : "Crédito à vista"}{isMobile && date ? ` · ${shortDate.format(date)}` : ""}</span>
+                <span style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap", marginTop: 2, fontSize: 10, color: T.inkMid }}><Badge bg={T.greenLight} color={T.green}>{category(row)}</Badge>{part ? `Crédito ${part.installment_number}/${part.total_installments}×` : row.recurring ? "Recorrente" : "Crédito à vista"}{isMobile && date ? ` · ${dateLabel(date)}` : ""}</span>
               </button>
               <div style={{ ...G, ...NUM, textAlign: "right", flex: "none", fontSize: 12, fontWeight: 700, color: row.type === "refund" ? T.green : T.ink }}>{amount(row, cardCurrency)}{!isMobile && <span style={{ display: "block", fontSize: 10, fontWeight: 500, color: info.color }}>{info.text}</span>}</div>
               <ChevronRight size={14} color={T.inkMid} aria-hidden="true" />

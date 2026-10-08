@@ -111,8 +111,12 @@ describe("CardAllTransactionsPage", () => {
     expect(await screen.findByRole("button", { name: "Filtros" })).toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole("button", { name: "Filtros" }));
     const sheet = screen.getByRole("dialog", { name: "Filtros dos lançamentos" });
+    expect(sheet.querySelector(".fincla-scroll")).toHaveStyle({ overflowY: "auto" });
+    expect(within(sheet).getByRole("button", { name: "Ver 2 lançamentos" })).toBeInTheDocument();
     expect(within(sheet).getByRole("button", { name: "Categoria" })).toBeInTheDocument();
     await userEvent.setup().click(within(sheet).getByRole("button", { name: "Categoria" }));
+    expect(within(sheet).queryByRole("button", { name: "Ver 2 lançamentos" })).not.toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: "Ver 2 transações" })).toBeInTheDocument();
     expect(within(sheet).getByRole("button", { name: "← Voltar" })).toBeInTheDocument();
     expect(await screen.findByRole("listitem")).toHaveTextContent("Mercado");
     expect(within(sheet).getByRole("button", { name: "Fechar filtros" })).toHaveFocus();
