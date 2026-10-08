@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -75,6 +75,7 @@ for (const isMobile of [false, true]) {
       expect(screen.getAllByText("Assinatura").length).toBeGreaterThan(0);
       expect(screen.getByTestId("monthly-committed")).toHaveTextContent("R$ 150,00");
       expect(screen.getByTestId("committed-total")).toHaveTextContent("R$ 300,00");
+      expect(screen.getByText("Comprometido em parcelas")).toBeInTheDocument();
       expect(screen.getByText("Parcelas ativas")).toBeInTheDocument();
       expect(screen.getByText(/estornos vinculados R\$ 50,00/)).toBeInTheDocument();
       expect(screen.getByTestId("recurring-monthly")).toHaveTextContent("R$ 50,00");
@@ -84,12 +85,14 @@ for (const isMobile of [false, true]) {
       expect(calls.filter((c) => c.startsWith("/v1/credit-cards"))).toHaveLength(3);
       const timeline = screen.getByRole("region", { name: "Linha do tempo do compromisso" });
       expect(within(timeline).getAllByText("Sem dados").length).toBeGreaterThan(0);
-      expect(screen.getByTestId("timeline-bar-2026-09").getAttribute("title")).toMatch(/setembro 2026: R\$\s*70,00/);
-      expect(screen.getByTestId("timeline-bar-2026-10").getAttribute("title")).toMatch(/outubro 2026: R\$\s*150,00/);
+      expect(screen.getByTestId("timeline-bar-2026-09").getAttribute("aria-label")).toMatch(/setembro 2026: R\$\s*70,00/);
+      expect(screen.getByTestId("timeline-bar-2026-10").getAttribute("aria-label")).toMatch(/outubro 2026: R\$\s*150,00/);
       expect(Number.parseInt(screen.getByTestId("timeline-bar-2026-09").style.height)).toBeLessThan(Number.parseInt(screen.getByTestId("timeline-bar-2026-10").style.height));
       expect(screen.queryByTestId("timeline-bar-2026-08")).not.toBeInTheDocument();
       const monthlyDetail = screen.getByRole("region", { name: "Detalhe por mês" });
       expect(within(monthlyDetail).getByText("Próximo")).toBeInTheDocument();
+      expect(screen.getByTestId("detail-month-2026-11")).toHaveTextContent("Próximo");
+      expect(screen.getByTestId("detail-month-2026-10")).not.toHaveTextContent("Próximo");
       expect(within(monthlyDetail).getByText("Sem parcelas previstas")).toBeInTheDocument();
       const inventory = screen.getByRole("region", { name: "Inventário de compromissos" });
       if (isMobile) {
@@ -333,11 +336,52 @@ it("abre e fecha o detalhe no bottom sheet mobile", async () => {
   const inventory = await screen.findByRole("region", { name: "Inventário de compromissos" });
   await user.click(within(inventory).getByRole("button", { name: "Detalhar Notebook" }));
   const sheet = screen.getByRole("dialog", { name: "Detalhes de Notebook" });
+  expect(within(sheet).getByRole("button", { name: "Fechar detalhes" })).toHaveFocus();
+  expect(sheet.querySelector(".fincla-scroll")).toBeInTheDocument();
   expect(within(sheet).getByText("Última parcela")).toBeInTheDocument();
   expect(within(sheet).getByText("Total original").nextSibling).toHaveTextContent("—");
   expect(within(sheet).getByText(/sem estado de pagamento informado/)).toBeInTheDocument();
   await user.keyboard("{Escape}");
   expect(screen.queryByRole("dialog", { name: "Detalhes de Notebook" })).not.toBeInTheDocument();
+});
+
+it("fecha o detalhe antes de abrir mover no mobile e foca a fatura de destino", async () => {
+  const user = userEvent.setup();
+  render(<CardCommitmentsPage organizationId={ORG} isMobile />);
+  const inventory = await screen.findByRole("region", { name: "Inventário de compromissos" });
+  await user.click(within(inventory).getByRole("button", { name: "Detalhar Notebook" }));
+  const details = screen.getByRole("dialog", { name: "Detalhes de Notebook" });
+  await user.click(within(details).getByRole("button", { name: "Mover Notebook" }));
+  expect(screen.queryByRole("dialog", { name: "Detalhes de Notebook" })).not.toBeInTheDocument();
+  const moving = screen.getByRole("dialog", { name: "Mover Notebook" });
+  expect(within(moving).getByLabelText("Fatura de destino")).toHaveFocus();
+  expect(screen.getAllByRole("dialog")).toHaveLength(1);
+});
+
+it("mostra o valor junto à barra ao apontar e ao focar pelo teclado", async () => {
+  const user = userEvent.setup();
+  render(<CardCommitmentsPage organizationId={ORG} />);
+  const bar = await screen.findByTestId("timeline-bar-2026-10");
+  await user.hover(bar);
+  expect(within(bar).getByRole("tooltip")).toHaveTextContent("R$ 150,00");
+  await user.unhover(bar);
+  expect(within(bar).queryByRole("tooltip")).not.toBeInTheDocument();
+  fireEvent.focus(bar);
+  expect(within(bar).getByRole("tooltip")).toHaveTextContent("R$ 150,00");
+  fireEvent.blur(bar);
+  expect(within(bar).queryByRole("tooltip")).not.toBeInTheDocument();
+});
+
+it("ordena cartões mensais cronologicamente antes de escolher o próximo mês", async () => {
+  const row = (month) => ({ year: 2026, month, month_name: "mês", installments: [], recurrences: [] });
+  futureOverride = { monthly_breakdown: [row(12), row(10), row(11)] };
+  render(<CardCommitmentsPage organizationId={ORG} />);
+  const detail = await screen.findByRole("region", { name: "Detalhe por mês" });
+  expect([...detail.querySelectorAll('[data-testid^="detail-month-"]')].map((item) => item.dataset.testid)).toEqual([
+    "detail-month-2026-10", "detail-month-2026-11", "detail-month-2026-12",
+  ]);
+  expect(screen.getByTestId("detail-month-2026-11")).toHaveTextContent("Próximo");
+  expect(screen.getByTestId("detail-month-2026-10")).not.toHaveTextContent("Próximo");
 });
 
 it("não apresenta concentração temporal como zero quando a data de um compromisso falta", async () => {
