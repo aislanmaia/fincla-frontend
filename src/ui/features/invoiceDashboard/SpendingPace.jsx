@@ -61,6 +61,8 @@ export function SpendingPace({ pace, currency, isMobile = false }) {
   const currentPoint = current.find((point) => point.day === activeDay);
   const previousPoint = previous.find((point) => point.day === activeDay);
   const activeValue = focusSeries === "previous" ? previousPoint ?? currentPoint : currentPoint ?? previousPoint;
+  const activeAmount = activeValue ? valueOf(activeValue.cumulative) : null;
+  const tooltipY = activeAmount !== null ? y(activeAmount) / 220 * 170 : 0;
   const tooltipValues = [
     ["Atual", currentPoint ? formatMoney(currentPoint.cumulative, currency) : "—"],
     ...(pace.previous ? [["Anterior", previousPoint ? formatMoney(previousPoint.cumulative, currency) : "—"]] : []),
@@ -116,10 +118,10 @@ export function SpendingPace({ pace, currency, isMobile = false }) {
           </svg>
           {previous.length > 0 && valueOf(previous.at(-1).cumulative) !== null && <span data-testid="pace-previous-point" aria-hidden="true" style={{ position: "absolute", left: `${x(previous.at(-1).day) / 580 * 100}%`, top: `${y(valueOf(previous.at(-1).cumulative)) / 220 * 100}%`, width: 7, height: 7, borderRadius: "50%", background: T.inkGhost, transform: "translate(-50%, -50%)", pointerEvents: "none" }} />}
           {current.length > 0 && valueOf(current.at(-1).cumulative) !== null && <span data-testid="pace-current-point" aria-hidden="true" style={{ position: "absolute", left: `${x(current.at(-1).day) / 580 * 100}%`, top: `${y(valueOf(current.at(-1).cumulative)) / 220 * 100}%`, width: 9, height: 9, borderRadius: "50%", background: T.blue, transform: "translate(-50%, -50%)", pointerEvents: "none" }} />}
-          {activeValue && <div data-testid="pace-tooltip" style={{
+          {activeAmount !== null && <div data-testid="pace-tooltip" style={{
             position: "absolute", left: `clamp(0px, ${x(activeDay) / 580 * 100}%, calc(100% - 180px))`,
-            top: `clamp(48px, ${y(valueOf(activeValue.cumulative)) / 220 * 100}%, 100%)`,
-            transform: "translateY(-100%)", boxSizing: "border-box", maxWidth: "min(180px, 100%)",
+            top: tooltipY, transform: tooltipY < 80 ? "translateY(8px)" : "translateY(calc(-100% - 8px))",
+            boxSizing: "border-box", maxWidth: "min(180px, 100%)",
             padding: "6px 9px", borderRadius: 7, background: T.ink, color: T.surface,
             boxShadow: T.md, pointerEvents: "none", zIndex: 1,
           }}>
