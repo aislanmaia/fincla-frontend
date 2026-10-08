@@ -860,6 +860,8 @@ export interface LargestTransaction {
 
 export interface TransactionsSummaryResponse {
   total_transactions: number;
+  /** Total movimentado no recorte, por moeda original; preservado como Money. */
+  by_currency?: Array<{ amount: string; currency: string }>;
   total_value: number;
   total_income: number;
   /** Bruto — soma absoluta de transações type='expense' (não desconta estornos). */
