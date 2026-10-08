@@ -119,6 +119,7 @@ function Inventory({ rows, remainingSeries, currency, groupBy, sortBy, onMove, i
   useFocusTrap(sheetRef, sheetOpen);
   useEffect(() => {
     if (!sheetOpen) return undefined;
+    sheetRef.current?.querySelector('[aria-label="Fechar detalhes"]')?.focus();
     const onKeyDown = (event) => { if (event.key === "Escape") setSheetOpen(false); };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
@@ -152,7 +153,7 @@ function Inventory({ rows, remainingSeries, currency, groupBy, sortBy, onMove, i
     </div>
     {selected.type === "installment" && <div><div style={label}>{selected.total_installments} parcelas · {Math.max(0, Number(selected.installment_number) - 1)} anteriores</div><div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 8 }}>{Array.from({ length: Math.min(Number(selected.total_installments), 60) }, (_, index) => <span key={index} style={{ width: 16, height: 16, borderRadius: "50%", background: index === Number(selected.installment_number) - 1 ? T.blueLight : T.grayLight, border: `2px solid ${index === Number(selected.installment_number) - 1 ? T.blue : T.border}` }} />)}</div><div style={{ ...G, fontSize: 10, color: T.inkLight, marginTop: 5 }}>anel azul = parcela deste mês · demais parcelas sem estado de pagamento informado</div></div>}
     <div style={{ display: "grid", gap: 7 }}>
-      {selected.type === "installment" && <Btn variant="blue" aria-label={`Mover ${selected.description}`} onClick={() => onMove({ item: selected })}>↻ Mover para outra fatura</Btn>}
+      {selected.type === "installment" && <Btn variant="blue" aria-label={`Mover ${selected.description}`} onClick={() => { setSheetOpen(false); onMove({ item: selected }); }}>↻ Mover para outra fatura</Btn>}
       <Btn variant="outGray" onClick={() => navigate({ to: cardAllTransactionsPath(cardId) })}>↗ Ver em Lançamentos</Btn>
     </div>
   </div>;
@@ -179,7 +180,7 @@ function Inventory({ rows, remainingSeries, currency, groupBy, sortBy, onMove, i
       </div><div style={{ ...G, fontSize: 11, color: T.inkLight, padding: "9px 14px", borderTop: `1px solid ${T.border}` }}>{items.length} compromissos · role para ver todos</div></Card>
       {!isMobile && <Card style={{ ...cardStyle, position: "sticky", top: 0 }}>{selectedDetail || <p style={{ ...G, fontSize: 12 }}>Selecione um compromisso.</p>}</Card>}
     </div>
-    {isMobile && sheetOpen && selected && <div ref={sheetRef} role="dialog" aria-modal="true" aria-label={`Detalhes de ${selected.description}`} style={{ position: "fixed", inset: 0, zIndex: 90, background: "#0008", display: "flex", alignItems: "flex-end" }} onClick={() => setSheetOpen(false)}><Card style={{ ...cardStyle, width: "100%", maxHeight: "85dvh", overflowY: "auto", borderRadius: "16px 16px 0 0" }} onClick={(event) => event.stopPropagation()}><Btn variant="ghost" onClick={() => setSheetOpen(false)} style={{ float: "right" }} aria-label="Fechar detalhes">✕</Btn>{selectedDetail}</Card></div>}
+    {isMobile && sheetOpen && selected && <div ref={sheetRef} role="dialog" aria-modal="true" aria-label={`Detalhes de ${selected.description}`} style={{ position: "fixed", inset: 0, zIndex: 90, background: "#0008", display: "flex", alignItems: "flex-end" }} onClick={() => setSheetOpen(false)}><Card className="fincla-scroll" style={{ ...cardStyle, width: "100%", maxHeight: "85dvh", overflowY: "auto", borderRadius: "16px 16px 0 0" }} onClick={(event) => event.stopPropagation()}><Btn variant="ghost" onClick={() => setSheetOpen(false)} style={{ float: "right" }} aria-label="Fechar detalhes">✕</Btn>{selectedDetail}</Card></div>}
   </section>;
 }
 
@@ -230,6 +231,7 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
   const [refresh, setRefresh] = useState(0);
   const [historyMonths, setHistoryMonths] = useState(3);
   const [futureMonths, setFutureMonths] = useState(6);
+  const [activeTimelineKey, setActiveTimelineKey] = useState(null);
   const moveDialogRef = useRef(null);
   useFocusTrap(moveDialogRef, Boolean(moveItem));
   useEffect(() => {
@@ -257,6 +259,8 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
   const rows = future?.monthly_breakdown || [];
   const currency = card?.currency || null;
   const nowKey = currentKey();
+  const detailRows = [...rows].filter((row) => keyOf(row) >= nowKey).sort((a, b) => keyOf(a).localeCompare(keyOf(b)));
+  const nextMonthKey = detailRows.find((row) => keyOf(row) > nowKey);
   const monthNow = rows.find((row) => keyOf(row) === nowKey) ?? null;
   const knownRows = rows.filter((row) => inventoryKnown(row, currency));
   const browsableRows = rows.filter((row) => inventoryCurrencyKnown(row, currency));
@@ -380,7 +384,7 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
       </Card>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2,minmax(0,1fr))" : "repeat(3, minmax(0, 1fr))", gap }}>
         <Metric title="Parcelas ativas" value={balanceKnown ? `${balance.series.length} itens` : "—"} detail={balanceKnown ? "Compras parceladas com saldo pendente" : "Inventário exato indisponível"} />
-        <Metric title="Total comprometido" value={moneyValue(balanceKnown ? balance.net_amount : null, currency)} testId="committed-total" detail={!currency ? "Moeda do cartão indisponível" : balanceKnown ? `Parcelas pendentes ${moneyValue(balance.gross_amount, currency)} − estornos vinculados ${moneyValue(balance.linked_refunds_amount, currency)}. Recorrências à parte.` : "Saldo exato indisponível; confira a moeda e tente atualizar os dados."} />
+        <Metric title="Comprometido em parcelas" value={moneyValue(balanceKnown ? balance.net_amount : null, currency)} testId="committed-total" detail={!currency ? "Moeda do cartão indisponível" : balanceKnown ? `Parcelas pendentes ${moneyValue(balance.gross_amount, currency)} − estornos vinculados ${moneyValue(balance.linked_refunds_amount, currency)}. Recorrências à parte.` : "Saldo exato indisponível; confira a moeda e tente atualizar os dados."} />
         <Metric title="Comprometimento mensal" value={usage === null ? "—" : `${Math.round(usage)}%`} detail={monthly === null ? "Valor mensal indisponível" : card.credit_limit == null ? `${moneyValue(monthly, currency)} · limite não informado` : `${moneyValue(monthly, currency)} de um limite de ${moneyValue(card.credit_limit, currency)}`} detailTestId="monthly-committed" style={isMobile ? { gridColumn: "1 / -1" } : undefined} />
       </div>
       {usage !== null && usage >= 30 && <div role="status" style={{ ...G, fontSize: 12, color: T.inkMid, background: T.amberLight, border: `1px solid ${T.amber}`, borderRadius: 9, padding: 10 }}><b style={{ color: T.amber }}>Comprometimento elevado</b> — {Math.round(usage)}% do limite está comprometido por parcelas e assinaturas neste mês. Considere segurar novas compras parceladas até algumas terminarem.</div>}
@@ -390,7 +394,7 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
         <div className="fincla-scroll" style={{ overflowX: "auto" }}><div style={{ display: "flex", alignItems: "flex-end", gap: 8, minWidth: Math.max(520, timeline.length * 74), height: 155 }}>
           {timeline.map((entry) => <div key={entry.key} data-testid={`timeline-${entry.key}`} style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", textAlign: "center", height: "100%", minWidth: 58 }}>
             <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", height: 112 }}>
-              {entry.value !== null && currency ? <div data-testid={`timeline-bar-${entry.key}`} role="img" aria-label={`${entry.label}: ${moneyValue(entry.value, currency)}`} tabIndex={0} title={`${entry.label}: ${moneyValue(entry.value, currency)}`} style={{ width: "100%", height: `${entry.value > 0 ? Math.max(5, Math.round(entry.value / largestCommitment * 104)) : 2}px`, borderRadius: "4px 4px 0 0", background: entry.phase === "history" ? T.grayLight : entry.phase === "current" ? T.blue : T.blueBar, outline: entry.phase === "current" ? `1px solid ${T.ink}` : "none" }} /> : <span style={{ ...G, fontSize: 10, color: T.inkLight }}>Sem dados</span>}
+              {entry.value !== null && currency ? <div data-testid={`timeline-bar-${entry.key}`} role="img" aria-label={`${entry.label}: ${moneyValue(entry.value, currency)}`} tabIndex={0} onMouseEnter={() => setActiveTimelineKey(entry.key)} onMouseLeave={() => setActiveTimelineKey(null)} onFocus={() => setActiveTimelineKey(entry.key)} onBlur={() => setActiveTimelineKey(null)} style={{ position: "relative", width: "100%", height: `${entry.value > 0 ? Math.max(5, Math.round(entry.value / largestCommitment * 104)) : 2}px`, borderRadius: "4px 4px 0 0", background: entry.phase === "history" ? T.grayLight : entry.phase === "current" ? T.blue : T.blueBar, outline: entry.phase === "current" ? `1px solid ${T.ink}` : "none" }}>{activeTimelineKey === entry.key && <span role="tooltip" style={{ ...G, ...NUM, position: "absolute", bottom: "calc(100% + 5px)", left: "50%", transform: "translateX(-50%)", zIndex: 2, borderRadius: 6, padding: "4px 6px", background: T.ink, color: T.surface, whiteSpace: "nowrap", fontSize: 10 }}>{moneyValue(entry.value, currency)}</span>}</div> : <span style={{ ...G, fontSize: 10, color: T.inkLight }}>Sem dados</span>}
             </div><span style={{ ...G, fontSize: 10, fontWeight: entry.phase === "current" ? 800 : 500, marginTop: 5 }}>{entry.label}</span>
           </div>)}
         </div></div>
@@ -398,8 +402,8 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 8 }}>{[["Histórico", T.grayLight], ["Atual", T.blue], ["Projeção", T.blueBar]].map(([name, color]) => <span key={name} style={{ ...G, fontSize: 10, color: T.inkLight }}><i style={{ display: "inline-block", width: 8, height: 8, background: color, marginRight: 4 }} />{name}</span>)}</div>
       </section></Card>
       <Card style={cardStyle}><section role="region" aria-label="Detalhe por mês"><h2 style={{ ...G, margin: "0 0 12px", fontSize: 17 }}>Detalhe por mês</h2><div className="fincla-scroll" style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 5 }}>
-        {rows.slice(0, futureMonths).map((row) => <div key={keyOf(row)} style={{ flex: "0 0 180px", border: `1px solid ${T.border}`, borderRadius: 10, padding: 12 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><strong>{period(row)} {keyOf(row) === nowKey && <span style={{ color: T.blue, fontSize: 11 }}>Próximo</span>}</strong><strong>{moneyValue(inventoryKnown(row, currency) ? committed(row) : null, currency)}</strong></div>
+        {detailRows.slice(0, futureMonths).map((row) => <div key={keyOf(row)} data-testid={`detail-month-${keyOf(row)}`} style={{ flex: "0 0 180px", border: `1px solid ${T.border}`, borderRadius: 10, padding: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}><strong>{period(row)} {nextMonthKey && keyOf(row) === keyOf(nextMonthKey) && <span style={{ color: T.blue, fontSize: 11 }}>Próximo</span>}</strong><strong>{moneyValue(inventoryKnown(row, currency) ? committed(row) : null, currency)}</strong></div>
           {inventoryKnown(row, currency) ? <>
             <div style={{ marginTop: 8, fontSize: 12, color: T.inkLight }}>{installments(row).length} parcelas · {row.recurrences.length} recorrências</div>
             {installments(row).length === 0 ? <p style={{ ...G, fontSize: 11, color: T.inkLight }}>Sem parcelas previstas</p> : [...installments(row)].sort((a, b) => Number(b.amount) - Number(a.amount)).slice(0, 3).map((item) => <div key={item.transaction_id} style={{ display: "flex", justifyContent: "space-between", gap: 7, marginTop: 6, fontSize: 11 }}><span>{item.description}</span><span>{moneyValue(item.amount, currency)}</span></div>)}
