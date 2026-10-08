@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import React from "react";
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
@@ -38,6 +38,7 @@ const server = setupServer(
   }),
 );
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
+beforeEach(() => { Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 }); });
 afterAll(() => server.close());
 afterEach(() => { cleanup(); server.resetHandlers(); requests.length = 0; cardRequests = 0; navigate.mockReset(); vi.unstubAllGlobals(); });
 
@@ -68,27 +69,27 @@ describe("CardAllTransactionsPage", () => {
   it("abre o dock desktop e aplica categoria real na query do cartão", async () => {
     server.use(http.get("*/v1/tags/catalog", () => HttpResponse.json({ categories: [{ id: "food", label: "Alimentação", system_key: "food", color: "#059669" }] })));
     render(<CardAllTransactionsPage organizationId={ORG_ID} />);
-    expect(await screen.findByRole("button", { name: /\+ Filtros/ })).toBeInTheDocument();
-    await userEvent.setup().click(screen.getByRole("button", { name: /\+ Filtros/ }));
+    expect(await screen.findByRole("button", { name: /Abrir filtros/ })).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: /Abrir filtros/ }));
     expect(screen.getByRole("region", { name: "Filtros" })).toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole("button", { name: /Categoria/ }));
     await userEvent.setup().click(screen.getByRole("button", { name: "Alimentação" }));
     await waitFor(() => expect(requests.at(-1).searchParams.get("category")).toBe("food"));
     expect(requests.at(-1).searchParams.get("credit_card_id")).toBe("7");
-    await userEvent.setup().click(screen.getByRole("button", { name: "Limpar filtro Categoria" }));
+    await userEvent.setup().click(screen.getByRole("button", { name: "Remover filtro Categoria" }));
     await waitFor(() => expect(requests.at(-1).searchParams.has("category")).toBe(false));
   });
 
   it("filtra todos os cartões pela faceta Cartão sem reutilizar o id selecionado", async () => {
     render(<CardAllTransactionsPage organizationId={ORG_ID} />);
     expect(await screen.findByText("Mercado")).toBeInTheDocument();
-    await userEvent.setup().click(screen.getByRole("button", { name: /\+ Filtros/ }));
+    await userEvent.setup().click(screen.getByRole("button", { name: /Abrir filtros/ }));
     await userEvent.setup().click(screen.getByRole("button", { name: "Cartão" }));
     await userEvent.setup().click(screen.getByRole("button", { name: "Todos os cartões" }));
     await waitFor(() => expect(requests.at(-1).searchParams.get("payment_method")).toBe("credit_card"));
     expect(requests.at(-1).searchParams.has("credit_card_id")).toBe(false);
     expect(screen.getByRole("region", { name: "Resumo dos lançamentos filtrados" })).toBeInTheDocument();
-    await userEvent.setup().click(screen.getByRole("button", { name: "Limpar filtro Cartão" }));
+    await userEvent.setup().click(screen.getByRole("button", { name: "Remover filtro Cartão" }));
     await waitFor(() => expect(requests.at(-1).searchParams.get("credit_card_id")).toBe("7"));
   });
 
@@ -211,7 +212,7 @@ describe("CardAllTransactionsPage", () => {
     expect(screen.getByRole("combobox", { name: "Densidade da lista" })).toHaveValue("compacto");
     await userEvent.setup().click(screen.getByRole("checkbox", { name: "Agrupar por data" }));
     expect(screen.getByRole("checkbox", { name: "Agrupar por data" })).toBeChecked();
-    await userEvent.setup().click(screen.getByRole("button", { name: /\+ Filtros/ }));
+    await userEvent.setup().click(screen.getByRole("button", { name: /Abrir filtros/ }));
     await userEvent.setup().click(screen.getByRole("button", { name: "Preset: Este mês" }));
     await waitFor(() => expect(requests.at(-1).searchParams.has("date_start")).toBe(true));
     expect(requests.at(-1).searchParams.has("date_end")).toBe(true);

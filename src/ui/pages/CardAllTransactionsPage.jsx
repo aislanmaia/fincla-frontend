@@ -11,6 +11,8 @@ import { CardTransactionsSummary } from "../features/cardTransactions/CardTransa
 import { CardTransactionsTable } from "../features/cardTransactions/CardTransactionsTable.jsx";
 import { DENSITIES, readListPrefs, writeListPrefs } from "../features/transactions/listPrefs.js";
 import { TransactionsFilterPanel } from "../features/transactions/filters/TransactionsFilterPanel.jsx";
+import { TransactionsFilterBar } from "../features/transactions/filters/TransactionsFilterBar.jsx";
+import { TransactionsFilterChips } from "../features/transactions/filters/TransactionsFilterChips.jsx";
 import { useTransactionsFilterState } from "../features/transactions/filters/useTransactionsFilterState.js";
 import { useTransactionsTagCatalog } from "../features/transactions/filters/useTransactionsTagCatalog.js";
 import { buildTagOptions, isTagFilterBlocked, resolveTagFilterStatuses, tagFilterStatusMessage, tagOptionsToDisplayMap } from "../features/transactions/filters/tagCatalogResolution.js";
@@ -67,12 +69,15 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const [cardScope, setCardScope] = useState("current");
   const [summarySheetOpen, setSummarySheetOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [viewportWidth, setViewportWidth] = useState(() => typeof window === "undefined" ? 1440 : window.innerWidth);
+  const [chipsBudget, setChipsBudget] = useState(null);
   const detailDialogRef = useRef(null);
   const filterDialogRef = useRef(null);
   const summaryDialogRef = useRef(null);
   const detailCloseRef = useRef(null);
   const filterCloseRef = useRef(null);
   const summaryCloseRef = useRef(null);
+  const searchInputRef = useRef(null);
   const [selectedRows, setSelectedRows] = useState([]);
   const [inspected, setInspected] = useState(null);
   const [historyState, setHistoryState] = useState({ cardId: null, data: null, error: false });
@@ -84,6 +89,12 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   useFocusTrap(detailDialogRef, Boolean(inspected));
   useFocusTrap(filterDialogRef, filtersOpen && isMobile && !inspected);
   useFocusTrap(summaryDialogRef, summarySheetOpen && isMobile && !inspected && !filtersOpen);
+
+  useEffect(() => {
+    const onResize = () => setViewportWidth(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   useEffect(() => {
     if (inspected) detailCloseRef.current?.focus();
@@ -243,7 +254,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const back = () => navigate({ to: "/cards", search: { [FC.VIEW]: "new", [FC.HUB_CARD]: cardId } });
   const exportable = state.total != null && state.rows.length > 0 && state.rows.length === state.total && !state.loading;
   const closeFilters = () => setFiltersOpen(false);
-  const openFacet = (key) => { setActiveFacet(key); setMobileFacetOpen(true); setFiltersOpen(true); };
+  const openFacet = (key) => { if (key === "busca") { searchInputRef.current?.focus(); return; } setActiveFacet(key); setMobileFacetOpen(true); setFiltersOpen(true); };
   const card = state.card;
   const clearAll = () => { filter.clearAll(); setCardScope("current"); };
   const clearFacet = (key) => key === "cartao" ? setCardScope("current") : filter.clearFacet(key);
@@ -253,6 +264,8 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const currentSummaryLoading = summaryState.key !== summaryKey || summaryState.loading;
   const currentSummaryError = summaryState.key === summaryKey && summaryState.error;
   const currentFacets = facetState.key === summaryKey ? facetState.data : null;
+  const filterChips = <TransactionsFilterChips facets={activeFacets} searchActive={Boolean(debouncedSearch)} searchLabel={debouncedSearch} onOpenFacet={openFacet} onAbrirAtivos={() => openFacet("ativos")} onClearFacet={clearFacet} onClearAll={clearAll} maxVisible={viewportWidth >= 1600 ? 3 : viewportWidth >= 1366 ? 2 : 1} chipsBudget={chipsBudget} collapsed={viewportWidth < 1200} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen((open) => !open)} />;
+  const dockFloating = !isMobile && viewportWidth < 1280;
   const cardScopePanel = <CardScopePanel card={card} scope={cardScope} onScope={(value) => { setCardScope(value); setSummarySheetOpen(false); }} />;
   const inspectedInstallment = inspected?.installment_info?.length === 1 ? inspected.installment_info[0] : null;
 
@@ -272,22 +285,21 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
       </div>}
       {cardScope === "current" && isMobile && <Card as="button" type="button" onClick={() => setSummarySheetOpen(true)} style={{ ...G, padding: 16, width: "100%", textAlign: "left", cursor: "pointer", color: T.ink }}><strong>Resumo e gráficos das faturas</strong><span style={{ display: "block", fontSize: 11, color: T.inkMid, marginTop: 4 }}>Histórico do cartão selecionado · tocar para ver gráficos</span></Card>}
       {cardScope === "all" && <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} />}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+      {!isMobile && <TransactionsFilterBar filter={filter} hideSavedViews hideFacets searchInput={filter.search} setSearchInput={filter.setSearch} searchInputRef={searchInputRef} barChips={filterChips} onChipsBudget={setChipsBudget} barTrailing={<div style={{ display: "flex", alignItems: "center", gap: 7 }}><Select aria-label="Densidade da lista" value={prefs.density} onChange={(event) => setPreference({ density: event.target.value })}>{Object.entries(DENSITIES).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</Select><label style={{ ...G, display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: T.inkMid, whiteSpace: "nowrap" }}><input type="checkbox" checked={prefs.grouped && sortField === "date"} disabled={sortField !== "date"} onChange={(event) => setPreference({ grouped: event.target.checked })} /> Agrupar</label></div>} />}
+      {isMobile && <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <label onFocusCapture={() => setSearchFocused(true)} onBlurCapture={() => setSearchFocused(false)} style={{ ...G, flex: "1 1 280px", display: "flex", alignItems: "center", gap: 8, border: `1px solid ${searchFocused ? T.blue : T.border}`, boxShadow: searchFocused ? `0 0 0 2px ${T.blueLight}` : "none", background: T.surface, borderRadius: 9, padding: "8px 10px" }}><Search size={14} color={T.inkMid} /><input aria-label="Buscar lançamentos" placeholder="Buscar por descrição…" value={filter.search} onChange={(event) => filter.setSearch(event.target.value)} style={{ ...G, flex: 1, minWidth: 0, border: 0, outline: "none", background: "transparent", fontSize: 12 }} /></label>
         {activeFacets.map((facet) => <div key={facet.key} style={{ display: "flex", border: `1px solid ${T.border}`, borderRadius: 8, background: T.blueLight, overflow: "hidden" }}>
           <button type="button" onClick={() => openFacet(facet.key)} style={{ ...G, border: 0, background: "none", color: T.blue, padding: "8px 4px 8px 10px", fontSize: 11, cursor: "pointer" }}>{facet.label}: {facet.value}</button>
           <button type="button" aria-label={`Limpar filtro ${facet.label}`} onClick={() => clearFacet(facet.key)} style={{ ...G, border: 0, background: "none", color: T.blue, padding: "8px 10px 8px 4px", cursor: "pointer" }}>×</button>
         </div>)}
         <Btn variant={filtersOpen ? "dark" : "outGray"} onClick={() => { if (isMobile) setMobileFacetOpen(false); setFiltersOpen((open) => !open); }}><Filter size={14} /> {isMobile ? "Filtros" : "+ Filtros"}{activeCount ? ` (${activeCount})` : ""}</Btn>
-        <Select aria-label="Ordenar lançamentos" value={`${sort.field}:${sort.dir}`} onChange={(event) => { const [field, dir] = event.target.value.split(":"); filter.setSort([{ field, dir }]); }}><option value="date:desc">Mais recentes</option><option value="date:asc">Mais antigos</option><option value="val:desc">Maior valor</option><option value="val:asc">Menor valor</option><option value="desc:asc">Descrição A–Z</option></Select>
-        <Select aria-label="Densidade da lista" value={prefs.density} onChange={(event) => setPreference({ density: event.target.value })}>{Object.entries(DENSITIES).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</Select>
-        <label style={{ ...G, display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: T.inkMid }}><input type="checkbox" checked={prefs.grouped && sortField === "date"} disabled={sortField !== "date"} onChange={(event) => setPreference({ grouped: event.target.checked })} /> Agrupar por data</label>
-        <span style={{ ...G, ...NUM, fontSize: 11, color: T.inkMid }}>{state.rows.length}{state.total != null ? ` de ${state.total}` : ""}</span>
-      </div>
+      </div>}
       {filterBlocked && <Card role="status" style={{ padding: 12, color: T.amber }}>{isTagFilterBlocked(tagStatus) ? tagFilterStatusMessage(tagStatus) : "Aguardando o catálogo de categorias para aplicar o filtro."}</Card>}
-      <div style={{ display: "grid", gridTemplateColumns: filtersOpen && !isMobile ? "minmax(300px, 360px) minmax(0,1fr)" : "minmax(0,1fr)", gap: 12, alignItems: "start", minWidth: 0 }}>
-        {filtersOpen && !isMobile && <div style={{ height: 560, minWidth: 0 }}><TransactionsFilterPanel filter={filter} facet={activeFacet} onFacetChange={setActiveFacet} categories={categories} allTags={tagOptions.map((tag) => tag.displayLabel)} allTagsLoading={tagCatalog.loading} allTagsError={Boolean(tagCatalog.error)} tagIdByLabel={tagIdByLabel} facetCounts={currentFacets} activeFacets={activeFacets} onClearFacet={clearFacet} onClearAll={clearAll} onApply={closeFilters} onClose={closeFilters} resultCount={state.total ?? 0} resultsLoading={state.loading} visibleFacetKeys={FACETS} defaultPeriod="tudo" cardScopePanel={cardScopePanel} selectionOverrides={{ cartao: cardScope === "all" ? 1 : 0 }} /></div>}
+      <div style={{ display: "flex", alignItems: "stretch", minWidth: 0, position: "relative", gap: filtersOpen && !dockFloating ? 12 : 0 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
         <CardTransactionsTable rows={state.rows} total={state.total} cardCurrency={cardScope === "current" ? card.currency : null} loading={state.loading} error={state.error} hasMore={hasMore} onMore={onMore} selected={selectedRows} onSelected={setSelectedRows} onExportSelected={() => exportLoadedRows(state.rows.filter((row) => selectedRows.includes(row.id)), cardScope === "current" ? card.currency : null)} inspected={inspected} onInspect={setInspected} grouped={prefs.grouped && sortField === "date"} density={prefs.density} isMobile={isMobile} />
+        </div>
+        {filtersOpen && !isMobile && <div style={{ ...(dockFloating ? { position: "absolute", top: 0, right: 0, zIndex: 5, boxShadow: "-8px 0 24px rgba(15,15,13,.1)" } : { flex: "none" }), width: Math.min(420, Math.max(320, viewportWidth * .28)), height: 560, minWidth: 0 }}><TransactionsFilterPanel filter={filter} facet={activeFacet} onFacetChange={setActiveFacet} categories={categories} allTags={tagOptions.map((tag) => tag.displayLabel)} allTagsLoading={tagCatalog.loading} allTagsError={Boolean(tagCatalog.error)} tagIdByLabel={tagIdByLabel} facetCounts={currentFacets} activeFacets={activeFacets} onClearFacet={clearFacet} onClearAll={clearAll} onApply={closeFilters} onClose={closeFilters} resultCount={state.total ?? 0} resultsLoading={state.loading} visibleFacetKeys={FACETS} defaultPeriod="tudo" cardScopePanel={cardScopePanel} selectionOverrides={{ cartao: cardScope === "all" ? 1 : 0 }} /></div>}
       </div>
       {state.error && <Card role="alert" style={{ display: "flex", alignItems: "center", gap: 12, padding: 14 }}>Não foi possível carregar os lançamentos. <Btn variant="outGray" onClick={() => { setState((current) => ({ ...current, loading: true, error: false })); setRetry((value) => value + 1); }}>Tentar novamente</Btn></Card>}
     </>}
@@ -312,17 +324,19 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
       </div>
     </div>}
     {filtersOpen && isMobile && <div ref={filterDialogRef} role="dialog" aria-modal="true" aria-label="Filtros dos lançamentos" style={{ position: "fixed", inset: 0, zIndex: 49, background: "rgba(15,15,13,.35)", display: "flex", alignItems: "flex-end" }} onClick={closeFilters}>
-      <div style={{ background: T.surface, borderRadius: "18px 18px 0 0", height: "min(85dvh, 720px)", width: "100%", padding: 12, display: "flex", flexDirection: "column", gap: 12 }} onClick={(event) => event.stopPropagation()}>
+      <div style={{ background: T.surface, borderRadius: "18px 18px 0 0", height: "min(100dvh, 760px)", width: "100%", padding: "0 12px 12px", display: "flex", flexDirection: "column", gap: 12 }} onClick={(event) => event.stopPropagation()}>
+        <div aria-hidden="true" style={{ width: 36, height: 4, borderRadius: 99, background: T.border, margin: "11px auto 2px" }} />
         <div style={{ ...G, display: "flex", justifyContent: "space-between", alignItems: "center", fontWeight: 700 }}>
           <button type="button" onClick={() => setMobileFacetOpen(false)} style={{ ...G, border: 0, background: "none", color: T.blue, cursor: "pointer" }}>{mobileFacetOpen ? "← Voltar" : "Filtros"}</button>
           <button ref={filterCloseRef} type="button" aria-label="Fechar filtros" onClick={closeFilters} style={{ border: 0, background: "none", cursor: "pointer" }}><X size={18} /></button>
         </div>
         {!mobileFacetOpen && <div className="fincla-scroll" style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", alignContent: "start", gap: 10, overflowY: "auto", flex: 1 }}>
+          <label style={{ ...G, gridColumn: "1 / -1", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, fontSize: 11, color: T.inkMid, fontWeight: 700 }}>ORDENAR POR <Select aria-label="Ordenar lançamentos" value={`${sort.field}:${sort.dir}`} onChange={(event) => { const [field, dir] = event.target.value.split(":"); filter.setSort([{ field, dir }]); }}><option value="date:desc">Data ↓</option><option value="date:asc">Data ↑</option><option value="val:desc">Maior valor</option><option value="val:asc">Menor valor</option><option value="desc:asc">Descrição A–Z</option></Select></label>
           {FACETS.map((key) => <button key={key} type="button" onClick={() => { setActiveFacet(key); setMobileFacetOpen(true); }} style={{ ...G, minHeight: 64, border: `1px solid ${T.border}`, borderRadius: 10, background: activeFacets.some((facet) => facet.key === key) ? T.blueLight : T.surface, color: T.ink, textAlign: "left", padding: 12, fontWeight: 700 }}>{FACET_LABELS[key]} {activeFacets.some((facet) => facet.key === key) ? "●" : ""}</button>)}
           <button type="button" onClick={clearAll} style={{ ...G, gridColumn: "1 / -1", border: 0, background: "none", color: T.red, padding: 12 }}>Limpar tudo</button>
-          <Btn variant="dark" onClick={closeFilters} style={{ gridColumn: "1 / -1" }}>Ver {state.total ?? "—"} lançamentos</Btn>
         </div>}
         {mobileFacetOpen && <div style={{ minHeight: 0, flex: 1 }}><TransactionsFilterPanel filter={filter} facet={activeFacet} onFacetChange={setActiveFacet} categories={categories} allTags={tagOptions.map((tag) => tag.displayLabel)} allTagsLoading={tagCatalog.loading} allTagsError={Boolean(tagCatalog.error)} tagIdByLabel={tagIdByLabel} facetCounts={currentFacets} activeFacets={activeFacets} onClearFacet={clearFacet} onClearAll={clearAll} onApply={closeFilters} onClose={() => setMobileFacetOpen(false)} resultCount={state.total ?? 0} resultsLoading={state.loading} compact hideRail visibleFacetKeys={FACETS} defaultPeriod="tudo" cardScopePanel={cardScopePanel} selectionOverrides={{ cartao: cardScope === "all" ? 1 : 0 }} /></div>}
+        <Btn variant="dark" onClick={closeFilters} style={{ width: "100%", flex: "none" }}>Ver {state.total ?? "—"} lançamentos</Btn>
       </div>
     </div>}
   </div>;
