@@ -101,33 +101,35 @@ export const getCreditCardInvoice = async (
   year: number,
   month: number,
   organizationId: string,
-  { includeMetrics = false, includeChanges = false }: { includeMetrics?: boolean; includeChanges?: boolean } = {}
-): Promise<InvoiceResponse> => {
-  const response = await apiClient.get<InvoiceResponse>(
+  { includeMetrics = false, includeChanges = false, emptyAsNull = false }: { includeMetrics?: boolean; includeChanges?: boolean; emptyAsNull?: boolean } = {}
+): Promise<InvoiceResponse | null> => {
+  const response = await apiClient.get<InvoiceResponse | null>(
     `/credit-cards/${cardId}/invoices/${year}/${month}`,
     {
-      params: { organization_id: organizationId, ...(includeMetrics ? { include_metrics: true } : {}), ...(includeChanges ? { include_changes: true } : {}) },
+      params: { organization_id: organizationId, ...(includeMetrics ? { include_metrics: true } : {}), ...(includeChanges ? { include_changes: true } : {}), ...(emptyAsNull ? { empty_as_null: true } : {}) },
     }
   );
+  if (response.data === null) return null;
   const currency = toCurrency(response.data.total_amount);
   return { ...unwrapMoney(response.data), currency };
 };
 
 /**
  * Fatura em aberto do cartão (a que ainda aceita lançamentos), sem informar ano e mês.
- * `404` também significa "a fatura aberta ainda não tem lançamentos": quem chama decide.
+ * Com empty_as_null, a ausência de lançamentos retorna 200 com null.
  */
 export const getCurrentCreditCardInvoice = async (
   cardId: number,
-  organizationId: string
-): Promise<InvoiceResponse> => {
-  const response = await apiClient.get<InvoiceResponse>(
+  organizationId: string,
+  { emptyAsNull = false }: { emptyAsNull?: boolean } = {}
+): Promise<InvoiceResponse | null> => {
+  const response = await apiClient.get<InvoiceResponse | null>(
     `/credit-cards/${cardId}/invoices/current`,
     {
-      params: { organization_id: organizationId },
+      params: { organization_id: organizationId, ...(emptyAsNull ? { empty_as_null: true } : {}) },
     }
   );
-  return unwrapMoney(response.data);
+  return response.data === null ? null : unwrapMoney(response.data);
 };
 
 /**

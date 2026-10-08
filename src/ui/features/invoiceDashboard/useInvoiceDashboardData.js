@@ -25,9 +25,9 @@ const detailId = (orgId, cardId, year, month) => `${orgId}:${cardId}:${year}-${m
  * da fatura SELECIONADA. O detalhe de outra fatura só é buscado quando ela é
  * selecionada (cacheado por fatura). Fatura posterior à aberta também consulta o
  * detalhe: compra com data futura e parcelas já formam fatura real no servidor, e
- * future-commitments nem sempre concorda com ela; sem detalhe (404) vale a previsão.
+ * future-commitments nem sempre concorda com ela; sem detalhe vale a previsão.
  *
- * `404` do detalhe é "fatura sem lançamentos", nunca erro. Stale-while-revalidate:
+ * `null` do detalhe é "fatura sem lançamentos". Stale-while-revalidate:
  * só a primeira carga mostra carregamento; refetch e mutações mantêm a tela.
  */
 export function useInvoiceDashboardData({ organizationId, cardId, year, month, enabled = true, refreshToken = 0 }) {
@@ -105,13 +105,12 @@ export function useInvoiceDashboardData({ organizationId, cardId, year, month, e
   const selectedStale = selectedEntry?.stale === true;
 
   const fetchDetail = useCallback((id) => once(`detail:${id}`, () => settle(
-    getCreditCardInvoice(numericCardId, year, month, organizationId, { includeMetrics: true, includeChanges: true }),
+    getCreditCardInvoice(numericCardId, year, month, organizationId, { includeMetrics: true, includeChanges: true, emptyAsNull: true }),
   )).then((res) => {
     setDetails((prev) => {
       const old = prev[id];
-      if (res.ok) return { ...prev, [id]: { state: "ok", data: res.value, stale: false, refreshFailed: false } };
+      if (res.ok) return { ...prev, [id]: { state: res.value === null ? "empty" : "ok", data: res.value, stale: false, refreshFailed: false } };
       const status = statusOf(res.error);
-      if (status === 404) return { ...prev, [id]: { state: "empty", data: null, stale: false, refreshFailed: false } };
       if (old && old.state === "ok") return { ...prev, [id]: { ...old, stale: false, refreshFailed: true } };
       return { ...prev, [id]: { state: status === 403 ? "forbidden" : "error", data: null, stale: false, refreshFailed: false } };
     });

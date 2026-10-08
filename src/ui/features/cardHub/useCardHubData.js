@@ -25,16 +25,12 @@ const LOADING_DETAIL = {
   futureFailed: false,
 };
 
-function isNotFound(error) {
-  return error?.response?.status === 404;
-}
-
 const settle = (promise) => promise.then((value) => ({ ok: true, value }), (error) => ({ ok: false, error }));
 
 /**
  * Dados do Hub do cartão: lista de cartões e, para o selecionado, as três fontes
- * de faturas (histórico, aberta, futuras). `404` na fatura aberta é "ainda sem
- * lançamentos", nunca erro. Falha de uma fonte não derruba as outras.
+ * de faturas (histórico, aberta, futuras). Fatura vazia vem como `null`.
+ * Falha de uma fonte não derruba as outras.
  *
  * Stale-while-revalidate: só a primeira carga (ou troca de organização/cartão)
  * mostra carregamento. Um refetch mantém a UI e os dados atuais e só os troca
@@ -99,14 +95,14 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
     let cancelled = false;
     Promise.all([
       settle(getInvoiceHistory(selectedCardId, organizationId, HISTORY_MONTHS, true)),
-      settle(getCurrentCreditCardInvoice(selectedCardId, organizationId)),
+      settle(getCurrentCreditCardInvoice(selectedCardId, organizationId, { emptyAsNull: true })),
       settle(getFutureCommitments(selectedCardId, organizationId, FUTURE_MONTHS)),
     ]).then(([history, current, future]) => {
       if (cancelled) return;
       setDetail((prev) => {
         const sameCard = prev.cardId === selectedCardId && !prev.loading;
         const keep = (res, old, key) => (res.ok || !sameCard ? (res.ok ? res.value : null) : old[key]);
-        const currentState = current.ok ? "ok" : isNotFound(current.error) ? "empty" : sameCard ? prev.currentState : "unavailable";
+        const currentState = current.ok ? (current.value === null ? "empty" : "ok") : sameCard ? prev.currentState : "unavailable";
         return {
           cardId: selectedCardId,
           orgId: organizationId,
@@ -117,7 +113,7 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
           currentState,
           future: keep(future, prev, "future"),
           futureFailed: sameCard ? (future.ok ? false : prev.futureFailed) : !future.ok,
-          refreshFailed: sameCard && (!history.ok || (!current.ok && !isNotFound(current.error)) || !future.ok),
+          refreshFailed: sameCard && (!history.ok || !current.ok || !future.ok),
         };
       });
     });

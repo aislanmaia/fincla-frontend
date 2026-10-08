@@ -127,7 +127,9 @@ function mockApi({ cards = [cardFixture()], detail = DETAILS, patch, listStatus 
       calls.queries.push(new URL(request.url).search);
       const make = detail[`${params.year}/${params.month}`];
       if (detail === "fail") return HttpResponse.json({ detail: "boom" }, { status: 500 });
-      if (!make) return HttpResponse.json({ detail: "Invoice not found for the specified card/month" }, { status: 404 });
+      if (!make) return new URL(request.url).searchParams.get("empty_as_null") === "true"
+        ? HttpResponse.json(null)
+        : HttpResponse.json({ detail: "Opt in to empty invoice response" }, { status: 400 });
       const override = paidOverride[`${params.year}/${params.month}`];
       return HttpResponse.json({ ...make(), ...(override ?? {}) });
     }),
@@ -549,7 +551,7 @@ describe("InvoiceDashboardPage — exportar CSV", () => {
 });
 
 describe("InvoiceDashboardPage — estados de borda", () => {
-  it("fatura sem lançamentos (404 do detalhe) é estado vazio, nunca erro", async () => {
+  it("fatura sem lançamentos (200 com null) é estado vazio, nunca erro", async () => {
     mockApi({ detail: {} });
     renderPage();
     await screen.findByTestId("invoice-empty");
