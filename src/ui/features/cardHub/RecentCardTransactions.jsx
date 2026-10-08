@@ -16,10 +16,10 @@ function dateOf(row) {
   return Number.isNaN(date.getTime()) ? "Data indisponível" : dateFormat.format(date);
 }
 
-export function RecentCardTransactions({ transactions, cardCurrency, loading, error, onViewAll }) {
+export function RecentCardTransactions({ transactions, cardCurrency, loading, error, onViewAll, title = "🧾 Lançamentos recentes" }) {
   return (
-    <section aria-label="Lançamentos recentes" style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, boxShadow: T.sm, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-      <h3 style={{ ...G, margin: 0, fontSize: 13, fontWeight: 700, color: T.ink }}>🧾 Lançamentos recentes</h3>
+    <section aria-label={title === "🧾 Lançamentos recentes" ? "Lançamentos recentes" : title} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, boxShadow: T.sm, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+      <h3 style={{ ...G, margin: 0, fontSize: 13, fontWeight: 700, color: T.ink }}>{title}</h3>
       {loading && <p role="status" style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>Carregando lançamentos…</p>}
       {error && <p role="alert" style={{ ...G, margin: 0, fontSize: 12, color: T.red }}>Não foi possível carregar os lançamentos deste cartão.</p>}
       {!loading && !error && transactions.length === 0 && <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>Este cartão ainda não tem lançamentos.</p>}
@@ -34,9 +34,9 @@ export function RecentCardTransactions({ transactions, cardCurrency, loading, er
           </div>
         </div>
       ))}
-      <button type="button" onClick={onViewAll} style={{ ...G, alignSelf: "flex-start", marginTop: "auto", padding: "6px 0 0", border: 0, background: "none", color: T.blue, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
+      {onViewAll && <button type="button" onClick={onViewAll} style={{ ...G, alignSelf: "flex-start", marginTop: "auto", padding: "6px 0 0", border: 0, background: "none", color: T.blue, fontSize: 11, fontWeight: 700, cursor: "pointer" }}>
         Ver todas as transações →
-      </button>
+      </button>}
     </section>
   );
 }

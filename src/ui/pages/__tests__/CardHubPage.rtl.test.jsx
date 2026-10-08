@@ -328,7 +328,7 @@ describe("CardHubPage — lançamentos recentes", () => {
     await within(section).findByText("Farmácia");
     expect(requests).toHaveLength(2);
     await userEvent.setup().click(within(section).getByRole("button", { name: /Ver todas as transações/ }));
-    expect(navigateMock).toHaveBeenCalledWith({ to: "/transactions" });
+    expect(navigateMock).toHaveBeenCalledWith({ to: `/cards/${publicIdFor(1)}/transactions` });
   });
 });
 
