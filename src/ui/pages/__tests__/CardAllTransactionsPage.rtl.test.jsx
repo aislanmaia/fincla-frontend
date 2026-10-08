@@ -13,7 +13,7 @@ vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => navigate,
   useParams: () => ({ cardId: CARD_ID }),
 }));
-import { CardAllTransactionsPage } from "../CardAllTransactionsPage.jsx";
+import { CardAllTransactionsPage, csvCell } from "../CardAllTransactionsPage.jsx";
 
 const requests = [];
 let cardRequests = 0;
@@ -43,17 +43,23 @@ afterAll(() => server.close());
 afterEach(() => { cleanup(); server.resetHandlers(); requests.length = 0; cardRequests = 0; navigate.mockReset(); vi.unstubAllGlobals(); });
 
 describe("CardAllTransactionsPage", () => {
+  it("neutraliza fórmulas de planilha no CSV de descrições informadas pelo usuário", () => {
+    expect(csvCell('=HYPERLINK("https://example.com","Abrir")', true)).toBe('"\'=HYPERLINK(""https://example.com"",""Abrir"")"');
+    expect(csvCell("  @SUM(1,2)", true)).toBe('"\'  @SUM(1,2)"');
+    expect(csvCell("-35.00", false)).toBe('"-35.00"');
+  });
   it("mostra gasto por categoria do recorte completo na moeda recebida da API", async () => {
     server.use(http.get("*/v1/transactions/summary", ({ request }) => {
       const url = new URL(request.url);
       expect(url.searchParams.get("credit_card_id")).toBe("7");
       expect(url.searchParams.get("include_breakdown")).toBe("true");
-      return HttpResponse.json({ total_transactions: 45, breakdown: { by_category: [{ category: "Alimentação", amount: { amount: "25.50", currency: "USD" } }], by_month: [] } });
+      return HttpResponse.json({ total_transactions: 45, by_currency: [{ amount: "25.50", currency: "USD" }], breakdown: { by_category: [{ category: "Alimentação", amount: { amount: "25.50", currency: "USD" } }], by_month: [] } });
     }));
     render(<CardAllTransactionsPage organizationId={ORG_ID} />);
     const summary = await screen.findByRole("region", { name: "Resumo dos lançamentos filtrados" });
     expect(await within(summary).findByText("45 lançamentos")).toBeInTheDocument();
-    expect(within(summary).getByText(/25,50/)).toBeInTheDocument();
+    expect(within(summary).getByText("Total movimentado no recorte")).toBeInTheDocument();
+    expect(within(summary).getAllByText(/25,50/)).toHaveLength(2);
     expect(within(summary).queryByText(/R\$\s*25,50/)).not.toBeInTheDocument();
   });
 
@@ -108,6 +114,10 @@ describe("CardAllTransactionsPage", () => {
   });
 
   it("usa grade de facetas no sheet mobile", async () => {
+    server.use(http.get("*/v1/transactions", ({ request }) => {
+      requests.push(new URL(request.url));
+      return HttpResponse.json({ data: [{ id: 1, date: "2026-09-01", description: "Mercado", value: 12, value_currency: "BRL", type: "expense", status: "confirmed" }], pagination: { total: 2, page: 1, limit: 30, pages: 1, has_next: false, has_prev: false } });
+    }));
     render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
     expect(await screen.findByRole("button", { name: "Filtros" })).toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole("button", { name: "Filtros" }));
@@ -120,7 +130,10 @@ describe("CardAllTransactionsPage", () => {
     expect(within(sheet).getByRole("button", { name: "Ver 2 transações" })).toBeInTheDocument();
     expect(within(sheet).getByRole("button", { name: "← Voltar" })).toBeInTheDocument();
     expect(await screen.findByRole("listitem")).toHaveTextContent("Mercado");
-    expect(within(sheet).getByRole("button", { name: "Fechar filtros" })).toHaveFocus();
+    expect(screen.getByRole("listitem")).toHaveTextContent("A pagar");
+    expect(within(sheet).getByRole("heading", { name: "Categoria" })).toHaveFocus();
+    await userEvent.setup().click(within(sheet).getByRole("button", { name: "← Voltar" }));
+    expect(within(sheet).getByRole("button", { name: "Categoria" })).toHaveFocus();
     await userEvent.setup().click(within(sheet).getByRole("button", { name: "Fechar filtros" }));
     await userEvent.setup().click(screen.getByRole("button", { name: /Mercado/ }));
     expect(screen.getByRole("dialog", { name: "Detalhes do lançamento" })).toHaveTextContent("Mercado");

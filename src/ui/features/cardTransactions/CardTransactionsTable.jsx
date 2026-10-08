@@ -30,7 +30,9 @@ function status(row) {
   if (row.type === "refund") return { text: "Estorno", color: T.green, bg: T.greenLight };
   if (row.status === "paid") return { text: "Paga", color: T.green, bg: T.greenLight };
   if (row.status === "confirmed") return { text: "A pagar", color: T.blue, bg: T.blueLight };
-  return { text: "Pendente", color: T.amber, bg: T.amberLight };
+  if (row.status === "pending") return { text: "Pendente", color: T.amber, bg: T.amberLight };
+  if (row.status === "cancelled") return { text: "Cancelada", color: T.inkMid, bg: T.grayLight };
+  return { text: "Situação indisponível", color: T.inkMid, bg: T.grayLight };
 }
 
 export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasMore, error, onMore, selected, onSelected, onExportSelected, inspected, onInspect, grouped, density, isMobile, maxHeight }) {
@@ -80,7 +82,7 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
                 <strong style={{ display: "block", fontSize: 12, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.description}</strong>
                 <span style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap", marginTop: 2, fontSize: 10, color: T.inkMid }}><Badge bg={T.greenLight} color={T.green}>{category(row)}</Badge>{part ? `Crédito ${part.installment_number}/${part.total_installments}×` : row.recurring ? "Recorrente" : "Crédito à vista"}{isMobile && date ? ` · ${dateLabel(date)}` : ""}</span>
               </button>
-              <div style={{ ...G, ...NUM, textAlign: "right", flex: "none", fontSize: 12, fontWeight: 700, color: row.type === "refund" ? T.green : T.ink }}>{amount(row, cardCurrency)}{!isMobile && <span style={{ display: "block", fontSize: 10, fontWeight: 500, color: info.color }}>{info.text}</span>}</div>
+              <div style={{ ...G, ...NUM, textAlign: "right", flex: "none", fontSize: 12, fontWeight: 700, color: row.type === "refund" ? T.green : T.ink }}>{amount(row, cardCurrency)}<span style={{ display: "block", fontSize: 10, fontWeight: 500, color: info.color }}>{info.text}</span></div>
               <ChevronRight size={14} color={T.inkMid} aria-hidden="true" />
             </div>;
           })}

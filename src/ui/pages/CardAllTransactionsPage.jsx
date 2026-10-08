@@ -39,13 +39,15 @@ function sharePending(map, key, request) {
 function cardLabel(card) {
   return `${card.description || card.brand || "Cartão"} •${card.last4 || "••••"}`;
 }
-function csvCell(value) {
-  return `"${String(value ?? "").replaceAll('"', '""')}"`;
+export function csvCell(value, textField = false) {
+  const raw = String(value ?? "");
+  const safe = textField && /^[\s\u0000-\u001f]*[=+\-@]/u.test(raw) ? `'${raw}` : raw;
+  return `"${safe.replaceAll('"', '""')}"`;
 }
 function exportLoadedRows(rows, cardCurrency) {
   const header = ["Data", "Descrição", "Categoria", "Valor", "Moeda", "Situação"];
   const lines = rows.map((row) => [row.date, row.description, pickCategoryTagFromApiTransaction(row)?.label || row.category || "", row.value, row.value_currency || cardCurrency || "", row.status]);
-  const csv = `\uFEFF${[header, ...lines].map((line) => line.map(csvCell).join(",")).join("\r\n")}`;
+  const csv = `\uFEFF${[header, ...lines].map((line) => line.map((value, index) => csvCell(value, index === 1 || index === 2)).join(",")).join("\r\n")}`;
   const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
   const link = document.createElement("a");
   link.href = url;
@@ -80,6 +82,9 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const filterCloseRef = useRef(null);
   const summaryCloseRef = useRef(null);
   const searchInputRef = useRef(null);
+  const mobileFacetHeadingRef = useRef(null);
+  const mobileFacetButtonRefs = useRef({});
+  const wasMobileFacetOpenRef = useRef(false);
   const [selectedRows, setSelectedRows] = useState([]);
   const [inspected, setInspected] = useState(null);
   const [historyState, setHistoryState] = useState({ cardId: null, data: null, error: false });
@@ -122,9 +127,15 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
 
   useEffect(() => {
     if (inspected) detailCloseRef.current?.focus();
-    else if (filtersOpen && isMobile) filterCloseRef.current?.focus();
+    else if (filtersOpen && isMobile) {
+      if (mobileFacetOpen) mobileFacetHeadingRef.current?.focus();
+      else if (wasMobileFacetOpenRef.current) mobileFacetButtonRefs.current[activeFacet]?.focus();
+      else filterCloseRef.current?.focus();
+      wasMobileFacetOpenRef.current = mobileFacetOpen;
+    }
     else if (summarySheetOpen && isMobile) summaryCloseRef.current?.focus();
-  }, [inspected, filtersOpen, summarySheetOpen, isMobile, mobileFacetOpen]);
+    if (!filtersOpen) wasMobileFacetOpenRef.current = false;
+  }, [inspected, filtersOpen, summarySheetOpen, isMobile, mobileFacetOpen, activeFacet]);
 
   useEffect(() => {
     if (!filtersOpen && !inspected && !summarySheetOpen) return undefined;
@@ -323,7 +334,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
         <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} />
         <CardTransactionsHistory history={currentHistory} error={currentHistoryError} currency={card.currency} isMobile={false} />
       </div>}
-      {cardScope === "current" && isMobile && <Card as="button" type="button" onClick={() => setSummarySheetOpen(true)} style={{ ...G, padding: 16, width: "100%", textAlign: "left", cursor: "pointer", color: T.ink }}><strong>Resumo e gráficos das faturas</strong><span style={{ display: "block", fontSize: 11, color: T.inkMid, marginTop: 4 }}>Histórico do cartão selecionado · tocar para ver gráficos</span></Card>}
+      {cardScope === "current" && isMobile && <Card as="button" type="button" onClick={() => setSummarySheetOpen(true)} style={{ ...G, padding: 16, width: "100%", textAlign: "left", cursor: "pointer", color: T.ink }}><strong>Resumo filtrado e histórico do cartão</strong><span style={{ display: "block", fontSize: 11, color: T.inkMid, marginTop: 4 }}>Gastos do recorte e faturas do cartão · tocar para ver</span></Card>}
       {cardScope === "all" && <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} />}
       {!isMobile && <TransactionsFilterBar filter={filter} hideSavedViews hideFacets searchInput={filter.search} setSearchInput={filter.setSearch} searchPlaceholder="Buscar por descrição…" searchInputRef={searchInputRef} barChips={filterChips} onChipsBudget={setChipsBudget} barTrailing={<div style={{ display: "flex", alignItems: "center", gap: 7 }}><Select aria-label="Densidade da lista" value={prefs.density} onChange={(event) => setPreference({ density: event.target.value })}>{Object.entries(DENSITIES).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}</Select><label style={{ ...G, display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: T.inkMid, whiteSpace: "nowrap" }}><input type="checkbox" checked={prefs.grouped && sortField === "date"} disabled={sortField !== "date"} onChange={(event) => setPreference({ grouped: event.target.checked })} /> Agrupar</label></div>} />}
       {isMobile && <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
@@ -356,7 +367,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
         {inspected.refund_of_transaction_id && <p style={{ ...G, fontSize: 11, color: T.inkMid }}>Este estorno está vinculado a uma compra original.</p>}
       </Card>
     </div>}
-    {summarySheetOpen && isMobile && cardScope === "current" && <div ref={summaryDialogRef} role="dialog" aria-modal="true" aria-label="Resumo e gráficos das faturas" style={{ position: "fixed", inset: 0, zIndex: 48, background: "rgba(15,15,13,.35)", display: "flex", alignItems: "flex-end" }} onClick={() => setSummarySheetOpen(false)}>
+    {summarySheetOpen && isMobile && cardScope === "current" && <div ref={summaryDialogRef} role="dialog" aria-modal="true" aria-label="Resumo filtrado e histórico do cartão" style={{ position: "fixed", inset: 0, zIndex: 48, background: "rgba(15,15,13,.35)", display: "flex", alignItems: "flex-end" }} onClick={() => setSummarySheetOpen(false)}>
       <div className="fincla-scroll" style={{ background: T.bg, borderRadius: "18px 18px 0 0", maxHeight: "85dvh", width: "100%", padding: 16, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }} onClick={(event) => event.stopPropagation()}>
         <button ref={summaryCloseRef} type="button" aria-label="Fechar resumo" onClick={() => setSummarySheetOpen(false)} style={{ alignSelf: "flex-end", border: 0, background: "none", cursor: "pointer" }}><X size={18} /></button>
         <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} />
@@ -372,10 +383,10 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
         </div>
         {!mobileFacetOpen && <div className="fincla-scroll" style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", alignContent: "start", gap: 10, overflowY: "auto", flex: 1 }}>
           <label style={{ ...G, gridColumn: "1 / -1", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, fontSize: 11, color: T.inkMid, fontWeight: 700 }}>ORDENAR POR <Select aria-label="Ordenar lançamentos" value={`${sort.field}:${sort.dir}`} onChange={(event) => { const [field, dir] = event.target.value.split(":"); filter.setSort([{ field, dir }]); }}><option value="date:desc">Data ↓</option><option value="date:asc">Data ↑</option><option value="val:desc">Maior valor</option><option value="val:asc">Menor valor</option><option value="desc:asc">Descrição A–Z</option></Select></label>
-          {FACETS.map((key) => <button key={key} type="button" onClick={() => { setActiveFacet(key); setMobileFacetOpen(true); }} style={{ ...G, minHeight: 64, border: `1px solid ${T.border}`, borderRadius: 10, background: activeFacets.some((facet) => facet.key === key) ? T.blueLight : T.surface, color: T.ink, textAlign: "left", padding: 12, fontWeight: 700 }}>{FACET_LABELS[key]} {activeFacets.some((facet) => facet.key === key) ? "●" : ""}</button>)}
+          {FACETS.map((key) => <button ref={(node) => { mobileFacetButtonRefs.current[key] = node; }} key={key} type="button" onClick={() => { setActiveFacet(key); setMobileFacetOpen(true); }} style={{ ...G, minHeight: 64, border: `1px solid ${T.border}`, borderRadius: 10, background: activeFacets.some((facet) => facet.key === key) ? T.blueLight : T.surface, color: T.ink, textAlign: "left", padding: 12, fontWeight: 700 }}>{FACET_LABELS[key]} {activeFacets.some((facet) => facet.key === key) ? "●" : ""}</button>)}
           <button type="button" onClick={clearAll} style={{ ...G, gridColumn: "1 / -1", border: 0, background: "none", color: T.red, padding: 12 }}>Limpar tudo</button>
         </div>}
-        {mobileFacetOpen && <div style={{ minHeight: 0, flex: 1 }}><TransactionsFilterPanel filter={filter} facet={activeFacet} onFacetChange={setActiveFacet} categories={categories} allTags={tagOptions.map((tag) => tag.displayLabel)} allTagsLoading={tagCatalog.loading} allTagsError={Boolean(tagCatalog.error)} tagIdByLabel={tagIdByLabel} facetCounts={facetCounts} activeFacets={activeFacets} onClearFacet={clearFacet} onClearAll={clearAll} onApply={closeFilters} onClose={() => setMobileFacetOpen(false)} resultCount={state.total ?? 0} resultsLoading={state.loading} compact hideRail visibleFacetKeys={FACETS} defaultPeriod="tudo" cardScopePanel={cardScopePanel} selectionOverrides={{ cartao: cardScope === "all" ? 1 : 0 }} /></div>}
+        {mobileFacetOpen && <div style={{ minHeight: 0, flex: 1, display: "flex", flexDirection: "column" }}><h2 ref={mobileFacetHeadingRef} tabIndex={-1} style={{ ...G, fontSize: 14, margin: "0 0 8px", color: T.ink }}>{FACET_LABELS[activeFacet] || "Filtros ativos"}</h2><div style={{ minHeight: 0, flex: 1 }}><TransactionsFilterPanel filter={filter} facet={activeFacet} onFacetChange={setActiveFacet} categories={categories} allTags={tagOptions.map((tag) => tag.displayLabel)} allTagsLoading={tagCatalog.loading} allTagsError={Boolean(tagCatalog.error)} tagIdByLabel={tagIdByLabel} facetCounts={facetCounts} activeFacets={activeFacets} onClearFacet={clearFacet} onClearAll={clearAll} onApply={closeFilters} onClose={() => setMobileFacetOpen(false)} resultCount={state.total ?? 0} resultsLoading={state.loading} compact hideRail visibleFacetKeys={FACETS} defaultPeriod="tudo" cardScopePanel={cardScopePanel} selectionOverrides={{ cartao: cardScope === "all" ? 1 : 0 }} /></div></div>}
         {!mobileFacetOpen && <Btn variant="dark" onClick={closeFilters} style={{ width: "100%", flex: "none" }}>Ver {state.total ?? "—"} lançamentos</Btn>}
       </div>
     </div>}
