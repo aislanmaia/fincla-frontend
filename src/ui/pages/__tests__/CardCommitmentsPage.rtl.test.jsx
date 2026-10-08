@@ -75,23 +75,29 @@ for (const isMobile of [false, true]) {
       expect(screen.getAllByText("Assinatura").length).toBeGreaterThan(0);
       expect(screen.getByTestId("monthly-committed")).toHaveTextContent("R$ 150,00");
       expect(screen.getByTestId("committed-total")).toHaveTextContent("R$ 300,00");
-      expect(screen.getByText(/Projeção de parcelas e recorrências nos próximos 12 meses: R\$ 200,00/)).toBeInTheDocument();
+      expect(screen.getByText("Parcelas ativas")).toBeInTheDocument();
       expect(screen.getByText(/estornos vinculados R\$ 50,00/)).toBeInTheDocument();
-      expect(screen.getByText(/termina em dezembro 2027.*saldo R\$ 350,00/)).toBeInTheDocument();
       expect(screen.getByTestId("recurring-monthly")).toHaveTextContent("R$ 50,00");
-      expect(screen.getByText("Dias 1–10 · 2 itens")).toBeInTheDocument();
-      expect(screen.getAllByText("Serviços").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("Início do mês (dias 1–10)").length).toBeGreaterThan(0);
+      expect(screen.getByText(/R\$ 150,00 · 2 itens/)).toBeInTheDocument();
       expect(screen.queryByText("À vista")).not.toBeInTheDocument();
       expect(calls.filter((c) => c.startsWith("/v1/credit-cards"))).toHaveLength(3);
       const timeline = screen.getByRole("region", { name: "Linha do tempo do compromisso" });
-      expect(within(timeline).getByText("R$ 70,00")).toBeInTheDocument();
       expect(within(timeline).getAllByText("Sem dados").length).toBeGreaterThan(0);
-      expect(within(timeline).getByText("R$ 150,00")).toBeInTheDocument();
+      expect(screen.getByTestId("timeline-bar-2026-09").getAttribute("title")).toMatch(/setembro 2026: R\$\s*70,00/);
+      expect(screen.getByTestId("timeline-bar-2026-10").getAttribute("title")).toMatch(/outubro 2026: R\$\s*150,00/);
       expect(Number.parseInt(screen.getByTestId("timeline-bar-2026-09").style.height)).toBeLessThan(Number.parseInt(screen.getByTestId("timeline-bar-2026-10").style.height));
       expect(screen.queryByTestId("timeline-bar-2026-08")).not.toBeInTheDocument();
       const monthlyDetail = screen.getByRole("region", { name: "Detalhe por mês" });
-      expect(within(monthlyDetail).getAllByText(/Histórico · parcelas/).some((item) => item.textContent.includes("60,00") && item.textContent.includes("10,00"))).toBe(true);
-      expect(within(monthlyDetail).getAllByText("Sem dados").length).toBeGreaterThan(0);
+      expect(within(monthlyDetail).getByText("Próximo")).toBeInTheDocument();
+      expect(within(monthlyDetail).getByText("Sem parcelas previstas")).toBeInTheDocument();
+      const inventory = screen.getByRole("region", { name: "Inventário de compromissos" });
+      if (isMobile) {
+        await userEvent.setup().click(within(inventory).getByRole("button", { name: "Detalhar Notebook" }));
+        expect(screen.getByRole("dialog", { name: "Detalhes de Notebook" })).toHaveTextContent("R$ 350,00");
+      } else {
+        expect(within(inventory).getByText("R$ 350,00")).toBeInTheDocument();
+      }
     });
   });
 }
@@ -156,10 +162,10 @@ it("calcula a média por categoria no período histórico e futuro selecionado",
   const historyButtons = screen.getByRole("group", { name: "Histórico" });
   const futureButtons = screen.getByRole("group", { name: "Projeção" });
   await user.click(within(futureButtons).getByRole("button", { name: "3 meses" }));
-  expect(screen.getByText("Média por categoria · 3m histórico + 3m projeção")).toBeInTheDocument();
+  expect(screen.getByText("▥ Média por categoria — 3m histórico + 3m projeção")).toBeInTheDocument();
   expect(screen.getByText("R$ 65,00/mês")).toBeInTheDocument();
   await user.click(within(historyButtons).getByRole("button", { name: "Sem histórico" }));
-  expect(screen.getByText("Média por categoria · 3m projeção")).toBeInTheDocument();
+  expect(screen.getByText("▥ Média por categoria — 3m projeção")).toBeInTheDocument();
   expect(screen.getByText("R$ 100,00/mês")).toBeInTheDocument();
   expect(calls.filter((call) => call.startsWith("/v1/credit-cards"))).toHaveLength(3);
 });
@@ -168,7 +174,7 @@ it("não soma moedas diferentes no histórico", async () => {
   historyCurrency = "EUR";
   render(<CardCommitmentsPage organizationId={ORG} />);
   expect(await screen.findByTestId("timeline-2026-09")).toHaveTextContent("Sem dados");
-  expect(screen.queryByText("R$ 70,00")).not.toBeInTheDocument();
+  expect(screen.queryByTestId("timeline-bar-2026-09")).not.toBeInTheDocument();
 });
 
 it("não formata compromisso futuro com a moeda errada do cartão", async () => {
@@ -180,7 +186,7 @@ it("não formata compromisso futuro com a moeda errada do cartão", async () => 
   render(<CardCommitmentsPage organizationId={ORG} />);
   expect(await screen.findByText(/A moeda dos compromissos recebidos não corresponde/)).toBeInTheDocument();
   expect(screen.getByTestId("committed-total")).toHaveTextContent("—");
-  expect(screen.getByTestId("monthly-committed")).toHaveTextContent("—");
+  expect(screen.getByTestId("monthly-committed")).toHaveTextContent("Valor mensal indisponível");
   expect(screen.queryByText("R$ 100,00")).not.toBeInTheDocument();
 });
 
@@ -211,14 +217,14 @@ it("não converte ausência de limite e inventário em zero", async () => {
   server.use(http.get("*/v1/credit-cards", () => HttpResponse.json([{ id: 7, public_id: "public-card", description: "Azul", brand: "Visa", last4: "7112", currency: "BRL", credit_limit: null }])));
   render(<CardCommitmentsPage organizationId={ORG} />);
   expect((await screen.findAllByText("Notebook")).length).toBeGreaterThan(0);
-  expect(screen.getByText("Limite não informado")).toBeInTheDocument();
+  expect(screen.getByText(/limite não informado/i)).toBeInTheDocument();
 });
 
 it("não presume que uma recorrência é de baixo uso quando o catálogo falha", async () => {
   server.use(http.get("*/v1/recurring-series", () => HttpResponse.json({}, { status: 500 })));
   render(<CardCommitmentsPage organizationId={ORG} />);
   expect((await screen.findAllByText("Notebook")).length).toBeGreaterThan(0);
-  expect(screen.getByText("Baixo uso indisponível")).toBeInTheDocument();
+  expect(screen.getByText(/Baixo uso indisponível/)).toBeInTheDocument();
   expect(screen.queryByRole("checkbox", { name: /baixo uso/i })).not.toBeInTheDocument();
 });
 
@@ -229,7 +235,7 @@ it("não assume BRL quando a moeda do cartão falta", async () => {
   expect(screen.getByTestId("committed-total")).toHaveTextContent("—");
 });
 
-it("agrupa por categoria e valor e ordena por categoria", async () => {
+it("busca, agrupa por categoria e mês e ordena por progresso", async () => {
   const user = userEvent.setup();
   futureOverride = {
     monthly_breakdown: [
@@ -238,14 +244,15 @@ it("agrupa por categoria e valor e ordena por categoria", async () => {
     ],
   };
   render(<CardCommitmentsPage organizationId={ORG} />);
-  expect(await screen.findByText("Nenhuma parcela termina neste ciclo")).toBeInTheDocument();
-  await user.selectOptions(screen.getByLabelText("Agrupar por"), "category");
+  expect(await screen.findByText(/Nenhuma parcela termina neste ciclo/)).toBeInTheDocument();
+  const inventory = screen.getByRole("region", { name: "Inventário de compromissos" });
+  await user.type(within(inventory).getByRole("searchbox", { name: "Buscar compromissos" }), "Notebook");
+  expect(within(inventory).getAllByRole("button", { name: "Detalhar Notebook" })).toHaveLength(2);
+  await user.click(within(screen.getByRole("group", { name: "Agrupar por" })).getByRole("button", { name: "Categoria" }));
   expect(screen.getByText("Tecnologia · 2 itens")).toBeInTheDocument();
-  await user.selectOptions(screen.getByLabelText("Agrupar por"), "value");
-  expect(screen.getByText("R$ 100,00 · 1 item")).toBeInTheDocument();
-  await user.selectOptions(screen.getByLabelText("Ordenar por"), "category");
-  expect(screen.getByLabelText("Ordenar por")).toHaveValue("category");
-  await user.selectOptions(screen.getByLabelText("Agrupar por"), "month");
+  await user.click(within(screen.getByRole("group", { name: "Ordenar por" })).getByRole("button", { name: "Progresso" }));
+  expect(within(screen.getByRole("group", { name: "Ordenar por" })).getByRole("button", { name: "Progresso" })).toHaveAttribute("aria-pressed", "true");
+  await user.click(within(screen.getByRole("group", { name: "Agrupar por" })).getByRole("button", { name: "Mês" }));
   expect(screen.getByText("Termina após o período consultado · 1 item")).toBeInTheDocument();
   expect(screen.getByText("Termina em novembro 2026 · 1 item")).toBeInTheDocument();
 });
@@ -261,8 +268,8 @@ it("mostra alívio por parcela que termina, mesmo quando outros compromissos aum
   ] };
   render(<CardCommitmentsPage organizationId={ORG} />);
   expect((await screen.findAllByText("Notebook")).length).toBeGreaterThan(0);
-  expect(screen.getByText("Redução de R$ 100,00")).toBeInTheDocument();
-  expect(screen.getByText("1 parcela termina neste ciclo")).toBeInTheDocument();
+  expect(screen.getAllByText("R$ 100,00").length).toBeGreaterThan(0);
+  expect(screen.getByText(/1 parcela\(s\) chegam ao fim neste ciclo/)).toBeInTheDocument();
   const detail = screen.getByRole("region", { name: "Detalhe por mês" });
   expect(within(detail).getByText("Próximo")).toBeInTheDocument();
   expect(within(detail).getByText("Geladeira")).toBeInTheDocument();
@@ -277,7 +284,69 @@ it("inventário mostra cada compra uma vez e agrupa pelo mês de término", asyn
   const user = userEvent.setup();
   render(<CardCommitmentsPage organizationId={ORG} />);
   const inventory = await screen.findByRole("region", { name: "Inventário de compromissos" });
-  expect(within(inventory).getAllByText("Notebook")).toHaveLength(1);
-  await user.selectOptions(screen.getByLabelText("Agrupar por"), "month");
+  expect(within(inventory).getAllByRole("button", { name: "Detalhar Notebook" })).toHaveLength(1);
+  await user.click(within(screen.getByRole("group", { name: "Agrupar por" })).getByRole("button", { name: "Mês" }));
   expect(within(inventory).getByText("Termina em novembro 2026 · 1 item")).toBeInTheDocument();
+});
+
+it("seleciona um compromisso no desktop e a busca filtra a lista sem mudar a API", async () => {
+  const user = userEvent.setup();
+  render(<CardCommitmentsPage organizationId={ORG} />);
+  const inventory = await screen.findByRole("region", { name: "Inventário de compromissos" });
+  const subscription = within(inventory).getByRole("button", { name: "Detalhar Assinatura" });
+  await user.click(subscription);
+  expect(subscription).toHaveAttribute("aria-pressed", "true");
+  expect(within(inventory).getByText("Por mês")).toBeInTheDocument();
+  expect(within(inventory).queryByRole("button", { name: "Mover Assinatura" })).not.toBeInTheDocument();
+  await user.type(within(inventory).getByRole("searchbox", { name: "Buscar compromissos" }), "não existe");
+  expect(within(inventory).getByText("Nenhum compromisso encontrado.")).toBeInTheDocument();
+  expect(within(inventory).queryByRole("button", { name: "Detalhar Notebook" })).not.toBeInTheDocument();
+  expect(calls.filter((call) => call.startsWith("/v1/credit-cards"))).toHaveLength(3);
+});
+
+it("reordena a lista por valor, progresso e saldo restante real", async () => {
+  const series = (id, remaining) => ({ series_id: id, description: id, category_name: null, remaining_installments: 2,
+    remaining_amount: money(remaining), linked_refunds_amount: money("0"), last_due_date: "2026-12-10", next_amount: money("100") });
+  futureOverride = {
+    remaining_balance: { complete: true, gross_amount: money("300"), linked_refunds_amount: money("0"), net_amount: money("300"),
+      series: [series("a", "250"), series("b", "50")] },
+    monthly_breakdown: [{ year: 2026, month: 10, month_name: "outubro", installments: [
+      { transaction_id: 11, series_id: "a", description: "Avançado", amount: money("100"), installment_number: 3, total_installments: 4, due_date: "2026-10-10" },
+      { transaction_id: 12, series_id: "b", description: "Alto valor", amount: money("200"), installment_number: 1, total_installments: 4, due_date: "2026-10-10" },
+    ], recurrences: [] }],
+  };
+  const user = userEvent.setup();
+  render(<CardCommitmentsPage organizationId={ORG} />);
+  const inventory = await screen.findByRole("region", { name: "Inventário de compromissos" });
+  const names = () => within(inventory).getAllByRole("button", { name: /^Detalhar/ }).map((item) => item.getAttribute("aria-label"));
+  expect(names()).toEqual(["Detalhar Alto valor", "Detalhar Avançado"]);
+  const sort = screen.getByRole("group", { name: "Ordenar por" });
+  await user.click(within(sort).getByRole("button", { name: "Progresso" }));
+  expect(names()).toEqual(["Detalhar Avançado", "Detalhar Alto valor"]);
+  await user.click(within(sort).getByRole("button", { name: "Restante" }));
+  expect(names()).toEqual(["Detalhar Avançado", "Detalhar Alto valor"]);
+});
+
+it("abre e fecha o detalhe no bottom sheet mobile", async () => {
+  const user = userEvent.setup();
+  render(<CardCommitmentsPage organizationId={ORG} isMobile />);
+  const inventory = await screen.findByRole("region", { name: "Inventário de compromissos" });
+  await user.click(within(inventory).getByRole("button", { name: "Detalhar Notebook" }));
+  const sheet = screen.getByRole("dialog", { name: "Detalhes de Notebook" });
+  expect(within(sheet).getByText("Última parcela")).toBeInTheDocument();
+  expect(within(sheet).getByText("Total original").nextSibling).toHaveTextContent("—");
+  expect(within(sheet).getByText(/sem estado de pagamento informado/)).toBeInTheDocument();
+  await user.keyboard("{Escape}");
+  expect(screen.queryByRole("dialog", { name: "Detalhes de Notebook" })).not.toBeInTheDocument();
+});
+
+it("não apresenta concentração temporal como zero quando a data de um compromisso falta", async () => {
+  futureOverride = { monthly_breakdown: [{
+    year: 2026, month: 10, month_name: "outubro",
+    installments: [{ transaction_id: 11, series_id: "a", description: "Notebook", amount: money("100"), installment_number: 2, total_installments: 3, due_date: null }],
+    recurrences: [],
+  }] };
+  render(<CardCommitmentsPage organizationId={ORG} />);
+  expect(await screen.findByText("Datas indisponíveis neste mês.")).toBeInTheDocument();
+  expect(screen.queryByText("Início do mês (dias 1–10)")).not.toBeInTheDocument();
 });
