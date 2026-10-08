@@ -59,7 +59,11 @@ export function SpendingPace({ pace, currency }) {
   const currentPoint = current.find((point) => point.day === activeDay);
   const previousPoint = previous.find((point) => point.day === activeDay);
   const activeValue = focusSeries === "previous" ? previousPoint ?? currentPoint : currentPoint ?? previousPoint;
-  const tooltip = activeValue ? `${currentPoint ? formatMoney(currentPoint.cumulative, currency) : "—"}${pace.previous ? ` / ${previousPoint ? formatMoney(previousPoint.cumulative, currency) : "—"}` : ""}` : "";
+  const tooltipValues = [
+    ["Atual", currentPoint ? formatMoney(currentPoint.cumulative, currency) : "—"],
+    ...(pace.previous ? [["Anterior", previousPoint ? formatMoney(previousPoint.cumulative, currency) : "—"]] : []),
+  ];
+  if (focusSeries === "previous") tooltipValues.reverse();
   const lastCurrent = current.at(-1);
   const sameDayPrevious = lastCurrent ? previous.find((point) => point.day === lastCurrent.day) : null;
   const hasPaceComparison = lastCurrent?.cumulative != null && sameDayPrevious?.cumulative != null;
@@ -114,7 +118,7 @@ export function SpendingPace({ pace, currency }) {
             boxShadow: T.md, pointerEvents: "none", zIndex: 1,
           }}>
             <div style={{ ...G, fontSize: 11, lineHeight: 1.3 }}>Dia {activeDay} · {focusSeries === "previous" && previousPoint ? "ciclo anterior" : "ciclo atual"}</div>
-            <div style={{ ...G, ...NUM, fontSize: 12, fontWeight: 700, lineHeight: 1.3, whiteSpace: "nowrap" }}>{tooltip}</div>
+            {tooltipValues.map(([label, value]) => <div key={label} style={{ ...G, ...NUM, fontSize: 12, fontWeight: 700, lineHeight: 1.3, whiteSpace: "nowrap" }}>{label}: {value}</div>)}
           </div>}
           </div>
           <div aria-hidden="true" style={{ ...G, ...NUM, display: "flex", justifyContent: "space-between", fontSize: 11, color: T.inkMid, padding: "0 4px" }}>
