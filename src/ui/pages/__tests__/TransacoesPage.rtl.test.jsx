@@ -443,6 +443,9 @@ describe("<TransacoesPage> — integração da Variação C", () => {
     const btn = await screen.findByRole("button", { name: /Densidade da lista/i });
     expect(btn).toHaveAccessibleName(/Padrão/i);
     await userEvent.click(btn);
+    const menu = screen.getByRole("menu", { name: "Densidade da lista" });
+    expect(within(menu).getByRole("menuitemradio", { name: "Padrão" })).toHaveAttribute("aria-checked", "true");
+    await userEvent.click(within(menu).getByRole("menuitemradio", { name: "Compacto" }));
     expect(btn).toHaveAccessibleName(/Compacto/i);
     expect(JSON.parse(localStorage.getItem("fincla:transactions:list-prefs")).density).toBe(
       "compacto",

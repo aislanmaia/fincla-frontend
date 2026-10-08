@@ -227,7 +227,13 @@ describe("CardAllTransactionsPage", () => {
     expect(requests.at(-1).searchParams.get("description")).toBe("Farmácia");
     expect(requests.at(-1).searchParams.get("credit_card_id")).toBe("7");
     await userEvent.setup().click(screen.getByRole("button", { name: /Densidade da lista: Padrão/i }));
+    expect(screen.getByRole("menuitemradio", { name: "Padrão" })).toHaveAttribute("aria-checked", "true");
+    await userEvent.setup().click(screen.getByRole("menuitemradio", { name: "Compacto" }));
     expect(screen.getByRole("button", { name: /Densidade da lista: Compacto/i })).toBeInTheDocument();
+    expect(screen.queryByRole("menu", { name: "Densidade da lista" })).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole("button", { name: /Densidade da lista: Compacto/i }));
+    await userEvent.setup().keyboard("{Escape}");
+    expect(screen.queryByRole("menu", { name: "Densidade da lista" })).not.toBeInTheDocument();
     await userEvent.setup().click(screen.getByRole("button", { name: "Agrupar por data" }));
     expect(screen.getByRole("button", { name: "Agrupar por data" })).toHaveAttribute("aria-pressed", "true");
     await userEvent.setup().click(screen.getByRole("button", { name: /Abrir filtros/ }));
