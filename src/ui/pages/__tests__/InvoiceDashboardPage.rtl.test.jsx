@@ -17,6 +17,8 @@ vi.mock("@tanstack/react-router", () => ({
 
 import { InvoiceDashboardPage } from "../InvoiceDashboardPage.jsx";
 import { InvoiceSummaryTiles, useInvoiceBudgetContext } from "../../features/invoiceDashboard/InvoiceBottomSections.jsx";
+import { SpendingPace } from "../../features/invoiceDashboard/SpendingPace.jsx";
+import { Headline } from "../../features/invoiceDashboard/InvoiceDetailBody.jsx";
 import { BUDGETS_CHANGED_EVENT } from "../../../api/budgets";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
@@ -282,6 +284,34 @@ describe("InvoiceDashboardPage — card da fatura", () => {
     await user.click(screen.getByTestId("card-notes-save"));
     await waitFor(() => expect(patched).toEqual([{ notes: "Ligar para o banco" }]));
     expect(footer).toHaveTextContent("Ligar para o banco");
+  });
+
+  it("atualiza a nota local quando o mesmo cartão recebe dados novos do servidor", async () => {
+    const card = cardFixture({ notes: "Nota antiga" });
+    const props = { detail: { items: [] }, card, organizationId: ORG, currency: "BRL", isMobile: false, onFilter: vi.fn() };
+    const view = render(<InvoiceSummaryTiles {...props} />);
+    expect(screen.getByRole("region", { name: "Resumo da fatura" })).toHaveTextContent("Nota antiga");
+    view.rerender(<InvoiceSummaryTiles {...props} card={{ ...card, notes: "Nota atualizada" }} />);
+    expect(screen.getByRole("region", { name: "Resumo da fatura" })).toHaveTextContent("Nota atualizada");
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Editar anotação" }));
+    expect(screen.getByRole("textbox", { name: "Anotação do cartão" })).toHaveValue("Nota atualizada");
+  });
+
+  it("compara o mesmo dia com valor visível e três estados de velocidade", () => {
+    const pace = (current) => ({ current: [{ day: 3, cumulative: current }], previous: { points: [{ day: 3, cumulative: 100 }] } });
+    const view = render(<SpendingPace pace={pace(120)} currency="BRL" />);
+    expect(screen.getByTestId("spending-pace")).toHaveTextContent("Acima do ciclo anterior · R$ 20,00 a mais no dia 3");
+    view.rerender(<SpendingPace pace={pace(80)} currency="BRL" />);
+    expect(screen.getByTestId("spending-pace")).toHaveTextContent("Abaixo do ciclo anterior · R$ 20,00 a menos no dia 3");
+    view.rerender(<SpendingPace pace={pace(100)} currency="BRL" />);
+    expect(screen.getByTestId("spending-pace")).toHaveTextContent("Igual ao ciclo anterior · mesmo valor no dia 3");
+  });
+
+  it("mostra a média de seis meses mesmo sem comparação com mês anterior", () => {
+    render(<Headline invoice={{ total: 120, key: "2026-10" }} detail={{ month_over_month_change: null, six_month_average_change: 20 }} state="ok" currency="BRL" />);
+    expect(screen.getByTestId("invoice-comparison")).toHaveTextContent("20% acima da média");
+    expect(screen.getByTestId("invoice-comparison")).not.toHaveTextContent("vs setembro");
   });
 
   it.each([false, true])("mostra mudanças por categoria e item no layout mobile=%s sem nova chamada", async (isMobile) => {

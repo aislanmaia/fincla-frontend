@@ -24,20 +24,21 @@ export function Headline({ invoice, detail, state, futureRow, currency, centered
   const averageChange = detail?.six_month_average_change;
   const prevName = previousMonthName(invoice.key);
   const hasComparison = Number.isFinite(Number(change)) && change !== null && prevName;
+  const hasAverageComparison = averageChange !== null && averageChange !== undefined && Number.isFinite(Number(averageChange));
   const up = Number(change) > 0;
   return (
     <div style={{ textAlign: centered ? "center" : "right" }}>
       <div data-testid="invoice-total" style={{ ...G, ...NUM, fontSize: centered ? 26 : 28, fontWeight: 800, color: T.ink }}>
         {invoice.isEmpty || emptyForecast ? "Sem lançamentos" : money(total)}
       </div>
-      {hasComparison && (
+      {(hasComparison || hasAverageComparison) && (
         <div data-testid="invoice-comparison" style={{ display: "flex", justifyContent: centered ? "center" : "flex-end", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 2 }}>
-        <span
+        {hasComparison && <span
           style={{ ...G, fontSize: 11, fontWeight: 600, marginTop: 2, color: Number(change) === 0 ? T.inkMid : up ? T.red : T.green }}>
           {Number(change) === 0 ? `igual a ${prevName}` : `${up ? "↑" : "↓"} ${Math.abs(Math.round(Number(change)))}% vs ${prevName}`}
           {detail.previous_month_total != null ? ` (${money(detail.previous_month_total)})` : ""}
-        </span>
-        {averageChange != null && <span style={{ ...G, fontSize: 10, fontWeight: 700, color: Number(averageChange) > 0 ? T.amber : T.green, background: Number(averageChange) > 0 ? T.amberLight : T.greenLight, borderRadius: 99, padding: "3px 7px" }}>{Math.abs(Number(averageChange)).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% {Number(averageChange) > 0 ? "acima" : "abaixo"} da média</span>}
+        </span>}
+        {hasAverageComparison && <span style={{ ...G, fontSize: 10, fontWeight: 700, color: Number(averageChange) > 0 ? T.amber : Number(averageChange) < 0 ? T.green : T.inkMid, background: Number(averageChange) > 0 ? T.amberLight : Number(averageChange) < 0 ? T.greenLight : T.grayLight, borderRadius: 99, padding: "3px 7px" }}>{Number(averageChange) === 0 ? "Igual à média" : `${Math.abs(Number(averageChange)).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% ${Number(averageChange) > 0 ? "acima" : "abaixo"} da média`}</span>}
         </div>
       )}
     </div>
