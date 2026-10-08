@@ -32,7 +32,7 @@ function status(row) {
   return { text: "Pendente", color: T.amber, bg: T.amberLight };
 }
 
-export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasMore, error, onMore, selected, onSelected, onExportSelected, inspected, onInspect, grouped, density, isMobile }) {
+export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasMore, error, onMore, selected, onSelected, onExportSelected, inspected, onInspect, grouped, density, isMobile, maxHeight }) {
   const scrollerRef = useRef(null);
   const sentinelRef = useRef(null);
   useEffect(() => {
@@ -63,7 +63,7 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
       {selected.length > 0 && <button type="button" onClick={onExportSelected} style={{ ...G, marginLeft: "auto", border: 0, background: "none", color: T.blue, cursor: "pointer", textDecoration: "underline", fontSize: 11 }}>Exportar seleção CSV</button>}
       {selected.length > 0 && <button type="button" onClick={() => onSelected([])} style={{ ...G, border: 0, background: "none", color: T.blue, cursor: "pointer", textDecoration: "underline", fontSize: 11 }}>Limpar seleção</button>}
     </div>
-    <div ref={scrollerRef} className="fincla-scroll" style={{ maxHeight: isMobile ? "min(60dvh, 680px)" : 560, overflowY: "auto", overflowX: "hidden" }}>
+    <div ref={scrollerRef} className="fincla-scroll" style={{ maxHeight: isMobile ? "min(60dvh, 680px)" : maxHeight == null ? 560 : Math.max(100, maxHeight - 82), overflowY: "auto", overflowX: "hidden" }}>
       <div role="list">
         {groups.map((group) => <div key={group.key}>
           {grouped && <div style={{ ...G, ...NUM, position: "sticky", top: 0, zIndex: 2, background: T.bg, borderBottom: `1px solid ${T.border}`, padding: "7px 14px", fontSize: 11, color: T.inkMid }}>{parsedDate(group.key) ? shortDate.format(parsedDate(group.key)) : "Sem data"} · {group.rows.length} itens carregados</div>}
