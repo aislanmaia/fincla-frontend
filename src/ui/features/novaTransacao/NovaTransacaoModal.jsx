@@ -750,8 +750,7 @@ export const NovaTransacaoModal = ({
     drawerSessionRef.current += 1;
     setModalCardsReloadNotice("");
 
-    const pc = preConfig;
-    const nr = novaRecorrencia;
+    const isCreatingRecurrence = novaRecorrencia;
 
     setTxSubmitError("");
     setTxSubmitting(false);
@@ -783,10 +782,10 @@ export const NovaTransacaoModal = ({
 
     const applyValor = (v) => setAmountFromDecimal(v);
 
-    if (nr) {
-      setTipo(pc?.tipo || "despesa");
-      applyValor(pc?.valorInicial);
-      setDesc(pc?.desc || "");
+    if (isCreatingRecurrence) {
+      setTipo(preConfig?.tipo || "despesa");
+      applyValor(preConfig?.valorInicial);
+      setDesc(preConfig?.desc || "");
       setTags([]);
       setDetailTagIds([]);
       setDetailTagLabelById({});
@@ -797,71 +796,71 @@ export const NovaTransacaoModal = ({
       setRecurrencePanelExiting(false);
       setIsRecurring(true);
       setCardId("");
-      setRecurrenceFrequency(pc?.freqRec || "mensal");
-      setRecurrenceEndKind(pc?.encRec || "sem-fim");
-      setRecurrenceValueKind(pc?.valorTipoRec || "fixo");
-      setSelectedDayOfWeek(pc?.selectedDayOfWeek ?? null);
-      setSelectedDayOfMonth(pc?.selectedDayOfMonth ?? null);
-      setCustomRecurrenceInterval(pc?.customIntervalRec ?? 1);
-      setCustomRecurrenceUnit(pc?.customUnitRec || "month");
-      setFirstOccurrenceYmd(pc?.firstOccurrenceYmd || null);
-      setRecurrenceRepetitions(pc?.encRepetitionsRec ?? 12);
-      setRecurrenceEndDateYmd(pc?.encEndDateYmdRec || pc?.dataFimRec || null);
-      setCat(pc?.cat || "");
-      setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, pc));
+      setRecurrenceFrequency(preConfig?.freqRec || "mensal");
+      setRecurrenceEndKind(preConfig?.encRec || "sem-fim");
+      setRecurrenceValueKind(preConfig?.valorTipoRec || "fixo");
+      setSelectedDayOfWeek(preConfig?.selectedDayOfWeek ?? null);
+      setSelectedDayOfMonth(preConfig?.selectedDayOfMonth ?? null);
+      setCustomRecurrenceInterval(preConfig?.customIntervalRec ?? 1);
+      setCustomRecurrenceUnit(preConfig?.customUnitRec || "month");
+      setFirstOccurrenceYmd(preConfig?.firstOccurrenceYmd || null);
+      setRecurrenceRepetitions(preConfig?.encRepetitionsRec ?? 12);
+      setRecurrenceEndDateYmd(preConfig?.encEndDateYmdRec || preConfig?.dataFimRec || null);
+      setCat(preConfig?.cat || "");
+      setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, preConfig));
       return;
     }
 
-    if (pc) {
-      setTipo(pc.tipo || "despesa");
-      setIsRefund(Boolean(pc.isEstorno));
-      refund.hydrateFromPreConfig(pc);
-      applyValor(pc.valorInicial);
-      setDesc(pc.desc || "");
-      setTags(Array.isArray(pc.tags) ? pc.tags : []);
+    if (preConfig) {
+      setTipo(preConfig.tipo || "despesa");
+      setIsRefund(Boolean(preConfig.isEstorno));
+      refund.hydrateFromPreConfig(preConfig);
+      applyValor(preConfig.valorInicial);
+      setDesc(preConfig.desc || "");
+      setTags(Array.isArray(preConfig.tags) ? preConfig.tags : []);
       setDetailTagIds(
-        Array.isArray(pc.detailTagIds)
-          ? pc.detailTagIds.map((id) => String(id))
+        Array.isArray(preConfig.detailTagIds)
+          ? preConfig.detailTagIds.map((id) => String(id))
           : [],
       );
       setDetailTagMetaById(
-        pc.detailTagMetaById && typeof pc.detailTagMetaById === "object"
-          ? { ...pc.detailTagMetaById }
+        preConfig.detailTagMetaById && typeof preConfig.detailTagMetaById === "object"
+          ? { ...preConfig.detailTagMetaById }
           : {},
       );
       setDetailTagLabelById(
-        pc.detailTagDisplayById && typeof pc.detailTagDisplayById === "object"
-          ? { ...pc.detailTagDisplayById }
+        preConfig.detailTagDisplayById && typeof preConfig.detailTagDisplayById === "object"
+          ? { ...preConfig.detailTagDisplayById }
           : {},
       );
       const editingTx =
-        pc.editingTransactionId != null &&
-        String(pc.editingTransactionId).trim() !== "";
+        preConfig.editingTransactionId != null &&
+        String(preConfig.editingTransactionId).trim() !== "";
       const prefsMerge = editingTx ? null : readStoredNovaTransacaoPrefs(organizationId);
-      const m = pc.method || "pix";
+      const m = preConfig.method || "pix";
       setMethod(typeof m === "string" ? m : "pix");
-      setIsRecurring(!!pc.recorre);
-      setRecurrenceFrequency(pc.freqRec || "mensal");
-      setRecurrenceEndKind(pc.encRec || "sem-fim");
-      setRecurrenceValueKind(pc.valorTipoRec || "fixo");
-      setSelectedDayOfWeek(pc?.selectedDayOfWeek ?? null);
-      setSelectedDayOfMonth(pc?.selectedDayOfMonth ?? null);
-      setCustomRecurrenceInterval(pc?.customIntervalRec ?? 1);
-      setCustomRecurrenceUnit(pc?.customUnitRec || "month");
-      setFirstOccurrenceYmd(pc?.firstOccurrenceYmd || null);
-      setRecurrenceRepetitions(pc?.encRepetitionsRec ?? 12);
-      setRecurrenceEndDateYmd(pc?.encEndDateYmdRec || pc?.dataFimRec || null);
+      setIsRecurring(!!preConfig.recorre);
+      setRecurrenceFrequency(preConfig.freqRec || "mensal");
+      setRecurrenceEndKind(preConfig.encRec || "sem-fim");
+      setRecurrenceValueKind(preConfig.valorTipoRec || "fixo");
+      setSelectedDayOfWeek(preConfig?.selectedDayOfWeek ?? null);
+      setSelectedDayOfMonth(preConfig?.selectedDayOfMonth ?? null);
+      setCustomRecurrenceInterval(preConfig?.customIntervalRec ?? 1);
+      setCustomRecurrenceUnit(preConfig?.customUnitRec || "month");
+      setFirstOccurrenceYmd(preConfig?.firstOccurrenceYmd || null);
+      setRecurrenceRepetitions(preConfig?.encRepetitionsRec ?? 12);
+      setRecurrenceEndDateYmd(preConfig?.encEndDateYmdRec || preConfig?.dataFimRec || null);
       const explicitPcCat =
-        pc.cat != null && String(pc.cat).trim() !== "";
+        preConfig.cat != null && String(preConfig.cat).trim() !== "";
       const explicitPcCatId =
-        pc.categoryTagId != null &&
-        isUuidString(String(pc.categoryTagId));
+        preConfig.categoryTagId != null &&
+        isUuidString(String(preConfig.categoryTagId));
 
       let mergedCat = "";
       if (editingTx) {
-        mergedCat = pc.cat || "";
+        mergedCat = preConfig.cat || "";
       } else if (explicitPcCat) {
-        mergedCat = String(pc.cat).trim();
+        mergedCat = String(preConfig.cat).trim();
       } else if (prefsMerge?.cat != null) {
         const s = String(prefsMerge.cat).trim();
         if (s) mergedCat = s;
@@ -869,9 +868,9 @@ export const NovaTransacaoModal = ({
 
       let mergedCatId = null;
       if (editingTx) {
-        mergedCatId = pc.categoryTagId ?? null;
+        mergedCatId = preConfig.categoryTagId ?? null;
       } else if (explicitPcCatId) {
-        mergedCatId = pc.categoryTagId;
+        mergedCatId = preConfig.categoryTagId;
       } else {
         const prefId = prefsMerge?.categoryTagId;
         if (prefId != null && isUuidString(String(prefId))) {
@@ -881,17 +880,17 @@ export const NovaTransacaoModal = ({
 
       setCat(mergedCat);
       setCategoryTagId(mergedCatId);
-      setCategoryTagIsActive(pc.categoryTagIsActive !== false);
+      setCategoryTagIsActive(preConfig.categoryTagIsActive !== false);
 
-      if (pc.modalidade) {
-        setModalityChoice(pc.modalidade);
+      if (preConfig.modalidade) {
+        setModalityChoice(preConfig.modalidade);
       } else if (m === "credito" && prefsMerge) {
         const isAvista = prefsMerge.modalidade === "avista";
         setModalityChoice(isAvista ? "avista" : "parcelado");
       }
 
-      if (pc.parcelas) {
-        setInstallments(pc.parcelas);
+      if (preConfig.parcelas) {
+        setInstallments(preConfig.parcelas);
       } else if (m === "credito" && prefsMerge) {
         const pp = clampNovaTxPrefsParcelas(prefsMerge.parcelas);
         if (pp != null) setInstallments(pp);
@@ -899,17 +898,17 @@ export const NovaTransacaoModal = ({
       if (m === "credito") {
         setCardPanelOpen(true);
         setCardPanelExiting(false);
-        setRecurrencePanelOpen(!!pc.recorre);
+        setRecurrencePanelOpen(!!preConfig.recorre);
         setRecurrencePanelExiting(false);
-        setCardId(pc.cartaoId != null ? String(pc.cartaoId) : "");
+        setCardId(preConfig.cartaoId != null ? String(preConfig.cartaoId) : "");
       } else {
         setCardPanelOpen(false);
         setCardPanelExiting(false);
-        setRecurrencePanelOpen(!!pc.recorre);
+        setRecurrencePanelOpen(!!preConfig.recorre);
         setRecurrencePanelExiting(false);
         setCardId("");
       }
-      setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, pc));
+      setTxDateYmd(initialNovaTransacaoDateYmd(organizationId, preConfig));
       return;
     }
 
