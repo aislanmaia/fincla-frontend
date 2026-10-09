@@ -9,7 +9,6 @@ import {
 import { handleApiError } from "../../api/client";
 import {
   categoryLabelPtForTag,
-  detailLabelPtForTag,
   resolveCategoryIconKey,
 } from "./categoryLabels.js";
 import { mapUiPaymentMethodToApi } from "./transactionsAdapter.js";
@@ -100,32 +99,20 @@ function firstCategoryTag(tags) {
 }
 
 /**
- * Tags de detalhe da série: tudo que não é a tag de categoria.
+ * Tags da série que NÃO são a escolhida como categoria, cruas.
  *
  * O modal de edição precisa delas para abrir com as tags já marcadas. Sem isso o
  * salvamento manda `tag_ids` só com a categoria e o backend, que SUBSTITUI a lista
- * inteira, apaga as tags de detalhe da série.
+ * inteira, apaga as tags da série. O critério é "tudo menos a categoria escolhida"
+ * (e não "tudo que não tem tipo categoria") de propósito: qualquer tag que a série
+ * tenha precisa sobreviver ao ciclo editar → salvar, mesmo uma segunda tag de tipo
+ * categoria ou uma tag sem `tag_type`.
  */
 function pickDetailTagsSeries(series) {
   const categoryTag = firstCategoryTag(series.tags);
   return (series.tags ?? []).filter(
-    (tag) => tag?.id != null && tag.id !== categoryTag?.id && !isCategoryTag(tag),
+    (tag) => tag?.id != null && tag.id !== categoryTag?.id,
   );
-}
-
-function buildDetailTagPreConfig(series) {
-  const detailTags = pickDetailTagsSeries(series);
-  const detailTagIds = [];
-  const detailTagDisplayById = {};
-  const detailTagMetaById = {};
-  for (const tag of detailTags) {
-    const id = String(tag.id);
-    const label = detailLabelPtForTag(tag) || `Tag ${id.slice(0, 8)}…`;
-    detailTagIds.push(id);
-    detailTagDisplayById[id] = label;
-    detailTagMetaById[id] = { id, name: label, isActive: tag.is_active !== false };
-  }
-  return { detailTagIds, detailTagDisplayById, detailTagMetaById };
 }
 
 function mergeSeriesTagIds(categoryTagId, detailTagIds) {
@@ -191,62 +178,11 @@ export function mapRecurringSeriesToUi(series) {
     endDateRaw: endDate || null,
     creditCardId: series.credit_card_id ?? null,
     categoryTagId: firstCategoryTag(series.tags)?.id ?? null,
-    ...buildDetailTagPreConfig(series),
+    detailTags: pickDetailTagsSeries(series),
     dayOfMonth: series.day_of_month ?? null,
     dayOfWeek: series.day_of_week ?? null,
     interval: Number(series.interval) > 0 ? Number(series.interval) : 1,
     intervalUnit: series.interval_unit ?? null,
-  };
-}
-
-/**
- * Pré-preenchimento do modal ao EDITAR uma série (linha de Recorrências → `preConfig`).
- *
- * Fica no adaptador, e não inline no `onEditar`, para ser testável: a edição já
- * perdeu as tags de detalhe da série aqui, e o modal em si estava certo.
- */
-export function buildEditRecurringPreConfig(rec) {
-  const freqId = rec.freqId || rec.freq?.split(" ")[0]?.toLowerCase() || "mensal";
-  const encId =
-    rec.encId ||
-    (rec.enc === "Após N repetições"
-      ? "repeticoes"
-      : rec.enc === "Data específica"
-        ? "data"
-        : "sem-fim");
-  const methodId =
-    rec.methodId ||
-    (rec.metodo === "Pix" ? "pix"
-      : rec.metodo === "Boleto" ? "boleto"
-      : rec.metodo === "Débito" || rec.metodo === "Débito auto." ? "debito"
-      : rec.metodo === "Transferência" ? "transferencia"
-      : rec.metodo === "Cartão crédito" ? "credito"
-      : "pix");
-  return {
-    tipo: rec.tipo,
-    desc: rec.desc,
-    cat: rec.cat,
-    categoryTagId: rec.categoryTagId ?? undefined,
-    detailTagIds: rec.detailTagIds,
-    detailTagDisplayById: rec.detailTagDisplayById,
-    detailTagMetaById: rec.detailTagMetaById,
-    method: methodId,
-    valorInicial: rec.val,
-    recorre: true,
-    freqRec: freqId,
-    encRec: encId,
-    dataFimRec: rec.endDateRaw || undefined,
-    encEndDateYmdRec: rec.endDateRaw || undefined,
-    valorTipoRec: rec.valorTipo || "fixo",
-    isEditRecorrencia: true,
-    recId: rec.id,
-    cartaoId: rec.creditCardId != null ? String(rec.creditCardId) : undefined,
-    transactionDate: rec.nextOccurrenceIso || undefined,
-    selectedDayOfWeek: rec.dayOfWeek ?? null,
-    selectedDayOfMonth: rec.dayOfMonth ?? null,
-    customIntervalRec: rec.interval ?? 1,
-    customUnitRec: rec.intervalUnit || "month",
-    firstOccurrenceYmd: rec.startDateRaw || rec.nextOccurrenceIso || undefined,
   };
 }
 

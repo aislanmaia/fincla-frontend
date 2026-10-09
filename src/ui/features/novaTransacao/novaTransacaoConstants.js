@@ -112,35 +112,33 @@ export function novaTxDetailDisplayStamp(detailTagDisplayById) {
 export function novaTxModalInitStamp(organizationId, novaRecorrencia, preConfig) {
   const oid = organizationId ?? "";
   if (novaRecorrencia) {
-    const pc = preConfig;
-    return `${oid}|nr|${pc?.recId ?? ""}|${pc?.isEditRecorrencia ? "1" : "0"}|${pc?.tipo ?? ""}|${String(pc?.valorInicial ?? "")}|${pc?.desc ?? ""}|${pc?.freqRec ?? ""}`;
+    return `${oid}|nr|${preConfig?.recId ?? ""}|${preConfig?.isEditRecorrencia ? "1" : "0"}|${preConfig?.tipo ?? ""}|${String(preConfig?.valorInicial ?? "")}|${preConfig?.desc ?? ""}|${preConfig?.freqRec ?? ""}`;
   }
-  const pc = preConfig;
-  if (pc == null) return `${oid}|empty`;
+  if (preConfig == null) return `${oid}|empty`;
   const eid =
-    pc.editingTransactionId != null && String(pc.editingTransactionId) !== ""
-      ? String(pc.editingTransactionId)
+    preConfig.editingTransactionId != null && String(preConfig.editingTransactionId) !== ""
+      ? String(preConfig.editingTransactionId)
       : "";
   return [
     oid,
     "tx",
     eid,
-    pc.desc ?? "",
-    String(pc.valorInicial ?? ""),
-    pc.cat ?? "",
-    String(pc.categoryTagId ?? ""),
-    pc.categoryTagIsActive === false ? "0" : "1",
-    pc.method ?? "",
-    String(pc.cartaoId ?? ""),
-    pc.dateIso ?? "",
-    pc.dateIsoForEdit ?? "",
-    pc.recorre ? "1" : "0",
-    pc.modalidade ?? "",
-    String(pc.parcelas ?? ""),
-    Array.isArray(pc.tags) ? JSON.stringify(pc.tags) : "",
-    Array.isArray(pc.detailTagIds) ? pc.detailTagIds.join(",") : "",
-    novaTxDetailDisplayStamp(pc.detailTagDisplayById),
-    JSON.stringify(pc.detailTagMetaById ?? {}),
-    pc.novaRecorrencia ? "1" : "0",
+    preConfig.desc ?? "",
+    String(preConfig.valorInicial ?? ""),
+    preConfig.cat ?? "",
+    String(preConfig.categoryTagId ?? ""),
+    preConfig.categoryTagIsActive === false ? "0" : "1",
+    preConfig.method ?? "",
+    String(preConfig.cartaoId ?? ""),
+    preConfig.dateIso ?? "",
+    preConfig.dateIsoForEdit ?? "",
+    preConfig.recorre ? "1" : "0",
+    preConfig.modalidade ?? "",
+    String(preConfig.parcelas ?? ""),
+    Array.isArray(preConfig.tags) ? JSON.stringify(preConfig.tags) : "",
+    Array.isArray(preConfig.detailTagIds) ? preConfig.detailTagIds.join(",") : "",
+    novaTxDetailDisplayStamp(preConfig.detailTagDisplayById),
+    JSON.stringify(preConfig.detailTagMetaById ?? {}),
+    preConfig.novaRecorrencia ? "1" : "0",
   ].join("|");
 }

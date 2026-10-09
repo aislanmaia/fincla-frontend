@@ -56,7 +56,7 @@ import { AccountsPage } from "./pages/AccountsPage.jsx";
 import { PlanningHub } from "./features/planning/PlanningHub.jsx";
 
 import { acceptOrganizationInvitation } from "./data/invitationAdapter.js";
-import { buildEditRecurringPreConfig } from "./data/recurringSeriesAdapter.js";
+import { buildEditRecurringPreConfig } from "./features/novaTransacao/buildEditRecurringPreConfig.js";
 import {
   buildEditBaselineFromUi,
   buildRefundLinkedTxFromUi,
