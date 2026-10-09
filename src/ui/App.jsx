@@ -56,6 +56,7 @@ import { AccountsPage } from "./pages/AccountsPage.jsx";
 import { PlanningHub } from "./features/planning/PlanningHub.jsx";
 
 import { acceptOrganizationInvitation } from "./data/invitationAdapter.js";
+import { buildEditRecurringPreConfig } from "./features/novaTransacao/buildEditRecurringPreConfig.js";
 import {
   buildEditBaselineFromUi,
   buildRefundLinkedTxFromUi,
@@ -411,32 +412,7 @@ export default function App() {
       if (tipo) setModalPreConfig({ novaRecorrencia: true, tipo });
       openTxModal({ [FC.MODAL]: FC_MODAL.NEW_RECURRING });
     }} onEditar={(rec) => {
-              const freqId = rec.freqId || rec.freq?.split(" ")[0]?.toLowerCase() || "mensal";
-              const encId  = rec.encId || (rec.enc === "Sem data fim" ? "sem-fim" : rec.enc === "Após N repetições" ? "repeticoes" : rec.enc === "Data específica" ? "data" : "sem-fim");
-              const methodId = rec.methodId || (rec.metodo === "Pix" ? "pix" : rec.metodo === "Boleto" ? "boleto" : rec.metodo === "Débito" || rec.metodo === "Débito auto." ? "debito" : rec.metodo === "Transferência" ? "transferencia" : rec.metodo === "Cartão crédito" ? "credito" : "pix");
-              setModalPreConfig({
-                tipo: rec.tipo,
-                desc: rec.desc,
-                cat: rec.cat,
-                categoryTagId: rec.categoryTagId ?? undefined,
-                method: methodId,
-                valorInicial: rec.val,
-                recorre: true,
-                freqRec: freqId,
-                encRec: encId,
-                dataFimRec: rec.endDateRaw || undefined,
-                encEndDateYmdRec: rec.endDateRaw || undefined,
-                valorTipoRec: rec.valorTipo || "fixo",
-                isEditRecorrencia: true,
-                recId: rec.id,
-                cartaoId: rec.creditCardId != null ? String(rec.creditCardId) : undefined,
-                transactionDate: rec.nextOccurrenceIso || undefined,
-                selectedDayOfWeek: rec.dayOfWeek ?? null,
-                selectedDayOfMonth: rec.dayOfMonth ?? null,
-                customIntervalRec: rec.interval ?? 1,
-                customUnitRec: rec.intervalUnit || "month",
-                firstOccurrenceYmd: rec.startDateRaw || rec.nextOccurrenceIso || undefined,
-              });
+              setModalPreConfig(buildEditRecurringPreConfig(rec));
               openTxModal();
             }} />,
     invoiceDashboard: <InvoiceDashboardPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} />,

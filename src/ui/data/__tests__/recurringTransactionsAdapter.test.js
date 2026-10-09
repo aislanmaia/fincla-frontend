@@ -58,6 +58,7 @@ describe("recurringTransactionsAdapter", () => {
       endDateRaw: null,
       creditCardId: null,
       categoryTagId: "t1",
+      detailTags: [],
       dayOfMonth: 13,
       dayOfWeek: null,
       interval: 1,

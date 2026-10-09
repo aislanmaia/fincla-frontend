@@ -88,14 +88,31 @@ function mapMethodId(method) {
   return ids[method] || "pix";
 }
 
+function isCategoryTag(tag) {
+  const typeName = (tag.tag_type?.name || "").toLowerCase();
+  return typeName === "category" || typeName === "categoria";
+}
+
 function firstCategoryTag(tags) {
   if (!tags?.length) return null;
-  const typeName = (t) => (t.tag_type?.name || "").toLowerCase();
-  const cat = tags.find((t) => {
-    const n = typeName(t);
-    return n === "category" || n === "categoria";
-  }) || tags[0];
-  return cat || null;
+  return tags.find(isCategoryTag) || tags[0] || null;
+}
+
+/**
+ * Tags da série que NÃO são a escolhida como categoria, cruas.
+ *
+ * O modal de edição precisa delas para abrir com as tags já marcadas. Sem isso o
+ * salvamento manda `tag_ids` só com a categoria e o backend, que SUBSTITUI a lista
+ * inteira, apaga as tags da série. O critério é "tudo menos a categoria escolhida"
+ * (e não "tudo que não tem tipo categoria") de propósito: qualquer tag que a série
+ * tenha precisa sobreviver ao ciclo editar → salvar, mesmo uma segunda tag de tipo
+ * categoria ou uma tag sem `tag_type`.
+ */
+function pickDetailTagsSeries(series) {
+  const categoryTag = firstCategoryTag(series.tags);
+  return (series.tags ?? []).filter(
+    (tag) => tag?.id != null && tag.id !== categoryTag?.id,
+  );
 }
 
 function mergeSeriesTagIds(categoryTagId, detailTagIds) {
@@ -161,6 +178,7 @@ export function mapRecurringSeriesToUi(series) {
     endDateRaw: endDate || null,
     creditCardId: series.credit_card_id ?? null,
     categoryTagId: firstCategoryTag(series.tags)?.id ?? null,
+    detailTags: pickDetailTagsSeries(series),
     dayOfMonth: series.day_of_month ?? null,
     dayOfWeek: series.day_of_week ?? null,
     interval: Number(series.interval) > 0 ? Number(series.interval) : 1,
