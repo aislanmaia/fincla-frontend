@@ -201,6 +201,9 @@ export function TransactionsFilterChips({
   onToggleFilters,
   /** Recolhe TODOS os chips no contador do "＋ Filtros" (telas estreitas). */
   collapsed = false,
+  /** Chip FIXO (sem "✕"), entre os filtros ativos e o "＋ Filtros": `{ key, label, value }`.
+   *  Para o recorte que a tela exibe sempre, como o de tempo no ledger do cartão. */
+  pinnedChip = null,
 }) {
   const [overflowOpen, setOverflowOpen] = useState(false);
   const overflowRef = useRef(null);
@@ -341,7 +344,9 @@ export function TransactionsFilterChips({
     </button>
   );
 
-  if (chips.length === 0) return filtrosChip;
+  const pinned = pinnedChip ? <PinnedChip facet={pinnedChip} onOpen={onOpenFacet} /> : null;
+
+  if (chips.length === 0) return pinned ? <>{pinned}{filtrosChip}</> : filtrosChip;
 
   return (
     <div
@@ -473,6 +478,7 @@ export function TransactionsFilterChips({
         </div>
       )}
 
+      {pinned}
       {filtrosChip}
     </div>
   );
@@ -548,5 +554,28 @@ function Chip({ facet, onOpen, onClear, compact, block = false, noMedir = false 
         ✕
       </button>
     </span>
+  );
+}
+
+/** Chip que não se remove: abre a faceta e só. */
+function PinnedChip({ facet, onOpen }) {
+  return (
+    <button
+      type="button"
+      data-pinned-chip={facet.key}
+      onClick={() => onOpen?.(facet.key)}
+      aria-label={`${facet.label}: ${facet.value}. Ajustar.`}
+      title={facet.value}
+      style={{
+        ...chipStyle("on"),
+        maxWidth: 260,
+        overflow: "hidden",
+        textOverflow: "ellipsis",
+        display: "inline-block",
+        lineHeight: `${CHIP_H - 2}px`,
+      }}
+    >
+      {facet.value}
+    </button>
   );
 }

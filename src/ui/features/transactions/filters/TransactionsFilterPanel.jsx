@@ -74,6 +74,10 @@ export function TransactionsFilterPanel({
   hideRail = false,
   defaultPeriod = "mes",
   cardScopePanel = null,
+  /** Acima do conteúdo da faceta Período (ex.: alternar Fatura / Período livre). */
+  periodScopePanel = null,
+  /** Esconde o conteúdo de Período (calendário e atalhos) quando outro modo manda. */
+  hidePeriodContent = false,
   selectionOverrides = null,
   /** Largura real do painel — decide se as opções cabem em mais de uma coluna. */
   width = 396,
@@ -176,7 +180,8 @@ export function TransactionsFilterPanel({
           overflowY: "auto",
         }}
       >
-        {facet === "cartao" && cardScopePanel ? cardScopePanel : facet === "ativos" ? (
+        {facet === "periodo" && periodScopePanel}
+        {facet === "periodo" && hidePeriodContent ? null : facet === "cartao" && cardScopePanel ? cardScopePanel : facet === "ativos" ? (
           <ActiveFacetsPane
             facets={activeFacets}
             onClearFacet={onClearFacet}

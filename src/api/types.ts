@@ -661,7 +661,7 @@ export type SortOrder = 'asc' | 'desc';
 export interface ListTransactionsQuery {
   organization_id: string;
   /** Apenas lançamentos vinculados a este cartão; combina com os outros filtros. */
-  credit_card_id?: number;
+  invoice_id?: number | number[];
   invoice_id?: number;
   type?: 'income' | 'expense' | 'refund';
   /** Um valor, ou vários (casa com qualquer um) — serializado como param repetido. */
@@ -792,7 +792,7 @@ export interface PaginatedTransactionsResponse {
 
 export interface TransactionsSummaryQuery {
   organization_id: string;
-  credit_card_id?: number;
+  invoice_id?: number | number[];
   invoice_id?: number;
   include_breakdown?: boolean;
   locale?: string;
@@ -1059,6 +1059,8 @@ export interface InvoiceHistoryItem {
   total_amount: number;
   total_amount_currency?: string | null;
   status: string;
+  /** Id da fatura para filtrar /transactions; `null` quando o mês ainda não tem fatura. */
+  invoice_id?: number | null;
   items_count: number;
   top_category: string | null;
   category_breakdown?: Record<string, number>;

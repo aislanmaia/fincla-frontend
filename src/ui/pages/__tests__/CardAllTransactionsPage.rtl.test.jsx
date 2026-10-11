@@ -247,3 +247,79 @@ describe("CardAllTransactionsPage", () => {
     expect(requests.at(-1).searchParams.get("credit_card_id")).toBe("7");
   });
 });
+
+describe("CardAllTransactionsPage · recorte de tempo", () => {
+  const history = {
+    monthly_data: [
+      { year: 2026, month: 8, month_name: "agosto 2026", invoice_id: 38, status: "paid", total_amount: "100.00", items_count: 3 },
+      { year: 2026, month: 9, month_name: "setembro 2026", invoice_id: 39, status: "closed", total_amount: "200.00", items_count: 4 },
+      { year: 2026, month: 10, month_name: "outubro 2026", invoice_id: 40, status: "open", total_amount: "300.00", items_count: 5 },
+      { year: 2027, month: 1, month_name: "janeiro 2027", invoice_id: 50, status: "open", total_amount: "10.00", items_count: 1 },
+    ],
+  };
+  const withHistory = (data = history) => server.use(http.get("*/v1/credit-cards/:id/invoices/history", () => HttpResponse.json(data)));
+  const ids = (url) => url.searchParams.getAll("invoice_id").sort();
+
+  it("abre na fatura aberta, sem intervalo de datas, e mostra o recorte num chip fixo", async () => {
+    withHistory({ monthly_data: history.monthly_data.slice(0, 3) });
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    expect(await screen.findByText("Mercado")).toBeInTheDocument();
+    expect(ids(requests.at(-1))).toEqual(["40"]);
+    expect(requests.at(-1).searchParams.has("date_start")).toBe(false);
+    expect(requests.at(-1).searchParams.has("date_end")).toBe(false);
+    expect(screen.getByRole("button", { name: "Recorte de tempo: Fatura: Out. Ajustar." })).toBeInTheDocument();
+  });
+
+  it("marca várias faturas, manda os ids repetidos e põe o ano nas de outro ano", async () => {
+    withHistory({ monthly_data: history.monthly_data.slice(0, 3) });
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    expect(await screen.findByText("Mercado")).toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /Recorte de tempo/ }));
+    await user.click(screen.getByRole("checkbox", { name: "Fatura de setembro 2026" }));
+    await waitFor(() => expect(ids(requests.at(-1))).toEqual(["39", "40"]));
+    expect(screen.getByRole("button", { name: "Recorte de tempo: Faturas: Set, Out. Ajustar." })).toBeInTheDocument();
+  });
+
+  it("mostra o ano da fatura que não é do ano corrente", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 9, 11));
+    withHistory({ monthly_data: history.monthly_data.map((row) => row.year === 2027 ? { ...row, status: "closed" } : row) });
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    try {
+      expect(await screen.findByText("Mercado")).toBeInTheDocument();
+      const user = userEvent.setup();
+      await user.click(screen.getByRole("button", { name: /Recorte de tempo/ }));
+      await user.click(screen.getByRole("checkbox", { name: "Fatura de janeiro 2027" }));
+      expect(await screen.findByRole("button", { name: /Faturas: Jan\/2027, Out|Faturas: Out, Jan\/2027/ })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("sem nenhuma fatura marcada não busca e pede para marcar", async () => {
+    withHistory({ monthly_data: history.monthly_data.slice(2, 3) });
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    expect(await screen.findByText("Mercado")).toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /Recorte de tempo/ }));
+    const before = requests.length;
+    await user.click(screen.getByRole("checkbox", { name: "Fatura de outubro 2026" }));
+    expect(await screen.findByText("Marque ao menos uma fatura para ver os lançamentos.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Recorte de tempo: Nenhuma fatura. Ajustar." })).toBeInTheDocument();
+    expect(requests.length).toBe(before);
+  });
+
+  it("no modo Período livre usa datas e abandona o filtro de fatura", async () => {
+    withHistory({ monthly_data: history.monthly_data.slice(2, 3) });
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    expect(await screen.findByText("Mercado")).toBeInTheDocument();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /Recorte de tempo/ }));
+    await user.click(screen.getByRole("button", { name: "Período livre" }));
+    await user.click(screen.getByRole("button", { name: "Preset: Este mês" }));
+    await waitFor(() => expect(requests.at(-1).searchParams.has("date_start")).toBe(true));
+    expect(requests.at(-1).searchParams.has("invoice_id")).toBe(false);
+    expect(screen.getByRole("button", { name: "Recorte de tempo: Período: Este mês. Ajustar." })).toBeInTheDocument();
+  });
+});
