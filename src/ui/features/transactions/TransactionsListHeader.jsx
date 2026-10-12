@@ -274,7 +274,7 @@ export function TransactionsListHeader({
  * Desabilitado continua DESENHADO, apagado: some-e-volta faria os dois botões
  * trocarem de posição conforme o histórico enche.
  */
-function HistoryButton({ dir, enabled, onClick, label, busy = false }) {
+export function HistoryButton({ dir, enabled, onClick, label, busy = false }) {
   const verb = dir === "undo" ? "Desfazer" : "Refazer";
   /* O `label` JÁ é a frase inteira ("Desfazer: remover Alimentação"), porque
      quem sabe o que a mudança foi é quem calculou o diff. Montar

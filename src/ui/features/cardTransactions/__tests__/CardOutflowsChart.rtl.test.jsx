@@ -36,4 +36,12 @@ describe("CardOutflowsChart — estimativa", () => {
     expect(screen.queryByTestId("outflow-projection-note")).toBeNull();
     expect(screen.queryByTestId("outflow-estimate")).toBeNull();
   });
+
+  it("barra de semana é botão e entrega a própria barra ao clicar", async () => {
+    const onPickWeek = vi.fn();
+    const weekBar = { key: "2026-10-05", label: "05/10", title: "Semana de 05/10", amount: 735.77, from: "2026-10-05", to: "2026-10-11", selected: true, clickable: true };
+    render(<CardOutflowsChart currency="BRL" onPickWeek={onPickWeek} outflows={{ kind: "weeks", bars: [weekBar] }} />);
+    await userEvent.setup().click(screen.getByRole("button", { name: /Semana de 05\/10/ }));
+    expect(onPickWeek).toHaveBeenCalledWith(weekBar);
+  });
 });

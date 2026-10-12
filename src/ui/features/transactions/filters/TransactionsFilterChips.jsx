@@ -99,7 +99,8 @@ function chipStyle(tone) {
     return { ...base, background: T.blueLight, border: "1px solid #BFD3FA", color: T.blue };
   }
   if (tone === "ghost") {
-    return { ...base, background: T.surface, border: `1px dashed ${T.border}`, color: T.inkGhost };
+    // Ação principal fechada: borda cheia e texto legível. Tracejado + cinza apagado lia como "desabilitado".
+    return { ...base, background: T.surface, border: `1px solid ${T.borderHov}`, color: T.ink };
   }
   return { ...base, background: T.surface, border: `1px solid ${T.border}`, color: T.inkMid };
 }
@@ -311,7 +312,6 @@ export function TransactionsFilterChips({
         : undefined}
       style={{
         ...chipStyle(filtersOpen ? "on" : "ghost"),
-        ...(filtersOpen ? {} : { borderStyle: "dashed" }),
         ...(filtrosSoIcone
           ? {
               width: CHIP_H,

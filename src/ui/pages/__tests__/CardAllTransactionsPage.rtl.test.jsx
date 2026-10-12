@@ -430,6 +430,37 @@ describe("CardAllTransactionsPage · saídas por mês/semana", () => {
     await waitFor(() => expect(requests.at(-1).searchParams.getAll("category").length).toBeGreaterThan(0));
     expect(screen.getByRole("button", { name: "Filtrar por Alimentação" })).toHaveAttribute("aria-pressed", "true");
   });
+
+  it("filtrar pela categoria oferece Desfazer/Refazer, como em /transactions", async () => {
+    server.use(http.get("*/v1/tags/catalog", () => HttpResponse.json({ categories: [{ id: "food", label: "Alimentação", system_key: "food", color: "#059669" }] })));
+    server.use(http.get("*/v1/credit-cards/:id/invoices/history", () => HttpResponse.json({ monthly_data: history.monthly_data.slice(1) })));
+    server.use(summaryWith({ week: { by_invoice: [], by_week: [] } }));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    const food = await screen.findByRole("button", { name: "Filtrar por Alimentação" });
+    // abrir a tela e escolher a fatura padrão não são passos do usuário
+    expect(screen.queryByTestId("ledger-history")).toBeNull();
+    await user.click(food);
+    const undo = await screen.findByRole("button", { name: "Desfazer: remover Alimentação" });
+    await user.click(undo);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Filtrar por Alimentação" })).toHaveAttribute("aria-pressed", "false"));
+    await user.click(await screen.findByRole("button", { name: "Refazer: aplicar Alimentação" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Filtrar por Alimentação" })).toHaveAttribute("aria-pressed", "true"));
+  });
+
+  it("clicar numa semana recorta a lista nas datas dela e mantém as outras barras", async () => {
+    server.use(http.get("*/v1/credit-cards/:id/invoices/history", () => HttpResponse.json({ monthly_data: history.monthly_data.slice(1) })));
+    server.use(summaryWith({ week: { by_invoice: [], by_week: [{ week_start: "2026-10-05", amount: money("50.00") }, { week_start: "2026-10-12", amount: money("40.00") }] } }));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /Semana de 05\/10/ }));
+    await waitFor(() => expect(requests.some((url) => url.searchParams.get("date_start") === "2026-10-05" && url.searchParams.get("date_end") === "2026-10-11")).toBe(true));
+    expect(await screen.findByTestId("week-chip")).toHaveTextContent("Semana 05/10–11/10");
+    // as outras semanas continuam no gráfico (consulta sem o recorte de datas)
+    expect(screen.getByRole("button", { name: /Semana de 12\/10/ })).toHaveAttribute("aria-pressed", "false");
+    await user.click(screen.getByTestId("week-chip"));
+    await waitFor(() => expect(screen.queryByTestId("week-chip")).toBeNull());
+  });
 });
 
 describe("CardAllTransactionsPage · ações do ledger", () => {
