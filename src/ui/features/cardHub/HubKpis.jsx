@@ -4,12 +4,32 @@ import { formatMoney } from "../../money/formatMoney.js";
 
 const LABEL = { ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.09em" };
 
-/** Disponível e usado: os dois números de limite que o backend entrega. */
-export function LimitTiles({ card, currency, isMobile, onEdit, onOpenCommitments }) {
+const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+/**
+ * Saldo de parcelas pendentes (o mesmo número da tela Parcelas & Compromissos): só é afirmado
+ * quando o backend o provou completo e na moeda do cartão; ausente é "não sabemos", nunca zero.
+ */
+export function summarizeCommitted(future, currency) {
+  const balance = future?.remaining_balance;
+  if (!currency || balance?.complete !== true || !Array.isArray(balance.series)) return null;
+  if (balance.net_amount === null || balance.net_amount === undefined || !Number.isFinite(Number(balance.net_amount))
+    || balance.net_amount_currency !== currency) return null;
+  const ends = balance.series.map((item) => String(item.last_due_date ?? "")).filter((date) => /^\d{4}-(0[1-9]|1[0-2])/.test(date)).sort();
+  if (ends.length !== balance.series.length) return null;
+  const last = ends[ends.length - 1];
+  return {
+    net: balance.net_amount,
+    count: balance.series.length,
+    until: last ? `${MONTHS[Number(last.slice(5, 7)) - 1]}/${last.slice(0, 4)}` : null,
+  };
+}
+
+/** Limite disponível (com o percentual usado) e o saldo comprometido em parcelas, que abre o raio-x. */
+export function LimitTiles({ card, currency, committed = null, isMobile, onEdit, onOpenCommitments }) {
   const hasLimit = card.credit_limit !== null && card.credit_limit !== undefined && Number(card.credit_limit) > 0;
   const available = hasLimit ? formatMoney(card.available_limit, currency) : null;
   const totalLimit = hasLimit ? formatMoney(card.credit_limit, currency) : null;
-  const used = formatMoney(card.used_limit, currency) ?? "—";
   const usage = Number.isFinite(Number(card.limit_usage_percent)) && card.limit_usage_percent !== null
     ? Math.round(Number(card.limit_usage_percent))
     : null;
@@ -42,12 +62,16 @@ export function LimitTiles({ card, currency, isMobile, onEdit, onOpenCommitments
         {!hasLimit && onEdit && <button type="button" onClick={onEdit} style={{ ...G, background: "none", border: 0, color: T.blue, padding: "8px 0 0", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Definir limite</button>}
       </div>
       <div data-testid="kpi-committed" {...openProps} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: isMobile ? "12px 14px" : "14px 16px", boxShadow: T.sm, cursor: onOpenCommitments ? "pointer" : "default" }}>
-        <div style={{ ...LABEL, marginBottom: 5 }}>Limite usado</div>
-        <div style={{ ...G, ...NUM, fontSize: isMobile ? 16 : 19, fontWeight: 800, color: T.blue }}>{used}</div>
-        <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 8 }}>
-          {usage === null ? "Limite não informado" : `${usage}% do limite · fatura e parcelas futuras`}
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", columnGap: 8, marginBottom: 5 }}>
+          <div style={LABEL}>Comprometido em parcelas</div>
+          {onOpenCommitments && <span style={{ ...G, fontSize: 10, color: T.blue, fontWeight: 700, whiteSpace: "nowrap" }}>ver todas →</span>}
         </div>
-        {onOpenCommitments && <div style={{ ...G, fontSize: 11, color: T.blue, fontWeight: 700, marginTop: 6 }}>Ver parcelas e compromissos →</div>}
+        <div style={{ ...G, ...NUM, fontSize: isMobile ? 16 : 19, fontWeight: 800, color: T.blue }}>{committed ? formatMoney(committed.net, currency) ?? "—" : "—"}</div>
+        <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 8 }}>
+          {committed
+            ? (committed.count === 0 ? "Nenhuma parcela pendente" : `${committed.count} ${committed.count === 1 ? "ativa" : "ativas"} · até ${committed.until}`)
+            : "Saldo exato indisponível"}
+        </div>
       </div>
     </div>
   );
