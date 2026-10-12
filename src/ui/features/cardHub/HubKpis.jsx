@@ -34,6 +34,9 @@ export function LimitTiles({ card, currency, committed = null, isMobile, onEdit,
     ? Math.round(Number(card.limit_usage_percent))
     : null;
   const usedPercent = usage === null ? null : Math.min(100, Math.max(0, usage));
+  // Passou do limite: disponível é R$ 0,00 (um fato) e o excesso é dito em dinheiro, não só em porcentagem.
+  const usedNumber = card.used_limit === null || card.used_limit === undefined ? null : Number(card.used_limit);
+  const overBy = hasLimit && usedNumber !== null && Number.isFinite(usedNumber) && usedNumber > Number(card.credit_limit) ? usedNumber - Number(card.credit_limit) : null;
   const barColor = usage === null ? T.inkFaint : usage >= 90 ? T.red : usage >= 70 ? T.amber : T.green;
   // Link de verdade: o nome acessível é o conteúdo (valor e %), e só Enter ativa, como em <a>.
   const openProps = onOpenCommitments
@@ -42,11 +45,12 @@ export function LimitTiles({ card, currency, committed = null, isMobile, onEdit,
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: isMobile ? 10 : 12 }}>
       <div data-testid="kpi-available" style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: isMobile ? "12px 14px" : "14px 16px", boxShadow: T.sm }}>
-        <div style={{ ...LABEL, marginBottom: 5 }}>Limite disponível</div>
+        <div style={{ ...LABEL, marginBottom: 5 }}>{overBy !== null ? "Limite excedido" : "Limite disponível"}</div>
         <div style={{ ...G, ...NUM, fontSize: isMobile ? 16 : 19, fontWeight: 800, color: T.ink }}>
           {available ?? (hasLimit ? "Não calculado" : "Sem limite cadastrado")}
         </div>
         {available && totalLimit ? <>
+          {overBy !== null && <div data-testid="limit-over" style={{ ...G, fontSize: 11, fontWeight: 700, color: T.red, marginTop: 5 }}>{formatMoney(overBy, currency)} acima do limite</div>}
           <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 5 }}>de {totalLimit} de limite total</div>
           {usedPercent !== null && <>
             <div role="meter" aria-label="Percentual do limite usado" aria-valuemin={0} aria-valuemax={100}

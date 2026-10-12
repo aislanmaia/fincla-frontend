@@ -18,7 +18,8 @@ export function CardVisual({ c, selected, size = "md", onClick }) {
   // passa de ~52px para ~64px de conteúdo — 82px de altura (130/1.586) cortava
   // a última linha via overflow:hidden. 94px dá margem real, não só cosmética.
   const H = size === "sm" ? 94 : Math.round(W / 1.586);
-  const pct = safe(c.limite - c.disponivel, c.limite);
+  // O chip diz o uso REAL do limite (284% se estourou), não o valor travado em 100.
+  const pct = Number.isFinite(c.limitUsagePercent) ? Math.round(c.limitUsagePercent) : safe(c.limite - c.disponivel, c.limite);
   return (
     <div data-selected={selected} onClick={() => onClick?.(c.id)} style={{
       width: W, height: H, borderRadius: size === "sm" ? 12 : 16, flexShrink: 0, cursor: "pointer",
@@ -59,7 +60,7 @@ export function CardVisual({ c, selected, size = "md", onClick }) {
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
           {pct >= 70 && (
-            <div style={{ ...G, fontSize: 11, fontWeight: 800, color: pct >= 90 ? "#7F1D1D" : "#78350F", background: pct >= 90 ? "#FCA5A5" : "#FCD34D", borderRadius: 5, padding: "2px 6px" }}>{pct}%</div>
+            <div style={{ ...G, fontSize: 11, fontWeight: 800, color: pct >= 90 ? "#7F1D1D" : "#78350F", background: pct >= 90 ? "#FCA5A5" : "#FCD34D", borderRadius: 5, padding: "2px 6px" }} title={pct > 100 ? `Limite usado: ${pct}% (acima do limite)` : `Limite usado: ${pct}%`}>{pct}%</div>
           )}
           {/* maxWidth só no "sm": sem ele, "MASTERCARD" a 11px (~79px com o
               letterSpacing) tomava quase toda a largura útil (104px) e sobrava

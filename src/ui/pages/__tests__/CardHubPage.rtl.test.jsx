@@ -594,6 +594,17 @@ describe("CardHubPage — KPIs e insights", () => {
     expect(tile).not.toHaveTextContent("R$ 0,00");
   });
 
+  it("cartão acima do limite diz 'excedido' em dinheiro e o chip mostra o uso real", async () => {
+    mockApi({ cards: [cardFixture({ available_limit: money("0.00"), used_limit: money("12500.00"), limit_usage_percent: 125 })] });
+    renderHub();
+    const tile = await screen.findByTestId("kpi-available");
+    expect(tile).toHaveTextContent("Limite excedido");
+    expect(tile).toHaveTextContent("R$ 0,00");
+    expect(within(tile).getByTestId("limit-over")).toHaveTextContent("R$ 2.500,00 acima do limite");
+    expect(tile).not.toHaveTextContent("Não calculado");
+    expect(await screen.findByTitle("Limite usado: 125% (acima do limite)")).toHaveTextContent("125%");
+  });
+
   it("explica a ausência de limite sem representar desconhecido como zero", async () => {
     mockApi({ cards: [cardFixture({ credit_limit: null, available_limit: null, limit_usage_percent: null })] });
     renderHub();
