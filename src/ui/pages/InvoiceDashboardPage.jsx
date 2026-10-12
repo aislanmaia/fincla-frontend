@@ -8,7 +8,7 @@ import { FC } from "../routing/searchContract.js";
 import { Btn, Card } from "../components/primitives";
 import { shouldUseRealData } from "../dataMode.js";
 import { mapInvoiceItemToUi } from "../data/creditCardsAdapter.js";
-import { cardTransactionsPath, invoiceDashboardPath, isValidInvoiceParams } from "../routing/invoiceRoute.js";
+import { cardLedgerLink, invoiceDashboardPath, isValidInvoiceParams } from "../routing/invoiceRoute.js";
 import { StatusBadge } from "../features/cardHub/InvoiceCard.jsx";
 import { InvoiceCarousel } from "../features/cardHub/InvoiceCarousel.jsx";
 import { invoiceKey, parseInvoiceKey } from "../features/cardHub/hubInvoices.js";
@@ -18,6 +18,9 @@ import { Headline, InvoiceDetailBody } from "../features/invoiceDashboard/Invoic
 import { InvoiceNavigator } from "../features/invoiceDashboard/InvoiceNavigator.jsx";
 import { MobileInvoiceItem } from "../features/invoiceDashboard/MobileInvoiceItem.jsx";
 import { AverageComparison, InvoiceMetrics } from "../features/invoiceDashboard/SpendingPace.jsx";
+import { NotesDialog } from "../features/cardHub/NotesDialog.jsx";
+import { useInvoiceNote } from "../features/invoiceDashboard/useInvoiceNote.js";
+import { INVOICE_STATUS } from "../features/cardHub/hubInvoices.js";
 import { InvoiceChanges } from "../features/invoiceDashboard/InvoiceChanges.jsx";
 import { ForecastInstallments, RecentItems } from "../features/invoiceDashboard/RecentItems.jsx";
 import { InvoiceBudgetContext, InvoiceSummaryTiles, useInvoiceBudgetContext } from "../features/invoiceDashboard/InvoiceBottomSections.jsx";
@@ -67,6 +70,7 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
     refreshToken: transactionsRefreshToken,
   });
   const { card, invoices, detail, detailState, now } = data;
+  const noteApi = useInvoiceNote({ card, organizationId, year, month });
 
   const goBack = () => navigate({ to: "/cards", search: { [FC.VIEW]: "new", [FC.HUB_CARD]: cardId } });
   const selectedKey = invoiceKey(year, month);
@@ -98,8 +102,10 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
     onUnmarkPaid: data.unmarkPaid,
     onExport: exportCsv,
     onRetry: data.retryDetail,
+    note: noteApi.note,
+    onEditNote: noteApi.openEditor,
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [detailState, detail, data.futureRow, card, now, data.mutation, data.refreshFailed, data.markPaid, data.unmarkPaid, data.retryDetail, selectedKey]);
+  }), [noteApi.note, noteApi.openEditor, detailState, detail, data.futureRow, card, now, data.mutation, data.refreshFailed, data.markPaid, data.unmarkPaid, data.retryDetail, selectedKey]);
 
   if (!valid) {
     return <div style={{ padding: pad, display: "flex", flexDirection: "column", gap: 12 }}><BackLink onClick={goBack} /><Notice tone="warn" role="alert">Fatura inválida.</Notice></div>;
@@ -131,6 +137,12 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
     </div>
   );
 
+  // Abre os Lançamentos já filtrados (fatura desta tela, ou a anterior para o que "saiu"); extras: categoria, busca, tipo.
+  const openLedger = ({ previous = false, ...extra } = {}) => {
+    const prior = /^(\d{4})-(\d{2})$/.exec(detail?.changes?.previous_month ?? "");
+    const ref = previous ? (prior ? { year: Number(prior[1]), month: Number(prior[2]) } : { year: month === 1 ? year - 1 : year, month: month === 1 ? 12 : month - 1 }) : { year, month };
+    navigate(cardLedgerLink(cardId, { invoice: ref, ...extra }));
+  };
   const showBreakdown = detailState === "ok" && detail;
   const emptyOpenBudget = detailState === "empty" && invoice?.status === "open"
     ? <InvoiceBudgetContext detail={null} invoice={invoice} budget={budget} currency={currency} isMobile={isMobile} now={now} />
@@ -142,15 +154,15 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
   );
   const analysis = showBreakdown && <>
     {invoice?.status === "open" && <InvoiceMetrics detail={detail} currency={currency} isMobile={isMobile} />}
-    <RecentItems items={detail.items} totalCount={detail.items_count} currency={currency} isMobile={isMobile} onViewAll={() => navigate({ to: cardTransactionsPath(cardId, year, month) })} />
+    <RecentItems items={detail.items} totalCount={detail.items_count} currency={currency} isMobile={isMobile} onViewAll={() => openLedger()} />
     <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1.2fr", gap: 16, minWidth: 0 }}>
       <CategoryBreakdown breakdown={detail.category_breakdown} total={invoice?.total} currency={currency} isMobile={isMobile} />
       <AverageComparison detail={detail} currency={currency} />
     </div>
     <InvoiceBudgetContext detail={detail} invoice={invoice} budget={budget} currency={currency} isMobile={isMobile} now={now} />
-    <InvoiceChanges changes={detail.changes} currency={currency} isMobile={isMobile} />
-    <InvoiceSummaryTiles key={`${card?.id}:${year}-${month}`} detail={detail} card={card} organizationId={organizationId} currency={currency} isMobile={isMobile} year={year} month={month}
-      onFilter={(modality) => navigate({ to: cardTransactionsPath(cardId, year, month), search: { [FC.INVOICE_MODALITY]: modality } })} />
+    <InvoiceChanges changes={detail.changes} currency={currency} isMobile={isMobile} invoiceOpen={invoice?.status === INVOICE_STATUS.OPEN} onOpenLedger={openLedger} />
+    <InvoiceSummaryTiles detail={detail} currency={currency} isMobile={isMobile} note={noteApi.note} onEditNote={noteApi.openEditor}
+      onFilter={(kind) => openLedger({ kind })} />
   </>;
 
   return (
@@ -197,6 +209,7 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
           {lower}
         </>
       )}
+      {noteApi.open && <NotesDialog title="Anotação da fatura" label="Anotação da fatura" initialNotes={noteApi.note.text ?? ""} isMobile={isMobile} onSave={noteApi.save} onClose={noteApi.closeEditor} />}
     </div>
   );
 }

@@ -246,7 +246,7 @@ describe("InvoiceDashboardPage — card da fatura", () => {
     expect(footer).toHaveTextContent("1 assinatura nesta fatura");
     expect(footer).toHaveTextContent("Anotação da fatura");
     await user.click(within(footer).getByRole("button", { name: /ver parcelas/i }));
-    expect(navigateMock).toHaveBeenLastCalledWith({ to: `/cards/${CARD_PUBLIC_ID}/invoices/2026/10/transactions`, search: { fc_invoice_modality: "installment" } });
+    expect(navigateMock).toHaveBeenLastCalledWith({ to: `/cards/${CARD_PUBLIC_ID}/transactions`, search: { fc_inv: "2026-10", fc_kind: "installment" } });
     expect(calls.filter((call) => call.startsWith("GET /v1/credit-cards"))).toHaveLength(4);
     expect(calls.notes).toHaveLength(1);
     expect(calls.filter((call) => call === "GET /v1/budgets")).toHaveLength(1);
@@ -307,8 +307,13 @@ describe("InvoiceDashboardPage — card da fatura", () => {
     mockApi({ note: null });
     renderPage();
     const footer = await screen.findByRole("region", { name: "Resumo da fatura" });
-    await waitFor(() => expect(footer).toHaveTextContent("Nenhuma anotação nesta fatura."));
-    expect(within(footer).getByRole("button", { name: "Editar anotação" })).toBeEnabled();
+    await waitFor(() => expect(footer).toHaveTextContent("Escreva um lembrete sobre esta fatura"));
+    expect(within(footer).getByRole("button", { name: /Clique para adicionar/ })).toBeEnabled();
+    // O mesmo modal abre pelo CTA do cabeçalho da fatura.
+    const cta = await screen.findByTestId("invoice-note-cta");
+    expect(cta).toHaveTextContent("Adicionar anotação");
+    await userEvent.setup().click(cta);
+    expect(screen.getByRole("textbox", { name: "Anotação da fatura" })).toBeVisible();
   });
 
   it("compara o mesmo dia com valor visível e três estados de velocidade", () => {
@@ -355,10 +360,29 @@ describe("InvoiceDashboardPage — card da fatura", () => {
     expect(within(section).getByText("Novo")).toBeVisible();
     expect(within(section).getByText("Não apareceu mais")).toBeVisible();
     expect(within(section).getByText("Mudou de valor")).toBeVisible();
-    expect(within(section).getByText("Ocorrências: 1 → 1")).toBeVisible();
+    expect(within(section).getByText("Fatura anterior: 1 cobrança · nesta: 1 cobrança")).toBeVisible();
     expect(within(section).getByText(/por ocorrência/)).toBeVisible();
     expect(calls.filter((call) => call.startsWith("GET /v1/credit-cards"))).toHaveLength(4);
     expect(calls.queries).toContainEqual(expect.stringMatching(/include_metrics=true.*include_changes=true|include_changes=true.*include_metrics=true/));
+  });
+
+  it("os informativos de mudança levam aos Lançamentos já filtrados", async () => {
+    const CAT = "122ba3c6-4803-4fd7-aa2a-37d26fd3c333";
+    mockApi({ detail: { ...DETAILS, "2026/10": () => detailFixture({ changes: {
+      previous_available: true, previous_month: "2026-09",
+      categories: [{ category_id: CAT, category_name: "Alimentação", category_color: null, current_total: money("300.00"), previous_total: money("100.00"), change: money("200.00") }],
+      items: [{ change_type: "removed", commitment_type: "recurring", series_id: "s2", description: "Aluguel", category_id: CAT, category_name: "Alimentação", current_amount: null, previous_amount: money("50.00"), change_amount: null, installment_number: null, total_installments: null, occurrences_previous: 1, occurrences_current: null }],
+      one_off: { current_count: 3, current_total: money("30.00"), previous_count: 2, previous_total: money("20.00") },
+    } }) } });
+    const user = userEvent.setup();
+    renderPage();
+    const section = await screen.findByRole("region", { name: "O que mudou" });
+    await user.click(within(section).getByRole("button", { name: /Ver lançamentos de Alimentação nesta fatura/ }));
+    expect(navigateMock).toHaveBeenLastCalledWith({ to: `/cards/${CARD_PUBLIC_ID}/transactions`, search: { fc_inv: "2026-10", fc_lcat: CAT } });
+    await user.click(within(section).getByRole("button", { name: "ver lançamentos →" }));
+    expect(navigateMock).toHaveBeenLastCalledWith({ to: `/cards/${CARD_PUBLIC_ID}/transactions`, search: { fc_inv: "2026-10", fc_kind: "one_off" } });
+    await user.click(within(section).getByRole("button", { name: "Aluguel" }));
+    expect(navigateMock).toHaveBeenLastCalledWith({ to: `/cards/${CARD_PUBLIC_ID}/transactions`, search: { fc_inv: "2026-09", fc_q: "Aluguel" } });
   });
 
   it("esconde a comparação quando a fatura anterior não existe", async () => {

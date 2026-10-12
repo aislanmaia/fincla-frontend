@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "@tanstack/react-router";
+import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { ArrowLeft, Download, Filter, Search, Sparkles, X } from "lucide-react";
 
 import { getCurrentCreditCardInvoice, getInvoiceHistory, listCreditCards } from "../../api/creditCards";
@@ -49,6 +49,7 @@ function sharePending(map, key, request) {
   if (!map.has(key)) map.set(key, request().finally(() => map.delete(key)));
   return map.get(key);
 }
+const KIND_LABELS = { one_off: "Compras avulsas e estornos", installment: "Parcelas", recurring: "Recorrências", refund: "Estornos" };
 function cardLabel(card) {
   return `${card.description || card.brand || "Cartão"} •${card.last4 || "••••"}`;
 }
@@ -56,11 +57,16 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const { cardId } = useParams({ strict: false });
   const navigate = useNavigate();
   const enabled = shouldUseRealData(organizationId, dataMode);
-  const filter = useTransactionsFilterState({ initial: { period: "tudo" }, clearToInitial: true });
+  // Deep link (Dashboard da fatura): fatura, categoria, busca e tipo chegam pela URL, lidos uma vez.
+  const urlSearch = useSearch({ strict: false });
+  const [link] = useState(() => ({ invoice: urlSearch?.[FC.LEDGER_INVOICE] ?? null, category: urlSearch?.[FC.LEDGER_CATEGORY] ?? null, query: urlSearch?.[FC.LEDGER_SEARCH] ?? "", kind: urlSearch?.[FC.LEDGER_KIND] ?? null }));
+  const [kind, setKind] = useState(link.kind);
+  const linkScopeRef = useRef(null);
+  const filter = useTransactionsFilterState({ initial: { period: "tudo", cats: link.category ? [link.category] : [], search: link.query }, clearToInitial: true });
   const categoryCatalog = useCategoryTagsData({ organizationId, enabled });
   const refundCatalog = useCategoryTagsData({ organizationId, transactionType: "refund", enabled });
   const tagCatalog = useTransactionsTagCatalog({ organizationId, enabled });
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState(link.query);
   const [prefs, setPrefs] = useState(readListPrefs);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [activeFacet, setActiveFacet] = useState("periodo");
@@ -68,7 +74,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const [cardScope, setCardScope] = useState("current");
   // O recorte de tempo é sempre um destes dois: FATURAS do cartão ou um PERÍODO livre.
   const [timeMode, setTimeMode] = useState("invoice");
-  const [invoiceKeys, setInvoiceKeys] = useState(null);
+  const [invoiceKeys, setInvoiceKeys] = useState(() => link.invoice ? [link.invoice] : null);
   const [summarySheetOpen, setSummarySheetOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(() => typeof window === "undefined" ? 1440 : window.innerWidth);
@@ -211,7 +217,8 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     ...(parseMoneyInput(filter.valueMin) != null ? { value_min: parseMoneyInput(filter.valueMin) } : {}),
     ...(parseMoneyInput(filter.valueMax) != null ? { value_max: parseMoneyInput(filter.valueMax) } : {}),
     ...(filter.valueCurrency && (filter.valueMin || filter.valueMax) ? { value_currency: filter.valueCurrency } : {}),
-    ...(filter.type === "despesa" ? { type: "expense" } : filter.type === "receita" ? { type: "income" } : {}),
+    ...(kind === "refund" ? { type: "refund" } : filter.type === "despesa" ? { type: "expense" } : filter.type === "receita" ? { type: "income" } : {}),
+    ...(kind === "one_off" || kind === "installment" ? { commitment_kind: kind } : kind === "recurring" ? { recurring: true } : {}),
     ...(filter.settlement === "pagas" ? { settled: true } : filter.settlement === "a-pagar" ? { settled: false } : {}),
     ...(filter.cats.length && !unresolvedCategory ? { category: filter.cats.map((id) => categoriesById[id]?.apiName) } : {}),
     ...(tagStatus.kind === "resolved" ? { tag_id: tagStatus.ids, tag_match: filter.tagMode } : {}),
@@ -234,7 +241,10 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     let active = true;
     setState({ card: null, rows: [], total: null, page: 0, queryKey: filterKey, loading: true, error: false, missing: false });
     setHistoryState({ cardId: null, data: null, error: false });
-    setInvoiceKeys(null);
+    // O link da URL vale só para o cartão em que a tela abriu; trocar de organização/cartão volta ao padrão.
+    const scope = `${organizationId}:${cardId}`;
+    if (linkScopeRef.current === null) linkScopeRef.current = scope;
+    setInvoiceKeys(linkScopeRef.current === scope && link.invoice ? [link.invoice] : null);
     setTimeMode("invoice");
     sharePending(pendingCards, organizationId, () => listCreditCards(organizationId)).then((cards) => {
       if (!active) return;
@@ -407,7 +417,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const closeFilters = () => setFiltersOpen(false);
   const openFacet = (key) => { if (key === "busca") { searchInputRef.current?.focus(); return; } setActiveFacet(key); setMobileFacetOpen(true); setFiltersOpen(true); };
   const card = state.card;
-  const clearAll = () => { filter.clearAll(); setCardScope("current"); };
+  const clearAll = () => { filter.clearAll(); setCardScope("current"); setKind(null); };
   const clearFacet = (key) => key === "cartao" ? setCardScope("current") : filter.clearFacet(key);
   const currentSummary = summaryState.key === summaryKey ? summaryState.data : null;
   const currentSummaryLoading = summaryState.key !== summaryKey || summaryState.loading;
@@ -453,7 +463,8 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const outflowsError = outflowsKind === "invoices" && needsLadder ? Boolean(currentLadder?.error) : currentSummaryError;
   const outflowsMessage = cardScope === "all" ? "As saídas por fatura valem para um cartão. Volte para “este cartão”." : noInvoice ? "Marque ao menos uma fatura pra ver as saídas." : null;
   const outflows = buildOutflows({ mode: outflowsKind, summary: currentSummary, ladder: needsLadder ? currentLadder?.data : null, selectedKeys: invoiceMode ? invoiceKeys ?? [] : [], selectableKeys: new Set(invoiceOpts.filter((option) => option.invoiceId != null).map((option) => option.key)), currency: state.card?.currency });
-  const filterChips = <TransactionsFilterChips facets={activeFacets} searchActive={Boolean(debouncedSearch)} searchLabel={debouncedSearch} onOpenFacet={openFacet} onAbrirAtivos={() => openFacet("ativos")} onClearFacet={clearFacet} onClearAll={clearAll} maxVisible={viewportWidth >= 1600 ? 3 : viewportWidth >= 1366 ? 2 : 1} chipsBudget={chipsBudget} collapsed={viewportWidth < 1200} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen((open) => !open)} pinnedChip={temporalChip} />;
+  const kindChip = kind ? <button type="button" data-testid="kind-chip" onClick={() => setKind(null)} aria-label={`Remover filtro: ${KIND_LABELS[kind]}`} style={{ ...G, display: "inline-flex", alignItems: "center", gap: 4, border: `1px solid ${T.border}`, borderRadius: 8, background: T.blueLight, color: T.blue, padding: "8px 10px", fontSize: 11, cursor: "pointer" }}>{KIND_LABELS[kind]} <X size={12} /></button> : null;
+  const filterChips = <><TransactionsFilterChips facets={activeFacets} searchActive={Boolean(debouncedSearch)} searchLabel={debouncedSearch} onOpenFacet={openFacet} onAbrirAtivos={() => openFacet("ativos")} onClearFacet={clearFacet} onClearAll={clearAll} maxVisible={viewportWidth >= 1600 ? 3 : viewportWidth >= 1366 ? 2 : 1} chipsBudget={chipsBudget} collapsed={viewportWidth < 1200} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen((open) => !open)} pinnedChip={temporalChip} />{kindChip}</>;
   // A tabela do extrato tem colunas demais para ceder espaço: o dock só empurra a partir de 1600px.
   const dockFloating = !isMobile && viewportWidth < 1600;
   const cardScopePanel = <CardScopePanel card={card} scope={cardScope} onScope={(value) => { setCardScope(value); setSummarySheetOpen(false); }} />;

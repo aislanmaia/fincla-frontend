@@ -25,6 +25,11 @@ export const FC = {
   VIEW: "view",
   HUB_CARD: "card",
   INVOICE_MODALITY: "fc_invoice_modality",
+  // Deep link para os Lançamentos do cartão (`/cards/:id/transactions`): fatura, categoria, busca e tipo.
+  LEDGER_INVOICE: "fc_inv", // "YYYY-MM" — a fatura
+  LEDGER_CATEGORY: "fc_lcat", // id da categoria no catálogo
+  LEDGER_SEARCH: "fc_q", // texto da busca
+  LEDGER_KIND: "fc_kind", // "one_off" | "installment" | "recurring" | "refund"
 };
 
 /** Valores de `fc_modal` (inglês, partilháveis). */
@@ -76,6 +81,10 @@ export function mergeNavSearch(previous, _targetSegment, opts = {}) {
   delete next[FC.CARD];
   delete next[FC.VIEW];
   delete next[FC.HUB_CARD];
+  delete next[FC.LEDGER_INVOICE];
+  delete next[FC.LEDGER_CATEGORY];
+  delete next[FC.LEDGER_SEARCH];
+  delete next[FC.LEDGER_KIND];
 
   if (opts.filterCat != null && String(opts.filterCat).trim() !== "") {
     next[FC.CATEGORY] = String(opts.filterCat).trim();
