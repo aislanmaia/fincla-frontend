@@ -65,6 +65,14 @@ describe("CardAllTransactionsPage", () => {
     expect(within(summary).queryByText(/R\$\s*25,50/)).not.toBeInTheDocument();
   });
 
+  it.each([[1440, "absolute"], [1700, ""]])("com %ipx o dock de filtros %s a tabela", async (width, position) => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    await userEvent.setup().click(await screen.findByRole("button", { name: /Abrir filtros/ }));
+    const dock = screen.getByRole("region", { name: "Filtros" }).parentElement;
+    expect(dock.style.position).toBe(position);
+  });
+
   it("abre o dock desktop e aplica categoria real na query do cartão", async () => {
     server.use(http.get("*/v1/tags/catalog", () => HttpResponse.json({ categories: [{ id: "food", label: "Alimentação", system_key: "food", color: "#059669" }] })));
     render(<CardAllTransactionsPage organizationId={ORG_ID} />);

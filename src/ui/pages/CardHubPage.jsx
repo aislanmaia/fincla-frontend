@@ -25,7 +25,7 @@ import { CategoryTrendChart, InvoiceHistoryChart } from "../features/cardHub/Hub
 import { HubDialog } from "../features/cardHub/HubDialog.jsx";
 import { CreateCardDialog } from "../features/cardHub/CreateCardDialog.jsx";
 import { EditCardDialog } from "../features/cardHub/EditCardDialog.jsx";
-import { CompactKpiStrip, LimitTiles } from "../features/cardHub/HubKpis.jsx";
+import { CompactKpiStrip, LimitTiles, summarizeCommitted } from "../features/cardHub/HubKpis.jsx";
 import { InsightsList } from "../features/cardHub/InsightsList.jsx";
 
 import { NotesDialog } from "../features/cardHub/NotesDialog.jsx";
@@ -295,7 +295,7 @@ export function CardHubPage({
         Cartão selecionado: <strong style={{ color: T.ink }}>{cardName} •{selectedCard.last4}</strong>
       </div>
 
-      <LimitTiles card={selectedCard} currency={currency} isMobile={isMobile} onEdit={() => setDialog("edit-card")} onOpenCommitments={openCommitments} />
+      <LimitTiles card={selectedCard} currency={currency} committed={summarizeCommitted(detail.future, currency)} isMobile={isMobile} onEdit={() => setDialog("edit-card")} onOpenCommitments={openCommitments} />
 
       {!isMobile && insights.length > 0 && (
         <div style={{ background: T.surface, border: `1px solid ${T.amber}`, borderRadius: 14, padding: "14px 18px" }}>

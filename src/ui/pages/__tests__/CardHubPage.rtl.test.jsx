@@ -102,6 +102,13 @@ const futureFixture = (over = {}) => ({
     { year: 2026, month: 11, month_name: "novembro", total_amount: money("6050.28"), limit_usage_percent: 20, installments_count: 7, top_installments: [] },
     { year: 2026, month: 12, month_name: "dezembro", total_amount: money("5050.27"), limit_usage_percent: 15, installments_count: 5, top_installments: [] },
   ],
+  remaining_balance: {
+    complete: true, gross_amount: money("12000.00"), linked_refunds_amount: money("500.00"), net_amount: money("11500.00"),
+    series: [
+      { series_id: "a", description: "Notebook", category_name: null, remaining_installments: 4, remaining_amount: money("8000.00"), linked_refunds_amount: money("500.00"), last_due_date: "2027-10-10", next_amount: money("2000.00") },
+      { series_id: "b", description: "Sofá", category_name: null, remaining_installments: 2, remaining_amount: money("4000.00"), linked_refunds_amount: money("0"), last_due_date: "2026-12-10", next_amount: money("2000.00") },
+    ],
+  },
   ending_soon: [],
   insights: [],
   ...over,
@@ -219,10 +226,10 @@ describe("CardHubPage — gráficos do Hub", () => {
 });
 
 describe("CardHubPage — cadastro de cartão", () => {
-  it("o KPI de limite usado abre Parcelas & Compromissos do cartão selecionado", async () => {
+  it("o KPI de comprometido em parcelas abre Parcelas & Compromissos do cartão selecionado", async () => {
     mockApi();
     render(<CardHubPage organizationId={ORG} dataMode="live" onNewItem={vi.fn()} />);
-    const kpi = await screen.findByRole("link", { name: /Limite usado/ });
+    const kpi = await screen.findByRole("link", { name: /Comprometido em parcelas/ });
     await userEvent.setup().click(kpi);
     expect(navigateMock).toHaveBeenCalledWith({ to: "/cards/$cardId/commitments", params: { cardId: publicIdFor(1) } });
     navigateMock.mockClear();
@@ -233,11 +240,11 @@ describe("CardHubPage — cadastro de cartão", () => {
     expect(navigateMock).toHaveBeenCalledTimes(1);
   });
 
-  it("sem public_id o KPI de limite usado não vira link", async () => {
+  it("sem public_id o KPI de comprometido em parcelas não vira link", async () => {
     mockApi({ cards: [cardFixture({ public_id: null })] });
     render(<CardHubPage organizationId={ORG} dataMode="live" onNewItem={vi.fn()} />);
-    expect(await screen.findByText("Limite usado")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /Limite usado/ })).not.toBeInTheDocument();
+    expect(await screen.findByText("Comprometido em parcelas")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Comprometido em parcelas/ })).not.toBeInTheDocument();
   });
 
   it("cria pelo tile, aceita fechamento ausente, atualiza a lista e seleciona o criado", async () => {
@@ -572,9 +579,19 @@ describe("CardHubPage — KPIs e insights", () => {
     expect(tile).toHaveTextContent("de R$ 10.000,00 de limite total");
     expect(within(tile).getByRole("meter", { name: "Percentual do limite usado" })).toHaveAttribute("aria-valuenow", "35");
     expect(tile).toHaveTextContent("35% do limite usado");
-    const usedTile = screen.getByTestId("kpi-committed");
-    expect(usedTile).toHaveTextContent("Limite usado");
-    expect(usedTile).toHaveTextContent("fatura e parcelas futuras");
+    const committedTile = screen.getByTestId("kpi-committed");
+    expect(committedTile).toHaveTextContent("Comprometido em parcelas");
+    await waitFor(() => expect(committedTile).toHaveTextContent("R$ 11.500,00"));
+    expect(committedTile).toHaveTextContent("2 ativas · até out/2027");
+    expect(committedTile).toHaveTextContent("ver todas →");
+  });
+
+  it("não afirma o comprometido quando o saldo exato não foi provado", async () => {
+    mockApi({ future: futureFixture({ remaining_balance: { complete: false, gross_amount: null, linked_refunds_amount: null, net_amount: null, series: [] } }) });
+    renderHub();
+    const tile = await screen.findByTestId("kpi-committed");
+    await waitFor(() => expect(tile).toHaveTextContent("Saldo exato indisponível"));
+    expect(tile).not.toHaveTextContent("R$ 0,00");
   });
 
   it("explica a ausência de limite sem representar desconhecido como zero", async () => {
