@@ -662,6 +662,8 @@ export interface ListTransactionsQuery {
   organization_id: string;
   /** Apenas lançamentos vinculados a este cartão; combina com os outros filtros. */
   credit_card_id?: number;
+  /** Uma ou mais faturas (id do histórico/fatura atual); param repetido. */
+  invoice_id?: number | number[];
   type?: 'income' | 'expense' | 'refund';
   /** Um valor, ou vários (casa com qualquer um) — serializado como param repetido. */
   category?: string | string[];
@@ -680,6 +682,7 @@ export interface ListTransactionsQuery {
    * então as duas facets podem estar ativas ao mesmo tempo.
    */
   tag_id?: string | string[];
+  tag_match?: 'any' | 'all';
   date_start?: string;
   date_end?: string;
   value_min?: number;
@@ -748,6 +751,8 @@ export interface TransactionsFacetsQuery
   extends Omit<ListTransactionsQuery, 'page' | 'limit' | 'sort_by' | 'sort_order'> {
   /** Facets a calcular. Omita para receber todas. */
   facets?: TransactionFacetName[];
+  localize_labels?: boolean;
+  locale?: string;
 }
 
 /**
@@ -788,10 +793,15 @@ export interface PaginatedTransactionsResponse {
 
 export interface TransactionsSummaryQuery {
   organization_id: string;
+  credit_card_id?: number;
+  invoice_id?: number | number[];
+  include_breakdown?: boolean;
+  locale?: string;
   type?: 'income' | 'expense' | 'refund';
-  category?: string;
+  category?: string | string[];
   /** Quando o filtro da UI usa UUID da tag categoria (alinhado a GET /transactions) */
-  tag_id?: string;
+  tag_id?: string | string[];
+  tag_match?: 'any' | 'all';
   /** Um valor, ou vários (casa com qualquer um) — serializado como param repetido. */
   payment_method?: string | string[];
   description?: string;
@@ -851,6 +861,8 @@ export interface LargestTransaction {
 
 export interface TransactionsSummaryResponse {
   total_transactions: number;
+  /** Total movimentado no recorte, por moeda original; preservado como Money. */
+  by_currency?: Array<{ amount: string; currency: string }>;
   total_value: number;
   total_income: number;
   /** Bruto — soma absoluta de transações type='expense' (não desconta estornos). */
@@ -892,6 +904,15 @@ export interface TransactionsSummaryResponse {
   unsettled_refunds: number;
   /** Mesma fórmula de `balance`, restrita a status = 'paid'. */
   settled_balance: number;
+  /** Opt-in, full filtered result. Values remain separate by currency. */
+  breakdown?: {
+    by_category: Array<{ category: string; amount: number; amount_currency?: string | null }>;
+    by_month: Array<{ year: number; month: number; amount: number; amount_currency?: string | null }>;
+    /** Uma linha por fatura e moeda; `year`/`month` são o mês de REFERÊNCIA da fatura (rótulo do banco). */
+    by_invoice?: Array<{ invoice_id: number; credit_card_id: number; year: number; month: number; amount: number; amount_currency?: string | null }>;
+    /** Semanas ISO (segunda-feira); só vem preenchido quando o filtro é exatamente uma fatura. */
+    by_week?: Array<{ week_start: string; amount: number; amount_currency?: string | null }>;
+  } | null;
 }
 
 // ===== CARTÕES DE CRÉDITO =====
@@ -974,6 +995,8 @@ export interface InvoiceItemResponse {
 }
 
 export interface InvoiceResponse {
+  /** Id da fatura (o `invoice_id` de /transactions); `null` enquanto o mês não tem linha de fatura. */
+  invoice_id?: number | null;
   /** Capturada pelo cliente do MoneyResponse antes de desembrulhar os valores. */
   currency?: string | null;
   month: string;
@@ -1043,6 +1066,8 @@ export interface InvoiceHistoryItem {
   total_amount: number;
   total_amount_currency?: string | null;
   status: string;
+  /** Id da fatura para filtrar /transactions; `null` quando o mês ainda não tem fatura. */
+  invoice_id?: number | null;
   items_count: number;
   top_category: string | null;
   category_breakdown?: Record<string, number>;
