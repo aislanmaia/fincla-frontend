@@ -52,6 +52,7 @@ const server = setupServer(
       { year: 2026, month: 7, month_name: "julho", total_amount: money("75") },
     ] });
   }),
+  http.get("*/v1/tags/catalog", () => HttpResponse.json({ categories: [{ id: "refund-cat", label: "Não classificado", system_key: "unclassified", color: "#6B7280" }] })),
   http.get("*/v1/recurring-series", () => HttpResponse.json({ series: [{ id: "r", is_low_usage: false }], summary: {} })),
   http.patch("*/v1/recurring-series/r", async ({ request }) => {
     calls.push(`low:${JSON.stringify(await request.json())}`);
@@ -340,7 +341,7 @@ it("abre e fecha o detalhe no bottom sheet mobile", async () => {
   expect(sheet.querySelector(".fincla-scroll")).toBeInTheDocument();
   expect(within(sheet).getByText("Última parcela")).toBeInTheDocument();
   expect(within(sheet).getByText("Total original").nextSibling).toHaveTextContent("—");
-  expect(within(sheet).getByText(/sem estado de pagamento informado/)).toBeInTheDocument();
+  expect(within(sheet).getByText(/estado de pagamento não informado/)).toBeInTheDocument();
   await user.keyboard("{Escape}");
   expect(screen.queryByRole("dialog", { name: "Detalhes de Notebook" })).not.toBeInTheDocument();
 });
@@ -393,4 +394,42 @@ it("não apresenta concentração temporal como zero quando a data de um comprom
   render(<CardCommitmentsPage organizationId={ORG} />);
   expect(await screen.findByText("Datas indisponíveis neste mês.")).toBeInTheDocument();
   expect(screen.queryByText("Início do mês (dias 1–10)")).not.toBeInTheDocument();
+});
+
+it("mostra total original, parcelas liquidadas e estorno vinculado só quando a API prova", async () => {
+  const user = userEvent.setup();
+  futureOverride = { monthly_breakdown: [{
+    year: 2026, month: 10, month_name: "outubro", total_amount: money("100"),
+    installments: [{ transaction_id: 11, series_id: "a", description: "Notebook", amount: money("100"), installment_number: 3, total_installments: 6, due_date: "2026-10-10", purchase_date: "2026-08-10", category_name: "Tecnologia", category_id: "tech",
+      original_total: money("600"), paid_installment_numbers: [1, 2], linked_refunds_count: 1, linked_refunds_total: money("40") }],
+    recurrences: [],
+  }] };
+  render(<CardCommitmentsPage organizationId={ORG} isMobile />);
+  const inventory = await screen.findByRole("region", { name: "Inventário de compromissos" });
+  await user.click(within(inventory).getByRole("button", { name: "Detalhar Notebook" }));
+  const sheet = screen.getByRole("dialog", { name: "Detalhes de Notebook" });
+  expect(within(sheet).getByText("Total original").nextSibling).toHaveTextContent("600,00");
+  expect(within(sheet).getByText(/2 pagas/)).toBeInTheDocument();
+  expect(within(sheet).getByText(/40,00 estornado/)).toBeInTheDocument();
+  // Com estorno já vinculado a ação de estornar some.
+  expect(within(sheet).queryByRole("button", { name: /Lançar estorno/ })).not.toBeInTheDocument();
+});
+
+it("lança estorno vinculado à parcela pela categoria do catálogo de estorno", async () => {
+  const user = userEvent.setup();
+  const posted = [];
+  server.use(http.post("*/v1/transactions", async ({ request }) => { posted.push(await request.json()); return HttpResponse.json({ id: 99 }); }));
+  futureOverride = { monthly_breakdown: [{
+    year: 2026, month: 10, month_name: "outubro", total_amount: money("100"),
+    installments: [{ transaction_id: 11, series_id: "a", description: "Notebook", amount: money("100"), installment_number: 1, total_installments: 3, due_date: "2026-10-10", purchase_date: "2026-10-01", category_name: "Tecnologia", category_id: "tech", linked_refunds_count: 0, linked_refunds_total: money("0") }],
+    recurrences: [],
+  }] };
+  render(<CardCommitmentsPage organizationId={ORG} isMobile />);
+  const inventory = await screen.findByRole("region", { name: "Inventário de compromissos" });
+  await user.click(within(inventory).getByRole("button", { name: "Detalhar Notebook" }));
+  await user.click(within(screen.getByRole("dialog", { name: "Detalhes de Notebook" })).getByRole("button", { name: /Lançar estorno/ }));
+  const dialog = screen.getByRole("dialog", { name: "Lançar estorno" });
+  await user.click(within(dialog).getByRole("button", { name: "Lançar estorno" }));
+  await waitFor(() => expect(posted).toHaveLength(1));
+  expect(posted[0]).toMatchObject({ type: "refund", refund_of_transaction_id: 11, card_id: 7, tag_ids: ["refund-cat"], value: 100 });
 });

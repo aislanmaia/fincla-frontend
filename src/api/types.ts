@@ -1167,6 +1167,13 @@ export interface MonthlyBreakdown {
     due_date: string;
     purchase_date: string;
     category_id: string | null;
+    /** Total original como a série o guarda; null = não guardado (nunca parcela x N). */
+    original_total?: number | null;
+    /** Parcelas já liquidadas da série; [] = nenhuma comprovada, null/ausente = não comprovado. */
+    paid_installment_numbers?: number[] | null;
+    /** Valores da SÉRIE (repetidos em cada parcela): não somar entre itens. */
+    linked_refunds_count?: number | null;
+    linked_refunds_total?: number | null;
   }> | null;
   recurrences?: Array<{
     series_id: string;
@@ -1176,6 +1183,8 @@ export interface MonthlyBreakdown {
     amount_currency?: string | null;
     due_date: string;
     projected: boolean;
+    /** Só a ocorrência materializada tem alvo para estorno vinculado. */
+    refundable?: boolean;
     category_id: string | null;
     category_name: string | null;
     category_color: string | null;
