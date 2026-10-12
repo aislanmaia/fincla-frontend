@@ -7,6 +7,7 @@ import {
   isForecastInvoice,
   timelineProgress,
   cycleTimeline,
+  topCategoryTotal,
 } from "../invoiceDashboardModel.js";
 
 const card = { id: 1, closing_day: 15, due_day: 10 };
@@ -123,5 +124,23 @@ describe("cycleTimeline", () => {
   it("sem ciclo coerente (vencimento antes do fechamento) não desenha a linha", () => {
     expect(cycleTimeline({ closingDate: "2026-10-31", dueDate: "2026-10-10" }, new Date(2026, 9, 12))).toBeNull();
     expect(cycleTimeline({ closingDate: null, dueDate: "2026-10-10" }, new Date())).toBeNull();
+  });
+});
+
+describe("cycleTimeline (datas)", () => {
+  it("expõe início, fechamento e vencimento; no dia do fechamento já está fechada", () => {
+    const t = cycleTimeline({ closingDate: "2026-10-20", dueDate: "2026-10-27" }, new Date(2026, 9, 20));
+    expect([t.start.getMonth(), t.start.getDate(), t.closing.getDate(), t.due.getDate()]).toEqual([8, 21, 20, 27]);
+    expect(t.beforeClosing).toBe(false);
+  });
+});
+
+describe("topCategoryTotal", () => {
+  it("devolve o total da categoria líder e null quando não foi provado", () => {
+    expect(topCategoryTotal([{ category_name: "A", total: "10.5" }, { category_name: "B", total: "30" }])).toBe(30);
+    expect(topCategoryTotal([{ category_name: "A", total: null }])).toBeNull();
+    expect(topCategoryTotal([])).toBeNull();
+    expect(topCategoryTotal([{ category_name: "A", total: "abc" }, { category_name: "B", total: "30" }])).toBe(30);
+    expect(topCategoryTotal([{ category_name: "A", total: null }, { category_name: "B", total: "-5" }])).toBe(-5);
   });
 });

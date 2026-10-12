@@ -6,7 +6,7 @@ import { Btn, ProgBar } from "../../components/primitives";
 import { formatMoney } from "../../money/formatMoney.js";
 import { INVOICE_STATUS, monthNameLower } from "../cardHub/hubInvoices.js";
 import { PayControls } from "./PayControls.jsx";
-import { cycleTimeline, topCategoryLabel, timelineProgress } from "./invoiceDashboardModel.js";
+import { cycleTimeline, topCategoryLabel, topCategoryTotal, timelineProgress } from "./invoiceDashboardModel.js";
 import { dayMonth, dueText, plural, previousMonthName } from "./invoiceFormat.js";
 
 /** Linha de future-commitments que de fato traz compromisso (valor ou parcelas). */
@@ -53,7 +53,8 @@ function Timeline({ detail, status, now }) {
   const pct = progress?.pct;
   const cycle = cycleTimeline({ closingDate: detail.closing_date, dueDate: detail.due_date }, now);
   const due = `🗓 ${dueText({ days: detail.days_until_due, dueDate: detail.due_date }) ?? ""}`.trim();
-  const closingLabel = closing ? `${progress?.beforeClosing ? "Fecha" : "Fechou"} ${closing}` : "";
+  const dm = (date) => `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}`;
+  const closingLabel = cycle ? `Ciclo ${dm(cycle.start)} – ${dm(cycle.closing)}` : closing ? `${progress?.beforeClosing ? "Fecha" : "Fechou"} ${closing}` : "";
   return (
     <div data-testid="invoice-timeline">
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
@@ -65,16 +66,16 @@ function Timeline({ detail, status, now }) {
       {cycle ? (
         <div data-testid="invoice-cycle" style={{ position: "relative", paddingTop: 18 }}>
           <div style={{ display: "flex", gap: 2, height: 6 }}>
-            <div title="Ciclo aberto: as compras entram nesta fatura" style={{ width: `${cycle.closingPct}%`, borderRadius: "99px 0 0 99px", background: T.blue, opacity: cycle.beforeClosing ? 0.35 : 0.9 }} />
-            <div title="Fechada: janela de pagamento" style={{ flex: 1, borderRadius: "0 99px 99px 0", background: cycle.afterDue ? T.red : T.green, opacity: cycle.beforeClosing ? 0.25 : 0.9 }} />
+            <div title="Ciclo: as compras entram nesta fatura até o fechamento" style={{ width: `${cycle.closingPct}%`, borderRadius: "99px 0 0 99px", background: T.blue, opacity: cycle.beforeClosing ? 0.35 : 0.9 }} />
+            <div title="Entre o fechamento e o vencimento" style={{ flex: 1, borderRadius: "0 99px 99px 0", background: cycle.afterDue ? T.red : T.green, opacity: cycle.beforeClosing ? 0.25 : 0.9 }} />
           </div>
           <div style={{ position: "absolute", left: `${Math.min(97, Math.max(3, cycle.todayPct))}%`, top: 0, transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
             <span style={{ ...G, fontSize: 10, fontWeight: 700, color: T.ink, lineHeight: "12px" }}>hoje</span>
             <span style={{ width: 2, height: 10, background: T.ink }} />
           </div>
           <div style={{ display: "flex", marginTop: 4 }}>
-            <span style={{ ...mutedText, fontSize: 10, width: `${cycle.closingPct}%`, whiteSpace: "nowrap" }}>ciclo aberto</span>
-            <span style={{ ...mutedText, fontSize: 10, flex: 1, textAlign: "right" }}>pagamento</span>
+            <span style={{ ...mutedText, fontSize: 10, flex: "0 0 auto", minWidth: `${cycle.closingPct}%`, textAlign: "right", whiteSpace: "nowrap", paddingRight: 4, boxSizing: "border-box" }}>{cycle.beforeClosing ? "fecha" : "fechou"} {dayMonth(detail.closing_date)}</span>
+            <span style={{ ...mutedText, fontSize: 10, flex: 1, textAlign: "right", whiteSpace: "nowrap" }}>vence {dayMonth(detail.due_date)}</span>
           </div>
         </div>
       ) : pct !== null && pct !== undefined && (
@@ -134,6 +135,7 @@ export function InvoiceDetailBody({
 }) {
   const status = invoice.status;
   const topCategory = detail ? topCategoryLabel(detail.category_breakdown) : null;
+  const topTotal = detail ? topCategoryTotal(detail.category_breakdown) : null;
 
   if (state === "loading") {
     return <div role="status" style={{ ...mutedText, textAlign: "center" }}>Carregando fatura…</div>;
@@ -163,7 +165,7 @@ export function InvoiceDetailBody({
         <>
           <div style={{ ...mutedText, display: "flex", gap: 8, flexWrap: "wrap", justifyContent: centered ? "center" : "flex-start" }}>
             <span data-testid="invoice-count">{plural(detail.items_count ?? 0, "lançamento", "lançamentos")}</span>
-            {topCategory && <><span style={{ color: T.border }}>·</span><span>maior categoria: <strong style={{ color: T.ink }}>{topCategory}</strong></span></>}
+            {topCategory && <><span style={{ color: T.border }}>·</span><span>maior categoria: <strong style={{ color: T.ink }}>{topCategory}</strong>{topTotal !== null && <> · <strong data-testid="invoice-top-category-total" style={{ color: T.ink }}>{formatMoney(topTotal, currency) ?? "—"}</strong></>}</span></>}
           </div>
           <Timeline detail={detail} status={status} now={now} />
           <LimitUsage percent={detail.limit_usage_percent} card={card} currency={currency} />
