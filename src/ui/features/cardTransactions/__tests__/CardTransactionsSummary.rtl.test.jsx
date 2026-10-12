@@ -30,4 +30,19 @@ describe("CardTransactionsSummary — categorias", () => {
     expect(screen.queryByText(/Ver mais/)).toBeNull();
     expect(screen.queryByText(/Outros/)).toBeNull();
   });
+
+  it("com 6 categorias o link fala no singular", () => {
+    render(<CardTransactionsSummary summary={{ ...summary, breakdown: { by_category: summary.breakdown.by_category.slice(0, 6) } }} isCategorySelected={() => false} onToggleCategory={() => {}} />);
+    expect(screen.getByRole("button", { name: "Ver mais 1 categoria" })).toBeTruthy();
+  });
+
+  it("com duas moedas cada uma abre a própria lista", async () => {
+    const usd = ["A", "B", "C", "D", "E", "F"].map((c, i) => ({ category: `U${c}`, amount: String(60 - i), amount_currency: "USD" }));
+    const user = userEvent.setup();
+    render(<CardTransactionsSummary summary={{ ...summary, breakdown: { by_category: [...summary.breakdown.by_category, ...usd] } }} isCategorySelected={() => false} onToggleCategory={() => {}} />);
+    await user.click(screen.getByRole("button", { name: "Ver mais 1 categoria" }));
+    const dialog = screen.getByRole("dialog", { name: "Categorias do recorte" });
+    expect(within(dialog).getByRole("list", { name: "Todas as categorias em USD" })).toBeTruthy();
+    expect(within(dialog).getAllByRole("listitem")).toHaveLength(6);
+  });
 });

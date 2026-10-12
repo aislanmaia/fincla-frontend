@@ -13,9 +13,12 @@ const RADIUS = 38;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 function Donut({ rows, total }) {
+  const rest = Math.max(0, total - rows.reduce((acc, row) => acc + Math.abs(Number(row.amount)), 0));
   let offset = 0;
   return <svg role="img" aria-label="Distribuição das saídas por categoria" viewBox="0 0 100 100" width="112" height="112" style={{ flex: "none" }}>
     <circle cx="50" cy="50" r={RADIUS} fill="none" stroke={T.grayLight} strokeWidth="14" />
+    {/* O resto (atrás do "Ver mais") fica no anel como fatia neutra: a rosca sempre fecha o total. */}
+    {total > 0 && rest > 0 && <circle cx="50" cy="50" r={RADIUS} fill="none" stroke={T.borderHov} strokeWidth="14" strokeDasharray={`${rest / total * CIRCUMFERENCE} ${CIRCUMFERENCE}`} strokeDashoffset={-(1 - rest / total) * CIRCUMFERENCE} transform="rotate(-90 50 50)" />}
     {total > 0 && rows.map((row, index) => {
       const share = Math.abs(Number(row.amount)) / total;
       const length = share * CIRCUMFERENCE;
