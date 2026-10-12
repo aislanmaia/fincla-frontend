@@ -602,6 +602,7 @@ describe("CardHubPage — KPIs e insights", () => {
     expect(tile).toHaveTextContent("R$ 0,00");
     expect(within(tile).getByTestId("limit-over")).toHaveTextContent("R$ 2.500,00 acima do limite");
     expect(tile).not.toHaveTextContent("Não calculado");
+    expect(tile).toHaveTextContent("125% do limite usado");
     expect(await screen.findByTitle("Limite usado: 125% (acima do limite)")).toHaveTextContent("125%");
   });
 

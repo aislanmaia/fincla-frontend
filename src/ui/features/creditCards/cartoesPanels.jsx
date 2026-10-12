@@ -60,7 +60,7 @@ export function CardVisual({ c, selected, size = "md", onClick }) {
         </div>
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
           {pct >= 70 && (
-            <div style={{ ...G, fontSize: 11, fontWeight: 800, color: pct >= 90 ? "#7F1D1D" : "#78350F", background: pct >= 90 ? "#FCA5A5" : "#FCD34D", borderRadius: 5, padding: "2px 6px" }} title={pct > 100 ? `Limite usado: ${pct}% (acima do limite)` : `Limite usado: ${pct}%`}>{pct}%</div>
+            <div style={{ ...G, fontSize: 11, fontWeight: 800, color: pct >= 90 ? "#7F1D1D" : "#78350F", background: pct >= 90 ? "#FCA5A5" : "#FCD34D", borderRadius: 5, padding: "2px 6px", whiteSpace: "nowrap" }} title={pct > 100 ? `Limite usado: ${pct}% (acima do limite)` : `Limite usado: ${pct}%`}>{pct > 999 ? "999%+" : `${Math.max(0, pct)}%`}</div>
           )}
           {/* maxWidth só no "sm": sem ele, "MASTERCARD" a 11px (~79px com o
               letterSpacing) tomava quase toda a largura útil (104px) e sobrava

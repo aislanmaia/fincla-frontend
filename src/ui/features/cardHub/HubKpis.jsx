@@ -36,7 +36,9 @@ export function LimitTiles({ card, currency, committed = null, isMobile, onEdit,
   const usedPercent = usage === null ? null : Math.min(100, Math.max(0, usage));
   // Passou do limite: disponível é R$ 0,00 (um fato) e o excesso é dito em dinheiro, não só em porcentagem.
   const usedNumber = card.used_limit === null || card.used_limit === undefined ? null : Number(card.used_limit);
-  const overBy = hasLimit && usedNumber !== null && Number.isFinite(usedNumber) && usedNumber > Number(card.credit_limit) ? usedNumber - Number(card.credit_limit) : null;
+  // Em centavos: nada de 0,10000000000000009 nem de "excedido" por fração de centavo.
+  const overCents = hasLimit && usedNumber !== null && Number.isFinite(usedNumber) ? Math.round(usedNumber * 100) - Math.round(Number(card.credit_limit) * 100) : 0;
+  const overBy = overCents > 0 ? overCents / 100 : null;
   const barColor = usage === null ? T.inkFaint : usage >= 90 ? T.red : usage >= 70 ? T.amber : T.green;
   // Link de verdade: o nome acessível é o conteúdo (valor e %), e só Enter ativa, como em <a>.
   const openProps = onOpenCommitments
@@ -47,18 +49,18 @@ export function LimitTiles({ card, currency, committed = null, isMobile, onEdit,
       <div data-testid="kpi-available" style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: isMobile ? "12px 14px" : "14px 16px", boxShadow: T.sm }}>
         <div style={{ ...LABEL, marginBottom: 5 }}>{overBy !== null ? "Limite excedido" : "Limite disponível"}</div>
         <div style={{ ...G, ...NUM, fontSize: isMobile ? 16 : 19, fontWeight: 800, color: T.ink }}>
-          {available ?? (hasLimit ? "Não calculado" : "Sem limite cadastrado")}
+          {available ?? (overBy !== null ? formatMoney(0, currency) : hasLimit ? "Não calculado" : "Sem limite cadastrado")}
         </div>
-        {available && totalLimit ? <>
-          {overBy !== null && <div data-testid="limit-over" style={{ ...G, fontSize: 11, fontWeight: 700, color: T.red, marginTop: 5 }}>{formatMoney(overBy, currency)} acima do limite</div>}
+        {overBy !== null && <div data-testid="limit-over" style={{ ...G, fontSize: 11, fontWeight: 700, color: T.red, marginTop: 5 }}>{formatMoney(overBy, currency) ?? "—"} acima do limite</div>}
+        {(available || overBy !== null) && totalLimit ? <>
           <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 5 }}>de {totalLimit} de limite total</div>
           {usedPercent !== null && <>
             <div role="meter" aria-label="Percentual do limite usado" aria-valuemin={0} aria-valuemax={100}
-              aria-valuenow={usedPercent}
+              aria-valuenow={usedPercent} aria-valuetext={usage > 100 ? `${usage}% do limite usado, acima do limite` : undefined}
               style={{ height: 5, background: T.grayLight, borderRadius: 99, overflow: "hidden", marginTop: 9 }}>
               <div style={{ height: "100%", width: `${usedPercent}%`, background: barColor, borderRadius: 99 }} />
             </div>
-            <div style={{ ...G, fontSize: 10, color: T.inkMid, marginTop: 5 }}>{usedPercent}% do limite usado</div>
+            <div style={{ ...G, fontSize: 10, color: T.inkMid, marginTop: 5 }}>{usage}% do limite usado</div>
           </>}
         </> : <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 7, lineHeight: 1.45 }}>
           {hasLimit ? "Não foi possível calcular o valor disponível deste cartão." : "Cadastre o limite do cartão para acompanhar quanto ainda pode usar."}
