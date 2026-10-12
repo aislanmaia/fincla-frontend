@@ -11,7 +11,7 @@ export const NOTES_MAX_LENGTH = 2000;
  * Anotação livre do cartão. Falha ao salvar mostra o erro e preserva o texto
  * digitado: o rascunho só é descartado ao salvar com sucesso ou cancelar.
  */
-export function NotesDialog({ initialNotes, isMobile, onSave, onClose }) {
+export function NotesDialog({ initialNotes, isMobile, onSave, onClose, title = "Anotações do cartão", label = "Anotação do cartão" }) {
   const [draft, setDraft] = useState(initialNotes ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -42,11 +42,11 @@ export function NotesDialog({ initialNotes, isMobile, onSave, onClose }) {
   );
 
   return (
-    <HubDialog title="Anotações do cartão" isMobile={isMobile} onClose={onClose} footer={footer} width={420}>
+    <HubDialog title={title} isMobile={isMobile} onClose={onClose} footer={footer} width={420}>
       <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
         <textarea
           data-testid="card-notes-textarea"
-          aria-label="Anotação do cartão"
+          aria-label={label}
           value={draft}
           maxLength={NOTES_MAX_LENGTH}
           onChange={(e) => setDraft(e.target.value)}

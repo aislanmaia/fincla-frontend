@@ -4,7 +4,7 @@
 // `unwrapMoney` desembrulha em qualquer profundidade — enumerar campo a campo é
 // onde se esquece um, e um esquecido vira "R$ NaN" na tela.
 import apiClient from './client';
-import { unwrapMoney } from './money';
+import { toCurrency, unwrapMoney } from './money';
 import type {
   Budget,
   CreateBudgetRequest,
@@ -13,6 +13,11 @@ import type {
   PreviewTransactionRequest,
   PreviewTransactionResponse,
 } from './types';
+
+export const BUDGETS_CHANGED_EVENT = 'fincla:budgets-changed';
+const notifyBudgetsChanged = () => {
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(BUDGETS_CHANGED_EVENT));
+};
 
 /**
  * Cria um novo orçamento para uma tag/categoria
@@ -24,6 +29,7 @@ export const createBudget = async (
   const response = await apiClient.post<Budget>('/budgets', data, {
     params: { organization_id: organizationId },
   });
+  notifyBudgetsChanged();
   return unwrapMoney(response.data);
 };
 
@@ -42,7 +48,14 @@ export const listBudgets = async (
       ...(isActive !== undefined ? { is_active: isActive } : {}),
     },
   });
-  return unwrapMoney(response.data);
+  const unwrapped = unwrapMoney(response.data);
+  return {
+    ...unwrapped,
+    budgets: unwrapped.budgets.map((budget, index) => ({
+      ...budget,
+      currency: toCurrency(response.data.budgets[index]?.amount),
+    })),
+  };
 };
 
 /**
@@ -71,6 +84,7 @@ export const updateBudget = async (
     data,
     { params: { organization_id: organizationId } }
   );
+  notifyBudgetsChanged();
   return unwrapMoney(response.data);
 };
 
@@ -84,6 +98,7 @@ export const deleteBudget = async (
   await apiClient.delete(`/budgets/${budgetId}`, {
     params: { organization_id: organizationId },
   });
+  notifyBudgetsChanged();
 };
 
 /**

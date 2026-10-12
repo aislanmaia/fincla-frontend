@@ -1016,6 +1016,17 @@ export interface InvoiceResponse {
   six_month_average?: number | null;
   six_month_average_change?: number | null;
   six_month_average_invoices_count?: number;
+  /** Recorrências, parcelas e estornos do ciclo (magnitudes na moeda do cartão). Zero é fato conhecido. */
+  commitments_summary?: {
+    recurring_count: number;
+    recurring_total: number;
+    installments_count: number;
+    installments_total: number;
+    ending_count: number;
+    ending_released: number;
+    refunds_count: number;
+    refunds_total: number;
+  } | null;
   spending_pace?: {
     cycle_start: string;
     cycle_end: string;
@@ -1032,7 +1043,6 @@ export interface InvoiceResponse {
       current_total: number;
       previous_total: number;
       change: number;
-      change_percent: number | null;
     }[];
     items: {
       change_type: 'new' | 'removed' | 'changed_value';
@@ -1406,6 +1416,8 @@ export interface Budget {
   /** Quando o backend enviar, alinha ícone à UI (Lucide `icon_key`) */
   tag_icon_key?: string | null;
   tag_color: string | null;
+  /** Preserved from the canonical amount before unwrapMoney for mixed-currency organizations. */
+  currency?: string | null;
   amount: number;
   period_type: BudgetPeriodType;
   is_active: boolean;
