@@ -64,15 +64,6 @@ describe("CardAllTransactionsPage", () => {
     expect(within(summary).queryByText(/R\$\s*25,50/)).not.toBeInTheDocument();
   });
 
-  it("preserva valor e moeda reais do histórico de faturas", async () => {
-    server.use(http.get("*/v1/credit-cards/:id/invoices/history", () => HttpResponse.json({ monthly_data: [{ year: 2026, month: 9, total_amount: { amount: "25.00", currency: "USD" }, status: "paid" }] })));
-    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
-    const chart = await screen.findByRole("img", { name: /Valores das últimas faturas do cartão em USD/ });
-    const bar = chart.querySelector("[title]");
-    expect(bar?.title).toMatch(/25,00/);
-    expect(bar?.title).not.toContain("R$");
-  });
-
   it("abre o dock desktop e aplica categoria real na query do cartão", async () => {
     server.use(http.get("*/v1/tags/catalog", () => HttpResponse.json({ categories: [{ id: "food", label: "Alimentação", system_key: "food", color: "#059669" }] })));
     render(<CardAllTransactionsPage organizationId={ORG_ID} />);
@@ -331,5 +322,73 @@ describe("CardAllTransactionsPage · recorte de tempo", () => {
     await waitFor(() => expect(requests.at(-1).searchParams.has("date_start")).toBe(true));
     expect(requests.at(-1).searchParams.has("invoice_id")).toBe(false);
     expect(screen.getByRole("button", { name: "Recorte de tempo: Período: Este mês. Ajustar." })).toBeInTheDocument();
+  });
+});
+
+describe("CardAllTransactionsPage · saídas por mês/semana", () => {
+  const money = (amount) => ({ amount, currency: "BRL" });
+  const history = { monthly_data: [
+    { year: 2026, month: 9, invoice_id: 39, status: "closed", total_amount: "200.00", items_count: 4 },
+    { year: 2026, month: 10, invoice_id: 40, status: "open", total_amount: "300.00", items_count: 5 },
+  ] };
+  const summaryWith = (breakdown) => http.get("*/v1/transactions/summary", ({ request }) => {
+    const url = new URL(request.url);
+    const invoices = url.searchParams.getAll("invoice_id");
+    const kind = invoices.length === 1 ? "week" : "invoice";
+    return HttpResponse.json({ total_transactions: 3, by_currency: [money("90.00")], breakdown: { by_category: [{ category: "Alimentação", amount: money("90.00") }], by_month: [], ...breakdown[kind] } });
+  });
+
+  it("com uma fatura mostra as semanas dela, cruzando a virada de mês", async () => {
+    server.use(http.get("*/v1/credit-cards/:id/invoices/history", () => HttpResponse.json({ monthly_data: history.monthly_data.slice(1) })));
+    server.use(summaryWith({ week: { by_invoice: [], by_week: [{ week_start: "2026-09-28", amount: money("40.00") }, { week_start: "2026-10-05", amount: money("50.00") }] } }));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const chart = await screen.findByRole("region", { name: "Saídas por mês e semana" });
+    expect(await within(chart).findByRole("heading", { name: "Saídas por semana" })).toBeInTheDocument();
+    const group = await within(chart).findByRole("group", { name: "Saídas por semana da fatura" });
+    expect(within(group).getByText("28/09")).toBeInTheDocument();
+    expect(within(group).getByText("05/10")).toBeInTheDocument();
+  });
+
+  it("com várias faturas desenha uma barra por fatura e o clique desmarca a fatura", async () => {
+    server.use(http.get("*/v1/credit-cards/:id/invoices/history", () => HttpResponse.json(history)));
+    const calls = [];
+    server.use(http.get("*/v1/transactions/summary", ({ request }) => {
+      const url = new URL(request.url);
+      calls.push(url);
+      const ids = url.searchParams.getAll("invoice_id");
+      return HttpResponse.json({ total_transactions: 3, by_currency: [money("90.00")], breakdown: { by_category: [], by_month: [], by_week: ids.length === 1 ? [{ week_start: "2026-10-05", amount: money("50.00") }] : [], by_invoice: ids.length === 1 ? [] : [{ invoice_id: 39, credit_card_id: 7, year: 2026, month: 9, amount: money("40.00") }, { invoice_id: 40, credit_card_id: 7, year: 2026, month: 10, amount: money("50.00") }] } });
+    }));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await screen.findByRole("heading", { name: "Saídas por semana" });
+    await user.click(screen.getByRole("button", { name: /Recorte de tempo/ }));
+    await user.click(screen.getByRole("checkbox", { name: "Fatura de setembro 2026" }));
+    const sept = await screen.findByRole("button", { name: /Fatura de Set 2026/ });
+    expect(sept).toHaveAttribute("aria-pressed", "true");
+    // a barra vem da consulta SEM o recorte de fatura, para que fatura desmarcada também apareça
+    expect(calls.some((url) => url.searchParams.getAll("invoice_id").length === 0 && url.searchParams.get("credit_card_id") === "7")).toBe(true);
+    await user.click(sept);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Recorte de tempo: Fatura: Out. Ajustar." })).toBeInTheDocument());
+  });
+
+  it("sem fatura marcada pede para marcar em vez de desenhar zero", async () => {
+    server.use(http.get("*/v1/credit-cards/:id/invoices/history", () => HttpResponse.json({ monthly_data: history.monthly_data.slice(1) })));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await screen.findByRole("heading", { name: "Saídas por semana" });
+    await user.click(screen.getByRole("button", { name: /Recorte de tempo/ }));
+    await user.click(screen.getByRole("checkbox", { name: "Fatura de outubro 2026" }));
+    expect(await screen.findByText("Marque ao menos uma fatura pra ver as saídas.")).toBeInTheDocument();
+  });
+
+  it("a legenda do donut isola a categoria na query da tela inteira", async () => {
+    server.use(http.get("*/v1/tags/catalog", () => HttpResponse.json({ categories: [{ id: "food", label: "Alimentação", system_key: "food", color: "#059669" }] })));
+    server.use(http.get("*/v1/credit-cards/:id/invoices/history", () => HttpResponse.json({ monthly_data: history.monthly_data.slice(1) })));
+    server.use(summaryWith({ week: { by_invoice: [], by_week: [] } }));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Filtrar por Alimentação" }));
+    await waitFor(() => expect(requests.at(-1).searchParams.getAll("category").length).toBeGreaterThan(0));
+    expect(screen.getByRole("button", { name: "Filtrar por Alimentação" })).toHaveAttribute("aria-pressed", "true");
   });
 });

@@ -100,6 +100,8 @@ export const getTransactionsSummary = async (
     breakdown: {
       by_category: raw.breakdown.by_category.map((row) => ({ ...row, amount_currency: toCurrency(row.amount) ?? row.amount_currency ?? null })),
       by_month: raw.breakdown.by_month.map((row) => ({ ...row, amount_currency: toCurrency(row.amount) ?? row.amount_currency ?? null })),
+      by_invoice: (raw.breakdown.by_invoice ?? []).map((row) => ({ ...row, amount_currency: toCurrency(row.amount) ?? row.amount_currency ?? null })),
+      by_week: (raw.breakdown.by_week ?? []).map((row) => ({ ...row, amount_currency: toCurrency(row.amount) ?? row.amount_currency ?? null })),
     },
   } : raw;
   return unwrapMoney(withBreakdownCurrencies);

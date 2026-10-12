@@ -6,10 +6,11 @@ import { getCurrentCreditCardInvoice, getInvoiceHistory, listCreditCards } from 
 import { getTransactionsFacets, getTransactionsSummary, listTransactions } from "../../api/transactions";
 import { Btn, Card, PageTitle, Select } from "../components/primitives.jsx";
 import { shouldUseRealData } from "../dataMode.js";
-import { CardTransactionsHistory } from "../features/cardTransactions/CardTransactionsHistory.jsx";
+import { CardOutflowsChart } from "../features/cardTransactions/CardOutflowsChart.jsx";
 import { CardTransactionsSummary } from "../features/cardTransactions/CardTransactionsSummary.jsx";
 import { CardTransactionsTable } from "../features/cardTransactions/CardTransactionsTable.jsx";
 import { CardTimeScopePanel } from "../features/cardTransactions/CardTimeScopePanel.jsx";
+import { buildOutflows } from "../features/cardTransactions/outflowsModel.js";
 import { defaultInvoiceKeys, invoiceChipLabel, invoiceIdsForQuery, invoiceOptions, periodChipLabel, withCurrentInvoice } from "../features/cardTransactions/invoiceScope.js";
 import { formatCustomPeriodLabel } from "../features/transactions/filters/customPeriodLabel.js";
 import { readListPrefs, writeListPrefs } from "../features/transactions/listPrefs.js";
@@ -31,9 +32,8 @@ import { G, NUM } from "../typography.js";
 import { T } from "../tokens.js";
 
 const PAGE_SIZE = 30;
-// O ledger lê 12 faturas para o seletor; o gráfico de histórico segue mostrando as 6 últimas.
+// O ledger lê 12 faturas para o seletor de recorte.
 const INVOICE_WINDOW = 12;
-const HISTORY_BARS = 6;
 const FACETS = ["periodo", "categoria", "tag", "cartao", "tipo", "situacao", "valor"];
 const FACET_LABELS = { periodo: "Período", categoria: "Categoria", tag: "Etiquetas", cartao: "Cartão", tipo: "Tipo", situacao: "Status", valor: "Valor" };
 const pendingCards = new Map();
@@ -100,6 +100,8 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const [historyState, setHistoryState] = useState({ cardId: null, data: null, error: false });
   const [summaryState, setSummaryState] = useState({ key: null, data: null, loading: false, error: false });
   const [facetState, setFacetState] = useState({ key: null, data: null });
+  // Faturas lado a lado: mesma consulta sem o recorte de fatura, para barras de faturas ainda não marcadas.
+  const [ladderState, setLadderState] = useState({ key: null, data: null, loading: false, error: false });
   const [retry, setRetry] = useState(0);
   const [state, setState] = useState({ card: null, rows: [], total: null, page: 0, queryKey: "", loading: true, error: false, missing: false });
   const [nextPage, setNextPage] = useState(1);
@@ -274,6 +276,23 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.card, organizationId, summaryKey, filterBlocked]);
 
+  const needsLadder = invoiceMode && selectedInvoiceIds.length >= 2;
+  const ladderFilter = Object.fromEntries(Object.entries(aggregateFilter).filter(([key]) => key !== "invoice_id"));
+  const ladderKey = `${state.card?.id ?? "none"}:${JSON.stringify(ladderFilter)}`;
+  useEffect(() => {
+    if (!state.card || filterBlocked || !needsLadder) return undefined;
+    let active = true;
+    setLadderState({ key: ladderKey, data: null, loading: true, error: false });
+    getTransactionsSummary({ organization_id: organizationId, credit_card_id: state.card.id, ...ladderFilter, include_breakdown: true, locale: "pt-BR" }).then((data) => {
+      if (active) setLadderState({ key: ladderKey, data, loading: false, error: false });
+    }).catch(() => {
+      if (active) setLadderState({ key: ladderKey, data: null, loading: false, error: true });
+    });
+    return () => { active = false; };
+  // ladderKey carries the filters that matter.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.card, organizationId, ladderKey, filterBlocked, needsLadder]);
+
   useEffect(() => {
     if (!state.card || filterBlocked || !filtersOpen) return undefined;
     let active = true;
@@ -329,9 +348,6 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const card = state.card;
   const clearAll = () => { filter.clearAll(); setCardScope("current"); };
   const clearFacet = (key) => key === "cartao" ? setCardScope("current") : filter.clearFacet(key);
-  const fullHistory = historyState.cardId === card?.id ? historyState.data : null;
-  const currentHistory = fullHistory ? { ...fullHistory, monthly_data: fullHistory.monthly_data.slice(-HISTORY_BARS) } : null;
-  const currentHistoryError = historyState.cardId === card?.id && historyState.error;
   const currentSummary = summaryState.key === summaryKey ? summaryState.data : null;
   const currentSummaryLoading = summaryState.key !== summaryKey || summaryState.loading;
   const currentSummaryError = summaryState.key === summaryKey && summaryState.error;
@@ -362,6 +378,20 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   };
   const toggleInvoice = (key) => setInvoiceKeys((keys) => { const current = keys ?? []; return current.includes(key) ? current.filter((entry) => entry !== key) : [...current, key]; });
   const timeScopePanel = <CardTimeScopePanel mode={invoiceMode ? "invoice" : "period"} onMode={changeTimeMode} options={invoiceOpts} selectedKeys={invoiceKeys ?? []} onToggle={toggleInvoice} currency={state.card?.currency} invoiceDisabled={cardScope !== "current"} />;
+  const categoryIdByName = (name) => categories.find((row) => row.label === name || row.apiName === name)?.id ?? null;
+  const isCategorySelected = (name) => { const id = categoryIdByName(name); return id == null ? null : filter.cats.includes(id); };
+  const toggleCategory = (name) => { const id = categoryIdByName(name); if (id != null) filter.setCats(filter.cats.includes(id) ? filter.cats.filter((entry) => entry !== id) : [...filter.cats, id]); };
+  // Clicar numa barra de fatura: no modo Fatura marca/desmarca; no modo Período vira "só esta fatura".
+  const pickInvoice = (key) => {
+    if (!invoiceMode) { setTimeMode("invoice"); setInvoiceKeys([key]); return; }
+    toggleInvoice(key);
+  };
+  const outflowsKind = invoiceMode && selectedInvoiceIds.length === 1 ? "weeks" : "invoices";
+  const currentLadder = ladderState.key === ladderKey ? ladderState : null;
+  const outflowsLoading = outflowsKind === "invoices" && needsLadder ? !currentLadder || currentLadder.loading : currentSummaryLoading;
+  const outflowsError = outflowsKind === "invoices" && needsLadder ? Boolean(currentLadder?.error) : currentSummaryError;
+  const outflowsMessage = cardScope === "all" ? "As saídas por fatura valem para um cartão. Volte para “este cartão”." : noInvoice ? "Marque ao menos uma fatura pra ver as saídas." : null;
+  const outflows = buildOutflows({ mode: outflowsKind, summary: currentSummary, ladder: needsLadder ? currentLadder?.data : null, selectedKeys: invoiceMode ? invoiceKeys ?? [] : [], currency: state.card?.currency });
   const filterChips = <TransactionsFilterChips facets={activeFacets} searchActive={Boolean(debouncedSearch)} searchLabel={debouncedSearch} onOpenFacet={openFacet} onAbrirAtivos={() => openFacet("ativos")} onClearFacet={clearFacet} onClearAll={clearAll} maxVisible={viewportWidth >= 1600 ? 3 : viewportWidth >= 1366 ? 2 : 1} chipsBudget={chipsBudget} collapsed={viewportWidth < 1200} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen((open) => !open)} pinnedChip={temporalChip} />;
   const dockFloating = !isMobile && viewportWidth < 1280;
   const cardScopePanel = <CardScopePanel card={card} scope={cardScope} onScope={(value) => { setCardScope(value); setSummarySheetOpen(false); }} />;
@@ -377,12 +407,12 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     {state.missing && <Card role="status" style={{ padding: 18 }}>Cartão não encontrado ou sem acesso.</Card>}
     {state.error && !card && <Card role="alert" style={{ padding: 18 }}>Não foi possível carregar o cartão.</Card>}
     {card && <>
-      {cardScope === "current" && !isMobile && <div style={{ display: "grid", gridTemplateColumns: "minmax(280px,1fr) minmax(0,2fr)", gap: 12, minWidth: 0 }}>
-        <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} />
-        <CardTransactionsHistory history={currentHistory} error={currentHistoryError} currency={card.currency} isMobile={false} />
+      {cardScope === "current" && !isMobile && <div style={{ display: "grid", gridTemplateColumns: "minmax(300px,3fr) minmax(0,7fr)", gap: 12, minWidth: 0 }}>
+        <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} isCategorySelected={isCategorySelected} onToggleCategory={toggleCategory} />
+        <CardOutflowsChart outflows={outflows} currency={card.currency} loading={outflowsLoading} error={outflowsError} message={outflowsMessage} onPickInvoice={pickInvoice} />
       </div>}
-      {cardScope === "current" && isMobile && <Card as="button" type="button" onClick={() => setSummarySheetOpen(true)} style={{ ...G, padding: 16, width: "100%", textAlign: "left", cursor: "pointer", color: T.ink }}><strong>Resumo filtrado e histórico do cartão</strong><span style={{ display: "block", fontSize: 11, color: T.inkMid, marginTop: 4 }}>Gastos do recorte e faturas do cartão · tocar para ver</span></Card>}
-      {cardScope === "all" && <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} />}
+      {cardScope === "current" && isMobile && <Card as="button" type="button" onClick={() => setSummarySheetOpen(true)} style={{ ...G, padding: 16, width: "100%", textAlign: "left", cursor: "pointer", color: T.ink }}><strong>Resumo e saídas do recorte</strong><span style={{ display: "block", fontSize: 11, color: T.inkMid, marginTop: 4 }}>{currentSummary ? `${currentSummary.total_transactions} lançamento${currentSummary.total_transactions === 1 ? "" : "s"} · ` : ""}ver gráficos</span></Card>}
+      {cardScope === "all" && <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} isCategorySelected={isCategorySelected} onToggleCategory={toggleCategory} />}
       {!isMobile && <TransactionsFilterBar filter={filter} hideSavedViews hideFacets searchInput={filter.search} setSearchInput={filter.setSearch} searchPlaceholder="Buscar por descrição…" searchInputRef={searchInputRef} barChips={filterChips} onChipsBudget={setChipsBudget} barTrailing={<TransactionsListDisplayControls
         density={prefs.density} grouped={prefs.grouped && sortField === "date"} canGroup={sortField === "date"}
         onDensityChange={(density) => setPreference({ density })}
@@ -419,11 +449,11 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
         {inspected.refund_of_transaction_id && <p style={{ ...G, fontSize: 11, color: T.inkMid }}>Este estorno está vinculado a uma compra original.</p>}
       </Card>
     </div>}
-    {summarySheetOpen && isMobile && cardScope === "current" && <div ref={summaryDialogRef} role="dialog" aria-modal="true" aria-label="Resumo filtrado e histórico do cartão" style={{ position: "fixed", inset: 0, zIndex: 48, background: "rgba(15,15,13,.35)", display: "flex", alignItems: "flex-end" }} onClick={() => setSummarySheetOpen(false)}>
+    {summarySheetOpen && isMobile && cardScope === "current" && <div ref={summaryDialogRef} role="dialog" aria-modal="true" aria-label="Resumo e saídas do recorte" style={{ position: "fixed", inset: 0, zIndex: 48, background: "rgba(15,15,13,.35)", display: "flex", alignItems: "flex-end" }} onClick={() => setSummarySheetOpen(false)}>
       <div className="fincla-scroll" style={{ background: T.bg, borderRadius: "18px 18px 0 0", maxHeight: "85dvh", width: "100%", padding: 16, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }} onClick={(event) => event.stopPropagation()}>
         <button ref={summaryCloseRef} type="button" aria-label="Fechar resumo" onClick={() => setSummarySheetOpen(false)} style={{ alignSelf: "flex-end", border: 0, background: "none", cursor: "pointer" }}><X size={18} /></button>
-        <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} />
-        <CardTransactionsHistory history={currentHistory} error={currentHistoryError} currency={card?.currency} isMobile />
+        <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} isCategorySelected={isCategorySelected} onToggleCategory={toggleCategory} />
+        <CardOutflowsChart outflows={outflows} currency={card?.currency} loading={outflowsLoading} error={outflowsError} message={outflowsMessage} onPickInvoice={pickInvoice} isMobile />
       </div>
     </div>}
     {filtersOpen && isMobile && <div ref={filterDialogRef} role="dialog" aria-modal="true" aria-label="Filtros dos lançamentos" style={{ position: "fixed", inset: 0, zIndex: 49, background: "rgba(15,15,13,.35)", display: "flex", alignItems: "flex-end" }} onClick={closeFilters}>

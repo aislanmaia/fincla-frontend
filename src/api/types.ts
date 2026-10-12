@@ -907,6 +907,10 @@ export interface TransactionsSummaryResponse {
   breakdown?: {
     by_category: Array<{ category: string; amount: number; amount_currency?: string | null }>;
     by_month: Array<{ year: number; month: number; amount: number; amount_currency?: string | null }>;
+    /** Uma linha por fatura e moeda; `year`/`month` são o mês de REFERÊNCIA da fatura (rótulo do banco). */
+    by_invoice?: Array<{ invoice_id: number; credit_card_id: number; year: number; month: number; amount: number; amount_currency?: string | null }>;
+    /** Semanas ISO (segunda-feira); só vem preenchido quando o filtro é exatamente uma fatura. */
+    by_week?: Array<{ week_start: string; amount: number; amount_currency?: string | null }>;
   } | null;
 }
 
