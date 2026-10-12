@@ -695,6 +695,8 @@ export interface ListTransactionsQuery {
    */
   value_currency?: string;
   recurring?: boolean;
+  /** `one_off` = compras avulsas e estornos (sem série); `installment` = compras parceladas. */
+  commitment_kind?: 'one_off' | 'installment';
   page?: number;
   limit?: number;
   sort_by?: SortByField;
@@ -818,6 +820,8 @@ export interface TransactionsSummaryQuery {
   value_currency?: string;
   /** `true` = só transações recorrentes; `false` = só não recorrentes */
   recurring?: boolean;
+  /** `one_off` = compras avulsas e estornos (sem série); `installment` = compras parceladas. */
+  commitment_kind?: 'one_off' | 'installment';
   /** Mesmo eixo de `ListTransactionsQuery.settled` — mande junto com o da lista. */
   settled?: boolean;
 }

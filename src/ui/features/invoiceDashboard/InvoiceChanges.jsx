@@ -23,20 +23,44 @@ function signedMoney(value, currency) {
   return `${amount > 0 ? "+" : ""}${formatMoney(amount, currency)}`;
 }
 
-function ItemChange({ item, currency }) {
+const LINK_BUTTON = { background: "none", border: 0, padding: 0, cursor: "pointer", textDecoration: "underline", textDecorationColor: T.border, textUnderlineOffset: 3 };
+
+/** Texto das ocorrências de uma recorrência: nunca "—" sozinho; ausência vira palavra. */
+function occurrencesText(item, notYetCharged) {
+  const previous = item.occurrences_previous;
+  const current = item.occurrences_current;
+  const count = (value) => `${value} ${value === 1 ? "cobrança" : "cobranças"}`;
+  if (previous != null && current == null) return notYetCharged ? `Fatura anterior: ${count(previous)} · nesta, ainda nenhuma` : `Fatura anterior: ${count(previous)} · nesta, nenhuma`;
+  if (previous == null && current != null) return `Fatura anterior: nenhuma · nesta: ${count(current)}`;
+  if (previous != null && current != null) return `Fatura anterior: ${count(previous)} · nesta: ${count(current)}`;
+  return "Cobranças não informadas";
+}
+
+/** Pílula que vira botão (com foco e rótulo) quando há destino; sem destino segue só informativa. */
+function Chip({ onOpen, label, style, children }) {
+  if (!onOpen) return <span style={style}>{children}</span>;
+  return <button type="button" onClick={onOpen} aria-label={label} title={label} style={{ ...style, border: 0, cursor: "pointer" }}>{children}</button>;
+}
+
+function ItemChange({ item, currency, invoiceOpen, onOpenLedger }) {
   const amount = item.change_type === "removed" ? item.previous_amount : item.current_amount;
   const hasOccurrences = item.commitment_type === "recurring" && (item.occurrences_previous != null || item.occurrences_current != null);
+  // Numa fatura ainda aberta, uma RECORRÊNCIA que "não apareceu" ainda não foi cobrada neste ciclo; parcela ou compra que saiu, saiu.
+  const notYetCharged = item.change_type === "removed" && invoiceOpen && item.commitment_type === "recurring";
+  const statusText = item.change_type === "removed" ? (notYetCharged ? "Ainda não cobrado neste ciclo" : changeLabels.removed) : changeLabels[item.change_type];
   return (
     <li style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 12, padding: "10px 0", borderTop: `1px solid ${T.border}` }}>
       <div style={{ minWidth: 0 }}>
-        <div style={{ ...G, fontSize: 12, fontWeight: 700, color: T.ink, overflowWrap: "anywhere" }}>{item.description}</div>
+        {onOpenLedger
+          ? <button type="button" onClick={() => onOpenLedger({ query: item.description, previous: item.change_type === "removed" })} title="Ver estes lançamentos" style={{ ...G, ...LINK_BUTTON, fontSize: 12, fontWeight: 700, color: T.ink, textAlign: "left", overflowWrap: "anywhere" }}>{item.description}</button>
+          : <div style={{ ...G, fontSize: 12, fontWeight: 700, color: T.ink, overflowWrap: "anywhere" }}>{item.description}</div>}
         <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 3 }}>
-          {item.category_name ? `${categoryLabelPtForTag({ name: item.category_name })} · ` : ""}{changeLabels[item.change_type]}
+          {item.category_name ? `${categoryLabelPtForTag({ name: item.category_name })} · ` : ""}{statusText}
           {item.commitment_type === "installment" && item.installment_number != null && item.total_installments != null
             ? ` · parcela ${item.installment_number}/${item.total_installments}` : ""}
         </div>
         {hasOccurrences && <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 3 }}>
-          Ocorrências: {item.occurrences_previous ?? "—"} → {item.occurrences_current ?? "—"}
+          {occurrencesText(item, notYetCharged)}
         </div>}
       </div>
       <div style={{ ...G, ...NUM, minWidth: 0, textAlign: "right", fontSize: 12, fontWeight: 700, color: T.ink, overflowWrap: "anywhere" }}>
@@ -51,7 +75,7 @@ function ItemChange({ item, currency }) {
   );
 }
 
-export function InvoiceChanges({ changes, currency, isMobile = false }) {
+export function InvoiceChanges({ changes, currency, isMobile = false, invoiceOpen = false, onOpenLedger }) {
   if (!changes?.previous_available) return null;
   const categories = changes.categories ?? [];
   const items = changes.items ?? [];
@@ -78,21 +102,22 @@ export function InvoiceChanges({ changes, currency, isMobile = false }) {
               <span style={{ ...G, fontSize: 11, fontWeight: 700, color: group.color, background: group.background, borderRadius: 99, padding: "4px 8px" }}>{group.label}</span>
               <span style={{ ...G, fontSize: 11, color: T.inkMid }}>{group.hint}</span>
             </div>
-            {entries.length ? <ul style={{ listStyle: "none", padding: 0, margin: "10px 0 0" }}>{entries.map((item, index) => <ItemChange key={`${item.change_type}:${item.series_id ?? index}:${index}`} item={item} currency={currency} />)}</ul>
+            {entries.length ? <ul style={{ listStyle: "none", padding: 0, margin: "10px 0 0" }}>{entries.map((item, index) => <ItemChange key={`${item.change_type}:${item.series_id ?? index}:${index}`} item={item} currency={currency} invoiceOpen={invoiceOpen} onOpenLedger={onOpenLedger} />)}</ul>
               : <p style={{ ...G, fontSize: 12, color: T.inkMid, margin: "14px 0 0" }}>Nenhum item neste grupo.</p>}
           </Card>;
         })}
       </div>}
       {categoryDeltas.length > 0 && <Card style={{ padding: isMobile ? 16 : 20, display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "start" : "center", gap: 10 }}>
         <span style={{ ...G, fontSize: 11, color: T.inkLight }}>por categoria</span>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{categoryDeltas.map((category, index) => <span key={`${category.category_id ?? category.category_name}:${index}`} style={{ ...G, ...NUM, fontSize: 11, fontWeight: 700, color: invoiceMoneyValue(category.change, currency) > 0 ? T.red : T.green, background: invoiceMoneyValue(category.change, currency) > 0 ? T.redLight : T.greenLight, borderRadius: 99, padding: "5px 8px" }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{categoryDeltas.map((category, index) => <Chip key={`${category.category_id ?? category.category_name}:${index}`} onOpen={onOpenLedger && category.category_id ? () => onOpenLedger({ categoryId: category.category_id }) : undefined} label={`Ver lançamentos de ${categoryLabelPtForTag({ name: category.category_name })} nesta fatura`} style={{ ...G, ...NUM, fontSize: 11, fontWeight: 700, color: invoiceMoneyValue(category.change, currency) > 0 ? T.red : T.green, background: invoiceMoneyValue(category.change, currency) > 0 ? T.redLight : T.greenLight, borderRadius: 99, padding: "5px 8px" }}>
           {invoiceMoneyValue(category.change, currency) > 0 ? "↑" : "↓"} {categoryLabelPtForTag({ name: category.category_name })} {invoiceMoneyValue(category.previous_total, currency) > 0
             ? `${Math.abs(invoiceMoneyValue(category.change, currency) / invoiceMoneyValue(category.previous_total, currency) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`
             : signedMoney(category.change, currency)}
-        </span>)}</div>
+        </Chip>)}</div>
       </Card>}
       {oneOffChanged && <Card style={{ padding: isMobile ? 16 : 20, ...G, fontSize: 12, color: T.inkMid }}>
         <strong style={{ color: T.ink }}>Compras avulsas e estornos</strong>: <span style={NUM}>{moneyOrDash(oneOff.previous_total, currency)} → {moneyOrDash(oneOff.current_total, currency)}</span> · {oneOff.previous_count} → {oneOff.current_count} lançamentos
+        {onOpenLedger && <> · <button type="button" onClick={() => onOpenLedger({ kind: "one_off" })} style={{ ...G, ...LINK_BUTTON, fontSize: 12, fontWeight: 700, color: T.blue }}>ver lançamentos →</button></>}
       </Card>}
     </section>
   );

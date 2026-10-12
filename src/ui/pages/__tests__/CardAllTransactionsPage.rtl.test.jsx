@@ -9,9 +9,11 @@ import { setupServer } from "msw/node";
 const CARD_ID = "00000000-0000-4000-8000-000000000001";
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
 const navigate = vi.fn();
+const route = vi.hoisted(() => ({ search: {} }));
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => navigate,
   useParams: () => ({ cardId: CARD_ID }),
+  useSearch: () => route.search,
 }));
 import { CardAllTransactionsPage } from "../CardAllTransactionsPage.jsx";
 import { csvCell } from "../../features/cardTransactions/ledgerExport.js";
@@ -42,7 +44,7 @@ const server = setupServer(
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 beforeEach(() => { Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 }); });
 afterAll(() => server.close());
-afterEach(() => { cleanup(); server.resetHandlers(); requests.length = 0; cardRequests = 0; navigate.mockReset(); vi.unstubAllGlobals(); });
+afterEach(() => { route.search = {}; cleanup(); server.resetHandlers(); requests.length = 0; cardRequests = 0; navigate.mockReset(); vi.unstubAllGlobals(); });
 
 describe("CardAllTransactionsPage", () => {
   it("neutraliza fórmulas de planilha no CSV de descrições informadas pelo usuário", () => {
@@ -71,6 +73,34 @@ describe("CardAllTransactionsPage", () => {
     await userEvent.setup().click(await screen.findByRole("button", { name: /Abrir filtros/ }));
     const dock = screen.getByRole("region", { name: "Filtros" }).parentElement;
     expect(dock.style.position).toBe(position);
+  });
+
+  it("chega do Dashboard da fatura já filtrado: fatura, tipo e busca vêm da URL", async () => {
+    route.search = { fc_inv: "2026-09", fc_kind: "installment", fc_q: "Mercado" };
+    server.use(http.get("*/v1/credit-cards/:id/invoices/history", () => HttpResponse.json({ monthly_data: [{ year: 2026, month: 10, invoice_id: 56, status: "open", total_amount: "20.00", items_count: 2 }, { year: 2026, month: 9, invoice_id: 55, status: "closed", total_amount: "10.00", items_count: 1 }] })));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    await waitFor(() => expect(requests.length).toBeGreaterThan(0));
+    await waitFor(() => expect(requests.at(-1).searchParams.get("invoice_id")).toBe("55"));
+    const query = requests.at(-1).searchParams;
+    expect(query.get("invoice_id")).toBe("55");
+    expect(query.get("commitment_kind")).toBe("installment");
+    expect(query.get("description")).toBe("Mercado");
+    const chip = await screen.findByTestId("kind-chip");
+    expect(chip).toHaveTextContent("Parcelas");
+    await userEvent.setup().click(chip);
+    await waitFor(() => expect(requests.at(-1).searchParams.get("commitment_kind")).toBeNull());
+  });
+
+  it("deep link para fatura inexistente cai na fatura padrão e o tipo do link pode ser removido", async () => {
+    route.search = { fc_inv: "2025-01", fc_q: "Mercado", fc_kind: "refund" };
+    server.use(http.get("*/v1/credit-cards/:id/invoices/history", () => HttpResponse.json({ monthly_data: [{ year: 2026, month: 10, invoice_id: 56, status: "open", total_amount: "20.00", items_count: 2 }] })));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    await waitFor(() => expect(requests.at(-1)?.searchParams.get("invoice_id")).toBe("56"));
+    expect(requests.at(-1).searchParams.get("type")).toBe("refund");
+    const user = userEvent.setup();
+    expect(requests.at(-1).searchParams.get("description")).toBe("Mercado");
+    await user.click(await screen.findByRole("button", { name: "Remover filtro: Estornos" }));
+    await waitFor(() => expect(requests.at(-1).searchParams.get("type")).toBeNull());
   });
 
   it("abre o dock desktop e aplica categoria real na query do cartão", async () => {

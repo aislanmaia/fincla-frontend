@@ -1,4 +1,4 @@
-import { Download } from "lucide-react";
+import { Download, Pencil } from "lucide-react";
 
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
@@ -131,7 +131,7 @@ function ForecastBody({ invoice, futureRow, card, currency }) {
  */
 export function InvoiceDetailBody({
   invoice, state, detail, futureRow, card, currency, now, mutation,
-  onMarkPaid, onUnmarkPaid, onExport, onRetry, centered = false, refreshFailed = false,
+  onMarkPaid, onUnmarkPaid, onExport, onRetry, centered = false, refreshFailed = false, note = null, onEditNote,
 }) {
   const status = invoice.status;
   const topCategory = detail ? topCategoryLabel(detail.category_breakdown) : null;
@@ -173,10 +173,23 @@ export function InvoiceDetailBody({
             <div role="status" style={{ ...G, fontSize: 11, color: "#92400E" }}>Não foi possível atualizar agora. Mostrando os dados anteriores.</div>
           )}
           <div style={{ height: 1, background: T.border }} />
+          {note?.status === "ok" && note.text?.trim() && (
+            <button type="button" data-testid="invoice-note-preview" onClick={onEditNote} title="Clique para editar a anotação" style={{ ...G, display: "flex", gap: 6, alignItems: "baseline", background: T.amberLight, border: 0, borderRadius: 8, padding: "7px 10px", textAlign: "left", cursor: "pointer", color: T.ink, fontSize: 12 }}>
+              <Pencil size={11} aria-hidden="true" style={{ flex: "none" }} />
+              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{note.text.trim()}</span>
+            </button>
+          )}
           <div style={{ display: "flex", flexDirection: centered ? "column" : "row", gap: 10, alignItems: centered ? "stretch" : "flex-start", justifyContent: "space-between", flexWrap: "wrap" }}>
-            <Btn variant="outGray" small onClick={onExport} data-testid="export-csv" style={centered ? { justifyContent: "center" } : undefined}>
-              <Download size={12} /> Exportar CSV
-            </Btn>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", flexDirection: centered ? "column" : "row" }}>
+              <Btn variant="outGray" small onClick={onExport} data-testid="export-csv" style={centered ? { justifyContent: "center" } : undefined}>
+                <Download size={12} /> Exportar CSV
+              </Btn>
+              {onEditNote && (
+                <Btn variant="outGray" small onClick={onEditNote} disabled={note?.status !== "ok"} data-testid="invoice-note-cta" style={centered ? { justifyContent: "center" } : undefined}>
+                  <Pencil size={12} /> {note?.text?.trim() ? "Editar anotação" : "Adicionar anotação"}
+                </Btn>
+              )}
+            </div>
             {(status === INVOICE_STATUS.OPEN || status === INVOICE_STATUS.CLOSED || status === INVOICE_STATUS.PAID) && (
               <PayControls
                 key={invoice.key}

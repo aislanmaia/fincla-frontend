@@ -32,3 +32,16 @@ export function isValidInvoiceParams({ cardId, year, month }) {
     Number.isInteger(m) && m >= 1 && m <= 12
   );
 }
+
+/**
+ * Link para os Lançamentos do cartão já filtrados: `invoice` ({ year, month }), `categoryId`,
+ * `query` (texto) e `kind` ("one_off" | "installment" | "recurring" | "refund"). Só entra o que veio.
+ */
+export function cardLedgerLink(cardId, { invoice, categoryId, query, kind } = {}) {
+  const search = {};
+  if (invoice?.year && invoice?.month) search.fc_inv = `${Number(invoice.year)}-${String(Number(invoice.month)).padStart(2, "0")}`;
+  if (categoryId) search.fc_lcat = String(categoryId);
+  if (query) search.fc_q = String(query);
+  if (kind) search.fc_kind = kind;
+  return { to: cardAllTransactionsPath(cardId), search };
+}

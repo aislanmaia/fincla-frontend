@@ -122,6 +122,10 @@ export const finclaRootSearchSchema = z.object({
   [FC.DATE]: fcYmdSchema,
   [FC.VIEW]: viewSchema,
   [FC.HUB_CARD]: hubCardSchema,
+  [FC.LEDGER_INVOICE]: fcYmSchema,
+  [FC.LEDGER_CATEGORY]: optionalUuidParam(),
+  [FC.LEDGER_SEARCH]: optionalTrimmedString(120),
+  [FC.LEDGER_KIND]: z.preprocess((value) => ["one_off", "installment", "recurring", "refund"].includes(value) ? value : undefined, z.enum(["one_off", "installment", "recurring", "refund"]).optional()),
   [FC.INVOICE_MODALITY]: z.preprocess((value) => value === "installment" || value === "refund" ? value : undefined, z.enum(["installment", "refund"]).optional()),
 });
 

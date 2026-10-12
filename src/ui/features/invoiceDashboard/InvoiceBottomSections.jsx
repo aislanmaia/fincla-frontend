@@ -1,13 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import { Pencil } from "lucide-react";
 
-import { getInvoiceNote, saveInvoiceNote } from "../../../api/creditCards";
 import { BUDGETS_CHANGED_EVENT, listBudgets } from "../../../api/budgets";
 import { Card, Btn } from "../../components/primitives";
 import { categoryLabelPtForTag } from "../../data/categoryLabels.js";
 import { formatMoney } from "../../money/formatMoney.js";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
-import { NotesDialog } from "../cardHub/NotesDialog.jsx";
 import { invoiceMoneyValue } from "./invoiceMoney.js";
 
 const title = { ...G, fontSize: 18, fontWeight: 800, margin: 0, color: T.ink };
@@ -89,8 +88,10 @@ export function InvoiceBudgetContext({ detail, invoice, budget, currency, isMobi
                 {rows.map(({ category, budget: row }, index) => {
                   const knownBudgetCurrency = Boolean(row?.currency);
                   const amount = knownBudgetCurrency ? format(row.amount, row.currency) : row ? "Moeda indisponível" : "Sem teto";
-                  const spent = knownBudgetCurrency ? format(row.spent_amount, row.currency) : "—";
-                  const remaining = knownBudgetCurrency ? format(row.remaining_amount, row.currency) : "—";
+                  // Sem orçamento não há o que comparar: diz isso em vez de um "—" sem sentido.
+                  const noBudget = !row;
+                  const spent = knownBudgetCurrency ? format(row.spent_amount, row.currency) : noBudget ? "sem orçamento" : "—";
+                  const remaining = knownBudgetCurrency ? format(row.remaining_amount, row.currency) : noBudget ? "sem orçamento" : "—";
                   const invoiceSpend = category
                     ? format(category.total, currency)
                     : row?.currency && row.currency === currency && breakdownComplete && categoriesIdentified ? format(0, currency) : "—";
@@ -98,8 +99,8 @@ export function InvoiceBudgetContext({ detail, invoice, budget, currency, isMobi
                   return <div key={row?.id ?? category?.category_id ?? `${categoryName}:${index}`} style={{ display: "grid", gridTemplateColumns: col, gap: isMobile ? 5 : 12, padding: isMobile ? "12px" : "14px 16px", borderBottom: index < rows.length - 1 ? `1px solid ${T.border}` : "none", alignItems: "center", ...G, fontSize: 12 }}>
                     <strong style={{ color: T.ink }}>{categoryLabelPtForTag({ name: categoryName })}</strong>
                     <span style={NUM}>{isMobile ? `Teto org.: ${amount}` : amount}</span>
-                    <span style={NUM}>{isMobile ? `Gasto org.: ${spent}` : spent}</span>
-                    <span style={{ ...NUM, color: knownBudgetCurrency && Number(row.remaining_amount) < 0 ? T.red : T.green }}>{isMobile ? `Sobra org.: ${remaining}` : remaining}</span>
+                    <span style={{ ...NUM, ...(noBudget ? { color: T.inkLight, fontStyle: "italic" } : {}) }}>{isMobile ? `Gasto org.: ${spent}` : spent}</span>
+                    <span style={{ ...NUM, color: noBudget ? T.inkLight : knownBudgetCurrency && Number(row.remaining_amount) < 0 ? T.red : T.green, ...(noBudget ? { fontStyle: "italic" } : {}) }}>{isMobile ? `Sobra org.: ${remaining}` : remaining}</span>
                     <span style={{ ...NUM, fontWeight: 700 }}>{isMobile ? `Gasto nesta fatura: ${invoiceSpend}` : invoiceSpend}</span>
                     {knownBudgetCurrency && Number.isFinite(Number(row.usage_percent)) && <div style={{ gridColumn: "1 / -1", height: 4, background: T.grayLight, borderRadius: 99 }}><div style={{ width: `${Math.min(100, Math.max(0, Number(row.usage_percent)))}%`, height: "100%", background: Number(row.usage_percent) >= 100 ? T.red : Number(row.usage_percent) >= 80 ? T.amber : T.green, borderRadius: 99 }} /></div>}
                   </div>;
@@ -117,38 +118,26 @@ function SummaryTile({ label, value, detail, color, onOpen }) {
   </Card>;
 }
 
-export function InvoiceSummaryTiles({ detail, card, organizationId, currency, isMobile, onFilter, year, month }) {
-  // Anotação POR FATURA: `null` = nunca houve; texto vazio é uma anotação existente.
-  const [note, setNote] = useState({ status: "loading", text: null });
-  const [notesOpen, setNotesOpen] = useState(false);
-  useEffect(() => {
-    if (!card?.id || !organizationId || !year || !month) return undefined;
-    let active = true;
-    setNote({ status: "loading", text: null });
-    getInvoiceNote(card.id, organizationId, year, month)
-      .then((found) => { if (active) setNote({ status: "ok", text: found ? found.text : null }); })
-      .catch(() => { if (active) setNote({ status: "error", text: null }); });
-    return () => { active = false; };
-  }, [card?.id, organizationId, year, month]);
+export function InvoiceSummaryTiles({ detail, currency, isMobile, onFilter, note = { status: "loading", text: null }, onEditNote }) {
   const summary = detail?.commitments_summary ?? null;
   const num = (value) => invoiceMoneyValue(value, currency);
   const money = (value) => currency && value !== null ? formatMoney(value, currency) ?? "—" : "—";
   const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
-  const saveNotes = async (value) => {
-    const saved = await saveInvoiceNote(card.id, organizationId, year, month, value);
-    setNote({ status: "ok", text: saved.text });
-  };
   return <>
     <section aria-label="Resumo da fatura" style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(4, minmax(0, 1fr))", gap: isMobile ? 10 : 12 }}>
-      <SummaryTile label="🔁 Recorrências" value={summary ? money(num(summary.recurring_total)) : "—"} detail={summary ? (summary.recurring_count ? `${plural(summary.recurring_count, "assinatura", "assinaturas")} nesta fatura` : "Nenhuma recorrência nesta fatura") : "Resumo indisponível nesta fatura"} color={T.purple} />
+      <SummaryTile label="🔁 Recorrências" value={summary ? money(num(summary.recurring_total)) : "—"} detail={summary ? (summary.recurring_count ? `${plural(summary.recurring_count, "assinatura", "assinaturas")} nesta fatura` : "Nenhuma recorrência nesta fatura") : "Resumo indisponível nesta fatura"} color={T.purple} onOpen={summary?.recurring_count ? () => onFilter("recurring") : undefined} />
       <SummaryTile label="🧩 Parcelas" value={summary ? `${plural(summary.installments_count, "compra", "compras")} parcelada${summary.installments_count === 1 ? "" : "s"}` : "—"} detail={!summary ? "Resumo indisponível nesta fatura" : summary.ending_count ? `${plural(summary.ending_count, "termina", "terminam")} neste ciclo · libera ${money(num(summary.ending_released))}/mês` : summary.installments_count ? "Nenhuma termina neste ciclo" : "Nenhuma parcela nesta fatura"} color={T.blue} onOpen={summary?.installments_count ? () => onFilter("installment") : undefined} />
       <SummaryTile label="↺ Estornos" value={summary ? money(num(summary.refunds_total)) : "—"} detail={summary ? `${plural(summary.refunds_count, "estorno", "estornos")} nesta fatura` : "Resumo indisponível nesta fatura"} color={T.green} onOpen={summary?.refunds_count ? () => onFilter("refund") : undefined} />
       <Card style={{ padding: 16, display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-        <strong style={{ ...G, fontSize: 13, color: T.ink }}>📌 Anotação da fatura</strong>
-        <span style={{ ...caption, overflowWrap: "anywhere", flex: 1 }}>{note.status === "loading" ? "Carregando anotação…" : note.status === "error" ? "Não foi possível carregar a anotação." : note.text?.trim() || "Nenhuma anotação nesta fatura."}</span>
-        <Btn variant="ghost" small disabled={note.status !== "ok"} onClick={() => setNotesOpen(true)}>Editar anotação</Btn>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <strong style={{ ...G, fontSize: 13, color: T.ink }}>📌 Anotação da fatura</strong>
+          <Pencil size={13} color={T.inkLight} aria-hidden="true" />
+        </div>
+        <span style={{ ...caption, overflowWrap: "anywhere", flex: 1 }}>{note.status === "loading" ? "Carregando anotação…" : note.status === "error" ? "Não foi possível carregar a anotação." : note.text?.trim() || "Escreva um lembrete sobre esta fatura: o que conferir, dividir ou cobrar."}</span>
+        <Btn variant="ghost" small disabled={note.status !== "ok"} onClick={onEditNote} style={{ alignSelf: "flex-start", padding: "4px 0", fontSize: 11, color: T.blue, gap: 5 }}>
+          <Pencil size={11} aria-hidden="true" /> {note.text?.trim() ? "Editar anotação" : "Clique para adicionar"}
+        </Btn>
       </Card>
     </section>
-    {notesOpen && <NotesDialog title="Anotação da fatura" label="Anotação da fatura" initialNotes={note.text ?? ""} isMobile={isMobile} onSave={saveNotes} onClose={() => setNotesOpen(false)} />}
   </>;
 }
