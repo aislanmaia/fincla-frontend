@@ -141,6 +141,7 @@ export function CardHubPage({
     ?? mobileOtherInvoices[mobileOtherInvoices.length - 1];
   const insights = detail.future?.insights ?? [];
 
+  const openCommitments = selectedCard?.public_id ? () => navigate({ to: "/cards/$cardId/commitments", params: { cardId: selectedCard.public_id } }) : undefined;
   const kpis = useMemo(() => {
     if (!uiCard || detail.loading) return null;
     const invoice = { val: openInvoice?.total ?? (detail.currentState === "empty" ? 0 : null) };
@@ -198,7 +199,7 @@ export function CardHubPage({
           </button>
         )}
         {selectedCard?.public_id && (
-          <button type="button" onClick={() => navigate({ to: "/cards/$cardId/commitments", params: { cardId: selectedCard.public_id } })} style={OUTLINE_BTN}>
+          <button type="button" onClick={openCommitments} style={OUTLINE_BTN}>
             Parcelas & Compromissos
           </button>
         )}
@@ -294,7 +295,7 @@ export function CardHubPage({
         Cartão selecionado: <strong style={{ color: T.ink }}>{cardName} •{selectedCard.last4}</strong>
       </div>
 
-      <LimitTiles card={selectedCard} currency={currency} isMobile={isMobile} onEdit={() => setDialog("edit-card")} />
+      <LimitTiles card={selectedCard} currency={currency} isMobile={isMobile} onEdit={() => setDialog("edit-card")} onOpenCommitments={openCommitments} />
 
       {!isMobile && insights.length > 0 && (
         <div style={{ background: T.surface, border: `1px solid ${T.amber}`, borderRadius: 14, padding: "14px 18px" }}>
