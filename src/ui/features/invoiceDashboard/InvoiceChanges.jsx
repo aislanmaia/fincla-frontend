@@ -11,6 +11,12 @@ const changeLabels = {
   changed_value: "Valor alterado",
 };
 
+/** Dinheiro só na moeda da fatura; ausência ou moeda diferente vira "—", nunca "null" nem zero. */
+function moneyOrDash(value, currency) {
+  const amount = invoiceMoneyValue(value, currency);
+  return amount === null ? "—" : formatMoney(amount, currency) ?? "—";
+}
+
 function signedMoney(value, currency) {
   const amount = invoiceMoneyValue(value, currency);
   if (amount === null) return "—";
@@ -35,7 +41,7 @@ function ItemChange({ item, currency }) {
       </div>
       <div style={{ ...G, ...NUM, minWidth: 0, textAlign: "right", fontSize: 12, fontWeight: 700, color: T.ink, overflowWrap: "anywhere" }}>
         {item.change_type === "changed_value"
-          ? `${formatMoney(item.previous_amount, currency)} → ${formatMoney(item.current_amount, currency)}`
+          ? `${moneyOrDash(item.previous_amount, currency)} → ${moneyOrDash(item.current_amount, currency)}`
           : formatMoney(amount, currency) ?? "—"}
         {item.change_type === "changed_value" && <div style={{ fontSize: 11, color: (invoiceMoneyValue(item.change_amount, currency) ?? 0) > 0 ? T.red : T.green }}>
           {signedMoney(item.change_amount, currency)} por ocorrência
@@ -86,7 +92,7 @@ export function InvoiceChanges({ changes, currency, isMobile = false }) {
         </span>)}</div>
       </Card>}
       {oneOffChanged && <Card style={{ padding: isMobile ? 16 : 20, ...G, fontSize: 12, color: T.inkMid }}>
-        <strong style={{ color: T.ink }}>Compras avulsas e estornos</strong>: <span style={NUM}>{formatMoney(oneOff.previous_total, currency)} → {formatMoney(oneOff.current_total, currency)}</span> · {oneOff.previous_count} → {oneOff.current_count} lançamentos
+        <strong style={{ color: T.ink }}>Compras avulsas e estornos</strong>: <span style={NUM}>{moneyOrDash(oneOff.previous_total, currency)} → {moneyOrDash(oneOff.current_total, currency)}</span> · {oneOff.previous_count} → {oneOff.current_count} lançamentos
       </Card>}
     </section>
   );

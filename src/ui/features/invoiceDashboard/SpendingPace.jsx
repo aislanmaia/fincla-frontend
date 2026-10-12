@@ -11,18 +11,19 @@ export function AverageComparison({ detail, currency }) {
   const average = valueOf(detail.six_month_average);
   const count = detail.six_month_average_invoices_count ?? 0;
   const change = valueOf(detail.six_month_average_change);
+  const total = valueOf(detail.total_amount);
   return (
     <Card data-testid="six-month-average" style={{ padding: 18, minWidth: 0 }}>
       <h3 style={{ ...G, fontSize: 14, color: T.ink, margin: 0 }}>Comparado à sua média (6 meses)</h3>
-      {average === null ? (
+      {average === null || total === null || count === 0 ? (
         <p style={{ ...G, color: T.inkMid, fontSize: 12 }}>Sem faturas anteriores para comparar.</p>
       ) : (
         <>
           <div style={{ display: "flex", gap: 12, alignItems: "end", height: 110, marginTop: 12 }}>
-            {[{ label: "Média", value: average, color: T.grayLight }, { label: "Esta fatura", value: Number(detail.total_amount), color: T.amber }].map((bar) => (
+            {[{ label: "Média", value: average, color: T.grayLight }, { label: "Esta fatura", value: total, color: T.amber }].map((bar) => (
               <div key={bar.label} style={{ flex: 1, textAlign: "center", minWidth: 0 }}>
                 <div style={{ ...G, ...NUM, fontSize: 11, fontWeight: 700, color: T.ink }}>{formatMoney(bar.value, currency)}</div>
-                <div style={{ height: `${Math.max(3, Math.min(76, bar.value / Math.max(average, Number(detail.total_amount), 1) * 76))}px`, marginTop: 4, background: bar.color, borderRadius: "4px 4px 0 0" }} />
+                <div style={{ height: `${Math.max(3, Math.min(76, bar.value / Math.max(average, total, 1) * 76))}px`, marginTop: 4, background: bar.color, borderRadius: "4px 4px 0 0" }} />
                 <div style={{ ...G, fontSize: 10, color: T.inkMid, marginTop: 4 }}>{bar.label}</div>
               </div>
             ))}
