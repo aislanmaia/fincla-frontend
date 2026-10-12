@@ -19,6 +19,11 @@ describe("buildOutflows — estimativa de recorrências", () => {
     expect(out.bars[2]).toMatchObject({ amount: 0, clickable: false, label: "Mar/27" });
   });
 
+  it("duas linhas do mesmo mês somam em vez de a última vencer", () => {
+    const out = build({ by_invoice: [row(2026, 11, "100.00")], projected_by_invoice: [projected(2026, 11, "10.00", { count: 2 }), projected(2026, 11, "5.00", { count: 1, approximate: true })] });
+    expect(out.bars[0].projected).toMatchObject({ amount: 15, count: 3, approximate: true });
+  });
+
   it("não calculada (null/ausente) ou em outra moeda não desenha estimativa", () => {
     expect(build({ by_invoice: [row(2026, 11, "100.00")], projected_by_invoice: null }).hasProjection).toBe(false);
     expect(build({ by_invoice: [row(2026, 11, "100.00")] }).hasProjection).toBe(false);

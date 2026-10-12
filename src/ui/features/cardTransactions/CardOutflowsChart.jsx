@@ -29,13 +29,13 @@ export function CardOutflowsChart({ outflows, currency, loading, error, message,
         const estimateNote = estimate ? `~${estimate} estimados em ${bar.projected.count === 1 ? "1 recorrência prevista" : `${bar.projected.count} recorrências previstas`}${bar.projected.approximate ? " (algum valor é aproximado)" : ""}` : null;
         const description = `${bar.title}: ${bar.amount > 0 ? `${display} confirmados` : "nada confirmado ainda"}${estimateNote ? ` + ${estimateNote}` : ""}`;
         const confirmedHeight = bar.amount / ceiling * 100;
-        const projectedHeight = (bar.projected?.amount ?? 0) / ceiling * 100;
+        const projectedHeight = estimate ? (bar.projected?.amount ?? 0) / ceiling * 100 : 0;
         const body = <>
           <span style={{ ...G, ...NUM, fontSize: 10, color: T.inkMid, whiteSpace: "nowrap" }}>{display}</span>
           {estimate && <span data-testid="outflow-estimate" style={{ ...G, ...NUM, fontSize: 10, color: T.blue, fontStyle: "italic", whiteSpace: "nowrap" }}>+ ~{estimate}</span>}
           <span aria-hidden="true" style={{ width: "100%", maxWidth: 72, display: "flex", flexDirection: "column", justifyContent: "end" }}>
-            {projectedHeight > 0 && <span style={{ display: "block", height: `${Math.max(3, projectedHeight)}px`, borderRadius: "6px 6px 0 0", border: `1px dashed ${bar.selected ? T.blue : T.border}`, borderBottom: 0, background: `repeating-linear-gradient(135deg, ${bar.selected ? `${T.blue}55` : T.border} 0 3px, transparent 3px 7px)` }} />}
-            {(bar.amount > 0 || projectedHeight === 0) && <span style={{ display: "block", height: `${Math.max(3, confirmedHeight)}px`, borderRadius: projectedHeight > 0 ? 0 : "6px 6px 0 0", background: bar.selected ? T.blue : T.grayLight, border: bar.selected ? 0 : `1px solid ${T.border}` }} />}
+            {projectedHeight > 0 && <span style={{ display: "block", height: `${Math.max(2, projectedHeight)}px`, borderRadius: "6px 6px 0 0", border: `1px dashed ${bar.selected ? T.blue : T.border}`, borderBottom: 0, background: `repeating-linear-gradient(135deg, ${bar.selected ? `${T.blue}55` : T.border} 0 3px, transparent 3px 7px)` }} />}
+            {(bar.amount > 0 || projectedHeight === 0) && <span style={{ display: "block", height: `${Math.max(2, confirmedHeight)}px`, borderRadius: projectedHeight > 0 ? 0 : "6px 6px 0 0", background: bar.selected ? T.blue : T.grayLight, border: bar.selected ? 0 : `1px solid ${T.border}` }} />}
           </span>
           <span style={{ ...G, ...NUM, fontSize: 10, color: bar.selected ? T.ink : T.inkMid, fontWeight: bar.selected ? 700 : 400 }}>{bar.label}</span>
         </>;

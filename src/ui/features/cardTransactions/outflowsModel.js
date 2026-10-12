@@ -25,8 +25,13 @@ export function buildOutflows({ mode, summary, ladder, selectedKeys, selectableK
     return { kind: "weeks", bars };
   }
   const chosen = new Set(selectedKeys);
-  const projectedByKey = new Map((breakdown?.projected_by_invoice ?? []).filter((row) => Number(row.amount) > 0 && (!currency || row.amount_currency === currency))
-    .map((row) => [invoiceKey(row.year, row.month), { year: row.year, month: row.month, amount: Number(row.amount), count: row.count, approximate: Boolean(row.approximate) }]));
+  // Linhas do mesmo mês somam (nunca a última vence): cada uma é uma parte da estimativa.
+  const projectedByKey = new Map();
+  (breakdown?.projected_by_invoice ?? []).filter((row) => Number(row.amount) > 0 && (!currency || row.amount_currency === currency)).forEach((row) => {
+    const key = invoiceKey(row.year, row.month);
+    const before = projectedByKey.get(key);
+    projectedByKey.set(key, { year: row.year, month: row.month, amount: (before?.amount ?? 0) + Number(row.amount), count: (before?.count ?? 0) + Number(row.count ?? 0), approximate: Boolean(before?.approximate || row.approximate) });
+  });
   const labelOf = (year, month) => year === now.getFullYear() ? MONTHS[month - 1] : `${MONTHS[month - 1]}/${String(year).slice(2)}`;
   const confirmed = (breakdown?.by_invoice ?? []).filter((row) => positive(row, currency)).map((row) => {
     const key = invoiceKey(row.year, row.month);
@@ -36,7 +41,7 @@ export function buildOutflows({ mode, summary, ladder, selectedKeys, selectableK
   const known = new Set(confirmed.map((bar) => bar.key));
   const projectedOnly = [...projectedByKey.entries()].filter(([key]) => !known.has(key)).map(([key, row]) => ({
     key, year: row.year, month: row.month, label: labelOf(row.year, row.month), title: `Fatura de ${MONTHS[row.month - 1]} ${row.year}`,
-    amount: 0, projected: row, selected: chosen.size === 0, clickable: false,
+    amount: 0, projected: row, selected: true, clickable: false,
   }));
   const bars = [...confirmed, ...projectedOnly].sort((a, b) => (a.year - b.year) || (a.month - b.month));
   return { kind: "invoices", bars, hasProjection: bars.some((bar) => bar.projected) };
