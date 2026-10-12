@@ -17,7 +17,7 @@ import { CardTransactionsSummary } from "../features/cardTransactions/CardTransa
 import { CardTransactionsTable } from "../features/cardTransactions/CardTransactionsTable.jsx";
 import { CardTimeScopePanel } from "../features/cardTransactions/CardTimeScopePanel.jsx";
 import { buildOutflows } from "../features/cardTransactions/outflowsModel.js";
-import { defaultInvoiceKeys, invoiceChipLabel, invoiceIdsForQuery, invoiceOptions, periodChipLabel, withCurrentInvoice } from "../features/cardTransactions/invoiceScope.js";
+import { defaultInvoiceKeys, invoiceChipLabel, invoiceIdsForQuery, invoiceOptions, periodChipLabel, withCurrentInvoice, withLedgerInvoices } from "../features/cardTransactions/invoiceScope.js";
 import { formatCustomPeriodLabel } from "../features/transactions/filters/customPeriodLabel.js";
 import { readListPrefs, writeListPrefs } from "../features/transactions/listPrefs.js";
 import { TransactionsListDisplayControls } from "../features/transactions/TransactionsListDisplayControls.jsx";
@@ -90,6 +90,17 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const [historyState, setHistoryState] = useState({ cardId: null, data: null, error: false });
   const [summaryState, setSummaryState] = useState({ key: null, data: null, loading: false, error: false });
   const [facetState, setFacetState] = useState({ key: null, data: null });
+  // Faturas vistas no resumo do ledger (inclui as futuras, que o histórico não traz); só do cartão da tela.
+  const [ledgerInvoiceRows, setLedgerInvoiceRows] = useState({ cardId: null, rows: [] });
+  const rememberInvoices = (cardId, data) => {
+    const rows = (data?.breakdown?.by_invoice ?? []).filter((row) => row.invoice_id != null && row.credit_card_id === cardId);
+    if (rows.length === 0) return;
+    setLedgerInvoiceRows((prev) => {
+      const byKey = new Map((prev.cardId === cardId ? prev.rows : []).map((row) => [`${row.year}-${row.month}`, row]));
+      rows.forEach((row) => byKey.set(`${row.year}-${row.month}`, { invoice_id: row.invoice_id, year: row.year, month: row.month }));
+      return { cardId, rows: [...byKey.values()] };
+    });
+  };
   // Faturas lado a lado: mesma consulta sem o recorte de fatura, para barras de faturas ainda não marcadas.
   const [ladderState, setLadderState] = useState({ key: null, data: null, loading: false, error: false });
   const [retry, setRetry] = useState(0);
@@ -181,8 +192,9 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const invoiceMode = timeMode === "invoice" && cardScope === "current";
   const invoiceOpts = useMemo(() => {
     const ready = historyState.cardId === state.card?.id;
-    return withCurrentInvoice(invoiceOptions(ready ? historyState.data : null), ready ? historyState.current : null);
-  }, [historyState, state.card]);
+    const base = withCurrentInvoice(invoiceOptions(ready ? historyState.data : null), ready ? historyState.current : null);
+    return withLedgerInvoices(base, ledgerInvoiceRows.cardId === state.card?.id ? ledgerInvoiceRows.rows : null);
+  }, [historyState, state.card, ledgerInvoiceRows]);
   const scopeReady = historyState.cardId != null && historyState.cardId === state.card?.id;
   const selectedInvoiceIds = invoiceIdsForQuery(invoiceMode ? "invoice" : "period", invoiceOpts, invoiceKeys ?? []);
   const noInvoice = invoiceMode && scopeReady && selectedInvoiceIds.length === 0;
@@ -270,7 +282,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
       include_breakdown: true,
       locale: "pt-BR",
     }).then((data) => {
-      if (active) setSummaryState({ key: summaryKey, data, loading: false, error: false });
+      if (active) { setSummaryState({ key: summaryKey, data, loading: false, error: false }); if (cardScope === "current") rememberInvoices(state.card.id, data); }
     }).catch(() => {
       if (active) setSummaryState({ key: summaryKey, data: null, loading: false, error: true });
     });
@@ -287,7 +299,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     let active = true;
     setLadderState({ key: ladderKey, data: null, loading: true, error: false });
     getTransactionsSummary({ organization_id: organizationId, credit_card_id: state.card.id, ...ladderFilter, include_breakdown: true, locale: "pt-BR" }).then((data) => {
-      if (active) setLadderState({ key: ladderKey, data, loading: false, error: false });
+      if (active) { setLadderState({ key: ladderKey, data, loading: false, error: false }); rememberInvoices(state.card.id, data); }
     }).catch(() => {
       if (active) setLadderState({ key: ladderKey, data: null, loading: false, error: true });
     });

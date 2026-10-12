@@ -390,9 +390,11 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
   };
   const moveOptions = rows.filter((row) => keyOf(row) > nowKey && keyOf(row) !== `${moveItem?.firstYear}-${String(moveItem?.firstMonth).padStart(2, "0")}`);
   const gap = isMobile ? 12 : 16;
-  return <div style={{ ...G, padding: isMobile ? 16 : 28, display: "flex", flexDirection: "column", gap, minWidth: 0 }}>
-    <Btn variant="ghost" onClick={back} style={{ alignSelf: "flex-start", color: T.blue, paddingLeft: 0 }}><ArrowLeft size={14} /> Cartão</Btn>
-    {!state.loading && card && <p style={{ margin: 0, fontSize: 12, color: T.inkLight }}>{card.brand} •{card.last4} · {card.description}</p>}
+  return <div style={{ ...G, padding: isMobile ? "8px 16px 16px" : "8px 28px 28px", display: "flex", flexDirection: "column", gap, minWidth: 0 }}>
+    <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", columnGap: 10 }}>
+      <Btn variant="ghost" onClick={back} style={{ color: T.blue, paddingLeft: 0 }}><ArrowLeft size={14} /> Cartão</Btn>
+      {!state.loading && card && <span style={{ fontSize: 12, color: T.inkLight }}>· {card.brand} •{card.last4} · {card.description}</span>}
+    </div>
     <PageTitle sans="Parcelas &" serif="Compromissos" />
     {state.loading && <p role="status">Carregando compromissos…</p>}
     {state.error && <p role="alert">{state.error}</p>}

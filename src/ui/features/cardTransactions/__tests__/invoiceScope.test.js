@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultInvoiceKeys, invoiceChipLabel, invoiceIdsForQuery, invoiceOptions, periodChipLabel, withCurrentInvoice } from "../invoiceScope.js";
+import { defaultInvoiceKeys, invoiceChipLabel, invoiceIdsForQuery, invoiceOptions, periodChipLabel, withCurrentInvoice, withLedgerInvoices } from "../invoiceScope.js";
 
 const NOW = new Date(2026, 9, 11);
 const history = {
@@ -61,5 +61,21 @@ describe("invoice scope", () => {
     expect(periodChipLabel({ period: "mes" }, NOW)).toBe("Período: Este mês");
     expect(periodChipLabel({ period: "custom", customFrom: "2026-03-01", customTo: "2026-04-10", customLabel: "1 mar – 10 abr" }, NOW)).toBe("Período: 1 mar – 10 abr");
     expect(periodChipLabel({ period: "custom", customFrom: "2025-03-01", customTo: "2025-04-10", customLabel: "x" }, NOW)).toBe("Período: 1 mar 2025 – 10 abr 2025");
+  });
+});
+
+describe("withLedgerInvoices", () => {
+  it("acrescenta as faturas futuras que o histórico não traz e ignora linhas sem id", () => {
+    const base = [{ key: "2026-10", year: 2026, month: 10, invoiceId: 5, status: "open", total: 40, itemsCount: 3 }];
+    const rows = [
+      { invoice_id: 5, year: 2026, month: 10, amount: "40.00" },
+      { invoice_id: 9, year: 2026, month: 11, amount: "300.00" },
+      { invoice_id: null, year: 2026, month: 12, amount: "10.00" },
+    ];
+    const out = withLedgerInvoices(base, rows);
+    expect(out.map((option) => option.key)).toEqual(["2026-11", "2026-10"]);
+    expect(out[0]).toMatchObject({ invoiceId: 9, total: null, status: null, ledgerOnly: true });
+    expect(defaultInvoiceKeys([out[0]])).toEqual([]);
+    expect(withLedgerInvoices(base, null)).toBe(base);
   });
 });
