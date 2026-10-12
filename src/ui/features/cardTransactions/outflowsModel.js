@@ -11,8 +11,9 @@ const positive = (row, currency) => Number(row.amount) > 0 && (!currency || row.
  * - Várias faturas (ou recorte por período): uma barra por FATURA (`by_invoice`),
  *   rotulada com o mês de referência, como nos apps de banco.
  * - Só saídas (> 0) na moeda do cartão; nada vira zero por ausência.
+ * - Só é clicável a fatura que o seletor conhece (`selectableKeys`): uma barra antiga demais não vira recorte.
  */
-export function buildOutflows({ mode, summary, ladder, selectedKeys, currency, now = new Date() }) {
+export function buildOutflows({ mode, summary, ladder, selectedKeys, selectableKeys, currency, now = new Date() }) {
   const breakdown = (mode === "weeks" ? summary : ladder ?? summary)?.breakdown;
   if (mode === "weeks") {
     const bars = (breakdown?.by_week ?? []).filter((row) => positive(row, currency)).map((row) => {
@@ -28,7 +29,7 @@ export function buildOutflows({ mode, summary, ladder, selectedKeys, currency, n
     .map((row) => {
       const key = invoiceKey(row.year, row.month);
       const label = row.year === now.getFullYear() ? MONTHS[row.month - 1] : `${MONTHS[row.month - 1]}/${String(row.year).slice(2)}`;
-      return { key, label, title: `Fatura de ${MONTHS[row.month - 1]} ${row.year}`, amount: Number(row.amount), selected: chosen.size === 0 || chosen.has(key), clickable: true };
+      return { key, label, title: `Fatura de ${MONTHS[row.month - 1]} ${row.year}`, amount: Number(row.amount), selected: chosen.size === 0 || chosen.has(key), clickable: selectableKeys ? selectableKeys.has(key) : true };
     });
   return { kind: "invoices", bars };
 }

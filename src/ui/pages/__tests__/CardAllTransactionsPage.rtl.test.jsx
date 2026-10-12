@@ -13,7 +13,8 @@ vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => navigate,
   useParams: () => ({ cardId: CARD_ID }),
 }));
-import { CardAllTransactionsPage, csvCell } from "../CardAllTransactionsPage.jsx";
+import { CardAllTransactionsPage } from "../CardAllTransactionsPage.jsx";
+import { csvCell } from "../../features/cardTransactions/ledgerExport.js";
 
 const requests = [];
 let cardRequests = 0;
@@ -454,6 +455,40 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     await user.selectOptions(within(dialog).getByLabelText("Nova categoria"), "c3");
     await user.click(within(dialog).getByRole("button", { name: "Aplicar categoria" }));
     await waitFor(() => expect(ids.sort()).toEqual(["11", "12"]));
+  });
+
+  it("depois de falha parcial, tentar de novo reenvia só o que falhou", async () => {
+    withLedger();
+    const attempts = [];
+    server.use(http.put("*/v1/transactions/:id", ({ params }) => {
+      attempts.push(params.id);
+      return params.id === "12" && attempts.filter((id) => id === "12").length === 1 ? new HttpResponse(null, { status: 400 }) : HttpResponse.json({ id: Number(params.id) });
+    }));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await screen.findByText("Notebook");
+    await user.click(screen.getByRole("checkbox", { name: "Selecionar lançamentos carregados" }));
+    await user.click(screen.getByRole("button", { name: "Categorizar" }));
+    const dialog = screen.getByRole("dialog", { name: "Categorizar lançamentos" });
+    await user.selectOptions(within(dialog).getByLabelText("Nova categoria"), "c3");
+    await user.click(within(dialog).getByRole("button", { name: "Aplicar categoria" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("1 de 2 não puderam ser alterados; 1 já foram");
+    await user.click(within(dialog).getByRole("button", { name: "Aplicar categoria" }));
+    await waitFor(() => expect(attempts.sort()).toEqual(["11", "12", "12"]));
+  });
+
+  it("em todos os cartões o detalhe não oferece mover nem estornar (a ação é do cartão da tela)", async () => {
+    withLedger();
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await screen.findByText("Notebook");
+    await user.click(screen.getByRole("button", { name: /Abrir filtros/ }));
+    await user.click(screen.getByRole("button", { name: "Cartão" }));
+    await user.click(screen.getByRole("button", { name: "Todos os cartões" }));
+    await user.click(await screen.findByRole("button", { name: "Ver detalhes de Notebook" }));
+    const detail = screen.getByRole("dialog", { name: "Detalhes do lançamento" });
+    expect(within(detail).queryByRole("button", { name: /Mover para outra fatura/ })).not.toBeInTheDocument();
+    expect(within(detail).queryByRole("button", { name: /Lançar estorno/ })).not.toBeInTheDocument();
   });
 
   it("move só as parcelas para a fatura escolhida e avisa dos itens à vista", async () => {

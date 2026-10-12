@@ -17,6 +17,7 @@ function Rows({ entries }) {
 
 /** Detalhe do lançamento: dados, cronograma da parcela, mudança de fatura e estorno. */
 export function LedgerDetail({ row, currency, closeRef, onClose, onMove, onRefund, onOpenOriginal }) {
+  // Mover fatura e estornar valem para o cartão da tela: em "todos os cartões" a página não passa as ações.
   const code = row.value_currency || currency;
   const money = (value) => code ? formatMoneyAbs(value, code) : "—";
   const part = installmentOf(row);
@@ -39,14 +40,14 @@ export function LedgerDetail({ row, currency, closeRef, onClose, onMove, onRefun
         ["Vencimento desta parcela", formatYmdToBrDisplay(part.due_date) || "—"],
       ]} />
       <p style={{ ...G, fontSize: 11, color: T.inkMid }}>Cronograma regular: total e última parcela somam o valor desta parcela; centavos de arredondamento podem diferir do banco.</p>
-      <Btn variant="outGray" onClick={() => onMove(row)} style={{ width: "100%" }}>↻ Mover para outra fatura</Btn>
+      {onMove && <Btn variant="outGray" onClick={() => onMove(row)} style={{ width: "100%" }}>↻ Mover para outra fatura</Btn>}
     </>}
     <div style={{ marginTop: 16 }}>
       {row.type === "refund"
         ? (row.refund_of_transaction_id ? <Btn variant="outGray" onClick={() => onOpenOriginal(row.refund_of_transaction_id)} style={{ width: "100%" }}>↗ Ver lançamento original</Btn> : null)
         : hasRefund
           ? <p role="status" style={{ ...G, margin: 0, fontSize: 12, color: T.green, fontWeight: 700 }}>✓ Esta compra possui estorno relacionado</p>
-          : <button type="button" onClick={() => onRefund(row)} style={{ ...G, width: "100%", minHeight: 40, border: `1.5px dashed ${T.green}`, borderRadius: 10, background: T.greenLight, color: T.green, fontWeight: 700, cursor: "pointer" }}>↺ Lançar estorno desta compra</button>}
+          : !onRefund ? null : <button type="button" onClick={() => onRefund(row)} style={{ ...G, width: "100%", minHeight: 40, border: `1.5px dashed ${T.green}`, borderRadius: 10, background: T.greenLight, color: T.green, fontWeight: 700, cursor: "pointer" }}>↺ Lançar estorno desta compra</button>}
     </div>
   </>;
 }

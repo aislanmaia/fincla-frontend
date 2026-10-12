@@ -7,6 +7,7 @@ import { T } from "../../tokens.js";
 import { G, NUM } from "../../typography.js";
 import { useFocusTrap } from "../transactions/useFocusTrap.js";
 import { pickCategoryTagFromApiTransaction } from "../../data/transactionsAdapter.js";
+import { parseMoneyInput } from "../onboarding/onboardingValueUtils.js";
 import { installmentOf } from "./ledgerModel.js";
 
 const MONTH_NAMES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -63,17 +64,22 @@ export function CategorizeDialog({ rows: selection, categories, onSubmit, onClos
   </LedgerModal>;
 }
 
-/** Destinos: do mês seguinte à fatura atual até 12 meses à frente, mais os meses que o histórico já conhece. */
-function targetMonths(options, now) {
-  const known = options.map((option) => ({ year: option.year, month: option.month }));
-  const ahead = Array.from({ length: 12 }, (_, index) => { const date = new Date(now.getFullYear(), now.getMonth() + index, 1); return { year: date.getFullYear(), month: date.getMonth() + 1 }; });
+/**
+ * Destinos: faturas ainda editáveis. Parte da fatura ATUAL do backend (ou do mês do relógio, sem ela)
+ * e vai 12 meses à frente; do histórico entram só as que não estão paga/fechada.
+ */
+function targetMonths(options, currentKey, now) {
+  const match = /^(\d{4})-(\d{2})$/.exec(currentKey ?? "");
+  const base = match ? { year: Number(match[1]), month: Number(match[2]) } : { year: now.getFullYear(), month: now.getMonth() + 1 };
+  const known = options.filter((option) => option.status !== "paid" && option.status !== "closed" && (option.year * 12 + option.month) >= (base.year * 12 + base.month)).map((option) => ({ year: option.year, month: option.month }));
+  const ahead = Array.from({ length: 12 }, (_, index) => { const date = new Date(base.year, base.month - 1 + index, 1); return { year: date.getFullYear(), month: date.getMonth() + 1 }; });
   const seen = new Set();
   return [...known, ...ahead].filter((entry) => { const key = `${entry.year}-${entry.month}`; if (seen.has(key)) return false; seen.add(key); return true; }).sort((a, b) => (a.year - b.year) || (a.month - b.month));
 }
 
-export function MoveInstallmentDialog({ rows, invoiceOptions, onSubmit, onClose, now = new Date() }) {
+export function MoveInstallmentDialog({ rows, invoiceOptions, currentKey = null, onSubmit, onClose, now = new Date() }) {
   const movable = rows.filter((row) => installmentOf(row));
-  const months = targetMonths(invoiceOptions, now);
+  const months = targetMonths(invoiceOptions, currentKey, now);
   const [target, setTarget] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -104,15 +110,18 @@ export function MoveInstallmentDialog({ rows, invoiceOptions, onSubmit, onClose,
 export function RefundDialog({ row, currency, categories, onSubmit, onClose, today }) {
   const original = Math.abs(Number(row.value) || 0);
   const code = row.value_currency ?? currency;
-  const [value, setValue] = useState(String(original));
+  // pt-BR: vírgula decimal (o parser tira o ponto como separador de milhar).
+  const [value, setValue] = useState(original.toFixed(2).replace(".", ","));
   const [description, setDescription] = useState(`Estorno · ${row.description}`);
   const [date, setDate] = useState(today);
   // Mesma categoria da compra quando o catálogo de estorno a tem; senão a primeira disponível.
   const originalLabel = pickCategoryTagFromApiTransaction(row)?.label;
-  const [categoryId, setCategoryId] = useState(() => (categories.find((entry) => entry.label === originalLabel) ?? categories[0])?.id ?? "");
+  const [pickedCategory, setPickedCategory] = useState("");
+  // O catálogo de estorno pode chegar depois de o diálogo abrir: o padrão é calculado a cada render.
+  const categoryId = pickedCategory || (categories.find((entry) => entry.label === originalLabel) ?? categories[0])?.id || "";
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
-  const amount = Number(String(value).replace(",", "."));
+  const amount = parseMoneyInput(value) ?? Number.NaN;
   const valid = Number.isFinite(amount) && amount > 0 && amount <= original && description.trim() && date && categoryId;
   const submit = async () => {
     setBusy(true); setError(null);
@@ -135,7 +144,7 @@ export function RefundDialog({ row, currency, categories, onSubmit, onClose, tod
       <input aria-label="Data do estorno" type="date" value={date} onChange={(event) => setDate(event.target.value)} style={inputStyle} />
     </label>
     {categories.length > 1 && <label style={{ ...G, display: "flex", flexDirection: "column", gap: 6, fontSize: 11, fontWeight: 700, color: T.inkMid }}>Categoria do estorno
-      <Select aria-label="Categoria do estorno" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>{categories.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}</Select>
+      <Select aria-label="Categoria do estorno" value={categoryId} onChange={(event) => setPickedCategory(event.target.value)}>{categories.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}</Select>
     </label>}
     {categories.length === 0 && <p role="alert" style={{ ...G, margin: 0, fontSize: 12, color: T.red }}>Nenhuma categoria de estorno disponível.</p>}
     {Number.isFinite(amount) && amount > original && <p role="alert" style={{ ...G, margin: 0, fontSize: 12, color: T.red }}>O estorno não pode passar do valor da compra.</p>}

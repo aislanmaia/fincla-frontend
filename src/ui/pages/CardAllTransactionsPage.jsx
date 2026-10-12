@@ -11,7 +11,7 @@ import { assistantInsights } from "../features/cardTransactions/assistantModel.j
 import { CategorizeDialog, ExportDialog, MoveInstallmentDialog, RefundDialog } from "../features/cardTransactions/LedgerDialogs.jsx";
 import { AssistantDrawer, LedgerDetail } from "../features/cardTransactions/LedgerPanels.jsx";
 import { categorizeRows, createRefund, fetchAllRows, moveRows } from "../features/cardTransactions/ledgerActions.js";
-import { buildPrintHtml, printHtml } from "../features/cardTransactions/ledgerExport.js";
+import { buildPdfParts, buildPrintHtml, downloadCsv, printHtml } from "../features/cardTransactions/ledgerExport.js";
 import { CardOutflowsChart } from "../features/cardTransactions/CardOutflowsChart.jsx";
 import { CardTransactionsSummary } from "../features/cardTransactions/CardTransactionsSummary.jsx";
 import { CardTransactionsTable } from "../features/cardTransactions/CardTransactionsTable.jsx";
@@ -52,23 +52,6 @@ function sharePending(map, key, request) {
 function cardLabel(card) {
   return `${card.description || card.brand || "Cartão"} •${card.last4 || "••••"}`;
 }
-export function csvCell(value, textField = false) {
-  const raw = String(value ?? "");
-  const safe = textField && /^[\s\u0000-\u001f]*[=+\-@]/u.test(raw) ? `'${raw}` : raw;
-  return `"${safe.replaceAll('"', '""')}"`;
-}
-function exportLoadedRows(rows, cardCurrency) {
-  const header = ["Data", "Descrição", "Categoria", "Valor", "Moeda", "Situação"];
-  const lines = rows.map((row) => [row.date, row.description, pickCategoryTagFromApiTransaction(row)?.label || row.category || "", row.value, row.value_currency || cardCurrency || "", row.status]);
-  const csv = `\uFEFF${[header, ...lines].map((line) => line.map((value, index) => csvCell(value, index === 1 || index === 2)).join(",")).join("\r\n")}`;
-  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "card-transactions.csv";
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
-}
-
 export function CardAllTransactionsPage({ organizationId = null, dataMode = "live", isMobile = false }) {
   const { cardId } = useParams({ strict: false });
   const navigate = useNavigate();
@@ -116,7 +99,10 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const [notice, setNotice] = useState(null);
   const [state, setState] = useState({ card: null, rows: [], total: null, page: 0, queryKey: "", loading: true, error: false, missing: false });
   const [nextPage, setNextPage] = useState(1);
-  useFocusTrap(detailDialogRef, Boolean(inspected));
+  // O detalhe do desktop é um painel ao lado da tabela (não modal): sem armadilha de foco, só devolve o foco.
+  useFocusTrap(detailDialogRef, Boolean(inspected) && isMobile);
+  const inspectTriggerRef = useRef(null);
+  const wasInspectedRef = useRef(false);
   useFocusTrap(filterDialogRef, filtersOpen && isMobile && !inspected);
   useFocusTrap(summaryDialogRef, summarySheetOpen && isMobile && !inspected && !filtersOpen);
 
@@ -171,6 +157,12 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     document.addEventListener("keydown", onEscape);
     return () => document.removeEventListener("keydown", onEscape);
   }, [filtersOpen, inspected, summarySheetOpen]);
+
+  useEffect(() => {
+    if (inspected) { wasInspectedRef.current = true; return; }
+    if (wasInspectedRef.current && !isMobile) inspectTriggerRef.current?.focus?.();
+    wasInspectedRef.current = false;
+  }, [inspected, isMobile]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(filter.search.trim()), 300);
@@ -361,6 +353,8 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const outcome = (result, total, message) => {
     if (result.failed.length === 0) { finishAction(message); return null; }
     if (result.done.length > 0) dirtyRef.current = true;
+    // Tentar de novo refaz só o que falhou: o que já passou não é reenviado.
+    setDialog((current) => current && current.ids ? { ...current, ids: result.failed.map((row) => row.id) } : current);
     return `${result.failed.length} de ${total} não puderam ser alterados${result.done.length ? `; ${result.done.length} já foram` : ""}. Tente novamente.`;
   };
   const submitCategorize = async (categoryId) => {
@@ -382,13 +376,11 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const submitExport = async (format) => {
     try {
       const all = await exportRowsOf();
-      if (format === "csv") { exportLoadedRows(all, cardScope === "current" ? state.card.currency : null); return null; }
-      const code = cardScope === "current" ? state.card.currency : null;
+      if (format === "csv") { downloadCsv(all, cardScope === "current" ? state.card.currency : null); return null; }
       printHtml(buildPrintHtml({
         title: `Lançamentos · ${cardScope === "all" ? "Todos os cartões" : cardLabel(state.card)}`,
         subtitle: `${all.length} lançamentos · ${filterSummary().join(" · ")}`,
-        header: ["Data", "Descrição", "Categoria", "Valor", "Situação"],
-        lines: all.map((row) => [row.date, row.description, pickCategoryTagFromApiTransaction(row)?.label || row.category || "", row.value_currency || code ? formatMoneyAbs(row.value, row.value_currency || code) : String(row.value), row.status]),
+        ...buildPdfParts(all, cardScope === "current" ? state.card.currency : null),
       }));
       return null;
     } catch {
@@ -448,7 +440,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const outflowsLoading = outflowsKind === "invoices" && needsLadder ? !currentLadder || currentLadder.loading : currentSummaryLoading;
   const outflowsError = outflowsKind === "invoices" && needsLadder ? Boolean(currentLadder?.error) : currentSummaryError;
   const outflowsMessage = cardScope === "all" ? "As saídas por fatura valem para um cartão. Volte para “este cartão”." : noInvoice ? "Marque ao menos uma fatura pra ver as saídas." : null;
-  const outflows = buildOutflows({ mode: outflowsKind, summary: currentSummary, ladder: needsLadder ? currentLadder?.data : null, selectedKeys: invoiceMode ? invoiceKeys ?? [] : [], currency: state.card?.currency });
+  const outflows = buildOutflows({ mode: outflowsKind, summary: currentSummary, ladder: needsLadder ? currentLadder?.data : null, selectedKeys: invoiceMode ? invoiceKeys ?? [] : [], selectableKeys: new Set(invoiceOpts.filter((option) => option.invoiceId != null).map((option) => option.key)), currency: state.card?.currency });
   const filterChips = <TransactionsFilterChips facets={activeFacets} searchActive={Boolean(debouncedSearch)} searchLabel={debouncedSearch} onOpenFacet={openFacet} onAbrirAtivos={() => openFacet("ativos")} onClearFacet={clearFacet} onClearAll={clearAll} maxVisible={viewportWidth >= 1600 ? 3 : viewportWidth >= 1366 ? 2 : 1} chipsBudget={chipsBudget} collapsed={viewportWidth < 1200} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen((open) => !open)} pinnedChip={temporalChip} />;
   const dockFloating = !isMobile && viewportWidth < 1280;
   const cardScopePanel = <CardScopePanel card={card} scope={cardScope} onScope={(value) => { setCardScope(value); setSummarySheetOpen(false); }} />;
@@ -489,20 +481,20 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
       {catalogBlocked && <Card role="status" style={{ padding: 12, color: T.amber }}>{isTagFilterBlocked(tagStatus) ? tagFilterStatusMessage(tagStatus) : "Aguardando o catálogo de categorias para aplicar o filtro."}</Card>}
       <div ref={ledgerRef} style={{ display: "flex", alignItems: "stretch", minWidth: 0, position: "relative", gap: filtersOpen && !dockFloating ? 12 : 0 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-        <CardTransactionsTable rows={state.rows} total={state.total} cardCurrency={cardScope === "current" ? card.currency : null} loading={state.loading} error={state.error} hasMore={hasMore} onMore={onMore} selected={selectedRows} onSelected={setSelectedRows} selectionSum={selectionSum} onCategorize={() => setDialog({ kind: "categorize", ids: selectedRows })} onMoveInstallment={cardScope === "current" ? () => setDialog({ kind: "move", ids: selectedRows }) : undefined} onExportSelected={() => exportLoadedRows(selectedRowObjects, cardScope === "current" ? card.currency : null)} inspected={inspected} onInspect={setInspected} grouped={prefs.grouped && sortField === "date"} density={prefs.density} isMobile={isMobile} maxHeight={filtersOpen && !isMobile ? ledgerHeight : undefined} />
+        <CardTransactionsTable rows={state.rows} total={state.total} cardCurrency={cardScope === "current" ? card.currency : null} loading={state.loading} error={state.error} hasMore={hasMore} onMore={onMore} selected={selectedRows} onSelected={setSelectedRows} selectionSum={selectionSum} onCategorize={() => setDialog({ kind: "categorize", ids: selectedRows })} onMoveInstallment={cardScope === "current" ? () => setDialog({ kind: "move", ids: selectedRows }) : undefined} onExportSelected={() => downloadCsv(selectedRowObjects, cardScope === "current" ? card.currency : null)} inspected={inspected} onInspect={(row) => { inspectTriggerRef.current = document.activeElement; setInspected(row); }} grouped={prefs.grouped && sortField === "date"} density={prefs.density} isMobile={isMobile} maxHeight={filtersOpen && !isMobile ? ledgerHeight : undefined} />
         </div>
-        {inspected && !isMobile && <div ref={detailDialogRef} role="dialog" aria-modal="false" aria-label="Detalhes do lançamento" style={{ flex: "none", width: 360, minWidth: 0, marginLeft: 12 }}><Card style={{ height: "100%", padding: 20, overflowY: "auto", boxSizing: "border-box" }}><LedgerDetail row={inspected} currency={cardScope === "current" ? card?.currency : null} closeRef={detailCloseRef} onClose={() => setInspected(null)} onMove={(row) => setDialog({ kind: "move", ids: [row.id] })} onRefund={(row) => setDialog({ kind: "refund", row })} onOpenOriginal={openOriginal} /></Card></div>}
+        {inspected && !isMobile && <div ref={detailDialogRef} role="dialog" aria-modal="false" aria-label="Detalhes do lançamento" style={{ flex: "none", width: 360, minWidth: 0, marginLeft: 12 }}><Card style={{ height: "100%", padding: 20, overflowY: "auto", boxSizing: "border-box" }}><LedgerDetail row={inspected} currency={cardScope === "current" ? card?.currency : null} closeRef={detailCloseRef} onClose={() => setInspected(null)} onMove={cardScope === "current" ? (row) => setDialog({ kind: "move", ids: [row.id] }) : undefined} onRefund={cardScope === "current" ? (row) => setDialog({ kind: "refund", row }) : undefined} onOpenOriginal={openOriginal} /></Card></div>}
         {filtersOpen && !isMobile && !inspected && <div style={{ ...(dockFloating ? { position: "absolute", top: 0, right: 0, zIndex: 5, boxShadow: "-8px 0 24px rgba(15,15,13,.1)" } : { flex: "none" }), width: Math.min(420, Math.max(320, viewportWidth * .28)), height: ledgerHeight, minWidth: 0 }}><TransactionsFilterPanel filter={filter} facet={activeFacet} onFacetChange={setActiveFacet} categories={categories} allTags={tagOptions.map((tag) => tag.displayLabel)} allTagsLoading={tagCatalog.loading} allTagsError={Boolean(tagCatalog.error)} tagIdByLabel={tagIdByLabel} facetCounts={facetCounts} activeFacets={activeFacets} onClearFacet={clearFacet} onClearAll={clearAll} onApply={closeFilters} onClose={closeFilters} resultCount={state.total ?? 0} resultsLoading={state.loading} visibleFacetKeys={FACETS} defaultPeriod="tudo" cardScopePanel={cardScopePanel} periodScopePanel={timeScopePanel} hidePeriodContent={invoiceMode} selectionOverrides={{ cartao: cardScope === "all" ? 1 : 0, ...(invoiceMode ? { periodo: 0 } : {}) }} /></div>}
       </div>
       {state.error && <Card role="alert" style={{ display: "flex", alignItems: "center", gap: 12, padding: 14 }}>Não foi possível carregar os lançamentos. <Btn variant="outGray" onClick={() => { setState((current) => ({ ...current, loading: true, error: false })); setRetry((value) => value + 1); }}>Tentar novamente</Btn></Card>}
     </>}
     {inspected && isMobile && <div ref={detailDialogRef} role="dialog" aria-modal="true" aria-label="Detalhes do lançamento" style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(15,15,13,.35)", display: "flex", justifyContent: "flex-end", alignItems: "flex-end" }} onClick={() => setInspected(null)}>
       <Card style={{ width: "100%", maxHeight: "80dvh", borderRadius: "18px 18px 0 0", padding: 20, overflowY: "auto" }} onClick={(event) => event.stopPropagation()}>
-        <LedgerDetail row={inspected} currency={cardScope === "current" ? card?.currency : null} closeRef={detailCloseRef} onClose={() => setInspected(null)} onMove={(row) => setDialog({ kind: "move", ids: [row.id] })} onRefund={(row) => setDialog({ kind: "refund", row })} onOpenOriginal={openOriginal} />
+        <LedgerDetail row={inspected} currency={cardScope === "current" ? card?.currency : null} closeRef={detailCloseRef} onClose={() => setInspected(null)} onMove={cardScope === "current" ? (row) => setDialog({ kind: "move", ids: [row.id] }) : undefined} onRefund={cardScope === "current" ? (row) => setDialog({ kind: "refund", row }) : undefined} onOpenOriginal={openOriginal} />
       </Card>
     </div>}
     {dialog?.kind === "categorize" && <CategorizeDialog rows={rowsByIds(dialog.ids)} categories={categories} onSubmit={submitCategorize} onClose={closeDialog} />}
-    {dialog?.kind === "move" && <MoveInstallmentDialog rows={rowsByIds(dialog.ids).length ? rowsByIds(dialog.ids) : inspected ? [inspected] : []} invoiceOptions={invoiceOpts} onSubmit={submitMove} onClose={closeDialog} />}
+    {dialog?.kind === "move" && <MoveInstallmentDialog rows={rowsByIds(dialog.ids).length ? rowsByIds(dialog.ids) : inspected ? [inspected] : []} invoiceOptions={invoiceOpts} currentKey={historyState.current?.month ?? null} onSubmit={submitMove} onClose={closeDialog} />}
     {dialog?.kind === "refund" && <RefundDialog row={dialog.row} categories={(refundCatalog.categories ?? []).map((entry) => ({ id: String(entry.id), label: entry.labelPt }))} currency={cardScope === "current" ? card?.currency : null} today={todayLocalYmd()} onSubmit={submitRefund} onClose={closeDialog} />}
     {dialog?.kind === "export" && <ExportDialog total={state.total} filterSummary={filterSummary()} onExport={submitExport} onClose={closeDialog} />}
     {dialog?.kind === "assistant" && <AssistantDrawer insights={insights.items} loadedCount={state.rows.length} onClose={closeDialog} onSelect={(ids) => { setSelectedRows(ids); setDialog(null); }} onCategorize={(ids) => { setSelectedRows(ids); setDialog({ kind: "categorize", ids }); }} />}
