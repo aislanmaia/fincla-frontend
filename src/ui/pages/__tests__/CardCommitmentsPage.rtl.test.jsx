@@ -433,3 +433,17 @@ it("lança estorno vinculado à parcela pela categoria do catálogo de estorno",
   await waitFor(() => expect(posted).toHaveLength(1));
   expect(posted[0]).toMatchObject({ type: "refund", refund_of_transaction_id: 11, card_id: 7, tag_ids: ["refund-cat"], value: 100 });
 });
+
+it("não oferece estorno quando a contagem de estornos não é comprovada, e limita ao total original", async () => {
+  const user = userEvent.setup();
+  futureOverride = { monthly_breakdown: [{
+    year: 2026, month: 10, month_name: "outubro", total_amount: money("100"),
+    installments: [{ transaction_id: 11, series_id: "a", description: "Notebook", amount: money("100"), installment_number: 1, total_installments: 3, due_date: "2026-10-10", purchase_date: "2026-10-01", category_name: "Tecnologia", category_id: "tech", original_total: money("300") }],
+    recurrences: [],
+  }] };
+  render(<CardCommitmentsPage organizationId={ORG} isMobile />);
+  const inventory = await screen.findByRole("region", { name: "Inventário de compromissos" });
+  await user.click(within(inventory).getByRole("button", { name: "Detalhar Notebook" }));
+  // linked_refunds_count ausente = não comprovado: sem botão (evita estorno em duplicidade).
+  expect(within(screen.getByRole("dialog", { name: "Detalhes de Notebook" })).queryByRole("button", { name: /Lançar estorno/ })).not.toBeInTheDocument();
+});

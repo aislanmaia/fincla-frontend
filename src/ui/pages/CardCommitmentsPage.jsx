@@ -10,6 +10,7 @@ import { formatMoney } from "../money/formatMoney";
 import { FC } from "../routing/searchContract";
 import { cardAllTransactionsPath } from "../routing/invoiceRoute";
 import { shouldUseRealData } from "../dataMode";
+import { handleApiError } from "../../api/client";
 import { useFocusTrap } from "../features/transactions/useFocusTrap";
 import { useCategoryTagsData } from "../features/tags/useCategoryTagsData.js";
 import { RefundDialog } from "../features/cardTransactions/LedgerDialogs.jsx";
@@ -108,13 +109,17 @@ function Metric({ title, value, detail, testId, detailTestId, style }) {
   return <Card style={{ ...cardStyle, ...style }}><div style={label}>{title}</div><div data-testid={testId} style={{ ...G, ...NUM, fontSize: 22, fontWeight: 800, marginTop: 5 }}>{value}</div>{detail && <div data-testid={detailTestId} style={{ ...G, fontSize: 12, color: T.inkLight, marginTop: 5 }}>{detail}</div>}</Card>;
 }
 
+/** Estorno já vinculado: o inventário (por série) ou o saldo exato dizem que existe. */
+const hasLinkedRefund = (item) => Number(item.linked_refunds_count) > 0 || Number(item.linkedRefunds) > 0;
+/** Só oferece estornar quando está PROVADO que não há estorno (contagem 0, inteira, e saldo exato sem estorno). */
+const canRefund = (item) => item.type === "installment" && Number.isInteger(item.transaction_id) && Number.isInteger(item.linked_refunds_count) && item.linked_refunds_count === 0 && !(Number(item.linkedRefunds) > 0);
 const progress = (part, whole) => whole > 0 && Number.isFinite(part) ? Math.max(0, Math.min(100, part / whole * 100)) : 0;
 function ProgressLine({ value, max, color = T.blue }) {
   return <div aria-hidden="true"><ProgBar pct={progress(value, max)} color={color} h={5} /></div>;
 }
 function SectionHeading({ children }) { return <h2 style={{ ...G, fontSize: 19, margin: "10px 0 0", fontWeight: 800 }}>{children}</h2>; }
 
-function Inventory({ rows, remainingSeries, currency, groupBy, sortBy, onMove, isMobile, cardId }) {
+function Inventory({ rows, remainingSeries, currency, groupBy, sortBy, onMove, onRefund, isMobile, cardId }) {
   const items = useMemo(() => inventorySeries(rows, remainingSeries), [rows, remainingSeries]);
   const [search, setSearch] = useState("");
   const [selectedKey, setSelectedKey] = useState(null);
@@ -148,7 +153,7 @@ function Inventory({ rows, remainingSeries, currency, groupBy, sortBy, onMove, i
   const selected = filtered.find((item) => `${item.type}:${item.series_id ?? item.transaction_id}` === selectedKey) || filtered[0] || null;
   const remaining = selected?.remainingAmount ?? null;
   const selectedDetail = selected && <div style={{ display: "flex", flexDirection: "column", gap: 13 }}>
-    <div><h3 style={{ ...G, fontSize: 16, margin: 0 }}>{selected.description}</h3><span style={{ ...G, fontSize: 11, color: T.inkLight }}>{selected.category_name || "Sem categoria"}</span>{(Number(selected.linked_refunds_count) > 0 || Number(selected.linkedRefunds) > 0) && <span style={{ ...G, fontSize: 11, color: T.green, marginLeft: 7 }}>↺ {moneyValue(selected.linked_refunds_total ?? selected.linkedRefunds, currency)} estornado{Number(selected.linked_refunds_count) > 1 ? ` (${selected.linked_refunds_count} estornos)` : ""}</span>}</div>
+    <div><h3 style={{ ...G, fontSize: 16, margin: 0 }}>{selected.description}</h3><span style={{ ...G, fontSize: 11, color: T.inkLight }}>{selected.category_name || "Sem categoria"}</span>{hasLinkedRefund(selected) && <span style={{ ...G, fontSize: 11, color: T.green, marginLeft: 7 }}>↺ {moneyValue(selected.linked_refunds_total ?? selected.linkedRefunds, currency)} estornado{Number(selected.linked_refunds_count) > 1 ? ` (${selected.linked_refunds_count} estornos)` : ""}</span>}</div>
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
       {[[selected.type === "recurring" ? "Por mês" : "Por parcela", moneyValue(selected.amount, currency)],
         [selected.type === "recurring" ? "Recorrência" : `${Math.max(0, Number(selected.total_installments) - Number(selected.installment_number) + 1)}× restam`, moneyValue(remaining, currency)],
@@ -158,7 +163,7 @@ function Inventory({ rows, remainingSeries, currency, groupBy, sortBy, onMove, i
     {selected.type === "installment" && <div><div style={label}>{selected.total_installments} parcelas · {Array.isArray(selected.paid_installment_numbers) ? `${selected.paid_installment_numbers.length} paga${selected.paid_installment_numbers.length === 1 ? "" : "s"}` : "pagamento não informado"}</div><div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 8 }}>{Array.from({ length: Math.min(Number(selected.total_installments), 60) }, (_, index) => <span key={index} style={{ width: 16, height: 16, borderRadius: "50%", background: Array.isArray(selected.paid_installment_numbers) && selected.paid_installment_numbers.includes(index + 1) ? T.green : index === Number(selected.installment_number) - 1 ? T.blueLight : T.grayLight, border: `2px solid ${index === Number(selected.installment_number) - 1 ? T.blue : T.border}` }} />)}</div><div style={{ ...G, fontSize: 10, color: T.inkLight, marginTop: 5 }}>{Array.isArray(selected.paid_installment_numbers) ? "verde = parcela liquidada · anel azul = parcela deste mês" : "anel azul = parcela deste mês · estado de pagamento não informado"}</div></div>}
     <div style={{ display: "grid", gap: 7 }}>
       {selected.type === "installment" && <Btn variant="blue" aria-label={`Mover ${selected.description}`} onClick={() => { setSheetOpen(false); onMove({ item: selected }); }}>↻ Mover para outra fatura</Btn>}
-      {selected.type === "installment" && Number.isInteger(selected.transaction_id) && Number(selected.linked_refunds_count) === 0 && <Btn variant="outGray" aria-label={`Lançar estorno de ${selected.description}`} onClick={() => { setSheetOpen(false); onMove({ refundItem: selected }); }}>↺ Lançar estorno desta compra</Btn>}
+      {canRefund(selected) && <Btn variant="outGray" aria-label={`Lançar estorno de ${selected.description}`} onClick={() => { setSheetOpen(false); onRefund(selected); }}>↺ Lançar estorno desta compra</Btn>}
       <Btn variant="outGray" onClick={() => navigate({ to: cardAllTransactionsPath(cardId) })}>↗ Ver em Lançamentos</Btn>
     </div>
   </div>;
@@ -177,7 +182,7 @@ function Inventory({ rows, remainingSeries, currency, groupBy, sortBy, onMove, i
           {name && <div style={{ ...G, background: T.bg, padding: "8px 10px", fontSize: 11, fontWeight: 700, display: "flex", justifyContent: "space-between", position: "sticky", top: 0, zIndex: 1 }}><span>{name} · {list.length} {list.length === 1 ? "item" : "itens"}</span><span>{moneyValue(sum(list), currency)}</span></div>}
           {list.map((item) => { const key = `${item.type}:${item.series_id ?? item.transaction_id}`; const active = selected === item; return <button key={key} type="button" aria-label={`Detalhar ${item.description}`} aria-pressed={active} onClick={() => { setSelectedKey(key); if (isMobile) setSheetOpen(true); }} style={{ ...G, width: "100%", display: "flex", alignItems: "center", gap: 9, textAlign: "left", background: active ? T.blueLight : T.surface, border: 0, borderRadius: 8, padding: 9, cursor: "pointer" }}>
             <span aria-hidden="true" style={{ width: 32, height: 32, borderRadius: 8, display: "grid", placeItems: "center", background: T.grayLight, fontWeight: 700 }}>{item.type === "recurring" ? "↻" : "▣"}</span>
-            <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: "block", fontSize: 12, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.description}{Number(item.linkedRefunds) > 0 && <span style={{ color: T.green, marginLeft: 4 }}>↺</span>}</span><ProgressLine value={item.installment_number || 0} max={item.total_installments || 1} color={T.blue} /></span>
+            <span style={{ flex: 1, minWidth: 0 }}><span style={{ display: "block", fontSize: 12, fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.description}{hasLinkedRefund(item) && <span style={{ color: T.green, marginLeft: 4 }}>↺</span>}</span><ProgressLine value={item.installment_number || 0} max={item.total_installments || 1} color={T.blue} /></span>
             <span style={{ textAlign: "right" }}><strong style={{ ...NUM, fontSize: 12, whiteSpace: "nowrap" }}>{moneyValue(item.amount, currency)}</strong><small style={{ display: "block", color: T.inkLight }}>{item.type === "recurring" ? "↻" : `${item.installment_number}/${item.total_installments}`}</small></span>
           </button>; })}
         </div>)}
@@ -357,7 +362,6 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
     if (change.groupBy) setGroupBy(change.groupBy);
     if (change.sortBy) setSortBy(change.sortBy);
     if (change.item) { setMoveItem(change.item); setTargetMonth(""); }
-    if (change.refundItem) setRefundItem(change.refundItem);
   };
   const toggleLowUsage = async (item) => {
     const old = Boolean(seriesById.get(item.series_id)?.is_low_usage);
@@ -373,7 +377,7 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
       await createRefund({ row: { id: row.transaction_id }, cardId: card.id, organizationId, value, description, dateYmd, categoryId });
       setRefundItem(null); setRefresh((current) => current + 1);
       return null;
-    } catch { return "Não foi possível lançar o estorno. Tente novamente."; }
+    } catch (error) { return handleApiError(error) || "Não foi possível lançar o estorno. Tente novamente."; }
   };
   const confirmMove = async () => {
     if (!moveItem || !targetMonth) return;
@@ -429,9 +433,9 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
       <CommitmentsRay isMobile={isMobile} currency={currency} recurring={recurring} recurringMonthly={recurringMonthly} recurringNextYear={recurringNextYear} recurringInvoicePercent={recurringInvoicePercent} seriesById={seriesById} seriesError={state.seriesError} mutationPending={mutation.pending} onLowUsage={toggleLowUsage} lowUsageMonthly={lowUsageMonthly} largestInstallments={largestInstallments} nearestToEnd={nearestToEnd} reduction={reduction} finishing={finishing} inventoryReady={inventoryKnown(monthNow, currency)} bucketDatesKnown={bucketDatesKnown} dayBuckets={dayBuckets} largestBucket={largestBucket} monthly={monthly} periodCategories={periodCategories} categoryPeriodLabel={categoryPeriodLabel} categoryAverageKnown={categoryAverageKnown} periodCount={historyMonths + futureMonths} />
       {currencyMismatch && <p role="alert" style={{ margin: 0, color: T.amber }}>A moeda dos compromissos recebidos não corresponde à moeda do cartão. Valores desses meses estão indisponíveis.</p>}
       {!allKnown && <p role="status" style={{ margin: 0, color: T.amber }}>O inventário de alguns meses está incompleto. Os itens disponíveis continuam listados abaixo.</p>}
-      <Inventory rows={browsableRows} remainingSeries={balanceKnown ? balance.series : []} currency={currency} groupBy={groupBy} sortBy={sortBy} onMove={handleInventory} isMobile={isMobile} cardId={cardId} />
+      <Inventory rows={browsableRows} remainingSeries={balanceKnown ? balance.series : []} currency={currency} groupBy={groupBy} sortBy={sortBy} onMove={handleInventory} onRefund={setRefundItem} isMobile={isMobile} cardId={cardId} />
       {mutation.error && <p role="alert">{mutation.error}</p>}
-      {refundItem && <RefundDialog row={{ ...refundItem, value: refundItem.amount, value_currency: currency }} categories={(refundCatalog.categories ?? []).map((entry) => ({ id: String(entry.id), label: entry.labelPt }))} currency={currency} today={todayLocalYmd()} onSubmit={submitRefund} onClose={() => setRefundItem(null)} />}
+      {refundItem && <RefundDialog row={{ ...refundItem, value: refundItem.original_total ?? refundItem.amount, value_currency: currency }} categories={(refundCatalog.categories ?? []).map((entry) => ({ id: String(entry.id), label: entry.labelPt }))} currency={currency} today={todayLocalYmd()} onSubmit={submitRefund} onClose={() => setRefundItem(null)} />}
       {moveItem && <div ref={moveDialogRef} role="dialog" aria-modal="true" aria-label={`Mover ${moveItem.description}`} style={{ position: "fixed", inset: 0, background: "#0008", zIndex: 100, display: "flex", alignItems: isMobile ? "flex-end" : "center", justifyContent: "center" }}><Card style={{ ...cardStyle, width: isMobile ? "100%" : 420, display: "flex", flexDirection: "column", gap: 12 }}><h2 style={{ margin: 0, fontSize: 18 }}>Mover {moveItem.description}</h2><p style={{ margin: 0, fontSize: 12 }}>As demais parcelas da compra serão reposicionadas automaticamente.</p><label>Fatura de destino <Select aria-label="Fatura de destino" value={targetMonth} onChange={(event) => setTargetMonth(event.target.value)} style={{ width: "100%" }}><option value="">Selecione o mês</option>{moveOptions.map((row) => <option key={keyOf(row)} value={keyOf(row)}>{period(row)}</option>)}</Select></label><div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}><Btn variant="outGray" onClick={() => setMoveItem(null)}>Cancelar</Btn><Btn variant="blue" disabled={!targetMonth || mutation.pending} onClick={confirmMove}>Confirmar mudança</Btn></div></Card></div>}
     </>}
   </div>;
