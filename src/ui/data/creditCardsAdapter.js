@@ -685,6 +685,7 @@ export function mapCreditCardToUi({ card, currentInvoice, history, futureCommitm
     fechamento: card.closing_day || 1,
     closingDayEffective: closingDayForInvoiceAnchor(card),
     limite: card.credit_limit || 0,
+    limitUsagePercent: Number.isFinite(Number(card.limit_usage_percent)) && card.limit_usage_percent !== null ? Number(card.limit_usage_percent) : null,
     disponivel: card.available_limit ?? Math.max(0, (card.credit_limit || 0) - (card.used_limit || 0)),
     faturas,
     tendencia: buildTrendFromCurrentInvoice(currentInvoice),
