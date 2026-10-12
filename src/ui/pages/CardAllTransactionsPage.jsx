@@ -59,10 +59,27 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const enabled = shouldUseRealData(organizationId, dataMode);
   // Deep link (Dashboard da fatura): fatura, categoria, busca e tipo chegam pela URL, lidos uma vez.
   const urlSearch = useSearch({ strict: false });
-  const [link] = useState(() => ({ invoice: urlSearch?.[FC.LEDGER_INVOICE] ?? null, category: urlSearch?.[FC.LEDGER_CATEGORY] ?? null, query: urlSearch?.[FC.LEDGER_SEARCH] ?? "", kind: urlSearch?.[FC.LEDGER_KIND] ?? null }));
+  const readLink = () => ({ invoice: urlSearch?.[FC.LEDGER_INVOICE] ?? null, category: urlSearch?.[FC.LEDGER_CATEGORY] ?? null, query: urlSearch?.[FC.LEDGER_SEARCH] ?? "", kind: urlSearch?.[FC.LEDGER_KIND] ?? null });
+  const [link, setLink] = useState(readLink);
   const [kind, setKind] = useState(link.kind);
   const linkScopeRef = useRef(null);
-  const filter = useTransactionsFilterState({ initial: { period: "tudo", cats: link.category ? [link.category] : [], search: link.query }, clearToInitial: true });
+  const filter = useTransactionsFilterState({ initial: { period: "tudo" }, clearToInitial: true });
+  // A URL é a fonte do deep link: aplica na abertura e de novo se ela mudar com a tela montada.
+  const linkKey = JSON.stringify(readLink());
+  const appliedLinkKey = useRef(null);
+  useEffect(() => {
+    if (appliedLinkKey.current === linkKey) return;
+    const first = appliedLinkKey.current === null;
+    appliedLinkKey.current = linkKey;
+    const next = readLink();
+    if (!first) {
+      setLink(next); setKind(next.kind); setInvoiceKeys(next.invoice ? [next.invoice] : null);
+      if (next.invoice) setTimeMode("invoice");
+    }
+    if (next.category) filter.setCats([next.category]); else if (!first) filter.setCats([]);
+    if (next.query) filter.setSearch(next.query); else if (!first) filter.setSearch("");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkKey]);
   const categoryCatalog = useCategoryTagsData({ organizationId, enabled });
   const refundCatalog = useCategoryTagsData({ organizationId, transactionType: "refund", enabled });
   const tagCatalog = useTransactionsTagCatalog({ organizationId, enabled });
@@ -280,6 +297,14 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     setInvoiceKeys(keys);
     if (keys.length === 0) setTimeMode("period");
   }, [scopeReady, invoiceKeys, invoiceOpts, historyState.current]);
+  // Link para uma fatura que o cartão não tem (ou sem id): cai na fatura padrão em vez de uma tela vazia.
+  useEffect(() => {
+    if (!scopeReady || !link.invoice || (invoiceKeys ?? []).join() !== link.invoice) return;
+    if (invoiceOpts.some((option) => option.key === link.invoice && option.invoiceId != null)) return;
+    const current = historyState.current;
+    setInvoiceKeys(defaultInvoiceKeys(invoiceOpts, current?.month && /^\d{4}-\d{2}$/.test(current.month) ? current.month : null));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scopeReady, invoiceOpts, link.invoice]);
 
   useEffect(() => {
     if (!state.card || filterBlocked) return undefined;
@@ -394,7 +419,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     }
   };
   const exportRowsOf = async () => fetchAllRows({ base: { organization_id: organizationId, ...(cardScope === "current" ? { credit_card_id: state.card.id } : {}) }, filter: queryFilter, total: state.total ?? state.rows.length });
-  const filterSummary = () => [chipLabel, ...(debouncedSearch ? [`Busca: ${debouncedSearch}`] : []), ...activeFacets.map((facet) => `${facet.label}: ${facet.value}`)];
+  const filterSummary = () => [chipLabel, ...(kind ? [`Tipo: ${KIND_LABELS[kind]}`] : []), ...(debouncedSearch ? [`Busca: ${debouncedSearch}`] : []), ...activeFacets.map((facet) => `${facet.label}: ${facet.value}`)];
   const submitExport = async (format) => {
     try {
       const all = await exportRowsOf();

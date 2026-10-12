@@ -91,6 +91,18 @@ describe("CardAllTransactionsPage", () => {
     await waitFor(() => expect(requests.at(-1).searchParams.get("commitment_kind")).toBeNull());
   });
 
+  it("deep link para fatura inexistente cai na fatura padrão e o tipo do link pode ser removido", async () => {
+    route.search = { fc_inv: "2025-01", fc_q: "Mercado", fc_kind: "refund" };
+    server.use(http.get("*/v1/credit-cards/:id/invoices/history", () => HttpResponse.json({ monthly_data: [{ year: 2026, month: 10, invoice_id: 56, status: "open", total_amount: "20.00", items_count: 2 }] })));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    await waitFor(() => expect(requests.at(-1)?.searchParams.get("invoice_id")).toBe("56"));
+    expect(requests.at(-1).searchParams.get("type")).toBe("refund");
+    const user = userEvent.setup();
+    expect(requests.at(-1).searchParams.get("description")).toBe("Mercado");
+    await user.click(await screen.findByRole("button", { name: "Remover filtro: Estornos" }));
+    await waitFor(() => expect(requests.at(-1).searchParams.get("type")).toBeNull());
+  });
+
   it("abre o dock desktop e aplica categoria real na query do cartão", async () => {
     server.use(http.get("*/v1/tags/catalog", () => HttpResponse.json({ categories: [{ id: "food", label: "Alimentação", system_key: "food", color: "#059669" }] })));
     render(<CardAllTransactionsPage organizationId={ORG_ID} />);

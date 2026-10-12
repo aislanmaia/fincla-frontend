@@ -45,8 +45,8 @@ function Chip({ onOpen, label, style, children }) {
 function ItemChange({ item, currency, invoiceOpen, onOpenLedger }) {
   const amount = item.change_type === "removed" ? item.previous_amount : item.current_amount;
   const hasOccurrences = item.commitment_type === "recurring" && (item.occurrences_previous != null || item.occurrences_current != null);
-  // Numa fatura ainda aberta, "não apareceu" quer dizer "ainda não foi cobrado neste ciclo".
-  const notYetCharged = item.change_type === "removed" && invoiceOpen;
+  // Numa fatura ainda aberta, uma RECORRÊNCIA que "não apareceu" ainda não foi cobrada neste ciclo; parcela ou compra que saiu, saiu.
+  const notYetCharged = item.change_type === "removed" && invoiceOpen && item.commitment_type === "recurring";
   const statusText = item.change_type === "removed" ? (notYetCharged ? "Ainda não cobrado neste ciclo" : changeLabels.removed) : changeLabels[item.change_type];
   return (
     <li style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 12, padding: "10px 0", borderTop: `1px solid ${T.border}` }}>
