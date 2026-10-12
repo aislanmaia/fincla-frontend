@@ -661,8 +661,9 @@ export type SortOrder = 'asc' | 'desc';
 export interface ListTransactionsQuery {
   organization_id: string;
   /** Apenas lançamentos vinculados a este cartão; combina com os outros filtros. */
+  credit_card_id?: number;
+  /** Uma ou mais faturas (id do histórico/fatura atual); param repetido. */
   invoice_id?: number | number[];
-  invoice_id?: number;
   type?: 'income' | 'expense' | 'refund';
   /** Um valor, ou vários (casa com qualquer um) — serializado como param repetido. */
   category?: string | string[];
@@ -792,8 +793,8 @@ export interface PaginatedTransactionsResponse {
 
 export interface TransactionsSummaryQuery {
   organization_id: string;
+  credit_card_id?: number;
   invoice_id?: number | number[];
-  invoice_id?: number;
   include_breakdown?: boolean;
   locale?: string;
   type?: 'income' | 'expense' | 'refund';
