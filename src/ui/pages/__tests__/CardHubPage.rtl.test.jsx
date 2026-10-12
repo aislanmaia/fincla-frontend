@@ -219,6 +219,14 @@ describe("CardHubPage — gráficos do Hub", () => {
 });
 
 describe("CardHubPage — cadastro de cartão", () => {
+  it("o KPI de limite usado abre Parcelas & Compromissos do cartão selecionado", async () => {
+    mockApi();
+    render(<CardHubPage organizationId={ORG} dataMode="live" onNewItem={vi.fn()} />);
+    const kpi = await screen.findByRole("link", { name: /Limite usado: abrir Parcelas & Compromissos/ });
+    await userEvent.setup().click(kpi);
+    expect(navigateMock).toHaveBeenCalledWith({ to: "/cards/$cardId/commitments", params: { cardId: publicIdFor(1) } });
+  });
+
   it("cria pelo tile, aceita fechamento ausente, atualiza a lista e seleciona o criado", async () => {
     const requests = mockApi();
     const user = userEvent.setup();

@@ -294,7 +294,7 @@ export function CardHubPage({
         Cartão selecionado: <strong style={{ color: T.ink }}>{cardName} •{selectedCard.last4}</strong>
       </div>
 
-      <LimitTiles card={selectedCard} currency={currency} isMobile={isMobile} onEdit={() => setDialog("edit-card")} />
+      <LimitTiles card={selectedCard} currency={currency} isMobile={isMobile} onEdit={() => setDialog("edit-card")} onOpenCommitments={selectedCard.public_id ? () => navigate({ to: "/cards/$cardId/commitments", params: { cardId: selectedCard.public_id } }) : undefined} />
 
       {!isMobile && insights.length > 0 && (
         <div style={{ background: T.surface, border: `1px solid ${T.amber}`, borderRadius: 14, padding: "14px 18px" }}>
