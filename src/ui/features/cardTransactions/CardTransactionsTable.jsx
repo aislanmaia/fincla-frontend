@@ -35,7 +35,7 @@ function status(row) {
 const bulkButton = { ...G, border: 0, background: "none", color: T.blue, cursor: "pointer", textDecoration: "underline", fontSize: 11 };
 const COLUMNS = "22px 58px minmax(140px,2.2fr) minmax(96px,1fr) 62px 96px 70px 92px 86px";
 
-export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasMore, error, onMore, selected, onSelected, onExportSelected, onCategorize, onMoveInstallment, inspected, onInspect, grouped, density, isMobile, maxHeight }) {
+export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasMore, error, onMore, selected, onSelected, onExportSelected, selectionSum, onCategorize, onMoveInstallment, inspected, onInspect, grouped, density, isMobile, maxHeight }) {
   const scrollerRef = useRef(null);
   const sentinelRef = useRef(null);
   useEffect(() => {
@@ -62,7 +62,7 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
     <div style={{ ...G, display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", borderBottom: `1px solid ${T.border}`, fontSize: 12, fontWeight: 700 }}>
       <input type="checkbox" aria-label="Selecionar lançamentos carregados" checked={allChecked} onChange={(event) => onSelected(event.target.checked ? [...new Set([...selected, ...rows.map((row) => row.id)])] : selected.filter((id) => !rows.some((row) => row.id === id)))} />
       <span>{total == null ? `${rows.length} lançamentos` : `${total} lançamentos`}</span>
-      {selected.length > 0 && <span style={{ color: T.blue }}>{selected.length} selecionado{selected.length === 1 ? "" : "s"}</span>}
+      {selected.length > 0 && <span style={{ color: T.blue }}>{selected.length} selecionado{selected.length === 1 ? "" : "s"}{selectionSum ? ` · ${selectionSum}` : ""}</span>}
       {selected.length > 0 && <span role="toolbar" aria-label="Ações em lote" style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
         {onCategorize && <button type="button" onClick={onCategorize} style={bulkButton}>Categorizar</button>}
         {onMoveInstallment && <button type="button" onClick={onMoveInstallment} style={bulkButton}>Mover parcela</button>}
@@ -116,6 +116,7 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
     </div>
     <div style={{ ...G, ...NUM, borderTop: `1px solid ${T.border}`, padding: "8px 14px", fontSize: 11, color: T.inkMid }}>
       {total == null ? `${rows.length} lançamentos carregados` : `${rows.length} de ${total} lançamentos`}
+      {!hasMore && !loading && total != null && total > 0 && rows.length === total && <span style={{ marginLeft: 12 }}>Você viu todos os {total} lançamentos</span>}
       {hasMore && !loading && <button type="button" onClick={onMore} style={{ ...G, marginLeft: 12, border: 0, background: "none", color: T.blue, fontSize: 11, cursor: "pointer" }}>Carregar mais</button>}
     </div>
   </Card>;

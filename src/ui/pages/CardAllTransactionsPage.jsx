@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
-import { ArrowLeft, Download, Filter, Search, X } from "lucide-react";
+import { ArrowLeft, Download, Filter, Search, Sparkles, X } from "lucide-react";
 
 import { getCurrentCreditCardInvoice, getInvoiceHistory, listCreditCards } from "../../api/creditCards";
-import { getTransactionsFacets, getTransactionsSummary, listTransactions } from "../../api/transactions";
+import { getTransaction, getTransactionsFacets, getTransactionsSummary, listTransactions } from "../../api/transactions";
 import { Btn, Card, PageTitle, Select } from "../components/primitives.jsx";
 import { shouldUseRealData } from "../dataMode.js";
+import { groupSubtotal } from "../features/cardTransactions/ledgerModel.js";
+import { assistantInsights } from "../features/cardTransactions/assistantModel.js";
+import { CategorizeDialog, ExportDialog, MoveInstallmentDialog, RefundDialog } from "../features/cardTransactions/LedgerDialogs.jsx";
+import { AssistantDrawer, LedgerDetail } from "../features/cardTransactions/LedgerPanels.jsx";
+import { categorizeRows, createRefund, fetchAllRows, moveRows } from "../features/cardTransactions/ledgerActions.js";
+import { buildPrintHtml, printHtml } from "../features/cardTransactions/ledgerExport.js";
 import { CardOutflowsChart } from "../features/cardTransactions/CardOutflowsChart.jsx";
 import { CardTransactionsSummary } from "../features/cardTransactions/CardTransactionsSummary.jsx";
 import { CardTransactionsTable } from "../features/cardTransactions/CardTransactionsTable.jsx";
@@ -25,7 +31,7 @@ import { useCategoryTagsData } from "../features/tags/useCategoryTagsData.js";
 import { useFocusTrap } from "../features/transactions/useFocusTrap.js";
 import { resolvePeriodDisplayBounds } from "../features/transactions/periodDateBounds.js";
 import { parseMoneyInput } from "../features/onboarding/onboardingValueUtils.js";
-import { pickCategoryTagFromApiTransaction } from "../data/transactionsAdapter.js";
+import { pickCategoryTagFromApiTransaction, todayLocalYmd } from "../data/transactionsAdapter.js";
 import { formatMoneyAbs } from "../money/formatMoney.js";
 import { FC } from "../routing/searchContract.js";
 import { G, NUM } from "../typography.js";
@@ -103,6 +109,10 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   // Faturas lado a lado: mesma consulta sem o recorte de fatura, para barras de faturas ainda não marcadas.
   const [ladderState, setLadderState] = useState({ key: null, data: null, loading: false, error: false });
   const [retry, setRetry] = useState(0);
+  // Depois de uma ação que muda dados (categoria, fatura, estorno) tudo é lido de novo.
+  const [reload, setReload] = useState(0);
+  const [dialog, setDialog] = useState(null);
+  const [notice, setNotice] = useState(null);
   const [state, setState] = useState({ card: null, rows: [], total: null, page: 0, queryKey: "", loading: true, error: false, missing: false });
   const [nextPage, setNextPage] = useState(1);
   useFocusTrap(detailDialogRef, Boolean(inspected));
@@ -205,7 +215,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     sort_order: sort.dir === "asc" ? "asc" : "desc",
   };
   const aggregateFilter = Object.fromEntries(Object.entries(queryFilter).filter(([key]) => key !== "sort_by" && key !== "sort_order"));
-  const filterKey = JSON.stringify({ queryFilter, cats: filter.cats, tags: filter.tags, blocked: filterBlocked, cardScope });
+  const filterKey = JSON.stringify({ queryFilter, cats: filter.cats, tags: filter.tags, blocked: filterBlocked, cardScope, reload });
   const summaryKey = `${state.card?.id ?? "none"}:${filterKey}`;
   const facets = filter.buildFacets({ categoriesById });
   const activeFacets = facets.filter((facet) => FACETS.includes(facet.key) && facet.active).filter((facet) => facet.key !== "cartao" && facet.key !== "periodo");
@@ -244,7 +254,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
       if (active) setHistoryState({ cardId: state.card.id, data: null, current: null, error: true });
     });
     return () => { active = false; };
-  }, [state.card, organizationId]);
+  }, [state.card, organizationId, reload]);
 
   // Primeira abertura: a fatura aberta. Sem fatura selecionável (cartão novo, falha do
   // histórico), o recorte cai para Período livre em vez de deixar a tela vazia.
@@ -341,8 +351,54 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     setState((current) => ({ ...current, loading: true }));
     setNextPage((page) => page + 1);
   }, [state.loading, state.error, hasMore]);
+  const dirtyRef = useRef(false);
+  const selectedRowObjects = state.rows.filter((row) => selectedRows.includes(row.id));
+  const rowsByIds = (ids) => state.rows.filter((row) => ids.includes(row.id));
+  const insights = useMemo(() => assistantInsights(state.rows), [state.rows]);
+  const closeDialog = () => { setDialog(null); if (dirtyRef.current) { dirtyRef.current = false; setReload((value) => value + 1); } };
+  const finishAction = (message) => { dirtyRef.current = false; setDialog(null); setSelectedRows([]); setInspected(null); setNotice(message); setReload((value) => value + 1); };
+  const outcome = (result, total, message) => {
+    if (result.failed.length === 0) { finishAction(message); return null; }
+    if (result.done.length > 0) dirtyRef.current = true;
+    return `${result.failed.length} de ${total} não puderam ser alterados${result.done.length ? `; ${result.done.length} já foram` : ""}. Tente novamente.`;
+  };
+  const submitCategorize = async (categoryId) => {
+    const rows = rowsByIds(dialog.ids);
+    return outcome(await categorizeRows({ rows, categoryId, organizationId }), rows.length, `${rows.length} lançamento${rows.length === 1 ? "" : "s"} recategorizado${rows.length === 1 ? "" : "s"}.`);
+  };
+  const submitMove = async ({ rows, year, month }) => outcome(await moveRows({ rows, cardId: state.card.id, organizationId, year, month }), rows.length, `${rows.length} parcela${rows.length === 1 ? "" : "s"} movida${rows.length === 1 ? "" : "s"} de fatura.`);
+  const submitRefund = async ({ row, value, description, dateYmd }) => {
+    try {
+      await createRefund({ row, cardId: state.card.id, organizationId, value, description, dateYmd });
+      finishAction("Estorno lançado e vinculado à compra.");
+      return null;
+    } catch {
+      return "Não foi possível lançar o estorno. Tente novamente.";
+    }
+  };
+  const exportRowsOf = async () => fetchAllRows({ base: { organization_id: organizationId, ...(cardScope === "current" ? { credit_card_id: state.card.id } : {}) }, filter: queryFilter, total: state.total ?? state.rows.length });
+  const filterSummary = () => [chipLabel, ...(debouncedSearch ? [`Busca: ${debouncedSearch}`] : []), ...activeFacets.map((facet) => `${facet.label}: ${facet.value}`)];
+  const submitExport = async (format) => {
+    try {
+      const all = await exportRowsOf();
+      if (format === "csv") { exportLoadedRows(all, cardScope === "current" ? state.card.currency : null); return null; }
+      const code = cardScope === "current" ? state.card.currency : null;
+      printHtml(buildPrintHtml({
+        title: `Lançamentos · ${cardScope === "all" ? "Todos os cartões" : cardLabel(state.card)}`,
+        subtitle: `${all.length} lançamentos · ${filterSummary().join(" · ")}`,
+        header: ["Data", "Descrição", "Categoria", "Valor", "Situação"],
+        lines: all.map((row) => [row.date, row.description, pickCategoryTagFromApiTransaction(row)?.label || row.category || "", row.value_currency || code ? formatMoneyAbs(row.value, row.value_currency || code) : String(row.value), row.status]),
+      }));
+      return null;
+    } catch {
+      return "Não foi possível preparar a exportação. Tente novamente.";
+    }
+  };
+  const openOriginal = async (id) => {
+    try { setInspected(await getTransaction(id, organizationId)); } catch { setNotice("Não foi possível abrir o lançamento original."); }
+  };
+  const selectionSum = (() => { const sub = groupSubtotal(selectedRowObjects, cardScope === "current" ? state.card?.currency : null); return sub ? formatMoneyAbs(sub.amount, sub.currency) : null; })();
   const back = () => navigate({ to: "/cards", search: { [FC.VIEW]: "new", [FC.HUB_CARD]: cardId } });
-  const exportable = state.total != null && state.rows.length > 0 && state.rows.length === state.total && !state.loading;
   const closeFilters = () => setFiltersOpen(false);
   const openFacet = (key) => { if (key === "busca") { searchInputRef.current?.focus(); return; } setActiveFacet(key); setMobileFacetOpen(true); setFiltersOpen(true); };
   const card = state.card;
@@ -395,13 +451,15 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const filterChips = <TransactionsFilterChips facets={activeFacets} searchActive={Boolean(debouncedSearch)} searchLabel={debouncedSearch} onOpenFacet={openFacet} onAbrirAtivos={() => openFacet("ativos")} onClearFacet={clearFacet} onClearAll={clearAll} maxVisible={viewportWidth >= 1600 ? 3 : viewportWidth >= 1366 ? 2 : 1} chipsBudget={chipsBudget} collapsed={viewportWidth < 1200} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen((open) => !open)} pinnedChip={temporalChip} />;
   const dockFloating = !isMobile && viewportWidth < 1280;
   const cardScopePanel = <CardScopePanel card={card} scope={cardScope} onScope={(value) => { setCardScope(value); setSummarySheetOpen(false); }} />;
-  const inspectedInstallment = inspected?.installment_info?.length === 1 ? inspected.installment_info[0] : null;
 
   return <div style={{ padding: isMobile ? 16 : 28, display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
     <button type="button" onClick={back} style={{ ...G, alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 5, border: 0, background: "none", color: T.blue, fontSize: 12, fontWeight: 700, cursor: "pointer" }}><ArrowLeft size={14} /> Voltar para o cartão</button>
     <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
       <div><PageTitle sans="Lançamentos do" serif="cartão" />{card && <p style={{ ...G, ...NUM, margin: "5px 0 0", color: T.inkMid, fontSize: 12 }}>{cardScope === "all" ? "Todos os cartões" : cardLabel(card)}</p>}</div>
-      {exportable && <Btn variant="outGray" onClick={() => exportLoadedRows(state.rows, cardScope === "current" ? card.currency : null)}><Download size={14} /> Exportar CSV</Btn>}
+      {card && <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <Btn variant="outGray" disabled={!state.total} onClick={() => setDialog({ kind: "export" })}><Download size={14} /> Exportar</Btn>
+        <Btn variant="outGray" onClick={() => setDialog({ kind: "assistant" })}><Sparkles size={14} /> Assistente{insights.alertCount > 0 && <span aria-label={`${insights.alertCount} alertas`} style={{ ...NUM, marginLeft: 4, background: T.amber, color: "#fff", borderRadius: 99, padding: "0 6px", fontSize: 10 }}>{insights.alertCount}</span>}</Btn>
+      </div>}
     </header>
     {!enabled && <Card role="status" style={{ padding: 18 }}>Selecione uma organização para ver os lançamentos.</Card>}
     {state.missing && <Card role="status" style={{ padding: 18 }}>Cartão não encontrado ou sem acesso.</Card>}
@@ -430,25 +488,24 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
       {catalogBlocked && <Card role="status" style={{ padding: 12, color: T.amber }}>{isTagFilterBlocked(tagStatus) ? tagFilterStatusMessage(tagStatus) : "Aguardando o catálogo de categorias para aplicar o filtro."}</Card>}
       <div ref={ledgerRef} style={{ display: "flex", alignItems: "stretch", minWidth: 0, position: "relative", gap: filtersOpen && !dockFloating ? 12 : 0 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-        <CardTransactionsTable rows={state.rows} total={state.total} cardCurrency={cardScope === "current" ? card.currency : null} loading={state.loading} error={state.error} hasMore={hasMore} onMore={onMore} selected={selectedRows} onSelected={setSelectedRows} onExportSelected={() => exportLoadedRows(state.rows.filter((row) => selectedRows.includes(row.id)), cardScope === "current" ? card.currency : null)} inspected={inspected} onInspect={setInspected} grouped={prefs.grouped && sortField === "date"} density={prefs.density} isMobile={isMobile} maxHeight={filtersOpen && !isMobile ? ledgerHeight : undefined} />
+        <CardTransactionsTable rows={state.rows} total={state.total} cardCurrency={cardScope === "current" ? card.currency : null} loading={state.loading} error={state.error} hasMore={hasMore} onMore={onMore} selected={selectedRows} onSelected={setSelectedRows} selectionSum={selectionSum} onCategorize={() => setDialog({ kind: "categorize", ids: selectedRows })} onMoveInstallment={cardScope === "current" ? () => setDialog({ kind: "move", ids: selectedRows }) : undefined} onExportSelected={() => exportLoadedRows(selectedRowObjects, cardScope === "current" ? card.currency : null)} inspected={inspected} onInspect={setInspected} grouped={prefs.grouped && sortField === "date"} density={prefs.density} isMobile={isMobile} maxHeight={filtersOpen && !isMobile ? ledgerHeight : undefined} />
         </div>
-        {filtersOpen && !isMobile && <div style={{ ...(dockFloating ? { position: "absolute", top: 0, right: 0, zIndex: 5, boxShadow: "-8px 0 24px rgba(15,15,13,.1)" } : { flex: "none" }), width: Math.min(420, Math.max(320, viewportWidth * .28)), height: ledgerHeight, minWidth: 0 }}><TransactionsFilterPanel filter={filter} facet={activeFacet} onFacetChange={setActiveFacet} categories={categories} allTags={tagOptions.map((tag) => tag.displayLabel)} allTagsLoading={tagCatalog.loading} allTagsError={Boolean(tagCatalog.error)} tagIdByLabel={tagIdByLabel} facetCounts={facetCounts} activeFacets={activeFacets} onClearFacet={clearFacet} onClearAll={clearAll} onApply={closeFilters} onClose={closeFilters} resultCount={state.total ?? 0} resultsLoading={state.loading} visibleFacetKeys={FACETS} defaultPeriod="tudo" cardScopePanel={cardScopePanel} periodScopePanel={timeScopePanel} hidePeriodContent={invoiceMode} selectionOverrides={{ cartao: cardScope === "all" ? 1 : 0, ...(invoiceMode ? { periodo: 0 } : {}) }} /></div>}
+        {inspected && !isMobile && <div ref={detailDialogRef} role="dialog" aria-modal="false" aria-label="Detalhes do lançamento" style={{ flex: "none", width: 360, minWidth: 0, marginLeft: 12 }}><Card style={{ height: "100%", padding: 20, overflowY: "auto", boxSizing: "border-box" }}><LedgerDetail row={inspected} currency={cardScope === "current" ? card?.currency : null} closeRef={detailCloseRef} onClose={() => setInspected(null)} onMove={(row) => setDialog({ kind: "move", ids: [row.id] })} onRefund={(row) => setDialog({ kind: "refund", row })} onOpenOriginal={openOriginal} /></Card></div>}
+        {filtersOpen && !isMobile && !inspected && <div style={{ ...(dockFloating ? { position: "absolute", top: 0, right: 0, zIndex: 5, boxShadow: "-8px 0 24px rgba(15,15,13,.1)" } : { flex: "none" }), width: Math.min(420, Math.max(320, viewportWidth * .28)), height: ledgerHeight, minWidth: 0 }}><TransactionsFilterPanel filter={filter} facet={activeFacet} onFacetChange={setActiveFacet} categories={categories} allTags={tagOptions.map((tag) => tag.displayLabel)} allTagsLoading={tagCatalog.loading} allTagsError={Boolean(tagCatalog.error)} tagIdByLabel={tagIdByLabel} facetCounts={facetCounts} activeFacets={activeFacets} onClearFacet={clearFacet} onClearAll={clearAll} onApply={closeFilters} onClose={closeFilters} resultCount={state.total ?? 0} resultsLoading={state.loading} visibleFacetKeys={FACETS} defaultPeriod="tudo" cardScopePanel={cardScopePanel} periodScopePanel={timeScopePanel} hidePeriodContent={invoiceMode} selectionOverrides={{ cartao: cardScope === "all" ? 1 : 0, ...(invoiceMode ? { periodo: 0 } : {}) }} /></div>}
       </div>
       {state.error && <Card role="alert" style={{ display: "flex", alignItems: "center", gap: 12, padding: 14 }}>Não foi possível carregar os lançamentos. <Btn variant="outGray" onClick={() => { setState((current) => ({ ...current, loading: true, error: false })); setRetry((value) => value + 1); }}>Tentar novamente</Btn></Card>}
     </>}
-    {inspected && <div ref={detailDialogRef} role="dialog" aria-modal="true" aria-label="Detalhes do lançamento" style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(15,15,13,.35)", display: "flex", justifyContent: "flex-end", alignItems: isMobile ? "flex-end" : "stretch" }} onClick={() => setInspected(null)}>
-      <Card style={{ width: isMobile ? "100%" : 360, maxHeight: isMobile ? "80dvh" : "100%", borderRadius: isMobile ? "18px 18px 0 0" : 0, padding: 20, overflowY: "auto" }} onClick={(event) => event.stopPropagation()}>
-        <button ref={detailCloseRef} type="button" aria-label="Fechar detalhes" onClick={() => setInspected(null)} style={{ float: "right", border: 0, background: "none", cursor: "pointer" }}><X size={18} /></button>
-        <h2 style={{ ...G, margin: "0 0 18px", fontSize: 18 }}>{inspected.description}</h2>
-        {[["Data", inspected.date], ["Categoria", pickCategoryTagFromApiTransaction(inspected)?.label || inspected.category || "—"], ["Valor", inspected.value_currency || (cardScope === "current" && card?.currency) ? formatMoneyAbs(inspected.value, inspected.value_currency || card.currency) : "—"], ["Situação", inspected.status === "paid" ? "Paga" : inspected.status === "confirmed" ? "A pagar" : "Pendente"]].map(([label, value]) => <div key={label} style={{ ...G, display: "flex", justifyContent: "space-between", gap: 10, borderBottom: `1px solid ${T.border}`, padding: "10px 0", fontSize: 12 }}><span style={{ color: T.inkMid }}>{label}</span><strong style={{ ...NUM }}>{value}</strong></div>)}
-        {inspectedInstallment && <>
-          <h3 style={{ ...G, fontSize: 14, margin: "20px 0 6px" }}>Parcela</h3>
-          {[["Parcela atual", `${inspectedInstallment.installment_number}/${inspectedInstallment.total_installments}`], ["Restam", `${Math.max(0, inspectedInstallment.total_installments - inspectedInstallment.installment_number)} parcelas`], ["Vencimento desta parcela", inspectedInstallment.due_date || "—"], ["Valor desta parcela", inspected.value_currency || (cardScope === "current" && card?.currency) ? formatMoneyAbs(inspectedInstallment.amount, inspected.value_currency || card.currency) : "—"]].map(([label, value]) => <div key={label} style={{ ...G, display: "flex", justifyContent: "space-between", gap: 10, borderBottom: `1px solid ${T.border}`, padding: "10px 0", fontSize: 12 }}><span style={{ color: T.inkMid }}>{label}</span><strong style={{ ...NUM }}>{value}</strong></div>)}
-          <p style={{ ...G, fontSize: 11, color: T.inkMid }}>A data da última parcela depende do cronograma completo, que não vem nesta listagem.</p>
-        </>}
-        {inspected.refund_of_transaction_id && <p style={{ ...G, fontSize: 11, color: T.inkMid }}>Este estorno está vinculado a uma compra original.</p>}
+    {inspected && isMobile && <div ref={detailDialogRef} role="dialog" aria-modal="true" aria-label="Detalhes do lançamento" style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(15,15,13,.35)", display: "flex", justifyContent: "flex-end", alignItems: "flex-end" }} onClick={() => setInspected(null)}>
+      <Card style={{ width: "100%", maxHeight: "80dvh", borderRadius: "18px 18px 0 0", padding: 20, overflowY: "auto" }} onClick={(event) => event.stopPropagation()}>
+        <LedgerDetail row={inspected} currency={cardScope === "current" ? card?.currency : null} closeRef={detailCloseRef} onClose={() => setInspected(null)} onMove={(row) => setDialog({ kind: "move", ids: [row.id] })} onRefund={(row) => setDialog({ kind: "refund", row })} onOpenOriginal={openOriginal} />
       </Card>
     </div>}
+    {dialog?.kind === "categorize" && <CategorizeDialog rows={rowsByIds(dialog.ids)} categories={categories} onSubmit={submitCategorize} onClose={closeDialog} />}
+    {dialog?.kind === "move" && <MoveInstallmentDialog rows={rowsByIds(dialog.ids).length ? rowsByIds(dialog.ids) : inspected ? [inspected] : []} invoiceOptions={invoiceOpts} onSubmit={submitMove} onClose={closeDialog} />}
+    {dialog?.kind === "refund" && <RefundDialog row={dialog.row} currency={cardScope === "current" ? card?.currency : null} today={todayLocalYmd()} onSubmit={submitRefund} onClose={closeDialog} />}
+    {dialog?.kind === "export" && <ExportDialog total={state.total} filterSummary={filterSummary()} onExport={submitExport} onClose={closeDialog} />}
+    {dialog?.kind === "assistant" && <AssistantDrawer insights={insights.items} loadedCount={state.rows.length} onClose={closeDialog} onSelect={(ids) => { setSelectedRows(ids); setDialog(null); }} onCategorize={(ids) => { setSelectedRows(ids); setDialog({ kind: "categorize", ids }); }} />}
+    {notice && <div role="status" style={{ ...G, position: "fixed", left: "50%", bottom: 20, transform: "translateX(-50%)", zIndex: 70, background: T.ink, color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 12, display: "flex", gap: 12, alignItems: "center" }}>{notice}<button type="button" aria-label="Fechar aviso" onClick={() => setNotice(null)} style={{ border: 0, background: "none", color: "#fff", cursor: "pointer" }}>×</button></div>}
     {summarySheetOpen && isMobile && cardScope === "current" && <div ref={summaryDialogRef} role="dialog" aria-modal="true" aria-label="Resumo e saídas do recorte" style={{ position: "fixed", inset: 0, zIndex: 48, background: "rgba(15,15,13,.35)", display: "flex", alignItems: "flex-end" }} onClick={() => setSummarySheetOpen(false)}>
       <div className="fincla-scroll" style={{ background: T.bg, borderRadius: "18px 18px 0 0", maxHeight: "85dvh", width: "100%", padding: 16, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }} onClick={(event) => event.stopPropagation()}>
         <button ref={summaryCloseRef} type="button" aria-label="Fechar resumo" onClick={() => setSummarySheetOpen(false)} style={{ alignSelf: "flex-end", border: 0, background: "none", cursor: "pointer" }}><X size={18} /></button>

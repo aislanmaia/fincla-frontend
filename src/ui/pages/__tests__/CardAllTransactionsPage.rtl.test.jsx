@@ -392,3 +392,126 @@ describe("CardAllTransactionsPage · saídas por mês/semana", () => {
     expect(screen.getByRole("button", { name: "Filtrar por Alimentação" })).toHaveAttribute("aria-pressed", "true");
   });
 });
+
+describe("CardAllTransactionsPage · ações do ledger", () => {
+  const tag = (id, label) => ({ categoria: [{ id, name: label, label, type: "category" }] });
+  const ledger = [
+    { id: 11, date: "2026-10-02", description: "Notebook", value: 100, value_currency: "BRL", type: "expense", status: "confirmed", tags: tag("c1", "Compras"), installment_info: [{ installment_number: 3, total_installments: 10, due_date: "2026-10-15", amount: 100 }] },
+    { id: 12, date: "2026-10-02", description: "Padaria", value: 20, value_currency: "BRL", type: "expense", status: "confirmed", tags: tag("c2", "Alimentação") },
+  ];
+  const withLedger = (rows = ledger) => server.use(
+    http.get("*/v1/transactions", ({ request }) => {
+      requests.push(new URL(request.url));
+      return HttpResponse.json({ data: rows, pagination: { total: rows.length, page: 1, limit: 30, pages: 1, has_next: false, has_prev: false } });
+    }),
+    http.get("*/v1/tags/catalog", () => HttpResponse.json({ categories: [{ id: "c1", label: "Compras", system_key: "shopping", color: "#2563EB" }, { id: "c3", label: "Lazer", system_key: "fun", color: "#059669" }] })),
+  );
+
+  it("mostra Parcela, Restam, Fim previsto e o subtotal do dia", async () => {
+    withLedger();
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    expect(await screen.findByText("Notebook")).toBeInTheDocument();
+    const list = screen.getByRole("list");
+    expect(within(list).getByText("3/10")).toBeInTheDocument();
+    expect(within(list).getByText(/7×/)).toBeInTheDocument();
+    expect(within(list).getByText("mai/27")).toBeInTheDocument();
+    expect(within(list).getByText(/2 itens/)).toBeInTheDocument();
+    expect(within(list).getByText(/120,00/)).toBeInTheDocument();
+  });
+
+  it("categoriza em lote mandando só tag_ids e a data", async () => {
+    withLedger();
+    const bodies = [];
+    server.use(http.put("*/v1/transactions/:id", async ({ request, params }) => { bodies.push({ id: params.id, body: await request.json() }); return HttpResponse.json({ id: Number(params.id) }); }));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await screen.findByText("Notebook");
+    await user.click(screen.getByRole("checkbox", { name: "Selecionar lançamentos carregados" }));
+    await user.click(screen.getByRole("button", { name: "Categorizar" }));
+    const dialog = screen.getByRole("dialog", { name: "Categorizar lançamentos" });
+    await user.selectOptions(within(dialog).getByLabelText("Nova categoria"), "c3");
+    await user.click(within(dialog).getByRole("button", { name: "Aplicar categoria" }));
+    await waitFor(() => expect(bodies).toHaveLength(2));
+    expect(bodies.map((entry) => entry.body.tag_ids)).toEqual([["c3"], ["c3"]]);
+    expect(Object.keys(bodies[0].body).sort()).toEqual(["date", "tag_ids"]);
+    expect(await screen.findByText("2 lançamentos recategorizados.")).toBeInTheDocument();
+  });
+
+  it("move só as parcelas para a fatura escolhida e avisa dos itens à vista", async () => {
+    withLedger();
+    const moves = [];
+    server.use(http.patch("*/v1/credit-cards/:card/installments/:tx/move-invoice", async ({ request, params }) => { moves.push({ card: params.card, tx: params.tx, body: await request.json() }); return HttpResponse.json({ success: true, message: "ok" }); }));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await screen.findByText("Notebook");
+    await user.click(screen.getByRole("checkbox", { name: "Selecionar lançamentos carregados" }));
+    await user.click(screen.getByRole("button", { name: "Mover parcela" }));
+    const dialog = screen.getByRole("dialog", { name: "Mover parcela de fatura" });
+    expect(dialog).toHaveTextContent("1 item(ns) à vista foram ignorados");
+    const option = within(dialog).getAllByRole("option").find((entry) => /dezembro 2026/.test(entry.textContent));
+    await user.selectOptions(within(dialog).getByLabelText("Fatura de destino"), option.value);
+    await user.click(within(dialog).getByRole("button", { name: "Mover parcela" }));
+    await waitFor(() => expect(moves).toHaveLength(1));
+    expect(moves[0]).toEqual({ card: "7", tx: "11", body: { target_year: 2026, target_month: 12 } });
+  });
+
+  it("lança estorno vinculado à compra, com categoria herdada, e recusa valor acima da compra", async () => {
+    withLedger();
+    const posted = [];
+    server.use(http.post("*/v1/transactions", async ({ request }) => { posted.push(await request.json()); return HttpResponse.json({ id: 99, type: "refund" }); }));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Ver detalhes de Notebook" }));
+    await user.click(screen.getByRole("button", { name: /Lançar estorno desta compra/ }));
+    const dialog = screen.getByRole("dialog", { name: "Lançar estorno" });
+    const value = within(dialog).getByLabelText("Valor do estorno");
+    await user.clear(value);
+    await user.type(value, "150");
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("O estorno não pode passar do valor da compra.");
+    expect(within(dialog).getByRole("button", { name: "Lançar estorno" })).toBeDisabled();
+    await user.clear(value);
+    await user.type(value, "40");
+    await user.click(within(dialog).getByRole("button", { name: "Lançar estorno" }));
+    await waitFor(() => expect(posted).toHaveLength(1));
+    expect(posted[0]).toMatchObject({ type: "refund", value: 40, refund_of_transaction_id: 11, card_id: 7, tag_ids: ["c1"], payment_method: "credit_card" });
+  });
+
+  it("exporta o conjunto inteiro do recorte, não só a página carregada", async () => {
+    const pages = [];
+    server.use(
+      http.get("*/v1/transactions", ({ request }) => {
+        const url = new URL(request.url);
+        requests.push(url);
+        const page = Number(url.searchParams.get("page"));
+        const limit = Number(url.searchParams.get("limit"));
+        pages.push({ page, limit });
+        return HttpResponse.json({ data: [{ id: page, date: "2026-10-02", description: `Linha ${page}`, value: 5, value_currency: "BRL", type: "expense", status: "paid" }], pagination: { total: 2, page, limit, pages: 2, has_next: page === 1, has_prev: page > 1 } });
+      }),
+    );
+    const created = [];
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: (blob) => { created.push(blob); return "blob:x"; }, revokeObjectURL: () => {} }));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await screen.findByText("Linha 1");
+    await user.click(screen.getByRole("button", { name: /Exportar/ }));
+    const dialog = screen.getByRole("dialog", { name: "Exportar lançamentos" });
+    expect(dialog).toHaveTextContent("2 lançamentos");
+    await user.click(within(dialog).getByRole("button", { name: "Exportar CSV" }));
+    await waitFor(() => expect(created).toHaveLength(1));
+    expect(await created[0].text()).toContain("Linha 2");
+    expect(pages.some((entry) => entry.limit === 100)).toBe(true);
+  });
+
+  it("o Assistente aponta itens sem categoria e abre a categorização deles", async () => {
+    withLedger([{ id: 21, date: "2026-10-02", description: "Sem dono", value: 9, value_currency: "BRL", type: "expense", status: "confirmed" }, ledger[1]]);
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await screen.findByText("Sem dono");
+    expect(screen.getByLabelText("1 alertas")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Assistente/ }));
+    const drawer = screen.getByRole("dialog", { name: "Assistente" });
+    expect(within(drawer).getByText("1 item sem categoria")).toBeInTheDocument();
+    await user.click(within(drawer).getByRole("button", { name: "Categorizar" }));
+    expect(screen.getByRole("dialog", { name: "Categorizar lançamentos" })).toHaveTextContent("1 lançamento selecionado");
+  });
+});
