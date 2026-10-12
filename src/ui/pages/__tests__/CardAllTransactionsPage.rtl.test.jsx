@@ -404,7 +404,10 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
       requests.push(new URL(request.url));
       return HttpResponse.json({ data: rows, pagination: { total: rows.length, page: 1, limit: 30, pages: 1, has_next: false, has_prev: false } });
     }),
-    http.get("*/v1/tags/catalog", () => HttpResponse.json({ categories: [{ id: "c1", label: "Compras", system_key: "shopping", color: "#2563EB" }, { id: "c3", label: "Lazer", system_key: "fun", color: "#059669" }] })),
+    // Como no backend real: o catálogo de estorno tem categorias próprias, as de despesa não valem para refund.
+    http.get("*/v1/tags/catalog", ({ request }) => HttpResponse.json({ categories: new URL(request.url).searchParams.get("transaction_type") === "refund"
+      ? [{ id: "r1", label: "Não classificado", system_key: "unclassified", color: "#6B7280" }]
+      : [{ id: "c1", label: "Compras", system_key: "shopping", color: "#2563EB" }, { id: "c3", label: "Lazer", system_key: "fun", color: "#059669" }] })),
   );
 
   it("mostra Parcela, Restam, Fim previsto e o subtotal do dia", async () => {
@@ -437,6 +440,22 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(await screen.findByText("2 lançamentos recategorizados.")).toBeInTheDocument();
   });
 
+  it("categoriza em lote sem tocar nos estornos selecionados", async () => {
+    withLedger([...ledger, { id: 13, date: "2026-10-03", description: "Estorno loja", value: 5, value_currency: "BRL", type: "refund", status: "confirmed", tags: tag("r1", "Não classificado") }]);
+    const ids = [];
+    server.use(http.put("*/v1/transactions/:id", ({ params }) => { ids.push(params.id); return HttpResponse.json({ id: Number(params.id) }); }));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await screen.findByText("Notebook");
+    await user.click(screen.getByRole("checkbox", { name: "Selecionar lançamentos carregados" }));
+    await user.click(screen.getByRole("button", { name: "Categorizar" }));
+    const dialog = screen.getByRole("dialog", { name: "Categorizar lançamentos" });
+    expect(dialog).toHaveTextContent("1 estorno fica de fora");
+    await user.selectOptions(within(dialog).getByLabelText("Nova categoria"), "c3");
+    await user.click(within(dialog).getByRole("button", { name: "Aplicar categoria" }));
+    await waitFor(() => expect(ids.sort()).toEqual(["11", "12"]));
+  });
+
   it("move só as parcelas para a fatura escolhida e avisa dos itens à vista", async () => {
     withLedger();
     const moves = [];
@@ -455,7 +474,7 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(moves[0]).toEqual({ card: "7", tx: "11", body: { target_year: 2026, target_month: 12 } });
   });
 
-  it("lança estorno vinculado à compra, com categoria herdada, e recusa valor acima da compra", async () => {
+  it("lança estorno vinculado à compra, na categoria do catálogo de estorno, e recusa valor acima da compra", async () => {
     withLedger();
     const posted = [];
     server.use(http.post("*/v1/transactions", async ({ request }) => { posted.push(await request.json()); return HttpResponse.json({ id: 99, type: "refund" }); }));
@@ -473,7 +492,7 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     await user.type(value, "40");
     await user.click(within(dialog).getByRole("button", { name: "Lançar estorno" }));
     await waitFor(() => expect(posted).toHaveLength(1));
-    expect(posted[0]).toMatchObject({ type: "refund", value: 40, refund_of_transaction_id: 11, card_id: 7, tag_ids: ["c1"], payment_method: "credit_card" });
+    expect(posted[0]).toMatchObject({ type: "refund", value: 40, refund_of_transaction_id: 11, card_id: 7, tag_ids: ["r1"], payment_method: "credit_card" });
   });
 
   it("exporta o conjunto inteiro do recorte, não só a página carregada", async () => {

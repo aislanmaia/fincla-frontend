@@ -1,6 +1,6 @@
 import { createTransaction, listTransactions, updateTransaction } from "../../../api/transactions";
 import { moveInstallmentToInvoice } from "../../../api/creditCards";
-import { buildCreateTransactionPayload, pickCategoryTagFromApiTransaction, pickNonCategoryTagIdsFromApiTransaction, TRANSACTIONS_API_MAX_LIMIT } from "../../data/transactionsAdapter.js";
+import { buildCreateTransactionPayload, pickNonCategoryTagIdsFromApiTransaction, TRANSACTIONS_API_MAX_LIMIT } from "../../data/transactionsAdapter.js";
 
 /** Roda uma ação por linha sem parar na primeira falha; devolve quem passou e quem falhou. */
 async function eachRow(rows, action) {
@@ -24,17 +24,19 @@ export function moveRows({ rows, cardId, organizationId, year, month }) {
   return eachRow(rows, (row) => moveInstallmentToInvoice(cardId, row.id, organizationId, { target_year: year, target_month: month }));
 }
 
-/** Estorno vinculado à compra; herda a categoria e as etiquetas dela. */
-export function createRefund({ row, cardId, organizationId, value, description, dateYmd }) {
-  const category = pickCategoryTagFromApiTransaction(row);
+/**
+ * Estorno vinculado à compra. A categoria vem do catálogo de ESTORNO (as categorias de despesa
+ * não valem para o tipo refund) e etiquetas de detalhe da compra ficam de fora: pertencem a
+ * outra categoria e o backend as recusa.
+ */
+export function createRefund({ row, cardId, organizationId, value, description, dateYmd, categoryId }) {
   return createTransaction(buildCreateTransactionPayload({
     organizationId,
     tipo: "estorno",
     description,
     value,
     paymentMethodKey: "credito",
-    categoryTagId: category?.id ?? null,
-    detailTagIds: pickNonCategoryTagIdsFromApiTransaction(row),
+    categoryTagId: categoryId,
     dateIso: `${dateYmd}T12:00:00`,
     cardId,
     refundOfTransactionId: row.id,

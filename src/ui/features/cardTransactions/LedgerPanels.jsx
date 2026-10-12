@@ -1,7 +1,7 @@
 import { X } from "lucide-react";
 
 import { Badge, Btn } from "../../components/primitives.jsx";
-import { pickCategoryTagFromApiTransaction } from "../../data/transactionsAdapter.js";
+import { formatYmdToBrDisplay, pickCategoryTagFromApiTransaction } from "../../data/transactionsAdapter.js";
 import { formatMoneyAbs } from "../../money/formatMoney.js";
 import { T } from "../../tokens.js";
 import { G, NUM } from "../../typography.js";
@@ -27,7 +27,7 @@ export function LedgerDetail({ row, currency, closeRef, onClose, onMove, onRefun
     <button ref={closeRef} type="button" aria-label="Fechar detalhes" onClick={onClose} style={{ float: "right", border: 0, background: "none", cursor: "pointer" }}><X size={18} /></button>
     <h2 style={{ ...G, margin: "0 0 6px", fontSize: 18 }}>{row.description}</h2>
     <div style={{ marginBottom: 14 }}><Badge bg={T.greenLight} color={T.green}>{category}</Badge></div>
-    <Rows entries={[["Data", row.date], ["Valor", money(row.value)], ["Situação", statusText(row)]]} />
+    <Rows entries={[["Data", formatYmdToBrDisplay(String(row.date).slice(0, 10)) || row.date], ["Valor", money(row.value)], ["Situação", statusText(row)]]} />
     {part && <>
       <h3 style={{ ...G, fontSize: 14, margin: "18px 0 4px" }}>Parcela</h3>
       <Rows entries={[
@@ -36,7 +36,7 @@ export function LedgerDetail({ row, currency, closeRef, onClose, onMove, onRefun
         ["Restam", rest === 0 ? "quitada" : `${rest}× · ${money(part.amount * rest)}`],
         ["Total original", money(part.amount * part.total_installments)],
         ["Última parcela (prevista)", forecastEnd(row) ?? "—"],
-        ["Vencimento desta parcela", part.due_date || "—"],
+        ["Vencimento desta parcela", formatYmdToBrDisplay(part.due_date) || "—"],
       ]} />
       <p style={{ ...G, fontSize: 11, color: T.inkMid }}>Cronograma regular: total e última parcela somam o valor desta parcela; centavos de arredondamento podem diferir do banco.</p>
       <Btn variant="outGray" onClick={() => onMove(row)} style={{ width: "100%" }}>↻ Mover para outra fatura</Btn>

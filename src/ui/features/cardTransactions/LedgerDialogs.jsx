@@ -6,6 +6,7 @@ import { formatMoneyAbs } from "../../money/formatMoney.js";
 import { T } from "../../tokens.js";
 import { G, NUM } from "../../typography.js";
 import { useFocusTrap } from "../transactions/useFocusTrap.js";
+import { pickCategoryTagFromApiTransaction } from "../../data/transactionsAdapter.js";
 import { installmentOf } from "./ledgerModel.js";
 
 const MONTH_NAMES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
@@ -36,7 +37,10 @@ function Outcome({ error, notice }) {
   </>;
 }
 
-export function CategorizeDialog({ rows, categories, onSubmit, onClose }) {
+export function CategorizeDialog({ rows: selection, categories, onSubmit, onClose }) {
+  // Estorno tem catálogo de categorias próprio: a categoria de despesa não vale para ele.
+  const rows = selection.filter((row) => row.type !== "refund");
+  const ignored = selection.length - rows.length;
   const [categoryId, setCategoryId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -47,7 +51,7 @@ export function CategorizeDialog({ rows, categories, onSubmit, onClose }) {
     if (failed) setError(failed);
   };
   return <LedgerModal title="Categorizar lançamentos" onClose={onClose}>
-    <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>{rows.length} lançamento{rows.length === 1 ? "" : "s"} selecionado{rows.length === 1 ? "" : "s"}. As etiquetas de cada um são mantidas.</p>
+    <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>{rows.length} lançamento{rows.length === 1 ? "" : "s"} selecionado{rows.length === 1 ? "" : "s"}. As etiquetas de cada um são mantidas.{ignored > 0 ? ` ${ignored} estorno${ignored === 1 ? " fica" : "s ficam"} de fora: estorno mantém a categoria de estorno.` : ""}</p>
     <label style={{ ...G, display: "flex", flexDirection: "column", gap: 6, fontSize: 11, fontWeight: 700, color: T.inkMid }}>Nova categoria
       <Select aria-label="Nova categoria" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
         <option value="">Escolha…</option>
@@ -55,7 +59,7 @@ export function CategorizeDialog({ rows, categories, onSubmit, onClose }) {
       </Select>
     </label>
     <Outcome error={error} />
-    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}><Btn variant="outGray" onClick={onClose}>Cancelar</Btn><Btn variant="blue" disabled={!categoryId || busy} onClick={submit}>{busy ? "Aplicando…" : "Aplicar categoria"}</Btn></div>
+    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}><Btn variant="outGray" onClick={onClose}>Cancelar</Btn><Btn variant="blue" disabled={!categoryId || busy || rows.length === 0} onClick={submit}>{busy ? "Aplicando…" : "Aplicar categoria"}</Btn></div>
   </LedgerModal>;
 }
 
@@ -97,19 +101,22 @@ export function MoveInstallmentDialog({ rows, invoiceOptions, onSubmit, onClose,
   </LedgerModal>;
 }
 
-export function RefundDialog({ row, currency, onSubmit, onClose, today }) {
+export function RefundDialog({ row, currency, categories, onSubmit, onClose, today }) {
   const original = Math.abs(Number(row.value) || 0);
   const code = row.value_currency ?? currency;
   const [value, setValue] = useState(String(original));
   const [description, setDescription] = useState(`Estorno · ${row.description}`);
   const [date, setDate] = useState(today);
+  // Mesma categoria da compra quando o catálogo de estorno a tem; senão a primeira disponível.
+  const originalLabel = pickCategoryTagFromApiTransaction(row)?.label;
+  const [categoryId, setCategoryId] = useState(() => (categories.find((entry) => entry.label === originalLabel) ?? categories[0])?.id ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const amount = Number(String(value).replace(",", "."));
-  const valid = Number.isFinite(amount) && amount > 0 && amount <= original && description.trim() && date;
+  const valid = Number.isFinite(amount) && amount > 0 && amount <= original && description.trim() && date && categoryId;
   const submit = async () => {
     setBusy(true); setError(null);
-    const failed = await onSubmit({ row, value: amount, description: description.trim(), dateYmd: date });
+    const failed = await onSubmit({ row, value: amount, description: description.trim(), dateYmd: date, categoryId });
     setBusy(false);
     if (failed) setError(failed);
   };
@@ -127,6 +134,10 @@ export function RefundDialog({ row, currency, onSubmit, onClose, today }) {
     <label style={{ ...G, display: "flex", flexDirection: "column", gap: 6, fontSize: 11, fontWeight: 700, color: T.inkMid }}>Data
       <input aria-label="Data do estorno" type="date" value={date} onChange={(event) => setDate(event.target.value)} style={inputStyle} />
     </label>
+    {categories.length > 1 && <label style={{ ...G, display: "flex", flexDirection: "column", gap: 6, fontSize: 11, fontWeight: 700, color: T.inkMid }}>Categoria do estorno
+      <Select aria-label="Categoria do estorno" value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>{categories.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}</Select>
+    </label>}
+    {categories.length === 0 && <p role="alert" style={{ ...G, margin: 0, fontSize: 12, color: T.red }}>Nenhuma categoria de estorno disponível.</p>}
     {Number.isFinite(amount) && amount > original && <p role="alert" style={{ ...G, margin: 0, fontSize: 12, color: T.red }}>O estorno não pode passar do valor da compra.</p>}
     <Outcome error={error} />
     <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}><Btn variant="outGray" onClick={onClose}>Cancelar</Btn><Btn variant="green" disabled={!valid || busy} onClick={submit}>{busy ? "Lançando…" : "Lançar estorno"}</Btn></div>

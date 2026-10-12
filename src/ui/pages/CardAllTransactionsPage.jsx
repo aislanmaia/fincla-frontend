@@ -75,6 +75,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const enabled = shouldUseRealData(organizationId, dataMode);
   const filter = useTransactionsFilterState({ initial: { period: "tudo" }, clearToInitial: true });
   const categoryCatalog = useCategoryTagsData({ organizationId, enabled });
+  const refundCatalog = useCategoryTagsData({ organizationId, transactionType: "refund", enabled });
   const tagCatalog = useTransactionsTagCatalog({ organizationId, enabled });
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [prefs, setPrefs] = useState(readListPrefs);
@@ -363,13 +364,13 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     return `${result.failed.length} de ${total} não puderam ser alterados${result.done.length ? `; ${result.done.length} já foram` : ""}. Tente novamente.`;
   };
   const submitCategorize = async (categoryId) => {
-    const rows = rowsByIds(dialog.ids);
+    const rows = rowsByIds(dialog.ids).filter((row) => row.type !== "refund");
     return outcome(await categorizeRows({ rows, categoryId, organizationId }), rows.length, `${rows.length} lançamento${rows.length === 1 ? "" : "s"} recategorizado${rows.length === 1 ? "" : "s"}.`);
   };
   const submitMove = async ({ rows, year, month }) => outcome(await moveRows({ rows, cardId: state.card.id, organizationId, year, month }), rows.length, `${rows.length} parcela${rows.length === 1 ? "" : "s"} movida${rows.length === 1 ? "" : "s"} de fatura.`);
-  const submitRefund = async ({ row, value, description, dateYmd }) => {
+  const submitRefund = async ({ row, value, description, dateYmd, categoryId }) => {
     try {
-      await createRefund({ row, cardId: state.card.id, organizationId, value, description, dateYmd });
+      await createRefund({ row, cardId: state.card.id, organizationId, value, description, dateYmd, categoryId });
       finishAction("Estorno lançado e vinculado à compra.");
       return null;
     } catch {
@@ -502,7 +503,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     </div>}
     {dialog?.kind === "categorize" && <CategorizeDialog rows={rowsByIds(dialog.ids)} categories={categories} onSubmit={submitCategorize} onClose={closeDialog} />}
     {dialog?.kind === "move" && <MoveInstallmentDialog rows={rowsByIds(dialog.ids).length ? rowsByIds(dialog.ids) : inspected ? [inspected] : []} invoiceOptions={invoiceOpts} onSubmit={submitMove} onClose={closeDialog} />}
-    {dialog?.kind === "refund" && <RefundDialog row={dialog.row} currency={cardScope === "current" ? card?.currency : null} today={todayLocalYmd()} onSubmit={submitRefund} onClose={closeDialog} />}
+    {dialog?.kind === "refund" && <RefundDialog row={dialog.row} categories={(refundCatalog.categories ?? []).map((entry) => ({ id: String(entry.id), label: entry.labelPt }))} currency={cardScope === "current" ? card?.currency : null} today={todayLocalYmd()} onSubmit={submitRefund} onClose={closeDialog} />}
     {dialog?.kind === "export" && <ExportDialog total={state.total} filterSummary={filterSummary()} onExport={submitExport} onClose={closeDialog} />}
     {dialog?.kind === "assistant" && <AssistantDrawer insights={insights.items} loadedCount={state.rows.length} onClose={closeDialog} onSelect={(ids) => { setSelectedRows(ids); setDialog(null); }} onCategorize={(ids) => { setSelectedRows(ids); setDialog({ kind: "categorize", ids }); }} />}
     {notice && <div role="status" style={{ ...G, position: "fixed", left: "50%", bottom: 20, transform: "translateX(-50%)", zIndex: 70, background: T.ink, color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 12, display: "flex", gap: 12, alignItems: "center" }}>{notice}<button type="button" aria-label="Fechar aviso" onClick={() => setNotice(null)} style={{ border: 0, background: "none", color: "#fff", cursor: "pointer" }}>×</button></div>}
