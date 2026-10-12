@@ -43,10 +43,20 @@ function detailEntry(detail, year, month, card, openRef) {
   };
 }
 
-export function topCategoryLabel(breakdown) {
+const topCategoryRow = (breakdown) => {
   if (!Array.isArray(breakdown) || breakdown.length === 0) return null;
-  const top = breakdown.reduce((best, row) => (Number(row.total) > Number(best.total) ? row : best), breakdown[0]);
+  return breakdown.reduce((best, row) => (Number(row.total) > Number(best.total) ? row : best), breakdown[0]);
+};
+
+export function topCategoryLabel(breakdown) {
+  const top = topCategoryRow(breakdown);
   return top?.category_name ? categoryLabelPtForTag({ name: top.category_name }) : null;
+}
+
+/** Total da categoria que lidera a fatura; `null` quando não foi provado (nunca zero por ausência). */
+export function topCategoryTotal(breakdown) {
+  const total = topCategoryRow(breakdown)?.total;
+  return total === null || total === undefined || total === "" || !Number.isFinite(Number(total)) ? null : Number(total);
 }
 
 /**
@@ -183,5 +193,5 @@ export function cycleTimeline({ closingDate, dueDate }, now) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const total = due.getTime() - start.getTime();
   const at = (date) => Math.min(100, Math.max(0, ((date.getTime() - start.getTime()) / total) * 100));
-  return { closingPct: at(closing), todayPct: at(today), beforeClosing: today <= closing, afterDue: today > due };
+  return { start, closing, due, closingPct: at(closing), todayPct: at(today), beforeClosing: today <= closing, afterDue: today > due };
 }
