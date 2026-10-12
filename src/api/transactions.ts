@@ -102,6 +102,8 @@ export const getTransactionsSummary = async (
       by_month: raw.breakdown.by_month.map((row) => ({ ...row, amount_currency: toCurrency(row.amount) ?? row.amount_currency ?? null })),
       by_invoice: (raw.breakdown.by_invoice ?? []).map((row) => ({ ...row, amount_currency: toCurrency(row.amount) ?? row.amount_currency ?? null })),
       by_week: (raw.breakdown.by_week ?? []).map((row) => ({ ...row, amount_currency: toCurrency(row.amount) ?? row.amount_currency ?? null })),
+      // `undefined`/`null` = a API não calculou (recorte com filtros); `[]` = calculou e nada está previsto.
+      projected_by_invoice: raw.breakdown.projected_by_invoice == null ? raw.breakdown.projected_by_invoice : raw.breakdown.projected_by_invoice.map((row) => ({ ...row, amount_currency: toCurrency(row.amount) ?? null })),
     },
   } : raw;
   return unwrapMoney(withBreakdownCurrencies);
