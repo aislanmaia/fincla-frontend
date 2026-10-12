@@ -28,23 +28,22 @@ function Donut({ rows, total }) {
 
 
 /** Uma linha de categoria: botão que filtra a tela inteira (ou texto, se a categoria não tem filtro possível). */
-function CategoryRow({ row, color, sum, currency, state, onToggle, onOpenAll }) {
+function CategoryRow({ row, color, sum, currency, state, onToggle }) {
   const [hover, setHover] = useState(false);
   const selected = state === true;
-  const action = row.isOthers ? onOpenAll : state !== null && onToggle ? () => onToggle(row.category) : null;
+  const action = state !== null && onToggle ? () => onToggle(row.category) : null;
   const percent = sum > 0 ? Math.round(Math.abs(Number(row.amount)) / sum * 100) : 0;
-  const label = row.isOthers ? `${row.category} (${row.count})` : row.category;
   const content = <>
     <span aria-hidden="true" style={{ width: 9, height: 9, borderRadius: 99, flex: "none", background: color }} />
-    <span style={{ ...G, flex: 1, minWidth: 0, fontSize: 11, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: selected ? 700 : 400 }} title={label}>{label}</span>
+    <span style={{ ...G, flex: 1, minWidth: 0, fontSize: 11, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: selected ? 700 : 400 }} title={row.category}>{row.category}</span>
     <span style={{ ...G, ...NUM, fontSize: 10, color: T.inkMid }}>{percent}%</span>
     <strong style={{ ...G, ...NUM, fontSize: 11, whiteSpace: "nowrap" }}>{formatMoney(row.amount, currency) ?? "—"}</strong>
   </>;
   const rowStyle = { display: "flex", alignItems: "center", gap: 7, width: "100%", minHeight: 26, padding: "2px 6px", borderRadius: 7, border: 0, background: selected ? T.blueLight : hover && action ? T.grayLight : "none", color: T.ink, boxSizing: "border-box" };
   if (!action) return <div style={rowStyle}>{content}</div>;
-  return <button type="button" aria-pressed={row.isOthers ? undefined : selected}
-    aria-label={row.isOthers ? `Ver as ${row.count} categorias agrupadas em Outros` : `Filtrar por ${row.category}`}
-    title={row.isOthers ? "Ver todas as categorias" : selected ? `Remover o filtro ${row.category}` : `Filtrar por ${row.category}`}
+  return <button type="button" aria-pressed={selected}
+    aria-label={`Filtrar por ${row.category}`}
+    title={selected ? `Remover o filtro ${row.category}` : `Filtrar por ${row.category}`}
     onClick={action} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)} style={{ ...rowStyle, cursor: "pointer" }}>{content}</button>;
 }
 
@@ -66,7 +65,7 @@ export function CardTransactionsSummary({ summary, loading, error, isCategorySel
     {summary && <div style={{ display: "flex", flexDirection: "column", gap: 3 }}><span style={{ ...G, fontSize: 11, color: T.inkMid }}>Total movimentado no recorte</span>{totals.length === 0 ? <strong style={{ ...G, ...NUM, fontSize: 16 }}>—</strong> : totals.map((row) => <strong key={row.currency} style={{ ...G, ...NUM, fontSize: 16 }}>{formatMoney(row.amount, row.currency) ?? "—"}</strong>)}</div>}
     {summary && currencies.length === 0 && <p style={{ ...G, fontSize: 12, color: T.inkMid }}>Sem gastos por categoria neste recorte.</p>}
     {currencies.map((currency) => {
-      const { visible, all, others } = groupCategories(categories.filter((row) => row.amount_currency === currency));
+      const { visible, all, hidden } = groupCategories(categories.filter((row) => row.amount_currency === currency));
       const sum = all.reduce((acc, row) => acc + Math.abs(Number(row.amount)), 0);
       return <div key={currency} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {currencies.length > 1 && <h3 style={{ ...G, margin: 0, fontSize: 11, color: T.inkMid }}>{currency}</h3>}
@@ -75,11 +74,11 @@ export function CardTransactionsSummary({ summary, loading, error, isCategorySel
           <ul aria-label={`Categorias em ${currency}`} style={{ listStyle: "none", margin: 0, padding: 0, flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
             {visible.map((row, index) => <li key={`${row.category}-${index}`}>
               {/* `null` = a categoria não existe no catálogo: sem id não há filtro possível. */}
-              <CategoryRow row={row} color={COLORS[index % COLORS.length]} sum={sum} currency={currency} state={row.isOthers ? false : isCategorySelected ? isCategorySelected(row.category) : false} onToggle={onToggleCategory} onOpenAll={() => setAllOpen(currency)} />
+              <CategoryRow row={row} color={COLORS[index % COLORS.length]} sum={sum} currency={currency} state={isCategorySelected ? isCategorySelected(row.category) : false} onToggle={onToggleCategory} />
             </li>)}
           </ul>
         </div>
-        {others && <button type="button" onClick={() => setAllOpen(currency)} style={{ ...G, alignSelf: "flex-start", border: 0, background: "none", color: T.blue, fontSize: 11, fontWeight: 700, cursor: "pointer", padding: "2px 0" }}>Ver todas as {all.length} categorias</button>}
+        {hidden > 0 && <button type="button" onClick={() => setAllOpen(currency)} style={{ ...G, alignSelf: "flex-start", border: 0, background: "none", color: T.blue, fontSize: 11, fontWeight: 700, cursor: "pointer", padding: "2px 0" }}>Ver mais {hidden} {hidden === 1 ? "categoria" : "categorias"}</button>}
         {allOpen === currency && <LedgerModal title="Categorias do recorte" onClose={() => setAllOpen(null)}>
           <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>Do maior para o menor valor. Clique numa categoria para filtrar a lista; clique de novo para remover.</p>
           <ul aria-label={`Todas as categorias em ${currency}`} style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 2 }}>
