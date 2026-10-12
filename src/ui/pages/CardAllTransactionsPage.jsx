@@ -17,6 +17,9 @@ import { CardTransactionsSummary } from "../features/cardTransactions/CardTransa
 import { CardTransactionsTable } from "../features/cardTransactions/CardTransactionsTable.jsx";
 import { CardTimeScopePanel } from "../features/cardTransactions/CardTimeScopePanel.jsx";
 import { buildOutflows } from "../features/cardTransactions/outflowsModel.js";
+import { describeLedgerChange, weekEnd } from "../features/cardTransactions/ledgerHistory.js";
+import { useFilterHistory } from "../features/transactions/filters/useFilterHistory.js";
+import { HistoryButton } from "../features/transactions/TransactionsListHeader.jsx";
 import { defaultInvoiceKeys, invoiceChipLabel, invoiceIdsForQuery, invoiceOptions, periodChipLabel, withCurrentInvoice, withLedgerInvoices } from "../features/cardTransactions/invoiceScope.js";
 import { formatCustomPeriodLabel } from "../features/transactions/filters/customPeriodLabel.js";
 import { readListPrefs, writeListPrefs } from "../features/transactions/listPrefs.js";
@@ -73,7 +76,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     appliedLinkKey.current = linkKey;
     const next = readLink();
     if (!first) {
-      setLink(next); setKind(next.kind); setInvoiceKeys(next.invoice ? [next.invoice] : null);
+      setLink(next); setKind(next.kind); setWeek(null); setInvoiceKeys(next.invoice ? [next.invoice] : null);
       if (next.invoice) setTimeMode("invoice");
     }
     if (next.category) filter.setCats([next.category]); else if (!first) filter.setCats([]);
@@ -92,6 +95,8 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   // O recorte de tempo é sempre um destes dois: FATURAS do cartão ou um PERÍODO livre.
   const [timeMode, setTimeMode] = useState("invoice");
   const [invoiceKeys, setInvoiceKeys] = useState(() => link.invoice ? [link.invoice] : null);
+  // Semana (do gráfico "Saídas por semana") que recorta a lista; vale só para a fatura em que foi marcada.
+  const [week, setWeek] = useState(null);
   const [summarySheetOpen, setSummarySheetOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const [viewportWidth, setViewportWidth] = useState(() => typeof window === "undefined" ? 1440 : window.innerWidth);
@@ -115,13 +120,13 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const [facetState, setFacetState] = useState({ key: null, data: null });
   // Faturas vistas no resumo do ledger (inclui as futuras, que o histórico não traz); só do cartão da tela.
   const [ledgerInvoiceRows, setLedgerInvoiceRows] = useState({ cardId: null, rows: [] });
-  const rememberInvoices = (cardId, data) => {
-    const rows = (data?.breakdown?.by_invoice ?? []).filter((row) => row.invoice_id != null && row.credit_card_id === cardId);
+  const rememberInvoices = (ownerId, data) => {
+    const rows = (data?.breakdown?.by_invoice ?? []).filter((row) => row.invoice_id != null && row.credit_card_id === ownerId);
     if (rows.length === 0) return;
     setLedgerInvoiceRows((prev) => {
-      const byKey = new Map((prev.cardId === cardId ? prev.rows : []).map((row) => [`${row.year}-${row.month}`, row]));
+      const byKey = new Map((prev.cardId === ownerId ? prev.rows : []).map((row) => [`${row.year}-${row.month}`, row]));
       rows.forEach((row) => byKey.set(`${row.year}-${row.month}`, { invoice_id: row.invoice_id, year: row.year, month: row.month }));
-      return { cardId, rows: [...byKey.values()] };
+      return { cardId: ownerId, rows: [...byKey.values()] };
     });
   };
   // Faturas lado a lado: mesma consulta sem o recorte de fatura, para barras de faturas ainda não marcadas.
@@ -158,6 +163,9 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
         setLedgerHeight((old) => Math.abs(old - available) < 2 ? old : available);
       });
     };
+    // O resumo e o gráfico empurram a tabela para baixo: sem trazê-la para a vista o dock abriria cortado (180px) fora da dobra.
+    const top = ledgerRef.current?.getBoundingClientRect().top;
+    if (top != null && top > window.innerHeight * 0.4) ledgerRef.current.scrollIntoView?.({ block: "start", behavior: "smooth" });
     measure();
     window.addEventListener("resize", measure);
     window.addEventListener("scroll", measure, true);
@@ -221,6 +229,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const scopeReady = historyState.cardId != null && historyState.cardId === state.card?.id;
   const selectedInvoiceIds = invoiceIdsForQuery(invoiceMode ? "invoice" : "period", invoiceOpts, invoiceKeys ?? []);
   const noInvoice = invoiceMode && scopeReady && selectedInvoiceIds.length === 0;
+  const activeWeek = invoiceMode && week && selectedInvoiceIds.length === 1 && (invoiceKeys ?? []).join() === week.invoiceKey && week.scope === `${organizationId}:${cardId}` ? week : null;
   // A lista espera o catálogo, o histórico (que diz qual fatura abrir) e ao menos uma fatura marcada.
   const scopeWaiting = cardScope === "current" && !scopeReady;
   const filterBlocked = catalogBlocked || noInvoice || scopeWaiting;
@@ -230,6 +239,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     ...(invoiceMode ? { invoice_id: selectedInvoiceIds } : {}),
     ...(!invoiceMode && bounds.from ? { date_start: bounds.from } : {}),
     ...(!invoiceMode && bounds.to ? { date_end: bounds.to } : {}),
+    ...(activeWeek ? { date_start: activeWeek.from, date_end: activeWeek.to } : {}),
     ...(debouncedSearch ? { description: debouncedSearch } : {}),
     ...(parseMoneyInput(filter.valueMin) != null ? { value_min: parseMoneyInput(filter.valueMin) } : {}),
     ...(parseMoneyInput(filter.valueMax) != null ? { value_max: parseMoneyInput(filter.valueMax) } : {}),
@@ -326,8 +336,10 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.card, organizationId, summaryKey, filterBlocked]);
 
-  const needsLadder = invoiceMode && selectedInvoiceIds.length >= 2;
-  const ladderFilter = Object.fromEntries(Object.entries(aggregateFilter).filter(([key]) => key !== "invoice_id"));
+  // Várias faturas: a escada tira o recorte de fatura. Uma semana marcada: tira o recorte de datas, para as outras semanas continuarem no gráfico.
+  const needsLadder = invoiceMode && (selectedInvoiceIds.length >= 2 || Boolean(activeWeek));
+  const ladderDrop = (selectedInvoiceIds?.length ?? 0) >= 2 ? ["invoice_id"] : ["date_start", "date_end"];
+  const ladderFilter = Object.fromEntries(Object.entries(aggregateFilter).filter(([key]) => !ladderDrop.includes(key)));
   const ladderKey = `${state.card?.id ?? "none"}:${JSON.stringify(ladderFilter)}`;
   useEffect(() => {
     if (!state.card || filterBlocked || !needsLadder) return undefined;
@@ -419,7 +431,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     }
   };
   const exportRowsOf = async () => fetchAllRows({ base: { organization_id: organizationId, ...(cardScope === "current" ? { credit_card_id: state.card.id } : {}) }, filter: queryFilter, total: state.total ?? state.rows.length });
-  const filterSummary = () => [chipLabel, ...(kind ? [`Tipo: ${KIND_LABELS[kind]}`] : []), ...(debouncedSearch ? [`Busca: ${debouncedSearch}`] : []), ...activeFacets.map((facet) => `${facet.label}: ${facet.value}`)];
+  const filterSummary = () => [chipLabel, ...(kind ? [`Tipo: ${KIND_LABELS[kind]}`] : []), ...(weekLabel ? [weekLabel] : []), ...(debouncedSearch ? [`Busca: ${debouncedSearch}`] : []), ...activeFacets.map((facet) => `${facet.label}: ${facet.value}`)];
   const submitExport = async (format) => {
     try {
       const all = await exportRowsOf();
@@ -442,7 +454,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const closeFilters = () => setFiltersOpen(false);
   const openFacet = (key) => { if (key === "busca") { searchInputRef.current?.focus(); return; } setActiveFacet(key); setMobileFacetOpen(true); setFiltersOpen(true); };
   const card = state.card;
-  const clearAll = () => { filter.clearAll(); setCardScope("current"); setKind(null); };
+  const clearAll = () => { filter.clearAll(); setCardScope("current"); setKind(null); setWeek(null); };
   const clearFacet = (key) => key === "cartao" ? setCardScope("current") : filter.clearFacet(key);
   const currentSummary = summaryState.key === summaryKey ? summaryState.data : null;
   const currentSummaryLoading = summaryState.key !== summaryKey || summaryState.loading;
@@ -482,14 +494,41 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     if (!invoiceMode) { setTimeMode("invoice"); setInvoiceKeys([key]); return; }
     toggleInvoice(key);
   };
+  // Barra de semana: marca (ou desmarca, se já era a marcada) o recorte de datas dela dentro da fatura.
+  const pickWeek = (bar) => setWeek(activeWeek?.from === bar.from ? null : { from: bar.from, to: bar.to, invoiceKey: (invoiceKeys ?? []).join(), scope: `${organizationId}:${cardId}` });
   const outflowsKind = invoiceMode && selectedInvoiceIds.length === 1 ? "weeks" : "invoices";
   const currentLadder = ladderState.key === ladderKey ? ladderState : null;
-  const outflowsLoading = outflowsKind === "invoices" && needsLadder ? !currentLadder || currentLadder.loading : currentSummaryLoading;
-  const outflowsError = outflowsKind === "invoices" && needsLadder ? Boolean(currentLadder?.error) : currentSummaryError;
+  const outflowsLoading = needsLadder ? !currentLadder || currentLadder.loading : currentSummaryLoading;
+  const outflowsError = needsLadder ? Boolean(currentLadder?.error) : currentSummaryError;
   const outflowsMessage = cardScope === "all" ? "As saídas por fatura valem para um cartão. Volte para “este cartão”." : noInvoice ? "Marque ao menos uma fatura pra ver as saídas." : null;
-  const outflows = buildOutflows({ mode: outflowsKind, summary: currentSummary, ladder: needsLadder ? currentLadder?.data : null, selectedKeys: invoiceMode ? invoiceKeys ?? [] : [], selectableKeys: new Set(invoiceOpts.filter((option) => option.invoiceId != null).map((option) => option.key)), currency: state.card?.currency });
-  const kindChip = kind ? <button type="button" data-testid="kind-chip" onClick={() => setKind(null)} aria-label={`Remover filtro: ${KIND_LABELS[kind]}`} style={{ ...G, display: "inline-flex", alignItems: "center", gap: 4, border: `1px solid ${T.border}`, borderRadius: 8, background: T.blueLight, color: T.blue, padding: "8px 10px", fontSize: 11, cursor: "pointer" }}>{KIND_LABELS[kind]} <X size={12} /></button> : null;
-  const filterChips = <><TransactionsFilterChips facets={activeFacets} searchActive={Boolean(debouncedSearch)} searchLabel={debouncedSearch} onOpenFacet={openFacet} onAbrirAtivos={() => openFacet("ativos")} onClearFacet={clearFacet} onClearAll={clearAll} maxVisible={viewportWidth >= 1600 ? 3 : viewportWidth >= 1366 ? 2 : 1} chipsBudget={chipsBudget} collapsed={viewportWidth < 1200} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen((open) => !open)} pinnedChip={temporalChip} />{kindChip}</>;
+  const outflows = buildOutflows({ mode: outflowsKind, summary: currentSummary, ladder: needsLadder ? currentLadder?.data : null, selectedKeys: invoiceMode ? invoiceKeys ?? [] : [], selectableKeys: new Set(invoiceOpts.filter((option) => option.invoiceId != null).map((option) => option.key)), selectedWeek: activeWeek?.from ?? null, currency: state.card?.currency });
+  const removableChip = (testid, label, onRemove) => <button type="button" data-testid={testid} onClick={onRemove} aria-label={`Remover filtro: ${label}`} style={{ ...G, display: "inline-flex", alignItems: "center", gap: 4, border: `1px solid ${T.border}`, borderRadius: 8, background: T.blueLight, color: T.blue, padding: "8px 10px", fontSize: 11, cursor: "pointer" }}>{label} <X size={12} /></button>;
+  const kindChip = kind ? removableChip("kind-chip", KIND_LABELS[kind], () => setKind(null)) : null;
+  const weekLabel = activeWeek ? `Semana ${activeWeek.from.slice(8, 10)}/${activeWeek.from.slice(5, 7)}–${activeWeek.to.slice(8, 10)}/${activeWeek.to.slice(5, 7)}` : null;
+  const weekChip = activeWeek ? removableChip("week-chip", weekLabel, () => setWeek(null)) : null;
+  // Desfazer/refazer como em /transactions: cada mudança de filtro, de recorte ou de cartão é um passo.
+  const searchRef = useRef(filter.search);
+  searchRef.current = filter.search;
+  const { search: _search, ...filterWithoutSearch } = filter.snapshot;
+  const ledgerSnapshot = useMemo(() => ({ filter: filterWithoutSearch, kind, timeMode, invoiceKeys, cardScope, week }), [JSON.stringify(filterWithoutSearch), kind, timeMode, invoiceKeys, cardScope, week]);
+  const applyLedgerSnapshot = useCallback((snap) => {
+    // O texto digitado fica como está: a busca tem o próprio "limpar" e não entra nos passos.
+    filter.applySnapshot({ ...snap.filter, search: searchRef.current });
+    setKind(snap.kind); setTimeMode(snap.timeMode); setInvoiceKeys(snap.invoiceKeys); setCardScope(snap.cardScope); setWeek(snap.week);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter.applySnapshot]);
+  const describeLedger = useCallback((destino, atual, verbo) => describeLedgerChange(atual, destino, verbo, { categorias: categoriesById, kindLabels: KIND_LABELS }), [categoriesById]);
+  const history = useFilterHistory(ledgerSnapshot, applyLedgerSnapshot, describeLedger);
+  // A escolha inicial da fatura (e o link da URL) não é um passo do usuário: o histórico começa quando a tela fica pronta.
+  const linkInvoiceUnknown = Boolean(link.invoice) && (invoiceKeys ?? []).join() === link.invoice && !invoiceOpts.some((option) => option.key === link.invoice && option.invoiceId != null);
+  const historyReady = scopeReady && invoiceKeys !== null && !linkInvoiceUnknown;
+  const resetHistory = history.reset;
+  useEffect(() => { resetHistory(); }, [historyReady, cardId, organizationId, resetHistory]);
+  const historyButtons = (history.canUndo || history.canRedo) ? <span data-testid="ledger-history" style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>
+    <HistoryButton dir="undo" enabled={history.canUndo} onClick={history.undo} label={history.undoLabel} />
+    <HistoryButton dir="redo" enabled={history.canRedo} onClick={history.redo} label={history.redoLabel} />
+  </span> : null;
+  const filterChips = <><TransactionsFilterChips facets={activeFacets} searchActive={Boolean(debouncedSearch)} searchLabel={debouncedSearch} onOpenFacet={openFacet} onAbrirAtivos={() => openFacet("ativos")} onClearFacet={clearFacet} onClearAll={clearAll} maxVisible={viewportWidth >= 1600 ? 3 : viewportWidth >= 1366 ? 2 : 1} chipsBudget={chipsBudget} collapsed={viewportWidth < 1200} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen((open) => !open)} pinnedChip={temporalChip} />{kindChip}{weekChip}</>;
   // A tabela do extrato tem colunas demais para ceder espaço: o dock só empurra a partir de 1600px.
   const dockFloating = !isMobile && viewportWidth < 1600;
   const cardScopePanel = <CardScopePanel card={card} scope={cardScope} onScope={(value) => { setCardScope(value); setSummarySheetOpen(false); }} />;
@@ -509,14 +548,14 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     {card && <>
       {cardScope === "current" && !isMobile && <div style={{ display: "grid", gridTemplateColumns: "minmax(300px,3fr) minmax(0,7fr)", gap: 12, minWidth: 0 }}>
         <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} isCategorySelected={isCategorySelected} onToggleCategory={toggleCategory} />
-        <CardOutflowsChart outflows={outflows} currency={card.currency} loading={outflowsLoading} error={outflowsError} message={outflowsMessage} onPickInvoice={pickInvoice} />
+        <CardOutflowsChart outflows={outflows} currency={card.currency} loading={outflowsLoading} error={outflowsError} message={outflowsMessage} onPickInvoice={pickInvoice} onPickWeek={pickWeek} />
       </div>}
       {cardScope === "current" && isMobile && <Card as="button" type="button" onClick={() => setSummarySheetOpen(true)} style={{ ...G, padding: 16, width: "100%", textAlign: "left", cursor: "pointer", color: T.ink }}><strong>Resumo e saídas do recorte</strong><span style={{ display: "block", fontSize: 11, color: T.inkMid, marginTop: 4 }}>{currentSummary ? `${currentSummary.total_transactions} lançamento${currentSummary.total_transactions === 1 ? "" : "s"} · ` : ""}ver gráficos</span></Card>}
       {cardScope === "all" && <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} isCategorySelected={isCategorySelected} onToggleCategory={toggleCategory} />}
-      {!isMobile && <TransactionsFilterBar filter={filter} hideSavedViews hideFacets searchInput={filter.search} setSearchInput={filter.setSearch} searchPlaceholder="Buscar por descrição…" searchInputRef={searchInputRef} barChips={filterChips} onChipsBudget={setChipsBudget} barTrailing={<TransactionsListDisplayControls
+      {!isMobile && <TransactionsFilterBar filter={filter} hideSavedViews hideFacets searchInput={filter.search} setSearchInput={filter.setSearch} searchPlaceholder="Buscar por descrição…" searchInputRef={searchInputRef} barChips={filterChips} onChipsBudget={setChipsBudget} barTrailing={<>{historyButtons}<TransactionsListDisplayControls
         density={prefs.density} grouped={prefs.grouped && sortField === "date"} canGroup={sortField === "date"}
         onDensityChange={(density) => setPreference({ density })}
-        onGroupChange={() => setPreference({ grouped: !prefs.grouped })} />} />}
+        onGroupChange={() => setPreference({ grouped: !prefs.grouped })} /></>} />}
       {isMobile && <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
         <label onFocusCapture={() => setSearchFocused(true)} onBlurCapture={() => setSearchFocused(false)} style={{ ...G, flex: "1 1 180px", minWidth: 0, display: "flex", alignItems: "center", gap: 8, border: `1px solid ${searchFocused ? T.blue : T.border}`, boxShadow: searchFocused ? `0 0 0 2px ${T.blueLight}` : "none", background: T.surface, borderRadius: 9, padding: "8px 10px" }}><Search size={14} color={T.inkMid} /><input aria-label="Buscar lançamentos" placeholder="Buscar por descrição…" value={filter.search} onChange={(event) => filter.setSearch(event.target.value)} style={{ ...G, flex: 1, minWidth: 0, border: 0, outline: "none", background: "transparent", fontSize: 12 }} /></label>
         <button type="button" data-pinned-chip="periodo" onClick={() => openFacet("periodo")} aria-label={`Recorte de tempo: ${chipLabel}. Ajustar.`} style={{ ...G, border: `1px solid ${T.border}`, borderRadius: 8, background: T.blueLight, color: T.blue, padding: "8px 10px", fontSize: 11, cursor: "pointer" }}>{chipLabel}</button>
@@ -525,6 +564,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
           <button type="button" aria-label={`Limpar filtro ${facet.label}`} onClick={() => clearFacet(facet.key)} style={{ ...G, border: 0, background: "none", color: T.blue, padding: "8px 10px 8px 4px", cursor: "pointer" }}>×</button>
         </div>)}
         <Btn variant={filtersOpen ? "dark" : "outGray"} onClick={() => { if (isMobile) setMobileFacetOpen(false); setFiltersOpen((open) => !open); }}><Filter size={14} /> {isMobile ? "Filtros" : "+ Filtros"}{activeCount ? ` (${activeCount})` : ""}</Btn>
+        {historyButtons}
       </div>}
       {noInvoice && <Card role="status" style={{ padding: 12, color: T.inkMid }}>Marque ao menos uma fatura para ver os lançamentos.</Card>}
       {catalogBlocked && <Card role="status" style={{ padding: 12, color: T.amber }}>{isTagFilterBlocked(tagStatus) ? tagFilterStatusMessage(tagStatus) : "Aguardando o catálogo de categorias para aplicar o filtro."}</Card>}
@@ -533,7 +573,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
         <CardTransactionsTable rows={state.rows} total={state.total} cardCurrency={cardScope === "current" ? card.currency : null} loading={state.loading} error={state.error} hasMore={hasMore} onMore={onMore} selected={selectedRows} onSelected={setSelectedRows} selectionSum={selectionSum} onCategorize={() => setDialog({ kind: "categorize", ids: selectedRows })} onMoveInstallment={cardScope === "current" ? () => setDialog({ kind: "move", ids: selectedRows }) : undefined} onExportSelected={() => downloadCsv(selectedRowObjects, cardScope === "current" ? card.currency : null)} inspected={inspected} onInspect={(row) => { inspectTriggerRef.current = document.activeElement; setInspected(row); }} grouped={prefs.grouped && sortField === "date"} density={prefs.density} isMobile={isMobile} maxHeight={filtersOpen && !isMobile ? ledgerHeight : undefined} />
         </div>
         {inspected && !isMobile && <div ref={detailDialogRef} role="dialog" aria-modal="false" aria-label="Detalhes do lançamento" style={{ flex: "none", width: 360, minWidth: 0, marginLeft: 12 }}><Card style={{ height: "100%", padding: 20, overflowY: "auto", boxSizing: "border-box" }}><LedgerDetail row={inspected} currency={cardScope === "current" ? card?.currency : null} closeRef={detailCloseRef} onClose={() => setInspected(null)} onMove={cardScope === "current" ? (row) => setDialog({ kind: "move", ids: [row.id] }) : undefined} onRefund={cardScope === "current" ? (row) => setDialog({ kind: "refund", row }) : undefined} onOpenOriginal={openOriginal} /></Card></div>}
-        {filtersOpen && !isMobile && !inspected && <div style={{ ...(dockFloating ? { position: "absolute", top: 0, right: 0, zIndex: 5, boxShadow: "-8px 0 24px rgba(15,15,13,.1)" } : { flex: "none" }), width: Math.min(420, Math.max(320, viewportWidth * .28)), height: ledgerHeight, minWidth: 0 }}><TransactionsFilterPanel filter={filter} facet={activeFacet} onFacetChange={setActiveFacet} categories={categories} allTags={tagOptions.map((tag) => tag.displayLabel)} allTagsLoading={tagCatalog.loading} allTagsError={Boolean(tagCatalog.error)} tagIdByLabel={tagIdByLabel} facetCounts={facetCounts} activeFacets={activeFacets} onClearFacet={clearFacet} onClearAll={clearAll} onApply={closeFilters} onClose={closeFilters} resultCount={state.total ?? 0} resultsLoading={state.loading} visibleFacetKeys={FACETS} defaultPeriod="tudo" cardScopePanel={cardScopePanel} periodScopePanel={timeScopePanel} hidePeriodContent={invoiceMode} selectionOverrides={{ cartao: cardScope === "all" ? 1 : 0, ...(invoiceMode ? { periodo: 0 } : {}) }} /></div>}
+        {filtersOpen && !isMobile && !inspected && <div style={{ ...(dockFloating ? { position: "absolute", top: 0, right: 0, zIndex: 5, boxShadow: "-8px 0 24px rgba(15,15,13,.1)" } : { flex: "none" }), width: dockFloating ? Math.min(480, Math.max(400, viewportWidth * .4)) : Math.min(420, Math.max(320, viewportWidth * .28)), maxWidth: "100%", height: ledgerHeight, minWidth: 0 }}><TransactionsFilterPanel filter={filter} facet={activeFacet} onFacetChange={setActiveFacet} categories={categories} allTags={tagOptions.map((tag) => tag.displayLabel)} allTagsLoading={tagCatalog.loading} allTagsError={Boolean(tagCatalog.error)} tagIdByLabel={tagIdByLabel} facetCounts={facetCounts} activeFacets={activeFacets} onClearFacet={clearFacet} onClearAll={clearAll} onApply={closeFilters} onClose={closeFilters} resultCount={state.total ?? 0} resultsLoading={state.loading} visibleFacetKeys={FACETS} defaultPeriod="tudo" cardScopePanel={cardScopePanel} periodScopePanel={timeScopePanel} hidePeriodContent={invoiceMode} selectionOverrides={{ cartao: cardScope === "all" ? 1 : 0, ...(invoiceMode ? { periodo: 0 } : {}) }} /></div>}
       </div>
       {state.error && <Card role="alert" style={{ display: "flex", alignItems: "center", gap: 12, padding: 14 }}>Não foi possível carregar os lançamentos. <Btn variant="outGray" onClick={() => { setState((current) => ({ ...current, loading: true, error: false })); setRetry((value) => value + 1); }}>Tentar novamente</Btn></Card>}
     </>}
@@ -552,7 +592,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
       <div className="fincla-scroll" style={{ background: T.bg, borderRadius: "18px 18px 0 0", maxHeight: "85dvh", width: "100%", padding: 16, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }} onClick={(event) => event.stopPropagation()}>
         <button ref={summaryCloseRef} type="button" aria-label="Fechar resumo" onClick={() => setSummarySheetOpen(false)} style={{ alignSelf: "flex-end", border: 0, background: "none", cursor: "pointer" }}><X size={18} /></button>
         <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} isCategorySelected={isCategorySelected} onToggleCategory={toggleCategory} />
-        <CardOutflowsChart outflows={outflows} currency={card?.currency} loading={outflowsLoading} error={outflowsError} message={outflowsMessage} onPickInvoice={pickInvoice} isMobile />
+        <CardOutflowsChart outflows={outflows} currency={card?.currency} loading={outflowsLoading} error={outflowsError} message={outflowsMessage} onPickInvoice={pickInvoice} onPickWeek={pickWeek} isMobile />
       </div>
     </div>}
     {filtersOpen && isMobile && <div ref={filterDialogRef} role="dialog" aria-modal="true" aria-label="Filtros dos lançamentos" style={{ position: "fixed", inset: 0, zIndex: 49, background: "rgba(15,15,13,.35)", display: "flex", alignItems: "flex-end" }} onClick={closeFilters}>

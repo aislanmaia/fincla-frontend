@@ -6,9 +6,9 @@ import { G, NUM } from "../../typography.js";
 /**
  * "Saídas por mês/semana": o gráfico do recorte filtrado. Com uma fatura mostra as
  * semanas dela; com várias (ou por período) mostra uma barra por fatura. Barra de
- * fatura é clicável e marca/desmarca a fatura no recorte de tempo.
+ * fatura é clicável e marca/desmarca a fatura no recorte de tempo; barra de semana recorta a lista nas datas dela.
  */
-export function CardOutflowsChart({ outflows, currency, loading, error, message, onPickInvoice, isMobile = false }) {
+export function CardOutflowsChart({ outflows, currency, loading, error, message, onPickInvoice, onPickWeek, isMobile = false }) {
   const bars = outflows?.bars ?? [];
   const total = (bar) => bar.amount + (bar.projected?.amount ?? 0);
   const ceiling = Math.max(1, ...bars.map(total));
@@ -16,7 +16,7 @@ export function CardOutflowsChart({ outflows, currency, loading, error, message,
   return <Card as="section" aria-label="Saídas por mês e semana" style={{ padding: 18, minWidth: 0 }}>
     <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline", flexWrap: "wrap" }}>
       <h2 style={{ ...G, fontSize: 15, margin: 0 }}>{weekly ? "Saídas por semana" : "Saídas por fatura"}</h2>
-      <span style={{ ...G, fontSize: 11, color: T.inkMid }}>{weekly ? "Semanas da fatura marcada" : "Clique numa barra para marcar ou desmarcar a fatura"}</span>
+      <span style={{ ...G, fontSize: 11, color: T.inkMid }}>{weekly ? "Clique numa semana para filtrar a lista" : "Clique numa barra para marcar ou desmarcar a fatura"}</span>
     </div>
     {message && <p role="status" style={{ ...G, fontSize: 12, color: T.inkMid }}>{message}</p>}
     {!message && error && <p role="alert" style={{ ...G, fontSize: 12, color: T.inkMid }}>Não foi possível carregar as saídas.</p>}
@@ -41,7 +41,7 @@ export function CardOutflowsChart({ outflows, currency, loading, error, message,
         </>;
         const cell = { flex: 1, minWidth: 0, height: "100%", display: "flex", flexDirection: "column", justifyContent: "end", alignItems: "center", gap: 4 };
         return bar.clickable
-          ? <button key={bar.key} type="button" aria-pressed={bar.selected} aria-label={description} title={description} onClick={() => onPickInvoice?.(bar.key)} style={{ ...cell, border: 0, background: "none", padding: 0, cursor: "pointer" }}>{body}</button>
+          ? <button key={bar.key} type="button" aria-pressed={bar.selected} aria-label={description} title={description} onClick={() => (weekly ? onPickWeek?.(bar) : onPickInvoice?.(bar.key))} style={{ ...cell, border: 0, background: "none", padding: 0, cursor: "pointer" }}>{body}</button>
           : <div key={bar.key} role="img" aria-label={description} title={description} style={cell}>{body}</div>;
       })}
     </div>}
