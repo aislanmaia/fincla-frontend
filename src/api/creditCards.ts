@@ -279,3 +279,23 @@ export const getConsolidatedCommitments = async (
   );
   return unwrapMoney(response.data);
 };
+
+export interface InvoiceNote { text: string; updated_at: string }
+
+/** Anotação da fatura (cartão + ano + mês). `null` = nunca houve anotação; texto vazio é diferente. */
+export const getInvoiceNote = async (cardId: number, organizationId: string, year: number, month: number): Promise<InvoiceNote | null> => {
+  const response = await apiClient.get<{ note: InvoiceNote | null }>(
+    `/credit-cards/${cardId}/invoices/${year}/${month}/note`,
+    { params: { organization_id: organizationId } }
+  );
+  return response.data.note;
+};
+
+export const saveInvoiceNote = async (cardId: number, organizationId: string, year: number, month: number, text: string): Promise<InvoiceNote> => {
+  const response = await apiClient.put<{ note: InvoiceNote }>(
+    `/credit-cards/${cardId}/invoices/${year}/${month}/note`,
+    { text },
+    { params: { organization_id: organizationId } }
+  );
+  return response.data.note;
+};

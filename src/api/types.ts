@@ -1016,6 +1016,17 @@ export interface InvoiceResponse {
   six_month_average?: number | null;
   six_month_average_change?: number | null;
   six_month_average_invoices_count?: number;
+  /** Recorrências, parcelas e estornos do ciclo (magnitudes na moeda do cartão). Zero é fato conhecido. */
+  commitments_summary?: {
+    recurring_count: number;
+    recurring_total: number;
+    installments_count: number;
+    installments_total: number;
+    ending_count: number;
+    ending_released: number;
+    refunds_count: number;
+    refunds_total: number;
+  } | null;
   spending_pace?: {
     cycle_start: string;
     cycle_end: string;

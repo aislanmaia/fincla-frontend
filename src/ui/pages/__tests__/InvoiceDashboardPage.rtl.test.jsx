@@ -99,6 +99,10 @@ const detailFixture = (over = {}) => ({
     item(5, "Estorno farmácia", "38.90", "2026-09-26", { modality: "refund" }),
     item(6, "Compra antiga", "10.00", "2026-09-01"),
   ],
+  commitments_summary: {
+    recurring_count: 1, recurring_total: money("44.90"), installments_count: 1, installments_total: money("269.00"),
+    ending_count: 1, ending_released: money("269.00"), refunds_count: 1, refunds_total: money("38.90"),
+  },
   ...over,
 });
 
@@ -109,14 +113,24 @@ const DETAILS = {
 };
 
 /** Backend de mentira na camada HTTP: cliente, adapter, hook e tela reais rodam por cima. */
-function mockApi({ cards = [cardFixture()], detail = DETAILS, patch, listStatus = 200, future = futureFixture(), budgets = [{
+function mockApi({ note = null, saved = [], cards = [cardFixture()], detail = DETAILS, patch, listStatus = 200, future = futureFixture(), budgets = [{
   id: "budget-1", tag_id: "c1", tag_name: "Alimentação", period_type: "monthly", is_active: true,
   amount: money("5000.00"), spent_amount: money("1000.00"), remaining_amount: money("4000.00"), usage_percent: 20,
 }] } = {}) {
   const calls = [];
   calls.queries = [];
+  calls.notes = [];
   const paidOverride = {};
   server.use(
+    http.get("*/v1/credit-cards/:id/invoices/:year/:month/note", ({ request }) => {
+      calls.notes.push(`GET ${new URL(request.url).pathname}`);
+      return HttpResponse.json({ note });
+    }),
+    http.put("*/v1/credit-cards/:id/invoices/:year/:month/note", async ({ request }) => {
+      const body = await request.json();
+      saved.push(body);
+      return HttpResponse.json({ note: { text: body.text, updated_at: "2026-10-12T10:00:00" } });
+    }),
     http.get("*/v1/budgets", ({ request }) => {
       calls.push(`GET ${new URL(request.url).pathname}`);
       expect(new URL(request.url).searchParams.get("period_type")).toBe("monthly");
@@ -195,12 +209,18 @@ describe("InvoiceDashboardPage — card da fatura", () => {
     await waitFor(() => expect(calls.filter((call) => call === "GET /v1/budgets")).toHaveLength(3));
   });
 
-  it("soma estornos Money só quando a moeda é compatível", () => {
-    const base = { card: cardFixture(), organizationId: ORG, currency: "BRL", isMobile: false, onFilter: vi.fn() };
-    const view = render(<InvoiceSummaryTiles {...base} detail={{ items: [{ modality: "refund", amount: money("-38.90") }] }} />);
-    expect(screen.getByRole("region", { name: "Resumo da fatura" })).toHaveTextContent("38,90");
-    view.rerender(<InvoiceSummaryTiles {...base} detail={{ items: [{ modality: "refund", amount: money("-38.90", "EUR") }] }} />);
+  it("lê o resumo de compromissos da API e só aceita dinheiro na moeda da fatura", async () => {
+    mockApi();
+    const base = { card: cardFixture(), organizationId: ORG, currency: "BRL", isMobile: false, onFilter: vi.fn(), year: 2026, month: 10 };
+    const summary = { recurring_count: 0, recurring_total: money("0.00"), installments_count: 2, installments_total: money("10.00"), ending_count: 0, ending_released: money("0.00"), refunds_count: 1, refunds_total: money("38.90") };
+    const view = render(<InvoiceSummaryTiles {...base} detail={{ commitments_summary: summary }} />);
+    const region = screen.getByRole("region", { name: "Resumo da fatura" });
+    expect(region).toHaveTextContent("38,90");
+    expect(region).toHaveTextContent("Nenhuma recorrência nesta fatura");
+    view.rerender(<InvoiceSummaryTiles {...base} detail={{ commitments_summary: { ...summary, refunds_total: money("38.90", "EUR") } }} />);
     expect(screen.getByRole("region", { name: "Resumo da fatura" })).not.toHaveTextContent("38,90");
+    view.rerender(<InvoiceSummaryTiles {...base} detail={{ commitments_summary: null }} />);
+    expect(screen.getByRole("region", { name: "Resumo da fatura" })).toHaveTextContent("Resumo indisponível nesta fatura");
   });
 
   it("segue a hierarquia da Direção C com resumos fundamentados e filtro por modalidade", async () => {
@@ -220,13 +240,15 @@ describe("InvoiceDashboardPage — card da fatura", () => {
     expect(budget).toHaveTextContent("4.000,00");
     expect(budget).toHaveTextContent("3.000,00");
     expect(budget).toHaveTextContent("os períodos podem ser diferentes");
-    expect(footer).toHaveTextContent("1 nesta fatura");
+    expect(footer).toHaveTextContent("1 compra parcelada");
+    expect(footer).toHaveTextContent("1 termina neste ciclo · libera");
     expect(footer).toHaveTextContent("38,90");
-    expect(footer).toHaveTextContent("Resumo de recorrências indisponível");
-    expect(footer).toHaveTextContent("Anotação do cartão");
+    expect(footer).toHaveTextContent("1 assinatura nesta fatura");
+    expect(footer).toHaveTextContent("Anotação da fatura");
     await user.click(within(footer).getByRole("button", { name: /ver parcelas/i }));
     expect(navigateMock).toHaveBeenLastCalledWith({ to: `/cards/${CARD_PUBLIC_ID}/invoices/2026/10/transactions`, search: { fc_invoice_modality: "installment" } });
     expect(calls.filter((call) => call.startsWith("GET /v1/credit-cards"))).toHaveLength(4);
+    expect(calls.notes).toHaveLength(1);
     expect(calls.filter((call) => call === "GET /v1/budgets")).toHaveLength(1);
   });
 
@@ -265,37 +287,28 @@ describe("InvoiceDashboardPage — card da fatura", () => {
     expect(within(budget).getByText("Vestuário").parentElement.children[4]).toHaveTextContent("—");
   });
 
-  it("rotula a nota como dado do cartão e salva sem criar uma anotação fictícia da fatura", async () => {
-    const patched = [];
-    mockApi({ cards: [cardFixture({ notes: "Confirmar estorno" })] });
-    server.use(http.patch("*/v1/credit-cards/1", async ({ request }) => {
-      const body = await request.json();
-      patched.push(body);
-      return HttpResponse.json(cardFixture({ notes: body.notes }));
-    }));
+  it("a anotação é da fatura: lê e grava em /note, e vazio não vira ausência", async () => {
+    const saved = [];
+    mockApi({ note: { text: "Confirmar estorno", updated_at: "2026-10-01T10:00:00" }, saved });
     const user = userEvent.setup();
     renderPage();
     const footer = await screen.findByRole("region", { name: "Resumo da fatura" });
-    expect(footer).toHaveTextContent("Anotação do cartão");
-    expect(footer).toHaveTextContent("Confirmar estorno");
+    await waitFor(() => expect(footer).toHaveTextContent("Confirmar estorno"));
+    expect(footer).toHaveTextContent("Anotação da fatura");
     await user.click(within(footer).getByRole("button", { name: "Editar anotação" }));
-    await user.clear(screen.getByRole("textbox", { name: "Anotação do cartão" }));
-    await user.type(screen.getByRole("textbox", { name: "Anotação do cartão" }), "Ligar para o banco");
+    await user.clear(screen.getByRole("textbox", { name: "Anotação da fatura" }));
+    await user.type(screen.getByRole("textbox", { name: "Anotação da fatura" }), "Ligar para o banco");
     await user.click(screen.getByTestId("card-notes-save"));
-    await waitFor(() => expect(patched).toEqual([{ notes: "Ligar para o banco" }]));
+    await waitFor(() => expect(saved).toEqual([{ text: "Ligar para o banco" }]));
     expect(footer).toHaveTextContent("Ligar para o banco");
   });
 
-  it("atualiza a nota local quando o mesmo cartão recebe dados novos do servidor", async () => {
-    const card = cardFixture({ notes: "Nota antiga" });
-    const props = { detail: { items: [] }, card, organizationId: ORG, currency: "BRL", isMobile: false, onFilter: vi.fn() };
-    const view = render(<InvoiceSummaryTiles {...props} />);
-    expect(screen.getByRole("region", { name: "Resumo da fatura" })).toHaveTextContent("Nota antiga");
-    view.rerender(<InvoiceSummaryTiles {...props} card={{ ...card, notes: "Nota atualizada" }} />);
-    expect(screen.getByRole("region", { name: "Resumo da fatura" })).toHaveTextContent("Nota atualizada");
-    const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "Editar anotação" }));
-    expect(screen.getByRole("textbox", { name: "Anotação do cartão" })).toHaveValue("Nota atualizada");
+  it("sem anotação mostra o estado vazio e permite escrever a primeira", async () => {
+    mockApi({ note: null });
+    renderPage();
+    const footer = await screen.findByRole("region", { name: "Resumo da fatura" });
+    await waitFor(() => expect(footer).toHaveTextContent("Nenhuma anotação nesta fatura."));
+    expect(within(footer).getByRole("button", { name: "Editar anotação" })).toBeEnabled();
   });
 
   it("compara o mesmo dia com valor visível e três estados de velocidade", () => {

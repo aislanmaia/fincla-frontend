@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { updateCreditCard } from "../../../api/creditCards";
+import { getInvoiceNote, saveInvoiceNote } from "../../../api/creditCards";
 import { BUDGETS_CHANGED_EVENT, listBudgets } from "../../../api/budgets";
 import { Card, Btn } from "../../components/primitives";
 import { categoryLabelPtForTag } from "../../data/categoryLabels.js";
@@ -117,31 +117,38 @@ function SummaryTile({ label, value, detail, color, onOpen }) {
   </Card>;
 }
 
-export function InvoiceSummaryTiles({ detail, card, organizationId, currency, isMobile, onFilter }) {
-  const [notes, setNotes] = useState(card?.notes ?? "");
+export function InvoiceSummaryTiles({ detail, card, organizationId, currency, isMobile, onFilter, year, month }) {
+  // Anotação POR FATURA: `null` = nunca houve; texto vazio é uma anotação existente.
+  const [note, setNote] = useState({ status: "loading", text: null });
   const [notesOpen, setNotesOpen] = useState(false);
-  useEffect(() => { setNotes(card?.notes ?? ""); }, [card?.notes]);
-  const items = detail?.items ?? [];
-  const installments = items.filter((item) => item.modality === "installment");
-  const refunds = items.filter((item) => item.modality === "refund");
-  const refundAmounts = refunds.map((item) => invoiceMoneyValue(item.amount, currency));
-  const refundTotal = refundAmounts.every((amount) => amount !== null) ? refundAmounts.reduce((sum, amount) => sum + Math.abs(amount), 0) : null;
-  const money = (value) => currency ? formatMoney(value, currency) ?? "—" : "—";
+  useEffect(() => {
+    if (!card?.id || !organizationId || !year || !month) return undefined;
+    let active = true;
+    setNote({ status: "loading", text: null });
+    getInvoiceNote(card.id, organizationId, year, month)
+      .then((found) => { if (active) setNote({ status: "ok", text: found ? found.text : null }); })
+      .catch(() => { if (active) setNote({ status: "error", text: null }); });
+    return () => { active = false; };
+  }, [card?.id, organizationId, year, month]);
+  const summary = detail?.commitments_summary ?? null;
+  const num = (value) => invoiceMoneyValue(value, currency);
+  const money = (value) => currency && value !== null ? formatMoney(value, currency) ?? "—" : "—";
+  const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
   const saveNotes = async (value) => {
-    await updateCreditCard(card.id, { organization_id: organizationId, notes: value });
-    setNotes(value);
+    const saved = await saveInvoiceNote(card.id, organizationId, year, month, value);
+    setNote({ status: "ok", text: saved.text });
   };
   return <>
     <section aria-label="Resumo da fatura" style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(4, minmax(0, 1fr))", gap: isMobile ? 10 : 12 }}>
-      <SummaryTile label="🔁 Recorrências" value="—" detail="Resumo de recorrências indisponível nesta fatura" color={T.purple} />
-      <SummaryTile label="🧩 Parcelas" value={`${installments.length} nesta fatura`} detail={installments.length ? "Ver os lançamentos parcelados" : "Nenhuma parcela nesta fatura"} color={T.blue} onOpen={() => onFilter("installment")} />
-      <SummaryTile label="↺ Estornos" value={refundTotal === null ? "—" : money(refundTotal)} detail={`${refunds.length} ${refunds.length === 1 ? "estorno" : "estornos"} nesta fatura`} color={T.green} onOpen={() => onFilter("refund")} />
+      <SummaryTile label="🔁 Recorrências" value={summary ? money(num(summary.recurring_total)) : "—"} detail={summary ? (summary.recurring_count ? `${plural(summary.recurring_count, "assinatura", "assinaturas")} nesta fatura` : "Nenhuma recorrência nesta fatura") : "Resumo indisponível nesta fatura"} color={T.purple} />
+      <SummaryTile label="🧩 Parcelas" value={summary ? `${plural(summary.installments_count, "compra", "compras")} parcelada${summary.installments_count === 1 ? "" : "s"}` : "—"} detail={!summary ? "Resumo indisponível nesta fatura" : summary.ending_count ? `${plural(summary.ending_count, "termina", "terminam")} neste ciclo · libera ${money(num(summary.ending_released))}/mês` : summary.installments_count ? "Nenhuma termina neste ciclo" : "Nenhuma parcela nesta fatura"} color={T.blue} onOpen={summary?.installments_count ? () => onFilter("installment") : undefined} />
+      <SummaryTile label="↺ Estornos" value={summary ? money(num(summary.refunds_total)) : "—"} detail={summary ? `${plural(summary.refunds_count, "estorno", "estornos")} nesta fatura` : "Resumo indisponível nesta fatura"} color={T.green} onOpen={summary?.refunds_count ? () => onFilter("refund") : undefined} />
       <Card style={{ padding: 16, display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
-        <strong style={{ ...G, fontSize: 13, color: T.ink }}>📌 Anotação do cartão</strong>
-        <span style={{ ...caption, overflowWrap: "anywhere", flex: 1 }}>{notes?.trim() || "Nenhuma anotação neste cartão."}</span>
-        <Btn variant="ghost" small onClick={() => setNotesOpen(true)}>Editar anotação</Btn>
+        <strong style={{ ...G, fontSize: 13, color: T.ink }}>📌 Anotação da fatura</strong>
+        <span style={{ ...caption, overflowWrap: "anywhere", flex: 1 }}>{note.status === "loading" ? "Carregando anotação…" : note.status === "error" ? "Não foi possível carregar a anotação." : note.text?.trim() || "Nenhuma anotação nesta fatura."}</span>
+        <Btn variant="ghost" small disabled={note.status !== "ok"} onClick={() => setNotesOpen(true)}>Editar anotação</Btn>
       </Card>
     </section>
-    {notesOpen && <NotesDialog initialNotes={notes} isMobile={isMobile} onSave={saveNotes} onClose={() => setNotesOpen(false)} />}
+    {notesOpen && <NotesDialog title="Anotação da fatura" label="Anotação da fatura" initialNotes={note.text ?? ""} isMobile={isMobile} onSave={saveNotes} onClose={() => setNotesOpen(false)} />}
   </>;
 }

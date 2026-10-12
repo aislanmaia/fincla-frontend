@@ -149,7 +149,7 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
     </div>
     <InvoiceBudgetContext detail={detail} invoice={invoice} budget={budget} currency={currency} isMobile={isMobile} now={now} />
     <InvoiceChanges changes={detail.changes} currency={currency} isMobile={isMobile} />
-    <InvoiceSummaryTiles key={card?.id} detail={detail} card={card} organizationId={organizationId} currency={currency} isMobile={isMobile}
+    <InvoiceSummaryTiles key={`${card?.id}:${year}-${month}`} detail={detail} card={card} organizationId={organizationId} currency={currency} isMobile={isMobile} year={year} month={month}
       onFilter={(modality) => navigate({ to: cardTransactionsPath(cardId, year, month), search: { [FC.INVOICE_MODALITY]: modality } })} />
   </>;
 
