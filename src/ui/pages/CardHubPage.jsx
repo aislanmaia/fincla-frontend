@@ -140,6 +140,7 @@ export function CardHubPage({
   const nearestOtherInvoice = mobileOtherInvoices.find((invoice) => invoice.key > hub.initialInvoiceKey)
     ?? mobileOtherInvoices[mobileOtherInvoices.length - 1];
   const insights = detail.future?.insights ?? [];
+  const committed = useMemo(() => summarizeCommitted(detail.future, currency), [detail.future, currency]);
 
   const openCommitments = selectedCard?.public_id ? () => navigate({ to: "/cards/$cardId/commitments", params: { cardId: selectedCard.public_id } }) : undefined;
   const kpis = useMemo(() => {
@@ -295,7 +296,7 @@ export function CardHubPage({
         Cartão selecionado: <strong style={{ color: T.ink }}>{cardName} •{selectedCard.last4}</strong>
       </div>
 
-      <LimitTiles card={selectedCard} currency={currency} committed={summarizeCommitted(detail.future, currency)} isMobile={isMobile} onEdit={() => setDialog("edit-card")} onOpenCommitments={openCommitments} />
+      <LimitTiles card={selectedCard} currency={currency} committed={committed} isMobile={isMobile} onEdit={() => setDialog("edit-card")} onOpenCommitments={openCommitments} />
 
       {!isMobile && insights.length > 0 && (
         <div style={{ background: T.surface, border: `1px solid ${T.amber}`, borderRadius: 14, padding: "14px 18px" }}>

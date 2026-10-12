@@ -15,7 +15,7 @@ export function summarizeCommitted(future, currency) {
   if (!currency || balance?.complete !== true || !Array.isArray(balance.series)) return null;
   if (balance.net_amount === null || balance.net_amount === undefined || !Number.isFinite(Number(balance.net_amount))
     || balance.net_amount_currency !== currency) return null;
-  const ends = balance.series.map((item) => String(item.last_due_date ?? "")).filter((date) => /^\d{4}-\d{2}/.test(date)).sort();
+  const ends = balance.series.map((item) => String(item.last_due_date ?? "")).filter((date) => /^\d{4}-(0[1-9]|1[0-2])/.test(date)).sort();
   if (ends.length !== balance.series.length) return null;
   const last = ends[ends.length - 1];
   return {
@@ -62,9 +62,9 @@ export function LimitTiles({ card, currency, committed = null, isMobile, onEdit,
         {!hasLimit && onEdit && <button type="button" onClick={onEdit} style={{ ...G, background: "none", border: 0, color: T.blue, padding: "8px 0 0", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Definir limite</button>}
       </div>
       <div data-testid="kpi-committed" {...openProps} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: isMobile ? "12px 14px" : "14px 16px", boxShadow: T.sm, cursor: onOpenCommitments ? "pointer" : "default" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 5 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", columnGap: 8, marginBottom: 5 }}>
           <div style={LABEL}>Comprometido em parcelas</div>
-          {onOpenCommitments && <span aria-hidden="true" style={{ ...G, fontSize: 10, color: T.blue, fontWeight: 700, whiteSpace: "nowrap" }}>ver todas →</span>}
+          {onOpenCommitments && <span style={{ ...G, fontSize: 10, color: T.blue, fontWeight: 700, whiteSpace: "nowrap" }}>ver todas →</span>}
         </div>
         <div style={{ ...G, ...NUM, fontSize: isMobile ? 16 : 19, fontWeight: 800, color: T.blue }}>{committed ? formatMoney(committed.net, currency) ?? "—" : "—"}</div>
         <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 8 }}>
