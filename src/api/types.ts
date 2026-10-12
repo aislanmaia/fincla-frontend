@@ -916,6 +916,8 @@ export interface TransactionsSummaryResponse {
     by_invoice?: Array<{ invoice_id: number; credit_card_id: number; year: number; month: number; amount: number; amount_currency?: string | null }>;
     /** Semanas ISO (segunda-feira); só vem preenchido quando o filtro é exatamente uma fatura. */
     by_week?: Array<{ week_start: string; amount: number; amount_currency?: string | null }>;
+    /** ESTIMATIVA de recorrências do cartão ainda não cobradas, por fatura. `null`/ausente = não calculada. */
+    projected_by_invoice?: Array<{ year: number; month: number; amount: number; amount_currency?: string | null; count: number; approximate: boolean }> | null;
   } | null;
 }
 
