@@ -74,7 +74,8 @@ describe("withLedgerInvoices", () => {
     ];
     const out = withLedgerInvoices(base, rows);
     expect(out.map((option) => option.key)).toEqual(["2026-11", "2026-10"]);
-    expect(out[0]).toMatchObject({ invoiceId: 9, total: 300, status: null });
+    expect(out[0]).toMatchObject({ invoiceId: 9, total: null, status: null, ledgerOnly: true });
+    expect(defaultInvoiceKeys([out[0]])).toEqual([]);
     expect(withLedgerInvoices(base, null)).toBe(base);
   });
 });

@@ -68,18 +68,20 @@ function Timeline({ detail, status, now }) {
             <div title="Ciclo aberto: as compras entram nesta fatura" style={{ width: `${cycle.closingPct}%`, borderRadius: "99px 0 0 99px", background: T.blue, opacity: cycle.beforeClosing ? 0.35 : 0.9 }} />
             <div title="Fechada: janela de pagamento" style={{ flex: 1, borderRadius: "0 99px 99px 0", background: cycle.afterDue ? T.red : T.green, opacity: cycle.beforeClosing ? 0.25 : 0.9 }} />
           </div>
-          <div style={{ position: "absolute", left: `${cycle.todayPct}%`, top: 0, transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
+          <div style={{ position: "absolute", left: `${Math.min(97, Math.max(3, cycle.todayPct))}%`, top: 0, transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
             <span style={{ ...G, fontSize: 10, fontWeight: 700, color: T.ink, lineHeight: "12px" }}>hoje</span>
             <span style={{ width: 2, height: 10, background: T.ink }} />
           </div>
           <div style={{ display: "flex", marginTop: 4 }}>
-            <span style={{ ...mutedText, fontSize: 10, width: `${cycle.closingPct}%` }}>ciclo aberto</span>
+            <span style={{ ...mutedText, fontSize: 10, width: `${cycle.closingPct}%`, whiteSpace: "nowrap" }}>ciclo aberto</span>
             <span style={{ ...mutedText, fontSize: 10, flex: 1, textAlign: "right" }}>pagamento</span>
           </div>
         </div>
       ) : pct !== null && pct !== undefined && (
         <div style={{ position: "relative" }}>
           <ProgBar pct={pct} color={`linear-gradient(90deg, ${T.green}, ${T.amber})`} h={6} />
+          <div style={{ position: "absolute", left: `${pct}%`, top: -4, width: 14, height: 14, borderRadius: "50%", background: T.ink, border: "2.5px solid #fff", boxShadow: "0 1px 4px rgba(0,0,0,0.3)", transform: "translateX(-50%)" }} />
+          <div style={{ ...mutedText, fontSize: 11, fontWeight: 700, textAlign: "center", marginTop: 4 }}>hoje</div>
         </div>
       )}
     </div>

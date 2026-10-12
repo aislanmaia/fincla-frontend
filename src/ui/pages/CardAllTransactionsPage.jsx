@@ -90,19 +90,18 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const [historyState, setHistoryState] = useState({ cardId: null, data: null, error: false });
   const [summaryState, setSummaryState] = useState({ key: null, data: null, loading: false, error: false });
   const [facetState, setFacetState] = useState({ key: null, data: null });
-  // Faturas lado a lado: mesma consulta sem o recorte de fatura, para barras de faturas ainda não marcadas.
-  // Faturas vistas no resumo do ledger (inclui as futuras, que o histórico não traz); acumula por cartão.
+  // Faturas vistas no resumo do ledger (inclui as futuras, que o histórico não traz); só do cartão da tela.
   const [ledgerInvoiceRows, setLedgerInvoiceRows] = useState({ cardId: null, rows: [] });
   const rememberInvoices = (cardId, data) => {
-    const rows = data?.breakdown?.by_invoice;
-    if (!Array.isArray(rows) || rows.length === 0) return;
+    const rows = (data?.breakdown?.by_invoice ?? []).filter((row) => row.invoice_id != null && row.credit_card_id === cardId);
+    if (rows.length === 0) return;
     setLedgerInvoiceRows((prev) => {
-      const base = prev.cardId === cardId ? prev.rows : [];
-      const byKey = new Map(base.map((row) => [`${row.year}-${row.month}`, row]));
-      rows.forEach((row) => { if (row.invoice_id != null && (row.credit_card_id == null || row.credit_card_id === cardId)) byKey.set(`${row.year}-${row.month}`, row); });
-      return byKey.size === base.length && base.every((row) => byKey.get(`${row.year}-${row.month}`)?.invoice_id === row.invoice_id) && prev.cardId === cardId ? prev : { cardId, rows: [...byKey.values()] };
+      const byKey = new Map((prev.cardId === cardId ? prev.rows : []).map((row) => [`${row.year}-${row.month}`, row]));
+      rows.forEach((row) => byKey.set(`${row.year}-${row.month}`, { invoice_id: row.invoice_id, year: row.year, month: row.month }));
+      return { cardId, rows: [...byKey.values()] };
     });
   };
+  // Faturas lado a lado: mesma consulta sem o recorte de fatura, para barras de faturas ainda não marcadas.
   const [ladderState, setLadderState] = useState({ key: null, data: null, loading: false, error: false });
   const [retry, setRetry] = useState(0);
   // Depois de uma ação que muda dados (categoria, fatura, estorno) tudo é lido de novo.
@@ -283,7 +282,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
       include_breakdown: true,
       locale: "pt-BR",
     }).then((data) => {
-      if (active) { setSummaryState({ key: summaryKey, data, loading: false, error: false }); rememberInvoices(state.card.id, data); }
+      if (active) { setSummaryState({ key: summaryKey, data, loading: false, error: false }); if (cardScope === "current") rememberInvoices(state.card.id, data); }
     }).catch(() => {
       if (active) setSummaryState({ key: summaryKey, data: null, loading: false, error: true });
     });

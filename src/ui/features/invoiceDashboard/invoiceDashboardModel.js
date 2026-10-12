@@ -177,7 +177,9 @@ export function cycleTimeline({ closingDate, dueDate }, now) {
   const closing = parse(closingDate);
   const due = parse(dueDate);
   if (!closing || !due || due.getTime() <= closing.getTime()) return null;
-  const start = new Date(closing.getFullYear(), closing.getMonth() - 1, closing.getDate() + 1);
+  // Fechamento do mês anterior no mesmo dia, limitado ao último dia daquele mês (31/03 → 28/02).
+  const lastOfPrev = new Date(closing.getFullYear(), closing.getMonth(), 0).getDate();
+  const start = new Date(closing.getFullYear(), closing.getMonth() - 1, Math.min(closing.getDate(), lastOfPrev) + 1);
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const total = due.getTime() - start.getTime();
   const at = (date) => Math.min(100, Math.max(0, ((date.getTime() - start.getTime()) / total) * 100));

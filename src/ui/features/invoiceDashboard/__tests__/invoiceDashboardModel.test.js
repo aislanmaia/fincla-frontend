@@ -116,6 +116,10 @@ describe("cycleTimeline", () => {
     const t = cycleTimeline({ closingDate: "2026-10-05", dueDate: "2026-10-15" }, new Date(2026, 9, 20));
     expect(t).toMatchObject({ todayPct: 100, afterDue: true, beforeClosing: false });
   });
+  it("limita o fechamento do mês anterior ao último dia dele (31/03 → 28/02)", () => {
+    const t = cycleTimeline({ closingDate: "2026-03-31", dueDate: "2026-04-10" }, new Date(2026, 2, 1));
+    expect(t.todayPct).toBeCloseTo(0, 5);
+  });
   it("sem ciclo coerente (vencimento antes do fechamento) não desenha a linha", () => {
     expect(cycleTimeline({ closingDate: "2026-10-31", dueDate: "2026-10-10" }, new Date(2026, 9, 12))).toBeNull();
     expect(cycleTimeline({ closingDate: null, dueDate: "2026-10-10" }, new Date())).toBeNull();
