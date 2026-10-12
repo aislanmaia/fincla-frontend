@@ -6,6 +6,7 @@ import {
   groupCategoryRows,
   isForecastInvoice,
   timelineProgress,
+  cycleTimeline,
 } from "../invoiceDashboardModel.js";
 
 const card = { id: 1, closing_day: 15, due_day: 10 };
@@ -100,5 +101,23 @@ describe("timelineProgress", () => {
   it("sem data de fechamento só diz se já venceu; sem vencimento não há timeline", () => {
     expect(timelineProgress({ closingDate: null, dueDate: "2026-10-01" }, new Date(2026, 9, 6))).toEqual({ pct: null, beforeClosing: false, afterDue: true });
     expect(timelineProgress({ closingDate: null, dueDate: null }, new Date())).toBeNull();
+  });
+});
+
+describe("cycleTimeline", () => {
+  it("posiciona hoje e o fechamento no ciclo abertura → vencimento", () => {
+    const t = cycleTimeline({ closingDate: "2026-10-31", dueDate: "2026-11-10" }, new Date(2026, 9, 12));
+    expect(t.beforeClosing).toBe(true);
+    expect(t.afterDue).toBe(false);
+    expect(t.todayPct).toBeLessThan(t.closingPct);
+    expect(t.closingPct).toBeGreaterThan(70);
+  });
+  it("em atraso a marca de hoje fica no fim e vencida", () => {
+    const t = cycleTimeline({ closingDate: "2026-10-05", dueDate: "2026-10-15" }, new Date(2026, 9, 20));
+    expect(t).toMatchObject({ todayPct: 100, afterDue: true, beforeClosing: false });
+  });
+  it("sem ciclo coerente (vencimento antes do fechamento) não desenha a linha", () => {
+    expect(cycleTimeline({ closingDate: "2026-10-31", dueDate: "2026-10-10" }, new Date(2026, 9, 12))).toBeNull();
+    expect(cycleTimeline({ closingDate: null, dueDate: "2026-10-10" }, new Date())).toBeNull();
   });
 });

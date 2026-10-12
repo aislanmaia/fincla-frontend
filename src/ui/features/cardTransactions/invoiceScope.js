@@ -42,6 +42,19 @@ export function withCurrentInvoice(options, current) {
     .sort((a, b) => (b.year - a.year) || (b.month - a.month));
 }
 
+/**
+ * Faturas que o resumo do ledger conhece e o histórico não: as FUTURAS (parcelas já lançadas
+ * em meses que o histórico, que termina no mês corrente, não cobre). Têm `invoice_id`, então
+ * são filtráveis como qualquer outra; sem id continuam fora.
+ */
+export function withLedgerInvoices(options, rows) {
+  const known = new Set(options.map((option) => option.key));
+  const extra = (rows ?? [])
+    .filter((row) => row.invoice_id != null && !known.has(invoiceKey(row.year, row.month)))
+    .map((row) => ({ key: invoiceKey(row.year, row.month), year: row.year, month: row.month, invoiceId: row.invoice_id, status: null, total: Number(row.amount), itemsCount: 0 }));
+  return extra.length === 0 ? options : [...options, ...extra].sort((a, b) => (b.year - a.year) || (b.month - a.month));
+}
+
 /** A fatura atual; sem ela, a aberta mais recente, depois a mais recente com id; sem nenhuma, nada. */
 export function defaultInvoiceKeys(options, currentKey = null) {
   const selectable = options.filter((option) => option.invoiceId != null);

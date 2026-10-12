@@ -162,3 +162,24 @@ export function timelineProgress({ closingDate, dueDate }, now) {
   const pct = span <= 0 ? 100 : Math.min(100, Math.max(0, ((today.getTime() - closing.getTime()) / span) * 100));
   return { pct, beforeClosing: false, afterDue: today > due };
 }
+
+/**
+ * Linha do tempo do ciclo da fatura: [abertura → fechamento] (compras entrando) e
+ * [fechamento → vencimento] (janela de pagamento). A abertura é o dia seguinte ao fechamento do
+ * mês anterior. Devolve a posição (0–100) do fechamento e de "hoje"; `null` quando as datas não
+ * formam um ciclo coerente (sem fechamento, ou vencimento que não vem depois dele).
+ */
+export function cycleTimeline({ closingDate, dueDate }, now) {
+  const parse = (raw) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(raw ?? ""));
+    return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+  };
+  const closing = parse(closingDate);
+  const due = parse(dueDate);
+  if (!closing || !due || due.getTime() <= closing.getTime()) return null;
+  const start = new Date(closing.getFullYear(), closing.getMonth() - 1, closing.getDate() + 1);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const total = due.getTime() - start.getTime();
+  const at = (date) => Math.min(100, Math.max(0, ((date.getTime() - start.getTime()) / total) * 100));
+  return { closingPct: at(closing), todayPct: at(today), beforeClosing: today <= closing, afterDue: today > due };
+}
