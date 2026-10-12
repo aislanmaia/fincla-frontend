@@ -76,7 +76,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     appliedLinkKey.current = linkKey;
     const next = readLink();
     if (!first) {
-      setLink(next); setKind(next.kind); setInvoiceKeys(next.invoice ? [next.invoice] : null);
+      setLink(next); setKind(next.kind); setWeek(null); setInvoiceKeys(next.invoice ? [next.invoice] : null);
       if (next.invoice) setTimeMode("invoice");
     }
     if (next.category) filter.setCats([next.category]); else if (!first) filter.setCats([]);
@@ -229,7 +229,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const scopeReady = historyState.cardId != null && historyState.cardId === state.card?.id;
   const selectedInvoiceIds = invoiceIdsForQuery(invoiceMode ? "invoice" : "period", invoiceOpts, invoiceKeys ?? []);
   const noInvoice = invoiceMode && scopeReady && selectedInvoiceIds.length === 0;
-  const activeWeek = invoiceMode && week && selectedInvoiceIds.length === 1 && (invoiceKeys ?? []).join() === week.invoiceKey ? week : null;
+  const activeWeek = invoiceMode && week && selectedInvoiceIds.length === 1 && (invoiceKeys ?? []).join() === week.invoiceKey && week.scope === `${organizationId}:${cardId}` ? week : null;
   // A lista espera o catálogo, o histórico (que diz qual fatura abrir) e ao menos uma fatura marcada.
   const scopeWaiting = cardScope === "current" && !scopeReady;
   const filterBlocked = catalogBlocked || noInvoice || scopeWaiting;
@@ -495,7 +495,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     toggleInvoice(key);
   };
   // Barra de semana: marca (ou desmarca, se já era a marcada) o recorte de datas dela dentro da fatura.
-  const pickWeek = (bar) => setWeek(activeWeek?.from === bar.from ? null : { from: bar.from, to: bar.to, invoiceKey: (invoiceKeys ?? []).join() });
+  const pickWeek = (bar) => setWeek(activeWeek?.from === bar.from ? null : { from: bar.from, to: bar.to, invoiceKey: (invoiceKeys ?? []).join(), scope: `${organizationId}:${cardId}` });
   const outflowsKind = invoiceMode && selectedInvoiceIds.length === 1 ? "weeks" : "invoices";
   const currentLadder = ladderState.key === ladderKey ? ladderState : null;
   const outflowsLoading = needsLadder ? !currentLadder || currentLadder.loading : currentSummaryLoading;
@@ -520,7 +520,8 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const describeLedger = useCallback((destino, atual, verbo) => describeLedgerChange(atual, destino, verbo, { categorias: categoriesById, kindLabels: KIND_LABELS }), [categoriesById]);
   const history = useFilterHistory(ledgerSnapshot, applyLedgerSnapshot, describeLedger);
   // A escolha inicial da fatura (e o link da URL) não é um passo do usuário: o histórico começa quando a tela fica pronta.
-  const historyReady = scopeReady && invoiceKeys !== null;
+  const linkInvoiceUnknown = Boolean(link.invoice) && (invoiceKeys ?? []).join() === link.invoice && !invoiceOpts.some((option) => option.key === link.invoice && option.invoiceId != null);
+  const historyReady = scopeReady && invoiceKeys !== null && !linkInvoiceUnknown;
   const resetHistory = history.reset;
   useEffect(() => { resetHistory(); }, [historyReady, cardId, organizationId, resetHistory]);
   const historyButtons = (history.canUndo || history.canRedo) ? <span data-testid="ledger-history" style={{ display: "inline-flex", alignItems: "center", gap: 2 }}>

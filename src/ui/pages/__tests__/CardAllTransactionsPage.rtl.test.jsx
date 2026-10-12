@@ -448,6 +448,16 @@ describe("CardAllTransactionsPage · saídas por mês/semana", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "Filtrar por Alimentação" })).toHaveAttribute("aria-pressed", "true"));
   });
 
+  it("link para fatura inexistente cai na padrão sem oferecer Desfazer", async () => {
+    route.search = { fc_inv: "2020-01" };
+    server.use(http.get("*/v1/credit-cards/:id/invoices/history", () => HttpResponse.json({ monthly_data: history.monthly_data.slice(1) })));
+    server.use(summaryWith({ week: { by_invoice: [], by_week: [] } }));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    expect(await screen.findByRole("button", { name: "Recorte de tempo: Fatura: Out. Ajustar." })).toBeInTheDocument();
+    expect(screen.queryByTestId("ledger-history")).toBeNull();
+    route.search = {};
+  });
+
   it("clicar numa semana recorta a lista nas datas dela e mantém as outras barras", async () => {
     server.use(http.get("*/v1/credit-cards/:id/invoices/history", () => HttpResponse.json({ monthly_data: history.monthly_data.slice(1) })));
     server.use(summaryWith({ week: { by_invoice: [], by_week: [{ week_start: "2026-10-05", amount: money("50.00") }, { week_start: "2026-10-12", amount: money("40.00") }] } }));
