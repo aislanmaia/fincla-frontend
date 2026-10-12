@@ -222,9 +222,22 @@ describe("CardHubPage — cadastro de cartão", () => {
   it("o KPI de limite usado abre Parcelas & Compromissos do cartão selecionado", async () => {
     mockApi();
     render(<CardHubPage organizationId={ORG} dataMode="live" onNewItem={vi.fn()} />);
-    const kpi = await screen.findByRole("link", { name: /Limite usado: abrir Parcelas & Compromissos/ });
+    const kpi = await screen.findByRole("link", { name: /Limite usado/ });
     await userEvent.setup().click(kpi);
     expect(navigateMock).toHaveBeenCalledWith({ to: "/cards/$cardId/commitments", params: { cardId: publicIdFor(1) } });
+    navigateMock.mockClear();
+    kpi.focus();
+    await userEvent.setup().keyboard("{Enter}");
+    expect(navigateMock).toHaveBeenCalledTimes(1);
+    await userEvent.setup().keyboard(" ");
+    expect(navigateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("sem public_id o KPI de limite usado não vira link", async () => {
+    mockApi({ cards: [cardFixture({ public_id: null })] });
+    render(<CardHubPage organizationId={ORG} dataMode="live" onNewItem={vi.fn()} />);
+    expect(await screen.findByText("Limite usado")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Limite usado/ })).not.toBeInTheDocument();
   });
 
   it("cria pelo tile, aceita fechamento ausente, atualiza a lista e seleciona o criado", async () => {

@@ -15,6 +15,10 @@ export function LimitTiles({ card, currency, isMobile, onEdit, onOpenCommitments
     : null;
   const usedPercent = usage === null ? null : Math.min(100, Math.max(0, usage));
   const barColor = usage === null ? T.inkFaint : usage >= 90 ? T.red : usage >= 70 ? T.amber : T.green;
+  // Link de verdade: o nome acessível é o conteúdo (valor e %), e só Enter ativa, como em <a>.
+  const openProps = onOpenCommitments
+    ? { role: "link", tabIndex: 0, onClick: onOpenCommitments, onKeyDown: (event) => { if (event.key === "Enter") onOpenCommitments(); } }
+    : {};
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: isMobile ? 10 : 12 }}>
       <div data-testid="kpi-available" style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: isMobile ? "12px 14px" : "14px 16px", boxShadow: T.sm }}>
@@ -37,7 +41,7 @@ export function LimitTiles({ card, currency, isMobile, onEdit, onOpenCommitments
         </div>}
         {!hasLimit && onEdit && <button type="button" onClick={onEdit} style={{ ...G, background: "none", border: 0, color: T.blue, padding: "8px 0 0", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>Definir limite</button>}
       </div>
-      <div data-testid="kpi-committed" {...(onOpenCommitments ? { role: "link", tabIndex: 0, "aria-label": "Limite usado: abrir Parcelas & Compromissos", onClick: onOpenCommitments, onKeyDown: (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpenCommitments(); } } } : {})} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: isMobile ? "12px 14px" : "14px 16px", boxShadow: T.sm, cursor: onOpenCommitments ? "pointer" : "default" }}>
+      <div data-testid="kpi-committed" {...openProps} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: isMobile ? "12px 14px" : "14px 16px", boxShadow: T.sm, cursor: onOpenCommitments ? "pointer" : "default" }}>
         <div style={{ ...LABEL, marginBottom: 5 }}>Limite usado</div>
         <div style={{ ...G, ...NUM, fontSize: isMobile ? 16 : 19, fontWeight: 800, color: T.blue }}>{used}</div>
         <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 8 }}>
