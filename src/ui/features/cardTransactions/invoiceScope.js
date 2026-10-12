@@ -26,11 +26,28 @@ export function invoiceOptions(history) {
     .sort((a, b) => (b.year - a.year) || (b.month - a.month));
 }
 
-/** A fatura aberta mais recente; sem ela, a mais recente com id; sem nenhuma, nada. */
-export function defaultInvoiceKeys(options) {
+/**
+ * Junta a fatura ATUAL (a que o backend diz estar aberta) às opções do histórico. O
+ * histórico termina no mês corrente; depois do fechamento a fatura aberta é a do mês
+ * seguinte e só esta chamada a enxerga.
+ */
+export function withCurrentInvoice(options, current) {
+  const match = /^(\d{4})-(\d{2})$/.exec(current?.month ?? "");
+  if (!match || current.invoice_id == null) return options;
+  const [year, month] = [Number(match[1]), Number(match[2])];
+  const key = invoiceKey(year, month);
+  const known = options.find((option) => option.key === key);
+  if (known) return options.map((option) => option === known ? { ...option, invoiceId: option.invoiceId ?? current.invoice_id } : option);
+  return [{ key, year, month, invoiceId: current.invoice_id, status: current.status, total: current.total_amount, itemsCount: current.items_count ?? 0 }, ...options]
+    .sort((a, b) => (b.year - a.year) || (b.month - a.month));
+}
+
+/** A fatura atual; sem ela, a aberta mais recente, depois a mais recente com id; sem nenhuma, nada. */
+export function defaultInvoiceKeys(options, currentKey = null) {
   const selectable = options.filter((option) => option.invoiceId != null);
+  const current = currentKey && selectable.find((option) => option.key === currentKey);
   const open = selectable.find((option) => option.status === "open");
-  const pick = open ?? selectable[0];
+  const pick = current || open || selectable[0];
   return pick ? [pick.key] : [];
 }
 

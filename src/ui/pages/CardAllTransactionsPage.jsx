@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import { ArrowLeft, Download, Filter, Search, X } from "lucide-react";
 
-import { getInvoiceHistory, listCreditCards } from "../../api/creditCards";
+import { getCurrentCreditCardInvoice, getInvoiceHistory, listCreditCards } from "../../api/creditCards";
 import { getTransactionsFacets, getTransactionsSummary, listTransactions } from "../../api/transactions";
 import { Btn, Card, PageTitle, Select } from "../components/primitives.jsx";
 import { shouldUseRealData } from "../dataMode.js";
@@ -10,7 +10,7 @@ import { CardTransactionsHistory } from "../features/cardTransactions/CardTransa
 import { CardTransactionsSummary } from "../features/cardTransactions/CardTransactionsSummary.jsx";
 import { CardTransactionsTable } from "../features/cardTransactions/CardTransactionsTable.jsx";
 import { CardTimeScopePanel } from "../features/cardTransactions/CardTimeScopePanel.jsx";
-import { defaultInvoiceKeys, invoiceChipLabel, invoiceIdsForQuery, invoiceOptions, periodChipLabel } from "../features/cardTransactions/invoiceScope.js";
+import { defaultInvoiceKeys, invoiceChipLabel, invoiceIdsForQuery, invoiceOptions, periodChipLabel, withCurrentInvoice } from "../features/cardTransactions/invoiceScope.js";
 import { formatCustomPeriodLabel } from "../features/transactions/filters/customPeriodLabel.js";
 import { readListPrefs, writeListPrefs } from "../features/transactions/listPrefs.js";
 import { TransactionsListDisplayControls } from "../features/transactions/TransactionsListDisplayControls.jsx";
@@ -174,7 +174,10 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const catalogBlocked = isTagFilterBlocked(tagStatus) || Boolean(unresolvedCategory);
   const bounds = resolvePeriodDisplayBounds(filter.period, filter.customFrom, filter.customTo);
   const invoiceMode = timeMode === "invoice" && cardScope === "current";
-  const invoiceOpts = useMemo(() => invoiceOptions(historyState.cardId === state.card?.id ? historyState.data : null), [historyState, state.card]);
+  const invoiceOpts = useMemo(() => {
+    const ready = historyState.cardId === state.card?.id;
+    return withCurrentInvoice(invoiceOptions(ready ? historyState.data : null), ready ? historyState.current : null);
+  }, [historyState, state.card]);
   const scopeReady = historyState.cardId != null && historyState.cardId === state.card?.id;
   const selectedInvoiceIds = invoiceIdsForQuery(invoiceMode ? "invoice" : "period", invoiceOpts, invoiceKeys ?? []);
   const noInvoice = invoiceMode && scopeReady && selectedInvoiceIds.length === 0;
@@ -231,10 +234,12 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   useEffect(() => {
     if (!state.card) return undefined;
     let active = true;
-    getInvoiceHistory(state.card.id, organizationId, INVOICE_WINDOW).then((data) => {
-      if (active) setHistoryState({ cardId: state.card.id, data, error: false });
+    // A fatura atual é opcional: se falhar, o histórico sozinho ainda monta o seletor.
+    const current = getCurrentCreditCardInvoice(state.card.id, organizationId, { emptyAsNull: true }).catch(() => null);
+    Promise.all([getInvoiceHistory(state.card.id, organizationId, INVOICE_WINDOW), current]).then(([data, currentInvoice]) => {
+      if (active) setHistoryState({ cardId: state.card.id, data, current: currentInvoice, error: false });
     }).catch(() => {
-      if (active) setHistoryState({ cardId: state.card.id, data: null, error: true });
+      if (active) setHistoryState({ cardId: state.card.id, data: null, current: null, error: true });
     });
     return () => { active = false; };
   }, [state.card, organizationId]);
@@ -243,10 +248,11 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   // histórico), o recorte cai para Período livre em vez de deixar a tela vazia.
   useEffect(() => {
     if (!scopeReady || invoiceKeys !== null) return;
-    const keys = defaultInvoiceKeys(invoiceOpts);
+    const current = historyState.current;
+    const keys = defaultInvoiceKeys(invoiceOpts, current?.month && /^\d{4}-\d{2}$/.test(current.month) ? current.month : null);
     setInvoiceKeys(keys);
     if (keys.length === 0) setTimeMode("period");
-  }, [scopeReady, invoiceKeys, invoiceOpts]);
+  }, [scopeReady, invoiceKeys, invoiceOpts, historyState.current]);
 
   useEffect(() => {
     if (!state.card || filterBlocked) return undefined;

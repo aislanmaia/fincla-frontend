@@ -23,6 +23,7 @@ const server = setupServer(
     return HttpResponse.json([{ id: 7, public_id: CARD_ID, description: "Azul", last4: "7112", currency: "BRL" }]);
   }),
   http.get("*/v1/credit-cards/:id/invoices/history", () => HttpResponse.json({ monthly_data: [] })),
+  http.get("*/v1/credit-cards/:id/invoices/current", () => HttpResponse.json(null)),
   http.get("*/v1/transactions/summary", () => HttpResponse.json({ total_transactions: 2, breakdown: { by_category: [], by_month: [] } })),
   http.get("*/v1/transactions/facets", () => HttpResponse.json({ total: 2, category: [], type: [], tag: [], payment_method: [], settlement: null, recurring: null, value_bucket: [] })),
   http.get("*/v1/tags/catalog", () => HttpResponse.json({ categories: [] })),
@@ -268,6 +269,15 @@ describe("CardAllTransactionsPage · recorte de tempo", () => {
     expect(requests.at(-1).searchParams.has("date_start")).toBe(false);
     expect(requests.at(-1).searchParams.has("date_end")).toBe(false);
     expect(screen.getByRole("button", { name: "Recorte de tempo: Fatura: Out. Ajustar." })).toBeInTheDocument();
+  });
+
+  it("abre na fatura atual do backend mesmo quando ela é do mês que o histórico não cobre", async () => {
+    withHistory({ monthly_data: history.monthly_data.slice(0, 3).map((row) => ({ ...row, status: "closed" })) });
+    server.use(http.get("*/v1/credit-cards/:id/invoices/current", () => HttpResponse.json({ month: "2026-11", invoice_id: 60, status: "open", total_amount: "5.00", items_count: 1, items: [] })));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    expect(await screen.findByText("Mercado")).toBeInTheDocument();
+    expect(ids(requests.at(-1))).toEqual(["60"]);
+    expect(screen.getByRole("button", { name: /Recorte de tempo: Fatura: Nov/ })).toBeInTheDocument();
   });
 
   it("marca várias faturas, manda os ids repetidos e põe o ano nas de outro ano", async () => {

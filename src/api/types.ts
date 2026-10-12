@@ -990,6 +990,8 @@ export interface InvoiceItemResponse {
 }
 
 export interface InvoiceResponse {
+  /** Id da fatura (o `invoice_id` de /transactions); `null` enquanto o mês não tem linha de fatura. */
+  invoice_id?: number | null;
   /** Capturada pelo cliente do MoneyResponse antes de desembrulhar os valores. */
   currency?: string | null;
   month: string;

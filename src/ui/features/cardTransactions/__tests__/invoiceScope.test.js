@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultInvoiceKeys, invoiceChipLabel, invoiceIdsForQuery, invoiceOptions, periodChipLabel } from "../invoiceScope.js";
+import { defaultInvoiceKeys, invoiceChipLabel, invoiceIdsForQuery, invoiceOptions, periodChipLabel, withCurrentInvoice } from "../invoiceScope.js";
 
 const NOW = new Date(2026, 9, 11);
 const history = {
@@ -25,6 +25,16 @@ describe("invoice scope", () => {
     expect(defaultInvoiceKeys(options)).toEqual(["2027-01"]);
     expect(defaultInvoiceKeys(options.filter((option) => option.status !== "open"))).toEqual(["2026-09"]);
     expect(defaultInvoiceKeys([])).toEqual([]);
+  });
+
+  it("prefers the backend's current invoice, even one outside the history window", () => {
+    expect(defaultInvoiceKeys(options, "2026-09")).toEqual(["2026-09"]);
+    expect(defaultInvoiceKeys(options, "2026-07")).toEqual(["2027-01"]);
+    const merged = withCurrentInvoice(options, { month: "2026-11", invoice_id: 60, status: "open", total_amount: 5, items_count: 1 });
+    expect(merged.map((option) => option.key)).toContain("2026-11");
+    expect(defaultInvoiceKeys(merged, "2026-11")).toEqual(["2026-11"]);
+    expect(withCurrentInvoice(options, null)).toBe(options);
+    expect(withCurrentInvoice(options, { month: "2026-11", invoice_id: null })).toBe(options);
   });
 
   it("shows the year only for invoices outside the current year", () => {
