@@ -44,8 +44,9 @@ function detailEntry(detail, year, month, card, openRef) {
 }
 
 const topCategoryRow = (breakdown) => {
-  if (!Array.isArray(breakdown) || breakdown.length === 0) return null;
-  return breakdown.reduce((best, row) => (Number(row.total) > Number(best.total) ? row : best), breakdown[0]);
+  const known = Array.isArray(breakdown) ? breakdown.filter((row) => row.total !== null && row.total !== undefined && row.total !== "" && Number.isFinite(Number(row.total))) : [];
+  if (known.length === 0) return null;
+  return known.reduce((best, row) => (Number(row.total) > Number(best.total) ? row : best), known[0]);
 };
 
 export function topCategoryLabel(breakdown) {
@@ -193,5 +194,5 @@ export function cycleTimeline({ closingDate, dueDate }, now) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const total = due.getTime() - start.getTime();
   const at = (date) => Math.min(100, Math.max(0, ((date.getTime() - start.getTime()) / total) * 100));
-  return { start, closing, due, closingPct: at(closing), todayPct: at(today), beforeClosing: today <= closing, afterDue: today > due };
+  return { start, closing, due, closingPct: at(closing), todayPct: at(today), beforeClosing: today < closing, afterDue: today > due };
 }

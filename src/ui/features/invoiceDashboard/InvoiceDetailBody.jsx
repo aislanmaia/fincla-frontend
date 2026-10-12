@@ -73,9 +73,9 @@ function Timeline({ detail, status, now }) {
             <span style={{ ...G, fontSize: 10, fontWeight: 700, color: T.ink, lineHeight: "12px" }}>hoje</span>
             <span style={{ width: 2, height: 10, background: T.ink }} />
           </div>
-          <div style={{ position: "relative", height: 14, marginTop: 4 }}>
-            <span style={{ ...mutedText, fontSize: 10, position: "absolute", left: `${cycle.closingPct}%`, transform: "translateX(-100%)", whiteSpace: "nowrap", paddingRight: 4 }}>{cycle.beforeClosing ? "fecha" : "fechou"} {dayMonth(detail.closing_date)}</span>
-            <span style={{ ...mutedText, fontSize: 10, position: "absolute", right: 0, whiteSpace: "nowrap" }}>vence {dayMonth(detail.due_date)}</span>
+          <div style={{ display: "flex", marginTop: 4 }}>
+            <span style={{ ...mutedText, fontSize: 10, flex: "0 0 auto", minWidth: `${cycle.closingPct}%`, textAlign: "right", whiteSpace: "nowrap", paddingRight: 4, boxSizing: "border-box" }}>{cycle.beforeClosing ? "fecha" : "fechou"} {dayMonth(detail.closing_date)}</span>
+            <span style={{ ...mutedText, fontSize: 10, flex: 1, textAlign: "right", whiteSpace: "nowrap" }}>vence {dayMonth(detail.due_date)}</span>
           </div>
         </div>
       ) : pct !== null && pct !== undefined && (
