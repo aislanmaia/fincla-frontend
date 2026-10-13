@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { CardOutflowsChart } from "../CardOutflowsChart.jsx";
 
@@ -43,5 +43,17 @@ describe("CardOutflowsChart — estimativa", () => {
     render(<CardOutflowsChart currency="BRL" onPickWeek={onPickWeek} outflows={{ kind: "weeks", bars: [weekBar] }} />);
     await userEvent.setup().click(screen.getByRole("button", { name: /Semana de 05\/10/ }));
     expect(onPickWeek).toHaveBeenCalledWith(weekBar);
+  });
+});
+
+describe("CardOutflowsChart — muitas faturas", () => {
+  it("dá largura mínima a cada barra e rola na horizontal, em vez de sobrepor valores e meses", () => {
+    const bars = Array.from({ length: 24 }, (_, i) => bar(`2026-${String(i + 1).padStart(2, "0")}`));
+    render(<CardOutflowsChart currency="BRL" outflows={{ kind: "invoices", hasProjection: false, bars }} />);
+    const group = screen.getByRole("group", { name: "Saídas por fatura" });
+    expect(group.style.overflowX).toBe("auto");
+    const cells = within(group).getAllByRole("button");
+    expect(cells).toHaveLength(24);
+    cells.forEach((cell) => { expect(cell.style.flexShrink).toBe("0"); expect(cell.style.flexBasis).toBe("84px"); });
   });
 });

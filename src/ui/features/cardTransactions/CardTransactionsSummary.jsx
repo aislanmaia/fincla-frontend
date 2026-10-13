@@ -72,9 +72,10 @@ export function CardTransactionsSummary({ summary, loading, error, isCategorySel
       const sum = all.reduce((acc, row) => acc + Math.abs(Number(row.amount)), 0);
       return <div key={currency} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {currencies.length > 1 && <h3 style={{ ...G, margin: 0, fontSize: 11, color: T.inkMid }}>{currency}</h3>}
-        <div style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
+        {/* Card estreito: a legenda desce para baixo da rosca em vez de espremer os nomes. */}
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, minWidth: 0 }}>
           <Donut rows={visible} total={sum} />
-          <ul aria-label={`Categorias em ${currency}`} style={{ listStyle: "none", margin: 0, padding: 0, flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+          <ul aria-label={`Categorias em ${currency}`} style={{ listStyle: "none", margin: 0, padding: 0, flex: "1 1 190px", minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
             {visible.map((row, index) => <li key={`${row.category}-${index}`}>
               {/* `null` = a categoria não existe no catálogo: sem id não há filtro possível. */}
               <CategoryRow row={row} color={COLORS[index % COLORS.length]} sum={sum} currency={currency} state={isCategorySelected ? isCategorySelected(row.category) : false} onToggle={onToggleCategory} />

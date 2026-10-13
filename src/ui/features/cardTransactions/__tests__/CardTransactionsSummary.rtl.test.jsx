@@ -45,4 +45,11 @@ describe("CardTransactionsSummary — categorias", () => {
     expect(within(dialog).getByRole("list", { name: "Todas as categorias em USD" })).toBeTruthy();
     expect(within(dialog).getAllByRole("listitem")).toHaveLength(6);
   });
+
+  it("deixa a legenda quebrar para baixo da rosca, em vez de espremer os nomes", () => {
+    render(<CardTransactionsSummary summary={summary} isCategorySelected={() => false} onToggleCategory={() => {}} />);
+    const list = screen.getByRole("list", { name: "Categorias em BRL" });
+    expect(list.parentElement.style.flexWrap).toBe("wrap");
+    expect(list.style.flexBasis).toBe("190px");
+  });
 });
