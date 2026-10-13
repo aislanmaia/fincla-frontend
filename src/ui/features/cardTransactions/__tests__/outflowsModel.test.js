@@ -50,3 +50,24 @@ describe("buildOutflows — estimativa de recorrências", () => {
     expect(buildOutflows({ mode: "weeks", summary, ladder, selectedKeys: [], selectedWeek: "2026-10-12", currency: "BRL", now: NOW }).bars).toHaveLength(2);
   });
 });
+
+describe("buildOutflows — só as faturas marcadas", () => {
+  const ladder = { by_invoice: [row(2026, 9, "100.00"), row(2026, 10, "200.00"), row(2026, 11, "300.00"), row(2027, 1, "50.00")], projected_by_invoice: [projected(2026, 10, "10.00"), projected(2026, 12, "20.00"), projected(2027, 2, "30.00")] };
+
+  it("com faturas marcadas, o resto do cartão (confirmado ou só estimado) não ganha barra", () => {
+    const out = build(ladder, { selectedKeys: ["2026-09", "2026-10"] });
+    expect(out.bars.map((bar) => [bar.key, bar.selected])).toEqual([["2026-09", true], ["2026-10", true]]);
+    expect(out.bars[1].projected).toMatchObject({ amount: 10 });
+  });
+
+  it("fatura marcada só com estimativa mantém a barra; as demais estimativas somem", () => {
+    const out = build(ladder, { selectedKeys: ["2026-10", "2026-12"] });
+    expect(out.bars.map((bar) => bar.key)).toEqual(["2026-10", "2026-12"]);
+    expect(out.bars[1]).toMatchObject({ amount: 0, clickable: false });
+  });
+
+  it("sem faturas marcadas (recorte por período) todas as faturas do período aparecem", () => {
+    expect(build(ladder, { selectedKeys: [] }).bars.map((bar) => bar.key)).toEqual(["2026-09", "2026-10", "2026-11", "2026-12", "2027-01", "2027-02"]);
+  });
+});
+

@@ -10,7 +10,8 @@ const positive = (row, currency) => Number(row.amount) > 0 && (!currency || row.
  * - Uma fatura marcada: SEMANAS dela (`by_week`), porque um mês de calendário não
  *   descreve uma fatura que cruza a virada de mês. Cada semana é clicável (recorte de datas).
  * - Várias faturas (ou recorte por período): uma barra por FATURA (`by_invoice`),
- *   rotulada com o mês de referência, como nos apps de banco.
+ *   rotulada com o mês de referência, como nos apps de banco. Com faturas marcadas, só elas
+ *   têm barra; sem marcação (período), todas as do período.
  * - Só saídas (> 0) na moeda do cartão; nada vira zero por ausência.
  * - `breakdown.projected_by_invoice` (estimativa de recorrências ainda não cobradas) vira `bar.projected`; nunca soma ao `amount` confirmado.
  * - Só é clicável a fatura que o seletor conhece (`selectableKeys`): uma barra antiga demais não vira recorte.
@@ -45,6 +46,9 @@ export function buildOutflows({ mode, summary, ladder, selectedKeys, selectableK
     key, year: row.year, month: row.month, label: labelOf(row.year, row.month), title: `Fatura de ${MONTHS[row.month - 1]} ${row.year}`,
     amount: 0, projected: row, selected: true, clickable: false,
   }));
-  const bars = [...confirmed, ...projectedOnly].sort((a, b) => (a.year - b.year) || (a.month - b.month));
+  // Com faturas marcadas o gráfico retrata o recorte: só elas têm barra (o ladder traz o cartão inteiro, mas as outras faturas não pertencem ao recorte).
+  // Sem marcação (recorte por período) todas as faturas do período aparecem.
+  const inScope = (bar) => chosen.size === 0 || chosen.has(bar.key);
+  const bars = [...confirmed, ...projectedOnly].filter(inScope).sort((a, b) => (a.year - b.year) || (a.month - b.month));
   return { kind: "invoices", bars, hasProjection: bars.some((bar) => bar.projected) };
 }
