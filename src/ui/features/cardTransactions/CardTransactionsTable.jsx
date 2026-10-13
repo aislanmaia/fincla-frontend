@@ -5,7 +5,7 @@ import { G, NUM } from "../../typography.js";
 import { Badge, Card } from "../../components/primitives.jsx";
 import { formatMoneyAbs } from "../../money/formatMoney.js";
 import { pickCategoryTagFromApiTransaction } from "../../data/transactionsAdapter.js";
-import { forecastEnd, groupSubtotal, installmentOf, remainingInstallments } from "./ledgerModel.js";
+import { forecastEnd, groupSubtotal, installmentOf, remainingInstallments, statusInfo } from "./ledgerModel.js";
 
 const shortDate = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", timeZone: "UTC" });
 const weekDate = new Intl.DateTimeFormat("pt-BR", { weekday: "short", timeZone: "UTC" });
@@ -23,13 +23,10 @@ function amount(row, currency) {
   const formatted = code ? formatMoneyAbs(row.value, code) : null;
   return formatted ? `${row.type === "refund" || row.type === "income" ? "+" : "−"}${formatted}` : "—";
 }
+const TONES = { green: [T.green, T.greenLight], blue: [T.blue, T.blueLight], amber: [T.amber, T.amberLight], gray: [T.inkMid, T.grayLight] };
 function status(row) {
-  if (row.type === "refund") return { text: "Estorno", color: T.green, bg: T.greenLight };
-  if (row.status === "paid") return { text: "Paga", color: T.green, bg: T.greenLight };
-  if (row.status === "confirmed") return { text: "A pagar", color: T.blue, bg: T.blueLight };
-  if (row.status === "pending") return { text: "Pendente", color: T.amber, bg: T.amberLight };
-  if (row.status === "cancelled") return { text: "Cancelada", color: T.inkMid, bg: T.grayLight };
-  return { text: "Situação indisponível", color: T.inkMid, bg: T.grayLight };
+  const { text, tone } = statusInfo(row);
+  return { text, color: TONES[tone][0], bg: TONES[tone][1] };
 }
 
 const bulkButton = { ...G, border: 0, background: "none", color: T.blue, cursor: "pointer", textDecoration: "underline", fontSize: 11 };
@@ -59,16 +56,16 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
   }, [grouped, rows]);
   const rowPadding = density === "compacto" ? "7px 12px" : density === "confortavel" ? "15px 12px" : "10px 12px";
   return <Card as="section" aria-label="Lançamentos do cartão" style={{ minWidth: 0, overflow: "hidden", padding: 0, width: "100%" }}>
-    <div style={{ ...G, display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", borderBottom: `1px solid ${T.border}`, fontSize: 12, fontWeight: 700 }}>
+    <div style={{ ...G, display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px 10px", padding: "11px 14px", borderBottom: `1px solid ${T.border}`, fontSize: 12, fontWeight: 700 }}>
       <input type="checkbox" aria-label="Selecionar lançamentos carregados" checked={allChecked} onChange={(event) => onSelected(event.target.checked ? [...new Set([...selected, ...rows.map((row) => row.id)])] : selected.filter((id) => !rows.some((row) => row.id === id)))} />
       <span>{total == null ? `${rows.length} lançamentos` : `${total} lançamentos`}</span>
       {selected.length > 0 && <span style={{ color: T.blue }}>{selected.length} selecionado{selected.length === 1 ? "" : "s"}{selectionSum ? ` · ${selectionSum}` : ""}</span>}
-      {selected.length > 0 && <span role="toolbar" aria-label="Ações em lote" style={{ marginLeft: "auto", display: "flex", gap: 10, alignItems: "center" }}>
+      {selected.length > 0 && <span role="toolbar" aria-label="Ações em lote" style={{ marginLeft: "auto", display: "flex", flexWrap: "wrap", gap: "4px 10px", alignItems: "center", minWidth: 0 }}>
         {onCategorize && <button type="button" onClick={onCategorize} style={bulkButton}>Categorizar</button>}
         {onMoveInstallment && <button type="button" onClick={onMoveInstallment} style={bulkButton}>Mover parcela</button>}
         <button type="button" onClick={onExportSelected} style={bulkButton}>Exportar seleção CSV</button>
+        <button type="button" onClick={() => onSelected([])} style={bulkButton}>Limpar seleção</button>
       </span>}
-      {selected.length > 0 && <button type="button" onClick={() => onSelected([])} style={{ ...G, border: 0, background: "none", color: T.blue, cursor: "pointer", textDecoration: "underline", fontSize: 11 }}>Limpar seleção</button>}
     </div>
     <div ref={scrollerRef} className="fincla-scroll" style={{ maxHeight: isMobile ? "min(60dvh, 680px)" : maxHeight == null ? 560 : Math.max(100, maxHeight - 82), overflowY: "auto", overflowX: "hidden" }}>
       {!isMobile && <div aria-hidden="true" style={{ ...G, display: "grid", gridTemplateColumns: COLUMNS, gap: 10, padding: "7px 12px", borderBottom: `1px solid ${T.border}`, background: T.bg, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", position: "sticky", top: 0, zIndex: 3 }}><span /><span>Data</span><span>Descrição</span><span>Categoria</span><span>Parcela</span><span>Restam</span><span>Fim previsto</span><span style={{ textAlign: "right" }}>Valor</span><span>Status</span></div>}

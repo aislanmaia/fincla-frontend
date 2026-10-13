@@ -37,3 +37,14 @@ export function groupSubtotal(rows, cardCurrency) {
   const amount = rows.reduce((sum, row) => sum + (row.type === "refund" || row.type === "income" ? -1 : 1) * Math.abs(Number(row.value) || 0), 0);
   return { amount, currency };
 }
+
+const STATUS = { paid: ["Paga", "green"], confirmed: ["A pagar", "blue"], pending: ["Pendente", "amber"], cancelled: ["Cancelada", "gray"] };
+
+/** Situação como a tela mostra ("A pagar", "Paga"…) e o tom do selo; status desconhecido sai com o código da API. */
+export function statusInfo(row) {
+  if (row.type === "refund" && row.status !== "cancelled") return { text: "Estorno", tone: "green" };
+  const [text, tone] = STATUS[row.status] ?? [row.status || "Situação indisponível", "gray"];
+  return { text, tone };
+}
+
+export const statusLabel = (row) => statusInfo(row).text;

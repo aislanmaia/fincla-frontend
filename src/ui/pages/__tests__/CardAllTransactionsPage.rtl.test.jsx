@@ -471,6 +471,28 @@ describe("CardAllTransactionsPage · saídas por mês/semana", () => {
     await user.click(screen.getByTestId("week-chip"));
     await waitFor(() => expect(screen.queryByTestId("week-chip")).toBeNull());
   });
+
+  it("no mobile a semana escolhida no sheet aparece como chip removível", async () => {
+    server.use(http.get("*/v1/credit-cards/:id/invoices/history", () => HttpResponse.json({ monthly_data: history.monthly_data.slice(1) })));
+    server.use(summaryWith({ week: { by_invoice: [], by_week: [{ week_start: "2026-10-05", amount: money("50.00") }] } }));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /Resumo e saídas do recorte/ }));
+    await user.click(await screen.findByRole("button", { name: /Semana de 05\/10/ }));
+    await user.click(screen.getByRole("button", { name: "Fechar resumo" }));
+    const chip = await screen.findByTestId("week-chip");
+    expect(chip).toHaveTextContent("Semana 05/10–11/10");
+    await user.click(chip);
+    await waitFor(() => expect(screen.queryByTestId("week-chip")).toBeNull());
+  });
+
+  it("no mobile há menu de densidade e agrupamento por data", async () => {
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /Densidade da lista/ }));
+    await user.click(screen.getByRole("menuitemradio", { name: "Compacto" }));
+    expect(screen.getByRole("button", { name: /Densidade da lista: Compacto/ })).toBeInTheDocument();
+  });
 });
 
 describe("CardAllTransactionsPage · ações do ledger", () => {
