@@ -56,4 +56,11 @@ describe("CardOutflowsChart — muitas faturas", () => {
     expect(cells).toHaveLength(24);
     cells.forEach((cell) => { expect(cell.style.flexShrink).toBe("0"); expect(cell.style.flexBasis).toBe("84px"); });
   });
+
+  it("nas semanas as barras continuam elásticas: poucas, cabem sem rolar", () => {
+    const bars = Array.from({ length: 5 }, (_, i) => ({ ...bar(`w${i}`), from: `2026-10-0${i + 1}`, to: `2026-10-0${i + 2}` }));
+    render(<CardOutflowsChart currency="BRL" outflows={{ kind: "weeks", hasProjection: false, bars }} />);
+    const cells = within(screen.getByRole("group", { name: "Saídas por semana da fatura" })).getAllByRole("button");
+    cells.forEach((cell) => { expect(cell.style.flexBasis).not.toBe("84px"); expect(cell.style.minWidth).toBe("0px"); });
+  });
 });

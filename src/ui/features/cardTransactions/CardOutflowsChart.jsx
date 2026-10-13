@@ -17,11 +17,15 @@ export function CardOutflowsChart({ outflows, currency, loading, error, message,
   const weekly = outflows?.kind === "weeks";
   const groupRef = useRef(null);
   const selectedKeys = bars.filter((bar) => bar.selected).map((bar) => bar.key).join("|");
-  // Com rolagem, a barra marcada não pode ficar escondida: abre rolado até a primeira selecionada.
+  // Com rolagem, a seleção não pode ficar escondida: só rola quando nenhuma barra marcada está à vista
+  // (clicar numa barra já visível não move o gráfico).
   useEffect(() => {
     const group = groupRef.current;
-    const first = group?.querySelector('[aria-pressed="true"]');
-    if (group && first) group.scrollLeft = Math.max(0, first.offsetLeft - group.offsetLeft - 24);
+    const marked = group ? [...group.querySelectorAll('[aria-pressed="true"]')] : [];
+    if (!group || marked.length === 0) return;
+    const view = group.getBoundingClientRect();
+    const visible = marked.some((node) => { const box = node.getBoundingClientRect(); return box.left >= view.left && box.right <= view.right; });
+    if (!visible) group.scrollLeft = Math.max(0, marked[0].offsetLeft - group.offsetLeft - 24);
   }, [selectedKeys, bars.length, loading]);
   return <Card as="section" aria-label="Saídas por mês e semana" style={{ padding: 18, minWidth: 0 }}>
     <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline", flexWrap: "wrap" }}>
@@ -49,8 +53,8 @@ export function CardOutflowsChart({ outflows, currency, loading, error, message,
           </span>
           <span style={{ ...G, ...NUM, fontSize: 10, color: bar.selected ? T.ink : T.inkMid, fontWeight: bar.selected ? 700 : 400 }}>{bar.label}</span>
         </>;
-        // Largura mínima por barra: com muitas faturas o gráfico rola em vez de sobrepor valores e meses.
-        const cell = { flex: "1 0 84px", height: "100%", display: "flex", flexDirection: "column", justifyContent: "end", alignItems: "center", gap: 4 };
+        // Largura mínima por fatura: com muitas barras o gráfico rola em vez de sobrepor valores e meses (semanas são poucas e cabem).
+        const cell = { flex: weekly ? 1 : "1 0 84px", minWidth: weekly ? 0 : undefined, height: "100%", display: "flex", flexDirection: "column", justifyContent: "end", alignItems: "center", gap: 4 };
         return bar.clickable
           ? <button key={bar.key} type="button" aria-pressed={bar.selected} aria-label={description} title={description} onClick={() => (weekly ? onPickWeek?.(bar) : onPickInvoice?.(bar.key))} style={{ ...cell, border: 0, background: "none", padding: 0, cursor: "pointer" }}>{body}</button>
           : <div key={bar.key} role="img" aria-label={description} title={description} style={cell}>{body}</div>;
