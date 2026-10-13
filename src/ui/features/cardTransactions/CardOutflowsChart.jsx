@@ -1,3 +1,5 @@
+import { useEffect, useRef } from "react";
+
 import { Card } from "../../components/primitives.jsx";
 import { formatMoney } from "../../money/formatMoney.js";
 import { T } from "../../tokens.js";
@@ -13,6 +15,20 @@ export function CardOutflowsChart({ outflows, currency, loading, error, message,
   const total = (bar) => bar.amount + (bar.projected?.amount ?? 0);
   const ceiling = Math.max(1, ...bars.map(total));
   const weekly = outflows?.kind === "weeks";
+  const groupRef = useRef(null);
+  const selectedKeys = bars.filter((bar) => bar.selected).map((bar) => bar.key).join("|");
+  const ownClick = useRef(false);
+  // Com rolagem, a seleção não pode ficar escondida: só rola quando nenhuma barra marcada está à vista.
+  // Clique no próprio gráfico não move a rolagem (o usuário já está olhando para o que clicou).
+  useEffect(() => {
+    if (ownClick.current) { ownClick.current = false; return; }
+    const group = groupRef.current;
+    const marked = group ? [...group.querySelectorAll('[aria-pressed="true"]')] : [];
+    if (!group || marked.length === 0) return;
+    const view = group.getBoundingClientRect();
+    const visible = marked.some((node) => { const box = node.getBoundingClientRect(); return box.left >= view.left && box.right <= view.right; });
+    if (!visible) group.scrollLeft += marked[0].getBoundingClientRect().left - view.left - 24;
+  }, [selectedKeys, bars.length, loading]);
   return <Card as="section" aria-label="Saídas por mês e semana" style={{ padding: 18, minWidth: 0 }}>
     <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline", flexWrap: "wrap" }}>
       <h2 style={{ ...G, fontSize: 15, margin: 0 }}>{weekly ? "Saídas por semana" : "Saídas por fatura"}</h2>
@@ -22,7 +38,7 @@ export function CardOutflowsChart({ outflows, currency, loading, error, message,
     {!message && error && <p role="alert" style={{ ...G, fontSize: 12, color: T.inkMid }}>Não foi possível carregar as saídas.</p>}
     {!message && !error && loading && <p role="status" style={{ ...G, fontSize: 12, color: T.inkMid }}>Carregando saídas…</p>}
     {!message && !error && !loading && bars.length === 0 && <p style={{ ...G, fontSize: 12, color: T.inkMid }}>Sem saídas neste recorte.</p>}
-    {!message && !error && !loading && bars.length > 0 && <div role="group" aria-label={weekly ? "Saídas por semana da fatura" : "Saídas por fatura"} style={{ height: isMobile ? 160 : 180, display: "flex", alignItems: "end", gap: isMobile ? 8 : 14, marginTop: 12 }}>
+    {!message && !error && !loading && bars.length > 0 && <div ref={groupRef} role="group" aria-label={weekly ? "Saídas por semana da fatura" : "Saídas por fatura"} style={{ height: isMobile ? 160 : 180, display: "flex", alignItems: "end", gap: isMobile ? 8 : 14, marginTop: 12, overflowX: "auto", padding: "4px 2px 6px" }}>
       {bars.map((bar) => {
         const display = bar.amount > 0 ? formatMoney(bar.amount, currency) ?? "—" : "—";
         const estimate = bar.projected ? formatMoney(bar.projected.amount, currency) : null;
@@ -39,9 +55,10 @@ export function CardOutflowsChart({ outflows, currency, loading, error, message,
           </span>
           <span style={{ ...G, ...NUM, fontSize: 10, color: bar.selected ? T.ink : T.inkMid, fontWeight: bar.selected ? 700 : 400 }}>{bar.label}</span>
         </>;
-        const cell = { flex: 1, minWidth: 0, height: "100%", display: "flex", flexDirection: "column", justifyContent: "end", alignItems: "center", gap: 4 };
+        // Largura mínima por fatura: com muitas barras o gráfico rola em vez de sobrepor valores e meses (semanas são poucas e cabem).
+        const cell = { flex: weekly ? 1 : "1 0 84px", minWidth: weekly ? 0 : undefined, height: "100%", display: "flex", flexDirection: "column", justifyContent: "end", alignItems: "center", gap: 4 };
         return bar.clickable
-          ? <button key={bar.key} type="button" aria-pressed={bar.selected} aria-label={description} title={description} onClick={() => (weekly ? onPickWeek?.(bar) : onPickInvoice?.(bar.key))} style={{ ...cell, border: 0, background: "none", padding: 0, cursor: "pointer" }}>{body}</button>
+          ? <button key={bar.key} type="button" aria-pressed={bar.selected} aria-label={description} title={description} onClick={() => { ownClick.current = true; return weekly ? onPickWeek?.(bar) : onPickInvoice?.(bar.key); }} style={{ ...cell, border: 0, background: "none", padding: 0, cursor: "pointer" }}>{body}</button>
           : <div key={bar.key} role="img" aria-label={description} title={description} style={cell}>{body}</div>;
       })}
     </div>}
