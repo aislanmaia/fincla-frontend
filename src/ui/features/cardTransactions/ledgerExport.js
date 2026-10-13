@@ -36,7 +36,7 @@ const signedValue = (row) => `${isCredit(row) ? "" : "-"}${Math.abs(Number(row.v
 
 /** Colunas do extrato: `text` marca o que vem de texto livre e precisa de proteção contra fórmula. */
 const COLUMNS = [
-  { header: "Data", text: false, cell: (row) => dateOnly(row.date), pdf: (row) => formatYmdToBrDisplay(dateOnly(row.date)) || dateOnly(row.date) },
+  { header: "Data", text: false, cell: (row) => dateOnly(row.date), pdf: (row) => { const br = formatYmdToBrDisplay(dateOnly(row.date)); return br && br !== "—" ? br : dateOnly(row.date); } },
   { header: "Descrição", text: true, cell: (row) => row.description },
   { header: "Categoria", text: true, cell: (row) => pickCategoryTagFromApiTransaction(row)?.label || row.category || "" },
   { header: "Tipo", text: true, cell: (row) => TYPE_LABELS[row.type] ?? row.type ?? "" },
@@ -61,7 +61,7 @@ export function downloadCsv(rows, cardCurrency) {
 
 const categoryOf = (row) => pickCategoryTagFromApiTransaction(row)?.label || row.category || "Sem categoria";
 
-/** Total líquido por categoria e moeda (compra soma, estorno abate), do maior para o menor. */
+/** Total líquido por categoria e moeda (compra soma, estorno abate); cada moeda em bloco próprio, do maior para o menor. */
 export function buildCategorySummary(rows, cardCurrency) {
   const groups = new Map();
   for (const row of rows) {
@@ -69,13 +69,13 @@ export function buildCategorySummary(rows, cardCurrency) {
     const key = `${categoryOf(row)}\u0000${currency}`;
     const group = groups.get(key) ?? { category: categoryOf(row), currency, count: 0, amount: 0 };
     group.count += 1;
-    group.amount += (isCredit(row) ? -1 : 1) * Math.abs(Number(row.value) || 0);
+    group.amount = Math.round((group.amount + (isCredit(row) ? -1 : 1) * Math.abs(Number(row.value) || 0)) * 100) / 100;
     groups.set(key, group);
   }
   const money = (group) => (group.currency ? formatMoneyAbs(group.amount, group.currency) : null) ?? group.amount.toFixed(2);
   return {
     header: ["Categoria", "Lançamentos", "Total"],
-    lines: [...groups.values()].sort((a, b) => b.amount - a.amount).map((group) => [group.category, String(group.count), `${group.amount < 0 ? "−" : ""}${money({ ...group, amount: Math.abs(group.amount) })}`]),
+    lines: [...groups.values()].sort((a, b) => a.currency.localeCompare(b.currency) || b.amount - a.amount).map((group) => [group.category, String(group.count), `${group.amount < 0 ? "−" : ""}${money({ ...group, amount: Math.abs(group.amount) })}`]),
   };
 }
 

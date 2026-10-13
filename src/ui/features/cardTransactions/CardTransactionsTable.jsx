@@ -5,7 +5,7 @@ import { G, NUM } from "../../typography.js";
 import { Badge, Card } from "../../components/primitives.jsx";
 import { formatMoneyAbs } from "../../money/formatMoney.js";
 import { pickCategoryTagFromApiTransaction } from "../../data/transactionsAdapter.js";
-import { forecastEnd, groupSubtotal, installmentOf, remainingInstallments, statusLabel } from "./ledgerModel.js";
+import { forecastEnd, groupSubtotal, installmentOf, remainingInstallments, statusInfo } from "./ledgerModel.js";
 
 const shortDate = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", timeZone: "UTC" });
 const weekDate = new Intl.DateTimeFormat("pt-BR", { weekday: "short", timeZone: "UTC" });
@@ -23,12 +23,10 @@ function amount(row, currency) {
   const formatted = code ? formatMoneyAbs(row.value, code) : null;
   return formatted ? `${row.type === "refund" || row.type === "income" ? "+" : "−"}${formatted}` : "—";
 }
+const TONES = { green: [T.green, T.greenLight], blue: [T.blue, T.blueLight], amber: [T.amber, T.amberLight], gray: [T.inkMid, T.grayLight] };
 function status(row) {
-  const text = statusLabel(row);
-  if (row.type === "refund" || row.status === "paid") return { text, color: T.green, bg: T.greenLight };
-  if (row.status === "confirmed") return { text, color: T.blue, bg: T.blueLight };
-  if (row.status === "pending") return { text, color: T.amber, bg: T.amberLight };
-  return { text, color: T.inkMid, bg: T.grayLight };
+  const { text, tone } = statusInfo(row);
+  return { text, color: TONES[tone][0], bg: TONES[tone][1] };
 }
 
 const bulkButton = { ...G, border: 0, background: "none", color: T.blue, cursor: "pointer", textDecoration: "underline", fontSize: 11 };

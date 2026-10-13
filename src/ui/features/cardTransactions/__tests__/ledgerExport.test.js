@@ -54,4 +54,14 @@ describe("extrato CSV/PDF do ledger", () => {
     expect(html.indexOf("Resumo por categoria")).toBeGreaterThan(-1);
     expect(html.indexOf("Resumo por categoria")).toBeLessThan(html.indexOf("<h2>Lançamentos</h2>"));
   });
+  it("estorno que zera a compra não vira −0,00; status desconhecido sai com o código; data fora do padrão não vira traço", () => {
+    const zero = [
+      { description: "A", value: 100.1, value_currency: "BRL", type: "expense", category: "X" },
+      { description: "B", value: 100.1, value_currency: "BRL", type: "refund", category: "X" },
+    ];
+    expect(buildCategorySummary(zero, "BRL").lines[0][2]).not.toContain("−");
+    const odd = [{ date: "27/10/2026", description: "Z", value: 1, value_currency: "BRL", type: "expense", status: "overdue", category: "X" }];
+    expect(buildCsv(odd, "BRL")).toContain('"overdue"');
+    expect(buildPdfParts(odd, "BRL").lines[0][0]).toBe("27/10/2026");
+  });
 });
