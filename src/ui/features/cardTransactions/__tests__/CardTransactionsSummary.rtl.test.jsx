@@ -52,4 +52,9 @@ describe("CardTransactionsSummary — categorias", () => {
     expect(list.parentElement.style.flexWrap).toBe("wrap");
     expect(list.style.flexBasis).toBe("190px");
   });
+
+  it("no sheet mobile a legenda só fica ao lado da rosca quando cabe com folga", () => {
+    render(<CardTransactionsSummary summary={summary} isCategorySelected={() => false} onToggleCategory={() => {}} isMobile />);
+    expect(screen.getByRole("list", { name: "Categorias em BRL" }).style.flexBasis).toBe("230px");
+  });
 });

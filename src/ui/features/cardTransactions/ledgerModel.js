@@ -37,3 +37,10 @@ export function groupSubtotal(rows, cardCurrency) {
   const amount = rows.reduce((sum, row) => sum + (row.type === "refund" || row.type === "income" ? -1 : 1) * Math.abs(Number(row.value) || 0), 0);
   return { amount, currency };
 }
+
+/** Situação como a tela mostra ("A pagar", "Paga"…); o valor cru da API só aparece se for desconhecido. */
+export function statusLabel(row) {
+  if (row.type === "refund") return "Estorno";
+  const labels = { paid: "Paga", confirmed: "A pagar", pending: "Pendente", cancelled: "Cancelada" };
+  return labels[row.status] ?? "Situação indisponível";
+}

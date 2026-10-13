@@ -55,7 +55,7 @@ function CategoryRow({ row, color, sum, currency, state, onToggle }) {
  * backend sobre TODO o resultado filtrado, não da página carregada. A legenda é
  * clicável: marcar uma categoria isola a tela inteira nela (mesmo filtro da faceta).
  */
-export function CardTransactionsSummary({ summary, loading, error, isCategorySelected, onToggleCategory }) {
+export function CardTransactionsSummary({ summary, loading, error, isCategorySelected, onToggleCategory, isMobile }) {
   const [allOpen, setAllOpen] = useState(null);
   const categories = (summary?.breakdown?.by_category ?? []).filter(validAmount);
   const currencies = [...new Set(categories.map((row) => row.amount_currency))];
@@ -75,7 +75,7 @@ export function CardTransactionsSummary({ summary, loading, error, isCategorySel
         {/* Card estreito: a legenda desce para baixo da rosca em vez de espremer os nomes. */}
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10, minWidth: 0 }}>
           <Donut rows={visible} total={sum} />
-          <ul aria-label={`Categorias em ${currency}`} style={{ listStyle: "none", margin: 0, padding: 0, flex: "1 1 190px", minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+          <ul aria-label={`Categorias em ${currency}`} style={{ listStyle: "none", margin: 0, padding: 0, flex: isMobile ? "1 1 230px" : "1 1 190px", minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
             {visible.map((row, index) => <li key={`${row.category}-${index}`}>
               {/* `null` = a categoria não existe no catálogo: sem id não há filtro possível. */}
               <CategoryRow row={row} color={COLORS[index % COLORS.length]} sum={sum} currency={currency} state={isCategorySelected ? isCategorySelected(row.category) : false} onToggle={onToggleCategory} />
