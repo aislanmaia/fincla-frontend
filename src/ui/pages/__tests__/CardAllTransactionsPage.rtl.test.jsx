@@ -800,4 +800,37 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(screen.queryByRole("textbox", { name: "Buscar lançamentos" })).not.toBeInTheDocument();
     expect(fakeHistory.depth).toBe(0);
   });
+
+  it("abre a compra no Painel de Transação a partir do detalhe, com o rótulo certo para parcela e à vista", async () => {
+    withLedger();
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Ver detalhes de Padaria" }));
+    expect(screen.getByRole("button", { name: "↗ Abrir lançamento" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Ver detalhes de Notebook" }));
+    await user.click(screen.getByRole("button", { name: "↗ Abrir lançamento da compra" }));
+    expect(screen.queryByRole("dialog", { name: "Detalhes do lançamento" })).not.toBeInTheDocument();
+    expect(navigate).toHaveBeenCalledTimes(1);
+    expect(navigate.mock.calls[0][0].search({ fc_inv: "2026-10" })).toEqual({ fc_inv: "2026-10", fc_tx: "11", fc_modal: "edit-transaction" });
+  });
+
+  it("no celular o detalhe também abre o Painel de Transação, inclusive em todos os cartões", async () => {
+    withLedger();
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: /Notebook/ }));
+    await user.click(screen.getByRole("button", { name: "↗ Abrir lançamento da compra" }));
+    expect(navigate.mock.calls[0][0].search({}).fc_tx).toBe("11");
+  });
+
+  it("recarrega a lista e fecha o detalhe quando o Painel de Transação salva", async () => {
+    withLedger();
+    const { rerender } = render(<CardAllTransactionsPage organizationId={ORG_ID} transactionsRefreshToken={0} />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Ver detalhes de Padaria" }));
+    const before = requests.length;
+    rerender(<CardAllTransactionsPage organizationId={ORG_ID} transactionsRefreshToken={1} />);
+    await waitFor(() => expect(requests.length).toBeGreaterThan(before));
+    expect(screen.queryByRole("dialog", { name: "Detalhes do lançamento" })).not.toBeInTheDocument();
+  });
 });
