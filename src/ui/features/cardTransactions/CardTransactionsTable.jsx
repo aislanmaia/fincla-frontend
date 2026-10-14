@@ -82,7 +82,7 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
       {selected.length > 0 && <span role="toolbar" aria-label="Ações em lote" style={{ marginLeft: "auto", display: "flex", flexWrap: "wrap", gap: "4px 10px", alignItems: "center", minWidth: 0 }}>
         {onCategorize && <button type="button" onClick={onCategorize} style={bulkButton}>Categorizar</button>}
         {onMoveInstallment && <button type="button" onClick={onMoveInstallment} style={bulkButton}>Mover parcela</button>}
-        <button type="button" onClick={onExportSelected} style={bulkButton}>Exportar seleção CSV</button>
+        <button type="button" onClick={onExportSelected} style={bulkButton}>Exportar seleção</button>
         <button type="button" onClick={() => onSelected([])} style={bulkButton}>Limpar seleção</button>
       </span>}
     </div>

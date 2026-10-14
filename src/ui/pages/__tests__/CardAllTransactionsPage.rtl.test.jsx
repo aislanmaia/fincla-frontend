@@ -1020,4 +1020,48 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
       expect(screen.queryByText("Mercado dia 2")).not.toBeInTheDocument();
     });
   });
+
+  it("Exportar seleção abre o modal de exportação, leva só as linhas marcadas e baixa com a extensão no nome", async () => {
+    withLedger();
+    const created = [];
+    const names = [];
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: (blob) => { created.push(blob); return "blob:x"; }, revokeObjectURL: () => {} }));
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function click() { names.push(this.download); });
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await screen.findByText("Padaria");
+    await user.click(screen.getByRole("checkbox", { name: "Selecionar Padaria" }));
+    await user.click(screen.getByRole("button", { name: "Exportar seleção" }));
+    expect(created).toHaveLength(0);
+    const dialog = screen.getByRole("dialog", { name: "Exportar seleção" });
+    expect(dialog).toHaveTextContent("Saem só os lançamentos que você marcou: 1 lançamento");
+    expect(within(dialog).getByRole("group", { name: "Formato" })).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Exportar CSV" }));
+    await waitFor(() => expect(created).toHaveLength(1));
+    const csv = await created[0].text();
+    expect(csv).toContain("Padaria");
+    expect(csv).not.toContain("Notebook");
+    expect(names[0]).toMatch(/^lancamentos-\d{4}-\d{2}-\d{2}\.csv$/);
+    expect(document.querySelector("a[download]")).not.toBeNull();
+    HTMLAnchorElement.prototype.click.mockRestore();
+  });
+
+  it("no celular a faixa de chips mostra que rola: seta e esmaecido só quando há mais chips, e a seta avança a faixa", async () => {
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    const scroller = await screen.findByTestId("chip-scroller");
+    expect(screen.queryByRole("button", { name: "Ver mais filtros" })).not.toBeInTheDocument();
+    Object.defineProperty(scroller, "scrollWidth", { configurable: true, value: 600 });
+    Object.defineProperty(scroller, "clientWidth", { configurable: true, value: 200 });
+    scroller.scrollBy = vi.fn();
+    fireEvent.scroll(scroller);
+    const arrow = await screen.findByRole("button", { name: "Ver mais filtros" });
+    expect(scroller).toHaveAttribute("data-fade-right", "true");
+    expect(scroller).toHaveAttribute("data-fade-left", "false");
+    await userEvent.setup().click(arrow);
+    expect(scroller.scrollBy).toHaveBeenCalledWith(expect.objectContaining({ left: expect.any(Number) }));
+    scroller.scrollLeft = 400;
+    fireEvent.scroll(scroller);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Ver mais filtros" })).not.toBeInTheDocument());
+    expect(scroller).toHaveAttribute("data-fade-left", "true");
+  });
 });

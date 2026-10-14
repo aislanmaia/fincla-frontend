@@ -50,13 +50,20 @@ export function buildCsv(rows, cardCurrency) {
   return `\uFEFF${[COLUMNS.map((column) => csvCell(column.header)).join(","), ...lines].join("\r\n")}`;
 }
 
-export function downloadCsv(rows, cardCurrency) {
+/** Nome do arquivo exportado: `lancamentos-AAAA-MM-DD.csv`, com a extensão sempre presente. */
+export const exportFileName = (extension, now = new Date()) => `lancamentos-${now.toISOString().slice(0, 10)}.${extension}`;
+
+export function downloadCsv(rows, cardCurrency, filename = exportFileName("csv")) {
   const url = URL.createObjectURL(new Blob([buildCsv(rows, cardCurrency)], { type: "text/csv;charset=utf-8" }));
   const link = document.createElement("a");
   link.href = url;
-  link.download = "card-transactions.csv";
+  link.download = filename;
+  link.rel = "noopener";
+  link.style.display = "none";
+  // No DOM durante o clique e URL viva por um tempo: revogar na hora faz alguns navegadores salvarem o arquivo sem nome nem extensão.
+  document.body.appendChild(link);
   link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  setTimeout(() => { link.remove(); URL.revokeObjectURL(url); }, 30000);
 }
 
 const categoryOf = (row) => pickCategoryTagFromApiTransaction(row)?.label || row.category || "Sem categoria";

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ChevronRight, Download, Filter, PieChart, Search, Sparkles, X } from "lucide-react";
 
 import { formatMoneyAbs } from "../../money/formatMoney.js";
@@ -76,5 +76,35 @@ export function LedgerSearchEmpty({ query, onClear }) {
     <strong style={{ display: "block", fontSize: 16 }}>Nada com “{query}”</strong>
     <p style={{ margin: "6px 0 18px", fontSize: 13, color: T.inkGhost }}>Nenhum lançamento deste recorte tem esse texto.</p>
     <button type="button" onClick={onClear} style={{ ...G, height: 40, padding: "0 18px", border: `1px solid ${T.ink}`, borderRadius: 99, background: T.surface, color: T.ink, fontWeight: 600, fontSize: 14, cursor: "pointer" }}>Limpar busca</button>
+  </div>;
+}
+
+/**
+ * Faixa de chips rolável com sinais de que ela rola: esmaecido na borda que ainda tem conteúdo e uma seta que
+ * avança a faixa. Sem eles um chip cortado parece um defeito, não um carrossel.
+ */
+export function LedgerChipScroller({ children }) {
+  const ref = useRef(null);
+  const [edge, setEdge] = useState({ left: false, right: false });
+  const measure = () => {
+    const el = ref.current;
+    if (!el) return;
+    const left = el.scrollLeft > 4;
+    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 4;
+    setEdge((current) => current.left === left && current.right === right ? current : { left, right });
+  };
+  // Chips entram e saem a cada render; `setEdge` não re-renderiza quando nada mudou.
+  useEffect(measure);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver !== "function") return undefined;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const fade = `linear-gradient(to right, ${edge.left ? "transparent, black 28px" : "black, black"}, black calc(100% - ${edge.right ? 44 : 0}px), ${edge.right ? "transparent" : "black"})`;
+  return <div style={{ position: "relative", flex: 1, minWidth: 0 }}>
+    <div ref={ref} onScroll={measure} className="fincla-scroll" data-testid="chip-scroller" data-fade-left={edge.left} data-fade-right={edge.right} style={{ display: "flex", alignItems: "center", gap: 8, overflowX: "auto", scrollbarWidth: "none", WebkitMaskImage: fade, maskImage: fade }}>{children}</div>
+    {edge.right && <button type="button" aria-label="Ver mais filtros" onClick={() => ref.current?.scrollBy({ left: Math.max(120, ref.current.clientWidth * 0.7), behavior: "smooth" })} style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", width: 26, height: 26, padding: 0, border: `1px solid ${T.border}`, borderRadius: 99, background: T.surface, color: T.inkMid, display: "grid", placeItems: "center", cursor: "pointer", boxShadow: "0 1px 4px rgba(0,0,0,.12)" }}><ChevronRight size={16} aria-hidden="true" /></button>}
   </div>;
 }
