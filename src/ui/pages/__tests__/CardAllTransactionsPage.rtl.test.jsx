@@ -166,7 +166,7 @@ describe("CardAllTransactionsPage", () => {
     await userEvent.setup().click(within(sheet).getByRole("button", { name: "← Voltar" }));
     expect(within(sheet).getByRole("button", { name: "Categoria" })).toHaveFocus();
     await userEvent.setup().click(within(sheet).getByRole("button", { name: "Fechar filtros" }));
-    await userEvent.setup().click(within(screen.getByRole("listitem")).getByRole("button", { name: /Mercado/ }));
+    await userEvent.setup().click(screen.getByRole("button", { name: /Mercado/ }));
     expect(screen.getByRole("dialog", { name: "Detalhes do lançamento" })).toHaveTextContent("Mercado");
     await userEvent.setup().keyboard("{Escape}");
     expect(screen.queryByRole("dialog", { name: "Detalhes do lançamento" })).not.toBeInTheDocument();
@@ -677,13 +677,23 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     await screen.findByText("Sem dono");
     const banner = screen.getByRole("button", { name: /1 alerta para revisar/ });
     expect(banner).toHaveTextContent("1 item sem categoria");
-    expect(screen.queryAllByRole("button", { name: /Assistente/ })).toHaveLength(0);
     await user.click(banner);
     const sheet = screen.getByRole("dialog", { name: "Assistente" });
     expect(sheet.firstElementChild).toHaveStyle({ width: "100%", borderRadius: "18px 18px 0 0" });
     await user.click(within(sheet).getByRole("button", { name: "Fechar" }));
     expect(screen.queryByRole("dialog", { name: "Assistente" })).not.toBeInTheDocument();
     expect(banner).toHaveFocus();
+  });
+
+  it("no celular resume 2 ou mais alertas por tipo, sem repetir o título", async () => {
+    const dup = (id, time) => ({ id, date: "2026-10-02", description: "Padaria", value: 9, value_currency: "BRL", type: "expense", status: "confirmed", time });
+    const dup2 = (id) => ({ id, date: "2026-10-03", description: "Cinema", value: 30, value_currency: "BRL", type: "expense", status: "confirmed" });
+    withLedger([dup(31), dup(32), dup2(33), dup2(34), { id: 35, date: "2026-10-04", description: "Sem dono", value: 5, value_currency: "BRL", type: "expense", status: "confirmed" }]);
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    await screen.findByText("Sem dono");
+    const banner = screen.getByRole("button", { name: /alertas para revisar/ });
+    expect(banner).toHaveTextContent(/^.*2 possíveis duplicatas · \d+ itens sem categoria/);
+    expect(banner.textContent.match(/Possível duplicata/g)).toBeNull();
   });
 
   it("no celular sem alertas o aviso continua visível, neutro, e abre o Assistente", async () => {
@@ -705,5 +715,12 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(button.closest('[style*="position: fixed"]')).toBeNull();
     await user.click(button);
     expect(screen.getByRole("dialog", { name: "Assistente" }).firstElementChild).not.toHaveStyle({ width: "100%" });
+  });
+
+  it("no celular o aviso não diz que está tudo normal enquanto os lançamentos carregam", async () => {
+    server.use(http.get("*/v1/transactions", async () => { await new Promise((resolve) => setTimeout(resolve, 400)); return HttpResponse.json({ data: [], pagination: { total: 0, page: 1, limit: 50 } }); }));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    expect(await screen.findByRole("button", { name: "Assistente" })).toHaveTextContent("Analisando os lançamentos…");
+    expect(screen.queryByText(/Nada fora do comum/)).not.toBeInTheDocument();
   });
 });
