@@ -670,23 +670,40 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(screen.getByRole("dialog", { name: "Categorizar lançamentos" })).toHaveTextContent("1 lançamento selecionado");
   });
 
-  it("no celular o Assistente é um botão flutuante com selo e abre como bottom sheet", async () => {
+  it("no celular o Assistente é um aviso fixo na tela e abre como bottom sheet", async () => {
     withLedger([{ id: 21, date: "2026-10-02", description: "Sem dono", value: 9, value_currency: "BRL", type: "expense", status: "confirmed" }, ledger[1]]);
     render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
     const user = userEvent.setup();
     await screen.findByText("Sem dono");
-    const button = screen.getByRole("button", { name: /Assistente/ });
-    expect(button.parentElement).toHaveStyle({ position: "fixed" });
-    expect(screen.getAllByRole("button", { name: /Assistente/ })).toHaveLength(1);
-    expect(screen.getByLabelText("1 alertas")).toBeInTheDocument();
-    await user.click(button);
+    const banner = screen.getByRole("button", { name: /1 alerta para revisar/ });
+    expect(banner).toHaveTextContent("1 item sem categoria");
+    await user.click(banner);
     const sheet = screen.getByRole("dialog", { name: "Assistente" });
     expect(sheet.firstElementChild).toHaveStyle({ width: "100%", borderRadius: "18px 18px 0 0" });
     await user.click(within(sheet).getByRole("button", { name: "Fechar" }));
     expect(screen.queryByRole("dialog", { name: "Assistente" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Assistente/ })).toHaveFocus();
-    await user.click(screen.getByRole("button", { name: /Filtros/ }));
-    expect(screen.queryByRole("button", { name: /Assistente/ })).not.toBeInTheDocument();
+    expect(banner).toHaveFocus();
+  });
+
+  it("no celular resume 2 ou mais alertas por tipo, sem repetir o título", async () => {
+    const dup = (id, time) => ({ id, date: "2026-10-02", description: "Padaria", value: 9, value_currency: "BRL", type: "expense", status: "confirmed", time });
+    const dup2 = (id) => ({ id, date: "2026-10-03", description: "Cinema", value: 30, value_currency: "BRL", type: "expense", status: "confirmed" });
+    withLedger([dup(31), dup(32), dup2(33), dup2(34), { id: 35, date: "2026-10-04", description: "Sem dono", value: 5, value_currency: "BRL", type: "expense", status: "confirmed" }]);
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    await screen.findByText("Sem dono");
+    const banner = screen.getByRole("button", { name: /alertas para revisar/ });
+    expect(banner).toHaveTextContent(/^.*2 possíveis duplicatas · \d+ itens sem categoria/);
+    expect(banner.textContent.match(/Possível duplicata/g)).toBeNull();
+  });
+
+  it("no celular sem alertas o aviso continua visível, neutro, e abre o Assistente", async () => {
+    withLedger([ledger[0]]);
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    const user = userEvent.setup();
+    await screen.findByText(ledger[0].description);
+    expect(screen.queryByText(/para revisar/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^Assistente/ }));
+    expect(screen.getByRole("dialog", { name: "Assistente" })).toBeInTheDocument();
   });
 
   it("no desktop o Assistente continua no cabeçalho e abre como gaveta lateral", async () => {
@@ -698,5 +715,12 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(button.closest('[style*="position: fixed"]')).toBeNull();
     await user.click(button);
     expect(screen.getByRole("dialog", { name: "Assistente" }).firstElementChild).not.toHaveStyle({ width: "100%" });
+  });
+
+  it("no celular o aviso não diz que está tudo normal enquanto os lançamentos carregam", async () => {
+    server.use(http.get("*/v1/transactions", async () => { await new Promise((resolve) => setTimeout(resolve, 400)); return HttpResponse.json({ data: [], pagination: { total: 0, page: 1, limit: 50 } }); }));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    expect(await screen.findByRole("button", { name: "Assistente" })).toHaveTextContent("Analisando os lançamentos…");
+    expect(screen.queryByText(/Nada fora do comum/)).not.toBeInTheDocument();
   });
 });
