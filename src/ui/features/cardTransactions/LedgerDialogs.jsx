@@ -14,14 +14,14 @@ const MONTH_NAMES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho",
 const inputStyle = { ...G, border: `1px solid ${T.border}`, borderRadius: 9, background: T.surface, color: T.ink, padding: "8px 10px", fontSize: 12, width: "100%", boxSizing: "border-box" };
 
 /** Casca comum: dialog modal com foco preso, Escape e clique no fundo para fechar. */
-export function LedgerModal({ title, onClose, children, side = false, width = 420 }) {
+export function LedgerModal({ title, onClose, children, side = false, sheet = false, width = 420 }) {
   const ref = useRef(null);
   const closeRef = useRef(null);
   useFocusTrap(ref, true);
   useEffect(() => { closeRef.current?.focus(); }, []);
   return <div ref={ref} role="dialog" aria-modal="true" aria-label={title} onKeyDown={(event) => { if (event.key === "Escape") { event.stopPropagation(); onClose(); } }}
-    style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(15,15,13,.35)", display: "flex", justifyContent: side ? "flex-end" : "center", alignItems: side ? "stretch" : "center" }} onClick={onClose}>
-    <div style={{ ...G, background: T.surface, width: side ? Math.min(width, 380) : "min(92vw, " + width + "px)", maxHeight: side ? "100%" : "88dvh", borderRadius: side ? 0 : 14, padding: 20, overflowY: "auto", display: "flex", flexDirection: "column", gap: 14 }} onClick={(event) => event.stopPropagation()}>
+    style={{ position: "fixed", inset: 0, zIndex: 60, background: "rgba(15,15,13,.35)", display: "flex", justifyContent: side ? "flex-end" : "center", alignItems: sheet ? "flex-end" : side ? "stretch" : "center" }} onClick={onClose}>
+    <div style={{ ...G, background: T.surface, width: sheet ? "100%" : side ? Math.min(width, 380) : "min(92vw, " + width + "px)", maxHeight: sheet ? "85dvh" : side ? "100%" : "88dvh", boxSizing: "border-box", borderRadius: sheet ? "18px 18px 0 0" : side ? 0 : 14, padding: sheet ? "20px 20px calc(20px + env(safe-area-inset-bottom, 0px))" : 20, overflowY: "auto", display: "flex", flexDirection: "column", gap: 14 }} onClick={(event) => event.stopPropagation()}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
         <h2 style={{ ...G, margin: 0, fontSize: 16 }}>{title}</h2>
         <button ref={closeRef} type="button" aria-label="Fechar" onClick={onClose} style={{ border: 0, background: "none", cursor: "pointer" }}><X size={18} /></button>
