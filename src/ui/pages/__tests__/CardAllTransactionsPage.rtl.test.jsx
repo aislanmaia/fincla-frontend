@@ -154,6 +154,26 @@ describe("CardAllTransactionsPage", () => {
     expect(row).toHaveFocus();
   });
 
+  it("o sheet de filtros do celular segue o desenho de Transações: cartões com valor, Limpar tudo só com filtro, saída animada", async () => {
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Filtros" }));
+    const sheet = screen.getByRole("dialog", { name: "Filtros dos lançamentos" });
+    expect(within(sheet).getByText("Filtros")).toBeInTheDocument();
+    for (const name of [/^Período: /, /^Categoria: Todas/, /^Etiquetas: /, /^Cartão: /, /^Tipo: /, /^Status: /, /^Valor: /]) expect(within(sheet).getByRole("button", { name })).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: /^Cartão: .*7112/ })).toBeInTheDocument();
+    expect(within(sheet).queryByRole("button", { name: "Limpar tudo" })).not.toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: /^Cartão: / }));
+    await user.click(within(sheet).getByRole("button", { name: /Todos os cartões/ }));
+    await user.click(within(sheet).getByRole("button", { name: "← Voltar" }));
+    expect(within(sheet).getByRole("button", { name: /^Cartão: Todos os cartões/ })).toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: "Limpar tudo" }));
+    expect(within(sheet).queryByRole("button", { name: "Limpar tudo" })).not.toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: /^Ver \d+ lançamentos/ }));
+    expect(screen.getByRole("dialog", { name: "Filtros dos lançamentos" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Filtros dos lançamentos" })).not.toBeInTheDocument());
+  });
+
   it("usa grade de facetas no sheet mobile", async () => {
     server.use(http.get("*/v1/transactions", ({ request }) => {
       requests.push(new URL(request.url));
@@ -165,8 +185,8 @@ describe("CardAllTransactionsPage", () => {
     const sheet = screen.getByRole("dialog", { name: "Filtros dos lançamentos" });
     expect(sheet.querySelector(".fincla-scroll")).toHaveStyle({ overflowY: "auto" });
     expect(within(sheet).getByRole("button", { name: "Ver 2 lançamentos" })).toBeInTheDocument();
-    expect(within(sheet).getByRole("button", { name: "Categoria" })).toBeInTheDocument();
-    await userEvent.setup().click(within(sheet).getByRole("button", { name: "Categoria" }));
+    expect(within(sheet).getByRole("button", { name: /^Categoria:/ })).toBeInTheDocument();
+    await userEvent.setup().click(within(sheet).getByRole("button", { name: /^Categoria:/ }));
     expect(within(sheet).queryByRole("button", { name: "Ver 2 lançamentos" })).not.toBeInTheDocument();
     expect(within(sheet).getByRole("button", { name: "Ver 2 transações" })).toBeInTheDocument();
     expect(within(sheet).getByRole("button", { name: "← Voltar" })).toBeInTheDocument();
@@ -174,8 +194,9 @@ describe("CardAllTransactionsPage", () => {
     expect(screen.getByRole("listitem")).toHaveTextContent("A pagar");
     expect(within(sheet).getByRole("heading", { name: "Categoria" })).toHaveFocus();
     await userEvent.setup().click(within(sheet).getByRole("button", { name: "← Voltar" }));
-    expect(within(sheet).getByRole("button", { name: "Categoria" })).toHaveFocus();
+    expect(within(sheet).getByRole("button", { name: /^Categoria:/ })).toHaveFocus();
     await userEvent.setup().click(within(sheet).getByRole("button", { name: "Fechar filtros" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Filtros dos lançamentos" })).not.toBeInTheDocument());
     await userEvent.setup().click(screen.getByRole("button", { name: /Mercado/ }));
     expect(screen.getByRole("dialog", { name: "Detalhes do lançamento" })).toHaveTextContent("Mercado");
     await userEvent.setup().keyboard("{Escape}");
