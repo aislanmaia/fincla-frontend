@@ -717,10 +717,57 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(screen.getByRole("dialog", { name: "Assistente" }).firstElementChild).not.toHaveStyle({ width: "100%" });
   });
 
-  it("no celular o aviso não diz que está tudo normal enquanto os lançamentos carregam", async () => {
+  it("no celular a barra de app concentra as ações e a busca ocupa a barra inteira ao abrir", async () => {
+    withLedger([ledger[0]]);
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    const user = userEvent.setup();
+    await screen.findByText(ledger[0].description);
+    expect(screen.getByRole("heading", { name: "Lançamentos" })).toBeInTheDocument();
+    for (const name of ["Voltar para o cartão", "Filtros", "Assistente", "Exportar"]) expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Buscar lançamentos" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Buscar lançamentos" }));
+    const input = screen.getByRole("textbox", { name: "Buscar lançamentos" });
+    expect(input).toHaveFocus();
+    expect(screen.queryByRole("heading", { name: "Lançamentos" })).not.toBeInTheDocument();
+    await user.type(input, "amazon{Enter}");
+    expect(screen.queryByRole("textbox", { name: "Buscar lançamentos" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Busca: amazon. Editar." })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Buscar lançamentos, busca ativa" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Busca: amazon. Editar." }));
+    expect(screen.getByRole("textbox", { name: "Buscar lançamentos" })).toHaveValue("amazon");
+    await user.click(screen.getByRole("button", { name: "Limpar busca" }));
+    expect(screen.getByRole("textbox", { name: "Buscar lançamentos" })).toHaveValue("");
+    await user.click(screen.getByRole("button", { name: "Fechar busca" }));
+    expect(screen.queryByRole("button", { name: /^Busca:/ })).not.toBeInTheDocument();
+  });
+
+  it("no celular mostra a faixa de alerta junto da barra, só quando há alerta", async () => {
+    withLedger([{ id: 21, date: "2026-10-02", description: "Sem dono", value: 9, value_currency: "BRL", type: "expense", status: "confirmed" }, ledger[1]]);
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    await screen.findByText("Sem dono");
+    expect(screen.getByRole("button", { name: "Assistente, 1 alerta" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "1 alerta para revisar" })).toHaveTextContent("1 item sem categoria");
+  });
+
+  it("no celular, enquanto carrega, não há faixa de alerta", async () => {
     server.use(http.get("*/v1/transactions", async () => { await new Promise((resolve) => setTimeout(resolve, 400)); return HttpResponse.json({ data: [], pagination: { total: 0, page: 1, limit: 50 } }); }));
     render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
-    expect(await screen.findByRole("button", { name: "Assistente" })).toHaveTextContent("Analisando os lançamentos…");
-    expect(screen.queryByText(/Nada fora do comum/)).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Assistente" })).toBeInTheDocument();
+    expect(screen.queryByText(/para revisar/)).not.toBeInTheDocument();
+  });
+
+  it("no celular a busca sem resultado diz o que foi buscado, só depois de aplicada, e oferece limpar", async () => {
+    const searched = [];
+    server.use(http.get("*/v1/transactions", ({ request }) => { searched.push(new URL(request.url).searchParams.get("description")); return HttpResponse.json({ data: [], pagination: { total: 0, page: 1, limit: 50 } }); }));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Buscar lançamentos" }));
+    await user.type(screen.getByRole("textbox", { name: "Buscar lançamentos" }), "xyz{Enter}");
+    expect(screen.queryByText("Nada com “xyz”")).not.toBeInTheDocument();
+    await waitFor(() => expect(searched).toContain("xyz"));
+    expect(await screen.findByText("Nada com “xyz”")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Limpar busca" }));
+    await waitFor(() => expect(screen.queryByText("Nada com “xyz”")).not.toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /^Busca:/ })).not.toBeInTheDocument();
   });
 });

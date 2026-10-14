@@ -195,7 +195,8 @@ export default function App() {
   /* A tela é dona do próprio scroll? Só Transações no mobile, por enquanto.
      O `padding-bottom` de 40 também sai: ele existe para dar respiro ao fim de
      uma página que rola, e numa tela autocontida vira uma faixa morta. */
-  const selfScrollingScreen = isMobile && activeSegment === "transactions";
+  const ledgerScreen = isMobile && /^\/cards\/[^/]+\/transactions\/?$/.test(pathname);
+  const selfScrollingScreen = isMobile && (activeSegment === "transactions" || ledgerScreen);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [transactionsListVersion, setTransactionsListVersion] = useState(0);
@@ -632,7 +633,7 @@ export default function App() {
             display: selfScrollingScreen ? "flex" : undefined,
             flexDirection: selfScrollingScreen ? "column" : undefined,
             padding: selfScrollingScreen
-              ? "14px 14px 0"
+              ? (ledgerScreen ? 0 : "14px 14px 0")
               : isMobile ? "14px 14px 40px" : "20px 28px 40px" }}>
           <AccessNotice user={session.user} />
           {activeSegment === "dashboard" && onboardingWarnings.length > 0 && (
