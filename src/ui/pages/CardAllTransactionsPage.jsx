@@ -24,6 +24,8 @@ import { HistoryButton } from "../features/transactions/TransactionsListHeader.j
 import { defaultInvoiceKeys, invoiceChipLabel, invoiceIdsForQuery, invoiceOptions, periodChipLabel, withCurrentInvoice, withLedgerInvoices } from "../features/cardTransactions/invoiceScope.js";
 import { formatCustomPeriodLabel } from "../features/transactions/filters/customPeriodLabel.js";
 import { readListPrefs, writeListPrefs } from "../features/transactions/listPrefs.js";
+import { FacetCard } from "../features/transactions/filters/facetBar/FacetCard.jsx";
+import { MobileFilterSheet } from "../features/transactions/MobileFilterSheet.jsx";
 import { TransactionsListDisplayControls } from "../features/transactions/TransactionsListDisplayControls.jsx";
 import { TransactionsFilterPanel } from "../features/transactions/filters/TransactionsFilterPanel.jsx";
 import { TransactionsFilterBar } from "../features/transactions/filters/TransactionsFilterBar.jsx";
@@ -205,7 +207,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     if (inspected) detailCloseRef.current?.focus();
     else if (filtersOpen && isMobile) {
       if (mobileFacetOpen) mobileFacetHeadingRef.current?.focus();
-      else if (wasMobileFacetOpenRef.current) mobileFacetButtonRefs.current[activeFacet]?.focus();
+      else if (wasMobileFacetOpenRef.current) mobileFacetButtonRefs.current[activeFacet]?.querySelector("button")?.focus();
       else filterCloseRef.current?.focus();
       wasMobileFacetOpenRef.current = mobileFacetOpen;
     }
@@ -218,12 +220,12 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     const onEscape = (event) => {
       if (event.key !== "Escape") return;
       if (inspected) setInspected(null);
-      else if (filtersOpen) setFiltersOpen(false);
+      else if (filtersOpen) { if (isMobile && mobileFacetOpen) setMobileFacetOpen(false); else setFiltersOpen(false); }
       else setSummarySheetOpen(false);
     };
     document.addEventListener("keydown", onEscape);
     return () => document.removeEventListener("keydown", onEscape);
-  }, [filtersOpen, inspected, summarySheetOpen]);
+  }, [filtersOpen, inspected, summarySheetOpen, isMobile, mobileFacetOpen]);
 
   useEffect(() => {
     if (inspected) { wasInspectedRef.current = true; return; }
@@ -522,6 +524,15 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   };
   const toggleInvoice = (key) => setInvoiceKeys((keys) => { const current = keys ?? []; return current.includes(key) ? current.filter((entry) => entry !== key) : [...current, key]; });
   const timeScopePanel = <CardTimeScopePanel mode={invoiceMode ? "invoice" : "period"} onMode={changeTimeMode} options={invoiceOpts} selectedKeys={invoiceKeys ?? []} onToggle={toggleInvoice} currency={state.card?.currency} invoiceDisabled={cardScope !== "current"} />;
+  // Cartões de faceta do sheet de filtros (mesmos da tela de Transações); período e cartão mostram o recorte real da tela.
+  const tileFacet = (key) => {
+    const base = facets.find((facet) => facet.key === key) ?? { key, icon: key, value: "Todos", active: false };
+    const labelled = { ...base, label: FACET_LABELS[key] ?? base.label };
+    if (key === "periodo") return { ...labelled, value: chipLabel, active: true };
+    if (key === "cartao") return { ...labelled, value: cardScope === "all" ? "Todos os cartões" : card ? cardLabel(card) : labelled.value, active: cardScope === "all" };
+    return labelled;
+  };
+  const hasActiveFilters = activeFacets.length > 0 || facets.some((facet) => facet.key === "periodo" && facet.active) || Boolean(kind) || Boolean(activeWeek) || Boolean(filter.search.trim());
   const categoryIdByName = (name) => categories.find((row) => row.label === name || row.apiName === name)?.id ?? null;
   const isCategorySelected = (name) => { const id = categoryIdByName(name); return id == null ? null : filter.cats.includes(id); };
   const toggleCategory = (name) => { const id = categoryIdByName(name); if (id != null) filter.setCats(filter.cats.includes(id) ? filter.cats.filter((entry) => entry !== id) : [...filter.cats, id]); };
@@ -653,22 +664,17 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
         {cardScope === "current" && <CardOutflowsChart outflows={outflows} currency={card?.currency} loading={outflowsLoading} error={outflowsError} message={outflowsMessage} onPickInvoice={pickInvoice} onPickWeek={pickWeek} isMobile />}
       </div>
     </div>}
-    {filtersOpen && isMobile && <div ref={filterDialogRef} role="dialog" aria-modal="true" aria-label="Filtros dos lançamentos" style={{ position: "fixed", inset: 0, zIndex: 49, background: "rgba(15,15,13,.35)", display: "flex", alignItems: "flex-end" }} onClick={closeFilters}>
-      <div style={{ background: T.surface, borderRadius: "18px 18px 0 0", height: "min(100dvh, 760px)", width: "100%", padding: "0 12px 12px", display: "flex", flexDirection: "column", gap: 12 }} onClick={(event) => event.stopPropagation()}>
-        <div aria-hidden="true" style={{ width: 36, height: 4, borderRadius: 99, background: T.border, margin: "11px auto 2px" }} />
-        <div style={{ ...G, display: "flex", justifyContent: "space-between", alignItems: "center", fontWeight: 700 }}>
-          <button type="button" onClick={() => setMobileFacetOpen(false)} style={{ ...G, border: 0, background: "none", color: T.blue, cursor: "pointer" }}>{mobileFacetOpen ? "← Voltar" : "Filtros"}</button>
-          <button ref={filterCloseRef} type="button" aria-label="Fechar filtros" onClick={closeFilters} style={{ border: 0, background: "none", cursor: "pointer" }}><X size={18} /></button>
+    {filtersOpen && isMobile && <MobileFilterSheet dialogRef={filterDialogRef} closeRef={filterCloseRef} ariaLabel="Filtros dos lançamentos" onClose={closeFilters}
+      title={mobileFacetOpen ? <button type="button" onClick={() => setMobileFacetOpen(false)} style={{ ...G, border: 0, background: "none", color: T.blue, cursor: "pointer", padding: 0, fontSize: 16, fontWeight: 800 }}>← Voltar</button> : "Filtros"}
+      onClear={!mobileFacetOpen && hasActiveFilters ? clearAll : undefined} footer={mobileFacetOpen ? null : `Ver ${state.total ?? "—"} lançamentos`} footerLoading={state.loading}>
+      {!mobileFacetOpen && <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        <label style={{ ...G, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, fontSize: 11, color: T.inkMid, fontWeight: 700, letterSpacing: "0.04em" }}>ORDENAR POR <Select aria-label="Ordenar lançamentos" value={`${sort.field}:${sort.dir}`} onChange={(event) => { const [field, dir] = event.target.value.split(":"); filter.setSort([{ field, dir }]); }}><option value="date:desc">Data ↓</option><option value="date:asc">Data ↑</option><option value="val:desc">Maior valor</option><option value="val:asc">Menor valor</option><option value="desc:asc">Descrição A–Z</option></Select></label>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 10 }}>
+          {FACETS.map((key) => <div key={key} ref={(node) => { mobileFacetButtonRefs.current[key] = node; }}><FacetCard compact expanded={false} facet={tileFacet(key)} onClick={() => { setActiveFacet(key); setMobileFacetOpen(true); }} /></div>)}
         </div>
-        {!mobileFacetOpen && <div className="fincla-scroll" style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", alignContent: "start", gap: 10, overflowY: "auto", flex: 1 }}>
-          <label style={{ ...G, gridColumn: "1 / -1", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, fontSize: 11, color: T.inkMid, fontWeight: 700 }}>ORDENAR POR <Select aria-label="Ordenar lançamentos" value={`${sort.field}:${sort.dir}`} onChange={(event) => { const [field, dir] = event.target.value.split(":"); filter.setSort([{ field, dir }]); }}><option value="date:desc">Data ↓</option><option value="date:asc">Data ↑</option><option value="val:desc">Maior valor</option><option value="val:asc">Menor valor</option><option value="desc:asc">Descrição A–Z</option></Select></label>
-          {FACETS.map((key) => <button ref={(node) => { mobileFacetButtonRefs.current[key] = node; }} key={key} type="button" onClick={() => { setActiveFacet(key); setMobileFacetOpen(true); }} style={{ ...G, minHeight: 64, border: `1px solid ${T.border}`, borderRadius: 10, background: activeFacets.some((facet) => facet.key === key) ? T.blueLight : T.surface, color: T.ink, textAlign: "left", padding: 12, fontWeight: 700 }}>{FACET_LABELS[key]} {activeFacets.some((facet) => facet.key === key) ? "●" : ""}</button>)}
-          <button type="button" onClick={clearAll} style={{ ...G, gridColumn: "1 / -1", border: 0, background: "none", color: T.red, padding: 12 }}>Limpar tudo</button>
-        </div>}
-        {mobileFacetOpen && <div style={{ minHeight: 0, flex: 1, display: "flex", flexDirection: "column" }}><h2 ref={mobileFacetHeadingRef} tabIndex={-1} style={{ ...G, fontSize: 14, margin: "0 0 8px", color: T.ink }}>{FACET_LABELS[activeFacet] || "Filtros ativos"}</h2><div style={{ minHeight: 0, flex: 1 }}><TransactionsFilterPanel filter={filter} facet={activeFacet} onFacetChange={setActiveFacet} categories={categories} allTags={tagOptions.map((tag) => tag.displayLabel)} allTagsLoading={tagCatalog.loading} allTagsError={Boolean(tagCatalog.error)} tagIdByLabel={tagIdByLabel} facetCounts={facetCounts} activeFacets={activeFacets} onClearFacet={clearFacet} onClearAll={clearAll} onApply={closeFilters} onClose={() => setMobileFacetOpen(false)} resultCount={state.total ?? 0} resultsLoading={state.loading} compact hideRail visibleFacetKeys={FACETS} defaultPeriod="tudo" cardScopePanel={cardScopePanel} periodScopePanel={timeScopePanel} hidePeriodContent={invoiceMode} selectionOverrides={{ cartao: cardScope === "all" ? 1 : 0, ...(invoiceMode ? { periodo: 0 } : {}) }} /></div></div>}
-        {!mobileFacetOpen && <Btn variant="dark" onClick={closeFilters} style={{ width: "100%", flex: "none" }}>Ver {state.total ?? "—"} lançamentos</Btn>}
-      </div>
-    </div>}
+      </div>}
+      {mobileFacetOpen && <div style={{ minHeight: 0, flex: 1, display: "flex", flexDirection: "column" }}><h2 ref={mobileFacetHeadingRef} tabIndex={-1} style={{ ...G, fontSize: 14, margin: "0 0 8px", color: T.ink }}>{FACET_LABELS[activeFacet] || "Filtros ativos"}</h2><div style={{ minHeight: 0, flex: 1 }}><TransactionsFilterPanel filter={filter} facet={activeFacet} onFacetChange={setActiveFacet} categories={categories} allTags={tagOptions.map((tag) => tag.displayLabel)} allTagsLoading={tagCatalog.loading} allTagsError={Boolean(tagCatalog.error)} tagIdByLabel={tagIdByLabel} facetCounts={facetCounts} activeFacets={activeFacets} onClearFacet={clearFacet} onClearAll={clearAll} onApply={closeFilters} onClose={() => setMobileFacetOpen(false)} resultCount={state.total ?? 0} resultsLoading={state.loading} compact hideRail visibleFacetKeys={FACETS} defaultPeriod="tudo" cardScopePanel={cardScopePanel} periodScopePanel={timeScopePanel} hidePeriodContent={invoiceMode} selectionOverrides={{ cartao: cardScope === "all" ? 1 : 0, ...(invoiceMode ? { periodo: 0 } : {}) }} /></div></div>}
+    </MobileFilterSheet>}
   </div>;
 }
 

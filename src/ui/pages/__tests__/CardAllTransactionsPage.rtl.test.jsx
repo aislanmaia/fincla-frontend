@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -154,6 +154,53 @@ describe("CardAllTransactionsPage", () => {
     expect(row).toHaveFocus();
   });
 
+  it("o sheet de filtros do celular segue o desenho de Transações: cartões com valor, Limpar tudo só com filtro, saída animada", async () => {
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Filtros" }));
+    const sheet = screen.getByRole("dialog", { name: "Filtros dos lançamentos" });
+    expect(within(sheet).getByText("Filtros")).toBeInTheDocument();
+    for (const name of [/^Período: /, /^Categoria: Todas/, /^Etiquetas: /, /^Cartão: /, /^Tipo: /, /^Status: /, /^Valor: /]) expect(within(sheet).getByRole("button", { name })).toBeInTheDocument();
+    expect(within(sheet).getByRole("button", { name: /^Cartão: .*7112/ })).toBeInTheDocument();
+    expect(within(sheet).queryByRole("button", { name: "Limpar tudo" })).not.toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: /^Cartão: / }));
+    await user.click(within(sheet).getByRole("button", { name: /Todos os cartões/ }));
+    await user.click(within(sheet).getByRole("button", { name: "← Voltar" }));
+    expect(within(sheet).getByRole("button", { name: /^Cartão: Todos os cartões/ })).toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: "Limpar tudo" }));
+    expect(within(sheet).queryByRole("button", { name: "Limpar tudo" })).not.toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: /^Ver \d+ lançamentos/ }));
+    expect(screen.getByRole("dialog", { name: "Filtros dos lançamentos" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Filtros dos lançamentos" })).not.toBeInTheDocument());
+  });
+
+  it("no sheet de filtros o Escape volta da faceta antes de fechar, e o arrasto da alça reduz, cancela sem dispensar e dispensa", async () => {
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Filtros" }));
+    const sheet = screen.getByRole("dialog", { name: "Filtros dos lançamentos" });
+    await user.click(within(sheet).getByRole("button", { name: /^Categoria:/ }));
+    await user.keyboard("{Escape}");
+    expect(within(sheet).queryByRole("button", { name: "← Voltar" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Filtros dos lançamentos" })).toBe(sheet);
+    const handle = sheet.querySelector('[style*="cursor: grab"]');
+    expect(sheet.style.height).toBe("100dvh");
+    fireEvent.touchStart(handle, { touches: [{ clientY: 0 }] });
+    fireEvent.touchMove(document, { touches: [{ clientY: 100 }] });
+    expect(sheet.style.height).toBe("72dvh");
+    fireEvent.touchStart(handle, { touches: [{ clientY: 0 }] });
+    fireEvent.touchMove(document, { touches: [{ clientY: 20 }] });
+    fireEvent.touchCancel(document);
+    fireEvent.touchMove(document, { touches: [{ clientY: 600 }] });
+    fireEvent.touchEnd(document);
+    expect(sheet.style.transform).toBe("translateY(0)");
+    expect(screen.getByRole("dialog", { name: "Filtros dos lançamentos" })).toBeInTheDocument();
+    fireEvent.touchStart(handle, { touches: [{ clientY: 0 }] });
+    fireEvent.touchMove(document, { touches: [{ clientY: 400 }] });
+    fireEvent.touchEnd(document);
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Filtros dos lançamentos" })).not.toBeInTheDocument());
+  });
+
   it("usa grade de facetas no sheet mobile", async () => {
     server.use(http.get("*/v1/transactions", ({ request }) => {
       requests.push(new URL(request.url));
@@ -165,8 +212,8 @@ describe("CardAllTransactionsPage", () => {
     const sheet = screen.getByRole("dialog", { name: "Filtros dos lançamentos" });
     expect(sheet.querySelector(".fincla-scroll")).toHaveStyle({ overflowY: "auto" });
     expect(within(sheet).getByRole("button", { name: "Ver 2 lançamentos" })).toBeInTheDocument();
-    expect(within(sheet).getByRole("button", { name: "Categoria" })).toBeInTheDocument();
-    await userEvent.setup().click(within(sheet).getByRole("button", { name: "Categoria" }));
+    expect(within(sheet).getByRole("button", { name: /^Categoria:/ })).toBeInTheDocument();
+    await userEvent.setup().click(within(sheet).getByRole("button", { name: /^Categoria:/ }));
     expect(within(sheet).queryByRole("button", { name: "Ver 2 lançamentos" })).not.toBeInTheDocument();
     expect(within(sheet).getByRole("button", { name: "Ver 2 transações" })).toBeInTheDocument();
     expect(within(sheet).getByRole("button", { name: "← Voltar" })).toBeInTheDocument();
@@ -174,8 +221,9 @@ describe("CardAllTransactionsPage", () => {
     expect(screen.getByRole("listitem")).toHaveTextContent("A pagar");
     expect(within(sheet).getByRole("heading", { name: "Categoria" })).toHaveFocus();
     await userEvent.setup().click(within(sheet).getByRole("button", { name: "← Voltar" }));
-    expect(within(sheet).getByRole("button", { name: "Categoria" })).toHaveFocus();
+    expect(within(sheet).getByRole("button", { name: /^Categoria:/ })).toHaveFocus();
     await userEvent.setup().click(within(sheet).getByRole("button", { name: "Fechar filtros" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Filtros dos lançamentos" })).not.toBeInTheDocument());
     await userEvent.setup().click(screen.getByRole("button", { name: /Mercado/ }));
     expect(screen.getByRole("dialog", { name: "Detalhes do lançamento" })).toHaveTextContent("Mercado");
     await userEvent.setup().keyboard("{Escape}");
