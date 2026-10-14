@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
-import { ArrowLeft, ChevronRight, Download, Filter, Search, Sparkles, X } from "lucide-react";
+import { ArrowLeft, Download, Search, Sparkles, X } from "lucide-react";
 
 import { getCurrentCreditCardInvoice, getInvoiceHistory, listCreditCards } from "../../api/creditCards";
 import { getTransaction, getTransactionsFacets, getTransactionsSummary, listTransactions } from "../../api/transactions";
@@ -260,7 +260,6 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const facets = filter.buildFacets({ categoriesById });
   const activeFacets = facets.filter((facet) => FACETS.includes(facet.key) && facet.active).filter((facet) => facet.key !== "cartao" && facet.key !== "periodo");
   if (cardScope === "all") activeFacets.push({ key: "cartao", label: "Cartão", value: "Todos os cartões" });
-  const activeCount = activeFacets.length + Number(Boolean(filter.search));
   const hasMore = state.total != null ? state.rows.length < state.total : state.rows.length > 0 && state.rows.length % PAGE_SIZE === 0;
   const setPreference = (patch) => setPrefs((before) => { const next = { ...before, ...patch }; writeListPrefs(next); return next; });
 
@@ -541,7 +540,8 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const alertSummary = alerts.length === 1 ? `${alerts[0].title}: ${alerts[0].detail}` : [...(dupGroups ? [`${dupGroups} ${dupGroups === 1 ? "possível duplicata" : "possíveis duplicatas"}`] : []), ...otherAlerts.map((item) => item.title)].join(" · ");
   const cardScopePanel = <CardScopePanel card={card} scope={cardScope} onScope={(value) => { setCardScope(value); setSummarySheetOpen(false); }} />;
 
-  const searchEmpty = isMobile && Boolean(filter.search) && debouncedSearch === filter.search && !state.loading && !state.error && state.rows.length === 0;
+  const searchTerm = filter.search.trim();
+  const searchEmpty = isMobile && Boolean(searchTerm) && debouncedSearch === searchTerm && !state.loading && !state.error && !noInvoice && !catalogBlocked && state.rows.length === 0;
   const clearSearch = () => { filter.setSearch(""); setSearchOpen(false); };
   const chipPill = { borderRadius: 99, padding: "0 12px", height: 30, boxSizing: "border-box", display: "inline-flex", alignItems: "center", whiteSpace: "nowrap", flex: "none" };
   return <div style={isMobile ? { height: "100%", minHeight: 0, display: "flex", flexDirection: "column", minWidth: 0 } : { padding: 28, display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
@@ -563,17 +563,17 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
         <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} isCategorySelected={isCategorySelected} onToggleCategory={toggleCategory} />
         <CardOutflowsChart outflows={outflows} currency={card.currency} loading={outflowsLoading} error={outflowsError} message={outflowsMessage} onPickInvoice={pickInvoice} onPickWeek={pickWeek} />
       </div>}
-      {cardScope === "current" && isMobile && <LedgerSummaryRow summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} onOpen={() => setSummarySheetOpen(true)} />}
-      {cardScope === "all" && <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} isCategorySelected={isCategorySelected} onToggleCategory={toggleCategory} />}
+      {isMobile && <LedgerSummaryRow summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} onOpen={() => setSummarySheetOpen(true)} />}
+      {cardScope === "all" && !isMobile && <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} isCategorySelected={isCategorySelected} onToggleCategory={toggleCategory} />}
       {!isMobile && <TransactionsFilterBar filter={filter} hideSavedViews hideFacets searchInput={filter.search} setSearchInput={filter.setSearch} searchPlaceholder="Buscar por descrição…" searchInputRef={searchInputRef} barChips={filterChips} onChipsBudget={setChipsBudget} barTrailing={<>{historyButtons}<TransactionsListDisplayControls
         density={prefs.density} grouped={prefs.grouped && sortField === "date"} canGroup={sortField === "date"}
         onDensityChange={(density) => setPreference({ density })}
         onGroupChange={() => setPreference({ grouped: !prefs.grouped })} /></>} />}
       {isMobile && <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", flex: "none" }}>
         <div className="fincla-scroll" style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0, overflowX: "auto", scrollbarWidth: "none" }}>
-          {filter.search && <span style={{ ...chipPill, background: T.ink, color: "#fff", padding: 0, overflow: "hidden" }}>
-            <button type="button" onClick={() => setSearchOpen(true)} aria-label={`Busca: ${filter.search}. Editar.`} style={{ ...G, border: 0, background: "none", color: "#fff", padding: "0 4px 0 12px", height: "100%", fontSize: 12, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}><Search size={14} aria-hidden="true" />“{filter.search}”</button>
-            <button type="button" aria-label="Remover busca" onClick={clearSearch} style={{ ...G, border: 0, background: "none", color: "#fff", padding: "0 12px 0 4px", height: "100%", cursor: "pointer" }}>×</button>
+          {filter.search && <span style={{ ...chipPill, background: T.ink, color: T.surface, padding: 0, overflow: "hidden" }}>
+            <button type="button" onClick={() => setSearchOpen(true)} aria-label={`Busca: ${filter.search}. Editar.`} style={{ ...G, border: 0, background: "none", color: T.surface, padding: "0 4px 0 12px", height: "100%", fontSize: 12, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}><Search size={14} aria-hidden="true" />“{filter.search}”</button>
+            <button type="button" aria-label="Remover busca" onClick={clearSearch} style={{ ...G, border: 0, background: "none", color: T.surface, padding: "0 12px 0 4px", height: "100%", cursor: "pointer" }}>×</button>
           </span>}
           <button type="button" data-pinned-chip="periodo" onClick={() => openFacet("periodo")} aria-label={`Recorte de tempo: ${chipLabel}. Ajustar.`} style={{ ...G, ...chipPill, border: `1px solid ${T.border}`, background: T.blueLight, color: T.blue, fontSize: 12, cursor: "pointer" }}>{chipLabel}</button>
           {activeFacets.map((facet) => <div key={facet.key} style={{ ...chipPill, padding: 0, border: `1px solid ${T.border}`, background: T.blueLight, overflow: "hidden" }}>
@@ -591,7 +591,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
       {catalogBlocked && <Card role="status" style={{ padding: 12, color: T.amber }}>{isTagFilterBlocked(tagStatus) ? tagFilterStatusMessage(tagStatus) : "Aguardando o catálogo de categorias para aplicar o filtro."}</Card>}
       <div ref={ledgerRef} style={{ display: "flex", alignItems: "stretch", minWidth: 0, position: "relative", gap: filtersOpen && !dockFloating ? 12 : 0, ...(isMobile ? { flex: 1, minHeight: 0 } : {}) }}>
         <div style={{ flex: 1, minWidth: 0, ...(isMobile ? { minHeight: 0, display: "flex", flexDirection: "column" } : {}) }}>
-        {searchEmpty ? <LedgerSearchEmpty query={filter.search} onClear={clearSearch} /> : 
+        {searchEmpty ? <LedgerSearchEmpty query={searchTerm} onClear={clearSearch} /> : 
         <CardTransactionsTable rows={state.rows} total={state.total} cardCurrency={cardScope === "current" ? card.currency : null} loading={state.loading} error={state.error} hasMore={hasMore} onMore={onMore} selected={selectedRows} onSelected={setSelectedRows} selectionSum={selectionSum} onCategorize={() => setDialog({ kind: "categorize", ids: selectedRows })} onMoveInstallment={cardScope === "current" ? () => setDialog({ kind: "move", ids: selectedRows }) : undefined} onExportSelected={() => downloadCsv(selectedRowObjects, cardScope === "current" ? card.currency : null)} inspected={inspected} onInspect={(row) => { inspectTriggerRef.current = document.activeElement; setInspected(row); }} grouped={prefs.grouped && sortField === "date"} density={prefs.density} isMobile={isMobile} maxHeight={filtersOpen && !isMobile ? ledgerHeight : undefined} />}
         </div>
         {inspected && !isMobile && <div ref={detailDialogRef} role="dialog" aria-modal="false" aria-label="Detalhes do lançamento" style={{ flex: "none", width: 360, minWidth: 0, marginLeft: 12 }}><Card style={{ height: "100%", padding: 20, overflowY: "auto", boxSizing: "border-box" }}><LedgerDetail row={inspected} currency={cardScope === "current" ? card?.currency : null} closeRef={detailCloseRef} onClose={() => setInspected(null)} onMove={cardScope === "current" ? (row) => setDialog({ kind: "move", ids: [row.id] }) : undefined} onRefund={cardScope === "current" ? (row) => setDialog({ kind: "refund", row }) : undefined} onOpenOriginal={openOriginal} /></Card></div>}
@@ -609,12 +609,12 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     {dialog?.kind === "refund" && <RefundDialog row={dialog.row} categories={(refundCatalog.categories ?? []).map((entry) => ({ id: String(entry.id), label: entry.labelPt }))} currency={cardScope === "current" ? card?.currency : null} today={todayLocalYmd()} onSubmit={submitRefund} onClose={closeDialog} />}
     {dialog?.kind === "export" && <ExportDialog total={state.total} filterSummary={filterSummary()} onExport={submitExport} onClose={closeDialog} />}
     {dialog?.kind === "assistant" && <AssistantDrawer insights={insights.items} loadedCount={state.rows.length} onClose={closeDialog} isMobile={isMobile} onSelect={(ids) => { setSelectedRows(ids); setDialog(null); }} onCategorize={(ids) => { setSelectedRows(ids); setDialog({ kind: "categorize", ids }); }} />}
-    {notice && <div role="status" style={{ ...G, position: "fixed", left: "50%", bottom: "calc(20px + env(safe-area-inset-bottom, 0px))", transform: "translateX(-50%)", zIndex: 70, background: T.ink, color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 12, display: "flex", gap: 12, alignItems: "center" }}>{notice}<button type="button" aria-label="Fechar aviso" onClick={() => setNotice(null)} style={{ border: 0, background: "none", color: "#fff", cursor: "pointer" }}>×</button></div>}
-    {summarySheetOpen && isMobile && cardScope === "current" && <div ref={summaryDialogRef} role="dialog" aria-modal="true" aria-label="Resumo e saídas do recorte" style={{ position: "fixed", inset: 0, zIndex: 48, background: "rgba(15,15,13,.35)", display: "flex", alignItems: "flex-end" }} onClick={() => setSummarySheetOpen(false)}>
+    {notice && <div role="status" style={{ ...G, position: "fixed", left: "50%", bottom: "calc(20px + env(safe-area-inset-bottom, 0px))", transform: "translateX(-50%)", zIndex: 70, background: T.ink, color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 12, display: "flex", gap: 12, alignItems: "center" }}>{notice}<button type="button" aria-label="Fechar aviso" onClick={() => setNotice(null)} style={{ border: 0, background: "none", color: T.surface, cursor: "pointer" }}>×</button></div>}
+    {summarySheetOpen && isMobile && <div ref={summaryDialogRef} role="dialog" aria-modal="true" aria-label="Resumo e saídas do recorte" style={{ position: "fixed", inset: 0, zIndex: 48, background: "rgba(15,15,13,.35)", display: "flex", alignItems: "flex-end" }} onClick={() => setSummarySheetOpen(false)}>
       <div className="fincla-scroll" style={{ background: T.bg, borderRadius: "18px 18px 0 0", maxHeight: "85dvh", width: "100%", padding: 16, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }} onClick={(event) => event.stopPropagation()}>
         <button ref={summaryCloseRef} type="button" aria-label="Fechar resumo" onClick={() => setSummarySheetOpen(false)} style={{ alignSelf: "flex-end", border: 0, background: "none", cursor: "pointer" }}><X size={18} /></button>
         <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} isCategorySelected={isCategorySelected} onToggleCategory={toggleCategory} isMobile />
-        <CardOutflowsChart outflows={outflows} currency={card?.currency} loading={outflowsLoading} error={outflowsError} message={outflowsMessage} onPickInvoice={pickInvoice} onPickWeek={pickWeek} isMobile />
+        {cardScope === "current" && <CardOutflowsChart outflows={outflows} currency={card?.currency} loading={outflowsLoading} error={outflowsError} message={outflowsMessage} onPickInvoice={pickInvoice} onPickWeek={pickWeek} isMobile />}
       </div>
     </div>}
     {filtersOpen && isMobile && <div ref={filterDialogRef} role="dialog" aria-modal="true" aria-label="Filtros dos lançamentos" style={{ position: "fixed", inset: 0, zIndex: 49, background: "rgba(15,15,13,.35)", display: "flex", alignItems: "flex-end" }} onClick={closeFilters}>

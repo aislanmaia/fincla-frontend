@@ -9,7 +9,7 @@ const iconButton = { width: 44, height: 44, flex: "none", border: 0, padding: 0,
 const barStyle = { ...G, height: 56, boxSizing: "border-box", display: "flex", alignItems: "center", gap: 2, padding: "0 8px 0 4px", background: T.surface, borderBottom: `1px solid ${T.border}` };
 
 function Count({ children, color = T.amber }) {
-  return <span aria-hidden="true" style={{ ...NUM, position: "absolute", top: 5, right: 4, minWidth: 18, height: 18, boxSizing: "border-box", padding: "0 4px", display: "grid", placeItems: "center", background: color, color: "#fff", border: "2px solid #fff", borderRadius: 99, fontSize: 10, fontWeight: 700 }}>{children}</span>;
+  return <span aria-hidden="true" style={{ ...NUM, position: "absolute", top: 5, right: 4, minWidth: 18, height: 18, boxSizing: "border-box", padding: "0 4px", display: "grid", placeItems: "center", background: color, color: T.surface, border: `2px solid ${T.surface}`, borderRadius: 99, fontSize: 10, fontWeight: 700 }}>{children}</span>;
 }
 
 /** Barra de app da tela de Lançamentos no celular: voltar, título e ações em ícones; a busca ocupa a barra inteira. */
@@ -22,9 +22,9 @@ export function LedgerAppBar({ subtitle, onBack, hasCard, searchOpen, onSearchOp
       <label style={{ flex: 1, minWidth: 0, height: 40, boxSizing: "border-box", display: "flex", alignItems: "center", gap: 8, marginRight: 8, padding: "0 6px 0 12px", background: T.surface, border: `1px solid ${T.blue}`, boxShadow: `0 0 0 3px ${T.blueLight}`, borderRadius: 12 }}>
         <Search size={16} color={T.blue} aria-hidden="true" />
         <input ref={inputRef} aria-label="Buscar lançamentos" placeholder="Buscar por descrição…" enterKeyHint="search" value={search} onChange={(event) => onSearchChange(event.target.value)}
-          onKeyDown={(event) => { if (event.key === "Enter" || event.key === "Escape") { event.preventDefault(); onSearchClose(); } }}
+          onKeyDown={(event) => { if (!event.nativeEvent.isComposing && (event.key === "Enter" || event.key === "Escape")) { event.preventDefault(); onSearchClose(); } }}
           style={{ ...G, flex: 1, minWidth: 0, border: 0, outline: "none", background: "transparent", fontSize: 16 }} />
-        {search && <button type="button" aria-label="Limpar busca" onClick={() => { onSearchChange(""); inputRef.current?.focus(); }} style={{ ...iconButton, width: 32, height: 32, borderRadius: 99 }}><X size={16} /></button>}
+        {search && <button type="button" aria-label="Limpar texto" onClick={() => { onSearchChange(""); inputRef.current?.focus(); }} style={{ ...iconButton, width: 32, height: 32, borderRadius: 99 }}><X size={16} /></button>}
       </label>
     </div>;
   }
@@ -36,7 +36,7 @@ export function LedgerAppBar({ subtitle, onBack, hasCard, searchOpen, onSearchOp
       {subtitle && <span style={{ ...G, ...NUM, display: "block", fontSize: 11, color: T.inkGhost, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{subtitle}</span>}
     </div>
     {hasCard && <>
-      <button type="button" aria-label={searching ? "Buscar lançamentos, busca ativa" : "Buscar lançamentos"} onClick={onSearchOpen} style={{ ...iconButton, background: searching ? T.ink : "none", color: searching ? "#fff" : T.ink }}><Search size={20} />{searching && <span aria-hidden="true" style={{ position: "absolute", top: 8, right: 8, width: 9, height: 9, borderRadius: 99, background: T.blueBar, border: `2px solid ${T.ink}` }} />}</button>
+      <button type="button" aria-label={searching ? "Buscar lançamentos, busca ativa" : "Buscar lançamentos"} onClick={onSearchOpen} style={{ ...iconButton, background: searching ? T.ink : "none", color: searching ? T.surface : T.ink }}><Search size={20} />{searching && <span aria-hidden="true" style={{ position: "absolute", top: 8, right: 8, width: 9, height: 9, borderRadius: 99, background: T.blueBar, border: `2px solid ${T.ink}` }} />}</button>
       <button type="button" aria-label={`Filtros${facetCount ? ` (${facetCount})` : ""}`} aria-pressed={filtersOpen} onClick={onFilters} style={iconButton}><Filter size={20} />{facetCount > 0 && <Count color={T.blue}>{facetCount}</Count>}</button>
       <button type="button" aria-label={alertCount ? `Assistente, ${alertCount} ${alertCount === 1 ? "alerta" : "alertas"}` : "Assistente"} onClick={onAssistant} style={iconButton}><Sparkles size={20} />{alertCount > 0 && <Count>{alertCount}</Count>}</button>
       <button type="button" aria-label="Exportar" disabled={exportDisabled} onClick={onExport} style={{ ...iconButton, opacity: exportDisabled ? 0.4 : 1, cursor: exportDisabled ? "default" : "pointer" }}><Download size={20} /></button>

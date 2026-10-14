@@ -735,7 +735,7 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(screen.getByRole("button", { name: "Buscar lançamentos, busca ativa" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Busca: amazon. Editar." }));
     expect(screen.getByRole("textbox", { name: "Buscar lançamentos" })).toHaveValue("amazon");
-    await user.click(screen.getByRole("button", { name: "Limpar busca" }));
+    await user.click(screen.getByRole("button", { name: "Limpar texto" }));
     expect(screen.getByRole("textbox", { name: "Buscar lançamentos" })).toHaveValue("");
     await user.click(screen.getByRole("button", { name: "Fechar busca" }));
     expect(screen.queryByRole("button", { name: /^Busca:/ })).not.toBeInTheDocument();
