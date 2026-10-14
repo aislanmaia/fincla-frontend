@@ -860,4 +860,116 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     await waitFor(() => expect(requests.length).toBeGreaterThan(same));
     await waitFor(() => expect(screen.queryByText(/1 selecionado/)).not.toBeInTheDocument());
   });
+
+  describe("dias recolhíveis", () => {
+    const days = [
+      { id: 21, date: "2026-10-02", description: "Mercado dia 2", value: 40, value_currency: "BRL", type: "expense", status: "confirmed" },
+      { id: 22, date: "2026-10-02", description: "Padaria dia 2", value: 20, value_currency: "BRL", type: "expense", status: "confirmed" },
+      { id: 23, date: "2026-10-01", description: "Farmácia dia 1", value: 30, value_currency: "BRL", type: "expense", status: "confirmed" },
+    ];
+    const renderGrouped = async (props = {}) => {
+      localStorage.setItem("fincla:transactions:list-prefs", JSON.stringify({ density: "padrao", grouped: true }));
+      withLedger(days);
+      render(<CardAllTransactionsPage organizationId={ORG_ID} {...props} />);
+      await screen.findByText("Mercado dia 2");
+    };
+    afterEach(() => localStorage.removeItem("fincla:transactions:list-prefs"));
+
+    it("recolhe e expande um dia pelo cabeçalho, mantendo o contador e o subtotal", async () => {
+      await renderGrouped();
+      const user = userEvent.setup();
+      const header = screen.getByRole("button", { name: /2 itens/ });
+      expect(header).toHaveAttribute("aria-expanded", "true");
+      await user.click(header);
+      expect(header).toHaveAttribute("aria-expanded", "false");
+      expect(header).toHaveTextContent(/2 itens/);
+      expect(header).toHaveTextContent(/60,00/);
+      expect(screen.queryByText("Mercado dia 2")).not.toBeInTheDocument();
+      expect(screen.getByText("Farmácia dia 1")).toBeInTheDocument();
+      await user.click(header);
+      expect(screen.getByText("Mercado dia 2")).toBeInTheDocument();
+    });
+
+    it("mostra quantos itens marcados ficaram escondidos num dia recolhido e mantém a seleção", async () => {
+      await renderGrouped();
+      const user = userEvent.setup();
+      await user.click(screen.getByRole("checkbox", { name: "Selecionar Mercado dia 2" }));
+      const header = screen.getByRole("button", { name: /2 itens/ });
+      expect(header).not.toHaveTextContent(/selecionado/);
+      await user.click(header);
+      expect(header).toHaveTextContent("1 selecionado");
+      expect(screen.getByText(/1 selecionado · .*1 em dias recolhidos/)).toBeInTheDocument();
+      await user.click(header);
+      expect(screen.queryByText(/em dias recolhidos/)).not.toBeInTheDocument();
+    });
+
+    it("no desktop o cabeçalho do dia gruda abaixo do cabeçalho de colunas, para o botão não ficar coberto", async () => {
+      await renderGrouped();
+      const header = screen.getByRole("button", { name: /2 itens/ });
+      expect(header.style.top).toBe("30px");
+    });
+
+    it("recolhe e expande todos os dias pelo menu de agrupamento", async () => {
+      await renderGrouped();
+      const user = userEvent.setup();
+      await user.click(screen.getByRole("button", { name: /Agrupamento da lista/i }));
+      await user.click(screen.getByRole("menuitem", { name: "Recolher todos os dias" }));
+      expect(screen.queryByText("Mercado dia 2")).not.toBeInTheDocument();
+      expect(screen.queryByText("Farmácia dia 1")).not.toBeInTheDocument();
+      const headers = within(screen.getByRole("list")).getAllByRole("button");
+      expect(headers.map((button) => button.getAttribute("aria-expanded"))).toEqual(["false", "false"]);
+      await user.click(screen.getByRole("button", { name: /Agrupamento da lista/i }));
+      await user.click(screen.getByRole("menuitem", { name: "Expandir todos os dias" }));
+      expect(screen.getByText("Mercado dia 2")).toBeInTheDocument();
+      expect(screen.getByText("Farmácia dia 1")).toBeInTheDocument();
+    });
+
+    it("com busca ativa a lista não recolhe: cabeçalho sem botão e tudo à vista", async () => {
+      await renderGrouped();
+      const user = userEvent.setup();
+      await user.click(screen.getByRole("button", { name: /2 itens/ }));
+      await user.type(screen.getByRole("textbox", { name: /Buscar/ }), "dia");
+      await waitFor(() => expect(screen.queryByRole("button", { name: /2 itens/ })).not.toBeInTheDocument());
+      expect(screen.getByText("Mercado dia 2")).toBeInTheDocument();
+    });
+
+    it("filtrar volta todos os dias a expandidos", async () => {
+      await renderGrouped();
+      const user = userEvent.setup();
+      await user.click(screen.getByRole("button", { name: /2 itens/ }));
+      expect(screen.queryByText("Mercado dia 2")).not.toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: /Abrir filtros/ }));
+      await user.click(screen.getByRole("button", { name: "Preset: Este mês" }));
+      await waitFor(() => expect(screen.getByText("Mercado dia 2")).toBeInTheDocument());
+    });
+
+    it("com tudo recolhido a rolagem infinita pausa, e volta ao expandir", async () => {
+      const observed = [];
+      vi.stubGlobal("IntersectionObserver", class { constructor() { this.live = true; observed.push(this); } observe() {} disconnect() { this.live = false; } });
+      localStorage.setItem("fincla:transactions:list-prefs", JSON.stringify({ density: "padrao", grouped: true }));
+      server.use(http.get("*/v1/transactions", ({ request }) => {
+        requests.push(new URL(request.url));
+        return HttpResponse.json({ data: days, pagination: { total: 40, page: 1, limit: 30, pages: 2, has_next: true, has_prev: false } });
+      }));
+      render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+      await screen.findByText("Mercado dia 2");
+      const user = userEvent.setup();
+      expect(observed.some((observer) => observer.live)).toBe(true);
+      await user.click(screen.getByRole("button", { name: /Agrupamento da lista/i }));
+      await user.click(screen.getByRole("menuitem", { name: "Recolher todos os dias" }));
+      expect(observed.some((observer) => observer.live)).toBe(false);
+      await user.click(screen.getByRole("button", { name: /Agrupamento da lista/i }));
+      await user.click(screen.getByRole("menuitem", { name: "Expandir todos os dias" }));
+      expect(observed.some((observer) => observer.live)).toBe(true);
+    });
+
+    it("no celular o cabeçalho do dia é alvo de toque de 44px e recolhe", async () => {
+      await renderGrouped({ isMobile: true });
+      const header = screen.getByRole("button", { name: /2 itens/ });
+      expect(header.style.minHeight).toBe("44px");
+      expect(header.style.top).toBe("0px");
+      await userEvent.setup().click(header);
+      expect(screen.queryByText("Mercado dia 2")).not.toBeInTheDocument();
+    });
+  });
 });

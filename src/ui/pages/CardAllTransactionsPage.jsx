@@ -6,7 +6,7 @@ import { getCurrentCreditCardInvoice, getInvoiceHistory, listCreditCards } from 
 import { getTransaction, getTransactionsFacets, getTransactionsSummary, listTransactions } from "../../api/transactions";
 import { Btn, Card, PageTitle, Select } from "../components/primitives.jsx";
 import { shouldUseRealData } from "../dataMode.js";
-import { groupSubtotal } from "../features/cardTransactions/ledgerModel.js";
+import { dayKey, groupSubtotal } from "../features/cardTransactions/ledgerModel.js";
 import { assistantInsights } from "../features/cardTransactions/assistantModel.js";
 import { CategorizeDialog, ExportDialog, MoveInstallmentDialog, RefundDialog } from "../features/cardTransactions/LedgerDialogs.jsx";
 import { AssistantDrawer, LedgerDetail } from "../features/cardTransactions/LedgerPanels.jsx";
@@ -54,6 +54,7 @@ function sharePending(map, key, request) {
   return map.get(key);
 }
 const KIND_LABELS = { one_off: "Compras avulsas e estornos", installment: "Parcelas", recurring: "Recorrências", refund: "Estornos" };
+const EMPTY_DAYS = new Set();
 function cardLabel(card) {
   return `${card.description || card.brand || "Cartão"} •${card.last4 || "••••"}`;
 }
@@ -279,6 +280,16 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   };
   const aggregateFilter = Object.fromEntries(Object.entries(queryFilter).filter(([key]) => key !== "sort_by" && key !== "sort_order"));
   const filterKey = JSON.stringify({ queryFilter, cats: filter.cats, tags: filter.tags, blocked: filterBlocked, cardScope, reload });
+  const groupedByDate = prefs.grouped && sortField === "date";
+  const collapsible = groupedByDate && !filter.search.trim();
+  // Dias recolhidos: guardados com a chave do recorte, então filtro, recarga ou trocar o agrupamento voltam tudo a expandido
+  // já na mesma renderização (sem efeito, sem piscar).
+  const collapseKey = `${filterKey}|${prefs.grouped}`;
+  const [collapsedState, setCollapsedState] = useState({ key: collapseKey, days: new Set() });
+  const collapsedDays = collapsedState.key === collapseKey ? collapsedState.days : EMPTY_DAYS;
+  const setCollapsedDays = (days) => setCollapsedState({ key: collapseKey, days });
+  const toggleDay = (key) => { const next = new Set(collapsedDays); if (!next.delete(key)) next.add(key); setCollapsedDays(next); };
+  const dayControls = collapsible ? { onCollapseAll: () => setCollapsedDays(new Set(state.rows.map(dayKey))), onExpandAll: () => setCollapsedDays(new Set()) } : {};
   const summaryKey = `${state.card?.id ?? "none"}:${filterKey}`;
   const facets = filter.buildFacets({ categoriesById });
   const activeFacets = facets.filter((facet) => FACETS.includes(facet.key) && facet.active).filter((facet) => facet.key !== "cartao" && facet.key !== "periodo");
@@ -591,7 +602,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
       {isMobile && <LedgerSummaryRow summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} onOpen={() => setSummarySheetOpen(true)} />}
       {cardScope === "all" && !isMobile && <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} isCategorySelected={isCategorySelected} onToggleCategory={toggleCategory} />}
       {!isMobile && <TransactionsFilterBar filter={filter} hideSavedViews hideFacets searchInput={filter.search} setSearchInput={filter.setSearch} searchPlaceholder="Buscar por descrição…" searchInputRef={searchInputRef} barChips={filterChips} onChipsBudget={setChipsBudget} barTrailing={<>{historyButtons}<TransactionsListDisplayControls
-        density={prefs.density} grouped={prefs.grouped && sortField === "date"} canGroup={sortField === "date"}
+        density={prefs.density} grouped={groupedByDate} canGroup={sortField === "date"} {...dayControls}
         onDensityChange={(density) => setPreference({ density })}
         onGroupChange={() => setPreference({ grouped: !prefs.grouped })} /></>} />}
       {isMobile && <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", flex: "none" }}>
@@ -608,7 +619,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
           {kindChip}{weekChip}
         </div>
         <span style={{ display: "inline-flex", alignItems: "center", flex: "none" }}>{historyButtons}<TransactionsListDisplayControls
-          density={prefs.density} grouped={prefs.grouped && sortField === "date"} canGroup={sortField === "date"}
+          density={prefs.density} grouped={groupedByDate} canGroup={sortField === "date"} {...dayControls}
           onDensityChange={(density) => setPreference({ density })}
           onGroupChange={() => setPreference({ grouped: !prefs.grouped })} /></span>
       </div>}
@@ -617,7 +628,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
       <div ref={ledgerRef} style={{ display: "flex", alignItems: "stretch", minWidth: 0, position: "relative", gap: filtersOpen && !dockFloating ? 12 : 0, ...(isMobile ? { flex: 1, minHeight: 0 } : {}) }}>
         <div style={{ flex: 1, minWidth: 0, ...(isMobile ? { minHeight: 0, display: "flex", flexDirection: "column" } : {}) }}>
         {searchEmpty ? <LedgerSearchEmpty query={searchTerm} onClear={clearSearch} /> : 
-        <CardTransactionsTable rows={state.rows} total={state.total} cardCurrency={cardScope === "current" ? card.currency : null} loading={state.loading} error={state.error} hasMore={hasMore} onMore={onMore} selected={selectedRows} onSelected={setSelectedRows} selectionSum={selectionSum} onCategorize={() => setDialog({ kind: "categorize", ids: selectedRows })} onMoveInstallment={cardScope === "current" ? () => setDialog({ kind: "move", ids: selectedRows }) : undefined} onExportSelected={() => downloadCsv(selectedRowObjects, cardScope === "current" ? card.currency : null)} inspected={inspected} onInspect={(row) => { inspectTriggerRef.current = document.activeElement; setInspected(row); }} grouped={prefs.grouped && sortField === "date"} density={prefs.density} isMobile={isMobile} maxHeight={filtersOpen && !isMobile ? ledgerHeight : undefined} />}
+        <CardTransactionsTable rows={state.rows} total={state.total} cardCurrency={cardScope === "current" ? card.currency : null} loading={state.loading} error={state.error} hasMore={hasMore} onMore={onMore} selected={selectedRows} onSelected={setSelectedRows} selectionSum={selectionSum} onCategorize={() => setDialog({ kind: "categorize", ids: selectedRows })} onMoveInstallment={cardScope === "current" ? () => setDialog({ kind: "move", ids: selectedRows }) : undefined} onExportSelected={() => downloadCsv(selectedRowObjects, cardScope === "current" ? card.currency : null)} inspected={inspected} onInspect={(row) => { inspectTriggerRef.current = document.activeElement; setInspected(row); }} grouped={groupedByDate} collapsible={collapsible} collapsedKeys={collapsedDays} onToggleGroup={toggleDay} density={prefs.density} isMobile={isMobile} maxHeight={filtersOpen && !isMobile ? ledgerHeight : undefined} />}
         </div>
         {inspected && !isMobile && <div ref={detailDialogRef} role="dialog" aria-modal="false" aria-label="Detalhes do lançamento" style={{ flex: "none", width: 360, minWidth: 0, marginLeft: 12 }}><Card style={{ height: "100%", padding: 20, overflowY: "auto", boxSizing: "border-box" }}><LedgerDetail row={inspected} currency={cardScope === "current" ? card?.currency : null} closeRef={detailCloseRef} onClose={() => setInspected(null)} onOpen={openTransaction} onMove={cardScope === "current" ? (row) => setDialog({ kind: "move", ids: [row.id] }) : undefined} onRefund={cardScope === "current" ? (row) => setDialog({ kind: "refund", row }) : undefined} onOpenOriginal={openOriginal} /></Card></div>}
         {filtersOpen && !isMobile && !inspected && <div style={{ ...(dockFloating ? { position: "absolute", top: 0, right: 0, zIndex: 5, boxShadow: "-8px 0 24px rgba(15,15,13,.1)" } : { flex: "none" }), width: dockFloating ? Math.min(480, Math.max(400, viewportWidth * .4)) : Math.min(420, Math.max(320, viewportWidth * .28)), maxWidth: "100%", height: ledgerHeight, minWidth: 0 }}><TransactionsFilterPanel filter={filter} facet={activeFacet} onFacetChange={setActiveFacet} categories={categories} allTags={tagOptions.map((tag) => tag.displayLabel)} allTagsLoading={tagCatalog.loading} allTagsError={Boolean(tagCatalog.error)} tagIdByLabel={tagIdByLabel} facetCounts={facetCounts} activeFacets={activeFacets} onClearFacet={clearFacet} onClearAll={clearAll} onApply={closeFilters} onClose={closeFilters} resultCount={state.total ?? 0} resultsLoading={state.loading} visibleFacetKeys={FACETS} defaultPeriod="tudo" cardScopePanel={cardScopePanel} periodScopePanel={timeScopePanel} hidePeriodContent={invoiceMode} selectionOverrides={{ cartao: cardScope === "all" ? 1 : 0, ...(invoiceMode ? { periodo: 0 } : {}) }} /></div>}

@@ -48,3 +48,6 @@ export function statusInfo(row) {
 }
 
 export const statusLabel = (row) => statusInfo(row).text;
+
+/** Chave do dia usada para agrupar a lista e para recolher/expandir os grupos. */
+export const dayKey = (row) => String(row.date || "").slice(0, 10) || "undated";
