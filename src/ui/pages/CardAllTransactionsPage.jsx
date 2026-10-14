@@ -149,12 +149,13 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const [retry, setRetry] = useState(0);
   // Depois de uma ação que muda dados (categoria, fatura, estorno) tudo é lido de novo.
   const [reload, setReload] = useState(0);
-  // O Painel de Transação (modal global) avisa pelo token quando salva: recarrega a lista e fecha o detalhe, que ficou velho.
+  // O Painel de Transação (modal global) avisa pelo token quando salva: recarrega a lista e descarta detalhe e seleção, que ficaram velhos.
   const refreshTokenRef = useRef(transactionsRefreshToken);
   useEffect(() => {
     if (refreshTokenRef.current === transactionsRefreshToken) return;
     refreshTokenRef.current = transactionsRefreshToken;
     setInspected(null);
+    setSelectedRows([]);
     setReload((value) => value + 1);
   }, [transactionsRefreshToken]);
   const [dialog, setDialog] = useState(null);
@@ -472,7 +473,8 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     try { setInspected(await getTransaction(id, organizationId)); } catch { setNotice("Não foi possível abrir o lançamento original."); }
   };
   const selectionSum = (() => { const sub = groupSubtotal(selectedRowObjects, cardScope === "current" ? state.card?.currency : null); return sub ? formatMoneyAbs(sub.amount, sub.currency) : null; })();
-  const openTransaction = (row) => { setInspected(null); navigate({ search: (prev) => ({ ...prev, [FC.TX]: String(row.id), [FC.MODAL]: FC_MODAL.EDIT_TRANSACTION }) }); };
+  // Sem gatilho de foco: o Painel assume o foco, a linha atrás dele não pode roubá-lo.
+  const openTransaction = (row) => { inspectTriggerRef.current = null; setInspected(null); navigate({ search: (prev) => ({ ...prev, [FC.TX]: String(row.id), [FC.MODAL]: FC_MODAL.EDIT_TRANSACTION }) }); };
   const back = () => navigate({ to: "/cards", search: { [FC.VIEW]: "new", [FC.HUB_CARD]: cardId } });
   const closeFilters = () => setFiltersOpen(false);
   const openFacet = (key) => { if (key === "busca") { searchInputRef.current?.focus(); return; } setActiveFacet(key); setMobileFacetOpen(true); setFiltersOpen(true); };

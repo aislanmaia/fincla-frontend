@@ -833,4 +833,31 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     await waitFor(() => expect(requests.length).toBeGreaterThan(before));
     expect(screen.queryByRole("dialog", { name: "Detalhes do lançamento" })).not.toBeInTheDocument();
   });
+
+  it("ao abrir o Painel o foco não volta para a linha atrás dele; estorno ganha o rótulo próprio", async () => {
+    withLedger([{ ...ledger[1], id: 13, description: "Estorno padaria", type: "refund", refund_of_transaction_id: 12 }, ledger[0]]);
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    const row = await screen.findByRole("button", { name: "Ver detalhes de Estorno padaria" });
+    await user.click(row);
+    await user.click(screen.getByRole("button", { name: "↗ Abrir lançamento do estorno" }));
+    expect(row).not.toHaveFocus();
+    expect(navigate.mock.calls[0][0].search({}).fc_modal).toBe("edit-transaction");
+  });
+
+  it("o token do Painel só recarrega quando muda, e limpa a seleção que ficou velha", async () => {
+    withLedger();
+    const { rerender } = render(<CardAllTransactionsPage organizationId={ORG_ID} transactionsRefreshToken={0} />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("checkbox", { name: "Selecionar Padaria" }));
+    expect(screen.getByText(/1 selecionado/)).toBeInTheDocument();
+    const same = requests.length;
+    rerender(<CardAllTransactionsPage organizationId={ORG_ID} transactionsRefreshToken={0} />);
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(requests.length).toBe(same);
+    expect(screen.getByText(/1 selecionado/)).toBeInTheDocument();
+    rerender(<CardAllTransactionsPage organizationId={ORG_ID} transactionsRefreshToken={1} />);
+    await waitFor(() => expect(requests.length).toBeGreaterThan(same));
+    await waitFor(() => expect(screen.queryByText(/1 selecionado/)).not.toBeInTheDocument());
+  });
 });
