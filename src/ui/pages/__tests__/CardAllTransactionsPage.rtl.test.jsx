@@ -669,4 +669,32 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     await user.click(within(drawer).getByRole("button", { name: "Categorizar" }));
     expect(screen.getByRole("dialog", { name: "Categorizar lançamentos" })).toHaveTextContent("1 lançamento selecionado");
   });
+
+  it("no celular o Assistente é um botão flutuante com selo e abre como bottom sheet", async () => {
+    withLedger([{ id: 21, date: "2026-10-02", description: "Sem dono", value: 9, value_currency: "BRL", type: "expense", status: "confirmed" }, ledger[1]]);
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    const user = userEvent.setup();
+    await screen.findByText("Sem dono");
+    const button = screen.getByRole("button", { name: /Assistente/ });
+    expect(button.parentElement).toHaveStyle({ position: "fixed" });
+    expect(screen.getAllByRole("button", { name: /Assistente/ })).toHaveLength(1);
+    expect(screen.getByLabelText("1 alertas")).toBeInTheDocument();
+    await user.click(button);
+    const sheet = screen.getByRole("dialog", { name: "Assistente" });
+    expect(sheet.firstElementChild).toHaveStyle({ width: "100%", borderRadius: "18px 18px 0 0" });
+    expect(screen.queryByRole("button", { name: /Assistente/ })).not.toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: "Fechar" }));
+    expect(screen.getByRole("button", { name: /Assistente/ })).toBeInTheDocument();
+  });
+
+  it("no desktop o Assistente continua no cabeçalho e abre como gaveta lateral", async () => {
+    withLedger([ledger[0]]);
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await screen.findByText(ledger[0].description);
+    const button = screen.getByRole("button", { name: /Assistente/ });
+    expect(button.closest('[style*="position: fixed"]')).toBeNull();
+    await user.click(button);
+    expect(screen.getByRole("dialog", { name: "Assistente" }).firstElementChild).not.toHaveStyle({ width: "100%" });
+  });
 });

@@ -54,9 +54,9 @@ export function LedgerDetail({ row, currency, closeRef, onClose, onMove, onRefun
 
 const ICONS = { uncategorized: "🏷", duplicate: "⚠️", insight: "💡" };
 
-/** Drawer do Assistente: observações sobre as linhas carregadas, cada uma com a ação possível. */
-export function AssistantDrawer({ insights, loadedCount, onClose, onSelect, onCategorize }) {
-  return <LedgerModal title="Assistente" side onClose={onClose}>
+/** Drawer do Assistente (bottom sheet no celular): observações sobre as linhas carregadas, cada uma com a ação possível. */
+export function AssistantDrawer({ insights, loadedCount, onClose, onSelect, onCategorize, isMobile = false }) {
+  return <LedgerModal title="Assistente" side={!isMobile} sheet={isMobile} onClose={onClose}>
     <p style={{ ...G, margin: 0, fontSize: 11, color: T.inkMid }}>Observações sobre os {loadedCount} lançamentos carregados na tela.</p>
     {insights.length === 0 && <p role="status" style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>Nada fora do comum nos lançamentos carregados.</p>}
     {insights.map((item, index) => <section key={`${item.kind}-${index}`} aria-label={item.title} style={{ border: `1px solid ${T.border}`, borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 6 }}>
