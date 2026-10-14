@@ -55,8 +55,8 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
     return result;
   }, [grouped, rows]);
   const rowPadding = density === "compacto" ? "7px 12px" : density === "confortavel" ? "15px 12px" : "10px 12px";
-  return <Card as="section" aria-label="Lançamentos do cartão" style={{ minWidth: 0, overflow: "hidden", padding: 0, width: "100%" }}>
-    <div style={{ ...G, display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px 10px", padding: "11px 14px", borderBottom: `1px solid ${T.border}`, fontSize: 12, fontWeight: 700 }}>
+  return <Card as="section" aria-label="Lançamentos do cartão" style={{ minWidth: 0, overflow: "hidden", padding: 0, width: "100%", ...(isMobile ? { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", border: 0, borderRadius: 0, boxShadow: "none", background: T.surface } : {}) }}>
+    <div style={{ ...G, display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px 10px", padding: isMobile ? "11px 16px" : "11px 14px", borderBottom: `1px solid ${T.border}`, borderTop: isMobile ? `1px solid ${T.border}` : undefined, fontSize: isMobile ? 12.5 : 12, fontWeight: 700 }}>
       <input type="checkbox" aria-label="Selecionar lançamentos carregados" checked={allChecked} onChange={(event) => onSelected(event.target.checked ? [...new Set([...selected, ...rows.map((row) => row.id)])] : selected.filter((id) => !rows.some((row) => row.id === id)))} />
       <span>{total == null ? `${rows.length} lançamentos` : `${total} lançamentos`}</span>
       {selected.length > 0 && <span style={{ color: T.blue }}>{selected.length} selecionado{selected.length === 1 ? "" : "s"}{selectionSum ? ` · ${selectionSum}` : ""}</span>}
@@ -67,7 +67,7 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
         <button type="button" onClick={() => onSelected([])} style={bulkButton}>Limpar seleção</button>
       </span>}
     </div>
-    <div ref={scrollerRef} className="fincla-scroll" style={{ maxHeight: isMobile ? "min(60dvh, 680px)" : maxHeight == null ? 560 : Math.max(100, maxHeight - 82), overflowY: "auto", overflowX: "hidden" }}>
+    <div ref={scrollerRef} className="fincla-scroll" style={{ ...(isMobile ? { flex: 1, minHeight: 0 } : { maxHeight: maxHeight == null ? 560 : Math.max(100, maxHeight - 82) }), overflowY: "auto", overflowX: "hidden" }}>
       {!isMobile && <div aria-hidden="true" style={{ ...G, display: "grid", gridTemplateColumns: COLUMNS, gap: 10, padding: "7px 12px", borderBottom: `1px solid ${T.border}`, background: T.bg, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", position: "sticky", top: 0, zIndex: 3 }}><span /><span>Data</span><span>Descrição</span><span>Categoria</span><span>Parcela</span><span>Restam</span><span>Fim previsto</span><span style={{ textAlign: "right" }}>Valor</span><span>Status</span></div>}
       <div role="list">
         {groups.map((group) => <div key={group.key}>

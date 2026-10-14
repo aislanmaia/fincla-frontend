@@ -10,8 +10,18 @@ const CARD_ID = "00000000-0000-4000-8000-000000000001";
 const ORG_ID = "11111111-1111-4111-8111-111111111111";
 const navigate = vi.fn();
 const route = vi.hoisted(() => ({ search: {} }));
+// Histórico mínimo: o voltar do sistema chega como action BACK, igual ao popstate do @tanstack/history.
+const fakeHistory = vi.hoisted(() => {
+  const subscribers = new Set();
+  const history = { depth: 0, location: { href: "/cards/x/transactions" },
+    subscribe: (cb) => { subscribers.add(cb); return () => subscribers.delete(cb); },
+    push: () => { history.depth += 1; },
+    back: () => { history.depth -= 1; subscribers.forEach((cb) => cb({ action: { type: "BACK" } })); } };
+  return history;
+});
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => navigate,
+  useRouter: () => ({ history: fakeHistory }),
   useParams: () => ({ cardId: CARD_ID }),
   useSearch: () => route.search,
 }));
@@ -44,7 +54,7 @@ const server = setupServer(
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 beforeEach(() => { Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 }); });
 afterAll(() => server.close());
-afterEach(() => { route.search = {}; cleanup(); server.resetHandlers(); requests.length = 0; cardRequests = 0; navigate.mockReset(); vi.unstubAllGlobals(); });
+afterEach(() => { route.search = {}; cleanup(); server.resetHandlers(); requests.length = 0; cardRequests = 0; navigate.mockReset(); fakeHistory.depth = 0; vi.unstubAllGlobals(); });
 
 describe("CardAllTransactionsPage", () => {
   it("neutraliza fórmulas de planilha no CSV de descrições informadas pelo usuário", () => {
@@ -717,10 +727,77 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(screen.getByRole("dialog", { name: "Assistente" }).firstElementChild).not.toHaveStyle({ width: "100%" });
   });
 
-  it("no celular o aviso não diz que está tudo normal enquanto os lançamentos carregam", async () => {
+  it("no celular a barra de app concentra as ações e a busca ocupa a barra inteira ao abrir", async () => {
+    withLedger([ledger[0]]);
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    const user = userEvent.setup();
+    await screen.findByText(ledger[0].description);
+    expect(screen.getByRole("heading", { name: "Lançamentos" })).toBeInTheDocument();
+    for (const name of ["Voltar para o cartão", "Filtros", "Assistente", "Exportar"]) expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "Buscar lançamentos" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Buscar lançamentos" }));
+    const input = screen.getByRole("textbox", { name: "Buscar lançamentos" });
+    expect(input).toHaveFocus();
+    expect(screen.queryByRole("heading", { name: "Lançamentos" })).not.toBeInTheDocument();
+    await user.type(input, "amazon{Enter}");
+    expect(screen.queryByRole("textbox", { name: "Buscar lançamentos" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Busca: amazon. Editar." })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Buscar lançamentos, busca ativa" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Busca: amazon. Editar." }));
+    expect(screen.getByRole("textbox", { name: "Buscar lançamentos" })).toHaveValue("amazon");
+    await user.click(screen.getByRole("button", { name: "Limpar texto" }));
+    expect(screen.getByRole("textbox", { name: "Buscar lançamentos" })).toHaveValue("");
+    await user.click(screen.getByRole("button", { name: "Fechar busca" }));
+    expect(screen.queryByRole("button", { name: /^Busca:/ })).not.toBeInTheDocument();
+  });
+
+  it("no celular mostra a faixa de alerta junto da barra, só quando há alerta", async () => {
+    withLedger([{ id: 21, date: "2026-10-02", description: "Sem dono", value: 9, value_currency: "BRL", type: "expense", status: "confirmed" }, ledger[1]]);
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    await screen.findByText("Sem dono");
+    expect(screen.getByRole("button", { name: "Assistente, 1 alerta" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "1 alerta para revisar" })).toHaveTextContent("1 item sem categoria");
+  });
+
+  it("no celular, enquanto carrega, não há faixa de alerta", async () => {
     server.use(http.get("*/v1/transactions", async () => { await new Promise((resolve) => setTimeout(resolve, 400)); return HttpResponse.json({ data: [], pagination: { total: 0, page: 1, limit: 50 } }); }));
     render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
-    expect(await screen.findByRole("button", { name: "Assistente" })).toHaveTextContent("Analisando os lançamentos…");
-    expect(screen.queryByText(/Nada fora do comum/)).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Assistente" })).toBeInTheDocument();
+    expect(screen.queryByText(/para revisar/)).not.toBeInTheDocument();
+  });
+
+  it("no celular a busca sem resultado diz o que foi buscado, só depois de aplicada, e oferece limpar", async () => {
+    const searched = [];
+    server.use(http.get("*/v1/transactions", ({ request }) => { searched.push(new URL(request.url).searchParams.get("description")); return HttpResponse.json({ data: [], pagination: { total: 0, page: 1, limit: 50 } }); }));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Buscar lançamentos" }));
+    await user.type(screen.getByRole("textbox", { name: "Buscar lançamentos" }), "xyz{Enter}");
+    expect(screen.queryByText("Nada com “xyz”")).not.toBeInTheDocument();
+    await waitFor(() => expect(searched).toContain("xyz"));
+    expect(await screen.findByText("Nada com “xyz”")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Limpar busca" }));
+    await waitFor(() => expect(screen.queryByText("Nada com “xyz”")).not.toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /^Busca:/ })).not.toBeInTheDocument();
+  });
+
+  it("no celular o voltar do sistema fecha só o campo de busca e mantém o filtro; fechar pela UI não deixa entrada no histórico", async () => {
+    withLedger([ledger[0]]);
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    const user = userEvent.setup();
+    await screen.findByText(ledger[0].description);
+    await user.click(screen.getByRole("button", { name: "Buscar lançamentos" }));
+    await user.type(screen.getByRole("textbox", { name: "Buscar lançamentos" }), "amazon");
+    expect(fakeHistory.depth).toBe(1);
+    act(() => fakeHistory.back());
+    expect(screen.queryByRole("textbox", { name: "Buscar lançamentos" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Busca: amazon. Editar." })).toBeInTheDocument();
+    expect(navigate).not.toHaveBeenCalled();
+    expect(fakeHistory.depth).toBe(0);
+    await user.click(screen.getByRole("button", { name: "Busca: amazon. Editar." }));
+    expect(fakeHistory.depth).toBe(1);
+    await user.keyboard("{Enter}");
+    expect(screen.queryByRole("textbox", { name: "Buscar lançamentos" })).not.toBeInTheDocument();
+    expect(fakeHistory.depth).toBe(0);
   });
 });
