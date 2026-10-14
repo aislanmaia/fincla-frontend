@@ -27,6 +27,7 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 import { CardAllTransactionsPage } from "../CardAllTransactionsPage.jsx";
 import { csvCell } from "../../features/cardTransactions/ledgerExport.js";
+import { todayLocalYmd } from "../../data/transactionsAdapter.js";
 
 const requests = [];
 let cardRequests = 0;
@@ -1025,8 +1026,10 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     withLedger();
     const created = [];
     const names = [];
+    const realUrl = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
     vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: (blob) => { created.push(blob); return "blob:x"; }, revokeObjectURL: () => {} }));
-    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function click() { names.push(this.download); });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function clicked() { names.push(this.download); });
+    try {
     render(<CardAllTransactionsPage organizationId={ORG_ID} />);
     const user = userEvent.setup();
     await screen.findByText("Padaria");
@@ -1042,8 +1045,12 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(csv).toContain("Padaria");
     expect(csv).not.toContain("Notebook");
     expect(names[0]).toMatch(/^lancamentos-\d{4}-\d{2}-\d{2}\.csv$/);
-    expect(document.querySelector("a[download]")).not.toBeNull();
-    HTMLAnchorElement.prototype.click.mockRestore();
+    expect(names[0]).toBe(`lancamentos-${todayLocalYmd()}.csv`);
+    } finally {
+      click.mockRestore();
+      URL.createObjectURL = realUrl.create;
+      URL.revokeObjectURL = realUrl.revoke;
+    }
   });
 
   it("no celular a faixa de chips mostra que rola: seta e esmaecido só quando há mais chips, e a seta avança a faixa", async () => {
@@ -1063,5 +1070,22 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     fireEvent.scroll(scroller);
     await waitFor(() => expect(screen.queryByRole("button", { name: "Ver mais filtros" })).not.toBeInTheDocument());
     expect(scroller).toHaveAttribute("data-fade-left", "true");
+    await userEvent.setup().click(screen.getByRole("button", { name: "Ver filtros anteriores" }));
+    expect(scroller.scrollBy).toHaveBeenLastCalledWith(expect.objectContaining({ left: expect.any(Number) }));
+    expect(scroller.scrollBy.mock.lastCall[0].left).toBeLessThan(0);
+  });
+
+  it("o modal de exportar seleção guarda o que estava marcado ao abrir, mesmo que a lista recarregue por baixo", async () => {
+    withLedger();
+    const { rerender } = render(<CardAllTransactionsPage organizationId={ORG_ID} transactionsRefreshToken={0} />);
+    const user = userEvent.setup();
+    await screen.findByText("Padaria");
+    await user.click(screen.getByRole("checkbox", { name: "Selecionar Padaria" }));
+    await user.click(screen.getByRole("button", { name: "Exportar seleção" }));
+    rerender(<CardAllTransactionsPage organizationId={ORG_ID} transactionsRefreshToken={1} />);
+    await waitFor(() => expect(screen.queryByRole("checkbox", { name: "Selecionar Padaria", checked: true })).not.toBeInTheDocument());
+    const dialog = screen.getByRole("dialog", { name: "Exportar seleção" });
+    expect(dialog).toHaveTextContent("1 lançamento");
+    expect(within(dialog).getByRole("button", { name: "Exportar CSV" })).toBeEnabled();
   });
 });

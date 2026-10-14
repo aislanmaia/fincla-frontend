@@ -1,4 +1,4 @@
-import { formatYmdToBrDisplay, pickCategoryTagFromApiTransaction } from "../../data/transactionsAdapter.js";
+import { formatYmdToBrDisplay, pickCategoryTagFromApiTransaction, todayLocalYmd } from "../../data/transactionsAdapter.js";
 import { formatMoneyAbs } from "../../money/formatMoney.js";
 import { statusLabel } from "./ledgerModel.js";
 
@@ -51,7 +51,7 @@ export function buildCsv(rows, cardCurrency) {
 }
 
 /** Nome do arquivo exportado: `lancamentos-AAAA-MM-DD.csv`, com a extensão sempre presente. */
-export const exportFileName = (extension, now = new Date()) => `lancamentos-${now.toISOString().slice(0, 10)}.${extension}`;
+export const exportFileName = (extension, today = todayLocalYmd()) => `lancamentos-${today}.${extension}`;
 
 export function downloadCsv(rows, cardCurrency, filename = exportFileName("csv")) {
   const url = URL.createObjectURL(new Blob([buildCsv(rows, cardCurrency)], { type: "text/csv;charset=utf-8" }));
