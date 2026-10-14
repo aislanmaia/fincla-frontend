@@ -682,9 +682,11 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     await user.click(button);
     const sheet = screen.getByRole("dialog", { name: "Assistente" });
     expect(sheet.firstElementChild).toHaveStyle({ width: "100%", borderRadius: "18px 18px 0 0" });
-    expect(screen.queryByRole("button", { name: /Assistente/ })).not.toBeInTheDocument();
     await user.click(within(sheet).getByRole("button", { name: "Fechar" }));
-    expect(screen.getByRole("button", { name: /Assistente/ })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Assistente" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Assistente/ })).toHaveFocus();
+    await user.click(screen.getByRole("button", { name: /Filtros/ }));
+    expect(screen.queryByRole("button", { name: /Assistente/ })).not.toBeInTheDocument();
   });
 
   it("no desktop o Assistente continua no cabeçalho e abre como gaveta lateral", async () => {
