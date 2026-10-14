@@ -3,7 +3,7 @@ import { DENSITIES } from "./listPrefs.js";
 import { G } from "../../typography.js";
 import { T } from "../../tokens.js";
 
-export function TransactionsListDisplayControls({ density, grouped, canGroup, onDensityChange, onGroupChange }) {
+export function TransactionsListDisplayControls({ density, grouped, canGroup, onDensityChange, onGroupChange, onCollapseAll, onExpandAll }) {
   const [open, setOpen] = useState(null);
   const containerRef = useRef(null);
   const densityTriggerRef = useRef(null);
@@ -92,6 +92,12 @@ export function TransactionsListDisplayControls({ density, grouped, canGroup, on
             fontWeight: grouped === value ? 700 : 500,
             background: grouped === value ? T.blueLight : T.surface,
             color: grouped === value ? T.blue : T.inkMid }}>{label}</button>)}
+      {grouped && onCollapseAll && onExpandAll && <div role="group" aria-label="Dias" style={{ borderTop: `1px solid ${T.border}`, marginTop: 4, paddingTop: 4 }}>
+        {[["Recolher todos os dias", onCollapseAll], ["Expandir todos os dias", onExpandAll]].map(([label, action]) =>
+          <button key={label} type="button" role="menuitem"
+            onClick={() => { action(); setOpen(null); groupingTriggerRef.current?.focus(); }}
+            style={{ ...G, display: "block", width: "100%", minHeight: 36, padding: "7px 9px", border: 0, borderRadius: 9, textAlign: "left", cursor: "pointer", fontSize: 12.5, fontWeight: 500, background: T.surface, color: T.inkMid }}>{label}</button>)}
+      </div>}
     </div>}
     </div>
   </div>;

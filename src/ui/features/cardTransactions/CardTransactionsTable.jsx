@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { T } from "../../tokens.js";
 import { G, NUM } from "../../typography.js";
 import { Badge, Card } from "../../components/primitives.jsx";
@@ -29,21 +29,26 @@ function status(row) {
   return { text, color: TONES[tone][0], bg: TONES[tone][1] };
 }
 
+/** Cabeçalho do dia: sticky; quando a lista permite, vira botão que recolhe/expande os lançamentos do dia. */
+function DayHeader({ label, count, subtotal, collapsible, collapsed, selectedCount, onToggle, isMobile }) {
+  const style = { ...G, ...NUM, position: "sticky", top: 0, zIndex: 2, display: "flex", alignItems: "center", gap: 8, width: "100%", boxSizing: "border-box", minHeight: isMobile ? 44 : 32, margin: 0, background: T.bg, border: 0, borderBottom: `1px solid ${T.border}`, padding: isMobile ? "0 16px" : "0 14px", fontSize: 11, color: T.inkMid, textAlign: "left" };
+  const content = <>
+    {collapsible && <ChevronDown size={16} aria-hidden="true" style={{ flex: "none", transform: collapsed ? "rotate(-90deg)" : "none", transition: "transform .15s" }} />}
+    <span>{label} · {count} {count === 1 ? "item" : "itens"}</span>
+    {collapsed && selectedCount > 0 && <span style={{ color: T.blue, fontWeight: 700 }}>{selectedCount} selecionado{selectedCount === 1 ? "" : "s"}</span>}
+    {subtotal && <strong style={{ marginLeft: "auto", color: T.ink }}>{subtotal}</strong>}
+  </>;
+  return collapsible
+    ? <button type="button" aria-expanded={!collapsed} onClick={onToggle} style={{ ...style, cursor: "pointer" }}>{content}</button>
+    : <div style={style}>{content}</div>;
+}
+
 const bulkButton = { ...G, border: 0, background: "none", color: T.blue, cursor: "pointer", textDecoration: "underline", fontSize: 11 };
 const COLUMNS = "22px 58px minmax(140px,2.2fr) minmax(96px,1fr) 62px 96px 70px 92px 86px";
 
-export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasMore, error, onMore, selected, onSelected, onExportSelected, selectionSum, onCategorize, onMoveInstallment, inspected, onInspect, grouped, density, isMobile, maxHeight }) {
+export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasMore, error, onMore, selected, onSelected, onExportSelected, selectionSum, onCategorize, onMoveInstallment, inspected, onInspect, grouped, density, isMobile, maxHeight, collapsible = false, collapsedKeys, onToggleGroup }) {
   const scrollerRef = useRef(null);
   const sentinelRef = useRef(null);
-  useEffect(() => {
-    if (!hasMore || loading || error || !sentinelRef.current || !scrollerRef.current || typeof IntersectionObserver !== "function") return undefined;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0]?.isIntersecting) onMore();
-    }, { root: scrollerRef.current, rootMargin: "0px 0px 160px 0px" });
-    observer.observe(sentinelRef.current);
-    return () => observer.disconnect();
-  }, [hasMore, loading, error, onMore, rows.length]);
-  const allChecked = rows.length > 0 && rows.every((row) => selected.includes(row.id));
   const groups = useMemo(() => {
     if (!grouped) return [{ key: "all", rows }];
     const result = [];
@@ -54,6 +59,17 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
     }
     return result;
   }, [grouped, rows]);
+  // Tudo recolhido deixa a lista curta e o sentinela sempre à vista: sem esta pausa a rolagem infinita puxaria todas as páginas sozinha.
+  const allCollapsed = Boolean(grouped && collapsible && groups.length > 0 && groups.every((group) => collapsedKeys?.has(group.key)));
+  useEffect(() => {
+    if (!hasMore || loading || error || allCollapsed || !sentinelRef.current || !scrollerRef.current || typeof IntersectionObserver !== "function") return undefined;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) onMore();
+    }, { root: scrollerRef.current, rootMargin: "0px 0px 160px 0px" });
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [hasMore, loading, error, allCollapsed, onMore, rows.length]);
+  const allChecked = rows.length > 0 && rows.every((row) => selected.includes(row.id));
   const rowPadding = density === "compacto" ? "7px 12px" : density === "confortavel" ? "15px 12px" : "10px 12px";
   return <Card as="section" aria-label="Lançamentos do cartão" style={{ minWidth: 0, overflow: "hidden", padding: 0, width: "100%", ...(isMobile ? { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", border: 0, borderRadius: 0, boxShadow: "none", background: T.surface } : {}) }}>
     <div style={{ ...G, display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px 10px", padding: isMobile ? "11px 16px" : "11px 14px", borderBottom: `1px solid ${T.border}`, borderTop: isMobile ? `1px solid ${T.border}` : undefined, fontSize: isMobile ? 12.5 : 12, fontWeight: 700 }}>
@@ -71,8 +87,12 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
       {!isMobile && <div aria-hidden="true" style={{ ...G, display: "grid", gridTemplateColumns: COLUMNS, gap: 10, padding: "7px 12px", borderBottom: `1px solid ${T.border}`, background: T.bg, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", position: "sticky", top: 0, zIndex: 3 }}><span /><span>Data</span><span>Descrição</span><span>Categoria</span><span>Parcela</span><span>Restam</span><span>Fim previsto</span><span style={{ textAlign: "right" }}>Valor</span><span>Status</span></div>}
       <div role="list">
         {groups.map((group) => <div key={group.key}>
-          {grouped && <div style={{ ...G, ...NUM, position: "sticky", top: 0, zIndex: 2, background: T.bg, borderBottom: `1px solid ${T.border}`, padding: "7px 14px", fontSize: 11, color: T.inkMid }}>{parsedDate(group.key) ? dateLabel(parsedDate(group.key)) : "Sem data"} · {group.rows.length} {group.rows.length === 1 ? "item" : "itens"}{(() => { const sub = groupSubtotal(group.rows, cardCurrency); return sub ? <strong style={{ float: "right", color: T.ink }}>{formatMoneyAbs(sub.amount, sub.currency)}</strong> : null; })()}</div>}
-          {group.rows.map((row) => {
+          {grouped && (() => {
+            const sub = groupSubtotal(group.rows, cardCurrency);
+            const collapsed = collapsible && Boolean(collapsedKeys?.has(group.key));
+            return <DayHeader label={parsedDate(group.key) ? dateLabel(parsedDate(group.key)) : "Sem data"} count={group.rows.length} subtotal={sub ? formatMoneyAbs(sub.amount, sub.currency) : null} collapsible={collapsible} collapsed={collapsed} selectedCount={group.rows.filter((row) => selected.includes(row.id)).length} onToggle={() => onToggleGroup?.(group.key)} isMobile={isMobile} />;
+          })()}
+          {!(grouped && collapsible && collapsedKeys?.has(group.key)) && group.rows.map((row) => {
             const date = parsedDate(row.date);
             const part = installmentOf(row);
             const info = status(row);
