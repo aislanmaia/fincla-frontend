@@ -6,7 +6,7 @@ import { getCurrentCreditCardInvoice, getInvoiceHistory, listCreditCards } from 
 import { getTransaction, getTransactionsFacets, getTransactionsSummary, listTransactions } from "../../api/transactions";
 import { Btn, Card, PageTitle, Select } from "../components/primitives.jsx";
 import { shouldUseRealData } from "../dataMode.js";
-import { groupSubtotal } from "../features/cardTransactions/ledgerModel.js";
+import { dayKey, groupSubtotal } from "../features/cardTransactions/ledgerModel.js";
 import { assistantInsights } from "../features/cardTransactions/assistantModel.js";
 import { CategorizeDialog, ExportDialog, MoveInstallmentDialog, RefundDialog } from "../features/cardTransactions/LedgerDialogs.jsx";
 import { AssistantDrawer, LedgerDetail } from "../features/cardTransactions/LedgerPanels.jsx";
@@ -54,6 +54,7 @@ function sharePending(map, key, request) {
   return map.get(key);
 }
 const KIND_LABELS = { one_off: "Compras avulsas e estornos", installment: "Parcelas", recurring: "Recorrências", refund: "Estornos" };
+const EMPTY_DAYS = new Set();
 function cardLabel(card) {
   return `${card.description || card.brand || "Cartão"} •${card.last4 || "••••"}`;
 }
@@ -149,8 +150,6 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const [retry, setRetry] = useState(0);
   // Depois de uma ação que muda dados (categoria, fatura, estorno) tudo é lido de novo.
   const [reload, setReload] = useState(0);
-  // Dias recolhidos na lista agrupada. Filtro, recarga ou trocar o agrupamento voltam tudo a expandido; com busca ativa a lista não recolhe.
-  const [collapsedDays, setCollapsedDays] = useState(() => new Set());
   // O Painel de Transação (modal global) avisa pelo token quando salva: recarrega a lista e descarta detalhe e seleção, que ficaram velhos.
   const refreshTokenRef = useRef(transactionsRefreshToken);
   useEffect(() => {
@@ -283,9 +282,14 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const filterKey = JSON.stringify({ queryFilter, cats: filter.cats, tags: filter.tags, blocked: filterBlocked, cardScope, reload });
   const groupedByDate = prefs.grouped && sortField === "date";
   const collapsible = groupedByDate && !filter.search.trim();
-  useEffect(() => { setCollapsedDays(new Set()); }, [filterKey, prefs.grouped]);
-  const dayKeys = useMemo(() => [...new Set(state.rows.map((row) => String(row.date || "").slice(0, 10) || "undated"))], [state.rows]);
-  const toggleDay = (key) => setCollapsedDays((current) => { const next = new Set(current); if (!next.delete(key)) next.add(key); return next; });
+  // Dias recolhidos: guardados com a chave do recorte, então filtro, recarga ou trocar o agrupamento voltam tudo a expandido
+  // já na mesma renderização (sem efeito, sem piscar).
+  const collapseKey = `${filterKey}|${prefs.grouped}`;
+  const [collapsedState, setCollapsedState] = useState({ key: collapseKey, days: new Set() });
+  const collapsedDays = collapsedState.key === collapseKey ? collapsedState.days : EMPTY_DAYS;
+  const setCollapsedDays = (days) => setCollapsedState({ key: collapseKey, days });
+  const toggleDay = (key) => { const next = new Set(collapsedDays); if (!next.delete(key)) next.add(key); setCollapsedDays(next); };
+  const dayControls = collapsible ? { onCollapseAll: () => setCollapsedDays(new Set(state.rows.map(dayKey))), onExpandAll: () => setCollapsedDays(new Set()) } : {};
   const summaryKey = `${state.card?.id ?? "none"}:${filterKey}`;
   const facets = filter.buildFacets({ categoriesById });
   const activeFacets = facets.filter((facet) => FACETS.includes(facet.key) && facet.active).filter((facet) => facet.key !== "cartao" && facet.key !== "periodo");
@@ -598,7 +602,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
       {isMobile && <LedgerSummaryRow summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} onOpen={() => setSummarySheetOpen(true)} />}
       {cardScope === "all" && !isMobile && <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} isCategorySelected={isCategorySelected} onToggleCategory={toggleCategory} />}
       {!isMobile && <TransactionsFilterBar filter={filter} hideSavedViews hideFacets searchInput={filter.search} setSearchInput={filter.setSearch} searchPlaceholder="Buscar por descrição…" searchInputRef={searchInputRef} barChips={filterChips} onChipsBudget={setChipsBudget} barTrailing={<>{historyButtons}<TransactionsListDisplayControls
-        density={prefs.density} grouped={groupedByDate} canGroup={sortField === "date"} onCollapseAll={collapsible ? () => setCollapsedDays(new Set(dayKeys)) : undefined} onExpandAll={collapsible ? () => setCollapsedDays(new Set()) : undefined}
+        density={prefs.density} grouped={groupedByDate} canGroup={sortField === "date"} {...dayControls}
         onDensityChange={(density) => setPreference({ density })}
         onGroupChange={() => setPreference({ grouped: !prefs.grouped })} /></>} />}
       {isMobile && <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", flex: "none" }}>
@@ -615,7 +619,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
           {kindChip}{weekChip}
         </div>
         <span style={{ display: "inline-flex", alignItems: "center", flex: "none" }}>{historyButtons}<TransactionsListDisplayControls
-          density={prefs.density} grouped={groupedByDate} canGroup={sortField === "date"} onCollapseAll={collapsible ? () => setCollapsedDays(new Set(dayKeys)) : undefined} onExpandAll={collapsible ? () => setCollapsedDays(new Set()) : undefined}
+          density={prefs.density} grouped={groupedByDate} canGroup={sortField === "date"} {...dayControls}
           onDensityChange={(density) => setPreference({ density })}
           onGroupChange={() => setPreference({ grouped: !prefs.grouped })} /></span>
       </div>}

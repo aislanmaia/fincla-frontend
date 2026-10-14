@@ -5,7 +5,7 @@ import { G, NUM } from "../../typography.js";
 import { Badge, Card } from "../../components/primitives.jsx";
 import { formatMoneyAbs } from "../../money/formatMoney.js";
 import { pickCategoryTagFromApiTransaction } from "../../data/transactionsAdapter.js";
-import { forecastEnd, groupSubtotal, installmentOf, remainingInstallments, statusInfo } from "./ledgerModel.js";
+import { dayKey, forecastEnd, groupSubtotal, installmentOf, remainingInstallments, statusInfo } from "./ledgerModel.js";
 
 const shortDate = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", timeZone: "UTC" });
 const weekDate = new Intl.DateTimeFormat("pt-BR", { weekday: "short", timeZone: "UTC" });
@@ -31,7 +31,7 @@ function status(row) {
 
 /** Cabeçalho do dia: sticky; quando a lista permite, vira botão que recolhe/expande os lançamentos do dia. */
 function DayHeader({ label, count, subtotal, collapsible, collapsed, selectedCount, onToggle, isMobile }) {
-  const style = { ...G, ...NUM, position: "sticky", top: 0, zIndex: 2, display: "flex", alignItems: "center", gap: 8, width: "100%", boxSizing: "border-box", minHeight: isMobile ? 44 : 32, margin: 0, background: T.bg, border: 0, borderBottom: `1px solid ${T.border}`, padding: isMobile ? "0 16px" : "0 14px", fontSize: 11, color: T.inkMid, textAlign: "left" };
+  const style = { ...G, ...NUM, position: "sticky", top: isMobile ? 0 : COLUMN_HEADER_HEIGHT, zIndex: 2, display: "flex", alignItems: "center", gap: 8, width: "100%", boxSizing: "border-box", minHeight: isMobile ? 44 : 32, margin: 0, background: T.bg, border: 0, borderBottom: `1px solid ${T.border}`, padding: isMobile ? "0 16px" : "0 14px", fontSize: 11, color: T.inkMid, textAlign: "left" };
   const content = <>
     {collapsible && <ChevronDown size={16} aria-hidden="true" style={{ flex: "none", transform: collapsed ? "rotate(-90deg)" : "none", transition: "transform .15s" }} />}
     <span>{label} · {count} {count === 1 ? "item" : "itens"}</span>
@@ -44,6 +44,8 @@ function DayHeader({ label, count, subtotal, collapsible, collapsed, selectedCou
 }
 
 const bulkButton = { ...G, border: 0, background: "none", color: T.blue, cursor: "pointer", textDecoration: "underline", fontSize: 11 };
+// O cabeçalho do dia gruda logo abaixo do cabeçalho de colunas (desktop), senão ele ficaria coberto e sem clique.
+const COLUMN_HEADER_HEIGHT = 30;
 const COLUMNS = "22px 58px minmax(140px,2.2fr) minmax(96px,1fr) 62px 96px 70px 92px 86px";
 
 export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasMore, error, onMore, selected, onSelected, onExportSelected, selectionSum, onCategorize, onMoveInstallment, inspected, onInspect, grouped, density, isMobile, maxHeight, collapsible = false, collapsedKeys, onToggleGroup }) {
@@ -53,7 +55,7 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
     if (!grouped) return [{ key: "all", rows }];
     const result = [];
     for (const row of rows) {
-      const key = String(row.date || "").slice(0, 10) || "undated";
+      const key = dayKey(row);
       if (result.at(-1)?.key !== key) result.push({ key, rows: [] });
       result.at(-1).rows.push(row);
     }
@@ -69,13 +71,14 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
     observer.observe(sentinelRef.current);
     return () => observer.disconnect();
   }, [hasMore, loading, error, allCollapsed, onMore, rows.length]);
+  const hiddenSelected = !(grouped && collapsible) ? 0 : groups.reduce((sum, group) => sum + (collapsedKeys?.has(group.key) ? group.rows.filter((row) => selected.includes(row.id)).length : 0), 0);
   const allChecked = rows.length > 0 && rows.every((row) => selected.includes(row.id));
   const rowPadding = density === "compacto" ? "7px 12px" : density === "confortavel" ? "15px 12px" : "10px 12px";
   return <Card as="section" aria-label="Lançamentos do cartão" style={{ minWidth: 0, overflow: "hidden", padding: 0, width: "100%", ...(isMobile ? { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", border: 0, borderRadius: 0, boxShadow: "none", background: T.surface } : {}) }}>
     <div style={{ ...G, display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px 10px", padding: isMobile ? "11px 16px" : "11px 14px", borderBottom: `1px solid ${T.border}`, borderTop: isMobile ? `1px solid ${T.border}` : undefined, fontSize: isMobile ? 12.5 : 12, fontWeight: 700 }}>
       <input type="checkbox" aria-label="Selecionar lançamentos carregados" checked={allChecked} onChange={(event) => onSelected(event.target.checked ? [...new Set([...selected, ...rows.map((row) => row.id)])] : selected.filter((id) => !rows.some((row) => row.id === id)))} />
       <span>{total == null ? `${rows.length} lançamentos` : `${total} lançamentos`}</span>
-      {selected.length > 0 && <span style={{ color: T.blue }}>{selected.length} selecionado{selected.length === 1 ? "" : "s"}{selectionSum ? ` · ${selectionSum}` : ""}</span>}
+      {selected.length > 0 && <span style={{ color: T.blue }}>{selected.length} selecionado{selected.length === 1 ? "" : "s"}{selectionSum ? ` · ${selectionSum}` : ""}{hiddenSelected > 0 ? ` · ${hiddenSelected} em dias recolhidos` : ""}</span>}
       {selected.length > 0 && <span role="toolbar" aria-label="Ações em lote" style={{ marginLeft: "auto", display: "flex", flexWrap: "wrap", gap: "4px 10px", alignItems: "center", minWidth: 0 }}>
         {onCategorize && <button type="button" onClick={onCategorize} style={bulkButton}>Categorizar</button>}
         {onMoveInstallment && <button type="button" onClick={onMoveInstallment} style={bulkButton}>Mover parcela</button>}
@@ -84,7 +87,7 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
       </span>}
     </div>
     <div ref={scrollerRef} className="fincla-scroll" style={{ ...(isMobile ? { flex: 1, minHeight: 0 } : { maxHeight: maxHeight == null ? 560 : Math.max(100, maxHeight - 82) }), overflowY: "auto", overflowX: "hidden" }}>
-      {!isMobile && <div aria-hidden="true" style={{ ...G, display: "grid", gridTemplateColumns: COLUMNS, gap: 10, padding: "7px 12px", borderBottom: `1px solid ${T.border}`, background: T.bg, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", position: "sticky", top: 0, zIndex: 3 }}><span /><span>Data</span><span>Descrição</span><span>Categoria</span><span>Parcela</span><span>Restam</span><span>Fim previsto</span><span style={{ textAlign: "right" }}>Valor</span><span>Status</span></div>}
+      {!isMobile && <div aria-hidden="true" style={{ ...G, display: "grid", gridTemplateColumns: COLUMNS, gap: 10, padding: "0 12px", height: COLUMN_HEADER_HEIGHT, boxSizing: "border-box", alignItems: "center", borderBottom: `1px solid ${T.border}`, background: T.bg, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", position: "sticky", top: 0, zIndex: 3 }}><span /><span>Data</span><span>Descrição</span><span>Categoria</span><span>Parcela</span><span>Restam</span><span>Fim previsto</span><span style={{ textAlign: "right" }}>Valor</span><span>Status</span></div>}
       <div role="list">
         {groups.map((group) => <div key={group.key}>
           {grouped && (() => {

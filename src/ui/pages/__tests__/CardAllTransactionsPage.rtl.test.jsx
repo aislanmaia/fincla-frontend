@@ -898,7 +898,15 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
       expect(header).not.toHaveTextContent(/selecionado/);
       await user.click(header);
       expect(header).toHaveTextContent("1 selecionado");
-      expect(screen.getAllByText(/1 selecionado/).length).toBeGreaterThan(1);
+      expect(screen.getByText(/1 selecionado · .*1 em dias recolhidos/)).toBeInTheDocument();
+      await user.click(header);
+      expect(screen.queryByText(/em dias recolhidos/)).not.toBeInTheDocument();
+    });
+
+    it("no desktop o cabeçalho do dia gruda abaixo do cabeçalho de colunas, para o botão não ficar coberto", async () => {
+      await renderGrouped();
+      const header = screen.getByRole("button", { name: /2 itens/ });
+      expect(header.style.top).toBe("30px");
     });
 
     it("recolhe e expande todos os dias pelo menu de agrupamento", async () => {
@@ -959,6 +967,7 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
       await renderGrouped({ isMobile: true });
       const header = screen.getByRole("button", { name: /2 itens/ });
       expect(header.style.minHeight).toBe("44px");
+      expect(header.style.top).toBe("0px");
       await userEvent.setup().click(header);
       expect(screen.queryByText("Mercado dia 2")).not.toBeInTheDocument();
     });
