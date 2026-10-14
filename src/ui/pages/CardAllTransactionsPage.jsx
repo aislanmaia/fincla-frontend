@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams, useSearch } from "@tanstack/react-router";
+import { useNavigate, useParams, useRouter, useSearch } from "@tanstack/react-router";
 import { ArrowLeft, Download, Search, Sparkles, X } from "lucide-react";
 
 import { getCurrentCreditCardInvoice, getInvoiceHistory, listCreditCards } from "../../api/creditCards";
@@ -60,6 +60,7 @@ function cardLabel(card) {
 export function CardAllTransactionsPage({ organizationId = null, dataMode = "live", isMobile = false }) {
   const { cardId } = useParams({ strict: false });
   const navigate = useNavigate();
+  const router = useRouter();
   const enabled = shouldUseRealData(organizationId, dataMode);
   // Deep link (Dashboard da fatura): fatura, categoria, busca e tipo chegam pela URL, lidos uma vez.
   const urlSearch = useSearch({ strict: false });
@@ -100,6 +101,19 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const [week, setWeek] = useState(null);
   const [summarySheetOpen, setSummarySheetOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  // No celular a busca aberta ocupa uma entrada do histórico: o voltar do sistema fecha só o campo, como num app nativo.
+  const searchEntryRef = useRef(false);
+  const openSearch = () => {
+    setSearchOpen(true);
+    if (isMobile && !searchEntryRef.current) { searchEntryRef.current = true; router.history.push(router.history.location.href); }
+  };
+  const closeSearch = () => {
+    setSearchOpen(false);
+    if (searchEntryRef.current) { searchEntryRef.current = false; router.history.back(); }
+  };
+  useEffect(() => router.history.subscribe(({ action }) => {
+    if (action.type === "BACK" && searchEntryRef.current) { searchEntryRef.current = false; setSearchOpen(false); }
+  }), [router]);
   const [viewportWidth, setViewportWidth] = useState(() => typeof window === "undefined" ? 1440 : window.innerWidth);
   const [chipsBudget, setChipsBudget] = useState(null);
   const ledgerRef = useRef(null);
@@ -542,10 +556,10 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
 
   const searchTerm = filter.search.trim();
   const searchEmpty = isMobile && Boolean(searchTerm) && debouncedSearch === searchTerm && !state.loading && !state.error && !noInvoice && !catalogBlocked && state.rows.length === 0;
-  const clearSearch = () => { filter.setSearch(""); setSearchOpen(false); };
+  const clearSearch = () => { filter.setSearch(""); closeSearch(); };
   const chipPill = { borderRadius: 99, padding: "0 12px", height: 30, boxSizing: "border-box", display: "inline-flex", alignItems: "center", whiteSpace: "nowrap", flex: "none" };
   return <div style={isMobile ? { height: "100%", minHeight: 0, display: "flex", flexDirection: "column", minWidth: 0 } : { padding: 28, display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
-    {isMobile && <LedgerAppBar subtitle={card ? (cardScope === "all" ? "Todos os cartões" : cardLabel(card)) : null} onBack={back} hasCard={Boolean(card)} searchOpen={searchOpen} onSearchOpen={() => setSearchOpen(true)} onSearchClose={() => setSearchOpen(false)} search={filter.search} onSearchChange={filter.setSearch} facetCount={activeFacets.length} filtersOpen={filtersOpen} onFilters={() => { setMobileFacetOpen(false); setFiltersOpen((open) => !open); }} alertCount={alerts.length} onAssistant={openAssistant} onExport={() => setDialog({ kind: "export" })} exportDisabled={!state.total} />}
+    {isMobile && <LedgerAppBar subtitle={card ? (cardScope === "all" ? "Todos os cartões" : cardLabel(card)) : null} onBack={back} hasCard={Boolean(card)} searchOpen={searchOpen} onSearchOpen={openSearch} onSearchClose={closeSearch} search={filter.search} onSearchChange={filter.setSearch} facetCount={activeFacets.length} filtersOpen={filtersOpen} onFilters={() => { setMobileFacetOpen(false); setFiltersOpen((open) => !open); }} alertCount={alerts.length} onAssistant={openAssistant} onExport={() => setDialog({ kind: "export" })} exportDisabled={!state.total} />}
     {isMobile && card && alerts.length > 0 && <LedgerAlertStrip label={alertsLabel} summary={alertSummary} onOpen={openAssistant} />}
     {!isMobile && <button type="button" onClick={back} style={{ ...G, alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 5, border: 0, background: "none", color: T.blue, fontSize: 12, fontWeight: 700, cursor: "pointer" }}><ArrowLeft size={14} /> Voltar para o cartão</button>}
     {!isMobile && <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -572,7 +586,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
       {isMobile && <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", flex: "none" }}>
         <div className="fincla-scroll" style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0, overflowX: "auto", scrollbarWidth: "none" }}>
           {filter.search && <span style={{ ...chipPill, background: T.ink, color: T.surface, padding: 0, overflow: "hidden" }}>
-            <button type="button" onClick={() => setSearchOpen(true)} aria-label={`Busca: ${filter.search}. Editar.`} style={{ ...G, border: 0, background: "none", color: T.surface, padding: "0 4px 0 12px", height: "100%", fontSize: 12, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}><Search size={14} aria-hidden="true" />“{filter.search}”</button>
+            <button type="button" onClick={openSearch} aria-label={`Busca: ${filter.search}. Editar.`} style={{ ...G, border: 0, background: "none", color: T.surface, padding: "0 4px 0 12px", height: "100%", fontSize: 12, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}><Search size={14} aria-hidden="true" />“{filter.search}”</button>
             <button type="button" aria-label="Remover busca" onClick={clearSearch} style={{ ...G, border: 0, background: "none", color: T.surface, padding: "0 12px 0 4px", height: "100%", cursor: "pointer" }}>×</button>
           </span>}
           <button type="button" data-pinned-chip="periodo" onClick={() => openFacet("periodo")} aria-label={`Recorte de tempo: ${chipLabel}. Ajustar.`} style={{ ...G, ...chipPill, border: `1px solid ${T.border}`, background: T.blueLight, color: T.blue, fontSize: 12, cursor: "pointer" }}>{chipLabel}</button>
