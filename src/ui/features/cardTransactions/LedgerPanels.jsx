@@ -16,7 +16,7 @@ function Rows({ entries }) {
 }
 
 /** Detalhe do lançamento: dados, cronograma da parcela, mudança de fatura e estorno. */
-export function LedgerDetail({ row, currency, closeRef, onClose, onMove, onRefund, onOpenOriginal }) {
+export function LedgerDetail({ row, currency, closeRef, onClose, onOpen, onMove, onRefund, onOpenOriginal }) {
   // Mover fatura e estornar valem para o cartão da tela: em "todos os cartões" a página não passa as ações.
   const code = row.value_currency || currency;
   const money = (value) => code ? formatMoneyAbs(value, code) : "—";
@@ -42,6 +42,7 @@ export function LedgerDetail({ row, currency, closeRef, onClose, onMove, onRefun
       <p style={{ ...G, fontSize: 11, color: T.inkMid }}>Cronograma regular: total e última parcela somam o valor desta parcela; centavos de arredondamento podem diferir do banco.</p>
       {onMove && <Btn variant="outGray" onClick={() => onMove(row)} style={{ width: "100%" }}>↻ Mover para outra fatura</Btn>}
     </>}
+    {onOpen && <Btn variant="blue" onClick={() => onOpen(row)} style={{ width: "100%", marginTop: 16 }}>↗ {row.type === "refund" ? "Abrir lançamento do estorno" : part ? "Abrir lançamento da compra" : "Abrir lançamento"}</Btn>}
     <div style={{ marginTop: 16 }}>
       {row.type === "refund"
         ? (row.refund_of_transaction_id ? <Btn variant="outGray" onClick={() => onOpenOriginal(row.refund_of_transaction_id)} style={{ width: "100%" }}>↗ Ver lançamento original</Btn> : null)

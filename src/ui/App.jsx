@@ -418,7 +418,7 @@ export default function App() {
             }} />,
     invoiceDashboard: <InvoiceDashboardPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} />,
     cardTransactions: <CardTransactionsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} />,
-    cardAllTransactions: <CardAllTransactionsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} />,
+    cardAllTransactions: <CardAllTransactionsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} />,
     cardCommitments: <CardCommitmentsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} />,
     cards:      <CardsEntryPage dataMode={dataMode} organizationId={session.activeOrgId}
       hub={<CardHubPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onNewItem={onNewCardItem} />}
