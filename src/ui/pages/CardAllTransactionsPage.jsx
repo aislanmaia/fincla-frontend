@@ -10,7 +10,7 @@ import { dayKey, groupSubtotal } from "../features/cardTransactions/ledgerModel.
 import { assistantInsights } from "../features/cardTransactions/assistantModel.js";
 import { CategorizeDialog, ExportDialog, MoveInstallmentDialog, RefundDialog } from "../features/cardTransactions/LedgerDialogs.jsx";
 import { AssistantDrawer, LedgerDetail } from "../features/cardTransactions/LedgerPanels.jsx";
-import { LedgerAlertStrip, LedgerAppBar, LedgerSearchEmpty, LedgerSummaryRow } from "../features/cardTransactions/LedgerMobileBars.jsx";
+import { LedgerAlertStrip, LedgerAppBar, LedgerChipScroller, LedgerSearchEmpty, LedgerSummaryRow } from "../features/cardTransactions/LedgerMobileBars.jsx";
 import { categorizeRows, createRefund, fetchAllRows, moveRows } from "../features/cardTransactions/ledgerActions.js";
 import { buildPdfParts, buildPrintHtml, downloadCsv, printHtml } from "../features/cardTransactions/ledgerExport.js";
 import { CardOutflowsChart } from "../features/cardTransactions/CardOutflowsChart.jsx";
@@ -468,13 +468,13 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   };
   const exportRowsOf = async () => fetchAllRows({ base: { organization_id: organizationId, ...(cardScope === "current" ? { credit_card_id: state.card.id } : {}) }, filter: queryFilter, total: state.total ?? state.rows.length });
   const filterSummary = () => [chipLabel, ...(kind ? [`Tipo: ${KIND_LABELS[kind]}`] : []), ...(weekLabel ? [weekLabel] : []), ...(debouncedSearch ? [`Busca: ${debouncedSearch}`] : []), ...activeFacets.map((facet) => `${facet.label}: ${facet.value}`)];
-  const submitExport = async (format) => {
+  const submitExport = async (format, selectionRows = null) => {
     try {
-      const all = await exportRowsOf();
+      const all = selectionRows ?? await exportRowsOf();
       if (format === "csv") { downloadCsv(all, cardScope === "current" ? state.card.currency : null); return null; }
       printHtml(buildPrintHtml({
         title: `Lançamentos · ${cardScope === "all" ? "Todos os cartões" : cardLabel(state.card)}`,
-        subtitle: `${all.length} lançamentos · ${filterSummary().join(" · ")}`,
+        subtitle: selectionRows ? `${all.length} lançamento${all.length === 1 ? "" : "s"} selecionado${all.length === 1 ? "" : "s"}` : `${all.length} lançamentos · ${filterSummary().join(" · ")}`,
         ...buildPdfParts(all, cardScope === "current" ? state.card.currency : null),
       }));
       return null;
@@ -617,7 +617,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
         onDensityChange={(density) => setPreference({ density })}
         onGroupChange={() => setPreference({ grouped: !prefs.grouped })} /></>} />}
       {isMobile && <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", flex: "none" }}>
-        <div className="fincla-scroll" style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0, overflowX: "auto", scrollbarWidth: "none" }}>
+        <LedgerChipScroller>
           {filter.search && <span style={{ ...chipPill, background: T.ink, color: T.surface, padding: 0, overflow: "hidden" }}>
             <button type="button" onClick={openSearch} aria-label={`Busca: ${filter.search}. Editar.`} style={{ ...G, border: 0, background: "none", color: T.surface, padding: "0 4px 0 12px", height: "100%", fontSize: 12, cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}><Search size={14} aria-hidden="true" />“{filter.search}”</button>
             <button type="button" aria-label="Remover busca" onClick={clearSearch} style={{ ...G, border: 0, background: "none", color: T.surface, padding: "0 12px 0 4px", height: "100%", cursor: "pointer" }}>×</button>
@@ -628,7 +628,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
             <button type="button" aria-label={`Limpar filtro ${facet.label}`} onClick={() => clearFacet(facet.key)} style={{ ...G, border: 0, background: "none", color: T.blue, padding: "0 12px 0 4px", height: "100%", cursor: "pointer" }}>×</button>
           </div>)}
           {kindChip}{weekChip}
-        </div>
+        </LedgerChipScroller>
         <span style={{ display: "inline-flex", alignItems: "center", flex: "none" }}>{historyButtons}<TransactionsListDisplayControls
           density={prefs.density} grouped={groupedByDate} canGroup={sortField === "date"} {...dayControls}
           onDensityChange={(density) => setPreference({ density })}
@@ -639,7 +639,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
       <div ref={ledgerRef} style={{ display: "flex", alignItems: "stretch", minWidth: 0, position: "relative", gap: filtersOpen && !dockFloating ? 12 : 0, ...(isMobile ? { flex: 1, minHeight: 0 } : {}) }}>
         <div style={{ flex: 1, minWidth: 0, ...(isMobile ? { minHeight: 0, display: "flex", flexDirection: "column" } : {}) }}>
         {searchEmpty ? <LedgerSearchEmpty query={searchTerm} onClear={clearSearch} /> : 
-        <CardTransactionsTable rows={state.rows} total={state.total} cardCurrency={cardScope === "current" ? card.currency : null} loading={state.loading} error={state.error} hasMore={hasMore} onMore={onMore} selected={selectedRows} onSelected={setSelectedRows} selectionSum={selectionSum} onCategorize={() => setDialog({ kind: "categorize", ids: selectedRows })} onMoveInstallment={cardScope === "current" ? () => setDialog({ kind: "move", ids: selectedRows }) : undefined} onExportSelected={() => downloadCsv(selectedRowObjects, cardScope === "current" ? card.currency : null)} inspected={inspected} onInspect={(row) => { inspectTriggerRef.current = document.activeElement; setInspected(row); }} grouped={groupedByDate} collapsible={collapsible} collapsedKeys={collapsedDays} onToggleGroup={toggleDay} density={prefs.density} isMobile={isMobile} maxHeight={filtersOpen && !isMobile ? ledgerHeight : undefined} />}
+        <CardTransactionsTable rows={state.rows} total={state.total} cardCurrency={cardScope === "current" ? card.currency : null} loading={state.loading} error={state.error} hasMore={hasMore} onMore={onMore} selected={selectedRows} onSelected={setSelectedRows} selectionSum={selectionSum} onCategorize={() => setDialog({ kind: "categorize", ids: selectedRows })} onMoveInstallment={cardScope === "current" ? () => setDialog({ kind: "move", ids: selectedRows }) : undefined} onExportSelected={() => setDialog({ kind: "export", selection: { rows: selectedRowObjects, sum: selectionSum } })} inspected={inspected} onInspect={(row) => { inspectTriggerRef.current = document.activeElement; setInspected(row); }} grouped={groupedByDate} collapsible={collapsible} collapsedKeys={collapsedDays} onToggleGroup={toggleDay} density={prefs.density} isMobile={isMobile} maxHeight={filtersOpen && !isMobile ? ledgerHeight : undefined} />}
         </div>
         {inspected && !isMobile && <div ref={detailDialogRef} role="dialog" aria-modal="false" aria-label="Detalhes do lançamento" style={{ flex: "none", width: 360, minWidth: 0, marginLeft: 12 }}><Card style={{ height: "100%", padding: 20, overflowY: "auto", boxSizing: "border-box" }}><LedgerDetail row={inspected} currency={cardScope === "current" ? card?.currency : null} closeRef={detailCloseRef} onClose={() => setInspected(null)} onOpen={openTransaction} onMove={cardScope === "current" ? (row) => setDialog({ kind: "move", ids: [row.id] }) : undefined} onRefund={cardScope === "current" ? (row) => setDialog({ kind: "refund", row }) : undefined} onOpenOriginal={openOriginal} /></Card></div>}
         {filtersOpen && !isMobile && !inspected && <div style={{ ...(dockFloating ? { position: "absolute", top: 0, right: 0, zIndex: 5, boxShadow: "-8px 0 24px rgba(15,15,13,.1)" } : { flex: "none" }), width: dockFloating ? Math.min(480, Math.max(400, viewportWidth * .4)) : Math.min(420, Math.max(320, viewportWidth * .28)), maxWidth: "100%", height: ledgerHeight, minWidth: 0 }}><TransactionsFilterPanel filter={filter} facet={activeFacet} onFacetChange={setActiveFacet} categories={categories} allTags={tagOptions.map((tag) => tag.displayLabel)} allTagsLoading={tagCatalog.loading} allTagsError={Boolean(tagCatalog.error)} tagIdByLabel={tagIdByLabel} facetCounts={facetCounts} activeFacets={activeFacets} onClearFacet={clearFacet} onClearAll={clearAll} onApply={closeFilters} onClose={closeFilters} resultCount={state.total ?? 0} resultsLoading={state.loading} visibleFacetKeys={FACETS} defaultPeriod="tudo" cardScopePanel={cardScopePanel} periodScopePanel={timeScopePanel} hidePeriodContent={invoiceMode} selectionOverrides={{ cartao: cardScope === "all" ? 1 : 0, ...(invoiceMode ? { periodo: 0 } : {}) }} /></div>}
@@ -654,7 +654,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     {dialog?.kind === "categorize" && <CategorizeDialog rows={rowsByIds(dialog.ids)} categories={categories} onSubmit={submitCategorize} onClose={closeDialog} />}
     {dialog?.kind === "move" && <MoveInstallmentDialog rows={rowsByIds(dialog.ids).length ? rowsByIds(dialog.ids) : inspected ? [inspected] : []} invoiceOptions={invoiceOpts} currentKey={historyState.current?.month ?? null} onSubmit={submitMove} onClose={closeDialog} />}
     {dialog?.kind === "refund" && <RefundDialog row={dialog.row} categories={(refundCatalog.categories ?? []).map((entry) => ({ id: String(entry.id), label: entry.labelPt }))} currency={cardScope === "current" ? card?.currency : null} today={todayLocalYmd()} onSubmit={submitRefund} onClose={closeDialog} />}
-    {dialog?.kind === "export" && <ExportDialog total={state.total} filterSummary={filterSummary()} onExport={submitExport} onClose={closeDialog} />}
+    {dialog?.kind === "export" && <ExportDialog total={dialog.selection ? dialog.selection.rows.length : state.total} filterSummary={filterSummary()} selection={dialog.selection ? { count: dialog.selection.rows.length, sum: dialog.selection.sum } : null} onExport={(format) => submitExport(format, dialog.selection?.rows ?? null)} onClose={closeDialog} />}
     {dialog?.kind === "assistant" && <AssistantDrawer insights={insights.items} loadedCount={state.rows.length} onClose={closeDialog} isMobile={isMobile} onSelect={(ids) => { setSelectedRows(ids); setDialog(null); }} onCategorize={(ids) => { setSelectedRows(ids); setDialog({ kind: "categorize", ids }); }} />}
     {notice && <div role="status" style={{ ...G, position: "fixed", left: "50%", bottom: "calc(20px + env(safe-area-inset-bottom, 0px))", transform: "translateX(-50%)", zIndex: 70, background: T.ink, color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 12, display: "flex", gap: 12, alignItems: "center" }}>{notice}<button type="button" aria-label="Fechar aviso" onClick={() => setNotice(null)} style={{ border: 0, background: "none", color: T.surface, cursor: "pointer" }}>×</button></div>}
     {summarySheetOpen && isMobile && <div ref={summaryDialogRef} role="dialog" aria-modal="true" aria-label="Resumo e saídas do recorte" style={{ position: "fixed", inset: 0, zIndex: 48, background: "rgba(15,15,13,.35)", display: "flex", alignItems: "flex-end" }} onClick={() => setSummarySheetOpen(false)}>

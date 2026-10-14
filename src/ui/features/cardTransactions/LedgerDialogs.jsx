@@ -153,7 +153,7 @@ export function RefundDialog({ row, currency, categories, onSubmit, onClose, tod
   </LedgerModal>;
 }
 
-export function ExportDialog({ total, filterSummary, onExport, onClose }) {
+export function ExportDialog({ total, filterSummary, selection = null, onExport, onClose }) {
   const [format, setFormat] = useState("csv");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -163,9 +163,11 @@ export function ExportDialog({ total, filterSummary, onExport, onClose }) {
     setBusy(false);
     if (failed) setError(failed); else onClose();
   };
-  return <LedgerModal title="Exportar lançamentos" onClose={onClose}>
-    <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>Sai o conjunto inteiro do recorte atual{total != null ? `: ${total} lançamento${total === 1 ? "" : "s"}` : ""}, não só o que está carregado na tela.</p>
-    {filterSummary.length > 0 && <ul style={{ ...G, margin: 0, paddingLeft: 18, fontSize: 11, color: T.inkMid }}>{filterSummary.map((line) => <li key={line}>{line}</li>)}</ul>}
+  return <LedgerModal title={selection ? "Exportar seleção" : "Exportar lançamentos"} onClose={onClose}>
+    {selection
+      ? <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>Saem só os lançamentos que você marcou: {selection.count} lançamento{selection.count === 1 ? "" : "s"}{selection.sum ? ` · ${selection.sum}` : ""}.</p>
+      : <p style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>Sai o conjunto inteiro do recorte atual{total != null ? `: ${total} lançamento${total === 1 ? "" : "s"}` : ""}, não só o que está carregado na tela.</p>}
+    {!selection && filterSummary.length > 0 && <ul style={{ ...G, margin: 0, paddingLeft: 18, fontSize: 11, color: T.inkMid }}>{filterSummary.map((line) => <li key={line}>{line}</li>)}</ul>}
     <div role="group" aria-label="Formato" style={{ display: "flex", gap: 8 }}>
       {[["csv", "CSV"], ["pdf", "PDF"]].map(([value, label]) => <button key={value} type="button" aria-pressed={format === value} onClick={() => setFormat(value)} style={{ ...G, flex: 1, minHeight: 40, border: `1.5px solid ${format === value ? T.blue : T.border}`, borderRadius: 9, background: format === value ? T.blueLight : T.surface, color: format === value ? T.blue : T.ink, fontWeight: 700, cursor: "pointer" }}>{label}</button>)}
     </div>

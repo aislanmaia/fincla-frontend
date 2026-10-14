@@ -15,7 +15,7 @@ describe("CardTransactionsTable · seleção em lote", () => {
   it("a barra quebra de linha e leva todas as ações, inclusive Limpar seleção, para dentro do toolbar", () => {
     render(<CardTransactionsTable rows={rows} total={2} cardCurrency="BRL" selected={["1", "2"]} onSelected={noop} onCategorize={noop} onMoveInstallment={noop} onExportSelected={noop} onInspect={noop} onMore={noop} isMobile />);
     const toolbar = screen.getByRole("toolbar", { name: "Ações em lote" });
-    for (const name of ["Categorizar", "Mover parcela", "Exportar seleção CSV", "Limpar seleção"]) expect(within(toolbar).getByRole("button", { name })).toBeTruthy();
+    for (const name of ["Categorizar", "Mover parcela", "Exportar seleção", "Limpar seleção"]) expect(within(toolbar).getByRole("button", { name })).toBeTruthy();
     expect(toolbar.style.flexWrap).toBe("wrap");
     expect(toolbar.parentElement.style.flexWrap).toBe("wrap");
   });
