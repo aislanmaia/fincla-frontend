@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 import React from "react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -171,6 +171,33 @@ describe("CardAllTransactionsPage", () => {
     expect(within(sheet).queryByRole("button", { name: "Limpar tudo" })).not.toBeInTheDocument();
     await user.click(within(sheet).getByRole("button", { name: /^Ver \d+ lançamentos/ }));
     expect(screen.getByRole("dialog", { name: "Filtros dos lançamentos" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Filtros dos lançamentos" })).not.toBeInTheDocument());
+  });
+
+  it("no sheet de filtros o Escape volta da faceta antes de fechar, e o arrasto da alça reduz, cancela sem dispensar e dispensa", async () => {
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Filtros" }));
+    const sheet = screen.getByRole("dialog", { name: "Filtros dos lançamentos" });
+    await user.click(within(sheet).getByRole("button", { name: /^Categoria:/ }));
+    await user.keyboard("{Escape}");
+    expect(within(sheet).queryByRole("button", { name: "← Voltar" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Filtros dos lançamentos" })).toBe(sheet);
+    const handle = sheet.querySelector('[style*="cursor: grab"]');
+    expect(sheet.style.height).toBe("100dvh");
+    fireEvent.touchStart(handle, { touches: [{ clientY: 0 }] });
+    fireEvent.touchMove(document, { touches: [{ clientY: 100 }] });
+    expect(sheet.style.height).toBe("72dvh");
+    fireEvent.touchStart(handle, { touches: [{ clientY: 0 }] });
+    fireEvent.touchMove(document, { touches: [{ clientY: 20 }] });
+    fireEvent.touchCancel(document);
+    fireEvent.touchMove(document, { touches: [{ clientY: 600 }] });
+    fireEvent.touchEnd(document);
+    expect(sheet.style.transform).toBe("translateY(0)");
+    expect(screen.getByRole("dialog", { name: "Filtros dos lançamentos" })).toBeInTheDocument();
+    fireEvent.touchStart(handle, { touches: [{ clientY: 0 }] });
+    fireEvent.touchMove(document, { touches: [{ clientY: 400 }] });
+    fireEvent.touchEnd(document);
     await waitFor(() => expect(screen.queryByRole("dialog", { name: "Filtros dos lançamentos" })).not.toBeInTheDocument());
   });
 

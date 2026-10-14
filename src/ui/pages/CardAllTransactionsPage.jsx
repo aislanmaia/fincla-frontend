@@ -220,12 +220,12 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     const onEscape = (event) => {
       if (event.key !== "Escape") return;
       if (inspected) setInspected(null);
-      else if (filtersOpen) setFiltersOpen(false);
+      else if (filtersOpen) { if (isMobile && mobileFacetOpen) setMobileFacetOpen(false); else setFiltersOpen(false); }
       else setSummarySheetOpen(false);
     };
     document.addEventListener("keydown", onEscape);
     return () => document.removeEventListener("keydown", onEscape);
-  }, [filtersOpen, inspected, summarySheetOpen]);
+  }, [filtersOpen, inspected, summarySheetOpen, isMobile, mobileFacetOpen]);
 
   useEffect(() => {
     if (inspected) { wasInspectedRef.current = true; return; }

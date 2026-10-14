@@ -4,7 +4,10 @@ import { T } from "../../tokens.js";
 import { G } from "../../typography.js";
 import { DisclosureChevron } from "../../components/DisclosureChevron.jsx";
 
+// Durações das animações de saída: o desmonte (EXIT_MS) espera a animação (SLIDE_MS) terminar.
+const SLIDE_MS = 380;
 const EXIT_MS = 420;
+const SHEET_TRANSITION = `height ${SLIDE_MS}ms cubic-bezier(0.32,0.72,0,1), border-radius 0.2s ease`;
 
 /**
  * Sheet de filtros do celular, no desenho da tela de Transações: abre em tela cheia, alça com chevron que
@@ -19,24 +22,37 @@ export function MobileFilterSheet({ dialogRef, closeRef, ariaLabel, title, onClo
   const closingRef = useRef(false);
   const timerRef = useRef(null);
   const [full, setFull] = useState(true);
-  const [closing, setClosing] = useState(false);
-  useEffect(() => () => clearTimeout(timerRef.current), []);
+  const [closing, setClosing] = useState(null); // null | "animated" | "dragged"
+  const cleanupRef = useRef(null);
+  useEffect(() => () => { clearTimeout(timerRef.current); cleanupRef.current?.(); }, []);
 
   const requestClose = () => {
     if (closingRef.current) return;
     closingRef.current = true;
-    setClosing(true);
+    setClosing("animated");
+    clearTimeout(timerRef.current);
     timerRef.current = setTimeout(onClose, EXIT_MS);
   };
   const setSnap = (value) => { fullRef.current = value; setFull(value); };
 
   const onHandleTouchStart = (event) => {
     const el = sheetRef.current;
-    if (!el) return;
+    if (!el || closingRef.current) return;
+    cleanupRef.current?.();
     const startY = event.touches[0].clientY;
     const startedAt = Date.now();
     let lastDelta = 0;
-    const cleanup = () => { document.removeEventListener("touchmove", onMove); document.removeEventListener("touchend", onEnd); };
+    const settle = (transform, transition) => {
+      el.style.transition = transition;
+      el.style.transform = transform;
+      setTimeout(() => { el.style.transition = SHEET_TRANSITION; }, SLIDE_MS);
+    };
+    const cleanup = () => {
+      document.removeEventListener("touchmove", onMove);
+      document.removeEventListener("touchend", onEnd);
+      document.removeEventListener("touchcancel", onCancel);
+      cleanupRef.current = null;
+    };
     const onMove = (move) => {
       const delta = move.touches[0].clientY - startY;
       lastDelta = delta;
@@ -48,29 +64,32 @@ export function MobileFilterSheet({ dialogRef, closeRef, ariaLabel, title, onClo
     };
     const onEnd = () => {
       const velocity = lastDelta / Math.max(Date.now() - startedAt, 1);
-      if (!fullRef.current && (velocity > 0.45 || lastDelta > (el.offsetHeight || 400) * 0.3)) {
-        el.style.transition = "transform 0.38s cubic-bezier(0.32,0.72,0,1)";
-        el.style.transform = "translateY(105%)";
-        timerRef.current = setTimeout(() => { el.style.transform = ""; el.style.transition = ""; onClose(); }, 380);
-      } else {
-        el.style.transition = "transform 0.4s cubic-bezier(0.32,0.72,0,1)";
-        el.style.transform = "translateY(0)";
-        setTimeout(() => { el.style.transition = ""; }, 400);
-      }
       cleanup();
+      if (!fullRef.current && (velocity > 0.45 || lastDelta > (el.offsetHeight || 400) * 0.3)) {
+        // Dispensar pelo arrasto: o sheet desce pelo transform e só o fundo usa a animação de saída.
+        closingRef.current = true;
+        setClosing("dragged");
+        settle("translateY(105%)", `transform ${SLIDE_MS}ms cubic-bezier(0.32,0.72,0,1)`);
+        clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(onClose, SLIDE_MS);
+      } else settle("translateY(0)", `transform 0.4s cubic-bezier(0.32,0.72,0,1), ${SHEET_TRANSITION}`);
     };
+    // Gesto cancelado pelo sistema (ligação, borda): volta ao lugar, nunca dispensa.
+    const onCancel = () => { cleanup(); settle("translateY(0)", `transform 0.4s cubic-bezier(0.32,0.72,0,1), ${SHEET_TRANSITION}`); };
+    cleanupRef.current = cleanup;
     document.addEventListener("touchmove", onMove, { passive: true });
     document.addEventListener("touchend", onEnd);
+    document.addEventListener("touchcancel", onCancel);
   };
 
   return <div style={{ position: "fixed", inset: 0, zIndex: 49, display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-    <div aria-hidden="true" onClick={requestClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)", animation: closing ? "backdropOut 0.38s ease-in both" : "backdropIn 0.22s ease-out both" }} />
+    <div aria-hidden="true" onClick={requestClose} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.45)", animation: closing ? `backdropOut ${SLIDE_MS}ms ease-in both` : "backdropIn 0.22s ease-out both" }} />
     <div ref={(node) => { sheetRef.current = node; if (dialogRef) dialogRef.current = node; }} role="dialog" aria-modal="true" aria-label={ariaLabel}
       style={{ position: "relative", background: T.surface, display: "flex", flexDirection: "column", willChange: "transform",
-        borderRadius: full ? 0 : "24px 24px 0 0", maxHeight: full ? "100dvh" : "72dvh", height: full ? "100dvh" : undefined,
-        paddingTop: full ? "env(safe-area-inset-top, 0px)" : 0,
-        transition: "max-height 0.38s cubic-bezier(0.32,0.72,0,1), border-radius 0.2s ease",
-        animation: closing ? "sheetDown 0.38s cubic-bezier(0.32,0.72,0,1) both" : "sheetUp 0.5s cubic-bezier(0.32,0.72,0,1) both",
+        borderRadius: full ? 0 : "24px 24px 0 0", height: full ? "100dvh" : "72dvh", maxHeight: "100dvh",
+        paddingTop: full ? "env(safe-area-inset-top, 0px)" : 0, transition: SHEET_TRANSITION,
+        // A entrada preenche só para trás: um `forwards` seguraria o transform e o arrasto não moveria o sheet.
+        animation: closing === "animated" ? `sheetDown ${SLIDE_MS}ms cubic-bezier(0.32,0.72,0,1) both` : closing ? "none" : "sheetUp 0.5s cubic-bezier(0.32,0.72,0,1) backwards",
         boxShadow: "0 -2px 0 rgba(0,0,0,0.05), 0 -8px 32px rgba(0,0,0,0.14), 0 -24px 80px rgba(0,0,0,0.08)" }}>
       <div onTouchStart={onHandleTouchStart} aria-hidden="true" style={{ padding: "12px 0 8px", flex: "none", cursor: "grab", userSelect: "none", touchAction: "none", display: "flex", flexDirection: "column", alignItems: "center", gap: 4, minHeight: 44, boxSizing: "border-box" }}>
         <div style={{ width: 36, height: 4, borderRadius: 99, background: "rgba(0,0,0,0.18)" }} />
