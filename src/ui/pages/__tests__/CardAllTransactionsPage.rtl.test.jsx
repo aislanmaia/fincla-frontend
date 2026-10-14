@@ -166,7 +166,7 @@ describe("CardAllTransactionsPage", () => {
     await userEvent.setup().click(within(sheet).getByRole("button", { name: "← Voltar" }));
     expect(within(sheet).getByRole("button", { name: "Categoria" })).toHaveFocus();
     await userEvent.setup().click(within(sheet).getByRole("button", { name: "Fechar filtros" }));
-    await userEvent.setup().click(screen.getByRole("button", { name: /Mercado/ }));
+    await userEvent.setup().click(within(screen.getByRole("listitem")).getByRole("button", { name: /Mercado/ }));
     expect(screen.getByRole("dialog", { name: "Detalhes do lançamento" })).toHaveTextContent("Mercado");
     await userEvent.setup().keyboard("{Escape}");
     expect(screen.queryByRole("dialog", { name: "Detalhes do lançamento" })).not.toBeInTheDocument();
@@ -670,23 +670,30 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(screen.getByRole("dialog", { name: "Categorizar lançamentos" })).toHaveTextContent("1 lançamento selecionado");
   });
 
-  it("no celular o Assistente é um botão flutuante com selo e abre como bottom sheet", async () => {
+  it("no celular o Assistente é um aviso fixo na tela e abre como bottom sheet", async () => {
     withLedger([{ id: 21, date: "2026-10-02", description: "Sem dono", value: 9, value_currency: "BRL", type: "expense", status: "confirmed" }, ledger[1]]);
     render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
     const user = userEvent.setup();
     await screen.findByText("Sem dono");
-    const button = screen.getByRole("button", { name: /Assistente/ });
-    expect(button.parentElement).toHaveStyle({ position: "fixed" });
-    expect(screen.getAllByRole("button", { name: /Assistente/ })).toHaveLength(1);
-    expect(screen.getByLabelText("1 alertas")).toBeInTheDocument();
-    await user.click(button);
+    const banner = screen.getByRole("button", { name: /1 alerta para revisar/ });
+    expect(banner).toHaveTextContent("1 item sem categoria");
+    expect(screen.queryAllByRole("button", { name: /Assistente/ })).toHaveLength(0);
+    await user.click(banner);
     const sheet = screen.getByRole("dialog", { name: "Assistente" });
     expect(sheet.firstElementChild).toHaveStyle({ width: "100%", borderRadius: "18px 18px 0 0" });
     await user.click(within(sheet).getByRole("button", { name: "Fechar" }));
     expect(screen.queryByRole("dialog", { name: "Assistente" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Assistente/ })).toHaveFocus();
-    await user.click(screen.getByRole("button", { name: /Filtros/ }));
-    expect(screen.queryByRole("button", { name: /Assistente/ })).not.toBeInTheDocument();
+    expect(banner).toHaveFocus();
+  });
+
+  it("no celular sem alertas o aviso continua visível, neutro, e abre o Assistente", async () => {
+    withLedger([ledger[0]]);
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    const user = userEvent.setup();
+    await screen.findByText(ledger[0].description);
+    expect(screen.queryByText(/para revisar/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^Assistente/ }));
+    expect(screen.getByRole("dialog", { name: "Assistente" })).toBeInTheDocument();
   });
 
   it("no desktop o Assistente continua no cabeçalho e abre como gaveta lateral", async () => {
