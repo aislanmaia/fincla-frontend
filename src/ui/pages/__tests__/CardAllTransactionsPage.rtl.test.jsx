@@ -1113,4 +1113,32 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     await user.click(within(sheet).getByRole("button", { name: "← Voltar" }));
     await waitFor(() => expect(facetRequests.at(-1).searchParams.getAll("category").length).toBeGreaterThan(0));
   });
+
+  describe.each([
+    ["Categoria", "Alimentação", "category", "category"],
+    ["Tipo", /^Despesa/, "type", "type"],
+    ["Situação", /^Pagas/, "settled", "settled"],
+  ])("desktop, faceta %s à vista", (rail, option, listParam, facetParam) => {
+    it("o pedido de contagens ignora a seleção da própria faceta e a recupera ao trocar de faceta", async () => {
+      const facetRequests = [];
+      server.use(
+        http.get("*/v1/tags/catalog", () => HttpResponse.json({ categories: [{ id: "food", label: "Alimentação", system_key: "food", color: "#059669" }] })),
+        http.get("*/v1/transactions/facets", ({ request }) => {
+          facetRequests.push(new URL(request.url));
+          return HttpResponse.json({ total: 2, category: [], type: [], tag: [], payment_method: [], settlement: null, recurring: null, value_bucket: [] });
+        }),
+      );
+      render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole("button", { name: "Abrir filtros" }));
+      await user.click(await screen.findByRole("button", { name: new RegExp(`^${rail}`) }));
+      await waitFor(() => expect(facetRequests.length).toBeGreaterThan(0));
+      await user.click(await screen.findByRole("button", { name: option }));
+      await waitFor(() => expect(requests.at(-1).searchParams.has(listParam)).toBe(true));
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      expect(facetRequests.some((url) => url.searchParams.has(facetParam))).toBe(false);
+      await user.click(screen.getByRole("button", { name: /^Período/ }));
+      await waitFor(() => expect(facetRequests.at(-1).searchParams.has(facetParam)).toBe(true));
+    });
+  });
 });

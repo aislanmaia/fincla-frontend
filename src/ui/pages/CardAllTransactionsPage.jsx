@@ -392,12 +392,14 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.card, organizationId, ladderKey, filterBlocked, needsLadder]);
 
-  // As categorias do painel são lidas da faceta `tag`, que mantém o filtro `category` aplicado; com a faceta
-  // aberta o contador de cada opção tem de ignorar a seleção da própria Categoria (OU, não E), como em /transactions.
-  // As demais facetas (tipo, tag, status, valor) já têm o filtro próprio descartado pelo backend ao contar a si mesmas.
-  const dropCategory = filtersOpen && activeFacet === "categoria" && (isMobile ? mobileFacetOpen : !inspected);
-  const facetFilter = dropCategory ? omitKeys(aggregateFilter, ["category"]) : aggregateFilter;
-  // A chave descreve o pedido enviado: marcar uma categoria com a faceta aberta não o muda e não deve piscar os números.
+  // Com uma faceta à vista, o contador de cada opção tem de ignorar a seleção da própria faceta (OU, não E), como em
+  // /transactions. Categoria: o painel lê da faceta `tag`, que mantém o filtro `category`. Tipo e Status: o "Todos" é o
+  // `total` da resposta, que carrega o filtro próprio. As demais (tag, valor) o backend já descarta ao contar a si mesmas.
+  // Tipo vindo do recorte "Estornos" não é seleção da faceta e fica.
+  const facetInView = filtersOpen && (isMobile ? mobileFacetOpen : !inspected) ? activeFacet : null;
+  const facetOwnKeys = { categoria: ["category"], situacao: ["settled"], tipo: kind === "refund" ? [] : ["type"] }[facetInView] ?? [];
+  const facetFilter = facetOwnKeys.length ? omitKeys(aggregateFilter, facetOwnKeys) : aggregateFilter;
+  // A chave descreve o pedido enviado: marcar uma opção da faceta à vista não o muda e não deve piscar os números.
   const facetKey = `${state.card?.id ?? "none"}:${cardScope}:${JSON.stringify(facetFilter)}`;
   useEffect(() => {
     if (!state.card || filterBlocked || !filtersOpen) return undefined;
