@@ -391,25 +391,30 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.card, organizationId, ladderKey, filterBlocked, needsLadder]);
 
+  // As categorias do painel são lidas da faceta `tag`, que mantém o filtro `category` aplicado; com a faceta
+  // aberta o contador de cada opção tem de ignorar a seleção da própria Categoria (OU, não E), como em /transactions.
+  const dropCategory = filtersOpen && activeFacet === "categoria" && (!isMobile || mobileFacetOpen);
+  const facetFilter = dropCategory ? Object.fromEntries(Object.entries(aggregateFilter).filter(([key]) => key !== "category")) : aggregateFilter;
+  const facetKey = `${summaryKey}:${dropCategory ? "no-category" : ""}`;
   useEffect(() => {
     if (!state.card || filterBlocked || !filtersOpen) return undefined;
     let active = true;
-    setFacetState({ key: summaryKey, data: null });
+    setFacetState({ key: facetKey, data: null });
     getTransactionsFacets({
       organization_id: organizationId,
       ...(cardScope === "current" ? { credit_card_id: state.card.id } : {}),
-      ...aggregateFilter,
+      ...facetFilter,
       localize_labels: true,
       locale: "pt-BR",
     }).then((data) => {
-      if (active) setFacetState({ key: summaryKey, data });
+      if (active) setFacetState({ key: facetKey, data });
     }).catch(() => {
-      if (active) setFacetState({ key: summaryKey, data: null });
+      if (active) setFacetState({ key: facetKey, data: null });
     });
     return () => { active = false; };
-  // summaryKey carries queryFilter and cardScope; closed dock needs no facets call.
+  // facetKey carries queryFilter, cardScope and the open facet; closed dock needs no facets call.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.card, organizationId, summaryKey, filterBlocked, filtersOpen]);
+  }, [state.card, organizationId, facetKey, filterBlocked, filtersOpen]);
 
   useEffect(() => {
     setSelectedRows([]);
@@ -497,7 +502,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const currentSummary = summaryState.key === summaryKey ? summaryState.data : null;
   const currentSummaryLoading = summaryState.key !== summaryKey || summaryState.loading;
   const currentSummaryError = summaryState.key === summaryKey && summaryState.error;
-  const currentFacets = facetState.key === summaryKey ? facetState.data : null;
+  const currentFacets = facetState.key === facetKey ? facetState.data : null;
   const facetCounts = {
     counts: currentFacets,
     total: currentFacets?.total ?? null,
