@@ -47,6 +47,8 @@ const PAGE_SIZE = 30;
 // O ledger lê 12 faturas para o seletor de recorte.
 const INVOICE_WINDOW = 12;
 const omitKeys = (object, keys) => Object.fromEntries(Object.entries(object).filter(([key]) => !keys.includes(key)));
+// Filtro que cada faceta possui: sai do pedido de contagens enquanto ela está à vista (OU, não E).
+const FACET_OWN_KEYS = { categoria: ["category"], situacao: ["settled"], tipo: ["type"] };
 const FACETS = ["periodo", "categoria", "tag", "cartao", "tipo", "situacao", "valor"];
 const FACET_LABELS = { periodo: "Período", categoria: "Categoria", tag: "Etiquetas", cartao: "Cartão", tipo: "Tipo", situacao: "Status", valor: "Valor" };
 const pendingCards = new Map();
@@ -396,13 +398,16 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   // /transactions. Categoria: o painel lê da faceta `tag`, que mantém o filtro `category`. Tipo e Status: o "Todos" é o
   // `total` da resposta, que carrega o filtro próprio. As demais (tag, valor) o backend já descarta ao contar a si mesmas.
   // Tipo vindo do recorte "Estornos" não é seleção da faceta e fica.
-  const facetInView = filtersOpen && (isMobile ? mobileFacetOpen : !inspected) ? activeFacet : null;
-  const facetOwnKeys = { categoria: ["category"], situacao: ["settled"], tipo: kind === "refund" ? [] : ["type"] }[facetInView] ?? [];
+  const facetInView = filtersOpen && (!isMobile || mobileFacetOpen) ? activeFacet : null;
+  const facetOwnKeys = Object.hasOwn(FACET_OWN_KEYS, facetInView) && !(facetInView === "tipo" && kind === "refund") ? FACET_OWN_KEYS[facetInView] : [];
   const facetFilter = facetOwnKeys.length ? omitKeys(aggregateFilter, facetOwnKeys) : aggregateFilter;
   // A chave descreve o pedido enviado: marcar uma opção da faceta à vista não o muda e não deve piscar os números.
-  const facetKey = `${state.card?.id ?? "none"}:${cardScope}:${JSON.stringify(facetFilter)}`;
+  // `reload` entra porque salvar um lançamento muda as contagens sem mudar nenhum filtro.
+  const facetKey = `${state.card?.id ?? "none"}:${cardScope}:${reload}:${JSON.stringify(facetFilter)}`;
   useEffect(() => {
     if (!state.card || filterBlocked || !filtersOpen) return undefined;
+    // Já temos as contagens deste pedido (o detalhe abriu por cima do painel e fechou): não refaz nem apaga.
+    if (facetState.key === facetKey && facetState.data) return undefined;
     let active = true;
     setFacetState({ key: facetKey, data: null });
     getTransactionsFacets({
