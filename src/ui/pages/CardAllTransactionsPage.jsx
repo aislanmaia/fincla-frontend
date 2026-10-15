@@ -46,6 +46,7 @@ import { T } from "../tokens.js";
 const PAGE_SIZE = 30;
 // O ledger lê 12 faturas para o seletor de recorte.
 const INVOICE_WINDOW = 12;
+const omitKeys = (object, keys) => Object.fromEntries(Object.entries(object).filter(([key]) => !keys.includes(key)));
 const FACETS = ["periodo", "categoria", "tag", "cartao", "tipo", "situacao", "valor"];
 const FACET_LABELS = { periodo: "Período", categoria: "Categoria", tag: "Etiquetas", cartao: "Cartão", tipo: "Tipo", situacao: "Status", valor: "Valor" };
 const pendingCards = new Map();
@@ -280,7 +281,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     sort_by: sortField,
     sort_order: sort.dir === "asc" ? "asc" : "desc",
   };
-  const aggregateFilter = Object.fromEntries(Object.entries(queryFilter).filter(([key]) => key !== "sort_by" && key !== "sort_order"));
+  const aggregateFilter = omitKeys(queryFilter, ["sort_by", "sort_order"]);
   const filterKey = JSON.stringify({ queryFilter, cats: filter.cats, tags: filter.tags, blocked: filterBlocked, cardScope, reload });
   const groupedByDate = prefs.grouped && sortField === "date";
   const collapsible = groupedByDate && !filter.search.trim();
@@ -375,7 +376,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   // Várias faturas: a escada tira o recorte de fatura. Uma semana marcada: tira o recorte de datas, para as outras semanas continuarem no gráfico.
   const needsLadder = invoiceMode && (selectedInvoiceIds.length >= 2 || Boolean(activeWeek));
   const ladderDrop = (selectedInvoiceIds?.length ?? 0) >= 2 ? ["invoice_id"] : ["date_start", "date_end"];
-  const ladderFilter = Object.fromEntries(Object.entries(aggregateFilter).filter(([key]) => !ladderDrop.includes(key)));
+  const ladderFilter = omitKeys(aggregateFilter, ladderDrop);
   const ladderKey = `${state.card?.id ?? "none"}:${JSON.stringify(ladderFilter)}`;
   useEffect(() => {
     if (!state.card || filterBlocked || !needsLadder) return undefined;
@@ -393,9 +394,11 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
 
   // As categorias do painel são lidas da faceta `tag`, que mantém o filtro `category` aplicado; com a faceta
   // aberta o contador de cada opção tem de ignorar a seleção da própria Categoria (OU, não E), como em /transactions.
-  const dropCategory = filtersOpen && activeFacet === "categoria" && (!isMobile || mobileFacetOpen);
-  const facetFilter = dropCategory ? Object.fromEntries(Object.entries(aggregateFilter).filter(([key]) => key !== "category")) : aggregateFilter;
-  const facetKey = `${summaryKey}:${dropCategory ? "no-category" : ""}`;
+  // As demais facetas (tipo, tag, status, valor) já têm o filtro próprio descartado pelo backend ao contar a si mesmas.
+  const dropCategory = filtersOpen && activeFacet === "categoria" && (isMobile ? mobileFacetOpen : !inspected);
+  const facetFilter = dropCategory ? omitKeys(aggregateFilter, ["category"]) : aggregateFilter;
+  // A chave descreve o pedido enviado: marcar uma categoria com a faceta aberta não o muda e não deve piscar os números.
+  const facetKey = `${state.card?.id ?? "none"}:${cardScope}:${JSON.stringify(facetFilter)}`;
   useEffect(() => {
     if (!state.card || filterBlocked || !filtersOpen) return undefined;
     let active = true;

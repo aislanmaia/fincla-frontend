@@ -1103,10 +1103,12 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     await user.click(await screen.findByRole("button", { name: "Filtros" }));
     const sheet = screen.getByRole("dialog", { name: "Filtros dos lançamentos" });
     await user.click(within(sheet).getByRole("button", { name: /^Categoria:/ }));
+    await waitFor(() => expect(facetRequests.length).toBeGreaterThan(0));
     await user.click(await within(sheet).findByRole("button", { name: "Alimentação" }));
     await waitFor(() => expect(requests.at(-1).searchParams.getAll("category").length).toBeGreaterThan(0));
-    await waitFor(() => expect(facetRequests.length).toBeGreaterThan(1));
-    expect(facetRequests.at(-1).searchParams.has("category")).toBe(false);
+    // Nenhum pedido de contagem, antes ou depois da marcação, leva a categoria com a faceta à vista.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(facetRequests.some((url) => url.searchParams.has("category"))).toBe(false);
     // Voltando às facetas, a contagem das outras recupera o filtro de categoria.
     await user.click(within(sheet).getByRole("button", { name: "← Voltar" }));
     await waitFor(() => expect(facetRequests.at(-1).searchParams.getAll("category").length).toBeGreaterThan(0));
