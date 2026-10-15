@@ -1113,4 +1113,53 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     await user.click(within(sheet).getByRole("button", { name: "← Voltar" }));
     await waitFor(() => expect(facetRequests.at(-1).searchParams.getAll("category").length).toBeGreaterThan(0));
   });
+
+  // Resposta que reproduz o backend: o `total` e a faceta `tag` carregam o filtro da própria faceta quando ele vai no pedido.
+  const facetsLikeBackend = (facetRequests) => http.get("*/v1/transactions/facets", ({ request }) => {
+    const url = new URL(request.url);
+    facetRequests.push(url);
+    const has = (key) => url.searchParams.has(key);
+    return HttpResponse.json({
+      total: has("settled") ? 0 : has("type") ? 28 : 31,
+      category: [], type: [], payment_method: [], settlement: null, recurring: null, value_bucket: [],
+      tag: [{ value: "health", label: "Saúde", count: has("category") ? 0 : 6 }],
+    });
+  });
+  const categories = [{ id: "food", label: "Alimentação", system_key: "food", color: "#059669" }, { id: "health", label: "Saúde", system_key: "health", color: "#dc2626" }];
+
+  describe.each([
+    ["Categoria", "Alimentação", "category", "Saúde", "6"],
+    ["Tipo", /^Despesa/, "type", /^Todos/, "31"],
+    ["Situação", /^Pagas/, "settled", /^Todas/, "31"],
+  ])("faceta %s à vista", (rail, option, param, probe, expected) => {
+    const check = async (mobile) => {
+      const facetRequests = [];
+      server.use(http.get("*/v1/tags/catalog", () => HttpResponse.json({ categories })), facetsLikeBackend(facetRequests));
+      render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile={mobile} />);
+      const user = userEvent.setup();
+      await user.click(await screen.findByRole("button", { name: mobile ? "Filtros" : "Abrir filtros" }));
+      const scope = mobile ? within(screen.getByRole("dialog", { name: "Filtros dos lançamentos" })) : screen;
+      await user.click(await scope.findByRole("button", { name: mobile ? new RegExp(`^${rail === "Situação" ? "Status" : rail}:`) : new RegExp(`^${rail}`) }));
+      await user.click(await scope.findByRole("button", { name: option }));
+      await waitFor(() => expect(requests.at(-1).searchParams.has(param)).toBe(true));
+      // O que o usuário vê: o contador da opção de prova segue o total sem a seleção da própria faceta.
+      await waitFor(() => expect(scope.getByRole("button", { name: probe })).toHaveTextContent(expected));
+      expect(facetRequests.some((url) => url.searchParams.has(param))).toBe(false);
+    };
+    it("no desktop o contador ignora a seleção da própria faceta", () => check(false));
+    it("no celular o contador ignora a seleção da própria faceta", () => check(true));
+  });
+
+  it("o recorte Estornos não é seleção da faceta Tipo e continua no pedido de contagens", async () => {
+    const facetRequests = [];
+    route.search = { fc_kind: "refund" };
+    server.use(facetsLikeBackend(facetRequests));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Abrir filtros" }));
+    await user.click(await screen.findByRole("button", { name: /^Tipo/ }));
+    await waitFor(() => expect(facetRequests.length).toBeGreaterThan(0));
+    expect(facetRequests.at(-1).searchParams.get("type")).toBe("refund");
+    route.search = {};
+  });
 });

@@ -47,6 +47,8 @@ const PAGE_SIZE = 30;
 // O ledger lê 12 faturas para o seletor de recorte.
 const INVOICE_WINDOW = 12;
 const omitKeys = (object, keys) => Object.fromEntries(Object.entries(object).filter(([key]) => !keys.includes(key)));
+// Filtro que cada faceta possui: sai do pedido de contagens enquanto ela está à vista (OU, não E).
+const FACET_OWN_KEYS = { categoria: ["category"], situacao: ["settled"], tipo: ["type"] };
 const FACETS = ["periodo", "categoria", "tag", "cartao", "tipo", "situacao", "valor"];
 const FACET_LABELS = { periodo: "Período", categoria: "Categoria", tag: "Etiquetas", cartao: "Cartão", tipo: "Tipo", situacao: "Status", valor: "Valor" };
 const pendingCards = new Map();
@@ -392,15 +394,20 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.card, organizationId, ladderKey, filterBlocked, needsLadder]);
 
-  // As categorias do painel são lidas da faceta `tag`, que mantém o filtro `category` aplicado; com a faceta
-  // aberta o contador de cada opção tem de ignorar a seleção da própria Categoria (OU, não E), como em /transactions.
-  // As demais facetas (tipo, tag, status, valor) já têm o filtro próprio descartado pelo backend ao contar a si mesmas.
-  const dropCategory = filtersOpen && activeFacet === "categoria" && (isMobile ? mobileFacetOpen : !inspected);
-  const facetFilter = dropCategory ? omitKeys(aggregateFilter, ["category"]) : aggregateFilter;
-  // A chave descreve o pedido enviado: marcar uma categoria com a faceta aberta não o muda e não deve piscar os números.
-  const facetKey = `${state.card?.id ?? "none"}:${cardScope}:${JSON.stringify(facetFilter)}`;
+  // Com uma faceta à vista, o contador de cada opção tem de ignorar a seleção da própria faceta (OU, não E), como em
+  // /transactions. Categoria: o painel lê da faceta `tag`, que mantém o filtro `category`. Tipo e Status: o "Todos" é o
+  // `total` da resposta, que carrega o filtro próprio. As demais (tag, valor) o backend já descarta ao contar a si mesmas.
+  // Tipo vindo do recorte "Estornos" não é seleção da faceta e fica.
+  const facetInView = filtersOpen && (!isMobile || mobileFacetOpen) ? activeFacet : null;
+  const facetOwnKeys = Object.hasOwn(FACET_OWN_KEYS, facetInView) && !(facetInView === "tipo" && kind === "refund") ? FACET_OWN_KEYS[facetInView] : [];
+  const facetFilter = facetOwnKeys.length ? omitKeys(aggregateFilter, facetOwnKeys) : aggregateFilter;
+  // A chave descreve o pedido enviado: marcar uma opção da faceta à vista não o muda e não deve piscar os números.
+  // `reload` entra porque salvar um lançamento muda as contagens sem mudar nenhum filtro.
+  const facetKey = `${state.card?.id ?? "none"}:${cardScope}:${reload}:${JSON.stringify(facetFilter)}`;
   useEffect(() => {
     if (!state.card || filterBlocked || !filtersOpen) return undefined;
+    // Já temos as contagens deste pedido (o detalhe abriu por cima do painel e fechou): não refaz nem apaga.
+    if (facetState.key === facetKey && facetState.data) return undefined;
     let active = true;
     setFacetState({ key: facetKey, data: null });
     getTransactionsFacets({
