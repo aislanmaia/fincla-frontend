@@ -1088,4 +1088,29 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(dialog).toHaveTextContent("1 lançamento");
     expect(within(dialog).getByRole("button", { name: "Exportar CSV" })).toBeEnabled();
   });
+
+  it("com a faceta Categoria aberta, o pedido de contagens ignora as categorias marcadas (OU, não E)", async () => {
+    const facetRequests = [];
+    server.use(
+      http.get("*/v1/tags/catalog", () => HttpResponse.json({ categories: [{ id: "food", label: "Alimentação", system_key: "food", color: "#059669" }, { id: "health", label: "Saúde", system_key: "health", color: "#dc2626" }] })),
+      http.get("*/v1/transactions/facets", ({ request }) => {
+        facetRequests.push(new URL(request.url));
+        return HttpResponse.json({ total: 2, category: [], type: [], tag: [], payment_method: [], settlement: null, recurring: null, value_bucket: [] });
+      }),
+    );
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Filtros" }));
+    const sheet = screen.getByRole("dialog", { name: "Filtros dos lançamentos" });
+    await user.click(within(sheet).getByRole("button", { name: /^Categoria:/ }));
+    await waitFor(() => expect(facetRequests.length).toBeGreaterThan(0));
+    await user.click(await within(sheet).findByRole("button", { name: "Alimentação" }));
+    await waitFor(() => expect(requests.at(-1).searchParams.getAll("category").length).toBeGreaterThan(0));
+    // Nenhum pedido de contagem, antes ou depois da marcação, leva a categoria com a faceta à vista.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(facetRequests.some((url) => url.searchParams.has("category"))).toBe(false);
+    // Voltando às facetas, a contagem das outras recupera o filtro de categoria.
+    await user.click(within(sheet).getByRole("button", { name: "← Voltar" }));
+    await waitFor(() => expect(facetRequests.at(-1).searchParams.getAll("category").length).toBeGreaterThan(0));
+  });
 });
