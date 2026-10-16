@@ -601,11 +601,17 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const otherAlerts = alerts.filter((item) => item.kind !== "duplicate");
   const alertSummary = alerts.length === 1 ? `${alerts[0].title}: ${alerts[0].detail}` : [...(dupGroups ? [`${dupGroups} ${dupGroups === 1 ? "possível duplicata" : "possíveis duplicatas"}`] : []), ...otherAlerts.map((item) => item.title)].join(" · ");
   // Em "Todos os cartões" o gráfico de saídas some (ele é por fatura de um cartão): o aviso diz por quê e leva de volta.
-  const allCardsNotice = <div role="status" style={{ ...G, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", padding: "12px 16px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, fontSize: 13, color: T.inkMid }}>
+  const scopeBackFocusRef = useRef(false);
+  const outflowsSlotRef = useRef(null);
+  useEffect(() => {
+    if (cardScope === "current" && scopeBackFocusRef.current) { scopeBackFocusRef.current = false; outflowsSlotRef.current?.focus(); }
+  }, [cardScope]);
+  const changeScope = (value) => { setCardScope(value); setSummarySheetOpen(false); };
+  const allCardsNotice = <div style={{ ...G, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", padding: "12px 16px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, fontSize: 13, color: T.inkMid, boxSizing: "border-box" }}>
     <span style={{ flex: "1 1 200px", minWidth: 0 }}>As saídas por fatura valem para um cartão.</span>
-    <button type="button" onClick={() => { setCardScope("current"); setSummarySheetOpen(false); }} style={{ ...G, minHeight: 36, padding: "0 14px", border: `1px solid ${T.ink}`, borderRadius: 99, background: T.surface, color: T.ink, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Ver só este cartão</button>
+    <button type="button" onClick={() => { scopeBackFocusRef.current = true; changeScope("current"); }} style={{ ...G, minHeight: isMobile ? 44 : 36, padding: "0 14px", border: `1px solid ${T.ink}`, borderRadius: 99, background: T.surface, color: T.ink, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Ver só este cartão</button>
   </div>;
-  const cardScopePanel = <CardScopePanel card={card} scope={cardScope} onScope={(value) => { setCardScope(value); setSummarySheetOpen(false); }} />;
+  const cardScopePanel = <CardScopePanel card={card} scope={cardScope} onScope={changeScope} />;
 
   const searchTerm = filter.search.trim();
   const searchEmpty = isMobile && Boolean(searchTerm) && debouncedSearch === searchTerm && !state.loading && !state.error && !noInvoice && !catalogBlocked && state.rows.length === 0;
@@ -626,13 +632,14 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     {state.missing && <Card role="status" style={{ padding: 18 }}>Cartão não encontrado ou sem acesso.</Card>}
     {state.error && !card && <Card role="alert" style={{ padding: 18 }}>Não foi possível carregar o cartão.</Card>}
     {card && <>
-      {cardScope === "current" && !isMobile && <div style={{ display: "grid", gridTemplateColumns: "minmax(300px,3fr) minmax(0,7fr)", gap: 12, minWidth: 0 }}>
+      {!isMobile && <div style={{ display: "grid", gridTemplateColumns: "minmax(300px,3fr) minmax(0,7fr)", gap: 12, minWidth: 0 }}>
         <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} isCategorySelected={isCategorySelected} onToggleCategory={toggleCategory} />
-        <CardOutflowsChart outflows={outflows} currency={card.currency} loading={outflowsLoading} error={outflowsError} message={outflowsMessage} onPickInvoice={pickInvoice} onPickWeek={pickWeek} />
+        {/* Foco: o botão do aviso some ao voltar para o cartão; o foco vai para este espaço, não para o body. */}
+        <div ref={outflowsSlotRef} tabIndex={-1} style={{ minWidth: 0, outline: "none", display: "flex", flexDirection: "column" }}>
+          {cardScope === "current" ? <CardOutflowsChart outflows={outflows} currency={card.currency} loading={outflowsLoading} error={outflowsError} message={outflowsMessage} onPickInvoice={pickInvoice} onPickWeek={pickWeek} /> : allCardsNotice}
+        </div>
       </div>}
-      {cardScope === "all" && !isMobile && allCardsNotice}
       {isMobile && <LedgerSummaryRow summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} onOpen={() => setSummarySheetOpen(true)} />}
-      {cardScope === "all" && !isMobile && <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} isCategorySelected={isCategorySelected} onToggleCategory={toggleCategory} />}
       {!isMobile && <TransactionsFilterBar filter={filter} hideSavedViews hideFacets searchInput={filter.search} setSearchInput={filter.setSearch} searchPlaceholder="Buscar por descrição…" searchInputRef={searchInputRef} barChips={filterChips} onChipsBudget={setChipsBudget} barTrailing={<>{historyButtons}<TransactionsListDisplayControls
         density={prefs.density} grouped={groupedByDate} canGroup={sortField === "date"} {...dayControls}
         onDensityChange={(density) => setPreference({ density })}

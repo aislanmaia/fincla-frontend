@@ -1175,6 +1175,8 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     await user.click(screen.getByRole("button", { name: "Ver só este cartão" }));
     await waitFor(() => expect(requests.at(-1).searchParams.has("credit_card_id")).toBe(true));
     expect(screen.queryByText("As saídas por fatura valem para um cartão.")).not.toBeInTheDocument();
+    // O botão sumiu: o foco não pode cair no body.
+    expect(document.body).not.toHaveFocus();
   });
 
   it("em todos os cartões o sheet de Resumo avisa e o botão fecha o sheet e volta a este cartão", async () => {
