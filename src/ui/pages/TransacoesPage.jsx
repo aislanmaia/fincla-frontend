@@ -4085,7 +4085,7 @@ function TransacoesPageBody({
               display:"flex", flexDirection:"column",
               animation: sheetClosing
                 ? "sheetDown 0.38s cubic-bezier(0.32,0.72,0,1) both"
-                : "sheetUp 0.5s cubic-bezier(0.32,0.72,0,1) both",
+                : "sheetUp 0.5s cubic-bezier(0.32,0.72,0,1) backwards",
               willChange:"transform",
               boxShadow:"0 -2px 0 rgba(0,0,0,0.05), 0 -8px 32px rgba(0,0,0,0.14), 0 -24px 80px rgba(0,0,0,0.08)" }}>
             {/* Handle — ONLY drag zone. Touch here = dismiss/expand. Content scroll is unaffected. */}

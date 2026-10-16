@@ -671,6 +671,19 @@ describe("<TransacoesPage> — integração da Variação C", () => {
     });
   });
 
+  it("mobile: a entrada do sheet de filtros não segura o transform, para a alça poder arrastá-lo", async () => {
+    Object.defineProperty(window, "innerWidth", { configurable: true, writable: true, value: 375 });
+    window.dispatchEvent(new Event("resize"));
+    renderPage({ isMobile: true });
+    await openFilters();
+    const handle = document.querySelector('[style*="cursor: grab"]');
+    const sheet = handle.parentElement;
+    // `both` seguraria o keyframe final (transform: translateY(0)) e anularia o transform inline do arrasto.
+    expect(sheet.style.animation).toContain("sheetUp");
+    expect(sheet.style.animation).toContain("backwards");
+    expect(sheet.style.animation).not.toMatch(/\b(both|forwards)\b/);
+  });
+
   it("mobile: o ✕ do cabeçalho do sheet fecha o sheet", async () => {
     // Cobertura que não existia em lugar nenhum: o teste acima apontava para o
     // ✕ por acidente (ele se chamava "Fechar filtros") e passou a apontar para o
