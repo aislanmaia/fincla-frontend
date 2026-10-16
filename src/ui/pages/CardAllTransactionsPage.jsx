@@ -562,7 +562,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const currentLadder = ladderState.key === ladderKey ? ladderState : null;
   const outflowsLoading = needsLadder ? !currentLadder || currentLadder.loading : currentSummaryLoading;
   const outflowsError = needsLadder ? Boolean(currentLadder?.error) : currentSummaryError;
-  const outflowsMessage = cardScope === "all" ? "As saídas por fatura valem para um cartão. Volte para “este cartão”." : noInvoice ? "Marque ao menos uma fatura pra ver as saídas." : null;
+  const outflowsMessage = noInvoice ? "Marque ao menos uma fatura pra ver as saídas." : null;
   const outflows = buildOutflows({ mode: outflowsKind, summary: currentSummary, ladder: needsLadder ? currentLadder?.data : null, selectedKeys: invoiceMode ? invoiceKeys ?? [] : [], selectableKeys: new Set(invoiceOpts.filter((option) => option.invoiceId != null).map((option) => option.key)), selectedWeek: activeWeek?.from ?? null, currency: state.card?.currency });
   const removableChip = (testid, label, onRemove) => <button type="button" data-testid={testid} onClick={onRemove} aria-label={`Remover filtro: ${label}`} style={{ ...G, display: "inline-flex", alignItems: "center", gap: 4, border: `1px solid ${T.border}`, borderRadius: 8, background: T.blueLight, color: T.blue, padding: "8px 10px", fontSize: 11, cursor: "pointer" }}>{label} <X size={12} /></button>;
   const kindChip = kind ? removableChip("kind-chip", KIND_LABELS[kind], () => setKind(null)) : null;
@@ -600,6 +600,11 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const dupGroups = alerts.filter((item) => item.kind === "duplicate").length;
   const otherAlerts = alerts.filter((item) => item.kind !== "duplicate");
   const alertSummary = alerts.length === 1 ? `${alerts[0].title}: ${alerts[0].detail}` : [...(dupGroups ? [`${dupGroups} ${dupGroups === 1 ? "possível duplicata" : "possíveis duplicatas"}`] : []), ...otherAlerts.map((item) => item.title)].join(" · ");
+  // Em "Todos os cartões" o gráfico de saídas some (ele é por fatura de um cartão): o aviso diz por quê e leva de volta.
+  const allCardsNotice = <div role="status" style={{ ...G, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", padding: "12px 16px", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, fontSize: 13, color: T.inkMid }}>
+    <span style={{ flex: "1 1 200px", minWidth: 0 }}>As saídas por fatura valem para um cartão.</span>
+    <button type="button" onClick={() => { setCardScope("current"); setSummarySheetOpen(false); }} style={{ ...G, minHeight: 36, padding: "0 14px", border: `1px solid ${T.ink}`, borderRadius: 99, background: T.surface, color: T.ink, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>Ver só este cartão</button>
+  </div>;
   const cardScopePanel = <CardScopePanel card={card} scope={cardScope} onScope={(value) => { setCardScope(value); setSummarySheetOpen(false); }} />;
 
   const searchTerm = filter.search.trim();
@@ -625,6 +630,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
         <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} isCategorySelected={isCategorySelected} onToggleCategory={toggleCategory} />
         <CardOutflowsChart outflows={outflows} currency={card.currency} loading={outflowsLoading} error={outflowsError} message={outflowsMessage} onPickInvoice={pickInvoice} onPickWeek={pickWeek} />
       </div>}
+      {cardScope === "all" && !isMobile && allCardsNotice}
       {isMobile && <LedgerSummaryRow summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} onOpen={() => setSummarySheetOpen(true)} />}
       {cardScope === "all" && !isMobile && <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} isCategorySelected={isCategorySelected} onToggleCategory={toggleCategory} />}
       {!isMobile && <TransactionsFilterBar filter={filter} hideSavedViews hideFacets searchInput={filter.search} setSearchInput={filter.setSearch} searchPlaceholder="Buscar por descrição…" searchInputRef={searchInputRef} barChips={filterChips} onChipsBudget={setChipsBudget} barTrailing={<>{historyButtons}<TransactionsListDisplayControls
@@ -676,7 +682,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
       <div className="fincla-scroll" style={{ background: T.bg, borderRadius: "18px 18px 0 0", maxHeight: "85dvh", width: "100%", padding: 16, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }} onClick={(event) => event.stopPropagation()}>
         <button ref={summaryCloseRef} type="button" aria-label="Fechar resumo" onClick={() => setSummarySheetOpen(false)} style={{ alignSelf: "flex-end", border: 0, background: "none", cursor: "pointer" }}><X size={18} /></button>
         <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} isCategorySelected={isCategorySelected} onToggleCategory={toggleCategory} isMobile />
-        {cardScope === "current" && <CardOutflowsChart outflows={outflows} currency={card?.currency} loading={outflowsLoading} error={outflowsError} message={outflowsMessage} onPickInvoice={pickInvoice} onPickWeek={pickWeek} isMobile />}
+        {cardScope === "current" ? <CardOutflowsChart outflows={outflows} currency={card?.currency} loading={outflowsLoading} error={outflowsError} message={outflowsMessage} onPickInvoice={pickInvoice} onPickWeek={pickWeek} isMobile /> : allCardsNotice}
       </div>
     </div>}
     {filtersOpen && isMobile && <MobileFilterSheet dialogRef={filterDialogRef} closeRef={filterCloseRef} ariaLabel="Filtros dos lançamentos" onClose={closeFilters}
