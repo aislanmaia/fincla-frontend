@@ -14,11 +14,25 @@ export function TransactionsListDisplayControls({ density, grouped, canGroup, on
     const onPointerDown = (event) => {
       if (!containerRef.current?.contains(event.target)) setOpen(null);
     };
+    // Padrão WAI-ARIA de menu: abrir leva o foco ao item marcado (ou ao primeiro); setas, Home e End percorrem os itens.
+    const menuItems = () => [...(containerRef.current?.querySelectorAll('[role="menu"] [role^="menuitem"]') ?? [])];
+    const initial = menuItems();
+    (initial.find((item) => item.getAttribute("aria-checked") === "true") ?? initial[0])?.focus();
     const onKeyDown = (event) => {
       if (event.key === "Escape") {
         setOpen(null);
         (open === "density" ? densityTriggerRef : groupingTriggerRef).current?.focus();
+        return;
       }
+      if (!["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft", "Home", "End"].includes(event.key)) return;
+      const items = menuItems();
+      if (!items.length || !containerRef.current?.contains(document.activeElement)) return;
+      const index = items.indexOf(document.activeElement);
+      const forward = event.key === "ArrowDown" || event.key === "ArrowRight";
+      const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1
+        : index === -1 ? (forward ? 0 : items.length - 1) : (index + (forward ? 1 : -1) + items.length) % items.length;
+      event.preventDefault();
+      items[next].focus();
     };
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);

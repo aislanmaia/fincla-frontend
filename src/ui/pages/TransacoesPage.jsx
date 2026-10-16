@@ -95,6 +95,7 @@ import { getPaymentMethodLabel } from "../features/transactions/filters/paymentM
 import { DisclosureChevron } from "../components/DisclosureChevron.jsx";
 import { usePullToRefresh } from "../features/transactions/usePullToRefresh.js";
 import { detailLabelPtForTag } from "../data/categoryLabels.js";
+import { saveBlob } from "../features/export/saveBlob.js";
 import {
   CAT_COLORS,
   catBg,
@@ -2571,10 +2572,7 @@ function TransacoesPageBody({
       `${t.date},"${t.desc}","${t.cat}","${t.method}","${t.val > 0 ? "+" : ""}${t.val}","${t.status}","${(t.tags || []).join(";")}"`
     );
     const csv = [header, ...rows].join("\n");
-    const blob = new Blob([csv], { type:"text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "transacoes.csv"; a.click();
-    URL.revokeObjectURL(url);
+    saveBlob(new Blob([csv], { type:"text/csv;charset=utf-8;" }), "transacoes.csv");
   };
 
   // ── Detail panel content ──────────────────────────────────────────────────

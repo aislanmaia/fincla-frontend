@@ -1,3 +1,5 @@
+import { saveBlob } from "../export/saveBlob.js";
+
 const HEADER = "Descrição,Categoria,Valor,Data,Parcela,Recorrente";
 
 const quote = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
@@ -17,8 +19,5 @@ export function buildInvoiceCsv(items) {
 
 /** Baixa o texto como arquivo `.csv` pelo navegador. */
 export function downloadCsv(filename, text) {
-  const url = URL.createObjectURL(new Blob([text], { type: "text/csv" }));
-  const a = Object.assign(document.createElement("a"), { href: url, download: filename });
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  saveBlob(new Blob([text], { type: "text/csv" }), filename);
 }

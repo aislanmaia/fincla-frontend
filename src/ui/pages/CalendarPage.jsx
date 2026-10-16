@@ -34,7 +34,7 @@ function weekLabel(ymdStr) {
     : `${start.getDate()} ${sm} – ${end.getDate()} ${em}`;
 }
 import { shouldUseRealData } from "../dataMode.js";
-import { FC, FC_MODAL } from "../routing/searchContract.js";
+import { FC, editTransactionSearch } from "../routing/searchContract.js";
 
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const fmt = (v) => brl.format(Number(v || 0));
@@ -200,7 +200,7 @@ export function CalendarPage({ organizationId = null, dataMode = "live", isMobil
     (e, ev) => {
       ev?.stopPropagation();
       if (!e?.id) return;
-      navigate({ search: (prev) => ({ ...prev, [FC.TX]: String(e.id), [FC.MODAL]: FC_MODAL.EDIT_TRANSACTION }) });
+      navigate({ search: (prev) => editTransactionSearch(prev, e.id) });
     },
     [navigate],
   );

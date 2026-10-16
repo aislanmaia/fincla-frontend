@@ -64,6 +64,14 @@ export function simulationTipoToUrl(internalTipo) {
 }
 
 /**
+ * Search que abre o Painel de Transação (edição) de um lançamento, preservando o resto da URL.
+ * Um único lugar para a regra `fc_tx` + `fc_modal=edit-transaction` que Calendário e Lançamentos repetiam.
+ */
+export function editTransactionSearch(previous, transactionId) {
+  return { ...previous, [FC.TX]: String(transactionId), [FC.MODAL]: FC_MODAL.EDIT_TRANSACTION };
+}
+
+/**
  * Ao mudar de rota principal via `navTo`, limpa one-shots e reaplica `opts`.
  * Preserva chaves de auth (`invite_token`, …) e `fc_*` não listados aqui (futuro).
  * @param {Record<string, unknown>} previous — search já validado (saída Zod)

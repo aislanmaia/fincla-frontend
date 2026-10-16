@@ -563,6 +563,30 @@ describe("CardAllTransactionsPage · saídas por mês/semana", () => {
     expect(within(sheet).queryByRole("button", { name: "Limpar seleção" })).not.toBeInTheDocument();
   });
 
+  it("o Escape fecha o sheet de filtros com a animação de saída, como o botão Fechar", async () => {
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Filtros" }));
+    const sheet = screen.getByRole("dialog", { name: "Filtros dos lançamentos" });
+    await user.keyboard("{Escape}");
+    expect(sheet).toBeInTheDocument();
+    expect(sheet.style.animation).toContain("sheetDown");
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Filtros dos lançamentos" })).not.toBeInTheDocument());
+  });
+
+  it("Limpar tudo volta também a seleção de fatura ao padrão", async () => {
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    expect(await screen.findByText("Mercado")).toBeInTheDocument();
+    const initial = requests.at(-1).searchParams.getAll("invoice_id");
+    await user.click(screen.getByRole("button", { name: /Abrir filtros/ }));
+    await user.click(screen.getByRole("button", { name: "Tipo" }));
+    await user.click(screen.getByRole("button", { name: /^Despesa/ }));
+    await user.click(screen.getByRole("button", { name: "Limpar tudo" }));
+    await waitFor(() => expect(requests.at(-1).searchParams.has("type")).toBe(false));
+    expect(requests.at(-1).searchParams.getAll("invoice_id")).toEqual(initial);
+  });
+
   it("no mobile há menu de densidade e agrupamento por data", async () => {
     render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
     const user = userEvent.setup();
@@ -739,7 +763,7 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     render(<CardAllTransactionsPage organizationId={ORG_ID} />);
     const user = userEvent.setup();
     await screen.findByText("Sem dono");
-    expect(screen.getByLabelText("1 alertas")).toBeInTheDocument();
+    expect(screen.getByLabelText("1 alerta")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Assistente/ }));
     const drawer = screen.getByRole("dialog", { name: "Assistente" });
     expect(within(drawer).getByText("1 item sem categoria")).toBeInTheDocument();
@@ -1166,6 +1190,24 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     };
     it("no desktop o contador ignora a seleção da própria faceta", () => check(false));
     it("no celular o contador ignora a seleção da própria faceta", () => check(true));
+  });
+
+  it("voltar a uma faceta com os mesmos filtros reaproveita as contagens, sem novo pedido nem números apagados", async () => {
+    const facetRequests = [];
+    server.use(http.get("*/v1/tags/catalog", () => HttpResponse.json({ categories })), facetsLikeBackend(facetRequests));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Abrir filtros" }));
+    await user.click(await screen.findByRole("button", { name: /^Tipo/ }));
+    await user.click(await screen.findByRole("button", { name: /^Despesa/ }));
+    await waitFor(() => expect(requests.at(-1).searchParams.has("type")).toBe(true));
+    await user.click(screen.getByRole("button", { name: /^Período/ }));
+    await waitFor(() => expect(facetRequests.at(-1).searchParams.has("type")).toBe(true));
+    const before = facetRequests.length;
+    await user.click(screen.getByRole("button", { name: /^Tipo/ }));
+    // Sem espera: os números da faceta já estão na tela (cache), e nenhum pedido novo saiu.
+    expect(screen.getByRole("button", { name: /^Todos/ })).toHaveTextContent("31");
+    expect(facetRequests).toHaveLength(before);
   });
 
   it("o recorte Estornos não é seleção da faceta Tipo e continua no pedido de contagens", async () => {
