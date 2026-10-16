@@ -14,9 +14,10 @@ const SHEET_TRANSITION = `height ${SLIDE_MS}ms cubic-bezier(0.32,0.72,0,1), bord
  * reduz a 72% ao arrastar para baixo e dispensa no arrasto seguinte, cabeçalho com "Limpar tudo" só quando há
  * filtro, rodapé com o CTA "Ver N …" e animação de entrada/saída.
  *
- * `onClose` roda depois da animação de saída; quem fecha por outro caminho (Escape) desmonta direto.
+ * `onClose` roda depois da animação de saída. `requestCloseRef` recebe a função que fecha COM a animação, para quem
+ * fecha por outro caminho (Escape): chamar `onClose` direto desmontaria o sheet sem saída.
  */
-export function MobileFilterSheet({ dialogRef, closeRef, ariaLabel, title, onClose, onClear, footer, footerLoading = false, children }) {
+export function MobileFilterSheet({ dialogRef, closeRef, requestCloseRef, ariaLabel, title, onClose, onClear, footer, footerLoading = false, children }) {
   const sheetRef = useRef(null);
   const fullRef = useRef(true);
   const closingRef = useRef(false);
@@ -33,6 +34,12 @@ export function MobileFilterSheet({ dialogRef, closeRef, ariaLabel, title, onClo
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(onClose, EXIT_MS);
   };
+  // Publicada em efeito (não no render) e solta ao desmontar: o Escape da página nunca chama um sheet que já saiu.
+  useEffect(() => {
+    if (!requestCloseRef) return undefined;
+    requestCloseRef.current = requestClose;
+    return () => { requestCloseRef.current = null; };
+  });
   const setSnap = (value) => { fullRef.current = value; setFull(value); };
 
   const onHandleTouchStart = (event) => {

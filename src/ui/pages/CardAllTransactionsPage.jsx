@@ -7,7 +7,7 @@ import { getTransaction, getTransactionsFacets, getTransactionsSummary, listTran
 import { Btn, Card, PageTitle, Select } from "../components/primitives.jsx";
 import { shouldUseRealData } from "../dataMode.js";
 import { dayKey, groupSubtotal } from "../features/cardTransactions/ledgerModel.js";
-import { assistantInsights } from "../features/cardTransactions/assistantModel.js";
+import { alertsLabel, assistantInsights } from "../features/cardTransactions/assistantModel.js";
 import { CategorizeDialog, ExportDialog, MoveInstallmentDialog, RefundDialog } from "../features/cardTransactions/LedgerDialogs.jsx";
 import { AssistantDrawer, LedgerDetail } from "../features/cardTransactions/LedgerPanels.jsx";
 import { LedgerAlertStrip, LedgerAppBar, LedgerChipScroller, LedgerSearchEmpty, LedgerSummaryRow } from "../features/cardTransactions/LedgerMobileBars.jsx";
@@ -39,7 +39,7 @@ import { resolvePeriodDisplayBounds } from "../features/transactions/periodDateB
 import { parseMoneyInput } from "../features/onboarding/onboardingValueUtils.js";
 import { pickCategoryTagFromApiTransaction, todayLocalYmd } from "../data/transactionsAdapter.js";
 import { formatMoneyAbs } from "../money/formatMoney.js";
-import { FC, FC_MODAL } from "../routing/searchContract.js";
+import { FC, editTransactionSearch } from "../routing/searchContract.js";
 import { G, NUM } from "../typography.js";
 import { T } from "../tokens.js";
 
@@ -138,7 +138,10 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const [inspected, setInspected] = useState(null);
   const [historyState, setHistoryState] = useState({ cardId: null, data: null, error: false });
   const [summaryState, setSummaryState] = useState({ key: null, data: null, loading: false, error: false });
-  const [facetState, setFacetState] = useState({ key: null, data: null });
+  // Contagens já buscadas, por pedido exato: voltar a uma faceta com os mesmos filtros mostra os números na hora (sem apagar).
+  // O Map é a única fonte; o tick só força o render quando uma resposta chega.
+  const facetCacheRef = useRef(new Map());
+  const [, setFacetTick] = useState(0);
   // Faturas vistas no resumo do ledger (inclui as futuras, que o histórico não traz); só do cartão da tela.
   const [ledgerInvoiceRows, setLedgerInvoiceRows] = useState({ cardId: null, rows: [] });
   const rememberInvoices = (ownerId, data) => {
@@ -218,12 +221,13 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     if (!filtersOpen) wasMobileFacetOpenRef.current = false;
   }, [inspected, filtersOpen, summarySheetOpen, isMobile, mobileFacetOpen, activeFacet]);
 
+  const filterRequestCloseRef = useRef(null);
   useEffect(() => {
     if (!filtersOpen && !inspected && !summarySheetOpen) return undefined;
     const onEscape = (event) => {
       if (event.key !== "Escape") return;
       if (inspected) setInspected(null);
-      else if (filtersOpen) { if (isMobile && mobileFacetOpen) setMobileFacetOpen(false); else setFiltersOpen(false); }
+      else if (filtersOpen) { if (isMobile && mobileFacetOpen) setMobileFacetOpen(false); else if (isMobile && filterRequestCloseRef.current) filterRequestCloseRef.current(); else setFiltersOpen(false); }
       else setSummarySheetOpen(false);
     };
     document.addEventListener("keydown", onEscape);
@@ -405,11 +409,12 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   // `reload` entra porque salvar um lançamento muda as contagens sem mudar nenhum filtro.
   const facetKey = `${state.card?.id ?? "none"}:${cardScope}:${reload}:${JSON.stringify(facetFilter)}`;
   useEffect(() => {
+    // Painel fechado: descarta o cache; reabrir busca de novo (os dados podem ter mudado fora desta tela).
+    if (!filtersOpen) facetCacheRef.current.clear();
     if (!state.card || filterBlocked || !filtersOpen) return undefined;
     // Já temos as contagens deste pedido (o detalhe abriu por cima do painel e fechou): não refaz nem apaga.
-    if (facetState.key === facetKey && facetState.data) return undefined;
+    if (facetCacheRef.current.has(facetKey)) return undefined;
     let active = true;
-    setFacetState({ key: facetKey, data: null });
     getTransactionsFacets({
       organization_id: organizationId,
       ...(cardScope === "current" ? { credit_card_id: state.card.id } : {}),
@@ -417,10 +422,12 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
       localize_labels: true,
       locale: "pt-BR",
     }).then((data) => {
-      if (active) setFacetState({ key: facetKey, data });
-    }).catch(() => {
-      if (active) setFacetState({ key: facetKey, data: null });
-    });
+      // Resposta de um pedido já descartado (painel fechado, filtro trocado) não entra no cache.
+      if (!active) return;
+      facetCacheRef.current.set(facetKey, data);
+      if (facetCacheRef.current.size > 12) facetCacheRef.current.delete(facetCacheRef.current.keys().next().value);
+      setFacetTick((tick) => tick + 1);
+    }).catch(() => {});
     return () => { active = false; };
   // facetKey carries queryFilter, cardScope and the open facet; closed dock needs no facets call.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -502,17 +509,24 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   };
   const selectionSum = (() => { const sub = groupSubtotal(selectedRowObjects, cardScope === "current" ? state.card?.currency : null); return sub ? formatMoneyAbs(sub.amount, sub.currency) : null; })();
   // Sem gatilho de foco: o Painel assume o foco, a linha atrás dele não pode roubá-lo.
-  const openTransaction = (row) => { inspectTriggerRef.current = null; setInspected(null); navigate({ search: (prev) => ({ ...prev, [FC.TX]: String(row.id), [FC.MODAL]: FC_MODAL.EDIT_TRANSACTION }) }); };
+  const openTransaction = (row) => { inspectTriggerRef.current = null; setInspected(null); navigate({ search: (prev) => editTransactionSearch(prev, row.id) }); };
   const back = () => navigate({ to: "/cards", search: { [FC.VIEW]: "new", [FC.HUB_CARD]: cardId } });
   const closeFilters = () => setFiltersOpen(false);
   const openFacet = (key) => { if (key === "busca") { searchInputRef.current?.focus(); return; } setActiveFacet(key); setMobileFacetOpen(true); setFiltersOpen(true); };
   const card = state.card;
-  const clearAll = () => { filter.clearAll(); setCardScope("current"); setKind(null); setWeek(null); };
+  // A seleção de fatura volta ao padrão (a do ciclo atual), como na abertura da tela.
+  const clearAll = () => {
+    filter.clearAll(); setCardScope("current"); setKind(null); setWeek(null);
+    // Fatura padrão calculada aqui (não `null` + efeito): `null` deixaria um quadro no modo fatura sem fatura marcada.
+    const keys = scopeReady ? defaultInvoiceKeys(invoiceOpts, historyState.current?.month && /^\d{4}-\d{2}$/.test(historyState.current.month) ? historyState.current.month : null) : null;
+    setInvoiceKeys(keys);
+    setTimeMode(keys && keys.length === 0 ? "period" : "invoice");
+  };
   const clearFacet = (key) => key === "cartao" ? setCardScope("current") : filter.clearFacet(key);
   const currentSummary = summaryState.key === summaryKey ? summaryState.data : null;
   const currentSummaryLoading = summaryState.key !== summaryKey || summaryState.loading;
   const currentSummaryError = summaryState.key === summaryKey && summaryState.error;
-  const currentFacets = facetState.key === facetKey ? facetState.data : null;
+  const currentFacets = facetCacheRef.current.get(facetKey) ?? null;
   const facetCounts = {
     counts: currentFacets,
     total: currentFacets?.total ?? null,
@@ -599,12 +613,8 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   // A tabela do extrato tem colunas demais para ceder espaço: o dock só empurra a partir de 1600px.
   const dockFloating = !isMobile && viewportWidth < 1600;
   const openAssistant = () => setDialog({ kind: "assistant" });
-  const assistantButton = <Btn variant="outGray" onClick={openAssistant}><Sparkles size={14} /> Assistente{insights.alertCount > 0 && <span aria-label={`${insights.alertCount} alertas`} style={{ ...NUM, marginLeft: 4, background: T.amber, color: "#fff", borderRadius: 99, padding: "0 6px", fontSize: 10 }}>{insights.alertCount}</span>}</Btn>;
-  const alerts = insights.items.filter((item) => item.kind !== "insight");
-  const alertsLabel = `${alerts.length} ${alerts.length === 1 ? "alerta" : "alertas"}`;
-  const dupGroups = alerts.filter((item) => item.kind === "duplicate").length;
-  const otherAlerts = alerts.filter((item) => item.kind !== "duplicate");
-  const alertSummary = alerts.length === 1 ? `${alerts[0].title}: ${alerts[0].detail}` : [...(dupGroups ? [`${dupGroups} ${dupGroups === 1 ? "possível duplicata" : "possíveis duplicatas"}`] : []), ...otherAlerts.map((item) => item.title)].join(" · ");
+  const assistantButton = <Btn variant="outGray" onClick={openAssistant}><Sparkles size={14} /> Assistente{insights.alertCount > 0 && <span aria-label={alertsLabel(insights.alertCount)} style={{ ...NUM, marginLeft: 4, background: T.amber, color: "#fff", borderRadius: 99, padding: "0 6px", fontSize: 10 }}>{insights.alertCount}</span>}</Btn>;
+  const { alerts, alertSummary } = insights;
   // Em "Todos os cartões" o gráfico de saídas some (ele é por fatura de um cartão): o aviso diz por quê e leva de volta.
   const scopeBackFocusRef = useRef(false);
   const outflowsSlotRef = useRef(null);
@@ -624,7 +634,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const chipPill = { borderRadius: 99, padding: "0 12px", height: 30, boxSizing: "border-box", display: "inline-flex", alignItems: "center", whiteSpace: "nowrap", flex: "none" };
   return <div style={isMobile ? { height: "100%", minHeight: 0, display: "flex", flexDirection: "column", minWidth: 0 } : { padding: 28, display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
     {isMobile && <LedgerAppBar subtitle={card ? (cardScope === "all" ? "Todos os cartões" : cardLabel(card)) : null} onBack={back} hasCard={Boolean(card)} searchOpen={searchOpen} onSearchOpen={openSearch} onSearchClose={closeSearch} search={filter.search} onSearchChange={filter.setSearch} facetCount={activeFacets.length} filtersOpen={filtersOpen} onFilters={() => { setMobileFacetOpen(false); setFiltersOpen((open) => !open); }} alertCount={alerts.length} onAssistant={openAssistant} onExport={() => setDialog({ kind: "export" })} exportDisabled={!state.total} />}
-    {isMobile && card && alerts.length > 0 && <LedgerAlertStrip label={alertsLabel} summary={alertSummary} onOpen={openAssistant} />}
+    {isMobile && card && alerts.length > 0 && <LedgerAlertStrip label={alertsLabel(alerts.length)} summary={alertSummary} onOpen={openAssistant} />}
     {!isMobile && <button type="button" onClick={back} style={{ ...G, alignSelf: "flex-start", display: "flex", alignItems: "center", gap: 5, border: 0, background: "none", color: T.blue, fontSize: 12, fontWeight: 700, cursor: "pointer" }}><ArrowLeft size={14} /> Voltar para o cartão</button>}
     {!isMobile && <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
       <div><PageTitle sans="Lançamentos do" serif="cartão" />{card && <p style={{ ...G, ...NUM, margin: "5px 0 0", color: T.inkMid, fontSize: 12 }}>{cardScope === "all" ? "Todos os cartões" : cardLabel(card)}</p>}</div>
@@ -697,7 +707,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
         {cardScope === "current" ? <CardOutflowsChart outflows={outflows} currency={card?.currency} loading={outflowsLoading} error={outflowsError} message={outflowsMessage} onPickInvoice={pickInvoice} onPickWeek={pickWeek} isMobile /> : allCardsNotice}
       </div>
     </div>}
-    {filtersOpen && isMobile && <MobileFilterSheet dialogRef={filterDialogRef} closeRef={filterCloseRef} ariaLabel="Filtros dos lançamentos" onClose={closeFilters}
+    {filtersOpen && isMobile && <MobileFilterSheet dialogRef={filterDialogRef} closeRef={filterCloseRef} requestCloseRef={filterRequestCloseRef} ariaLabel="Filtros dos lançamentos" onClose={closeFilters}
       title={mobileFacetOpen ? <button type="button" onClick={() => setMobileFacetOpen(false)} style={{ ...G, border: 0, background: "none", color: T.blue, cursor: "pointer", padding: 0, fontSize: 16, fontWeight: 800 }}>← Voltar</button> : "Filtros"}
       onClear={!mobileFacetOpen && hasActiveFilters ? clearAll : undefined} footer={mobileFacetOpen ? null : `Ver ${state.total ?? "—"} lançamentos`} footerLoading={state.loading}>
       {!mobileFacetOpen && <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>

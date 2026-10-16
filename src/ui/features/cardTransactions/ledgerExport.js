@@ -1,6 +1,7 @@
 import { formatYmdToBrDisplay, pickCategoryTagFromApiTransaction, todayLocalYmd } from "../../data/transactionsAdapter.js";
 import { formatMoneyAbs } from "../../money/formatMoney.js";
 import { statusLabel } from "./ledgerModel.js";
+import { saveBlob } from "../export/saveBlob.js";
 
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
 
@@ -54,16 +55,7 @@ export function buildCsv(rows, cardCurrency) {
 export const exportFileName = (extension, today = todayLocalYmd()) => `lancamentos-${today}.${extension}`;
 
 export function downloadCsv(rows, cardCurrency, filename = exportFileName("csv")) {
-  const url = URL.createObjectURL(new Blob([buildCsv(rows, cardCurrency)], { type: "text/csv;charset=utf-8" }));
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.rel = "noopener";
-  link.style.display = "none";
-  // No DOM durante o clique e URL viva por um tempo: revogar na hora faz alguns navegadores salvarem o arquivo sem nome nem extensão.
-  document.body.appendChild(link);
-  link.click();
-  setTimeout(() => { link.remove(); URL.revokeObjectURL(url); }, 30000);
+  saveBlob(new Blob([buildCsv(rows, cardCurrency)], { type: "text/csv;charset=utf-8" }), filename);
 }
 
 const categoryOf = (row) => pickCategoryTagFromApiTransaction(row)?.label || row.category || "Sem categoria";

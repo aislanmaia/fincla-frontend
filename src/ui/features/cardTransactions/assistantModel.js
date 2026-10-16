@@ -26,5 +26,12 @@ export function assistantInsights(rows) {
   const sum = [...totals.values()].reduce((a, b) => a + b, 0);
   const top = [...totals.entries()].sort((a, b) => b[1] - a[1])[0];
   if (top && sum > 0) items.push({ kind: "insight", title: "Insight", detail: `${top[0]} é ${Math.round(top[1] / sum * 100)}% das saídas carregadas`, rowIds: [] });
-  return { items, alertCount: items.filter((item) => item.kind !== "insight").length };
+  const alerts = items.filter((item) => item.kind !== "insight");
+  const duplicates = alerts.filter((item) => item.kind === "duplicate").length;
+  const others = alerts.filter((item) => item.kind !== "duplicate");
+  const alertSummary = alerts.length === 1 ? `${alerts[0].title}: ${alerts[0].detail}` : [...(duplicates ? [`${duplicates} ${duplicates === 1 ? "possível duplicata" : "possíveis duplicatas"}`] : []), ...others.map((item) => item.title)].join(" · ");
+  return { items, alerts, alertCount: alerts.length, alertSummary };
 }
+
+/** "1 alerta" / "3 alertas": a única regra de plural dos avisos do Assistente. */
+export const alertsLabel = (count) => `${count} ${count === 1 ? "alerta" : "alertas"}`;

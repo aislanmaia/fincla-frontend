@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { FC, FC_MODAL, mergeNavSearch, simulationTipoFromUrl, simulationTipoToUrl } from "../searchContract.js";
+import { FC, FC_MODAL, editTransactionSearch, mergeNavSearch, simulationTipoFromUrl, simulationTipoToUrl } from "../searchContract.js";
 
 describe("searchContract", () => {
+  it("editTransactionSearch abre o painel de edição e preserva o resto da URL", () => {
+    expect(editTransactionSearch({ fc_inv: "2026-10", [FC.TX]: "1" }, 42)).toEqual({ fc_inv: "2026-10", [FC.TX]: "42", [FC.MODAL]: FC_MODAL.EDIT_TRANSACTION });
+  });
+
   it("simulationTipoToUrl e fromUrl são inversos para tipos conhecidos", () => {
     expect(simulationTipoToUrl("despesa_recorrente")).toBe("recurring_expense");
     expect(simulationTipoFromUrl("recurring_expense")).toBe("despesa_recorrente");

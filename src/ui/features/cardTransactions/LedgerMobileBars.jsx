@@ -3,6 +3,7 @@ import { ArrowLeft, ChevronLeft, ChevronRight, Download, Filter, PieChart, Searc
 
 import { formatMoneyAbs } from "../../money/formatMoney.js";
 import { T } from "../../tokens.js";
+import { alertsLabel } from "./assistantModel.js";
 import { G, NUM } from "../../typography.js";
 
 const iconButton = { width: 44, height: 44, flex: "none", border: 0, padding: 0, borderRadius: 12, background: "none", color: T.ink, display: "grid", placeItems: "center", cursor: "pointer", position: "relative" };
@@ -38,7 +39,7 @@ export function LedgerAppBar({ subtitle, onBack, hasCard, searchOpen, onSearchOp
     {hasCard && <>
       <button type="button" aria-label={searching ? "Buscar lançamentos, busca ativa" : "Buscar lançamentos"} onClick={onSearchOpen} style={{ ...iconButton, background: searching ? T.ink : "none", color: searching ? T.surface : T.ink }}><Search size={20} />{searching && <span aria-hidden="true" style={{ position: "absolute", top: 8, right: 8, width: 9, height: 9, borderRadius: 99, background: T.blueBar, border: `2px solid ${T.ink}` }} />}</button>
       <button type="button" aria-label={`Filtros${facetCount ? ` (${facetCount})` : ""}`} aria-pressed={filtersOpen} onClick={onFilters} style={iconButton}><Filter size={20} />{facetCount > 0 && <Count color={T.blue}>{facetCount}</Count>}</button>
-      <button type="button" aria-label={alertCount ? `Assistente, ${alertCount} ${alertCount === 1 ? "alerta" : "alertas"}` : "Assistente"} onClick={onAssistant} style={iconButton}><Sparkles size={20} />{alertCount > 0 && <Count>{alertCount}</Count>}</button>
+      <button type="button" aria-label={alertCount ? `Assistente, ${alertsLabel(alertCount)}` : "Assistente"} onClick={onAssistant} style={iconButton}><Sparkles size={20} />{alertCount > 0 && <Count>{alertCount}</Count>}</button>
       <button type="button" aria-label="Exportar" disabled={exportDisabled} onClick={onExport} style={{ ...iconButton, opacity: exportDisabled ? 0.4 : 1, cursor: exportDisabled ? "default" : "pointer" }}><Download size={20} /></button>
     </>}
   </div>;
