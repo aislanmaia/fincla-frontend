@@ -549,6 +549,11 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   };
   const hasActiveFilters = activeFacets.length > 0 || facets.some((facet) => facet.key === "periodo" && facet.active) || Boolean(kind) || Boolean(activeWeek) || Boolean(filter.search.trim());
   const categoryIdByName = (name) => categories.find((row) => row.label === name || row.apiName === name)?.id ?? null;
+  // Rótulo das categorias marcadas; com o catálogo ainda carregando (ou id desconhecido) cai na contagem, nunca some.
+  const selectedLabels = filter.cats.map((id) => categoriesById[id]?.label);
+  const selectedCategoriesLabel = filter.cats.length === 0 ? null : selectedLabels.every(Boolean) ? selectedLabels.join(", ") : `${filter.cats.length} ${filter.cats.length === 1 ? "categoria" : "categorias"}`;
+  // O botão some ao limpar: o foco volta ao fechar do sheet em vez de cair no body, fora do diálogo.
+  const clearCategorySelection = () => { clearFacet("categoria"); summaryCloseRef.current?.focus(); };
   const isCategorySelected = (name) => { const id = categoryIdByName(name); return id == null ? null : filter.cats.includes(id); };
   const toggleCategory = (name) => { const id = categoryIdByName(name); if (id != null) filter.setCats(filter.cats.includes(id) ? filter.cats.filter((entry) => entry !== id) : [...filter.cats, id]); };
   // Clicar numa barra de fatura: no modo Fatura marca/desmarca; no modo Período vira "só esta fatura".
@@ -688,7 +693,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     {summarySheetOpen && isMobile && <div ref={summaryDialogRef} role="dialog" aria-modal="true" aria-label="Resumo e saídas do recorte" style={{ position: "fixed", inset: 0, zIndex: 48, background: "rgba(15,15,13,.35)", display: "flex", alignItems: "flex-end" }} onClick={() => setSummarySheetOpen(false)}>
       <div className="fincla-scroll" style={{ background: T.bg, borderRadius: "18px 18px 0 0", maxHeight: "85dvh", width: "100%", padding: 16, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }} onClick={(event) => event.stopPropagation()}>
         <button ref={summaryCloseRef} type="button" aria-label="Fechar resumo" onClick={() => setSummarySheetOpen(false)} style={{ alignSelf: "flex-end", border: 0, background: "none", cursor: "pointer" }}><X size={18} /></button>
-        <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} isCategorySelected={isCategorySelected} onToggleCategory={toggleCategory} isMobile selectedLabels={filter.cats.map((id) => categoriesById[id]?.label).filter(Boolean)} onClearSelection={() => filter.setCats([])} />
+        <CardTransactionsSummary summary={currentSummary} loading={currentSummaryLoading} error={currentSummaryError} isCategorySelected={isCategorySelected} onToggleCategory={toggleCategory} isMobile selectedLabel={selectedCategoriesLabel} onClearSelection={clearCategorySelection} />
         {cardScope === "current" ? <CardOutflowsChart outflows={outflows} currency={card?.currency} loading={outflowsLoading} error={outflowsError} message={outflowsMessage} onPickInvoice={pickInvoice} onPickWeek={pickWeek} isMobile /> : allCardsNotice}
       </div>
     </div>}

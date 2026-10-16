@@ -554,10 +554,12 @@ describe("CardAllTransactionsPage · saídas por mês/semana", () => {
     const sheet = screen.getByRole("dialog", { name: "Resumo e saídas do recorte" });
     expect(within(sheet).queryByRole("button", { name: "Limpar seleção" })).not.toBeInTheDocument();
     await user.click(await within(sheet).findByRole("button", { name: "Filtrar por Alimentação" }));
-    await waitFor(() => expect(requests.at(-1).searchParams.getAll("category").length).toBeGreaterThan(0));
-    expect(within(sheet).getByText(/Filtrando por/)).toHaveTextContent("Alimentação");
+    const lastList = () => requests.filter((url) => url.pathname.endsWith("/v1/transactions")).at(-1);
+    await waitFor(() => expect(lastList().searchParams.getAll("category")).toHaveLength(1));
+    expect(within(sheet).getByText(/Categorias selecionadas/)).toHaveTextContent("Alimentação");
     await user.click(within(sheet).getByRole("button", { name: "Limpar seleção" }));
-    await waitFor(() => expect(requests.at(-1).searchParams.getAll("category")).toHaveLength(0));
+    await waitFor(() => expect(lastList().searchParams.getAll("category")).toHaveLength(0));
+    expect(within(sheet).getByRole("button", { name: "Fechar resumo" })).toHaveFocus();
     expect(within(sheet).queryByRole("button", { name: "Limpar seleção" })).not.toBeInTheDocument();
   });
 
