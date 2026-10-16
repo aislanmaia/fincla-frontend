@@ -1162,4 +1162,37 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(facetRequests.at(-1).searchParams.get("type")).toBe("refund");
     route.search = {};
   });
+
+  it("em todos os cartões o desktop avisa que as saídas por fatura valem para um cartão e o botão volta a este cartão", async () => {
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    expect(await screen.findByText("Mercado")).toBeInTheDocument();
+    expect(screen.queryByText("As saídas por fatura valem para um cartão.")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Abrir filtros/ }));
+    await user.click(screen.getByRole("button", { name: "Cartão" }));
+    await user.click(screen.getByRole("button", { name: "Todos os cartões" }));
+    expect(await screen.findByText("As saídas por fatura valem para um cartão.")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Ver só este cartão" }));
+    await waitFor(() => expect(requests.at(-1).searchParams.has("credit_card_id")).toBe(true));
+    expect(screen.queryByText("As saídas por fatura valem para um cartão.")).not.toBeInTheDocument();
+    // O botão sumiu: o foco não pode cair no body.
+    expect(document.body).not.toHaveFocus();
+  });
+
+  it("em todos os cartões o sheet de Resumo avisa e o botão fecha o sheet e volta a este cartão", async () => {
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Filtros" }));
+    const filters = screen.getByRole("dialog", { name: "Filtros dos lançamentos" });
+    await user.click(within(filters).getByRole("button", { name: /^Cartão: / }));
+    await user.click(within(filters).getByRole("button", { name: /Todos os cartões/ }));
+    await user.click(screen.getByRole("button", { name: "Fechar filtros" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Filtros dos lançamentos" })).not.toBeInTheDocument());
+    await user.click(await screen.findByRole("button", { name: "Resumo e saídas do recorte" }));
+    const sheet = screen.getByRole("dialog", { name: "Resumo e saídas do recorte" });
+    expect(within(sheet).getByText("As saídas por fatura valem para um cartão.")).toBeInTheDocument();
+    await user.click(within(sheet).getByRole("button", { name: "Ver só este cartão" }));
+    expect(screen.queryByRole("dialog", { name: "Resumo e saídas do recorte" })).not.toBeInTheDocument();
+    await waitFor(() => expect(requests.at(-1).searchParams.has("credit_card_id")).toBe(true));
+  });
 });
