@@ -64,7 +64,7 @@ export function CardTransactionsSummary({ summary, loading, error, isCategorySel
     <div><h2 style={{ ...G, fontSize: 15, margin: "0 0 4px" }}>Resumo do recorte</h2><p style={{ ...G, fontSize: 11, color: T.inkMid, margin: 0 }}>Todos os lançamentos que correspondem aos filtros · dados da API</p></div>
     {onClearSelection && selectedLabels.length > 0 && <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, padding: "6px 6px 6px 10px", borderRadius: 10, background: T.blueLight }}>
       <span style={{ ...G, flex: 1, minWidth: 0, fontSize: 12, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={selectedLabels.join(", ")}>Filtrando por <strong>{selectedLabels.join(", ")}</strong></span>
-      <button type="button" onClick={onClearSelection} style={{ ...G, flex: "none", minHeight: 36, padding: "0 12px", border: `1px solid ${T.blue}`, borderRadius: 99, background: T.surface, color: T.blue, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Limpar seleção</button>
+      <button type="button" onClick={onClearSelection} style={{ ...G, flex: "none", minHeight: isMobile ? 44 : 36, padding: "0 12px", border: `1px solid ${T.blue}`, borderRadius: 99, background: T.surface, color: T.blue, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Limpar seleção</button>
     </div>}
     {loading && <p role="status" style={{ ...G, fontSize: 12, color: T.inkMid }}>Carregando resumo…</p>}
     {error && <p role="alert" style={{ ...G, fontSize: 12, color: T.inkMid }}>Não foi possível carregar o resumo.</p>}
