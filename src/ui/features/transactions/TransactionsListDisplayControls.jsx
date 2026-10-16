@@ -9,15 +9,20 @@ export function TransactionsListDisplayControls({ density, grouped, canGroup, on
   const densityTriggerRef = useRef(null);
   const groupingTriggerRef = useRef(null);
 
+  const wasOpenRef = useRef(false);
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open) { wasOpenRef.current = false; return undefined; }
     const onPointerDown = (event) => {
       if (!containerRef.current?.contains(event.target)) setOpen(null);
     };
     // Padrão WAI-ARIA de menu: abrir leva o foco ao item marcado (ou ao primeiro); setas, Home e End percorrem os itens.
     const menuItems = () => [...(containerRef.current?.querySelectorAll('[role="menu"] [role^="menuitem"]') ?? [])];
-    const initial = menuItems();
-    (initial.find((item) => item.getAttribute("aria-checked") === "true") ?? initial[0])?.focus();
+    // Só ao ABRIR: trocar direto de um menu para o outro não rouba o foco de quem clicou com o mouse.
+    if (!wasOpenRef.current) {
+      const initial = menuItems();
+      (initial.find((item) => item.getAttribute("aria-checked") === "true") ?? initial[0])?.focus();
+    }
+    wasOpenRef.current = true;
     const onKeyDown = (event) => {
       if (event.key === "Escape") {
         setOpen(null);
@@ -27,6 +32,8 @@ export function TransactionsListDisplayControls({ density, grouped, canGroup, on
       if (!["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft", "Home", "End"].includes(event.key)) return;
       const items = menuItems();
       if (!items.length || !containerRef.current?.contains(document.activeElement)) return;
+      // Home/End só valem dentro do menu; no botão continuam sendo do navegador.
+      if ((event.key === "Home" || event.key === "End") && !document.activeElement.closest('[role="menu"]')) return;
       const index = items.indexOf(document.activeElement);
       const forward = event.key === "ArrowDown" || event.key === "ArrowRight";
       const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1

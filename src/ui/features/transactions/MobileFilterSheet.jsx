@@ -34,7 +34,12 @@ export function MobileFilterSheet({ dialogRef, closeRef, requestCloseRef, ariaLa
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(onClose, EXIT_MS);
   };
-  if (requestCloseRef) requestCloseRef.current = requestClose;
+  // Publicada em efeito (não no render) e solta ao desmontar: o Escape da página nunca chama um sheet que já saiu.
+  useEffect(() => {
+    if (!requestCloseRef) return undefined;
+    requestCloseRef.current = requestClose;
+    return () => { requestCloseRef.current = null; };
+  });
   const setSnap = (value) => { fullRef.current = value; setFull(value); };
 
   const onHandleTouchStart = (event) => {

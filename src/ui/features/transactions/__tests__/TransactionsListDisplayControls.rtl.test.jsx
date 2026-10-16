@@ -51,4 +51,17 @@ describe("TransactionsListDisplayControls · teclado do menu", () => {
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     expect(trigger).toHaveFocus();
   });
+
+  it("trocar direto de um menu para o outro não rouba o foco, e Home/End no botão ficam com o navegador", async () => {
+    const user = userEvent.setup();
+    setup();
+    await user.click(screen.getByRole("button", { name: /Densidade da lista/ }));
+    const grouping = screen.getByRole("button", { name: /Agrupamento da lista/ });
+    await user.click(grouping);
+    expect(screen.getByRole("menu", { name: "Agrupamento da lista" })).toBeInTheDocument();
+    expect(grouping).toHaveFocus();
+    const event = new KeyboardEvent("keydown", { key: "End", bubbles: true, cancelable: true });
+    grouping.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+  });
 });

@@ -138,9 +138,10 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const [inspected, setInspected] = useState(null);
   const [historyState, setHistoryState] = useState({ cardId: null, data: null, error: false });
   const [summaryState, setSummaryState] = useState({ key: null, data: null, loading: false, error: false });
-  const [facetState, setFacetState] = useState({ key: null, data: null });
   // Contagens já buscadas, por pedido exato: voltar a uma faceta com os mesmos filtros mostra os números na hora (sem apagar).
+  // O Map é a única fonte; o tick só força o render quando uma resposta chega.
   const facetCacheRef = useRef(new Map());
+  const [, setFacetTick] = useState(0);
   // Faturas vistas no resumo do ledger (inclui as futuras, que o histórico não traz); só do cartão da tela.
   const [ledgerInvoiceRows, setLedgerInvoiceRows] = useState({ cardId: null, rows: [] });
   const rememberInvoices = (ownerId, data) => {
@@ -412,9 +413,8 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     if (!filtersOpen) facetCacheRef.current.clear();
     if (!state.card || filterBlocked || !filtersOpen) return undefined;
     // Já temos as contagens deste pedido (o detalhe abriu por cima do painel e fechou): não refaz nem apaga.
-    if (facetCacheRef.current.has(facetKey)) { setFacetState({ key: facetKey, data: facetCacheRef.current.get(facetKey) }); return undefined; }
+    if (facetCacheRef.current.has(facetKey)) return undefined;
     let active = true;
-    setFacetState({ key: facetKey, data: null });
     getTransactionsFacets({
       organization_id: organizationId,
       ...(cardScope === "current" ? { credit_card_id: state.card.id } : {}),
@@ -422,12 +422,12 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
       localize_labels: true,
       locale: "pt-BR",
     }).then((data) => {
+      // Resposta de um pedido já descartado (painel fechado, filtro trocado) não entra no cache.
+      if (!active) return;
       facetCacheRef.current.set(facetKey, data);
       if (facetCacheRef.current.size > 12) facetCacheRef.current.delete(facetCacheRef.current.keys().next().value);
-      if (active) setFacetState({ key: facetKey, data });
-    }).catch(() => {
-      if (active) setFacetState({ key: facetKey, data: null });
-    });
+      setFacetTick((tick) => tick + 1);
+    }).catch(() => {});
     return () => { active = false; };
   // facetKey carries queryFilter, cardScope and the open facet; closed dock needs no facets call.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -514,13 +514,19 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   const closeFilters = () => setFiltersOpen(false);
   const openFacet = (key) => { if (key === "busca") { searchInputRef.current?.focus(); return; } setActiveFacet(key); setMobileFacetOpen(true); setFiltersOpen(true); };
   const card = state.card;
-  // null devolve a seleção de fatura ao padrão (a do ciclo atual), como na abertura da tela.
-  const clearAll = () => { filter.clearAll(); setCardScope("current"); setKind(null); setWeek(null); setTimeMode("invoice"); setInvoiceKeys(null); };
+  // A seleção de fatura volta ao padrão (a do ciclo atual), como na abertura da tela.
+  const clearAll = () => {
+    filter.clearAll(); setCardScope("current"); setKind(null); setWeek(null);
+    // Fatura padrão calculada aqui (não `null` + efeito): `null` deixaria um quadro no modo fatura sem fatura marcada.
+    const keys = scopeReady ? defaultInvoiceKeys(invoiceOpts, historyState.current?.month && /^\d{4}-\d{2}$/.test(historyState.current.month) ? historyState.current.month : null) : null;
+    setInvoiceKeys(keys);
+    setTimeMode(keys && keys.length === 0 ? "period" : "invoice");
+  };
   const clearFacet = (key) => key === "cartao" ? setCardScope("current") : filter.clearFacet(key);
   const currentSummary = summaryState.key === summaryKey ? summaryState.data : null;
   const currentSummaryLoading = summaryState.key !== summaryKey || summaryState.loading;
   const currentSummaryError = summaryState.key === summaryKey && summaryState.error;
-  const currentFacets = facetCacheRef.current.get(facetKey) ?? (facetState.key === facetKey ? facetState.data : null);
+  const currentFacets = facetCacheRef.current.get(facetKey) ?? null;
   const facetCounts = {
     counts: currentFacets,
     total: currentFacets?.total ?? null,
