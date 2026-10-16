@@ -545,6 +545,24 @@ describe("CardAllTransactionsPage · saídas por mês/semana", () => {
     await waitFor(() => expect(screen.queryByTestId("week-chip")).toBeNull());
   });
 
+  it("no sheet de Resumo a categoria marcada aparece com 'Limpar seleção', que remove o filtro", async () => {
+    server.use(http.get("*/v1/tags/catalog", () => HttpResponse.json({ categories: [{ id: "food", label: "Alimentação", system_key: "food", color: "#059669" }] })));
+    server.use(summaryWith({}));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Resumo e saídas do recorte" }));
+    const sheet = screen.getByRole("dialog", { name: "Resumo e saídas do recorte" });
+    expect(within(sheet).queryByRole("button", { name: "Limpar seleção" })).not.toBeInTheDocument();
+    await user.click(await within(sheet).findByRole("button", { name: "Filtrar por Alimentação" }));
+    const lastList = () => requests.filter((url) => url.pathname.endsWith("/v1/transactions")).at(-1);
+    await waitFor(() => expect(lastList().searchParams.getAll("category")).toHaveLength(1));
+    expect(within(sheet).getByText(/Categorias selecionadas/)).toHaveTextContent("Alimentação");
+    await user.click(within(sheet).getByRole("button", { name: "Limpar seleção" }));
+    await waitFor(() => expect(lastList().searchParams.getAll("category")).toHaveLength(0));
+    expect(within(sheet).getByRole("button", { name: "Fechar resumo" })).toHaveFocus();
+    expect(within(sheet).queryByRole("button", { name: "Limpar seleção" })).not.toBeInTheDocument();
+  });
+
   it("no mobile há menu de densidade e agrupamento por data", async () => {
     render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
     const user = userEvent.setup();

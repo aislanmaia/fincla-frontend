@@ -55,13 +55,17 @@ function CategoryRow({ row, color, sum, currency, state, onToggle }) {
  * backend sobre TODO o resultado filtrado, não da página carregada. A legenda é
  * clicável: marcar uma categoria isola a tela inteira nela (mesmo filtro da faceta).
  */
-export function CardTransactionsSummary({ summary, loading, error, isCategorySelected, onToggleCategory, isMobile }) {
+export function CardTransactionsSummary({ summary, loading, error, isCategorySelected, onToggleCategory, isMobile, selectedLabel = null, onClearSelection }) {
   const [allOpen, setAllOpen] = useState(null);
   const categories = (summary?.breakdown?.by_category ?? []).filter(validAmount);
   const currencies = [...new Set(categories.map((row) => row.amount_currency))];
   const totals = (summary?.by_currency ?? []).filter((row) => row?.currency && row.amount != null && row.amount !== "" && Number.isFinite(Number(row.amount)));
   return <Card as="section" aria-label="Resumo dos lançamentos filtrados" style={{ padding: 18, minWidth: 0, display: "flex", flexDirection: "column", gap: 12 }}>
     <div><h2 style={{ ...G, fontSize: 15, margin: "0 0 4px" }}>Resumo do recorte</h2><p style={{ ...G, fontSize: 11, color: T.inkMid, margin: 0 }}>Todos os lançamentos que correspondem aos filtros · dados da API</p></div>
+    {onClearSelection && selectedLabel && <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8, minWidth: 0, padding: "6px 6px 6px 10px", borderRadius: 10, background: T.blueLight }}>
+      <span style={{ ...G, flex: "1 1 140px", minWidth: 0, fontSize: 12, color: T.ink, overflowWrap: "anywhere" }}>Categorias selecionadas: <strong>{selectedLabel}</strong></span>
+      <button type="button" onClick={onClearSelection} style={{ ...G, flex: "none", minHeight: 44, padding: "0 12px", border: `1px solid ${T.blue}`, borderRadius: 99, background: T.surface, color: T.blue, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>Limpar seleção</button>
+    </div>}
     {loading && <p role="status" style={{ ...G, fontSize: 12, color: T.inkMid }}>Carregando resumo…</p>}
     {error && <p role="alert" style={{ ...G, fontSize: 12, color: T.inkMid }}>Não foi possível carregar o resumo.</p>}
     {summary && <strong style={{ ...G, ...NUM, fontSize: 22 }}>{summary.total_transactions} lançamento{summary.total_transactions === 1 ? "" : "s"}</strong>}
