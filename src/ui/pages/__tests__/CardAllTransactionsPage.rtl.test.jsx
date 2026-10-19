@@ -711,25 +711,24 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(moves[0]).toEqual({ card: "7", tx: "11", body: { target_year: 2026, target_month: 12 } });
   });
 
-  it("lança estorno vinculado à compra, na categoria do catálogo de estorno, e recusa valor acima da compra", async () => {
+  it("Lançar estorno entrega a compra ao painel oficial de Nova transação, sem diálogo próprio", async () => {
     withLedger();
-    const posted = [];
-    server.use(http.post("*/v1/transactions", async ({ request }) => { posted.push(await request.json()); return HttpResponse.json({ id: 99, type: "refund" }); }));
-    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const onRefund = vi.fn();
+    render(<CardAllTransactionsPage organizationId={ORG_ID} onRefund={onRefund} />);
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "Ver detalhes de Notebook" }));
     await user.click(screen.getByRole("button", { name: /Lançar estorno desta compra/ }));
-    const dialog = screen.getByRole("dialog", { name: "Lançar estorno" });
-    const value = within(dialog).getByLabelText("Valor do estorno");
-    await user.clear(value);
-    await user.type(value, "150");
-    expect(within(dialog).getByRole("alert")).toHaveTextContent("O estorno não pode passar do valor da compra.");
-    expect(within(dialog).getByRole("button", { name: "Lançar estorno" })).toBeDisabled();
-    await user.clear(value);
-    await user.type(value, "40");
-    await user.click(within(dialog).getByRole("button", { name: "Lançar estorno" }));
-    await waitFor(() => expect(posted).toHaveLength(1));
-    expect(posted[0]).toMatchObject({ type: "refund", value: 40, refund_of_transaction_id: 11, card_id: 7, tag_ids: ["r1"], payment_method: "credit_card" });
+    expect(onRefund).toHaveBeenCalledWith(expect.objectContaining({ transactionId: 11, cardId: 7, description: "Notebook", amount: 1000, category: "Compras" }));
+    expect(screen.queryByRole("dialog", { name: "Detalhes do lançamento" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "Lançar estorno" })).not.toBeInTheDocument();
+  });
+
+  it("sem o painel oficial disponível a tela não oferece estorno", async () => {
+    withLedger();
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Ver detalhes de Notebook" }));
+    expect(screen.queryByRole("button", { name: /Lançar estorno desta compra/ })).not.toBeInTheDocument();
   });
 
   it("exporta o conjunto inteiro do recorte, não só a página carregada", async () => {

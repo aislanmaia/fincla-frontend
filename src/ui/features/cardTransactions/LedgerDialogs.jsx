@@ -2,16 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 
 import { Btn, Select } from "../../components/primitives.jsx";
-import { formatMoneyAbs } from "../../money/formatMoney.js";
 import { T } from "../../tokens.js";
-import { G, NUM } from "../../typography.js";
+import { G } from "../../typography.js";
 import { useFocusTrap } from "../transactions/useFocusTrap.js";
-import { pickCategoryTagFromApiTransaction } from "../../data/transactionsAdapter.js";
-import { parseMoneyInput } from "../onboarding/onboardingValueUtils.js";
 import { installmentOf } from "./ledgerModel.js";
 
 const MONTH_NAMES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
-const inputStyle = { ...G, border: `1px solid ${T.border}`, borderRadius: 9, background: T.surface, color: T.ink, padding: "8px 10px", fontSize: 12, width: "100%", boxSizing: "border-box" };
 
 /** Casca comum: dialog modal com foco preso, Escape e clique no fundo para fechar. */
 export function LedgerModal({ title, onClose, children, side = false, sheet = false, width = 420 }) {
@@ -104,52 +100,6 @@ export function MoveInstallmentDialog({ rows, invoiceOptions, currentKey = null,
       </>}
     <Outcome error={error} />
     <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}><Btn variant="outGray" onClick={onClose}>Cancelar</Btn>{movable.length > 0 && <Btn variant="blue" disabled={!target || busy} onClick={submit}>{busy ? "Movendo…" : "Mover parcela"}</Btn>}</div>
-  </LedgerModal>;
-}
-
-export function RefundDialog({ row, currency, categories, onSubmit, onClose, today }) {
-  const original = Math.abs(Number(row.value) || 0);
-  const code = row.value_currency ?? currency;
-  // pt-BR: vírgula decimal (o parser tira o ponto como separador de milhar).
-  const [value, setValue] = useState(original.toFixed(2).replace(".", ","));
-  const [description, setDescription] = useState(`Estorno · ${row.description}`);
-  const [date, setDate] = useState(today);
-  // Mesma categoria da compra quando o catálogo de estorno a tem; senão a primeira disponível.
-  const originalLabel = pickCategoryTagFromApiTransaction(row)?.label;
-  const [pickedCategory, setPickedCategory] = useState("");
-  // O catálogo de estorno pode chegar depois de o diálogo abrir: o padrão é calculado a cada render.
-  const categoryId = pickedCategory || (categories.find((entry) => entry.label === originalLabel) ?? categories[0])?.id || "";
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
-  const amount = parseMoneyInput(value) ?? Number.NaN;
-  const valid = Number.isFinite(amount) && amount > 0 && amount <= original && description.trim() && date && categoryId;
-  const submit = async () => {
-    setBusy(true); setError(null);
-    const failed = await onSubmit({ row, value: amount, description: description.trim(), dateYmd: date, categoryId });
-    setBusy(false);
-    if (failed) setError(failed);
-  };
-  return <LedgerModal title="Lançar estorno" onClose={onClose}>
-    <div style={{ background: T.greenLight, border: `1px solid ${T.green}`, borderRadius: 10, padding: 12, fontSize: 12 }}>
-      <strong style={{ color: T.green }}>Estornando a compra</strong>
-      <div style={{ marginTop: 4 }}>{row.description} · <span style={NUM}>{code ? formatMoneyAbs(original, code) : original}</span></div>
-    </div>
-    <label style={{ ...G, display: "flex", flexDirection: "column", gap: 6, fontSize: 11, fontWeight: 700, color: T.inkMid }}>Valor do estorno
-      <input aria-label="Valor do estorno" inputMode="decimal" value={value} onChange={(event) => setValue(event.target.value)} style={inputStyle} />
-    </label>
-    <label style={{ ...G, display: "flex", flexDirection: "column", gap: 6, fontSize: 11, fontWeight: 700, color: T.inkMid }}>Descrição
-      <input aria-label="Descrição do estorno" value={description} onChange={(event) => setDescription(event.target.value)} style={inputStyle} />
-    </label>
-    <label style={{ ...G, display: "flex", flexDirection: "column", gap: 6, fontSize: 11, fontWeight: 700, color: T.inkMid }}>Data
-      <input aria-label="Data do estorno" type="date" value={date} onChange={(event) => setDate(event.target.value)} style={inputStyle} />
-    </label>
-    {categories.length > 1 && <label style={{ ...G, display: "flex", flexDirection: "column", gap: 6, fontSize: 11, fontWeight: 700, color: T.inkMid }}>Categoria do estorno
-      <Select aria-label="Categoria do estorno" value={categoryId} onChange={(event) => setPickedCategory(event.target.value)}>{categories.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}</Select>
-    </label>}
-    {categories.length === 0 && <p role="alert" style={{ ...G, margin: 0, fontSize: 12, color: T.red }}>Nenhuma categoria de estorno disponível.</p>}
-    {Number.isFinite(amount) && amount > original && <p role="alert" style={{ ...G, margin: 0, fontSize: 12, color: T.red }}>O estorno não pode passar do valor da compra.</p>}
-    <Outcome error={error} />
-    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}><Btn variant="outGray" onClick={onClose}>Cancelar</Btn><Btn variant="green" disabled={!valid || busy} onClick={submit}>{busy ? "Lançando…" : "Lançar estorno"}</Btn></div>
   </LedgerModal>;
 }
 

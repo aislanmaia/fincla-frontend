@@ -1,6 +1,6 @@
-import { createTransaction, listTransactions, updateTransaction } from "../../../api/transactions";
+import { listTransactions, updateTransaction } from "../../../api/transactions";
 import { moveInstallmentToInvoice } from "../../../api/creditCards";
-import { buildCreateTransactionPayload, pickNonCategoryTagIdsFromApiTransaction, TRANSACTIONS_API_MAX_LIMIT } from "../../data/transactionsAdapter.js";
+import { pickNonCategoryTagIdsFromApiTransaction, TRANSACTIONS_API_MAX_LIMIT } from "../../data/transactionsAdapter.js";
 
 /** Roda uma ação por linha sem parar na primeira falha; devolve quem passou e quem falhou. */
 async function eachRow(rows, action) {
@@ -22,25 +22,6 @@ export function categorizeRows({ rows, categoryId, organizationId }) {
 /** Só parcelas de compra parcelada podem mudar de fatura; as demais linhas são ignoradas aqui. */
 export function moveRows({ rows, cardId, organizationId, year, month }) {
   return eachRow(rows, (row) => moveInstallmentToInvoice(cardId, row.id, organizationId, { target_year: year, target_month: month }));
-}
-
-/**
- * Estorno vinculado à compra. A categoria vem do catálogo de ESTORNO (as categorias de despesa
- * não valem para o tipo refund) e etiquetas de detalhe da compra ficam de fora: pertencem a
- * outra categoria e o backend as recusa.
- */
-export function createRefund({ row, cardId, organizationId, value, description, dateYmd, categoryId }) {
-  return createTransaction(buildCreateTransactionPayload({
-    organizationId,
-    tipo: "estorno",
-    description,
-    value,
-    paymentMethodKey: "credito",
-    categoryTagId: categoryId,
-    dateIso: `${dateYmd}T12:00:00`,
-    cardId,
-    refundOfTransactionId: row.id,
-  }));
 }
 
 /** Todas as páginas do recorte filtrado (a exportação nunca sai só com o que está carregado). */

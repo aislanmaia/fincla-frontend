@@ -10,12 +10,8 @@ import { formatMoney } from "../money/formatMoney";
 import { FC } from "../routing/searchContract";
 import { cardAllTransactionsPath } from "../routing/invoiceRoute";
 import { shouldUseRealData } from "../dataMode";
-import { handleApiError } from "../../api/client";
+import { formatYmdToBrDisplay } from "../data/transactionsAdapter.js";
 import { useFocusTrap } from "../features/transactions/useFocusTrap";
-import { useCategoryTagsData } from "../features/tags/useCategoryTagsData.js";
-import { RefundDialog } from "../features/cardTransactions/LedgerDialogs.jsx";
-import { createRefund } from "../features/cardTransactions/ledgerActions.js";
-import { todayLocalYmd } from "../data/transactionsAdapter.js";
 
 const cardStyle = { padding: 18, minWidth: 0 };
 const label = { ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: ".07em" };
@@ -163,7 +159,7 @@ function Inventory({ rows, remainingSeries, currency, groupBy, sortBy, onMove, o
     {selected.type === "installment" && <div><div style={label}>{selected.total_installments} parcelas · {Array.isArray(selected.paid_installment_numbers) ? `${selected.paid_installment_numbers.length} paga${selected.paid_installment_numbers.length === 1 ? "" : "s"}` : "pagamento não informado"}</div><div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 8 }}>{Array.from({ length: Math.min(Number(selected.total_installments), 60) }, (_, index) => <span key={index} style={{ width: 16, height: 16, borderRadius: "50%", background: Array.isArray(selected.paid_installment_numbers) && selected.paid_installment_numbers.includes(index + 1) ? T.green : index === Number(selected.installment_number) - 1 ? T.blueLight : T.grayLight, border: `2px solid ${index === Number(selected.installment_number) - 1 ? T.blue : T.border}` }} />)}</div><div style={{ ...G, fontSize: 10, color: T.inkLight, marginTop: 5 }}>{Array.isArray(selected.paid_installment_numbers) ? "verde = parcela liquidada · anel azul = parcela deste mês" : "anel azul = parcela deste mês · estado de pagamento não informado"}</div></div>}
     <div style={{ display: "grid", gap: 7 }}>
       {selected.type === "installment" && <Btn variant="blue" aria-label={`Mover ${selected.description}`} onClick={() => { setSheetOpen(false); onMove({ item: selected }); }}>↻ Mover para outra fatura</Btn>}
-      {canRefund(selected) && <Btn variant="outGray" aria-label={`Lançar estorno de ${selected.description}`} onClick={() => { setSheetOpen(false); onRefund(selected); }}>↺ Lançar estorno desta compra</Btn>}
+      {onRefund && canRefund(selected) && <Btn variant="outGray" aria-label={`Lançar estorno de ${selected.description}`} onClick={() => { setSheetOpen(false); onRefund(selected); }}>↺ Lançar estorno desta compra</Btn>}
       <Btn variant="outGray" onClick={() => navigate({ to: cardAllTransactionsPath(cardId) })}>↗ Ver em Lançamentos</Btn>
     </div>
   </div>;
@@ -229,7 +225,7 @@ function CommitmentsRay({ isMobile, currency, recurring, recurringMonthly, recur
   </>;
 }
 
-export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobile = false }) {
+export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobile = false, transactionsRefreshToken = 0, onRefund = null }) {
   const { cardId } = useParams({ strict: false });
   const navigate = useNavigate();
   const [state, setState] = useState({ loading: true, card: null, future: null, history: null, series: [], error: "", seriesError: false, historyError: false });
@@ -237,8 +233,6 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
   const [groupBy, setGroupBy] = useState("purchase");
   const [sortBy, setSortBy] = useState("value");
   const [moveItem, setMoveItem] = useState(null);
-  const [refundItem, setRefundItem] = useState(null);
-  const refundCatalog = useCategoryTagsData({ organizationId, transactionType: "refund", enabled: shouldUseRealData(organizationId, dataMode) });
   const [targetMonth, setTargetMonth] = useState("");
   const [refresh, setRefresh] = useState(0);
   const [historyMonths, setHistoryMonths] = useState(3);
@@ -261,11 +255,11 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
     if (!enabled) { setState({ loading: false, card: null, future: null, history: null, series: [], error: "Organização indisponível.", seriesError: false, historyError: false }); return; }
     let cancelled = false;
     setState((old) => ({ ...old, loading: true }));
-    loadSnapshot(organizationId, cardId, refresh)
+    loadSnapshot(organizationId, cardId, `${refresh}.${transactionsRefreshToken}`)
       .then((snapshot) => { if (!cancelled) setState(snapshot); })
       .catch(() => { if (!cancelled) setState({ loading: false, card: null, future: null, history: null, series: [], seriesError: false, historyError: false, error: "Não foi possível carregar os compromissos deste cartão." }); });
     return () => { cancelled = true; };
-  }, [enabled, organizationId, cardId, refresh]);
+  }, [enabled, organizationId, cardId, refresh, transactionsRefreshToken]);
 
   const { card, future, history, series } = state;
   const rows = future?.monthly_breakdown || [];
@@ -372,13 +366,6 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
       setMutation({ pending: false, error: "" });
     } catch { setMutation({ pending: false, error: "Não foi possível atualizar a marcação de baixo uso." }); }
   };
-  const submitRefund = async ({ row, value, description, dateYmd, categoryId }) => {
-    try {
-      await createRefund({ row: { id: row.transaction_id }, cardId: card.id, organizationId, value, description, dateYmd, categoryId });
-      setRefundItem(null); setRefresh((current) => current + 1);
-      return null;
-    } catch (error) { return handleApiError(error) || "Não foi possível lançar o estorno. Tente novamente."; }
-  };
   const confirmMove = async () => {
     if (!moveItem || !targetMonth) return;
     const [year, month] = targetMonth.split("-").map(Number);
@@ -435,9 +422,8 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
       <CommitmentsRay isMobile={isMobile} currency={currency} recurring={recurring} recurringMonthly={recurringMonthly} recurringNextYear={recurringNextYear} recurringInvoicePercent={recurringInvoicePercent} seriesById={seriesById} seriesError={state.seriesError} mutationPending={mutation.pending} onLowUsage={toggleLowUsage} lowUsageMonthly={lowUsageMonthly} largestInstallments={largestInstallments} nearestToEnd={nearestToEnd} reduction={reduction} finishing={finishing} inventoryReady={inventoryKnown(monthNow, currency)} bucketDatesKnown={bucketDatesKnown} dayBuckets={dayBuckets} largestBucket={largestBucket} monthly={monthly} periodCategories={periodCategories} categoryPeriodLabel={categoryPeriodLabel} categoryAverageKnown={categoryAverageKnown} periodCount={historyMonths + futureMonths} />
       {currencyMismatch && <p role="alert" style={{ margin: 0, color: T.amber }}>A moeda dos compromissos recebidos não corresponde à moeda do cartão. Valores desses meses estão indisponíveis.</p>}
       {!allKnown && <p role="status" style={{ margin: 0, color: T.amber }}>O inventário de alguns meses está incompleto. Os itens disponíveis continuam listados abaixo.</p>}
-      <Inventory rows={browsableRows} remainingSeries={balanceKnown ? balance.series : []} currency={currency} groupBy={groupBy} sortBy={sortBy} onMove={handleInventory} onRefund={setRefundItem} isMobile={isMobile} cardId={cardId} />
+      <Inventory rows={browsableRows} remainingSeries={balanceKnown ? balance.series : []} currency={currency} groupBy={groupBy} sortBy={sortBy} onMove={handleInventory} onRefund={onRefund ? (item) => onRefund({ transactionId: item.transaction_id, cardId: card?.id, description: item.description, amount: item.original_total ?? item.amount, dateLabel: item.purchase_date ? formatYmdToBrDisplay(String(item.purchase_date).slice(0, 10)) : undefined, category: item.category_name || undefined }) : null} isMobile={isMobile} cardId={cardId} />
       {mutation.error && <p role="alert">{mutation.error}</p>}
-      {refundItem && <RefundDialog row={{ ...refundItem, value: refundItem.original_total ?? refundItem.amount, value_currency: currency }} categories={(refundCatalog.categories ?? []).map((entry) => ({ id: String(entry.id), label: entry.labelPt }))} currency={currency} today={todayLocalYmd()} onSubmit={submitRefund} onClose={() => setRefundItem(null)} />}
       {moveItem && <div ref={moveDialogRef} role="dialog" aria-modal="true" aria-label={`Mover ${moveItem.description}`} style={{ position: "fixed", inset: 0, background: "#0008", zIndex: 100, display: "flex", alignItems: isMobile ? "flex-end" : "center", justifyContent: "center" }}><Card style={{ ...cardStyle, width: isMobile ? "100%" : 420, display: "flex", flexDirection: "column", gap: 12 }}><h2 style={{ margin: 0, fontSize: 18 }}>Mover {moveItem.description}</h2><p style={{ margin: 0, fontSize: 12 }}>As demais parcelas da compra serão reposicionadas automaticamente.</p><label>Fatura de destino <Select aria-label="Fatura de destino" value={targetMonth} onChange={(event) => setTargetMonth(event.target.value)} style={{ width: "100%" }}><option value="">Selecione o mês</option>{moveOptions.map((row) => <option key={keyOf(row)} value={keyOf(row)}>{period(row)}</option>)}</Select></label><div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}><Btn variant="outGray" onClick={() => setMoveItem(null)}>Cancelar</Btn><Btn variant="blue" disabled={!targetMonth || mutation.pending} onClick={confirmMove}>Confirmar mudança</Btn></div></Card></div>}
     </>}
   </div>;

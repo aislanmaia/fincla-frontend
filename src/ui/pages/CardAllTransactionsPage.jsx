@@ -6,12 +6,12 @@ import { getCurrentCreditCardInvoice, getInvoiceHistory, listCreditCards } from 
 import { getTransaction, getTransactionsFacets, getTransactionsSummary, listTransactions } from "../../api/transactions";
 import { Btn, Card, PageTitle, Select } from "../components/primitives.jsx";
 import { shouldUseRealData } from "../dataMode.js";
-import { dayKey, groupSubtotal } from "../features/cardTransactions/ledgerModel.js";
+import { dayKey, groupSubtotal, installmentOf } from "../features/cardTransactions/ledgerModel.js";
 import { alertsLabel, assistantInsights } from "../features/cardTransactions/assistantModel.js";
-import { CategorizeDialog, ExportDialog, MoveInstallmentDialog, RefundDialog } from "../features/cardTransactions/LedgerDialogs.jsx";
+import { CategorizeDialog, ExportDialog, MoveInstallmentDialog } from "../features/cardTransactions/LedgerDialogs.jsx";
 import { AssistantDrawer, LedgerDetail } from "../features/cardTransactions/LedgerPanels.jsx";
 import { LedgerAlertStrip, LedgerAppBar, LedgerChipScroller, LedgerSearchEmpty, LedgerSummaryRow } from "../features/cardTransactions/LedgerMobileBars.jsx";
-import { categorizeRows, createRefund, fetchAllRows, moveRows } from "../features/cardTransactions/ledgerActions.js";
+import { categorizeRows, fetchAllRows, moveRows } from "../features/cardTransactions/ledgerActions.js";
 import { buildPdfParts, buildPrintHtml, downloadCsv, printHtml } from "../features/cardTransactions/ledgerExport.js";
 import { CardOutflowsChart } from "../features/cardTransactions/CardOutflowsChart.jsx";
 import { CardTransactionsSummary } from "../features/cardTransactions/CardTransactionsSummary.jsx";
@@ -37,7 +37,7 @@ import { useCategoryTagsData } from "../features/tags/useCategoryTagsData.js";
 import { useFocusTrap } from "../features/transactions/useFocusTrap.js";
 import { resolvePeriodDisplayBounds } from "../features/transactions/periodDateBounds.js";
 import { parseMoneyInput } from "../features/onboarding/onboardingValueUtils.js";
-import { pickCategoryTagFromApiTransaction, todayLocalYmd } from "../data/transactionsAdapter.js";
+import { formatYmdToBrDisplay, pickCategoryTagFromApiTransaction } from "../data/transactionsAdapter.js";
 import { formatMoneyAbs } from "../money/formatMoney.js";
 import { FC, editTransactionSearch } from "../routing/searchContract.js";
 import { G, NUM } from "../typography.js";
@@ -63,7 +63,7 @@ const EMPTY_DAYS = new Set();
 function cardLabel(card) {
   return `${card.description || card.brand || "Cartão"} •${card.last4 || "••••"}`;
 }
-export function CardAllTransactionsPage({ organizationId = null, dataMode = "live", isMobile = false, transactionsRefreshToken = 0 }) {
+export function CardAllTransactionsPage({ organizationId = null, dataMode = "live", isMobile = false, transactionsRefreshToken = 0, onRefund = null }) {
   const { cardId } = useParams({ strict: false });
   const navigate = useNavigate();
   const router = useRouter();
@@ -92,7 +92,6 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkKey]);
   const categoryCatalog = useCategoryTagsData({ organizationId, enabled });
-  const refundCatalog = useCategoryTagsData({ organizationId, transactionType: "refund", enabled });
   const tagCatalog = useTransactionsTagCatalog({ organizationId, enabled });
   const [debouncedSearch, setDebouncedSearch] = useState(link.query);
   const [prefs, setPrefs] = useState(readListPrefs);
@@ -479,14 +478,12 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     return outcome(await categorizeRows({ rows, categoryId, organizationId }), rows.length, `${rows.length} lançamento${rows.length === 1 ? "" : "s"} recategorizado${rows.length === 1 ? "" : "s"}.`);
   };
   const submitMove = async ({ rows, year, month }) => outcome(await moveRows({ rows, cardId: state.card.id, organizationId, year, month }), rows.length, `${rows.length} parcela${rows.length === 1 ? "" : "s"} movida${rows.length === 1 ? "" : "s"} de fatura.`);
-  const submitRefund = async ({ row, value, description, dateYmd, categoryId }) => {
-    try {
-      await createRefund({ row, cardId: state.card.id, organizationId, value, description, dateYmd, categoryId });
-      finishAction("Estorno lançado e vinculado à compra.");
-      return null;
-    } catch {
-      return "Não foi possível lançar o estorno. Tente novamente.";
-    }
+  /** Entrega a compra ao painel oficial de Nova transação; parcelada leva o total da compra, não a parcela. */
+  const requestRefund = (row) => {
+    const part = installmentOf(row);
+    const amount = part ? Math.round(Math.abs(Number(part.amount ?? row.value) || 0) * part.total_installments * 100) / 100 : row.value;
+    setInspected(null);
+    onRefund({ transactionId: row.id, cardId: state.card?.id, description: row.description, amount, dateLabel: formatYmdToBrDisplay(String(row.date ?? "").slice(0, 10)), category: pickCategoryTagFromApiTransaction(row)?.label || row.category || undefined });
   };
   const exportRowsOf = async () => fetchAllRows({ base: { organization_id: organizationId, ...(cardScope === "current" ? { credit_card_id: state.card.id } : {}) }, filter: queryFilter, total: state.total ?? state.rows.length });
   const filterSummary = () => [chipLabel, ...(kind ? [`Tipo: ${KIND_LABELS[kind]}`] : []), ...(weekLabel ? [weekLabel] : []), ...(debouncedSearch ? [`Busca: ${debouncedSearch}`] : []), ...activeFacets.map((facet) => `${facet.label}: ${facet.value}`)];
@@ -684,19 +681,18 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
         {searchEmpty ? <LedgerSearchEmpty query={searchTerm} onClear={clearSearch} /> : 
         <CardTransactionsTable rows={state.rows} total={state.total} cardCurrency={cardScope === "current" ? card.currency : null} loading={state.loading} error={state.error} hasMore={hasMore} onMore={onMore} selected={selectedRows} onSelected={setSelectedRows} selectionSum={selectionSum} onCategorize={() => setDialog({ kind: "categorize", ids: selectedRows })} onMoveInstallment={cardScope === "current" ? () => setDialog({ kind: "move", ids: selectedRows }) : undefined} onExportSelected={() => setDialog({ kind: "export", selection: { rows: selectedRowObjects, sum: selectionSum } })} inspected={inspected} onInspect={(row) => { inspectTriggerRef.current = document.activeElement; setInspected(row); }} grouped={groupedByDate} collapsible={collapsible} collapsedKeys={collapsedDays} onToggleGroup={toggleDay} density={prefs.density} isMobile={isMobile} maxHeight={filtersOpen && !isMobile ? ledgerHeight : undefined} />}
         </div>
-        {inspected && !isMobile && <div ref={detailDialogRef} role="dialog" aria-modal="false" aria-label="Detalhes do lançamento" style={{ flex: "none", width: 360, minWidth: 0, marginLeft: 12 }}><Card style={{ height: "100%", padding: 20, overflowY: "auto", boxSizing: "border-box" }}><LedgerDetail row={inspected} currency={cardScope === "current" ? card?.currency : null} closeRef={detailCloseRef} onClose={() => setInspected(null)} onOpen={openTransaction} onMove={cardScope === "current" ? (row) => setDialog({ kind: "move", ids: [row.id] }) : undefined} onRefund={cardScope === "current" ? (row) => setDialog({ kind: "refund", row }) : undefined} onOpenOriginal={openOriginal} /></Card></div>}
+        {inspected && !isMobile && <div ref={detailDialogRef} role="dialog" aria-modal="false" aria-label="Detalhes do lançamento" style={{ flex: "none", width: 360, minWidth: 0, marginLeft: 12 }}><Card style={{ height: "100%", padding: 20, overflowY: "auto", boxSizing: "border-box" }}><LedgerDetail row={inspected} currency={cardScope === "current" ? card?.currency : null} closeRef={detailCloseRef} onClose={() => setInspected(null)} onOpen={openTransaction} onMove={cardScope === "current" ? (row) => setDialog({ kind: "move", ids: [row.id] }) : undefined} onRefund={cardScope === "current" && onRefund ? requestRefund : undefined} onOpenOriginal={openOriginal} /></Card></div>}
         {filtersOpen && !isMobile && !inspected && <div style={{ ...(dockFloating ? { position: "absolute", top: 0, right: 0, zIndex: 5, boxShadow: "-8px 0 24px rgba(15,15,13,.1)" } : { flex: "none" }), width: dockFloating ? Math.min(480, Math.max(400, viewportWidth * .4)) : Math.min(420, Math.max(320, viewportWidth * .28)), maxWidth: "100%", height: ledgerHeight, minWidth: 0 }}><TransactionsFilterPanel filter={filter} facet={activeFacet} onFacetChange={setActiveFacet} categories={categories} allTags={tagOptions.map((tag) => tag.displayLabel)} allTagsLoading={tagCatalog.loading} allTagsError={Boolean(tagCatalog.error)} tagIdByLabel={tagIdByLabel} facetCounts={facetCounts} activeFacets={activeFacets} onClearFacet={clearFacet} onClearAll={clearAll} onApply={closeFilters} onClose={closeFilters} resultCount={state.total ?? 0} resultsLoading={state.loading} visibleFacetKeys={FACETS} defaultPeriod="tudo" cardScopePanel={cardScopePanel} periodScopePanel={timeScopePanel} hidePeriodContent={invoiceMode} selectionOverrides={{ cartao: cardScope === "all" ? 1 : 0, ...(invoiceMode ? { periodo: 0 } : {}) }} /></div>}
       </div>
       {state.error && <Card role="alert" style={{ display: "flex", alignItems: "center", gap: 12, padding: 14 }}>Não foi possível carregar os lançamentos. <Btn variant="outGray" onClick={() => { setState((current) => ({ ...current, loading: true, error: false })); setRetry((value) => value + 1); }}>Tentar novamente</Btn></Card>}
     </>}
     {inspected && isMobile && <div ref={detailDialogRef} role="dialog" aria-modal="true" aria-label="Detalhes do lançamento" style={{ position: "fixed", inset: 0, zIndex: 50, background: "rgba(15,15,13,.35)", display: "flex", justifyContent: "flex-end", alignItems: "flex-end" }} onClick={() => setInspected(null)}>
       <Card style={{ width: "100%", maxHeight: "80dvh", borderRadius: "18px 18px 0 0", padding: 20, overflowY: "auto" }} onClick={(event) => event.stopPropagation()}>
-        <LedgerDetail row={inspected} currency={cardScope === "current" ? card?.currency : null} closeRef={detailCloseRef} onClose={() => setInspected(null)} onOpen={openTransaction} onMove={cardScope === "current" ? (row) => setDialog({ kind: "move", ids: [row.id] }) : undefined} onRefund={cardScope === "current" ? (row) => setDialog({ kind: "refund", row }) : undefined} onOpenOriginal={openOriginal} />
+        <LedgerDetail row={inspected} currency={cardScope === "current" ? card?.currency : null} closeRef={detailCloseRef} onClose={() => setInspected(null)} onOpen={openTransaction} onMove={cardScope === "current" ? (row) => setDialog({ kind: "move", ids: [row.id] }) : undefined} onRefund={cardScope === "current" && onRefund ? requestRefund : undefined} onOpenOriginal={openOriginal} />
       </Card>
     </div>}
     {dialog?.kind === "categorize" && <CategorizeDialog rows={rowsByIds(dialog.ids)} categories={categories} onSubmit={submitCategorize} onClose={closeDialog} />}
     {dialog?.kind === "move" && <MoveInstallmentDialog rows={rowsByIds(dialog.ids).length ? rowsByIds(dialog.ids) : inspected ? [inspected] : []} invoiceOptions={invoiceOpts} currentKey={historyState.current?.month ?? null} onSubmit={submitMove} onClose={closeDialog} />}
-    {dialog?.kind === "refund" && <RefundDialog row={dialog.row} categories={(refundCatalog.categories ?? []).map((entry) => ({ id: String(entry.id), label: entry.labelPt }))} currency={cardScope === "current" ? card?.currency : null} today={todayLocalYmd()} onSubmit={submitRefund} onClose={closeDialog} />}
     {dialog?.kind === "export" && <ExportDialog total={dialog.selection ? dialog.selection.rows.length : state.total} filterSummary={filterSummary()} selection={dialog.selection ? { count: dialog.selection.rows.length, sum: dialog.selection.sum } : null} onExport={(format) => submitExport(format, dialog.selection?.rows ?? null)} onClose={closeDialog} />}
     {dialog?.kind === "assistant" && <AssistantDrawer insights={insights.items} loadedCount={state.rows.length} onClose={closeDialog} isMobile={isMobile} onSelect={(ids) => { setSelectedRows(ids); setDialog(null); }} onCategorize={(ids) => { setSelectedRows(ids); setDialog({ kind: "categorize", ids }); }} />}
     {notice && <div role="status" style={{ ...G, position: "fixed", left: "50%", bottom: "calc(20px + env(safe-area-inset-bottom, 0px))", transform: "translateX(-50%)", zIndex: 70, background: T.ink, color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 12, display: "flex", gap: 12, alignItems: "center" }}>{notice}<button type="button" aria-label="Fechar aviso" onClick={() => setNotice(null)} style={{ border: 0, background: "none", color: T.surface, cursor: "pointer" }}>×</button></div>}
