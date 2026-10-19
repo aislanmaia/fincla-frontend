@@ -415,23 +415,20 @@ it("mostra total original, parcelas liquidadas e estorno vinculado só quando a 
   expect(within(sheet).queryByRole("button", { name: /Lançar estorno/ })).not.toBeInTheDocument();
 });
 
-it("lança estorno vinculado à parcela pela categoria do catálogo de estorno", async () => {
+it("Lançar estorno entrega a parcela ao painel oficial de Nova transação, sem diálogo próprio", async () => {
   const user = userEvent.setup();
-  const posted = [];
-  server.use(http.post("*/v1/transactions", async ({ request }) => { posted.push(await request.json()); return HttpResponse.json({ id: 99 }); }));
+  const onRefund = vi.fn();
   futureOverride = { monthly_breakdown: [{
     year: 2026, month: 10, month_name: "outubro", total_amount: money("100"),
     installments: [{ transaction_id: 11, series_id: "a", description: "Notebook", amount: money("100"), installment_number: 1, total_installments: 3, due_date: "2026-10-10", purchase_date: "2026-10-01", category_name: "Tecnologia", category_id: "tech", linked_refunds_count: 0, linked_refunds_total: money("0") }],
     recurrences: [],
   }] };
-  render(<CardCommitmentsPage organizationId={ORG} isMobile />);
+  render(<CardCommitmentsPage organizationId={ORG} isMobile onRefund={onRefund} />);
   const inventory = await screen.findByRole("region", { name: "Inventário de compromissos" });
   await user.click(within(inventory).getByRole("button", { name: "Detalhar Notebook" }));
   await user.click(within(screen.getByRole("dialog", { name: "Detalhes de Notebook" })).getByRole("button", { name: /Lançar estorno/ }));
-  const dialog = screen.getByRole("dialog", { name: "Lançar estorno" });
-  await user.click(within(dialog).getByRole("button", { name: "Lançar estorno" }));
-  await waitFor(() => expect(posted).toHaveLength(1));
-  expect(posted[0]).toMatchObject({ type: "refund", refund_of_transaction_id: 11, card_id: 7, tag_ids: ["refund-cat"], value: 100 });
+  expect(onRefund).toHaveBeenCalledWith({ transactionId: 11, cardId: 7, description: "Notebook" });
+  expect(screen.queryByRole("dialog", { name: "Lançar estorno" })).not.toBeInTheDocument();
 });
 
 it("não oferece estorno quando a contagem de estornos não é comprovada, e limita ao total original", async () => {

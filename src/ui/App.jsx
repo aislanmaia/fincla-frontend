@@ -348,6 +348,20 @@ export default function App() {
     openTxModal(isUuidString(id) ? { [FC.CARD]: id } : {});
   };
 
+  /** "Lançar estorno" das telas do cartão: o painel oficial de Nova transação, já como estorno ligado à compra. */
+  const onRefundCardItem = ({ transactionId, cardId }) => {
+    if (transactionId == null) return;
+    setModalPreConfig((p) => ({
+      ...(p || {}),
+      tipo: "despesa",
+      isEstorno: true,
+      method: "credito",
+      ...(cardId != null ? { cartaoId: String(cardId) } : {}),
+      refundOfTransactionId: Number(transactionId),
+    }));
+    openTxModal({ [FC.MODAL]: FC_MODAL.NEW_REFUND, [FC.TX]: String(transactionId) });
+  };
+
   const pages = {
     dashboard:    <DashboardPageView onNav={navTo} stateCtrl={stateCtrl} dataMode={dataMode} onboardingData={onboardingData} extraRecs={extraRecs} onNewTx={()=>openTxModal()} organizationId={session.activeOrgId} />,
     rhythm: <RitmoPageView
@@ -418,8 +432,8 @@ export default function App() {
             }} />,
     invoiceDashboard: <InvoiceDashboardPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} />,
     cardTransactions: <CardTransactionsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} />,
-    cardAllTransactions: <CardAllTransactionsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} />,
-    cardCommitments: <CardCommitmentsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} />,
+    cardAllTransactions: <CardAllTransactionsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onRefund={onRefundCardItem} />,
+    cardCommitments: <CardCommitmentsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onRefund={onRefundCardItem} />,
     cards:      <CardsEntryPage dataMode={dataMode} organizationId={session.activeOrgId}
       hub={<CardHubPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onNewItem={onNewCardItem} />}
       classic={<CartoesPage    onNav={navTo} isMobile={isMobile} cards={dataMode==="empty" ? extraCards : undefined} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onTransactionsInvalidate={bumpTransactionsList} onOpenTransaction={(transactionId) => { navigate({ search: (prev) => ({ ...prev, [FC.TX]: String(transactionId), [FC.MODAL]: FC_MODAL.EDIT_TRANSACTION }) }); }} onNewItem={onNewCardItem} onLaunchRefund={(item, fromCard) => {
