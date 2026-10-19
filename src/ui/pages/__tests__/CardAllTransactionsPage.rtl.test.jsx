@@ -718,7 +718,8 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "Ver detalhes de Notebook" }));
     await user.click(screen.getByRole("button", { name: /Lançar estorno desta compra/ }));
-    expect(onRefund).toHaveBeenCalledWith({ transactionId: 11, cardId: 7, description: "Notebook" });
+    expect(onRefund).toHaveBeenCalledWith(expect.objectContaining({ transactionId: 11, cardId: 7, description: "Notebook", amount: 1000, category: "Compras" }));
+    expect(screen.queryByRole("dialog", { name: "Detalhes do lançamento" })).not.toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "Lançar estorno" })).not.toBeInTheDocument();
   });
 

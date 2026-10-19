@@ -427,7 +427,7 @@ it("Lançar estorno entrega a parcela ao painel oficial de Nova transação, sem
   const inventory = await screen.findByRole("region", { name: "Inventário de compromissos" });
   await user.click(within(inventory).getByRole("button", { name: "Detalhar Notebook" }));
   await user.click(within(screen.getByRole("dialog", { name: "Detalhes de Notebook" })).getByRole("button", { name: /Lançar estorno/ }));
-  expect(onRefund).toHaveBeenCalledWith({ transactionId: 11, cardId: 7, description: "Notebook" });
+  expect(onRefund).toHaveBeenCalledWith(expect.objectContaining({ transactionId: 11, cardId: 7, description: "Notebook", amount: 100, category: "Tecnologia" }));
   expect(screen.queryByRole("dialog", { name: "Lançar estorno" })).not.toBeInTheDocument();
 });
 

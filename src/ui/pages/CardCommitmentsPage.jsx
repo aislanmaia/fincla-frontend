@@ -11,7 +11,6 @@ import { FC } from "../routing/searchContract";
 import { cardAllTransactionsPath } from "../routing/invoiceRoute";
 import { shouldUseRealData } from "../dataMode";
 import { formatYmdToBrDisplay } from "../data/transactionsAdapter.js";
-import { handleApiError } from "../../api/client";
 import { useFocusTrap } from "../features/transactions/useFocusTrap";
 
 const cardStyle = { padding: 18, minWidth: 0 };

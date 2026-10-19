@@ -352,8 +352,7 @@ export default function App() {
   const onRefundCardItem = ({ transactionId, cardId, description, amount, dateLabel, category }) => {
     if (transactionId == null) return;
     const id = Number(transactionId);
-    setModalPreConfig((p) => ({
-      ...(p || {}),
+    setModalPreConfig({
       tipo: "despesa",
       isEstorno: true,
       method: "credito",
@@ -372,7 +371,7 @@ export default function App() {
         cardId: cardId != null && Number.isFinite(Number(cardId)) ? Number(cardId) : null,
       },
       valorInicial: Math.abs(Number(amount) || 0),
-    }));
+    });
     openTxModal({ [FC.MODAL]: FC_MODAL.NEW_REFUND, [FC.TX]: String(id) });
   };
 
