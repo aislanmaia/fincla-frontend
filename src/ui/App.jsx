@@ -349,17 +349,31 @@ export default function App() {
   };
 
   /** "Lançar estorno" das telas do cartão: o painel oficial de Nova transação, já como estorno ligado à compra. */
-  const onRefundCardItem = ({ transactionId, cardId }) => {
+  const onRefundCardItem = ({ transactionId, cardId, description, amount, dateLabel, category }) => {
     if (transactionId == null) return;
+    const id = Number(transactionId);
     setModalPreConfig((p) => ({
       ...(p || {}),
       tipo: "despesa",
       isEstorno: true,
       method: "credito",
       ...(cardId != null ? { cartaoId: String(cardId) } : {}),
-      refundOfTransactionId: Number(transactionId),
+      ...(category ? { cat: category } : {}),
+      categoryTagId: null,
+      refundOfTransactionId: id,
+      refundLinkedTx: {
+        id,
+        desc: description,
+        dateLabel,
+        val: Math.abs(Number(amount) || 0),
+        cat: category,
+        categoryTagId: null,
+        paymentMethodKey: "credito",
+        cardId: cardId != null && Number.isFinite(Number(cardId)) ? Number(cardId) : null,
+      },
+      valorInicial: Math.abs(Number(amount) || 0),
     }));
-    openTxModal({ [FC.MODAL]: FC_MODAL.NEW_REFUND, [FC.TX]: String(transactionId) });
+    openTxModal({ [FC.MODAL]: FC_MODAL.NEW_REFUND, [FC.TX]: String(id) });
   };
 
   const pages = {
