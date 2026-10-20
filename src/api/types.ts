@@ -956,7 +956,7 @@ export interface CreditCard {
   due_day: number;
   description: string | null;
   credit_limit: number | null;
-  closing_day: number | null;
+  closing_day: number;
   color: string | null;
   notes?: string | null;
   /** ISO 4217, herdada da conta em que o cartão liquida. */

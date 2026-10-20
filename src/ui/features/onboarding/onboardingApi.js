@@ -141,7 +141,7 @@ function buildOnboardingCreditCardPayload(data, organizationId) {
     last4Digits: last4,
     limitInput: data.cardLim || "",
     dueDay: data.cardVenc || "",
-    closingDay: "",
+    closingDay: data.cardFech || "",
   });
 }
 

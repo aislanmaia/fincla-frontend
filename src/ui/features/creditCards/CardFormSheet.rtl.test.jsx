@@ -96,6 +96,7 @@ describe("CardFormSheet — foco nos campos", () => {
     await user.type(screen.getByPlaceholderText(/Nubank Roxinho/i), "Roxinho");
     await user.type(screen.getByPlaceholderText("0,00"), "5000");
     await user.type(screen.getByPlaceholderText("ex: 10"), "10");
+    await user.type(screen.getByPlaceholderText("ex: 3"), "3");
 
     const salvar = screen.getByRole("button", { name: /Salvar|Adicionar cartão/i });
     await user.type(screen.getByPlaceholderText("1234"), "123");
@@ -103,5 +104,23 @@ describe("CardFormSheet — foco nos campos", () => {
 
     await user.type(screen.getByPlaceholderText("1234"), "4");
     expect(screen.getByRole("button", { name: /Salvar|Adicionar cartão/i }).disabled).toBe(false);
+  });
+
+  it("exige o dia de fechamento e oferece a sugestão (7 dias antes do vencimento) em um toque", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.type(screen.getByPlaceholderText(/Nubank, Itaú/i), "Nubank");
+    await user.type(screen.getByPlaceholderText(/Nubank Roxinho/i), "Roxinho");
+    await user.type(screen.getByPlaceholderText("0,00"), "5000");
+    await user.type(screen.getByPlaceholderText("1234"), "1234");
+    await user.type(screen.getByPlaceholderText("ex: 10"), "10");
+
+    expect(screen.getByRole("button", { name: /Salvar|Adicionar cartão/i }).disabled).toBe(true);
+
+    await user.click(screen.getByRole("button", { name: /Usar dia 3/ }));
+    expect(screen.getByPlaceholderText("ex: 3").value).toBe("3");
+    expect(screen.getByRole("button", { name: /Salvar|Adicionar cartão/i }).disabled).toBe(false);
+    expect(screen.queryByRole("button", { name: /Usar dia/ })).not.toBeInTheDocument();
   });
 });

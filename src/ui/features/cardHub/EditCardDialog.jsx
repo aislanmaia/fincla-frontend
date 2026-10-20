@@ -9,6 +9,7 @@ import {
   formatLimitInputFromNumber,
 } from "../../data/creditCardsAdapter.js";
 import { HubDialog } from "./HubDialog.jsx";
+import { ClosingDaySuggestion } from "../creditCards/ClosingDaySuggestion.jsx";
 
 const field = { ...G, width: "100%", boxSizing: "border-box", border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px 12px", fontSize: 13, color: T.ink, background: T.surface };
 const label = { ...G, display: "block", marginBottom: 5, fontSize: 11, fontWeight: 700, color: T.inkMid };
@@ -29,7 +30,7 @@ export function EditCardDialog({ card, organizationId, isMobile, onSave, onClose
 
   const canSave = brand.trim().length >= 2 && brand.trim().length <= 50 && name.trim().length > 0
     && /^\d{4}$/.test(last4) && validDay(dueDay)
-    && (!closingDay || validDay(closingDay)) && validLimit(limit.trim())
+    && validDay(closingDay) && validLimit(limit.trim())
     && (!color || /^#[0-9a-fA-F]{6}$/.test(color));
 
   async function submit(event) {
@@ -82,12 +83,13 @@ export function EditCardDialog({ card, organizationId, isMobile, onSave, onClose
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
         {input("Dia do vencimento", dueDay, setDueDay, { inputMode: "numeric", maxLength: 2, required: true })}
-        {input("Dia do fechamento", closingDay, setClosingDay, { inputMode: "numeric", maxLength: 2, placeholder: "Não informado" })}
+        {input("Dia do fechamento", closingDay, setClosingDay, { inputMode: "numeric", maxLength: 2, placeholder: "ex: 3", required: true })}
+        <div style={{ gridColumn: "1 / -1" }}><ClosingDaySuggestion dueDay={dueDay} closingDay={closingDay} onUse={setClosingDay} /></div>
       </div>
       {input("Cor do cartão (opcional)", color, setColor, { placeholder: "#RRGGBB", maxLength: 7 })}
       {error && <div role="alert" style={{ ...G, color: T.red, fontSize: 12 }}>{error}</div>}
       <p style={{ ...G, margin: 0, fontSize: 11, lineHeight: 1.5, color: T.inkLight }}>
-        Deixe o limite vazio para manter o valor atual. O dia de fechamento vazio também mantém a configuração atual.
+        Deixe o limite vazio para manter o valor atual. O dia de fechamento é obrigatório.
       </p>
     </form>
   </HubDialog>;

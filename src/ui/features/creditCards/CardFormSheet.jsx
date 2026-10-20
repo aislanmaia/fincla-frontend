@@ -4,6 +4,8 @@ import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { M_MONO } from "../moodV4";
 import { CARD_BRAND_OPTIONS } from "../../data/creditCardsAdapter.js";
+import { ClosingDaySuggestion } from "./ClosingDaySuggestion.jsx";
+import { isValidMonthDay } from "./closingDay.js";
 
 /**
  * Campo de texto do sheet.
@@ -69,7 +71,7 @@ export function CardFormSheet({
   // `last4` precisa estar completo: o backend exige exatamente 4 dígitos e
   // salvar com 1..3 só devolveria erro de validação.
   const canSave =
-    draftIssuer && draftName && String(draftLast4).length === 4 && draftLimit && draftDueDay;
+    draftIssuer && draftName && String(draftLast4).length === 4 && draftLimit && draftDueDay && isValidMonthDay(draftClosingDay);
 
   const inner = (
     <>
@@ -154,6 +156,7 @@ export function CardFormSheet({
           <div>
             <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Dia do fechamento</div>
             <FI val={draftClosingDay} set={setDraftClosingDay} ph="ex: 3" type="number" />
+            <ClosingDaySuggestion dueDay={draftDueDay} closingDay={draftClosingDay} onUse={setDraftClosingDay} />
           </div>
         </div>
         <div style={{ background: T.blueLight, border: `1px solid ${T.blue}22`, borderRadius: 10, padding: "10px 14px" }}>
