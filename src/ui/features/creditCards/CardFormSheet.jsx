@@ -148,7 +148,7 @@ export function CardFormSheet({
               style={{ ...G, ...NUM, flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 13, color: T.ink }} />
           </div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 12 }}>
           <div>
             <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Dia do vencimento</div>
             <FI val={draftDueDay} set={setDraftDueDay} ph="ex: 10" type="number" />
@@ -156,9 +156,9 @@ export function CardFormSheet({
           <div>
             <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Dia do fechamento</div>
             <FI val={draftClosingDay} set={setDraftClosingDay} ph="ex: 3" type="number" />
-            <ClosingDaySuggestion dueDay={draftDueDay} closingDay={draftClosingDay} onUse={setDraftClosingDay} />
           </div>
         </div>
+        <ClosingDaySuggestion dueDay={draftDueDay} closingDay={draftClosingDay} onUse={setDraftClosingDay} />
         <div style={{ background: T.blueLight, border: `1px solid ${T.blue}22`, borderRadius: 10, padding: "10px 14px" }}>
           <div style={{ ...G, fontSize: 11, color: T.blue, lineHeight: 1.65 }}>
             💡 <strong>Dica financeira:</strong> O dia do fechamento define o início do período de compras. Compras feitas logo após o fechamento têm mais prazo para pagamento.
