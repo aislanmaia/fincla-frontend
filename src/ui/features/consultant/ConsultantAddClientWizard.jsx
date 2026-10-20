@@ -1,6 +1,6 @@
+import React from "react";
 import { ClosingDaySuggestion } from "../creditCards/ClosingDaySuggestion.jsx";
 import { isValidMonthDay } from "../creditCards/closingDay.js";
-import React from "react";
 import { useNavigate } from "@tanstack/react-router";
 
 import { Btn } from "../../components/primitives";
@@ -362,7 +362,7 @@ export function ConsultantAddClientWizard({ open, onClose, onCreated, quota = nu
         { ic: "user", t: "Cliente", rows: [["Nome", f.nome || "—"], ["E-mail", f.email || "—"], ["Telefone", f.telefone || "—"], ["Ocupação", f.ocupacao || "—"]] },
         { ic: "users", t: "Organização", rows: [["Nome", f.orgNome || "—"], ["Tipo", orgTypeMeta?.label], ["Renda mensal", f.renda ? "R$ " + f.renda : "—"]] },
         { ic: "wallet", t: "Início", rows: [["Saldo inicial", f.saldo ? "R$ " + f.saldo : "R$ 0,00"], ["Categorias", f.categorias.length + " selecionadas"]] },
-        ...(f.temCartao ? [{ ic: "card", t: "Cartão", rows: [["Banco", f.cardBanco || "—"], ["Limite", f.cardLimite ? "R$ " + f.cardLimite : "—"], ["Vencimento", "dia " + f.cardVenc]] }] : []),
+        ...(f.temCartao ? [{ ic: "card", t: "Cartão", rows: [["Banco", f.cardBanco || "—"], ["Limite", f.cardLimite ? "R$ " + f.cardLimite : "—"], ["Vencimento", "dia " + f.cardVenc], ["Fechamento", "dia " + f.cardFech]] }] : []),
         ...(f.temReceita ? [{ ic: "repeat", t: "Receita recorrente", rows: [["Descrição", f.recDesc], ["Valor", f.recValor ? "R$ " + f.recValor : "—"], ["Dia", "dia " + f.recDia]] }] : []),
         { ic: "user", t: "Perfil (privado)", rows: [["Nível", EXPERIENCE_LEVELS.find((l) => l.id === f.nivel)?.l], ["Objetivo", f.objetivo], ["Tags", f.tags.length ? f.tags.map((t) => "#" + t).join(" ") : "—"]] },
       ].map((sec) => (

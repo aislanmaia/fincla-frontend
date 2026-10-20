@@ -1,6 +1,6 @@
+import React, { useState } from "react";
 import { ClosingDaySuggestion } from "../creditCards/ClosingDaySuggestion.jsx";
 import { isValidMonthDay } from "../creditCards/closingDay.js";
-import React, { useState } from "react";
 import { T } from "../../tokens";
 import { G, S, NUM } from "../../typography";
 import { ONBOARDING_CATEGORY_ROWS } from "../../data/onboardingFlowCategories.js";
@@ -371,7 +371,7 @@ export const OnboardingFlow = ({
                       </div>
                       {cardNome.trim()&&<ClosingDaySuggestion dueDay={cardVenc} closingDay={cardFech} onUse={setCardFech}/>}
                     </div>
-                    {cardNome.trim()&&card4.length===4&&(!isValidMonthDay(cardVenc)||!isValidMonthDay(cardFech))&&(
+                    {cardNome.trim()&&(!isValidMonthDay(cardVenc)||!isValidMonthDay(cardFech))&&(
                       <div className="fin" style={{...G,fontSize:11,color:T.amber,marginTop:9,lineHeight:1.5}}>
                         Informe os dias de vencimento e de fechamento (1 a 31) — eles definem em qual fatura cada compra cai.
                       </div>

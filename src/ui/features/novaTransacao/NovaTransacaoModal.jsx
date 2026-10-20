@@ -3077,7 +3077,7 @@ export const NovaTransacaoModal = ({
                       </select>
                     </div>
                     {/* Dia de vencimento — obrigatório aqui (não tem default seguro): o
-                        backend deriva `closing_day` dele quando ausente, e um due_day
+                        o fechamento também é obrigatório (com sugestão em um toque); um dia
                         errado bota a compra na fatura errada. Bandeira também é pedida
                         agora — ficava fixa em "Visa" pra sempre no picker senão. */}
                     <input value={quickAddCardDueDay}
@@ -3110,7 +3110,6 @@ export const NovaTransacaoModal = ({
                           setQuickAddCardLast4("");
                           setQuickAddCardBrand(CARD_BRAND_OPTIONS[0]);
                           setQuickAddCardDueDay("");
-    setQuickAddCardClosingDay("");
                           setQuickAddCardClosingDay("");
                           setQuickAddCardError("");
                         }}

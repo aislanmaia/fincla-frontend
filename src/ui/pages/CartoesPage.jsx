@@ -321,7 +321,7 @@ export const CartoesPage = ({
     setDraftBrand(matchBrandToSelectOption(card.bandeira || card.banco));
     setDraftLimit(formatLimitInputFromNumber(card.limite));
     setDraftDueDay(String(card.vencimento ?? ""));
-    setDraftClosingDay(card.fechamento != null ? String(card.fechamento) : "");
+    setDraftClosingDay(card.fechamentoInformado !== false && card.fechamento != null ? String(card.fechamento) : "");
     setEditCardSheet(true);
   };
 

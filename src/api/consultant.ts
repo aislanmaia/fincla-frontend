@@ -248,7 +248,7 @@ export interface CreateConsultantClientPayload {
    */
   estimated_income?: string;
   initial_balance?: string;
-  card?: { bank?: string; limit?: string; due_day?: string } | null;
+  card?: { bank?: string; limit?: string; due_day?: string; closing_day?: string } | null;
   income?: { description?: string; value?: string; day?: string } | null;
   notes?: string;
   tags?: string[];
