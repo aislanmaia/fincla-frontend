@@ -42,7 +42,9 @@ export function dueDateFor(year, month, dueDay, closingDay) {
   const day = Number(dueDay);
   if (!Number.isFinite(day) || day < 1) return null;
   const closing = Number(closingDay);
-  const shifts = Number.isFinite(closing) && closing >= 1 && day <= closing;
+  const monthLength = new Date(year, month, 0).getDate();
+  // Comparados como caem no mês do fechamento (mês curto: os dois ajustam para o último dia).
+  const shifts = Number.isFinite(closing) && closing >= 1 && Math.min(day, monthLength) <= Math.min(closing, monthLength);
   const dueYear = shifts && month === 12 ? year + 1 : year;
   const dueMonth = shifts ? (month === 12 ? 1 : month + 1) : month;
   const lastDay = new Date(dueYear, dueMonth, 0).getDate();

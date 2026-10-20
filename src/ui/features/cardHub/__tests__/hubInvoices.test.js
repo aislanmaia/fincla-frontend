@@ -145,6 +145,7 @@ describe("dueDateFor — vencimento da fatura identificada pelo mês do fechamen
 
   it("usa o último dia do mês de vencimento quando o dia não existe nele", () => {
     expect(dueDateFor(2027, 1, 31, 31)).toBe("2027-02-28");
+    expect(dueDateFor(2027, 2, 31, 30)).toBe("2027-03-31"); // fev: fecha e vence dia 28, o vencimento vai para março
   });
 
   it("a linha do histórico do Hub traz o vencimento do mês seguinte para cartão que fecha depois de vencer", () => {
