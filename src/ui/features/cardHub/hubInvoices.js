@@ -1,3 +1,4 @@
+import { suggestedClosingDay } from "../creditCards/closingDay.js";
 import {
   closingDayForInvoiceAnchor,
   yearMonthOfOpenInvoiceByClosingDay,
@@ -88,7 +89,7 @@ export function buildInvoiceCards({ card, history, current, currentState, future
     ?? yearMonthOfOpenInvoiceByClosingDay(now, closingDayForInvoiceAnchor(card));
   const openKey = invoiceKey(openRef.year, openRef.month);
   const dueDay = card?.due_day;
-  const closingDay = card?.closing_day;
+  const closingDay = card?.closing_day ?? suggestedClosingDay(card?.due_day);
   const byKey = new Map();
 
   (history?.monthly_data || []).forEach((row) => {
