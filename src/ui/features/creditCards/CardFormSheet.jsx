@@ -4,6 +4,8 @@ import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { M_MONO } from "../moodV4";
 import { CARD_BRAND_OPTIONS } from "../../data/creditCardsAdapter.js";
+import { ClosingDaySuggestion } from "./ClosingDaySuggestion.jsx";
+import { isValidMonthDay } from "./closingDay.js";
 
 /**
  * Campo de texto do sheet.
@@ -69,7 +71,7 @@ export function CardFormSheet({
   // `last4` precisa estar completo: o backend exige exatamente 4 dígitos e
   // salvar com 1..3 só devolveria erro de validação.
   const canSave =
-    draftIssuer && draftName && String(draftLast4).length === 4 && draftLimit && draftDueDay;
+    draftIssuer && draftName && String(draftLast4).length === 4 && draftLimit && isValidMonthDay(draftDueDay) && isValidMonthDay(draftClosingDay);
 
   const inner = (
     <>
@@ -146,16 +148,20 @@ export function CardFormSheet({
               style={{ ...G, ...NUM, flex: 1, border: "none", outline: "none", background: "transparent", fontSize: 13, color: T.ink }} />
           </div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 12 }}>
           <div>
-            <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Dia do vencimento</div>
+            <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Dia do vencimento *</div>
             <FI val={draftDueDay} set={setDraftDueDay} ph="ex: 10" type="number" />
           </div>
           <div>
-            <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Dia do fechamento</div>
+            <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Dia do fechamento *</div>
             <FI val={draftClosingDay} set={setDraftClosingDay} ph="ex: 3" type="number" />
           </div>
         </div>
+        {String(draftClosingDay).trim() !== "" && !isValidMonthDay(draftClosingDay) && (
+          <div role="alert" style={{ ...G, fontSize: 11, color: T.red, marginTop: -4 }}>Informe um dia do fechamento de 1 a 31.</div>
+        )}
+        <ClosingDaySuggestion dueDay={draftDueDay} closingDay={draftClosingDay} onUse={setDraftClosingDay} />
         <div style={{ background: T.blueLight, border: `1px solid ${T.blue}22`, borderRadius: 10, padding: "10px 14px" }}>
           <div style={{ ...G, fontSize: 11, color: T.blue, lineHeight: 1.65 }}>
             💡 <strong>Dica financeira:</strong> O dia do fechamento define o início do período de compras. Compras feitas logo após o fechamento têm mais prazo para pagamento.

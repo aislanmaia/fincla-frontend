@@ -1,3 +1,4 @@
+import { suggestedClosingDay } from "../features/creditCards/closingDay.js";
 import {
   createCreditCard,
   getCreditCardInvoice,
@@ -130,11 +131,7 @@ const yearMonthKey = (year, month) => `${year}-${month}`;
  * `closing_date`: sem dia de fechamento, 7 dias antes do vencimento.
  */
 function closingDateOfInvoiceMonth(card, year, month) {
-  let closingDay = card?.closing_day;
-  if (closingDay == null) {
-    closingDay = Number(card?.due_day) - 7;
-    if (closingDay <= 0) closingDay += 28;
-  }
+  const closingDay = card?.closing_day ?? suggestedClosingDay(card?.due_day) ?? 1;
   return new Date(year, month - 1, Math.min(Number(closingDay), daysInCalendarMonth(year, month)));
 }
 
@@ -682,7 +679,9 @@ export function mapCreditCardToUi({ card, currentInvoice, history, futureCommitm
     dig: card.last4,
     bandeira: card.brand,
     vencimento: card.due_day,
-    fechamento: card.closing_day || 1,
+    fechamento: card.closing_day ?? suggestedClosingDay(card.due_day) ?? 1,
+    /** Falso só em cartão legado sem fechamento: o formulário de edição não pré-preenche um dia que o usuário nunca escolheu. */
+    fechamentoInformado: card.closing_day != null,
     closingDayEffective: closingDayForInvoiceAnchor(card),
     limite: card.credit_limit || 0,
     limitUsagePercent: Number.isFinite(Number(card.limit_usage_percent)) && card.limit_usage_percent !== null ? Number(card.limit_usage_percent) : null,

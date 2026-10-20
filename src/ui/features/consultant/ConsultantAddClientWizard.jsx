@@ -1,4 +1,6 @@
 import React from "react";
+import { ClosingDaySuggestion } from "../creditCards/ClosingDaySuggestion.jsx";
+import { isValidMonthDay } from "../creditCards/closingDay.js";
 import { useNavigate } from "@tanstack/react-router";
 
 import { Btn } from "../../components/primitives";
@@ -76,7 +78,7 @@ const INITIAL = {
   nome: "", email: "", telefone: "", ocupacao: "",
   orgNome: "", orgTipo: "personal", renda: "",
   saldo: "", categorias: ["housing", "food_groceries", "transport"],
-  temCartao: false, cardBanco: "", cardLimite: "", cardVenc: "10",
+  temCartao: false, cardBanco: "", cardLimite: "", cardVenc: "10", cardFech: "",
   temReceita: true, recDesc: "Salário", recValor: "", recDia: "5",
   notas: "", tags: [], nivel: "iniciante", objetivo: "Montar reserva", prioridade: false, categoryTemplateId: "",
 };
@@ -120,7 +122,7 @@ function toPayload(f) {
     org_type: f.orgTipo,
     estimated_income: f.renda || undefined,
     initial_balance: f.saldo || undefined,
-    card: f.temCartao ? { bank: f.cardBanco, limit: f.cardLimite, due_day: f.cardVenc } : null,
+    card: f.temCartao ? { bank: f.cardBanco, limit: f.cardLimite, due_day: f.cardVenc, closing_day: f.cardFech } : null,
     income: f.temReceita ? { description: f.recDesc, value: f.recValor, day: f.recDia } : null,
     notes: f.notas || undefined,
     tags: f.tags,
@@ -164,6 +166,7 @@ export function ConsultantAddClientWizard({ open, onClose, onCreated, quota = nu
   const canNext = () => {
     if (step.id === "cliente") return f.nome.trim() && /\S+@\S+\.\S+/.test(f.email);
     if (step.id === "org") return f.orgNome.trim();
+    if (step.id === "cartao" && f.temCartao) return isValidMonthDay(f.cardVenc) && isValidMonthDay(f.cardFech);
     return true;
   };
   const next = () => stepIdx < STEPS.length - 1 && setStepIdx(stepIdx + 1);
@@ -287,6 +290,8 @@ export function ConsultantAddClientWizard({ open, onClose, onCreated, quota = nu
             <Field label="Limite"><TextInput value={f.cardLimite} onChange={(v) => set("cardLimite", v.replace(/[^0-9.,]/g, ""))} placeholder="0,00" pre="R$" /></Field>
             <Field label="Dia de vencimento"><TextInput value={f.cardVenc} onChange={(v) => set("cardVenc", v.replace(/[^0-9]/g, "").slice(0, 2))} placeholder="10" /></Field>
           </div>
+          <Field label="Dia de fechamento"><TextInput value={f.cardFech} onChange={(v) => set("cardFech", v.replace(/[^0-9]/g, "").slice(0, 2))} placeholder="3" /></Field>
+          <ClosingDaySuggestion dueDay={f.cardVenc} closingDay={f.cardFech} onUse={(v) => set("cardFech", v)} />
         </div>
       )}
     </div>
@@ -357,7 +362,7 @@ export function ConsultantAddClientWizard({ open, onClose, onCreated, quota = nu
         { ic: "user", t: "Cliente", rows: [["Nome", f.nome || "—"], ["E-mail", f.email || "—"], ["Telefone", f.telefone || "—"], ["Ocupação", f.ocupacao || "—"]] },
         { ic: "users", t: "Organização", rows: [["Nome", f.orgNome || "—"], ["Tipo", orgTypeMeta?.label], ["Renda mensal", f.renda ? "R$ " + f.renda : "—"]] },
         { ic: "wallet", t: "Início", rows: [["Saldo inicial", f.saldo ? "R$ " + f.saldo : "R$ 0,00"], ["Categorias", f.categorias.length + " selecionadas"]] },
-        ...(f.temCartao ? [{ ic: "card", t: "Cartão", rows: [["Banco", f.cardBanco || "—"], ["Limite", f.cardLimite ? "R$ " + f.cardLimite : "—"], ["Vencimento", "dia " + f.cardVenc]] }] : []),
+        ...(f.temCartao ? [{ ic: "card", t: "Cartão", rows: [["Banco", f.cardBanco || "—"], ["Limite", f.cardLimite ? "R$ " + f.cardLimite : "—"], ["Vencimento", "dia " + f.cardVenc], ["Fechamento", "dia " + f.cardFech]] }] : []),
         ...(f.temReceita ? [{ ic: "repeat", t: "Receita recorrente", rows: [["Descrição", f.recDesc], ["Valor", f.recValor ? "R$ " + f.recValor : "—"], ["Dia", "dia " + f.recDia]] }] : []),
         { ic: "user", t: "Perfil (privado)", rows: [["Nível", EXPERIENCE_LEVELS.find((l) => l.id === f.nivel)?.l], ["Objetivo", f.objetivo], ["Tags", f.tags.length ? f.tags.map((t) => "#" + t).join(" ") : "—"]] },
       ].map((sec) => (

@@ -79,6 +79,8 @@ import {
   computeFirstOccurrence as computeFirstOccurrenceMath,
 } from "../../data/recurrenceDateMath.js";
 import { listCreditCards } from "../../../api/creditCards";
+import { ClosingDaySuggestion } from "../creditCards/ClosingDaySuggestion.jsx";
+import { isValidMonthDay } from "../creditCards/closingDay.js";
 import { getOrgBalances } from "../../../api/balances";
 import {
   buildCreateCreditCardPayload,
@@ -295,6 +297,7 @@ export const NovaTransacaoModal = ({
    */
   const [quickAddCardBrand, setQuickAddCardBrand] = useState(CARD_BRAND_OPTIONS[0]);
   const [quickAddCardDueDay, setQuickAddCardDueDay] = useState("");
+  const [quickAddCardClosingDay, setQuickAddCardClosingDay] = useState("");
   /**
    * CAUSA DO BUG (issue #79): o botão "Adicionar" do quick-add de cartão só
    * limpava o formulário — nunca chamava a API. Cartão "criado" nunca existia
@@ -770,6 +773,7 @@ export const NovaTransacaoModal = ({
     setQuickAddCardLast4("");
     setQuickAddCardBrand(CARD_BRAND_OPTIONS[0]);
     setQuickAddCardDueDay("");
+    setQuickAddCardClosingDay("");
     setQuickAddCardError("");
     setQuickAddCardSaving(false);
     setNewTag("");
@@ -1007,6 +1011,7 @@ export const NovaTransacaoModal = ({
     Boolean(quickAddCardName) &&
     quickAddCardLast4.length === 4 &&
     quickAddCardDueDayValid &&
+    isValidMonthDay(quickAddCardClosingDay) &&
     !quickAddCardSaving;
 
   /**
@@ -1033,6 +1038,7 @@ export const NovaTransacaoModal = ({
         last4Digits: quickAddCardLast4,
         brand: quickAddCardBrand,
         dueDay: quickAddCardDueDay,
+        closingDay: quickAddCardClosingDay,
       });
       created = await createCreditCardForUi(payload);
     } catch (e) {
@@ -1053,6 +1059,7 @@ export const NovaTransacaoModal = ({
     setQuickAddCardLast4("");
     setQuickAddCardBrand(CARD_BRAND_OPTIONS[0]);
     setQuickAddCardDueDay("");
+    setQuickAddCardClosingDay("");
     setCardId(String(created.id));
     // Marca reconciliado: se havia preConfig.cartaoId pendente, o cartão
     // recém-criado (escolha explícita do usuário) já venceu essa disputa —
@@ -1105,6 +1112,7 @@ export const NovaTransacaoModal = ({
     quickAddCardLast4,
     quickAddCardBrand,
     quickAddCardDueDay,
+    quickAddCardClosingDay,
     fetchModalCardRows,
   ]);
 
@@ -2125,7 +2133,7 @@ export const NovaTransacaoModal = ({
     releaseFailedCreateKeys();
     setMobileReviewImpactOpen(false); resetAi();
     setDescFocused(false); setAddingCartao(false); setQuickAddCardName(""); setQuickAddCardLast4("");
-    setQuickAddCardBrand(CARD_BRAND_OPTIONS[0]); setQuickAddCardDueDay("");
+    setQuickAddCardBrand(CARD_BRAND_OPTIONS[0]); setQuickAddCardDueDay(""); setQuickAddCardClosingDay("");
     setQuickAddCardError(""); setQuickAddCardSaving(false);
     setNewTag(""); setAddingTag(false); resetInstallmentCalc(); setShowImpact(false);
     setEditBaselineDropped(true);
@@ -3069,7 +3077,7 @@ export const NovaTransacaoModal = ({
                       </select>
                     </div>
                     {/* Dia de vencimento — obrigatório aqui (não tem default seguro): o
-                        backend deriva `closing_day` dele quando ausente, e um due_day
+                        o fechamento também é obrigatório (com sugestão em um toque); um dia
                         errado bota a compra na fatura errada. Bandeira também é pedida
                         agora — ficava fixa em "Visa" pra sempre no picker senão. */}
                     <input value={quickAddCardDueDay}
@@ -3080,6 +3088,15 @@ export const NovaTransacaoModal = ({
                         transition:"border-color 0.15s" }}
                       onFocus={e=>e.target.style.borderColor=T.blue}
                       onBlur={e=>e.target.style.borderColor=T.border}/>
+                    <input value={quickAddCardClosingDay}
+                      onChange={e=>setQuickAddCardClosingDay(e.target.value.replace(/\D/g, "").slice(0,2))}
+                      placeholder="Dia do fechamento (1-31)" inputMode="numeric" disabled={quickAddCardSaving}
+                      style={{ ...G, ...NUM, padding:"8px 10px", borderRadius:8, border:`1px solid ${T.border}`,
+                        fontSize:12, color:T.ink, outline:"none", background:T.surface,
+                        transition:"border-color 0.15s" }}
+                      onFocus={e=>e.target.style.borderColor=T.blue}
+                      onBlur={e=>e.target.style.borderColor=T.border}/>
+                    <ClosingDaySuggestion dueDay={quickAddCardDueDay} closingDay={quickAddCardClosingDay} onUse={setQuickAddCardClosingDay} />
                     <div style={{ ...G, fontSize: 11, color:T.inkLight, lineHeight:1.5 }}>
                       Limite fica em R$ 0,00 por enquanto — edite em Cartões quando quiser definir o valor.
                     </div>
@@ -3093,6 +3110,7 @@ export const NovaTransacaoModal = ({
                           setQuickAddCardLast4("");
                           setQuickAddCardBrand(CARD_BRAND_OPTIONS[0]);
                           setQuickAddCardDueDay("");
+                          setQuickAddCardClosingDay("");
                           setQuickAddCardError("");
                         }}
                         disabled={quickAddCardSaving}

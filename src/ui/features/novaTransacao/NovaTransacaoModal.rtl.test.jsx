@@ -133,8 +133,8 @@ async function openCardPanel(user) {
   return screen.findByText(/Novo cartão/i);
 }
 
-/** Preenche os 3 campos hoje obrigatórios do mini-form (nome, 4 dígitos, vencimento). */
-async function fillQuickAddForm(user, { name, last4, dueDay }) {
+/** Preenche os campos obrigatórios do mini-form (nome, 4 dígitos, vencimento, fechamento). */
+async function fillQuickAddForm(user, { name, last4, dueDay, closingDay = "3" }) {
   await user.type(
     screen.getByPlaceholderText("Nome (ex: Nubank Roxinho)"),
     name,
@@ -143,6 +143,10 @@ async function fillQuickAddForm(user, { name, last4, dueDay }) {
   await user.type(
     screen.getByPlaceholderText("Dia do vencimento (1-31)"),
     dueDay,
+  );
+  await user.type(
+    screen.getByPlaceholderText("Dia do fechamento (1-31)"),
+    closingDay,
   );
 }
 
@@ -177,6 +181,7 @@ describe("NovaTransacaoModal — quick-add de cartão no drawer (issue #79)", ()
           last4: "4321",
           brand: "Visa",
           due_day: 10,
+          closing_day: 3,
           description: "Nubank Roxinho",
         }),
       );
