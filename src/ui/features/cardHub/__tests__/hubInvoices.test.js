@@ -4,6 +4,7 @@ import {
   buildInvoiceCards,
   defaultInvoiceKey,
   describeDue,
+  dueDateFor,
   summarizeInvoiceCounts,
 } from "../hubInvoices.js";
 
@@ -128,5 +129,64 @@ describe("linha do histórico 'open' fora do mês aberto", () => {
     expect(cards.find((c) => c.key === "2026-11").status).toBe("forecast");
     expect(cards.filter((c) => c.status === "open")).toHaveLength(1);
     expect(defaultInvoiceKey(cards)).toBe("2026-10");
+  });
+});
+
+describe("dueDateFor — vencimento da fatura identificada pelo mês do fechamento", () => {
+  it("cai no mês seguinte quando o vencimento não vem depois do fechamento (fecha 25, vence 5)", () => {
+    expect(dueDateFor(2026, 12, 5, 25)).toBe("2027-01-05");
+    expect(dueDateFor(2026, 10, 5, 25)).toBe("2026-11-05");
+    expect(dueDateFor(2026, 10, 25, 25)).toBe("2026-11-25");
+  });
+
+  it("fica no mesmo mês quando o vencimento vem depois do fechamento", () => {
+    expect(dueDateFor(2026, 11, 10, 3)).toBe("2026-11-10");
+  });
+
+  it("usa o último dia do mês de vencimento quando o dia não existe nele", () => {
+    expect(dueDateFor(2027, 1, 31, 31)).toBe("2027-02-28");
+    expect(dueDateFor(2027, 2, 31, 30)).toBe("2027-03-31"); // fev: fecha e vence dia 28, o vencimento vai para março
+  });
+
+  it("a linha do histórico do Hub traz o vencimento do mês seguinte para cartão que fecha depois de vencer", () => {
+    const card = { id: 7, closing_day: 25, due_day: 5 };
+    const cards = buildInvoiceCards({
+      card,
+      history: { monthly_data: [hist(2026, 9, "closed", 100)] },
+      current: null,
+      currentState: "empty",
+      future: null,
+      now: new Date(2026, 9, 26),
+    });
+    expect(cards.find((c) => c.key === "2026-09").dueDate).toBe("2026-10-05");
+  });
+});
+
+describe("vencimento nas linhas de previsão e do mês aberto vazio", () => {
+  const card = { id: 7, closing_day: 25, due_day: 5 };
+
+  it("a fatura aberta sem lançamentos e a prevista trazem o vencimento do mês seguinte", () => {
+    const cards = buildInvoiceCards({
+      card,
+      history: { monthly_data: [] },
+      current: null,
+      currentState: "empty",
+      future: { monthly_breakdown: [{ year: 2026, month: 12, total_amount: 50, installments_count: 1 }] },
+      now: new Date(2026, 9, 20),
+    });
+    expect(cards.find((c) => c.key === "2026-10").dueDate).toBe("2026-11-05");
+    expect(cards.find((c) => c.key === "2026-12").dueDate).toBe("2027-01-05");
+  });
+
+  it("cartão legado sem dia de fechamento usa a sugestão (vencimento - 7)", () => {
+    const cards = buildInvoiceCards({
+      card: { id: 8, closing_day: null, due_day: 5 },
+      history: { monthly_data: [hist(2026, 9, "closed", 100)] },
+      current: null,
+      currentState: "empty",
+      future: null,
+      now: new Date(2026, 9, 20),
+    });
+    expect(cards.find((c) => c.key === "2026-09").dueDate).toBe("2026-10-05");
   });
 });

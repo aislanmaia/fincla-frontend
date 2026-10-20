@@ -1,3 +1,4 @@
+import { suggestedClosingDay } from "../creditCards/closingDay.js";
 import {
   closingDayForInvoiceAnchor,
   yearMonthOfOpenInvoiceByClosingDay,
@@ -32,11 +33,22 @@ export function parseInvoiceKey(raw) {
   return m ? { year: Number(m[1]), month: Number(m[2]) } : null;
 }
 
-function dueDateFor(year, month, dueDay) {
+/**
+ * Vencimento da fatura identificada pelo mês do fechamento. Espelho de
+ * `CreditCardScheduleService.invoice_due_date` do backend: quando o dia de vencimento
+ * não vem depois do fechamento (fecha 25, vence 5), cai no mês seguinte.
+ */
+export function dueDateFor(year, month, dueDay, closingDay) {
   const day = Number(dueDay);
   if (!Number.isFinite(day) || day < 1) return null;
-  const lastDay = new Date(year, month, 0).getDate();
-  return `${invoiceKey(year, month)}-${pad2(Math.min(day, lastDay))}`;
+  const closing = Number(closingDay);
+  const monthLength = new Date(year, month, 0).getDate();
+  // Comparados como caem no mês do fechamento (mês curto: os dois ajustam para o último dia).
+  const shifts = Number.isFinite(closing) && closing >= 1 && Math.min(day, monthLength) <= Math.min(closing, monthLength);
+  const dueYear = shifts && month === 12 ? year + 1 : year;
+  const dueMonth = shifts ? (month === 12 ? 1 : month + 1) : month;
+  const lastDay = new Date(dueYear, dueMonth, 0).getDate();
+  return `${invoiceKey(dueYear, dueMonth)}-${pad2(Math.min(day, lastDay))}`;
 }
 
 function toFiniteOrNull(value) {
@@ -79,6 +91,7 @@ export function buildInvoiceCards({ card, history, current, currentState, future
     ?? yearMonthOfOpenInvoiceByClosingDay(now, closingDayForInvoiceAnchor(card));
   const openKey = invoiceKey(openRef.year, openRef.month);
   const dueDay = card?.due_day;
+  const closingDay = card?.closing_day ?? suggestedClosingDay(card?.due_day);
   const byKey = new Map();
 
   (history?.monthly_data || []).forEach((row) => {
@@ -90,7 +103,7 @@ export function buildInvoiceCards({ card, history, current, currentState, future
       status: historyStatus(row.status, key, openKey),
       total: toFiniteOrNull(row.total_amount),
       itemsCount: toFiniteOrNull(row.items_count),
-      dueDate: dueDateFor(row.year, row.month, dueDay),
+      dueDate: dueDateFor(row.year, row.month, dueDay, closingDay),
       paidDate: null,
       limitUsagePercent: null,
       topCategory: row.top_category ? categoryLabelPtForTag({ name: row.top_category }) : null,
@@ -106,7 +119,7 @@ export function buildInvoiceCards({ card, history, current, currentState, future
       status: ["open", "closed", "paid"].includes(current.status) ? current.status : INVOICE_STATUS.OPEN,
       total: toFiniteOrNull(current.total_amount),
       itemsCount: toFiniteOrNull(current.items_count),
-      dueDate: current.due_date || dueDateFor(currentRef.year, currentRef.month, dueDay),
+      dueDate: current.due_date || dueDateFor(currentRef.year, currentRef.month, dueDay, closingDay),
       paidDate: current.paid_date || null,
       limitUsagePercent: toFiniteOrNull(current.limit_usage_percent),
       apiVsPercent: toFiniteOrNull(current.month_over_month_change),
@@ -123,7 +136,7 @@ export function buildInvoiceCards({ card, history, current, currentState, future
         status: INVOICE_STATUS.OPEN,
         total: null,
         itemsCount: 0,
-        dueDate: dueDateFor(openRef.year, openRef.month, dueDay),
+        dueDate: dueDateFor(openRef.year, openRef.month, dueDay, closingDay),
         paidDate: null,
         limitUsagePercent: null,
         topCategory: null,
@@ -142,7 +155,7 @@ export function buildInvoiceCards({ card, history, current, currentState, future
       status: INVOICE_STATUS.FORECAST,
       total: toFiniteOrNull(row.total_amount),
       itemsCount: toFiniteOrNull(row.installments_count),
-      dueDate: dueDateFor(row.year, row.month, dueDay),
+      dueDate: dueDateFor(row.year, row.month, dueDay, closingDay),
       paidDate: null,
       limitUsagePercent: toFiniteOrNull(row.limit_usage_percent),
       topCategory: null,
