@@ -780,30 +780,124 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(screen.queryByRole("button", { name: /Lançar estorno desta compra/ })).not.toBeInTheDocument();
   });
 
-  it("exporta o conjunto inteiro do recorte, não só a página carregada", async () => {
-    const pages = [];
-    server.use(
-      http.get("*/v1/transactions", ({ request }) => {
-        const url = new URL(request.url);
-        requests.push(url);
-        const page = Number(url.searchParams.get("page"));
-        const limit = Number(url.searchParams.get("limit"));
-        pages.push({ page, limit });
-        return HttpResponse.json({ data: [{ id: page, date: "2026-10-02", description: `Linha ${page}`, value: 5, value_currency: "BRL", type: "expense", status: "paid" }], pagination: { total: 2, page, limit, pages: 2, has_next: page === 1, has_prev: page > 1 } });
-      }),
-    );
+  const realBlobUrl = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
+  afterEach(() => { URL.createObjectURL = realBlobUrl.create; URL.revokeObjectURL = realBlobUrl.revoke; vi.restoreAllMocks(); });
+  const stubDownload = () => {
     const created = [];
-    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: (blob) => { created.push(blob); return "blob:x"; }, revokeObjectURL: () => {} }));
-    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
-    const user = userEvent.setup();
+    const names = [];
+    URL.createObjectURL = (blob) => { created.push(blob); return "blob:x"; };
+    URL.revokeObjectURL = () => {};
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function clicked() { names.push(this.download); });
+    return { created, names };
+  };
+  const openExport = async (user) => {
     await screen.findByText("Linha 1");
     await user.click(screen.getByRole("button", { name: /Exportar/ }));
-    const dialog = screen.getByRole("dialog", { name: "Exportar lançamentos" });
+    return screen.getByRole("dialog", { name: "Exportar lançamentos" });
+  };
+  const withTwoPages = () => server.use(http.get("*/v1/transactions", ({ request }) => {
+    const url = new URL(request.url);
+    requests.push(url);
+    const page = Number(url.searchParams.get("page"));
+    return HttpResponse.json({ data: [{ id: page, date: "2026-10-02", description: `Linha ${page}`, value: 5, value_currency: "BRL", type: "expense", status: "paid" }], pagination: { total: 2, page, limit: 30, pages: 2, has_next: page === 1, has_prev: page > 1 } });
+  }));
+
+  it("exporta o conjunto inteiro pelo servidor, com os mesmos filtros da lista e sem paginar nem ordenar", async () => {
+    withTwoPages();
+    const exports = [];
+    server.use(http.get("*/v1/transactions/export", ({ request }) => {
+      exports.push(new URL(request.url));
+      return new HttpResponse("\uFEFF\"Data\",\"Descrição\"\r\n\"2026-10-02\",\"Linha 1\"\r\n\"2026-10-02\",\"Linha 2\"", { headers: { "Content-Type": "text/csv; charset=utf-8" } });
+    }));
+    const { created, names } = stubDownload();
+    route.search = { fc_q: "Linha" };
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    const dialog = await openExport(user);
     expect(dialog).toHaveTextContent("2 lançamentos");
     await user.click(within(dialog).getByRole("button", { name: "Exportar CSV" }));
     await waitFor(() => expect(created).toHaveLength(1));
     expect(await created[0].text()).toContain("Linha 2");
-    expect(pages.some((entry) => entry.limit === 100)).toBe(true);
+    expect([...new Uint8Array(await created[0].arrayBuffer()).slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
+    expect(names[0]).toBe(`lancamentos-${todayLocalYmd()}.csv`);
+    const listed = requests.at(-1).searchParams;
+    const asked = exports[0].searchParams;
+    expect(asked.get("organization_id")).toBe(ORG_ID);
+    expect(asked.get("format")).toBe("csv");
+    expect(asked.get("credit_card_id")).toBe("7");
+    expect(asked.get("description")).toBe("Linha");
+    for (const key of ["page", "limit", "sort_by", "sort_order"]) expect(asked.has(key)).toBe(false);
+    // Tudo o que a lista filtrou o export também filtra (menos paginação e ordem).
+    for (const [key, value] of listed.entries()) if (!["page", "limit", "sort_by", "sort_order"].includes(key)) expect(asked.getAll(key)).toContain(value);
+    expect(requests.some((url) => url.searchParams.get("page") === "2")).toBe(false);
+  });
+
+  it("o recorte acima do limite diz o tamanho e pede para estreitar os filtros", async () => {
+    withTwoPages();
+    server.use(http.get("*/v1/transactions/export", () => HttpResponse.json({ detail: { code: "export_too_large", message: "Too large", total: 25000, limit: 20000 } }, { status: 422 })));
+    const { created } = stubDownload();
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    const dialog = await openExport(user);
+    await user.click(within(dialog).getByRole("button", { name: "Exportar CSV" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("O recorte tem 25.000 lançamentos e o limite por arquivo é 20.000. Estreite os filtros e exporte de novo.");
+    expect(created).toHaveLength(0);
+  });
+
+  it("extrato que mudou durante a leitura (409) pede para exportar de novo; falha sem causa fala o genérico", async () => {
+    withTwoPages();
+    let calls = 0;
+    server.use(http.get("*/v1/transactions/export", () => { calls += 1; return calls === 1 ? HttpResponse.json({ detail: { code: "export_changed", message: "changed" } }, { status: 409 }) : new HttpResponse(null, { status: 500 }); }));
+    stubDownload();
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    const dialog = await openExport(user);
+    await user.click(within(dialog).getByRole("button", { name: "Exportar CSV" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("O extrato mudou enquanto o arquivo era preparado. Exporte de novo.");
+    await user.click(within(dialog).getByRole("button", { name: "Exportar CSV" }));
+    await waitFor(() => expect(within(dialog).getByRole("alert")).toHaveTextContent("Não foi possível preparar a exportação. Tente novamente."));
+  });
+
+  it("recorte acima do limite do arquivo avisa antes de pedir e desabilita só o CSV", async () => {
+    server.use(http.get("*/v1/transactions", () => HttpResponse.json({ data: [{ id: 1, date: "2026-09-01", description: "Linha 1", value: 5, value_currency: "BRL", type: "expense" }], pagination: { total: 25000, page: 1, limit: 30, pages: 834, has_next: true, has_prev: false } })));
+    let asked = 0;
+    server.use(http.get("*/v1/transactions/export", () => { asked += 1; return new HttpResponse("x"); }));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    const dialog = await openExport(user);
+    expect(dialog).toHaveTextContent("O recorte passa de 20.000 lançamentos");
+    expect(within(dialog).getByRole("button", { name: "Exportar CSV" })).toBeDisabled();
+    await user.click(within(dialog).getByRole("button", { name: "PDF" }));
+    expect(within(dialog).getByRole("button", { name: "Exportar PDF" })).toBeEnabled();
+    expect(asked).toBe(0);
+  });
+
+  it("outra recusa de negócio do servidor mostra a mensagem dele em vez de pedir para tentar de novo", async () => {
+    withTwoPages();
+    server.use(http.get("*/v1/transactions/export", () => HttpResponse.json({ detail: { code: "plan_limit", message: "Seu plano não inclui exportação." } }, { status: 422 })));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    const dialog = await openExport(user);
+    await user.click(within(dialog).getByRole("button", { name: "Exportar CSV" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Seu plano não inclui exportação.");
+  });
+
+  it("o PDF segue pelo navegador e parte do conjunto completo (todas as páginas)", async () => {
+    withTwoPages();
+    let exported = 0;
+    server.use(http.get("*/v1/transactions/export", () => { exported += 1; return new HttpResponse("x"); }));
+    const printed = [];
+    const realCreate = document.createElement.bind(document);
+    vi.spyOn(document, "createElement").mockImplementation((tag, ...rest) => { const el = realCreate(tag, ...rest); if (tag === "iframe") Object.defineProperty(el, "srcdoc", { set: (html) => printed.push(html), get: () => "" }); return el; });
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    const dialog = await openExport(user);
+    await user.click(within(dialog).getByRole("button", { name: "PDF" }));
+    await user.click(within(dialog).getByRole("button", { name: "Exportar PDF" }));
+    await waitFor(() => expect(printed).toHaveLength(1));
+    expect(printed[0]).toContain("Linha 1");
+    expect(printed[0]).toContain("Linha 2");
+    expect(exported).toBe(0);
   });
 
   it("o Assistente aponta itens sem categoria e abre a categorização deles", async () => {

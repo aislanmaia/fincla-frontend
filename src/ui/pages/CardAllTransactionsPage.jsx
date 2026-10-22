@@ -3,7 +3,7 @@ import { useNavigate, useParams, useRouter, useSearch } from "@tanstack/react-ro
 import { ArrowLeft, Download, Search, Sparkles, X } from "lucide-react";
 
 import { getCurrentCreditCardInvoice, getInvoiceHistory, listCreditCards } from "../../api/creditCards";
-import { getTransaction, getTransactionsFacets, getTransactionsSummary, listTransactions } from "../../api/transactions";
+import { exportTransactionsCsv, getTransaction, getTransactionsFacets, getTransactionsSummary, listTransactions } from "../../api/transactions";
 import { Btn, Card, PageTitle, Select } from "../components/primitives.jsx";
 import { shouldUseRealData } from "../dataMode.js";
 import { dayKey, groupSubtotal, installmentOf } from "../features/cardTransactions/ledgerModel.js";
@@ -12,7 +12,8 @@ import { CategorizeDialog, ExportDialog, MoveInstallmentDialog } from "../featur
 import { AssistantDrawer, LedgerDetail } from "../features/cardTransactions/LedgerPanels.jsx";
 import { LedgerAlertStrip, LedgerAppBar, LedgerChipScroller, LedgerSearchEmpty, LedgerSummaryRow } from "../features/cardTransactions/LedgerMobileBars.jsx";
 import { categorizeRows, fetchAllRows, moveRows } from "../features/cardTransactions/ledgerActions.js";
-import { buildPdfParts, buildPrintHtml, downloadCsv, printHtml } from "../features/cardTransactions/ledgerExport.js";
+import { saveBlob } from "../features/export/saveBlob.js";
+import { buildPdfParts, buildPrintHtml, downloadCsv, exportFailureMessage, exportFileName, printHtml } from "../features/cardTransactions/ledgerExport.js";
 import { CardOutflowsChart } from "../features/cardTransactions/CardOutflowsChart.jsx";
 import { CardTransactionsSummary } from "../features/cardTransactions/CardTransactionsSummary.jsx";
 import { CardTransactionsTable } from "../features/cardTransactions/CardTransactionsTable.jsx";
@@ -491,8 +492,14 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   };
   const exportRowsOf = async () => fetchAllRows({ base: { organization_id: organizationId, ...(cardScope === "current" ? { credit_card_id: state.card.id } : {}) }, filter: queryFilter, total: state.total ?? state.rows.length });
   const filterSummary = () => [chipLabel, ...(kind ? [`Tipo: ${KIND_LABELS[kind]}`] : []), ...(weekLabel ? [weekLabel] : []), ...(debouncedSearch ? [`Busca: ${debouncedSearch}`] : []), ...activeFacets.map((facet) => `${facet.label}: ${facet.value}`)];
+  // CSV do recorte inteiro vem do servidor (todas as páginas, até 20.000); a seleção marcada e o PDF (impressão do
+  // navegador) partem das linhas que já temos / lidas página a página.
   const submitExport = async (format, selectionRows = null) => {
     try {
+      if (format === "csv" && !selectionRows) {
+        saveBlob(await exportTransactionsCsv({ organization_id: organizationId, ...(cardScope === "current" ? { credit_card_id: state.card.id } : {}), ...aggregateFilter }), exportFileName("csv"));
+        return null;
+      }
       const all = selectionRows ?? await exportRowsOf();
       if (format === "csv") { downloadCsv(all, cardScope === "current" ? state.card.currency : null); return null; }
       printHtml(buildPrintHtml({
@@ -501,8 +508,8 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
         ...buildPdfParts(all, cardScope === "current" ? state.card.currency : null),
       }));
       return null;
-    } catch {
-      return "Não foi possível preparar a exportação. Tente novamente.";
+    } catch (error) {
+      return exportFailureMessage(error);
     }
   };
   const openOriginal = async (id) => {
@@ -697,7 +704,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     </div>}
     {dialog?.kind === "categorize" && <CategorizeDialog rows={rowsByIds(dialog.ids)} categories={categories} onSubmit={submitCategorize} onClose={closeDialog} />}
     {dialog?.kind === "move" && <MoveInstallmentDialog rows={rowsByIds(dialog.ids).length ? rowsByIds(dialog.ids) : inspected ? [inspected] : []} invoiceOptions={invoiceOpts} currentKey={historyState.current?.month ?? null} onSubmit={submitMove} onClose={closeDialog} />}
-    {dialog?.kind === "export" && <ExportDialog total={dialog.selection ? dialog.selection.rows.length : state.total} filterSummary={filterSummary()} selection={dialog.selection ? { count: dialog.selection.rows.length, sum: dialog.selection.sum } : null} onExport={(format) => submitExport(format, dialog.selection?.rows ?? null)} onClose={closeDialog} />}
+    {dialog?.kind === "export" && <ExportDialog blocked={filterBlocked} total={dialog.selection ? dialog.selection.rows.length : state.total} filterSummary={filterSummary()} selection={dialog.selection ? { count: dialog.selection.rows.length, sum: dialog.selection.sum } : null} onExport={(format) => submitExport(format, dialog.selection?.rows ?? null)} onClose={closeDialog} />}
     {dialog?.kind === "assistant" && <AssistantDrawer insights={insights.items} loadedCount={state.rows.length} onClose={closeDialog} isMobile={isMobile} onSelect={(ids) => { setSelectedRows(ids); setDialog(null); }} onCategorize={(ids) => { setSelectedRows(ids); setDialog({ kind: "categorize", ids }); }} />}
     {notice && <div role="status" style={{ ...G, position: "fixed", left: "50%", bottom: "calc(20px + env(safe-area-inset-bottom, 0px))", transform: "translateX(-50%)", zIndex: 70, background: T.ink, color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 12, display: "flex", gap: 12, alignItems: "center" }}>{notice}<button type="button" aria-label="Fechar aviso" onClick={() => setNotice(null)} style={{ border: 0, background: "none", color: T.surface, cursor: "pointer" }}>×</button></div>}
     {summarySheetOpen && isMobile && <div ref={summaryDialogRef} role="dialog" aria-modal="true" aria-label="Resumo e saídas do recorte" style={{ position: "fixed", inset: 0, zIndex: 48, background: "rgba(15,15,13,.35)", display: "flex", alignItems: "flex-end" }} onClick={() => setSummarySheetOpen(false)}>

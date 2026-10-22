@@ -168,6 +168,52 @@ export const updateTransaction = async (
   return unwrapMoney(response.data);
 };
 
+/** Os filtros da listagem, sem paginação nem ordem: o servidor exporta tudo, em data decrescente. */
+export type ExportTransactionsQuery = Omit<
+  ListTransactionsQuery,
+  'page' | 'limit' | 'sort_by' | 'sort_order'
+>;
+
+const EXPORT_TIMEOUT_MS = 60_000;
+
+/**
+ * O CSV é pedido como texto: o corpo de um erro (`detail.code`) vem como texto e o app lê JSON, então
+ * devolve-se a ele a forma `response.data.detail` que o resto do app já sabe ler.
+ */
+function parseErrorBody(error: unknown): void {
+  const response = (error as { response?: { data?: unknown } })?.response;
+  if (!response || typeof response.data !== 'string') return;
+  try {
+    response.data = JSON.parse(response.data);
+  } catch {
+    response.data = undefined;
+  }
+}
+
+/**
+ * Baixa o CSV do conjunto COMPLETO que os filtros descrevem (o servidor percorre todas as páginas; limite de
+ * 20.000). Recusas: `422 export_too_large` (com `total` e `limit`) e `409 export_changed` (exportar de novo).
+ * O BOM (UTF-8) é recolocado: a leitura como texto o descarta, e sem ele a planilha estraga os acentos.
+ */
+export const exportTransactionsCsv = async (filters: ExportTransactionsQuery): Promise<Blob> => {
+  try {
+    const response = await apiClient.get<string>('/transactions/export', {
+      params: { ...filters, format: 'csv' },
+      paramsSerializer: repeatArrayParams,
+      responseType: 'text',
+      timeout: EXPORT_TIMEOUT_MS,
+      // Leitura longa: um timeout não deve refazer a exportação inteira no servidor (ver client.ts).
+      ...({ __noRetry: true } as Record<string, unknown>),
+    });
+    return new Blob(['\uFEFF', response.data.replace(/^\uFEFF/, '')], {
+      type: 'text/csv;charset=utf-8',
+    });
+  } catch (error) {
+    parseErrorBody(error);
+    throw error;
+  }
+};
+
 /**
  * Põe vários lançamentos (1 a 200) na mesma categoria, tudo ou nada: se algum for recusado, nada muda
  * e o `422` (`code: 'bulk_rejected'`) traz `failures` com o motivo de cada um.

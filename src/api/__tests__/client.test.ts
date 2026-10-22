@@ -250,6 +250,21 @@ describe('interceptor de retry — só GET/HEAD, nunca writes', () => {
     expect(adapter.callCount).toBe(2);
   });
 
+  it('GET marcado __noRetry (leitura longa, como a exportação) não é repetido nem num timeout', async () => {
+    const adapter = scriptAdapter([
+      (config) => networkFailure(config, 'ECONNABORTED'),
+      (config) => respondWithStatus(config, 200, { ok: true }),
+    ]);
+    apiClient.defaults.adapter = adapter as any;
+
+    const promise = apiClient.get('/slow', { __noRetry: true } as any);
+    const settled = promise.catch((error) => error);
+    await vi.runAllTimersAsync();
+
+    expect((await settled).code).toBe('ECONNABORTED');
+    expect(adapter.callCount).toBe(1);
+  });
+
   it('GET com ERR_NETWORK persistente: para em 3 tentativas (1 inicial + 2 retries)', async () => {
     const adapter = scriptAdapter([
       (config) => networkFailure(config),
