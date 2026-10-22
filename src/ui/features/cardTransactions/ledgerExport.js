@@ -54,6 +54,20 @@ export function buildCsv(rows, cardCurrency) {
 /** Nome do arquivo exportado: `lancamentos-AAAA-MM-DD.csv`, com a extensão sempre presente. */
 export const exportFileName = (extension, today = todayLocalYmd()) => `lancamentos-${today}.${extension}`;
 
+const EXPORT_FAILURES = {
+  export_changed: "O extrato mudou enquanto o arquivo era preparado. Exporte de novo.",
+};
+
+/** Por que a exportação pelo servidor falhou, em português; sem causa conhecida, o convite a tentar de novo. */
+export function exportFailureMessage(error) {
+  const detail = error?.response?.data?.detail;
+  if (detail?.code === "export_too_large" && Number.isFinite(detail.total) && Number.isFinite(detail.limit)) {
+    const fmt = (value) => value.toLocaleString("pt-BR");
+    return `O recorte tem ${fmt(detail.total)} lançamentos e o limite por arquivo é ${fmt(detail.limit)}. Estreite os filtros e exporte de novo.`;
+  }
+  return EXPORT_FAILURES[detail?.code] ?? "Não foi possível preparar a exportação. Tente novamente.";
+}
+
 export function downloadCsv(rows, cardCurrency, filename = exportFileName("csv")) {
   saveBlob(new Blob([buildCsv(rows, cardCurrency)], { type: "text/csv;charset=utf-8" }), filename);
 }
