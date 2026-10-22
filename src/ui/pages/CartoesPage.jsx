@@ -6,6 +6,7 @@ import { G } from "../typography";
 import { DragScrollTabs } from "../layouts/DragScrollTabs.jsx";
 import { useCreditCardsData } from "../features/creditCards/useCreditCardsData.js";
 import { CardFormSheet } from "../features/creditCards/CardFormSheet.jsx";
+import { APPLY_FROM, applyFromToSend } from "../features/creditCards/CycleChangeOptions.jsx";
 import { KpiStrip } from "../features/creditCards/cartoesPanels.jsx";
 import { CardsPageModals } from "../features/creditCards/CartoesPageModals.jsx";
 import { InvoiceTab } from "../features/creditCards/CartoesFaturaTab.jsx";
@@ -130,6 +131,10 @@ export const CartoesPage = ({
   const [draftDueDay,        setDraftDueDay]        = useState("");
   const [draftClosingDay,    setDraftClosingDay]    = useState("");
   const [draftSuccess,       setDraftSuccess]       = useState(false);
+  // Edição de vencimento/fechamento: desde quando os novos dias valem (a pré-seleção é a mais defensiva).
+  const [draftApplyFrom,     setDraftApplyFrom]     = useState(APPLY_FROM.NEXT);
+  const [draftConfirmRewrite, setDraftConfirmRewrite] = useState(false);
+  const [originalDays,       setOriginalDays]       = useState(null);
   const cardSheetOpen = addCardSheet || editCardSheet;
   const clearCardFormState = () => {
     setDraftSuccess(false);
@@ -143,6 +148,9 @@ export const CartoesPage = ({
     setDraftLimit("");
     setDraftDueDay("");
     setDraftClosingDay("");
+    setDraftApplyFrom(APPLY_FROM.NEXT);
+    setDraftConfirmRewrite(false);
+    setOriginalDays(null);
   };
   const openAddCardSheet = useCallback(() => {
     setDraftSuccess(false);
@@ -201,6 +209,7 @@ export const CartoesPage = ({
         limitInput: draftLimit,
         dueDay: draftDueDay,
         closingDay: draftClosingDay,
+        applyFrom: applyFromToSend(originalDays, draftDueDay, draftClosingDay, draftApplyFrom, draftConfirmRewrite),
       }));
     } catch {
       return;
@@ -322,6 +331,9 @@ export const CartoesPage = ({
     setDraftLimit(formatLimitInputFromNumber(card.limite));
     setDraftDueDay(String(card.vencimento ?? ""));
     setDraftClosingDay(card.fechamentoInformado !== false && card.fechamento != null ? String(card.fechamento) : "");
+    setDraftApplyFrom(APPLY_FROM.NEXT);
+    setDraftConfirmRewrite(false);
+    setOriginalDays({ dueDay: card.vencimento, closingDay: card.fechamento });
     setEditCardSheet(true);
   };
 
@@ -691,6 +703,14 @@ export const CartoesPage = ({
       onSaveCard={handleSaveCard}
       onUpdateCard={handleUpdateCard}
       onCancelCardForm={clearCardFormState}
+      cycleChange={{
+        original: originalDays,
+        scheduled: card?.scheduledCycleChange ?? null,
+        applyFrom: draftApplyFrom,
+        setApplyFrom: setDraftApplyFrom,
+        confirmRewrite: draftConfirmRewrite,
+        setConfirmRewrite: setDraftConfirmRewrite,
+      }}
     />
   );
 

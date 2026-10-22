@@ -944,6 +944,18 @@ export interface UpdateCreditCardRequest {
   color?: string;
   /** Anotação livre (até 2000 caracteres). `""` limpa; omitir ou `null` mantém. */
   notes?: string | null;
+  /** A partir de qual fatura valem novos dias de vencimento/fechamento. Omitido = `next_invoice`. Ignorado se os dias não mudam. */
+  apply_from?: CardCycleApplyFrom;
+}
+
+export type CardCycleApplyFrom = "next_invoice" | "open_invoice" | "all_history";
+
+/** Par vencimento/fechamento em vigor a partir de uma fatura (identificada pelo mês em que fecha). `1900` = desde o início. */
+export interface CardCycleRule {
+  effective_year: number;
+  effective_month: number;
+  due_day: number;
+  closing_day: number;
 }
 
 export interface CreditCard {
@@ -966,6 +978,8 @@ export interface CreditCard {
    *  ausente). Zero usado é um FATO e chega como `0`. */
   used_limit: number | null;
   limit_usage_percent: number | null;
+  /** Dias ao longo do tempo, do mais antigo ao mais novo. `due_day`/`closing_day` são os da fatura aberta hoje; uma mudança agendada aparece só aqui. */
+  cycle_rules?: CardCycleRule[];
 }
 
 export interface CategoryBreakdown {

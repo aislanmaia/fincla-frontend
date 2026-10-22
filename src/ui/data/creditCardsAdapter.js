@@ -683,6 +683,7 @@ export function mapCreditCardToUi({ card, currentInvoice, history, futureCommitm
     /** Falso só em cartão legado sem fechamento: o formulário de edição não pré-preenche um dia que o usuário nunca escolheu. */
     fechamentoInformado: card.closing_day != null,
     closingDayEffective: closingDayForInvoiceAnchor(card),
+    scheduledCycleChange: scheduledCycleChange(card),
     limite: card.credit_limit || 0,
     limitUsagePercent: Number.isFinite(Number(card.limit_usage_percent)) && card.limit_usage_percent !== null ? Number(card.limit_usage_percent) : null,
     disponivel: card.available_limit ?? Math.max(0, (card.credit_limit || 0) - (card.used_limit || 0)),
@@ -702,6 +703,25 @@ export function mapCreditCardToUi({ card, currentInvoice, history, futureCommitm
       currentInvoice: currentInvoice || null,
     },
     ...colors,
+  };
+}
+
+/**
+ * Mudança de vencimento/fechamento já agendada para uma fatura futura, ou `null`.
+ *
+ * `due_day`/`closing_day` do cartão são os da fatura aberta hoje; a última regra do histórico é a que o
+ * cartão seguirá, e só difere deles quando a mudança começa numa fatura que ainda não abriu.
+ */
+export function scheduledCycleChange(card) {
+  const rules = Array.isArray(card?.cycle_rules) ? card.cycle_rules : [];
+  const last = rules[rules.length - 1];
+  if (!last || last.effective_year <= 1900) return null;
+  if (last.due_day === card.due_day && last.closing_day === card.closing_day) return null;
+  return {
+    year: last.effective_year,
+    month: last.effective_month,
+    dueDay: last.due_day,
+    closingDay: last.closing_day,
   };
 }
 
@@ -736,6 +756,7 @@ export function buildUpdateCreditCardPayload({
   dueDay,
   closingDay,
   color = undefined,
+  applyFrom = undefined,
 }) {
   const payload = {
     organization_id: organizationId,
@@ -755,6 +776,7 @@ export function buildUpdateCreditCardPayload({
     payload.closing_day = Number(closingDay);
   }
   if (color !== undefined) payload.color = color || undefined;
+  if (applyFrom !== undefined) payload.apply_from = applyFrom;
 
   return Object.fromEntries(
     Object.entries(payload).filter(([, v]) => v !== undefined),
