@@ -40,6 +40,7 @@ const server = setupServer(
   http.get("*/v1/credit-cards/:id/invoices/current", () => HttpResponse.json(null)),
   http.get("*/v1/transactions/summary", () => HttpResponse.json({ total_transactions: 2, breakdown: { by_category: [], by_month: [] } })),
   http.get("*/v1/transactions/facets", () => HttpResponse.json({ total: 2, category: [], type: [], tag: [], payment_method: [], settlement: null, recurring: null, value_bucket: [] })),
+  http.get("*/v1/transactions/assistant", () => HttpResponse.json({ scanned: 0, alert_count: 0, items: [] })),
   http.get("*/v1/tags/catalog", () => HttpResponse.json({ categories: [] })),
   http.get("*/v1/tags", () => HttpResponse.json({ tags: [] })),
   http.get("*/v1/transactions", ({ request }) => {
@@ -900,25 +901,156 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(exported).toBe(0);
   });
 
-  it("o Assistente aponta itens sem categoria e abre a categorização deles", async () => {
-    withLedger([{ id: 21, date: "2026-10-02", description: "Sem dono", value: 9, value_currency: "BRL", type: "expense", status: "confirmed" }, ledger[1]]);
+  const semDono = { id: 21, date: "2026-10-02", description: "Sem dono", value: 9, value_currency: "BRL", type: "expense", status: "confirmed" };
+  const uncategorizedItem = (ids, suggestions = []) => ({ kind: "uncategorized", title: `${ids.length} ${ids.length === 1 ? "item sem categoria" : "itens sem categoria"}`, detail: "Sem dono", transaction_ids: ids, suggestions });
+  const withAssistant = (items, scanned = 140) => server.use(http.get("*/v1/transactions/assistant", ({ request }) => {
+    assistantRequests.push(new URL(request.url));
+    return HttpResponse.json({ scanned, alert_count: items.filter((item) => item.kind !== "insight").length, items });
+  }));
+  const assistantRequests = [];
+  afterEach(() => { assistantRequests.length = 0; });
+
+  it("o Assistente lê o recorte INTEIRO no servidor e abre a categorização inclusive do que não está carregado", async () => {
+    withLedger([semDono, ledger[1]]);
+    withAssistant([uncategorizedItem([21, 9001])]);
     render(<CardAllTransactionsPage organizationId={ORG_ID} />);
     const user = userEvent.setup();
     await screen.findByText("Sem dono");
-    expect(screen.getByLabelText("1 alerta")).toBeInTheDocument();
+    expect(await screen.findByLabelText("1 alerta")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Assistente/ }));
     const drawer = screen.getByRole("dialog", { name: "Assistente" });
-    expect(within(drawer).getByText("1 item sem categoria")).toBeInTheDocument();
+    expect(drawer).toHaveTextContent("140 lançamentos do recorte, não só os carregados na tela");
+    expect(within(drawer).getByText("2 itens sem categoria")).toBeInTheDocument();
     await user.click(within(drawer).getByRole("button", { name: "Categorizar" }));
-    expect(screen.getByRole("dialog", { name: "Categorizar lançamentos" })).toHaveTextContent("1 lançamento selecionado");
+    expect(screen.getByRole("dialog", { name: "Categorizar lançamentos" })).toHaveTextContent("2 lançamentos selecionados");
+  });
+
+  it("o Assistente pergunta com os mesmos filtros da lista, sem paginar nem ordenar", async () => {
+    route.search = { fc_q: "Sem" };
+    withLedger([semDono]);
+    withAssistant([]);
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    await screen.findByText("Sem dono");
+    await waitFor(() => expect(assistantRequests.length).toBeGreaterThan(0));
+    const asked = assistantRequests.at(-1).searchParams;
+    expect(asked.get("organization_id")).toBe(ORG_ID);
+    expect(asked.get("credit_card_id")).toBe("7");
+    expect(asked.get("description")).toBe("Sem");
+    for (const key of ["page", "limit", "sort_by", "sort_order"]) expect(asked.has(key)).toBe(false);
+  });
+
+  it("Aplicar sugestão categoriza pelo lote com os ids do servidor, só quando o usuário clica, e o Assistente é relido", async () => {
+    withLedger([semDono, ledger[1]]);
+    let phase = 0;
+    server.use(http.get("*/v1/transactions/assistant", () => {
+      phase += 1;
+      return HttpResponse.json(phase === 1
+        ? { scanned: 140, alert_count: 1, items: [uncategorizedItem([21, 9001], [{ category_tag_id: "c3", category_name: "Lazer (servidor)", transaction_ids: [21, 9001], basis: "a organização já usou esta categoria 3× para a mesma descrição" }])] }
+        : { scanned: 140, alert_count: 0, items: [] });
+    }));
+    const bulk = [];
+    server.use(http.patch("*/v1/transactions/bulk", async ({ request }) => { bulk.push(await request.json()); return HttpResponse.json({ updated_ids: [21, 9001], count: 2 }); }));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await screen.findByText("Sem dono");
+    await screen.findByLabelText("1 alerta");
+    expect(bulk).toHaveLength(0);
+    await user.click(screen.getByRole("button", { name: /Assistente/ }));
+    const drawer = screen.getByRole("dialog", { name: "Assistente" });
+    expect(drawer).toHaveTextContent("a organização já usou esta categoria 3× para a mesma descrição");
+    await user.click(within(drawer).getByRole("button", { name: "Aplicar sugestão: Lazer (2)" }));
+    expect(await screen.findByText("2 lançamentos recategorizados como Lazer.")).toBeInTheDocument();
+    expect(bulk).toEqual([{ ids: [21, 9001], category_tag_id: "c3" }]);
+    await waitFor(() => expect(screen.queryByLabelText("1 alerta")).not.toBeInTheDocument());
+  });
+
+  it("sugestão recusada pelo servidor diz o motivo no próprio Assistente e nada é dado como feito", async () => {
+    withLedger([semDono, ledger[1]]);
+    withAssistant([uncategorizedItem([21], [{ category_tag_id: "c3", category_name: "Lazer", transaction_ids: [21], basis: "x" }])]);
+    server.use(http.patch("*/v1/transactions/bulk", () => HttpResponse.json({ detail: { code: "bulk_rejected", message: "x", failures: [{ id: 21, reason: "invalid_category" }] } }, { status: 422 })));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await screen.findByText("Sem dono");
+    await screen.findByLabelText("1 alerta");
+    await user.click(screen.getByRole("button", { name: /Assistente/ }));
+    const drawer = screen.getByRole("dialog", { name: "Assistente" });
+    await user.click(within(drawer).getByRole("button", { name: /Aplicar sugestão/ }));
+    expect(await within(drawer).findByText(/Nada foi alterado: a categoria escolhida não está mais disponível/)).toBeInTheDocument();
+    expect(screen.queryByText(/recategorizado/)).not.toBeInTheDocument();
+  });
+
+  it("antes da resposta o Assistente não afirma que nada foi encontrado nem fala em 0 lançamentos", async () => {
+    withLedger([semDono]);
+    server.use(http.get("*/v1/transactions/assistant", async () => { await new Promise((resolve) => setTimeout(resolve, 1500)); return HttpResponse.json({ scanned: 3, alert_count: 0, items: [] }); }));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await screen.findByText("Sem dono");
+    await user.click(screen.getByRole("button", { name: /Assistente/ }));
+    const drawer = screen.getByRole("dialog", { name: "Assistente" });
+    expect(within(drawer).getByText("Analisando o recorte…")).toBeInTheDocument();
+    expect(drawer).not.toHaveTextContent("0 lançamentos");
+    expect(within(drawer).queryByText("Nada fora do comum no recorte.")).not.toBeInTheDocument();
+    expect(await within(drawer).findByText("Nada fora do comum no recorte.", {}, { timeout: 4000 })).toBeInTheDocument();
+  });
+
+  it("falha na leitura do Assistente oferece tentar de novo, e a nova tentativa traz o resultado", async () => {
+    withLedger([semDono]);
+    let calls = 0;
+    server.use(http.get("*/v1/transactions/assistant", () => { calls += 1; return calls === 1 ? new HttpResponse(null, { status: 502 }) : HttpResponse.json({ scanned: 3, alert_count: 1, items: [uncategorizedItem([21])] }); }));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await screen.findByText("Sem dono");
+    await user.click(screen.getByRole("button", { name: /Assistente/ }));
+    const drawer = screen.getByRole("dialog", { name: "Assistente" });
+    expect(await within(drawer).findByRole("alert")).toHaveTextContent("Não foi possível analisar o recorte agora.");
+    await user.click(within(drawer).getByRole("button", { name: "Tentar de novo" }));
+    expect(await within(drawer).findByText("1 item sem categoria")).toBeInTheDocument();
+  });
+
+  it("recorte grande só é analisado quando o Assistente é aberto", async () => {
+    server.use(http.get("*/v1/transactions", () => HttpResponse.json({ data: [semDono], pagination: { total: 6000, page: 1, limit: 30, pages: 200, has_next: true, has_prev: false } })));
+    withAssistant([]);
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await screen.findByText("Sem dono");
+    await new Promise((resolve) => setTimeout(resolve, 900));
+    expect(assistantRequests).toHaveLength(0);
+    await user.click(screen.getByRole("button", { name: /Assistente/ }));
+    await waitFor(() => expect(assistantRequests.length).toBeGreaterThan(0));
+  });
+
+  it("Revisar duplicatas seleciona só o que está carregado e avisa do resto", async () => {
+    withLedger([semDono, ledger[1]]);
+    withAssistant([{ kind: "duplicate", title: "Possível duplicata", detail: "2× x", transaction_ids: [21, 9001], suggestions: [] }]);
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await screen.findByText("Sem dono");
+    await screen.findByLabelText("1 alerta");
+    await user.click(screen.getByRole("button", { name: /Assistente/ }));
+    await user.click(within(screen.getByRole("dialog", { name: "Assistente" })).getByRole("button", { name: "Revisar" }));
+    expect(await screen.findByText(/1 de 2 lançamentos deste alerta ainda não estão carregados/)).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Selecionar Sem dono" })).toBeChecked();
+  });
+
+  it("recorte grande demais para o Assistente diz o tamanho e pede para estreitar os filtros", async () => {
+    withLedger([semDono]);
+    server.use(http.get("*/v1/transactions/assistant", () => HttpResponse.json({ detail: { code: "slice_too_large", message: "x", total: 25000, limit: 20000 } }, { status: 422 })));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await screen.findByText("Sem dono");
+    await user.click(screen.getByRole("button", { name: /Assistente/ }));
+    const drawer = screen.getByRole("dialog", { name: "Assistente" });
+    expect(await within(drawer).findByRole("alert")).toHaveTextContent("O recorte tem 25.000 lançamentos e o Assistente analisa até 20.000. Estreite os filtros.");
+    expect(within(drawer).queryByText("Nada fora do comum no recorte.")).not.toBeInTheDocument();
   });
 
   it("no celular o Assistente é um aviso fixo na tela e abre como bottom sheet", async () => {
-    withLedger([{ id: 21, date: "2026-10-02", description: "Sem dono", value: 9, value_currency: "BRL", type: "expense", status: "confirmed" }, ledger[1]]);
+    withLedger([semDono, ledger[1]]);
+    withAssistant([uncategorizedItem([21])]);
     render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
     const user = userEvent.setup();
     await screen.findByText("Sem dono");
-    const banner = screen.getByRole("button", { name: /1 alerta para revisar/ });
+    const banner = await screen.findByRole("button", { name: /1 alerta para revisar/ });
     expect(banner).toHaveTextContent("1 item sem categoria");
     await user.click(banner);
     const sheet = screen.getByRole("dialog", { name: "Assistente" });
@@ -929,13 +1061,13 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
   });
 
   it("no celular resume 2 ou mais alertas por tipo, sem repetir o título", async () => {
-    const dup = (id, time) => ({ id, date: "2026-10-02", description: "Padaria", value: 9, value_currency: "BRL", type: "expense", status: "confirmed", time });
-    const dup2 = (id) => ({ id, date: "2026-10-03", description: "Cinema", value: 30, value_currency: "BRL", type: "expense", status: "confirmed" });
-    withLedger([dup(31), dup(32), dup2(33), dup2(34), { id: 35, date: "2026-10-04", description: "Sem dono", value: 5, value_currency: "BRL", type: "expense", status: "confirmed" }]);
+    withLedger([semDono]);
+    const dup = (ids) => ({ kind: "duplicate", title: "Possível duplicata", detail: "2× x", transaction_ids: ids, suggestions: [] });
+    withAssistant([dup([31, 32]), dup([33, 34]), uncategorizedItem([35, 36, 37])]);
     render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
     await screen.findByText("Sem dono");
-    const banner = screen.getByRole("button", { name: /alertas para revisar/ });
-    expect(banner).toHaveTextContent(/^.*2 possíveis duplicatas · \d+ itens sem categoria/);
+    const banner = await screen.findByRole("button", { name: /alertas para revisar/ });
+    expect(banner).toHaveTextContent("2 possíveis duplicatas · 3 itens sem categoria");
     expect(banner.textContent.match(/Possível duplicata/g)).toBeNull();
   });
 
@@ -985,10 +1117,11 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
   });
 
   it("no celular mostra a faixa de alerta junto da barra, só quando há alerta", async () => {
-    withLedger([{ id: 21, date: "2026-10-02", description: "Sem dono", value: 9, value_currency: "BRL", type: "expense", status: "confirmed" }, ledger[1]]);
+    withLedger([semDono, ledger[1]]);
+    withAssistant([uncategorizedItem([21])]);
     render(<CardAllTransactionsPage organizationId={ORG_ID} isMobile />);
     await screen.findByText("Sem dono");
-    expect(screen.getByRole("button", { name: "Assistente, 1 alerta" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Assistente, 1 alerta" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "1 alerta para revisar" })).toHaveTextContent("1 item sem categoria");
   });
 
