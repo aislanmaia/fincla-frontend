@@ -1,7 +1,7 @@
 import { humanizeDetailString, isLegacyError, isSafeError } from "../../../api/apiError";
-import { listTransactions, updateTransaction } from "../../../api/transactions";
+import { bulkCategorizeTransactions, listTransactions } from "../../../api/transactions";
 import { moveInstallmentToInvoice } from "../../../api/creditCards";
-import { pickNonCategoryTagIdsFromApiTransaction, TRANSACTIONS_API_MAX_LIMIT } from "../../data/transactionsAdapter.js";
+import { TRANSACTIONS_API_MAX_LIMIT } from "../../data/transactionsAdapter.js";
 
 /**
  * Por que o servidor recusou: a mensagem do PRÓPRIO servidor, quando é regra de negócio (400/409/422), como
@@ -32,12 +32,46 @@ async function eachRow(rows, action) {
   };
 }
 
-/** Troca só a categoria (as demais etiquetas ficam). Manda só `tag_ids` + a data exigida pelo PUT. */
-export function categorizeRows({ rows, categoryId, organizationId }) {
-  return eachRow(rows, (row) => updateTransaction(row.id, organizationId, {
-    date: row.date,
-    tag_ids: [...new Set([String(categoryId), ...pickNonCategoryTagIdsFromApiTransaction(row)])],
-  }));
+/** O servidor aceita de 1 a 200 lançamentos por pedido. */
+export const BULK_MAX_IDS = 200;
+
+const BULK_REASONS = {
+  not_found: "um dos lançamentos não existe mais",
+  category_not_allowed_for_type: "a categoria escolhida não aceita o tipo de um dos lançamentos",
+  detail_tag_outside_category: "um lançamento tem uma etiqueta de detalhe de outra categoria; ajuste-o sozinho",
+  invalid_category: "a categoria escolhida não está mais disponível",
+};
+
+/** Por que o servidor recusou o lote inteiro (nada foi alterado), nomeando o lançamento quando o servidor aponta um. */
+function bulkRefusalReason(error, rows) {
+  const detail = error?.response?.data?.detail;
+  if (error?.response?.status !== 422 || detail?.code !== "bulk_rejected" || !Array.isArray(detail.failures)) return refusalReason(error);
+  const parts = [...new Set(detail.failures.map((failure) => {
+    const reason = BULK_REASONS[failure.reason];
+    if (!reason) return null;
+    const row = rows.find((entry) => entry.id === failure.id);
+    return row ? `${reason} (${row.description})` : reason;
+  }).filter(Boolean))];
+  return parts.length ? `Nada foi alterado: ${parts.join("; ")}.` : "";
+}
+
+/**
+ * Troca só a categoria (as demais etiquetas ficam) pelo lote do servidor: cada pedido é tudo ou nada.
+ * Passam de 200? Vão em pedidos sequenciais; na primeira recusa para, e o que não foi enviado fica entre os que
+ * falharam (tentar de novo reenvia só esses).
+ */
+export async function categorizeRows({ rows, categoryId, organizationId }) {
+  const done = [];
+  for (let start = 0; start < rows.length; start += BULK_MAX_IDS) {
+    const chunk = rows.slice(start, start + BULK_MAX_IDS);
+    try {
+      await bulkCategorizeTransactions(organizationId, chunk.map((row) => row.id), String(categoryId));
+      done.push(...chunk);
+    } catch (error) {
+      return { done, failed: rows.filter((row) => !done.includes(row)), reason: bulkRefusalReason(error, rows) };
+    }
+  }
+  return { done, failed: [], reason: "" };
 }
 
 /** Só parcelas de compra parcelada podem mudar de fatura; as demais linhas são ignoradas aqui. */

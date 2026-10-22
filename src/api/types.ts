@@ -3056,3 +3056,15 @@ export interface AiCopilotoRunStatusResponse {
   output?: CopilotoOutput | null;
   computed_at?: string | null;
 }
+
+/** PATCH /v1/transactions/bulk: a mesma categoria para vários lançamentos, tudo ou nada (1 a 200 ids). */
+export interface BulkCategorizeResponse {
+  updated_ids: number[];
+  count: number;
+}
+
+export type BulkRejectionReason =
+  | 'not_found'
+  | 'category_not_allowed_for_type'
+  | 'detail_tag_outside_category'
+  | 'invalid_category';

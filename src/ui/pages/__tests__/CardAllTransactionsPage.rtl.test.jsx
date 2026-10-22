@@ -625,58 +625,74 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(within(list).getByText(/120,00/)).toBeInTheDocument();
   });
 
-  it("categoriza em lote mandando só tag_ids e a data", async () => {
-    withLedger();
-    const bodies = [];
-    server.use(http.put("*/v1/transactions/:id", async ({ request, params }) => { bodies.push({ id: params.id, body: await request.json() }); return HttpResponse.json({ id: Number(params.id) }); }));
-    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
-    const user = userEvent.setup();
+  const pickAllAndOpenCategorize = async (user) => {
     await screen.findByText("Notebook");
     await user.click(screen.getByRole("checkbox", { name: "Selecionar lançamentos carregados" }));
     await user.click(screen.getByRole("button", { name: "Categorizar" }));
     const dialog = screen.getByRole("dialog", { name: "Categorizar lançamentos" });
     await user.selectOptions(within(dialog).getByLabelText("Nova categoria"), "c3");
+    return dialog;
+  };
+
+  it("categoriza em lote com UM PATCH /transactions/bulk (ids + categoria), sem PUT por linha", async () => {
+    withLedger();
+    const bulk = [];
+    let puts = 0;
+    server.use(
+      http.patch("*/v1/transactions/bulk", async ({ request }) => { bulk.push({ org: new URL(request.url).searchParams.get("organization_id"), body: await request.json() }); return HttpResponse.json({ updated_ids: [11, 12], count: 2 }); }),
+      http.put("*/v1/transactions/:id", () => { puts += 1; return HttpResponse.json({}); }),
+    );
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    const dialog = await pickAllAndOpenCategorize(user);
     await user.click(within(dialog).getByRole("button", { name: "Aplicar categoria" }));
-    await waitFor(() => expect(bodies).toHaveLength(2));
-    expect(bodies.map((entry) => entry.body.tag_ids)).toEqual([["c3"], ["c3"]]);
-    expect(Object.keys(bodies[0].body).sort()).toEqual(["date", "tag_ids"]);
     expect(await screen.findByText("2 lançamentos recategorizados.")).toBeInTheDocument();
+    expect(bulk).toEqual([{ org: ORG_ID, body: { ids: [11, 12], category_tag_id: "c3" } }]);
+    expect(puts).toBe(0);
   });
 
   it("categoriza em lote sem tocar nos estornos selecionados", async () => {
     withLedger([...ledger, { id: 13, date: "2026-10-03", description: "Estorno loja", value: 5, value_currency: "BRL", type: "refund", status: "confirmed", tags: tag("r1", "Não classificado") }]);
-    const ids = [];
-    server.use(http.put("*/v1/transactions/:id", ({ params }) => { ids.push(params.id); return HttpResponse.json({ id: Number(params.id) }); }));
+    const sent = [];
+    server.use(http.patch("*/v1/transactions/bulk", async ({ request }) => { sent.push(await request.json()); return HttpResponse.json({ updated_ids: [11, 12], count: 2 }); }));
     render(<CardAllTransactionsPage organizationId={ORG_ID} />);
     const user = userEvent.setup();
-    await screen.findByText("Notebook");
-    await user.click(screen.getByRole("checkbox", { name: "Selecionar lançamentos carregados" }));
-    await user.click(screen.getByRole("button", { name: "Categorizar" }));
-    const dialog = screen.getByRole("dialog", { name: "Categorizar lançamentos" });
+    const dialog = await pickAllAndOpenCategorize(user);
     expect(dialog).toHaveTextContent("1 estorno fica de fora");
-    await user.selectOptions(within(dialog).getByLabelText("Nova categoria"), "c3");
     await user.click(within(dialog).getByRole("button", { name: "Aplicar categoria" }));
-    await waitFor(() => expect(ids.sort()).toEqual(["11", "12"]));
+    await waitFor(() => expect(sent).toHaveLength(1));
+    expect(sent[0].ids.sort()).toEqual([11, 12]);
   });
 
-  it("depois de falha parcial, tentar de novo reenvia só o que falhou", async () => {
+  it("lote recusado (422 bulk_rejected) é tudo ou nada: diz o motivo e o lançamento, e repetir reenvia o mesmo lote", async () => {
     withLedger();
     const attempts = [];
-    server.use(http.put("*/v1/transactions/:id", ({ params }) => {
-      attempts.push(params.id);
-      return params.id === "12" && attempts.filter((id) => id === "12").length === 1 ? new HttpResponse(null, { status: 400 }) : HttpResponse.json({ id: Number(params.id) });
+    server.use(http.patch("*/v1/transactions/bulk", async ({ request }) => {
+      attempts.push((await request.json()).ids);
+      return attempts.length === 1
+        ? HttpResponse.json({ detail: { code: "bulk_rejected", message: "Bulk rejected", failures: [{ id: 12, reason: "category_not_allowed_for_type" }] } }, { status: 422 })
+        : HttpResponse.json({ updated_ids: [11, 12], count: 2 });
     }));
     render(<CardAllTransactionsPage organizationId={ORG_ID} />);
     const user = userEvent.setup();
-    await screen.findByText("Notebook");
-    await user.click(screen.getByRole("checkbox", { name: "Selecionar lançamentos carregados" }));
-    await user.click(screen.getByRole("button", { name: "Categorizar" }));
-    const dialog = screen.getByRole("dialog", { name: "Categorizar lançamentos" });
-    await user.selectOptions(within(dialog).getByLabelText("Nova categoria"), "c3");
+    const dialog = await pickAllAndOpenCategorize(user);
     await user.click(within(dialog).getByRole("button", { name: "Aplicar categoria" }));
-    expect(await within(dialog).findByRole("alert")).toHaveTextContent("1 de 2 não puderam ser alterados; 1 já foram");
+    const alert = await within(dialog).findByRole("alert");
+    expect(alert).toHaveTextContent("2 de 2 não puderam ser alterados.");
+    expect(alert).toHaveTextContent("Nada foi alterado: a categoria escolhida não aceita o tipo de um dos lançamentos (Padaria).");
+    expect(alert).not.toHaveTextContent("já foram");
     await user.click(within(dialog).getByRole("button", { name: "Aplicar categoria" }));
-    await waitFor(() => expect(attempts.sort()).toEqual(["11", "12", "12"]));
+    await waitFor(() => expect(attempts).toEqual([[11, 12], [11, 12]]));
+  });
+
+  it("falha de servidor no lote não inventa causa e convida a tentar de novo", async () => {
+    withLedger();
+    server.use(http.patch("*/v1/transactions/bulk", () => new HttpResponse(null, { status: 500 })));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    const dialog = await pickAllAndOpenCategorize(user);
+    await user.click(within(dialog).getByRole("button", { name: "Aplicar categoria" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("2 de 2 não puderam ser alterados. Tente novamente.");
   });
 
   it("mover parcela de fatura paga diz a causa em vez de pedir para tentar de novo", async () => {

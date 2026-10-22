@@ -21,6 +21,7 @@ import type {
   TransactionsSummaryResponse,
   TransactionsFacetsQuery,
   TransactionsFacetsResponse,
+  BulkCategorizeResponse,
 } from './types';
 
 /**
@@ -165,6 +166,23 @@ export const updateTransaction = async (
     }
   );
   return unwrapMoney(response.data);
+};
+
+/**
+ * Põe vários lançamentos (1 a 200) na mesma categoria, tudo ou nada: se algum for recusado, nada muda
+ * e o `422` (`code: 'bulk_rejected'`) traz `failures` com o motivo de cada um.
+ */
+export const bulkCategorizeTransactions = async (
+  organizationId: string,
+  ids: number[],
+  categoryTagId: string
+): Promise<BulkCategorizeResponse> => {
+  const response = await apiClient.patch<BulkCategorizeResponse>(
+    '/transactions/bulk',
+    { ids, category_tag_id: categoryTagId },
+    { params: { organization_id: organizationId } }
+  );
+  return response.data;
 };
 
 /**
