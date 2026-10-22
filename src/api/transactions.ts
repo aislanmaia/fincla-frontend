@@ -254,6 +254,8 @@ export const getLedgerAssistant = async (
     paramsSerializer: repeatArrayParams,
     signal,
     timeout: ASSISTANT_TIMEOUT_MS,
+    // Leitura longa: um timeout não deve refazer a análise inteira no servidor (ver client.ts).
+    ...({ __noRetry: true } as Record<string, unknown>),
   });
   return response.data;
 };
