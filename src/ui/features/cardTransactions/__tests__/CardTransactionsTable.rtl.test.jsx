@@ -22,20 +22,20 @@ describe("CardTransactionsTable · seleção em lote", () => {
 });
 
 describe("CardTransactionsTable · alvo de toque das caixas de seleção", () => {
-  it("no celular cada caixa vive num rótulo de 32 px; no desktop continua a caixa nativa", () => {
-    const { unmount } = render(<CardTransactionsTable rows={rows} total={2} cardCurrency="BRL" selected={[]} onSelected={noop} onInspect={noop} onMore={noop} isMobile />);
-    for (const name of ["Selecionar Aluguel", "Selecionar lançamentos carregados"]) {
-      const box = screen.getByRole("checkbox", { name });
-      expect(box.closest("label")).not.toBeNull();
-      expect(box.closest("label").style.width).toBe("32px");
-      expect(box.closest("label").style.height).toBe("32px");
+  it("cada caixa vive num rótulo de 28 px, no celular e no desktop (tablet e notebook com toque incluídos)", () => {
+    for (const isMobile of [true, false]) {
+      const { unmount } = render(<CardTransactionsTable rows={rows} total={2} cardCurrency="BRL" selected={[]} onSelected={noop} onInspect={noop} onMore={noop} isMobile={isMobile} />);
+      for (const name of ["Selecionar Aluguel", "Selecionar lançamentos carregados"]) {
+        const label = screen.getByRole("checkbox", { name }).closest("label");
+        expect(label).not.toBeNull();
+        expect(label.style.width).toBe("28px");
+        expect(label.style.height).toBe("28px");
+      }
+      unmount();
     }
-    unmount();
-    render(<CardTransactionsTable rows={rows} total={2} cardCurrency="BRL" selected={[]} onSelected={noop} onInspect={noop} onMore={noop} />);
-    expect(screen.getByRole("checkbox", { name: "Selecionar Aluguel" }).closest("label")).toBeNull();
   });
 
-  it("tocar na área do rótulo marca a linha", async () => {
+  it("tocar na área do rótulo marca a linha", () => {
     const picked = [];
     render(<CardTransactionsTable rows={rows} total={2} cardCurrency="BRL" selected={[]} onSelected={(ids) => picked.push(ids)} onInspect={noop} onMore={noop} isMobile />);
     screen.getByRole("checkbox", { name: "Selecionar Luz" }).closest("label").click();

@@ -698,6 +698,20 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(alert).not.toHaveTextContent("Tente novamente");
   });
 
+  it("recusa sem mensagem própria (ou 5xx) segue pedindo para tentar de novo, sem inventar causa", async () => {
+    withLedger();
+    server.use(http.patch("*/v1/credit-cards/:card/installments/:tx/move-invoice", () => HttpResponse.json({ detail: "" }, { status: 409 })));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await screen.findByText("Notebook");
+    await user.click(await screen.findByRole("button", { name: "Ver detalhes de Notebook" }));
+    await user.click(within(screen.getByRole("dialog", { name: "Detalhes do lançamento" })).getByRole("button", { name: /Mover para outra fatura/ }));
+    const dialog = await screen.findByRole("dialog", { name: /Mover parcela/ });
+    await user.selectOptions(within(dialog).getByRole("combobox"), within(dialog).getAllByRole("option")[1]);
+    await user.click(within(dialog).getByRole("button", { name: "Mover parcela" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("1 de 1 não puderam ser alterados. Tente novamente.");
+  });
+
   it("em todos os cartões o detalhe não oferece mover nem estornar (a ação é do cartão da tela)", async () => {
     withLedger();
     render(<CardAllTransactionsPage organizationId={ORG_ID} />);
