@@ -476,7 +476,10 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   };
   const submitCategorize = async (categoryId) => {
     const rows = rowsByIds(dialog.ids).filter((row) => row.type !== "refund");
-    return outcome(await categorizeRows({ rows, categoryId, organizationId }), rows.length, `${rows.length} lançamento${rows.length === 1 ? "" : "s"} recategorizado${rows.length === 1 ? "" : "s"}.`);
+    const result = await categorizeRows({ rows, categoryId, organizationId });
+    // Compra parcelada é reetiquetada inteira: o aviso conta o que o servidor alterou, não só o que foi marcado.
+    const changed = Math.max(result.updated, rows.length);
+    return outcome(result, rows.length, `${changed} lançamento${changed === 1 ? "" : "s"} recategorizado${changed === 1 ? "" : "s"}.`);
   };
   const submitMove = async ({ rows, year, month }) => outcome(await moveRows({ rows, cardId: state.card.id, organizationId, year, month }), rows.length, `${rows.length} parcela${rows.length === 1 ? "" : "s"} movida${rows.length === 1 ? "" : "s"} de fatura.`);
   /** Entrega a compra ao painel oficial de Nova transação; parcelada leva o total da compra, não a parcela. */
