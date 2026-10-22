@@ -22,6 +22,7 @@ import type {
   TransactionsFacetsQuery,
   TransactionsFacetsResponse,
   BulkCategorizeResponse,
+  LedgerAssistantResponse,
 } from './types';
 
 /**
@@ -228,6 +229,34 @@ export const bulkCategorizeTransactions = async (
     { ids, category_tag_id: categoryTagId },
     { params: { organization_id: organizationId } }
   );
+  return response.data;
+};
+
+const ASSISTANT_TIMEOUT_MS = 30_000;
+
+/** Os filtros da listagem, sem paginação nem ordem. */
+export type LedgerAssistantQuery = Omit<
+  ListTransactionsQuery,
+  'page' | 'limit' | 'sort_by' | 'sort_order'
+> & { locale?: string };
+
+/**
+ * As observações do Assistente sobre o recorte inteiro que os filtros descrevem (mesmos filtros da listagem, sem
+ * paginação). Examina todos os lançamentos (~0,5 ms cada): chame sob demanda, com debounce, e cancele a anterior
+ * (`signal`). Recusas: `422 slice_too_large` (com `total` e `limit`) e `409 slice_changed` (perguntar de novo).
+ */
+export const getLedgerAssistant = async (
+  filters: LedgerAssistantQuery,
+  signal?: AbortSignal
+): Promise<LedgerAssistantResponse> => {
+  const response = await apiClient.get<LedgerAssistantResponse>('/transactions/assistant', {
+    params: filters,
+    paramsSerializer: repeatArrayParams,
+    signal,
+    timeout: ASSISTANT_TIMEOUT_MS,
+    // Leitura longa: um timeout não deve refazer a análise inteira no servidor (ver client.ts).
+    ...({ __noRetry: true } as Record<string, unknown>),
+  });
   return response.data;
 };
 

@@ -7,10 +7,11 @@ import { exportTransactionsCsv, getTransaction, getTransactionsFacets, getTransa
 import { Btn, Card, PageTitle, Select } from "../components/primitives.jsx";
 import { shouldUseRealData } from "../dataMode.js";
 import { dayKey, groupSubtotal, installmentOf } from "../features/cardTransactions/ledgerModel.js";
-import { alertsLabel, assistantInsights } from "../features/cardTransactions/assistantModel.js";
+import { alertsLabel, assistantFailureMessage, assistantFromApi } from "../features/cardTransactions/assistantModel.js";
 import { CategorizeDialog, ExportDialog, MoveInstallmentDialog } from "../features/cardTransactions/LedgerDialogs.jsx";
 import { AssistantDrawer, LedgerDetail } from "../features/cardTransactions/LedgerPanels.jsx";
 import { LedgerAlertStrip, LedgerAppBar, LedgerChipScroller, LedgerSearchEmpty, LedgerSummaryRow } from "../features/cardTransactions/LedgerMobileBars.jsx";
+import { useLedgerAssistant } from "../features/cardTransactions/useLedgerAssistant.js";
 import { categorizeRows, fetchAllRows, moveRows } from "../features/cardTransactions/ledgerActions.js";
 import { saveBlob } from "../features/export/saveBlob.js";
 import { buildPdfParts, buildPrintHtml, downloadCsv, exportFailureMessage, exportFileName, printHtml } from "../features/cardTransactions/ledgerExport.js";
@@ -47,6 +48,8 @@ import { T } from "../tokens.js";
 const PAGE_SIZE = 30;
 // O ledger lê 12 faturas para o seletor de recorte.
 const INVOICE_WINDOW = 12;
+// Acima disto o Assistente só lê o recorte quando é aberto (a análise custa ~0,5 ms por lançamento).
+const ASSISTANT_EAGER_MAX_ROWS = 5000;
 const omitKeys = (object, keys) => Object.fromEntries(Object.entries(object).filter(([key]) => !keys.includes(key)));
 // Filtro que cada faceta possui: sai do pedido de contagens enquanto ela está à vista (OU, não E).
 const FACET_OWN_KEYS = { categoria: ["category"], situacao: ["settled"], tipo: ["type"] };
@@ -463,20 +466,42 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   }, [state.loading, state.error, hasMore]);
   const dirtyRef = useRef(false);
   const selectedRowObjects = state.rows.filter((row) => selectedRows.includes(row.id));
-  const rowsByIds = (ids) => state.rows.filter((row) => ids.includes(row.id));
-  const insights = useMemo(() => assistantInsights(state.rows), [state.rows]);
+  // O Assistente fala do recorte inteiro: um lançamento que ainda não foi carregado entra só com o id (o servidor decide).
+  const rowsByIds = (ids, { allowUnloaded = false } = {}) => allowUnloaded
+    ? ids.map((id) => state.rows.find((row) => row.id === id) ?? { id, description: `Lançamento #${id}` })
+    : state.rows.filter((row) => ids.includes(row.id));
+  // O Assistente lê o recorte INTEIRO no servidor (mesmos filtros da lista, sem ordem); `reload` o refaz depois de uma ação.
+  const assistantParams = { organization_id: organizationId, ...(cardScope === "current" && state.card ? { credit_card_id: state.card.id } : {}), ...aggregateFilter, locale: "pt-BR" };
+  // A leitura examina o recorte todo (~0,5 ms por lançamento): em recortes grandes só acontece com o Assistente aberto.
+  const assistantOpen = dialog?.kind === "assistant";
+  const assistant = useLedgerAssistant({ enabled: enabled && Boolean(state.card) && !filterBlocked && (assistantOpen || (state.total ?? 0) <= ASSISTANT_EAGER_MAX_ROWS), params: assistantParams, requestKey: `${organizationId}:${state.card?.id ?? "none"}:${cardScope}:${reload}:${JSON.stringify(aggregateFilter)}` });
+  const insights = useMemo(() => assistantFromApi(assistant.current ? assistant.data : null), [assistant.current, assistant.data]);
   const closeDialog = () => { setDialog(null); if (dirtyRef.current) { dirtyRef.current = false; setReload((value) => value + 1); } };
   const finishAction = (message) => { dirtyRef.current = false; setDialog(null); setSelectedRows([]); setInspected(null); setNotice(message); setReload((value) => value + 1); };
+  // Com causa (ex.: fatura paga), repetir não adianta: diz o motivo em vez de pedir para tentar de novo.
+  const failureText = (result, total) => `${result.failed.length} de ${total} não puderam ser alterados${result.done.length ? `; ${result.done.length} já foram` : ""}. ${result.reason || "Tente novamente."}`;
   const outcome = (result, total, message) => {
     if (result.failed.length === 0) { finishAction(message); return null; }
     if (result.done.length > 0) dirtyRef.current = true;
     // Tentar de novo refaz só o que falhou: o que já passou não é reenviado.
     setDialog((current) => current && current.ids ? { ...current, ids: result.failed.map((row) => row.id) } : current);
-    // Com causa (ex.: fatura paga), repetir não adianta: diz o motivo em vez de pedir para tentar de novo.
-    return `${result.failed.length} de ${total} não puderam ser alterados${result.done.length ? `; ${result.done.length} já foram` : ""}. ${result.reason || "Tente novamente."}`;
+    return failureText(result, total);
+  };
+  /** "Aplicar sugestão" do Assistente: o mesmo lote do Categorizar, com os lançamentos que o servidor apontou. */
+  const applySuggestion = async (suggestion) => {
+    const rows = rowsByIds(suggestion.rowIds, { allowUnloaded: true });
+    const result = await categorizeRows({ rows, categoryId: suggestion.categoryTagId, organizationId });
+    if (result.failed.length === 0) {
+      const changed = Math.max(result.updated, rows.length);
+      finishAction(`${changed} lançamento${changed === 1 ? "" : "s"} recategorizado${changed === 1 ? "" : "s"} como ${categoriesById[suggestion.categoryTagId]?.label ?? suggestion.categoryName}.`);
+      return null;
+    }
+    // O que passou já mudou: o Assistente é relido, e a sugestão volta só com o que ainda falta.
+    if (result.done.length > 0) setReload((value) => value + 1);
+    return failureText(result, rows.length);
   };
   const submitCategorize = async (categoryId) => {
-    const rows = rowsByIds(dialog.ids).filter((row) => row.type !== "refund");
+    const rows = rowsByIds(dialog.ids, { allowUnloaded: Boolean(dialog.fromAssistant) }).filter((row) => row.type !== "refund");
     const result = await categorizeRows({ rows, categoryId, organizationId });
     // Compra parcelada é reetiquetada inteira: o aviso conta o que o servidor alterou, não só o que foi marcado.
     const changed = Math.max(result.updated, rows.length);
@@ -702,10 +727,10 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
         <LedgerDetail row={inspected} currency={cardScope === "current" ? card?.currency : null} closeRef={detailCloseRef} onClose={() => setInspected(null)} onOpen={openTransaction} onMove={cardScope === "current" ? (row) => setDialog({ kind: "move", ids: [row.id] }) : undefined} onRefund={cardScope === "current" && onRefund ? requestRefund : undefined} onOpenOriginal={openOriginal} />
       </Card>
     </div>}
-    {dialog?.kind === "categorize" && <CategorizeDialog rows={rowsByIds(dialog.ids)} categories={categories} onSubmit={submitCategorize} onClose={closeDialog} />}
+    {dialog?.kind === "categorize" && <CategorizeDialog rows={rowsByIds(dialog.ids, { allowUnloaded: Boolean(dialog.fromAssistant) })} categories={categories} onSubmit={submitCategorize} onClose={closeDialog} />}
     {dialog?.kind === "move" && <MoveInstallmentDialog rows={rowsByIds(dialog.ids).length ? rowsByIds(dialog.ids) : inspected ? [inspected] : []} invoiceOptions={invoiceOpts} currentKey={historyState.current?.month ?? null} onSubmit={submitMove} onClose={closeDialog} />}
     {dialog?.kind === "export" && <ExportDialog blocked={filterBlocked} total={dialog.selection ? dialog.selection.rows.length : state.total} filterSummary={filterSummary()} selection={dialog.selection ? { count: dialog.selection.rows.length, sum: dialog.selection.sum } : null} onExport={(format) => submitExport(format, dialog.selection?.rows ?? null)} onClose={closeDialog} />}
-    {dialog?.kind === "assistant" && <AssistantDrawer insights={insights.items} loadedCount={state.rows.length} onClose={closeDialog} isMobile={isMobile} onSelect={(ids) => { setSelectedRows(ids); setDialog(null); }} onCategorize={(ids) => { setSelectedRows(ids); setDialog({ kind: "categorize", ids }); }} />}
+    {dialog?.kind === "assistant" && <AssistantDrawer insights={insights} loading={!assistant.current} error={assistant.current && assistant.error ? assistantFailureMessage(assistant.error) : null} onRetry={assistant.retry} categoryLabelOf={(id) => categoriesById[id]?.label} onApply={applySuggestion} onClose={closeDialog} isMobile={isMobile} onSelect={(ids) => { const loaded = ids.filter((id) => state.rows.some((row) => row.id === id)); setSelectedRows(loaded); setDialog(null); if (loaded.length < ids.length) setNotice(`${ids.length - loaded.length} de ${ids.length} lançamentos deste alerta ainda não estão carregados na lista; carregue mais ou filtre para vê-los.`); }} onCategorize={(ids) => { setDialog({ kind: "categorize", ids, fromAssistant: true }); }} />}
     {notice && <div role="status" style={{ ...G, position: "fixed", left: "50%", bottom: "calc(20px + env(safe-area-inset-bottom, 0px))", transform: "translateX(-50%)", zIndex: 70, background: T.ink, color: "#fff", borderRadius: 10, padding: "10px 14px", fontSize: 12, display: "flex", gap: 12, alignItems: "center" }}>{notice}<button type="button" aria-label="Fechar aviso" onClick={() => setNotice(null)} style={{ border: 0, background: "none", color: T.surface, cursor: "pointer" }}>×</button></div>}
     {summarySheetOpen && isMobile && <div ref={summaryDialogRef} role="dialog" aria-modal="true" aria-label="Resumo e saídas do recorte" style={{ position: "fixed", inset: 0, zIndex: 48, background: "rgba(15,15,13,.35)", display: "flex", alignItems: "flex-end" }} onClick={() => setSummarySheetOpen(false)}>
       <div className="fincla-scroll" style={{ background: T.bg, borderRadius: "18px 18px 0 0", maxHeight: "85dvh", width: "100%", padding: 16, overflowY: "auto", display: "flex", flexDirection: "column", gap: 12 }} onClick={(event) => event.stopPropagation()}>

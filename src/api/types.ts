@@ -3075,3 +3075,27 @@ export interface BulkRejectedDetail {
   message: string;
   failures: Array<{ id: number | null; reason: BulkRejectionReason }>;
 }
+
+/** GET /v1/transactions/assistant: observações determinísticas sobre o recorte INTEIRO (só leem; nada é aplicado). */
+export interface LedgerAssistantSuggestion {
+  category_tag_id: string;
+  category_name: string;
+  /** Quais lançamentos do item esta sugestão atende. */
+  transaction_ids: number[];
+  /** Em que a sugestão se baseia (ex.: "a organização já usou esta categoria 3× para a mesma descrição"). */
+  basis: string;
+}
+
+export interface LedgerAssistantItem {
+  kind: 'uncategorized' | 'duplicate' | 'insight';
+  title: string;
+  detail: string;
+  transaction_ids: number[];
+  suggestions: LedgerAssistantSuggestion[];
+}
+
+export interface LedgerAssistantResponse {
+  scanned: number;
+  alert_count: number;
+  items: LedgerAssistantItem[];
+}

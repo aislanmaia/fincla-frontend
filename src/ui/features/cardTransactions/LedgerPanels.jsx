@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { X } from "lucide-react";
 
 import { Badge, Btn } from "../../components/primitives.jsx";
@@ -55,14 +56,36 @@ export function LedgerDetail({ row, currency, closeRef, onClose, onOpen, onMove,
 
 const ICONS = { uncategorized: "🏷", duplicate: "⚠️", insight: "💡" };
 
-/** Drawer do Assistente (bottom sheet no celular): observações sobre as linhas carregadas, cada uma com a ação possível. */
-export function AssistantDrawer({ insights, loadedCount, onClose, onSelect, onCategorize, isMobile = false }) {
+/**
+ * Drawer do Assistente (bottom sheet no celular): observações do servidor sobre o recorte INTEIRO, cada uma com a ação
+ * possível. A sugestão de categoria só é aplicada pelo botão: `onApply` devolve o texto do erro (ou `null`).
+ */
+export function AssistantDrawer({ insights, loading = false, error = null, categoryLabelOf = null, onClose, onSelect, onCategorize, onApply, onRetry = null, isMobile = false }) {
+  const [applying, setApplying] = useState(null);
+  const [failure, setFailure] = useState(null);
+  const apply = async (suggestion) => {
+    setApplying(suggestion.categoryTagId); setFailure(null);
+    const failed = await onApply(suggestion);
+    setApplying(null);
+    if (failed) setFailure(failed);
+  };
   return <LedgerModal title="Assistente" side={!isMobile} sheet={isMobile} onClose={onClose}>
-    <p style={{ ...G, margin: 0, fontSize: 11, color: T.inkMid }}>Observações sobre os {loadedCount} lançamentos carregados na tela.</p>
-    {insights.length === 0 && <p role="status" style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>Nada fora do comum nos lançamentos carregados.</p>}
-    {insights.map((item, index) => <section key={`${item.kind}-${index}`} aria-label={item.title} style={{ border: `1px solid ${T.border}`, borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+    <p style={{ ...G, margin: 0, fontSize: 11, color: T.inkMid }}>{loading || error ? "Observações sobre o recorte inteiro, não só os lançamentos carregados na tela." : `Observações sobre os ${insights.scanned.toLocaleString("pt-BR")} lançamentos do recorte, não só os carregados na tela.`}</p>
+    {loading && <p role="status" style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>Analisando o recorte…</p>}
+    {error && <p role="alert" style={{ ...G, margin: 0, fontSize: 12, color: T.red }}>{error}</p>}
+    {error && onRetry && <Btn variant="outGray" small onClick={onRetry}>Tentar de novo</Btn>}
+    {failure && <p role="alert" style={{ ...G, margin: 0, fontSize: 12, color: T.red }}>{failure}</p>}
+    {!loading && !error && insights.items.length === 0 && <p role="status" style={{ ...G, margin: 0, fontSize: 12, color: T.inkMid }}>Nada fora do comum no recorte.</p>}
+    {insights.items.map((item, index) => <section key={`${item.kind}-${index}`} aria-label={item.title} style={{ border: `1px solid ${T.border}`, borderRadius: 10, padding: 12, display: "flex", flexDirection: "column", gap: 6 }}>
       <strong style={{ ...G, fontSize: 12 }}><span aria-hidden="true">{ICONS[item.kind]} </span>{item.title}</strong>
       <span style={{ ...G, fontSize: 11, color: T.inkMid }}>{item.detail}</span>
+      {item.kind === "uncategorized" && item.suggestions.map((suggestion) => {
+        const name = categoryLabelOf?.(suggestion.categoryTagId) ?? suggestion.categoryName;
+        return <div key={suggestion.categoryTagId} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <span style={{ ...G, fontSize: 11, color: T.inkMid }}>Sugestão: {name} para {suggestion.rowIds.length} {suggestion.rowIds.length === 1 ? "lançamento" : "lançamentos"} — {suggestion.basis}.</span>
+          <Btn variant="blue" small disabled={applying !== null} onClick={() => apply(suggestion)}>{applying === suggestion.categoryTagId ? "Aplicando…" : `Aplicar sugestão: ${name} (${suggestion.rowIds.length})`}</Btn>
+        </div>;
+      })}
       {item.kind === "uncategorized" && <Btn variant="outGray" small onClick={() => onCategorize(item.rowIds)}>Categorizar</Btn>}
       {item.kind === "duplicate" && <Btn variant="outGray" small onClick={() => onSelect(item.rowIds)}>Revisar</Btn>}
     </section>)}
