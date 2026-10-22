@@ -59,12 +59,11 @@ function findExistingTagForFlow(tags, flowId) {
   return null;
 }
 
-async function persistOnboardingCategories(organizationId, categoryIds) {
+async function persistOnboardingCategories(categoryIds, loadCategoryTags) {
   const flowIds = collectOrderedFlowIds(categoryIds);
   if (!flowIds.length) return;
 
-  const existingTagsResponse = await listTags(organizationId, "categoria");
-  const tags = existingTagsResponse?.tags ?? [];
+  const tags = await loadCategoryTags();
 
   let index = 0;
   for (const flowId of flowIds) {
@@ -215,6 +214,23 @@ async function hasEquivalentRecurringSeries(organizationId, payload) {
   }
 }
 
+/** Chaves de sistema das categorias que a receita do onboarding aceita (as duas valem para receita). */
+const INCOME_CATEGORY_KEYS = ["work_salary", "uncategorized"];
+
+/**
+ * A série recorrente precisa de EXATAMENTE uma categoria (regra do produto, também no backend). A receita do
+ * onboarding nasce como "Salário e trabalho"; sem ela na organização, "Sem categoria". Só vale a categoria que
+ * declara aceitar receita: sem `allowed_transaction_types`, não há base para supor que aceita.
+ */
+function pickIncomeCategoryTagId(tags) {
+  const acceptsIncome = (tag) => Array.isArray(tag.allowed_transaction_types) && tag.allowed_transaction_types.includes("income");
+  for (const key of INCOME_CATEGORY_KEYS) {
+    const found = tags.find((tag) => tag.system_key === key && acceptsIncome(tag));
+    if (found) return found.id;
+  }
+  return null;
+}
+
 export async function submitOnboarding(data) {
   const orgName = data?.orgNome?.trim();
 
@@ -269,13 +285,24 @@ export async function submitOnboarding(data) {
     }
   };
 
+  // As categorias da organização são buscadas uma vez e servem à receita recorrente e ao destaque das escolhidas.
+  let categoryTags = null;
+  const loadCategoryTags = async () => {
+    categoryTags ??= (await listTags(organization.id, "categoria"))?.tags ?? [];
+    return categoryTags;
+  };
+
   const recurringPayload = buildOnboardingRecurringPayload(data);
   if (recurringPayload) {
     await runOptionalStep("Não foi possível salvar a receita recorrente.", async () => {
       if (reused && (await hasEquivalentRecurringSeries(organization.id, recurringPayload))) {
         return;
       }
-      await createRecurringSeries(organization.id, recurringPayload);
+      const categoryTagId = pickIncomeCategoryTagId(await loadCategoryTags());
+      // Sem categoria que aceite receita a API recusaria a série: nem tenta (o passo é opcional e avisa).
+      if (!categoryTagId) throw new Error("no income category");
+      const { category: _legacyCategoryText, ...withoutLegacyText } = recurringPayload;
+      await createRecurringSeries(organization.id, { ...withoutLegacyText, tag_ids: [categoryTagId] });
     });
   }
 
@@ -287,7 +314,7 @@ export async function submitOnboarding(data) {
   }
 
   await runOptionalStep("Não foi possível destacar as categorias escolhidas.", () =>
-    persistOnboardingCategories(organization.id, data?.cats),
+    persistOnboardingCategories(data?.cats, loadCategoryTags),
   );
 
   const inviteEmails = collectInvitationEmails(data);

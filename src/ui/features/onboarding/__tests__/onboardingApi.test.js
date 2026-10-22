@@ -77,6 +77,8 @@ describe("submitOnboarding", () => {
           tag_type: tagType,
           parent_category_tag_id: null,
         },
+        { id: "t-salary", name: "Work & Salary", system_key: "work_salary", allowed_transaction_types: ["income"], tag_type: tagType, parent_category_tag_id: null },
+        { id: "t-none", name: "Uncategorized", system_key: "uncategorized", allowed_transaction_types: ["income", "expense", "refund"], tag_type: tagType, parent_category_tag_id: null },
       ],
     });
     mocks.updateTag.mockResolvedValue({ id: "t-x" });
@@ -108,8 +110,32 @@ describe("submitOnboarding", () => {
       start_date: "2026-03-24",
       day_of_month: 10,
       value_kind: "exact",
-      category: "Receita",
+      tag_ids: ["t-salary"],
     });
+  });
+
+  it("a receita recorrente cai em 'Sem categoria' quando a organização não tem 'Salário e trabalho'", async () => {
+    mocks.listTags.mockResolvedValue({ tags: [{ id: "t-none", name: "Uncategorized", system_key: "uncategorized", allowed_transaction_types: ["income", "expense"], tag_type: tagType, parent_category_tag_id: null }] });
+    await submitOnboarding({ orgNome: "Casa", orgTipo: "couple", temRec: "sim", recDesc: "Salário", recVal: "2200,00", recDia: "10", recTipo: "fixo" });
+    expect(mocks.createRecurringSeries).toHaveBeenCalledWith("org-1", expect.objectContaining({ tag_ids: ["t-none"] }));
+  });
+
+  it("sem categoria que aceite receita, nem tenta criar a série e avisa (o passo é opcional)", async () => {
+    mocks.listTags.mockResolvedValue({ tags: [{ id: "t-home", name: "Housing", system_key: "housing", allowed_transaction_types: ["expense"], tag_type: tagType, parent_category_tag_id: null }] });
+    const result = await submitOnboarding({ orgNome: "Casa", orgTipo: "couple", temRec: "sim", recDesc: "Salário", recVal: "2200,00", recDia: "10", recTipo: "fixo" });
+    expect(mocks.createRecurringSeries).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).toContain("Não foi possível salvar a receita recorrente.");
+  });
+
+  it("uma categoria sem a lista de tipos permitidos não conta como aceitando receita", async () => {
+    mocks.listTags.mockResolvedValue({ tags: [{ id: "t-salary", name: "Work & Salary", system_key: "work_salary", tag_type: tagType, parent_category_tag_id: null }] });
+    await submitOnboarding({ orgNome: "Casa", orgTipo: "couple", temRec: "sim", recDesc: "Salário", recVal: "2200,00", recDia: "10", recTipo: "fixo" });
+    expect(mocks.createRecurringSeries).not.toHaveBeenCalled();
+  });
+
+  it("busca as categorias uma só vez por onboarding", async () => {
+    await submitOnboarding({ orgNome: "Casa", orgTipo: "couple", temRec: "sim", recDesc: "Salário", recVal: "2200,00", recDia: "10", recTipo: "fixo", cats: ["casa"] });
+    expect(mocks.listTags).toHaveBeenCalledTimes(1);
   });
 
   it("persiste o cartão configurado no onboarding", async () => {
