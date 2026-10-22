@@ -59,6 +59,7 @@ export function CardsPageModals({
   onSaveCard,
   onUpdateCard,
   onCancelCardForm,
+  cycleChange,
 }) {
   return (
     <>
@@ -123,6 +124,7 @@ export function CardsPageModals({
         onSave={onSaveCard}
         onUpdate={onUpdateCard}
         onCancel={onCancelCardForm}
+        cycleChange={cycleChange}
       />
     </>
   );

@@ -6,6 +6,7 @@ import { M_MONO } from "../moodV4";
 import { CARD_BRAND_OPTIONS } from "../../data/creditCardsAdapter.js";
 import { ClosingDaySuggestion } from "./ClosingDaySuggestion.jsx";
 import { isValidMonthDay } from "./closingDay.js";
+import { APPLY_FROM, CycleChangeOptions, ScheduledCycleNotice, cycleDaysChanged } from "./CycleChangeOptions.jsx";
 
 /**
  * Campo de texto do sheet.
@@ -41,6 +42,10 @@ function FI({ val, set, ph, type = "text", inputMode, maxLength }) {
  * Permanece "stateless": todo o estado de rascunho (`draft*`), os handlers
  * de salvar/atualizar/cancelar, e flags de loading/erro/sucesso são
  * controlados pelo pai. Apresentação reage só via props.
+ *
+ * `cycleChange` (só na edição) leva o que o pai guarda sobre a mudança de vencimento/fechamento:
+ * `original` (dias de hoje), `scheduled` (mudança já agendada), `hasPaidInvoices` e o estado da
+ * escolha `applyFrom` / `confirmRewrite`.
  */
 export function CardFormSheet({
   open,
@@ -66,12 +71,16 @@ export function CardFormSheet({
   onSave,
   onUpdate,
   onCancel,
+  cycleChange = null,
 }) {
   if (!open) return null;
   // `last4` precisa estar completo: o backend exige exatamente 4 dígitos e
   // salvar com 1..3 só devolveria erro de validação.
+  const daysChanged = isEdit && cycleDaysChanged(cycleChange?.original, draftDueDay, draftClosingDay);
+  // Reescrever o passado só com a confirmação explícita.
+  const rewriteUnconfirmed = daysChanged && cycleChange?.applyFrom === APPLY_FROM.ALL && !cycleChange?.confirmRewrite;
   const canSave =
-    draftIssuer && draftName && String(draftLast4).length === 4 && draftLimit && isValidMonthDay(draftDueDay) && isValidMonthDay(draftClosingDay);
+    draftIssuer && draftName && String(draftLast4).length === 4 && draftLimit && isValidMonthDay(draftDueDay) && isValidMonthDay(draftClosingDay) && !rewriteUnconfirmed;
 
   const inner = (
     <>
@@ -162,6 +171,16 @@ export function CardFormSheet({
           <div role="alert" style={{ ...G, fontSize: 11, color: T.red, marginTop: -4 }}>Informe um dia do fechamento de 1 a 31.</div>
         )}
         <ClosingDaySuggestion dueDay={draftDueDay} closingDay={draftClosingDay} onUse={setDraftClosingDay} />
+        {isEdit && <ScheduledCycleNotice scheduled={cycleChange?.scheduled} />}
+        {daysChanged && (
+          <CycleChangeOptions
+            applyFrom={cycleChange.applyFrom}
+            setApplyFrom={cycleChange.setApplyFrom}
+            confirmRewrite={cycleChange.confirmRewrite}
+            setConfirmRewrite={cycleChange.setConfirmRewrite}
+            hasPaidInvoices={cycleChange.hasPaidInvoices}
+          />
+        )}
         <div style={{ background: T.blueLight, border: `1px solid ${T.blue}22`, borderRadius: 10, padding: "10px 14px" }}>
           <div style={{ ...G, fontSize: 11, color: T.blue, lineHeight: 1.65 }}>
             💡 <strong>Dica financeira:</strong> O dia do fechamento define o início do período de compras. Compras feitas logo após o fechamento têm mais prazo para pagamento.

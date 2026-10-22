@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildCreateCreditCardPayload,
   buildUpdateCreditCardPayload,
+  scheduledCycleChange,
   faturaIdxAfterCardsRefresh,
   faturaIdxMatchingInvoiceRef,
   mapCreditCardToUi,
@@ -339,5 +340,39 @@ describe("faturaIdxMatchingInvoiceRef / faturaIdxAfterCardsRefresh", () => {
     const nextCard = { id: "card-a", faturas: [...faturas] };
     const prevCards = [{ id: "card-a", faturas: [...faturas] }];
     expect(faturaIdxAfterCardsRefresh(nextCard, prevCards, 0)).toBe(0);
+  });
+});
+
+describe("mudança de dias do cartão", () => {
+  it("envia apply_from só quando informado", () => {
+    expect(buildUpdateCreditCardPayload({ organizationId: "o", dueDay: "10", applyFrom: "open_invoice" }).apply_from).toBe("open_invoice");
+    expect("apply_from" in buildUpdateCreditCardPayload({ organizationId: "o", dueDay: "10" })).toBe(false);
+  });
+
+  it("enxerga a mudança agendada pela última regra do histórico", () => {
+    const card = {
+      due_day: 5,
+      closing_day: 25,
+      cycle_rules: [
+        { effective_year: 1900, effective_month: 1, due_day: 5, closing_day: 25 },
+        { effective_year: 2026, effective_month: 12, due_day: 10, closing_day: 3 },
+      ],
+    };
+
+    expect(scheduledCycleChange(card)).toEqual({ year: 2026, month: 12, dueDay: 10, closingDay: 3 });
+  });
+
+  it("sem histórico, ou com a última regra já em vigor, não há nada agendado", () => {
+    expect(scheduledCycleChange({ due_day: 5, closing_day: 25 })).toBeNull();
+    expect(
+      scheduledCycleChange({
+        due_day: 10,
+        closing_day: 3,
+        cycle_rules: [
+          { effective_year: 1900, effective_month: 1, due_day: 5, closing_day: 25 },
+          { effective_year: 2026, effective_month: 6, due_day: 10, closing_day: 3 },
+        ],
+      }),
+    ).toBeNull();
   });
 });
