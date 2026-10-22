@@ -48,6 +48,11 @@ const bulkButton = { ...G, border: 0, background: "none", color: T.blue, cursor:
 const COLUMN_HEADER_HEIGHT = 30;
 const COLUMNS = "22px 58px minmax(140px,2.2fr) minmax(96px,1fr) 62px 96px 70px 92px 86px";
 
+/** A caixa nativa (13 px) é pequena demais para o dedo: o rótulo estende a área de toque para 28 px (WCAG 2.2, 2.5.8) sem mudar o desenho nem ocupar espaço (a margem negativa devolve o excesso). */
+function RowCheckbox(props) {
+  return <label style={{ display: "grid", placeItems: "center", width: 28, height: 28, margin: -7, flex: "none", cursor: "pointer" }}><input type="checkbox" style={{ margin: 0 }} {...props} /></label>;
+}
+
 export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasMore, error, onMore, selected, onSelected, onExportSelected, selectionSum, onCategorize, onMoveInstallment, inspected, onInspect, grouped, density, isMobile, maxHeight, collapsible = false, collapsedKeys, onToggleGroup }) {
   const scrollerRef = useRef(null);
   const sentinelRef = useRef(null);
@@ -76,7 +81,7 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
   const rowPadding = density === "compacto" ? "7px 12px" : density === "confortavel" ? "15px 12px" : "10px 12px";
   return <Card as="section" aria-label="Lançamentos do cartão" style={{ minWidth: 0, overflow: "hidden", padding: 0, width: "100%", ...(isMobile ? { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", border: 0, borderRadius: 0, boxShadow: "none", background: T.surface } : {}) }}>
     <div style={{ ...G, display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px 10px", padding: isMobile ? "11px 16px" : "11px 14px", borderBottom: `1px solid ${T.border}`, borderTop: isMobile ? `1px solid ${T.border}` : undefined, fontSize: isMobile ? 12.5 : 12, fontWeight: 700 }}>
-      <input type="checkbox" aria-label="Selecionar lançamentos carregados" checked={allChecked} onChange={(event) => onSelected(event.target.checked ? [...new Set([...selected, ...rows.map((row) => row.id)])] : selected.filter((id) => !rows.some((row) => row.id === id)))} />
+      <RowCheckbox aria-label="Selecionar lançamentos carregados" checked={allChecked} onChange={(event) => onSelected(event.target.checked ? [...new Set([...selected, ...rows.map((row) => row.id)])] : selected.filter((id) => !rows.some((row) => row.id === id)))} />
       <span>{total == null ? `${rows.length} lançamentos` : `${total} lançamentos`}</span>
       {selected.length > 0 && <span style={{ color: T.blue }}>{selected.length} selecionado{selected.length === 1 ? "" : "s"}{selectionSum ? ` · ${selectionSum}` : ""}{hiddenSelected > 0 ? ` · ${hiddenSelected} em dias recolhidos` : ""}</span>}
       {selected.length > 0 && <span role="toolbar" aria-label="Ações em lote" style={{ marginLeft: "auto", display: "flex", flexWrap: "wrap", gap: "4px 10px", alignItems: "center", minWidth: 0 }}>
@@ -102,7 +107,7 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
             if (!isMobile) {
               const rest = remainingInstallments(row);
               return <div key={row.id} role="listitem" style={{ display: "grid", gridTemplateColumns: COLUMNS, gap: 10, alignItems: "center", padding: rowPadding, borderBottom: `1px solid ${T.border}`, background: inspected?.id === row.id ? T.blueLight : T.surface, minWidth: 0, ...G, fontSize: 11 }}>
-                <input type="checkbox" aria-label={`Selecionar ${row.description}`} checked={selected.includes(row.id)} onChange={() => onSelected(selected.includes(row.id) ? selected.filter((id) => id !== row.id) : [...selected, row.id])} />
+                <RowCheckbox aria-label={`Selecionar ${row.description}`} checked={selected.includes(row.id)} onChange={() => onSelected(selected.includes(row.id) ? selected.filter((id) => id !== row.id) : [...selected, row.id])} />
                 <div style={{ ...NUM, fontSize: 10, lineHeight: 1.25, color: T.inkMid }}><strong style={{ display: "block", color: T.ink, fontSize: 12, whiteSpace: "nowrap" }}>{date ? dateLabel(date) : "—"}</strong>{date ? weekDate.format(date) : ""}</div>
                 <button type="button" onClick={() => onInspect(row)} aria-label={`Ver detalhes de ${row.description}`} style={{ ...G, minWidth: 0, border: 0, background: "none", textAlign: "left", padding: 0, cursor: "pointer" }}>
                   <strong style={{ display: "block", fontSize: 12, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.description}</strong>
@@ -117,7 +122,7 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
               </div>;
             }
             return <div key={row.id} role="listitem" style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 11, padding: rowPadding, borderBottom: `1px solid ${T.border}`, background: inspected?.id === row.id ? T.blueLight : T.surface, minWidth: 0 }}>
-              <input type="checkbox" aria-label={`Selecionar ${row.description}`} checked={selected.includes(row.id)} onChange={() => onSelected(selected.includes(row.id) ? selected.filter((id) => id !== row.id) : [...selected, row.id])} />
+              <RowCheckbox aria-label={`Selecionar ${row.description}`} checked={selected.includes(row.id)} onChange={() => onSelected(selected.includes(row.id) ? selected.filter((id) => id !== row.id) : [...selected, row.id])} />
               {!isMobile && <div style={{ ...G, ...NUM, width: 46, flex: "none", fontSize: 10, lineHeight: 1.25, color: T.inkMid, textAlign: "center" }}><strong style={{ display: "block", color: T.ink, fontSize: 12, whiteSpace: "nowrap" }}>{date ? dateLabel(date) : "—"}</strong>{date ? weekDate.format(date) : ""}</div>}
               <div aria-hidden="true" style={{ width: 28, height: 28, borderRadius: 8, background: row.type === "refund" ? T.greenLight : T.blueLight, display: "grid", placeItems: "center", flex: "none", color: row.type === "refund" ? T.green : T.blue, fontSize: 13 }}>{row.type === "refund" ? "↩" : "▤"}</div>
               <button type="button" onClick={() => onInspect(row)} aria-label={`Ver detalhes de ${row.description}`} style={{ ...G, flex: 1, minWidth: 0, border: 0, background: "none", textAlign: "left", padding: 0, cursor: "pointer" }}>

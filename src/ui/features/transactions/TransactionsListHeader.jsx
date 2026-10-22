@@ -295,8 +295,9 @@ export function HistoryButton({ dir, enabled, onClick, label, busy = false }) {
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        width: 22,
-        height: 22,
+        // 24 px é o mínimo de alvo de toque (WCAG 2.2, 2.5.8); era 22.
+        width: 24,
+        height: 24,
         borderRadius: 6,
         border: `1px solid ${T.border}`,
         background: T.surface,

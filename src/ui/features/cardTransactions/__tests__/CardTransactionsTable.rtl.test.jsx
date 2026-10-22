@@ -20,3 +20,25 @@ describe("CardTransactionsTable · seleção em lote", () => {
     expect(toolbar.parentElement.style.flexWrap).toBe("wrap");
   });
 });
+
+describe("CardTransactionsTable · alvo de toque das caixas de seleção", () => {
+  it("cada caixa vive num rótulo de 28 px, no celular e no desktop (tablet e notebook com toque incluídos)", () => {
+    for (const isMobile of [true, false]) {
+      const { unmount } = render(<CardTransactionsTable rows={rows} total={2} cardCurrency="BRL" selected={[]} onSelected={noop} onInspect={noop} onMore={noop} isMobile={isMobile} />);
+      for (const name of ["Selecionar Aluguel", "Selecionar lançamentos carregados"]) {
+        const label = screen.getByRole("checkbox", { name }).closest("label");
+        expect(label).not.toBeNull();
+        expect(label.style.width).toBe("28px");
+        expect(label.style.height).toBe("28px");
+      }
+      unmount();
+    }
+  });
+
+  it("tocar na área do rótulo marca a linha", () => {
+    const picked = [];
+    render(<CardTransactionsTable rows={rows} total={2} cardCurrency="BRL" selected={[]} onSelected={(ids) => picked.push(ids)} onInspect={noop} onMore={noop} isMobile />);
+    screen.getByRole("checkbox", { name: "Selecionar Luz" }).closest("label").click();
+    expect(picked.at(-1)).toEqual(["2"]);
+  });
+});
