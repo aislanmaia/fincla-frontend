@@ -6,7 +6,7 @@ import { G } from "../typography";
 import { DragScrollTabs } from "../layouts/DragScrollTabs.jsx";
 import { useCreditCardsData } from "../features/creditCards/useCreditCardsData.js";
 import { CardFormSheet } from "../features/creditCards/CardFormSheet.jsx";
-import { APPLY_FROM, cycleDaysChanged } from "../features/creditCards/CycleChangeOptions.jsx";
+import { APPLY_FROM, applyFromToSend } from "../features/creditCards/CycleChangeOptions.jsx";
 import { KpiStrip } from "../features/creditCards/cartoesPanels.jsx";
 import { CardsPageModals } from "../features/creditCards/CartoesPageModals.jsx";
 import { InvoiceTab } from "../features/creditCards/CartoesFaturaTab.jsx";
@@ -209,7 +209,7 @@ export const CartoesPage = ({
         limitInput: draftLimit,
         dueDay: draftDueDay,
         closingDay: draftClosingDay,
-        applyFrom: cycleDaysChanged(originalDays, draftDueDay, draftClosingDay) ? draftApplyFrom : undefined,
+        applyFrom: applyFromToSend(originalDays, draftDueDay, draftClosingDay, draftApplyFrom, draftConfirmRewrite),
       }));
     } catch {
       return;
@@ -705,8 +705,7 @@ export const CartoesPage = ({
       onCancelCardForm={clearCardFormState}
       cycleChange={{
         original: originalDays,
-        scheduled: card?.cicloAgendado ?? null,
-        hasPaidInvoices: (card?.faturas || []).some((f) => f.pago),
+        scheduled: card?.scheduledCycleChange ?? null,
         applyFrom: draftApplyFrom,
         setApplyFrom: setDraftApplyFrom,
         confirmRewrite: draftConfirmRewrite,

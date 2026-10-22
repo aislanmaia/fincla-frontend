@@ -683,7 +683,7 @@ export function mapCreditCardToUi({ card, currentInvoice, history, futureCommitm
     /** Falso só em cartão legado sem fechamento: o formulário de edição não pré-preenche um dia que o usuário nunca escolheu. */
     fechamentoInformado: card.closing_day != null,
     closingDayEffective: closingDayForInvoiceAnchor(card),
-    cicloAgendado: scheduledCycleChange(card),
+    scheduledCycleChange: scheduledCycleChange(card),
     limite: card.credit_limit || 0,
     limitUsagePercent: Number.isFinite(Number(card.limit_usage_percent)) && card.limit_usage_percent !== null ? Number(card.limit_usage_percent) : null,
     disponivel: card.available_limit ?? Math.max(0, (card.credit_limit || 0) - (card.used_limit || 0)),

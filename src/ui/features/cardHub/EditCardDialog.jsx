@@ -7,9 +7,11 @@ import {
   buildUpdateCreditCardPayload,
   formatCreditCardsApiError,
   formatLimitInputFromNumber,
+  scheduledCycleChange,
 } from "../../data/creditCardsAdapter.js";
 import { HubDialog } from "./HubDialog.jsx";
 import { ClosingDaySuggestion } from "../creditCards/ClosingDaySuggestion.jsx";
+import { APPLY_FROM, CycleChangeOptions, ScheduledCycleNotice, applyFromToSend, cycleDaysChanged } from "../creditCards/CycleChangeOptions.jsx";
 
 const field = { ...G, width: "100%", boxSizing: "border-box", border: `1px solid ${T.border}`, borderRadius: 9, padding: "10px 12px", fontSize: 13, color: T.ink, background: T.surface };
 const label = { ...G, display: "block", marginBottom: 5, fontSize: 11, fontWeight: 700, color: T.inkMid };
@@ -27,11 +29,16 @@ export function EditCardDialog({ card, organizationId, isMobile, onSave, onClose
   const [color, setColor] = useState(card.color ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [applyFrom, setApplyFrom] = useState(APPLY_FROM.NEXT);
+  const [confirmRewrite, setConfirmRewrite] = useState(false);
+  const originalDays = { dueDay: card.due_day, closingDay: card.closing_day };
+  const daysChanged = cycleDaysChanged(originalDays, dueDay, closingDay);
 
   const canSave = brand.trim().length >= 2 && brand.trim().length <= 50 && name.trim().length > 0
     && /^\d{4}$/.test(last4) && validDay(dueDay)
     && validDay(closingDay) && validLimit(limit.trim())
-    && (!color || /^#[0-9a-fA-F]{6}$/.test(color));
+    && (!color || /^#[0-9a-fA-F]{6}$/.test(color))
+    && !(daysChanged && applyFrom === APPLY_FROM.ALL && !confirmRewrite);
 
   async function submit(event) {
     event.preventDefault();
@@ -48,6 +55,7 @@ export function EditCardDialog({ card, organizationId, isMobile, onSave, onClose
         dueDay,
         closingDay,
         color: color || undefined,
+        applyFrom: applyFromToSend(originalDays, dueDay, closingDay, applyFrom, confirmRewrite),
       }));
       onClose();
     } catch (cause) {
@@ -86,6 +94,8 @@ export function EditCardDialog({ card, organizationId, isMobile, onSave, onClose
         {input("Dia do fechamento", closingDay, setClosingDay, { inputMode: "numeric", maxLength: 2, placeholder: "ex: 3", required: true })}
         <div style={{ gridColumn: "1 / -1" }}><ClosingDaySuggestion dueDay={dueDay} closingDay={closingDay} onUse={setClosingDay} /></div>
       </div>
+      <ScheduledCycleNotice scheduled={scheduledCycleChange(card)} />
+      {daysChanged && <CycleChangeOptions applyFrom={applyFrom} setApplyFrom={setApplyFrom} confirmRewrite={confirmRewrite} setConfirmRewrite={setConfirmRewrite} />}
       {input("Cor do cartão (opcional)", color, setColor, { placeholder: "#RRGGBB", maxLength: 7 })}
       {error && <div role="alert" style={{ ...G, color: T.red, fontSize: 12 }}>{error}</div>}
       <p style={{ ...G, margin: 0, fontSize: 11, lineHeight: 1.5, color: T.inkLight }}>

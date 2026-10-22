@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+
 import { T } from "../../tokens";
 import { G } from "../../typography";
 
@@ -35,10 +37,19 @@ export function invoiceLabel(year, month) {
 /** O dia mudou de verdade? Dias em branco ou inválidos nunca contam como mudança. */
 export function cycleDaysChanged(original, dueDay, closingDay) {
   if (!original) return false;
-  const due = Number(dueDay);
-  const closing = Number(closingDay);
-  if (!Number.isInteger(due) || !Number.isInteger(closing)) return false;
-  return due !== Number(original.dueDay) || closing !== Number(original.closingDay);
+  const valid = (value) => /^\d{1,2}$/.test(String(value).trim()) && Number(value) >= 1 && Number(value) <= 31;
+  if (!valid(dueDay) || !valid(closingDay)) return false;
+  return Number(dueDay) !== Number(original.dueDay) || Number(closingDay) !== Number(original.closingDay);
+}
+
+/**
+ * O que mandar em `apply_from`: a escolha do usuário só quando os dias de fato mudaram, e `undefined`
+ * (o backend assume a próxima fatura) quando não. Reescrever o histórico sem confirmação nunca sai.
+ */
+export function applyFromToSend(original, dueDay, closingDay, applyFrom, confirmRewrite) {
+  if (!cycleDaysChanged(original, dueDay, closingDay)) return undefined;
+  if (applyFrom === APPLY_FROM.ALL && !confirmRewrite) return APPLY_FROM.NEXT;
+  return applyFrom;
 }
 
 /**
@@ -47,7 +58,13 @@ export function cycleDaysChanged(original, dueDay, closingDay) {
  * A pré-seleção é a opção mais defensiva (próxima fatura): nada do que o banco já emitiu muda sem o
  * usuário pedir. Reescrever o histórico exige uma confirmação explícita.
  */
-export function CycleChangeOptions({ applyFrom, setApplyFrom, confirmRewrite, setConfirmRewrite, hasPaidInvoices }) {
+export function CycleChangeOptions({ applyFrom, setApplyFrom, confirmRewrite, setConfirmRewrite }) {
+  // Voltar aos dias originais fecha as opções: a próxima mudança começa de novo, sem herdar uma confirmação antiga.
+  useEffect(() => () => {
+    setApplyFrom(APPLY_FROM.NEXT);
+    setConfirmRewrite(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const choose = (value) => {
     setApplyFrom(value);
     if (value !== APPLY_FROM.ALL) setConfirmRewrite(false);
@@ -78,9 +95,7 @@ export function CycleChangeOptions({ applyFrom, setApplyFrom, confirmRewrite, se
       {applyFrom === APPLY_FROM.ALL && (
         <div style={{ marginTop: 12, background: T.redLight, border: `1px solid ${T.red}22`, borderRadius: 9, padding: "10px 12px" }}>
           <div role="alert" style={{ ...G, fontSize: 11, color: T.red, lineHeight: 1.55 }}>
-            {hasPaidInvoices
-              ? "Este cartão tem faturas já pagas: a data de vencimento delas também será reescrita. Os valores e o status não mudam."
-              : "A data de vencimento de todas as faturas e parcelas será reescrita. Os valores e o status não mudam."}
+            A data de vencimento de todas as faturas e parcelas será reescrita, inclusive as de faturas já pagas. Os valores e o status não mudam.
           </div>
           <label style={{ display: "flex", gap: 8, alignItems: "flex-start", marginTop: 8, cursor: "pointer" }}>
             <input type="checkbox" checked={confirmRewrite} onChange={(e) => setConfirmRewrite(e.target.checked)} style={{ marginTop: 2 }} />

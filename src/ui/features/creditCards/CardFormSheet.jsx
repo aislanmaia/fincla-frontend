@@ -44,7 +44,7 @@ function FI({ val, set, ph, type = "text", inputMode, maxLength }) {
  * controlados pelo pai. Apresentação reage só via props.
  *
  * `cycleChange` (só na edição) leva o que o pai guarda sobre a mudança de vencimento/fechamento:
- * `original` (dias de hoje), `scheduled` (mudança já agendada), `hasPaidInvoices` e o estado da
+ * `original` (dias de hoje), `scheduled` (mudança já agendada) e o estado da
  * escolha `applyFrom` / `confirmRewrite`.
  */
 export function CardFormSheet({
@@ -178,7 +178,6 @@ export function CardFormSheet({
             setApplyFrom={cycleChange.setApplyFrom}
             confirmRewrite={cycleChange.confirmRewrite}
             setConfirmRewrite={cycleChange.setConfirmRewrite}
-            hasPaidInvoices={cycleChange.hasPaidInvoices}
           />
         )}
         <div style={{ background: T.blueLight, border: `1px solid ${T.blue}22`, borderRadius: 10, padding: "10px 14px" }}>
