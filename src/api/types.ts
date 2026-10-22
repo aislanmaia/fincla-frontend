@@ -3068,3 +3068,10 @@ export type BulkRejectionReason =
   | 'category_not_allowed_for_type'
   | 'detail_tag_outside_category'
   | 'invalid_category';
+
+/** Corpo do `422` do lote: nada foi alterado; `id: null` é falha do pedido inteiro (categoria inválida). */
+export interface BulkRejectedDetail {
+  code: 'bulk_rejected';
+  message: string;
+  failures: Array<{ id: number | null; reason: BulkRejectionReason }>;
+}

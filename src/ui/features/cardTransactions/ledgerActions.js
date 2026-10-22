@@ -41,37 +41,48 @@ const BULK_REASONS = {
   detail_tag_outside_category: "um lançamento tem uma etiqueta de detalhe de outra categoria; ajuste-o sozinho",
   invalid_category: "a categoria escolhida não está mais disponível",
 };
+const BULK_REASONS_SHOWN = 3;
 
-/** Por que o servidor recusou o lote inteiro (nada foi alterado), nomeando o lançamento quando o servidor aponta um. */
-function bulkRefusalReason(error, rows) {
+/**
+ * Por que o servidor recusou o lote (nada daquele pedido foi alterado), nomeando o lançamento quando o servidor
+ * aponta um da seleção ("outra parcela da mesma compra" quando é uma que não foi enviada). Poucos motivos aparecem;
+ * o resto vira contagem. Motivo desconhecido ainda diz que foi recusa — repetir não resolve.
+ */
+function bulkRefusalReason(error, rows, anythingCommitted) {
   const detail = error?.response?.data?.detail;
   if (error?.response?.status !== 422 || detail?.code !== "bulk_rejected" || !Array.isArray(detail.failures)) return refusalReason(error);
   const parts = [...new Set(detail.failures.map((failure) => {
-    const reason = BULK_REASONS[failure.reason];
-    if (!reason) return null;
+    const reason = BULK_REASONS[failure.reason] ?? "o servidor recusou um dos lançamentos";
+    if (failure.id == null) return reason;
     const row = rows.find((entry) => entry.id === failure.id);
-    return row ? `${reason} (${row.description})` : reason;
-  }).filter(Boolean))];
-  return parts.length ? `Nada foi alterado: ${parts.join("; ")}.` : "";
+    return `${reason} (${row ? row.description : "outra parcela da mesma compra"})`;
+  }))];
+  const shown = parts.slice(0, BULK_REASONS_SHOWN).join("; ");
+  const more = parts.length > BULK_REASONS_SHOWN ? ` e mais ${parts.length - BULK_REASONS_SHOWN}` : "";
+  return `${anythingCommitted ? "Este bloco não foi alterado" : "Nada foi alterado"}: ${shown}${more}.`;
 }
 
 /**
- * Troca só a categoria (as demais etiquetas ficam) pelo lote do servidor: cada pedido é tudo ou nada.
- * Passam de 200? Vão em pedidos sequenciais; na primeira recusa para, e o que não foi enviado fica entre os que
- * falharam (tentar de novo reenvia só esses).
+ * Troca só a categoria (as demais etiquetas ficam) pelo lote do servidor. Cada pedido é tudo ou nada, mas a
+ * seleção acima de 200 vai em pedidos sequenciais: uma recusa ou queda num bloco posterior NÃO desfaz os anteriores
+ * (ficam em `done`, e a tela diz quantos já foram). Para na primeira falha; o que não foi enviado fica entre os que
+ * falharam, e tentar de novo reenvia só esses. `updated` conta o que o servidor efetivamente alterou (uma compra
+ * parcelada é reetiquetada inteira, então pode passar do que foi selecionado).
  */
 export async function categorizeRows({ rows, categoryId, organizationId }) {
   const done = [];
+  let updated = 0;
   for (let start = 0; start < rows.length; start += BULK_MAX_IDS) {
     const chunk = rows.slice(start, start + BULK_MAX_IDS);
     try {
-      await bulkCategorizeTransactions(organizationId, chunk.map((row) => row.id), String(categoryId));
+      const response = await bulkCategorizeTransactions(organizationId, chunk.map((row) => row.id), String(categoryId));
       done.push(...chunk);
+      updated += Number.isFinite(response?.count) ? response.count : chunk.length;
     } catch (error) {
-      return { done, failed: rows.filter((row) => !done.includes(row)), reason: bulkRefusalReason(error, rows) };
+      return { done, failed: rows.slice(start), updated, reason: bulkRefusalReason(error, rows, done.length > 0) };
     }
   }
-  return { done, failed: [], reason: "" };
+  return { done, failed: [], updated, reason: "" };
 }
 
 /** Só parcelas de compra parcelada podem mudar de fatura; as demais linhas são ignoradas aqui. */

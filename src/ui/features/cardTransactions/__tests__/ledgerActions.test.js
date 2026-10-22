@@ -31,7 +31,32 @@ describe("categorizeRows (lote do servidor)", () => {
     expect(sent).toEqual([200, 200]);
     expect(result.done).toHaveLength(200);
     expect(result.failed.map((row) => row.id)).toEqual(rows(450).slice(200).map((row) => row.id));
-    expect(result.reason).toBe("Nada foi alterado: um dos lançamentos não existe mais (Item 250).");
+    expect(result.reason).toBe("Este bloco não foi alterado: um dos lançamentos não existe mais (Item 250).");
+  });
+
+  it("recusa depois de blocos já aceitos não diz 'nada foi alterado' e conta o que o servidor alterou", async () => {
+    server.use(http.patch("*/v1/transactions/bulk", async () => {
+      sent.push(1);
+      return sent.length === 1 ? HttpResponse.json({ updated_ids: [], count: 230 }) : HttpResponse.json({ detail: { code: "bulk_rejected", message: "x", failures: [{ id: 300, reason: "category_not_allowed_for_type" }] } }, { status: 422 });
+    }));
+    const result = await categorizeRows({ rows: rows(250), categoryId: "c3", organizationId: "org" });
+    expect(result.updated).toBe(230);
+    expect(result.done).toHaveLength(200);
+    expect(result.reason).toMatch(/^Este bloco não foi alterado: /);
+    expect(result.reason).not.toMatch(/Nada foi alterado/);
+  });
+
+  it("motivo desconhecido, id nulo e irmã não enviada ainda explicam a recusa; muitos motivos viram contagem", async () => {
+    server.use(http.patch("*/v1/transactions/bulk", () => HttpResponse.json({ detail: { code: "bulk_rejected", message: "x", failures: [
+      { id: null, reason: "something_new" },
+      { id: 9999, reason: "detail_tag_outside_category" },
+      ...[1, 2, 3, 4].map((id) => ({ id, reason: "not_found" })),
+    ] } }, { status: 422 })));
+    const { reason } = await categorizeRows({ rows: rows(4), categoryId: "c3", organizationId: "org" });
+    expect(reason).toContain("o servidor recusou um dos lançamentos");
+    expect(reason).toContain("(outra parcela da mesma compra)");
+    expect(reason).toMatch(/ e mais 3\.$/);
+    expect(reason).not.toMatch(/Tente novamente/);
   });
 
   it("recusa de fatura paga (409 com mensagem do servidor) vira o motivo, sem pedir para tentar de novo", async () => {
