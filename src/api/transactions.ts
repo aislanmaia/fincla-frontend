@@ -202,6 +202,8 @@ export const exportTransactionsCsv = async (filters: ExportTransactionsQuery): P
       paramsSerializer: repeatArrayParams,
       responseType: 'text',
       timeout: EXPORT_TIMEOUT_MS,
+      // Leitura longa: um timeout não deve refazer a exportação inteira no servidor (ver client.ts).
+      ...({ __noRetry: true } as Record<string, unknown>),
     });
     return new Blob(['\uFEFF', response.data.replace(/^\uFEFF/, '')], {
       type: 'text/csv;charset=utf-8',

@@ -780,10 +780,13 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(screen.queryByRole("button", { name: /Lançar estorno desta compra/ })).not.toBeInTheDocument();
   });
 
+  const realBlobUrl = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
+  afterEach(() => { URL.createObjectURL = realBlobUrl.create; URL.revokeObjectURL = realBlobUrl.revoke; vi.restoreAllMocks(); });
   const stubDownload = () => {
     const created = [];
     const names = [];
-    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: (blob) => { created.push(blob); return "blob:x"; }, revokeObjectURL: () => {} }));
+    URL.createObjectURL = (blob) => { created.push(blob); return "blob:x"; };
+    URL.revokeObjectURL = () => {};
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function clicked() { names.push(this.download); });
     return { created, names };
   };
@@ -853,6 +856,30 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("O extrato mudou enquanto o arquivo era preparado. Exporte de novo.");
     await user.click(within(dialog).getByRole("button", { name: "Exportar CSV" }));
     await waitFor(() => expect(within(dialog).getByRole("alert")).toHaveTextContent("Não foi possível preparar a exportação. Tente novamente."));
+  });
+
+  it("recorte acima do limite do arquivo avisa antes de pedir e desabilita só o CSV", async () => {
+    server.use(http.get("*/v1/transactions", () => HttpResponse.json({ data: [{ id: 1, date: "2026-09-01", description: "Linha 1", value: 5, value_currency: "BRL", type: "expense" }], pagination: { total: 25000, page: 1, limit: 30, pages: 834, has_next: true, has_prev: false } })));
+    let asked = 0;
+    server.use(http.get("*/v1/transactions/export", () => { asked += 1; return new HttpResponse("x"); }));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    const dialog = await openExport(user);
+    expect(dialog).toHaveTextContent("O recorte passa de 20.000 lançamentos");
+    expect(within(dialog).getByRole("button", { name: "Exportar CSV" })).toBeDisabled();
+    await user.click(within(dialog).getByRole("button", { name: "PDF" }));
+    expect(within(dialog).getByRole("button", { name: "Exportar PDF" })).toBeEnabled();
+    expect(asked).toBe(0);
+  });
+
+  it("outra recusa de negócio do servidor mostra a mensagem dele em vez de pedir para tentar de novo", async () => {
+    withTwoPages();
+    server.use(http.get("*/v1/transactions/export", () => HttpResponse.json({ detail: { code: "plan_limit", message: "Seu plano não inclui exportação." } }, { status: 422 })));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    const dialog = await openExport(user);
+    await user.click(within(dialog).getByRole("button", { name: "Exportar CSV" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Seu plano não inclui exportação.");
   });
 
   it("o PDF segue pelo navegador e parte do conjunto completo (todas as páginas)", async () => {

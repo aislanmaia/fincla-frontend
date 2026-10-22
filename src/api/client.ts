@@ -74,7 +74,7 @@ const RETRYABLE_NETWORK_CODES = new Set([
 const MAX_RETRY_ATTEMPTS = 2;
 const RETRY_BASE_DELAY_MS = 350;
 
-type RetryableConfig = AxiosError['config'] & { __retryCount?: number };
+type RetryableConfig = AxiosError['config'] & { __retryCount?: number; __noRetry?: boolean };
 
 function isSafeToRetry(error: AxiosError): boolean {
   // Resposta HTTP recebida → servidor processou (mesmo que 5xx). Não retenta.
@@ -82,6 +82,8 @@ function isSafeToRetry(error: AxiosError): boolean {
   if (!error.code || !RETRYABLE_NETWORK_CODES.has(error.code)) return false;
   const cfg = error.config as RetryableConfig | undefined;
   if (!cfg) return false;
+  // Leituras longas (exportação) não se repetem sozinhas: o servidor refaria o trabalho todo a cada tentativa.
+  if (cfg.__noRetry) return false;
   const method = (cfg.method || 'get').toLowerCase();
   // Só GET/HEAD: idempotentes por definição, nunca escrevem. Qualquer write
   // (POST/PUT/PATCH/DELETE) fica de fora, sempre — ver comentário acima.
