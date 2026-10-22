@@ -215,6 +215,18 @@ async function hasEquivalentRecurringSeries(organizationId, payload) {
   }
 }
 
+/**
+ * A série recorrente precisa de EXATAMENTE uma categoria (regra do produto, também no backend). A receita do
+ * onboarding nasce como "Salário e trabalho"; sem ela na organização, "Sem categoria". As duas aceitam receita.
+ */
+async function resolveIncomeCategoryTagId(organizationId) {
+  const response = await listTags(organizationId, "categoria");
+  const tags = response?.tags ?? [];
+  const acceptsIncome = (tag) => (tag.allowed_transaction_types ?? ["income"]).includes("income");
+  const pick = (key) => tags.find((tag) => tag.system_key === key && acceptsIncome(tag));
+  return (pick("work_salary") ?? pick("uncategorized"))?.id ?? null;
+}
+
 export async function submitOnboarding(data) {
   const orgName = data?.orgNome?.trim();
 
@@ -275,7 +287,8 @@ export async function submitOnboarding(data) {
       if (reused && (await hasEquivalentRecurringSeries(organization.id, recurringPayload))) {
         return;
       }
-      await createRecurringSeries(organization.id, recurringPayload);
+      const categoryTagId = await resolveIncomeCategoryTagId(organization.id);
+      await createRecurringSeries(organization.id, categoryTagId ? { ...recurringPayload, tag_ids: [categoryTagId] } : recurringPayload);
     });
   }
 

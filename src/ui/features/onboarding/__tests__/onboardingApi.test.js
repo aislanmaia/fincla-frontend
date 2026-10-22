@@ -77,6 +77,8 @@ describe("submitOnboarding", () => {
           tag_type: tagType,
           parent_category_tag_id: null,
         },
+        { id: "t-salary", name: "Work & Salary", system_key: "work_salary", allowed_transaction_types: ["income"], tag_type: tagType, parent_category_tag_id: null },
+        { id: "t-none", name: "Uncategorized", system_key: "uncategorized", allowed_transaction_types: ["income", "expense", "refund"], tag_type: tagType, parent_category_tag_id: null },
       ],
     });
     mocks.updateTag.mockResolvedValue({ id: "t-x" });
@@ -109,7 +111,20 @@ describe("submitOnboarding", () => {
       day_of_month: 10,
       value_kind: "exact",
       category: "Receita",
+      tag_ids: ["t-salary"],
     });
+  });
+
+  it("a receita recorrente cai em 'Sem categoria' quando a organização não tem 'Salário e trabalho'", async () => {
+    mocks.listTags.mockResolvedValue({ tags: [{ id: "t-none", name: "Uncategorized", system_key: "uncategorized", allowed_transaction_types: ["income", "expense"], tag_type: tagType, parent_category_tag_id: null }] });
+    await submitOnboarding({ orgNome: "Casa", orgTipo: "couple", temRec: "sim", recDesc: "Salário", recVal: "2200,00", recDia: "10", recTipo: "fixo" });
+    expect(mocks.createRecurringSeries).toHaveBeenCalledWith("org-1", expect.objectContaining({ tag_ids: ["t-none"] }));
+  });
+
+  it("não inventa categoria: sem nenhuma que aceite receita, a série segue sem tag_ids (a API recusa e o passo é opcional)", async () => {
+    mocks.listTags.mockResolvedValue({ tags: [{ id: "t-home", name: "Housing", system_key: "housing", allowed_transaction_types: ["expense"], tag_type: tagType, parent_category_tag_id: null }] });
+    await submitOnboarding({ orgNome: "Casa", orgTipo: "couple", temRec: "sim", recDesc: "Salário", recVal: "2200,00", recDia: "10", recTipo: "fixo" });
+    expect(mocks.createRecurringSeries.mock.calls[0][1]).not.toHaveProperty("tag_ids");
   });
 
   it("persiste o cartão configurado no onboarding", async () => {
