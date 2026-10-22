@@ -20,3 +20,25 @@ describe("CardTransactionsTable · seleção em lote", () => {
     expect(toolbar.parentElement.style.flexWrap).toBe("wrap");
   });
 });
+
+describe("CardTransactionsTable · alvo de toque das caixas de seleção", () => {
+  it("no celular cada caixa vive num rótulo de 32 px; no desktop continua a caixa nativa", () => {
+    const { unmount } = render(<CardTransactionsTable rows={rows} total={2} cardCurrency="BRL" selected={[]} onSelected={noop} onInspect={noop} onMore={noop} isMobile />);
+    for (const name of ["Selecionar Aluguel", "Selecionar lançamentos carregados"]) {
+      const box = screen.getByRole("checkbox", { name });
+      expect(box.closest("label")).not.toBeNull();
+      expect(box.closest("label").style.width).toBe("32px");
+      expect(box.closest("label").style.height).toBe("32px");
+    }
+    unmount();
+    render(<CardTransactionsTable rows={rows} total={2} cardCurrency="BRL" selected={[]} onSelected={noop} onInspect={noop} onMore={noop} />);
+    expect(screen.getByRole("checkbox", { name: "Selecionar Aluguel" }).closest("label")).toBeNull();
+  });
+
+  it("tocar na área do rótulo marca a linha", async () => {
+    const picked = [];
+    render(<CardTransactionsTable rows={rows} total={2} cardCurrency="BRL" selected={[]} onSelected={(ids) => picked.push(ids)} onInspect={noop} onMore={noop} isMobile />);
+    screen.getByRole("checkbox", { name: "Selecionar Luz" }).closest("label").click();
+    expect(picked.at(-1)).toEqual(["2"]);
+  });
+});

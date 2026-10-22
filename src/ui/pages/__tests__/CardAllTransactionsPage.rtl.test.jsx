@@ -679,6 +679,25 @@ describe("CardAllTransactionsPage · ações do ledger", () => {
     await waitFor(() => expect(attempts.sort()).toEqual(["11", "12", "12"]));
   });
 
+  it("mover parcela de fatura paga diz a causa em vez de pedir para tentar de novo", async () => {
+    withLedger();
+    server.use(http.patch("*/v1/credit-cards/:card/installments/:tx/move-invoice", () => HttpResponse.json(
+      { detail: { error: "PAID_INVOICE_IMMUTABLE", message: "Reabra a fatura paga antes de alterar seus lançamentos.", type: "business_logic" } },
+      { status: 409 },
+    )));
+    render(<CardAllTransactionsPage organizationId={ORG_ID} />);
+    const user = userEvent.setup();
+    await screen.findByText("Notebook");
+    await user.click(await screen.findByRole("button", { name: "Ver detalhes de Notebook" }));
+    await user.click(within(screen.getByRole("dialog", { name: "Detalhes do lançamento" })).getByRole("button", { name: /Mover para outra fatura/ }));
+    const dialog = await screen.findByRole("dialog", { name: /Mover parcela/ });
+    await user.selectOptions(within(dialog).getByRole("combobox"), within(dialog).getAllByRole("option")[1]);
+    await user.click(within(dialog).getByRole("button", { name: "Mover parcela" }));
+    const alert = await within(dialog).findByRole("alert");
+    expect(alert).toHaveTextContent("1 de 1 não puderam ser alterados. Reabra a fatura paga antes de alterar seus lançamentos.");
+    expect(alert).not.toHaveTextContent("Tente novamente");
+  });
+
   it("em todos os cartões o detalhe não oferece mover nem estornar (a ação é do cartão da tela)", async () => {
     withLedger();
     render(<CardAllTransactionsPage organizationId={ORG_ID} />);

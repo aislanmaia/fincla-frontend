@@ -471,7 +471,8 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     if (result.done.length > 0) dirtyRef.current = true;
     // Tentar de novo refaz só o que falhou: o que já passou não é reenviado.
     setDialog((current) => current && current.ids ? { ...current, ids: result.failed.map((row) => row.id) } : current);
-    return `${result.failed.length} de ${total} não puderam ser alterados${result.done.length ? `; ${result.done.length} já foram` : ""}. Tente novamente.`;
+    // Com causa (ex.: fatura paga), repetir não adianta: diz o motivo em vez de pedir para tentar de novo.
+    return `${result.failed.length} de ${total} não puderam ser alterados${result.done.length ? `; ${result.done.length} já foram` : ""}. ${result.reason || "Tente novamente."}`;
   };
   const submitCategorize = async (categoryId) => {
     const rows = rowsByIds(dialog.ids).filter((row) => row.type !== "refund");
