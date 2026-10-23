@@ -44,4 +44,28 @@ describe("LocaleDatePicker no celular", () => {
     const popover = openAt({ triggerWidth: 156, viewport: 1280, variant: "desktop" });
     expect(parseFloat(popover.style.width)).toBe(300);
   });
+
+  it("os dias e as setas têm alvo de 36px no celular e 28px no desktop", () => {
+    openAt({ triggerWidth: 156, viewport: 390 });
+    const day = screen.getByText("15").closest("[role=button]").firstElementChild;
+    expect(day.style.width).toBe("36px");
+    expect(screen.getByRole("button", { name: /Próximo mês|Next month/i }).style.width).toBe("36px");
+    cleanup();
+    openAt({ triggerWidth: 156, viewport: 1280, variant: "desktop" });
+    expect(screen.getByText("15").closest("[role=button]").firstElementChild.style.width).toBe("28px");
+  });
+
+  it("o dia encolhe em vez de vazar quando a tela é muito estreita", () => {
+    openAt({ triggerWidth: 156, viewport: 280 });
+    const day = screen.getByText("15").closest("[role=button]").firstElementChild;
+    // balão de 256px → (256 − 30) / 7 = 32px por coluna
+    expect(parseFloat(day.style.width)).toBeLessThanOrEqual(32);
+  });
+
+  it("abre acima do botão com a altura real do balão quando não cabe embaixo", () => {
+    window.innerHeight = 800;
+    const popover = openAt({ triggerWidth: 156, viewport: 390 });
+    // botão em top=600/bottom=644: embaixo não cabe (644 + 6 + 392 > 792), então sobe: 600 − 392 − 6
+    expect(parseFloat(popover.style.top)).toBe(202);
+  });
 });

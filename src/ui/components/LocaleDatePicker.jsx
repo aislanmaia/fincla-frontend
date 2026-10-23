@@ -17,6 +17,7 @@ import {
   FINCLA_CALENDAR_SHADOW,
   FINCLA_CALENDAR_SURFACE_RADIUS,
   FINCLA_CAL_DAY_PX,
+  FINCLA_CAL_DAY_PX_TOUCH,
   finclaCalendarWeekdayCellStyle,
   finclaCalNavButtonBase,
   finclaCalMonthTitleStyle,
@@ -156,7 +157,7 @@ export function LocaleDatePicker({
     const w = variant === "mobile" ? Math.min(window.innerWidth - 24, Math.max(300, Math.min(r.width, 340))) : 300;
     const left = Math.max(12, Math.min(r.left, window.innerWidth - w - 12));
     let top = r.bottom + 6;
-    const estHeight = 360;
+    const estHeight = variant === "mobile" ? 392 : 360; // 6 semanas de 36px + cabeçalho + rodapé + padding
     if (top + estHeight > window.innerHeight - 8) {
       top = Math.max(8, r.top - estHeight - 6);
     }
@@ -260,9 +261,11 @@ export function LocaleDatePicker({
     }
   };
 
-  // Alvo do dedo: 28px serve ao cursor, não à mão.
-  const dayPx = variant === "mobile" ? 36 : FINCLA_CAL_DAY_PX;
-  const navBase = variant === "mobile" ? { ...finclaCalNavButtonBase(), width: 36, height: 36, justifyContent: "center" } : finclaCalNavButtonBase();
+  // Alvo do dedo só no balão do celular; o modo "expand" mora dentro de um container já medido pela tela dona.
+  // Em tela estreita o dia encolhe até caber as 7 colunas (largura do balão − 30px de padding).
+  const touch = variant === "mobile" && popoverMode === "portal";
+  const dayPx = touch ? Math.max(FINCLA_CAL_DAY_PX, Math.min(FINCLA_CAL_DAY_PX_TOUCH, Math.floor((popoverPos.width - 30) / 7))) : FINCLA_CAL_DAY_PX;
+  const navBase = touch ? { ...finclaCalNavButtonBase(), width: FINCLA_CAL_DAY_PX_TOUCH, height: FINCLA_CAL_DAY_PX_TOUCH, justifyContent: "center" } : finclaCalNavButtonBase();
 
   const handleDraftChange = (e) => {
     const v = e.target.value;
