@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  cancelScheduledCycleChange,
   createCreditCard,
   getCurrentCreditCardInvoice,
   getFutureCommitments,
@@ -171,6 +172,16 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
     return updated;
   }, [selectedCardId]);
 
+  const cancelScheduledCycle = useCallback(async () => {
+    const updated = await cancelScheduledCycleChange(selectedCardId, organizationId);
+    setCardsState((state) => ({
+      ...state,
+      cards: state.cards.map((card) => card.id === updated.id ? updated : card),
+    }));
+    setInvoiceRefresh((value) => value + 1);
+    return updated;
+  }, [organizationId, selectedCardId]);
+
   const payInvoice = useCallback(async (invoice, paidDate) => {
     await markInvoicePaid(selectedCardId, invoice.year, invoice.month, organizationId, paidDate);
     setDetail((prev) => prev.cardId === selectedCardId && prev.orgId === organizationId ? {
@@ -206,6 +217,7 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
     initialInvoiceKey,
     saveNotes,
     updateCard,
+    cancelScheduledCycle,
     payInvoice,
     createCard,
   };

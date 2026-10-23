@@ -19,7 +19,7 @@ const validDay = (value) => /^\d{1,2}$/.test(value) && Number(value) >= 1 && Num
 const validLimit = (value) => !value || /^(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d{1,2})?$/.test(value);
 
 /** Edits the fields supported by PATCH /credit-cards/{id}; the settling account is immutable here. */
-export function EditCardDialog({ card, organizationId, isMobile, onSave, onClose }) {
+export function EditCardDialog({ card, organizationId, isMobile, onSave, onCancelScheduled, onClose }) {
   const [brand, setBrand] = useState(card.brand ?? "");
   const [name, setName] = useState(card.description ?? "");
   const [last4, setLast4] = useState(card.last4 ?? "");
@@ -94,7 +94,7 @@ export function EditCardDialog({ card, organizationId, isMobile, onSave, onClose
         {input("Dia do fechamento", closingDay, setClosingDay, { inputMode: "numeric", maxLength: 2, placeholder: "ex: 3", required: true })}
         <div style={{ gridColumn: "1 / -1" }}><ClosingDaySuggestion dueDay={dueDay} closingDay={closingDay} onUse={setClosingDay} /></div>
       </div>
-      <ScheduledCycleNotice scheduled={scheduledCycleChange(card)} />
+      <ScheduledCycleNotice scheduled={scheduledCycleChange(card)} onCancel={onCancelScheduled} />
       {daysChanged && <CycleChangeOptions applyFrom={applyFrom} setApplyFrom={setApplyFrom} confirmRewrite={confirmRewrite} setConfirmRewrite={setConfirmRewrite} />}
       {input("Cor do cartão (opcional)", color, setColor, { placeholder: "#RRGGBB", maxLength: 7 })}
       {error && <div role="alert" style={{ ...G, color: T.red, fontSize: 12 }}>{error}</div>}

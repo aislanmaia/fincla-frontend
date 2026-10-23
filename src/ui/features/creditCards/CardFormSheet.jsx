@@ -171,7 +171,7 @@ export function CardFormSheet({
           <div role="alert" style={{ ...G, fontSize: 11, color: T.red, marginTop: -4 }}>Informe um dia do fechamento de 1 a 31.</div>
         )}
         <ClosingDaySuggestion dueDay={draftDueDay} closingDay={draftClosingDay} onUse={setDraftClosingDay} />
-        {isEdit && <ScheduledCycleNotice scheduled={cycleChange?.scheduled} />}
+        {isEdit && <ScheduledCycleNotice scheduled={cycleChange?.scheduled} onCancel={cycleChange?.onCancelScheduled} />}
         {daysChanged && (
           <CycleChangeOptions
             applyFrom={cycleChange.applyFrom}

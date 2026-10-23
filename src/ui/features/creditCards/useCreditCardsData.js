@@ -7,6 +7,7 @@ import {
   markInvoicePaidForUi,
   moveInstallmentForUi,
   updateCreditCardForUi,
+  cancelScheduledCycleForUi,
 } from "../../data/creditCardsAdapter.js";
 import { deleteTransactionForUi } from "../../data/transactionsAdapter.js";
 
@@ -247,6 +248,22 @@ export function useCreditCardsData({
     setState((current) => ({ ...current, isUpdatingCard: false }));
   }, [reload]);
 
+  const cancelScheduledCycle = useCallback(async (cardId, organizationId) => {
+    setState((current) => ({ ...current, isUpdatingCard: true, error: "" }));
+    try {
+      await cancelScheduledCycleForUi(cardId, organizationId);
+      await reload();
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        isUpdatingCard: false,
+        error: formatCreditCardsApiError(error),
+      }));
+      throw error;
+    }
+    setState((current) => ({ ...current, isUpdatingCard: false }));
+  }, [reload]);
+
   const markInvoicePaid = useCallback(async (payload) => {
     setState((current) => ({ ...current, isMarkingInvoice: true, error: "" }));
     try {
@@ -304,8 +321,9 @@ export function useCreditCardsData({
     retryCardDetail,
     createCard,
     updateCard,
+    cancelScheduledCycle,
     markInvoicePaid,
     moveInstallment,
     deleteInvoiceItem,
-  }), [createCard, updateCard, markInvoicePaid, moveInstallment, deleteInvoiceItem, reload, ensureCardDetail, retryCardDetail, state]);
+  }), [createCard, updateCard, cancelScheduledCycle, markInvoicePaid, moveInstallment, deleteInvoiceItem, reload, ensureCardDetail, retryCardDetail, state]);
 }

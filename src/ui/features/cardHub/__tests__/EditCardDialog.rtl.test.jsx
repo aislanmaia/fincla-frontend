@@ -72,3 +72,29 @@ describe("EditCardDialog — desde quando os novos dias valem", () => {
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ apply_from: "all_history" }));
   });
 });
+
+describe("EditCardDialog — cancelar a mudança agendada", () => {
+  const withSchedule = {
+    due_day: 10, closing_day: 3,
+    cycle_rules: [
+      { effective_year: 1900, effective_month: 1, due_day: 10, closing_day: 3 },
+      { effective_year: 2099, effective_month: 3, due_day: 20, closing_day: 13 },
+    ],
+  };
+
+  it("oferece cancelar quando há mudança agendada e chama o handler do hub", async () => {
+    const onCancelScheduled = vi.fn().mockResolvedValue(undefined);
+    render(<EditCardDialog card={{ ...card, ...withSchedule }} organizationId="org" isMobile={false} onSave={vi.fn()} onCancelScheduled={onCancelScheduled} onClose={() => {}} />);
+
+    expect(screen.getByText(/a partir da fatura de mar\/2099, vence dia 20 e fecha dia 13/)).toBeTruthy();
+    await userEvent.setup().click(screen.getByRole("button", { name: /Cancelar mudança agendada/ }));
+
+    expect(onCancelScheduled).toHaveBeenCalledTimes(1);
+  });
+
+  it("sem mudança agendada não há o que cancelar", () => {
+    render(<EditCardDialog card={card} organizationId="org" isMobile={false} onSave={vi.fn()} onCancelScheduled={vi.fn()} onClose={() => {}} />);
+
+    expect(screen.queryByRole("button", { name: /Cancelar mudança agendada/ })).toBeNull();
+  });
+});

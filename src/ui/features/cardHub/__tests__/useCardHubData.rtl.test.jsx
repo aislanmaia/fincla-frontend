@@ -83,3 +83,33 @@ describe("useCardHubData — StrictMode", () => {
     await waitFor(() => expect(lists).toBe(2));
   });
 });
+
+
+describe("useCardHubData — cancelar a mudança agendada", () => {
+  it("manda o DELETE do cartão selecionado e troca o cartão pelo que o backend devolveu", async () => {
+    const scheduled = { ...card(1, 3, 10), cycle_rules: [
+      { effective_year: 1900, effective_month: 1, due_day: 10, closing_day: 3 },
+      { effective_year: 2099, effective_month: 3, due_day: 20, closing_day: 13 },
+    ] };
+    const cancelled = { ...scheduled, cycle_rules: [scheduled.cycle_rules[0]] };
+    const deletes = [];
+    server.use(
+      http.get("*/v1/credit-cards", () => HttpResponse.json([scheduled])),
+      http.get("*/v1/credit-cards/:id/invoices/history", () => HttpResponse.json({ monthly_data: [row("111.00")] })),
+      http.get("*/v1/credit-cards/:id/invoices/current", ({ request }) => new URL(request.url).searchParams.get("empty_as_null") === "true"
+        ? HttpResponse.json(null) : HttpResponse.json({ detail: "missing opt in" }, { status: 400 })),
+      http.get("*/v1/credit-cards/:id/future-commitments", () => HttpResponse.json({ monthly_breakdown: [], insights: [] })),
+      http.delete("*/v1/credit-cards/:id/scheduled-cycle", ({ params, request }) => {
+        deletes.push({ id: params.id, org: new URL(request.url).searchParams.get("organization_id") });
+        return HttpResponse.json(cancelled);
+      }),
+    );
+    const { result } = renderHook(() => useCardHubData({ organizationId: ORG, enabled: true, refreshToken: 0 }));
+    await waitFor(() => expect(result.current.selectedCard?.cycle_rules).toHaveLength(2));
+
+    await act(async () => { await result.current.cancelScheduledCycle(); });
+
+    expect(deletes).toEqual([{ id: "1", org: ORG }]);
+    expect(result.current.selectedCard.cycle_rules).toHaveLength(1);
+  });
+});

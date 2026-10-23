@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { T } from "../../tokens";
 import { G } from "../../typography";
+import { formatCreditCardsApiError } from "../../data/creditCardsAdapter.js";
 
 export const APPLY_FROM = {
   NEXT: "next_invoice",
@@ -107,13 +108,44 @@ export function CycleChangeOptions({ applyFrom, setApplyFrom, confirmRewrite, se
   );
 }
 
-/** Aviso de uma mudança já agendada, com os dias que o cartão passa a seguir. */
-export function ScheduledCycleNotice({ scheduled }) {
+/**
+ * Aviso de uma mudança já agendada, com os dias que o cartão passa a seguir.
+ *
+ * Com `onCancel`, oferece desfazê-la enquanto ela não começou: o cartão segue nos dias atuais e as parcelas das
+ * próximas faturas voltam ao vencimento anterior. O backend recusa (409) quando não há mais nada agendado.
+ */
+export function ScheduledCycleNotice({ scheduled, onCancel }) {
+  const [canceling, setCanceling] = useState(false);
+  const [error, setError] = useState("");
   if (!scheduled) return null;
+  const cancel = async () => {
+    setCanceling(true);
+    setError("");
+    try {
+      await onCancel();
+    } catch (cause) {
+      setError(formatCreditCardsApiError(cause));
+    } finally {
+      setCanceling(false);
+    }
+  };
   return (
-    <div style={{ ...G, fontSize: 11, color: T.inkMid, background: T.grayLight, borderRadius: 9, padding: "9px 12px", lineHeight: 1.55 }}>
-      Mudança agendada: a partir da fatura de {invoiceLabel(scheduled.year, scheduled.month)}, vence dia {scheduled.dueDay} e fecha dia {scheduled.closingDay}.
-      Os campos abaixo mostram os dias da fatura aberta.
+    <div style={{ ...G, fontSize: 11, color: T.inkMid, background: T.grayLight, borderRadius: 9, padding: "9px 12px", lineHeight: 1.55, display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
+      <span>
+        Mudança agendada: a partir da fatura de {invoiceLabel(scheduled.year, scheduled.month)}, vence dia {scheduled.dueDay} e fecha dia {scheduled.closingDay}.
+        Os campos abaixo mostram os dias da fatura aberta.
+      </span>
+      {onCancel && (
+        <button
+          type="button"
+          onClick={cancel}
+          disabled={canceling}
+          style={{ ...G, alignSelf: "flex-start", minHeight: 36, border: `1px solid ${T.border}`, borderRadius: 9, background: T.surface, color: T.ink, padding: "8px 12px", fontSize: 12, fontWeight: 700, cursor: canceling ? "not-allowed" : "pointer", opacity: canceling ? 0.6 : 1 }}
+        >
+          {canceling ? "Cancelando…" : "Cancelar mudança agendada"}
+        </button>
+      )}
+      {error && <span role="alert" style={{ color: T.red }}>{error}</span>}
     </div>
   );
 }
