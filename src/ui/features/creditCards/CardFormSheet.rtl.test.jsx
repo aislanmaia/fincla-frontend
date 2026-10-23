@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React, { useState } from "react";
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -14,7 +14,7 @@ afterEach(cleanup);
  * exatamente o ciclo "digitou → setState no pai → re-render do sheet",
  * que é onde o input perdia o foco a cada caractere.
  */
-function Harness() {
+function Harness({ onCancel = () => {}, isMobile = false, saving = false }) {
   const [issuer, setIssuer] = useState("");
   const [name, setName] = useState("");
   const [last4, setLast4] = useState("");
@@ -24,7 +24,7 @@ function Harness() {
   return (
     <CardFormSheet
       open
-      isMobile={false}
+      isMobile={isMobile}
       isEdit={false}
       draftIssuer={issuer}
       setDraftIssuer={setIssuer}
@@ -41,11 +41,11 @@ function Harness() {
       draftClosingDay={closingDay}
       setDraftClosingDay={setClosingDay}
       draftSuccess={false}
-      saving={false}
+      saving={saving}
       error=""
       onSave={() => {}}
       onUpdate={() => {}}
-      onCancel={() => {}}
+      onCancel={onCancel}
     />
   );
 }
@@ -122,5 +122,48 @@ describe("CardFormSheet — foco nos campos", () => {
     expect(screen.getByPlaceholderText("ex: 3").value).toBe("3");
     expect(screen.getByRole("button", { name: /Salvar|Adicionar cartão/i }).disabled).toBe(false);
     expect(screen.queryByRole("button", { name: /Usar dia/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("CardFormSheet — diálogo", () => {
+  it.each([[false], [true]])("é um diálogo nomeado, com botão de fechar acessível (mobile=%s)", (isMobile) => {
+    render(<Harness isMobile={isMobile} />);
+    expect(screen.getByRole("dialog", { name: "Adicionar cartão" })).toHaveAttribute("aria-modal", "true");
+    expect(screen.getByRole("button", { name: "Fechar" })).toBeInTheDocument();
+  });
+
+  it("fecha com Esc, como os demais diálogos do app", async () => {
+    const onCancel = vi.fn();
+    const user = userEvent.setup();
+    render(<Harness onCancel={onCancel} />);
+    await user.keyboard("{Escape}");
+    expect(onCancel).toHaveBeenCalledTimes(1);
+  });
+
+  it("marca com asterisco todo campo que bloqueia o botão de salvar", () => {
+    render(<Harness />);
+    for (const label of ["Banco / Emissor", "Nome do cartão", "4 últimos dígitos", "Limite total", "Dia do vencimento", "Dia do fechamento"]) {
+      expect(screen.getByText(new RegExp(`^${label} \\*$`))).toBeInTheDocument();
+    }
+  });
+});
+
+describe("CardFormSheet — Esc e nomes acessíveis", () => {
+  it("não fecha com Esc enquanto salva", async () => {
+    const onCancel = vi.fn();
+    const user = userEvent.setup();
+    render(<Harness onCancel={onCancel} saving />);
+    await user.keyboard("{Escape}");
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it("dá nome acessível e aria-required aos campos que bloqueiam o salvar", () => {
+    render(<Harness />);
+    for (const name of ["Banco / Emissor", "Nome do cartão", "4 últimos dígitos", "Limite total"]) {
+      expect(screen.getByRole("textbox", { name })).toHaveAttribute("aria-required", "true");
+    }
+    for (const name of ["Dia do vencimento", "Dia do fechamento"]) {
+      expect(screen.getByRole("spinbutton", { name })).toHaveAttribute("aria-required", "true");
+    }
   });
 });

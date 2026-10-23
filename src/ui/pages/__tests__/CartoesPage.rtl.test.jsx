@@ -52,7 +52,7 @@ const TEST_CARDS = [
   },
 ];
 
-function renderPage() {
+function renderPage(cards = TEST_CARDS) {
   return render(
     <CartoesPage
       onNav={vi.fn()}
@@ -61,7 +61,7 @@ function renderPage() {
       onOpenTransaction={vi.fn()}
       onTransactionsInvalidate={vi.fn()}
       isMobile={false}
-      cards={TEST_CARDS}
+      cards={cards}
       dataMode="mock"
       organizationId={null}
       transactionsRefreshToken={0}
@@ -110,5 +110,20 @@ describe("CartoesPage - busca na aba Fatura", () => {
     expect(screen.getByText("1 de 3 lançamentos")).toBeInTheDocument();
     expect(screen.getByText("Notebook Gamer")).toBeInTheDocument();
     expect(screen.queryByText("Cinema")).not.toBeInTheDocument();
+  });
+});
+
+describe("CartoesPage - pagar fatura reaberta", () => {
+  // "Desfazer pagamento" numa fatura que já fechou devolve status `closed`; ela continua não paga e tem de poder ser paga de novo.
+  const reopened = [{ ...TEST_CARDS[0], faturas: [...TEST_CARDS[0].faturas.slice(0, 5), { id: "f6", mes: "Mar'26", val: 363.45, pago: false, status: "closed", venc: "10/04/2026", atual: true }] }];
+
+  it("mostra 'Marcar como paga' numa fatura não paga com status closed", () => {
+    renderPage(reopened);
+    expect(screen.getByRole("button", { name: /Marcar como paga/ })).toBeInTheDocument();
+  });
+
+  it("não mostra o botão numa fatura já paga", () => {
+    renderPage([{ ...TEST_CARDS[0], faturas: TEST_CARDS[0].faturas.map((f) => ({ ...f, pago: true, status: "paid" })) }]);
+    expect(screen.queryByRole("button", { name: /Marcar como paga/ })).toBeNull();
   });
 });
