@@ -94,4 +94,54 @@ describe("KebabMenu", () => {
     render(<KebabMenu ariaLabel="Mais" items={makeItems()} />);
     expect(screen.queryByTestId("kebab-dot")).toBeNull();
   });
+
+  describe("em tela de pouca altura (celular em paisagem)", () => {
+    const ITEMS = ["a", "b", "c", "d", "e"].map((k) => ({ key: k, label: `Item ${k}` }));
+    const openAt = ({ top, bottom, innerHeight }) => {
+      window.innerHeight = innerHeight;
+      vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ top, bottom, left: 250, right: 290, width: 40, height: bottom - top, x: 250, y: top, toJSON: () => ({}) });
+      render(<KebabMenu ariaLabel="Mais" items={ITEMS} width={230} />);
+      fireEvent.click(screen.getByRole("button", { name: "Mais" }));
+      return screen.getByRole("menu");
+    };
+    const realHeight = window.innerHeight;
+    afterEach(() => { vi.restoreAllMocks(); window.innerHeight = realHeight; });
+
+    it("abre para o lado com mais espaço e nunca passa do topo: rola por dentro", () => {
+      // gatilho em 90–130 numa tela de 320px: embaixo sobram 178px, em cima 78px; o menu tem 192px
+      const menu = openAt({ top: 90, bottom: 130, innerHeight: 320 });
+      expect(menu.style.transform).toBe("none");
+      expect(parseFloat(menu.style.top)).toBe(134);
+      expect(parseFloat(menu.style.maxHeight)).toBe(178);
+      expect(menu.style.overflowY).toBe("auto");
+    });
+
+    it("com espaço de sobra segue embaixo do gatilho, sem limitar a altura", () => {
+      const menu = openAt({ top: 100, bottom: 140, innerHeight: 800 });
+      expect(menu.style.transform).toBe("none");
+      expect(parseFloat(menu.style.maxHeight)).toBeGreaterThanOrEqual(192);
+    });
+
+    it("sobe quando em cima cabe e embaixo não", () => {
+      const menu = openAt({ top: 600, bottom: 640, innerHeight: 700 });
+      expect(menu.style.transform).toBe("translateY(-100%)");
+      expect(parseFloat(menu.style.maxHeight)).toBeLessThanOrEqual(600 - 12);
+    });
+
+    it("rolar dentro do menu não o fecha, e rolar a página fecha", () => {
+      const menu = openAt({ top: 90, bottom: 130, innerHeight: 320 });
+      fireEvent.scroll(menu);
+      expect(screen.getByRole("menu")).toBeInTheDocument();
+      fireEvent.scroll(document.body);
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    });
+
+    it("numa tela mínima o menu fica preso dentro da tela (piso de altura, posição limitada)", () => {
+      const menu = openAt({ top: 60, bottom: 100, innerHeight: 150 });
+      const top = parseFloat(menu.style.top); const height = parseFloat(menu.style.maxHeight);
+      const down = menu.style.transform === "none";
+      expect(height).toBe(96);
+      expect(down ? top >= 8 && top + height <= 150 - 8 : top - height >= 8 && top <= 150).toBe(true);
+    });
+  });
 });

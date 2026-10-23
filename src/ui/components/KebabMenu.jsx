@@ -4,6 +4,10 @@ import { createPortal } from "react-dom";
 import { T } from "../tokens";
 import { G } from "../typography";
 
+const GAP = 4; // folga entre o gatilho e o menu
+const MARGIN = 8; // folga até a borda da tela
+const MIN_MENU_HEIGHT = 96;
+
 const itemStyle = {
   ...G,
   display: "flex",
@@ -51,15 +55,17 @@ export function KebabMenu({ ariaLabel = "Ações", items = [], width = 190, trig
     const onKeyDown = (e) => {
       if (e.key === "Escape") close();
     };
+    // Rolar DENTRO do menu (tela baixa) não é reflow da página: não fecha.
+    const onScroll = (e) => { if (menuRef.current?.contains(e.target)) return; close(); };
     const onReflow = () => close();
     document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("keydown", onKeyDown);
-    window.addEventListener("scroll", onReflow, true);
+    window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", onReflow);
     return () => {
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("scroll", onReflow, true);
+      window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", onReflow);
     };
   }, [open, close]);
@@ -93,9 +99,16 @@ export function KebabMenu({ ariaLabel = "Ações", items = [], width = 190, trig
         ? createPortal(
             (() => {
               const menuHeight = items.length * 38 + 2; // rows are ~38px; the menu clips, so it must fit where it opens
-              const flipUp = rect.bottom + menuHeight + 8 > window.innerHeight;
-              const top = flipUp ? rect.top - 4 : rect.bottom + 4;
-              const left = Math.max(8, rect.right - width);
+              // Abre para o lado com mais espaço. Se nem ali cabe (celular em paisagem), o menu rola por dentro em vez de
+              // sair da tela: `maxHeight` é o espaço do lado escolhido menos as folgas, e a posição é presa à tela.
+              const below = window.innerHeight - rect.bottom - MARGIN - GAP;
+              const above = rect.top - MARGIN - GAP;
+              const flipUp = menuHeight > below && above > below;
+              const maxHeight = Math.max(MIN_MENU_HEIGHT, flipUp ? above : below);
+              const top = flipUp
+                ? Math.max(rect.top - GAP, MARGIN + maxHeight)
+                : Math.min(rect.bottom + GAP, Math.max(MARGIN, window.innerHeight - MARGIN - maxHeight));
+              const left = Math.max(MARGIN, rect.right - width);
               return (
                 <div
                   ref={menuRef}
@@ -111,7 +124,9 @@ export function KebabMenu({ ariaLabel = "Ações", items = [], width = 190, trig
                     borderRadius: 10,
                     boxShadow: T.lg,
                     zIndex: 150,
-                    overflow: "hidden",
+                    maxHeight,
+                    overflowX: "hidden",
+                    overflowY: "auto",
                   }}
                 >
                   {items.map((item) => (
