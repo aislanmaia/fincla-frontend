@@ -185,7 +185,7 @@ export function CardHubPage({
   // on the right. Five labelled buttons wrapped under the title read as a form, not as an app.
   const mobileMenuItems = [
     canCreateCard && !hub.isLoading && !hub.error && { key: "create-card", label: "Novo cartão", onSelect: () => setDialog("create-card") },
-    selectedCard && insights.length > 0 && { key: "insights", label: "Insights", onSelect: () => setDialog("insights") },
+    selectedCard && insights.length > 0 && { key: "insights", label: "Insights", badge: String(insights.length), onSelect: () => setDialog("insights") },
     selectedCard && { key: "edit-card", label: "Editar cartão", onSelect: () => setDialog("edit-card") },
     selectedCard?.public_id && { key: "commitments", label: "Parcelas & Compromissos", onSelect: openCommitments },
     selectedCard && { key: "notes", label: "Anotações", testId: "card-notes-open", onSelect: () => setDialog("notes") },
@@ -197,12 +197,13 @@ export function CardHubPage({
       <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
         {selectedCard && onNewItem && (
           <button type="button" onClick={() => onNewItem(selectedCard.id)}
-            style={{ ...OUTLINE_BTN, background: T.green, border: "none", color: "#fff", minHeight: 40 }}>
-            <Plus size={14} /> Item
+            aria-label="Novo item" title="Novo item"
+            style={{ ...OUTLINE_BTN, background: T.green, border: "none", color: "#fff", width: 40, height: 40, padding: 0, justifyContent: "center" }}>
+            <Plus size={18} />
           </button>
         )}
         {mobileMenuItems.length > 0 && (
-          <KebabMenu ariaLabel="Mais ações do cartão" items={mobileMenuItems} width={230} triggerTestId="card-hub-more"
+          <KebabMenu ariaLabel="Mais ações do cartão" items={mobileMenuItems} width={230} triggerTestId="card-hub-more" triggerDot={insights.length > 0}
             triggerStyle={{ ...OUTLINE_BTN, width: 40, height: 40, minHeight: 40, padding: 0, justifyContent: "center", fontSize: 18, lineHeight: 1 }} />
         )}
       </div>

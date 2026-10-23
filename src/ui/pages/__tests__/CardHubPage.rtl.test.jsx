@@ -852,7 +852,7 @@ describe("CardHubPage — barra do topo", () => {
     renderHub({ isMobile: true });
     await screen.findByTestId("hub-current-invoice");
     const more = screen.getByTestId("card-hub-more");
-    const item = screen.getByRole("button", { name: /Item/ });
+    const item = screen.getByRole("button", { name: "Novo item" });
     expect(more.parentElement).toBe(item.parentElement);
     expect(more.parentElement.parentElement).toHaveTextContent("Meus");
     expect(more.parentElement.parentElement.style.flexWrap).toBe("nowrap");
@@ -885,5 +885,21 @@ describe("CardHubPage — barra do topo", () => {
     for (const name of ["Editar cartão", "Parcelas & Compromissos", "Anotações", "Novo item"]) {
       expect(screen.getByRole("button", { name })).toBeInTheDocument();
     }
+  });
+});
+
+describe("CardHubPage — insights no menu do mobile", () => {
+  it("o ⋮ acende um ponto quando há insights e o menu os lista", async () => {
+    mockApi({ future: futureFixture({ insights: [{ type: "limit_warning", icon: "warning", message: "Dezembro usa 82% do limite." }] }) });
+    renderHub({ isMobile: true });
+    await screen.findByTestId("hub-current-invoice");
+    expect(await screen.findByTestId("kebab-dot")).toBeInTheDocument();
+  });
+
+  it("sem insights o ⋮ não acende", async () => {
+    mockApi();
+    renderHub({ isMobile: true });
+    await screen.findByTestId("hub-current-invoice");
+    expect(screen.queryByTestId("kebab-dot")).toBeNull();
   });
 });
