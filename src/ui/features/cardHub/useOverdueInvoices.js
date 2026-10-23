@@ -4,7 +4,7 @@ import { getOverdueInvoices } from "../../../api/creditCards";
 
 /**
  * Faturas vencidas da organização, buscadas ao abrir o Hub (uma chamada, todos os cartões).
- * Falha vira "sem insight" (ou o último valor da mesma organização): o aviso é um extra, nunca derruba a tela.
+ * Falha vira "sem insight": o aviso é um extra, nunca derruba a tela, e nunca repete um valor que pode estar velho.
  */
 export function useOverdueInvoices({ organizationId, enabled, refreshToken = 0 }) {
   const active = Boolean(enabled && organizationId);
@@ -16,7 +16,8 @@ export function useOverdueInvoices({ organizationId, enabled, refreshToken = 0 }
     getOverdueInvoices(organizationId)
       .then((summary) => { if (!cancelled) setState({ organizationId, summary }); })
       .catch(() => {
-        if (!cancelled) setState((previous) => (previous.organizationId === organizationId ? previous : { organizationId, summary: null }));
+        // Sem resposta, sem aviso: repetir o último valor poderia afirmar uma dívida que já foi paga.
+        if (!cancelled) setState({ organizationId, summary: null });
       });
     return () => { cancelled = true; };
   }, [active, organizationId, refreshToken]);

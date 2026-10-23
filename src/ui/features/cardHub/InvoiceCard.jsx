@@ -5,6 +5,7 @@ import { invoiceDashboardPath } from "../../routing/invoiceRoute.js";
 import {
   INVOICE_STATUS,
   invoiceStatusLabel,
+  isInvoiceOverdue,
   describeDue,
   describePaidDate,
   monthName,
@@ -23,7 +24,7 @@ export const STATUS_STYLE = {
 
 /** `overdue` (do servidor) troca Aberta/Fechada por "Vencida"; fatura paga nunca é vencida. */
 export function StatusBadge({ status, overdue = false }) {
-  const isOverdue = overdue && status !== INVOICE_STATUS.PAID;
+  const isOverdue = isInvoiceOverdue({ status, overdue });
   const style = STATUS_STYLE[isOverdue ? "overdue" : status] ?? STATUS_STYLE.forecast;
   return (
     <span data-testid="invoice-status" data-overdue={isOverdue ? "true" : undefined} style={{ ...G, fontSize: 11, fontWeight: 700, color: style.fg, background: style.bg, padding: "2px 8px", borderRadius: 9999, whiteSpace: "nowrap" }}>

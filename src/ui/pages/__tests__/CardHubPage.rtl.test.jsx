@@ -984,3 +984,14 @@ describe("CardHubPage — faturas vencidas", () => {
     expect(labels).not.toContain("Fechada");
   });
 });
+
+describe("CardHubPage — faturas vencidas: falha ao atualizar", () => {
+  it("se a atualização falha depois de uma resposta boa, o aviso some em vez de repetir dívida velha", async () => {
+    mockApi({ overdue: overdueFixture() });
+    const { rerender } = renderHub({ transactionsRefreshToken: 0 });
+    expect(await screen.findByTestId("insight-overdue_invoices")).toBeInTheDocument();
+    mockApi({ overdue: "fail" });
+    rerender(<CardHubPage organizationId={ORG} dataMode="live" onNewItem={vi.fn()} transactionsRefreshToken={1} />);
+    await waitFor(() => expect(screen.queryByTestId("insight-overdue_invoices")).toBeNull());
+  });
+});

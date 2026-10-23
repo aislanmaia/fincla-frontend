@@ -56,4 +56,14 @@ describe("selo de fatura vencida", () => {
     expect(cardsBuilt.find((c) => c.key === "2026-08").overdue).toBe(true);
     expect(cardsBuilt.find((c) => c.key === "2026-09").overdue).toBe(false);
   });
+
+  it("usa o vencimento do servidor e nunca marca paga ou prevista como vencida", () => {
+    const history = { monthly_data: [
+      { year: 2026, month: 7, status: "closed", total_amount: 10, items_count: 1, is_overdue: true, due_date: "2026-08-12" },
+      { year: 2026, month: 8, status: "paid", total_amount: 10, items_count: 1, is_overdue: true },
+    ] };
+    const built = buildInvoiceCards({ card: { due_day: 10, closing_day: 3 }, history, current: null, currentState: "unavailable", future: null, now: new Date(2026, 9, 4) });
+    expect(built.find((c) => c.key === "2026-07").dueDate).toBe("2026-08-12");
+    expect(built.find((c) => c.key === "2026-08").overdue).toBe(false);
+  });
 });
