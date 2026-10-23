@@ -1883,7 +1883,10 @@ export const NovaTransacaoModal = ({
         editingTransactionIdStr != null);
 
     if (liveOneShot) {
-      if (categoryTagId && !categoryTagIsActive) {
+      // Editar um lançamento cuja categoria foi apagada é permitido: o backend aceita a categoria apagada de volta em
+      // `tag_ids` quando o lançamento já a tem. Para CRIAR, a categoria apagada nem aparece na lista.
+      const isEditingExisting = editingTransactionIdStr != null || editingTransactionId != null;
+      if (categoryTagId && !categoryTagIsActive && !isEditingExisting) {
         setTxSubmitError("Selecione uma nova categoria ativa antes de salvar.");
         return;
       }
@@ -1900,7 +1903,6 @@ export const NovaTransacaoModal = ({
       setTxCreateFailed(false);
       setTxCreateErrorAmbiguous(false);
       setTxRetryConfirmPending(false);
-      const isEditingExisting = editingTransactionIdStr != null || editingTransactionId != null;
       // Preenchido logo antes do POST; o catch usa para lembrar QUAL payload
       // falhou. Fica fora do `try` porque um erro pode acontecer antes dele.
       let attemptedCreatePayload = null;
@@ -2559,13 +2561,17 @@ export const NovaTransacaoModal = ({
                 <div>
                   <div style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid, marginBottom:10 }}>Categoria</div>
                   <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                    {modalCategoryChoices.map((row) => (
-                      <button key={row.id || row.labelPt} onClick={() => { setCat(row.labelPt); setCategoryTagId(row.id); setDetailTagIds([]); setDetailTagLabelById({}); }}
-                        style={{ ...G, display:"flex", alignItems:"center", gap:5, padding:"8px 12px", borderRadius:99, border:`1.5px solid ${cat === row.labelPt ? T.ink : T.border}`, background:cat === row.labelPt ? T.ink : T.surface, color:cat === row.labelPt ? "#fff" : T.inkMid, fontSize:12, fontWeight:600, cursor:"pointer", transition:"all 0.15s" }}>
-                        <CategoryLucideIcon iconKey={row.iconKey} labelPt={row.labelPt} size={15} color={cat === row.labelPt ? "#fff" : T.inkMid} />
+                    {(categorySelectRows.some((r) => r.isInactive) ? categorySelectRows : modalCategoryChoices).map((row) => {
+                      // A categoria apagada (edição) aparece como chip selecionado; sem ela a lista é a de sempre (inclusive a de demonstração, de ids nulos).
+                      const selected = row.isInactive || cat === row.labelPt;
+                      return (
+                      <button key={row.id || row.labelPt} onClick={() => { if (row.isInactive) return; setCat(row.labelPt); setCategoryTagId(row.id); setCategoryTagIsActive(true); setDetailTagIds([]); setDetailTagLabelById({}); }}
+                        style={{ ...G, display:"flex", alignItems:"center", gap:5, padding:"8px 12px", borderRadius:99, border:`1.5px solid ${selected ? T.ink : T.border}`, background:selected ? T.ink : T.surface, color:selected ? "#fff" : T.inkMid, fontSize:12, fontWeight:600, cursor:"pointer", transition:"all 0.15s" }}>
+                        <CategoryLucideIcon iconKey={row.iconKey} labelPt={row.labelPt} size={15} color={selected ? "#fff" : T.inkMid} />
                         {row.labelPt}
                       </button>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -3575,7 +3581,9 @@ export const NovaTransacaoModal = ({
                     )}
                     {!categoryTagIsActive && categoryTagId ? (
                       <div style={{ ...G, fontSize:11, color:T.amber, marginTop:6 }}>
-                        Esta categoria foi removida e precisa ser substituida antes de salvar.
+                        {preConfig?.editingTransactionId != null && String(preConfig.editingTransactionId).trim() !== ""
+                          ? "Esta categoria foi removida. Você pode mantê-la e salvar, ou escolher outra."
+                          : "Esta categoria foi removida e precisa ser substituida antes de salvar."}
                       </div>
                     ) : null}
                   </div>
