@@ -731,7 +731,8 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
           )}
           <button onClick={onNovaRec} aria-label="Nova recorrência" title="Nova recorrência"
             style={{ ...G, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, background: T.ink, border: "none", borderRadius: 9, padding: isMobile ? 0 : "8px 14px", width: isMobile ? 40 : undefined, height: isMobile ? 40 : undefined, fontSize: 12, fontWeight: 700, color: "#fff", cursor: "pointer", flexShrink: 0 }}>
-            <Plus size={isMobile ? 18 : 13} /> {isMobile ? null : "Nova Recorrência"}{" "}
+            <Plus size={isMobile ? 18 : 13} />
+            {!isMobile && "Nova Recorrência"}
             {!isMobile && <span style={{ width: 5, height: 5, background: T.purple, borderRadius: 9999, display: "inline-block", marginLeft: 2 }} />}
           </button>
         </div>

@@ -117,6 +117,9 @@ describe("RecorrenciasPage (RTL)", () => {
 
   it("desktop mantém o botão com texto", () => {
     renderPage(false);
-    expect(screen.getByRole("button", { name: "Nova recorrência" })).toHaveTextContent("Nova Recorrência");
+    const button = screen.getByRole("button", { name: "Nova recorrência" });
+    expect(button).toHaveTextContent("Nova Recorrência");
+    expect(button.parentElement.parentElement.style.flexWrap).toBe("wrap");
+    expect(button.style.width).toBe("");
   });
 });
