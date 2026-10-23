@@ -272,7 +272,8 @@ describe("CardHubPage — cadastro de cartão", () => {
     const user = userEvent.setup();
     renderHub({ isMobile: true });
     await screen.findByTestId("hub-current-invoice");
-    await user.click(screen.getByRole("button", { name: "Cartão" }));
+    await user.click(screen.getByRole("button", { name: "Mais ações do cartão" }));
+    await user.click(screen.getByRole("menuitem", { name: "Novo cartão" }));
     await fillCardForm(user);
     await user.click(screen.getByRole("button", { name: "Adicionar cartão" }));
 
@@ -841,5 +842,64 @@ describe("CardHubPage — navegação e atualização", () => {
     expect(await screen.findByText(/Mostrando os dados anteriores/)).toBeInTheDocument();
     expect(screen.getByTestId("hub-current-invoice")).toHaveAttribute("data-status", "open");
     expect(screen.getByText("Cartão selecionado:")).toHaveTextContent("Azul");
+  });
+});
+
+describe("CardHubPage — barra do topo", () => {
+  it("mobile: título, Item e o menu ⋮ ficam na mesma linha; as demais ações moram no menu", async () => {
+    mockApi();
+    const user = userEvent.setup();
+    renderHub({ isMobile: true });
+    await screen.findByTestId("hub-current-invoice");
+    const more = screen.getByTestId("card-hub-more");
+    const item = screen.getByRole("button", { name: "Novo item" });
+    expect(more.parentElement).toBe(item.parentElement);
+    expect(more.parentElement.parentElement).toHaveTextContent("Meus");
+    expect(more.parentElement.parentElement.style.flexWrap).toBe("nowrap");
+    for (const name of ["Editar cartão", "Parcelas & Compromissos", "Anotações"]) {
+      expect(screen.queryByRole("button", { name })).toBeNull();
+    }
+    await user.click(more);
+    expect(screen.getAllByRole("menuitem").map((entry) => entry.textContent)).toEqual(
+      expect.arrayContaining(["Novo cartão", "Editar cartão", "Parcelas & Compromissos", "Anotações"]),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Parcelas & Compromissos" }));
+    expect(navigateMock).toHaveBeenCalledWith({ to: "/cards/$cardId/commitments", params: { cardId: publicIdFor(1) } });
+  });
+
+  it("mobile: Anotações abre pelo menu", async () => {
+    mockApi();
+    const user = userEvent.setup();
+    renderHub({ isMobile: true });
+    await screen.findByTestId("hub-current-invoice");
+    await user.click(screen.getByTestId("card-hub-more"));
+    await user.click(screen.getByTestId("card-notes-open"));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("desktop mantém os botões com texto", async () => {
+    mockApi();
+    renderHub({ isMobile: false });
+    await screen.findByTestId("hub-current-invoice");
+    expect(screen.queryByTestId("card-hub-more")).toBeNull();
+    for (const name of ["Editar cartão", "Parcelas & Compromissos", "Anotações", "Novo item"]) {
+      expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    }
+  });
+});
+
+describe("CardHubPage — insights no menu do mobile", () => {
+  it("o ⋮ acende um ponto quando há insights e o menu os lista", async () => {
+    mockApi({ future: futureFixture({ insights: [{ type: "limit_warning", icon: "warning", message: "Dezembro usa 82% do limite." }] }) });
+    renderHub({ isMobile: true });
+    await screen.findByTestId("hub-current-invoice");
+    expect(await screen.findByTestId("kebab-dot")).toBeInTheDocument();
+  });
+
+  it("sem insights o ⋮ não acende", async () => {
+    mockApi();
+    renderHub({ isMobile: true });
+    await screen.findByTestId("hub-current-invoice");
+    expect(screen.queryByTestId("kebab-dot")).toBeNull();
   });
 });

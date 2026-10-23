@@ -71,4 +71,27 @@ describe("KebabMenu", () => {
     fireEvent.click(trigger);
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
+
+  it("triggerStyle é mesclado sobre o padrão; triggerTestId, testId do item e o ponto aparecem", () => {
+    render(
+      <KebabMenu
+        ariaLabel="Mais"
+        items={[{ key: "a", label: "Ação A", testId: "item-a" }]}
+        triggerStyle={{ width: 40 }}
+        triggerTestId="more"
+        triggerDot
+      />,
+    );
+    const trigger = screen.getByTestId("more");
+    expect(trigger.style.width).toBe("40px");
+    expect(trigger.style.cursor).toBe("pointer");
+    expect(screen.getByTestId("kebab-dot")).toBeInTheDocument();
+    fireEvent.click(trigger);
+    expect(screen.getByTestId("item-a")).toHaveTextContent("Ação A");
+  });
+
+  it("sem triggerDot não há ponto", () => {
+    render(<KebabMenu ariaLabel="Mais" items={makeItems()} />);
+    expect(screen.queryByTestId("kebab-dot")).toBeNull();
+  });
 });
