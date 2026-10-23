@@ -76,7 +76,7 @@ export function CardVisual({ c, selected, size = "md", onClick }) {
 export function InvoiceNav({ compact = false, invoice, previousInvoice, nextInvoice, onPrev, onNext }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: compact ? 8 : 12 }}>
-      <button onClick={onPrev} disabled={!previousInvoice}
+      <button onClick={onPrev} disabled={!previousInvoice} aria-label="Fatura anterior"
         style={{ width: 30, height: 30, borderRadius: 9, border: `1px solid ${T.border}`, background: previousInvoice ? T.surface : T.grayLight, cursor: previousInvoice ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", opacity: previousInvoice ? 1 : 0.3, transition: "all 0.15s" }}>
         <ChevronLeft size={14} color={T.inkMid} />
       </button>
@@ -84,7 +84,7 @@ export function InvoiceNav({ compact = false, invoice, previousInvoice, nextInvo
         <div style={{ ...G, ...NUM, fontSize: compact ? 12 : 14, fontWeight: 800, color: T.ink }}>{invoice?.mes}</div>
         {invoice?.atual && <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.blue, textTransform: "uppercase", letterSpacing: "0.09em" }}>Atual</div>}
       </div>
-      <button onClick={onNext} disabled={!nextInvoice}
+      <button onClick={onNext} disabled={!nextInvoice} aria-label="Próxima fatura"
         style={{ width: 30, height: 30, borderRadius: 9, border: `1px solid ${T.border}`, background: nextInvoice ? T.surface : T.grayLight, cursor: nextInvoice ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", opacity: nextInvoice ? 1 : 0.3, transition: "all 0.15s" }}>
         <ChevronRight size={14} color={T.inkMid} />
       </button>

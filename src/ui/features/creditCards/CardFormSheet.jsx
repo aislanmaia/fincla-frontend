@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Check, ChevronDown, X } from "lucide-react";
 
 import { T } from "../../tokens";
@@ -73,6 +74,18 @@ export function CardFormSheet({
   onCancel,
   cycleChange = null,
 }) {
+  const panelRef = useRef(null);
+  const cancelRef = useRef(onCancel);
+  cancelRef.current = onCancel;
+  // Mesmo contrato dos outros diálogos do app (HubDialog): Esc fecha e o foco entra no painel.
+  // O foco só entra ao abrir: `onCancel` muda a cada render do pai e refocar o painel tiraria o foco do campo a cada tecla.
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => { if (e.key === "Escape") cancelRef.current?.(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+  useEffect(() => { if (open) panelRef.current?.focus(); }, [open]);
   if (!open) return null;
   // `last4` precisa estar completo: o backend exige exatamente 4 dígitos e
   // salvar com 1..3 só devolveria erro de validação.
@@ -95,7 +108,7 @@ export function CardFormSheet({
             </div>
           )}
         </div>
-        <button type="button" onClick={onCancel}
+        <button type="button" onClick={onCancel} aria-label="Fechar"
           style={{ background: T.grayLight, border: "none", cursor: "pointer", padding: 7, borderRadius: 8, display: "flex", flexShrink: 0 }}>
           <X size={14} color={T.inkMid} />
         </button>
@@ -115,16 +128,16 @@ export function CardFormSheet({
           </div>
         </div>
         <div>
-          <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Banco / Emissor</div>
+          <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Banco / Emissor *</div>
           <FI val={draftIssuer} set={setDraftIssuer} ph="ex: Nubank, Itaú, Bradesco…" />
         </div>
         <div>
-          <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Nome do cartão</div>
+          <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Nome do cartão *</div>
           <FI val={draftName} set={setDraftName} ph="ex: Nubank Roxinho, Personnalité…" />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div>
-            <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>4 últimos dígitos</div>
+            <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>4 últimos dígitos *</div>
             {/* Só dígitos e no máximo 4: o backend exige exatamente 4 e
                 devolveria 422 para qualquer outra coisa. */}
             <FI
@@ -148,7 +161,7 @@ export function CardFormSheet({
           </div>
         </div>
         <div>
-          <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Limite total</div>
+          <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 7 }}>Limite total *</div>
           <div style={{ display: "flex", alignItems: "center", padding: "9px 12px", border: `1px solid ${T.border}`, borderRadius: 9, background: T.surface }}
             onFocusCapture={(e) => (e.currentTarget.style.borderColor = T.blue)}
             onBlurCapture={(e) => (e.currentTarget.style.borderColor = T.border)}>
@@ -206,7 +219,7 @@ export function CardFormSheet({
     return (
       <div style={{ position: "fixed", inset: 0, zIndex: 400, overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
         <div onClick={onCancel} style={{ position: "absolute", inset: 0, background: "rgba(15,23,35,0.5)" }} />
-        <div style={{ position: "relative", background: T.surface, borderRadius: "24px 24px 0 0", maxHeight: "95dvh", display: "flex", flexDirection: "column", animation: "sheetUp 0.5s cubic-bezier(0.32,0.72,0,1) both" }}>
+        <div ref={panelRef} role="dialog" aria-modal="true" aria-label={isEdit ? "Editar cartão" : "Adicionar cartão"} tabIndex={-1} style={{ position: "relative", background: T.surface, borderRadius: "24px 24px 0 0", maxHeight: "95dvh", display: "flex", flexDirection: "column", animation: "sheetUp 0.5s cubic-bezier(0.32,0.72,0,1) both" }}>
           <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
             <div style={{ width: 36, height: 4, borderRadius: 99, background: T.inkFaint }} />
           </div>
@@ -219,7 +232,7 @@ export function CardFormSheet({
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 400, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div onClick={onCancel} style={{ position: "absolute", inset: 0, background: "rgba(15,23,35,0.38)" }} />
-      <div style={{ position: "relative", width: 460, maxHeight: "88dvh", background: T.surface, borderRadius: 18, boxShadow: T.dark, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div ref={panelRef} role="dialog" aria-modal="true" aria-label={isEdit ? "Editar cartão" : "Adicionar cartão"} tabIndex={-1} style={{ position: "relative", width: 460, maxHeight: "88dvh", background: T.surface, borderRadius: 18, boxShadow: T.dark, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {inner}
       </div>
     </div>

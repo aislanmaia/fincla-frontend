@@ -193,6 +193,8 @@ async function fillCardForm(user) {
   await user.type(screen.getByPlaceholderText("1234"), "4321");
   await user.type(screen.getByPlaceholderText("0,00"), "5000");
   await user.type(screen.getByPlaceholderText("ex: 10"), "12");
+  // O dia de fechamento é obrigatório desde a migration aa086.
+  await user.type(screen.getByPlaceholderText("ex: 3"), "3");
 }
 
 describe("CardHubPage — gráficos do Hub", () => {
@@ -247,7 +249,7 @@ describe("CardHubPage — cadastro de cartão", () => {
     expect(screen.queryByRole("link", { name: /Comprometido em parcelas/ })).not.toBeInTheDocument();
   });
 
-  it("cria pelo tile, aceita fechamento ausente, atualiza a lista e seleciona o criado", async () => {
+  it("cria pelo tile, atualiza a lista e seleciona o criado", async () => {
     const requests = mockApi();
     const user = userEvent.setup();
     const view = renderHub();
@@ -261,8 +263,7 @@ describe("CardHubPage — cadastro de cartão", () => {
     expect(screen.getByText("R$ 5.000,00")).toBeInTheDocument();
     expect(screen.queryByText("Não calculado")).toBeNull();
     expect(requests.posted).toHaveLength(1);
-    expect(requests.posted[0]).toMatchObject({ organization_id: ORG, last4: "4321", due_day: 12 });
-    expect(requests.posted[0]).not.toHaveProperty("closing_day");
+    expect(requests.posted[0]).toMatchObject({ organization_id: ORG, last4: "4321", due_day: 12, closing_day: 3 });
     expect(screen.getAllByRole("button", { name: "Novo cartão" })).toHaveLength(1);
   });
 
