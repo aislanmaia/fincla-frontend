@@ -115,6 +115,21 @@ describe("defaultInvoiceKey / summarizeInvoiceCounts / describeDue", () => {
     expect(summarizeInvoiceCounts(build())).toBe("2 pagas · 1 fechada · 1 aberta · 2 previstas");
   });
 
+  it("conta a fatura vencida como vencida, nunca também como fechada", () => {
+    const cards = build().map((c) => (c.status === "closed" ? { ...c, overdue: true } : c));
+    expect(summarizeInvoiceCounts(cards)).toBe("2 pagas · 1 vencida · 1 aberta · 2 previstas");
+  });
+
+  it("fatura aberta vencida sai de 'aberta' e várias viram 'vencidas'", () => {
+    const cards = build().map((c) => (c.status === "closed" || c.status === "open" ? { ...c, overdue: true } : c));
+    expect(summarizeInvoiceCounts(cards)).toBe("2 pagas · 2 vencidas · 2 previstas");
+  });
+
+  it("vencida paga ou prevista não conta como vencida", () => {
+    const cards = build().map((c) => (c.status === "paid" || c.status === "forecast" ? { ...c, overdue: true } : c));
+    expect(summarizeInvoiceCounts(cards)).toBe("2 pagas · 1 fechada · 1 aberta · 2 previstas");
+  });
+
   it("descreve o vencimento relativo a hoje", () => {
     expect(describeDue("2026-10-10", NOW)).toBe("vence em 6 dias (10/10)");
     expect(describeDue("2026-10-04", NOW)).toBe("vence hoje (04/10)");
