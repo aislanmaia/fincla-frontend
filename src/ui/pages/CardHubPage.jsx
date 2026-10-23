@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight, Lightbulb, Pencil, Pin, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pencil, Pin, Plus } from "lucide-react";
 
 import { T } from "../tokens";
 import { G } from "../typography";
 import { PageTitle } from "../components/primitives";
+import { KebabMenu } from "../components/KebabMenu.jsx";
 import { DragScrollTabs } from "../layouts/DragScrollTabs.jsx";
 import { shouldUseRealData } from "../dataMode.js";
 import { FC } from "../routing/searchContract.js";
@@ -180,23 +181,44 @@ export function CardHubPage({
     scroller?.scrollBy?.({ left: direction * step, behavior: "smooth" });
   };
 
-  const header = (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: isMobile ? 12 : 16 }}>
+  // Mobile: a top bar, one row. The title on the left, the primary action ("Item") and a "⋮" menu with the rest
+  // on the right. Five labelled buttons wrapped under the title read as a form, not as an app.
+  const mobileMenuItems = [
+    canCreateCard && !hub.isLoading && !hub.error && { key: "create-card", label: "Novo cartão", onSelect: () => setDialog("create-card") },
+    selectedCard && insights.length > 0 && { key: "insights", label: "Insights", onSelect: () => setDialog("insights") },
+    selectedCard && { key: "edit-card", label: "Editar cartão", onSelect: () => setDialog("edit-card") },
+    selectedCard?.public_id && { key: "commitments", label: "Parcelas & Compromissos", onSelect: openCommitments },
+    selectedCard && { key: "notes", label: "Anotações", testId: "card-notes-open", onSelect: () => setDialog("notes") },
+  ].filter(Boolean);
+
+  const header = isMobile ? (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "nowrap", gap: 8, marginBottom: 12 }}>
+      <div style={{ minWidth: 0 }}><PageTitle sans="Meus" serif="Cartões" /></div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+        {selectedCard && onNewItem && (
+          <button type="button" onClick={() => onNewItem(selectedCard.id)}
+            style={{ ...OUTLINE_BTN, background: T.green, border: "none", color: "#fff", minHeight: 40 }}>
+            <Plus size={14} /> Item
+          </button>
+        )}
+        {mobileMenuItems.length > 0 && (
+          <KebabMenu ariaLabel="Mais ações do cartão" items={mobileMenuItems} width={230} triggerTestId="card-hub-more"
+            triggerStyle={{ ...OUTLINE_BTN, width: 40, height: 40, minHeight: 40, padding: 0, justifyContent: "center", fontSize: 18, lineHeight: 1 }} />
+        )}
+      </div>
+    </div>
+  ) : (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, marginBottom: 16 }}>
       <PageTitle sans="Meus" serif="Cartões" />
-      <div style={{ display: "flex", gap: isMobile ? 6 : 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
         {canCreateCard && !hub.isLoading && !hub.error && (
           <button type="button" onClick={() => setDialog("create-card")} style={OUTLINE_BTN}>
             <Plus size={14} /> Cartão
           </button>
         )}
-        {selectedCard && insights.length > 0 && isMobile && (
-          <button type="button" onClick={() => setDialog("insights")} aria-label="Insights" style={OUTLINE_BTN}>
-            <Lightbulb size={14} />
-          </button>
-        )}
         {selectedCard && (
           <button type="button" onClick={() => setDialog("edit-card")} style={OUTLINE_BTN}>
-            <Pencil size={14} /> {isMobile ? "Editar" : "Editar cartão"}
+            <Pencil size={14} /> Editar cartão
           </button>
         )}
         {selectedCard?.public_id && (
@@ -212,7 +234,7 @@ export function CardHubPage({
         {selectedCard && onNewItem && (
           <button type="button" onClick={() => onNewItem(selectedCard.id)}
             style={{ ...OUTLINE_BTN, background: T.green, border: "none", color: "#fff" }}>
-            <Plus size={14} /> {isMobile ? "Item" : "Novo item"}
+            <Plus size={14} /> Novo item
           </button>
         )}
       </div>

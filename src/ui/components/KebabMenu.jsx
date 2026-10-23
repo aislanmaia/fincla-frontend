@@ -25,11 +25,11 @@ const itemStyle = {
  * **Escape**, **scroll** ou **resize**. A posição é capturada na abertura (não
  * reposiciona), então fechar no scroll evita o menu descolar do gatilho.
  *
- * `items`: `[{ key, label, badge?, disabled?, onSelect? }]` — ids/handlers no chamador,
+ * `items`: `[{ key, label, badge?, disabled?, onSelect?, testId? }]`; `triggerStyle` troca o visual do gatilho (ex.: botão de barra de topo) — ids/handlers no chamador,
  * labels PT-BR. Consolida o padrão portal-dropdown antes hand-rolled em telas soltas
  * (AccountsPage/CalendarPage); migrar esses call-sites pro primitivo é follow-up.
  */
-export function KebabMenu({ ariaLabel = "Ações", items = [], width = 190 }) {
+export function KebabMenu({ ariaLabel = "Ações", items = [], width = 190, triggerStyle, triggerTestId }) {
   const [rect, setRect] = React.useState(null);
   const menuRef = React.useRef(null);
   const triggerRef = React.useRef(null);
@@ -79,7 +79,8 @@ export function KebabMenu({ ariaLabel = "Ações", items = [], width = 190 }) {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={ariaLabel}
-        style={{ border: "none", background: "none", cursor: "pointer", color: T.inkGhost, fontSize: 18, lineHeight: 1, padding: 4 }}
+        data-testid={triggerTestId}
+        style={triggerStyle ?? { border: "none", background: "none", cursor: "pointer", color: T.inkGhost, fontSize: 18, lineHeight: 1, padding: 4 }}
       >
         ⋮
       </button>
@@ -113,6 +114,7 @@ export function KebabMenu({ ariaLabel = "Ações", items = [], width = 190 }) {
                       key={item.key}
                       type="button"
                       role="menuitem"
+                      data-testid={item.testId}
                       disabled={item.disabled}
                       onClick={() => select(item)}
                       style={{ ...itemStyle, color: item.disabled ? T.inkFaint : T.inkMid, cursor: item.disabled ? "default" : "pointer" }}
