@@ -93,7 +93,12 @@ export function KebabMenu({ ariaLabel = "Ações", items = [], width = 190, trig
         ? createPortal(
             (() => {
               const menuHeight = items.length * 38 + 2; // rows are ~38px; the menu clips, so it must fit where it opens
-              const flipUp = rect.bottom + menuHeight + 8 > window.innerHeight;
+              // Abre para o lado com mais espaço. Se nem ali cabe (celular em paisagem), o menu rola por dentro em vez de
+              // sair da tela: `maxHeight` é o espaço do lado escolhido menos uma folga de 8px.
+              const below = window.innerHeight - rect.bottom - 8 - 4;
+              const above = rect.top - 8 - 4;
+              const flipUp = menuHeight > below && above > below;
+              const maxHeight = Math.max(96, flipUp ? above : below);
               const top = flipUp ? rect.top - 4 : rect.bottom + 4;
               const left = Math.max(8, rect.right - width);
               return (
@@ -111,7 +116,9 @@ export function KebabMenu({ ariaLabel = "Ações", items = [], width = 190, trig
                     borderRadius: 10,
                     boxShadow: T.lg,
                     zIndex: 150,
-                    overflow: "hidden",
+                    maxHeight,
+                    overflowX: "hidden",
+                    overflowY: "auto",
                   }}
                 >
                   {items.map((item) => (
