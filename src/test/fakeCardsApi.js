@@ -190,6 +190,14 @@ export function installFakeCardsApi({ cards, invoices = {}, breakdownTotals = {}
       found.paid_date = `${found.month}-21`;
       return done(200, { message: "ok" });
     }
+    if (rest === "/scheduled-cycle" && (config.method || "get").toLowerCase() === "delete") {
+      const rules = card.cycle_rules || [];
+      if (rules.length < 2) {
+        return done(409, { detail: { error: "NO_SCHEDULED_CYCLE_CHANGE", message: "nothing scheduled", type: "conflict" } });
+      }
+      card.cycle_rules = rules.slice(0, -1);
+      return done(200, card);
+    }
     if (rest === "/invoices/current") {
       return done(404, { detail: "Invoice not found" });
     }

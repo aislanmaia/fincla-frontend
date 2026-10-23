@@ -706,7 +706,7 @@ export const CartoesPage = ({
       cycleChange={{
         original: originalDays,
         scheduled: card?.scheduledCycleChange ?? null,
-        onCancelScheduled: editingCardId ? () => creditCardsData.cancelScheduledCycle(editingCardId, organizationId) : undefined,
+        onCancelScheduled: editingCardId ? () => creditCardsData.cancelScheduledCycle(editingCardId) : undefined,
         applyFrom: draftApplyFrom,
         setApplyFrom: setDraftApplyFrom,
         confirmRewrite: draftConfirmRewrite,

@@ -893,6 +893,11 @@ export async function updateCreditCardForUi(cardId, payload) {
   return updateCreditCard(cardId, payload);
 }
 
+/** O backend recusou o cancelamento porque já não há mudança agendada (cancelada em outra aba ou aparelho). */
+export function isNoScheduledCycleChange(error) {
+  return error?.response?.status === 409 && error.response.data?.detail?.error === "NO_SCHEDULED_CYCLE_CHANGE";
+}
+
 export async function cancelScheduledCycleForUi(cardId, organizationId) {
   return cancelScheduledCycleChange(cardId, organizationId);
 }

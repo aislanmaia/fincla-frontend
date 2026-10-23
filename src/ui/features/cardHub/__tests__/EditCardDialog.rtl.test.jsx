@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -87,9 +87,26 @@ describe("EditCardDialog — cancelar a mudança agendada", () => {
     render(<EditCardDialog card={{ ...card, ...withSchedule }} organizationId="org" isMobile={false} onSave={vi.fn()} onCancelScheduled={onCancelScheduled} onClose={() => {}} />);
 
     expect(screen.getByText(/a partir da fatura de mar\/2099, vence dia 20 e fecha dia 13/)).toBeTruthy();
-    await userEvent.setup().click(screen.getByRole("button", { name: /Cancelar mudança agendada/ }));
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /Cancelar mudança agendada/ }));
+    await user.click(screen.getByRole("button", { name: /Sim, cancelar a mudança/ }));
 
     expect(onCancelScheduled).toHaveBeenCalledTimes(1);
+  });
+
+  it("não deixa salvar o formulário enquanto o cancelamento está em andamento", async () => {
+    const onSave = vi.fn();
+    let finish;
+    const onCancelScheduled = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
+    render(<EditCardDialog card={{ ...card, ...withSchedule }} organizationId="org" isMobile={false} onSave={onSave} onCancelScheduled={onCancelScheduled} onClose={() => {}} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: /Cancelar mudança agendada/ }));
+    await user.click(screen.getByRole("button", { name: /Sim, cancelar a mudança/ }));
+
+    expect(screen.getByRole("button", { name: /Salvar/ }).disabled).toBe(true);
+    finish();
+    await waitFor(() => expect(screen.getByRole("button", { name: /Salvar/ }).disabled).toBe(false));
   });
 
   it("sem mudança agendada não há o que cancelar", () => {

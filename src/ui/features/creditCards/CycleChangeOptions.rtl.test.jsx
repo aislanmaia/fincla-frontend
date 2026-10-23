@@ -172,6 +172,8 @@ describe("applyFromToSend", () => {
 
 describe("ScheduledCycleNotice — cancelar a mudança agendada", () => {
   const scheduled = { year: 2026, month: 12, dueDay: 10, closingDay: 3 };
+  const ask = (user) => user.click(screen.getByRole("button", { name: /Cancelar mudança agendada/ }));
+  const confirm = (user) => user.click(screen.getByRole("button", { name: /Sim, cancelar a mudança/ }));
 
   it("sem mudança agendada não mostra nada", () => {
     const { container } = render(<ScheduledCycleNotice scheduled={null} onCancel={() => {}} />);
@@ -185,32 +187,55 @@ describe("ScheduledCycleNotice — cancelar a mudança agendada", () => {
     expect(screen.queryByRole("button", { name: /Cancelar mudança agendada/ })).toBeNull();
   });
 
-  it("o botão chama onCancel uma vez e fica bloqueado enquanto espera", async () => {
+  it("pede confirmação: o primeiro toque não cancela e 'Manter' desiste", async () => {
+    const user = userEvent.setup();
+    const onCancel = vi.fn().mockResolvedValue(undefined);
+    render(<ScheduledCycleNotice scheduled={scheduled} onCancel={onCancel} />);
+
+    await ask(user);
+
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(screen.getByText(/voltam ao vencimento anterior/)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Manter" }));
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /Cancelar mudança agendada/ })).toBeTruthy();
+  });
+
+  it("confirmar chama onCancel uma vez e bloqueia os botões enquanto espera", async () => {
     const user = userEvent.setup();
     let finish;
     const onCancel = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
     render(<ScheduledCycleNotice scheduled={scheduled} onCancel={onCancel} />);
 
-    await user.click(screen.getByRole("button", { name: /Cancelar mudança agendada/ }));
+    await ask(user);
+    await confirm(user);
 
     expect(onCancel).toHaveBeenCalledTimes(1);
     const busy = screen.getByRole("button", { name: /Cancelando/ });
     expect(busy.disabled).toBe(true);
+    expect(screen.getByRole("button", { name: "Manter" }).disabled).toBe(true);
     await user.click(busy);
     expect(onCancel).toHaveBeenCalledTimes(1);
     finish();
-    await waitFor(() => expect(screen.getByRole("button", { name: /Cancelar mudança agendada/ }).disabled).toBe(false));
+    await waitFor(() => expect(screen.getByRole("button", { name: /Cancelar mudança agendada/ })).toBeTruthy());
   });
 
-  it("mostra o motivo quando o backend recusa (fatura paga)", async () => {
+  it("mostra o motivo quando o backend recusa (fatura paga) e deixa tentar de novo", async () => {
     const user = userEvent.setup();
     const refusal = { isAxiosError: true, response: { status: 409, data: { detail: { error: "PAID_INVOICE_IMMUTABLE", message: "Reabra a fatura paga antes de alterar seus lançamentos." } } } };
     render(<ScheduledCycleNotice scheduled={scheduled} onCancel={() => Promise.reject(refusal)} />);
 
-    await user.click(screen.getByRole("button", { name: /Cancelar mudança agendada/ }));
+    await ask(user);
+    await confirm(user);
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toMatch(/Reabra a fatura paga/);
-    expect(screen.getByRole("button", { name: /Cancelar mudança agendada/ }).disabled).toBe(false);
+    expect(screen.getByRole("button", { name: /Sim, cancelar a mudança/ }).disabled).toBe(false);
+  });
+
+  it("fica travado enquanto o formulário salva", async () => {
+    render(<ScheduledCycleNotice scheduled={scheduled} onCancel={vi.fn()} disabled />);
+
+    expect(screen.getByRole("button", { name: /Cancelar mudança agendada/ }).disabled).toBe(true);
   });
 });

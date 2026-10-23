@@ -122,6 +122,45 @@ describe("useCreditCardsData: carga com custo fixo", () => {
   });
 });
 
+describe("useCreditCardsData: cancelar a mudança agendada", () => {
+  const rules = [
+    { effective_year: 1900, effective_month: 1, due_day: 10, closing_day: 3 },
+    { effective_year: 2099, effective_month: 3, due_day: 20, closing_day: 13 },
+  ];
+
+  it("manda o DELETE do cartão e recarrega: a mudança agendada some da lista", async () => {
+    const [card] = setup(1);
+    card.cycle_rules = rules;
+    const { result } = renderData();
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.cards[0].scheduledCycleChange).toMatchObject({ year: 2099, month: 3 });
+    api.calls.length = 0;
+
+    await act(async () => {
+      await result.current.cancelScheduledCycle(1);
+    });
+
+    expect(api.calls.map((c) => `${c.method} ${c.path}`)).toContain("DELETE /credit-cards/1/scheduled-cycle");
+    expect(result.current.cards[0].scheduledCycleChange).toBeNull();
+    expect(result.current.isUpdatingCard).toBe(false);
+  });
+
+  it("já cancelada em outro lugar (409): recarrega sem erro", async () => {
+    const [card] = setup(1);
+    card.cycle_rules = rules;
+    const { result } = renderData();
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    card.cycle_rules = [rules[0]]; // cancelada por fora; a tela ainda mostra a agenda
+
+    await act(async () => {
+      await result.current.cancelScheduledCycle(1);
+    });
+
+    expect(result.current.cards[0].scheduledCycleChange).toBeNull();
+    expect(result.current.error).toBe("");
+  });
+});
+
 describe("useCreditCardsData: detalhe sob demanda e cache", () => {
   it("ensureCardDetail busca só o cartão pedido e reaproveita na segunda vez", async () => {
     setup(3);

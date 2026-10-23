@@ -113,3 +113,52 @@ describe("useCardHubData — cancelar a mudança agendada", () => {
     expect(result.current.selectedCard.cycle_rules).toHaveLength(1);
   });
 });
+
+
+describe("useCardHubData — cancelar quando já foi cancelada em outro lugar", () => {
+  it("409 NO_SCHEDULED_CYCLE_CHANGE busca os cartões de novo em vez de travar", async () => {
+    const stale = { ...card(1, 3, 10), cycle_rules: [
+      { effective_year: 1900, effective_month: 1, due_day: 10, closing_day: 3 },
+      { effective_year: 2099, effective_month: 3, due_day: 20, closing_day: 13 },
+    ] };
+    const fresh = { ...stale, cycle_rules: [stale.cycle_rules[0]] };
+    let lists = 0;
+    server.use(
+      http.get("*/v1/credit-cards", () => { lists += 1; return HttpResponse.json(lists === 1 ? [stale] : [fresh]); }),
+      http.get("*/v1/credit-cards/:id/invoices/history", () => HttpResponse.json({ monthly_data: [row("111.00")] })),
+      http.get("*/v1/credit-cards/:id/invoices/current", ({ request }) => new URL(request.url).searchParams.get("empty_as_null") === "true"
+        ? HttpResponse.json(null) : HttpResponse.json({ detail: "missing opt in" }, { status: 400 })),
+      http.get("*/v1/credit-cards/:id/future-commitments", () => HttpResponse.json({ monthly_breakdown: [], insights: [] })),
+      http.delete("*/v1/credit-cards/:id/scheduled-cycle", () => HttpResponse.json(
+        { detail: { error: "NO_SCHEDULED_CYCLE_CHANGE", message: "nothing scheduled", type: "conflict" } }, { status: 409 })),
+    );
+    const { result } = renderHook(() => useCardHubData({ organizationId: ORG, enabled: true, refreshToken: 0 }));
+    await waitFor(() => expect(result.current.selectedCard?.cycle_rules).toHaveLength(2));
+
+    await act(async () => { await result.current.cancelScheduledCycle(); });
+
+    expect(result.current.selectedCard.cycle_rules).toHaveLength(1);
+  });
+
+  it("outro erro (fatura paga) continua subindo para o aviso", async () => {
+    const stale = { ...card(1, 3, 10), cycle_rules: [
+      { effective_year: 1900, effective_month: 1, due_day: 10, closing_day: 3 },
+      { effective_year: 2099, effective_month: 3, due_day: 20, closing_day: 13 },
+    ] };
+    server.use(
+      http.get("*/v1/credit-cards", () => HttpResponse.json([stale])),
+      http.get("*/v1/credit-cards/:id/invoices/history", () => HttpResponse.json({ monthly_data: [row("111.00")] })),
+      http.get("*/v1/credit-cards/:id/invoices/current", ({ request }) => new URL(request.url).searchParams.get("empty_as_null") === "true"
+        ? HttpResponse.json(null) : HttpResponse.json({ detail: "missing opt in" }, { status: 400 })),
+      http.get("*/v1/credit-cards/:id/future-commitments", () => HttpResponse.json({ monthly_breakdown: [], insights: [] })),
+      http.delete("*/v1/credit-cards/:id/scheduled-cycle", () => HttpResponse.json(
+        { detail: { error: "PAID_INVOICE_IMMUTABLE", message: "x", type: "business_logic" } }, { status: 409 })),
+    );
+    const { result } = renderHook(() => useCardHubData({ organizationId: ORG, enabled: true, refreshToken: 0 }));
+    await waitFor(() => expect(result.current.selectedCard?.cycle_rules).toHaveLength(2));
+
+    await expect(act(async () => { await result.current.cancelScheduledCycle(); })).rejects.toBeTruthy();
+
+    expect(result.current.selectedCard.cycle_rules).toHaveLength(2);
+  });
+});
