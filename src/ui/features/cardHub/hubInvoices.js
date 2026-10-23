@@ -197,15 +197,17 @@ export function defaultInvoiceKey(cards) {
   return cards[0]?.key ?? null;
 }
 
-/** "16 pagas · 1 aberta · 12 previstas" (só as categorias que existem). */
+/** "16 pagas · 1 vencida · 1 aberta · 12 previstas" (só as categorias que existem; vencida não conta também como aberta/fechada). */
 export function summarizeInvoiceCounts(cards) {
-  const count = (status) => cards.filter((c) => c.status === status).length;
+  const overdue = cards.filter(isInvoiceOverdue).length;
+  const count = (status) => cards.filter((c) => c.status === status && !isInvoiceOverdue(c)).length;
   const parts = [];
   const paid = count(INVOICE_STATUS.PAID);
   const closed = count(INVOICE_STATUS.CLOSED);
   const open = count(INVOICE_STATUS.OPEN);
   const forecast = count(INVOICE_STATUS.FORECAST);
   if (paid) parts.push(`${paid} ${paid === 1 ? "paga" : "pagas"}`);
+  if (overdue) parts.push(`${overdue} ${overdue === 1 ? "vencida" : "vencidas"}`);
   if (closed) parts.push(`${closed} ${closed === 1 ? "fechada" : "fechadas"}`);
   if (open) parts.push(`${open} ${open === 1 ? "aberta" : "abertas"}`);
   if (forecast) parts.push(`${forecast} ${forecast === 1 ? "prevista" : "previstas"}`);
