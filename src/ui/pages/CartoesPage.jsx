@@ -268,8 +268,8 @@ export const CartoesPage = ({
   // heurística de "é o mês corrente" (`isCurrent`/`atual`): uma fatura `open`
   // cujo fechamento já passou vira `atual:false` (o front avança pra próxima),
   // mas continua aberta de verdade e precisa poder ser paga navegando até ela.
-  // `closed` também: é o que o backend devolve depois de "Desfazer pagamento" numa
-  // fatura que já fechou, e ela tem de poder ser paga de novo.
+  // `closed` também: é o que o backend devolve depois de "Desfazer pagamento" (feito no dashboard da fatura ou no Hub)
+  // numa fatura que já fechou, e ela tem de poder ser paga de novo; o mark-paid do backend aceita `closed`.
   const canMarkPaid     = !isPaid && (invoice?.status === "open" || invoice?.status === "closed");
 
   const usagePercent = computeUsagePercent(card);

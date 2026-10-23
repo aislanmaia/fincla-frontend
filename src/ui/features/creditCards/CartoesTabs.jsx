@@ -104,11 +104,10 @@ export function HistoryTab({ cardInvoices, isMobile, formatBRL }) {
           // aqui rotulava essa fatura como "Vencida" (vermelho) mesmo ela ainda
           // podendo ser paga normalmente.
           const isOpen = !f.pago && f.status === "open";
-          const isClosed = !f.pago && f.status === "closed";
           const isProjected = !f.pago && f.status == null;
-          const overdue = !f.pago && !isOpen && !isClosed && !isProjected;
-          const statusColor = f.pago ? T.green : isOpen ? T.blue : isClosed ? T.amber : isProjected ? T.inkLight : T.red;
-          const statusLabel = f.pago ? "Paga" : isOpen ? "Aberta" : isClosed ? "Fechada" : isProjected ? "Prevista" : "Vencida";
+          const overdue = !f.pago && !isOpen && !isProjected;
+          const statusColor = f.pago ? T.green : isOpen ? T.blue : isProjected ? T.inkLight : T.red;
+          const statusLabel = f.pago ? "Paga" : isOpen ? "Aberta" : isProjected ? "Prevista" : "Vencida";
           return (
             <div key={f.id} style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr auto" : "2fr 1fr 1fr auto", gap: 12, padding: "13px 18px", alignItems: "center", borderBottom: i < cardInvoices.length - 1 ? `1px solid ${T.border}` : "none", background: f.atual ? `${T.blueLight}55` : "transparent" }}>
               <div>
@@ -117,7 +116,7 @@ export function HistoryTab({ cardInvoices, isMobile, formatBRL }) {
               </div>
               {!isMobile && <div style={{ ...G, fontSize: 12, color: T.inkMid }}>{f.venc}</div>}
               <div style={{ ...G, ...NUM, fontSize: 13, fontWeight: 700, color: overdue ? T.red : T.ink }}>{formatBRL(f.val)}</div>
-              <span style={{ ...G, fontSize: 11, fontWeight: 700, color: statusColor, background: f.pago ? "#DCFCE7" : isOpen ? "#EFF6FF" : isClosed ? T.amberLight : isProjected ? T.bg : "#FEF2F2", borderRadius: 8, padding: "3px 10px", whiteSpace: "nowrap" }}>{statusLabel}</span>
+              <span style={{ ...G, fontSize: 11, fontWeight: 700, color: statusColor, background: f.pago ? "#DCFCE7" : isOpen ? "#EFF6FF" : isProjected ? T.bg : "#FEF2F2", borderRadius: 8, padding: "3px 10px", whiteSpace: "nowrap" }}>{statusLabel}</span>
             </div>
           );
         })}
