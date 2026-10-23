@@ -17,6 +17,7 @@ import {
   FINCLA_CALENDAR_SHADOW,
   FINCLA_CALENDAR_SURFACE_RADIUS,
   FINCLA_CAL_DAY_PX,
+  FINCLA_CAL_DAY_PX_TOUCH,
   finclaCalendarWeekdayCellStyle,
   finclaCalNavButtonBase,
   finclaCalMonthTitleStyle,
@@ -151,10 +152,12 @@ export function LocaleDatePicker({
     const el = buttonRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    const w = variant === "mobile" ? Math.min(r.width, 320) : 300;
+    // No celular o balão não herda a largura do botão (o "Paga em" da fatura tem ~156px, menos que as 7 colunas do mês):
+    // 300–340px, sempre com 12px de folga em cada lado da tela.
+    const w = variant === "mobile" ? Math.min(window.innerWidth - 24, Math.max(300, Math.min(r.width, 340))) : 300;
     const left = Math.max(12, Math.min(r.left, window.innerWidth - w - 12));
     let top = r.bottom + 6;
-    const estHeight = 360;
+    const estHeight = variant === "mobile" ? 392 : 360; // 6 semanas de 36px + cabeçalho + rodapé + padding
     if (top + estHeight > window.innerHeight - 8) {
       top = Math.max(8, r.top - estHeight - 6);
     }
@@ -258,7 +261,11 @@ export function LocaleDatePicker({
     }
   };
 
-  const navBase = finclaCalNavButtonBase();
+  // Alvo do dedo só no balão do celular; o modo "expand" mora dentro de um container já medido pela tela dona.
+  // Em tela estreita o dia encolhe até caber as 7 colunas (largura do balão − 30px de padding).
+  const touch = variant === "mobile" && popoverMode === "portal";
+  const dayPx = touch ? Math.max(FINCLA_CAL_DAY_PX, Math.min(FINCLA_CAL_DAY_PX_TOUCH, Math.floor((popoverPos.width - 30) / 7))) : FINCLA_CAL_DAY_PX;
+  const navBase = touch ? { ...finclaCalNavButtonBase(), width: FINCLA_CAL_DAY_PX_TOUCH, height: FINCLA_CAL_DAY_PX_TOUCH, justifyContent: "center" } : finclaCalNavButtonBase();
 
   const handleDraftChange = (e) => {
     const v = e.target.value;
@@ -450,8 +457,8 @@ export function LocaleDatePicker({
             >
               <div
                 style={{
-                  width: FINCLA_CAL_DAY_PX,
-                  height: FINCLA_CAL_DAY_PX,
+                  width: dayPx,
+                  height: dayPx,
                   borderRadius: "50%",
                   margin: "0 auto",
                   display: "flex",

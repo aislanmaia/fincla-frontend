@@ -13,6 +13,8 @@ export const FINCLA_CALENDAR_SURFACE_RADIUS = 16;
 
 /** Tamanho da célula circular do dia (Transações / grid principal). */
 export const FINCLA_CAL_DAY_PX = 28;
+/** Dia do mês no celular (balão do seletor): 28px serve ao cursor, não ao dedo. */
+export const FINCLA_CAL_DAY_PX_TOUCH = 36;
 
 /** Legenda dos dias da semana: mesma leitura que o LocaleDatePicker (Visão Geral). */
 export const finclaCalendarWeekdayCellStyle = {
