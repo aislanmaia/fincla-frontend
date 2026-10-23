@@ -713,12 +713,12 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16, minHeight: 0 }}>
       <style>{shimmerKeyframes}</style>
-      <div style={{ paddingTop: 4, display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 10 }}>
-        <div>
+      <div style={{ paddingTop: 4, display: "flex", justifyContent: "space-between", alignItems: isMobile ? "center" : "flex-end", flexWrap: isMobile ? "nowrap" : "wrap", gap: 10 }}>
+        <div style={{ minWidth: 0 }}>
           <Breadcrumb label="Planejar" />
           <PageTitle sans="Recorrências &" serif="Compromissos" />
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: isMobile ? "nowrap" : "wrap", flexShrink: 0 }}>
           {!isMobile && (
             <Btn variant="outGray">
               <Upload size={12} /> Exportar
@@ -729,9 +729,11 @@ function RecorrenciasPageBody({ onNav, cenarios = [], onNovaRec, onEditar, isMob
               <Sparkles size={12} /> Simular recorrência
             </Btn>
           )}
-          <button onClick={onNovaRec} style={{ ...G, display: "flex", alignItems: "center", gap: 5, background: T.ink, border: "none", borderRadius: 9, padding: "8px 14px", fontSize: 12, fontWeight: 700, color: "#fff", cursor: "pointer" }}>
-            <Plus size={13} /> {isMobile ? "Nova" : "Nova Recorrência"}{" "}
-            <span style={{ width: 5, height: 5, background: T.purple, borderRadius: 9999, display: "inline-block", marginLeft: 2 }} />
+          <button onClick={onNovaRec} aria-label="Nova recorrência" title="Nova recorrência"
+            style={{ ...G, display: "flex", alignItems: "center", justifyContent: "center", gap: 5, background: T.ink, border: "none", borderRadius: 9, padding: isMobile ? 0 : "8px 14px", width: isMobile ? 40 : undefined, height: isMobile ? 40 : undefined, fontSize: 12, fontWeight: 700, color: "#fff", cursor: "pointer", flexShrink: 0 }}>
+            <Plus size={isMobile ? 18 : 13} />
+            {!isMobile && "Nova Recorrência"}
+            {!isMobile && <span style={{ width: 5, height: 5, background: T.purple, borderRadius: 9999, display: "inline-block", marginLeft: 2 }} />}
           </button>
         </div>
       </div>

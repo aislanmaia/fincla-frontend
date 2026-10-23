@@ -1,8 +1,8 @@
 /** @vitest-environment jsdom */
 
 import React from "react";
-import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
 import { RecorrenciasPage } from "../RecorrenciasPage.jsx";
 
 vi.mock("../../features/recurringTransactions/useRecurringTransactionsData.js", () => ({
@@ -65,6 +65,9 @@ vi.mock("recharts", () => ({
 }));
 
 describe("RecorrenciasPage (RTL)", () => {
+  afterEach(() => cleanup());
+
+
   it("mostra título e seção de despesas fixas com dados mockados", () => {
     render(
       <RecorrenciasPage
@@ -81,5 +84,42 @@ describe("RecorrenciasPage (RTL)", () => {
     expect(screen.getByText("Compromissos")).toBeInTheDocument();
     expect(screen.getByText("Despesas Fixas")).toBeInTheDocument();
     expect(screen.getAllByText("Conta de luz").length).toBeGreaterThanOrEqual(1);
+  });
+
+  const renderPage = (isMobile) => {
+    const onNovaRec = vi.fn();
+    render(
+      <RecorrenciasPage
+        onNav={vi.fn()}
+        cenarios={[]}
+        dataMode="live"
+        organizationId="org-rtl"
+        recurringRefreshToken={0}
+        onNovaRec={onNovaRec}
+        onEditar={vi.fn()}
+        isMobile={isMobile}
+      />,
+    );
+    return onNovaRec;
+  };
+
+  it("mobile: o botão Nova fica na mesma linha do título, sem quebrar para baixo, e continua clicável", () => {
+    const onNovaRec = renderPage(true);
+    const button = screen.getByRole("button", { name: "Nova recorrência" });
+    const row = button.parentElement.parentElement;
+    expect(row.style.flexWrap).toBe("nowrap");
+    expect(row).toHaveTextContent("Compromissos");
+    expect(button.parentElement.style.flexShrink).toBe("0");
+    expect(button).not.toHaveTextContent("Nova");
+    button.click();
+    expect(onNovaRec).toHaveBeenCalledTimes(1);
+  });
+
+  it("desktop mantém o botão com texto", () => {
+    renderPage(false);
+    const button = screen.getByRole("button", { name: "Nova recorrência" });
+    expect(button).toHaveTextContent("Nova Recorrência");
+    expect(button.parentElement.parentElement.style.flexWrap).toBe("wrap");
+    expect(button.style.width).toBe("");
   });
 });
