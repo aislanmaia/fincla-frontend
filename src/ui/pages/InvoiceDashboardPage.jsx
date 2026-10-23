@@ -198,7 +198,7 @@ export function InvoiceDashboardPage({ isMobile = false, organizationId = null, 
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <InvoiceNavigator invoices={invoices} selectedKey={selectedKey} onSelect={selectInvoice} currency={currency} />
-                <StatusBadge status={invoice.status} />
+                <StatusBadge status={invoice.status} overdue={invoice.overdue} />
               </div>
               <Headline invoice={invoice} detail={detail} state={detailState} futureRow={data.futureRow} currency={currency} />
             </div>

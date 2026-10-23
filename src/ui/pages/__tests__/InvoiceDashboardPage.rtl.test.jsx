@@ -498,7 +498,7 @@ describe("InvoiceDashboardPage — card da fatura", () => {
 
   it.each([
     ["2026", "10", "open", "Aberta"],
-    ["2026", "9", "closed", "Fechada"],
+    ["2026", "9", "closed", "Vencida"],
     ["2026", "8", "paid", "Paga"],
     ["2026", "11", "forecast", "Prevista"],
   ])("fatura %s/%s tem o status %s", async (year, month, status, label) => {

@@ -84,7 +84,7 @@ export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, 
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 8 }}>
           <div><div style={{ ...G, color: T.inkLight, fontSize: 10, fontWeight: 700, textTransform: "uppercase" }}>Fatura atual</div>
             <strong style={{ ...G, ...NUM, fontSize: 15 }}>{monthName(current.month)} {current.year}</strong></div>
-          <StatusBadge status={current.status} />
+          <StatusBadge status={current.status} overdue={current.overdue} />
         </div>
         <InvoiceDashboardLink cardId={cardId} invoice={current} onNavigate={onNavigate} style={{ color: T.ink, ...NUM, fontSize: 26, fontWeight: 800 }}>
           {money(current)}
@@ -130,7 +130,7 @@ export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, 
           {visible.map((invoice) => <InvoiceDashboardLink key={invoice.key} cardId={cardId} invoice={invoice} onNavigate={onNavigate} className="hub-invoice-row"
             style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 8px", borderBottom: `1px solid ${T.border}`, color: T.ink, minWidth: 0 }}>
             <span style={{ ...NUM, width: 38, flexShrink: 0, textAlign: "center", fontWeight: 800 }}>{monthShort(invoice.month)}<small style={{ display: "block", fontWeight: 400 }}>{invoice.year}</small></span>
-            <StatusBadge status={invoice.status} />
+            <StatusBadge status={invoice.status} overdue={invoice.overdue} />
             <span style={{ ...NUM, flex: 1, minWidth: 0, color: T.inkMid, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {invoice.status === INVOICE_STATUS.PAID ? describePaidDate(invoice.paidDate) : null}
               {invoice.itemsCount > 0 ? `${invoice.paidDate ? " · " : ""}${invoice.itemsCount} ${invoice.status === INVOICE_STATUS.FORECAST ? "parcelas" : "lanç."}` : ""}

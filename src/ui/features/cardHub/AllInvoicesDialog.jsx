@@ -26,7 +26,7 @@ export function AllInvoicesDialog({ invoices, cardId, currency, isMobile, onNavi
                   <span style={{ ...G, ...NUM, display: "block", fontSize: 12, fontWeight: 800, color: T.ink }}>{monthShort(invoice.month)}</span>
                   <span style={{ ...G, display: "block", fontSize: 11, color: T.inkLight }}>{invoice.year}</span>
                 </span>
-                <StatusBadge status={invoice.status} />
+                <StatusBadge status={invoice.status} overdue={invoice.overdue} />
                 <span style={{ ...G, fontSize: 11, color: T.inkMid, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {invoice.status === INVOICE_STATUS.PAID ? describePaidDate(invoice.paidDate) ?? "" : ""}
                   {invoice.itemsCount > 0 ? `${invoice.status === INVOICE_STATUS.PAID && invoice.paidDate ? " · " : ""}${invoice.itemsCount} ${invoice.status === INVOICE_STATUS.FORECAST ? "parcelas" : "lanç."}` : ""}

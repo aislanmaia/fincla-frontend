@@ -226,5 +226,6 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
     cancelScheduledCycle,
     payInvoice,
     createCard,
+    invoiceVersion: invoiceRefresh,
   };
 }

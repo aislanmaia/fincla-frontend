@@ -114,8 +114,20 @@ const futureFixture = (over = {}) => ({
   ...over,
 });
 
+const overdueFixture = (over = {}) => ({
+  count: 2,
+  total_amount: money("1350.00"),
+  by_currency: [money("1350.00")],
+  oldest_due_date: "2026-08-10",
+  items: [
+    { credit_card_id: 1, card_name: "Azul", invoice_id: 41, month: "2026-07", due_date: "2026-08-10", amount: money("1000.00"), days_overdue: 55 },
+    { credit_card_id: 1, card_name: "Azul", invoice_id: 42, month: "2026-08", due_date: "2026-09-10", amount: money("350.00"), days_overdue: 24 },
+  ],
+  ...over,
+});
+
 /** Backend de mentira na camada HTTP: o cliente, o adapter e o hook reais rodam por cima. */
-function mockApi({ cards = [cardFixture()], history, current, future, patch, transactions = [], create, createCurrency = "BRL" } = {}) {
+function mockApi({ cards = [cardFixture()], history, current, future, patch, transactions = [], create, createCurrency = "BRL", overdue } = {}) {
 
   const patched = [];
   const posted = [];
@@ -138,6 +150,9 @@ function mockApi({ cards = [cardFixture()], history, current, future, patch, tra
       currentCards = [...currentCards, created];
       return HttpResponse.json(created);
     }),
+    http.get("*/v1/credit-cards/overdue-invoices", () => (overdue === "fail"
+      ? HttpResponse.json({ detail: "boom" }, { status: 500 })
+      : HttpResponse.json(overdue ?? overdueFixture({ count: 0, items: [] })))),
     http.get("*/v1/credit-cards/:id/invoices/history", () => (history === "fail"
       ? HttpResponse.json({ detail: "boom" }, { status: 500 })
       : HttpResponse.json(history ?? historyFixture()))),
@@ -519,7 +534,7 @@ describe("CardHubPage — faturas do Hub", () => {
     expect(screen.queryByRole("button", { name: /Marcar como paga/ })).toBeNull();
   });
 
-  it("limita a carga inicial a quatro chamadas mesmo com vários cartões e meses", async () => {
+  it("limita a carga inicial a cinco chamadas (quatro do cartão e uma de faturas vencidas) mesmo com vários cartões e meses", async () => {
     const requests = [];
     const onStart = ({ request }) => {
       const url = new URL(request.url);
@@ -533,10 +548,11 @@ describe("CardHubPage — faturas do Hub", () => {
       });
       renderHub();
       await screen.findByTestId("hub-current-invoice");
-      expect(requests).toHaveLength(4);
+      expect(requests).toHaveLength(5);
       expect(requests).toEqual(expect.arrayContaining([
         "/v1/credit-cards", "/v1/credit-cards/1/invoices/history",
         "/v1/credit-cards/1/invoices/current", "/v1/credit-cards/1/future-commitments",
+        "/v1/credit-cards/overdue-invoices",
       ]));
     } finally {
       server.events.removeListener("request:start", onStart);
@@ -815,19 +831,20 @@ describe("CardHubPage — navegação e atualização", () => {
     const currentBefore = screen.getByTestId("hub-current-invoice");
     const counter = countRequests();
     rerender(<CardHubPage organizationId={ORG} dataMode="live" onNewItem={vi.fn()} transactionsRefreshToken={1} />);
-    await waitFor(() => expect(counter.seen).toHaveLength(4));
+    await waitFor(() => expect(counter.seen).toHaveLength(5));
     await new Promise((r) => setTimeout(r, 100));
     counter.stop();
 
     expect(screen.getByTestId("card-notes-textarea")).toHaveValue("rascunho não salvo");
     expect(screen.queryByText(/Carregando seus cartões/)).toBeNull();
     expect(screen.getByTestId("hub-current-invoice")).toBe(currentBefore);
-    // um refresh = exatamente as 4 chamadas do Hub, sem duplicar
+    // um refresh = exatamente as 4 chamadas do Hub mais a das faturas vencidas, sem duplicar
     expect(counter.seen.slice().sort()).toEqual([
       "GET /v1/credit-cards",
       "GET /v1/credit-cards/:id/future-commitments",
       "GET /v1/credit-cards/:id/invoices/current",
       "GET /v1/credit-cards/:id/invoices/history",
+      "GET /v1/credit-cards/overdue-invoices",
     ]);
   });
 
@@ -901,5 +918,69 @@ describe("CardHubPage — insights no menu do mobile", () => {
     renderHub({ isMobile: true });
     await screen.findByTestId("hub-current-invoice");
     expect(screen.queryByTestId("kebab-dot")).toBeNull();
+  });
+});
+
+describe("CardHubPage — faturas vencidas", () => {
+  it("avisa ao abrir, com o total, sem precisar abrir nenhuma fatura, e leva à mais atrasada", async () => {
+    mockApi({ overdue: overdueFixture() });
+    renderHub();
+    const row = await screen.findByTestId("insight-overdue_invoices");
+    expect(row).toHaveTextContent("Você tem 2 faturas vencidas — R$ 1.350,00");
+    await userEvent.setup({ advanceTimers: vi.advanceTimersByTime }).click(row);
+    expect(navigateMock).toHaveBeenCalledWith({ to: `/cards/${publicIdFor(1)}/invoices/2026/7` });
+  });
+
+  it("uma fatura só fica no singular", async () => {
+    mockApi({ overdue: overdueFixture({ count: 1, total_amount: money("1000.00"), by_currency: [money("1000.00")], items: overdueFixture().items.slice(0, 1) }) });
+    renderHub();
+    expect(await screen.findByTestId("insight-overdue_invoices")).toHaveTextContent("Você tem 1 fatura vencida — R$ 1.000,00");
+  });
+
+  it("com duas moedas mostra a quebra e nunca soma", async () => {
+    mockApi({ overdue: overdueFixture({ total_amount: null, by_currency: [money("100.00"), money("20.00", "EUR")] }) });
+    renderHub();
+    const text = (await screen.findByTestId("insight-overdue_invoices")).textContent.replace(/\s/g, " ");
+    expect(text).toBe("Você tem 2 faturas vencidas — R$ 100,00 + € 20,00");
+  });
+
+  it("sem faturas vencidas não há insight", async () => {
+    mockApi();
+    renderHub();
+    await screen.findByTestId("hub-current-invoice");
+    expect(screen.queryByTestId("insight-overdue_invoices")).toBeNull();
+    expect(screen.queryByTestId("insights-list")).toBeNull();
+  });
+
+  it("se a chamada falha, a tela segue sem o aviso", async () => {
+    mockApi({ overdue: "fail" });
+    renderHub();
+    await screen.findByTestId("hub-current-invoice");
+    expect(screen.queryByTestId("insight-overdue_invoices")).toBeNull();
+  });
+
+  it("no mobile acende o ponto do ⋮ e o aviso está em Insights", async () => {
+    mockApi({ overdue: overdueFixture() });
+    renderHub({ isMobile: true });
+    await screen.findByTestId("hub-current-invoice");
+    expect(await screen.findByTestId("kebab-dot")).toBeInTheDocument();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    await user.click(screen.getByTestId("card-hub-more"));
+    await user.click(await screen.findByRole("menuitem", { name: /Insights/ }));
+    await user.click(await screen.findByTestId("insight-overdue_invoices"));
+    expect(navigateMock).toHaveBeenCalledWith({ to: `/cards/${publicIdFor(1)}/invoices/2026/7` });
+  });
+
+  it("o selo troca Fechada por Vencida só quando o servidor afirma o atraso", async () => {
+    const history = historyFixture();
+    history.monthly_data[1] = { ...history.monthly_data[1], is_overdue: true };
+    history.monthly_data[0] = { ...history.monthly_data[0], is_overdue: true };
+    mockApi({ history });
+    renderHub();
+    await screen.findByTestId("hub-current-invoice");
+    const labels = within(otherRows()).getAllByTestId("invoice-status").map((el) => el.textContent);
+    expect(labels).toContain("Vencida");
+    expect(labels).toContain("Paga");
+    expect(labels).not.toContain("Fechada");
   });
 });

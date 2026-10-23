@@ -34,6 +34,7 @@ function detailEntry(detail, year, month, card, openRef) {
     total: num(detail.total_amount),
     itemsCount: num(detail.items_count),
     dueDate: detail.due_date || null,
+    overdue: detail.is_overdue === true,
     paidDate: detail.paid_date || null,
     limitUsagePercent: num(detail.limit_usage_percent),
     topCategory: topCategoryLabel(detail.category_breakdown),
