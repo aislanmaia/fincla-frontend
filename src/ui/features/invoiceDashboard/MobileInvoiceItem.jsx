@@ -1,7 +1,7 @@
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { formatMoney } from "../../money/formatMoney.js";
-import { INVOICE_STATUS, INVOICE_STATUS_LABEL, monthName, monthNameLower } from "../cardHub/hubInvoices.js";
+import { INVOICE_STATUS, invoiceStatusLabel, monthName, monthNameLower } from "../cardHub/hubInvoices.js";
 import { StatusBadge } from "../cardHub/InvoiceCard.jsx";
 import { Headline, InvoiceDetailBody } from "./InvoiceDetailBody.jsx";
 import { plural } from "./invoiceFormat.js";
@@ -17,7 +17,7 @@ export function MobileInvoiceItem({ invoice, selected, width, onSelect, currency
   return (
     <div
       role="group"
-      aria-label={`Fatura de ${monthNameLower(invoice.month)} de ${invoice.year}, ${INVOICE_STATUS_LABEL[invoice.status]}`}
+      aria-label={`Fatura de ${monthNameLower(invoice.month)} de ${invoice.year}, ${invoiceStatusLabel(invoice)}`}
       aria-current={selected ? "true" : undefined}
       data-testid={`invoice-card-${invoice.key}`}
       data-status={invoice.status}
@@ -34,7 +34,7 @@ export function MobileInvoiceItem({ invoice, selected, width, onSelect, currency
         <div style={{ ...G, fontSize: 11, fontWeight: 700, color: T.inkLight, textTransform: "uppercase", letterSpacing: "0.09em" }}>
           {monthName(invoice.month)} {invoice.year}
         </div>
-        <StatusBadge status={invoice.status} />
+        <StatusBadge status={invoice.status} overdue={invoice.overdue} />
         {selected
           ? <Headline invoice={invoice} detail={detailProps.detail} state={detailProps.state} futureRow={detailProps.futureRow} currency={currency} centered />
           : (

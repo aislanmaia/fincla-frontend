@@ -17,6 +17,8 @@ import type {
   MoveInstallmentResponse,
   FutureCommitmentsResponse,
   ConsolidatedCommitmentsResponse,
+  OverdueInvoicesResponse,
+  OverdueMoney,
 } from './types';
 
 /**
@@ -312,4 +314,35 @@ export const saveInvoiceNote = async (cardId: number, organizationId: string, ye
     { params: { organization_id: organizationId } }
   );
   return response.data.note;
+};
+
+/**
+ * Faturas vencidas e não pagas da organização, numa só chamada (todas as moedas, todos os cartões).
+ *
+ * Não passa por `unwrapMoney`: ele colapsa `{amount, currency}` num número e a moeda se perde, e aqui
+ * a moeda É a resposta (duas moedas nunca são somadas).
+ */
+export const getOverdueInvoices = async (
+  organizationId: string,
+  limit: number = 20
+): Promise<OverdueInvoicesResponse> => {
+  const response = await apiClient.get<{
+    count: number;
+    total_amount: { amount: string; currency: string } | null;
+    by_currency: { amount: string; currency: string }[];
+    oldest_due_date: string | null;
+    items: (Omit<OverdueInvoicesResponse['items'][number], 'amount'> & { amount: { amount: string; currency: string } | null })[];
+  }>('/credit-cards/overdue-invoices', { params: { organization_id: organizationId, limit } });
+  const money = (wire: { amount: string; currency: string } | null): OverdueMoney | null => {
+    const amount = wire ? Number(wire.amount) : NaN;
+    return wire && Number.isFinite(amount) ? { amount, currency: wire.currency } : null;
+  };
+  const data = response.data;
+  return {
+    count: data.count,
+    total_amount: money(data.total_amount),
+    by_currency: data.by_currency.map(money).filter((value): value is OverdueMoney => value !== null),
+    oldest_due_date: data.oldest_due_date,
+    items: data.items.map((item) => ({ ...item, amount: money(item.amount) })),
+  };
 };

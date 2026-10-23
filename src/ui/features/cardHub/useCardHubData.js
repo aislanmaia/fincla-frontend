@@ -193,8 +193,8 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
     setDetail((prev) => prev.cardId === selectedCardId && prev.orgId === organizationId ? {
       ...prev,
       history: prev.history ? { ...prev.history, monthly_data: prev.history.monthly_data.map((row) =>
-        row.year === invoice.year && row.month === invoice.month ? { ...row, status: "paid" } : row) } : prev.history,
-      current: prev.current?.month === invoice.key ? { ...prev.current, status: "paid", paid_date: paidDate } : prev.current,
+        row.year === invoice.year && row.month === invoice.month ? { ...row, status: "paid", is_overdue: false } : row) } : prev.history,
+      current: prev.current?.month === invoice.key ? { ...prev.current, status: "paid", is_overdue: false, paid_date: paidDate } : prev.current,
     } : prev);
     setPaidDates((dates) => ({ ...dates, [`${organizationId}:${selectedCardId}:${invoice.key}`]: paidDate }));
     setInvoiceRefresh((value) => value + 1);
@@ -226,5 +226,6 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
     cancelScheduledCycle,
     payInvoice,
     createCard,
+    invoiceVersion: invoiceRefresh,
   };
 }

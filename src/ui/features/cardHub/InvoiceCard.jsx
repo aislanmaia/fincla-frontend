@@ -4,7 +4,8 @@ import { formatMoney } from "../../money/formatMoney.js";
 import { invoiceDashboardPath } from "../../routing/invoiceRoute.js";
 import {
   INVOICE_STATUS,
-  INVOICE_STATUS_LABEL,
+  invoiceStatusLabel,
+  isInvoiceOverdue,
   describeDue,
   describePaidDate,
   monthName,
@@ -18,13 +19,16 @@ export const STATUS_STYLE = {
   closed: { bg: T.amberLight, fg: "#B45309" },
   paid: { bg: T.greenLight, fg: T.green },
   forecast: { bg: T.grayLight, fg: T.inkLight },
+  overdue: { bg: T.redLight, fg: T.red },
 };
 
-export function StatusBadge({ status }) {
-  const style = STATUS_STYLE[status] ?? STATUS_STYLE.forecast;
+/** `overdue` (do servidor) troca Aberta/Fechada por "Vencida"; fatura paga nunca é vencida. */
+export function StatusBadge({ status, overdue = false }) {
+  const isOverdue = isInvoiceOverdue({ status, overdue });
+  const style = STATUS_STYLE[isOverdue ? "overdue" : status] ?? STATUS_STYLE.forecast;
   return (
-    <span data-testid="invoice-status" style={{ ...G, fontSize: 11, fontWeight: 700, color: style.fg, background: style.bg, padding: "2px 8px", borderRadius: 9999, whiteSpace: "nowrap" }}>
-      {INVOICE_STATUS_LABEL[status]}
+    <span data-testid="invoice-status" data-overdue={isOverdue ? "true" : undefined} style={{ ...G, fontSize: 11, fontWeight: 700, color: style.fg, background: style.bg, padding: "2px 8px", borderRadius: 9999, whiteSpace: "nowrap" }}>
+      {invoiceStatusLabel({ status, overdue })}
     </span>
   );
 }
@@ -69,7 +73,7 @@ export function InvoiceCard({ invoice, cardId, currency, selected, width, onSele
     <Root
       href={href}
       role="group"
-      aria-label={`Fatura de ${monthNameLower(invoice.month)} de ${invoice.year}, ${INVOICE_STATUS_LABEL[status]}`}
+      aria-label={`Fatura de ${monthNameLower(invoice.month)} de ${invoice.year}, ${invoiceStatusLabel(invoice)}`}
       aria-current={selected ? "true" : undefined}
       data-testid={`invoice-card-${invoice.key}`}
       data-status={status}
@@ -97,7 +101,7 @@ export function InvoiceCard({ invoice, cardId, currency, selected, width, onSele
             {monthName(invoice.month)} {invoice.year}
           </div>
         </div>
-        <StatusBadge status={status} />
+        <StatusBadge status={status} overdue={invoice.overdue} />
       </div>
 
       <div>

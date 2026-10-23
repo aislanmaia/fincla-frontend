@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { formatMoney } from "../../money/formatMoney.js";
-import { INVOICE_STATUS_LABEL, monthName } from "../cardHub/hubInvoices.js";
+import { invoiceStatusLabel, monthName } from "../cardHub/hubInvoices.js";
 
 const ARROW = {
   width: 30, height: 30, borderRadius: 9, border: `1px solid ${T.border}`, background: T.surface,
@@ -12,7 +12,7 @@ const ARROW = {
 
 export function optionLabel(invoice, currency) {
   const total = invoice.isEmpty ? "sem lançamentos" : invoice.total !== null ? formatMoney(invoice.total, currency) : null;
-  return [`${monthName(invoice.month)} ${invoice.year}`, INVOICE_STATUS_LABEL[invoice.status], total].filter(Boolean).join(" · ");
+  return [`${monthName(invoice.month)} ${invoice.year}`, invoiceStatusLabel(invoice), total].filter(Boolean).join(" · ");
 }
 
 /** Desktop: ‹ mês ano ▾ › — o seletor é um `<select>` nativo (acessível) sob o título. */

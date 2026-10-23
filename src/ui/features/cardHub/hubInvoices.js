@@ -25,6 +25,16 @@ export const INVOICE_STATUS_LABEL = {
   forecast: "Prevista",
 };
 
+/** Fatura não paga com vencimento já passado: derivada pelo servidor (`is_overdue`), nunca um status gravado. */
+export const OVERDUE_LABEL = "Vencida";
+
+/** A única regra de "vencida": o servidor afirmou o atraso e a fatura não está paga nem é só previsão. */
+export const isInvoiceOverdue = (invoice) => invoice?.overdue === true
+  && invoice.status !== INVOICE_STATUS.PAID && invoice.status !== INVOICE_STATUS.FORECAST;
+
+/** Rótulo da fatura: "Vencida" substitui Aberta/Fechada quando a fatura está vencida. */
+export const invoiceStatusLabel = (invoice) => (isInvoiceOverdue(invoice) ? OVERDUE_LABEL : INVOICE_STATUS_LABEL[invoice?.status]);
+
 const pad2 = (n) => String(n).padStart(2, "0");
 export const invoiceKey = (year, month) => `${year}-${pad2(month)}`;
 
@@ -103,7 +113,9 @@ export function buildInvoiceCards({ card, history, current, currentState, future
       status: historyStatus(row.status, key, openKey),
       total: toFiniteOrNull(row.total_amount),
       itemsCount: toFiniteOrNull(row.items_count),
-      dueDate: dueDateFor(row.year, row.month, dueDay, closingDay),
+      // O vencimento do servidor vale (segue o ciclo daquela fatura); a conta local é só o fallback.
+      dueDate: row.due_date || dueDateFor(row.year, row.month, dueDay, closingDay),
+      overdue: row.is_overdue === true,
       paidDate: null,
       limitUsagePercent: null,
       topCategory: row.top_category ? categoryLabelPtForTag({ name: row.top_category }) : null,
@@ -120,6 +132,7 @@ export function buildInvoiceCards({ card, history, current, currentState, future
       total: toFiniteOrNull(current.total_amount),
       itemsCount: toFiniteOrNull(current.items_count),
       dueDate: current.due_date || dueDateFor(currentRef.year, currentRef.month, dueDay, closingDay),
+      overdue: current.is_overdue === true,
       paidDate: current.paid_date || null,
       limitUsagePercent: toFiniteOrNull(current.limit_usage_percent),
       apiVsPercent: toFiniteOrNull(current.month_over_month_change),
@@ -171,7 +184,7 @@ export function buildInvoiceCards({ card, history, current, currentState, future
     const vsPercent = adjacent && entry.total !== null && prev.total !== null && prev.total > 0
       ? Math.round(((entry.total - prev.total) / prev.total) * 100)
       : null;
-    return { ...entry, vsPercent: entry.apiVsPercent ?? vsPercent, prevKey: adjacent ? prev.key : null };
+    return { ...entry, overdue: isInvoiceOverdue(entry), vsPercent: entry.apiVsPercent ?? vsPercent, prevKey: adjacent ? prev.key : null };
   });
 }
 

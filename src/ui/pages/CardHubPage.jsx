@@ -33,6 +33,8 @@ import { NotesDialog } from "../features/cardHub/NotesDialog.jsx";
 import { RecentCardTransactions } from "../features/cardHub/RecentCardTransactions.jsx";
 import { INVOICE_STATUS, summarizeInvoiceCounts } from "../features/cardHub/hubInvoices.js";
 import { useCardHubData } from "../features/cardHub/useCardHubData.js";
+import { useOverdueInvoices } from "../features/cardHub/useOverdueInvoices.js";
+import { buildOverdueInsight } from "../features/cardHub/overdueInvoices.js";
 import { useRecentCardTransactions } from "../features/cardHub/useRecentCardTransactions.js";
 import { useToday } from "../features/cardHub/useToday.js";
 import "../features/cardHub/cardHub.css";
@@ -93,6 +95,11 @@ export function CardHubPage({
     selectedPublicIdFromUrl: search?.[FC.HUB_CARD] ?? null,
   });
   const { selectedCard, selectedCardId, invoiceCards, detail } = hub;
+  const overdueSummary = useOverdueInvoices({
+    organizationId,
+    enabled: shouldUseRealData(organizationId, dataMode),
+    refreshToken: `${transactionsRefreshToken}:${hub.invoiceVersion}`,
+  });
   const recent = useRecentCardTransactions({
     organizationId,
     cardId: selectedCardId,
@@ -140,7 +147,11 @@ export function CardHubPage({
   const mobileOtherInvoices = invoiceCards.filter((invoice) => invoice.key !== hub.initialInvoiceKey);
   const nearestOtherInvoice = mobileOtherInvoices.find((invoice) => invoice.key > hub.initialInvoiceKey)
     ?? mobileOtherInvoices[mobileOtherInvoices.length - 1];
-  const insights = detail.future?.insights ?? [];
+  // O aviso de faturas vencidas vale para a organização toda (todos os cartões) e vem primeiro.
+  const insights = useMemo(() => {
+    const overdue = buildOverdueInsight(overdueSummary, hub.cards);
+    return [...(overdue ? [overdue] : []), ...(detail.future?.insights ?? [])];
+  }, [overdueSummary, hub.cards, detail.future]);
   const committed = useMemo(() => summarizeCommitted(detail.future, currency), [detail.future, currency]);
 
   const openCommitments = selectedCard?.public_id ? () => navigate({ to: "/cards/$cardId/commitments", params: { cardId: selectedCard.public_id } }) : undefined;
@@ -324,7 +335,7 @@ export function CardHubPage({
       {!isMobile && insights.length > 0 && (
         <div style={{ background: T.surface, border: `1px solid ${T.amber}`, borderRadius: 14, padding: "14px 18px" }}>
           <div style={{ ...G, fontSize: 14, fontWeight: 700, color: T.ink, marginBottom: 10 }}>💡 Insights</div>
-          <InsightsList insights={insights} />
+          <InsightsList insights={insights} onOpen={goTo} />
         </div>
       )}
 
@@ -431,7 +442,7 @@ export function CardHubPage({
         onNavigate={(href) => { closeDialog(); goTo(href); }} onClose={closeDialog} />}
       {dialog === "insights" && (
         <HubDialog title="Insights" isMobile={isMobile} onClose={closeDialog}>
-          <div style={{ padding: "16px 20px" }}><InsightsList insights={insights} /></div>
+          <div style={{ padding: "16px 20px" }}><InsightsList insights={insights} onOpen={(href) => { closeDialog(); goTo(href); }} /></div>
         </HubDialog>
       )}
     </div>

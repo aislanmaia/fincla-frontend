@@ -1090,6 +1090,9 @@ export interface InvoiceResponse {
 
 // ===== HISTÓRICO DE FATURAS =====
 export interface InvoiceHistoryItem {
+  /** Vencimento e atraso derivados no servidor (fatura não paga com vencimento já passado). */
+  due_date?: string | null;
+  is_overdue?: boolean;
   year: number;
   month: number;
   month_name: string;
@@ -3098,4 +3101,31 @@ export interface LedgerAssistantResponse {
   scanned: number;
   alert_count: number;
   items: LedgerAssistantItem[];
+}
+
+
+// ===== FATURAS VENCIDAS (Hub) =====
+export interface OverdueMoney {
+  amount: number;
+  currency: string;
+}
+
+export interface OverdueInvoiceItem {
+  credit_card_id: number;
+  card_name: string;
+  invoice_id: number | null;
+  /** Mês de fechamento, `YYYY-MM`: a identidade da fatura. */
+  month: string;
+  due_date: string;
+  amount: OverdueMoney | null;
+  days_overdue: number;
+}
+
+export interface OverdueInvoicesResponse {
+  count: number;
+  /** Só preenchido quando tudo está numa moeda; com duas ou mais é `null` e `by_currency` traz a quebra. */
+  total_amount: OverdueMoney | null;
+  by_currency: OverdueMoney[];
+  oldest_due_date: string | null;
+  items: OverdueInvoiceItem[];
 }
