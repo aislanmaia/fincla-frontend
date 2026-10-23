@@ -19,7 +19,7 @@ const validDay = (value) => /^\d{1,2}$/.test(value) && Number(value) >= 1 && Num
 const validLimit = (value) => !value || /^(?:\d+|\d{1,3}(?:\.\d{3})+)(?:,\d{1,2})?$/.test(value);
 
 /** Edits the fields supported by PATCH /credit-cards/{id}; the settling account is immutable here. */
-export function EditCardDialog({ card, organizationId, isMobile, onSave, onClose }) {
+export function EditCardDialog({ card, organizationId, isMobile, onSave, onCancelScheduled, onClose }) {
   const [brand, setBrand] = useState(card.brand ?? "");
   const [name, setName] = useState(card.description ?? "");
   const [last4, setLast4] = useState(card.last4 ?? "");
@@ -28,6 +28,7 @@ export function EditCardDialog({ card, organizationId, isMobile, onSave, onClose
   const [closingDay, setClosingDay] = useState(card.closing_day == null ? "" : String(card.closing_day));
   const [color, setColor] = useState(card.color ?? "");
   const [saving, setSaving] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState("");
   const [applyFrom, setApplyFrom] = useState(APPLY_FROM.NEXT);
   const [confirmRewrite, setConfirmRewrite] = useState(false);
@@ -38,7 +39,8 @@ export function EditCardDialog({ card, organizationId, isMobile, onSave, onClose
     && /^\d{4}$/.test(last4) && validDay(dueDay)
     && validDay(closingDay) && validLimit(limit.trim())
     && (!color || /^#[0-9a-fA-F]{6}$/.test(color))
-    && !(daysChanged && applyFrom === APPLY_FROM.ALL && !confirmRewrite);
+    && !(daysChanged && applyFrom === APPLY_FROM.ALL && !confirmRewrite)
+    && !cancelling;
 
   async function submit(event) {
     event.preventDefault();
@@ -62,6 +64,15 @@ export function EditCardDialog({ card, organizationId, isMobile, onSave, onClose
       setError(formatCreditCardsApiError(cause));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function cancelScheduled() {
+    setCancelling(true);
+    try {
+      await onCancelScheduled();
+    } finally {
+      setCancelling(false);
     }
   }
 
@@ -94,7 +105,7 @@ export function EditCardDialog({ card, organizationId, isMobile, onSave, onClose
         {input("Dia do fechamento", closingDay, setClosingDay, { inputMode: "numeric", maxLength: 2, placeholder: "ex: 3", required: true })}
         <div style={{ gridColumn: "1 / -1" }}><ClosingDaySuggestion dueDay={dueDay} closingDay={closingDay} onUse={setClosingDay} /></div>
       </div>
-      <ScheduledCycleNotice scheduled={scheduledCycleChange(card)} />
+      <ScheduledCycleNotice scheduled={scheduledCycleChange(card)} onCancel={onCancelScheduled && cancelScheduled} disabled={saving} />
       {daysChanged && <CycleChangeOptions applyFrom={applyFrom} setApplyFrom={setApplyFrom} confirmRewrite={confirmRewrite} setConfirmRewrite={setConfirmRewrite} />}
       {input("Cor do cartão (opcional)", color, setColor, { placeholder: "#RRGGBB", maxLength: 7 })}
       {error && <div role="alert" style={{ ...G, color: T.red, fontSize: 12 }}>{error}</div>}

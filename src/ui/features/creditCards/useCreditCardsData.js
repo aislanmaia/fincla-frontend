@@ -7,6 +7,8 @@ import {
   markInvoicePaidForUi,
   moveInstallmentForUi,
   updateCreditCardForUi,
+  cancelScheduledCycleForUi,
+  isNoScheduledCycleChange,
 } from "../../data/creditCardsAdapter.js";
 import { deleteTransactionForUi } from "../../data/transactionsAdapter.js";
 
@@ -247,6 +249,22 @@ export function useCreditCardsData({
     setState((current) => ({ ...current, isUpdatingCard: false }));
   }, [reload]);
 
+  // O erro volta para quem chamou (o aviso da folha o mostra): não vai para o `error` da página, que a folha
+  // também exibe e repetiria a mensagem.
+  const cancelScheduledCycle = useCallback(async (cardId) => {
+    setState((current) => ({ ...current, isUpdatingCard: true }));
+    try {
+      await cancelScheduledCycleForUi(cardId, organizationId);
+      await reload();
+    } catch (error) {
+      // Já não havia o que cancelar (feito em outra aba): a tela só precisa mostrar o estado de agora.
+      if (!isNoScheduledCycleChange(error)) throw error;
+      await reload();
+    } finally {
+      setState((current) => ({ ...current, isUpdatingCard: false }));
+    }
+  }, [organizationId, reload]);
+
   const markInvoicePaid = useCallback(async (payload) => {
     setState((current) => ({ ...current, isMarkingInvoice: true, error: "" }));
     try {
@@ -304,8 +322,9 @@ export function useCreditCardsData({
     retryCardDetail,
     createCard,
     updateCard,
+    cancelScheduledCycle,
     markInvoicePaid,
     moveInstallment,
     deleteInvoiceItem,
-  }), [createCard, updateCard, markInvoicePaid, moveInstallment, deleteInvoiceItem, reload, ensureCardDetail, retryCardDetail, state]);
+  }), [createCard, updateCard, cancelScheduledCycle, markInvoicePaid, moveInstallment, deleteInvoiceItem, reload, ensureCardDetail, retryCardDetail, state]);
 }

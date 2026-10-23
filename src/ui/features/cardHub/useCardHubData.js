@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  cancelScheduledCycleChange,
   createCreditCard,
   getCurrentCreditCardInvoice,
   getFutureCommitments,
@@ -9,7 +10,7 @@ import {
   listCreditCards,
   updateCreditCard,
 } from "../../../api/creditCards";
-import { mapCreditCardToUi } from "../../data/creditCardsAdapter.js";
+import { isNoScheduledCycleChange, mapCreditCardToUi } from "../../data/creditCardsAdapter.js";
 import { buildInvoiceCards, defaultInvoiceKey } from "./hubInvoices.js";
 
 const HISTORY_MONTHS = 12;
@@ -171,6 +172,22 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
     return updated;
   }, [selectedCardId]);
 
+  const cancelScheduledCycle = useCallback(async () => {
+    let cards;
+    try {
+      cards = [await cancelScheduledCycleChange(selectedCardId, organizationId)];
+    } catch (error) {
+      // Já não havia o que cancelar (feito em outra aba ou aparelho): mostra o estado de agora em vez de travar.
+      if (!isNoScheduledCycleChange(error)) throw error;
+      cards = await listCreditCards(organizationId);
+    }
+    setCardsState((state) => state.orgId !== organizationId ? state : ({
+      ...state,
+      cards: state.cards.map((card) => cards.find((fresh) => fresh.id === card.id) ?? card),
+    }));
+    setInvoiceRefresh((value) => value + 1);
+  }, [organizationId, selectedCardId]);
+
   const payInvoice = useCallback(async (invoice, paidDate) => {
     await markInvoicePaid(selectedCardId, invoice.year, invoice.month, organizationId, paidDate);
     setDetail((prev) => prev.cardId === selectedCardId && prev.orgId === organizationId ? {
@@ -206,6 +223,7 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
     initialInvoiceKey,
     saveNotes,
     updateCard,
+    cancelScheduledCycle,
     payInvoice,
     createCard,
   };

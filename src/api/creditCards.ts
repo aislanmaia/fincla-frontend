@@ -82,6 +82,20 @@ export const updateCreditCard = async (
 };
 
 /**
+ * Cancela a mudança de vencimento/fechamento agendada (a que ainda não começou). 409 se não há nenhuma.
+ */
+export const cancelScheduledCycleChange = async (
+  cardId: number,
+  organizationId: string
+): Promise<CreditCard> => {
+  const response = await apiClient.delete<CreditCard>(
+    `/credit-cards/${cardId}/scheduled-cycle`,
+    { params: { organization_id: organizationId } }
+  );
+  return unwrapMoney(response.data);
+};
+
+/**
  * Deleta um cartão de crédito
  */
 export const deleteCreditCard = async (

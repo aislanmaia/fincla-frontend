@@ -394,7 +394,7 @@ export function CardHubPage({
       )}
       {dialog === "edit-card" && (
         <EditCardDialog key={`${organizationId}:${selectedCard.id}`} card={selectedCard} organizationId={organizationId}
-          isMobile={isMobile} onSave={hub.updateCard} onClose={closeDialog} />
+          isMobile={isMobile} onSave={hub.updateCard} onCancelScheduled={hub.cancelScheduledCycle} onClose={closeDialog} />
       )}
       {dialog === "create-card" && (
         <CreateCardDialog organizationId={organizationId} isMobile={isMobile} onCreate={async (payload) => {

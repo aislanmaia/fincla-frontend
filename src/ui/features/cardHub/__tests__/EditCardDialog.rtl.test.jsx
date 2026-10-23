@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -70,5 +70,48 @@ describe("EditCardDialog — desde quando os novos dias valem", () => {
     await user.click(save());
 
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ apply_from: "all_history" }));
+  });
+});
+
+describe("EditCardDialog — cancelar a mudança agendada", () => {
+  const withSchedule = {
+    due_day: 10, closing_day: 3,
+    cycle_rules: [
+      { effective_year: 1900, effective_month: 1, due_day: 10, closing_day: 3 },
+      { effective_year: 2099, effective_month: 3, due_day: 20, closing_day: 13 },
+    ],
+  };
+
+  it("oferece cancelar quando há mudança agendada e chama o handler do hub", async () => {
+    const onCancelScheduled = vi.fn().mockResolvedValue(undefined);
+    render(<EditCardDialog card={{ ...card, ...withSchedule }} organizationId="org" isMobile={false} onSave={vi.fn()} onCancelScheduled={onCancelScheduled} onClose={() => {}} />);
+
+    expect(screen.getByText(/a partir da fatura de mar\/2099, vence dia 20 e fecha dia 13/)).toBeTruthy();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /Cancelar mudança agendada/ }));
+    await user.click(screen.getByRole("button", { name: /Sim, cancelar a mudança/ }));
+
+    expect(onCancelScheduled).toHaveBeenCalledTimes(1);
+  });
+
+  it("não deixa salvar o formulário enquanto o cancelamento está em andamento", async () => {
+    const onSave = vi.fn();
+    let finish;
+    const onCancelScheduled = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
+    render(<EditCardDialog card={{ ...card, ...withSchedule }} organizationId="org" isMobile={false} onSave={onSave} onCancelScheduled={onCancelScheduled} onClose={() => {}} />);
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: /Cancelar mudança agendada/ }));
+    await user.click(screen.getByRole("button", { name: /Sim, cancelar a mudança/ }));
+
+    expect(screen.getByRole("button", { name: /Salvar/ }).disabled).toBe(true);
+    finish();
+    await waitFor(() => expect(screen.getByRole("button", { name: /Salvar/ }).disabled).toBe(false));
+  });
+
+  it("sem mudança agendada não há o que cancelar", () => {
+    render(<EditCardDialog card={card} organizationId="org" isMobile={false} onSave={vi.fn()} onCancelScheduled={vi.fn()} onClose={() => {}} />);
+
+    expect(screen.queryByRole("button", { name: /Cancelar mudança agendada/ })).toBeNull();
   });
 });
