@@ -92,7 +92,7 @@ import { ensureCurrencyRegistry } from "./money/useCurrencyRegistry.js";
  * duas cópias divergiriam num campo qualquer e só a duplicação sairia errada,
  * silenciosamente.
  */
-function buildTxModalPreConfig(tx) {
+export function buildTxModalPreConfig(tx) {
   const txMethod = modalPaymentKeyFromTransactionUi(tx);
   const isParcelado = tx.parcela && tx.parcela.total > 1;
   // Refund: tx.val é positivo mas o tipo no domínio é 'refund' → drawer abre na
@@ -107,6 +107,8 @@ function buildTxModalPreConfig(tx) {
     desc: tx.desc,
     cat: tx.cat,
     categoryTagId: tx.categoryTagId ?? null,
+    // Categoria apagada: sem isto o formulário não a acha entre as ativas e a troca em silêncio pela primeira.
+    categoryTagIsActive: tx.categoryTagIsActive !== false,
     method: txMethod,
     valorInicial: transactionUiValAbsForEdit(tx),
     recorre: tx.rec,

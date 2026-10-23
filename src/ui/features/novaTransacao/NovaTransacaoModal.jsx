@@ -1883,7 +1883,10 @@ export const NovaTransacaoModal = ({
         editingTransactionIdStr != null);
 
     if (liveOneShot) {
-      if (categoryTagId && !categoryTagIsActive) {
+      // Editar um lançamento cuja categoria foi apagada é permitido: o backend aceita a categoria apagada de volta em
+      // `tag_ids` quando o lançamento já a tem. Para CRIAR, a categoria apagada nem aparece na lista.
+      const editingExisting = editingTransactionIdStr != null || editingTransactionId != null;
+      if (categoryTagId && !categoryTagIsActive && !editingExisting) {
         setTxSubmitError("Selecione uma nova categoria ativa antes de salvar.");
         return;
       }
@@ -2559,10 +2562,10 @@ export const NovaTransacaoModal = ({
                 <div>
                   <div style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid, marginBottom:10 }}>Categoria</div>
                   <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-                    {modalCategoryChoices.map((row) => (
-                      <button key={row.id || row.labelPt} onClick={() => { setCat(row.labelPt); setCategoryTagId(row.id); setDetailTagIds([]); setDetailTagLabelById({}); }}
-                        style={{ ...G, display:"flex", alignItems:"center", gap:5, padding:"8px 12px", borderRadius:99, border:`1.5px solid ${cat === row.labelPt ? T.ink : T.border}`, background:cat === row.labelPt ? T.ink : T.surface, color:cat === row.labelPt ? "#fff" : T.inkMid, fontSize:12, fontWeight:600, cursor:"pointer", transition:"all 0.15s" }}>
-                        <CategoryLucideIcon iconKey={row.iconKey} labelPt={row.labelPt} size={15} color={cat === row.labelPt ? "#fff" : T.inkMid} />
+                    {categorySelectRows.map((row) => (
+                      <button key={row.id || row.labelPt} onClick={() => { if (row.isInactive) return; setCat(row.labelPt); setCategoryTagId(row.id); setDetailTagIds([]); setDetailTagLabelById({}); }}
+                        style={{ ...G, display:"flex", alignItems:"center", gap:5, padding:"8px 12px", borderRadius:99, border:`1.5px solid ${(row.isInactive || cat === row.labelPt) ? T.ink : T.border}`, background:(row.isInactive || cat === row.labelPt) ? T.ink : T.surface, color:(row.isInactive || cat === row.labelPt) ? "#fff" : T.inkMid, fontSize:12, fontWeight:600, cursor:"pointer", transition:"all 0.15s" }}>
+                        <CategoryLucideIcon iconKey={row.iconKey} labelPt={row.labelPt} size={15} color={(row.isInactive || cat === row.labelPt) ? "#fff" : T.inkMid} />
                         {row.labelPt}
                       </button>
                     ))}
