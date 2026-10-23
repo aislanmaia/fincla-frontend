@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { buildTxModalPreConfig } from "../App.jsx";
+import { buildTxModalPreConfig } from "../features/novaTransacao/buildTxModalPreConfig.js";
 
 const row = (over = {}) => ({ id: 203, desc: "Feira", cat: "QA Cat", categoryTagId: "6dd9306c-dae1-4f02-8bbf-ea73887f14ff", categoryTagIsActive: true, val: -25, type: "expense", date: "20/10/2026", dateIsoForEdit: "2026-10-20", tags: [], detailTagIds: [], ...over });
 
