@@ -8,6 +8,7 @@ import { listTransactions } from "../../../api/transactions";
 import {
   buildEditBaselineFromUi,
   editDateIso,
+  installmentEditDateFields,
   buildCreateTransactionPayload,
   buildUpdateTransactionPayload,
   buildTransactionsCsvOptions,
@@ -103,6 +104,8 @@ describe("transactionsAdapter", () => {
     });
 
     it("o formulário mostra a data da compra, não o vencimento da parcela", () => {
+      // um só construtor dos campos de data do modal
+      expect(installmentEditDateFields(mapApiTransactionToUi(parcel({ purchase_date: "2026-10-10" })))).toEqual({ dateIso: "2026-10-10T12:00:00", purchaseDateEdit: true, dueDateLabel: "10/11/2026" });
       const mapped = mapApiTransactionToUi(parcel({ purchase_date: "2026-10-10" }));
       expect(editDateIso(mapped)).toBe("2026-10-10T12:00:00");
       expect(mapped.parcela.vencimento).toBe("10/11/2026");

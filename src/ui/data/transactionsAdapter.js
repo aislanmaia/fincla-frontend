@@ -431,6 +431,19 @@ export function editDateIso(ui) {
   return ui.purchaseDateIso ?? ui.dateIsoForEdit ?? transactionDateIsoFromBrDisplay(ui.date) ?? undefined;
 }
 
+/**
+ * Campos de data do pré-preenchimento do modal de edição, num lugar só (lista, deep link e
+ * hidratação montam o mesmo): a data mostrada, se ela é a da COMPRA e o vencimento da parcela.
+ */
+export function installmentEditDateFields(ui) {
+  const isPurchaseDate = Boolean(ui.purchaseDateIso);
+  return {
+    dateIso: editDateIso(ui),
+    purchaseDateEdit: isPurchaseDate,
+    dueDateLabel: isPurchaseDate ? ui.parcela?.vencimento ?? null : null,
+  };
+}
+
 function mapInstallmentInfo(transaction) {
   const installment = transaction.installment_info?.[0];
   if (!installment) return null;

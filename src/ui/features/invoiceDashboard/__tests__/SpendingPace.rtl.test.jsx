@@ -32,5 +32,8 @@ describe("SpendingPace", () => {
       el = el.parentElement;
     }
     expect(positioned).not.toBeNull();
+    // O contêiner posicionado é o do gráfico, não o cartão inteiro: o título fica fora dele.
+    expect(positioned.contains(screen.getByRole("group", { name: "Escala de valores" }))).toBe(true);
+    expect(positioned.contains(screen.getByRole("heading", { name: "Velocidade de gasto" }))).toBe(false);
   });
 });
