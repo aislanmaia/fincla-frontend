@@ -1,6 +1,7 @@
 import React from "react";
 import { T } from "../../tokens";
 import { G } from "../../typography";
+import { fmtBRL } from "./shared/transactionFormat.js";
 
 /**
  * A pergunta defensiva de uma ação que muda dado — excluir ou liquidar.
@@ -25,12 +26,10 @@ export function deletionScope(tx) {
   return { count: p.total, total: p.valorTotal, atual: p.atual };
 }
 
-function fmtScopeTotal(v) {
-  return "R$\u00a0" + Math.abs(Number(v)).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
-}
-
 export function scopeNotice(scope) {
-  return `Esta é a ${scope.atual}ª de ${scope.count} parcelas de uma compra parcelada. Excluir apaga a compra inteira: ${scope.count} parcelas, ${fmtScopeTotal(scope.total)} no total.`;
+  const head = `Esta é a ${scope.atual}ª de ${scope.count} parcelas de uma compra parcelada. Excluir apaga a compra inteira: ${scope.count} parcelas`;
+  // O total vem de valor × nº de parcelas: pode errar por centavos quando a última leva o resto.
+  return Number.isFinite(Number(scope.total)) ? `${head}, cerca de ${fmtBRL(scope.total)} no total.` : `${head}.`;
 }
 
 export const CONFIRM_COPY = {

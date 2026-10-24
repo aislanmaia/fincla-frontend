@@ -31,7 +31,7 @@ describe("delete confirmation of an installment", () => {
     const text = screen.getByRole("alertdialog").textContent;
     expect(text).toMatch(/compra parcelada/i);
     expect(text).toMatch(/3 parcelas/);
-    expect(text).toMatch(/90,00/);
+    expect(text).toMatch(/cerca de.*90,00/);
     expect(text).toMatch(/2ª de 3/);
   });
   it("inline says the same on mobile", () => {
@@ -39,6 +39,12 @@ describe("delete confirmation of an installment", () => {
     const text = screen.getByRole("alertdialog").textContent;
     expect(text).toMatch(/3 parcelas/);
     expect(text).toMatch(/90,00/);
+  });
+  it("drops the amount instead of printing NaN when the total is unknown", () => {
+    render(<ConfirmActionModal kind="delete" desc="Sofá" tx={{ ...parcel, parcela: { atual: 2, total: 3 } }} />);
+    const text = screen.getByRole("alertdialog").textContent;
+    expect(text).not.toMatch(/NaN/);
+    expect(text).toMatch(/3 parcelas/);
   });
   it("a plain transaction keeps the short copy", () => {
     render(<ConfirmActionModal kind="delete" desc="Mercado" tx={{ desc: "Mercado", type: "expense", valorFormatado: "R$ 10,00" }} />);

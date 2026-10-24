@@ -159,6 +159,16 @@ export function resolveQuickAddDetailTagLabel(id, rows, typedLabel) {
   return resolveDetailTagRowLabel(row) || typedLabel;
 }
 
+/** Aviso sob o campo de data ao editar uma parcela: o campo é a data da COMPRA; o vencimento vai à parte. */
+function InstallmentDueNote({ preConfig }) {
+  if (!preConfig?.purchaseDateEdit) return null;
+  return (
+    <div data-testid="installment-due-note" style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 6 }}>
+      {preConfig.dueDateLabel ? `Vencimento desta parcela: ${preConfig.dueDateLabel}. ` : ""}Mudar a data muda a compra inteira.
+    </div>
+  );
+}
+
 export const NovaTransacaoModal = ({
   open,
   onClose,
@@ -2576,7 +2586,7 @@ export const NovaTransacaoModal = ({
                 </div>
 
                 <div>
-                  <div style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid, marginBottom:10 }}>{preConfig?.dueDateLabel ? "Data da compra" : "Data"}</div>
+                  <div style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid, marginBottom:10 }}>{preConfig?.purchaseDateEdit ? "Data da compra" : "Data"}</div>
                   <LocaleDatePicker
                     id="nova-tx-date-mobile"
                     variant="mobile"
@@ -2587,11 +2597,7 @@ export const NovaTransacaoModal = ({
                       writeStoredNovaTransacaoDate(organizationId, v);
                     }}
                   />
-{preConfig?.dueDateLabel ? (
-  <div data-testid="installment-due-note" style={{ ...G, fontSize:11, color:T.inkMid, marginTop:6 }}>
-    Vencimento desta parcela: {preConfig.dueDateLabel}. Mudar a data muda a compra inteira.
-  </div>
-) : null}
+                  <InstallmentDueNote preConfig={preConfig} />
                 </div>
 
                 {/* Método de pagamento */}
@@ -3593,7 +3599,7 @@ export const NovaTransacaoModal = ({
                     ) : null}
                   </div>
                   <div>
-                    <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>{preConfig?.dueDateLabel ? "Data da compra" : "Data"}</div>
+                    <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>{preConfig?.purchaseDateEdit ? "Data da compra" : "Data"}</div>
                     <LocaleDatePicker
                       id="nova-tx-date-desktop"
                       variant="desktop"
@@ -3604,11 +3610,7 @@ export const NovaTransacaoModal = ({
                         writeStoredNovaTransacaoDate(organizationId, v);
                       }}
                     />
-{preConfig?.dueDateLabel ? (
-  <div data-testid="installment-due-note" style={{ ...G, fontSize:11, color:T.inkMid, marginTop:6 }}>
-    Vencimento desta parcela: {preConfig.dueDateLabel}. Mudar a data muda a compra inteira.
-  </div>
-) : null}
+                  <InstallmentDueNote preConfig={preConfig} />
                   </div>
                 </div>
                 <div>
