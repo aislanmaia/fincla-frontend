@@ -4,7 +4,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { PayControls } from "../PayControls.jsx";
-import { defaultPaidDate } from "../../cardHub/paidOutside.jsx";
+import { defaultPaidDate } from "../../cardHub/paidOutside.js";
 
 afterEach(cleanup);
 
@@ -30,8 +30,8 @@ describe("PayControls — fatura vencida (pagou por fora)", () => {
     expect(screen.getByTestId("mark-paid")).toHaveTextContent("Já paguei — marcar como paga");
     expect(dateButton()).toHaveAttribute("data-date-value", "2026-08-10");
     const notice = screen.getByTestId("paid-outside-notice");
-    expect(notice).toHaveTextContent("nenhum dinheiro é movimentado");
-    expect(notice).toHaveTextContent("O valor sai do seu saldo na data escolhida e o limite do cartão é liberado.");
+    expect(notice).toHaveTextContent("nenhuma cobrança é feita");
+    expect(notice).toHaveTextContent("O valor passa a sair do seu saldo na data escolhida.");
     expect(notice).toHaveTextContent("não marque aqui para não contar duas vezes");
   });
 

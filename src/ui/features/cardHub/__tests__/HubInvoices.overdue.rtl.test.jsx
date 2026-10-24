@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { HubInvoices } from "../HubInvoices.jsx";
@@ -42,5 +42,16 @@ describe("HubInvoices — fatura atual vencida", () => {
     setup(invoice({ overdue: true }), { isMobile: true });
     expect(payButton()).toHaveTextContent("Já paguei");
     expect(screen.getByTestId("paid-outside-notice")).toBeInTheDocument();
+  });
+
+  it("a data escolhida pelo usuário sobrevive a uma atualização que muda o vencimento", async () => {
+    const user = userEvent.setup();
+    const props = { currentKey: "2026-10", cardId: 1, currency: "BRL", isMobile: false, now: NOW, onNavigate: () => {}, onMarkPaid: () => {} };
+    const view = render(<HubInvoices {...props} invoices={[invoice({ overdue: true })]} />);
+    await user.click(dateButton());
+    await user.click(within(screen.getByRole("dialog", { name: "Calendário" })).getByRole("button", { name: "3", exact: true }));
+    expect(dateButton()).toHaveAttribute("data-date-value", "2026-10-03");
+    view.rerender(<HubInvoices {...props} invoices={[invoice({ overdue: true, dueDate: "2026-10-07" })]} />);
+    expect(dateButton()).toHaveAttribute("data-date-value", "2026-10-03");
   });
 });

@@ -28,7 +28,7 @@ describe("buildOverdueInsight", () => {
   });
 
   it("oferece a saída 'Já paguei' junto do link; sem link, sem ação", () => {
-    expect(buildOverdueInsight(summary(), cards).actionLabel).toBe("Já paguei — marcar como paga");
+    expect(buildOverdueInsight(summary(), cards).actionLabel).toBe("Já paguei? Abrir a fatura mais atrasada");
     expect(buildOverdueInsight(summary(), []).actionLabel).toBeNull();
   });
 

@@ -165,7 +165,7 @@ export function useInvoiceDashboardData({ organizationId, cardId, year, month, e
     setMutation({ pending: true, error: "" });
     try {
       const res = await request();
-      patchDetail(id, { status: res.status, paid_date: res.paid_date ?? null });
+      patchDetail(id, { status: res.status, paid_date: res.paid_date ?? null, ...(res.status === "paid" ? { is_overdue: false } : {}) });
       patchHistoryRow(res.status);
       setMutation({ pending: false, error: "" });
       setDetails((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], stale: true } } : prev));

@@ -192,7 +192,7 @@ export function InvoiceDetailBody({
             </div>
             {(status === INVOICE_STATUS.OPEN || status === INVOICE_STATUS.CLOSED || status === INVOICE_STATUS.PAID) && (
               <PayControls
-                key={invoice.key}
+                key={`${invoice.key}:${detail.is_overdue === true}`}
                 status={status}
                 paidDate={detail.paid_date}
                 mutation={mutation}

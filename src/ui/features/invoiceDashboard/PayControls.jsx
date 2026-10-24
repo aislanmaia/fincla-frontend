@@ -6,7 +6,8 @@ import { Btn } from "../../components/primitives";
 import { LocaleDatePicker } from "../../components/LocaleDatePicker.jsx";
 import { APP_UI_LOCALE } from "../../appLocale.js";
 import { dayMonth, localYmd } from "./invoiceFormat.js";
-import { PAID_OUTSIDE_LABEL, PaidOutsideNotice, defaultPaidDate } from "../cardHub/paidOutside.jsx";
+import { PAID_OUTSIDE_LABEL, defaultPaidDate } from "../cardHub/paidOutside.js";
+import { PaidOutsideNotice } from "../cardHub/PaidOutsideNotice.jsx";
 
 /**
  * Pagar / desfazer pagamento de UMA fatura. O estado da fatura vive no hook de

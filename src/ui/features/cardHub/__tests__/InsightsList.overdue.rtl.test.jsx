@@ -10,8 +10,8 @@ afterEach(cleanup);
 describe("InsightsList — fatura vencida", () => {
   it("mostra a ação 'Já paguei' e leva à fatura ao tocar", async () => {
     const onOpen = vi.fn();
-    render(<InsightsList onOpen={onOpen} insights={[{ type: "overdue_invoices", message: "Você tem 1 fatura vencida — R$ 10,00", href: "/cards/x/invoices/2026/8", actionLabel: "Já paguei — marcar como paga" }]} />);
-    expect(screen.getByTestId("insight-action")).toHaveTextContent("Já paguei — marcar como paga");
+    render(<InsightsList onOpen={onOpen} insights={[{ type: "overdue_invoices", message: "Você tem 1 fatura vencida — R$ 10,00", href: "/cards/x/invoices/2026/8", actionLabel: "Já paguei? Abrir a fatura mais atrasada" }]} />);
+    expect(screen.getByTestId("insight-action")).toHaveTextContent("Já paguei? Abrir a fatura mais atrasada");
     await userEvent.setup().click(screen.getByTestId("insight-overdue_invoices"));
     expect(onOpen).toHaveBeenCalledWith("/cards/x/invoices/2026/8");
   });

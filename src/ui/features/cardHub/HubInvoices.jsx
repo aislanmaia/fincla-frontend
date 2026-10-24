@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { T } from "../../tokens";
 import { Btn, Card, ProgBar } from "../../components/primitives.jsx";
 import { LocaleDatePicker } from "../../components/LocaleDatePicker.jsx";
@@ -6,7 +6,8 @@ import { APP_UI_LOCALE } from "../../appLocale.js";
 import { G, NUM } from "../../typography";
 import { formatMoney } from "../../money/formatMoney.js";
 import { InvoiceDashboardLink, StatusBadge } from "./InvoiceCard.jsx";
-import { PAID_OUTSIDE_LABEL, PaidOutsideNotice, defaultPaidDate } from "./paidOutside.jsx";
+import { PAID_OUTSIDE_LABEL, defaultPaidDate } from "./paidOutside.js";
+import { PaidOutsideNotice } from "./PaidOutsideNotice.jsx";
 import { INVOICE_STATUS, describeDue, describePaidDate, monthName, monthShort } from "./hubInvoices.js";
 
 const panel = { padding: 16, minWidth: 0 };
@@ -17,7 +18,11 @@ const dateKey = (date) => {
 };
 
 export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, now, onNavigate, onMarkPaid }) {
-  const [paidDate, setPaidDate] = useState(() => dateKey(now));
+  // O pai remonta este painel por fatura (`key`): o padrão é definido uma vez, e a data que o usuário escolhe não é sobrescrita.
+  const [paidDate, setPaidDate] = useState(() => {
+    const initial = invoices.find((invoice) => invoice.key === currentKey);
+    return initial?.overdue === true ? defaultPaidDate(initial.dueDate, dateKey(now)) : dateKey(now);
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [visibleCount, setVisibleCount] = useState(INITIAL_ROWS);
@@ -64,14 +69,6 @@ export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, 
     if (list.scrollTop + list.clientHeight >= list.scrollHeight - 32) showMore();
   };
   const overdue = current?.overdue === true;
-  // Ao trocar de fatura, a data volta ao padrão: o vencimento se estiver vencida, senão hoje.
-  const currentKeyNow = current?.key;
-  const currentDue = current?.dueDate;
-  const currentOverdue = current?.overdue === true;
-  useEffect(() => {
-    setPaidDate(currentOverdue ? defaultPaidDate(currentDue, dateKey(now)) : dateKey(now));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentKeyNow, currentOverdue, currentDue]);
   const payable = current && !current.isEmpty && current.total !== null
     && (current.status === INVOICE_STATUS.OPEN || current.status === INVOICE_STATUS.CLOSED);
   const money = (invoice) => invoice.isEmpty ? "Sem lançamentos" : formatMoney(invoice.total, currency) ?? "—";
