@@ -87,7 +87,7 @@ export function SpendingPace({ pace, currency, isMobile = false }) {
       </div>
       <p style={{ ...G, fontSize: 12, color: T.inkMid, margin: "4px 0 12px" }}>Acumulado por dia do ciclo da fatura</p>
       {all.length === 0 ? <p style={{ ...G, fontSize: 12, color: T.inkMid }}>O ciclo ainda não começou.</p> : (
-        <>
+        <div style={{ position: "relative", minWidth: 0 }}>
           <div style={{ display: "flex", gap: 18, flexWrap: "wrap", ...G, fontSize: 11, color: T.inkMid }}>
             <span><span style={{ color: T.blue }}>●</span> Ciclo atual</span>
             {pace.previous && <span><span style={{ color: T.inkGhost }}>●</span> Ciclo anterior</span>}
@@ -146,7 +146,7 @@ export function SpendingPace({ pace, currency, isMobile = false }) {
             Dia {activeDay}: {currentPoint ? `atual ${formatMoney(currentPoint.cumulative, currency)}` : "atual ainda sem dados"}
             {pace.previous && ` · anterior ${previousPoint ? formatMoney(previousPoint.cumulative, currency) : "sem dados"}`}
           </div>}
-        </>
+        </div>
       )}
     </Card>
   );
