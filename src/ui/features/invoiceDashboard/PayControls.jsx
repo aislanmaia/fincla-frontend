@@ -6,14 +6,17 @@ import { Btn } from "../../components/primitives";
 import { LocaleDatePicker } from "../../components/LocaleDatePicker.jsx";
 import { APP_UI_LOCALE } from "../../appLocale.js";
 import { dayMonth, localYmd } from "./invoiceFormat.js";
+import { PAID_OUTSIDE_LABEL, defaultPaidDate } from "../cardHub/paidOutside.js";
+import { PaidOutsideNotice } from "../cardHub/PaidOutsideNotice.jsx";
 
 /**
  * Pagar / desfazer pagamento de UMA fatura. O estado da fatura vive no hook de
  * dados; aqui só a data escolhida. `key` por fatura (no pai) zera a data ao trocar.
  */
-export function PayControls({ status, paidDate, mutation, onMarkPaid, onUnmarkPaid, now, stacked = false }) {
+export function PayControls({ status, paidDate, mutation, onMarkPaid, onUnmarkPaid, now, stacked = false, overdue = false, dueDate = null }) {
   const today = localYmd(now);
-  const [date, setDate] = useState(today);
+  // Vencida e não paga: quem já pagou por fora marca com a data do vencimento (editável, nunca futura).
+  const [date, setDate] = useState(() => (overdue ? defaultPaidDate(dueDate, today) : today));
   const pending = mutation.pending;
 
   const wrap = {
@@ -51,9 +54,10 @@ export function PayControls({ status, paidDate, mutation, onMarkPaid, onUnmarkPa
           </div>
         </div>
         <Btn variant="green" small disabled={pending || !date || date > today} onClick={() => onMarkPaid(date)} data-testid="mark-paid">
-          {pending ? "Salvando…" : "✓ Marcar como paga"}
+          {pending ? "Salvando…" : overdue ? `✓ ${PAID_OUTSIDE_LABEL}` : "✓ Marcar como paga"}
         </Btn>
       </div>
+      {overdue && <PaidOutsideNotice />}
       {error}
     </div>
   );

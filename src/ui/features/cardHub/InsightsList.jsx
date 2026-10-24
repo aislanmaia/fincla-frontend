@@ -23,7 +23,10 @@ export function InsightsList({ insights, onOpen }) {
         const body = (
           <>
             <div style={{ width: 8, height: 8, borderRadius: 2, background: tone.dot, flexShrink: 0 }} />
-            <span style={{ ...G, fontSize: 12, color: T.ink, lineHeight: 1.5 }}>{insight.message}</span>
+            <span style={{ ...G, fontSize: 12, color: T.ink, lineHeight: 1.5, flex: 1, minWidth: 0 }}>
+              {insight.message}
+              {insight.href && insight.actionLabel && <span data-testid="insight-action" style={{ display: "block", color: T.blue, fontWeight: 700 }}>{insight.actionLabel} →</span>}
+            </span>
           </>
         );
         return insight.href && onOpen ? (

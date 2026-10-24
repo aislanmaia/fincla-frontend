@@ -6,6 +6,8 @@ import { APP_UI_LOCALE } from "../../appLocale.js";
 import { G, NUM } from "../../typography";
 import { formatMoney } from "../../money/formatMoney.js";
 import { InvoiceDashboardLink, StatusBadge } from "./InvoiceCard.jsx";
+import { PAID_OUTSIDE_LABEL, defaultPaidDate } from "./paidOutside.js";
+import { PaidOutsideNotice } from "./PaidOutsideNotice.jsx";
 import { INVOICE_STATUS, describeDue, describePaidDate, monthName, monthShort } from "./hubInvoices.js";
 
 const panel = { padding: 16, minWidth: 0 };
@@ -16,7 +18,11 @@ const dateKey = (date) => {
 };
 
 export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, now, onNavigate, onMarkPaid }) {
-  const [paidDate, setPaidDate] = useState(() => dateKey(now));
+  // O pai remonta este painel por fatura (`key`): o padrão é definido uma vez, e a data que o usuário escolhe não é sobrescrita.
+  const [paidDate, setPaidDate] = useState(() => {
+    const initial = invoices.find((invoice) => invoice.key === currentKey);
+    return initial?.overdue === true ? defaultPaidDate(initial.dueDate, dateKey(now)) : dateKey(now);
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [visibleCount, setVisibleCount] = useState(INITIAL_ROWS);
@@ -62,6 +68,7 @@ export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, 
     const list = event.currentTarget;
     if (list.scrollTop + list.clientHeight >= list.scrollHeight - 32) showMore();
   };
+  const overdue = current?.overdue === true;
   const payable = current && !current.isEmpty && current.total !== null
     && (current.status === INVOICE_STATUS.OPEN || current.status === INVOICE_STATUS.CLOSED);
   const money = (invoice) => invoice.isEmpty ? "Sem lançamentos" : formatMoney(invoice.total, currency) ?? "—";
@@ -115,7 +122,8 @@ export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, 
               />
             </div>
           </div>
-          <Btn variant="green" disabled={saving || !paidDate} onClick={pay}>{saving ? "Salvando…" : "✓ Marcar como paga"}</Btn>
+          {overdue && <PaidOutsideNotice undoHint />}
+          <Btn variant="green" disabled={saving || !paidDate || paidDate > dateKey(now)} onClick={pay}>{saving ? "Salvando…" : overdue ? `✓ ${PAID_OUTSIDE_LABEL}` : "✓ Marcar como paga"}</Btn>
         </>}
         {error && <div role="alert" style={{ ...G, fontSize: 11, color: T.red }}>{error}</div>}
         <InvoiceDashboardLink cardId={cardId} invoice={current} onNavigate={onNavigate}>Abrir dashboard da fatura →</InvoiceDashboardLink>

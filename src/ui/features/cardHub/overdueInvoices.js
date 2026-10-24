@@ -3,6 +3,8 @@ import { invoiceDashboardPath } from "../../routing/invoiceRoute.js";
 import { parseInvoiceKey } from "./hubInvoices.js";
 
 export const OVERDUE_INSIGHT_TYPE = "overdue_invoices";
+/** O toque abre a fatura mais atrasada; é lá que fica o "Já paguei — marcar como paga". */
+export const OVERDUE_INSIGHT_ACTION = "Já paguei? Abrir a fatura mais atrasada";
 
 /** "R$ 100,00" para uma moeda; "R$ 100,00 + € 20,00" para várias: moedas nunca são somadas. */
 function describeOverdueAmount(summary) {
@@ -25,5 +27,5 @@ export function buildOverdueInsight(summary, cards) {
   const publicId = first ? cards.find((card) => card.id === first.credit_card_id)?.public_id : null;
   const ref = first ? parseInvoiceKey(first.month) : null;
   const href = publicId && ref ? invoiceDashboardPath(publicId, ref.year, ref.month) : null;
-  return { type: OVERDUE_INSIGHT_TYPE, message, href };
+  return { type: OVERDUE_INSIGHT_TYPE, message, href, actionLabel: href ? OVERDUE_INSIGHT_ACTION : null };
 }

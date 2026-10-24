@@ -27,6 +27,11 @@ describe("buildOverdueInsight", () => {
     expect(insight.href).toBe(`/cards/${PUBLIC_ID}/invoices/2026/7`);
   });
 
+  it("oferece a saída 'Já paguei' junto do link; sem link, sem ação", () => {
+    expect(buildOverdueInsight(summary(), cards).actionLabel).toBe("Já paguei? Abrir a fatura mais atrasada");
+    expect(buildOverdueInsight(summary(), []).actionLabel).toBeNull();
+  });
+
   it("sem o cartão carregado mantém o aviso, só sem link", () => {
     const insight = buildOverdueInsight(summary(), []);
     expect(insight.message).toContain("2 faturas vencidas");

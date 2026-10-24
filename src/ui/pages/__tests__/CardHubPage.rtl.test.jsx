@@ -941,7 +941,7 @@ describe("CardHubPage — faturas vencidas", () => {
     mockApi({ overdue: overdueFixture({ total_amount: null, by_currency: [money("100.00"), money("20.00", "EUR")] }) });
     renderHub();
     const text = (await screen.findByTestId("insight-overdue_invoices")).textContent.replace(/\s/g, " ");
-    expect(text).toBe("Você tem 2 faturas vencidas — R$ 100,00 + € 20,00");
+    expect(text).toBe("Você tem 2 faturas vencidas — R$ 100,00 + € 20,00Já paguei? Abrir a fatura mais atrasada →");
   });
 
   it("sem faturas vencidas não há insight", async () => {
