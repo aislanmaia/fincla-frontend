@@ -38,6 +38,7 @@ import { buildOverdueInsight } from "../features/cardHub/overdueInvoices.js";
 import { useRecentCardTransactions } from "../features/cardHub/useRecentCardTransactions.js";
 import { useToday } from "../features/cardHub/useToday.js";
 import "../features/cardHub/cardHub.css";
+import { plural } from "../plural.js";
 
 const OUTLINE_BTN = {
   ...G, display: "flex", alignItems: "center", gap: 6, background: T.surface, border: `1px solid ${T.border}`,
@@ -383,7 +384,7 @@ export function CardHubPage({
               onSelect={setMobileInvoiceKey} onNavigate={goTo} isMobile now={now} openOnCard />}
             <button type="button" onClick={() => setDialog("invoices")} data-testid="all-invoices-open-button"
               style={{ ...OUTLINE_BTN, width: "100%", justifyContent: "space-between" }}>
-              <span>📋 Ver todas as faturas</span><span>{invoiceCards.length} faturas →</span>
+              <span>📋 Ver todas as faturas</span><span>{plural(invoiceCards.length, "fatura", "faturas")} →</span>
             </button>
           </>}
         </>

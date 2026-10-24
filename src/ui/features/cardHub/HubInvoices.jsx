@@ -9,6 +9,7 @@ import { InvoiceDashboardLink, StatusBadge } from "./InvoiceCard.jsx";
 import { PAID_OUTSIDE_LABEL, defaultPaidDate } from "./paidOutside.js";
 import { PaidOutsideNotice } from "./PaidOutsideNotice.jsx";
 import { INVOICE_STATUS, describeDue, describePaidDate, monthName, monthShort } from "./hubInvoices.js";
+import { plural } from "../../plural.js";
 
 const panel = { padding: 16, minWidth: 0 };
 const INITIAL_ROWS = 6;
@@ -107,7 +108,7 @@ export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, 
           <div style={{ ...G, display: "flex", justifyContent: "space-between", fontSize: 11, color: T.inkMid, marginBottom: 5 }}><span>Limite utilizado</span><strong style={NUM}>{Math.round(current.limitUsagePercent)}%</strong></div>
           <ProgBar pct={current.limitUsagePercent} h={4} color={current.limitUsagePercent >= 90 ? T.red : current.limitUsagePercent >= 70 ? T.amber : T.green} />
         </div>}
-        {current.itemsCount > 0 && <span style={{ ...G, ...NUM, fontSize: 11, color: T.inkMid }}>{current.itemsCount} lançamentos{current.topCategory ? ` · maior categoria: ${current.topCategory}` : ""}</span>}
+        {current.itemsCount > 0 && <span style={{ ...G, ...NUM, fontSize: 11, color: T.inkMid }}>{plural(current.itemsCount, "lançamento", "lançamentos")}{current.topCategory ? ` · maior categoria: ${current.topCategory}` : ""}</span>}
         {payable && <>
           <div style={{ ...G, display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: T.inkMid }}>
             <span>Paga em</span>

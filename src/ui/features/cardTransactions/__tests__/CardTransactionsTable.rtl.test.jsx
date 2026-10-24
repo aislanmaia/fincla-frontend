@@ -42,3 +42,14 @@ describe("CardTransactionsTable · alvo de toque das caixas de seleção", () =>
     expect(picked.at(-1)).toEqual(["2"]);
   });
 });
+
+describe("CardTransactionsTable · concordância da contagem", () => {
+  it("1 lançamento no singular, vários no plural", () => {
+    const { unmount } = render(<CardTransactionsTable rows={rows.slice(0, 1)} total={1} cardCurrency="BRL" selected={[]} onSelected={noop} onInspect={noop} onMore={noop} isMobile={false} />);
+    expect(screen.getAllByText(/\b1 lançamento\b(?!s)/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/\b1 lançamentos\b/)).toBeNull();
+    unmount();
+    render(<CardTransactionsTable rows={rows} total={2} cardCurrency="BRL" selected={[]} onSelected={noop} onInspect={noop} onMore={noop} isMobile={false} />);
+    expect(screen.getAllByText(/\b2 lançamentos\b/).length).toBeGreaterThan(0);
+  });
+});

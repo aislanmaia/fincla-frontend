@@ -86,6 +86,7 @@ for (const isMobile of [false, true]) {
       expect(calls.filter((c) => c.startsWith("/v1/credit-cards"))).toHaveLength(3);
       const timeline = screen.getByRole("region", { name: "Linha do tempo do compromisso" });
       expect(within(timeline).getAllByText("Sem dados").length).toBeGreaterThan(0);
+      expect(within(timeline).getByText(/^outubro 2026 · R\$\s*150,00 · 1 parcela \+ 1 recorrência$/)).toBeInTheDocument();
       expect(screen.getByTestId("timeline-bar-2026-09").getAttribute("aria-label")).toMatch(/setembro 2026: R\$\s*70,00/);
       expect(screen.getByTestId("timeline-bar-2026-10").getAttribute("aria-label")).toMatch(/outubro 2026: R\$\s*150,00/);
       expect(Number.parseInt(screen.getByTestId("timeline-bar-2026-09").style.height)).toBeLessThan(Number.parseInt(screen.getByTestId("timeline-bar-2026-10").style.height));
