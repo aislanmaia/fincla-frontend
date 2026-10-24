@@ -16,9 +16,26 @@ import { G } from "../../typography";
 /* O título NÃO repete a descrição da transação: ela aparece logo abaixo, no
    cartão, com ícone, data, categoria e valor. Repetir gastava a linha mais
    visível do modal para dizer de novo o que o cartão já mostra melhor. */
+/* Excluir uma parcela apaga a COMPRA inteira (todas as parcelas): o backend não
+   exclui uma parcela só. O diálogo tem que dizer isso, com a contagem e o total,
+   porque a linha clicada mostra apenas o valor de uma parcela. */
+export function deletionScope(tx) {
+  const p = tx?.parcela;
+  if (!p || !(p.total > 1)) return null;
+  return { count: p.total, total: p.valorTotal, atual: p.atual };
+}
+
+function fmtScopeTotal(v) {
+  return "R$\u00a0" + Math.abs(Number(v)).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+}
+
+export function scopeNotice(scope) {
+  return `Esta é a ${scope.atual}ª de ${scope.count} parcelas de uma compra parcelada. Excluir apaga a compra inteira: ${scope.count} parcelas, ${fmtScopeTotal(scope.total)} no total.`;
+}
+
 export const CONFIRM_COPY = {
   delete: {
-    title: () => "Excluir esta transação?",
+    title: (_desc, scope) => (scope ? "Excluir a compra parcelada?" : "Excluir esta transação?"),
     /* O aviso de irreversibilidade vem em NEGRITO e no fim: é a única coisa
        aqui que a pessoa não pode descobrir depois. */
     detail: "O lançamento some da lista e o valor sai do saldo.",
@@ -44,15 +61,16 @@ export const CONFIRM_COPY = {
   },
 };
 
-export function ConfirmActionInline({ kind, desc, busy = false, onConfirm, onCancel }) {
+export function ConfirmActionInline({ kind, desc, tx = null, busy = false, onConfirm, onCancel }) {
   const copy = CONFIRM_COPY[kind];
   if (!copy) return null;
+  const scope = kind === "delete" ? deletionScope(tx) : null;
   const tone = copy.danger ? T.red : T.ink;
 
   return (
     <div
       role="alertdialog"
-      aria-label={copy.title(desc)}
+      aria-label={copy.title(desc, scope)}
       style={{
         display: "flex",
         flexDirection: "column",
@@ -63,8 +81,11 @@ export function ConfirmActionInline({ kind, desc, busy = false, onConfirm, onCan
       }}
     >
       <div style={{ ...G, fontSize: 14, fontWeight: 800, color: T.ink }}>
-        {copy.title(desc)}
+        {copy.title(desc, scope)}
       </div>
+      {scope && (
+        <div style={{ ...G, fontSize: 12, color: T.ink, fontWeight: 700, lineHeight: 1.45 }}>{scopeNotice(scope)}</div>
+      )}
       <div style={{ ...G, fontSize: 12, color: T.inkMid, lineHeight: 1.45 }}>{copy.detail}</div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button
@@ -146,6 +167,7 @@ export function ConfirmActionModal({ kind, desc, tx = null, busy = false, onConf
 
   if (!copy) return null;
   const tone = copy.danger ? T.red : T.ink;
+  const scope = kind === "delete" ? deletionScope(tx) : null;
 
   return (
     <div
@@ -164,7 +186,7 @@ export function ConfirmActionModal({ kind, desc, tx = null, busy = false, onConf
       <div
         role="alertdialog"
         aria-modal="true"
-        aria-label={`${copy.title()} ${desc}`}
+        aria-label={`${copy.title(desc, scope)} ${desc}`}
         onClick={(e) => e.stopPropagation()}
         style={{
           ...G,
@@ -179,7 +201,7 @@ export function ConfirmActionModal({ kind, desc, tx = null, busy = false, onConf
         }}
       >
         <div style={{ ...G, fontSize: 16, fontWeight: 800, color: T.ink, lineHeight: 1.3 }}>
-          {copy.title()}
+          {copy.title(desc, scope)}
         </div>
 
         {/* O CARTÃO da transação. Ele é o que responde "qual delas?" sem a
@@ -230,6 +252,9 @@ export function ConfirmActionModal({ kind, desc, tx = null, busy = false, onConf
           </div>
         )}
 
+        {scope && (
+          <div style={{ ...G, fontSize: 12.5, color: T.ink, fontWeight: 700, lineHeight: 1.5 }}>{scopeNotice(scope)}</div>
+        )}
         <div style={{ ...G, fontSize: 12.5, color: T.inkMid, lineHeight: 1.5 }}>
           {copy.detail}
           {copy.alerta ? <> <b style={{ color: T.ink }}>{copy.alerta}</b></> : null}
