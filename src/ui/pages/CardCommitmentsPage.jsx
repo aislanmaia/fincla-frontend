@@ -90,7 +90,7 @@ function PeriodPicker({ title, options, selected, onChange }) {
     <span style={{ ...G, fontSize: 11, color: T.inkLight }}>{title}</span>
     <div style={{ display: "inline-flex", flexWrap: "wrap", gap: 2, padding: 3, borderRadius: 9, background: T.grayLight }}>
       {options.map((count) => <Btn key={count} small variant={selected === count ? "dark" : "ghost"} aria-pressed={selected === count} onClick={() => onChange(count)} style={{ padding: "5px 9px", fontSize: 11 }}>
-        {count === 0 ? "Sem histórico" : `${count} meses`}
+        {count === 0 ? "Sem histórico" : plural(count, "mês", "meses")}
       </Btn>)}
     </div>
   </div>;
@@ -221,7 +221,7 @@ function CommitmentsRay({ isMobile, currency, recurring, recurringMonthly, recur
     </div>
     <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(2,minmax(0,1fr))", gap: 12 }}>
       <Card style={cardStyle}><h3 style={panelHeading}>▦ Onde você mais se compromete no mês</h3>{bucketDatesKnown ? <>
-        {dayBuckets.map((bucket) => <div key={bucket.label} style={{ marginTop: 10 }}><div style={row}><span>{bucket.label}</span><strong style={{ ...NUM }}>{moneyValue(bucket.value, currency)} · {bucket.count} itens</strong></div><ProgressLine value={bucket.value} max={Math.max(1, ...dayBuckets.map((entry) => entry.value))} /></div>)}
+        {dayBuckets.map((bucket) => <div key={bucket.label} style={{ marginTop: 10 }}><div style={row}><span>{bucket.label}</span><strong style={{ ...NUM }}>{moneyValue(bucket.value, currency)} · {plural(bucket.count, "item", "itens")}</strong></div><ProgressLine value={bucket.value} max={Math.max(1, ...dayBuckets.map((entry) => entry.value))} /></div>)}
         {monthly > 0 && largestBucket && <div style={{ ...G, fontSize: 11, background: T.blueLight, color: T.inkMid, borderRadius: 8, padding: 9, marginTop: 12 }}>A maior concentração é <b>{largestBucket.label}</b>, com <b>{Math.round(progress(largestBucket.value, monthly))}%</b> do valor comprometido no mês.</div>}
       </> : <p style={{ ...G, fontSize: 12 }}>Datas indisponíveis neste mês.</p>}</Card>
       <Card style={cardStyle}><h3 style={panelHeading}>▥ Média por categoria — {categoryPeriodLabel}</h3>{periodCategories.map(({ id, name, amount }, index) => <div key={id} style={{ marginTop: 10 }}><div style={row}><span>{name}</span><strong style={{ ...NUM }}>{moneyValue(amount / periodCount, currency)}/mês</strong></div><ProgressLine value={amount} max={periodCategories[0]?.amount} color={[T.purple, T.inkMid, T.blue, T.amber, T.green][index % 5]} /></div>)}{periodCategories.length === 0 && <p style={{ ...G, fontSize: 12 }}>{categoryAverageKnown ? "Sem compromissos no período." : "Média indisponível: faltam dados de um ou mais meses do período."}</p>}</Card>
@@ -395,14 +395,14 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
         <PeriodPicker title="Projeção" options={[3, 6, 12]} selected={futureMonths} onChange={setFutureMonths} />
       </Card>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2,minmax(0,1fr))" : "repeat(3, minmax(0, 1fr))", gap }}>
-        <Metric title="Parcelas ativas" value={balanceKnown ? plural(balance.series.length, "item", "itens") : "—"} detail={balanceKnown ? "Compras parceladas com saldo pendente" : "Inventário exato indisponível"} />
+        <Metric title="Parcelas ativas" value={balanceKnown ? plural(balance.series.length, "compra", "compras") : "—"} detail={balanceKnown ? "Compras parceladas com saldo pendente" : "Inventário exato indisponível"} />
         <Metric title="Comprometido em parcelas" value={moneyValue(balanceKnown ? balance.net_amount : null, currency)} testId="committed-total" detail={!currency ? "Moeda do cartão indisponível" : balanceKnown ? `Parcelas pendentes ${moneyValue(balance.gross_amount, currency)} − estornos vinculados ${moneyValue(balance.linked_refunds_amount, currency)}. Recorrências à parte.` : "Saldo exato indisponível; confira a moeda e tente atualizar os dados."} />
         <Metric title="Comprometimento mensal" value={usage === null ? "—" : `${Math.round(usage)}%`} detail={monthly === null ? "Valor mensal indisponível" : card.credit_limit == null ? `${moneyValue(monthly, currency)} · limite não informado` : `${moneyValue(monthly, currency)} de um limite de ${moneyValue(card.credit_limit, currency)}`} detailTestId="monthly-committed" style={isMobile ? { gridColumn: "1 / -1" } : undefined} />
       </div>
       {usage !== null && usage >= 30 && <div role="status" style={{ ...G, fontSize: 12, color: T.inkMid, background: T.amberLight, border: `1px solid ${T.amber}`, borderRadius: 9, padding: 10 }}><b style={{ color: T.amber }}>Comprometimento elevado</b> — {Math.round(usage)}% do limite está comprometido por parcelas e assinaturas neste mês. Considere segurar novas compras parceladas até algumas terminarem.</div>}
       <Card style={cardStyle}><section role="region" aria-label="Linha do tempo do compromisso"><h2 style={{ ...G, margin: "0 0 12px", fontSize: 17 }}>Linha do tempo do compromisso</h2>
         {state.historyError && historyMonths > 0 && <p role="alert" style={{ fontSize: 12 }}>Não foi possível carregar o histórico de compromissos.</p>}
-        <div style={{ ...G, display: "inline-block", alignSelf: "flex-start", background: T.ink, color: T.surface, fontSize: 10, borderRadius: 8, padding: "6px 9px", marginBottom: 7 }}>{monthNow ? period(monthNow) : "Mês atual"} · {moneyValue(monthly, currency)} · {balanceKnown ? `${balance.series.length} parcelas` : "parcelas indisponíveis"} + {inventoryKnown(monthNow, currency) ? `${recurring.length} recorrências` : "recorrências indisponíveis"}</div>
+        <div style={{ ...G, display: "inline-block", alignSelf: "flex-start", background: T.ink, color: T.surface, fontSize: 10, borderRadius: 8, padding: "6px 9px", marginBottom: 7 }}>{monthNow ? period(monthNow) : "Mês atual"} · {moneyValue(monthly, currency)} · {inventoryKnown(monthNow, currency) ? plural(installments(monthNow).length, "parcela", "parcelas") : "parcelas indisponíveis"} + {inventoryKnown(monthNow, currency) ? plural(recurring.length, "recorrência", "recorrências") : "recorrências indisponíveis"}</div>
         <div className="fincla-scroll" style={{ overflowX: "auto" }}><div style={{ display: "flex", alignItems: "flex-end", gap: 8, minWidth: Math.max(520, timeline.length * 74), height: 155 }}>
           {timeline.map((entry) => <div key={entry.key} data-testid={`timeline-${entry.key}`} style={{ flex: 1, display: "flex", flexDirection: "column", justifyContent: "flex-end", textAlign: "center", height: "100%", minWidth: 58 }}>
             <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "center", height: 112 }}>

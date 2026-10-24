@@ -6,6 +6,7 @@ import { Badge, Card } from "../../components/primitives.jsx";
 import { formatMoneyAbs } from "../../money/formatMoney.js";
 import { pickCategoryTagFromApiTransaction } from "../../data/transactionsAdapter.js";
 import { dayKey, forecastEnd, groupSubtotal, installmentOf, remainingInstallments, statusInfo } from "./ledgerModel.js";
+import { plural } from "../../plural.js";
 
 const shortDate = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "short", timeZone: "UTC" });
 const weekDate = new Intl.DateTimeFormat("pt-BR", { weekday: "short", timeZone: "UTC" });
@@ -82,7 +83,7 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
   return <Card as="section" aria-label="Lançamentos do cartão" style={{ minWidth: 0, overflow: "hidden", padding: 0, width: "100%", ...(isMobile ? { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", border: 0, borderRadius: 0, boxShadow: "none", background: T.surface } : {}) }}>
     <div style={{ ...G, display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px 10px", padding: isMobile ? "11px 16px" : "11px 14px", borderBottom: `1px solid ${T.border}`, borderTop: isMobile ? `1px solid ${T.border}` : undefined, fontSize: isMobile ? 12.5 : 12, fontWeight: 700 }}>
       <RowCheckbox aria-label="Selecionar lançamentos carregados" checked={allChecked} onChange={(event) => onSelected(event.target.checked ? [...new Set([...selected, ...rows.map((row) => row.id)])] : selected.filter((id) => !rows.some((row) => row.id === id)))} />
-      <span>{total == null ? `${rows.length} lançamentos` : `${total} lançamentos`}</span>
+      <span data-testid="ledger-count">{plural(total == null ? rows.length : total, "lançamento", "lançamentos")}</span>
       {selected.length > 0 && <span style={{ color: T.blue }}>{selected.length} selecionado{selected.length === 1 ? "" : "s"}{selectionSum ? ` · ${selectionSum}` : ""}{hiddenSelected > 0 ? ` · ${hiddenSelected} em dias recolhidos` : ""}</span>}
       {selected.length > 0 && <span role="toolbar" aria-label="Ações em lote" style={{ marginLeft: "auto", display: "flex", flexWrap: "wrap", gap: "4px 10px", alignItems: "center", minWidth: 0 }}>
         {onCategorize && <button type="button" onClick={onCategorize} style={bulkButton}>Categorizar</button>}
@@ -140,8 +141,8 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
       {hasMore && !loading && !error && <div ref={sentinelRef} aria-hidden="true" style={{ height: 1 }} />}
     </div>
     <div style={{ ...G, ...NUM, borderTop: `1px solid ${T.border}`, padding: "8px 14px", fontSize: 11, color: T.inkMid }}>
-      {total == null ? `${rows.length} lançamentos carregados` : `${rows.length} de ${total} lançamentos`}
-      {!hasMore && !loading && total != null && total > 0 && rows.length === total && <span style={{ marginLeft: 12 }}>Você viu todos os {total} lançamentos</span>}
+      <span data-testid="ledger-footer-count">{total == null ? plural(rows.length, "lançamento carregado", "lançamentos carregados") : `${rows.length} de ${plural(total, "lançamento", "lançamentos")}`}</span>
+      {!hasMore && !loading && total != null && total > 1 && rows.length === total && <span style={{ marginLeft: 12 }}>Você viu todos os {plural(total, "lançamento", "lançamentos")}</span>}
       {hasMore && !loading && <button type="button" onClick={onMore} style={{ ...G, marginLeft: 12, border: 0, background: "none", color: T.blue, fontSize: 11, cursor: "pointer" }}>Carregar mais</button>}
     </div>
   </Card>;

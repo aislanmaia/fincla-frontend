@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 
 import { Card } from "../../components/primitives.jsx";
 import { formatMoney } from "../../money/formatMoney.js";
+import { plural } from "../../plural.js";
 import { T } from "../../tokens.js";
 import { G, NUM } from "../../typography.js";
 
@@ -42,7 +43,7 @@ export function CardOutflowsChart({ outflows, currency, loading, error, message,
       {bars.map((bar) => {
         const display = bar.amount > 0 ? formatMoney(bar.amount, currency) ?? "—" : "—";
         const estimate = bar.projected ? formatMoney(bar.projected.amount, currency) : null;
-        const estimateNote = estimate ? `~${estimate} estimados em ${bar.projected.count === 1 ? "1 recorrência prevista" : `${bar.projected.count} recorrências previstas`}${bar.projected.approximate ? " (algum valor é aproximado)" : ""}` : null;
+        const estimateNote = estimate ? `~${estimate} estimados em ${plural(bar.projected.count, "recorrência prevista", "recorrências previstas")}${bar.projected.approximate ? " (algum valor é aproximado)" : ""}` : null;
         const description = `${bar.title}: ${bar.amount > 0 ? `${display} confirmados` : "nada confirmado ainda"}${estimateNote ? ` + ${estimateNote}` : ""}`;
         const confirmedHeight = bar.amount / ceiling * 100;
         const projectedHeight = estimate ? (bar.projected?.amount ?? 0) / ceiling * 100 : 0;

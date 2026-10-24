@@ -42,3 +42,26 @@ describe("CardTransactionsTable · alvo de toque das caixas de seleção", () =>
     expect(picked.at(-1)).toEqual(["2"]);
   });
 });
+
+describe("CardTransactionsTable · concordância da contagem", () => {
+  const table = (props) => render(<CardTransactionsTable cardCurrency="BRL" selected={[]} onSelected={noop} onInspect={noop} onMore={noop} isMobile={false} {...props} />);
+
+  it("cabeçalho e rodapé: 1 lançamento no singular, vários no plural", () => {
+    const { unmount } = table({ rows: rows.slice(0, 1), total: 1 });
+    expect(screen.getByTestId("ledger-count")).toHaveTextContent(/^1 lançamento$/);
+    expect(screen.getByTestId("ledger-footer-count")).toHaveTextContent(/^1 de 1 lançamento$/);
+    expect(screen.queryByText(/Você viu todos/)).toBeNull();
+    unmount();
+    table({ rows, total: 2 });
+    expect(screen.getByTestId("ledger-count")).toHaveTextContent(/^2 lançamentos$/);
+    expect(screen.getByText("Você viu todos os 2 lançamentos")).toBeInTheDocument();
+  });
+
+  it("sem total, o rodapé conta os carregados com concordância", () => {
+    const { unmount } = table({ rows: rows.slice(0, 1), total: null });
+    expect(screen.getByTestId("ledger-footer-count")).toHaveTextContent(/^1 lançamento carregado$/);
+    unmount();
+    table({ rows, total: null });
+    expect(screen.getByTestId("ledger-footer-count")).toHaveTextContent(/^2 lançamentos carregados$/);
+  });
+});

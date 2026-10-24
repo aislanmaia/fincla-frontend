@@ -3,6 +3,7 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Pencil, Pin, Plus } from "lucide-react";
 
 import { T } from "../tokens";
+import { plural } from "../plural.js";
 import { G } from "../typography";
 import { PageTitle } from "../components/primitives";
 import { KebabMenu } from "../components/KebabMenu.jsx";
@@ -383,7 +384,7 @@ export function CardHubPage({
               onSelect={setMobileInvoiceKey} onNavigate={goTo} isMobile now={now} openOnCard />}
             <button type="button" onClick={() => setDialog("invoices")} data-testid="all-invoices-open-button"
               style={{ ...OUTLINE_BTN, width: "100%", justifyContent: "space-between" }}>
-              <span>📋 Ver todas as faturas</span><span>{invoiceCards.length} faturas →</span>
+              <span>📋 Ver todas as faturas</span><span>{plural(invoiceCards.length, "fatura", "faturas")} →</span>
             </button>
           </>}
         </>
