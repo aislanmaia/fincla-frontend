@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { getCreditCardInvoice, listCreditCards } from "../../api/creditCards";
 import { T } from "../tokens";
+import { plural } from "../plural.js";
 import { G, NUM } from "../typography";
 import { formatMoney } from "../money/formatMoney.js";
 import { Card, PageTitle } from "../components/primitives.jsx";
@@ -151,7 +152,7 @@ export function CardTransactionsPage({ isMobile = false, organizationId = null, 
       {enabled && state.status === "error" && <Notice>Não foi possível carregar a fatura.</Notice>}
       {enabled && state.status === "ok" && detail && <>
         <Card style={{ ...panel, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-          <span style={{ ...G, color: T.inkMid, fontSize: 12 }}>Total da fatura · {detail.items_count} lançamentos</span>
+          <span style={{ ...G, color: T.inkMid, fontSize: 12 }}>Total da fatura · {plural(detail.items_count, "lançamento", "lançamentos")}</span>
           <strong style={{ ...G, ...NUM, fontSize: 22 }}>{money(detail.total_amount, currency) ?? "—"}</strong>
         </Card>
         {!currency && <Notice>Moeda da fatura indisponível; os valores não podem ser exibidos com segurança.</Notice>}
@@ -174,7 +175,7 @@ export function CardTransactionsPage({ isMobile = false, organizationId = null, 
           <label style={{ ...G, display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: T.inkMid, minHeight: 38 }}><input type="checkbox" checked={prefs.grouped && filter.sort[0]?.field === "date"} disabled={filter.sort[0]?.field !== "date"} onChange={(event) => setPreference({ grouped: event.target.checked })} /> Agrupar por data</label>
           </div>
         </Card>
-        <div style={{ ...G, ...NUM, fontSize: 11, color: T.inkLight }}>Exibindo {rows.length} de {detail.items_count} lançamentos. Os filtros não alteram o resumo da fatura.</div>
+        <div style={{ ...G, ...NUM, fontSize: 11, color: T.inkLight }}>Exibindo {rows.length} de {plural(detail.items_count, "lançamento", "lançamentos")}. Os filtros não alteram o resumo da fatura.</div>
         <TransactionList rows={rows} grouped={prefs.grouped && filter.sort[0]?.field === "date"} density={prefs.density} isMobile={isMobile} currency={currency} />
       </>}
     </div>

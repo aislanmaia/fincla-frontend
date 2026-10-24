@@ -44,6 +44,7 @@ import { formatMoneyAbs } from "../money/formatMoney.js";
 import { FC, editTransactionSearch } from "../routing/searchContract.js";
 import { G, NUM } from "../typography.js";
 import { T } from "../tokens.js";
+import { plural } from "../plural.js";
 
 const PAGE_SIZE = 30;
 // O ledger lê 12 faturas para o seletor de recorte.
@@ -529,7 +530,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
       if (format === "csv") { downloadCsv(all, cardScope === "current" ? state.card.currency : null); return null; }
       printHtml(buildPrintHtml({
         title: `Lançamentos · ${cardScope === "all" ? "Todos os cartões" : cardLabel(state.card)}`,
-        subtitle: selectionRows ? `${all.length} lançamento${all.length === 1 ? "" : "s"} selecionado${all.length === 1 ? "" : "s"}` : `${all.length} lançamentos · ${filterSummary().join(" · ")}`,
+        subtitle: selectionRows ? `${all.length} lançamento${all.length === 1 ? "" : "s"} selecionado${all.length === 1 ? "" : "s"}` : `${plural(all.length, "lançamento", "lançamentos")} · ${filterSummary().join(" · ")}`,
         ...buildPdfParts(all, cardScope === "current" ? state.card.currency : null),
       }));
       return null;
@@ -741,7 +742,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
     </div>}
     {filtersOpen && isMobile && <MobileFilterSheet dialogRef={filterDialogRef} closeRef={filterCloseRef} requestCloseRef={filterRequestCloseRef} ariaLabel="Filtros dos lançamentos" onClose={closeFilters}
       title={mobileFacetOpen ? <button type="button" onClick={() => setMobileFacetOpen(false)} style={{ ...G, border: 0, background: "none", color: T.blue, cursor: "pointer", padding: 0, fontSize: 16, fontWeight: 800 }}>← Voltar</button> : "Filtros"}
-      onClear={!mobileFacetOpen && hasActiveFilters ? clearAll : undefined} footer={mobileFacetOpen ? null : `Ver ${state.total ?? "—"} lançamentos`} footerLoading={state.loading}>
+      onClear={!mobileFacetOpen && hasActiveFilters ? clearAll : undefined} footer={mobileFacetOpen ? null : state.total == null ? "Ver — lançamentos" : `Ver ${plural(state.total, "lançamento", "lançamentos")}`} footerLoading={state.loading}>
       {!mobileFacetOpen && <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         <label style={{ ...G, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, fontSize: 11, color: T.inkMid, fontWeight: 700, letterSpacing: "0.04em" }}>ORDENAR POR <Select aria-label="Ordenar lançamentos" value={`${sort.field}:${sort.dir}`} onChange={(event) => { const [field, dir] = event.target.value.split(":"); filter.setSort([{ field, dir }]); }}><option value="date:desc">Data ↓</option><option value="date:asc">Data ↑</option><option value="val:desc">Maior valor</option><option value="val:asc">Menor valor</option><option value="desc:asc">Descrição A–Z</option></Select></label>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 10 }}>

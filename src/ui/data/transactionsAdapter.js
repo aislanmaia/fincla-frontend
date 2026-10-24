@@ -1191,20 +1191,45 @@ function novaTxDateStorageKey(organizationId) {
   return `fincla.v2.novaTxDate.${organizationId || "default"}`;
 }
 
-/** Lê última data escolhida no modal Nova transação (por organização). */
+/**
+ * Lê a última data escolhida no modal Nova transação (por organização).
+ * Só vale no mesmo dia (fuso local) em que foi gravada; no dia seguinte o modal abre em hoje.
+ * Valores antigos (só a data, sem o dia da gravação) não têm como provar o dia e são ignorados.
+ */
 export function readStoredNovaTransacaoDate(organizationId) {
   try {
-    const v = localStorage.getItem(novaTxDateStorageKey(organizationId));
-    if (v && /^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+    const key = novaTxDateStorageKey(organizationId);
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    let o = null;
+    try {
+      o = JSON.parse(raw);
+    } catch (_) {}
+    // Valor antigo (só "YYYY-MM-DD"): não prova o dia da gravação, então sai do armazenamento.
+    if (!o || typeof o !== "object") {
+      localStorage.removeItem(key);
+      return null;
+    }
+    if (
+      o &&
+      typeof o.date === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(o.date) &&
+      o.savedOn === todayLocalYmd()
+    ) {
+      return o.date;
+    }
   } catch (_) {}
   return null;
 }
 
-/** Persiste última data escolhida (YYYY-MM-DD). */
+/** Persiste a última data escolhida (YYYY-MM-DD) junto do dia local da gravação. */
 export function writeStoredNovaTransacaoDate(organizationId, ymd) {
   if (!ymd || !/^\d{4}-\d{2}-\d{2}$/.test(ymd)) return;
   try {
-    localStorage.setItem(novaTxDateStorageKey(organizationId), ymd);
+    localStorage.setItem(
+      novaTxDateStorageKey(organizationId),
+      JSON.stringify({ date: ymd, savedOn: todayLocalYmd() }),
+    );
   } catch (_) {}
 }
 

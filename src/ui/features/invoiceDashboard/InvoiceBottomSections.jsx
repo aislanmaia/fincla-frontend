@@ -8,6 +8,7 @@ import { formatMoney } from "../../money/formatMoney.js";
 import { T } from "../../tokens";
 import { G, NUM } from "../../typography";
 import { invoiceMoneyValue } from "./invoiceMoney.js";
+import { plural } from "../../plural.js";
 
 const title = { ...G, fontSize: 18, fontWeight: 800, margin: 0, color: T.ink };
 const caption = { ...G, fontSize: 12, color: T.inkMid };
@@ -122,7 +123,6 @@ export function InvoiceSummaryTiles({ detail, currency, isMobile, onFilter, note
   const summary = detail?.commitments_summary ?? null;
   const num = (value) => invoiceMoneyValue(value, currency);
   const money = (value) => currency && value !== null ? formatMoney(value, currency) ?? "—" : "—";
-  const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
   return <>
     <section aria-label="Resumo da fatura" style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(4, minmax(0, 1fr))", gap: isMobile ? 10 : 12 }}>
       <SummaryTile label="🔁 Recorrências" value={summary ? money(num(summary.recurring_total)) : "—"} detail={summary ? (summary.recurring_count ? `${plural(summary.recurring_count, "assinatura", "assinaturas")} nesta fatura` : "Nenhuma recorrência nesta fatura") : "Resumo indisponível nesta fatura"} color={T.purple} onOpen={summary?.recurring_count ? () => onFilter("recurring") : undefined} />
