@@ -1198,9 +1198,18 @@ function novaTxDateStorageKey(organizationId) {
  */
 export function readStoredNovaTransacaoDate(organizationId) {
   try {
-    const raw = localStorage.getItem(novaTxDateStorageKey(organizationId));
+    const key = novaTxDateStorageKey(organizationId);
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
-    const o = JSON.parse(raw);
+    let o = null;
+    try {
+      o = JSON.parse(raw);
+    } catch (_) {}
+    // Valor antigo (só "YYYY-MM-DD"): não prova o dia da gravação, então sai do armazenamento.
+    if (!o || typeof o !== "object") {
+      localStorage.removeItem(key);
+      return null;
+    }
     if (
       o &&
       typeof o.date === "string" &&

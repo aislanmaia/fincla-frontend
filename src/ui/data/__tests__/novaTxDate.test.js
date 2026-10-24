@@ -45,3 +45,11 @@ describe("data lembrada do modal Nova transação", () => {
     expect(readStoredNovaTransacaoDate("org-1")).toBeNull();
   });
 });
+
+describe("valor antigo", () => {
+  it("é removido do armazenamento ao ser lido", () => {
+    localStorage.setItem("fincla.v2.novaTxDate.org-2", "2026-10-03");
+    expect(readStoredNovaTransacaoDate("org-2")).toBeNull();
+    expect(localStorage.getItem("fincla.v2.novaTxDate.org-2")).toBeNull();
+  });
+});

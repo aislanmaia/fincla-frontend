@@ -109,7 +109,7 @@ import {
 } from "./novaTransacaoConstants.js";
 
 /** Valor da parcela nas células do seletor: número pt-BR (vírgula), sem símbolo, para caber no botão. */
-const fmtInstallmentCell = v => (Number(v) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtInstallmentCell = v => !Number.isFinite(Number(v)) ? "—" : Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /* ─── NOVA TRANSAÇÃO DRAWER ─────────────────────────────── */
 

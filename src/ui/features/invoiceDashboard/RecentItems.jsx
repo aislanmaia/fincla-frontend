@@ -16,12 +16,13 @@ export function recentItems(items, limit = LIMIT) {
 
 export function RecentItems({ items, totalCount, currency, isMobile, onViewAll }) {
   const rows = recentItems(items);
+  const viewAllCount = totalCount ?? rows.length;
   return (
     <section data-testid="recent-items" aria-label="Itens recentes"
       style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, boxShadow: T.sm, padding: isMobile ? 16 : 20, display: "flex", flexDirection: "column", gap: 8, minWidth: 0 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
         <h3 style={{ ...G, margin: 0, fontSize: 14, fontWeight: 800, color: T.ink }}>🧾 Itens recentes</h3>
-        {onViewAll && <button type="button" onClick={onViewAll} style={{ ...G, border: 0, background: "none", color: T.blue, fontSize: 11, fontWeight: 700, padding: "6px 0", cursor: "pointer", whiteSpace: "nowrap" }}>{(totalCount ?? rows.length) === 1 ? "ver o lançamento" : `ver os ${totalCount ?? rows.length}`} →</button>}
+        {onViewAll && <button type="button" onClick={onViewAll} style={{ ...G, border: 0, background: "none", color: T.blue, fontSize: 11, fontWeight: 700, padding: "6px 0", cursor: "pointer", whiteSpace: "nowrap" }}>{viewAllCount === 1 ? "ver o lançamento" : `ver os ${viewAllCount}`} →</button>}
       </div>
       {rows.length === 0 ? (
         <div style={{ ...G, fontSize: 12, color: T.inkMid }}>Nenhum lançamento nesta fatura.</div>
