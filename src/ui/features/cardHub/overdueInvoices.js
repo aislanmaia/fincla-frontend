@@ -1,6 +1,7 @@
 import { formatMoney } from "../../money/formatMoney.js";
 import { invoiceDashboardPath } from "../../routing/invoiceRoute.js";
 import { parseInvoiceKey } from "./hubInvoices.js";
+import { PAID_OUTSIDE_LABEL } from "./paidOutside.jsx";
 
 export const OVERDUE_INSIGHT_TYPE = "overdue_invoices";
 
@@ -25,5 +26,5 @@ export function buildOverdueInsight(summary, cards) {
   const publicId = first ? cards.find((card) => card.id === first.credit_card_id)?.public_id : null;
   const ref = first ? parseInvoiceKey(first.month) : null;
   const href = publicId && ref ? invoiceDashboardPath(publicId, ref.year, ref.month) : null;
-  return { type: OVERDUE_INSIGHT_TYPE, message, href };
+  return { type: OVERDUE_INSIGHT_TYPE, message, href, actionLabel: href ? PAID_OUTSIDE_LABEL : null };
 }

@@ -200,6 +200,8 @@ export function InvoiceDetailBody({
                 onUnmarkPaid={onUnmarkPaid}
                 now={now}
                 stacked={centered}
+                overdue={detail.is_overdue === true}
+                dueDate={detail.due_date}
               />
             )}
           </div>

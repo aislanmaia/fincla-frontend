@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { T } from "../../tokens";
 import { Btn, Card, ProgBar } from "../../components/primitives.jsx";
 import { LocaleDatePicker } from "../../components/LocaleDatePicker.jsx";
@@ -6,6 +6,7 @@ import { APP_UI_LOCALE } from "../../appLocale.js";
 import { G, NUM } from "../../typography";
 import { formatMoney } from "../../money/formatMoney.js";
 import { InvoiceDashboardLink, StatusBadge } from "./InvoiceCard.jsx";
+import { PAID_OUTSIDE_LABEL, PaidOutsideNotice, defaultPaidDate } from "./paidOutside.jsx";
 import { INVOICE_STATUS, describeDue, describePaidDate, monthName, monthShort } from "./hubInvoices.js";
 
 const panel = { padding: 16, minWidth: 0 };
@@ -62,6 +63,15 @@ export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, 
     const list = event.currentTarget;
     if (list.scrollTop + list.clientHeight >= list.scrollHeight - 32) showMore();
   };
+  const overdue = current?.overdue === true;
+  // Ao trocar de fatura, a data volta ao padrão: o vencimento se estiver vencida, senão hoje.
+  const currentKeyNow = current?.key;
+  const currentDue = current?.dueDate;
+  const currentOverdue = current?.overdue === true;
+  useEffect(() => {
+    setPaidDate(currentOverdue ? defaultPaidDate(currentDue, dateKey(now)) : dateKey(now));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentKeyNow, currentOverdue, currentDue]);
   const payable = current && !current.isEmpty && current.total !== null
     && (current.status === INVOICE_STATUS.OPEN || current.status === INVOICE_STATUS.CLOSED);
   const money = (invoice) => invoice.isEmpty ? "Sem lançamentos" : formatMoney(invoice.total, currency) ?? "—";
@@ -115,7 +125,8 @@ export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, 
               />
             </div>
           </div>
-          <Btn variant="green" disabled={saving || !paidDate} onClick={pay}>{saving ? "Salvando…" : "✓ Marcar como paga"}</Btn>
+          {overdue && <PaidOutsideNotice undoHint />}
+          <Btn variant="green" disabled={saving || !paidDate || paidDate > dateKey(now)} onClick={pay}>{saving ? "Salvando…" : overdue ? `✓ ${PAID_OUTSIDE_LABEL}` : "✓ Marcar como paga"}</Btn>
         </>}
         {error && <div role="alert" style={{ ...G, fontSize: 11, color: T.red }}>{error}</div>}
         <InvoiceDashboardLink cardId={cardId} invoice={current} onNavigate={onNavigate}>Abrir dashboard da fatura →</InvoiceDashboardLink>
