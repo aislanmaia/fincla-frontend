@@ -6,6 +6,7 @@ import {
 import { flushSync } from "react-dom";
 
 import { T } from "../../tokens";
+import { fmtAbs } from "../../formatters.js";
 import { G, NUM } from "../../typography";
 import { Btn } from "../../components/primitives";
 import { CategoryLucideIcon } from "../../components/CategoryLucideIcon.jsx";
@@ -106,6 +107,9 @@ import {
   normalizeFreqRecId,
   novaTxModalInitStamp,
 } from "./novaTransacaoConstants.js";
+
+/** Valor da parcela nas células do seletor: número pt-BR (vírgula), sem símbolo, para caber no botão. */
+const fmtInstallmentCell = v => (Number(v) || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 /* ─── NOVA TRANSAÇÃO DRAWER ─────────────────────────────── */
 
@@ -2228,7 +2232,7 @@ export const NovaTransacaoModal = ({
               { label:"ENCERRAMENTO", val: ENC_LABELS[recurrenceEndKind] || recurrenceEndKind },
               { label:"TIPO DE VALOR", val: recurrenceValueKind === "estimado" ? "≈ Estimado" : "Fixo" },
             ] : [
-              { label:"MODALIDADE", val: method === "credito" ? (isRefund ? "Estorno em cartão (1×)" : (modalityChoice === "avista" ? "À vista (1×)" : `${installments}× de R$ ${(amountNum/installments).toFixed(2)}`)) : "—" },
+              { label:"MODALIDADE", val: method === "credito" ? (isRefund ? "Estorno em cartão (1×)" : (modalityChoice === "avista" ? "À vista (1×)" : `${installments}× de ${fmtAbs(amountNum/installments)}`)) : "—" },
               { label:"CARTÃO",    val: method === "credito" ? cards.find(c=>c.id===cardId)?.nome || "—" : "—" },
             ]),
           ].map((f,i) => (
@@ -2741,7 +2745,7 @@ export const NovaTransacaoModal = ({
                   <div>
                     <div style={{ ...G, fontSize:12, fontWeight:600, color:T.inkMid, marginBottom:10 }}>Modalidade</div>
                     <div style={{ display:"flex", gap:8 }}>
-                      {[["avista","À vista","1× sem juros"],["parcelado","Parcelado","Dividir em installments"]].map(([id, label, sub]) => {
+                      {[["avista","À vista","1× sem juros"],["parcelado","Parcelado","Dividir em parcelas"]].map(([id, label, sub]) => {
                         const disabled = id === "parcelado" && isRecurring;
                         const selected = modalityChoice === id;
                         return (
@@ -3143,7 +3147,7 @@ export const NovaTransacaoModal = ({
                 <div>
                   <div style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em", marginBottom:8 }}>Modalidade</div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
-                    {[["avista","À vista","1× sem juros"],["parcelado","Parcelado","Dividir em installments"]].map(([id,label,sub]) => {
+                    {[["avista","À vista","1× sem juros"],["parcelado","Parcelado","Dividir em parcelas"]].map(([id,label,sub]) => {
                       const disabled = id === "parcelado" && isRecurring;
                       const selected = modalityChoice === id;
                       return (
@@ -3172,13 +3176,13 @@ export const NovaTransacaoModal = ({
                 <div>
                   <div style={{ display:"flex", justifyContent:"space-between", marginBottom:8 }}>
                     <span style={{ ...G, fontSize: 11, fontWeight:700, color:T.inkMid, textTransform:"uppercase", letterSpacing:"0.09em" }}>Parcelas</span>
-                    <span style={{ ...G, ...NUM, fontSize:11, color:T.inkLight }}>R$ {amountNum.toFixed(2)} total</span>
+                    <span style={{ ...G, ...NUM, fontSize:11, color:T.inkLight }}>{fmtAbs(amountNum)} total</span>
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:6 }}>
                     {PARCELA_PRESETS.map(p => (
                       <button key={p} onClick={() => setInstallments(p)} style={{ padding:"8px 4px", borderRadius:8, border:`1.5px solid ${installments===p ? T.ink : T.border}`, background:installments===p ? T.ink : T.surface, cursor:"pointer", textAlign:"center" }}>
                         <div style={{ ...G, fontSize:12, fontWeight:700, color:installments===p?"#fff":T.ink }}>{p}×</div>
-                        <div style={{ ...G, ...NUM, fontSize: 11, color:installments===p?"rgba(255,255,255,0.6)":T.inkLight, marginTop:2 }}>{(amountNum/p).toFixed(2)}</div>
+                        <div style={{ ...G, ...NUM, fontSize: 11, color:installments===p?"rgba(255,255,255,0.6)":T.inkLight, marginTop:2 }}>{fmtInstallmentCell(amountNum/p)}</div>
                       </button>
                     ))}
                     {installmentsCustom ? (
@@ -3207,7 +3211,7 @@ export const NovaTransacaoModal = ({
                             color:"#fff" }} />
                         <div style={{ ...G, ...NUM, fontSize: 11, color:"rgba(255,255,255,0.55)" }}>
                           {installmentsInput && amountNum > 0
-                            ? (amountNum/parseInt(installmentsInput||1)).toFixed(2)
+                            ? fmtInstallmentCell(amountNum/parseInt(installmentsInput||1))
                             : "R$/parc"}
                         </div>
                       </div>
@@ -3223,7 +3227,7 @@ export const NovaTransacaoModal = ({
                         </div>
                         {!PARCELA_PRESETS.includes(installments) && amountNum > 0 && (
                           <div style={{ ...G, ...NUM, fontSize: 11, color:"rgba(255,255,255,0.55)", marginTop:2 }}>
-                            {(amountNum/installments).toFixed(2)}
+                            {fmtInstallmentCell(amountNum/installments)}
                           </div>
                         )}
                       </button>

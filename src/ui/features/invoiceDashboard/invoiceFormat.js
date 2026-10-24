@@ -1,4 +1,5 @@
 import { monthNameLower, parseInvoiceKey } from "../cardHub/hubInvoices.js";
+import { plural } from "../../plural.js";
 
 export function dayMonth(ymd) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(ymd ?? ""));
@@ -10,9 +11,7 @@ export function localYmd(date) {
   return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}`;
 }
 
-export function plural(n, one, many) {
-  return `${n} ${n === 1 ? one : many}`;
-}
+export { plural };
 
 /** "vence em 15 dias (10/11)" a partir do que o servidor calculou (`days_until_due`). */
 export function dueText({ days, dueDate }) {

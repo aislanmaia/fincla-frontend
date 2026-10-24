@@ -273,7 +273,7 @@ it("mostra alívio por parcela que termina, mesmo quando outros compromissos aum
   render(<CardCommitmentsPage organizationId={ORG} />);
   expect((await screen.findAllByText("Notebook")).length).toBeGreaterThan(0);
   expect(screen.getAllByText("R$ 100,00").length).toBeGreaterThan(0);
-  expect(screen.getByText(/1 parcela\(s\) chegam ao fim neste ciclo/)).toBeInTheDocument();
+  expect(screen.getByText(/1 parcela chega ao fim neste ciclo/)).toBeInTheDocument();
   const detail = screen.getByRole("region", { name: "Detalhe por mês" });
   expect(within(detail).getByText("Próximo")).toBeInTheDocument();
   expect(within(detail).getByText("Geladeira")).toBeInTheDocument();

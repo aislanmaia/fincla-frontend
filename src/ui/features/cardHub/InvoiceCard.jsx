@@ -12,6 +12,7 @@ import {
   monthNameLower,
   parseInvoiceKey,
 } from "./hubInvoices.js";
+import { plural } from "../../plural.js";
 
 /* Fechada usa âmbar bem distinto de Aberta (azul): já tem valor final, mas ainda não foi paga. */
 export const STATUS_STYLE = {
@@ -31,10 +32,6 @@ export function StatusBadge({ status, overdue = false }) {
       {invoiceStatusLabel({ status, overdue })}
     </span>
   );
-}
-
-function plural(n, one, many) {
-  return `${n} ${n === 1 ? one : many}`;
 }
 
 /**
