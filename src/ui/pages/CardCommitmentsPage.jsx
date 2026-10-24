@@ -395,7 +395,7 @@ export function CardCommitmentsPage({ organizationId, dataMode = "live", isMobil
         <PeriodPicker title="Projeção" options={[3, 6, 12]} selected={futureMonths} onChange={setFutureMonths} />
       </Card>
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2,minmax(0,1fr))" : "repeat(3, minmax(0, 1fr))", gap }}>
-        <Metric title="Parcelas ativas" value={balanceKnown ? plural(balance.series.length, "item", "itens") : "—"} detail={balanceKnown ? "Compras parceladas com saldo pendente" : "Inventário exato indisponível"} />
+        <Metric title="Parcelas ativas" value={balanceKnown ? plural(balance.series.length, "compra", "compras") : "—"} detail={balanceKnown ? "Compras parceladas com saldo pendente" : "Inventário exato indisponível"} />
         <Metric title="Comprometido em parcelas" value={moneyValue(balanceKnown ? balance.net_amount : null, currency)} testId="committed-total" detail={!currency ? "Moeda do cartão indisponível" : balanceKnown ? `Parcelas pendentes ${moneyValue(balance.gross_amount, currency)} − estornos vinculados ${moneyValue(balance.linked_refunds_amount, currency)}. Recorrências à parte.` : "Saldo exato indisponível; confira a moeda e tente atualizar os dados."} />
         <Metric title="Comprometimento mensal" value={usage === null ? "—" : `${Math.round(usage)}%`} detail={monthly === null ? "Valor mensal indisponível" : card.credit_limit == null ? `${moneyValue(monthly, currency)} · limite não informado` : `${moneyValue(monthly, currency)} de um limite de ${moneyValue(card.credit_limit, currency)}`} detailTestId="monthly-committed" style={isMobile ? { gridColumn: "1 / -1" } : undefined} />
       </div>

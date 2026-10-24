@@ -3,6 +3,7 @@ import { useNavigate, useSearch } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight, Pencil, Pin, Plus } from "lucide-react";
 
 import { T } from "../tokens";
+import { plural } from "../plural.js";
 import { G } from "../typography";
 import { PageTitle } from "../components/primitives";
 import { KebabMenu } from "../components/KebabMenu.jsx";
@@ -38,7 +39,6 @@ import { buildOverdueInsight } from "../features/cardHub/overdueInvoices.js";
 import { useRecentCardTransactions } from "../features/cardHub/useRecentCardTransactions.js";
 import { useToday } from "../features/cardHub/useToday.js";
 import "../features/cardHub/cardHub.css";
-import { plural } from "../plural.js";
 
 const OUTLINE_BTN = {
   ...G, display: "flex", alignItems: "center", gap: 6, background: T.surface, border: `1px solid ${T.border}`,
