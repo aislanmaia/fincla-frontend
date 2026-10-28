@@ -29,7 +29,7 @@ export function deletionScope(tx) {
 export function scopeNotice(scope) {
   const head = `Esta é a ${scope.atual}ª de ${scope.count} parcelas de uma compra parcelada. Excluir apaga a compra inteira: ${scope.count} parcelas`;
   // O total vem de valor × nº de parcelas: pode errar por centavos quando a última leva o resto.
-  return Number.isFinite(Number(scope.total)) ? `${head}, cerca de ${fmtBRL(scope.total)} no total.` : `${head}.`;
+  return scope.total != null && Number.isFinite(Number(scope.total)) ? `${head}, cerca de ${fmtBRL(scope.total)} no total.` : `${head}.`;
 }
 
 export const CONFIRM_COPY = {

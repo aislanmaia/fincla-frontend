@@ -436,7 +436,7 @@ export function editDateIso(ui) {
  * hidratação montam o mesmo): a data mostrada, se ela é a da COMPRA e o vencimento da parcela.
  */
 export function installmentEditDateFields(ui) {
-  const isPurchaseDate = Boolean(ui.purchaseDateIso);
+  const isPurchaseDate = Boolean(ui.purchaseDateIso) && (ui.parcela?.total ?? 0) > 1;
   return {
     dateIso: editDateIso(ui),
     purchaseDateEdit: isPurchaseDate,

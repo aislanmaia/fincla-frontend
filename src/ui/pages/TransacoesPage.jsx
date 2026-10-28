@@ -460,7 +460,6 @@ const DetailPanel = ({
             { label:"Vencimento",   val: tx.parcela.vencimento },
             { label:"Valor parcela",val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:700, color:T.blue }}>{fmtBRL(tx.parcela.valParcela)}/mês</span> },
             { label:"Valor total",  val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:600 }}>{fmtBRL(tx.parcela.valorTotal)}</span> },
-            { label:"Situação da parcela", val: <span style={{ ...G, fontSize:12, fontWeight:700, color: tx.settled ? T.green : T.inkMid }}>{tx.settled ? "Paga" : "A pagar"}</span> },
           ] : []),
         ].map(({label,val})=>(
           /* Na sanfona: rótulo EM CIMA do valor, como no artefato. Lado a lado
