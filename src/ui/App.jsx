@@ -381,7 +381,7 @@ export default function App() {
        */
       onDuplicateTx={(tx) => {
         // `categoryTagIsActive` também sai: a cópia é um lançamento NOVO e precisa de uma categoria ativa (nada de herdar a apagada).
-        const { editingTransactionId, editBaseline, dateIso, categoryTagIsActive, ...base } =
+        const { editingTransactionId, editBaseline, dateIso, categoryTagIsActive, purchaseDateEdit, dueDateLabel, ...base } =
           buildTxModalPreConfig(tx);
         flushSync(() =>
           setModalPreConfig({

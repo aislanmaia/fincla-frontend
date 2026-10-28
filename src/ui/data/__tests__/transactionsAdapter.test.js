@@ -6,6 +6,9 @@ vi.mock("../../../api/transactions", () => ({
 
 import { listTransactions } from "../../../api/transactions";
 import {
+  buildEditBaselineFromUi,
+  editDateIso,
+  installmentEditDateFields,
   buildCreateTransactionPayload,
   buildUpdateTransactionPayload,
   buildTransactionsCsvOptions,
@@ -71,9 +74,48 @@ describe("transactionsAdapter", () => {
         cartao: "",
         vencimento: "10/04/2026",
         valorTotal: 3600,
-        valorPago: 300,
-        valorResidual: 3300,
       },
+    });
+    // "Já pago" por parcela não é derivável de uma linha só: o campo antigo
+    // assumia "as N primeiras parcelas estão pagas". Não pode voltar.
+    expect(mapped.parcela).not.toHaveProperty("valorPago");
+    expect(mapped.parcela).not.toHaveProperty("valorResidual");
+  });
+
+  describe("data da compra na edição de parcela", () => {
+    const parcel = (extra = {}) => ({
+      id: 22,
+      organization_id: "org-1",
+      type: "expense",
+      description: "Sofá",
+      tags: { categoria: [{ id: "tag-cat", name: "Compras" }] },
+      value: 30,
+      payment_method: "credit_card",
+      date: "2026-11-10T00:00:00",
+      status: "confirmed",
+      recurring: false,
+      created_at: "2026-10-10T10:00:00",
+      updated_at: "2026-10-10T10:00:00",
+      credit_card_id: 10,
+      series_id: "series-1",
+      installment_info: [
+        { installment_number: 2, total_installments: 3, due_date: "2026-11-10", amount: 30, ...extra },
+      ],
+    });
+
+    it("o formulário mostra a data da compra, não o vencimento da parcela", () => {
+      // um só construtor dos campos de data do modal
+      expect(installmentEditDateFields(mapApiTransactionToUi(parcel({ purchase_date: "2026-10-10" })))).toEqual({ dateIso: "2026-10-10T12:00:00", purchaseDateEdit: true, dueDateLabel: "10/11/2026" });
+      const mapped = mapApiTransactionToUi(parcel({ purchase_date: "2026-10-10" }));
+      expect(editDateIso(mapped)).toBe("2026-10-10T12:00:00");
+      expect(mapped.parcela.vencimento).toBe("10/11/2026");
+      expect(buildEditBaselineFromUi(mapped).dateIso).toBe("2026-10-10T12:00:00");
+    });
+
+    it("sem purchase_date (backend antigo) mantém a data da linha", () => {
+      const mapped = mapApiTransactionToUi(parcel());
+      expect(mapped.purchaseDateIso).toBeNull();
+      expect(editDateIso(mapped)).toBe(mapped.dateIsoForEdit);
     });
   });
 

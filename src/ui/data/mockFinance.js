@@ -70,9 +70,9 @@ export const TRANSACTIONS = [
   { id:18, desc:"Padaria Dona Benta",   cat:"Alimentação",  val:-42.50,  date:"18/03/2026", icon:"🥐", method:"Débito",       rec:false, status:"confirmado", tags:["padaria"] },
   { id:19, desc:"Uber Eats",           cat:"Alimentação",  val:-73.80,  date:"19/03/2026", icon:"🛵", method:"Crédito",      rec:false, status:"pendente",   tags:["delivery"] },
   { id:20, desc:"Condomínio",           cat:"Moradia",      val:-520,    date:"05/03/2026", icon:"🏢", method:"Boleto",       rec:true,  status:"confirmado", tags:["condomínio"] },
-  { id:21, desc:"MacBook Pro 14pol",       cat:"Compras",      val:-3600,   date:"18/03/2026", icon:"💻", method:"Crédito",      rec:false, status:"confirmado", tags:["eletrônico","trabalho"], parcela:{atual:1, total:12, valParcela:300, cartao:"Nubank •• 1177", vencimento:"10/04/2026", valorTotal:3600, valorPago:300, valorResidual:3300} },
-  { id:22, desc:"Curso de React",         cat:"Educação",     val:-899,    date:"12/03/2026", icon:"📚", method:"Crédito",      rec:false, status:"confirmado", tags:["curso"], parcela:{atual:3, total:6, valParcela:149.83, cartao:"Inter •• 5521", vencimento:"15/04/2026", valorTotal:899, valorPago:449.49, valorResidual:449.51} },
-  { id:23, desc:"iPhone 15 — Americanas", cat:"Compras",      val:-8000,   date:"02/03/2026", icon:"📱", method:"Crédito",      rec:false, status:"confirmado", tags:["eletrônico"], parcela:{atual:5, total:24, valParcela:333.33, cartao:"Nubank •• 1177", vencimento:"10/04/2026", valorTotal:8000, valorPago:1666.65, valorResidual:6333.35} },
+  { id:21, desc:"MacBook Pro 14pol",       cat:"Compras",      val:-3600,   date:"18/03/2026", icon:"💻", method:"Crédito",      rec:false, status:"confirmado", tags:["eletrônico","trabalho"], parcela:{atual:1, total:12, valParcela:300, cartao:"Nubank •• 1177", vencimento:"10/04/2026", valorTotal:3600} },
+  { id:22, desc:"Curso de React",         cat:"Educação",     val:-899,    date:"12/03/2026", icon:"📚", method:"Crédito",      rec:false, status:"confirmado", tags:["curso"], parcela:{atual:3, total:6, valParcela:149.83, cartao:"Inter •• 5521", vencimento:"15/04/2026", valorTotal:899} },
+  { id:23, desc:"iPhone 15 — Americanas", cat:"Compras",      val:-8000,   date:"02/03/2026", icon:"📱", method:"Crédito",      rec:false, status:"confirmado", tags:["eletrônico"], parcela:{atual:5, total:24, valParcela:333.33, cartao:"Nubank •• 1177", vencimento:"10/04/2026", valorTotal:8000} },
 ];
 
 export const RECORRENCIAS = [

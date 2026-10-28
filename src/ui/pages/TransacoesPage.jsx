@@ -460,8 +460,6 @@ const DetailPanel = ({
             { label:"Vencimento",   val: tx.parcela.vencimento },
             { label:"Valor parcela",val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:700, color:T.blue }}>{fmtBRL(tx.parcela.valParcela)}/mês</span> },
             { label:"Valor total",  val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:600 }}>{fmtBRL(tx.parcela.valorTotal)}</span> },
-            { label:"Já pago",      val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:600, color:T.green }}>{fmtBRL(tx.parcela.valorPago)}</span> },
-            { label:"Valor residual",val: <span style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:13, fontWeight:700, color:T.red }}>{fmtBRL(tx.parcela.valorResidual)}</span> },
           ] : []),
         ].map(({label,val})=>(
           /* Na sanfona: rótulo EM CIMA do valor, como no artefato. Lado a lado
@@ -483,23 +481,6 @@ const DetailPanel = ({
             </div>
           )
         ))}
-        {tx.parcela && (
-          <div style={{ padding:"11px 0", borderBottom:`1px solid ${T.border}` }}>
-            <div style={{ ...G, fontSize:12, color:T.inkMid, marginBottom:8 }}>Progresso das parcelas</div>
-            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
-              <span style={{ ...G, fontSize:11, color:T.green, fontWeight:600 }}>{fmtBRL(tx.parcela.valorPago)} pago</span>
-              <span style={{ ...G, fontSize:11, color:T.red, fontWeight:600 }}>{fmtBRL(tx.parcela.valorResidual)} restante</span>
-            </div>
-            <div style={{ height:6, background:T.grayLight, borderRadius:99, overflow:"hidden" }}>
-              <div style={{ height:"100%", width:`${Math.round(tx.parcela.valorPago/tx.parcela.valorTotal*100)}%`,
-                background:`linear-gradient(to right, ${T.green}, ${T.blue})`, borderRadius:99,
-                animation:"progressFill 0.8s cubic-bezier(0.16,1,0.3,1) both" }}/>
-            </div>
-            <div style={{ ...G, fontSize:11, color:T.inkMid, textAlign:"center", marginTop:5 }}>
-              {Math.round(tx.parcela.valorPago/tx.parcela.valorTotal*100)}% pago · {tx.parcela.total - tx.parcela.atual} parcelas restantes
-            </div>
-          </div>
-        )}
         {(tx.tags||[]).length > 0 && (
           <div style={{ padding:"11px 0" }}>
             <div style={{ ...G, fontSize:12, color:T.inkMid, marginBottom:8 }}>Tags</div>
@@ -541,6 +522,7 @@ const DetailPanel = ({
           <ConfirmActionInline
             kind={confirmInline.kind}
             desc={tx.desc}
+            tx={tx}
             busy={confirmInlineBusy}
             onConfirm={() => onConfirmInline?.(confirmInline)}
             onCancel={() => setConfirmInline?.(null)}
@@ -4013,6 +3995,7 @@ function TransacoesPageBody({
             method: confirmAcao.tx.method,
             type: confirmAcao.tx.type,
             valorFormatado: fmtBRL(Math.abs(confirmAcao.tx.val)),
+            parcela: confirmAcao.tx.parcela,
           }}
           busy={deletingBusy}
           onCancel={() => setConfirmAcao(null)}

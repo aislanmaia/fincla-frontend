@@ -1,7 +1,7 @@
 import {
   buildEditBaselineFromUi,
   modalPaymentKeyFromTransactionUi,
-  transactionDateIsoFromBrDisplay,
+  installmentEditDateFields,
   transactionUiValAbsForEdit,
 } from "../../data/transactionsAdapter.js";
 
@@ -33,8 +33,8 @@ export function buildTxModalPreConfig(tx) {
     valorInicial: transactionUiValAbsForEdit(tx),
     recorre: tx.rec,
     editingTransactionId: tx.id,
-    dateIso:
-      tx.dateIsoForEdit ?? transactionDateIsoFromBrDisplay(tx.date) ?? undefined,
+    // Data da compra (parcela de cartão) e vencimento à parte: um só construtor no adaptador.
+    ...installmentEditDateFields(tx),
     cartaoId: tx.cartaoId != null ? tx.cartaoId : undefined,
     modalidade: txMethod === "credito" ? (isParcelado ? "parcelado" : "avista") : undefined,
     parcelas: isParcelado ? tx.parcela.total : undefined,

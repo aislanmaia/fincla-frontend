@@ -413,6 +413,37 @@ function pickTransactionIcon(transaction) {
   return "🧾";
 }
 
+/**
+ * Data da COMPRA de uma parcela de cartão (`installment_info[0].purchase_date`), no formato do
+ * campo de data do formulário. A data guardada na parcela é o vencimento dela; editar a partir
+ * dela fazia o que o usuário digitava virar data de compra e deslocava o cronograma inteiro.
+ * `null` quando a resposta não traz (backend anterior à mudança): aí vale o comportamento antigo.
+ */
+function pickPurchaseDateIsoForEdit(transaction) {
+  const raw = transaction.installment_info?.[0]?.purchase_date;
+  if (raw == null || String(raw).trim() === "") return null;
+  const ymd = ymdFromAnyDateInput(raw);
+  return ymd ? `${ymd}T12:00:00` : null;
+}
+
+/** Data que o formulário de edição mostra: a da compra quando é compra de cartão, senão a da linha. */
+export function editDateIso(ui) {
+  return ui.purchaseDateIso ?? ui.dateIsoForEdit ?? transactionDateIsoFromBrDisplay(ui.date) ?? undefined;
+}
+
+/**
+ * Campos de data do pré-preenchimento do modal de edição, num lugar só (lista, deep link e
+ * hidratação montam o mesmo): a data mostrada, se ela é a da COMPRA e o vencimento da parcela.
+ */
+export function installmentEditDateFields(ui) {
+  const isPurchaseDate = Boolean(ui.purchaseDateIso) && (ui.parcela?.total ?? 0) > 1;
+  return {
+    dateIso: editDateIso(ui),
+    purchaseDateEdit: isPurchaseDate,
+    dueDateLabel: isPurchaseDate ? ui.parcela?.vencimento ?? null : null,
+  };
+}
+
 function mapInstallmentInfo(transaction) {
   const installment = transaction.installment_info?.[0];
   if (!installment) return null;
@@ -420,7 +451,10 @@ function mapInstallmentInfo(transaction) {
   // Occurrence-based: each installment is its own transaction; the purchase total is
   // derived from the installment value × count (installments are equal-split).
   const total = Number((installment.amount * installment.total_installments).toFixed(2));
-  const paid = Number((installment.amount * installment.installment_number).toFixed(2));
+  // Sem valorPago/valorResidual de propósito: a resposta traz só ESTA parcela, nunca a
+  // liquidação das irmãs. O cálculo antigo (valor × nº da parcela) tratava "as N
+  // primeiras" como pagas — "Já pago" com fatura vencida e nada liquidado. A situação
+  // real desta parcela é `settled`, no objeto da linha.
   return {
     atual: installment.installment_number,
     total: installment.total_installments,
@@ -428,8 +462,6 @@ function mapInstallmentInfo(transaction) {
     cartao: "",
     vencimento: formatDate(installment.due_date),
     valorTotal: total,
-    valorPago: paid,
-    valorResidual: Number((total - paid).toFixed(2)),
   };
 }
 
@@ -550,6 +582,7 @@ export function mapApiTransactionToUi(transaction) {
     categoryIconKey: catTag?.icon_key ?? null,
     date: dateLabel,
     dateIsoForEdit: pickDateIsoForEditTransaction(transaction),
+    purchaseDateIso: pickPurchaseDateIsoForEdit(transaction),
     paymentMethodKey: mapApiPaymentMethodToModalKey(transaction.payment_method),
     cartaoId: cardIdFromCharge != null && Number.isFinite(Number(cardIdFromCharge))
       ? Number(cardIdFromCharge)
@@ -1149,8 +1182,7 @@ export function buildEditBaselineFromUi(ui) {
     paymentMethodKey,
     categoryTagId: ui.categoryTagId ?? null,
     detailTagIds: ui.detailTagIds ?? [],
-    dateIso:
-      ui.dateIsoForEdit ?? transactionDateIsoFromBrDisplay(ui.date) ?? undefined,
+    dateIso: editDateIso(ui),
     cardId: ui.cartaoId != null ? Number(ui.cartaoId) : null,
     modality: isCard ? (isParcelado ? "installment" : "cash") : null,
     installmentsCount: isParcelado ? ui.parcela.total : null,

@@ -9,7 +9,7 @@ import {
   isUuidString,
   mapApiTransactionToUi,
   modalPaymentKeyFromTransactionUi,
-  transactionDateIsoFromBrDisplay,
+  installmentEditDateFields,
   transactionUiValAbsForEdit,
 } from "../../data/transactionsAdapter.js";
 import { FC, FC_MODAL } from "../../routing/searchContract.js";
@@ -256,10 +256,7 @@ export function useTransactionModalController({
         valorInicial: transactionUiValAbsForEdit(tx),
         recorre: tx.rec,
         editingTransactionId: tx.id,
-        dateIso:
-          tx.dateIsoForEdit ??
-          transactionDateIsoFromBrDisplay(tx.date) ??
-          undefined,
+        ...installmentEditDateFields(tx),
         cartaoId: tx.cartaoId != null ? tx.cartaoId : undefined,
         modalidade:
           txMethod === "credito"
@@ -304,10 +301,7 @@ export function useTransactionModalController({
           valorInicial: transactionUiValAbsForEdit(ui),
           recorre: ui.rec,
           editingTransactionId: ui.id,
-          dateIso:
-            ui.dateIsoForEdit ??
-            transactionDateIsoFromBrDisplay(ui.date) ??
-            undefined,
+          ...installmentEditDateFields(ui),
           cartaoId: ui.cartaoId != null ? ui.cartaoId : undefined,
           modalidade:
             txMethod === "credito"
