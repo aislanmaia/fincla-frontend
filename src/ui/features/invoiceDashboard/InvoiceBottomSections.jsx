@@ -83,7 +83,7 @@ export function InvoiceBudgetContext({ detail, invoice, budget, currency, isMobi
         : budget.status === "error" ? <Card role="alert" style={{ padding: isMobile ? 16 : 20, ...caption }}>Não foi possível carregar os orçamentos atuais.</Card>
           : rows.length === 0 ? <Card style={{ padding: isMobile ? 16 : 20, ...caption }}>Nenhum orçamento mensal ativo nem gasto por categoria nesta fatura.</Card>
               : <Card style={{ padding: isMobile ? 4 : 0, overflow: "hidden" }}>
-                {!isMobile && <div style={{ display: "grid", gridTemplateColumns: col, gap: 12, padding: "12px 16px", borderBottom: `2px solid ${T.ink}`, ...G, fontSize: 10, fontWeight: 800, color: T.inkMid, textTransform: "uppercase" }}>
+                {!isMobile && <div style={{ display: "grid", gridTemplateColumns: col, gap: 12, padding: "12px 16px", borderBottom: `2px solid ${T.ink}`, ...G, fontSize: 11, fontWeight: 800, color: T.inkMid, textTransform: "uppercase" }}>
                   <span>Categoria</span><span>Teto org.</span><span>Gasto org.</span><span>Sobra org.</span><span>Gasto na fatura</span>
                 </div>}
                 {rows.map(({ category, budget: row }, index) => {

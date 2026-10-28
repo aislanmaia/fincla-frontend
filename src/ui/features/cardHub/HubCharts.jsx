@@ -43,9 +43,9 @@ function HistoryBars({ points, currency, onPick }) {
         className="hub-chart-point"
         style={{ ...G, position: "relative", flex: 1, minWidth: 0, height: "100%", padding: 0, border: 0, background: "none", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "end", gap: 5, cursor: "pointer" }}>
         {point.total === null
-          ? <span style={{ ...G, color: T.inkLight, fontSize: 10, borderBottom: `1px dashed ${T.border}`, width: "min(100%, 54px)", paddingBottom: 3 }}>Sem dados</span>
+          ? <span style={{ ...G, color: T.inkLight, fontSize: 11, borderBottom: `1px dashed ${T.border}`, width: "min(100%, 54px)", paddingBottom: 3 }}>Sem dados</span>
           : <span style={{ width: "100%", maxWidth: 50, height, background: color, opacity: point.status === "forecast" ? 0.7 : 1, borderRadius: "4px 4px 0 0" }} />}
-        <span style={{ ...NUM, color: point.current ? T.ink : T.inkLight, fontSize: 10, fontWeight: point.current ? 800 : 500 }}>{monthShort(point.month)}</span>
+        <span style={{ ...NUM, color: point.current ? T.ink : T.inkLight, fontSize: 11, fontWeight: point.current ? 800 : 500 }}>{monthShort(point.month)}</span>
         <ChartTooltip title={`${monthShort(point.month)} ${point.key.slice(0, 4)}${point.status ? ` · ${LABEL[point.status] ?? "Fatura"}` : ""}`} bottom={Math.min(height, 100) + 22}>
           {point.total === null ? "Sem fatura registrada" : formatMoney(point.total, currency)}
         </ChartTooltip>
@@ -88,7 +88,7 @@ function HistoryLines({ points, currency, activeKey, onPick }) {
       {formatMoney(active.total, currency)}
     </ChartTooltip>}
     </div>
-    <div style={{ display: "flex", justifyContent: "space-between" }}>{points.map((point) => <span key={point.key} style={{ ...NUM, fontSize: 9, color: point.current ? T.ink : T.inkLight, fontWeight: point.current ? 800 : 500 }}>{monthShort(point.month)}</span>)}</div>
+    <div style={{ display: "flex", justifyContent: "space-between" }}>{points.map((point) => <span key={point.key} style={{ ...NUM, fontSize: 11, color: point.current ? T.ink : T.inkLight, fontWeight: point.current ? 800 : 500 }}>{monthShort(point.month)}</span>)}</div>
   </>;
 }
 
@@ -164,7 +164,7 @@ export function CategoryTrendChart({ history, anchorKey, currency, isMobile }) {
                     return amount > 0 && <span key={category} style={{ display: "block", flexShrink: 0, background: PALETTE[index % PALETTE.length], height: Math.max(2, amount / (max || 1) * 105) }} />;
                   })}
                 </span>
-                <span style={{ ...NUM, fontSize: 10, color: T.inkLight }}>{monthShort(month.month)}{entries.some(([, amount]) => amount < 0) ? <span style={{ color: T.red }} aria-hidden="true"> ↺</span> : null}</span>
+                <span style={{ ...NUM, fontSize: 11, color: T.inkLight }}>{monthShort(month.month)}{entries.some(([, amount]) => amount < 0) ? <span style={{ color: T.red }} aria-hidden="true"> ↺</span> : null}</span>
                 <ChartTooltip title={`${monthShort(month.month)} ${month.key.slice(0, 4)}`} bottom={Math.min(stackHeight, 105) + 22}>
                   {entries.length ? <>{entries.map(([category, amount]) => <span key={category} style={{ display: "block" }}>{category}: {formatMoney(amount, currency)}</span>)}
                     <strong style={{ display: "block", borderTop: `1px solid ${T.border}`, marginTop: 5, paddingTop: 5 }}>Líquido: {formatMoney(netTotal, currency)}</strong></> : detail}

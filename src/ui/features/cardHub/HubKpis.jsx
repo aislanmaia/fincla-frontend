@@ -60,7 +60,7 @@ export function LimitTiles({ card, currency, committed = null, isMobile, onEdit,
               style={{ height: 5, background: T.grayLight, borderRadius: 99, overflow: "hidden", marginTop: 9 }}>
               <div style={{ height: "100%", width: `${usedPercent}%`, background: barColor, borderRadius: 99 }} />
             </div>
-            <div style={{ ...G, fontSize: 10, color: T.inkMid, marginTop: 5 }}>{usage}% do limite usado</div>
+            <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 5 }}>{usage}% do limite usado</div>
           </>}
         </> : <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 7, lineHeight: 1.45 }}>
           {hasLimit ? "Não foi possível calcular o valor disponível deste cartão." : "Cadastre o limite do cartão para acompanhar quanto ainda pode usar."}
@@ -70,7 +70,7 @@ export function LimitTiles({ card, currency, committed = null, isMobile, onEdit,
       <div data-testid="kpi-committed" {...openProps} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 14, padding: isMobile ? "12px 14px" : "14px 16px", boxShadow: T.sm, cursor: onOpenCommitments ? "pointer" : "default" }}>
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", columnGap: 8, marginBottom: 5 }}>
           <div style={LABEL}>Comprometido em parcelas</div>
-          {onOpenCommitments && <span style={{ ...G, fontSize: 10, color: T.blue, fontWeight: 700, whiteSpace: "nowrap" }}>ver todas →</span>}
+          {onOpenCommitments && <span style={{ ...G, fontSize: 11, color: T.blue, fontWeight: 700, whiteSpace: "nowrap" }}>ver todas →</span>}
         </div>
         <div style={{ ...G, ...NUM, fontSize: isMobile ? 16 : 19, fontWeight: 800, color: T.blue }}>{committed ? formatMoney(committed.net, currency) ?? "—" : "—"}</div>
         <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 8 }}>

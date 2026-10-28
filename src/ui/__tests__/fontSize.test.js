@@ -34,6 +34,11 @@ const toRel = (p) => p.split("/").join(path.sep);
 const PERMANENT_EXCEPTIONS = new Map(
   [
     [
+      "ui/features/consultant/PortfolioExpenseReportPdf.jsx",
+      "StyleSheet do @react-pdf/renderer: fontSize é pt de PDF em layout A4 " +
+        "fixo, não px de tela (mesma razão do ConsultantReportPdf).",
+    ],
+    [
       "ui/features/consultant/ConsultantReportPdf.jsx",
       "StyleSheet do @react-pdf/renderer: fontSize é pt de PDF em layout A4 " +
         "fixo (várias <Section wrap={false}>), não px de tela — o piso de " +

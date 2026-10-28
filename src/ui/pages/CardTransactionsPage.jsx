@@ -42,11 +42,11 @@ function WeeklyChart({ rows, currency }) {
         <div style={{ display: "flex", alignItems: "end", gap: 12, height: 126 }}>
           {rows.map((row) => (
             <div key={row.label} style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", justifyContent: "end", alignItems: "center", gap: 5 }}>
-              {row.hasData && <span style={{ ...G, ...NUM, fontSize: 10, color: T.inkMid }}>{money(row.amount, currency) ?? "—"}</span>}
-              {!row.hasData && <span style={{ ...G, fontSize: 10, color: T.inkGhost }}>sem dados</span>}
+              {row.hasData && <span style={{ ...G, ...NUM, fontSize: 11, color: T.inkMid }}>{money(row.amount, currency) ?? "—"}</span>}
+              {!row.hasData && <span style={{ ...G, fontSize: 11, color: T.inkGhost }}>sem dados</span>}
               <div role="img" aria-label={`Semana de ${row.label}: ${row.hasData ? money(row.amount, currency) ?? "valor indisponível" : "sem dados registrados"}`}
                 style={{ width: "100%", maxWidth: 58, minHeight: row.hasData ? 3 : 0, height: row.hasData ? `${Math.max(3, Math.abs(row.amount) / ceiling * 76)}px` : 0, background: row.amount < 0 ? T.green : T.blue, borderRadius: "5px 5px 0 0" }} />
-              <span style={{ ...G, fontSize: 10, color: T.inkLight }}>{row.label}</span>
+              <span style={{ ...G, fontSize: 11, color: T.inkLight }}>{row.label}</span>
             </div>
           ))}
         </div>

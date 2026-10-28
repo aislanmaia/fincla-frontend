@@ -44,7 +44,7 @@ export function CardTimeScopePanel({ mode, onMode, options, selectedKeys, onTogg
               <input type="checkbox" checked={checked} disabled={disabled} onChange={() => onToggle(option.key)} aria-label={`Fatura de ${name}`} />
               <span style={{ flex: 1, minWidth: 0, fontSize: 12, fontWeight: 700, textTransform: "capitalize" }}>{name}</span>
               <span style={{ ...NUM, fontSize: 11, color: T.inkMid }}>{disabled ? "sem lançamentos" : option.total != null && currency ? formatMoneyAbs(option.total, currency) : ""}</span>
-              {!disabled && option.status && <span style={{ fontSize: 10, fontWeight: 700, color: option.status === "paid" ? T.inkMid : T.blue }}>{STATUS_LABELS[option.status] ?? option.status}</span>}
+              {!disabled && option.status && <span style={{ fontSize: 11, fontWeight: 700, color: option.status === "paid" ? T.inkMid : T.blue }}>{STATUS_LABELS[option.status] ?? option.status}</span>}
             </label>
           </li>;
         })}

@@ -647,7 +647,7 @@ export function CardAllTransactionsPage({ organizationId = null, dataMode = "liv
   // A tabela do extrato tem colunas demais para ceder espaço: o dock só empurra a partir de 1600px.
   const dockFloating = !isMobile && viewportWidth < 1600;
   const openAssistant = () => setDialog({ kind: "assistant" });
-  const assistantButton = <Btn variant="outGray" onClick={openAssistant}><Sparkles size={14} /> Assistente{insights.alertCount > 0 && <span aria-label={alertsLabel(insights.alertCount)} style={{ ...NUM, marginLeft: 4, background: T.amber, color: "#fff", borderRadius: 99, padding: "0 6px", fontSize: 10 }}>{insights.alertCount}</span>}</Btn>;
+  const assistantButton = <Btn variant="outGray" onClick={openAssistant}><Sparkles size={14} /> Assistente{insights.alertCount > 0 && <span aria-label={alertsLabel(insights.alertCount)} style={{ ...NUM, marginLeft: 4, background: T.amber, color: "#fff", borderRadius: 99, padding: "0 6px", fontSize: 11 }}>{insights.alertCount}</span>}</Btn>;
   const { alerts, alertSummary } = insights;
   // Em "Todos os cartões" o gráfico de saídas some (ele é por fatura de um cartão): o aviso diz por quê e leva de volta.
   const scopeBackFocusRef = useRef(false);

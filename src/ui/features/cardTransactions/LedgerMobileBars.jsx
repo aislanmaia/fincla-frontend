@@ -10,7 +10,7 @@ const iconButton = { width: 44, height: 44, flex: "none", border: 0, padding: 0,
 const barStyle = { ...G, height: 56, boxSizing: "border-box", display: "flex", alignItems: "center", gap: 2, padding: "0 8px 0 4px", background: T.surface, borderBottom: `1px solid ${T.border}` };
 
 function Count({ children, color = T.amber }) {
-  return <span aria-hidden="true" style={{ ...NUM, position: "absolute", top: 5, right: 4, minWidth: 18, height: 18, boxSizing: "border-box", padding: "0 4px", display: "grid", placeItems: "center", background: color, color: T.surface, border: `2px solid ${T.surface}`, borderRadius: 99, fontSize: 10, fontWeight: 700 }}>{children}</span>;
+  return <span aria-hidden="true" style={{ ...NUM, position: "absolute", top: 5, right: 4, minWidth: 18, height: 18, boxSizing: "border-box", padding: "0 4px", display: "grid", placeItems: "center", background: color, color: T.surface, border: `2px solid ${T.surface}`, borderRadius: 99, fontSize: 11, fontWeight: 700 }}>{children}</span>;
 }
 
 /** Barra de app da tela de Lançamentos no celular: voltar, título e ações em ícones; a busca ocupa a barra inteira. */

@@ -38,7 +38,7 @@ export function Headline({ invoice, detail, state, futureRow, currency, centered
           {Number(change) === 0 ? `igual a ${prevName}` : `${up ? "↑" : "↓"} ${Math.abs(Math.round(Number(change)))}% vs ${prevName}`}
           {detail.previous_month_total != null ? ` (${money(detail.previous_month_total)})` : ""}
         </span>}
-        {hasAverageComparison && <span style={{ ...G, fontSize: 10, fontWeight: 700, color: Number(averageChange) > 0 ? T.amber : Number(averageChange) < 0 ? T.green : T.inkMid, background: Number(averageChange) > 0 ? T.amberLight : Number(averageChange) < 0 ? T.greenLight : T.grayLight, borderRadius: 99, padding: "3px 7px" }}>{Number(averageChange) === 0 ? "Igual à média" : `${Math.abs(Number(averageChange)).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% ${Number(averageChange) > 0 ? "acima" : "abaixo"} da média`}</span>}
+        {hasAverageComparison && <span style={{ ...G, fontSize: 11, fontWeight: 700, color: Number(averageChange) > 0 ? T.amber : Number(averageChange) < 0 ? T.green : T.inkMid, background: Number(averageChange) > 0 ? T.amberLight : Number(averageChange) < 0 ? T.greenLight : T.grayLight, borderRadius: 99, padding: "3px 7px" }}>{Number(averageChange) === 0 ? "Igual à média" : `${Math.abs(Number(averageChange)).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}% ${Number(averageChange) > 0 ? "acima" : "abaixo"} da média`}</span>}
         </div>
       )}
     </div>
@@ -70,12 +70,12 @@ function Timeline({ detail, status, now }) {
             <div title="Entre o fechamento e o vencimento" style={{ flex: 1, borderRadius: "0 99px 99px 0", background: cycle.afterDue ? T.red : T.green, opacity: cycle.beforeClosing ? 0.25 : 0.9 }} />
           </div>
           <div style={{ position: "absolute", left: `${Math.min(97, Math.max(3, cycle.todayPct))}%`, top: 0, transform: "translateX(-50%)", display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <span style={{ ...G, fontSize: 10, fontWeight: 700, color: T.ink, lineHeight: "12px" }}>hoje</span>
+            <span style={{ ...G, fontSize: 11, fontWeight: 700, color: T.ink, lineHeight: "12px" }}>hoje</span>
             <span style={{ width: 2, height: 10, background: T.ink }} />
           </div>
           <div style={{ display: "flex", marginTop: 4 }}>
-            <span style={{ ...mutedText, fontSize: 10, flex: "0 0 auto", minWidth: `${cycle.closingPct}%`, textAlign: "right", whiteSpace: "nowrap", paddingRight: 4, boxSizing: "border-box" }}>{cycle.beforeClosing ? "fecha" : "fechou"} {dayMonth(detail.closing_date)}</span>
-            <span style={{ ...mutedText, fontSize: 10, flex: 1, textAlign: "right", whiteSpace: "nowrap" }}>vence {dayMonth(detail.due_date)}</span>
+            <span style={{ ...mutedText, fontSize: 11, flex: "0 0 auto", minWidth: `${cycle.closingPct}%`, textAlign: "right", whiteSpace: "nowrap", paddingRight: 4, boxSizing: "border-box" }}>{cycle.beforeClosing ? "fecha" : "fechou"} {dayMonth(detail.closing_date)}</span>
+            <span style={{ ...mutedText, fontSize: 11, flex: 1, textAlign: "right", whiteSpace: "nowrap" }}>vence {dayMonth(detail.due_date)}</span>
           </div>
         </div>
       ) : pct !== null && pct !== undefined && (

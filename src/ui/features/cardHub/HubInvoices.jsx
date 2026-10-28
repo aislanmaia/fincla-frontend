@@ -90,7 +90,7 @@ export function HubInvoices({ invoices, currentKey, cardId, currency, isMobile, 
     <div className="hub-invoices-grid" style={{ display: "grid", gridTemplateColumns: isMobile ? "minmax(0, 1fr)" : "minmax(280px, 340px) minmax(0, 1fr)", gap: 16, alignItems: "start" }}>
       {current && <div ref={currentRef}><Card data-testid="hub-current-invoice" data-status={current.status} style={{ ...panel, borderColor: T.blue, display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 8 }}>
-          <div><div style={{ ...G, color: T.inkLight, fontSize: 10, fontWeight: 700, textTransform: "uppercase" }}>Fatura atual</div>
+          <div><div style={{ ...G, color: T.inkLight, fontSize: 11, fontWeight: 700, textTransform: "uppercase" }}>Fatura atual</div>
             <strong style={{ ...G, ...NUM, fontSize: 15 }}>{monthName(current.month)} {current.year}</strong></div>
           <StatusBadge status={current.status} overdue={current.overdue} />
         </div>

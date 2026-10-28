@@ -48,13 +48,13 @@ export function CardOutflowsChart({ outflows, currency, loading, error, message,
         const confirmedHeight = bar.amount / ceiling * 100;
         const projectedHeight = estimate ? (bar.projected?.amount ?? 0) / ceiling * 100 : 0;
         const body = <>
-          <span style={{ ...G, ...NUM, fontSize: 10, color: T.inkMid, whiteSpace: "nowrap" }}>{display}</span>
-          {estimate && <span data-testid="outflow-estimate" style={{ ...G, ...NUM, fontSize: 10, color: T.blue, fontStyle: "italic", whiteSpace: "nowrap" }}>+ ~{estimate}</span>}
+          <span style={{ ...G, ...NUM, fontSize: 11, color: T.inkMid, whiteSpace: "nowrap" }}>{display}</span>
+          {estimate && <span data-testid="outflow-estimate" style={{ ...G, ...NUM, fontSize: 11, color: T.blue, fontStyle: "italic", whiteSpace: "nowrap" }}>+ ~{estimate}</span>}
           <span aria-hidden="true" style={{ width: "100%", maxWidth: 72, display: "flex", flexDirection: "column", justifyContent: "end" }}>
             {projectedHeight > 0 && <span style={{ display: "block", height: `${Math.max(2, projectedHeight)}px`, borderRadius: "6px 6px 0 0", border: `1px dashed ${bar.selected ? T.blue : T.border}`, borderBottom: 0, background: `repeating-linear-gradient(135deg, ${bar.selected ? `${T.blue}55` : T.border} 0 3px, transparent 3px 7px)` }} />}
             {(bar.amount > 0 || projectedHeight === 0) && <span style={{ display: "block", height: `${Math.max(2, confirmedHeight)}px`, borderRadius: projectedHeight > 0 ? 0 : "6px 6px 0 0", background: bar.selected ? T.blue : T.grayLight, border: bar.selected ? 0 : `1px solid ${T.border}` }} />}
           </span>
-          <span style={{ ...G, ...NUM, fontSize: 10, color: bar.selected ? T.ink : T.inkMid, fontWeight: bar.selected ? 700 : 400 }}>{bar.label}</span>
+          <span style={{ ...G, ...NUM, fontSize: 11, color: bar.selected ? T.ink : T.inkMid, fontWeight: bar.selected ? 700 : 400 }}>{bar.label}</span>
         </>;
         // Largura mínima por fatura: com muitas barras o gráfico rola em vez de sobrepor valores e meses (semanas são poucas e cabem).
         const cell = { flex: weekly ? 1 : "1 0 84px", minWidth: weekly ? 0 : undefined, height: "100%", display: "flex", flexDirection: "column", justifyContent: "end", alignItems: "center", gap: 4 };

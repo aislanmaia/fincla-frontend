@@ -39,7 +39,7 @@ function CategoryRow({ row, color, sum, currency, state, onToggle }) {
   const content = <>
     <span aria-hidden="true" style={{ width: 9, height: 9, borderRadius: 99, flex: "none", background: color }} />
     <span style={{ ...G, flex: 1, minWidth: 0, fontSize: 11, textAlign: "left", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: selected ? 700 : 400 }} title={row.category}>{row.category}</span>
-    <span style={{ ...G, ...NUM, fontSize: 10, color: T.inkMid }}>{percent}%</span>
+    <span style={{ ...G, ...NUM, fontSize: 11, color: T.inkMid }}>{percent}%</span>
     <strong style={{ ...G, ...NUM, fontSize: 11, whiteSpace: "nowrap" }}>{formatMoney(row.amount, currency) ?? "—"}</strong>
   </>;
   const rowStyle = { display: "flex", alignItems: "center", gap: 7, width: "100%", minHeight: 26, padding: "2px 6px", borderRadius: 7, border: 0, background: selected ? T.blueLight : hover && action ? T.grayLight : "none", color: T.ink, boxSizing: "border-box" };

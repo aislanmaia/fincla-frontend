@@ -47,7 +47,7 @@ function DayHeader({ label, count, subtotal, collapsible, collapsed, selectedCou
 const bulkButton = { ...G, border: 0, background: "none", color: T.blue, cursor: "pointer", textDecoration: "underline", fontSize: 11 };
 // O cabeçalho do dia gruda logo abaixo do cabeçalho de colunas (desktop), senão ele ficaria coberto e sem clique.
 const COLUMN_HEADER_HEIGHT = 30;
-const COLUMNS = "22px 58px minmax(140px,2.2fr) minmax(96px,1fr) 62px 96px 70px 92px 86px";
+const COLUMNS = "22px 58px minmax(140px,2.2fr) minmax(96px,1fr) 62px 96px 92px 92px 86px";
 
 /** A caixa nativa (13 px) é pequena demais para o dedo: o rótulo estende a área de toque para 28 px (WCAG 2.2, 2.5.8) sem mudar o desenho nem ocupar espaço (a margem negativa devolve o excesso). */
 function RowCheckbox(props) {
@@ -93,7 +93,7 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
       </span>}
     </div>
     <div ref={scrollerRef} className="fincla-scroll" style={{ ...(isMobile ? { flex: 1, minHeight: 0 } : { maxHeight: maxHeight == null ? 560 : Math.max(100, maxHeight - 82) }), overflowY: "auto", overflowX: "hidden" }}>
-      {!isMobile && <div aria-hidden="true" style={{ ...G, display: "grid", gridTemplateColumns: COLUMNS, gap: 10, padding: "0 12px", height: COLUMN_HEADER_HEIGHT, boxSizing: "border-box", alignItems: "center", borderBottom: `1px solid ${T.border}`, background: T.bg, fontSize: 10, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", position: "sticky", top: 0, zIndex: 3 }}><span /><span>Data</span><span>Descrição</span><span>Categoria</span><span>Parcela</span><span>Restam</span><span>Fim previsto</span><span style={{ textAlign: "right" }}>Valor</span><span>Status</span></div>}
+      {!isMobile && <div aria-hidden="true" style={{ ...G, display: "grid", gridTemplateColumns: COLUMNS, gap: 10, padding: "0 12px", height: COLUMN_HEADER_HEIGHT, boxSizing: "border-box", alignItems: "center", borderBottom: `1px solid ${T.border}`, background: T.bg, fontSize: 11, fontWeight: 700, color: T.inkMid, textTransform: "uppercase", whiteSpace: "nowrap", position: "sticky", top: 0, zIndex: 3 }}><span /><span>Data</span><span>Descrição</span><span>Categoria</span><span>Parcela</span><span>Restam</span><span>Fim previsto</span><span style={{ textAlign: "right" }}>Valor</span><span>Status</span></div>}
       <div role="list">
         {groups.map((group) => <div key={group.key}>
           {grouped && (() => {
@@ -109,28 +109,28 @@ export function CardTransactionsTable({ rows, total, cardCurrency, loading, hasM
               const rest = remainingInstallments(row);
               return <div key={row.id} role="listitem" style={{ display: "grid", gridTemplateColumns: COLUMNS, gap: 10, alignItems: "center", padding: rowPadding, borderBottom: `1px solid ${T.border}`, background: inspected?.id === row.id ? T.blueLight : T.surface, minWidth: 0, ...G, fontSize: 11 }}>
                 <RowCheckbox aria-label={`Selecionar ${row.description}`} checked={selected.includes(row.id)} onChange={() => onSelected(selected.includes(row.id) ? selected.filter((id) => id !== row.id) : [...selected, row.id])} />
-                <div style={{ ...NUM, fontSize: 10, lineHeight: 1.25, color: T.inkMid }}><strong style={{ display: "block", color: T.ink, fontSize: 12, whiteSpace: "nowrap" }}>{date ? dateLabel(date) : "—"}</strong>{date ? weekDate.format(date) : ""}</div>
+                <div style={{ ...NUM, fontSize: 11, lineHeight: 1.25, color: T.inkMid }}><strong style={{ display: "block", color: T.ink, fontSize: 12, whiteSpace: "nowrap" }}>{date ? dateLabel(date) : "—"}</strong>{date ? weekDate.format(date) : ""}</div>
                 <button type="button" onClick={() => onInspect(row)} aria-label={`Ver detalhes de ${row.description}`} style={{ ...G, minWidth: 0, border: 0, background: "none", textAlign: "left", padding: 0, cursor: "pointer" }}>
                   <strong style={{ display: "block", fontSize: 12, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.description}</strong>
-                  <span style={{ fontSize: 10, color: T.inkMid }}>{part ? "Crédito parcelado" : row.type === "refund" ? "Estorno" : row.recurring ? "Recorrente" : "Crédito à vista"}</span>
+                  <span style={{ fontSize: 11, color: T.inkMid }}>{part ? "Crédito parcelado" : row.type === "refund" ? "Estorno" : row.recurring ? "Recorrente" : "Crédito à vista"}</span>
                 </button>
                 <span style={{ minWidth: 0 }}><Badge bg={T.greenLight} color={T.green}>{category(row)}</Badge></span>
                 <span style={{ ...NUM, color: T.ink }}>{part ? `${part.installment_number}/${part.total_installments}` : "—"}</span>
                 <span style={{ ...NUM, color: T.inkMid }}>{rest == null ? "—" : rest === 0 ? "quitada" : `${rest}× ${formatMoneyAbs(part.amount, row.value_currency ?? cardCurrency) ?? ""}`}</span>
                 <span style={{ ...NUM, color: T.inkMid }}>{forecastEnd(row) ?? "—"}</span>
                 <span style={{ ...NUM, textAlign: "right", fontSize: 12, fontWeight: 700, color: row.type === "refund" ? T.green : T.ink }}>{amount(row, cardCurrency)}</span>
-                <span style={{ color: info.color, fontWeight: 600, fontSize: 10 }}>{info.text}</span>
+                <span style={{ color: info.color, fontWeight: 600, fontSize: 11 }}>{info.text}</span>
               </div>;
             }
             return <div key={row.id} role="listitem" style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 11, padding: rowPadding, borderBottom: `1px solid ${T.border}`, background: inspected?.id === row.id ? T.blueLight : T.surface, minWidth: 0 }}>
               <RowCheckbox aria-label={`Selecionar ${row.description}`} checked={selected.includes(row.id)} onChange={() => onSelected(selected.includes(row.id) ? selected.filter((id) => id !== row.id) : [...selected, row.id])} />
-              {!isMobile && <div style={{ ...G, ...NUM, width: 46, flex: "none", fontSize: 10, lineHeight: 1.25, color: T.inkMid, textAlign: "center" }}><strong style={{ display: "block", color: T.ink, fontSize: 12, whiteSpace: "nowrap" }}>{date ? dateLabel(date) : "—"}</strong>{date ? weekDate.format(date) : ""}</div>}
+              {!isMobile && <div style={{ ...G, ...NUM, width: 46, flex: "none", fontSize: 11, lineHeight: 1.25, color: T.inkMid, textAlign: "center" }}><strong style={{ display: "block", color: T.ink, fontSize: 12, whiteSpace: "nowrap" }}>{date ? dateLabel(date) : "—"}</strong>{date ? weekDate.format(date) : ""}</div>}
               <div aria-hidden="true" style={{ width: 28, height: 28, borderRadius: 8, background: row.type === "refund" ? T.greenLight : T.blueLight, display: "grid", placeItems: "center", flex: "none", color: row.type === "refund" ? T.green : T.blue, fontSize: 13 }}>{row.type === "refund" ? "↩" : "▤"}</div>
               <button type="button" onClick={() => onInspect(row)} aria-label={`Ver detalhes de ${row.description}`} style={{ ...G, flex: 1, minWidth: 0, border: 0, background: "none", textAlign: "left", padding: 0, cursor: "pointer" }}>
                 <strong style={{ display: "block", fontSize: 12, color: T.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.description}</strong>
-                <span style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap", marginTop: 2, fontSize: 10, color: T.inkMid }}><Badge bg={T.greenLight} color={T.green}>{category(row)}</Badge>{part ? `Crédito ${part.installment_number}/${part.total_installments}×` : row.recurring ? "Recorrente" : "Crédito à vista"}{isMobile && date ? ` · ${dateLabel(date)}` : ""}</span>
+                <span style={{ display: "flex", gap: 5, alignItems: "center", flexWrap: "wrap", marginTop: 2, fontSize: 11, color: T.inkMid }}><Badge bg={T.greenLight} color={T.green}>{category(row)}</Badge>{part ? `Crédito ${part.installment_number}/${part.total_installments}×` : row.recurring ? "Recorrente" : "Crédito à vista"}{isMobile && date ? ` · ${dateLabel(date)}` : ""}</span>
               </button>
-              <div style={{ ...G, ...NUM, textAlign: "right", flex: "none", fontSize: 12, fontWeight: 700, color: row.type === "refund" ? T.green : T.ink }}>{amount(row, cardCurrency)}<span style={{ display: "block", fontSize: 10, fontWeight: 500, color: info.color }}>{info.text}</span></div>
+              <div style={{ ...G, ...NUM, textAlign: "right", flex: "none", fontSize: 12, fontWeight: 700, color: row.type === "refund" ? T.green : T.ink }}>{amount(row, cardCurrency)}<span style={{ display: "block", fontSize: 11, fontWeight: 500, color: info.color }}>{info.text}</span></div>
               <ChevronRight size={14} color={T.inkMid} aria-hidden="true" />
             </div>;
           })}
