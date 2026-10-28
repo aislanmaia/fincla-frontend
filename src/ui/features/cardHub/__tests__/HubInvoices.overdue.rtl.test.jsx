@@ -26,6 +26,7 @@ describe("HubInvoices — fatura atual vencida", () => {
     expect(dateButton()).toHaveAttribute("data-date-value", "2026-10-05");
     expect(screen.getByTestId("paid-outside-notice")).toHaveTextContent("não contar duas vezes");
     expect(screen.getByTestId("paid-outside-notice")).toHaveTextContent("desfazer o pagamento no dashboard da fatura");
+    expect(screen.getByTestId("paid-outside-notice")).toHaveTextContent("o limite do cartão é liberado");
     await userEvent.setup().click(payButton());
     expect(onMarkPaid).toHaveBeenCalledWith(expect.objectContaining({ key: "2026-10" }), "2026-10-05");
   });

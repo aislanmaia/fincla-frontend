@@ -17,7 +17,7 @@ const m = (a) => ({ amount: a, currency: "BRL" });
 const card = (id, closing, due) => ({
   id, public_id: `00000000-0000-4000-8000-${String(id).padStart(12, "0")}`, organization_id: ORG, last4: String(1000 + id), brand: "Visa", due_day: due, closing_day: closing,
   description: `C${id}`, color: null, notes: null, currency: "BRL",
-  credit_limit: m("1000.00"), available_limit: m("900.00"), used_limit: m("100.00"), limit_usage_percent: 10,
+  credit_limit: m("1000.00"), available_limit: m("900.00"), used_limit: "100.00", limit_usage_percent: 10,
 });
 const row = (total) => ({ year: 2026, month: 9, month_name: "", total_amount: m(total), status: "paid", items_count: 2, top_category: null });
 
@@ -160,5 +160,30 @@ describe("useCardHubData — cancelar quando já foi cancelada em outro lugar", 
     await expect(act(async () => { await result.current.cancelScheduledCycle(); })).rejects.toBeTruthy();
 
     expect(result.current.selectedCard.cycle_rules).toHaveLength(2);
+  });
+});
+
+describe("useCardHubData — pagar uma fatura libera o limite", () => {
+  it("depois de marcar paga, o cartão traz o uso de limite novo sem recarregar a tela", async () => {
+    let paid = false;
+    const used = () => (paid ? { used_limit: "0.00", available_limit: "1000.00", limit_usage_percent: 0 } : {});
+    server.use(
+      http.get("*/v1/credit-cards", () => HttpResponse.json([{ ...card(1, 3, 10), ...used() }])),
+      http.get("*/v1/credit-cards/:id/invoices/history", () => HttpResponse.json({ monthly_data: [row("111.00")] })),
+      http.get("*/v1/credit-cards/:id/invoices/current", ({ request }) => new URL(request.url).searchParams.get("empty_as_null") === "true"
+        ? HttpResponse.json(null) : HttpResponse.json({ detail: "missing opt in" }, { status: 400 })),
+      http.get("*/v1/credit-cards/:id/future-commitments", () => HttpResponse.json({ monthly_breakdown: [], insights: [] })),
+      http.patch("*/v1/credit-cards/:id/invoices/:year/:month/mark-paid", () => {
+        paid = true;
+        return HttpResponse.json({ status: "paid", paid_date: "2026-09-10" });
+      }),
+    );
+    const { result } = renderHook(() => useCardHubData({ organizationId: ORG, enabled: true, refreshToken: 0 }));
+    await waitFor(() => expect(result.current.selectedCard?.used_limit).toBe("100.00"));
+
+    await act(async () => { await result.current.payInvoice({ year: 2026, month: 9, key: "2026-09" }, "2026-09-10"); });
+
+    await waitFor(() => expect(result.current.selectedCard.used_limit).toBe("0.00"));
+    expect(result.current.selectedCard.limit_usage_percent).toBe(0);
   });
 });

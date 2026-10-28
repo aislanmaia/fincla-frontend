@@ -198,6 +198,11 @@ export function useCardHubData({ organizationId, enabled = true, refreshToken = 
     } : prev);
     setPaidDates((dates) => ({ ...dates, [`${organizationId}:${selectedCardId}:${invoice.key}`]: paidDate }));
     setInvoiceRefresh((value) => value + 1);
+    // Pagar libera o limite: o cartão em memória ainda traz o uso de antes. Falhar aqui não desfaz o pagamento.
+    listCreditCards(organizationId).then((fresh) => setCardsState((state) => state.orgId !== organizationId ? state : ({
+      ...state,
+      cards: state.cards.map((card) => fresh.find((f) => f.id === card.id) ?? card),
+    }))).catch(() => {});
   }, [organizationId, selectedCardId]);
   const createCard = useCallback(async (payload) => {
     const created = await createCreditCard(payload);

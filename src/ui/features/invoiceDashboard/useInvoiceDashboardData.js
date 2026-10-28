@@ -170,6 +170,8 @@ export function useInvoiceDashboardData({ organizationId, cardId, year, month, e
       setMutation({ pending: false, error: "" });
       setDetails((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], stale: true } } : prev));
       loadAux();
+      // Pagar/desfazer move o limite do cartão: recarrega a lista (best effort, o pagamento já valeu).
+      listCreditCards(organizationId).then((list) => setCardsState((s) => s.orgId === organizationId ? { ...s, status: "ok", cards: list } : s)).catch(() => {});
       return { ok: true };
     } catch (error) {
       setMutation({ pending: false, error: formatCreditCardsApiError(error) });
