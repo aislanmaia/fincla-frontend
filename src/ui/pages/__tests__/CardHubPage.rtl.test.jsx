@@ -800,19 +800,21 @@ describe("CardHubPage — navegação e atualização", () => {
     await waitFor(() => expect(screen.getByText("Cartão selecionado:")).toHaveTextContent("Roxo"));
   });
 
-  it("o link discreto leva para /cards sem view", async () => {
+  it("não oferece mais o link para a tela anterior", async () => {
     mockApi();
-    const user = userEvent.setup();
     renderHub();
     await screen.findByTestId("hub-current-invoice");
 
-    await user.click(screen.getByTestId("classic-view-link"));
-    const arg = navigateMock.mock.calls[0][0];
-    expect(arg.to).toBe("/cards");
-    expect(arg.search({ fc_tx: "9", view: "new", card: publicIdFor(2) })).toEqual({ fc_tx: "9" });
+    expect(screen.queryByTestId("classic-view-link")).toBeNull();
   });
 
-  it("convida a cadastrar o primeiro cartão (na tela anterior)", async () => {
+  it("quando a lista de cartões falha, oferece tentar de novo", async () => {
+    mockApi({ cards: "fail" });
+    renderHub();
+    expect(await screen.findByTestId("hub-error-retry")).toBeInTheDocument();
+  });
+
+  it("convida a cadastrar o primeiro cartão", async () => {
     mockApi({ cards: [] });
     renderHub();
     expect(await screen.findByText(/ainda não cadastrou nenhum cartão/i)).toBeInTheDocument();

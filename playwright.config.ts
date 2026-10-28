@@ -73,12 +73,6 @@ export default defineConfig({
       testMatch: "**/multi-currency.spec.ts",
     },
     {
-      // Semeia a própria organização (id novo) pela rota de teste, então não
-      // depende do `smoke` nem apaga os dados da organização compartilhada.
-      name: "cards-request-budget",
-      testMatch: "**/cards-request-budget.spec.ts",
-    },
-    {
       // Hub do cartão (desktop e mobile). Semeia os próprios cartões e faturas
       // via API sobre a organização de e2e, então não depende do `smoke`.
       name: "cards-hub",

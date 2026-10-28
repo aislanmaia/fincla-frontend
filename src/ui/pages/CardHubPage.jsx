@@ -172,12 +172,6 @@ export function CardHubPage({
     });
   }, [uiCard, openInvoice, detail.currentState, detail.loading, now]);
 
-  const goClassic = () => navigate({ to: "/cards", search: (prev) => {
-    const next = { ...prev };
-    delete next[FC.VIEW];
-    delete next[FC.HUB_CARD];
-    return next;
-  } });
   const goTo = (href) => navigate({ to: href });
   const selectCard = (cardId) => {
     const publicId = hub.cards.find((card) => card.id === cardId)?.public_id;
@@ -254,21 +248,12 @@ export function CardHubPage({
     </div>
   );
 
-  const classicLink = (
-    <div style={{ marginTop: 4 }}>
-      <button type="button" onClick={goClassic} data-testid="classic-view-link"
-        style={{ ...G, background: "none", border: "none", padding: 0, fontSize: 11, color: T.inkLight, textDecoration: "underline", cursor: "pointer" }}>
-        Ver tela anterior
-      </button>
-    </div>
-  );
-
   if (hub.isLoading) {
     return <div style={{ padding: isMobile ? 16 : 28 }}>{header}<Notice>Carregando seus cartões…</Notice></div>;
   }
 
   if (hub.error) {
-    return <div style={{ padding: isMobile ? 16 : 28 }}>{header}<Notice tone="warn">{hub.error}</Notice>{classicLink}</div>;
+    return <div style={{ padding: isMobile ? 16 : 28 }}>{header}<Notice tone="warn">{hub.error}</Notice><button type="button" data-testid="hub-error-retry" onClick={() => window.location.reload()} style={{ ...OUTLINE_BTN, marginTop: 12 }}>Tentar novamente</button></div>;
   }
 
   if (!selectedCard) {
@@ -323,7 +308,7 @@ export function CardHubPage({
 
   return (
     <div style={{ padding: isMobile ? 16 : 28, display: "flex", flexDirection: "column", gap: isMobile ? 14 : 18, minWidth: 0 }}>
-      <div>{header}{classicLink}</div>
+      <div>{header}</div>
 
       {cardRow}
 
