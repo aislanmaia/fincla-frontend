@@ -93,7 +93,7 @@ export function SpendingPace({ pace, currency, isMobile = false }) {
             {pace.previous && <span><span style={{ color: T.inkGhost }}>●</span> Ciclo anterior</span>}
           </div>
           <div style={{ display: "flex", alignItems: "stretch", gap: isMobile ? 4 : 8, minWidth: 0, marginTop: 8 }}>
-          <div role="group" aria-label="Escala de valores" style={{ position: "relative", width: isMobile ? 60 : 82, height: 170, flexShrink: 0, ...G, ...NUM, fontSize: 11, color: T.inkMid }}>
+          <div role="group" aria-label="Escala de valores" style={{ position: "relative", width: isMobile ? 72 : 82, height: 170, flexShrink: 0, ...G, ...NUM, fontSize: 11, color: T.inkMid }}>
             {axisTicks.map((value, index) => <span key={index} style={{ position: "absolute", top: `${[32, 106, 180][index] / 220 * 100}%`, right: 0, transform: "translateY(-50%)", whiteSpace: "nowrap" }}>{axisLabel(value)}</span>)}
           </div>
           <div style={{ position: "relative", minWidth: 0, flex: 1 }}>
