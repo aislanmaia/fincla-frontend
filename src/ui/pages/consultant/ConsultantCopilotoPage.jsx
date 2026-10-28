@@ -268,10 +268,10 @@ function ClientCategoriesCard({ block, onOpenClient }) {
           <button type="button" onClick={() => onOpenClient?.(block.organization_id, block.client_name)} style={{ ...G, display: "block", border: 0, padding: 0, background: "transparent", color: T.ink, fontWeight: 750, fontSize: 13, cursor: "pointer", textAlign: "left" }}>
             {block.client_name} <Icon name="arrow-right" size={11} color={T.inkLight} />
           </button>
-          {period && <span style={{ ...G, fontSize: 10.5, color: T.inkLight }}>Gastos · {period}</span>}
+          {period && <span style={{ ...G, fontSize: 11, color: T.inkLight }}>Gastos · {period}</span>}
         </div>
         <div style={{ textAlign: "right", flexShrink: 0 }}>
-          <div style={{ ...G, fontSize: 10, color: T.inkLight }}>Total no período</div>
+          <div style={{ ...G, fontSize: 11, color: T.inkLight }}>Total no período</div>
           <strong style={{ ...G, fontSize: 14, color: T.ink }}>{fmtBRL0(block.total)}</strong>
         </div>
       </div>
@@ -351,7 +351,7 @@ function AnswerRenderer({ output, onOpenClient, onEvaluate, onFollowUp, clients 
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, marginBottom: 9 }}>
             <strong style={{ ...G, fontSize: 12, color: T.ink }}>Distribuição por cliente</strong>
-            <span style={{ ...G, fontSize: 10.5, color: T.inkLight }}>Valores e período dos dados consultados</span>
+            <span style={{ ...G, fontSize: 11, color: T.inkLight }}>Valores e período dos dados consultados</span>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 310px), 1fr))", gap: 10 }}>
             {clientCategories.map((block) => <ClientCategoriesCard key={block.organization_id} block={block} onOpenClient={onOpenClient} />)}

@@ -24,7 +24,7 @@ export function AverageComparison({ detail, currency }) {
               <div key={bar.label} style={{ flex: 1, textAlign: "center", minWidth: 0 }}>
                 <div style={{ ...G, ...NUM, fontSize: 11, fontWeight: 700, color: T.ink }}>{formatMoney(bar.value, currency)}</div>
                 <div style={{ height: `${Math.max(3, Math.min(76, bar.value / Math.max(average, total, 1) * 76))}px`, marginTop: 4, background: bar.color, borderRadius: "4px 4px 0 0" }} />
-                <div style={{ ...G, fontSize: 10, color: T.inkMid, marginTop: 4 }}>{bar.label}</div>
+                <div style={{ ...G, fontSize: 11, color: T.inkMid, marginTop: 4 }}>{bar.label}</div>
               </div>
             ))}
           </div>
@@ -83,7 +83,7 @@ export function SpendingPace({ pace, currency, isMobile = false }) {
     <Card data-testid="spending-pace" style={{ padding: 18, minWidth: 0 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
         <h3 style={{ ...G, fontSize: 14, color: T.ink, margin: 0 }}>Velocidade de gasto</h3>
-        {comparisonLabel && <span style={{ ...G, fontSize: 10, fontWeight: 700, color: paceDifference > 0 ? T.amber : paceDifference < 0 ? T.green : T.inkMid }}>{comparisonLabel}</span>}
+        {comparisonLabel && <span style={{ ...G, fontSize: 11, fontWeight: 700, color: paceDifference > 0 ? T.amber : paceDifference < 0 ? T.green : T.inkMid }}>{comparisonLabel}</span>}
       </div>
       <p style={{ ...G, fontSize: 12, color: T.inkMid, margin: "4px 0 12px" }}>Acumulado por dia do ciclo da fatura</p>
       {all.length === 0 ? <p style={{ ...G, fontSize: 12, color: T.inkMid }}>O ciclo ainda não começou.</p> : (
@@ -93,7 +93,7 @@ export function SpendingPace({ pace, currency, isMobile = false }) {
             {pace.previous && <span><span style={{ color: T.inkGhost }}>●</span> Ciclo anterior</span>}
           </div>
           <div style={{ display: "flex", alignItems: "stretch", gap: isMobile ? 4 : 8, minWidth: 0, marginTop: 8 }}>
-          <div role="group" aria-label="Escala de valores" style={{ position: "relative", width: isMobile ? 60 : 82, height: 170, flexShrink: 0, ...G, ...NUM, fontSize: isMobile ? 9 : 10, color: T.inkMid }}>
+          <div role="group" aria-label="Escala de valores" style={{ position: "relative", width: isMobile ? 60 : 82, height: 170, flexShrink: 0, ...G, ...NUM, fontSize: 11, color: T.inkMid }}>
             {axisTicks.map((value, index) => <span key={index} style={{ position: "absolute", top: `${[32, 106, 180][index] / 220 * 100}%`, right: 0, transform: "translateY(-50%)", whiteSpace: "nowrap" }}>{axisLabel(value)}</span>)}
           </div>
           <div style={{ position: "relative", minWidth: 0, flex: 1 }}>
