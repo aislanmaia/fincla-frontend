@@ -293,14 +293,11 @@ test("marca fatura do Hub como paga e confirma status e data na API real", async
   expect(historyRows.monthly_data.find((row) => row.year === year && row.month === month)?.status).toBe("paid");
 });
 
-test("a tela clássica volta a ser o padrão de /cards", async ({ page }) => {
+test("o Hub é a tela padrão de /cards", async ({ page }) => {
   await loginAsE2EOwner(page);
-  await page.goto("/cards?view=new");
+  await page.goto("/cards");
   await expect(page.getByTestId("hub-current-invoice")).toBeVisible({ timeout: 30_000 });
-  await page.getByTestId("classic-view-link").click();
-  await expect(page).toHaveURL(/\/cards(?:\?.*)?$/);
-  await expect(page.getByTestId("hub-current-invoice")).toHaveCount(0);
-  await expect(page.getByText("Cartões").first()).toBeVisible();
+  await expect(page.getByTestId("classic-view-link")).toHaveCount(0);
 });
 
 /* ── Orçamento de chamadas de API ao abrir /cards ──────────────────────────
@@ -361,17 +358,8 @@ test.describe("orçamento de chamadas ao abrir /cards", () => {
         await nextCard.click();
         await expect.poll(() => page.getByTestId("hub-card-carousel").evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
       }
-      const classicFive = await measureLoad(page, "/cards", async () => {
-        try {
-          await expect(page.getByText("Budget 5").first()).toBeVisible({ timeout: 30_000 });
-        } catch (error) {
-          throw new Error(`Classic view at ${page.url()}: ${(await page.locator("body").innerText()).slice(0, 700)}`, { cause: error });
-        }
-        await page.waitForTimeout(4000);
-      });
-
       const hubCards = (seen: Seen[]) => seen.filter((r) => r.path.startsWith("/v1/credit-cards"));
-      console.log(`[calls ${vp.name}] HUB 1 cartão\n${summarize(one)}\n[calls ${vp.name}] HUB 5 cartões\n${summarize(five)}\n[calls ${vp.name}] CLÁSSICA 5 cartões (total ${classicFive.length}, credit-cards ${hubCards(classicFive).length})\n${summarize(classicFive)}`);
+      console.log(`[calls ${vp.name}] HUB 1 cartão\n${summarize(one)}\n[calls ${vp.name}] HUB 5 cartões\n${summarize(five)}`);
       counts[vp.name] = hubCards(five).length;
 
       expect(hubCards(five).length).toBe(hubCards(one).length);

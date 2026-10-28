@@ -808,6 +808,12 @@ describe("CardHubPage — navegação e atualização", () => {
     expect(screen.queryByTestId("classic-view-link")).toBeNull();
   });
 
+  it("quando a lista de cartões falha, oferece tentar de novo", async () => {
+    mockApi({ cards: "fail" });
+    renderHub();
+    expect(await screen.findByTestId("hub-error-retry")).toBeInTheDocument();
+  });
+
   it("convida a cadastrar o primeiro cartão", async () => {
     mockApi({ cards: [] });
     renderHub();

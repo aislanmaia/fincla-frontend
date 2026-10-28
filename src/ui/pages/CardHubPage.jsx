@@ -253,7 +253,7 @@ export function CardHubPage({
   }
 
   if (hub.error) {
-    return <div style={{ padding: isMobile ? 16 : 28 }}>{header}<Notice tone="warn">{hub.error}</Notice></div>;
+    return <div style={{ padding: isMobile ? 16 : 28 }}>{header}<Notice tone="warn">{hub.error}</Notice><button type="button" data-testid="hub-error-retry" onClick={() => window.location.reload()} style={{ ...OUTLINE_BTN, marginTop: 12 }}>Tentar novamente</button></div>;
   }
 
   if (!selectedCard) {
