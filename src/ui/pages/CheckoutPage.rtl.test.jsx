@@ -507,6 +507,8 @@ it("sends a visitor whose email already has an account to sign in, never to a de
 
   fireEvent.click(screen.getByRole("button", { name: "Entrar com este email" }));
   expect(await screen.findByRole("heading", { name: "Entre para continuar" })).toBeTruthy();
+  // The refused registration (and its password) is discarded: payment waits for the signed-in account.
+  expect(screen.queryByRole("heading", { name: "Pague com cartão" })).toBeNull();
   expect(screen.getByLabelText("Email")).toHaveValue("maria@example.com");
   fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "Password123!" } });
   fireEvent.submit(screen.getByLabelText("Senha").closest("form"));
