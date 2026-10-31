@@ -63,6 +63,26 @@ export function checkoutFieldErrors(fields) {
   return Object.fromEntries(fields.map((field) => fieldLabels[field]).filter(Boolean));
 }
 
+/** Scroll the screen's own container, never the viewport (each screen owns its scroll). */
+function scrollWithinScreen(element, block = "start") {
+  if (!element) return;
+  const scrollContainer = element.closest(".fincla-scroll");
+  if (!scrollContainer) {
+    element.scrollIntoView?.({ behavior: "smooth", block });
+    return;
+  }
+  const elementTop = element.getBoundingClientRect().top;
+  const containerTop = scrollContainer.getBoundingClientRect().top;
+  const top = Math.max(0, scrollContainer.scrollTop + elementTop - containerTop - 14);
+  if (typeof scrollContainer.scrollTo === "function") {
+    scrollContainer.scrollTo({ top, behavior: "smooth" });
+  } else {
+    // JSDOM does not implement Element#scrollTo; the browser path above
+    // keeps the native smooth transition on phone and desktop.
+    scrollContainer.scrollTop = top;
+  }
+}
+
 function isCheckoutRequestError(failure) {
   return failure instanceof CheckoutRequestError || (
     failure && typeof failure === "object" &&
@@ -71,9 +91,13 @@ function isCheckoutRequestError(failure) {
   );
 }
 
-export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRefresh, onReadinessChange, onValidationErrorChange, showStepLabel = true }) {
+export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRefresh, onReadinessChange, onValidationErrorChange, onAccountExists, showStepLabel = true }) {
   const TERMS_VERSION = "2026-09-23";
   const [offerChanged, setOfferChanged] = useState(false);
+  // The email already has an account this checkout could not resume. Nothing
+  // reached the card processor, so this must never read as a declined payment.
+  const [accountExists, setAccountExists] = useState(false);
+  const accountExistsNotice = useRef(null);
   const [showCancel, setShowCancel] = useState(false);
   const [attempt, setAttempt] = useState(null);
   const [busy, setBusy] = useState(true);
@@ -128,7 +152,7 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
     }
     setValidationFailure(false);
     onValidationErrorChange?.(false);
-    submitting.current = true; setBusy(true); setError("");
+    submitting.current = true; setBusy(true); setError(""); setAccountExists(false);
     let paymentSubmitted = false;
     let keepFormForCorrection = false;
     try {
@@ -146,6 +170,11 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
       if (isCheckoutRequestError(failure) && failure.code === "checkout_offer_changed") {
         setOfferChanged(true);
         setError("A oferta mudou. Atualize o resumo e confira o novo valor antes de confirmar o pagamento.");
+      } else if (isCheckoutRequestError(failure) && failure.code === "checkout_account_exists") {
+        // Nothing to correct in the card: the next step is signing in, which
+        // starts a fresh payment form. Do not keep card data on screen meanwhile.
+        setAccountExists(true);
+        setError(failure.message);
       } else if (isCheckoutRequestError(failure)) {
         // A resposta HTTP chegou: this was rejected before any charge could be created.
         // Keep the user in the form — a pending local subscription is not proof that
@@ -182,25 +211,7 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
 
   useEffect(() => {
     if (!awaitingConfirmation && !active) return undefined;
-    const timer = window.setTimeout(() => {
-      const section = paymentSection.current;
-      const scrollContainer = section?.closest(".fincla-scroll");
-      if (!section) return;
-      if (!scrollContainer) {
-        section.scrollIntoView({ behavior: "smooth", block: "start" });
-        return;
-      }
-      const sectionTop = section.getBoundingClientRect().top;
-      const containerTop = scrollContainer.getBoundingClientRect().top;
-      const top = Math.max(0, scrollContainer.scrollTop + sectionTop - containerTop - 14);
-      if (typeof scrollContainer.scrollTo === "function") {
-        scrollContainer.scrollTo({ top, behavior: "smooth" });
-      } else {
-        // JSDOM does not implement Element#scrollTo; the browser path above
-        // keeps the native smooth transition on phone and desktop.
-        scrollContainer.scrollTop = top;
-      }
-    }, 40);
+    const timer = window.setTimeout(() => scrollWithinScreen(paymentSection.current), 40);
     return () => window.clearTimeout(timer);
   }, [active, awaitingConfirmation]);
 
@@ -252,8 +263,14 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
     return () => onReadinessChange?.(false);
   }, [onReadinessChange, readyToPay]);
   useEffect(() => () => onValidationErrorChange?.(false), [onValidationErrorChange]);
+  // The submit button sits at the end of a long form; without this the notice
+  // appears out of view and the click looks like it did nothing.
+  useEffect(() => {
+    if (accountExists) scrollWithinScreen(accountExistsNotice.current);
+  }, [accountExists]);
   return <section ref={paymentSection} aria-labelledby="checkout-payment-title" style={{marginTop:24}}>
-    {error && <p role="alert">{error}</p>}
+    <div ref={accountExistsNotice}>{error && <p role="alert">{error}</p>}</div>
+    {accountExists && onAccountExists && <div style={{ margin: "0 0 18px" }}><Btn variant="dark" full onClick={() => onAccountExists(accountDetails?.email || "")}>Entrar com este email</Btn></div>}
     {busy && !attempt && !initialCheckoutLoaded ? <ConfirmationCard tone="waiting"><div style={{ display:"flex", alignItems:"center", gap:11 }}><span aria-hidden="true" style={{ flex:"0 0 auto", width:24, height:24, borderRadius:99, border:`3px solid ${T.border}`, borderTopColor:T.green, animation:"checkout-confirm-spin .8s linear infinite" }} /><div style={{ minWidth:0 }}><div style={{ color:T.green, fontSize:11, fontWeight:800, letterSpacing:".09em" }}>ASSINATURA</div><h2 id="checkout-payment-title" style={{ margin:"3px 0 0", fontSize:23 }}>Carregando sua contratação</h2></div></div></ConfirmationCard> : active ? <ConfirmationCard tone="success">
       <div aria-hidden="true" style={{ display:"grid", placeItems:"center", width:48, height:48, borderRadius:99, background:"#DCF5E8", color:T.green, fontSize:25, fontWeight:900, boxShadow:"inset 0 0 0 1px rgba(8,151,99,.12)" }}>✓</div>
       <div><div style={{ color:T.green, fontSize:11, fontWeight:800, letterSpacing:".09em" }}>PAGAMENTO CONFIRMADO</div><h2 id="checkout-payment-title" style={{ margin:"4px 0 6px", fontSize:25 }}>Sua assinatura está ativa</h2><p style={{ margin:0, color:T.inkMid, lineHeight:1.55 }}>{session?.user?.onboarding_completed ? "Tudo certo. Vamos abrir sua conta Fincla." : "Tudo certo. Vamos abrir sua configuração inicial para deixar o Fincla pronto para você."}</p></div>
@@ -291,7 +308,7 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
       </form>
     </>}
     {offerChanged && <Btn disabled={busy} onClick={onRefresh}>Atualizar oferta</Btn>}
-    {error && !offerChanged && !awaitingConfirmation && !validationFailure && <p style={{ margin: "12px 0 0", color: T.inkMid, fontSize: 12 }}>Confira o formulário e envie novamente.</p>}
+    {error && !offerChanged && !accountExists && !awaitingConfirmation && !validationFailure && <p style={{ margin: "12px 0 0", color: T.inkMid, fontSize: 12 }}>Confira o formulário e envie novamente.</p>}
     {showCancel && <CancelSubscriptionDialog onClose={() => setShowCancel(false)} onCancelled={() => { setShowCancel(false); setAttempt({status:"cancelled"}); }} />}
   </section>;
 }
