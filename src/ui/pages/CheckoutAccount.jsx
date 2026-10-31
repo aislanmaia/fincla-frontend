@@ -26,12 +26,12 @@ export function RegisteredCheckoutAccount({ details, email }) {
   </section>;
 }
 
-export function CheckoutAccount({ session, onContinue }) {
-  const [login, setLogin] = useState(false);
+export function CheckoutAccount({ session, onContinue, signInEmail = "" }) {
+  const [login, setLogin] = useState(Boolean(signInEmail));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [touched, setTouched] = useState({});
-  const [values, setValues] = useState({ name: "", email: "", cpfCnpj: "", phone: "", password: "", passwordConfirmation: "" });
+  const [values, setValues] = useState({ name: "", email: signInEmail, cpfCnpj: "", phone: "", password: "", passwordConfirmation: "" });
   const validEmail = /^\S+@\S+\.\S+$/.test(values.email);
   const validDocument = /^\d{11}$|^\d{14}$/.test(values.cpfCnpj);
   const validPhone = /^\d{10,13}$/.test(values.phone);
@@ -64,7 +64,7 @@ export function CheckoutAccount({ session, onContinue }) {
   }
   return <section aria-labelledby={login ? "checkout-account-title" : undefined} aria-label={login ? undefined : "Dados de acesso"} style={{ marginTop: 2 }}>
     {login && <h2 id="checkout-account-title" style={{ margin: "0 0 14px", fontSize: 20 }}>Entre para continuar</h2>}
-    <p style={{ color: T.inkMid, margin: "0 0 22px", lineHeight: 1.6 }}>{login ? "Use os dados da conta que já contratou esta oferta." : "Informe os dados que usará no Fincla. Sua conta será criada ao confirmar a assinatura e o acesso será liberado após o pagamento."}</p>
+    <p style={{ color: T.inkMid, margin: "0 0 22px", lineHeight: 1.6 }}>{login ? (signInEmail ? "Este email já tem uma conta no Fincla. Entre com sua senha para continuar o pagamento." : "Use os dados da conta que já contratou esta oferta.") : "Informe os dados que usará no Fincla. Sua conta será criada ao confirmar a assinatura e o acesso será liberado após o pagamento."}</p>
     <form onSubmit={submit} style={{ display: "grid", gap: 15 }}>
       {!login && <CheckoutField label="Nome" name="name" autoComplete="given-name" value={values.name} error={fieldError("name")} onBlur={touch("name")} onChange={(event) => setValues((current) => ({ ...current, name: event.target.value }))} />}
       <CheckoutField label="Email" name="email" type="email" autoComplete="email" value={values.email} error={fieldError("email")} onBlur={touch("email")} onChange={(event) => setValues((current) => ({ ...current, email: event.target.value }))} />

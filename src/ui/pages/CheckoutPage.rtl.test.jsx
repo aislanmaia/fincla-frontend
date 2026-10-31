@@ -468,3 +468,47 @@ it("maps every safe server field path to its payment input feedback", () => {
     address: "Informe um número válido para o endereço.", phone: "Informe um telefone com DDD válido.",
   });
 });
+
+it("sends a visitor whose email already has an account to sign in, never to a declined payment", async () => {
+  const { fireEvent } = await import("@testing-library/react");
+  const signIn = vi.fn().mockResolvedValue({});
+  const message = "Este email já tem uma conta no Fincla. Entre com sua senha para continuar.";
+  const fetch = vi.fn(async (url, options) => {
+    if (url.includes("checkout-quote")) return { ok: true, json: async () => ({ selection: JSON.parse(options.body), total_cents: 2990, capacity: null }) };
+    if (url.includes("/checkout/register")) return { ok: false, status: 409, json: async () => ({ detail: { code: "checkout_account_exists", message } }) };
+    return { ok: true, json: async () => ({}) };
+  });
+  vi.stubGlobal("fetch", fetch);
+  render(<CheckoutPage search="?persona=personal&billing_cycle=monthly" session={{ isAuthenticated: false, signIn }} />);
+  await screen.findByRole("button", { name: "Preencha os dados para continuar" });
+  fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+  fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "Maria" } });
+  fireEvent.change(screen.getByLabelText("Email"), { target: { value: "maria@example.com" } });
+  fireEvent.change(screen.getByLabelText(/CPF\/CNPJ/), { target: { value: "24971563792" } });
+  fireEvent.change(screen.getByLabelText(/Celular com DDD/), { target: { value: "4738010919" } });
+  fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "Another123!" } });
+  fireEvent.change(screen.getByLabelText("Confirme sua senha"), { target: { value: "Another123!" } });
+  fireEvent.click(screen.getByRole("button", { name: "Continuar para o pagamento" }));
+  await screen.findByRole("heading", { name: "Pague com cartão" });
+  fireEvent.change(screen.getByLabelText("Nome do titular"), { target: { value: "Maria Silva" } });
+  fireEvent.change(screen.getByLabelText("Número do cartão"), { target: { value: "4242 4242 4242 4242" } });
+  fireEvent.change(screen.getByLabelText("Validade (MM/AA)"), { target: { value: "12/30" } });
+  fireEvent.change(screen.getByLabelText("CVV"), { target: { value: "123" } });
+  fireEvent.change(screen.getByLabelText("CEP"), { target: { value: "01001-000" } });
+  fireEvent.change(screen.getByLabelText("Número do endereço"), { target: { value: "10" } });
+  fireEvent.click(screen.getByLabelText(/Termos de contratação/));
+  fireEvent.click(screen.getByLabelText(/Autorizo a cobrança/));
+  fireEvent.submit(screen.getByLabelText("Número do cartão").closest("form"));
+
+  expect(await screen.findByText(message)).toBeTruthy();
+  expect(screen.queryByText("Pagamento não aprovado. Tente novamente.")).toBeNull();
+  expect(fetch.mock.calls.find(([url]) => url.includes("/checkout/pay"))).toBeUndefined();
+  expect(signIn).not.toHaveBeenCalled();
+
+  fireEvent.click(screen.getByRole("button", { name: "Entrar com este email" }));
+  expect(await screen.findByRole("heading", { name: "Entre para continuar" })).toBeTruthy();
+  expect(screen.getByLabelText("Email")).toHaveValue("maria@example.com");
+  fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "Password123!" } });
+  fireEvent.submit(screen.getByLabelText("Senha").closest("form"));
+  await waitFor(() => expect(signIn).toHaveBeenCalledWith("maria@example.com", "Password123!"));
+});
