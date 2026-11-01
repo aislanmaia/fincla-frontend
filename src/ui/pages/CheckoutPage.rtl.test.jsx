@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { CheckoutPage } from "./CheckoutPage.jsx";
 import { checkoutFieldErrors } from "./CheckoutPayment.jsx";
+import { CHECKOUT_SIGN_IN_HANDOFF_MESSAGE, CheckoutAccount } from "./CheckoutAccount.jsx";
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -510,7 +511,29 @@ it("sends a visitor whose email already has an account to sign in, never to a de
   // The refused registration (and its password) is discarded: payment waits for the signed-in account.
   expect(screen.queryByRole("heading", { name: "Pague com cartão" })).toBeNull();
   expect(screen.getByLabelText("Email")).toHaveValue("maria@example.com");
+  expect(screen.getByText(CHECKOUT_SIGN_IN_HANDOFF_MESSAGE)).toBeTruthy();
   fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "Password123!" } });
   fireEvent.submit(screen.getByLabelText("Senha").closest("form"));
   await waitFor(() => expect(signIn).toHaveBeenCalledWith("maria@example.com", "Password123!"));
+});
+
+it("signs in only once when the sign-in form is submitted twice before the first attempt settles", async () => {
+  const { act, fireEvent } = await import("@testing-library/react");
+  let settle;
+  const signIn = vi.fn(() => new Promise((resolve) => { settle = resolve; }));
+  render(<CheckoutAccount session={{ isAuthenticated: false, signIn }} signInEmail="maria@example.com" />);
+  fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "Password123!" } });
+  const form = screen.getByLabelText("Senha").closest("form");
+  // Both submits land in one batch, before React commits `busy`: the second
+  // handler still closes over `busy === false`, as with a fast double Enter.
+  act(() => {
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+  });
+  expect(signIn).toHaveBeenCalledTimes(1);
+  settle({});
+  await waitFor(() => expect(screen.getByRole("button", { name: "Continuar para o pagamento" })).toBeEnabled());
+  // Once the first attempt settles the guard is released for a genuine retry.
+  fireEvent.submit(form);
+  expect(signIn).toHaveBeenCalledTimes(2);
 });
