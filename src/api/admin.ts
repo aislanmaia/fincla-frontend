@@ -173,3 +173,44 @@ export const disableAdminCoupon = async (id: string, reason: string) =>
 
 export const retryAdminCouponReprice = async (userId: string, reason: string) =>
   (await apiClient.post<{ completed: number; failed: number }>(`/admin/users/${userId}/retry-coupon-reprice`, { reason })).data;
+
+export type CheckoutEventSeverity = 'info' | 'problem';
+
+export interface AdminCheckoutEventSummary {
+  id: string;
+  event_type: string;
+  severity: CheckoutEventSeverity;
+  reason: string | null;
+  created_at: string;
+}
+
+export interface AdminCheckoutEvent extends AdminCheckoutEventSummary {
+  details: Record<string, unknown>;
+}
+
+export interface AdminCheckoutFeedEvent extends AdminCheckoutEvent {
+  user_id: string | null;
+  email: string | null;
+}
+
+export interface AdminStuckCheckoutAccount {
+  user_id: string;
+  email: string;
+  first_name: string | null;
+  account_created_at: string;
+  subscription_status: string;
+  billing_cycle: string;
+  gateway_customer_id: string | null;
+  problem_count: number;
+  last_event: AdminCheckoutEventSummary | null;
+  last_problem: AdminCheckoutEventSummary | null;
+}
+
+export const getAdminStuckCheckoutAccounts = async (params: { only_problems?: boolean; limit?: number } = {}) =>
+  (await apiClient.get<{ items: AdminStuckCheckoutAccount[] }>('/admin/checkout/stuck-accounts', { params })).data;
+
+export const getAdminUserCheckoutEvents = async (userId: string) =>
+  (await apiClient.get<{ items: AdminCheckoutEvent[] }>(`/admin/users/${userId}/checkout-events`)).data;
+
+export const getAdminCheckoutEvents = async (params: { severity?: CheckoutEventSeverity; limit?: number } = {}) =>
+  (await apiClient.get<{ items: AdminCheckoutFeedEvent[] }>('/admin/checkout/events', { params })).data;
