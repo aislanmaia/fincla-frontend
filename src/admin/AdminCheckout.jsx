@@ -19,6 +19,7 @@ const EVENT_LABELS = {
   charge_declined: "Cobrança recusada",
   charge_uncertain: "Cobrança sem confirmação",
   charge_sent: "Cobrança enviada",
+  sign_in_throttled: "Tentativas de senha bloqueadas",
 };
 
 const REASON_LABELS = {
@@ -45,12 +46,31 @@ const REASON_LABELS = {
   asaas_card_declined: "Cartão recusado pelo Asaas",
   asaas_field_rejected: "Asaas recusou um campo",
   gateway_uncertain: "Asaas não confirmou a cobrança",
+  too_many_attempts_email_from_address: "Muitas senhas erradas para este e-mail, vindas da mesma conexão",
+  too_many_attempts_email: "Muitas senhas erradas para este e-mail, de várias conexões",
+  too_many_attempts_address: "Muitas senhas erradas vindas da mesma conexão, em vários e-mails",
 };
 
 const STATUS_LABELS = { pending_payment: "aguardando pagamento", active: "ativa", past_due: "em atraso", cancelled: "cancelada", expired: "expirada" };
 const PROVIDER_REASONS = { manual: "Assinatura gerida manualmente, fora do Asaas", sponsored: "Acesso cedido (cortesia), sem cobrança" };
 const LIST_LIMIT = 100;
 const CYCLE_LABELS = { monthly: "Mensal", yearly: "Anual" };
+
+// A block on one connection guessing many emails names no account and no email:
+// the email that happened to be guessed when the limit hit is not the attacker.
+// It is checked first so a stray email on such an event is never shown as its subject.
+const THROTTLED_ROUTES = { login: "no login", checkout_register: "no cadastro do checkout" };
+
+function problemHeading(event) {
+  if (event.reason === "too_many_attempts_address") {
+    const route = THROTTLED_ROUTES[event.details?.route];
+    return { subject: "Vários e-mails", context: route ? `Sem conta ligada · ${route}` : "Sem conta ligada" };
+  }
+  return {
+    subject: event.email || "E-mail não informado",
+    context: event.user_id ? "Conta criada" : "Antes de criar a conta",
+  };
+}
 
 export function eventLabel(eventType) {
   return EVENT_LABELS[eventType] || eventType;
@@ -238,8 +258,9 @@ export function AdminCheckout() {
       </div>
       : <div className="admin-directory-list">
         {items.map((item) => {
+          const heading = problemHeading(item);
           const row = <>
-            <span><strong>{item.email || "E-mail não informado"}</strong><small>{item.user_id ? "Conta criada" : "Antes de criar a conta"}</small></span>
+            <span><strong>{heading.subject}</strong><small>{heading.context}</small></span>
             <EventSummary event={item} empty="" />
             <span className="admin-pill admin-checkout-pill-problem">Problema</span>
           </>;

@@ -14,7 +14,7 @@ vi.mock("../api/admin", () => ({
   getAdminCheckoutEvents: mocks.getAdminCheckoutEvents,
 }));
 
-import { AdminCheckout, noEventsLabel, reasonLabel } from "./AdminCheckout.jsx";
+import { AdminCheckout, eventLabel, noEventsLabel, reasonLabel } from "./AdminCheckout.jsx";
 
 const STUCK_LEAD = {
   user_id: "user-lead",
@@ -127,6 +127,29 @@ describe("checkout no painel administrativo", () => {
     expect(mocks.getAdminUserCheckoutEvents).toHaveBeenCalledWith("user-lead");
   });
 
+  it("mostra o bloqueio de uma conexão sem atribuí-lo a um e-mail nem a uma conta", async () => {
+    mocks.getAdminCheckoutEvents.mockResolvedValue({
+      items: [
+        { id: "t1", user_id: null, email: "inocente@example.com", event_type: "sign_in_throttled", severity: "problem", reason: "too_many_attempts_address", created_at: "2026-11-01T13:00:00", details: { route: "login", limit: 20, window_minutes: 15 } },
+        { id: "t2", user_id: "user-lead", email: "lead@example.com", event_type: "sign_in_throttled", severity: "problem", reason: "too_many_attempts_email_from_address", created_at: "2026-11-01T12:00:00", details: { route: "checkout_register", limit: 5, window_minutes: 15 } },
+      ],
+    });
+    render(<AdminCheckout />);
+    await screen.findByRole("button", { name: /Maria/ });
+
+    fireEvent.click(screen.getByRole("tab", { name: "Problemas recentes" }));
+
+    expect(await screen.findByText("Vários e-mails")).toBeInTheDocument();
+    expect(screen.getByText("Sem conta ligada · no login").closest("button")).toBeNull();
+    expect(screen.getByText(/Muitas senhas erradas vindas da mesma conexão, em vários e-mails/)).toBeInTheDocument();
+    expect(screen.queryByText("inocente@example.com")).toBeNull();
+    expect(screen.queryByText("Antes de criar a conta")).toBeNull();
+
+    const leadRow = screen.getByRole("button", { name: /lead@example.com/ });
+    expect(leadRow).toHaveTextContent("Conta criada");
+    expect(leadRow).toHaveTextContent("Muitas senhas erradas para este e-mail, vindas da mesma conexão");
+  });
+
   it("mostra o erro da API sem esconder a tela", async () => {
     mocks.getAdminStuckCheckoutAccounts.mockRejectedValue({ response: { status: 500, data: { detail: "Falha interna" } } });
     render(<AdminCheckout />);
@@ -200,6 +223,14 @@ describe("rótulos dos motivos", () => {
     expect(reasonLabel("gateway_uncertain")).toBe("Asaas não confirmou a cobrança");
     expect(reasonLabel("account_not_created")).toBe("Erro ao criar a conta");
     expect(reasonLabel("password_mismatch")).toBe("Senha diferente da cadastrada");
+    expect(reasonLabel("too_many_attempts_email_from_address")).toBe(
+      "Muitas senhas erradas para este e-mail, vindas da mesma conexão",
+    );
+    expect(reasonLabel("too_many_attempts_email")).toBe("Muitas senhas erradas para este e-mail, de várias conexões");
+    expect(reasonLabel("too_many_attempts_address")).toBe(
+      "Muitas senhas erradas vindas da mesma conexão, em vários e-mails",
+    );
+    expect(eventLabel("sign_in_throttled")).toBe("Tentativas de senha bloqueadas");
     expect(reasonLabel("brand_new_reason")).toBe("brand_new_reason");
     expect(reasonLabel(null)).toBeNull();
   });
