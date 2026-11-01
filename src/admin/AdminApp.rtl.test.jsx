@@ -25,13 +25,16 @@ const mocks = vi.hoisted(() => ({
   createAdminCoupon: vi.fn(),
   disableAdminCoupon: vi.fn(),
   retryAdminCouponReprice: vi.fn(),
+  getAdminStuckCheckoutAccounts: vi.fn(),
+  getAdminUserCheckoutEvents: vi.fn(),
+  getAdminCheckoutEvents: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
   resetPassword: vi.fn(),
   validateResetToken: vi.fn(),
 }));
 
-vi.mock("../api/admin", () => ({ getAdminMe: mocks.getAdminMe, getAdminOverview: mocks.getAdminOverview, getAdminUsers: mocks.getAdminUsers, getAdminUser: mocks.getAdminUser, getAdminOrganizations: mocks.getAdminOrganizations, getAdminOrganization: mocks.getAdminOrganization, getAdminPlans: mocks.getAdminPlans, getAdminUserAudit: mocks.getAdminUserAudit, changeAdminUserAccess: mocks.changeAdminUserAccess, createAdminAccount: mocks.createAdminAccount, sendAdminPasswordReset: mocks.sendAdminPasswordReset, changeAdminBeta: mocks.changeAdminBeta, grantAdminCourtesy: mocks.grantAdminCourtesy, endAdminCourtesy: mocks.endAdminCourtesy, getAdminPlanRequests: mocks.getAdminPlanRequests, requestAdminPlanChange: mocks.requestAdminPlanChange, withdrawAdminPlanChange: mocks.withdrawAdminPlanChange, cancelAdminRenewal: mocks.cancelAdminRenewal, getAdminCoupons: mocks.getAdminCoupons, createAdminCoupon: mocks.createAdminCoupon, disableAdminCoupon: mocks.disableAdminCoupon, retryAdminCouponReprice: mocks.retryAdminCouponReprice }));
+vi.mock("../api/admin", () => ({ getAdminMe: mocks.getAdminMe, getAdminOverview: mocks.getAdminOverview, getAdminUsers: mocks.getAdminUsers, getAdminUser: mocks.getAdminUser, getAdminOrganizations: mocks.getAdminOrganizations, getAdminOrganization: mocks.getAdminOrganization, getAdminPlans: mocks.getAdminPlans, getAdminUserAudit: mocks.getAdminUserAudit, changeAdminUserAccess: mocks.changeAdminUserAccess, createAdminAccount: mocks.createAdminAccount, sendAdminPasswordReset: mocks.sendAdminPasswordReset, changeAdminBeta: mocks.changeAdminBeta, grantAdminCourtesy: mocks.grantAdminCourtesy, endAdminCourtesy: mocks.endAdminCourtesy, getAdminPlanRequests: mocks.getAdminPlanRequests, requestAdminPlanChange: mocks.requestAdminPlanChange, withdrawAdminPlanChange: mocks.withdrawAdminPlanChange, cancelAdminRenewal: mocks.cancelAdminRenewal, getAdminCoupons: mocks.getAdminCoupons, createAdminCoupon: mocks.createAdminCoupon, disableAdminCoupon: mocks.disableAdminCoupon, retryAdminCouponReprice: mocks.retryAdminCouponReprice, getAdminStuckCheckoutAccounts: mocks.getAdminStuckCheckoutAccounts, getAdminUserCheckoutEvents: mocks.getAdminUserCheckoutEvents, getAdminCheckoutEvents: mocks.getAdminCheckoutEvents }));
 vi.mock("../api/auth", () => ({ login: mocks.login, logout: mocks.logout, resetPassword: mocks.resetPassword, validateResetToken: mocks.validateResetToken }));
 
 import { AdminApp } from "./AdminApp.jsx";
@@ -48,6 +51,8 @@ beforeEach(() => {
   mocks.getAdminOrganizations.mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 });
   mocks.getAdminPlans.mockResolvedValue({ items: [] });
   mocks.getAdminCoupons.mockResolvedValue({ items: [] });
+  mocks.getAdminStuckCheckoutAccounts.mockResolvedValue({ items: [] });
+  mocks.getAdminCheckoutEvents.mockResolvedValue({ items: [] });
   mocks.getAdminPlanRequests.mockResolvedValue({ items: [] });
   mocks.getAdminUserAudit.mockResolvedValue({ items: [] });
   mocks.sendAdminPasswordReset.mockResolvedValue({ email_sent: true });
@@ -97,6 +102,19 @@ describe("painel do administrador Fincla", () => {
     expect(mocks.login).toHaveBeenCalledWith("aislan.sousamaia@gmail.com", "senha-segura");
     fireEvent.click(screen.getAllByRole("button", { name: "Sair" })[1]);
     expect(mocks.logout).toHaveBeenCalled();
+  });
+
+  it("leva o administrador à seção de checkout pelo menu", async () => {
+    localStorage.setItem("auth_token", "admin-token");
+    mocks.getAdminMe.mockResolvedValue({ id: "admin-1", email: "admin@fincla.com", is_admin: true });
+
+    render(<AdminApp />);
+    await screen.findByText("Atenção agora");
+    fireEvent.click(screen.getAllByRole("button", { name: "Checkout" })[0]);
+
+    expect(await screen.findByRole("heading", { name: "Checkout" })).toBeInTheDocument();
+    expect(screen.getByText("Nenhuma conta aguardando o primeiro pagamento.")).toBeInTheDocument();
+    expect(mocks.getAdminStuckCheckoutAccounts).toHaveBeenCalled();
   });
 
   it("nega o painel ao proprietário sem permissão administrativa", async () => {

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, Building2, CreditCard, LayoutDashboard, LockKeyhole, LogOut, ShieldCheck, TicketPercent, UsersRound } from "lucide-react";
+import { ArrowRight, Building2, CreditCard, LayoutDashboard, LockKeyhole, LogOut, ShieldCheck, ShoppingCart, TicketPercent, UsersRound } from "lucide-react";
 import { getAdminMe } from "../api/admin";
 import { login, logout, resetPassword, validateResetToken } from "../api/auth";
 import { handleApiError } from "../api/client";
 import { PasswordResetPage } from "../ui/features/auth/PasswordResetPage.jsx";
 import { parseAuthEntryUrl, stripAuthEntryQueryAndHash } from "../ui/features/auth/authEntryUrl.js";
 import { AdminDirectory } from "./AdminDirectory";
+import { AdminCheckout } from "./AdminCheckout";
 import { AdminCoupons } from "./AdminCoupons";
 import { AdminDashboard } from "./AdminDashboard";
 import "./admin.css";
@@ -138,16 +139,16 @@ export function AdminApp() {
         <div className="admin-brand"><img src="/logo.png" alt="" /><span>fincla<span className="admin-brand-dot">.</span></span><small>ADMIN</small></div>
         <div className="admin-sidebar-section">ESPAÇO DE TRABALHO</div>
         <nav className="admin-sidebar-nav" aria-label="Administração">
-          {[["home", "Visão geral"], ["users", "Contas"], ["organizations", "Organizações"], ["plans", "Planos"], ["coupons", "Cupons"]].map(([key, label]) => <button key={key} type="button" className={section === key ? "admin-sidebar-current" : ""} onClick={() => navigate(key)}>{section === key && <span className="admin-sidebar-current-mark" />}{label}</button>)}
+          {[["home", "Visão geral"], ["users", "Contas"], ["organizations", "Organizações"], ["plans", "Planos"], ["coupons", "Cupons"], ["checkout", "Checkout"]].map(([key, label]) => <button key={key} type="button" className={section === key ? "admin-sidebar-current" : ""} onClick={() => navigate(key)}>{section === key && <span className="admin-sidebar-current-mark" />}{label}</button>)}
         </nav>
         <div className="admin-sidebar-bottom"><span>ADMINISTRADOR FINCLA</span><strong>{identity.email}</strong><button type="button" onClick={signOut}><LogOut size={16} aria-hidden="true" /> Sair</button></div>
       </aside>
       <section className="admin-content" ref={contentRef}>
-        <header className="admin-topbar"><span>Administração <span className="admin-breadcrumb-slash">/</span> {section === "home" ? "Visão geral" : section === "users" ? "Contas" : section === "organizations" ? "Organizações" : section === "coupons" ? "Cupons" : "Planos"}</span><span className="admin-topbar-secure"><ShieldCheck size={16} aria-hidden="true" /> Sessão protegida</span><button type="button" className="admin-mobile-signout" onClick={signOut}><LogOut size={16} aria-hidden="true" /> Sair</button></header>
-        {section === "home" ? <AdminDashboard onNavigate={navigate} /> : section === "coupons" ? <AdminCoupons /> : <AdminDirectory section={section} initialAction={directoryAction} />}
+        <header className="admin-topbar"><span>Administração <span className="admin-breadcrumb-slash">/</span> {section === "home" ? "Visão geral" : section === "users" ? "Contas" : section === "organizations" ? "Organizações" : section === "coupons" ? "Cupons" : section === "checkout" ? "Checkout" : "Planos"}</span><span className="admin-topbar-secure"><ShieldCheck size={16} aria-hidden="true" /> Sessão protegida</span><button type="button" className="admin-mobile-signout" onClick={signOut}><LogOut size={16} aria-hidden="true" /> Sair</button></header>
+        {section === "home" ? <AdminDashboard onNavigate={navigate} /> : section === "coupons" ? <AdminCoupons /> : section === "checkout" ? <AdminCheckout /> : <AdminDirectory section={section} initialAction={directoryAction} />}
       </section>
       <nav className="admin-mobile-nav" aria-label="Administração">
-        {[["home", "Início", LayoutDashboard], ["users", "Contas", UsersRound], ["organizations", "Organizações", Building2], ["plans", "Planos", CreditCard], ["coupons", "Cupons", TicketPercent]].map(([key, label, Icon]) => <button key={key} type="button" aria-current={section === key ? "page" : undefined} onClick={() => navigate(key)}><Icon size={19} aria-hidden="true" /><span>{label}</span></button>)}
+        {[["home", "Início", LayoutDashboard], ["users", "Contas", UsersRound], ["organizations", "Organizações", Building2], ["plans", "Planos", CreditCard], ["coupons", "Cupons", TicketPercent], ["checkout", "Checkout", ShoppingCart]].map(([key, label, Icon]) => <button key={key} type="button" aria-current={section === key ? "page" : undefined} onClick={() => navigate(key)}><Icon size={19} aria-hidden="true" /><span>{label}</span></button>)}
       </nav>
     </main>
   );
