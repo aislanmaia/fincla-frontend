@@ -43,3 +43,34 @@ it("restores the consultant offer chosen by an account returning to finish payme
   fireEvent.click(await screen.findByRole("button", { name: /continuar para o pagamento/i }));
   expect(await screen.findByRole("heading", { name: /pague com cartão/i })).toBeTruthy();
 });
+
+it("hands the consultant checkout's reset offer to the sign-in step after a refused registration", async () => {
+  const fetch = vi.fn(async (url, options) => {
+    if (url.includes("/checkout/register")) return { ok: false, status: 409, json: async () => ({ detail: { code: "checkout_account_exists", message: "Este email já tem uma conta no Fincla. Entre com sua senha para continuar.", password_reset_available: true } }) };
+    const selection = JSON.parse(options.body);
+    return { ok: true, json: async () => ({ catalog_version: "2026-09-15", selection, total_cents: 24900, capacity: selection.seats, currency: "BRL" }) };
+  });
+  vi.stubGlobal("fetch", fetch);
+  render(<ConsultantCheckoutPage session={{ isAuthenticated: false, signIn: vi.fn(), requestPasswordReset: vi.fn() }} />);
+  fireEvent.click(await screen.findByRole("button", { name: /continuar para seus dados/i }));
+  fireEvent.change(await screen.findByLabelText("Nome"), { target: { value: "Ana" } });
+  fireEvent.change(screen.getByLabelText("Email"), { target: { value: "ana@example.com" } });
+  fireEvent.change(screen.getByLabelText(/CPF\/CNPJ/), { target: { value: "24971563792" } });
+  fireEvent.change(screen.getByLabelText(/Celular com DDD/), { target: { value: "4738010919" } });
+  fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "Another123!" } });
+  fireEvent.change(screen.getByLabelText("Confirme sua senha"), { target: { value: "Another123!" } });
+  fireEvent.click(screen.getByRole("button", { name: "Continuar para o pagamento" }));
+  await screen.findByRole("heading", { name: /pague com cartão/i });
+  fireEvent.change(screen.getByLabelText("Nome do titular"), { target: { value: "Ana Souza" } });
+  fireEvent.change(screen.getByLabelText("Número do cartão"), { target: { value: "4242 4242 4242 4242" } });
+  fireEvent.change(screen.getByLabelText("Validade (MM/AA)"), { target: { value: "12/30" } });
+  fireEvent.change(screen.getByLabelText("CVV"), { target: { value: "123" } });
+  fireEvent.change(screen.getByLabelText("CEP"), { target: { value: "01001-000" } });
+  fireEvent.change(screen.getByLabelText("Número do endereço"), { target: { value: "10" } });
+  fireEvent.click(screen.getByLabelText(/Termos de contratação/));
+  fireEvent.click(screen.getByLabelText(/Autorizo a cobrança/));
+  fireEvent.submit(screen.getByLabelText("Número do cartão").closest("form"));
+  fireEvent.click(await screen.findByRole("button", { name: "Entrar com este email" }));
+
+  expect(await screen.findByRole("button", { name: "Esqueci minha senha" })).toBeInTheDocument();
+});
