@@ -513,6 +513,8 @@ it("sends a visitor whose email already has an account to sign in, never to a de
   expect(screen.getByLabelText("Email")).toHaveValue("maria@example.com");
   // The sign-in step repeats the API's own 409 message: one source for the copy.
   expect(screen.getByText(message)).toBeTruthy();
+  // Without the API's password_reset_available the checkout offers no reset of its own.
+  expect(screen.queryByRole("button", { name: "Esqueci minha senha" })).toBeNull();
   fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "Password123!" } });
   fireEvent.submit(screen.getByLabelText("Senha").closest("form"));
   await waitFor(() => expect(signIn).toHaveBeenCalledWith("maria@example.com", "Password123!"));
@@ -544,4 +546,87 @@ it("signs in only once when the sign-in form is submitted twice before the first
 it("falls back to its own sign-in copy when the handoff carries no message", () => {
   render(<CheckoutAccount session={{ isAuthenticated: false, signIn: vi.fn() }} signInEmail="maria@example.com" />);
   expect(screen.getByText("Este email já tem uma conta no Fincla. Entre com sua senha para continuar o pagamento.")).toBeTruthy();
+});
+
+async function reachSignInAfterRefusedRegistration(detail, session) {
+  const { fireEvent } = await import("@testing-library/react");
+  vi.stubGlobal("fetch", vi.fn(async (url, options) => {
+    if (url.includes("checkout-quote")) return { ok: true, json: async () => ({ selection: JSON.parse(options.body), total_cents: 2990, capacity: null }) };
+    if (url.includes("/checkout/register")) return { ok: false, status: 409, json: async () => ({ detail }) };
+    return { ok: true, json: async () => ({}) };
+  }));
+  render(<CheckoutPage search="?persona=personal&billing_cycle=monthly" session={session} />);
+  await screen.findByRole("button", { name: "Preencha os dados para continuar" });
+  fireEvent.click(screen.getByRole("button", { name: "Continuar" }));
+  fireEvent.change(screen.getByLabelText("Nome"), { target: { value: "Maria" } });
+  fireEvent.change(screen.getByLabelText("Email"), { target: { value: "maria@example.com" } });
+  fireEvent.change(screen.getByLabelText(/CPF\/CNPJ/), { target: { value: "24971563792" } });
+  fireEvent.change(screen.getByLabelText(/Celular com DDD/), { target: { value: "4738010919" } });
+  fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "Another123!" } });
+  fireEvent.change(screen.getByLabelText("Confirme sua senha"), { target: { value: "Another123!" } });
+  fireEvent.click(screen.getByRole("button", { name: "Continuar para o pagamento" }));
+  await screen.findByRole("heading", { name: "Pague com cartão" });
+  fireEvent.change(screen.getByLabelText("Nome do titular"), { target: { value: "Maria Silva" } });
+  fireEvent.change(screen.getByLabelText("Número do cartão"), { target: { value: "4242 4242 4242 4242" } });
+  fireEvent.change(screen.getByLabelText("Validade (MM/AA)"), { target: { value: "12/30" } });
+  fireEvent.change(screen.getByLabelText("CVV"), { target: { value: "123" } });
+  fireEvent.change(screen.getByLabelText("CEP"), { target: { value: "01001-000" } });
+  fireEvent.change(screen.getByLabelText("Número do endereço"), { target: { value: "10" } });
+  fireEvent.click(screen.getByLabelText(/Termos de contratação/));
+  fireEvent.click(screen.getByLabelText(/Autorizo a cobrança/));
+  fireEvent.submit(screen.getByLabelText("Número do cartão").closest("form"));
+  fireEvent.click(await screen.findByRole("button", { name: "Entrar com este email" }));
+  await screen.findByRole("heading", { name: "Entre para continuar" });
+}
+
+it("offers a reset link after the refusal only when the API says the lead never completed a checkout", async () => {
+  const { fireEvent } = await import("@testing-library/react");
+  const requestPasswordReset = vi.fn().mockResolvedValue(undefined);
+  await reachSignInAfterRefusedRegistration(
+    { code: "checkout_account_exists", message: "Este email já tem uma conta no Fincla. Entre com sua senha para continuar.", password_reset_available: true },
+    { isAuthenticated: false, signIn: vi.fn(), requestPasswordReset },
+  );
+
+  fireEvent.click(screen.getByRole("button", { name: "Esqueci minha senha" }));
+
+  expect(requestPasswordReset).toHaveBeenCalledWith("maria@example.com");
+  const note = await screen.findByRole("status");
+  expect(note).toHaveTextContent("Se houver uma conta para maria@example.com, enviamos um link para criar uma nova senha.");
+  expect(note).toHaveTextContent("volte a esta página e entre com a nova senha");
+  // A second request would invalidate the link just sent.
+  expect(screen.queryByRole("button", { name: "Esqueci minha senha" })).toBeNull();
+  fireEvent.change(screen.getByLabelText("Email"), { target: { value: "outra@example.com" } });
+  expect(screen.getByRole("status")).toHaveTextContent("maria@example.com");
+});
+
+it("hides the reset link once the email differs from the one the API vouched for", async () => {
+  const { fireEvent } = await import("@testing-library/react");
+  render(<CheckoutAccount session={{ isAuthenticated: false, signIn: vi.fn(), requestPasswordReset: vi.fn() }} signInEmail="maria@example.com" signInPasswordReset />);
+  expect(screen.getByRole("button", { name: "Esqueci minha senha" })).toBeInTheDocument();
+
+  fireEvent.change(screen.getByLabelText("Email"), { target: { value: "MARIA@example.com" } });
+  expect(screen.getByRole("button", { name: "Esqueci minha senha" })).toBeInTheDocument();
+
+  fireEvent.change(screen.getByLabelText("Email"), { target: { value: "outra@example.com" } });
+  expect(screen.queryByRole("button", { name: "Esqueci minha senha" })).toBeNull();
+});
+
+it("shows the delivery error and no confirmation when the reset email cannot be sent", async () => {
+  const { fireEvent } = await import("@testing-library/react");
+  const requestPasswordReset = vi.fn().mockRejectedValue(new Error("Não foi possível enviar o e-mail agora. Tente novamente mais tarde."));
+  render(<CheckoutAccount session={{ isAuthenticated: false, signIn: vi.fn(), requestPasswordReset }} signInEmail="maria@example.com" signInPasswordReset />);
+
+  fireEvent.click(screen.getByRole("button", { name: "Esqueci minha senha" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Não foi possível enviar o e-mail agora.");
+  expect(screen.queryByRole("status")).toBeNull();
+});
+
+it("never offers the reset link on a plain sign-in or on the create-account step", () => {
+  const session = { isAuthenticated: false, signIn: vi.fn(), requestPasswordReset: vi.fn() };
+  const { unmount } = render(<CheckoutAccount session={session} signInEmail="maria@example.com" />);
+  expect(screen.queryByRole("button", { name: "Esqueci minha senha" })).toBeNull();
+  unmount();
+  render(<CheckoutAccount session={session} signInPasswordReset />);
+  expect(screen.queryByRole("button", { name: "Esqueci minha senha" })).toBeNull();
 });

@@ -57,7 +57,8 @@ export interface CheckoutAttempt {
 }
 
 export class CheckoutRequestError extends Error {
-  constructor(message: string, public code: string | undefined, public fields: string[] = []) { super(message); }
+  /** Set only on the 409 of POST /checkout/register (never on login) for a lead that never completed a checkout. */
+  constructor(message: string, public code: string | undefined, public fields: string[] = [], public passwordResetAvailable = false) { super(message); }
 }
 
 async function checkoutRequest<T>(path: string, body?: unknown): Promise<T> {
@@ -71,7 +72,7 @@ async function checkoutRequest<T>(path: string, body?: unknown): Promise<T> {
       signal: controller.signal,
     });
     const payload = await response.json();
-    if (!response.ok) throw new CheckoutRequestError(payload?.detail?.message || 'Não foi possível continuar. Confira os dados e tente novamente.', payload?.detail?.code, Array.isArray(payload?.detail?.fields) ? payload.detail.fields : []);
+    if (!response.ok) throw new CheckoutRequestError(payload?.detail?.message || 'Não foi possível continuar. Confira os dados e tente novamente.', payload?.detail?.code, Array.isArray(payload?.detail?.fields) ? payload.detail.fields : [], payload?.detail?.password_reset_available === true);
     return payload;
   } finally { window.clearTimeout(timeout); }
 }

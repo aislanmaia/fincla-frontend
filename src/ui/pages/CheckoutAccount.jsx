@@ -30,7 +30,11 @@ export function RegisteredCheckoutAccount({ details, email }) {
 // was handed; this is only the fallback when the handoff carries none.
 const SIGN_IN_HANDOFF_FALLBACK = "Este email já tem uma conta no Fincla. Entre com sua senha para continuar o pagamento.";
 
-export function CheckoutAccount({ session, onContinue, signInEmail = "", signInMessage = "" }) {
+const sameEmail = (left, right) => left.trim().toLowerCase() === right.trim().toLowerCase();
+
+// `signInPasswordReset` comes from the API's 409 and is true only for a lead that
+// never completed a checkout; every other account resets through the app itself.
+export function CheckoutAccount({ session, onContinue, signInEmail = "", signInMessage = "", signInPasswordReset = false }) {
   const [login, setLogin] = useState(Boolean(signInEmail));
   const [busy, setBusy] = useState(false);
   // Defensive, like CheckoutPayment's: the disabled button already blocks a second
@@ -38,6 +42,9 @@ export function CheckoutAccount({ session, onContinue, signInEmail = "", signInM
   // before that render (the same guard regardless of how events are batched).
   const submitting = useRef(false);
   const [error, setError] = useState("");
+  // The email a reset link was requested for; the API answers the same whether or
+  // not an account exists, so the note never claims one does.
+  const [resetSentTo, setResetSentTo] = useState("");
   const [touched, setTouched] = useState({});
   const [values, setValues] = useState({ name: "", email: signInEmail, cpfCnpj: "", phone: "", password: "", passwordConfirmation: "" });
   const validEmail = /^\S+@\S+\.\S+$/.test(values.email);
@@ -70,6 +77,19 @@ export function CheckoutAccount({ session, onContinue, signInEmail = "", signInM
     } catch (failure) { setError(failure.message); }
     finally { submitting.current = false; setBusy(false); }
   }
+  // The API vouched for the handed-off email only; editing it hides the offer.
+  // Once sent, the offer goes away: each new request invalidates the links already sent.
+  const canResetPassword = login && signInPasswordReset && Boolean(signInEmail) && sameEmail(values.email, signInEmail) && !resetSentTo;
+  async function requestReset() {
+    if (submitting.current || !canResetPassword) return;
+    submitting.current = true; setBusy(true); setError(""); setResetSentTo("");
+    const email = signInEmail.trim();
+    try {
+      await session.requestPasswordReset(email);
+      setResetSentTo(email);
+    } catch (failure) { setError(failure.message); }
+    finally { submitting.current = false; setBusy(false); }
+  }
   return <section aria-labelledby={login ? "checkout-account-title" : undefined} aria-label={login ? undefined : "Dados de acesso"} style={{ marginTop: 2 }}>
     {login && <h2 id="checkout-account-title" style={{ margin: "0 0 14px", fontSize: 20 }}>Entre para continuar</h2>}
     <p style={{ color: T.inkMid, margin: "0 0 22px", lineHeight: 1.6 }}>{login ? (signInEmail ? (signInMessage || SIGN_IN_HANDOFF_FALLBACK) : "Use os dados da conta que já contratou esta oferta.") : "Informe os dados que usará no Fincla. Sua conta será criada ao confirmar a assinatura e o acesso será liberado após o pagamento."}</p>
@@ -80,10 +100,12 @@ export function CheckoutAccount({ session, onContinue, signInEmail = "", signInM
       <CheckoutField label="Senha" name="password" type="password" minLength={8} autoComplete={login ? "current-password" : "new-password"} value={values.password} error={fieldError("password")} hint={!login && values.password && values.password === values.passwordConfirmation ? "As senhas coincidem" : ""} onBlur={touch("password")} onChange={(event) => setValues((current) => ({ ...current, password: event.target.value }))} />
       {!login && <CheckoutField label="Confirme sua senha" name="passwordConfirmation" type="password" minLength={8} autoComplete="new-password" value={values.passwordConfirmation} error={fieldError("passwordConfirmation")} hint={values.password && values.password === values.passwordConfirmation ? "As senhas coincidem" : ""} onBlur={touch("passwordConfirmation")} onChange={(event) => setValues((current) => ({ ...current, passwordConfirmation: event.target.value }))} />}
       {!login && <p style={{ color: T.inkGhost, fontSize: 12, lineHeight: 1.5, margin: "-3px 0 0" }}>Use pelo menos 8 caracteres na senha.</p>}
+      {canResetPassword && <button type="button" disabled={busy} onClick={requestReset} style={{ justifySelf: "start", marginTop: -5, border: 0, padding: 0, background: "transparent", color: T.inkMid, font: "inherit", fontSize: 13, textDecoration: "underline", cursor: "pointer" }}>Esqueci minha senha</button>}
+      {resetSentTo && <p role="status" style={{ margin: 0, padding: "11px 13px", borderRadius: 10, background: "#E8F6EE", color: T.ink, fontSize: 13, lineHeight: 1.5 }}>Se houver uma conta para <strong>{resetSentTo}</strong>, enviamos um link para criar uma nova senha. Depois de criar, volte a esta página e entre com a nova senha para continuar o pagamento. Se ela tiver recarregado, use "Já tem uma conta? Entrar". Confira também o spam.</p>}
       {error && <p role="alert" style={{ color: T.red, margin: 0 }}>{error}</p>}
       <Btn type="submit" variant="dark" full disabled={!canSubmit}>{busy ? "Aguarde…" : canSubmit ? "Continuar para o pagamento" : "Preencha seus dados para continuar"}</Btn>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, color: T.inkGhost, fontSize: 13, paddingTop: 2 }}>
-        <span>{login ? "Ainda não tem conta?" : "Já tem uma conta?"}</span><button type="button" disabled={busy} onClick={() => { setLogin(!login); setError(""); }} style={{ border: 0, padding: 0, background: "transparent", color: T.ink, font: "inherit", fontWeight: 750, textDecoration: "underline", cursor: "pointer" }}>{login ? "Criar conta" : "Entrar"}</button>
+        <span>{login ? "Ainda não tem conta?" : "Já tem uma conta?"}</span><button type="button" disabled={busy} onClick={() => { setLogin(!login); setError(""); setResetSentTo(""); }} style={{ border: 0, padding: 0, background: "transparent", color: T.ink, font: "inherit", fontWeight: 750, textDecoration: "underline", cursor: "pointer" }}>{login ? "Criar conta" : "Entrar"}</button>
       </div>
     </form>
     {!login && <p style={{ color: T.inkGhost, fontSize: 12, lineHeight: 1.5, margin: "22px 0 0" }}>Pessoal e Consultor usam perfis separados. Para contratar a outra área, use outro email.</p>}
