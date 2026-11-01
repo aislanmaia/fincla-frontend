@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { T } from "../tokens.js";
 import { Btn } from "../components/primitives.jsx";
 
@@ -26,9 +26,17 @@ export function RegisteredCheckoutAccount({ details, email }) {
   </section>;
 }
 
-export function CheckoutAccount({ session, onContinue, signInEmail = "" }) {
+// The sign-in step repeats the API's 409 `checkout_account_exists` message it
+// was handed; this is only the fallback when the handoff carries none.
+const SIGN_IN_HANDOFF_FALLBACK = "Este email já tem uma conta no Fincla. Entre com sua senha para continuar o pagamento.";
+
+export function CheckoutAccount({ session, onContinue, signInEmail = "", signInMessage = "" }) {
   const [login, setLogin] = useState(Boolean(signInEmail));
   const [busy, setBusy] = useState(false);
+  // Defensive, like CheckoutPayment's: the disabled button already blocks a second
+  // submit once `busy` renders, but the ref also holds when two submits land
+  // before that render (the same guard regardless of how events are batched).
+  const submitting = useRef(false);
   const [error, setError] = useState("");
   const [touched, setTouched] = useState({});
   const [values, setValues] = useState({ name: "", email: signInEmail, cpfCnpj: "", phone: "", password: "", passwordConfirmation: "" });
@@ -49,8 +57,8 @@ export function CheckoutAccount({ session, onContinue, signInEmail = "" }) {
   const touch = (field) => () => setTouched((current) => ({ ...current, [field]: true }));
   async function submit(event) {
     event.preventDefault();
-    if (busy) return;
-    setBusy(true); setError("");
+    if (submitting.current) return;
+    submitting.current = true; setBusy(true); setError("");
     const fields = new FormData(event.currentTarget);
     const email = fields.get("email"), password = fields.get("password");
     try {
@@ -60,11 +68,11 @@ export function CheckoutAccount({ session, onContinue, signInEmail = "" }) {
         onContinue?.({ name: String(fields.get("name")), email: String(email), cpfCnpj: String(fields.get("cpfCnpj")), phone: String(fields.get("phone")), password: String(password) });
       }
     } catch (failure) { setError(failure.message); }
-    finally { setBusy(false); }
+    finally { submitting.current = false; setBusy(false); }
   }
   return <section aria-labelledby={login ? "checkout-account-title" : undefined} aria-label={login ? undefined : "Dados de acesso"} style={{ marginTop: 2 }}>
     {login && <h2 id="checkout-account-title" style={{ margin: "0 0 14px", fontSize: 20 }}>Entre para continuar</h2>}
-    <p style={{ color: T.inkMid, margin: "0 0 22px", lineHeight: 1.6 }}>{login ? (signInEmail ? "Este email já tem uma conta no Fincla. Entre com sua senha para continuar o pagamento." : "Use os dados da conta que já contratou esta oferta.") : "Informe os dados que usará no Fincla. Sua conta será criada ao confirmar a assinatura e o acesso será liberado após o pagamento."}</p>
+    <p style={{ color: T.inkMid, margin: "0 0 22px", lineHeight: 1.6 }}>{login ? (signInEmail ? (signInMessage || SIGN_IN_HANDOFF_FALLBACK) : "Use os dados da conta que já contratou esta oferta.") : "Informe os dados que usará no Fincla. Sua conta será criada ao confirmar a assinatura e o acesso será liberado após o pagamento."}</p>
     <form onSubmit={submit} style={{ display: "grid", gap: 15 }}>
       {!login && <CheckoutField label="Nome" name="name" autoComplete="given-name" value={values.name} error={fieldError("name")} onBlur={touch("name")} onChange={(event) => setValues((current) => ({ ...current, name: event.target.value }))} />}
       <CheckoutField label="Email" name="email" type="email" autoComplete="email" value={values.email} error={fieldError("email")} onBlur={touch("email")} onChange={(event) => setValues((current) => ({ ...current, email: event.target.value }))} />

@@ -3,6 +3,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { CheckoutPage } from "./CheckoutPage.jsx";
 import { checkoutFieldErrors } from "./CheckoutPayment.jsx";
+import { CheckoutAccount } from "./CheckoutAccount.jsx";
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -510,7 +511,37 @@ it("sends a visitor whose email already has an account to sign in, never to a de
   // The refused registration (and its password) is discarded: payment waits for the signed-in account.
   expect(screen.queryByRole("heading", { name: "Pague com cartão" })).toBeNull();
   expect(screen.getByLabelText("Email")).toHaveValue("maria@example.com");
+  // The sign-in step repeats the API's own 409 message: one source for the copy.
+  expect(screen.getByText(message)).toBeTruthy();
   fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "Password123!" } });
   fireEvent.submit(screen.getByLabelText("Senha").closest("form"));
   await waitFor(() => expect(signIn).toHaveBeenCalledWith("maria@example.com", "Password123!"));
+});
+
+it("signs in only once when the sign-in form is submitted twice before the first attempt settles", async () => {
+  const { act, fireEvent } = await import("@testing-library/react");
+  let settle;
+  const signIn = vi.fn()
+    .mockImplementationOnce(() => new Promise((resolve) => { settle = resolve; }))
+    .mockResolvedValue({});
+  render(<CheckoutAccount session={{ isAuthenticated: false, signIn }} signInEmail="maria@example.com" />);
+  fireEvent.change(screen.getByLabelText("Senha"), { target: { value: "Password123!" } });
+  const form = screen.getByLabelText("Senha").closest("form");
+  // Both submits land before React commits `busy` (the disabled button's guard);
+  // the ref still lets only the first through.
+  act(() => {
+    fireEvent.submit(form);
+    fireEvent.submit(form);
+  });
+  expect(signIn).toHaveBeenCalledTimes(1);
+  await act(async () => { settle({}); });
+  await waitFor(() => expect(screen.getByRole("button", { name: "Continuar para o pagamento" })).toBeEnabled());
+  // Once the first attempt settles the guard is released for a genuine retry.
+  await act(async () => { fireEvent.submit(form); });
+  expect(signIn).toHaveBeenCalledTimes(2);
+});
+
+it("falls back to its own sign-in copy when the handoff carries no message", () => {
+  render(<CheckoutAccount session={{ isAuthenticated: false, signIn: vi.fn() }} signInEmail="maria@example.com" />);
+  expect(screen.getByText("Este email já tem uma conta no Fincla. Entre com sua senha para continuar o pagamento.")).toBeTruthy();
 });
