@@ -19,6 +19,7 @@ const EVENT_LABELS = {
   charge_declined: "Cobrança recusada",
   charge_uncertain: "Cobrança sem confirmação",
   charge_sent: "Cobrança enviada",
+  sign_in_throttled: "Tentativas de senha bloqueadas",
 };
 
 const REASON_LABELS = {
@@ -45,12 +46,29 @@ const REASON_LABELS = {
   asaas_card_declined: "Cartão recusado pelo Asaas",
   asaas_field_rejected: "Asaas recusou um campo",
   gateway_uncertain: "Asaas não confirmou a cobrança",
+  too_many_attempts_email_from_address: "Muitas senhas erradas para este e-mail, vindas da mesma conexão",
+  too_many_attempts_email: "Muitas senhas erradas para este e-mail, de várias conexões",
+  too_many_attempts_address: "Muitas senhas erradas vindas da mesma conexão, em vários e-mails",
 };
 
 const STATUS_LABELS = { pending_payment: "aguardando pagamento", active: "ativa", past_due: "em atraso", cancelled: "cancelada", expired: "expirada" };
 const PROVIDER_REASONS = { manual: "Assinatura gerida manualmente, fora do Asaas", sponsored: "Acesso cedido (cortesia), sem cobrança" };
 const LIST_LIMIT = 100;
 const CYCLE_LABELS = { monthly: "Mensal", yearly: "Anual" };
+
+// A block on one connection guessing many emails names no account and no email:
+// the email that happened to be guessed when the limit hit is not the attacker.
+const isAddressBlock = (event) => event.reason === "too_many_attempts_address";
+
+function problemSubject(event) {
+  if (event.email) return event.email;
+  return isAddressBlock(event) ? "Vários e-mails" : "E-mail não informado";
+}
+
+function problemContext(event) {
+  if (event.user_id) return "Conta criada";
+  return isAddressBlock(event) ? "Sem conta ligada" : "Antes de criar a conta";
+}
 
 export function eventLabel(eventType) {
   return EVENT_LABELS[eventType] || eventType;
@@ -239,7 +257,7 @@ export function AdminCheckout() {
       : <div className="admin-directory-list">
         {items.map((item) => {
           const row = <>
-            <span><strong>{item.email || "E-mail não informado"}</strong><small>{item.user_id ? "Conta criada" : "Antes de criar a conta"}</small></span>
+            <span><strong>{problemSubject(item)}</strong><small>{problemContext(item)}</small></span>
             <EventSummary event={item} empty="" />
             <span className="admin-pill admin-checkout-pill-problem">Problema</span>
           </>;
