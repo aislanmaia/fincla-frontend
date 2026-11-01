@@ -130,7 +130,8 @@ describe("checkout no painel administrativo", () => {
   it("mostra o bloqueio de uma conexão sem atribuí-lo a um e-mail nem a uma conta", async () => {
     mocks.getAdminCheckoutEvents.mockResolvedValue({
       items: [
-        { id: "t1", user_id: null, email: null, event_type: "sign_in_throttled", severity: "problem", reason: "too_many_attempts_address", created_at: "2026-11-01T13:00:00", details: { route: "login", limit: 20, window_minutes: 15 } },
+        { id: "t1", user_id: null, email: "inocente@example.com", event_type: "sign_in_throttled", severity: "problem", reason: "too_many_attempts_address", created_at: "2026-11-01T13:00:00", details: { route: "login", limit: 20, window_minutes: 15 } },
+        { id: "t2", user_id: "user-lead", email: "lead@example.com", event_type: "sign_in_throttled", severity: "problem", reason: "too_many_attempts_email_from_address", created_at: "2026-11-01T12:00:00", details: { route: "checkout_register", limit: 5, window_minutes: 15 } },
       ],
     });
     render(<AdminCheckout />);
@@ -139,9 +140,14 @@ describe("checkout no painel administrativo", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Problemas recentes" }));
 
     expect(await screen.findByText("Vários e-mails")).toBeInTheDocument();
-    expect(screen.getByText("Sem conta ligada").closest("button")).toBeNull();
+    expect(screen.getByText("Sem conta ligada · no login").closest("button")).toBeNull();
     expect(screen.getByText(/Muitas senhas erradas vindas da mesma conexão, em vários e-mails/)).toBeInTheDocument();
+    expect(screen.queryByText("inocente@example.com")).toBeNull();
     expect(screen.queryByText("Antes de criar a conta")).toBeNull();
+
+    const leadRow = screen.getByRole("button", { name: /lead@example.com/ });
+    expect(leadRow).toHaveTextContent("Conta criada");
+    expect(leadRow).toHaveTextContent("Muitas senhas erradas para este e-mail, vindas da mesma conexão");
   });
 
   it("mostra o erro da API sem esconder a tela", async () => {

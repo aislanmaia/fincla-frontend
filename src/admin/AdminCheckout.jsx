@@ -58,16 +58,18 @@ const CYCLE_LABELS = { monthly: "Mensal", yearly: "Anual" };
 
 // A block on one connection guessing many emails names no account and no email:
 // the email that happened to be guessed when the limit hit is not the attacker.
-const isAddressBlock = (event) => event.reason === "too_many_attempts_address";
+// It is checked first so a stray email on such an event is never shown as its subject.
+const THROTTLED_ROUTES = { login: "no login", checkout_register: "no cadastro do checkout" };
 
-function problemSubject(event) {
-  if (event.email) return event.email;
-  return isAddressBlock(event) ? "Vários e-mails" : "E-mail não informado";
-}
-
-function problemContext(event) {
-  if (event.user_id) return "Conta criada";
-  return isAddressBlock(event) ? "Sem conta ligada" : "Antes de criar a conta";
+function problemHeading(event) {
+  if (event.reason === "too_many_attempts_address") {
+    const route = THROTTLED_ROUTES[event.details?.route];
+    return { subject: "Vários e-mails", context: route ? `Sem conta ligada · ${route}` : "Sem conta ligada" };
+  }
+  return {
+    subject: event.email || "E-mail não informado",
+    context: event.user_id ? "Conta criada" : "Antes de criar a conta",
+  };
 }
 
 export function eventLabel(eventType) {
@@ -256,8 +258,9 @@ export function AdminCheckout() {
       </div>
       : <div className="admin-directory-list">
         {items.map((item) => {
+          const heading = problemHeading(item);
           const row = <>
-            <span><strong>{problemSubject(item)}</strong><small>{problemContext(item)}</small></span>
+            <span><strong>{heading.subject}</strong><small>{heading.context}</small></span>
             <EventSummary event={item} empty="" />
             <span className="admin-pill admin-checkout-pill-problem">Problema</span>
           </>;
