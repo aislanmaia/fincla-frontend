@@ -298,3 +298,4 @@
 .admin-checkout-details pre { margin: 8px 0 0; padding: 12px; max-height: 320px; overflow: auto; background: #f6f8f4; border: 1px solid #e6ebe3; border-radius: 8px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 900px) { .admin-checkout-detail { grid-template-columns: 1fr; } }
 @media (max-width: 760px) { .admin-checkout-row { grid-template-columns: minmax(0, 1fr) 18px; } .admin-checkout-row > span:nth-child(2) { display: block; } .admin-checkout-row > :nth-child(2), .admin-checkout-row > :nth-child(3) { grid-column: 1; } .admin-checkout-row > :last-child { grid-column: 2; grid-row: 1; } .admin-checkout-event-head time { margin-left: 0; width: 100%; } }
+.admin-checkout-limit { margin: 12px 2px 0; color: #77877a; font-size: 12px; }

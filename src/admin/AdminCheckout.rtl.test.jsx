@@ -134,6 +134,53 @@ describe("checkout no painel administrativo", () => {
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Checkout" })).toBeInTheDocument();
   });
+
+  it("não deixa a linha do tempo de uma conta aberta antes aparecer na conta aberta depois", async () => {
+    let releaseFirst;
+    mocks.getAdminUserCheckoutEvents
+      .mockImplementationOnce(() => new Promise((resolve) => { releaseFirst = () => resolve({ items: TIMELINE }); }))
+      .mockResolvedValueOnce({ items: [] });
+    render(<AdminCheckout />);
+    fireEvent.click(await screen.findByRole("button", { name: /Maria/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Voltar para o checkout/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /old@example.com/ }));
+    expect(await screen.findByText(/foi criada antes do diário existir/)).toBeInTheDocument();
+
+    releaseFirst();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(screen.queryByText("Cobrança recusada")).not.toBeInTheDocument();
+    expect(screen.getByText(/foi criada antes do diário existir/)).toBeInTheDocument();
+  });
+
+  it("não leva o erro da linha do tempo de volta para a lista", async () => {
+    mocks.getAdminUserCheckoutEvents.mockRejectedValue({ response: { status: 404, data: { detail: "Usuário não encontrado" } } });
+    render(<AdminCheckout />);
+    fireEvent.click(await screen.findByRole("button", { name: /Maria/ }));
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Voltar para o checkout/ }));
+
+    expect(await screen.findByRole("button", { name: /Maria/ })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("avisa quando a lista chegou ao limite e pode estar cortada", async () => {
+    const many = Array.from({ length: 100 }, (_, index) => ({ ...OLD_ACCOUNT, user_id: `user-${index}`, email: `lead${index}@example.com` }));
+    mocks.getAdminStuckCheckoutAccounts.mockResolvedValue({ items: many });
+    render(<AdminCheckout />);
+
+    expect(await screen.findByRole("note")).toHaveTextContent("Mostrando só os 100 mais recentes");
+  });
+
+  it("não derruba a tela com uma data que não dá para ler", async () => {
+    mocks.getAdminUserCheckoutEvents.mockResolvedValue({ items: [{ ...TIMELINE[1], created_at: "não é data" }] });
+    render(<AdminCheckout />);
+    fireEvent.click(await screen.findByRole("button", { name: /Maria/ }));
+
+    const timeline = await screen.findByRole("list", { name: "Linha do tempo do checkout" });
+    expect(within(timeline).getByText("—")).toBeInTheDocument();
+  });
 });
 
 describe("conta sem eventos no diário", () => {
@@ -147,7 +194,11 @@ describe("conta sem eventos no diário", () => {
 describe("rótulos dos motivos", () => {
   it("traduz os motivos com prefixo e mantém o código desconhecido", () => {
     expect(reasonLabel("subscription_active")).toBe("Assinatura ativa");
-    expect(reasonLabel("gateway_manual")).toBe("Cobrança por outro provedor (manual)");
+    expect(reasonLabel("subscription_expired")).toBe("Assinatura expirada");
+    expect(reasonLabel("gateway_manual")).toBe("Assinatura gerida manualmente, fora do Asaas");
+    expect(reasonLabel("gateway_sponsored")).toBe("Acesso cedido (cortesia), sem cobrança");
+    expect(reasonLabel("gateway_uncertain")).toBe("Asaas não confirmou a cobrança");
+    expect(reasonLabel("account_not_created")).toBe("Erro ao criar a conta");
     expect(reasonLabel("password_mismatch")).toBe("Senha diferente da cadastrada");
     expect(reasonLabel("brand_new_reason")).toBe("brand_new_reason");
     expect(reasonLabel(null)).toBeNull();

@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { getAdminCheckoutEvents, getAdminStuckCheckoutAccounts, getAdminUserCheckoutEvents } from "../api/admin";
 import { handleApiError } from "../api/client";
 import { AdminSelect } from "./AdminSelect";
 
-// The diary went live with API v298: accounts created before it have no entries.
+// The diary went live with API v298 in production: accounts created before it have no
+// entries. Admin runs only against production, so the cutoff is that deploy's instant.
 const DIARY_STARTED_AT = "2026-11-01T02:51:10Z";
 
 const EVENT_LABELS = {
@@ -27,6 +28,7 @@ const REASON_LABELS = {
   persona_mismatch: "Plano de outro perfil (pessoal × consultor)",
   invalid_offer: "Oferta inválida",
   email_lookup_failed: "Erro ao consultar o e-mail",
+  account_not_created: "Erro ao criar a conta",
   subscription_lookup_failed: "Erro ao consultar a assinatura",
   asaas_customer_rejected: "Asaas recusou os dados do cliente",
   asaas_customer_unavailable: "Asaas indisponível ao criar o cliente",
@@ -45,7 +47,9 @@ const REASON_LABELS = {
   gateway_uncertain: "Asaas não confirmou a cobrança",
 };
 
-const STATUS_LABELS = { pending_payment: "aguardando pagamento", active: "ativa", past_due: "em atraso", cancelled: "cancelada", suspended: "suspensa", trialing: "em teste" };
+const STATUS_LABELS = { pending_payment: "aguardando pagamento", active: "ativa", past_due: "em atraso", cancelled: "cancelada", expired: "expirada" };
+const PROVIDER_REASONS = { manual: "Assinatura gerida manualmente, fora do Asaas", sponsored: "Acesso cedido (cortesia), sem cobrança" };
+const LIST_LIMIT = 100;
 const CYCLE_LABELS = { monthly: "Mensal", yearly: "Anual" };
 
 export function eventLabel(eventType) {
@@ -59,16 +63,24 @@ export function reasonLabel(reason) {
     const status = reason.slice("subscription_".length);
     return `Assinatura ${STATUS_LABELS[status] || status}`;
   }
-  if (reason.startsWith("gateway_")) return `Cobrança por outro provedor (${reason.slice("gateway_".length)})`;
+  if (reason.startsWith("gateway_")) {
+    const provider = reason.slice("gateway_".length);
+    return PROVIDER_REASONS[provider] || `Assinatura fora do Asaas (${provider})`;
+  }
   return reason;
 }
 
 // The API sends UTC timestamps without an offset.
 const asUtc = (value) => new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(value) ? value : `${value}Z`);
-const dateTime = (value) => value ? new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(asUtc(value)) : "—";
-const dateOnly = (value) => value ? new Intl.DateTimeFormat("pt-BR").format(asUtc(value)) : "—";
+const validDate = (value) => {
+  if (!value) return null;
+  const parsed = asUtc(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+const dateTime = (value) => { const parsed = validDate(value); return parsed ? new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(parsed) : "—"; };
+const dateOnly = (value) => { const parsed = validDate(value); return parsed ? new Intl.DateTimeFormat("pt-BR").format(parsed) : "—"; };
 const accountName = (account) => account.first_name || account.email || "Sem e-mail";
-const createdBeforeDiary = (account) => Boolean(account.account_created_at) && asUtc(account.account_created_at) < new Date(DIARY_STARTED_AT);
+const createdBeforeDiary = (account) => { const created = validDate(account.account_created_at); return Boolean(created) && created < new Date(DIARY_STARTED_AT); };
 export const noEventsLabel = (account) => createdBeforeDiary(account)
   ? `Criada antes do diário (${dateTime(DIARY_STARTED_AT)})`
   : "Nenhum passo registrado no diário";
@@ -98,7 +110,7 @@ function Timeline({ events, account }) {
           <div className="admin-checkout-event-head">
             <strong>{eventLabel(event.event_type)}</strong>
             <span className={`admin-checkout-severity is-${event.severity}`}>{event.severity === "problem" ? "Problema" : "Registro"}</span>
-            <time dateTime={asUtc(event.created_at).toISOString()}>{dateTime(event.created_at)}</time>
+            <time dateTime={validDate(event.created_at)?.toISOString()}>{dateTime(event.created_at)}</time>
           </div>
           {reason && <p className="admin-checkout-reason">{reason} <code>{event.reason}</code></p>}
           {hasDetails && <details className="admin-checkout-details" open={event.severity === "problem"}>
@@ -121,13 +133,15 @@ export function AdminCheckout() {
   const [account, setAccount] = useState(null);
   const [events, setEvents] = useState([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
+  // Only the latest timeline request may fill the screen.
+  const timelineRequest = useRef(0);
 
   useEffect(() => {
     let active = true;
     setLoading(true); setError("");
     const request = view === "stuck"
-      ? getAdminStuckCheckoutAccounts({ only_problems: onlyProblems || undefined, limit: 100 })
-      : getAdminCheckoutEvents({ severity: "problem", limit: 100 });
+      ? getAdminStuckCheckoutAccounts({ only_problems: onlyProblems || undefined, limit: LIST_LIMIT })
+      : getAdminCheckoutEvents({ severity: "problem", limit: LIST_LIMIT });
     request.then((result) => { if (active) setItems(result.items); })
       .catch((nextError) => { if (active) setError(handleApiError(nextError)); })
       .finally(() => { if (active) setLoading(false); });
@@ -137,14 +151,21 @@ export function AdminCheckout() {
   async function openAccount(nextAccount) {
     const content = document.querySelector(".admin-content");
     if (content) content.scrollTop = 0;
+    const request = ++timelineRequest.current;
     setAccount(nextAccount); setEvents([]); setError(""); setLoadingEvents(true);
     try {
-      setEvents((await getAdminUserCheckoutEvents(nextAccount.user_id)).items);
+      const result = await getAdminUserCheckoutEvents(nextAccount.user_id);
+      if (request === timelineRequest.current) setEvents(result.items);
     } catch (nextError) {
-      setError(handleApiError(nextError));
+      if (request === timelineRequest.current) setError(handleApiError(nextError));
     } finally {
-      setLoadingEvents(false);
+      if (request === timelineRequest.current) setLoadingEvents(false);
     }
+  }
+
+  function closeAccount() {
+    timelineRequest.current += 1;
+    setAccount(null); setEvents([]); setError(""); setLoadingEvents(false);
   }
 
   function changeView(nextView) {
@@ -152,7 +173,7 @@ export function AdminCheckout() {
     // Each view has its own row shape; never render one with the other's rows.
     setItems([]);
     setLoading(true);
-    setAccount(null);
+    closeAccount();
     setView(nextView);
   }
 
@@ -161,7 +182,7 @@ export function AdminCheckout() {
       <div className="admin-page-number">06 / CHECKOUT</div>
       <div className="admin-directory-heading">
         <div>
-          <button className="admin-back" type="button" onClick={() => setAccount(null)}><ArrowLeft size={16} /> Voltar para o checkout</button>
+          <button className="admin-back" type="button" onClick={closeAccount}><ArrowLeft size={16} /> Voltar para o checkout</button>
           <h1>{accountName(account)}</h1>
           <p>O que aconteceu com esta conta no caminho até o pagamento, do mais recente ao mais antigo.</p>
         </div>
@@ -208,7 +229,7 @@ export function AdminCheckout() {
     {loading ? <p role="status">Carregando…</p> : view === "stuck"
       ? <div className="admin-directory-list">
         {items.map((item) => <button type="button" className="admin-directory-row admin-checkout-row" key={item.user_id} onClick={() => openAccount(item)}>
-          <span><strong>{accountName(item)}</strong><small>{item.email} · criada em {dateOnly(item.account_created_at)}</small></span>
+          <span><strong>{accountName(item)}</strong><small>{item.email ? `${item.email} · ` : ""}criada em {dateOnly(item.account_created_at)}</small></span>
           <EventSummary event={item.last_problem || item.last_event} empty={noEventsLabel(item)} />
           <span className={`admin-pill ${item.problem_count ? "admin-checkout-pill-problem" : ""}`}>{item.problem_count ? `${item.problem_count} ${item.problem_count === 1 ? "problema" : "problemas"}` : "Sem problemas"}</span>
           <ChevronRight size={18} />
@@ -228,5 +249,6 @@ export function AdminCheckout() {
         })}
         {!items.length && <p className="admin-empty">Nenhum problema registrado no checkout.</p>}
       </div>}
+    {!loading && items.length >= LIST_LIMIT && <p className="admin-checkout-limit" role="note">Mostrando só os {LIST_LIMIT} mais recentes; os mais antigos não aparecem nesta lista.</p>}
   </div>;
 }
