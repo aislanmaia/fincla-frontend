@@ -78,7 +78,8 @@ export function CheckoutAccount({ session, onContinue, signInEmail = "", signInM
     finally { submitting.current = false; setBusy(false); }
   }
   // The API vouched for the handed-off email only; editing it hides the offer.
-  const canResetPassword = login && signInPasswordReset && Boolean(signInEmail) && sameEmail(values.email, signInEmail);
+  // Once sent, the offer goes away: each new request invalidates the links already sent.
+  const canResetPassword = login && signInPasswordReset && Boolean(signInEmail) && sameEmail(values.email, signInEmail) && !resetSentTo;
   async function requestReset() {
     if (submitting.current || !canResetPassword) return;
     submitting.current = true; setBusy(true); setError(""); setResetSentTo("");
@@ -100,7 +101,7 @@ export function CheckoutAccount({ session, onContinue, signInEmail = "", signInM
       {!login && <CheckoutField label="Confirme sua senha" name="passwordConfirmation" type="password" minLength={8} autoComplete="new-password" value={values.passwordConfirmation} error={fieldError("passwordConfirmation")} hint={values.password && values.password === values.passwordConfirmation ? "As senhas coincidem" : ""} onBlur={touch("passwordConfirmation")} onChange={(event) => setValues((current) => ({ ...current, passwordConfirmation: event.target.value }))} />}
       {!login && <p style={{ color: T.inkGhost, fontSize: 12, lineHeight: 1.5, margin: "-3px 0 0" }}>Use pelo menos 8 caracteres na senha.</p>}
       {canResetPassword && <button type="button" disabled={busy} onClick={requestReset} style={{ justifySelf: "start", marginTop: -5, border: 0, padding: 0, background: "transparent", color: T.inkMid, font: "inherit", fontSize: 13, textDecoration: "underline", cursor: "pointer" }}>Esqueci minha senha</button>}
-      {canResetPassword && resetSentTo && <p role="status" style={{ margin: 0, padding: "11px 13px", borderRadius: 10, background: "#E8F6EE", color: T.ink, fontSize: 13, lineHeight: 1.5 }}>Se houver uma conta para <strong>{resetSentTo}</strong>, enviamos um link para criar uma nova senha. Depois de criar, volte a esta página e entre com a nova senha para continuar o pagamento.</p>}
+      {resetSentTo && <p role="status" style={{ margin: 0, padding: "11px 13px", borderRadius: 10, background: "#E8F6EE", color: T.ink, fontSize: 13, lineHeight: 1.5 }}>Se houver uma conta para <strong>{resetSentTo}</strong>, enviamos um link para criar uma nova senha. Depois de criar, volte a esta página e entre com a nova senha para continuar o pagamento. Se ela tiver recarregado, use "Já tem uma conta? Entrar". Confira também o spam.</p>}
       {error && <p role="alert" style={{ color: T.red, margin: 0 }}>{error}</p>}
       <Btn type="submit" variant="dark" full disabled={!canSubmit}>{busy ? "Aguarde…" : canSubmit ? "Continuar para o pagamento" : "Preencha seus dados para continuar"}</Btn>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6, color: T.inkGhost, fontSize: 13, paddingTop: 2 }}>

@@ -51,7 +51,8 @@ it("hands the consultant checkout's reset offer to the sign-in step after a refu
     return { ok: true, json: async () => ({ catalog_version: "2026-09-15", selection, total_cents: 24900, capacity: selection.seats, currency: "BRL" }) };
   });
   vi.stubGlobal("fetch", fetch);
-  render(<ConsultantCheckoutPage session={{ isAuthenticated: false, signIn: vi.fn(), requestPasswordReset: vi.fn() }} />);
+  const requestPasswordReset = vi.fn().mockResolvedValue(undefined);
+  render(<ConsultantCheckoutPage session={{ isAuthenticated: false, signIn: vi.fn(), requestPasswordReset }} />);
   fireEvent.click(await screen.findByRole("button", { name: /continuar para seus dados/i }));
   fireEvent.change(await screen.findByLabelText("Nome"), { target: { value: "Ana" } });
   fireEvent.change(screen.getByLabelText("Email"), { target: { value: "ana@example.com" } });
@@ -72,5 +73,6 @@ it("hands the consultant checkout's reset offer to the sign-in step after a refu
   fireEvent.submit(screen.getByLabelText("Número do cartão").closest("form"));
   fireEvent.click(await screen.findByRole("button", { name: "Entrar com este email" }));
 
-  expect(await screen.findByRole("button", { name: "Esqueci minha senha" })).toBeInTheDocument();
+  fireEvent.click(await screen.findByRole("button", { name: "Esqueci minha senha" }));
+  await waitFor(() => expect(requestPasswordReset).toHaveBeenCalledWith("ana@example.com"));
 });

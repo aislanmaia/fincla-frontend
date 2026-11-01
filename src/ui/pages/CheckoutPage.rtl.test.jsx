@@ -593,6 +593,10 @@ it("offers a reset link after the refusal only when the API says the lead never 
   const note = await screen.findByRole("status");
   expect(note).toHaveTextContent("Se houver uma conta para maria@example.com, enviamos um link para criar uma nova senha.");
   expect(note).toHaveTextContent("volte a esta página e entre com a nova senha");
+  // A second request would invalidate the link just sent.
+  expect(screen.queryByRole("button", { name: "Esqueci minha senha" })).toBeNull();
+  fireEvent.change(screen.getByLabelText("Email"), { target: { value: "outra@example.com" } });
+  expect(screen.getByRole("status")).toHaveTextContent("maria@example.com");
 });
 
 it("hides the reset link once the email differs from the one the API vouched for", async () => {

@@ -153,7 +153,7 @@ export function CheckoutPayment({ quote, accountDetails, session, onOffer, onRef
     }
     setValidationFailure(false);
     onValidationErrorChange?.(false);
-    submitting.current = true; setBusy(true); setError(""); setAccountExists(false);
+    submitting.current = true; setBusy(true); setError(""); setAccountExists(false); setPasswordResetAvailable(false);
     let paymentSubmitted = false;
     let keepFormForCorrection = false;
     try {

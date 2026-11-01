@@ -57,7 +57,7 @@ export interface CheckoutAttempt {
 }
 
 export class CheckoutRequestError extends Error {
-  /** Set by the API only for a lead that never completed a checkout and typed a wrong password. */
+  /** Set only on the 409 of POST /checkout/register (never on login) for a lead that never completed a checkout. */
   constructor(message: string, public code: string | undefined, public fields: string[] = [], public passwordResetAvailable = false) { super(message); }
 }
 
