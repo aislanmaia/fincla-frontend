@@ -336,7 +336,7 @@ export default function App() {
   };
 
   const pages = {
-    dashboard:    <DashboardPageView onNav={navTo} stateCtrl={stateCtrl} dataMode={dataMode} onboardingData={onboardingData} extraRecs={extraRecs} onNewTx={()=>openTxModal()} organizationId={session.activeOrgId} />,
+    dashboard:    <DashboardPageView onNav={navTo} stateCtrl={stateCtrl} dataMode={dataMode} onboardingData={onboardingData} extraRecs={extraRecs} onNewTx={()=>openTxModal()} organizationId={session.activeOrgId} declaredMonthlyIncome={activeOrganization?.monthly_income ?? null} />,
     rhythm: <RitmoPageView
       onNav={navTo}
       isMobile={isMobile}

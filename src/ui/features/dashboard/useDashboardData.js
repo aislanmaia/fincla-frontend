@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getBalanceSummary } from "../../../api/balances";
+import { linearProjection } from "./periodYardstick.js";
 import {
   fetchAllTransactionsPages,
   formatDashboardApiError,
@@ -405,7 +406,7 @@ function buildRhythmDaily(transactions, summary, startD, D, todayStartMs) {
   const series = [];
   for (let i = 0; i < D; i++) {
     const dayDate = addLocalDays(startD, i);
-    const proj = Math.round((envelope / D) * (i + 1));
+    const proj = linearProjection(envelope, D, i);
     const dayLabel = dayDate
       .toLocaleDateString("pt-BR", { day: "numeric", month: "short" })
       .replace(/\./g, "");
@@ -508,7 +509,7 @@ function buildRhythmWeekly(
     const d0 = addLocalDays(startD, fromDay);
     const d1 = addLocalDays(startD, toDay);
     const dayLabel = `${d0.getDate()}/${d0.getMonth() + 1}–${d1.getDate()}/${d1.getMonth() + 1}`;
-    const proj = Math.round((envelope / nB) * (b + 1));
+    const proj = linearProjection(envelope, nB, b);
     series.push({
       dia: b + 1,
       proj,

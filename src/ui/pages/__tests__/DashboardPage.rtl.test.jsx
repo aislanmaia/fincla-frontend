@@ -16,7 +16,9 @@ vi.mock("../../features/dashboard/useDashboardData.js", () => ({
 vi.mock("recharts", () => ({
   ResponsiveContainer: ({ children }) => <div data-testid="recharts-rc">{children}</div>,
   CartesianGrid: () => null,
-  ComposedChart: ({ children }) => <div>{children}</div>,
+  ComposedChart: ({ children, data }) => (
+    <div data-testid="composed-chart" data-points={JSON.stringify(data ?? [])}>{children}</div>
+  ),
   Line: () => null,
   ReferenceLine: () => null,
   Tooltip: () => null,
@@ -585,5 +587,109 @@ describe("DashboardPage — issue #87: sem estouro horizontal no mobile", () => 
     expect(saldo.parentElement).toBe(resultado.parentElement);
     const irmaos = Array.from(saldo.parentElement.children);
     expect(irmaos.indexOf(saldo) + 1).toBe(irmaos.indexOf(resultado));
+  });
+});
+
+describe("DashboardPage — humor antes de a receita do mês entrar", () => {
+  // Caso real (conta demo saudável, 02/11): salário cai no dia 5, renda declarada
+  // R$ 9.200, R$ 157,60 gastos em 2 dias. A régua era max(receita, despesa) — com
+  // receita zero ela virava a própria despesa, 100% "gasto" no dia 2: "Crítico".
+  // O período padrão da tela é "Este mês"; o relógio fica em 02/11/2026 para que
+  // "contém hoje" e o tamanho do mês não dependam de quando a suíte roda.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 2, 10, 0, 0));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const renderAt = (summary, declaredMonthlyIncome) => {
+    mockDashboardData = {
+      ...baseData(),
+      summary: { ...baseData().summary, ...summary },
+      rhythmMeta: { ...baseData().rhythmMeta, dim: 30, today: 2 },
+    };
+    render(
+      <DashboardPage
+        onNav={vi.fn()}
+        stateCtrl={{ mounted: true, isMobile: false }}
+        dataMode="live"
+        organizationId="org-no-income-yet"
+        declaredMonthlyIncome={declaredMonthlyIncome}
+        onNewTx={vi.fn()}
+      />,
+    );
+  };
+  const noIncome = { total_income: 0, total_expenses: 157.6, balance: -157.6, total_transactions: 3 };
+
+  it("sem receita ainda, mede contra a renda declarada — não é situação crítica", () => {
+    renderAt(noIncome, 9200);
+    expect(screen.queryByText("Crítico")).not.toBeInTheDocument();
+    expect(screen.getByText("Sereno")).toBeInTheDocument();
+    const quantias = screen.getByTestId("dashboard-insight-quantias");
+    expect(quantias).toHaveTextContent("seria o ritmo linear da renda declarada");
+    expect(quantias).not.toHaveTextContent("R$ 0,00");
+    expect(screen.getByTestId("dashboard-regua-ritmo")).toHaveTextContent("da renda declarada");
+    // A projeção desenhada usa a mesma régua do selo: termina na renda declarada.
+    const points = JSON.parse(screen.getByTestId("composed-chart").dataset.points);
+    expect(points.at(-1).proj).toBe(9200);
+    // O teto por dia sai da mesma régua: (9.200 − 157,60) / 29 dias restantes.
+    // Com o resultado do período (−157,60) o "Sereno" diria "R$ 0,00/dia".
+    expect(screen.getByText(/R\$ 312,00\/dia/)).toBeInTheDocument();
+  });
+
+  it("durante um carregamento a renda declarada não se mistura com totais velhos", () => {
+    mockDashboardData = {
+      ...baseData(),
+      isLoading: true,
+      summary: { ...baseData().summary, ...noIncome },
+      rhythmMeta: { ...baseData().rhythmMeta, dim: 30, today: 2 },
+    };
+    render(
+      <DashboardPage
+        onNav={vi.fn()}
+        stateCtrl={{ mounted: true, isMobile: false }}
+        dataMode="live"
+        organizationId="org-loading"
+        declaredMonthlyIncome={9200}
+        onNewTx={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText(/da renda declarada/)).not.toBeInTheDocument();
+  });
+
+  it("sem renda declarada, o gráfico é o do hook, intocado", () => {
+    renderAt(noIncome, null);
+    const points = JSON.parse(screen.getByTestId("composed-chart").dataset.points);
+    expect(points.map((p) => p.proj)).toEqual(baseData().rhythmChart.map((p) => p.proj));
+  });
+
+  it("totais desconhecidos: a renda declarada não entra na régua", () => {
+    // Multi-moeda sem cotação manda `null`. A régua declarada não pode transformar
+    // "não sabemos" em "0% da renda declarada". (O humor com totais nulos já era
+    // impreciso antes deste PR — issue à parte.)
+    renderAt({ total_income: null, total_expenses: null, balance: null }, 9200);
+    expect(screen.queryByText(/da renda declarada/)).not.toBeInTheDocument();
+  });
+
+  it("um Pix pequeno não derruba a régua de volta (sem degrau)", () => {
+    renderAt({ ...noIncome, total_income: 10, balance: -147.6 }, 9200);
+    expect(screen.getByText("Sereno")).toBeInTheDocument();
+  });
+
+  it("sem renda declarada, nada muda", () => {
+    renderAt(noIncome, null);
+    expect(screen.getByText("Crítico")).toBeInTheDocument();
+  });
+
+  it("gastar acima da renda declarada continua crítico", () => {
+    renderAt({ ...noIncome, total_expenses: 6000, balance: -6000 }, 9200);
+    expect(screen.getByText("Crítico")).toBeInTheDocument();
+  });
+
+  it("quando a receita real passa a declarada, a régua volta a ser a receita", () => {
+    // Recebeu 1.000, gastou 2.000; declarou 500: o declarado não pode suavizar nada.
+    renderAt({ total_income: 1000, total_expenses: 2000, balance: -1000 }, 500);
+    expect(screen.getByText("Crítico")).toBeInTheDocument();
+    expect(screen.getByTestId("dashboard-regua-ritmo")).toHaveTextContent("da receita gasta");
   });
 });
