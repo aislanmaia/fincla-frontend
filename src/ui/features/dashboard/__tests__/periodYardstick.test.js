@@ -1,11 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { periodYardstick } from "../periodYardstick.js";
+import { linearProjection, periodYardstick } from "../periodYardstick.js";
 
-const today = new Date(2026, 10, 2); // 02/11/2026
-const nov = { rangeStartYmd: "2026-11-01", rangeEndYmd: "2026-11-30", today };
+const nov = { rangeStartYmd: "2026-11-01", rangeEndYmd: "2026-11-30", periodContainsToday: true };
 
 describe("periodYardstick", () => {
-  it("período corrente sem receita: a base é a renda declarada", () => {
+  it("mês corrente sem receita: a base é a renda declarada", () => {
     expect(periodYardstick({ income: 0, expenses: 157.6, declaredMonthlyIncome: 9200, ...nov }))
       .toEqual({ envelope: 9200, base: 9200, basis: "declared" });
   });
@@ -19,40 +18,43 @@ describe("periodYardstick", () => {
       .toEqual({ envelope: 9500, base: 9500, basis: "income" });
   });
 
-  it("mês passado é julgado só pelo que aconteceu", () => {
-    const oct = { rangeStartYmd: "2026-10-01", rangeEndYmd: "2026-10-31", today };
+  it("período que não contém hoje é julgado só pelo que aconteceu", () => {
+    const oct = { rangeStartYmd: "2026-10-01", rangeEndYmd: "2026-10-31", periodContainsToday: false };
     expect(periodYardstick({ income: 0, expenses: 3000, declaredMonthlyIncome: 9200, ...oct }))
       .toEqual({ envelope: 3000, base: 0, basis: "income" });
+  });
+
+  it("período de vários meses nunca troca receita real pela declarada", () => {
+    const ytd = { rangeStartYmd: "2026-01-01", rangeEndYmd: "2026-11-30", periodContainsToday: true };
+    expect(periodYardstick({ income: 80000, expenses: 79000, declaredMonthlyIncome: 9200, ...ytd }).basis).toBe("income");
   });
 
   it("sem renda declarada, é a régua antiga max(receita, despesa)", () => {
     expect(periodYardstick({ income: 0, expenses: 157.6, declaredMonthlyIncome: null, ...nov }).envelope).toBe(157.6);
   });
 
-  it("período que não é um mês usa a renda proporcional aos dias", () => {
-    const week = { rangeStartYmd: "2026-11-01", rangeEndYmd: "2026-11-07", today };
+  it("recorte do mês corrente usa a renda proporcional aos dias", () => {
+    const week = { rangeStartYmd: "2026-11-01", rangeEndYmd: "2026-11-07", periodContainsToday: true };
     expect(periodYardstick({ income: 0, expenses: 50, declaredMonthlyIncome: 9000, ...week }).base).toBeCloseTo(2100);
+  });
+
+  it("fevereiro inteiro vale a renda inteira", () => {
+    const feb = { rangeStartYmd: "2027-02-01", rangeEndYmd: "2027-02-28", periodContainsToday: true };
+    expect(periodYardstick({ income: 0, expenses: 10, declaredMonthlyIncome: 9200, ...feb }).base).toBeCloseTo(9200);
   });
 
   it("despesa acima da base: a régua é a despesa", () => {
     expect(periodYardstick({ income: 0, expenses: 12000, declaredMonthlyIncome: 9200, ...nov }).envelope).toBe(12000);
   });
-});
-
-describe("periodYardstick — proporção e ausência", () => {
-  it("um mês civil inteiro vale a renda inteira, tenha 28 ou 31 dias", () => {
-    const feb = { rangeStartYmd: "2027-02-01", rangeEndYmd: "2027-02-28", today: new Date(2027, 1, 3) };
-    expect(periodYardstick({ income: 0, expenses: 10, declaredMonthlyIncome: 9200, ...feb }).base).toBeCloseTo(9200);
-  });
-
-  it("período longo soma mês a mês: não depende do mês em que começa", () => {
-    const fromJan = { rangeStartYmd: "2027-01-01", rangeEndYmd: "2027-12-31", today: new Date(2027, 0, 10) };
-    const fromFeb = { rangeStartYmd: "2027-02-01", rangeEndYmd: "2028-01-31", today: new Date(2027, 1, 10) };
-    expect(periodYardstick({ income: 0, expenses: 10, declaredMonthlyIncome: 9200, ...fromJan }).base).toBeCloseTo(110400);
-    expect(periodYardstick({ income: 0, expenses: 10, declaredMonthlyIncome: 9200, ...fromFeb }).base).toBeCloseTo(110400);
-  });
 
   it("totais nulos (multi-moeda sem cotação): a renda declarada não entra", () => {
     expect(periodYardstick({ income: null, expenses: null, declaredMonthlyIncome: 9200, ...nov }).basis).toBe("income");
+  });
+});
+
+describe("linearProjection", () => {
+  it("chega ao envelope no último ponto", () => {
+    expect(linearProjection(9200, 30, 29)).toBe(9200);
+    expect(linearProjection(9200, 30, 0)).toBe(307);
   });
 });

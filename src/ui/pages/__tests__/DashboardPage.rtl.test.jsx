@@ -632,6 +632,15 @@ describe("DashboardPage — humor antes de a receita do mês entrar", () => {
     // A projeção desenhada usa a mesma régua do selo: termina na renda declarada.
     const points = JSON.parse(screen.getByTestId("composed-chart").dataset.points);
     expect(points.at(-1).proj).toBe(9200);
+    // O teto por dia sai da mesma régua: (9.200 − 157,60) / 29 dias restantes.
+    // Com o resultado do período (−157,60) o "Sereno" diria "R$ 0,00/dia".
+    expect(screen.getByText(/R\$ 312,00\/dia/)).toBeInTheDocument();
+  });
+
+  it("sem renda declarada, o gráfico é o do hook, intocado", () => {
+    renderAt(noIncome, null);
+    const points = JSON.parse(screen.getByTestId("composed-chart").dataset.points);
+    expect(points.map((p) => p.proj)).toEqual(baseData().rhythmChart.map((p) => p.proj));
   });
 
   it("totais desconhecidos: a renda declarada não entra na régua", () => {

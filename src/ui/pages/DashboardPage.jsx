@@ -38,7 +38,7 @@ import {
   calcMood,
 } from "../features/moodV4";
 import { useDashboardData } from "../features/dashboard/useDashboardData.js";
-import { periodYardstick } from "../features/dashboard/periodYardstick.js";
+import { linearProjection, periodYardstick } from "../features/dashboard/periodYardstick.js";
 import { pickCommittedExpenseForDashboard } from "../features/dashboard/dashboardRecurringKpi.js";
 import { toAmount } from "../../api/money";
 import { getRecurringProjection } from "../../api/recurringSeries";
@@ -207,14 +207,21 @@ export function DashboardPage({
   // Régua do período — a MESMA que desenha a projeção do gráfico. Ver
   // periodYardstick: no período corrente, antes de o salário cair, a base é a
   // renda declarada e não uma receita que ainda não chegou.
-  const yardstick = periodYardstick({
-    // `null` segue `null`: sem os totais (multi-moeda sem cotação) a renda
-    // declarada não entra — ausência não pode virar "Sereno".
+  // "Contém hoje" pelo relógio do gráfico: antes do período não há marcador,
+  // depois dele o rótulo vira "Fim".
+  const periodContainsToday = showTodayMarker && refLabel === "Hoje";
+  const yardstickInput = {
     income: summary?.total_income,
-    expenses: summary?.total_expenses == null ? null : exp,
     declaredMonthlyIncome,
     rangeStartYmd: appliedRange.start,
     rangeEndYmd: appliedRange.end,
+    periodContainsToday,
+  };
+  // `null` segue `null`: sem os totais (multi-moeda sem cotação) a renda
+  // declarada não entra — ausência não pode virar "Sereno".
+  const yardstick = periodYardstick({
+    ...yardstickInput,
+    expenses: summary?.total_expenses == null ? null : exp,
   });
   const envelope = yardstick.envelope;
   const measuresAgainstDeclared = yardstick.basis === "declared";
@@ -269,15 +276,24 @@ export function DashboardPage({
     return map;
   }, [recurringProjection, appliedRange.start, dim]);
 
+  /**
+   * Quando a régua é a renda declarada, o hook (que não a conhece) desenhou a
+   * projeção até `max(receita, despesa)` — a linha contradiria o selo. Só nesse
+   * caso ela é refeita aqui, com a fórmula do hook e com a despesa BRUTA, que é a
+   * mesma escala da linha "real" que o hook desenhou. Fora disso, o gráfico é o
+   * do hook, intocado.
+   */
+  const chartEnvelope = measuresAgainstDeclared
+    ? periodYardstick({ ...yardstickInput, expenses: summary?.total_expenses }).envelope
+    : null;
   const rhythmSafe = useMemo(() => {
-    // A projeção é redesenhada AQUI com a régua da página (mesma fórmula do hook:
-    // linear até `envelope` no último ponto, diário ou semanal). O hook não sabe a
-    // renda declarada — se desenhasse com a régua dele, a linha contradiria o selo.
     const base = rhythmData.length > 0
-      ? rhythmData.map((point, i) => ({
-          ...point,
-          proj: Math.round((Math.max(envelope, 1) / rhythmData.length) * (i + 1)),
-        }))
+      ? chartEnvelope === null
+        ? rhythmData
+        : rhythmData.map((point, i) => ({
+            ...point,
+            proj: linearProjection(chartEnvelope, rhythmData.length, i),
+          }))
       : (() => {
           const d = Math.max(dim, 1);
           const env = Math.max(envelope, 1);
@@ -299,7 +315,7 @@ export function DashboardPage({
       // esse campo deixa o usuário ver quanto já foi gasto até agora, sem poluir o gráfico).
       return { ...point, committed: acc, realAtToday: todayReal };
     });
-  }, [rhythmData, dim, envelope, projectedExpenseByDay, calendarDay]);
+  }, [rhythmData, chartEnvelope, dim, envelope, projectedExpenseByDay, calendarDay]);
   const day = calendarDay;
   const timePct = Math.round((day / Math.max(dim, 1)) * 100);
   const spendPct =
@@ -528,7 +544,12 @@ export function DashboardPage({
    */
 
   const dailyBudget = useMemo(() => {
-    const byCycle = Math.max(0, bal);
+    // Medindo contra a renda declarada, o que ainda cabe no ciclo é o que falta
+    // dela — com `bal` (receita zero − despesa) o "Sereno" diria "R$ 0,00/dia".
+    // O caixa continua limitando logo abaixo.
+    const byCycle = measuresAgainstDeclared
+      ? Math.max(0, yardstick.base - exp)
+      : Math.max(0, bal);
     const cash = dashboardData.balanceSummary?.total_available;
     if (typeof cash !== "number") {
       return { value: Math.round(byCycle / daysLeftInRange), noCash: false };
@@ -549,7 +570,7 @@ export function DashboardPage({
       // dizem que `total_available` ausente não vira zero.
       noCash: byCash <= 0,
     };
-  }, [bal, daysLeftInRange, dashboardData.balanceSummary, projectedToCome]);
+  }, [bal, daysLeftInRange, dashboardData.balanceSummary, projectedToCome, measuresAgainstDeclared, yardstick.base, exp]);
 
   /**
    * Saldo em conta no HEADLINE (opção D).
