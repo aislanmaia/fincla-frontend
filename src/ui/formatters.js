@@ -28,4 +28,10 @@ export const fmtSgn = (v, moeda = MOEDA_PADRAO) => {
 // Abaixo de mil não corta em "k", mas arredonda: sem o Math.round, um valor
 // fracionário (ex.: média de uma divisão) sai como "R$466.6666666666667" —
 // ponto decimal en-US solto numa UI pt-BR.
-export const fmtK = (v, moeda = MOEDA_PADRAO) => formatMoneyCompact(v, moeda) ?? "";
+//
+// A moeda só vale quando é um código (string). `fmtK` é passado direto como
+// `tickFormatter` nos gráficos, e o recharts o chama com (valor, índice do
+// tick): sem essa guarda o índice virava o "símbolo" e o eixo saía "12.0k" no
+// lugar de "R$2.0k".
+export const fmtK = (v, moeda = MOEDA_PADRAO) =>
+  formatMoneyCompact(v, typeof moeda === "string" ? moeda : MOEDA_PADRAO) ?? "";
