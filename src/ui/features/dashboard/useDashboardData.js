@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getBalanceSummary } from "../../../api/balances";
-import { periodYardstick } from "./periodYardstick.js";
 import {
   fetchAllTransactionsPages,
   formatDashboardApiError,
@@ -321,13 +320,7 @@ const RITMO_VAZIO = {
   rhythmMode: "daily",
 };
 
-export function buildRhythmChart(
-  transactions,
-  summary,
-  rangeStartYmd,
-  rangeEndYmd,
-  declaredMonthlyIncome = null,
-) {
+export function buildRhythmChart(transactions, summary, rangeStartYmd, rangeEndYmd) {
   const startD = parseLocalYmd(rangeStartYmd);
   const endD = parseLocalYmd(rangeEndYmd);
   if (!startD || !endD) return { ...RITMO_VAZIO };
@@ -354,19 +347,8 @@ export function buildRhythmChart(
     now.getDate(),
   ).getTime();
 
-  // Mesma régua que o humor e o Insight usam (periodYardstick): se cada um
-  // calculasse a sua, a projeção desenhada contradiria o selo logo acima dela.
-  const { envelope } = periodYardstick({
-    income: summary?.total_income,
-    expenses: summary?.total_expenses,
-    declaredMonthlyIncome,
-    rangeStartYmd,
-    rangeEndYmd,
-    today: now,
-  });
-
   if (D <= RHYTHM_MAX_DAILY_POINTS) {
-    return buildRhythmDaily(transactions, summary, startD, D, todayStartMs, envelope);
+    return buildRhythmDaily(transactions, summary, startD, D, todayStartMs);
   }
   return buildRhythmWeekly(
     transactions,
@@ -375,11 +357,10 @@ export function buildRhythmChart(
     endD,
     D,
     todayStartMs,
-    envelope,
   );
 }
 
-function buildRhythmDaily(transactions, summary, startD, D, todayStartMs, envelope) {
+function buildRhythmDaily(transactions, summary, startD, D, todayStartMs) {
   const daily = Array(D).fill(0);
   for (const tx of transactions) {
     if (tx.type !== "expense") continue;
@@ -405,6 +386,11 @@ function buildRhythmDaily(transactions, summary, startD, D, todayStartMs, envelo
 
   const targetExpenses = summary?.total_expenses ?? 0;
   const atToday = todayIdx >= 0 ? rawCum[todayIdx] : 0;
+  const envelope = Math.max(
+    summary?.total_income ?? 0,
+    summary?.total_expenses ?? 0,
+    1,
+  );
 
   const scaledReal = (i) => {
     if (todayIdx < 0 || i > todayIdx) return null;
@@ -468,7 +454,6 @@ function buildRhythmWeekly(
   endD,
   D,
   todayStartMs,
-  envelope,
 ) {
   const nB = Math.ceil(D / 7);
   const bucketSum = Array(nB).fill(0);
@@ -500,6 +485,11 @@ function buildRhythmWeekly(
 
   const targetExpenses = summary?.total_expenses ?? 0;
   const atToday = todayBucket >= 0 ? rawCum[todayBucket] : 0;
+  const envelope = Math.max(
+    summary?.total_income ?? 0,
+    summary?.total_expenses ?? 0,
+    1,
+  );
 
   const scaledRealBucket = (b) => {
     if (todayBucket < 0 || b > todayBucket) return null;
@@ -628,7 +618,6 @@ export function useDashboardData({
   enabled = true,
   dateStart,
   dateEnd,
-  declaredMonthlyIncome = null,
 }) {
   const [state, setState] = useState(EMPTY_STATE);
   const [fetchTick, setFetchTick] = useState(0);
@@ -784,7 +773,7 @@ export function useDashboardData({
 
       const rawTx = transactionsResponse.data ?? [];
       const recent = rawTx.slice(0, 5).map(mapTransaction);
-      const rhythm = buildRhythmChart(rawTx, summary, start, end, declaredMonthlyIncome);
+      const rhythm = buildRhythmChart(rawTx, summary, start, end);
 
       const prevTotalByTagId = new Map(
         (prevCategoriesResponse.categories ?? []).map((c) => [
@@ -829,7 +818,7 @@ export function useDashboardData({
         autoRetryTimeoutRef.current = null;
       }
     };
-  }, [enabled, organizationId, fetchTick, dateStart, dateEnd, declaredMonthlyIncome]);
+  }, [enabled, organizationId, fetchTick, dateStart, dateEnd]);
 
   const hasRealData = useMemo(() => {
     return Boolean(state.summary);

@@ -147,7 +147,6 @@ export function DashboardPage({
     enabled: apiDataEnabled,
     dateStart: appliedRange.start,
     dateEnd: appliedRange.end,
-    declaredMonthlyIncome,
   });
   const recentTransactions = dashboardData.transactions;
   const categoryData = dashboardData.categories;
@@ -209,8 +208,10 @@ export function DashboardPage({
   // periodYardstick: no período corrente, antes de o salário cair, a base é a
   // renda declarada e não uma receita que ainda não chegou.
   const yardstick = periodYardstick({
-    income: inc,
-    expenses: exp,
+    // `null` segue `null`: sem os totais (multi-moeda sem cotação) a renda
+    // declarada não entra — ausência não pode virar "Sereno".
+    income: summary?.total_income,
+    expenses: summary?.total_expenses == null ? null : exp,
     declaredMonthlyIncome,
     rangeStartYmd: appliedRange.start,
     rangeEndYmd: appliedRange.end,
@@ -269,8 +270,14 @@ export function DashboardPage({
   }, [recurringProjection, appliedRange.start, dim]);
 
   const rhythmSafe = useMemo(() => {
+    // A projeção é redesenhada AQUI com a régua da página (mesma fórmula do hook:
+    // linear até `envelope` no último ponto, diário ou semanal). O hook não sabe a
+    // renda declarada — se desenhasse com a régua dele, a linha contradiria o selo.
     const base = rhythmData.length > 0
-      ? rhythmData
+      ? rhythmData.map((point, i) => ({
+          ...point,
+          proj: Math.round((Math.max(envelope, 1) / rhythmData.length) * (i + 1)),
+        }))
       : (() => {
           const d = Math.max(dim, 1);
           const env = Math.max(envelope, 1);

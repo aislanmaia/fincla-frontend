@@ -16,7 +16,9 @@ vi.mock("../../features/dashboard/useDashboardData.js", () => ({
 vi.mock("recharts", () => ({
   ResponsiveContainer: ({ children }) => <div data-testid="recharts-rc">{children}</div>,
   CartesianGrid: () => null,
-  ComposedChart: ({ children }) => <div>{children}</div>,
+  ComposedChart: ({ children, data }) => (
+    <div data-testid="composed-chart" data-points={JSON.stringify(data ?? [])}>{children}</div>
+  ),
   Line: () => null,
   ReferenceLine: () => null,
   Tooltip: () => null,
@@ -592,7 +594,14 @@ describe("DashboardPage — humor antes de a receita do mês entrar", () => {
   // Caso real (conta demo saudável, 02/11): salário cai no dia 5, renda declarada
   // R$ 9.200, R$ 157,60 gastos em 2 dias. A régua era max(receita, despesa) — com
   // receita zero ela virava a própria despesa, 100% "gasto" no dia 2: "Crítico".
-  // O período padrão da tela é "Este mês", que contém hoje.
+  // O período padrão da tela é "Este mês"; o relógio fica em 02/11/2026 para que
+  // "contém hoje" e o tamanho do mês não dependam de quando a suíte roda.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 10, 2, 10, 0, 0));
+  });
+  afterEach(() => vi.useRealTimers());
+
   const renderAt = (summary, declaredMonthlyIncome) => {
     mockDashboardData = {
       ...baseData(),
@@ -620,6 +629,17 @@ describe("DashboardPage — humor antes de a receita do mês entrar", () => {
     expect(quantias).toHaveTextContent("seria o ritmo linear da renda declarada");
     expect(quantias).not.toHaveTextContent("R$ 0,00");
     expect(screen.getByTestId("dashboard-regua-ritmo")).toHaveTextContent("da renda declarada");
+    // A projeção desenhada usa a mesma régua do selo: termina na renda declarada.
+    const points = JSON.parse(screen.getByTestId("composed-chart").dataset.points);
+    expect(points.at(-1).proj).toBe(9200);
+  });
+
+  it("totais desconhecidos: a renda declarada não entra na régua", () => {
+    // Multi-moeda sem cotação manda `null`. A régua declarada não pode transformar
+    // "não sabemos" em "0% da renda declarada". (O humor com totais nulos já era
+    // impreciso antes deste PR — issue à parte.)
+    renderAt({ total_income: null, total_expenses: null, balance: null }, 9200);
+    expect(screen.queryByText(/da renda declarada/)).not.toBeInTheDocument();
   });
 
   it("um Pix pequeno não derruba a régua de volta (sem degrau)", () => {

@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { periodYardstick } from "../periodYardstick.js";
-import { buildRhythmChart } from "../useDashboardData.js";
 
 const today = new Date(2026, 10, 2); // 02/11/2026
 const nov = { rangeStartYmd: "2026-11-01", rangeEndYmd: "2026-11-30", today };
@@ -40,19 +39,20 @@ describe("periodYardstick", () => {
   });
 });
 
-describe("buildRhythmChart usa a mesma régua", () => {
-  it("a projeção do gráfico termina na renda declarada quando ainda não houve receita", () => {
-    const now = new Date();
-    const pad = (n) => String(n).padStart(2, "0");
-    const y = now.getFullYear();
-    const m = now.getMonth() + 1;
-    const dim = new Date(y, m, 0).getDate();
-    const start = `${y}-${pad(m)}-01`;
-    const end = `${y}-${pad(m)}-${pad(dim)}`;
-    const summary = { total_income: 0, total_expenses: 157.6 };
-    const chart = buildRhythmChart([], summary, start, end, 9200);
-    expect(chart.series.at(-1).proj).toBe(9200);
-    const old = buildRhythmChart([], summary, start, end, null);
-    expect(old.series.at(-1).proj).toBe(158);
+describe("periodYardstick — proporção e ausência", () => {
+  it("um mês civil inteiro vale a renda inteira, tenha 28 ou 31 dias", () => {
+    const feb = { rangeStartYmd: "2027-02-01", rangeEndYmd: "2027-02-28", today: new Date(2027, 1, 3) };
+    expect(periodYardstick({ income: 0, expenses: 10, declaredMonthlyIncome: 9200, ...feb }).base).toBeCloseTo(9200);
+  });
+
+  it("período longo soma mês a mês: não depende do mês em que começa", () => {
+    const fromJan = { rangeStartYmd: "2027-01-01", rangeEndYmd: "2027-12-31", today: new Date(2027, 0, 10) };
+    const fromFeb = { rangeStartYmd: "2027-02-01", rangeEndYmd: "2028-01-31", today: new Date(2027, 1, 10) };
+    expect(periodYardstick({ income: 0, expenses: 10, declaredMonthlyIncome: 9200, ...fromJan }).base).toBeCloseTo(110400);
+    expect(periodYardstick({ income: 0, expenses: 10, declaredMonthlyIncome: 9200, ...fromFeb }).base).toBeCloseTo(110400);
+  });
+
+  it("totais nulos (multi-moeda sem cotação): a renda declarada não entra", () => {
+    expect(periodYardstick({ income: null, expenses: null, declaredMonthlyIncome: 9200, ...nov }).basis).toBe("income");
   });
 });
