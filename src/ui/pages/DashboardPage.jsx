@@ -212,7 +212,10 @@ export function DashboardPage({
   const periodContainsToday = showTodayMarker && refLabel === "Hoje";
   const yardstickInput = {
     income: summary?.total_income,
-    declaredMonthlyIncome,
+    // Durante um carregamento o resumo e o `rhythmMeta` ainda são do período (ou da
+    // organização) anterior, enquanto o intervalo e a renda declarada já são os
+    // novos — misturá-los aplicaria a renda de uma org/período aos totais de outro.
+    declaredMonthlyIncome: dashboardData.isLoading ? null : declaredMonthlyIncome,
     rangeStartYmd: appliedRange.start,
     rangeEndYmd: appliedRange.end,
     periodContainsToday,

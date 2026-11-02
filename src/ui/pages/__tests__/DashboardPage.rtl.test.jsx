@@ -637,6 +637,26 @@ describe("DashboardPage — humor antes de a receita do mês entrar", () => {
     expect(screen.getByText(/R\$ 312,00\/dia/)).toBeInTheDocument();
   });
 
+  it("durante um carregamento a renda declarada não se mistura com totais velhos", () => {
+    mockDashboardData = {
+      ...baseData(),
+      isLoading: true,
+      summary: { ...baseData().summary, ...noIncome },
+      rhythmMeta: { ...baseData().rhythmMeta, dim: 30, today: 2 },
+    };
+    render(
+      <DashboardPage
+        onNav={vi.fn()}
+        stateCtrl={{ mounted: true, isMobile: false }}
+        dataMode="live"
+        organizationId="org-loading"
+        declaredMonthlyIncome={9200}
+        onNewTx={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText(/da renda declarada/)).not.toBeInTheDocument();
+  });
+
   it("sem renda declarada, o gráfico é o do hook, intocado", () => {
     renderAt(noIncome, null);
     const points = JSON.parse(screen.getByTestId("composed-chart").dataset.points);

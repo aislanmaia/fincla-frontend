@@ -47,6 +47,11 @@ describe("periodYardstick", () => {
     expect(periodYardstick({ income: 0, expenses: 12000, declaredMonthlyIncome: 9200, ...nov }).envelope).toBe(12000);
   });
 
+  it("renda declarada como string numérica ou dinheiro canônico também vale", () => {
+    expect(periodYardstick({ income: 0, expenses: 10, declaredMonthlyIncome: "9200.00", ...nov }).base).toBe(9200);
+    expect(periodYardstick({ income: 0, expenses: 10, declaredMonthlyIncome: { amount: "9200.00", currency: "BRL" }, ...nov }).base).toBe(9200);
+  });
+
   it("totais nulos (multi-moeda sem cotação): a renda declarada não entra", () => {
     expect(periodYardstick({ income: null, expenses: null, declaredMonthlyIncome: 9200, ...nov }).basis).toBe("income");
   });

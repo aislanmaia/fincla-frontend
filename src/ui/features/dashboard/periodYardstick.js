@@ -26,11 +26,17 @@
  * período), não enxerga a fatura de cartão ainda aberta e absolveria quem gasta
  * mais do que ganha só por ter reserva.
  *
+ * Limitação conhecida: um recorte personalizado que cruza a virada do mês (ex.:
+ * 27/10–09/11) não usa a renda declarada — "Últimos 30 dias" quase sempre já
+ * contém um salário, e repartir a declarada entre meses fechados e o corrente
+ * reabriria o problema de trocar receita real por declarada.
+ *
  * Limitação conhecida: a renda declarada é mantida pelo usuário e a régua não
  * tenta adivinhar se o que já entrou é o salário inteiro ou um Pix solto.
  * Declarada acima da real, o humor fica mais brando até a receita do mês
  * alcançá-la.
  */
+import { toFiniteNumber } from "../../../api/money";
 import { daysInclusive, parseLocalYmd } from "./dashboardDateRange.js";
 
 /**
@@ -57,20 +63,23 @@ export function periodYardstick({
   const exp = Number(expenses) || 0;
   const start = parseLocalYmd(rangeStartYmd);
   const end = parseLocalYmd(rangeEndYmd);
+  // A regra única de coerção do projeto: aceita número, string numérica e a forma
+  // canônica {amount, currency}. Um "9200.00" legado não pode desligar a régua.
+  const monthly = toFiniteNumber(declaredMonthlyIncome);
 
   let declared = null;
   if (
     totalsKnown &&
     periodContainsToday &&
-    typeof declaredMonthlyIncome === "number" &&
-    declaredMonthlyIncome > 0 &&
+    monthly !== null &&
+    monthly > 0 &&
     start &&
     end &&
     start.getFullYear() === end.getFullYear() &&
     start.getMonth() === end.getMonth()
   ) {
     const daysInMonth = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate();
-    declared = declaredMonthlyIncome * (daysInclusive(start, end) / daysInMonth);
+    declared = monthly * (daysInclusive(start, end) / daysInMonth);
   }
 
   const useDeclared = declared !== null && declared > inc;
