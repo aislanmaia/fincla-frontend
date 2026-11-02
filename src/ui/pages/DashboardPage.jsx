@@ -201,7 +201,21 @@ export function DashboardPage({
   );
   const showNeutralLiveHero = apiFailedNoSummary || isPeriodWithoutActivity;
   const refetch = dashboardData.refetch;
-  const envelope = Math.max(inc, exp, 1);
+  /**
+   * Régua do período: contra o que o gasto é medido.
+   *
+   * Normalmente é a receita (`max(inc, exp)`). Mas antes de o salário cair a
+   * receita é zero, a régua virava a própria despesa e qualquer gasto no dia 2
+   * contava como 100% do período: "Situação crítica" com R$ 27 mil em conta.
+   * Enquanto NADA entrou no período, a régua passa a ser o dinheiro que havia em
+   * conta no início dele (saldo de hoje + o que já saiu). Basta R$ 1 de receita
+   * para voltar à régua normal — de propósito: quem gasta mais do que ganha não
+   * pode ser absolvido por ter reserva. Sem saber o saldo, nada muda.
+   */
+  const availableNow = dashboardData.balanceSummary?.total_available;
+  const measuresAgainstCash =
+    inc === 0 && exp > 0 && typeof availableNow === "number" && availableNow > 0;
+  const envelope = measuresAgainstCash ? availableNow + exp : Math.max(inc, exp, 1);
 
   /**
    * Projeção de recorrências futuras (após hoje) no período do dashboard.
@@ -288,7 +302,9 @@ export function DashboardPage({
   // cru não é, e 37 combinações de (dia, dias-no-período) caem nessa fresta.
   const aheadOfPace = spendPct <= timePct;
   const freePctMood =
-    inc > 0
+    measuresAgainstCash
+      ? (availableNow / envelope) * 100
+      : inc > 0
       ? Math.min(100, Math.max(0, (bal / inc) * 100))
       : bal >= 0
         ? 55
@@ -565,7 +581,7 @@ export function DashboardPage({
    * medidas. Mostrar as duas quantias deixa a diferença evidente sozinha, ancorada
    * em valores que existem, e o nome único fica com o card de Ritmo.
    */
-  const expectedByNow = Math.round((inc * timePct) / 100);
+  const expectedByNow = Math.round(((measuresAgainstCash ? envelope : inc) * timePct) / 100);
   /**
    * Percentual da RECEITA gasta — dividido por `inc`, não pelo `envelope`.
    *
@@ -1514,7 +1530,9 @@ export function DashboardPage({
                   <span style={{ ...M_MONO, ...NUM, fontSize: 23, fontWeight: 700, color: T.inkGhost, lineHeight: 1 }}>
                     {fmtAbs(expectedByNow)}
                   </span>
-                  <span style={{ ...G, fontSize: 12, color: T.inkMid }}>seria o ritmo linear da receita</span>
+                  <span style={{ ...G, fontSize: 12, color: T.inkMid }}>
+                    {measuresAgainstCash ? "seria o ritmo linear do saldo" : "seria o ritmo linear da receita"}
+                  </span>
                 </div>
               </div>
 

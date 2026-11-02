@@ -587,3 +587,54 @@ describe("DashboardPage — issue #87: sem estouro horizontal no mobile", () => 
     expect(irmaos.indexOf(saldo) + 1).toBe(irmaos.indexOf(resultado));
   });
 });
+
+describe("DashboardPage — humor antes de a receita do mês entrar", () => {
+  // Caso real (conta demo saudável, 02/11): salário cai no dia 5, R$ 27,5 mil em
+  // conta, R$ 157,60 gastos em 2 dias. A régua era max(receita, despesa) — com
+  // receita zero ela virava a própria despesa, 100% "gasto" no dia 2: "Crítico".
+  const renderAt = (summary, balanceSummary) => {
+    mockDashboardData = {
+      ...baseData(),
+      summary: { ...baseData().summary, ...summary },
+      rhythmMeta: { ...baseData().rhythmMeta, dim: 30, today: 2 },
+      balanceSummary,
+    };
+    render(
+      <DashboardPage
+        onNav={vi.fn()}
+        stateCtrl={{ mounted: true, isMobile: false }}
+        dataMode="live"
+        organizationId="org-no-income-yet"
+        onNewTx={vi.fn()}
+      />,
+    );
+  };
+  const noIncome = { total_income: 0, total_expenses: 157.6, balance: -157.6, total_transactions: 3 };
+  const cash = (total) => ({ as_of: "2026-11-02T12:00:00", total_available: total, total_all: total, account_count: 1, by_type: [] });
+
+  it("saldo em conta muito acima do gasto não é situação crítica", () => {
+    renderAt(noIncome, cash(27538.32));
+    expect(screen.queryByText("Crítico")).not.toBeInTheDocument();
+    expect(screen.getByText("Sereno")).toBeInTheDocument();
+    // O Insight diz contra o que mede: o saldo, não uma receita que ainda não existe.
+    const quantias = screen.getByTestId("dashboard-insight-quantias");
+    expect(quantias).toHaveTextContent("seria o ritmo linear do saldo");
+    expect(quantias).not.toHaveTextContent("R$ 0,00");
+  });
+
+  it("saldo que mal cobre o gasto continua crítico", () => {
+    renderAt(noIncome, cash(50));
+    expect(screen.getByText("Crítico")).toBeInTheDocument();
+  });
+
+  it("sem saber o saldo, não inventa folga", () => {
+    renderAt(noIncome, null);
+    expect(screen.getByText("Crítico")).toBeInTheDocument();
+  });
+
+  it("com receita no mês a régua continua sendo a receita, mesmo com saldo alto", () => {
+    // Gastou o dobro do que entrou: o saldo grande não pode esconder isso.
+    renderAt({ total_income: 100, total_expenses: 400, balance: -300 }, cash(50000));
+    expect(screen.getByText("Crítico")).toBeInTheDocument();
+  });
+});
