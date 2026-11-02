@@ -589,15 +589,15 @@ describe("DashboardPage — issue #87: sem estouro horizontal no mobile", () => 
 });
 
 describe("DashboardPage — humor antes de a receita do mês entrar", () => {
-  // Caso real (conta demo saudável, 02/11): salário cai no dia 5, R$ 27,5 mil em
-  // conta, R$ 157,60 gastos em 2 dias. A régua era max(receita, despesa) — com
+  // Caso real (conta demo saudável, 02/11): salário cai no dia 5, renda declarada
+  // R$ 9.200, R$ 157,60 gastos em 2 dias. A régua era max(receita, despesa) — com
   // receita zero ela virava a própria despesa, 100% "gasto" no dia 2: "Crítico".
-  const renderAt = (summary, balanceSummary) => {
+  // O período padrão da tela é "Este mês", que contém hoje.
+  const renderAt = (summary, declaredMonthlyIncome) => {
     mockDashboardData = {
       ...baseData(),
       summary: { ...baseData().summary, ...summary },
       rhythmMeta: { ...baseData().rhythmMeta, dim: 30, today: 2 },
-      balanceSummary,
     };
     render(
       <DashboardPage
@@ -605,36 +605,42 @@ describe("DashboardPage — humor antes de a receita do mês entrar", () => {
         stateCtrl={{ mounted: true, isMobile: false }}
         dataMode="live"
         organizationId="org-no-income-yet"
+        declaredMonthlyIncome={declaredMonthlyIncome}
         onNewTx={vi.fn()}
       />,
     );
   };
   const noIncome = { total_income: 0, total_expenses: 157.6, balance: -157.6, total_transactions: 3 };
-  const cash = (total) => ({ as_of: "2026-11-02T12:00:00", total_available: total, total_all: total, account_count: 1, by_type: [] });
 
-  it("saldo em conta muito acima do gasto não é situação crítica", () => {
-    renderAt(noIncome, cash(27538.32));
+  it("sem receita ainda, mede contra a renda declarada — não é situação crítica", () => {
+    renderAt(noIncome, 9200);
     expect(screen.queryByText("Crítico")).not.toBeInTheDocument();
     expect(screen.getByText("Sereno")).toBeInTheDocument();
-    // O Insight diz contra o que mede: o saldo, não uma receita que ainda não existe.
     const quantias = screen.getByTestId("dashboard-insight-quantias");
-    expect(quantias).toHaveTextContent("seria o ritmo linear do saldo");
+    expect(quantias).toHaveTextContent("seria o ritmo linear da renda declarada");
     expect(quantias).not.toHaveTextContent("R$ 0,00");
+    expect(screen.getByTestId("dashboard-regua-ritmo")).toHaveTextContent("da renda declarada");
   });
 
-  it("saldo que mal cobre o gasto continua crítico", () => {
-    renderAt(noIncome, cash(50));
-    expect(screen.getByText("Crítico")).toBeInTheDocument();
+  it("um Pix pequeno não derruba a régua de volta (sem degrau)", () => {
+    renderAt({ ...noIncome, total_income: 10, balance: -147.6 }, 9200);
+    expect(screen.getByText("Sereno")).toBeInTheDocument();
   });
 
-  it("sem saber o saldo, não inventa folga", () => {
+  it("sem renda declarada, nada muda", () => {
     renderAt(noIncome, null);
     expect(screen.getByText("Crítico")).toBeInTheDocument();
   });
 
-  it("com receita no mês a régua continua sendo a receita, mesmo com saldo alto", () => {
-    // Gastou o dobro do que entrou: o saldo grande não pode esconder isso.
-    renderAt({ total_income: 100, total_expenses: 400, balance: -300 }, cash(50000));
+  it("gastar acima da renda declarada continua crítico", () => {
+    renderAt({ ...noIncome, total_expenses: 6000, balance: -6000 }, 9200);
     expect(screen.getByText("Crítico")).toBeInTheDocument();
+  });
+
+  it("quando a receita real passa a declarada, a régua volta a ser a receita", () => {
+    // Recebeu 1.000, gastou 2.000; declarou 500: o declarado não pode suavizar nada.
+    renderAt({ total_income: 1000, total_expenses: 2000, balance: -1000 }, 500);
+    expect(screen.getByText("Crítico")).toBeInTheDocument();
+    expect(screen.getByTestId("dashboard-regua-ritmo")).toHaveTextContent("da receita gasta");
   });
 });

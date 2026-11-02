@@ -38,6 +38,7 @@ import {
   calcMood,
 } from "../features/moodV4";
 import { useDashboardData } from "../features/dashboard/useDashboardData.js";
+import { periodYardstick } from "../features/dashboard/periodYardstick.js";
 import { pickCommittedExpenseForDashboard } from "../features/dashboard/dashboardRecurringKpi.js";
 import { toAmount } from "../../api/money";
 import { getRecurringProjection } from "../../api/recurringSeries";
@@ -69,6 +70,8 @@ export function DashboardPage({
   extraRecs = [],
   onNewTx,
   organizationId = null,
+  /** Renda mensal DECLARADA da organização (`null` = não declarou). */
+  declaredMonthlyIncome = null,
 }) {
   const { mounted, isMobile } = stateCtrl;
   const apiDataEnabled = Boolean(organizationId);
@@ -144,6 +147,7 @@ export function DashboardPage({
     enabled: apiDataEnabled,
     dateStart: appliedRange.start,
     dateEnd: appliedRange.end,
+    declaredMonthlyIncome,
   });
   const recentTransactions = dashboardData.transactions;
   const categoryData = dashboardData.categories;
@@ -201,21 +205,18 @@ export function DashboardPage({
   );
   const showNeutralLiveHero = apiFailedNoSummary || isPeriodWithoutActivity;
   const refetch = dashboardData.refetch;
-  /**
-   * Régua do período: contra o que o gasto é medido.
-   *
-   * Normalmente é a receita (`max(inc, exp)`). Mas antes de o salário cair a
-   * receita é zero, a régua virava a própria despesa e qualquer gasto no dia 2
-   * contava como 100% do período: "Situação crítica" com R$ 27 mil em conta.
-   * Enquanto NADA entrou no período, a régua passa a ser o dinheiro que havia em
-   * conta no início dele (saldo de hoje + o que já saiu). Basta R$ 1 de receita
-   * para voltar à régua normal — de propósito: quem gasta mais do que ganha não
-   * pode ser absolvido por ter reserva. Sem saber o saldo, nada muda.
-   */
-  const availableNow = dashboardData.balanceSummary?.total_available;
-  const measuresAgainstCash =
-    inc === 0 && exp > 0 && typeof availableNow === "number" && availableNow > 0;
-  const envelope = measuresAgainstCash ? availableNow + exp : Math.max(inc, exp, 1);
+  // Régua do período — a MESMA que desenha a projeção do gráfico. Ver
+  // periodYardstick: no período corrente, antes de o salário cair, a base é a
+  // renda declarada e não uma receita que ainda não chegou.
+  const yardstick = periodYardstick({
+    income: inc,
+    expenses: exp,
+    declaredMonthlyIncome,
+    rangeStartYmd: appliedRange.start,
+    rangeEndYmd: appliedRange.end,
+  });
+  const envelope = yardstick.envelope;
+  const measuresAgainstDeclared = yardstick.basis === "declared";
 
   /**
    * Projeção de recorrências futuras (após hoje) no período do dashboard.
@@ -302,8 +303,8 @@ export function DashboardPage({
   // cru não é, e 37 combinações de (dia, dias-no-período) caem nessa fresta.
   const aheadOfPace = spendPct <= timePct;
   const freePctMood =
-    measuresAgainstCash
-      ? (availableNow / envelope) * 100
+    measuresAgainstDeclared
+      ? Math.min(100, Math.max(0, ((yardstick.base - exp) / yardstick.base) * 100))
       : inc > 0
       ? Math.min(100, Math.max(0, (bal / inc) * 100))
       : bal >= 0
@@ -581,19 +582,23 @@ export function DashboardPage({
    * medidas. Mostrar as duas quantias deixa a diferença evidente sozinha, ancorada
    * em valores que existem, e o nome único fica com o card de Ritmo.
    */
-  const expectedByNow = Math.round(((measuresAgainstCash ? envelope : inc) * timePct) / 100);
+  const expectedByNow = Math.round((yardstick.base * timePct) / 100);
   /**
    * Percentual da RECEITA gasta — dividido por `inc`, não pelo `envelope`.
    *
-   * `envelope` é `max(inc, exp)`, então quem gasta mais do que recebe teria o
+   * `envelope` é `max(base, exp)`, então quem gasta mais do que recebe teria o
    * numerador travado em 100%: com receita 1.000 e despesa 2.000 o chip diria
    * "100% da receita gasta" (verdade: 200%). Justo o caso mais grave seria o que a
    * tela leria mais errado. Passar de 100 aqui é informação, não bug.
    *
-   * Sem receita no período a fração não existe e o chip não aparece — o humor
-   * continua saindo do `envelope`, que é outra conta e não muda nesta PR.
+   * Sem receita e sem régua declarada a fração não existe e o chip não aparece.
    */
-  const spentOfIncomePct = inc > 0 ? Math.round((exp / inc) * 100) : null;
+  // Medindo contra a renda declarada, o chip diz isso: "1.576% da receita gasta"
+  // (um Pix de R$ 10 contra R$ 157 de gasto) ao lado de "Sereno" seria a
+  // contradição que a régua única existe para evitar.
+  const spentOfIncomePct = measuresAgainstDeclared
+    ? Math.round((exp / yardstick.base) * 100)
+    : inc > 0 ? Math.round((exp / inc) * 100) : null;
 
 
   /**
@@ -1375,19 +1380,19 @@ export function DashboardPage({
                     nenhum. Sem o par não há como reconstruir por que a tela está na
                     cor que está.
 
-                    Enquanto receitas ≥ despesas — o caso normal — este par é
-                    exatamente o que `calcMood` compara, porque aí `envelope === inc`.
-                    Quando a despesa passa a receita os dois divergem: o humor satura
-                    (envelope vira `exp`, o ratio trava) e o chip continua contando a
-                    verdade, acima de 100%. Preferi o chip honesto ao chip fiel ao
-                    cálculo — trocar a régua do humor é decisão de produto à parte. */}
+                    Enquanto a base (receita, ou renda declarada no período corrente
+                    antes de o salário cair — ver periodYardstick) ≥ despesas, este
+                    par é exatamente o que `calcMood` compara, porque aí
+                    `envelope === base`. Quando a despesa passa a base os dois
+                    divergem: o humor satura (envelope vira `exp`, o ratio trava) e o
+                    chip continua contando a verdade, acima de 100%. */}
                 {spentOfIncomePct === null ? null : (
                 <span
                   data-testid="dashboard-regua-ritmo"
                   style={{ ...G, display: "inline-flex", alignItems: "center", gap: 6, background: T.grayLight, borderRadius: 9999, padding: "3px 11px" }}
                 >
                   <span style={{ ...M_MONO, ...NUM, fontSize: 11, fontWeight: 700, color: spentOfIncomePct > 100 ? T.red : T.ink }}>{spentOfIncomePct}%</span>
-                  <span style={{ fontSize: 11, color: T.inkLight }}>da receita gasta</span>
+                  <span style={{ fontSize: 11, color: T.inkLight }}>{measuresAgainstDeclared ? "da renda declarada" : "da receita gasta"}</span>
                   <span style={{ color: T.border }}>·</span>
                   <span style={{ ...M_MONO, ...NUM, fontSize: 11, fontWeight: 700, color: T.ink }}>{timePct}%</span>
                   <span style={{ fontSize: 11, color: T.inkLight }}>do período</span>
@@ -1531,7 +1536,7 @@ export function DashboardPage({
                     {fmtAbs(expectedByNow)}
                   </span>
                   <span style={{ ...G, fontSize: 12, color: T.inkMid }}>
-                    {measuresAgainstCash ? "seria o ritmo linear do saldo" : "seria o ritmo linear da receita"}
+                    {measuresAgainstDeclared ? "seria o ritmo linear da renda declarada" : "seria o ritmo linear da receita"}
                   </span>
                 </div>
               </div>
