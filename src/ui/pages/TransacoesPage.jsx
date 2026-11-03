@@ -31,6 +31,7 @@ import { TransactionsEmptyState } from "../features/transactions/TransactionsEmp
 import { TransactionsSkeleton } from "../features/transactions/TransactionsSkeleton.jsx";
 import { TransactionsListDisplayControls } from "../features/transactions/TransactionsListDisplayControls.jsx";
 import { ConfirmActionInline, ConfirmActionModal } from "../features/transactions/ConfirmAction.jsx";
+import { settlementCopy } from "../features/transactions/settlementCopy.js";
 import { ShortcutsModal } from "../features/transactions/ShortcutsModal.jsx";
 import { useTransactionsKeyboard } from "../features/transactions/useTransactionsKeyboard.js";
 import { useFocusTrap } from "../features/transactions/useFocusTrap.js";
@@ -596,7 +597,7 @@ const DetailPanel = ({
                 setSettlingId(null);
               }
             }}>
-            {settlingId === tx.id ? "…" : tx.settled ? "↺ Desfazer pagamento" : "✓ Marcar como pago"}
+            {settlingId === tx.id ? "…" : tx.settled ? settlementCopy(tx.type).undoButton : settlementCopy(tx.type).markButton}
           </AccButton>
         )}
         <AccButton

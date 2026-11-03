@@ -29,7 +29,7 @@ export const GRUPOS_DE_ATALHOS = [
   [
     "Agir na linha em foco",
     [
-      [["P"], "Marcar ou desmarcar como pago", ""],
+      [["P"], "Marcar ou desmarcar como pago ou recebido", ""],
       [["E"], "Editar", "a sanfona continua aberta"],
       [["D"], "Duplicar", ""],
       [["Delete", "ou", "⌫"], "Excluir", "pede confirmação"],

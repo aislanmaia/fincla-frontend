@@ -219,6 +219,21 @@ describe("TxRow desktop", () => {
     expect(screen.queryByRole("button", { name: /Duplicar/ })).toBeNull();
   });
 
+  /* Hoje (errado) a receita dizia "pagar"; esperado: "receber". Despesa não muda. */
+  it("receita: ação rápida e anel falam em receber", () => {
+    const quickActions = { onSettle: vi.fn(), onEdit: vi.fn(), onDelete: vi.fn() };
+    const tx = { ...income, settleable: true, settled: false };
+    row({ tx, quickActions, showActionLabels: true });
+    fireEvent.click(screen.getByRole("button", { name: "Marcar Salário como recebido" }));
+    expect(quickActions.onSettle).toHaveBeenCalledWith(tx);
+    expect(screen.getByText("A receber")).toBeTruthy();
+    expect(screen.queryByText("A pagar")).toBeNull();
+    expect(screen.queryByRole("button", { name: /como pago/ })).toBeNull();
+    cleanup();
+    row({ tx: { ...tx, settled: true }, quickActions });
+    expect(screen.getByRole("button", { name: "Desfazer recebimento de Salário" })).toBeTruthy();
+  });
+
   it("sem quickActions não há botões de ação", () => {
     row();
     expect(screen.queryByRole("button", { name: /^Editar/ })).toBeNull();
@@ -259,6 +274,17 @@ describe("TxRow mobile", () => {
     fireEvent.click(screen.getByRole("button", { name: "Marcar Almoço como pago" }));
     expect(quickActions.onSettle).toHaveBeenCalledWith(tx);
     expect(swipe.close).toHaveBeenCalledTimes(2);
+  });
+
+  it("receita no mobile: swipe e anel falam em receber", () => {
+    const swipe = { isOpen: (id) => id === "t2", close: vi.fn(), handlers: () => ({}) };
+    const quickActions = { onSettle: vi.fn(), onDelete: vi.fn() };
+    const tx = { ...income, settleable: true, settled: false };
+    row({ isMobile: true, swipe, quickActions, tx });
+    const btn = screen.getByRole("button", { name: "Marcar Salário como recebido" });
+    expect(btn.textContent).toContain("receber");
+    expect(screen.getByText("A receber")).toBeTruthy();
+    expect(screen.queryByText("A pagar")).toBeNull();
   });
 
   it("clique com swipe aberto fecha em vez de selecionar", () => {

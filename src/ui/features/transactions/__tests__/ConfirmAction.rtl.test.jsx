@@ -51,3 +51,29 @@ describe("delete confirmation of an installment", () => {
     expect(screen.getByRole("alertdialog").textContent).not.toMatch(/parcelada/i);
   });
 });
+
+/* Hoje (errado) a receita era "paga"; esperado: a receita é "recebida". */
+describe("settle confirmation wording follows the transaction type", () => {
+  const income = { desc: "Salário", type: "income", valorFormatado: "R$ 5.000,00" };
+  const expense = { desc: "Luz", type: "expense", valorFormatado: "R$ 100,00" };
+
+  it.each([
+    ["settle", income, "Marcar como recebida?", "✓ Confirmar recebimento"],
+    ["unsettle", income, "Desfazer este recebimento?", "↺ Desfazer recebimento"],
+    ["settle", expense, "Marcar como paga?", "✓ Confirmar pagamento"],
+    ["unsettle", expense, "Desfazer este pagamento?", "↺ Desfazer pagamento"],
+  ])("%s of %o", (kind, tx, title, confirm) => {
+    for (const Comp of [ConfirmActionModal, ConfirmActionInline]) {
+      render(<Comp kind={kind} desc={tx.desc} tx={tx} />);
+      const dialog = screen.getByRole("alertdialog");
+      expect(dialog.textContent).toContain(title);
+      expect(screen.getByRole("button", { name: confirm })).toBeTruthy();
+      cleanup();
+    }
+  });
+
+  it("without a tx it keeps the expense wording", () => {
+    render(<ConfirmActionInline kind="settle" desc="Luz" />);
+    expect(screen.getByRole("button", { name: "✓ Confirmar pagamento" })).toBeTruthy();
+  });
+});

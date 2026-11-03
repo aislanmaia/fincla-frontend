@@ -2,6 +2,7 @@ import React from "react";
 import { T } from "../../tokens";
 import { G } from "../../typography";
 import { fmtBRL } from "./shared/transactionFormat.js";
+import { settlementCopy } from "./settlementCopy.js";
 
 /**
  * A pergunta defensiva de uma ação que muda dado — excluir ou liquidar.
@@ -43,22 +44,24 @@ export const CONFIRM_COPY = {
     danger: true,
   },
   settle: {
-    title: () => "Marcar como paga?",
+    title: (_desc, _scope, type) => settlementCopy(type).confirmSettleTitle,
     detail: "O valor passa a contar no saldo da conta a partir de hoje.",
     alerta: null,
     reversivel: "Dá para desfazer depois.",
-    confirm: "✓ Confirmar pagamento",
+    confirm: (type) => settlementCopy(type).confirmSettleButton,
     danger: false,
   },
   unsettle: {
-    title: () => "Desfazer este pagamento?",
+    title: (_desc, _scope, type) => settlementCopy(type).confirmUnsettleTitle,
     detail: "O lançamento volta a ser um compromisso e sai do saldo.",
     alerta: null,
     reversivel: "Dá para refazer depois.",
-    confirm: "↺ Desfazer pagamento",
+    confirm: (type) => settlementCopy(type).confirmUnsettleButton,
     danger: false,
   },
 };
+
+const confirmLabel = (copy, tx) => (typeof copy.confirm === "function" ? copy.confirm(tx?.type) : copy.confirm);
 
 export function ConfirmActionInline({ kind, desc, tx = null, busy = false, onConfirm, onCancel }) {
   const copy = CONFIRM_COPY[kind];
@@ -69,7 +72,7 @@ export function ConfirmActionInline({ kind, desc, tx = null, busy = false, onCon
   return (
     <div
       role="alertdialog"
-      aria-label={copy.title(desc, scope)}
+      aria-label={copy.title(desc, scope, tx?.type)}
       style={{
         display: "flex",
         flexDirection: "column",
@@ -80,7 +83,7 @@ export function ConfirmActionInline({ kind, desc, tx = null, busy = false, onCon
       }}
     >
       <div style={{ ...G, fontSize: 14, fontWeight: 800, color: T.ink }}>
-        {copy.title(desc, scope)}
+        {copy.title(desc, scope, tx?.type)}
       </div>
       {scope && (
         <div style={{ ...G, fontSize: 12, color: T.ink, fontWeight: 700, lineHeight: 1.45 }}>{scopeNotice(scope)}</div>
@@ -129,7 +132,7 @@ export function ConfirmActionInline({ kind, desc, tx = null, busy = false, onCon
             opacity: busy ? 0.6 : 1,
           }}
         >
-          {busy ? "…" : copy.confirm}
+          {busy ? "…" : confirmLabel(copy, tx)}
         </button>
       </div>
     </div>
@@ -185,7 +188,7 @@ export function ConfirmActionModal({ kind, desc, tx = null, busy = false, onConf
       <div
         role="alertdialog"
         aria-modal="true"
-        aria-label={`${copy.title(desc, scope)} ${desc}`}
+        aria-label={`${copy.title(desc, scope, tx?.type)} ${desc}`}
         onClick={(e) => e.stopPropagation()}
         style={{
           ...G,
@@ -200,7 +203,7 @@ export function ConfirmActionModal({ kind, desc, tx = null, busy = false, onConf
         }}
       >
         <div style={{ ...G, fontSize: 16, fontWeight: 800, color: T.ink, lineHeight: 1.3 }}>
-          {copy.title(desc, scope)}
+          {copy.title(desc, scope, tx?.type)}
         </div>
 
         {/* O CARTÃO da transação. Ele é o que responde "qual delas?" sem a
@@ -288,7 +291,7 @@ export function ConfirmActionModal({ kind, desc, tx = null, busy = false, onConf
               cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1,
             }}
           >
-            {busy ? "…" : copy.confirm}
+            {busy ? "…" : confirmLabel(copy, tx)}
           </button>
         </div>
       </div>
