@@ -12,6 +12,10 @@ export function ModalShell({ titleSans, titleSerif, onClose, children, footer })
         inset: 0,
         background: "rgba(15,15,13,0.28)",
         display: "grid",
+        // The column is capped at the card width and may shrink to 0: with an
+        // `auto` column, long unwrapped content widened the card past a phone screen.
+        gridTemplateColumns: "minmax(0, 460px)",
+        justifyContent: "center",
         placeItems: "center",
         padding: 16,
         zIndex: 1000,
@@ -22,8 +26,7 @@ export function ModalShell({ titleSans, titleSerif, onClose, children, footer })
         role="dialog"
         aria-modal="true"
         style={{
-          width: 460,
-          maxWidth: "100%",
+          width: "100%",
           maxHeight: "90dvh",
           display: "flex",
           flexDirection: "column",
