@@ -1103,6 +1103,8 @@ it("cancelar no modal NÃO liquida", async () => {
     );
 
     expect(setTransactionSettled).toHaveBeenCalledWith("tx-paga", false);
+    // Despesa mantém o texto de pagamento na torrada.
+    expect(await screen.findByText('Pagamento de "Mercado" desfeito')).toBeInTheDocument();
   });
 
   /* Receita não se "paga": ela se RECEBE. Hoje (errado) a receita usava o
@@ -1141,6 +1143,9 @@ it("cancelar no modal NÃO liquida", async () => {
     await userEvent.click(within(modal).getByRole("button", { name: /^✓ Confirmar recebimento$/ }));
 
     expect(setTransactionSettled).toHaveBeenCalledWith("tx-sal", true);
+    // A torrada de desfazer também: hoje (errado) dizia "marcada como paga".
+    expect(await screen.findByText('"Salário" marcada como recebida')).toBeInTheDocument();
+    expect(screen.queryByText(/marcada como paga/)).toBeNull();
   });
 
   it("numa receita recebida a ação é desfazer o recebimento", async () => {
@@ -1157,6 +1162,7 @@ it("cancelar no modal NÃO liquida", async () => {
     await userEvent.click(within(modal).getByRole("button", { name: /^↺ Desfazer recebimento$/ }));
 
     expect(setTransactionSettled).toHaveBeenCalledWith("tx-sal", false);
+    expect(await screen.findByText('Recebimento de "Salário" desfeito')).toBeInTheDocument();
   });
 
   it("transação de cartão não oferece a ação de liquidar no detalhe", async () => {

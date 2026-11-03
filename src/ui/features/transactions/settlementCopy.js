@@ -24,6 +24,8 @@ const EXPENSE = {
   confirmSettleButton: "✓ Confirmar pagamento",
   confirmUnsettleTitle: "Desfazer este pagamento?",
   confirmUnsettleButton: "↺ Desfazer pagamento",
+  settledToast: (desc) => `"${desc}" marcada como paga`,
+  undoneToast: (desc) => `Pagamento de "${desc}" desfeito`,
 };
 
 const INCOME = {
@@ -40,6 +42,8 @@ const INCOME = {
   confirmSettleButton: "✓ Confirmar recebimento",
   confirmUnsettleTitle: "Desfazer este recebimento?",
   confirmUnsettleButton: "↺ Desfazer recebimento",
+  settledToast: (desc) => `"${desc}" marcada como recebida`,
+  undoneToast: (desc) => `Recebimento de "${desc}" desfeito`,
 };
 
 export function settlementCopy(type) {

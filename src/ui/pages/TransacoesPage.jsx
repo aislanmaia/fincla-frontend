@@ -2874,8 +2874,8 @@ function TransacoesPageBody({
       setUndoToast({
         id,
         label: next
-          ? `"${tx?.desc ?? "Transação"}" marcada como paga`
-          : `Pagamento de "${tx?.desc ?? "transação"}" desfeito`,
+          ? settlementCopy(tx?.type).settledToast(tx?.desc ?? "Transação")
+          : settlementCopy(tx?.type).undoneToast(tx?.desc ?? "transação"),
         nota: saiuDoFiltro ? `Saiu do filtro "${next ? "A pagar" : "Pagas"}"` : null,
         revert: next,
       });
@@ -2987,7 +2987,7 @@ function TransacoesPageBody({
         // continua atrás da confirmação, e não ganha torrada de desfazer.
         setUndoToast({
           id: tx.id,
-          label: next ? `"${tx.desc}" marcada como paga` : `Pagamento de "${tx.desc}" desfeito`,
+          label: next ? settlementCopy(tx.type).settledToast(tx.desc) : settlementCopy(tx.type).undoneToast(tx.desc),
           nota: saiuDoFiltro
             ? `Saiu do filtro "${next ? "A pagar" : "Pagas"}"`
             : null,
