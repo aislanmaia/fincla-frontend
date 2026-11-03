@@ -72,6 +72,8 @@ export function DashboardPage({
   organizationId = null,
   /** Renda mensal DECLARADA da organização (`null` = não declarou). */
   declaredMonthlyIncome = null,
+  /** Sobe a cada transação salva (App): recarrega os cards da Visão Geral. */
+  transactionsRefreshToken = 0,
 }) {
   const { mounted, isMobile } = stateCtrl;
   const apiDataEnabled = Boolean(organizationId);
@@ -147,6 +149,7 @@ export function DashboardPage({
     enabled: apiDataEnabled,
     dateStart: appliedRange.start,
     dateEnd: appliedRange.end,
+    refreshKey: transactionsRefreshToken,
   });
   const recentTransactions = dashboardData.transactions;
   const categoryData = dashboardData.categories;
