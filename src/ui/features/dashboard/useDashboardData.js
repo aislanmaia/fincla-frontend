@@ -623,6 +623,8 @@ export function useDashboardData({
   enabled = true,
   dateStart,
   dateEnd,
+  /** Bumped by the app after any transaction is saved, so the cards never show the state from before it. */
+  refreshKey = 0,
 }) {
   const [state, setState] = useState(EMPTY_STATE);
   const [fetchTick, setFetchTick] = useState(0);
@@ -823,7 +825,7 @@ export function useDashboardData({
         autoRetryTimeoutRef.current = null;
       }
     };
-  }, [enabled, organizationId, fetchTick, dateStart, dateEnd]);
+  }, [enabled, organizationId, fetchTick, refreshKey, dateStart, dateEnd]);
 
   const hasRealData = useMemo(() => {
     return Boolean(state.summary);
