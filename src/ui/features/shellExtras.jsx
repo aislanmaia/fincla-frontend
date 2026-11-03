@@ -54,8 +54,9 @@ export const MiniChecklist = ({ onboardingData, completedTx, completedBudget, on
       </div>
       {/* Separator */}
       <div style={{ width:1, height:20, background:T.border, flexShrink:0 }}/>
-      {/* Items inline */}
-      <div style={{ display:"flex", alignItems:"center", gap:12, flex:1, flexWrap:"wrap" }}>
+      {/* Items inline. The 260px basis sends the list to its own line on a phone: with a bare
+          flex:1, done items (wrappable struck-through text) squeezed into a ~150px column beside the title. */}
+      <div data-testid="first-steps-items" style={{ display:"flex", alignItems:"center", gap:12, flex:"1 1 260px", minWidth:0, flexWrap:"wrap" }}>
         {items.map((it, i) => (
           <div key={i} style={{ display:"flex", alignItems:"center", gap:6 }}>
             <div style={{ width:14, height:14, borderRadius:4, flexShrink:0,
