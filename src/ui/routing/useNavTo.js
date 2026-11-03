@@ -14,6 +14,14 @@ import { mergeNavSearch } from "./searchContract.js";
  *   para a rota correspondente preservando os search params via `mergeNavSearch`.
  * - `opts.cenarioId` é encaminhado para o setter de simulação.
  */
+/**
+ * Destinos antigos que viraram áreas do hub Planejamento. Os CTAs ainda chamam
+ * `navTo("budgets")` etc.; sem este mapa o segmento não é mais rota autenticada e
+ * o clique não fazia nada (ex.: "Criar →" do checklist de primeiros passos).
+ * Mesmo mapa dos redirects de URL antiga em `finclaRouter.jsx`.
+ */
+export const LEGACY_PLANNING_TARGETS = { goals: "goals", budgets: "budgets", simulation: "simulator" };
+
 export function useNavTo({ session, setCenarioId, onSignOutReset }) {
   const navigate = useNavigate();
   return useCallback(
@@ -25,6 +33,13 @@ export function useNavTo({ session, setCenarioId, onSignOutReset }) {
         return;
       }
       if (opts.cenarioId) setCenarioId(opts.cenarioId);
+      if (typeof target === "string" && LEGACY_PLANNING_TARGETS[target]) {
+        navigate({
+          to: `/planning/${LEGACY_PLANNING_TARGETS[target]}`,
+          search: (prev) => mergeNavSearch(prev, "planning", opts),
+        });
+        return;
+      }
       if (typeof target === "string" && isAuthRouteSegment(target)) {
         // `planning` é hub com sub-áreas (/planning/$area), como o Perfil. Sem isto
         // o único destino possível é a área default, e um CTA que diz "Simular uma
