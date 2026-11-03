@@ -5,6 +5,7 @@ import { G } from "../../../typography";
 import { Tip } from "../../../components/Tip.jsx";
 import { SWIPE_WIDTH } from "../useSwipeActions.js";
 import { catBg, catColor, fmtBRL, fmtValorDaLinha } from "./transactionFormat.js";
+import { settlementCopy } from "../settlementCopy.js";
 
 /* O corpo dos micro-rótulos da linha (pílula de categoria, chips de tag,
    metadado). Constante e não literal porque ele aparece em DOIS lugares que
@@ -223,6 +224,7 @@ export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
   ].filter(Boolean).join(" ");
 
   const statusRing = !readOnly && tx.settleable && !tx.settled;
+  const settleCopy = settlementCopy(tx.type);
   const shownValue = readOnly ? (displayValue ?? "—") : fmtValorDaLinha(tx.val, tx.currency);
   const valuePrefix = readOnly ? (isRefund ? "− " : "") : (isReceita ? "+" : "−");
 
@@ -246,12 +248,12 @@ export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
               <button type="button"
                 tabIndex={swipeOpen ? 0 : -1}
                 onClick={(e) => { e.stopPropagation(); swipe.close(); quickActions?.onSettle(tx); }}
-                aria-label={tx.settled ? `Desfazer pagamento de ${tx.desc}` : `Marcar ${tx.desc} como pago`}
+                aria-label={tx.settled ? settleCopy.undoAria(tx.desc) : settleCopy.markAria(tx.desc)}
                 style={{ ...G, flex:1, display:"flex", flexDirection:"column", alignItems:"center",
                   justifyContent:"center", gap:3, border:"none", background:T.green, color:"#fff",
                   fontSize:11, fontWeight:700, cursor:"pointer" }}>
                 <b style={{ fontSize:14 }}>{tx.settled ? "↺" : "✓"}</b>
-                {tx.settled ? "desfazer" : "pagar"}
+                {tx.settled ? "desfazer" : settleCopy.markShort.toLowerCase()}
               </button>
             )}
             <button type="button"
@@ -374,7 +376,7 @@ export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
             <span style={{ color:T.amber, display:"inline-flex", alignItems:"center" }}>
               <i aria-hidden="true" style={{ display:"inline-block", width:8, height:8,
                 border:"1.75px solid currentColor", borderRadius:"50%", boxSizing:"border-box" }}/>
-              <span style={SR_ONLY}>A pagar</span>
+              <span style={SR_ONLY}>{settleCopy.pendingBadge}</span>
             </span>
           )}
         </div>
@@ -628,8 +630,8 @@ export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
           <div className="fincla-quick">
             {tx.settleable && (
               <QuickAction
-                label={tx.settled ? `Desfazer pagamento de ${tx.desc}` : `Marcar ${tx.desc} como pago`}
-                text={tx.settled ? "Desfazer" : "Pagar"}
+                label={tx.settled ? settleCopy.undoAria(tx.desc) : settleCopy.markAria(tx.desc)}
+                text={tx.settled ? "Desfazer" : settleCopy.markShort}
                 tone="green"
                 showText={showActionLabels}
                 onClick={(e) => { e.stopPropagation(); quickActions.onSettle(tx); }}
@@ -693,7 +695,7 @@ export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
             justifyContent: wide ? "flex-end" : "center" }}>
             <i aria-hidden="true" style={{ display:"inline-block", width:8, height:8,
               border:"1.75px solid currentColor", borderRadius:"50%", boxSizing:"border-box" }}/>
-            <span style={wide ? undefined : SR_ONLY}>A pagar</span>
+            <span style={wide ? undefined : SR_ONLY}>{settleCopy.pendingBadge}</span>
           </span>
         </Tip>
       ) : <span />)}

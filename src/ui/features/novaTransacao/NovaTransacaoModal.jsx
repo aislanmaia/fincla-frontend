@@ -83,6 +83,7 @@ import { listCreditCards } from "../../../api/creditCards";
 import { ClosingDaySuggestion } from "../creditCards/ClosingDaySuggestion.jsx";
 import { isValidMonthDay } from "../creditCards/closingDay.js";
 import { getOrgBalances } from "../../../api/balances";
+import { settlementCopy } from "../transactions/settlementCopy.js";
 import {
   buildCreateCreditCardPayload,
   CARD_BRAND_OPTIONS,
@@ -1669,6 +1670,7 @@ export const NovaTransacaoModal = ({
   /** Conta de liquidação + toggle "já paguei?" (settlement). Só p/ métodos não-cartão. */
   const renderAccountSettlement = () => {
     if (method === "credito") return null;
+    const copy = settlementCopy(tipo);
     return (
       <div>
         <div style={{ ...G, fontSize: 12, fontWeight: 600, color: T.inkMid, marginBottom: 8 }}>Conta</div>
@@ -1687,9 +1689,9 @@ export const NovaTransacaoModal = ({
           style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", background: settled ? T.greenLight : T.bg, borderRadius: 10, border: `1px solid ${settled ? T.green : T.border}`, cursor: "pointer", transition: "all 0.15s" }}
         >
           <div>
-            <div style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink }}>{settled ? "Já paguei" : "Ainda não paguei"}</div>
+            <div style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink }}>{settled ? copy.settledToggle : copy.pendingToggle}</div>
             <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 1 }}>
-              {settled ? "Entra no saldo da conta agora." : "Fica como compromisso pendente."}
+              {settled ? "Entra no saldo da conta agora." : copy.pendingHint}
             </div>
           </div>
           <div style={{ width: 42, height: 24, borderRadius: 12, background: settled ? T.green : T.inkFaint, position: "relative", transition: "background 0.2s", flexShrink: 0 }}>

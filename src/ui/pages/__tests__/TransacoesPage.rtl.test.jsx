@@ -1103,6 +1103,66 @@ it("cancelar no modal NÃO liquida", async () => {
     );
 
     expect(setTransactionSettled).toHaveBeenCalledWith("tx-paga", false);
+    // Despesa mantém o texto de pagamento na torrada.
+    expect(await screen.findByText('Pagamento de "Mercado" desfeito')).toBeInTheDocument();
+  });
+
+  /* Receita não se "paga": ela se RECEBE. Hoje (errado) a receita usava o
+     vocabulário de despesa; esperado: botão e diálogo falam em recebimento. */
+  function seedIncome(setTransactionSettled, settled) {
+    transactionsDataMock.mockReturnValue({
+      isLoading: false,
+      error: "",
+      summary: { total_income: 5000, total_expenses: 0, total_refunds: 0, balance: 5000 },
+      transactions: [
+        { id: "tx-sal", date: "21/05", desc: "Salário", cat: "Receita", val: 5000, method: "Pix",
+          type: "income", icon: "💰", status: "confirmado", rec: false, tags: [],
+          settled, settleable: true, paidAt: settled ? "2026-05-21T12:00:00" : null },
+      ],
+      total: 1,
+      hasMore: false,
+      removeTransaction: vi.fn(),
+      setTransactionSettled,
+      reload: recarregarMock,
+    });
+  }
+
+  it("numa receita a sanfona e o diálogo falam em receber, não em pagar", async () => {
+    const setTransactionSettled = vi.fn().mockResolvedValue({ settled: true });
+    seedIncome(setTransactionSettled, false);
+    renderPage();
+    await openFilters();
+
+    await userEvent.click(screen.getAllByText("Salário")[0]);
+    const detail = await screen.findByRole("region", { name: /^Detalhes de/i });
+    expect(within(detail).queryByRole("button", { name: /Marcar como pago/i })).toBeNull();
+    await userEvent.click(within(detail).getByRole("button", { name: /^✓ Marcar como recebido$/ }));
+    const modal = await screen.findByRole("alertdialog");
+    expect(within(modal).getByText("Marcar como recebida?")).toBeTruthy();
+    expect(within(modal).queryByText(/pagamento|paga\?/i)).toBeNull();
+    await userEvent.click(within(modal).getByRole("button", { name: /^✓ Confirmar recebimento$/ }));
+
+    expect(setTransactionSettled).toHaveBeenCalledWith("tx-sal", true);
+    // A torrada de desfazer também: hoje (errado) dizia "marcada como paga".
+    expect(await screen.findByText('"Salário" marcada como recebida')).toBeInTheDocument();
+    expect(screen.queryByText(/marcada como paga/)).toBeNull();
+  });
+
+  it("numa receita recebida a ação é desfazer o recebimento", async () => {
+    const setTransactionSettled = vi.fn().mockResolvedValue({ settled: false });
+    seedIncome(setTransactionSettled, true);
+    renderPage();
+    await openFilters();
+
+    await userEvent.click(screen.getAllByText("Salário")[0]);
+    const detail = await screen.findByRole("region", { name: /^Detalhes de/i });
+    await userEvent.click(within(detail).getByRole("button", { name: /^↺ Desfazer recebimento$/ }));
+    const modal = await screen.findByRole("alertdialog");
+    expect(within(modal).getByText("Desfazer este recebimento?")).toBeTruthy();
+    await userEvent.click(within(modal).getByRole("button", { name: /^↺ Desfazer recebimento$/ }));
+
+    expect(setTransactionSettled).toHaveBeenCalledWith("tx-sal", false);
+    expect(await screen.findByText('Recebimento de "Salário" desfeito')).toBeInTheDocument();
   });
 
   it("transação de cartão não oferece a ação de liquidar no detalhe", async () => {
