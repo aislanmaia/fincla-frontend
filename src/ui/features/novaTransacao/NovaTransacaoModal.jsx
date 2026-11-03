@@ -1685,11 +1685,18 @@ export const NovaTransacaoModal = ({
           ))}
         </select>
         <div
+          role="switch"
+          aria-checked={settled}
+          aria-label={copy.settledToggle}
+          tabIndex={0}
           onClick={() => setSettled((s) => !s)}
+          onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); setSettled((s) => !s); } }}
           style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", background: settled ? T.greenLight : T.bg, borderRadius: 10, border: `1px solid ${settled ? T.green : T.border}`, cursor: "pointer", transition: "all 0.15s" }}
         >
           <div>
-            <div style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink }}>{settled ? copy.settledToggle : copy.pendingToggle}</div>
+            {/* The label is the question ("Já recebi?"); the switch is the answer. It used to flip to
+                "Ainda não recebi" when off, which read as the switch being ON for "not received". */}
+            <div style={{ ...G, fontSize: 13, fontWeight: 600, color: T.ink }}>{copy.settledToggle}</div>
             <div style={{ ...G, fontSize: 11, color: T.inkLight, marginTop: 1 }}>
               {settled ? "Entra no saldo da conta agora." : copy.pendingHint}
             </div>
