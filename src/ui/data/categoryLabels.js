@@ -88,6 +88,23 @@ export const CATEGORY_LABEL_PT_BY_EN_NAME = {
   Housing: "Moradia",
   Income: "Receita",
   Uncategorized: "Não classificado",
+  // Demais categorias do catálogo do backend
+  // (fincla-api/src/infrastructure/database/seeds/system_category_catalog.py,
+  // `pt_br_label`). Sem elas a categoria de receita aparece em inglês
+  // ("Services Provided") nas telas que traduzem pelo nome.
+  "Financing & Debt": "Financiamentos e dívidas",
+  Donations: "Doações",
+  Pets: "Animais de estimação",
+  Travel: "Viagens",
+  "Work & Personal Business": "Trabalho e negócios pessoais",
+  "Work & Salary": "Trabalho e salário",
+  "Services Provided": "Serviços prestados",
+  Sales: "Vendas",
+  Benefits: "Benefícios",
+  "Rental Income": "Aluguéis recebidos",
+  "Investment Returns": "Rendimentos",
+  "Received Transfers": "Transferências recebidas",
+  "Received Reimbursements": "Reembolsos recebidos",
 };
 
 const CATEGORY_LABEL_PT_BY_EN_NAME_NORMALIZED = Object.fromEntries(

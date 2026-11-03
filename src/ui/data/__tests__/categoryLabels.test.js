@@ -285,3 +285,59 @@ describe("DETAIL_LABEL_PT_BY_EN_NAME — lista fixada (change-detector, não det
     expect(Object.keys(DETAIL_LABEL_PT_BY_EN_NAME).sort()).toEqual(expectedSeedSlugs);
   });
 });
+
+// Catálogo do backend: fincla-api/src/infrastructure/database/seeds/system_category_catalog.py
+// (`SYSTEM_CATEGORY_CATALOG_V1`, campos `name` → `pt_br_label`). A transação
+// guarda o `name` em inglês em `transactions.category`; a tela precisa mostrar
+// o rótulo PT. Se o backend acrescentar uma categoria, acrescente aqui também.
+const SYSTEM_CATEGORY_CATALOG_PT_BR = [
+  ["Food & Groceries", "Alimentação"],
+  ["Housing", "Moradia"],
+  ["Transport", "Transporte"],
+  ["Health", "Saúde"],
+  ["Education", "Educação"],
+  ["Leisure & Entertainment", "Lazer e entretenimento"],
+  ["Personal Shopping", "Compras pessoais"],
+  ["Services", "Serviços"],
+  ["Subscriptions & Software", "Assinaturas e software"],
+  ["Taxes & Fees", "Impostos e taxas"],
+  ["Financing & Debt", "Financiamentos e dívidas"],
+  ["Donations", "Doações"],
+  ["Pets", "Animais de estimação"],
+  ["Travel", "Viagens"],
+  ["Work & Personal Business", "Trabalho e negócios pessoais"],
+  ["Work & Salary", "Trabalho e salário"],
+  ["Services Provided", "Serviços prestados"],
+  ["Sales", "Vendas"],
+  ["Benefits", "Benefícios"],
+  ["Rental Income", "Aluguéis recebidos"],
+  ["Investment Returns", "Rendimentos"],
+  ["Received Transfers", "Transferências recebidas"],
+  ["Received Reimbursements", "Reembolsos recebidos"],
+  ["Uncategorized", "Não classificado"],
+];
+
+// Divergência conhecida, pré-existente: o mapa do FE usa "&" e caixa alta onde
+// o catálogo usa "e" e caixa baixa. Fica registrada aqui (não corrigida neste
+// PR) para que uma mudança de qualquer lado apareça como falha.
+const KNOWN_FE_LABEL_DIVERGENCES = {
+  "Leisure & Entertainment": "Lazer & Entretenimento",
+  "Personal Shopping": "Compras Pessoais",
+  "Subscriptions & Software": "Assinaturas & Software",
+  "Taxes & Fees": "Impostos & Taxas",
+};
+
+describe("categoryLabels: catálogo de categorias do backend", () => {
+  it.each(SYSTEM_CATEGORY_CATALOG_PT_BR)("traduz %s para o rótulo pt-BR do catálogo", (en, pt) => {
+    const expected = KNOWN_FE_LABEL_DIVERGENCES[en] ?? pt;
+    expect(categoryLabelPtForTag({ name: en })).toBe(expected);
+    expect(categoryLabelPtForTag({ name: en, is_default: true })).toBe(expected);
+  });
+
+  it("nenhuma categoria do catálogo sai em inglês", () => {
+    const untranslated = SYSTEM_CATEGORY_CATALOG_PT_BR.filter(
+      ([en]) => categoryLabelPtForTag({ name: en }) === en,
+    ).map(([en]) => en);
+    expect(untranslated).toEqual([]);
+  });
+});

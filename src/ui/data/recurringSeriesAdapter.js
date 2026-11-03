@@ -127,7 +127,9 @@ function mergeSeriesTagIds(categoryTagId, detailTagIds) {
 function pickCategoryLabelPtSeries(series) {
   const tag = firstCategoryTag(series.tags);
   if (tag) return categoryLabelPtForTag(tag);
-  if (series.category?.trim()) return series.category.trim();
+  // `series.category` é o nome canônico do seed em inglês ("Services Provided");
+  // passa pelo mesmo tradutor da tag em vez de exibir o texto cru.
+  if (series.category?.trim()) return categoryLabelPtForTag({ name: series.category.trim() });
   return series.type === "income" ? "Receita" : "Outros";
 }
 

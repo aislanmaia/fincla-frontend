@@ -604,7 +604,11 @@ export function mapUpcomingDebits(recurringResponse, horizonDays = 14) {
         // `tag.name` vem cru do seed (`Food & Groceries`...); traduz antes de
         // exibir. Sem tag de categoria (ou sem tags), mantém o fallback
         // original — nunca mostra o literal "Categoria".
-        cat: tag ? categoryLabelPtForTag(tag) : (r.category ?? "Recorrente"),
+        cat: tag
+          ? categoryLabelPtForTag(tag)
+          : r.category?.trim()
+            ? categoryLabelPtForTag({ name: r.category.trim() })
+            : "Recorrente",
         daysLeft,
         dateLabel: occ.toLocaleDateString("pt-BR", {
           day: "2-digit",

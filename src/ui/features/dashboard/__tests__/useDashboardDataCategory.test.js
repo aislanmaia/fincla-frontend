@@ -34,6 +34,12 @@ describe("pickCategoryName", () => {
     expect(name).toBe("Moradia");
   });
 
+  // Últimas Transações mostrava "Services Provided · 05/11": a categoria de
+  // receita do seed não estava no mapa de tradução.
+  it("categoria de receita do seed (`transaction.category`) sai em português", () => {
+    expect(pickCategoryName({ category: "Services Provided", tags: {} })).toBe("Serviços prestados");
+  });
+
   it("sem tag e sem `transaction.category`, cai em 'Sem categoria'", () => {
     expect(pickCategoryName({ category: null, tags: {} })).toBe("Sem categoria");
   });
@@ -180,6 +186,25 @@ describe("mapUpcomingDebits", () => {
     });
 
     expect(rows[0].cat).toBe("Assinaturas & Software");
+  });
+
+  it("sem tag de categoria, o fallback `r.category` em inglês do seed sai traduzido", () => {
+    const rows = mapUpcomingDebits({
+      series: [
+        {
+          id: "s4",
+          type: "expense",
+          is_active: true,
+          description: "Ração",
+          value: 90,
+          category: "Pets",
+          next_occurrence: inHorizon(2),
+          tags: [],
+        },
+      ],
+    });
+
+    expect(rows[0].cat).toBe("Animais de estimação");
   });
 
   it("sem tag e sem r.category, cai em 'Recorrente'", () => {
