@@ -11,8 +11,8 @@
  * Accepts the API type (`"income"`) or the modal's own `"receita"`.
  */
 const EXPENSE = {
+  // A question the switch answers: ON = yes. The label never flips to the negative.
   settledToggle: "Já paguei",
-  pendingToggle: "Ainda não paguei",
   pendingHint: "Fica como compromisso pendente.",
   markAria: (desc) => `Marcar ${desc} como pago`,
   undoAria: (desc) => `Desfazer pagamento de ${desc}`,
@@ -30,7 +30,6 @@ const EXPENSE = {
 
 const INCOME = {
   settledToggle: "Já recebi",
-  pendingToggle: "Ainda não recebi",
   pendingHint: "Fica como valor a receber.",
   markAria: (desc) => `Marcar ${desc} como recebido`,
   undoAria: (desc) => `Desfazer recebimento de ${desc}`,

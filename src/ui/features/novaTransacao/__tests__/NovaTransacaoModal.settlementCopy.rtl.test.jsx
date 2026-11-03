@@ -75,20 +75,28 @@ function renderModal(tipo) {
 describe("NovaTransacaoModal — toggle de liquidação por tipo", () => {
   afterEach(cleanup);
 
-  it("despesa mantém 'Já paguei' / 'Ainda não paguei'", async () => {
+  // The label is a fixed question; only the switch state and the hint change.
+  it("despesa: 'Já paguei' fica fixo; desligado = ainda não pagou", async () => {
     const user = userEvent.setup();
     renderModal("despesa");
-    await user.click(await screen.findByText("Já paguei"));
-    expect(screen.getByText("Ainda não paguei")).toBeTruthy();
+    const toggle = await screen.findByRole("switch", { name: "Já paguei" });
+    expect(toggle).toHaveAttribute("aria-checked", "true");
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByText("Já paguei")).toBeTruthy();
+    expect(screen.queryByText(/Ainda não/)).toBeNull();
     expect(screen.getByText("Fica como compromisso pendente.")).toBeTruthy();
     expect(screen.queryByText(/recebi/)).toBeNull();
   });
 
-  it("receita mostra 'Já recebi' / 'Ainda não recebi'", async () => {
+  it("receita: 'Já recebi' fica fixo; desligado = ainda não recebeu", async () => {
     const user = userEvent.setup();
     renderModal("receita");
-    await user.click(await screen.findByText("Já recebi"));
-    expect(screen.getByText("Ainda não recebi")).toBeTruthy();
+    const toggle = await screen.findByRole("switch", { name: "Já recebi" });
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByText("Já recebi")).toBeTruthy();
+    expect(screen.queryByText(/Ainda não/)).toBeNull();
     expect(screen.getByText("Fica como valor a receber.")).toBeTruthy();
     expect(screen.queryByText(/paguei/)).toBeNull();
   });
