@@ -37,7 +37,7 @@ const lista = (v) => (Array.isArray(v) ? v : []);
 const texto = (v) => String(v ?? "").trim();
 
 /** Os "chips" de um snapshot: faceta + o que ela diz. Ordem é a da tela. */
-export function chipsDoSnapshot(snap, { categorias = {}, cartoes = {} } = {}) {
+export function chipsDoSnapshot(snap, { categorias = {}, cartoes = {}, contas = {} } = {}) {
   if (!snap || typeof snap !== "object") return [];
   const out = [];
   const busca = texto(snap.searchInput ?? snap.debouncedSearch ?? snap.search);
@@ -57,6 +57,9 @@ export function chipsDoSnapshot(snap, { categorias = {}, cartoes = {} } = {}) {
   }
   for (const k of lista(snap.cardSel)) {
     out.push({ faceta: "cartao", nome: "Cartão", valor: cartoes[k]?.label || k });
+  }
+  for (const k of lista(snap.accountSel)) {
+    out.push({ faceta: "conta", nome: "Conta", valor: contas[k]?.label || "Conta" });
   }
   if (snap.rec && snap.rec !== "any") {
     out.push({ faceta: "recorrencia", nome: "Recorrência", valor: RÓTULOS_REC[snap.rec] || snap.rec });

@@ -42,6 +42,8 @@ export const DEFAULT_FILTER_STATE = Object.freeze({
   // "any" = a transação tem QUALQUER uma das tags; "all" = tem TODAS.
   tagMode: "any",
   cardSel: [],
+  /** Contas (ids) — filtro "Conta" (#268); só existe com 2+ contas ativas. */
+  accountSel: [],
   rec: "any",
   valueMin: "",
   valueMax: "",
@@ -59,6 +61,7 @@ function normalizeInitial(partial) {
       ? [next.method]
       : [];
   if (!isPaymentMethodAllowedForType(next.method, next.type)) next.method = [];
+  next.accountSel = Array.isArray(next.accountSel) ? next.accountSel.filter(Boolean).map(String) : [];
   return next;
 }
 
@@ -150,6 +153,8 @@ export function useTransactionsFilterState({
           return { ...prev, tags: [], tagMode: DEFAULT_FILTER_STATE.tagMode };
         case "cartao":
           return { ...prev, cardSel: [] };
+        case "conta":
+          return { ...prev, accountSel: [] };
         case "valor":
           return { ...prev, valueMin: "", valueMax: "", valueCurrency: "" };
         case "recorrencia":
@@ -166,7 +171,7 @@ export function useTransactionsFilterState({
 
   /** Lista canônica de facets para a FacetBar, derivada do estado. */
   const buildFacets = useCallback(
-    ({ categoriesById = {}, cardsById = {} } = {}) => {
+    ({ categoriesById = {}, cardsById = {}, accountsById = null } = {}) => {
       const presetPeriodLabels = {
         tudo: "Todo período",
         hoje: "Hoje",
@@ -255,6 +260,23 @@ export function useTransactionsFilterState({
           active: state.cardSel.length > 0,
           multi: state.cardSel.length,
         },
+        // "Conta" só existe com 2+ contas ativas (#268). `accountsById` nulo = a
+        // página não sabe das contas (ou tem uma só): a faceta nem aparece.
+        ...(accountsById && Object.keys(accountsById).length >= 2
+          ? [{
+              key: "conta",
+              label: "Conta",
+              value:
+                state.accountSel.length === 0
+                  ? "Todas"
+                  : state.accountSel.length === 1
+                  ? accountsById[state.accountSel[0]]?.label || "Conta"
+                  : `${state.accountSel.length} contas`,
+              icon: "wallet",
+              active: state.accountSel.length > 0,
+              multi: state.accountSel.length,
+            }]
+          : []),
         {
           key: "valor",
           label: "Valor",
@@ -291,6 +313,7 @@ export function useTransactionsFilterState({
     if (state.cats.length) return true;
     if (state.tags.length) return true;
     if (state.cardSel.length) return true;
+    if (state.accountSel.length) return true;
     if (state.rec !== DEFAULT_FILTER_STATE.rec) return true;
     if (state.settlement !== DEFAULT_FILTER_STATE.settlement) return true;
     if (state.valueMin || state.valueMax) return true;
@@ -314,6 +337,7 @@ export function useTransactionsFilterState({
     setTags,
     setTagMode: (v) => setField("tagMode", v),
     setCardSel: (v) => setField("cardSel", v),
+    setAccountSel: (v) => setField("accountSel", v),
     setRec: (v) => setField("rec", v),
     setSettlement: (v) => setField("settlement", v),
     setValueMin: (v) => setField("valueMin", v),

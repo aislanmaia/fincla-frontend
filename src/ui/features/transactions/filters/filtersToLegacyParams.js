@@ -172,6 +172,7 @@ export function filtersToLegacyParams(
     // mesmo objeto, então o card de totais e a lista não podem descrever conjuntos
     // diferentes de linhas.
     settlement: state.settlement ?? "todas",
+    ...(Array.isArray(state.accountSel) && state.accountSel.length ? { accountIds: state.accountSel } : {}),
     limit,
   };
 }

@@ -793,6 +793,7 @@ export function buildTransactionsQuery({
   tagMatch,
   recurring,
   settlement = "todas",
+  accountIds = null,
   limit = 10,
 }) {
   const categoryFilter = resolveCategoryParams(filterCat);
@@ -816,6 +817,7 @@ export function buildTransactionsQuery({
     ...(tagMatch === "all" ? { tag_match: "all" } : {}),
     ...(recurring != null ? { recurring } : {}),
     ...resolveSettlement(settlement),
+    ...accountFilterParam(accountIds),
     page: 1,
     limit,
     ...resolveSort(sortBy),
@@ -912,6 +914,7 @@ export function buildTransactionsSummaryQuery({
   tagMatch,
   recurring,
   settlement = "todas",
+  accountIds = null,
 }) {
   const categoryFilter = resolveCategoryParams(filterCat);
   const paymentMethod = resolvePaymentMethodParam(filterMethod);
@@ -937,7 +940,24 @@ export function buildTransactionsSummaryQuery({
     ...(tagMatch === "all" ? { tag_match: "all" } : {}),
     ...(recurring != null ? { recurring } : {}),
     ...resolveSettlement(settlement),
+    // Mesmo recorte de conta da lista (#268): sem ele o resumo descreveria a
+    // organização inteira enquanto a lista mostra uma conta.
+    ...accountFilterParam(accountIds),
   };
+}
+
+/**
+ * `account_id` repetível (fincla-api#446): `?account_id=a&account_id=b`, OU dentro
+ * do filtro. Vazio = sem recorte de conta.
+ */
+function accountFilterParam(accountIds) {
+  const ids = Array.isArray(accountIds) ? accountIds.filter(Boolean).map(String) : [];
+  return ids.length ? { account_id: ids } : {};
+}
+
+/** O intervalo `{date_start, date_end}` (YYYY-MM-DD) de um período da tela. */
+export function transactionsDateRangeFor(period, customFrom = "", customTo = "") {
+  return resolveDateRange(period, customFrom, customTo);
 }
 
 /**

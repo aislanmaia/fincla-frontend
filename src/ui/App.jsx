@@ -296,6 +296,13 @@ export default function App() {
     },
     [openTxModal, setModalPreConfig],
   );
+  /* Transações filtradas em UMA conta (#268): "+ Transação" nasce nessa conta. A
+     página avisa o recorte; o resto do app segue abrindo o lançamento na padrão. */
+  const [txAccountScope, setTxAccountScope] = useState(null);
+  const openNewTxFromTransactions = useCallback(() => {
+    if (txAccountScope) setModalPreConfig({ accountId: txAccountScope });
+    openTxModal();
+  }, [txAccountScope, openTxModal, setModalPreConfig]);
 
   const onNewCardItem = (cartaoId) => {
     const id = String(cartaoId);
@@ -352,7 +359,8 @@ export default function App() {
       transactionsRefreshToken={transactionsListVersion}
       onTransactionsInvalidate={bumpTransactionsList}
       extraTx={extraTx}
-      onNewTx={() => openTxModal()}
+      onNewTx={openNewTxFromTransactions}
+      onAccountScopeChange={setTxAccountScope}
       onEditTx={(tx) => {
         flushSync(() => setModalPreConfig(buildTxModalPreConfig(tx)));
         openTxModal({ [FC.TX]: String(tx.id) });
@@ -442,7 +450,7 @@ export default function App() {
       openTxModal({ [FC.MODAL]: FC_MODAL.NEW_REFUND, [FC.TX]: String(item.transactionId) });
     }} />} />,
     budgets:   <OrcamentosPage onNav={navTo} isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} />,
-    accounts:     <AccountsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} />,
+    accounts:     <AccountsPage isMobile={isMobile} dataMode={dataMode} organizationId={session.activeOrgId} transactionsRefreshToken={transactionsListVersion} onOpenAccountTransactions={(accountId) => navTo("transactions", { accountId })} />,
     planning:     <PlanningHub organizationId={session.activeOrgId} dataMode={dataMode} isMobile={isMobile} navTo={navTo} user={session.user} initialMetas={dataMode==="empty" ? [] : undefined} simulation={{ cenarios, setCenarios, cenarioId, setCenarioId }} onContribuir={(meta) => { setModalPreConfig({ tipo:"receita", desc:`Aporte — ${meta.nome}`, cat:"Poupança" }); openTxModal(); }} onNewTransaction={onNewTransaction} transactionsRefreshToken={transactionsListVersion} />,
     profile:        <ConfiguracoesPage onNav={navTo} isMobile={isMobile} onboardingData={onboardingData} dataMode={dataMode} organizationId={session.activeOrgId} currentUser={session.user} />,
     reports:   <RelatoriosPage onNav={(dest)=>{ if(dest==="_nova_transacao") openTxModal(); else navTo(dest); }} isMobile={isMobile} dataMode={dataMode} extraRecs={extraRecs} organizationId={session.activeOrgId} />,
@@ -583,7 +591,7 @@ export default function App() {
       />
       <div style={{ flex:1, display:"flex", flexDirection:"column", overflow:"hidden" }}>
         <Topbar
-          onNew={() => onNewTransaction(calDay)}
+          onNew={() => (activeSegment === "transactions" && txAccountScope ? openNewTxFromTransactions() : onNewTransaction(calDay))}
           isMobile={isMobile}
           onMenuOpen={() => setSidebarOpen(true)}
           onNav={navTo}

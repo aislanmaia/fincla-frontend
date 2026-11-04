@@ -25,3 +25,17 @@ describe("App entrega o token de transações às telas de saldo", () => {
     expect(elementSource(tag)).toMatch(/transactionsRefreshToken=\{transactionsListVersion\}/);
   });
 });
+
+describe("App: '+ Transação' com UMA conta filtrada em Transações nasce nela (#268)", () => {
+  it("a página avisa o recorte e o + Transação usa a conta", () => {
+    expect(elementSource("TransacoesPageView")).toMatch(/onAccountScopeChange=\{setTxAccountScope\}/);
+    expect(elementSource("TransacoesPageView")).toMatch(/onNewTx=\{openNewTxFromTransactions\}/);
+    expect(app).toMatch(/if \(txAccountScope\) setModalPreConfig\(\{ accountId: txAccountScope \}\)/);
+    expect(elementSource("Topbar")).toMatch(/openNewTxFromTransactions\(\)/);
+  });
+
+  it("Minhas Contas abre Transações filtradas na conta tocada", () => {
+    expect(elementSource("AccountsPage")).toMatch(/onOpenAccountTransactions=\{\(accountId\) => navTo\("transactions", \{ accountId \}\)\}/);
+  });
+});
+

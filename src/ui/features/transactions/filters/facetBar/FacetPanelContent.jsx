@@ -1,5 +1,6 @@
 import React from "react";
 import { CardPanel } from "./panels/CardPanel.jsx";
+import { AccountPanel } from "./panels/AccountPanel.jsx";
 import { CategoryPanel } from "./panels/CategoryPanel.jsx";
 import { PaymentMethodPanel } from "./panels/PaymentMethodPanel.jsx";
 import { PeriodPanel } from "./panels/PeriodPanel.jsx";
@@ -44,6 +45,10 @@ export function FacetPanelContent({
   cardSel,
   setCardSel,
   cards,
+  // account (#268)
+  accountSel = [],
+  setAccountSel,
+  accounts = [],
   // value
   valueMin,
   valueMax,
@@ -134,6 +139,16 @@ export function FacetPanelContent({
           cardSel={cardSel}
           setCardSel={setCardSel}
           cards={cards}
+          onClose={onClose}
+          compact={compact}
+        />
+      );
+    case "conta":
+      return (
+        <AccountPanel
+          accountSel={accountSel}
+          setAccountSel={setAccountSel}
+          accounts={accounts}
           onClose={onClose}
           compact={compact}
         />
