@@ -734,10 +734,17 @@ export const NovaTransacaoModal = ({
     const key = movePairKey;
     const inFlight = moveQuotesInFlightRef.current;
     inFlight.add(key);
+    // Duas leituras: a direta (origem→destino) CONVERTE o valor; a inversa
+    // (destino→origem) só EXIBE a taxa como o brasileiro lê câmbio ("US$ 1 = R$ 5,49"),
+    // vinda pronta da API — nunca uma divisão nossa. Sem a inversa, o aviso cai na
+    // direção direta; sem a direta, não há cotação.
+    const display = getQuotation(organizationId, moveTo, moveFrom)
+      .then((q) => (q?.rate != null && String(q.rate).trim() !== "" ? String(q.rate) : null))
+      .catch(() => null);
     getQuotation(organizationId, moveFrom, moveTo)
-      .then((q) => {
+      .then(async (q) => {
         if (q?.rate == null || String(q.rate).trim() === "") throw new Error("empty rate");
-        return { status: "ready", rate: String(q.rate), quoted_on: q.quoted_on ?? null };
+        return { status: "ready", rate: String(q.rate), quoted_on: q.quoted_on ?? null, displayRate: await display };
       })
       .catch(() => ({ status: "unavailable" }))
       .then((entry) => {

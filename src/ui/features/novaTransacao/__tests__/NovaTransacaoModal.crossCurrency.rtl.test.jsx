@@ -64,9 +64,12 @@ const rowInB = {
 };
 
 let quotation;
+/** Cotação INVERSA (USD→BRL), só para exibir a taxa como se lê câmbio. `null` = sem resposta útil. */
+let reverseQuotation;
 let allAccounts;
 
 beforeEach(() => {
+  reverseQuotation = null;
   allAccounts = [];
   quotation = () => Promise.resolve({ data: { base: "BRL", quote: "USD", rate: "0.1825", quoted_on: "2026-11-03" } });
   apiClient.get.mockImplementation((url) => {
@@ -75,6 +78,7 @@ beforeEach(() => {
         accounts: [balanceRow(ACC_A, "Conta A Itaú", "BRL"), balanceRow(ACC_B, "Conta B Nubank", "BRL"), balanceRow(ACC_USD, "Wise USD", "USD")] } });
     }
     if (url === "/quotations/BRL/USD") return quotation();
+    if (url === "/quotations/USD/BRL") return reverseQuotation ? reverseQuotation() : Promise.resolve({ data: [] });
     if (url === "/accounts") return Promise.resolve({ data: allAccounts });
     return Promise.resolve({ data: [] });
   });
@@ -219,7 +223,8 @@ describe("NovaTransacaoModal — mover para conta de outra moeda", () => {
     await user.selectOptions(screen.getByLabelText("Conta"), ACC_A);
     await user.selectOptions(screen.getByLabelText("Conta"), ACC_USD);
     expect(await screen.findByLabelText("Valor em US$")).toHaveValue("51,00");
-    expect(quotationCalls()).toHaveLength(1);
+    expect(quotationCalls().filter(([url]) => url === "/quotations/BRL/USD")).toHaveLength(1);
+    expect(quotationCalls().filter(([url]) => url === "/quotations/USD/BRL")).toHaveLength(1);
   });
 
   it("conta gravada desativada: a moeda vem da lista completa de contas", async () => {
@@ -271,6 +276,27 @@ describe("NovaTransacaoModal — mover para conta de outra moeda", () => {
     expect(screen.queryByText("Despesa registrada!")).toBeNull();
     await user.click(screen.getByRole("button", { name: /^Editar$/i }));
     expect(within(await screen.findByTestId("account-move-value")).getByRole("alert")).toHaveTextContent(message);
+  });
+
+  it("taxa exibida como se lê câmbio: 'US$ 1 = R$ 5,4914', vinda da cotação inversa da API; o valor continua pela direta", async () => {
+    reverseQuotation = () => Promise.resolve({ data: { base: "USD", quote: "BRL", rate: "5.49140000", quoted_on: "2026-11-03" } });
+    const user = userEvent.setup();
+    await openAndMoveTo(user, ACC_USD);
+    const box = await screen.findByTestId("account-move-value");
+    await waitFor(() => expect(box).toHaveTextContent("Esta conta é em US$. Valor convertido pela cotação de 03/11 (US$ 1 = R$ 5,4914):"));
+    expect(box).not.toHaveTextContent("R$ 1 = US$");
+    // 287,15 × 0,1825 (direta) = 52,40 — não 287,15 ÷ 5,4914.
+    expect(screen.getByLabelText("Valor em US$")).toHaveValue("52,40");
+  });
+
+  it("inversa indisponível: cai na direção direta da API, nunca numa inversa calculada", async () => {
+    reverseQuotation = () => Promise.reject(Object.assign(new Error("503"), { isAxiosError: true, response: { status: 503, data: {} } }));
+    const user = userEvent.setup();
+    await openAndMoveTo(user, ACC_USD);
+    const box = await screen.findByTestId("account-move-value");
+    await waitFor(() => expect(box).toHaveTextContent("(R$ 1 = US$ 0,1825):"));
+    expect(box).not.toHaveTextContent("5,48");
+    expect(screen.getByLabelText("Valor em US$")).toHaveValue("52,40");
   });
 });
 
