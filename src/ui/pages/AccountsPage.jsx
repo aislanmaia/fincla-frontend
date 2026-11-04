@@ -4,7 +4,7 @@ import { T } from "../tokens";
 import { G, NUM } from "../typography";
 import { PageTitle, Card, Btn, Badge, PageEnter } from "../components/primitives";
 import { useAccountsData } from "../features/accounts/useAccountsData.js";
-import { accountMeta, formatDay, formatMoney } from "../features/accounts/accountMeta.js";
+import { accountMeta, consolidationReceipt, formatMoney } from "../features/accounts/accountMeta.js";
 import { AccountFormModal } from "../features/accounts/AccountFormModal.jsx";
 import { TransferModal } from "../features/accounts/TransferModal.jsx";
 import { AdjustBalanceModal } from "../features/accounts/AdjustBalanceModal.jsx";
@@ -28,16 +28,9 @@ const menuItemStyle = {
   color: T.inkMid,
 };
 
-/**
- * Quão atual é o que a tela de Contas mostra (#264). `null` = não afirmar nada
- * (modo demonstração/sem organização: não há leitura para datar).
- */
-export function accountsFreshnessLabel(data, enabled) {
-  if (!enabled) return null;
-  if (data.isLoading) return data.hasLoaded ? "atualizando…" : null;
-  if (data.refreshFailed) return "não foi possível atualizar";
-  return data.hasLoaded ? "atualizado agora" : null;
-}
+// Mora em features/accounts para a Visão Geral usar a mesma regra; reexportado aqui.
+export { accountsFreshnessLabel } from "../features/accounts/accountsFreshness.js";
+import { accountsFreshnessLabel } from "../features/accounts/accountsFreshness.js";
 
 export function AccountsPage({ organizationId, dataMode = "live", isMobile = false, transactionsRefreshToken = 0 }) {
   const enabled = !!organizationId && dataMode === "live";
@@ -247,10 +240,7 @@ export function AccountsPage({ organizationId, dataMode = "live", isMobile = fal
             <div style={{ ...G, fontSize: 11.5, color: T.inkGhost, marginTop: 8, lineHeight: 1.45 }}>
               {/* A data é o que torna uma taxa velha visivelmente velha em vez de
                   silenciosamente errada. Nunca mostre o total convertido sem ela. */}
-              Convertido com{" "}
-              {data.consolidation.rates
-                .map((r) => `1 ${r.base} = ${formatMoney(r.rate, r.quote)} (${formatDay(r.quoted_on)})`)
-                .join(" · ")}
+              {consolidationReceipt(data.consolidation)}
             </div>
           ) : null}
         </Card>

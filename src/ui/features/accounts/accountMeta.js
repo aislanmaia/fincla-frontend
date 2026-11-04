@@ -1,6 +1,6 @@
 import { T } from "../../tokens";
 import { formatMoney as formatarDinheiro } from "../../money/formatMoney.js";
-import { offeredCurrencies } from "../../money/currencyRegistry.js";
+import { currencyInfo, offeredCurrencies } from "../../money/currencyRegistry.js";
 
 /** Tipos oferecidos no seletor de conta (o backend também aceita 'crypto'). */
 export const ACCOUNT_TYPES = [
@@ -82,3 +82,31 @@ export function parseBRL(input) {
   const n = Number.parseFloat(cleaned);
   return Number.isFinite(n) ? n : 0;
 }
+
+/**
+ * Recibo da consolidação entre moedas — "Convertido com 1 USD = R$ 5,48 (03/11)".
+ * Um texto só para Minhas Contas e para a Visão Geral: a data é o que torna uma
+ * taxa velha visivelmente velha. `null` quando não houve conversão.
+ */
+export function consolidationReceipt(consolidation) {
+  const rates = consolidation?.rates;
+  if (!Array.isArray(rates) || rates.length === 0) return null;
+  return `Convertido com ${rates
+    .map((r) => `1 ${r.base} = ${currencyInfo(r.quote).symbol} ${formatRateExact(r.rate)} (${formatDay(r.quoted_on)})`)
+    .join(" · ")}`;
+}
+
+/**
+ * A taxa EXATAMENTE como a API a deu — "5.4653" → "5,4653" — só trocando o ponto
+ * pela vírgula e cortando zeros à direita (mínimo 2 casas). Nunca arredonda para
+ * 2: com a taxa aplicada em 5,4653, mostrar "5,47" faz quem refaz a conta de
+ * 700 × 5,47 errar o total em R$ 3,29.
+ */
+export function formatRateExact(rate) {
+  const s = String(rate ?? "").trim();
+  const m = /^(\d+)(?:\.(\d+))?$/.exec(s);
+  if (!m) return s;
+  const frac = (m[2] ?? "").replace(/0+$/, "");
+  return `${m[1]},${frac.length >= 2 ? frac : frac.padEnd(2, "0")}`;
+}
+
