@@ -29,6 +29,8 @@ export const LIST_HEADER_HEIGHT_COMPACT = 40;
 export function TransactionsListHeader({
   total,
   totalUnfiltered = null,
+  /** Transferências à vista no extrato de uma conta (#268) — contadas à parte. */
+  transfers = 0,
   pending = 0,
   sum = null,
   fmt,
@@ -121,6 +123,13 @@ export function TransactionsListHeader({
               </>
             ) : null}
             transaç{total === 1 ? "ão" : "ões"}
+            {transfers > 0 ? (
+              <span data-testid="list-header-transfers">
+                {" · "}
+                <b style={{ fontFamily: "'Geist Mono',monospace", color: T.inkMid, fontWeight: 600 }}>{num(transfers)}</b>{" "}
+                transferência{transfers === 1 ? "" : "s"}
+              </span>
+            ) : null}
           </span>
         )}
         {pending > 0 ? (

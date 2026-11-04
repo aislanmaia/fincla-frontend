@@ -142,6 +142,12 @@ export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
   born = false }) => {
   const isRefund   = tx.type === "refund";
   const isReceita  = tx.type === "income" || isRefund;
+  /* Transferência no extrato de uma conta (#268): o sinal vem do VALOR (entrou +,
+     saiu −) e a cor é neutra — nem verde de receita nem tinta de despesa, porque ela
+     não é nenhuma das duas. */
+  const isTransfer  = tx.type === "transfer";
+  const transferIn  = isTransfer && tx.val > 0;
+  const kindLabel   = isTransfer ? (transferIn ? "transferência recebida" : "transferência enviada") : (isReceita ? "receita" : "despesa");
   const hasParcela = !!tx.parcela && !isRefund;
   const isCredito  = tx.paymentMethodKey === "credito" || tx.method === "Crédito";
   const hasRefundsLinked = tx.refundsSummary && tx.refundsSummary.count > 0;
@@ -226,7 +232,7 @@ export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
   const statusRing = !readOnly && tx.settleable && !tx.settled;
   const settleCopy = settlementCopy(tx.type);
   const shownValue = readOnly ? (displayValue ?? "—") : fmtValorDaLinha(tx.val, tx.currency);
-  const valuePrefix = readOnly ? (isRefund ? "− " : "") : (isReceita ? "+" : "−");
+  const valuePrefix = readOnly ? (isRefund ? "− " : "") : isTransfer ? (transferIn ? "+" : "−") : (isReceita ? "+" : "−");
 
   /* MOBILE tem grade própria: três colunas (ícone · descrição sobre
      data·categoria·método · valor). A grade do desktop tem nove — em 390 px
@@ -300,7 +306,7 @@ export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
         data-tx-row={tx.id}
         aria-busy={busy || undefined}
         aria-expanded={readOnly ? undefined : isSelected}
-        aria-label={readOnly ? `${tx.desc}, ${isRefund ? "estorno" : "compra"} de ${shownValue} em ${tx.date}` : `${tx.desc}, ${isReceita ? "receita" : "despesa"} de ${shownValue} em ${tx.date}`}
+        aria-label={readOnly ? `${tx.desc}, ${isRefund ? "estorno" : "compra"} de ${shownValue} em ${tx.date}` : `${tx.desc}, ${kindLabel} de ${shownValue} em ${tx.date}`}
         style={{ display:"grid", gridTemplateColumns:"28px minmax(0,1fr) auto",
           alignItems:"center", gap:10,
           /* `minHeight` e não `height`: com a terceira linha a altura cresce e um
@@ -366,7 +372,7 @@ export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
         </div>
         <div style={{ ...G, fontFamily:"'Geist Mono',monospace", fontSize:12.5, fontWeight:700,
           whiteSpace:"nowrap", display:"flex", alignItems:"center", gap:5,
-          color: isRefund ? T.green : (isReceita ? T.green : T.ink) }}>
+          color: isTransfer ? T.blue : isRefund ? T.green : (isReceita ? T.green : T.ink) }}>
           {/* §28: o indicador ocupa o LUGAR DO VALOR porque é justamente o
               número que a ação vai mudar. A linha não apaga nem se move — ela é
               a única coisa na tela que ainda vale olhar. */}
@@ -421,7 +427,7 @@ export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
       tabIndex={readOnly ? undefined : isRovingStop ? 0 : -1}
       aria-busy={busy || undefined}
       aria-expanded={readOnly ? undefined : isSelected}
-      aria-label={readOnly ? `${tx.desc}, ${isRefund ? "estorno" : "compra"} de ${shownValue} em ${tx.date}` : `${tx.desc}, ${isReceita ? "receita" : "despesa"} de ${shownValue} em ${tx.date}`}
+      aria-label={readOnly ? `${tx.desc}, ${isRefund ? "estorno" : "compra"} de ${shownValue} em ${tx.date}` : `${tx.desc}, ${kindLabel} de ${shownValue} em ${tx.date}`}
       style={{ display:"grid", gridTemplateColumns: columns,
         alignItems:"center", gap: dense ? 9 : 11,
         height: rowHeight,
@@ -678,7 +684,7 @@ export const TxRow = memo(({ tx, isMobile, isSelected, onSelect, coveringAnchor,
           seja qual for a largura das colunas. */}
       <div style={{ ...G, fontFamily:"'Geist Mono',monospace",
         fontSize: dense ? 12 : 13.5, fontWeight:700, textAlign:"right",
-        color: isRefund ? T.green : (isReceita ? T.green : T.ink) }}>
+        color: isTransfer ? T.blue : isRefund ? T.green : (isReceita ? T.green : T.ink) }}>
         {/* §28: mesmo lugar que a linha do toque usa — o valor é o número que
             a ação vai mudar, então é nele que o "aguarde" pertence. */}
         {busy

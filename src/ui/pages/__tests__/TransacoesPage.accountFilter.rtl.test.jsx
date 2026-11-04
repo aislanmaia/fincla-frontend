@@ -27,12 +27,14 @@ const baseTransactions = [
     type: "expense", icon: "🍞", status: "confirmado", rec: false, tags: [], settled: true, settleable: true },
 ];
 let summaryMock;
-const transactionsDataMock = vi.fn(() => ({
+let transactionsList;
+const defaultTransactionsData = () => ({
   isLoading: false, error: "", hasLoaded: true,
   summary: summaryMock,
-  transactions: baseTransactions,
+  transactions: transactionsList,
   total: 2, hasMore: false, removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
-}));
+});
+const transactionsDataMock = vi.fn(defaultTransactionsData);
 vi.mock("../../features/transactions/useTransactionsData.js", () => ({
   useTransactionsData: (...args) => transactionsDataMock(...args),
 }));
@@ -49,9 +51,20 @@ vi.mock("../../../api/balanceAdjustments", () => ({ listOrgBalanceAdjustments: v
 const listAccountsMock = vi.fn();
 vi.mock("../../../api/accounts", () => ({ listAccounts: (...args) => listAccountsMock(...args) }));
 const listTransfersMock = vi.fn();
+const exportMock = vi.fn();
+vi.mock("../../../api/transactions", async (importOriginal) => ({
+  ...(await importOriginal()),
+  exportTransactionsCsv: (...args) => exportMock(...args),
+}));
+vi.mock("../../features/export/saveBlob.js", () => ({ saveBlob: vi.fn() }));
+const narrowestMock = vi.fn(() => ({ narrowest: null }));
+vi.mock("../../features/transactions/useNarrowestFilter.js", () => ({
+  useNarrowestFilter: (...args) => narrowestMock(...args),
+}));
 vi.mock("../../../api/transfers", () => ({ listTransfers: (...args) => listTransfersMock(...args) }));
 
-import { TransacoesPage } from "../TransacoesPage.jsx";
+import { TransacoesPage, computePageSize } from "../TransacoesPage.jsx";
+import { readListPrefs, rowCost } from "../../features/transactions/listPrefs.js";
 
 const ACC_A = "aaaaaaaa-0000-4000-8000-000000000001";
 const ACC_B = "bbbbbbbb-0000-4000-8000-000000000002";
@@ -62,6 +75,9 @@ const TWO_ACCOUNTS = [
 ];
 
 beforeEach(() => {
+  // `mockImplementation` de um teste sobrevive ao `clearAllMocks`: volta ao padrão.
+  transactionsDataMock.mockImplementation(defaultTransactionsData);
+  transactionsList = baseTransactions;
   routerSearch = {};
   localStorage.clear();
   summaryMock = { total_income: 0, total_expenses: 120, total_refunds: 0, balance: -120, currency: "BRL" };
@@ -172,4 +188,146 @@ describe("<TransacoesPage> — filtro Conta (#268)", () => {
     renderPage({ onAccountScopeChange });
     await waitFor(() => expect(onAccountScopeChange).toHaveBeenLastCalledWith(ACC_B));
   });
+
+  const TRANSFERS = [
+    { id: "t-out", from_account_id: ACC_B, to_account_id: ACC_A, amount: 300, to_amount: 300, from_currency: "BRL", to_currency: "BRL", date: "2026-11-05T12:00:00" },
+    { id: "t-in", from_account_id: ACC_A, to_account_id: ACC_B, amount: 50, to_amount: 50, from_currency: "BRL", to_currency: "BRL", date: "2026-11-08T12:00:00" },
+  ];
+
+  it("sinal da transferência pelo valor: recebida '+', enviada '−', com rótulo acessível próprio", async () => {
+    routerSearch = { fc_account: ACC_B, fc_from: "2026-11-01", fc_to: "2026-11-30" };
+    listTransfersMock.mockResolvedValue(TRANSFERS);
+    renderPage();
+    const recebida = await screen.findByRole("button", { name: /Transferência de Conta A Itaú, transferência recebida de/ });
+    expect(recebida).toHaveTextContent(/\+\s?R\$\s?50,00/);
+    const enviada = screen.getByRole("button", { name: /Transferência para Conta A Itaú, transferência enviada de/ });
+    expect(enviada).toHaveTextContent(/−\s?R\$\s?300,00/);
+    expect(screen.queryByRole("button", { name: /Transferência.*despesa/ })).toBeNull();
+  });
+
+  it("transferências não roubam lugar das transações na janela carregada (sem mais páginas)", async () => {
+    const pageSize = computePageSize(window.innerHeight - 240, rowCost(readListPrefs().density, false, readListPrefs().grouped));
+    transactionsList = Array.from({ length: pageSize }, (_, i) => ({
+      id: `tx-${i}`, date: `${String(28 - Math.floor(i / 4)).padStart(2, "0")}/11/2026`, desc: `Lançamento ${i}`,
+      cat: "Alimentação", val: -10, method: "Pix", type: "expense", icon: "🍽", status: "confirmado", rec: false,
+      tags: [], settled: true, settleable: true,
+    }));
+    routerSearch = { fc_account: ACC_B, fc_from: "2026-11-01", fc_to: "2026-11-30" };
+    listTransfersMock.mockResolvedValue([
+      { ...TRANSFERS[0], date: "2026-11-27T12:00:00" },
+      { ...TRANSFERS[1], date: "2026-11-26T12:00:00" },
+    ]);
+    renderPage();
+    await screen.findAllByText("Transferência para Conta A Itaú");
+    // A ÚLTIMA transação da janela continua na tela.
+    expect(screen.getAllByText(`Lançamento ${pageSize - 1}`).length).toBeGreaterThan(0);
+  });
+
+  it("ordenação que não é por data: sem transferências, com o aviso", async () => {
+    routerSearch = { fc_account: ACC_B, fc_from: "2026-11-01", fc_to: "2026-11-30" };
+    listTransfersMock.mockResolvedValue(TRANSFERS);
+    renderPage();
+    await screen.findAllByText("Transferência para Conta A Itaú");
+    await openFilters();
+    await userEvent.click(screen.getByRole("button", { name: /Ordenar transações: Data ↓/i }));
+    await userEvent.click(screen.getByRole("button", { name: /Ordenar por Valor/i }));
+    expect(await screen.findByTestId("transfers-sort-note")).toHaveTextContent("Transferências aparecem na ordenação por data.");
+    expect(screen.queryByText("Transferência para Conta A Itaú")).toBeNull();
+  });
+
+  it("o cabeçalho conta as transferências à parte e a lista com só transferências não é 'vazia'", async () => {
+    transactionsList = [];
+    summaryMock = { total_income: 0, total_expenses: 0, total_refunds: 0, balance: 0, currency: "BRL" };
+    transactionsDataMock.mockImplementation(() => ({
+      isLoading: false, error: "", hasLoaded: true, summary: summaryMock, transactions: [], total: 0, hasMore: false,
+      removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
+    }));
+    routerSearch = { fc_account: ACC_B, fc_from: "2026-11-01", fc_to: "2026-11-30" };
+    listTransfersMock.mockResolvedValue(TRANSFERS);
+    renderPage();
+    expect(await screen.findByTestId("list-header-transfers")).toHaveTextContent("2 transferências");
+    expect(screen.getAllByText("Transferência para Conta A Itaú").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Nenhuma transação/i)).toBeNull();
+  });
+
+  it("subtotal do dia ignora transferências", async () => {
+    transactionsList = [{ id: "tx-d", date: "05/11/2026", desc: "Almoço", cat: "Alimentação", val: -40, method: "Pix",
+      type: "expense", icon: "🍽", status: "confirmado", rec: false, tags: [], settled: true, settleable: true }];
+    routerSearch = { fc_account: ACC_B, fc_from: "2026-11-01", fc_to: "2026-11-30" };
+    listTransfersMock.mockResolvedValue([TRANSFERS[0]]); // −300 no mesmo dia 05/11
+    localStorage.setItem("fincla:transactions:list-prefs", JSON.stringify({ grouped: true }));
+    renderPage();
+    await screen.findAllByText("Transferência para Conta A Itaú");
+    expect(screen.getAllByText(/−\s?R\$\s?40,00/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/−\s?R\$\s?340,00/)).toBeNull();
+  });
+
+  it("muda a busca e volta: as transferências da conta não são rebuscadas (cache por conta + token)", async () => {
+    routerSearch = { fc_account: ACC_B, fc_from: "2026-11-01", fc_to: "2026-11-30" };
+    listTransfersMock.mockResolvedValue(TRANSFERS);
+    renderPage();
+    await screen.findAllByText("Transferência para Conta A Itaú");
+    expect(listTransfersMock).toHaveBeenCalledTimes(1);
+    const busca = screen.getAllByLabelText("Buscar transações")[0];
+    await userEvent.type(busca, "x");
+    await waitFor(() => expect(screen.queryByText("Transferência para Conta A Itaú")).toBeNull());
+    await userEvent.clear(busca);
+    await screen.findAllByText("Transferência para Conta A Itaú");
+    expect(listTransfersMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("com UMA conta, a seleção de conta sai do estado: lista vazia não oferece 'Limpar filtros' por um filtro invisível", async () => {
+    listAccountsMock.mockResolvedValue([TWO_ACCOUNTS[0]]);
+    transactionsDataMock.mockImplementation(() => ({
+      isLoading: false, error: "", hasLoaded: true, summary: { ...summaryMock, total_expenses: 0, balance: 0 },
+      transactions: [], total: 0, hasMore: false, removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
+    }));
+    routerSearch = { fc_account: ACC_A };
+    renderPage();
+    await waitFor(() => expect(listAccountsMock).toHaveBeenCalled());
+    // Quando a lista de contas chega (uma só), a seleção sai do estado.
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Limpar filtros" })).toBeNull());
+    expect(screen.getByRole("button", { name: "+ Nova transação" })).toBeInTheDocument();
+  });
+
+  it("exportar CSV com conta filtrada vai ao export de Transações com account_id", async () => {
+    routerSearch = { fc_account: ACC_B };
+    exportMock.mockResolvedValue(new Blob(["x"]));
+    renderPage();
+    await waitFor(() => expect(lastFilters().accountIds).toEqual([ACC_B]));
+    const exportar = screen.queryAllByRole("button", { name: /Exportar|CSV/i })[0];
+    expect(exportar).toBeTruthy();
+    await userEvent.click(exportar);
+    const csvItem = screen.queryAllByRole("menuitem", { name: /CSV/i })[0] ?? screen.queryAllByRole("button", { name: /CSV/i }).find((b) => b !== exportar);
+    if (csvItem) await userEvent.click(csvItem);
+    await waitFor(() => expect(exportMock).toHaveBeenCalled());
+    expect(exportMock.mock.calls[0][0].account_id).toEqual([ACC_B]);
+  });
+
+  it("lista vazia sob filtro de conta: 'conta' entra nos candidatos do filtro mais restritivo", async () => {
+    transactionsDataMock.mockImplementation(() => ({
+      isLoading: false, error: "", hasLoaded: true, summary: { ...summaryMock, total_expenses: 0, balance: 0 },
+      transactions: [], total: 0, hasMore: false, removeTransaction: vi.fn(), setTransactionSettled: vi.fn(),
+    }));
+    routerSearch = { fc_account: ACC_B, fc_type: "income" };
+    renderPage();
+    await waitFor(() => {
+      const byKey = narrowestMock.mock.calls.at(-1)[0].filtersByKey;
+      expect(byKey).toHaveProperty("conta");
+      expect(byKey.conta.accountIds).toBeUndefined();
+      // Os outros candidatos mantêm o recorte de conta.
+      expect(byKey.tipo.accountIds).toEqual([ACC_B]);
+    });
+  });
+
+  it("desfazer nomeia a conta (chips/undo recebem o mapa de contas)", async () => {
+    renderPage();
+    await waitFor(() => expect(listAccountsMock).toHaveBeenCalled());
+    await openFilters();
+    await userEvent.click(await screen.findByRole("button", { name: /^Conta\b/ }));
+    const group = await screen.findByRole("group", { name: "Contas" });
+    await userEvent.click(within(group).getByRole("button", { name: /Conta A Itaú/ }));
+    await waitFor(() => expect(document.body.innerHTML).toMatch(/Desfazer[^"]*Conta A Itaú/));
+  });
 });
+
